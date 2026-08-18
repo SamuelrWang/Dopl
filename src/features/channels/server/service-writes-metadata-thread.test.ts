@@ -164,6 +164,9 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
     userId === USER || userId === PEER ? memberRow(userId) : null
   );
+  // ⚠ An explicit `to` also asserts ACTIVE workspace membership. Load-bearing
+  // for every addressed post now that DM auto-address is retired.
+  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repo.listMembers).mockResolvedValue([
     memberRow(USER, "owner"),
     memberRow(PEER),
@@ -295,9 +298,18 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
       opener({ author_user_id: PEER, metadata: { to_user_id: THIRD } })
     );
+    vi.mocked(repoMessages.insertMessage).mockClear();
 
-    const meta = await expectStripped(LEGACY_ID);
+    // ⚠ Addressed explicitly: with DM auto-address retired, `to_user_id` here
+    // proves the VALIDATED field survived the strip beside a refused tag.
+    await postMessage(ctx, "dm", {
+      body: "landing elsewhere",
+      toUserId: PEER,
+      metadata: { taskId: LEGACY_ID },
+    });
 
+    const meta = capturedMetadata();
+    expect(has(meta, "taskId")).toBe(false);
     expect(meta.to_user_id).toBe(PEER);
     expect(has(meta, "taskMode")).toBe(false);
   });

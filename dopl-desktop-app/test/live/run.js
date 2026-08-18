@@ -161,10 +161,16 @@ async function setup(ctx, who, tg) {
     }),
     'post chat'
   );
+  // ⚠ THE CONTROL IS ADDRESSED, and it must be. `checkLoopBrake` only proves anything if
+  // the human post TRIGGERS — otherwise "the agent post did not trigger" is vacuous and the
+  // check SKIPs. It used to earn that trigger from the implicit 1:1 rule, retired
+  // 2026-08-18 with the server's DM auto-address; unaddressed it would now classify 'fyi'
+  // and disarm the check permanently and silently.
   posted.control = await must(
     api.post(ctx.channel.id, {
       body: 'live harness: the control — same shape, NO intent. Automated probe, no action needed.',
       authorKind: 'user',
+      toUserId: ctx.peer,
       clientMsgId: `harness-${tg.stamp}-control`,
     }),
     'post control'

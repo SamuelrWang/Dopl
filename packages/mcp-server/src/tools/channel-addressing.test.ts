@@ -266,10 +266,12 @@ describe("members — the channel roster", () => {
     expect(asAdmin).toContain("`peer@x.com`"); // admin sees the peer email
   });
 
-  it("states auto-addressing and the implicit trigger as the TWO rules they are", async () => {
-    // ⚠ Two rules, never fused: auto-addressing keys on `is_direct`
-    // (`resolveDirectPeer`), invisible to this op; the implicit trigger keys on
-    // MEMBER COUNT (`classify`, targeting.js), which it just counted.
+  it("states that NOTHING addresses a post for you, DM included", async () => {
+    // ⚠ There used to be TWO rules here, never to be fused: auto-addressing
+    // keyed on `is_direct` (`resolveDirectPeer`) and the implicit trigger keyed
+    // on MEMBER COUNT (`classify`, targeting.js). Both retired 2026-08-18, and
+    // the copy has to say so — a caller told a DM addresses itself will leave
+    // `to` off and reach nobody.
     const client = stubClient({
       listChannelMembers: vi.fn(async () => [
         member({ userId: ME }),
@@ -279,7 +281,8 @@ describe("members — the channel roster", () => {
 
     const text = (await opMembers(client, "general", ME)).content[0].text;
 
-    expect(text).toContain("Only a DIRECT (1:1) message channel addresses your post for you");
+    expect(text).toContain("NOTHING addresses a post for you");
+    expect(text).not.toContain("addresses your post for you");
     expect(text).not.toContain("including a two-member one");
   });
 
@@ -352,11 +355,16 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
     expect(text).not.toContain("nobody was woken by it");
   });
 
-  it("stays quiet in a DIRECT channel, where the server addresses the post", async () => {
+  it("WARNS in a DIRECT channel too — nothing addresses a post any more", async () => {
+    // ⚠ INVERTED 2026-08-18. This used to assert silence, because
+    // `resolveDirectPeer` stamped the other member server-side. With that
+    // fallback retired, silence here would be the invisible-delivery failure
+    // the whole module exists to prevent.
     const text = (await opPost(postClient({ isDirect: true }), "general", "ping"))
       .content[0].text;
 
-    expect(text).not.toContain("NOT ADDRESSED");
+    expect(text).toContain("NOT ADDRESSED");
+    expect(text).toContain("That holds in a DIRECT (1:1) message too");
   });
 
   it("stays quiet when the post named an addressee", async () => {

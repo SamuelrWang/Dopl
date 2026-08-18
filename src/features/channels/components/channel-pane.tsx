@@ -46,10 +46,6 @@ interface Props {
   threadsLoading: boolean;
   loading: boolean;
   members: ChannelMember[];
-  /** ⚠ True while `members` is still the PREVIOUS channel's
-   *  (`keepPreviousData`). A request resolves its addressee from this roster, so
-   *  it must never send one built from another channel's. */
-  membersStale: boolean;
   currentUserId: string;
   /** Pending consent requests (inbound + outbound) for THIS channel. */
   consentRequests: ChannelConsentRequest[];
@@ -60,12 +56,6 @@ interface Props {
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
   onSend: (body: string, opts?: SendOptions) => Promise<void>;
-  /** REQUEST mode's path: open a titled thread addressed to one member. */
-  onCreateThread: (input: {
-    title: string;
-    body: string;
-    toUserId: string;
-  }) => Promise<void>;
   onCloseThread: (
     threadId: string,
     outcome: "completed" | "failed",
@@ -103,14 +93,12 @@ export function ChannelPane({
   threadsLoading,
   loading,
   members,
-  membersStale,
   currentUserId,
   consentRequests,
   trustedIds,
   trustBusyIds,
   consentBusyIds,
   onSend,
-  onCreateThread,
   onCloseThread,
   onReopenThread,
   onInvite,
@@ -403,11 +391,6 @@ export function ChannelPane({
           {channel.isMember ? (
             <MessageComposer
               onSend={onSend}
-              onCreateThread={onCreateThread}
-              members={members}
-              membersStale={membersStale}
-              currentUserId={currentUserId}
-              isDirect={channel.isDirect}
               disabled={channel.archivedAt !== null}
               placeholder={
                 channel.archivedAt

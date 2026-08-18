@@ -9,15 +9,17 @@
  * (docs/DESIGN-SYSTEM.md) and nothing carries a hex, a raw px font size or a
  * hand-rolled shadow.
  *
- * Two pieces did NOT survive the port and their absence is deliberate:
- * `ReactionPill` (emoji reactions have no backing column of any kind, and
- * inventing them would attribute a reaction to a real person nobody made) and
- * `PendingChip` (`requested` is a mock-side status — server-side it is a thread
- * whose consent rows are still pending, which nothing projects yet).
+ * `ReactionPill` did NOT survive the port and its absence is deliberate: emoji
+ * reactions have no backing column of any kind, and inventing them would
+ * attribute a reaction to a real person nobody made.
+ *
+ * `PendingChip` DID come back (wiring plan Phase 3), wired rather than
+ * fixtured — see its own docblock for what "requested" is derived from and
+ * whose view it is true in.
  */
 
 import type { ReactNode } from "react";
-import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, Clock, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 
@@ -77,6 +79,37 @@ export function AgentChip({ className }: { className?: string }) {
     >
       <Bot size={11} aria-hidden />
       Agent
+    </span>
+  );
+}
+
+/**
+ * REQUESTED — a thread the viewer has been asked about and has not answered.
+ *
+ * ⚠ THERE IS NO `requested` STATUS ANYWHERE IN STORAGE, and this chip is not
+ * quietly inventing one. Server-side the state is a live `pending`
+ * `channel_consent_requests` row against the viewer (INVARIANTS §6); the join is
+ * `view-model-requested.ts › requestedThreadIds`, off the consent inbox this
+ * page already reads.
+ *
+ * ⚠ TRUE IN ONE DIRECTION ONLY. A consent read is scoped to
+ * `(operator, workspace)`, so this can only ever say "YOU have not answered" —
+ * never "your addressee has not answered". A requester's own card carries no
+ * chip, and that is a missing projection, not a settled request (F-203).
+ *
+ * `Clock`, matching the sidebar's thread glyph: one shape means "waiting on
+ * approval" in both columns (MAPPING.md § Sidebar glyph legend).
+ */
+export function PendingChip({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-1.5 py-px text-micro font-medium text-warning",
+        className
+      )}
+    >
+      <Clock size={11} aria-hidden />
+      Requested
     </span>
   );
 }

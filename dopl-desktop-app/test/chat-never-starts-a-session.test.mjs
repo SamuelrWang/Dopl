@@ -131,11 +131,17 @@ test("chat still reaches classify, and still notifies the human", async () => {
 test("THE CONTROL: an otherwise identical REQUEST does reach both starting routes", async () => {
   // Without this, "chat reached no route" is free — it would also hold for a dispatcher that
   // reached no route for anything.
+  //
+  // ⚠ THE CONTROL IS NOW ADDRESSED, and it has to be. It used to rely on the implicit
+  // 1:1 trigger — an unaddressed human post in a 2-member channel — which retired
+  // 2026-08-18 with the server's DM auto-address. Left unaddressed, this control would
+  // classify 'fyi', reach no starting route, and quietly make every assertion above
+  // vacuous: the exact failure this test exists to prevent, aimed at itself.
   const { dispatchMessage, seen } = harness();
-  await dispatchMessage(entry(), msg(), ME);
+  await dispatchMessage(entry(), msg({ metadata: { to_user_id: ME } }), ME);
   assert.equal(seen.open, 1, "the control request did not reach maybeOpenRequesterSession");
   assert.equal(seen.surface, 1, "the control request did not reach maybeSurfaceRequesterReply");
-  assert.deepEqual(seen.trigger, [100], "a peer request in a 2-member channel should trigger");
+  assert.deepEqual(seen.trigger, [100], "an ADDRESSED peer request should trigger");
 });
 
 test("only the exact string is chat — a padded or cased variant is a REQUEST", async () => {

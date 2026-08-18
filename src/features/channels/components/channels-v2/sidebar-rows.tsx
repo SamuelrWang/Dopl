@@ -9,7 +9,7 @@
  * new row face is a design edit.
  */
 
-import { Bot, CornerDownRight, Hash } from "lucide-react";
+import { Bot, Clock, CornerDownRight, Hash } from "lucide-react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { CountBadge, IconTile } from "./bits";
@@ -107,32 +107,48 @@ export function ChannelRow({
  * peer control: the elbow says "under this", the second glyph says what state
  * it is in (a display claim, same rule as the transcript's chip).
  *
- * ⚠ ONE GLYPH, not the mock's two. `Bot` = an agent is party to it. The mock's
- * `Clock` meant REQUESTED — a thread addressed and waiting on consent — and
- * that is a mock-side status with no server-side existence (MAPPING.md § New
- * agent thread): server-side it is an open thread whose consent rows are still
- * pending, and nothing projects that until Phase 3. A glyph that cannot be
- * derived is not drawn.
+ * ⚠ BOTH GLYPHS ARE BACK AND BOTH ARE DERIVED (wiring plan Phase 3). `Clock` =
+ * REQUESTED — this viewer has a live `pending` consent request against this
+ * thread (`view-model-requested.ts › requestedThreadIds`, off the consent inbox
+ * the page already reads). `Bot` = everything else: an agent is party to it.
+ * Same shape as the card's `PendingChip`, so one glyph means "waiting on
+ * approval" in both columns (MAPPING.md § Sidebar glyph legend).
+ *
+ * ⚠ `requested` is the VIEWER's own state and cannot be anybody else's — a
+ * consent read is scoped to `(operator, workspace)` (INVARIANTS §6). A thread
+ * the viewer REQUESTED never wears the clock, however long its addressee takes.
  */
 export function ThreadRow({
   thread,
   selected,
+  requested,
   onOpen,
 }: {
   thread: ChannelThread;
   selected: boolean;
+  /** The viewer has been asked about this thread and has not answered. */
+  requested: boolean;
   onOpen: () => void;
 }) {
+  const StateGlyph = requested ? Clock : Bot;
   return (
     <SidebarRow
-      label={thread.title}
+      label={
+        requested ? `${thread.title} — awaiting your approval` : thread.title
+      }
       active={selected}
       indent={1}
       onClick={onOpen}
     >
-      <span aria-hidden className="flex shrink-0 items-center gap-1 text-text-muted">
+      <span
+        aria-hidden
+        className={cn(
+          "flex shrink-0 items-center gap-1",
+          requested ? "text-warning" : "text-text-muted"
+        )}
+      >
         <CornerDownRight size={13} />
-        <Bot size={13} />
+        <StateGlyph size={13} />
       </span>
       <span className="truncate">{thread.title}</span>
     </SidebarRow>

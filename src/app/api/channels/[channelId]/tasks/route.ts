@@ -8,9 +8,13 @@ import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-r
 import {
   buildChannelContext,
   createTask,
+  createTaskFanOut,
   listChannelTasks,
 } from "@/features/channels/server/service";
-import { TaskCreateSchema } from "@/features/channels/schema";
+import {
+  isTaskFanOutInput,
+  TaskCreatePayloadSchema,
+} from "@/features/channels/schema";
 
 // Channel tasks: GET lists, POST creates. NOT sessionOnly — task ops arrive over the MCP device
 // token; the service enforces channel-scoped authorization.
@@ -31,10 +35,34 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
+// ⚠ ONE POST, TWO SHAPES — the single-target create and the REQUEST FAN-OUT
+// (`toUserIds`), which raises one thread per addressee and answers with all of
+// them plus the group id their card is drawn from. Same route, same gate: a
+// fan-out is N ordinary creates by the same caller, so giving it its own
+// endpoint would give one resource two auth wrappers and two error mappings
+// (INVARIANTS §9). `toUserIds: []` is refused by the schema, not here — see
+// `TaskFanOutSchema`.
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, TaskCreateSchema);
+    const input = await parseJson(request, TaskCreatePayloadSchema);
     const ctx = buildChannelContext(auth);
+    if (isTaskFanOutInput(input)) {
+      const { threads, groupId } = await createTaskFanOut(
+        ctx,
+        requireChannelId(auth.params),
+        input
+      );
+      // `tasks` / `openingSeqs` keep the storage name and stay ALIGNED by
+      // index — the client patches its optimistic rows against that order.
+      return NextResponse.json(
+        {
+          tasks: threads.map((t) => t.thread),
+          openingSeqs: threads.map((t) => t.openingSeq),
+          fanoutGroup: groupId,
+        },
+        { status: 201 }
+      );
+    }
     const { thread, openingSeq } = await createTask(
       ctx,
       requireChannelId(auth.params),

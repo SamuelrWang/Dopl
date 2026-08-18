@@ -6,10 +6,15 @@ import * as repo from "./repository";
  * (The ADDRESSING half is `postMessage` / `createTask` asserting
  * `isActiveWorkspaceMember` and failing closed.)
  *
- * ⚠ Why the sweep exists: a departed member's `channel_members` rows outlive the
- * departure, and one ghost row turns a live 1:1 into a "3-party" room —
- * `classify`'s implicit trigger fires only on a known-exact `memberCount === 2`
- * (ENGINEERING §8), so the trigger silently dies for the two people still there.
+ * ⚠ Why the sweep exists — AND WHY THE REASON CHANGED. It was the implicit
+ * trigger: a departed member's `channel_members` rows outlive the departure, one
+ * ghost row turned a live 1:1 into a "3-party" room, and `classify`'s trigger
+ * fired only on a known-exact `memberCount === 2` (ENGINEERING §8), so the
+ * trigger silently died for the two people still there. **That trigger is gone
+ * (2026-08-18), and the sweep is not.** What it still buys: a ghost row keeps a
+ * departed teammate ADDRESSABLE in the picker and in `op="members"`, keeps the
+ * roster count wrong everywhere it is shown, and — the DM rule below — leaves a
+ * one-member direct channel that renders as a conversation with yourself.
  *
  * ⚠ SERVER-TO-SERVER ONLY, and it takes NO `ChannelContext` on purpose. It
  * carries no authorization of its own — the authority is the workspace removal
@@ -22,7 +27,7 @@ import * as repo from "./repository";
  * `buildDirectPeers` (`service-reads.ts`) falls back to `ids[0]` and renders the
  * survivor a conversation with themselves, while `resolveDirectPeer`
  * (`service-writes-metadata.ts`) requires exactly two members, so their next
- * post is auto-addressed to NOBODY and the implicit trigger cannot fire.
+ * post cannot inherit the pair's open thread either.
  * `deleted_at` on a direct channel is the CLOSE half of close/reopen
  * (ENGINEERING §7), and:
  *   1. the DM leaves the survivor's sidebar (`listChannels` filters

@@ -69,21 +69,31 @@ const plain = {
 // either would silently re-suppress a trigger the product depends on, and a green suite
 // that never asked would not notice.
 
-test("(rollback) the implicit 2-member trigger no longer consults a team-agent count", () => {
+test("(rollback) no leftover entry field consults a team-agent count", () => {
   // "ADDRESS TO ACT": while `entry.teamAgents` was non-zero, an UNADDRESSED human message
   // in a two-member channel triggered NOBODY, because the room held several workers. There
   // is no summoning and no count; the entry's own field is ignored whatever it says.
+  //
+  // ⚠ RE-AIMED, NOT WEAKENED. This used to assert the verdict was 'trigger' — the
+  // implicit 1:1 rule, retired 2026-08-18 with the server's DM auto-address. The
+  // ABSENCE it pins is the same one: no stale field on the entry may move a verdict.
+  // An ADDRESSED message carries it now, because that is the verdict a resurrected
+  // `teamAgents` read would suppress.
   const base = makeEntry({ memberCount: 2, isMember: true });
-  assert.equal(classify(plain, base, ME), "trigger");
-  assert.equal(classify(plain, { ...base, teamAgents: 3, rosterKnown: true }, ME), "trigger",
-    "a stale count must not suppress the implicit trigger");
+  const addressed = { ...plain, metadata: { to_user_id: ME } };
+  assert.equal(classify(addressed, base, ME), "trigger");
+  assert.equal(classify(addressed, { ...base, teamAgents: 3, rosterKnown: true }, ME), "trigger",
+    "a stale team count must not suppress an addressed request");
   // The per-channel mute that used to be the ONE exception to this is gone too
   // (F-170, 2026-08-08): notify scope was removed from the product, so nothing
   // — not a stale team count, not a stored preference — suppresses this verdict.
   assert.equal(
-    classify(plain, { ...base, teamAgents: 3, channel: { ...base.channel, myNotifyScope: "none" } }, ME),
+    classify(addressed, { ...base, teamAgents: 3, channel: { ...base.channel, myNotifyScope: "none" } }, ME),
     "trigger"
   );
+  // And the unaddressed half, stated where a reader will look for it: no field
+  // on the entry can turn an unaddressed post back into a trigger either.
+  assert.equal(classify(plain, { ...base, teamAgents: 0, rosterKnown: true }, ME), "fyi");
 });
 
 test("(rollback) an agent-authored message to me is a TRIGGER, never 'agent-escalation'", () => {

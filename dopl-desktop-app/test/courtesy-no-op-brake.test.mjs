@@ -142,7 +142,17 @@ test("both false invariants are corrected where they were written", () => {
     "targeting.js still claims an unaddressed reply reaches the loop brake"
   );
   assert.match(targeting, /THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM/);
-  assert.match(targeting, /resolvePostMetadata` falls back to\s*\/\/ `peerUserId`/);
+  // ⚠ AND THE CORRECTION IS ITSELF NOW HISTORY. The `peerUserId` fallback the
+  // corrected comment described was REMOVED 2026-08-18 (wiring plan Phase 3), so
+  // targeting.js must state it in the PAST TENSE — a present-tense description of
+  // a retired server behaviour is the same class of wrong comment this test was
+  // written to catch, one retirement later.
+  assert.match(targeting, /`resolvePostMetadata` fell back to/);
+  assert.match(targeting, /HISTORY, NOT BEHAVIOUR/);
+  assert.ok(
+    !/`resolvePostMetadata` falls back to/.test(targeting),
+    "targeting.js still describes the DM auto-address as live"
+  );
 
   const post = read("channel-post.js");
   assert.ok(

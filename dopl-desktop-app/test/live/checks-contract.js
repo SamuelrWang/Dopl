@@ -43,6 +43,11 @@ const FORGED = {
   intent: 'request',
   session_id: '00000000-0000-4000-8000-0000000000fc',
   handoff: true,
+  // The REQUEST FAN-OUT group (wiring plan Phase 3). Forged on `handoff`'s terms and for a
+  // sharper reason than most: the transcript renders every opening message sharing this id
+  // as ONE card, so a caller that could set it would draw its own thread inside somebody
+  // else's request — a claim about who was asked what, made by the wrong person.
+  fanoutGroup: 'forged-fanout-group',
   // The THREAD-SHAPE keys. Stripped unconditionally alongside the rest, and worth forging
   // for the same reason: `taskTarget` and `taskCreatedBy` are attribution, and `taskMode`
   // is the field that decides whether a thread starts at ask or runs unattended.

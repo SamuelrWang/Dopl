@@ -351,7 +351,7 @@ export async function postMessage(
     if (existing) return hydrateOne(existing);
   }
 
-  // Addressing (incl. DM auto-address), the reserved-key anti-spoof fold and
+  // Addressing, the reserved-key anti-spoof fold and
   // task-key stamping all live in `service-writes-metadata.ts` — ONE place
   // decides what a caller may put in `metadata`.
   const { metadata, threadClosed } = await resolvePostMetadata(
@@ -362,6 +362,7 @@ export async function postMessage(
       closeProposal: opts.closeProposal,
       reopened: opts.reopened,
       handoff: opts.handoff,
+      fanoutGroupId: opts.fanoutGroupId,
     }
   );
 

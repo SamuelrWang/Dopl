@@ -27,14 +27,19 @@ function metaStr(m, key) {
 //   1. metadata.to_user_id present → trigger only if it equals me; else FYI (multi-member) /
 //      ignore. USER *and* AGENT authors — an agent explicitly addressed to me is the core
 //      Channels use case and MUST trigger.
-//   2. absent + USER author + exactly 2 members → implicit target (trigger).
-//   3. absent + AGENT author → FYI / ignore, never an implicit trigger. LOOP BRAKE.
-//   4. absent + 3+ members → FYI only, never a trigger.
-//   5. `metadata.intent === 'chat'` triggers NOBODY, at any member count, any author kind.
+//   2. absent → FYI / ignore. NEVER a trigger, at any member count, any author kind.
+//   3. `metadata.intent === 'chat'` triggers NOBODY, on the same terms.
 // authorKind must be 'user' or 'agent'; anything else ('system') → ignore.
-// ⚠ The implicit 2-member trigger FAILS CLOSED: known-exact count of 2 AND explicit
-// membership. Absent/invalid count or unknown membership => multi-member (FYI). A stale
-// Channel DTO must never mass-prompt a group channel.
+// ⚠ ADDRESSING IS EXPLICIT NOW, AND RULE 2 IS THE WHOLE OF FAIL-CLOSED. The IMPLICIT
+// 1:1 trigger — a known-exact memberCount of 2 plus explicit membership — was REMOVED
+// 2026-08-18, together with the server-side DM auto-address it paired with. An ask that
+// names nobody reaches nobody, in a DM exactly as in a group channel; the one surface
+// that raises an agent request is the web app's New agent thread panel, which always
+// names its addressees. Do NOT reinstate a count-keyed trigger: it made the ROSTER a
+// behaviour, so one ghost membership row silently changed what a message did.
+// ⚠ SHIP ORDER, INVARIANTS §13: the WEB half deploys FIRST. An old desktop against a new
+// server keeps triggering on 2-member channels until it updates, which is noisy and safe;
+// a new desktop against an old server is the direction that breaks.
 
 // The `intent="chat"` marker.
 // ⚠ TWO READERS, ONE PREDICATE: listener-messages.js asks the same question BEFORE classify
@@ -66,14 +71,17 @@ function classify(m, entry, myId) {
     return 'ignore';
   }
 
-  const rawCount = Number(entry.channel && entry.channel.memberCount);
-  const knownTwo = Number.isFinite(rawCount) && rawCount === 2;
+  // ⚠ THE MEMBER COUNT IS NO LONGER READ. It keyed the implicit 1:1 trigger, retired
+  // 2026-08-18 — see the header. `listener-messages.js` still LOGS it as diagnostics.
   // Only an explicit `isMember: false` blocks (public channel the operator sees but is not
-  // in); a missing field degrades to member so DTO drift cannot silently stop 1:1 answering.
+  // in); a missing field degrades to member so DTO drift cannot silently stop answering.
   const isMember = !(entry.channel && entry.channel.isMember === false);
-  // ⚠ In a DIRECT channel the server addresses EVERY post automatically, so `to_user_id`
-  // there is not evidence anybody addressed anybody.
-  const isDirect = !!(entry.channel && entry.channel.isDirect === true);
+  // ⚠ `isDirect` USED TO BE READ HERE and its comment said a DIRECT channel addresses
+  // EVERY post automatically, so `to_user_id` there was not evidence anybody addressed
+  // anybody. It was already dead when the branch that needed it went; the SERVER
+  // behaviour it described was removed 2026-08-18 with the DM auto-address. A direct
+  // channel is now just a channel with two members, and `to_user_id` means the same
+  // thing in it as anywhere else.
 
   const toUserId = metaStr(m, 'to_user_id');
   // TASK-REPLY, requester side: an inbound reply on an INTERACTIVE task I created, addressed
@@ -110,9 +118,10 @@ function classify(m, entry, myId) {
   ) return 'task-reply';
   // CHAT — a post that declared it addresses nobody triggers nobody.
   // ⚠ POSITION IS LOAD-BEARING: after the two task-reply branches (passive notices, nothing to
-  // suppress) and BEFORE every branch that can return 'trigger'. Chat is the composer's
-  // DEFAULT and under it the server stamps no to_user_id, so without this an ordinary
-  // "sounds good" in a DM falls into the implicit 2-member rule and spawns an ASSIST session.
+  // suppress) and BEFORE every branch that can return 'trigger'. It no longer STOPS anything
+  // an unaddressed post could otherwise do — the implicit 2-member rule it used to brake is
+  // retired — but it still says which of FYI and ignore an unaddressed post takes, and it
+  // still tells the receiving side the sender MEANT to reach nobody.
   if (isChatIntent(m)) return isMember ? 'fyi' : 'ignore';
   if (toUserId) {
     // Explicit address always prompts — USER *and* AGENT authors.
@@ -120,19 +129,16 @@ function classify(m, entry, myId) {
     if (toUserId === m.authorUserId) return 'ignore'; // self-addressed noise
     return isMember ? 'fyi' : 'ignore';
   }
-  // LOOP BRAKE: an UNADDRESSED agent can never trigger — FYI (member) / ignore.
-  // ⚠ THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM. It claimed the responder's
-  // unaddressed reply lands here as FYI. In a DIRECT channel `resolvePostMetadata` falls back to
-  // `peerUserId`, so `to_user_id` IS stamped, the addressed rule above claims the message and
-  // this branch is never reached. What brakes a DM is `intent:"chat"` above (stamped by
-  // channel-post.postCourtesy). This branch covers group channels and DM posts carrying an
-  // explicit intent.
-  if (m.authorKind === 'agent') return isMember ? 'fyi' : 'ignore';
-  // Implicit 1:1 trigger (USER authors only). ⚠ NOTHING SUPPRESSES IT — there is no
-  // per-channel opt-out anywhere. The old `myNotifyScope` read was removed because two of its
-  // three options were lies ('addressed' compared nowhere; 'none' never silenced an addressed
-  // request). Do NOT reinstate that column; a quiet-in-one-channel feature must be designed.
-  if (knownTwo && isMember) return 'trigger';
+  // UNADDRESSED — FYI (member) / ignore. ONE branch now, for every author kind.
+  // ⚠ THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM, and the reason it was
+  // false is GONE. It used to claim a responder's unaddressed reply landed here as FYI;
+  // in a DIRECT channel `resolvePostMetadata` fell back to
+  // `peerUserId`, so `to_user_id` WAS stamped, the addressed rule above claimed the
+  // message and this branch was never reached. What braked a DM was `intent:"chat"`
+  // above (stamped by channel-post.postCourtesy). ⚠ HISTORY, NOT BEHAVIOUR: that
+  // fallback was REMOVED 2026-08-18 in the same change as the implicit 1:1 trigger, so an
+  // unaddressed DM post really does arrive here now — which is why the LOOP BRAKE that
+  // used to be an agent-only special case is simply the rule.
   return isMember ? 'fyi' : 'ignore';
 }
 

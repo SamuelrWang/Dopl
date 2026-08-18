@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
 import {
+  CHANNEL_FANOUT_MAX_ADDRESSEES,
   DEFAULT_MESSAGE_LIMIT,
   MAX_AWAIT_TIMEOUT_MS,
   MAX_MESSAGE_LIMIT,
@@ -108,11 +109,17 @@ export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
 
 /**
  * CHAT vs REQUEST — whether a post may reach anybody's agent.
- *  - `request` (DEFAULT, what every existing caller gets) — DM auto-address
- *    fires, receiving listener triggers.
- *  - `chat` — human talk. DM auto-address SKIPPED entirely: no `to_user_id`
- *    manufactured from the peer. Everything else normal (seq, realtime, read
- *    watermark, explicit `thread` tag).
+ *  - `request` (DEFAULT, what every existing caller gets) — an EXPLICIT
+ *    `toUserId` addresses, and the receiving listener triggers on it.
+ *  - `chat` — human talk. It STATES that this post is not work for anybody,
+ *    which the receiving side reads, and it keeps the post out of an open DM
+ *    thread (`resolvePostMetadata` never resolves a peer for it). Everything
+ *    else normal (seq, realtime, read watermark, explicit `thread` tag).
+ *
+ * ⚠ `chat` no longer has an AUTO-ADDRESS to suppress. The DM fallback that
+ * stamped the peer when a caller named nobody was retired 2026-08-18 (wiring
+ * plan Phase 3), so an unaddressed post reaches nobody's agent under either
+ * intent. What survives is the DECLARATION and the inheritance gate.
  *
  * ⚠ `chat` + explicit human `to` is a contradiction → 400
  * `CHANNEL_CHAT_ADDRESSED` (`server/errors.ts`), never silently resolved:
@@ -198,6 +205,62 @@ export const TaskCreateSchema = z.object({
   participants: removedParam(REMOVED_PARTICIPANTS),
 });
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
+
+/**
+ * Create ONE request against N addressees — the "New agent thread" panel's
+ * send. Storage still holds one requester + one target per thread
+ * (INVARIANTS §5), so the service loops `createTask`; this schema is the shape
+ * of the ASK, not of a row.
+ *
+ * ⚠ `toUserIds` is `.min(1)`: **a fan-out with no addressees is a 400**, not an
+ * empty success. Removing every pill reaches nobody, and a surface that
+ * accepted the send would report a request that was never raised. The UI
+ * disables Send at zero for the same reason — the refusal exists on both sides
+ * because only one of them is the contract.
+ *
+ * ⚠ `clientMsgId` is REQUIRED here where `TaskCreateSchema` leaves it optional.
+ * It is the BASE the per-addressee keys are derived from
+ * (`server/service-tasks-fanout.ts › addresseeClientMsgId`) AND the seed of the
+ * group id the N threads share, so a fan-out without one has no way to converge
+ * on retry and no stable card. Bounded well under `clientMsgId`'s own 200 so
+ * the derived `${base}:${uuid}` keys stay inside it.
+ */
+export const TaskFanOutSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  mode: TaskModeSchema.optional(),
+  body: z.string().min(1).max(16000),
+  toUserIds: z
+    .array(z.string().uuid())
+    .min(1, { error: "Address at least one agent" })
+    .max(CHANNEL_FANOUT_MAX_ADDRESSEES),
+  clientMsgId: z.string().min(1).max(120),
+});
+export type TaskFanOutInput = z.infer<typeof TaskFanOutSchema>;
+
+/**
+ * What POST `/channels/[channelId]/tasks` accepts: the fan-out shape or the
+ * single-target one.
+ *
+ * ⚠ Plain union, FAN-OUT FIRST, and the order is load-bearing. There is no
+ * discriminator to add without breaking every installed caller of the
+ * single-target create (the desktop and the MCP lane both post it), and zod
+ * STRIPS unknown keys — so a `{toUserIds}` body checked against
+ * {@link TaskCreateSchema} first would fail only on the missing `toUserId` and
+ * report that as the error. The two arms are mutually exclusive by their
+ * REQUIRED fields, so first-match is exact.
+ */
+export const TaskCreatePayloadSchema = z.union([
+  TaskFanOutSchema,
+  TaskCreateSchema,
+]);
+export type TaskCreatePayloadInput = z.infer<typeof TaskCreatePayloadSchema>;
+
+/** True for the fan-out arm of {@link TaskCreatePayloadSchema}. */
+export function isTaskFanOutInput(
+  input: TaskCreatePayloadInput
+): input is TaskFanOutInput {
+  return Array.isArray((input as TaskFanOutInput).toUserIds);
+}
 
 /**
  * Update a task. Authz per op:

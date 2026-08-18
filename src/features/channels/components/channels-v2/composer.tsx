@@ -4,23 +4,30 @@
  * Channels v2 — the composer card, with the @-mention autocomplete floating
  * above its left edge and the NEW AGENT THREAD panel recessed inside it.
  *
- * ⚠ WRITES ARE PHASE 3. Typing works, the panel opens, addressees can be
- * dropped and the @-autocomplete resolves against the REAL roster — but Send is
- * INERT. The write path (`channel_message_insert`, the request fan-out into one
- * `channel_tasks` row per addressee, `client_msg_id` idempotency) is the next
- * phase's whole subject, and a Send button that posted through the old
- * single-target `openThread` write would build the shape the fan-out has to
- * replace.
+ * ⚠ TWO SENDS, ONE BUTTON, AND THEY ARE DIFFERENT WRITES. With the panel CLOSED
+ * Send posts a plain chat message (`intent:"chat"` — the wire value is
+ * load-bearing, it is what tells the receiving side this reaches nobody's
+ * agent). With the panel OPEN it raises a REQUEST: the title becomes the thread
+ * title, every remaining pill becomes an addressee, and the fan-out writes one
+ * `channel_tasks` row per pill (INVARIANTS §5 — a thread is one requester + one
+ * target) which the transcript renders as ONE card
+ * (`transcript.tsx › ThreadCardMessage`).
  *
- * What a send WILL do: the title becomes the thread title, the pills become its
- * addressees, and the request lands in the channel as a thread card
- * (`transcript.tsx › ThreadCardMessage`). MAPPING.md § New agent thread has the
- * lifecycle, and N pills = N addressees — "broadcast" stays a shape the product
- * does not have (INVARIANTS §5).
+ * ⚠ N PILLS = N ADDRESSEES, AND ZERO PILLS IS NOT SENDABLE. "Broadcast" is not
+ * a shape this product has. The button disables at zero as a courtesy; the
+ * CONTRACT is `schema.ts › TaskFanOutSchema`, where an empty addressee list is
+ * a 400 — a UI-only refusal would be a rule that exists until somebody writes a
+ * second client.
+ *
+ * ⚠ THE BASE IDEMPOTENCY KEY IS MINTED HERE, at submit, exactly once per Send.
+ * The server derives one key per addressee from it plus the group id the card
+ * is drawn from, so a retry converges thread-by-thread instead of raising the
+ * request twice (INVARIANTS §8).
  */
 
 import { useMemo, useState } from "react";
 import { AtSign, Bot, Expand, Mic, Paperclip, Smile, X, Zap } from "lucide-react";
+import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { Avatar } from "@/shared/ui/avatar";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { FIELD_WELL } from "@/shared/ui/wells";
@@ -28,8 +35,21 @@ import { cn } from "@/shared/lib/utils";
 import { AgentTargetPill, IconButton } from "./bits";
 import { agentLabel } from "./fixtures";
 import { memberLabel } from "../../lib/channel-display";
+import { useThreadWrites } from "../../hooks/use-thread-writes";
+import { newClientMsgId } from "../../lib/optimistic-cache";
 import { memberPerson } from "./view-model";
 import type { ChannelMember } from "../../types";
+
+/**
+ * Why Send is disabled, said out loud. ⚠ A disabled control with no reason is
+ * indistinguishable from a broken one.
+ */
+function sendHint(panelOpen: boolean, canSend: boolean, pending: boolean): string {
+  if (canSend) return panelOpen ? "Send request" : "Send";
+  if (pending) return "Sending…";
+  if (!panelOpen) return "Write a message first";
+  return "A request needs a title and at least one agent";
+}
 
 /** The trailing `@token` of a draft, or null when the caret is not in one. */
 function mentionQuery(draft: string): string | null {
@@ -38,11 +58,24 @@ function mentionQuery(draft: string): string | null {
 }
 
 export function ChannelsV2Composer({
+  channelId,
+  workspaceId,
   members,
   currentUserId,
+  currentUserName,
+  currentUserAvatarUrl,
+  gate,
 }: {
+  /** ⚠ CAPTURED AT SUBMIT into every draft — never re-read from the selection
+   *  while a write is in flight (INVARIANTS §8, rule 4). */
+  channelId: string;
+  workspaceId: string;
   members: ChannelMember[];
   currentUserId: string;
+  currentUserName?: string | null;
+  currentUserAvatarUrl?: string | null;
+  /** The page's refetch coordinator — the SAME gate the reads register. */
+  gate: MutationGate;
 }) {
   const [draft, setDraft] = useState("");
   const [title, setTitle] = useState("");
@@ -50,6 +83,13 @@ export function ChannelsV2Composer({
   const [removedAgents, setRemovedAgents] = useState<ReadonlySet<string>>(
     () => new Set()
   );
+  const { send, fanOutThreads, pending } = useThreadWrites({
+    workspaceId,
+    currentUserId,
+    currentUserName,
+    currentUserAvatarUrl,
+    gate,
+  });
 
   // Every OTHER member's agent. Derived from the REAL roster, so the pills and
   // the Info tab's members list cannot disagree — you do not address your own.
@@ -77,6 +117,54 @@ export function ChannelsV2Composer({
       setRemovedAgents(new Set());
       return true;
     });
+  };
+
+  const addressed = targets.filter((target) => !removedAgents.has(target.id));
+  const body = draft.trim();
+  // ⚠ THE SEND GATE, computed once and read twice — the button's `disabled` and
+  // the submit's own guard. A request additionally needs a title and at least
+  // one addressee; a chat message needs a body and nothing else.
+  const canSend =
+    body.length > 0 &&
+    !pending &&
+    (!agentPanelOpen || (title.trim().length > 0 && addressed.length > 0));
+
+  const clear = () => {
+    setDraft("");
+    setTitle("");
+    setAgentPanelOpen(false);
+  };
+
+  /**
+   * ⚠ THE COMPOSER CLEARS BEFORE THE AWAIT and the drafts carry everything the
+   * write needs — the optimistic layer owns the rollback, and re-reading state
+   * after the round trip would read a composer the user has since typed into.
+   */
+  const submit = () => {
+    if (!canSend) return;
+    if (agentPanelOpen) {
+      const request = {
+        channelId,
+        clientMsgId: newClientMsgId(),
+        title: title.trim(),
+        body,
+        toUserIds: addressed.map((target) => target.id),
+      };
+      clear();
+      fanOutThreads.mutate(request);
+      return;
+    }
+    const message = {
+      channelId,
+      clientMsgId: newClientMsgId(),
+      body,
+      // ⚠ EXPLICIT, never omitted. Absence reads as `request` on the wire
+      // (`schema.ts › MessageIntentSchema`), and the plain composer is human
+      // chat, full stop — the intent pill that used to choose is retired.
+      intent: "chat" as const,
+    };
+    clear();
+    send.mutate(message);
   };
 
   return (
@@ -120,10 +208,21 @@ export function ChannelsV2Composer({
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter sends, Shift+Enter breaks the line — and an IME
+                // composition never sends, or a mid-word confirm posts.
+                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) {
+                  return;
+                }
+                e.preventDefault();
+                submit();
+              }}
               rows={1}
               spellCheck={false}
               aria-label="Message"
-              placeholder="Write a message"
+              placeholder={
+                agentPanelOpen ? "Describe the request" : "Write a message"
+              }
               className="min-w-0 flex-1 resize-none bg-transparent py-1 text-lead text-text-primary outline-none placeholder:text-text-muted"
             />
             <IconButton icon={Expand} label="Expand composer" size={14} className="h-6 w-6" />
@@ -146,24 +245,25 @@ export function ChannelsV2Composer({
             <span className="flex-1" />
             <button
               type="button"
-              onClick={() => {
-                setDraft("");
-                setTitle("");
-              }}
+              onClick={clear}
               className="rounded-[8px] px-2.5 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
             >
               Discard
             </button>
-            {/* INERT — writes are Phase 3 (see the file header). Disabled
-                rather than silently swallowing a click, so the surface never
-                claims to have sent something it did not. */}
+            {/* ⚠ DISABLED WITH A REASON, never a silent no-op: a Send that
+                swallows the click is a surface claiming to have sent something
+                it did not (INVARIANTS §8, rule 4 — the gate says WHY). */}
             <button
               type="button"
-              disabled
-              title="Sending is not wired yet"
-              className="auth-btn-3d ml-1 cursor-not-allowed rounded-[8px] px-3.5 py-1.5 text-caption font-semibold text-text-on-cta opacity-60"
+              onClick={submit}
+              disabled={!canSend}
+              title={sendHint(agentPanelOpen, canSend, pending)}
+              className={cn(
+                "auth-btn-3d ml-1 rounded-[8px] px-3.5 py-1.5 text-caption font-semibold text-text-on-cta",
+                !canSend && "cursor-not-allowed opacity-60"
+              )}
             >
-              Send
+              {agentPanelOpen ? "Send request" : "Send"}
             </button>
           </div>
         </div>

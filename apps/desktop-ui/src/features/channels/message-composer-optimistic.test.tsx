@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MessageComposer } from "@/features/channels/components/message-composer";
-import type { ChannelMember } from "@/features/channels/types";
 
 /**
  * The first frame after Enter. Pinned HERE because the root suite runs in the
@@ -13,29 +12,6 @@ import type { ChannelMember } from "@/features/channels/types";
  *  - a FAILED send restores the draft verbatim — the caller rolled its cache
  *    back and the message exists nowhere else.
  */
-
-const ME = "user-me";
-const PEER = "user-peer";
-
-function member(userId: string, displayName: string): ChannelMember {
-  return {
-    channelId: "channel-1",
-    userId,
-    role: "member",
-    lastReadAt: null,
-    notifyScope: null,
-    agentToolProfile: null,
-    agentOnline: true,
-    lastSeenAt: "2026-08-07T10:00:00.000Z",
-    addedBy: null,
-    joinedAt: "2026-08-07T09:00:00.000Z",
-    displayName,
-    email: null,
-    avatarUrl: null,
-  };
-}
-
-const MEMBERS = [member(ME, "Sam"), member(PEER, "Ada")];
 
 /** A send whose promise the test settles by hand. */
 function deferredSend() {
@@ -50,9 +26,9 @@ function deferredSend() {
 }
 
 function composer(onSend: () => Promise<void>) {
-  render(
-    <MessageComposer onSend={onSend} members={MEMBERS} currentUserId={ME} />
-  );
+  // ⚠ NO ROSTER PROP any more. The composer stopped taking one when request
+  // mode retired (wiring plan Phase 3) — it has nobody to address.
+  render(<MessageComposer onSend={onSend} />);
   return screen.getByPlaceholderText("Message the channel") as HTMLTextAreaElement;
 }
 
@@ -65,6 +41,9 @@ function press(field: HTMLTextAreaElement) {
 }
 
 describe("MessageComposer — the optimistic send", () => {
+  /** ⚠ `{ intent: "chat" }` IS THE ASSERTION, not decoration: absence reads as
+   *  `request` server-side, so a dropped field puts every message on this page
+   *  back on the lane that can start somebody's agent. */
   it("clears the draft before the write settles", async () => {
     const { onSend, settle, done } = deferredSend();
     const field = composer(onSend);

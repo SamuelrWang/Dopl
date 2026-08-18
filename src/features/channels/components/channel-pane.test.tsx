@@ -127,14 +127,12 @@ function render(
       threadsLoading={false}
       loading={false}
       members={[member({ userId: ME, displayName: "Me" })]}
-      membersStale={false}
       currentUserId={ME}
       consentRequests={consentRequests}
       trustedIds={new Set()}
       trustBusyIds={new Set()}
       consentBusyIds={new Set()}
       onSend={noopAsync}
-      onCreateThread={noopAsync}
       onCloseThread={noopAsync}
       onReopenThread={noopAsync}
       onInvite={noop}

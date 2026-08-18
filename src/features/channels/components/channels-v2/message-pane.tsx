@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
   Bookmark,
   ChevronRight,
@@ -44,18 +45,24 @@ export interface ScrollTarget {
 }
 
 export function ChannelsV2MessagePane({
+  channelId,
+  workspaceId,
   channelName,
   thread,
   rows,
   index,
   members,
   loading,
+  requested,
   scrollTarget,
   infoOpen,
+  gate,
   onToggleInfo,
   onExitThread,
   onOpenThread,
 }: {
+  channelId: string;
+  workspaceId: string;
   channelName: string;
   /** The open thread, or `null` for the channel view. */
   thread: ChannelThread | null;
@@ -63,8 +70,12 @@ export function ChannelsV2MessagePane({
   index: AuthorIndex;
   members: ChannelMember[];
   loading: boolean;
+  /** Thread ids the viewer has been asked about and has not answered. */
+  requested: ReadonlySet<string>;
   scrollTarget: ScrollTarget | null;
   infoOpen: boolean;
+  /** The page's refetch coordinator, handed straight to the composer's writes. */
+  gate: MutationGate;
   onToggleInfo: () => void;
   onExitThread: () => void;
   /** Set by an in-transcript thread card — the channel view's way IN. */
@@ -120,11 +131,18 @@ export function ChannelsV2MessagePane({
             rows={rows}
             index={index}
             flashId={flashId}
+            requested={requested}
             onOpenThread={onOpenThread}
           />
         )}
       </div>
-      <ChannelsV2Composer members={members} currentUserId={index.currentUserId} />
+      <ChannelsV2Composer
+        channelId={channelId}
+        workspaceId={workspaceId}
+        members={members}
+        currentUserId={index.currentUserId}
+        gate={gate}
+      />
     </section>
   );
 }

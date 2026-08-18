@@ -71,6 +71,10 @@ async function dispatchMessage(entry, m, myUserId) {
     'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,
     'authorKind', m.authorKind, 'author', String(m.authorUserId || '').slice(0, 8),
     'me', myUserId ? String(myUserId).slice(0, 8) : 'NULL',
+    // ⚠ DIAGNOSTIC ONLY, and deliberately kept after the implicit 1:1 trigger was
+    // removed (2026-08-18). classify no longer READS the count — but a roster of the
+    // wrong size is still the first thing to check when a verdict surprises somebody,
+    // and it is cheaper to log than to reconstruct.
     'members', Number(entry.channel && entry.channel.memberCount) || '?',
     'to', targeting.metaStr(m, 'to_user_id') ? String(targeting.metaStr(m, 'to_user_id')).slice(0, 8) : '-',
     'verdict', verdict

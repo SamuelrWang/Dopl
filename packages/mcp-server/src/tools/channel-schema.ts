@@ -92,7 +92,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .enum(["chat", "request"])
     .optional()
     .describe(
-      'op="post" (optional, default "request"): what this message IS. "request" is the working message: it may address a PERSON with `to`, and in a DIRECT (1:1) channel the server addresses it to the other member for you, which is what puts it in front of their side. "chat" is PEOPLE TALKING: it addresses nobody, starts nobody, and the direct-channel auto-address is skipped entirely, so two people can talk in a DM without each line poking the other side\'s machine. "chat" together with `to` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".',
+      'op="post" (optional, default "request"): what this message IS. "request" is the working message: it may address a PERSON with `to`, and `to` is the ONLY thing that puts a post in front of somebody\'s side — nothing is addressed for you, a DIRECT (1:1) channel included. "chat" is PEOPLE TALKING: it addresses nobody and starts nobody, and it SAYS SO on the wire, so the receiving side can tell a deliberate aside from a request that forgot to name anyone. "chat" together with `to` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".',
     ),
   body: z
     .string()

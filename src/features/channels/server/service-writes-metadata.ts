@@ -24,8 +24,8 @@ import type { ChannelContext } from "./service-shared";
  * server-validated values: `to_user_id`, `summary`, `runtime`, `appVersion`,
  * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
  * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
- * `handoff`, the six calm-terminal flags, the two close-proposal keys, and
- * `threadReopened`. `taskId` stays caller-settable, but every thread id —
+ * `handoff`, `fanoutGroup`, the six calm-terminal flags, the two close-proposal
+ * keys, and `threadReopened`. `taskId` stays caller-settable, but every thread id —
  * first-class or legacy — must BELONG to the poster (see
  * {@link resolvePostMetadata}). Marker keys live in
  * `service-writes-metadata-markers.ts`, the thread half in
@@ -40,8 +40,14 @@ import type { ChannelContext } from "./service-shared";
 /**
  * Other member of a DIRECT channel, or undefined when ambiguous. A DM is exactly
  * two members; any other shape resolves to nothing rather than guessing.
- * Read off the same roster table the explicit `to` path validates against, so an
- * auto-addressed peer satisfies addressee-is-active-member by construction.
+ *
+ * ⚠ ITS ONLY SURVIVING READER IS THREAD INHERITANCE. Until 2026-08-18 this also
+ * fed DM AUTO-ADDRESS — a DM post with no caller `to` was stamped with the peer
+ * — and that fallback is RETIRED (wiring plan Phase 3). Addressing is now
+ * explicit at every member count, in every channel shape: a post with no `to`
+ * addresses nobody, and nobody's agent is started by it. Do not reinstate the
+ * fallback here; the "New agent thread" panel is the one surface that raises an
+ * agent request, and it always names its addressees.
  */
 async function resolveDirectPeer(
   channel: ChannelRow,
@@ -121,6 +127,17 @@ export interface PostMetadataOptions {
    * to open a requester window, so it must never be caller-settable.
    */
   handoff?: boolean;
+  /**
+   * Stamp reserved `metadata.fanoutGroup` with this id. Only caller:
+   * `service-tasks-fanout.ts › createTaskFanOut` (through
+   * `service-tasks.ts › createTask`), which derives it server-side from the
+   * channel, the creator and the validated base idempotency key.
+   *
+   * ⚠ Reserved on the handoff stamp's terms — the transcript renders every
+   * opening message sharing a group id as ONE card, so a caller able to set it
+   * could splice its own thread into somebody else's request.
+   */
+  fanoutGroupId?: string;
 }
 
 /**
@@ -137,11 +154,13 @@ export interface PostMetadataOptions {
  *    turns fold (2) OFF. Stamped rather than merely acted on so the receiving
  *    side can tell a deliberate CHAT from a message that forgot to address, and
  *    never "repairs" it as a delivery failure.
- * 2. **DM auto-address.** Direct channel + no caller `to` → peer stamped as
- *    `to_user_id`; an unaddressed agent message is deliberately ignorable on the
- *    receiving desktop (loop brake), so a real DM reply would otherwise post and
- *    never deliver. ⚠ NEVER in a non-direct channel — with 3+ members a wrong
- *    guess prompts the wrong operator. Skipped entirely under `intent:"chat"`.
+ * 2. **Addressing is EXPLICIT, at every channel shape.** `metadata.to_user_id`
+ *    comes from the validated `input.toUserId` and from nowhere else. ⚠ The DM
+ *    auto-address fallback (direct channel + no caller `to` → stamp the peer)
+ *    was RETIRED 2026-08-18: a post that names nobody reaches nobody's agent, in
+ *    a DM exactly as in a group channel. `resolveDirectPeer` survives for fold
+ *    (3) — thread inheritance — and `intent:"chat"` still skips it, so a chat
+ *    post never inherits an open thread either.
  * 3. **Task keys.** Reserved four stripped and re-stamped from the resolved task
  *    row, so `taskMode` reflects the latest `set_task_mode` and can't be
  *    spoofed. `taskId` stays caller-settable: a UUID resolving to no task in
@@ -220,6 +239,10 @@ export async function resolvePostMetadata(
   // caller-set value could open a session on the operator's machine without
   // going through validated `create_thread`. Re-stamped only from `opts` below.
   delete metadata.handoff;
+  // ⚠ Same terms as `handoff`: the transcript groups every opening message
+  // sharing this id into ONE request card, so a settable group id is a way to
+  // render your own thread inside somebody else's request.
+  delete metadata.fanoutGroup;
   const calmFlags = takeCalmFlags(metadata);
 
   // Only when supplied — absent stamps no key, and absence reads as `request`.
@@ -233,14 +256,9 @@ export async function resolvePostMetadata(
   // Verbatim — shape already checked by `session-header.ts`.
   if (ctx.sessionId) metadata.session_id = ctx.sessionId;
 
-  // ⚠ CHAT never RESOLVES a peer, rather than resolving and discarding — the
-  // fallback below reads whatever `peerUserId` holds, so leaving nothing to fall
-  // back to is the only way a chat post can never be auto-addressed.
-  const peerUserId =
-    input.intent === "chat"
-      ? undefined
-      : await resolveDirectPeer(channel, ctx.userId);
-  const toUserId = input.toUserId ?? peerUserId;
+  // ⚠ THE VALIDATED FIELD, WITH NO FALLBACK BEHIND IT. There is no shape of
+  // channel in which the server picks an addressee the caller did not name.
+  const toUserId = input.toUserId;
   if (toUserId) metadata.to_user_id = toUserId;
   if (input.summary) metadata.summary = input.summary;
 
@@ -275,12 +293,19 @@ export async function resolvePostMetadata(
       delete metadata.taskId;
     }
   } else if (
-    peerUserId &&
-    toUserId === peerUserId &&
-    (input.kind ?? "message") === "message"
+    toUserId &&
+    (input.kind ?? "message") === "message" &&
+    // ⚠ Resolved LAZILY, and only for a post that could inherit: with the
+    // auto-address fallback gone this roster read has one reader left, and a
+    // group-channel or threaded post must not pay for it. `chat` never resolves
+    // a peer AT ALL, which is what keeps a chat post out of an open thread.
+    input.intent !== "chat"
   ) {
-    task = await resolveInheritableTask(channel, ctx.userId, peerUserId);
-    if (task) metadata.taskId = task.id;
+    const peerUserId = await resolveDirectPeer(channel, ctx.userId);
+    if (peerUserId && toUserId === peerUserId) {
+      task = await resolveInheritableTask(channel, ctx.userId, peerUserId);
+      if (task) metadata.taskId = task.id;
+    }
   }
 
   if (task) {
@@ -323,6 +348,13 @@ export async function resolvePostMetadata(
   // else's machine. Literal boolean, read `=== true` on the desktop.
   if (opts.handoff === true && typeof metadata.taskId === "string") {
     metadata.handoff = true;
+  }
+
+  // Fan-out group, same discipline and the same condition: it only ever rides
+  // the opening message of a thread the poster just created, so a tag that did
+  // not survive the participation gate above takes the group with it.
+  if (opts.fanoutGroupId && typeof metadata.taskId === "string") {
+    metadata.fanoutGroup = opts.fanoutGroupId;
   }
 
   // Read off the row the folds already resolved. An INHERITED task can never be

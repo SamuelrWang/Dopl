@@ -175,11 +175,21 @@ describe("routesToASession — first-class only", () => {
 describe("unaddressedPostNote", () => {
   const base = { ref: "chan-1", isDirect: false, landedThread: undefined };
 
-  it("says nothing when the caller addressed someone, or the channel is direct", () => {
+  it("says nothing ONLY when the caller addressed someone", () => {
     expect(unaddressedPostNote({ ...base, addressed: true })).toBeNull();
-    expect(
-      unaddressedPostNote({ ...base, isDirect: true, addressed: false }),
-    ).toBeNull();
+  });
+
+  /**
+   * ⚠ INVERTED 2026-08-18 (wiring plan Phase 3). This used to assert `null` for
+   * a DIRECT channel, because `resolveDirectPeer` stamped the other member
+   * server-side. That fallback is retired: an unaddressed DM post reaches
+   * nobody's agent like any other, and staying quiet about it is exactly the
+   * invisible-delivery failure this module exists to prevent.
+   */
+  it("WARNS in a direct channel too — nothing addresses a post for you now", () => {
+    const note = unaddressedPostNote({ ...base, isDirect: true, addressed: false });
+    expect(note).toContain("NOT ADDRESSED");
+    expect(note).toContain("That holds in a DIRECT (1:1) message too");
   });
 
   it("names the AUTHOR KIND as the reason, never the member count", () => {
@@ -240,23 +250,30 @@ describe("post — the note and the linkage line in one result", () => {
     expect(text).toContain('re-post it with to="<one member>"');
   });
 
-  it("stays silent in a DIRECT channel, where the server addresses the post", async () => {
+  it("warns in a DIRECT channel too, and still names the thread it landed in", async () => {
+    // ⚠ Inverted with the DM auto-address retirement (2026-08-18). A threaded
+    // post takes the THREADED shape of the note, which tells the caller to WAIT
+    // rather than re-post — the one remedy that would double the request.
     const client = postClient({ isDirect: true }, { taskId: UUID });
 
     const text = (await opPost(client, "general", "ping")).content[0].text;
 
-    expect(text).not.toContain("NOT ADDRESSED");
+    expect(text).toContain("NOT ADDRESSED, BUT THREADED");
+    expect(text).toContain("Do NOT re-post it");
   });
 });
 
 // ── the roster rule ──────────────────────────────────────────────────
 
 describe("rosterAddressingRule — stated from the count it just read", () => {
-  it("at two members, an unaddressed message CAN be an implicit request", () => {
+  /** ⚠ INVERTED 2026-08-18: the implicit two-member request is retired. Two
+   *  members is no longer a special size, and the copy has to stop saying it
+   *  is — a caller told otherwise leaves `to` off and reaches nobody. */
+  it("at two members, an unaddressed message reaches nobody EITHER", () => {
     const rule = rosterAddressingRule("general", 2);
-    expect(rule).toContain("Two members is the ONE size");
-    expect(rule).toContain("from a PERSON as meant for the only other member");
-    expect(rule).toContain("A post from an AGENT never counts");
+    expect(rule).toContain("the size buys you nothing");
+    expect(rule).not.toContain("Two members is the ONE size");
+    expect(rule).not.toMatch(/implicit request/i);
   });
 
   it("at three or more it really does reach nobody, and says so with the number", () => {
@@ -270,7 +287,12 @@ describe("rosterAddressingRule — stated from the count it just read", () => {
   it("never claims the auto-addressing half it cannot see", () => {
     for (const n of [1, 2, 3, 9]) {
       const rule = rosterAddressingRule("general", n);
-      expect(rule).toContain("it cannot tell you whether this is one");
+      // ⚠ The hedge it used to carry ("this op reads the roster, not the
+      // channel row, so it cannot tell you whether this is one") is GONE, and
+      // its absence is the assertion: there is no direct-channel case left to
+      // be unsure about.
+      expect(rule).not.toContain("it cannot tell you whether this is one");
+      expect(rule).toContain("NOTHING addresses a post for you");
       expect(rule).not.toMatch(/including a two-member/i);
       // ⚠ At every size a thread tag routes past the addressing entirely, so no
       // branch may say an unaddressed post reaches nobody without that caveat.
@@ -286,12 +308,12 @@ describe("rosterAddressingRule — stated from the count it just read", () => {
 });
 
 describe("members — the rule reaches the result", () => {
-  it("a two-member roster is told the two-member rule", async () => {
+  it("a two-member roster is told it is not a special size", async () => {
     const text = (await opMembers(rosterClient([ME, PEER]), "general", ME))
       .content[0].text;
 
-    expect(text).toContain("Two members is the ONE size");
-    expect(text).not.toContain("it triggers nobody");
+    expect(text).toContain("the size buys you nothing");
+    expect(text).not.toContain("Two members is the ONE size");
   });
 
   it("a three-member roster is told the group rule", async () => {

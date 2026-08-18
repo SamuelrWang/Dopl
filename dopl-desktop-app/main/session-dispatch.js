@@ -228,8 +228,12 @@ async function maybeReopenAddressedThread(entry, m, myUserId) {
   // on exactly the opposite pair, so no message can satisfy both.
   //   PEER-AUTHORED: my own message opens threads, it does not answer them.
   //   NOT SOMEBODY ELSE'S: an explicit addressee that is not me is a message I watch, not one I
-  //     owe an answer to. ⚠ Absent is allowed — in a DM the server addresses the peer
-  //     automatically and classify's implicit 1:1 rule is what earned the 'trigger'.
+  //     owe an answer to. ⚠ Absent is still ALLOWED, but no longer because the server filled
+  //     it in: DM auto-address and classify's implicit 1:1 rule both retired 2026-08-18, so
+  //     an unaddressed post no longer earns a 'trigger' at all and cannot reach this route
+  //     that way. What absence now covers is a STORED message from before the retirement,
+  //     and an addressee-less lifecycle post from an installed desktop. The route still runs
+  //     only under a 'trigger' verdict, which today means the post named me.
   if (!myUserId || !m.authorUserId || m.authorUserId === myUserId) return false;
   const addressee = targeting.metaStr(m, 'to_user_id');
   if (addressee && addressee !== myUserId) return false;

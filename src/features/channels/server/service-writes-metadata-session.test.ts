@@ -123,6 +123,9 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
     userId === USER || userId === PEER ? memberRow(userId) : null
   );
+  // ⚠ An explicit `to` also asserts ACTIVE workspace membership. Load-bearing
+  // for every addressed post now that DM auto-address is retired.
+  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repo.listMembers).mockResolvedValue([
     memberRow(USER, "owner"),
     memberRow(PEER),
@@ -245,7 +248,7 @@ describe("postMessage — session_id stamp (F2)", () => {
     await postMessage(
       { ...roomCtx, runtime: "desktop-session", appVersion: "1.7.19" },
       "dm",
-      { body: "on it" }
+      { body: "on it", toUserId: PEER }
     );
 
     const meta = capturedMetadata();

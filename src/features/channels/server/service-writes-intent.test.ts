@@ -134,6 +134,10 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
     userId === USER || userId === PEER ? memberRow(userId) : null
   );
+  // ⚠ Addressing an explicit `to` also asserts ACTIVE workspace membership —
+  // the check every post in this file now goes through, since the DM
+  // auto-address that used to supply the addressee is gone.
+  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repo.listMembers).mockResolvedValue([
     memberRow(USER),
     memberRow(PEER),
@@ -153,16 +157,22 @@ beforeEach(() => {
 describe("postMessage — the DEFAULT intent is unchanged", () => {
   /** ⚠ Whole-object assertion: a new default-stamped key changes what every
    *  existing caller writes, and a per-key assertion would not notice. */
-  it("stamps EXACTLY what it stamped before when no intent is supplied", async () => {
-    await postMessage(ctx, "dm", { body: "here is the result" });
+  it("stamps EXACTLY what an addressed post stamped before", async () => {
+    await postMessage(ctx, "dm", {
+      body: "here is the result",
+      toUserId: PEER,
+    });
 
     expect(capturedMetadata()).toEqual({ to_user_id: PEER });
   });
 
-  it("auto-addresses the DM peer, exactly as before", async () => {
+  it("stamps NOTHING for an unaddressed DM post (auto-address RETIRED)", async () => {
     await postMessage(ctx, "dm", { body: "on it" });
 
-    expect(capturedMetadata().to_user_id).toBe(PEER);
+    // ⚠ Until 2026-08-18 this stamped the peer. `intent` was the ONE way to opt
+    // out of that; now there is nothing to opt out of, and `chat` survives for
+    // what it always also said — this post is not work for anybody's agent.
+    expect(capturedMetadata()).toEqual({});
     expect(has(capturedMetadata(), "intent")).toBe(false);
   });
 
@@ -172,7 +182,7 @@ describe("postMessage — the DEFAULT intent is unchanged", () => {
       truncated: false,
     });
 
-    await postMessage(ctx, "dm", { body: "progress" });
+    await postMessage(ctx, "dm", { body: "progress", toUserId: PEER });
 
     const meta = capturedMetadata();
     expect(meta.taskId).toBe(TASK_ID);
@@ -180,7 +190,11 @@ describe("postMessage — the DEFAULT intent is unchanged", () => {
   });
 
   it("an EXPLICIT request behaves identically, and says so on the wire", async () => {
-    await postMessage(ctx, "dm", { body: "on it", intent: "request" });
+    await postMessage(ctx, "dm", {
+      body: "on it",
+      toUserId: PEER,
+      intent: "request",
+    });
 
     expect(capturedMetadata()).toEqual({
       to_user_id: PEER,
@@ -308,15 +322,23 @@ describe("postMessage — intent is a RESERVED metadata key", () => {
   });
 
   /** ⚠ The strip is load-bearing, not cosmetic: a fold reading `metadata.intent`
-   *  lets a caller suppress the auto-address — or dress a request up as chat on
-   *  the receiver's screen — without passing the validated field. */
-  it("SECURITY: a spoofed copy does not suppress the DM auto-address", async () => {
+   *  lets a caller dress a request up as chat on the receiver's screen — or
+   *  suppress THREAD INHERITANCE — without passing the validated field. */
+  it("SECURITY: a spoofed copy does not suppress thread inheritance", async () => {
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
+
     await postMessage(ctx, "dm", {
       body: "hi",
+      toUserId: PEER,
       metadata: { intent: "chat" },
     });
 
-    expect(capturedMetadata().to_user_id).toBe(PEER);
+    const meta = capturedMetadata();
+    expect(meta.taskId).toBe(TASK_ID);
+    expect(has(meta, "intent")).toBe(false);
   });
 
   it("SECURITY: a spoofed copy never survives beside the validated field", async () => {

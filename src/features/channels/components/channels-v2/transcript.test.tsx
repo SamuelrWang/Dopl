@@ -17,7 +17,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Transcript } from "./transcript";
 import { channelRows, indexMembers, threadRows } from "./view-model";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
@@ -31,10 +31,21 @@ const MEMBERS = [
 ];
 const INDEX = indexMembers(MEMBERS, ME);
 
-function renderRows(rows: ReturnType<typeof channelRows>) {
-  return render(
-    <Transcript rows={rows} index={INDEX} flashId={null} onOpenThread={vi.fn()} />
+function renderRows(
+  rows: ReturnType<typeof channelRows>,
+  requested: ReadonlySet<string> = new Set()
+) {
+  const onOpenThread = vi.fn();
+  render(
+    <Transcript
+      rows={rows}
+      index={INDEX}
+      flashId={null}
+      requested={requested}
+      onOpenThread={onOpenThread}
+    />
   );
+  return { onOpenThread };
 }
 
 /** The row element for a body string — `<article data-message-id>`. */
@@ -163,6 +174,14 @@ describe("channels-v2 transcript — channel view vs thread view", () => {
     expect(screen.queryByText("Agent thread")).toBeNull();
   });
 
+  it("opens the thread the card names, not the row's message id", () => {
+    const { onOpenThread } = renderRows(
+      channelRows(MESSAGES, [T], INDEX, formatChannelTimestamp)
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open thread" }));
+    expect(onOpenThread).toHaveBeenCalledWith("t-1");
+  });
+
   it("the thread view shows only that thread's messages", () => {
     renderRows(threadRows(MESSAGES, "t-1", INDEX, formatChannelTimestamp));
     expect(screen.getByText("OPENING-TEXT")).not.toBeNull();
@@ -206,5 +225,89 @@ describe("channels-v2 transcript — what it refuses to render", () => {
     );
     expect(screen.getByText("@Diana").className).toContain("text-link");
     expect(screen.getByText("@nobody").className).not.toContain("text-link");
+  });
+});
+
+/**
+ * THE REQUEST FAN-OUT, as the transcript sees it: N opening messages sharing one
+ * server-stamped `fanoutGroup` are ONE card with N addressee pills.
+ *
+ * ⚠ Mutation-verify by keying the dedupe on `thread.id` instead of the group —
+ * "one card" goes red and three identical posts appear.
+ */
+describe("channels-v2 transcript — the request fan-out", () => {
+  const GROUP = "grp-1";
+  const THIRD = "33333333-e29b-41d4-a716-446655440000";
+  const ROSTER = [
+    ...MEMBERS,
+    member({ userId: THIRD, displayName: "Ada Lovelace", role: "member" }),
+  ];
+  const FANOUT_INDEX = indexMembers(ROSTER, ME);
+  const THREADS = [
+    thread({ id: "t-a", title: "Sweep the docs", createdBy: ME, targetUserId: PEER }),
+    thread({ id: "t-b", title: "Sweep the docs", createdBy: ME, targetUserId: THIRD }),
+  ];
+  const OPENERS = [
+    message({
+      id: "op-a",
+      seq: 1,
+      body: "START-HERE",
+      metadata: { taskId: "t-a", fanoutGroup: GROUP },
+    }),
+    message({
+      id: "op-b",
+      seq: 2,
+      body: "START-HERE",
+      metadata: { taskId: "t-b", fanoutGroup: GROUP },
+    }),
+  ];
+
+  function renderFanOut(requested: ReadonlySet<string> = new Set()) {
+    const onOpenThread = vi.fn();
+    render(
+      <Transcript
+        rows={channelRows(OPENERS, THREADS, FANOUT_INDEX, formatChannelTimestamp)}
+        index={FANOUT_INDEX}
+        flashId={null}
+        requested={requested}
+        onOpenThread={onOpenThread}
+      />
+    );
+    return { onOpenThread };
+  }
+
+  it("draws ONE card for two threads, with a pill per ADDRESSEE", () => {
+    renderFanOut();
+    expect(screen.getAllByText("Agent thread")).toHaveLength(1);
+    expect(screen.getAllByText("START-HERE")).toHaveLength(1);
+    // Each pill is that thread's own `targetUserId` — never the requester.
+    expect(screen.getByText("Diana T.")).not.toBeNull();
+    expect(screen.getByText("Ada L.")).not.toBeNull();
+    expect(screen.queryByText("you")).toBeNull();
+  });
+
+  it("states NO approval on the pills — no projection says who allowed", () => {
+    renderFanOut();
+    // ⚠ `AddresseePill` renders an SR-only verdict when `approved` is passed at
+    // all. Nothing may pass it here (F-203): "no pending row" would report
+    // never-asked as approved.
+    expect(screen.queryByText(/approved/)).toBeNull();
+    expect(screen.queryByText(/awaiting approval/)).toBeNull();
+  });
+
+  it("shows REQUESTED only when the VIEWER's own consent is pending", () => {
+    renderFanOut();
+    expect(screen.queryByText("Requested")).toBeNull();
+    cleanup();
+    renderFanOut(new Set(["t-b"]));
+    expect(screen.getByText("Requested")).not.toBeNull();
+  });
+
+  it("opens the viewer's OWN thread of the group", () => {
+    const { onOpenThread } = renderFanOut();
+    fireEvent.click(screen.getByRole("button", { name: "Open thread" }));
+    // ME created both, so the first is theirs — the point is that it names a
+    // THREAD id from the group, not the card's message id.
+    expect(onOpenThread).toHaveBeenCalledWith("t-a");
   });
 });

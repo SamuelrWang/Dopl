@@ -128,15 +128,17 @@ export function ChannelsViewCore({
     loading: messagesLoading,
     refetch: refetchMessages,
   } = useChannelMessages(selected?.id ?? null, workspaceId);
-  // ⚠ `membersStale` is this read's `isPlaceholderData`. Through a channel
-  // switch `keepPreviousData` keeps the PREVIOUS channel's roster on screen and
-  // request mode turns that roster into the posted `toUserId`, so this rides
-  // down to the composer to stop a request addressing the last channel's peer.
-  const {
-    members,
-    stale: membersStale,
-    refetch: refetchMembers,
-  } = useChannelMembers(selected?.id ?? null, workspaceId);
+  // ⚠ THE READ STILL REPORTS `stale` and this page no longer reads it. It fed
+  // the composer's request mode — a roster kept on screen by `keepPreviousData`
+  // through a channel switch would have become the posted `toUserId` — and
+  // request mode is retired here (wiring plan Phase 3). The hook keeps the flag
+  // because it is a property of the READ, and the v2 composer resolves its
+  // addressees from the same roster; whoever wires that gate next needs it
+  // still to exist. Do not delete it from `use-channel-members.ts`.
+  const { members, refetch: refetchMembers } = useChannelMembers(
+    selected?.id ?? null,
+    workspaceId
+  );
   const {
     threads,
     loading: threadsLoading,
@@ -209,7 +211,12 @@ export function ChannelsViewCore({
   // Author display for a pending row, so an optimistic message does not render
   // as "Member" for a round trip and then rename itself.
   const me = members.find((m) => m.userId === currentUserId) ?? null;
-  const { send, openThread, threadOp } = useThreadWrites({
+  // ⚠ `openThread` is NOT destructured any more. This page's REQUEST mode is
+  // retired (wiring plan Phase 3 — the plain composer is human chat), so the
+  // single-target create has no caller HERE. `openThreadConfig` itself stays:
+  // it is the web half of `create_thread`, which the desktop and MCP lanes
+  // still post, and Phase 5's surfaces are its next callers.
+  const { send, threadOp } = useThreadWrites({
     workspaceId,
     currentUserId,
     currentUserName: me?.displayName ?? null,
@@ -234,25 +241,6 @@ export function ChannelsViewCore({
       clientMsgId: newClientMsgId(),
       body,
       intent: opts?.intent,
-    });
-  }
-
-  /**
-   * REQUEST mode: open a titled thread addressed to one member. `clientMsgId` is
-   * the idempotency key — a resend after a failed open returns the existing
-   * thread rather than double-creating it AND double-spawning the responder's
-   * window.
-   */
-  async function handleCreateThread(input: {
-    title: string;
-    body: string;
-    toUserId: string;
-  }) {
-    if (!selected) return;
-    await openThread.mutateAsync({
-      channelId: selected.id,
-      clientMsgId: newClientMsgId(),
-      ...input,
     });
   }
 
@@ -364,14 +352,12 @@ export function ChannelsViewCore({
           threadsLoading={threadsLoading}
           loading={messagesLoading}
           members={members}
-          membersStale={membersStale}
           currentUserId={currentUserId}
           consentRequests={channelConsent}
           trustedIds={trustedIds}
           trustBusyIds={trustBusyIds}
           consentBusyIds={consentBusyIds}
           onSend={handleSend}
-          onCreateThread={handleCreateThread}
           onCloseThread={handleCloseThread}
           onReopenThread={handleReopenThread}
           onInvite={() => setInviteOpen(true)}

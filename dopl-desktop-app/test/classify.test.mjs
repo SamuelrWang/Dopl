@@ -94,31 +94,58 @@ test("addressed to a third party -> fyi as a member, ignore as a public non-memb
   assert.equal(classify(to(U3), makeEntry({ memberCount: 3, isMember: false }), ME), "ignore");
 });
 
-test("unaddressed + exactly 2 members + member -> trigger (implicit 1:1)", () => {
-  assert.equal(classify(plain, makeEntry({ memberCount: 2, isMember: true }), ME), "trigger");
+// ⚠ THE IMPLICIT 1:1 TRIGGER IS RETIRED (2026-08-18, wiring plan Phase 3),
+// together with the server's DM auto-address it was paired with. The test that
+// stood here asserted the opposite:
+//
+//   test("unaddressed + exactly 2 members + member -> trigger (implicit 1:1)")
+//
+// It is INVERTED rather than deleted, because "an unaddressed post triggers
+// nobody" is now the load-bearing claim and the two-member channel is exactly
+// where a regression would reappear.
+test("unaddressed + exactly 2 members + member -> FYI, NEVER trigger", () => {
+  assert.equal(classify(plain, makeEntry({ memberCount: 2, isMember: true }), ME), "fyi");
+  // Fail-closed the other way too: a non-member sees nothing.
+  assert.equal(classify(plain, makeEntry({ memberCount: 2, isMember: false }), ME), "ignore");
 });
 
-// F-170 (2026-08-08) — NOTHING SUPPRESSES THE IMPLICIT TRIGGER ANY MORE.
-// Two assertions used to live here: that `myNotifyScope: 'none'` turned the
-// implicit two-member trigger into 'ignore', and that `'addressed'` did not.
-// They encoded the C-18 bug rather than a requirement — "Muted" never silenced
-// an explicitly addressed request, and `'addressed'` was compared nowhere — so
-// they went with the preference. This test replaces them by PINNING THE
-// ABSENCE: a stale channel entry carrying the old field must not change the
-// verdict, so a future change cannot quietly re-introduce the suppression by
-// re-reading a value the DTO may still be sending.
-test("(F-170) a leftover myNotifyScope on the entry cannot suppress the implicit trigger", () => {
-  const base = makeEntry({ memberCount: 2, isMember: true });
-  for (const stale of ["none", "addressed", "all"]) {
+// ⚠ THE MEMBER COUNT IS NOT READ AT ALL any more, which is a stronger statement
+// than "2 does not trigger" and is the one worth pinning: a future change that
+// re-introduces a count-keyed branch has to make one of these rows disagree.
+test("the verdict is INDEPENDENT of memberCount for an unaddressed post", () => {
+  for (const memberCount of [2, 3, 0, undefined, 99]) {
     assert.equal(
-      classify(plain, { ...base, channel: { ...base.channel, myNotifyScope: stale } }, ME),
-      "trigger",
-      `a stored notify scope of '${stale}' must be ignored`
+      classify(plain, makeEntry({ memberCount, isMember: true }), ME),
+      "fyi",
+      `memberCount ${memberCount} changed an unaddressed verdict`
     );
   }
 });
 
-test("unaddressed + 3+ members -> fyi", () => {
+// F-170 (2026-08-08) — nothing ever suppressed the implicit trigger, and now
+// there is no trigger to suppress. Two assertions once lived here about
+// `myNotifyScope: 'none'` turning the implicit two-member trigger into
+// 'ignore'; they went with the preference, and the absence-pin that replaced
+// them went with the branch. What survives is the same shape of guard aimed at
+// what is left: a stale channel entry carrying the removed field must not move
+// an unaddressed verdict in EITHER direction.
+test("(F-170) a leftover myNotifyScope on the entry changes nothing", () => {
+  const base = makeEntry({ memberCount: 2, isMember: true });
+  for (const stale of ["none", "addressed", "all"]) {
+    assert.equal(
+      classify(plain, { ...base, channel: { ...base.channel, myNotifyScope: stale } }, ME),
+      "fyi",
+      `a stored notify scope of '${stale}' must be ignored`
+    );
+    assert.equal(
+      classify(to(ME), { ...base, channel: { ...base.channel, myNotifyScope: stale } }, ME),
+      "trigger",
+      `a stored notify scope of '${stale}' must never silence an ADDRESSED request`
+    );
+  }
+});
+
+test("unaddressed + 3+ members -> fyi (unchanged, and now the general case)", () => {
   assert.equal(classify(plain, makeEntry({ memberCount: 3, isMember: true }), ME), "fyi");
 });
 
@@ -156,8 +183,11 @@ test("agent self-addressed (to === author) -> ignore", () => {
 });
 
 test("(c) agent UNADDRESSED + exactly 2 members -> fyi, NOT trigger (LOOP BRAKE)", () => {
-  // A USER here would trigger the implicit 1:1; an agent must not, or the
-  // responder's own unaddressed reply would ping-pong back into a new trigger.
+  // ⚠ THIS CASE NO LONGER DISTINGUISHES AGENT FROM USER, and that is the point
+  // of the retirement rather than a weakening of it: a USER here used to
+  // trigger the implicit 1:1, so the loop brake had to be an agent-only special
+  // case. Now NOTHING unaddressed triggers, and the brake is the general rule.
+  // Kept because it is the case a regression would reach for first.
   assert.equal(classify(agentPlain, makeEntry({ memberCount: 2, isMember: true }), ME), "fyi");
   // Public non-member still ignores.
   assert.equal(classify(agentPlain, makeEntry({ memberCount: 2, isMember: false }), ME), "ignore");

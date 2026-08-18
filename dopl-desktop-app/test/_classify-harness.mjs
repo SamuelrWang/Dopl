@@ -88,15 +88,18 @@ const U3 = "third-uuid"; // a distinct third party
 //     - to === me            -> trigger (explicit address always prompts)
 //     - to === the author    -> ignore  (self-addressed noise)
 //     - else                 -> fyi (member) / ignore (public non-member)
-//   unaddressed AGENT author:
-//     - fyi (member) / ignore (public non-member) — NEVER an implicit trigger
-//       (LOOP BRAKE: the responder's reply is unaddressed so it can't re-trigger)
-//   unaddressed USER author:
-//     - exactly 2 members + member -> trigger, UNCONDITIONALLY. The per-channel
-//       notify scope that used to mute this (myNotifyScope === 'none') was
-//       removed from the product 2026-08-08 (F-170); nothing suppresses an
-//       implicit two-member trigger any more.
-//     - otherwise            -> fyi (member) / ignore (public non-member)
+//   unaddressed, EITHER author kind:
+//     - fyi (member) / ignore (public non-member). NEVER a trigger, at any
+//       member count.
+//       ⚠ THE IMPLICIT 1:1 TRIGGER IS GONE (2026-08-18, wiring plan Phase 3):
+//       an unaddressed USER post in an exactly-2-member channel used to be
+//       'trigger', paired with the server's DM auto-address. Both retired
+//       together — addressing is explicit everywhere now. The member count is
+//       not read at all, which is why this oracle no longer reads it either.
+//       ⚠ THIS ORACLE AND `classify` MUST MOVE IN THE SAME COMMIT. It is a
+//       SECOND statement of the rule, deliberately (that is what makes the
+//       576-case sweep worth running) — and a second statement is a second
+//       thing to forget.
 function oracle(m, entry, myId) {
   if (!m || m.kind !== "message" || !m.authorUserId) return "ignore";
   if (m.authorKind !== "user" && m.authorKind !== "agent") return "ignore";
@@ -114,11 +117,7 @@ function oracle(m, entry, myId) {
     if (to === m.authorUserId) return "ignore";
     return isMember ? "fyi" : "ignore";
   }
-  // Unaddressed agent -> never an implicit trigger (loop brake); FYI/ignore only.
-  if (m.authorKind === "agent") return isMember ? "fyi" : "ignore";
-  const cnt = Number(ch && ch.memberCount);
-  const knownTwo = Number.isFinite(cnt) && cnt === 2;
-  if (knownTwo && isMember) return "trigger";
+  // Unaddressed, any author kind -> FYI/ignore. The member count is not read.
   return isMember ? "fyi" : "ignore";
 }
 

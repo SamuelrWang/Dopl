@@ -15,7 +15,7 @@
  * and is the only authorship signal a caller cannot assert.
  */
 
-import { PRESENCE_ONLINE_WINDOW_MS, SIDEBAR_THREAD_ACTIVE_WINDOW_MS } from "../../constants";
+import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import type {
   Channel,
   ChannelMember,
@@ -35,6 +35,24 @@ import type { AvatarPerson } from "@/shared/ui/avatar";
  */
 export function threadIdOf(message: ChannelMessage): string | null {
   const value = message.metadata.taskId;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * The REQUEST FAN-OUT group a thread's opening message belongs to, or null.
+ *
+ * ⚠ Reserved, server-stamped metadata (`server/service-writes-metadata.ts ›
+ * resolvePostMetadata`), stripped from caller input like every other reserved
+ * key — which is what makes it safe to render N threads as ONE card. A
+ * caller-settable group id would let a member draw their own thread inside
+ * somebody else's request.
+ *
+ * ⚠ Absent on every thread opened before the fan-out shipped, and on every
+ * single-target `create_thread` (the desktop and MCP lane still post those).
+ * Absent means "a group of one", never "unknown" — one thread, one card.
+ */
+export function fanoutGroupOf(message: ChannelMessage): string | null {
+  const value = message.metadata.fanoutGroup;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -85,9 +103,14 @@ export interface SystemRow {
 }
 
 /**
- * A thread's OPENING message, rendered in the channel transcript as the card
- * the thread hangs off. The rest of the thread's messages are NOT in the
- * channel view — they belong to the thread's own transcript.
+ * A REQUEST, rendered in the channel transcript as the card its threads hang
+ * off. The threads' remaining messages are NOT in the channel view — they
+ * belong to each thread's own transcript.
+ *
+ * ⚠ ONE CARD, N THREADS. A three-pill send is three `channel_tasks` rows
+ * (INVARIANTS §5 — a thread is one requester + one target) sharing one
+ * server-stamped `fanoutGroup`, and this row is the group. `threads` is in
+ * opening-message order, which is addressee order.
  */
 export interface ThreadCardRow {
   kind: "thread-card";
@@ -97,9 +120,32 @@ export interface ThreadCardRow {
   author: AvatarPerson;
   authorLabel: string;
   time: string;
-  thread: ChannelThread;
+  /** Every thread of the request, in addressee order. Never empty. */
+  threads: ChannelThread[];
+  /** Which thread "Open thread" opens — see {@link ownThreadOf}. */
+  openThreadId: string;
   /** The opening message's body — the card's preview line. */
   preview: string;
+}
+
+/**
+ * Which of a request's threads THIS viewer walks into.
+ *
+ * ⚠ A thread is readable by every channel member but WRITABLE only by its two
+ * parties (INVARIANTS §5), so the viewer's own thread is the one they can
+ * answer in. Falling back to the first keeps a bystander's "Open thread"
+ * working — they can read it, which is what the fallback promises and all it
+ * promises.
+ */
+export function ownThreadOf(
+  threads: ChannelThread[],
+  currentUserId: string
+): ChannelThread {
+  return (
+    threads.find(
+      (t) => t.createdBy === currentUserId || t.targetUserId === currentUserId
+    ) ?? threads[0]
+  );
 }
 
 export type TranscriptRow = MessageRow | SystemRow | ThreadCardRow;
@@ -185,14 +231,46 @@ function toMessageRow(
 }
 
 /**
- * THE CHANNEL VIEW's rows: every channel-level post, plus ONE card per thread
- * sitting where that thread's first message landed.
+ * Every thread of one fan-out group, keyed by that group id, in
+ * opening-message order.
+ *
+ * ⚠ A PRE-PASS, not a scan-as-you-go. The card is drawn at the FIRST opener of
+ * a group and must already name all N addressees, so the group has to be known
+ * before that row is emitted. It is derived from the messages rather than the
+ * thread list because only the messages carry the group id — `channel_tasks`
+ * has no such column, deliberately (nothing indexes on it).
+ */
+function groupThreads(
+  messages: ChannelMessage[],
+  threadById: ReadonlyMap<string, ChannelThread>
+): Map<string, ChannelThread[]> {
+  const groups = new Map<string, ChannelThread[]>();
+  for (const message of messages) {
+    const group = fanoutGroupOf(message);
+    const threadId = group ? threadIdOf(message) : null;
+    const thread = threadId ? threadById.get(threadId) : undefined;
+    if (!group || !thread) continue;
+    const members = groups.get(group) ?? [];
+    if (!members.some((t) => t.id === thread.id)) members.push(thread);
+    groups.set(group, members);
+  }
+  return groups;
+}
+
+/**
+ * THE CHANNEL VIEW's rows: every channel-level post, plus ONE card per REQUEST
+ * sitting where that request's first opening message landed.
  *
  * A thread's remaining messages are deliberately absent — they are the thread
  * view's transcript, and repeating them here would make the channel the union
  * of every exchange it holds, which is the shape v2 exists to end. A message
  * tagged for a thread this read does not know (a clipped list, a legacy id)
  * falls back to rendering as an ordinary message rather than vanishing.
+ *
+ * ⚠ A FAN-OUT COLLAPSES. Its N opening messages share one server-stamped
+ * `fanoutGroup`, and only the first emits a card; the rest are skipped, exactly
+ * as a thread's later messages are. Without the collapse a three-pill request
+ * would read as three identical posts.
  */
 export function channelRows(
   messages: ChannelMessage[],
@@ -201,6 +279,7 @@ export function channelRows(
   formatTime: (iso: string) => string
 ): TranscriptRow[] {
   const threadById = new Map(threads.map((t) => [t.id, t]));
+  const groups = groupThreads(messages, threadById);
   const openerSeen = new Set<string>();
   const rows: TranscriptRow[] = [];
   let previous: ChannelMessage | null = null;
@@ -210,8 +289,13 @@ export function channelRows(
     const threadId = threadIdOf(message);
     const thread = threadId ? threadById.get(threadId) : undefined;
     if (thread) {
-      if (openerSeen.has(thread.id)) continue;
-      openerSeen.add(thread.id);
+      const group = fanoutGroupOf(message);
+      // ⚠ The dedupe key is the GROUP where there is one, the thread otherwise.
+      // Keying on the thread alone would draw N cards for one request.
+      const key = group ?? thread.id;
+      if (openerSeen.has(key)) continue;
+      openerSeen.add(key);
+      const cardThreads = (group && groups.get(group)) || [thread];
       rows.push({
         kind: "thread-card",
         id: message.id,
@@ -220,7 +304,8 @@ export function channelRows(
         author: personFor(message, index),
         authorLabel: labelFor(message, index),
         time: formatTime(message.createdAt),
-        thread,
+        threads: cardThreads,
+        openThreadId: ownThreadOf(cardThreads, index.currentUserId).id,
         preview: message.body,
       });
       previous = null;
@@ -248,38 +333,6 @@ export function threadRows(
     previous = message;
   }
   return rows;
-}
-
-/**
- * The threads the SIDEBAR TREE shows: active inside
- * {@link SIDEBAR_THREAD_ACTIVE_WINDOW_MS} (Samuel, 2026-08-18).
- *
- * ⚠ CLIENT-SIDE arithmetic over `lastActivityAt`, exactly as presence is over
- * `lastSeenAt` (INVARIANTS §5) — the repository read is one plain bounded,
- * activity-ordered list and knows nothing about this window. ABSENT
- * `lastActivityAt` means the read did not derive it, never "no activity", so it
- * reads INACTIVE here: the same fail-safe direction presence has.
- *
- * ⚠ The ruling is "active in the last 24 hours **OR REQUESTED**". `requested`
- * has no server-side existence yet — it is a thread whose consent rows are
- * still pending, and nothing projects that (wiring plan, Phase 3+). Until it
- * does, this window IS the whole rule; the requested arm is not silently
- * approximated with something else.
- *
- * ⚠ ORDER IS PRESERVED, never re-sorted: the server clipped its page against
- * the activity order, so a re-sorted page is the wrong rows in a plausible
- * order (INVARIANTS §5).
- */
-export function sidebarThreads(
-  threads: ChannelThread[],
-  now: number = Date.now()
-): ChannelThread[] {
-  return threads.filter((thread) => {
-    if (!thread.lastActivityAt) return false;
-    const ts = new Date(thread.lastActivityAt).getTime();
-    if (Number.isNaN(ts)) return false;
-    return now - ts < SIDEBAR_THREAD_ACTIVE_WINDOW_MS;
-  });
 }
 
 /**

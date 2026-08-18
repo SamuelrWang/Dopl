@@ -35,14 +35,20 @@ export const CONSENT_INBOX_POLL_MS = 30_000;
 /**
  * Member count at which a channel stops behaving like a pair.
  *
- * `dopl-desktop-app/main/targeting.js` `classify` fires its implicit trigger
- * only on known-exact `memberCount === 2` + explicit membership. At 3+ an
- * UNADDRESSED ask triggers NOBODY — fail-closed by design (a broadcast trigger
- * turns the loop brake into a storm).
+ * ⚠ IT NO LONGER MARKS A BEHAVIOUR BOUNDARY. `dopl-desktop-app/main/targeting.js
+ * › classify` used to fire an IMPLICIT trigger on a known-exact
+ * `memberCount === 2` plus explicit membership; that branch was removed
+ * 2026-08-18 (wiring plan Phase 3) together with the server-side DM
+ * auto-address. **An UNADDRESSED ask now triggers NOBODY at every size** —
+ * fail-closed by design, and no longer only above a threshold (a broadcast
+ * trigger turns the loop brake into a storm; never add one).
  *
- * ⚠ COPY threshold, not a gate — nothing here decides routing. Shared by the
- * composer's unaddressed hint and the invite dialog's group note so the copy
- * cannot drift from the desktop rule in one place and not the other.
+ * ⚠ COPY threshold, not a gate — nothing here decides routing, and now nothing
+ * downstream branches on it either. Shared by the invite dialog's group note and
+ * its deliberate duplicate in
+ * `packages/mcp-server/src/tools/channel-addressing.ts`, pinned together by
+ * `channel-addressing-rule.test.ts`, so one tree cannot restate the rule and
+ * leave the other saying the old thing.
  */
 export const GROUP_CHANNEL_MIN_MEMBERS = 3;
 
@@ -128,6 +134,20 @@ export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
  * as of 2026-08-07, which is a different question and an older one.)
  */
 export const CHANNEL_THREAD_LIST_LIMIT = 200;
+
+/**
+ * Hard cap on the addressees of ONE request fan-out
+ * (`server/service-tasks-fanout.ts › createTaskFanOut`).
+ *
+ * ⚠ A BOUND ON WORK, not a product rule. The fan-out is N sequential
+ * `createTask` calls, each of which posts through the channel's advisory lock —
+ * so an unbounded roster turns one Send into an unbounded request. The UI can
+ * only offer one pill per OTHER channel member, so this bites a large room, and
+ * it bites it with a 400 rather than a timeout. **Nothing about "how many
+ * agents may be addressed" is decided here; addressing is explicit either way
+ * ({@link GROUP_CHANNEL_MIN_MEMBERS} is the copy threshold, not a gate).**
+ */
+export const CHANNEL_FANOUT_MAX_ADDRESSEES = 25;
 
 /** Default page size for a message read when `limit` is omitted. */
 export const DEFAULT_MESSAGE_LIMIT = 100;

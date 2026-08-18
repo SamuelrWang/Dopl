@@ -24,20 +24,23 @@
 import { Bot } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
-import { AddresseePill, CARD_BUTTON, MESSAGE_CARD } from "./bits";
+import { AddresseePill, CARD_BUTTON, MESSAGE_CARD, PendingChip } from "./bits";
 import { AgentChip } from "./bits";
-import { shortName, threadParties, type AuthorIndex, type MessageRow, type ThreadCardRow, type TranscriptRow } from "./view-model";
+import { shortName, type AuthorIndex, type MessageRow, type ThreadCardRow, type TranscriptRow } from "./view-model";
 
 export function Transcript({
   rows,
   index,
   flashId,
+  requested,
   onOpenThread,
 }: {
   rows: TranscriptRow[];
   index: AuthorIndex;
   /** Briefly set right after a Tags-inbox click lands on a row. */
   flashId: string | null;
+  /** Thread ids the viewer has been asked about and has not answered. */
+  requested: ReadonlySet<string>;
   onOpenThread: (id: string) => void;
 }) {
   if (rows.length === 0) {
@@ -68,7 +71,8 @@ export function Transcript({
               row={row}
               index={index}
               flash={row.id === flashId}
-              onOpen={() => onOpenThread(row.thread.id)}
+              requested={requested}
+              onOpen={() => onOpenThread(row.openThreadId)}
             />
           );
         }
@@ -174,30 +178,43 @@ function Message({
 }
 
 /**
- * THE POSTED THREAD — what a thread's opening message leaves in the channel.
+ * THE POSTED REQUEST — what a "New agent thread" send leaves in the channel.
  *
  * Same `MESSAGE_CARD` face as the mock drew, because it is the same object: a
- * body the message points at rather than says. The card is the ONE artifact
- * and storage holds one requester + one target (INVARIANTS §5), so the pills
- * name the parties.
+ * body the message points at rather than says. **ONE CARD, N THREADS** — the
+ * fan-out writes one `channel_tasks` row per addressee (INVARIANTS §5: a thread
+ * is one requester + one target) and they share a server-stamped `fanoutGroup`,
+ * so each pill is one real ADDRESSEE, read off that thread's own
+ * `targetUserId`.
  *
- * ⚠ NO APPROVAL LINE. The mock's "1 of 3 agents approved" reads a fan-out that
- * Phase 3 builds and a consent projection that does not exist: consent is
- * per-target, TTL'd and re-derived at consume time (INVARIANTS §6), and the
- * absence of a pending row does not distinguish approved from never-asked.
+ * ⚠ THE PILLS CARRY NO APPROVAL STATE, and their absence is a measurement, not
+ * a style choice. The mock's "1 of 3 agents approved" needs a per-target consent
+ * projection, and a consent read is scoped to `(operator, workspace)` with the
+ * operator always `ctx.userId` (INVARIANTS §6) — so the REQUESTER cannot see
+ * their addressees' decisions at all, and "no pending row" would report
+ * never-asked as approved. Filed as REFACTOR-FINDINGS F-203; the pill states the
+ * party and nothing else until a projection exists.
+ *
+ * ⚠ What IS derivable is the mirror image: a thread addressed to the VIEWER
+ * whose own consent request is still pending renders `PendingChip`. That is
+ * their own inbox, joined on the triggering seq — real data, and asymmetric for
+ * exactly the reason above.
  */
 function ThreadCardMessage({
   row,
   index,
   flash,
+  requested,
   onOpen,
 }: {
   row: ThreadCardRow;
   index: AuthorIndex;
   flash: boolean;
+  requested: ReadonlySet<string>;
   onOpen: () => void;
 }) {
-  const parties = threadParties(row.thread, index);
+  const first = row.threads[0];
+  const waiting = row.threads.some((t) => requested.has(t.id));
   return (
     <AuthoredRow
       id={row.id}
@@ -215,22 +232,43 @@ function ThreadCardMessage({
           <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
             Agent thread
           </span>
+          <span className="flex-1" />
+          {waiting && <PendingChip />}
         </div>
         <span className="text-body font-semibold text-text-primary">
-          {row.thread.title}
+          {first.title}
         </span>
         <p className="line-clamp-3 text-caption text-text-muted">{row.preview}</p>
 
-        {parties.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {parties.map((person) => (
+        <div className="flex flex-wrap gap-1.5">
+          {row.threads.map((thread) => {
+            const person = thread.targetUserId
+              ? index.byId.get(thread.targetUserId)
+              : undefined;
+            // ⚠ An addressee the roster cannot resolve still gets a pill — the
+            // request WAS raised against them, and dropping the pill would
+            // under-report who was addressed. It is the one claim this card
+            // must never get wrong.
+            return (
               <AddresseePill
-                key={person.userId}
-                label={shortName(person, index.currentUserId)}
+                key={thread.id}
+                label={
+                  person
+                    ? shortName(
+                        {
+                          userId: person.userId,
+                          email: person.email,
+                          displayName: person.displayName,
+                          avatarUrl: person.avatarUrl,
+                        },
+                        index.currentUserId
+                      )
+                    : "Unknown member"
+                }
               />
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
 
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-caption text-text-muted" />

@@ -301,7 +301,8 @@ async function reconcileInner() {
         // The entry used to carry `teamAgents` / `rosterKnown` — the tri-state behind the
         // "address to act" law, which disabled the implicit 2-member trigger while this
         // operator had summoned agents in the room. Both are gone with summoning
-        // (channels rollback §1).
+        // (channels rollback §1), and the implicit 2-member trigger they gated is gone
+        // too (2026-08-18) — an unaddressed post now triggers nobody at any count.
       };
       loops.set(id, entry);
       // Fire-and-forget: a thrown loop must not become an unhandledRejection that

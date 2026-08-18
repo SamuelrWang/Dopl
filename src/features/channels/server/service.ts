@@ -12,7 +12,8 @@ import "server-only";
  *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message
  *   - `service-writes-members.ts` — channel membership (add / remove / own prefs)
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
- *                            the server stamps (addressing, DM auto-address, task keys)
+ *                            the server stamps (addressing, task keys, the
+ *                            fan-out group)
  *   - `service-tasks.ts`   — first-class task lifecycle (create / set mode)
  *   - `service-tasks-lifecycle.ts` — the two status transitions (close / reopen),
  *                            each guarded against a double-apply and each echoed
@@ -74,6 +75,14 @@ export { removeWorkspaceDepartedMember } from "./service-workspace-departure";
 export type { DepartedMemberSweep } from "./service-workspace-departure";
 
 export { createTask, setTaskMode } from "./service-tasks";
+export type { TaskCreateOptions, TaskCreateResult } from "./service-tasks";
+
+// THE REQUEST FAN-OUT (wiring plan Phase 3): N addressees, N threads, one card.
+// Its own module because it is a CALLER of `createTask` and nothing else — the
+// per-addressee idempotency key and the derived group id are the whole content,
+// and both are the kind of rule that gets "simplified" out of a create.
+export { createTaskFanOut } from "./service-tasks-fanout";
+export type { TaskFanOutResult } from "./service-tasks-fanout";
 
 // C-26 / C-30 (2026-08-08): CLOSE and REOPEN are the only two writes that move a
 // thread's `status`, and they now share one shape — guard the transition

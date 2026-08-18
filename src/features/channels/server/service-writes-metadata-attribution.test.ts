@@ -114,6 +114,9 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
     userId === USER || userId === PEER ? memberRow(userId) : null
   );
+  // ⚠ An explicit `to` also asserts ACTIVE workspace membership. Load-bearing
+  // for every addressed post now that DM auto-address is retired.
+  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repo.listMembers).mockResolvedValue([
     memberRow(USER, "owner"),
     memberRow(PEER),
@@ -207,7 +210,7 @@ describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)
     await postMessage(
       { ...ctx, runtime: "desktop-session", appVersion: "1.9.0" },
       "dm",
-      { body: "plain reply" }
+      { body: "plain reply", toUserId: PEER }
     );
 
     const meta = capturedMetadata();
@@ -274,7 +277,7 @@ describe("SECURITY: the documented-but-unbuilt `to_user_notify` is stripped", ()
     await postMessage(
       { ...ctx, runtime: "desktop-session", appVersion: "1.9.0" },
       "dm",
-      { body: "plain reply" }
+      { body: "plain reply", toUserId: PEER }
     );
 
     const meta = capturedMetadata();

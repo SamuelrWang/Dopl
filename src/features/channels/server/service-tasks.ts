@@ -54,10 +54,10 @@ function openingMessageClientId(taskId: string): string {
  * the panel with no message for the responder's desktop to route.
  *
  * ⚠ Both writes stay in the SAME idempotency envelope rather than moving into
- * one RPC — `postMessage` owns the addressee check, DM auto-address,
- * reserved-key strip and task-key stamping, and forking that into PL/pgSQL gives
- * the metadata contract two homes. So the message gets its own deterministic key
- * and the post is re-driven on every create path.
+ * one RPC — `postMessage` owns the addressee check, the reserved-key strip and
+ * the task-key stamping, and forking that into PL/pgSQL gives the metadata
+ * contract two homes. So the message gets its own deterministic key and the post
+ * is re-driven on every create path.
  *
  * ⚠ Fields come from the STORED task row, never the retry's input, so a re-send
  * cannot rewrite the title or re-address the request.
@@ -70,7 +70,11 @@ async function postOpeningMessage(
   // Spawn-with-handoff: the opener carries the reserved `metadata.handoff` stamp
   // so the OPERATOR'S desktop opens the requester session instead of the
   // external session that posted the create. ⚠ Server-internal only.
-  handoff?: boolean
+  handoff?: boolean,
+  // Request fan-out: the opener carries the reserved `metadata.fanoutGroup`
+  // stamp so the N threads of ONE request render as ONE card. ⚠ Server-internal
+  // only — {@link TaskCreateOptions}.
+  fanoutGroupId?: string
 ): Promise<number> {
   const message = await postMessage(
     ctx,
@@ -83,7 +87,7 @@ async function postOpeningMessage(
       metadata: { taskId: task.id },
       clientMsgId: openingMessageClientId(task.id),
     },
-    { handoff }
+    { handoff, fanoutGroupId }
   );
   // ⚠ Seq travels back out — it is the requester's `await` cursor and is only
   // known here. Every return path is idempotent, so a dedup'd re-post yields the
@@ -147,13 +151,38 @@ async function convergeOnThread(
   ctx: ChannelContext,
   channelId: string,
   task: ChannelTaskRow,
-  input: TaskCreateInput
+  input: TaskCreateInput,
+  opts: TaskCreateOptions
 ): Promise<TaskCreateResult> {
   const isCreator = task.created_by === ctx.userId;
   const openingSeq = isCreator
-    ? await postOpeningMessage(ctx, channelId, task, input.body, input.handoff)
+    ? await postOpeningMessage(
+        ctx,
+        channelId,
+        task,
+        input.body,
+        input.handoff,
+        opts.fanoutGroupId
+      )
     : await storedOpeningSeq(channelId, task.id);
   return { thread: mapTaskRow(task), openingSeq };
+}
+
+/**
+ * SERVER-INTERNAL create options — not fields of {@link TaskCreateInput}, not
+ * parsed by any route, and therefore unreachable from an HTTP caller. Same
+ * device as `service-writes-metadata.ts › PostMetadataOptions`.
+ *
+ * ⚠ This parameter is ADDITIVE and changes nothing `createTask` decides: the
+ * authorization, the addressee checks, the self-target refusal and the
+ * idempotency short-circuit are untouched, and a thread is still ONE requester
+ * plus ONE target (INVARIANTS §5). It exists so the fan-out — which is a
+ * CALLER of `createTask`, never a second create path — can put its group id on
+ * the opening message through the one function that posts it.
+ */
+export interface TaskCreateOptions {
+  /** Stamped as reserved `metadata.fanoutGroup` on the opening message. */
+  fanoutGroupId?: string;
 }
 
 /**
@@ -168,7 +197,8 @@ async function convergeOnThread(
 export async function createTask(
   ctx: ChannelContext,
   ref: string,
-  rawInput: TaskCreateInput
+  rawInput: TaskCreateInput,
+  opts: TaskCreateOptions = {}
 ): Promise<TaskCreateResult> {
   const input = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
@@ -209,7 +239,7 @@ export async function createTask(
       channel.id,
       input.clientMsgId
     );
-    if (existing) return convergeOnThread(ctx, channel.id, existing, input);
+    if (existing) return convergeOnThread(ctx, channel.id, existing, input, opts);
   }
 
   let task;
@@ -232,7 +262,7 @@ export async function createTask(
         channel.id,
         input.clientMsgId
       );
-      if (raced) return convergeOnThread(ctx, channel.id, raced, input);
+      if (raced) return convergeOnThread(ctx, channel.id, raced, input, opts);
     }
     throw err;
   }
@@ -242,7 +272,8 @@ export async function createTask(
     channel.id,
     task,
     input.body,
-    input.handoff
+    input.handoff,
+    opts.fanoutGroupId
   );
 
   return { thread: mapTaskRow(task), openingSeq };

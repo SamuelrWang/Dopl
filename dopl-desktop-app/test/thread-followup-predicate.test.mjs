@@ -32,8 +32,12 @@ test("PREDICATE: a message addressed to somebody ELSE never takes this path", as
   const forThird = followUp(LEGACY, { metadata: { to_user_id: THIRD } });
   assert.equal(await h.routes.maybeReopenAddressedThread(dm(), forThird, ME), false);
   assert.deepEqual(h.calls.recordReads, []);
-  // An ABSENT addressee is allowed: in a DM the server addresses the peer for you, and the
-  // implicit 1:1 rule is what earns the 'trigger' this route runs under.
+  // An ABSENT addressee is still ALLOWED by the predicate, though the reason it used to
+  // be reachable is gone: DM auto-address and the implicit 1:1 trigger both retired
+  // 2026-08-18, so an unaddressed post no longer earns the 'trigger' this route runs
+  // under. The tolerance is kept for STORED pre-retirement messages and installed
+  // desktops' addressee-less lifecycle posts — narrowing it is a floor-raise, not a
+  // cleanup (INVARIANTS §13).
   const g = withRecord(record());
   const unaddressed = followUp(LEGACY, { metadata: { to_user_id: undefined } });
   assert.equal(await g.routes.maybeReopenAddressedThread(dm(), unaddressed, ME), true);

@@ -20,10 +20,10 @@ import { INITIALLY_READ_MENTIONS, FIXTURE_MENTIONS, type FixtureMention } from "
 import {
   channelRows,
   indexMembers,
-  sidebarThreads,
   splitChannels,
   threadRows,
 } from "./view-model";
+import { requestedThreadIds, sidebarThreads } from "./view-model-requested";
 
 export interface ChannelsV2CoreProps {
   workspaceId: string;
@@ -108,6 +108,11 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   } = useChannelThreads(channel?.id ?? null, workspaceId);
   // ⚠ Poll BACKSTOP scoped to THIS page for a downed socket only — consent
   // INSERTs do arrive over realtime. Pauses while the tab is hidden.
+  //
+  // ⚠ WORKSPACE-WIDE ON PURPOSE, not scoped to the open channel: the sidebar's
+  // Inbox badge counts every pending request, and the same rows are joined
+  // against this channel's transcript below to derive the REQUESTED state. One
+  // read, two consumers — a channel-scoped copy would make the badge lie.
   const { requests } = useConsentInbox(workspaceId, undefined, CONSENT_INBOX_POLL_MS);
 
   // Realtime → coalesced refetch, deferred while a local write is in flight.
@@ -127,7 +132,11 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
     };
     membersRefetchRef.current = () => void refetchMembers();
   });
-  const { signal } = useRefetchGate(() => refetchRef.current());
+  // ⚠ `gate` is handed to the composer's writes and `signal` to the realtime
+  // subscriptions — the SAME coordinator on both ends, which is the whole point
+  // (INVARIANTS §7/§8): a remote event mid-send must not clobber the local
+  // optimistic patch.
+  const { signal, gate } = useRefetchGate(() => refetchRef.current());
   useChannelsRealtime(workspaceId, signal);
   // Presence is high-churn (~30s per listener) and never clobbers a send, so it
   // bypasses the coordinator — but refetches the ROSTER only, on a trailing
@@ -157,7 +166,18 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
   const openThread = requestedThreadId
     ? (threads.find((t) => t.id === requestedThreadId) ?? null)
     : null;
-  const treeThreads = useMemo(() => sidebarThreads(threads), [threads]);
+  // REQUESTED, derived from the viewer's OWN consent inbox joined to this
+  // channel's transcript on the triggering seq (`view-model-requested.ts`). It
+  // feeds three surfaces — the sidebar's admission rule, its Clock glyph, and
+  // the card's `PendingChip` — from ONE derivation, so they cannot disagree.
+  const requested = useMemo(
+    () => requestedThreadIds(messages, requests),
+    [messages, requests]
+  );
+  const treeThreads = useMemo(
+    () => sidebarThreads(threads, requested),
+    [threads, requested]
+  );
 
   const rows = useMemo(
     () =>
@@ -207,20 +227,25 @@ export function ChannelsV2Core({ workspaceId, currentUserId }: ChannelsV2CorePro
           setRequestedThreadId(null);
         }}
         onOpenThread={setRequestedThreadId}
+        requestedThreads={requested}
         consentCount={requests.length}
       />
 
       {channel ? (
         <>
           <ChannelsV2MessagePane
+            channelId={channel.id}
+            workspaceId={workspaceId}
             channelName={channelName}
             thread={openThread}
             rows={rows}
             index={index}
             members={members}
             loading={messagesLoading}
+            requested={requested}
             scrollTarget={scrollTarget}
             infoOpen={infoOpen}
+            gate={gate}
             onToggleInfo={() => setInfoOpen((open) => !open)}
             onExitThread={() => setRequestedThreadId(null)}
             onOpenThread={setRequestedThreadId}

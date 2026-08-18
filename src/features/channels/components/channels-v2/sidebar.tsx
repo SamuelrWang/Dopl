@@ -46,8 +46,11 @@ import type { Channel, ChannelMember, ChannelThread } from "../../types";
 export interface ChannelsV2SidebarProps {
   rooms: Channel[];
   direct: Channel[];
-  /** Threads of the OPEN channel, already windowed to the sidebar's 24h rule. */
+  /** Threads of the OPEN channel, already windowed to the sidebar's rule
+   *  (active in the last 24h OR requested — `view-model-requested.ts`). */
   threads: ChannelThread[];
+  /** Thread ids the viewer has been asked about and has not answered. */
+  requestedThreads: ReadonlySet<string>;
   members: ChannelMember[];
   currentUserId: string;
   selectedChannelId: string | null;
@@ -64,6 +67,7 @@ export function ChannelsV2Sidebar({
   rooms,
   direct,
   threads,
+  requestedThreads,
   members,
   currentUserId,
   selectedChannelId,
@@ -108,6 +112,7 @@ export function ChannelsV2Sidebar({
       person={channelDisplayPeerPerson(channel, members, currentUserId)}
       selected={channel.id === selectedChannelId && !threadSelected}
       threads={channel.id === selectedChannelId ? threads : []}
+      requestedThreads={requestedThreads}
       openThreadId={openThreadId}
       onSelectChannel={onSelectChannel}
       onOpenThread={onOpenThread}
@@ -225,6 +230,7 @@ function ChannelBranch({
   person,
   selected,
   threads,
+  requestedThreads,
   openThreadId,
   onSelectChannel,
   onOpenThread,
@@ -234,6 +240,7 @@ function ChannelBranch({
   person: ReturnType<typeof channelDisplayPeerPerson>;
   selected: boolean;
   threads: ChannelThread[];
+  requestedThreads: ReadonlySet<string>;
   openThreadId: string | null;
   onSelectChannel: (id: string) => void;
   onOpenThread: (id: string) => void;
@@ -252,6 +259,7 @@ function ChannelBranch({
           key={thread.id}
           thread={thread}
           selected={thread.id === openThreadId}
+          requested={requestedThreads.has(thread.id)}
           onOpen={() => onOpenThread(thread.id)}
         />
       ))}

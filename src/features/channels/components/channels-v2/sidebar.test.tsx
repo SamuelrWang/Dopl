@@ -18,7 +18,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { ChannelsV2Sidebar } from "./sidebar";
 import { SIDEBAR_THREAD_ACTIVE_WINDOW_MS } from "../../constants";
 import { channel, member, thread, ME, PEER } from "./test-fixtures";
-import { sidebarThreads } from "./view-model";
+import { sidebarThreads } from "./view-model-requested";
 
 afterEach(cleanup);
 
@@ -47,6 +47,7 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsV2Sideb
     openThreadId: null,
     onSelectChannel: vi.fn(),
     onOpenThread: vi.fn(),
+    requestedThreads: new Set<string>(),
     consentCount: 0,
     ...over,
   };
@@ -148,12 +149,52 @@ describe("the sidebar's 24h window", () => {
         now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000
       ).toISOString(),
     });
-    expect(sidebarThreads([fresh, stale], now).map((t) => t.id)).toEqual(["fresh"]);
+    expect(
+      sidebarThreads([fresh, stale], new Set(), now).map((t) => t.id)
+    ).toEqual(["fresh"]);
   });
 
   it("reads an ABSENT lastActivityAt as inactive, never as active", () => {
     // ⚠ Absent means "this read did not derive it" (INVARIANTS §5), and the
     // fail-safe direction is the one presence has: stale reads OFFLINE.
-    expect(sidebarThreads([thread({ lastActivityAt: undefined })], now)).toEqual([]);
+    expect(
+      sidebarThreads([thread({ lastActivityAt: undefined })], new Set(), now)
+    ).toEqual([]);
+  });
+
+  /** ⚠ THE RULING'S SECOND ARM (Samuel 2026-08-18: "active in the last 24 hours
+   *  OR REQUESTED"). Unbuilt until Phase 3 because nothing derived `requested`;
+   *  it now comes from the viewer's own consent inbox. */
+  it("admits a REQUESTED thread however old it is", () => {
+    const stale = thread({
+      id: "asked",
+      lastActivityAt: new Date(
+        now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000
+      ).toISOString(),
+    });
+    expect(
+      sidebarThreads([stale], new Set(["asked"]), now).map((t) => t.id)
+    ).toEqual(["asked"]);
+  });
+
+  it("admits a requested thread with NO activity clock at all", () => {
+    const bare = thread({ id: "asked", lastActivityAt: undefined });
+    expect(
+      sidebarThreads([bare], new Set(["asked"]), now).map((t) => t.id)
+    ).toEqual(["asked"]);
+  });
+});
+
+describe("the sidebar's REQUESTED glyph", () => {
+  it("wears the clock and says why, for a thread awaiting the viewer", () => {
+    renderSidebar({ requestedThreads: new Set(["t-kit"]) });
+    expect(
+      screen.getByRole("button", { name: "UI-kit design — awaiting your approval" })
+    ).not.toBeNull();
+  });
+
+  it("wears the plain title when nothing is pending", () => {
+    renderSidebar();
+    expect(screen.getByRole("button", { name: "UI-kit design" })).not.toBeNull();
   });
 });

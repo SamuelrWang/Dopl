@@ -1,20 +1,30 @@
 "use client";
 
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   coldKeys,
   patchCache,
   useApiMutationWith,
-  type MutationGate,
   type UseApiMutationConfig,
 } from "@/shared/hooks/use-api-mutation";
-import { toast } from "@/shared/ui/toast";
-import { ChannelApiError, channelRequest } from "../client/api";
+import { channelRequest } from "../client/api";
 import {
   channelKeys,
   channelMessagesPath,
   channelThreadsPath,
 } from "../client/query-keys";
+import {
+  failed,
+  messagesKey,
+  threadsKey,
+  type ThreadWriteDeps,
+  type ThreadWritesParams,
+} from "./use-thread-writes-shared";
+import {
+  fanOutThreadsConfig,
+  type FanOutThreadsDraft,
+  type FanOutThreadsResponse,
+} from "./use-thread-writes-fanout";
 import {
   appendPendingMessage,
   buildPendingMessage,
@@ -77,28 +87,14 @@ export interface ThreadOpDraft {
   summary?: string;
 }
 
-export interface ThreadWritesParams {
-  workspaceId: string;
-  currentUserId: string;
-  /** Author display for the pending row, so it does not flip name on save. */
-  currentUserName?: string | null;
-  currentUserAvatarUrl?: string | null;
-  /** Holds realtime refetches open for the life of each write. */
-  gate: MutationGate;
-}
-
-/** The cache the configs read to decide whether a key still needs the
- *  cold-start refetch. */
-export interface ThreadWriteDeps extends ThreadWritesParams {
-  client: QueryClient;
-}
-
-function failed(err: unknown, fallback: string) {
-  toast({ title: err instanceof ChannelApiError ? err.message : fallback });
-}
-
-const messagesKey = (channelId: string) => channelKeys.messages(channelId).all;
-const threadsKey = (channelId: string) => channelKeys.threads(channelId).all;
+// ⚠ Re-exported, not re-declared: `use-thread-writes-shared.ts` is where these
+// live now, and every existing importer keeps its import path.
+export type { ThreadWritesParams, ThreadWriteDeps };
+export {
+  fanOutThreadsConfig,
+  type FanOutThreadsDraft,
+  type FanOutThreadsResponse,
+};
 
 /**
  * ⚠ Exported APART from the hook so `use-thread-writes.test.ts` can drive them
@@ -309,6 +305,10 @@ export function useThreadWrites(params: ThreadWritesParams) {
     channelRequest,
     openThreadConfig(params)
   );
+  const fanOutThreads = useApiMutationWith<
+    FanOutThreadsDraft,
+    FanOutThreadsResponse
+  >(channelRequest, fanOutThreadsConfig(deps));
   const threadOp = useApiMutationWith<ThreadOpDraft, { task: ChannelThread }>(
     channelRequest,
     threadOpConfig(params)
@@ -317,8 +317,13 @@ export function useThreadWrites(params: ThreadWritesParams) {
   return {
     send,
     openThread,
+    fanOutThreads,
     threadOp,
-    /** True while any of the three writes is in flight. */
-    pending: send.pending || openThread.pending || threadOp.pending,
+    /** True while any of the four writes is in flight. */
+    pending:
+      send.pending ||
+      openThread.pending ||
+      fanOutThreads.pending ||
+      threadOp.pending,
   };
 }

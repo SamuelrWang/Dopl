@@ -72,6 +72,20 @@ export interface PostMessageOptions {
    * carries a thread tag the poster is entitled to (`resolvePostMetadata`).
    */
   handoff?: boolean;
+  /**
+   * REQUEST FAN-OUT GROUP. Stamp the reserved `metadata.fanoutGroup` on this
+   * post, so the N opening messages of one fanned-out request can be rendered
+   * as ONE card. The one caller is `service-tasks-fanout.ts › createTaskFanOut`
+   * (through `service-tasks.ts › createTask`), which DERIVES the id server-side
+   * — see `fanoutGroupId` there.
+   *
+   * Reserved on the handoff stamp's terms: the group id decides which card a
+   * thread renders inside, so a caller able to set it in raw metadata could
+   * splice its own thread into somebody else's request card. Stamped only onto
+   * a post carrying a thread tag the poster is entitled to
+   * (`resolvePostMetadata`).
+   */
+  fanoutGroupId?: string;
 }
 
 /**

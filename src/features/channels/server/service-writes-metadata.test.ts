@@ -34,8 +34,6 @@ const USER = "11111111-e29b-41d4-a716-446655440000";
 const PEER = "22222222-e29b-41d4-a716-446655440000";
 const THIRD = "33333333-e29b-41d4-a716-446655440000";
 const TASK_ID = "44444444-e29b-41d4-a716-446655440000";
-const OTHER_TASK_ID = "55555555-e29b-41d4-a716-446655440000";
-
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
@@ -51,8 +49,6 @@ const ctx: ChannelContext = {
  * session's Supabase cookies, so ctx is `source: "user"` with the body declaring
  * `authorKind: "agent"`.
  */
-const desktopCtx: ChannelContext = { ...ctx, source: "user" };
-
 function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
   return {
     id: "chan-1",
@@ -159,21 +155,28 @@ beforeEach(() => {
     });
 });
 
-describe("postMessage — DM auto-address", () => {
-  it("stamps the peer as to_user_id when a DM post carries no `to`", async () => {
+describe("postMessage — DM addressing is EXPLICIT (auto-address RETIRED)", () => {
+  it("stamps NOTHING when a DM post carries no `to`", async () => {
     const msg = await postMessage(ctx, "dm", { body: "on it" });
 
-    expect(capturedMetadata().to_user_id).toBe(PEER);
-    expect(msg.metadata.to_user_id).toBe(PEER);
+    // ⚠ The FAIL-QUIET DM auto-address is gone (wiring plan Phase 3). A post
+    // that names nobody reaches nobody's agent, in a DM exactly as in a group
+    // channel — there is no channel shape in which the server picks an
+    // addressee the caller did not.
+    expect(has(capturedMetadata(), "to_user_id")).toBe(false);
+    expect(has(msg.metadata, "to_user_id")).toBe(false);
+    // And it does not even ask the roster: the peer read has ONE reader left
+    // (thread inheritance, below) and an unaddressed post is not it.
+    expect(repo.listMembers).not.toHaveBeenCalled();
   });
 
-  it("an explicit `to` is never overridden by the auto-address", async () => {
+  it("an EXPLICIT `to` is what addresses a DM, exactly as in a group channel", async () => {
     await postMessage(ctx, "dm", { body: "note to self", toUserId: USER });
 
     expect(capturedMetadata().to_user_id).toBe(USER);
   });
 
-  it("leaves a NON-direct channel unaddressed (3+ members are ambiguous)", async () => {
+  it("leaves a NON-direct channel unaddressed (unchanged)", async () => {
     vi.mocked(repo.findChannelBySlug).mockResolvedValue(
       channelRow({ is_direct: false, direct_key: null })
     );
@@ -184,194 +187,33 @@ describe("postMessage — DM auto-address", () => {
     expect(repo.listMembers).not.toHaveBeenCalled();
   });
 
-  it("stamps nothing (and still posts) when the DM peer cannot be resolved", async () => {
-    vi.mocked(repo.listMembers).mockResolvedValue([memberRow(USER, "owner")]);
-
-    await postMessage(ctx, "dm", { body: "hello" });
-
-    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
-    expect(has(capturedMetadata(), "to_user_id")).toBe(false);
-  });
-
-  it("stamps nothing when a would-be third member makes the peer ambiguous", async () => {
-    vi.mocked(repo.listMembers).mockResolvedValue([
-      memberRow(USER, "owner"),
-      memberRow(PEER),
-      memberRow(THIRD),
-    ]);
-
-    await postMessage(ctx, "dm", { body: "hello" });
-
-    expect(has(capturedMetadata(), "to_user_id")).toBe(false);
-  });
-
-  it("SECURITY: a caller-supplied metadata to_user_id is still stripped, then replaced by the validated peer", async () => {
+  it("SECURITY: a caller-supplied metadata to_user_id is stripped and NOT replaced", async () => {
     await postMessage(ctx, "dm", {
       body: "hello",
       metadata: { to_user_id: THIRD, keep: 1 },
     });
 
     const meta = capturedMetadata();
-    // ⚠ Spoofed non-member never survives — the stamp comes from the roster.
+    // ⚠ The strip was never the auto-address's doing, and it outlives it: with
+    // no validated `toUserId` there is nothing to re-stamp, so the spoofed id
+    // simply leaves.
+    expect(has(meta, "to_user_id")).toBe(false);
+    expect(meta.keep).toBe(1);
+  });
+
+  it("SECURITY: a caller-supplied metadata to_user_id loses to the VALIDATED field", async () => {
+    await postMessage(ctx, "dm", {
+      body: "hello",
+      toUserId: PEER,
+      metadata: { to_user_id: THIRD, keep: 1 },
+    });
+
+    const meta = capturedMetadata();
     expect(meta.to_user_id).toBe(PEER);
     expect(meta.keep).toBe(1);
   });
 });
 
-describe("postMessage — DM task-id inheritance", () => {
-  it("inherits the single open task and fires the reserved-key stamping", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
-      truncated: false,
-    });
-
-    await postMessage(ctx, "dm", { body: "here is the answer" });
-
-    const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
-    // Desktop routing / suppression predicates read exactly these.
-    expect(meta.taskMode).toBe("interactive");
-    expect(meta.taskCreatedBy).toBe(PEER);
-    expect(meta.taskTitle).toBe("Wire the listener");
-    expect(meta.taskTarget).toBe(USER);
-    expect(meta.to_user_id).toBe(PEER);
-    expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
-  });
-
-  it("inherits a task the AUTHOR created and addressed to the peer", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [
-      taskRow({ created_by: USER, target_user_id: PEER, mode: "autonomous" }),
-    ],
-      truncated: false,
-    });
-
-    await postMessage(ctx, "dm", { body: "any progress?" });
-
-    const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
-    expect(meta.taskMode).toBe("autonomous");
-  });
-
-  it("stamps nothing with 2+ open candidates (which task is ambiguous)", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [
-      taskRow(),
-      taskRow({ id: OTHER_TASK_ID, created_by: USER, target_user_id: PEER }),
-    ],
-      truncated: false,
-    });
-
-    await postMessage(ctx, "dm", { body: "reply" });
-
-    expect(has(capturedMetadata(), "taskId")).toBe(false);
-  });
-
-  it("ignores CLOSED tasks and tasks whose participants are not {author, peer}", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [
-      taskRow({ status: "closed", outcome: "completed" }),
-      taskRow({ id: OTHER_TASK_ID, created_by: THIRD, target_user_id: USER }),
-      taskRow({ id: OTHER_TASK_ID, created_by: USER, target_user_id: null }),
-    ],
-      truncated: false,
-    });
-
-    await postMessage(ctx, "dm", { body: "reply" });
-
-    const meta = capturedMetadata();
-    expect(has(meta, "taskId")).toBe(false);
-    expect(has(meta, "taskMode")).toBe(false);
-  });
-
-  it("a caller-supplied taskId suppresses inheritance (explicit threading wins)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ id: OTHER_TASK_ID, title: "Explicit" })
-    );
-
-    await postMessage(ctx, "dm", {
-      body: "reply",
-      metadata: { taskId: OTHER_TASK_ID },
-    });
-
-    expect(capturedMetadata().taskId).toBe(OTHER_TASK_ID);
-    expect(repoTasks.listTasksByChannel).not.toHaveBeenCalled();
-  });
-
-  it("a legacy task-<uuid>-<seq> id suppresses inheritance and stamps nothing", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
-      truncated: false,
-    });
-    // Poster is the opening request's addressee, so the tag survives its gate;
-    // this pins that it still suppresses inheritance and resolves no task row.
-    vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue({
-      id: "msg-open",
-      seq: 7,
-      channel_id: "chan-1",
-      workspace_id: WS,
-      author_user_id: PEER,
-      author_kind: "user",
-      kind: "message",
-      body: "please do X",
-      metadata: { to_user_id: USER },
-      client_msg_id: null,
-      created_at: "2026-07-29T00:00:00Z",
-    });
-
-    await postMessage(ctx, "dm", {
-      body: "reply",
-      metadata: { taskId: "task-chan-1-7" },
-    });
-
-    const meta = capturedMetadata();
-    expect(meta.taskId).toBe("task-chan-1-7");
-    expect(has(meta, "taskMode")).toBe(false);
-    expect(repoTasks.listTasksByChannel).not.toHaveBeenCalled();
-  });
-
-  it("never inherits in a NON-direct channel", async () => {
-    vi.mocked(repo.findChannelBySlug).mockResolvedValue(
-      channelRow({ is_direct: false, direct_key: null })
-    );
-
-    await postMessage(ctx, "dm", { body: "reply", toUserId: PEER });
-
-    expect(has(capturedMetadata(), "taskId")).toBe(false);
-    expect(repoTasks.listTasksByChannel).not.toHaveBeenCalled();
-  });
-
-  it("never inherits onto a lifecycle event (a marker must not land on someone else's task)", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
-      truncated: false,
-    });
-
-    await postMessage(desktopCtx, "dm", { body: "done", kind: "task_finished" });
-
-    expect(has(capturedMetadata(), "taskId")).toBe(false);
-    expect(repoTasks.listTasksByChannel).not.toHaveBeenCalled();
-  });
-
-  it("does not inherit when the post is explicitly addressed away from the peer", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
-      truncated: false,
-    });
-
-    await postMessage(ctx, "dm", { body: "note to self", toUserId: USER });
-
-    expect(has(capturedMetadata(), "taskId")).toBe(false);
-  });
-});
-
-/**
- * `runtime` is RESERVED, stamped from the request's own `X-Dopl-Runtime` header
- * (auth layer resolves it into `ctx.runtime`), so the desktop can tell a session
- * it spawned from an external agent's post. ⚠ A caller able to set it in
- * `metadata` could masquerade as a desktop session and steal the reply routing,
- * so the strip holds on BOTH sides of the stamp.
- */
 describe("postMessage — runtime stamp (WAKE-V1)", () => {
   const desktopCtx: ChannelContext = { ...ctx, runtime: "desktop-session" };
 
@@ -466,7 +308,12 @@ describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
   });
 
   it("stamps metadata.handoff=true when the create declared it", async () => {
-    await postMessage(ctx, "dm", { body: "drive this" }, { handoff: true });
+    await postMessage(
+      ctx,
+      "dm",
+      { body: "drive this", toUserId: PEER },
+      { handoff: true }
+    );
     const meta = capturedMetadata();
     expect(meta.taskId).toBe(TASK_ID);
     expect(meta.handoff).toBe(true);
