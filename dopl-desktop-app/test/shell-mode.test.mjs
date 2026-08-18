@@ -23,9 +23,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
+
+const require = createRequire(import.meta.url);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -127,8 +130,61 @@ test("navigation goes over the bridge, and nothing else", () => {
   assert.match(nav, /webContents\.send\('dopl:navigate', \{ path \}\)/);
   assert.match(nav, /if \(!path \|\| !win \|\| win\.isDestroyed\(\)\) return false;/, "fails closed");
   const chan = fnOf(SHELL, "navigateToChannels");
-  assert.match(chan, /navigateTo\(`\/\$\{segment\}\/channels`\)/);
+  assert.match(chan, /const page = `\/\$\{segment\}\/\$\{CHANNELS_PAGE\}`;/);
   assert.ok(!/guard\.load|appOrigin/.test(chan), "the remote URL load must be gone");
+});
+
+// ── PHASE 9: the notification lands ON the channel ──────────────────────────
+
+test("a clicked notification navigates to the CHANNEL, not just the page", () => {
+  // The "windowing inverts" ruling's focus-the-app half. The mechanism (show
+  // the window, push a route) already existed — what was missing was the
+  // channel, which every caller's `entry` had carried the whole time.
+  const chan = fnOf(SHELL, "navigateToChannels");
+  assert.match(chan, /function navigateToChannels\(segment, channelId\)/);
+  assert.match(chan, /deps\.showMainWindow\(\)/, "the window comes up either way");
+  assert.match(chan, /navigateTo\(isSafeSegment\(channelId\) \? `\$\{page\}\/\$\{channelId\}` : page\)/,
+    "a usable channel id deepens the route; anything else degrades to the page");
+  // The page is ONE named string, so Phase 12's rename is an edit and not a grep.
+  assert.match(SHELL, /const CHANNELS_PAGE = 'channels-v2';/);
+});
+
+test("both interpolated values pass the ONE segment rule, and it is not a local copy", () => {
+  // A channel id arrives on a server DTO and ends up inside a router path.
+  // INVARIANTS §11's rule is `deep-link-target.js`'s, and a second regex in
+  // this file would be a second answer to it — the drift the export exists to
+  // prevent. So: no character class here, and the check is required lazily so
+  // shell-mode keeps its module-scope dependency freedom.
+  const chan = fnOf(SHELL, "navigateToChannels");
+  assert.match(chan, /const \{ isSafeSegment \} = require\('\.\/deep-link-target'\);/);
+  assert.match(chan, /if \(!isSafeSegment\(segment\)\) return;/, "the segment is checked too");
+  assert.ok(
+    !/\[A-Za-z0-9\]|SLUG_RE|test\(channelId\)/.test(SHELL),
+    "shell-mode must not carry its own segment regex"
+  );
+  // …and the rule really is exported, so the require above resolves.
+  const target = require(join(HERE, "..", "main", "deep-link-target.js"));
+  assert.equal(typeof target.isSafeSegment, "function");
+  assert.equal(target.isSafeSegment("7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90"), true);
+  assert.equal(target.isSafeSegment("../etc"), false);
+  assert.equal(target.isSafeSegment(null), false);
+});
+
+test("the notification seam hands the channel over, and never invents one", () => {
+  // `targeting-window.js › openChannelForEntry` is the ONE seam all three
+  // notification producers reach (the inbound request, the silent FYI, the
+  // passive task-reply notice), which is why the destination is one channel
+  // route rather than a per-kind fork.
+  const TW = M("targeting-window.js");
+  const fn = fnOf(TW, "openChannelForEntry");
+  assert.match(
+    fn,
+    /handlers\.openChannel\(entry\.workspaceSegment, \(entry\.channel && entry\.channel\.id\) \|\| null\)/,
+    "an entry with no channel must degrade to the page, never to a fabricated id"
+  );
+  assert.match(fn, /if \(!handlers\.openChannel \|\| !entry \|\| !entry\.workspaceSegment\) return;/);
+  // index.js still wires this seam to the shell helper that grew the parameter.
+  assert.match(INDEX, /openChannel: navigateToChannels/);
 });
 
 test("the menu's Home routes the SPA to boot", () => {

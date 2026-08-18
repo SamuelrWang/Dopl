@@ -122,8 +122,8 @@ describe("app routes", () => {
   });
 
   it("mirrors the web app's page list", () => {
-    // `channels-v2` is the one desktop-only extra: a hardcoded design-review
-    // page with no web counterpart (routes.tsx row comment).
+    // `channels-v2` is the one desktop-only extra: the ported channels surface,
+    // live behind a temporary route until Phase 12 renames it to `channels`.
     expect(WORKSPACE_PAGES.map((page) => page.path)).toEqual([
       "overview",
       "ontology",
@@ -135,8 +135,34 @@ describe("app routes", () => {
       "chats",
       "channels",
       "channels-v2",
+      "channels-v2/:channelId",
       "members",
       "settings",
     ]);
+  });
+
+  it("routes a named channel to the v2 page, with its id", () => {
+    // THE DESKTOP NOTIFICATION'S LANDING ROUTE (wiring plan Phase 9). Main
+    // pushes `/{segment}/channels-v2/{channelId}` over the navigate bridge, so
+    // what this table owes is the match and the param — the page threads it
+    // into the v2 core's initial selection from there.
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/acme-ab12cd/channels-v2/7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90"],
+    });
+    const match = router.state.matches.at(-1);
+    expect(match?.route.path).toBe("channels-v2/:channelId");
+    expect(match?.params.channelId).toBe("7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90");
+  });
+
+  it("keeps the paramless row matching, and gives the SHIPPING page no detail child", () => {
+    // The pair the deep-link hand copy encodes (`channels-v2: true`,
+    // `channels: false`). A `channels/:channelId` row would either claim a
+    // detail view the v1 page does not have, or split one path across two page
+    // components — which is why the notification's route is v2's.
+    const paramless = createMemoryRouter(routes, {
+      initialEntries: ["/acme-ab12cd/channels-v2"],
+    });
+    expect(paramless.state.matches.at(-1)?.route.path).toBe("channels-v2");
+    expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("channels/:channelId");
   });
 });

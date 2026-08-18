@@ -1,5 +1,19 @@
 // Pre-consent window core (v2.0 Session Window, Track T3).
 //
+// ⚠ NOT THE DEFAULT PATH ANY MORE (2026-08-18, wiring plan Phase 9 — "windowing
+// inverts"). An inbound request no longer mints a window before anyone has looked at
+// it: the notification fires, and clicking it FOCUSES the main app on the channel,
+// where the Inbox's launch panel is the decision surface. The ONE gate is
+// `main/settings.js › getPreConsentWindow()` (default OFF), read at the ONE call site,
+// `main/trigger.js › handleTrigger`. Do not add a second gate here — a module that
+// refuses on its own behalf is a second answer to the same question, and the C-9
+// window-budget leak is what a divided answer costs.
+//
+// ⚠ THE CAPABILITY IS DELIBERATELY INTACT. Nothing in this file was removed or
+// narrowed for the flip: the window factory, the adopt handoff, the arms, the linger
+// and the release all behave exactly as they did, so opting back in restores the old
+// path byte-for-byte — and Phase 10's opt-in pop-out is built on this machinery.
+//
 // SECURITY (item 8 / §H-1): a pre-consent window runs NO SDK query, NO mcpServers,
 // NO canUseTool, NO tool of any kind. It renders the request text (textContent, in
 // the renderer) + Accept/Deny and holds the SAME durable consent row open. Accept

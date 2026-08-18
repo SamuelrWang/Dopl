@@ -277,13 +277,30 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   thread (the Agents tab is still Phase 5 fixtures).
 - **Agent view grows controls**: pause the agent, change its settings, plus the
   existing direct 1:1 lane.
-- **Windowing inverts.** Today: request → desktop notification → click → a NEW
-  WINDOW per thread (the session window with its open-session settings). New
-  default: notification click FOCUSES the main desktop app and auto-navigates
-  to the channel/DM where the request was made, to launch or decline there.
+- **Windowing inverts.** ✅ **SHIPPED in Phase 9 (2026-08-18), except the pop-out
+  button.** Today: request → desktop notification → click → a NEW WINDOW per
+  thread (the session window with its open-session settings). New default:
+  notification click FOCUSES the main desktop app and auto-navigates to the
+  channel/DM where the request was made, to launch or decline there.
   Each opened thread view gets an **open as new window** button — a pop-out,
   movable window (to be designed) — so the per-thread window becomes opt-in
   instead of the default.
+  - **What landed:** the request no longer mints a pre-consent window at all
+    (`settings.getPreConsentWindow()`, default OFF, read once in
+    `trigger.js › handleTrigger`), and the clicked notification now carries the
+    CHANNEL — `targeting-window.js › openChannelForEntry` →
+    `shell-mode.js › navigateToChannels(segment, channelId)` → the SPA's new
+    `channels-v2/:channelId` route, which selects that channel. ⚠ **The
+    machinery is intact, only the default moved**; the session window for the
+    operator's own runs (`getWindowMode()`) is untouched and still ON.
+  - ⚠ **The pop-out button is PARKED, not skipped.** Phase 10 is a security
+    decision — every renderer-reachable `ipcMain.handle` is bound to the MAIN
+    window, so a second SPA window would render nothing while reporting nothing
+    — and it is Samuel's call (wiring plan § Phase 10, options (a)/(b)).
+  - ⚠ **"To launch or decline THERE" is one click, not zero.** The notification
+    lands on the channel; the launch panel lives in the Inbox pane, which is a
+    sidebar nav row away with its own badge. The v2 channel transcript shows a
+    request as a `PendingChip` and offers no decision control — filed as F-212.
 - **Notification policy: mention-gated.** Today every agent post into a thread
   raises a desktop notification. New rule: agent/thread activity notifies ONLY
   when the agent explicitly @-tags me. Tagging is a capability the agent must
