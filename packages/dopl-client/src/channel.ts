@@ -27,6 +27,7 @@ import type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
+  ChannelThreadPage,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
@@ -186,15 +187,25 @@ export async function postMessage(
 // renaming means a migration plus every read and write path. Everything above
 // this line speaks `thread`.
 
+/**
+ * A channel's threads, MOST RECENTLY ACTIVE FIRST — the server's order, which
+ * is the only order (`repository-tasks.ts › listTasksByChannel`). ⚠ Do not
+ * re-sort: the server's LIMIT clipped against that order, so a re-sorted list is
+ * the wrong rows in a plausible order.
+ *
+ * `truncated` rides through from the envelope; an older server that does not
+ * send it reads as `false`, which is the pre-existing behaviour (an unbounded
+ * read never clipped), not a claim.
+ */
 export async function listChannelThreads(
   t: DoplTransport,
   channelId: string
-): Promise<ChannelThread[]> {
-  const data = await t.request<{ tasks: ChannelThread[] }>(
+): Promise<ChannelThreadPage> {
+  const data = await t.request<{ tasks: ChannelThread[]; truncated?: boolean }>(
     `/api/channels/${enc(channelId)}/tasks`,
     { toolName: "channel_list_threads" }
   );
-  return data.tasks;
+  return { threads: data.tasks, truncated: data.truncated === true };
 }
 
 /**

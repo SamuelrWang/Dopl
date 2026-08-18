@@ -33,7 +33,7 @@ import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskRow,
+  ChannelTaskActivityRow,
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
@@ -84,7 +84,7 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
 }
 
 /** The thread USER is the target of — open unless a test closes it. */
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
   return {
     id: TASK_ID,
     channel_id: "chan-1",
@@ -99,12 +99,15 @@ function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
     updated_at: "2026-08-01T00:00:00Z",
     closed_at: null,
     outcome_summary: null,
+    // Derived by the activity view, never stored on the row — the DM
+    // inheritance match is all-or-nothing on the pair, not on order.
+    last_activity_at: "2026-08-01T00:00:00Z",
     ...overrides,
   };
 }
 
 /** The closed shape a real `close_thread` leaves behind. */
-function closedTask(): ChannelTaskRow {
+function closedTask(): ChannelTaskActivityRow {
   return taskRow({
     status: "closed",
     outcome: "completed",
@@ -151,7 +154,10 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
+  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [],
+      truncated: false,
+    });
   // The legacy opener: PEER asked USER, so USER is a participant of it.
   vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
     insertedRow({
@@ -230,7 +236,10 @@ describe("postMessage — the closed-thread notice (F6)", () => {
     // Belt and braces on `resolveInheritableTask`'s own `status === "open"`
     // filter: a closed thread is not a candidate, so an untagged DM reply can
     // never inherit one and can never warn about one.
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([closedTask()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [closedTask()],
+      truncated: false,
+    });
 
     const msg = await postMessage(ctx, "dm", { body: "on it" });
 

@@ -39,7 +39,7 @@ const THREAD_ID = "79ce5325-f53e-4d00-a1c0-f48875000bc0";
 function stubClient(overrides: Record<string, unknown>): DoplClient {
   return {
     listChannels: vi.fn(async () => [CHANNEL]),
-    listChannelThreads: vi.fn(async () => []),
+    listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
     ...overrides,
   } as unknown as DoplClient;
 }

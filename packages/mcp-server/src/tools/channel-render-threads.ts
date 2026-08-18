@@ -22,6 +22,30 @@ import { inlineOr, metaString, neutralizeInline } from "./channel-shared";
 /** Tell for an id that neutralized to nothing — empty backticks read as a glitch. */
 export const UNREADABLE_ID = "(unreadable id)";
 
+/**
+ * THE CLIPPED-THREAD-LIST NOTICE — worded ONCE, for the one read that can see
+ * the clip.
+ *
+ * `list_threads` is bounded server-side (`features/channels/constants.ts ›
+ * CHANNEL_THREAD_LIST_LIMIT`) and a page coming back AT the ceiling counts as
+ * clipped, because at is indistinguishable from over (INVARIANTS §9). Threads
+ * are never closed and never leave the list, so this ceiling is reachable by
+ * ordinary use rather than by abuse — and a bounded page that renders exactly
+ * like an exhausted one is how an agent concludes an exchange does not exist.
+ *
+ * ⚠ IT MAY NOT OFFER ANOTHER READ AS THE REMEDY. There is no paging argument on
+ * this op and `get_thread` needs the id this page did not show, so no read on
+ * this connection fills the gap: say so, and say what the list IS bounded to
+ * (the most recently active), which is the fact that makes the clip safe to act
+ * on.
+ *
+ * ⚠ It may not let the clip pass as an absence: "no such thread" is an
+ * assertion this read never established.
+ */
+export function threadsClippedNote(ref: string): string {
+  return `_CLIPPED — **${ref}** holds more threads than one listing returns, so these are the MOST RECENTLY ACTIVE ones and older exchanges are missing. This op takes no page argument, so no read here fills the gap: if the thread you want is not above, do NOT conclude it does not exist — ask your operator for its id, or open a new one._`;
+}
+
 /** How many leading characters of a thread id stand in for it inline. */
 const THREAD_TAG_LEN = 8;
 

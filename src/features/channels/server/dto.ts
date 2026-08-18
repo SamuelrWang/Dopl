@@ -53,6 +53,32 @@ export type ChannelTaskRow = {
   outcome_summary: string | null;
 };
 
+/**
+ * The same task row read through `channel_tasks_activity` (migration
+ * `20260818120000`), which adds the ONE derived column the base table cannot
+ * hold: when the thread last saw real activity, off `channel_messages`.
+ *
+ * ⚠ A DISTINCT TYPE, not the base row with an optional field (INVARIANTS §9):
+ * the presence of `last_activity_at` is what says this read DERIVED the clock.
+ * A single-row load off `channel_tasks` did not, and must not be able to
+ * pass itself off as having done so.
+ */
+export type ChannelTaskActivityRow = ChannelTaskRow & {
+  /**
+   * Newest non-proposal message tagged for the thread, falling back to the
+   * thread's own `created_at`. NEVER `channel_tasks.updated_at` — see
+   * `repository-tasks.ts › updateTask`.
+   */
+  last_activity_at: string;
+};
+
+/** The columns `listTasksByChannel` reads off `channel_tasks_activity`. ⚠ Not
+ *  `*`: the view carries `client_msg_id`, which is an idempotency key and no
+ *  reader's business (INVARIANTS §9). Must stay in step with
+ *  {@link ChannelTaskActivityRow}. */
+export const CHANNEL_TASK_ACTIVITY_COLS =
+  "id,channel_id,workspace_id,title,status,outcome,mode,created_by,target_user_id,created_at,updated_at,closed_at,outcome_summary,last_activity_at";
+
 export type ChannelMemberRow = {
   channel_id: string;
   user_id: string;
@@ -229,9 +255,22 @@ export function mapMemberRow(
   };
 }
 
-/** Task row -> DTO. Pure — the task is the authoritative status/mode store. */
-export function mapTaskRow(row: ChannelTaskRow): ChannelThread {
+/**
+ * Task row -> DTO. Pure — the task is the authoritative status/mode store.
+ *
+ * ⚠ `lastActivityAt` rides through ONLY when the row came from the activity
+ * view ({@link ChannelTaskActivityRow}). On a single-row load it is ABSENT, and
+ * absent means "this view did not derive it" — never "no activity" and never
+ * "same as created_at" (INVARIANTS §9: omitting the field says this view did
+ * not ask). Anything ordering or windowing by it must read it from the LIST.
+ */
+export function mapTaskRow(
+  row: ChannelTaskRow | ChannelTaskActivityRow
+): ChannelThread {
+  const lastActivityAt =
+    "last_activity_at" in row ? { lastActivityAt: row.last_activity_at } : {};
   return {
+    ...lastActivityAt,
     id: row.id,
     channelId: row.channel_id,
     workspaceId: row.workspace_id,

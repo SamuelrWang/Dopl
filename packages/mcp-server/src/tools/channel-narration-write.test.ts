@@ -133,7 +133,7 @@ describe("Q1 write · a hostile channel NAME", () => {
         metadata: {},
         authorUserId: "u-me",
       })),
-      listChannelThreads: vi.fn(async () => []),
+      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
     });
 
     const text = (await opPost(client, "public-sync", "hi")).content[0].text;
@@ -382,9 +382,9 @@ describe("Q1 write · the not-threaded warning names peer-typed titles", () => {
       })),
       // ⚠ A thread the PEER opened and titled, addressed to me: offerable, and
       // its title is not mine.
-      listChannelThreads: vi.fn(async () => [
+      listChannelThreads: vi.fn(async () => ({ threads: [
         { ...THREAD, title: FORGERY, createdBy: "u-peer", targetUserId: "u-me" },
-      ]),
+      ], truncated: false })),
     });
 
     const text = (await opPost(client, "general", "unthreaded")).content[0].text;

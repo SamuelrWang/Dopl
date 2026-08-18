@@ -29,7 +29,7 @@ import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskRow,
+  ChannelTaskActivityRow,
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
@@ -80,7 +80,7 @@ function memberRow(userId: string): ChannelMemberRow {
 }
 
 /** An OPEN thread between the two DM members — the inheritance candidate. */
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
   return {
     id: TASK_ID,
     channel_id: "chan-1",
@@ -95,6 +95,9 @@ function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
     mode: "interactive",
     created_at: "2026-07-31T00:00:00Z",
     updated_at: "2026-07-31T00:00:00Z",
+    // Derived by the activity view, never stored on the row — the DM
+    // inheritance match is all-or-nothing on the pair, not on order.
+    last_activity_at: "2026-07-31T00:00:00Z",
     ...overrides,
   };
 }
@@ -141,7 +144,10 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
+  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [],
+      truncated: false,
+    });
 });
 
 describe("postMessage — the DEFAULT intent is unchanged", () => {
@@ -161,7 +167,10 @@ describe("postMessage — the DEFAULT intent is unchanged", () => {
   });
 
   it("still inherits the single open DM thread with no intent", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "progress" });
 
@@ -198,7 +207,10 @@ describe("postMessage — intent:chat reaches nobody's agent", () => {
   it("does NOT inherit the open DM thread", async () => {
     // Inheritance is part of the auto-addressing machinery and fires only for a
     // message addressed to the peer — a chat post is addressed to nobody.
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "unrelated aside", intent: "chat" });
 

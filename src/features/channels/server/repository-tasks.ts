@@ -1,6 +1,11 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { ChannelTaskRow } from "./dto";
+import { CHANNEL_THREAD_LIST_LIMIT } from "../constants";
+import {
+  CHANNEL_TASK_ACTIVITY_COLS,
+  type ChannelTaskActivityRow,
+  type ChannelTaskRow,
+} from "./dto";
 
 /**
  * Pure data access for `channel_tasks` (v15). Split out of `repository.ts` so
@@ -67,18 +72,63 @@ export async function findTaskByChannelAndId(
   return (data as ChannelTaskRow | null) ?? null;
 }
 
-/** All tasks in a channel, newest first. */
+/**
+ * One page of a channel's threads, MOST RECENTLY ACTIVE FIRST, plus whether the
+ * ceiling clipped it.
+ *
+ * ⚠ `truncated` is `rows.length >= limit`, i.e. AT the ceiling counts as
+ * clipped — at is indistinguishable from over (INVARIANTS §9). A cap that
+ * renders identically to an exhausted list is the bug, not the fix, so every
+ * surface that renders this list says so when it is true.
+ */
+export interface ChannelTaskPage {
+  rows: ChannelTaskActivityRow[];
+  truncated: boolean;
+}
+
+/**
+ * A channel's threads, ordered by LAST ACTIVITY (2026-08-18). Bounded, and the
+ * return shape says when the bound bit.
+ *
+ * WHY NOT `created_at DESC`, WHICH THIS WAS. That is the order threads were
+ * OPENED in. Threads no longer close, so nothing ever leaves this list and
+ * opening order buries the live exchange under whatever was started most
+ * recently. WHY NOT `channel_tasks.updated_at` either: {@link updateTask} is
+ * its only writer, reached from close / set_mode / reopen alone, so it equals
+ * `created_at` for every thread that was never closed — that was C-1, and the
+ * fix is not to write to it more.
+ *
+ * THE CLOCK IS `channel_messages`, DERIVED ONCE, IN SQL. `channel_tasks_activity`
+ * (migration `20260818120000`) carries the identical lateral
+ * `channel_tasks_stale` uses — same definition of activity, written once, so the
+ * ordering the sidebar sees and the ordering `list_threads` renders cannot
+ * disagree. ⚠ Do not re-sort the result anywhere; the ORDER is what the LIMIT
+ * clips against, so a caller that re-sorts is looking at the wrong 200 rows.
+ *
+ * ⚠ ONE WRITE-PATH CALLER, AND IT IS A DM-ONLY PATH:
+ * `service-writes-metadata.ts › resolveInheritableTask` runs only after a
+ * direct channel's peer resolves, so the lateral it pays for spans one pair's
+ * threads. Nothing was added to the write path itself (INVARIANTS §12) — no
+ * trigger, no touch, no second round trip.
+ */
 export async function listTasksByChannel(
-  channelId: string
-): Promise<ChannelTaskRow[]> {
+  channelId: string,
+  limit: number = CHANNEL_THREAD_LIST_LIMIT
+): Promise<ChannelTaskPage> {
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("channel_tasks")
-    .select("*")
+    .from("channel_tasks_activity")
+    .select(CHANNEL_TASK_ACTIVITY_COLS)
     .eq("channel_id", channelId)
-    .order("created_at", { ascending: false });
+    // ⚠ `created_at` is the TIE-BREAK, never the spine: threads opened in the
+    // same second with no traffic would otherwise page nondeterministically,
+    // and a nondeterministic order under a LIMIT drops rows at random.
+    .order("last_activity_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
-  return (data ?? []) as ChannelTaskRow[];
+  const rows = (data ?? []) as unknown as ChannelTaskActivityRow[];
+  return { rows, truncated: rows.length >= limit };
 }
 
 /**

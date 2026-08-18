@@ -254,6 +254,12 @@ export function formatThreadLine(
   view: MemberView = NO_MEMBER_VIEW,
 ): string {
   const bits = [`\`${t.id}\``, t.status, `${t.mode} mode`];
+  // ⚠ THE SORT KEY, RENDERED. The listing is ordered by this, so printing it is
+  // what makes the order legible instead of arbitrary — and it is the only
+  // timestamp on the row that means "somebody did something here" (`updatedAt`
+  // moves only when the ROW is patched). Absent on a single-thread read, which
+  // derives no activity clock and therefore claims none.
+  if (t.lastActivityAt) bits.push(`last activity ${t.lastActivityAt}`);
   if (t.outcome) bits.push(`outcome ${t.outcome}`);
   bits.push(`by ${memberRef(t.createdBy, view)}`);
   bits.push(

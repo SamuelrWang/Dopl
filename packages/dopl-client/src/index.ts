@@ -98,6 +98,7 @@ export type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
+  ChannelThreadPage,
   ChannelVisibility,
   MessageIntent,
   ReadMessagesOptions,

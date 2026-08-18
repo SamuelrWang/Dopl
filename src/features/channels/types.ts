@@ -60,6 +60,18 @@ export type ChannelThread = {
   closedAt: string | null;
   /** Null while open, or when closed without one. */
   outcomeSummary: string | null;
+  /**
+   * When this thread last saw real activity — the newest message tagged for it,
+   * or its own `createdAt` when nobody has posted. Derived off `channel_messages`
+   * by the `channel_tasks_activity` view; ⚠ NEVER `updatedAt`, whose only
+   * writers are close / set_mode / reopen (C-1).
+   *
+   * ⚠ ABSENT means THIS READ DID NOT DERIVE IT (a single-thread load), never
+   * "no activity". Only the channel thread LIST carries it, and it is what that
+   * list is ordered by and what `SIDEBAR_THREAD_ACTIVE_WINDOW_MS` is measured
+   * against.
+   */
+  lastActivityAt?: string;
 };
 
 /**

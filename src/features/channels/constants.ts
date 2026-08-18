@@ -53,6 +53,23 @@ export const GROUP_CHANNEL_MIN_MEMBERS = 3;
 export const PRESENCE_ONLINE_WINDOW_MS = 90_000;
 
 /**
+ * A thread is shown in the SIDEBAR TREE when it saw activity inside this window
+ * (or is a standing request). Ruled by Samuel on 2026-08-18: threads never
+ * close and never leave the Threads tab, so the sidebar needs a recency bound
+ * of its own or it grows without limit.
+ *
+ * ⚠ CLIENT-SIDE ARITHMETIC over `ChannelThread.lastActivityAt`, exactly like
+ * {@link PRESENCE_ONLINE_WINDOW_MS} over `lastSeenAt` — the repository read is a
+ * plain bounded activity-ordered list and knows nothing about this window. A
+ * server-side filter would need a second read for the Threads tab and the two
+ * would answer "is this thread live" differently.
+ *
+ * ⚠ Stale data therefore reads INACTIVE, never active: the same fail-safe
+ * direction presence has.
+ */
+export const SIDEBAR_THREAD_ACTIVE_WINDOW_MS = 24 * 60 * 60_000;
+
+/**
  * Trailing debounce on the presence-driven roster refetch. Listeners heartbeat
  * ~30s apiece, so a busy workspace drips realtime events; the freshness window
  * is 90s, so per-event refetching buys nothing. Coalesce the burst.
@@ -95,6 +112,22 @@ export const CONSENT_TTL_MS = 24 * 60 * 60_000;
  * F-060's RATE-LIMIT half (per-`(user, channel)` bucket → 429) is still OPEN.
  */
 export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
+
+/**
+ * Ceiling on one channel's thread list (`listTasksByChannel`). Threads never
+ * leave the list, so this read needs a bound (INVARIANTS §9) — and a read
+ * coming back AT the ceiling counts as CLIPPED, because at is indistinguishable
+ * from over. The caller is told; nothing renders a clip as an exhausted list.
+ *
+ * 200 mirrors {@link MAX_MESSAGE_LIMIT} — the same order of magnitude as the
+ * transcript page this list sits beside. ⚠ NOT derived from a production
+ * measurement: nobody has counted threads-per-channel on the deployment, and
+ * the number to check before moving this is
+ * `SELECT channel_id, count(*) FROM channel_tasks GROUP BY 1 ORDER BY 2 DESC`.
+ * (`20260807160000`'s header reports single-digit OPEN threads workspace-wide
+ * as of 2026-08-07, which is a different question and an older one.)
+ */
+export const CHANNEL_THREAD_LIST_LIMIT = 200;
 
 /** Default page size for a message read when `limit` is omitted. */
 export const DEFAULT_MESSAGE_LIMIT = 100;

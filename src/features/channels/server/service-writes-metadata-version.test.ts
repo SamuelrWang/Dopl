@@ -126,7 +126,10 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
+  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [],
+      truncated: false,
+    });
 });
 
 describe("readAppVersionHeader — a version, or nothing", () => {

@@ -154,7 +154,7 @@ describe("F4 — the POST result says the same thing the read render does", () =
       listChannels: vi.fn(async () => [
         { id: "chan-1", slug: "general", name: "General", visibility: "private" },
       ]),
-      listChannelThreads: vi.fn(async () => []),
+      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
       postChannelMessage: vi.fn(async () => ({
         id: "m1",
         seq: 346,

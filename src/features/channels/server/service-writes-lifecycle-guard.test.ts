@@ -137,7 +137,10 @@ beforeEach(() => {
   // Re-proposal anchor. 0 = "nothing said in this thread yet".
   vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(0);
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
+  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [],
+      truncated: false,
+    });
   vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
     taskRow({ ...patch })
   );

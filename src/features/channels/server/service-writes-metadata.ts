@@ -66,7 +66,11 @@ async function resolveInheritableTask(
   authorUserId: string,
   peerUserId: string
 ): Promise<ChannelTaskRow | null> {
-  const tasks = await repoTasks.listTasksByChannel(channel.id);
+  // ⚠ Reads the ACTIVITY-ordered page (the one thread read there is). Order is
+  // irrelevant here — this is an all-or-nothing match, not a pick-the-first —
+  // and the bound is not a risk on this path: it runs only for a DIRECT
+  // channel, i.e. one pair's threads.
+  const { rows: tasks } = await repoTasks.listTasksByChannel(channel.id);
   const candidates = tasks.filter(
     (task) =>
       task.status === "open" &&

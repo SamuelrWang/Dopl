@@ -25,7 +25,7 @@ import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskRow,
+  ChannelTaskActivityRow,
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
@@ -86,7 +86,7 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
   return {
     id: TASK_ID,
     channel_id: "chan-1",
@@ -101,6 +101,9 @@ function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
     updated_at: "2026-07-29T00:00:00Z",
     closed_at: null,
     outcome_summary: null,
+    // Derived by the activity view, never stored on the row — the DM
+    // inheritance match is all-or-nothing on the pair, not on order.
+    last_activity_at: "2026-08-01T00:00:00Z",
     ...overrides,
   };
 }
@@ -150,7 +153,10 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
+  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [],
+      truncated: false,
+    });
 });
 
 describe("postMessage — DM auto-address", () => {
@@ -214,7 +220,10 @@ describe("postMessage — DM auto-address", () => {
 
 describe("postMessage — DM task-id inheritance", () => {
   it("inherits the single open task and fires the reserved-key stamping", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "here is the answer" });
 
@@ -230,9 +239,12 @@ describe("postMessage — DM task-id inheritance", () => {
   });
 
   it("inherits a task the AUTHOR created and addressed to the peer", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [
       taskRow({ created_by: USER, target_user_id: PEER, mode: "autonomous" }),
-    ]);
+    ],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "any progress?" });
 
@@ -242,10 +254,13 @@ describe("postMessage — DM task-id inheritance", () => {
   });
 
   it("stamps nothing with 2+ open candidates (which task is ambiguous)", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [
       taskRow(),
       taskRow({ id: OTHER_TASK_ID, created_by: USER, target_user_id: PEER }),
-    ]);
+    ],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "reply" });
 
@@ -253,11 +268,14 @@ describe("postMessage — DM task-id inheritance", () => {
   });
 
   it("ignores CLOSED tasks and tasks whose participants are not {author, peer}", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [
       taskRow({ status: "closed", outcome: "completed" }),
       taskRow({ id: OTHER_TASK_ID, created_by: THIRD, target_user_id: USER }),
       taskRow({ id: OTHER_TASK_ID, created_by: USER, target_user_id: null }),
-    ]);
+    ],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "reply" });
 
@@ -281,7 +299,10 @@ describe("postMessage — DM task-id inheritance", () => {
   });
 
   it("a legacy task-<uuid>-<seq> id suppresses inheritance and stamps nothing", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
     // Poster is the opening request's addressee, so the tag survives its gate;
     // this pins that it still suppresses inheritance and resolves no task row.
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue({
@@ -321,7 +342,10 @@ describe("postMessage — DM task-id inheritance", () => {
   });
 
   it("never inherits onto a lifecycle event (a marker must not land on someone else's task)", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
 
     await postMessage(desktopCtx, "dm", { body: "done", kind: "task_finished" });
 
@@ -330,7 +354,10 @@ describe("postMessage — DM task-id inheritance", () => {
   });
 
   it("does not inherit when the post is explicitly addressed away from the peer", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
 
     await postMessage(ctx, "dm", { body: "note to self", toUserId: USER });
 
@@ -432,7 +459,10 @@ describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
   // Opener always carries a thread tag, so drive the stamp through DM
   // inheritance: one open {author, peer} task gives the post its `taskId`.
   beforeEach(() => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([taskRow()]);
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: false,
+    });
   });
 
   it("stamps metadata.handoff=true when the create declared it", async () => {

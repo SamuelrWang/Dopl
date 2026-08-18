@@ -17,8 +17,15 @@ import { TaskCreateSchema } from "@/features/channels/schema";
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
-    const tasks = await listChannelTasks(ctx, requireChannelId(auth.params));
-    return NextResponse.json({ tasks });
+    const { threads, truncated } = await listChannelTasks(
+      ctx,
+      requireChannelId(auth.params)
+    );
+    // `tasks` keeps the storage name. `truncated` is ADDITIVE and load-bearing:
+    // the list is bounded and threads never leave it, so a caller that cannot
+    // tell a clipped page from an exhausted one will present a partial list as
+    // the whole one (INVARIANTS §9).
+    return NextResponse.json({ tasks: threads, truncated });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

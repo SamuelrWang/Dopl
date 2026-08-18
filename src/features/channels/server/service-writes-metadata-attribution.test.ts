@@ -124,7 +124,10 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([]);
+  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [],
+      truncated: false,
+    });
 });
 
 describe("SECURITY: the three agent-attribution keys are stripped (rollback §1)", () => {

@@ -142,11 +142,17 @@ export async function threadLinkageNote(
 
   // ⚠ Best-effort — a listing failure must not turn a SUCCESSFUL post into an
   // error the agent might retry.
+  //
+  // ⚠ Reads the same bounded, ACTIVITY-ORDERED page every thread listing reads
+  // (`repository-tasks.ts › listTasksByChannel`). A clip is not reported on
+  // THIS surface and must not be: this is an advisory note under a post that
+  // already succeeded, the threads it can suggest are the most recently active
+  // ones, and it never says a thread does not exist — it says this post is not
+  // in one, which is true whatever the page held.
   let open;
   try {
-    open = (await client.listChannelThreads(channelId)).filter(
-      (t) => t.status === "open",
-    );
+    const page = await client.listChannelThreads(channelId);
+    open = page.threads.filter((t) => t.status === "open");
   } catch {
     return null;
   }

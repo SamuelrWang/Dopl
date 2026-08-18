@@ -33,7 +33,7 @@ const LIFECYCLE_KINDS = ["task_started", "task_finished", "task_failed"] as cons
 function stubClient(overrides: Record<string, unknown> = {}): DoplClient {
   return {
     listChannels: vi.fn(async () => [CHANNEL]),
-    listChannelThreads: vi.fn(async () => []),
+    listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
     postChannelMessage: vi.fn(async (_c: string, input: Record<string, unknown>) => ({
       id: "m1",
       seq: 7,

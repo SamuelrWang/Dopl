@@ -141,6 +141,30 @@ export interface ChannelThread {
   closedAt: string | null;
   /** Null while open, or when closed without one. */
   outcomeSummary: string | null;
+  /**
+   * When the thread last saw real activity — the newest message tagged for it,
+   * or its own `createdAt` when nobody has posted into it. ⚠ NOT `updatedAt`,
+   * which moves only when the ROW is patched.
+   *
+   * ⚠ ABSENT means THIS READ DID NOT DERIVE IT (`get_thread` loads one row and
+   * does not), never "no activity". Only the thread LIST carries it, and the
+   * list is ORDERED by it.
+   */
+  lastActivityAt?: string;
+}
+
+/**
+ * One page of a channel's threads: the rows, most recently active first, plus
+ * whether the server's ceiling clipped them.
+ *
+ * ⚠ `truncated` exists because threads never leave the list, so the read is
+ * bounded and a clipped page that renders like an exhausted one asserts
+ * something the read never established (INVARIANTS §9). Surface it; a caller
+ * that drops it is claiming these are all of them.
+ */
+export interface ChannelThreadPage {
+  threads: ChannelThread[];
+  truncated: boolean;
 }
 
 /**

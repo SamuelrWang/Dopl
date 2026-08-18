@@ -204,7 +204,7 @@ describe("Q13 · the not-threaded note recommends only WRITABLE threads", () => 
         metadata: {},
         authorUserId,
       })),
-      listChannelThreads: vi.fn(async () => threads),
+      listChannelThreads: vi.fn(async () => ({ threads: threads, truncated: false })),
     });
     const res = await opPost(client, "eng", "here is the answer", {});
     expect(res.isError).toBeFalsy();

@@ -1,6 +1,10 @@
 # Channels v2 — wiring plan
 
-Status: PLAN. Written 2026-08-18 against the tree at `c18b64ea`. Nothing here is built.
+Status: PLAN, partly executed. Written 2026-08-18 against the tree at `c18b64ea`.
+**Phase 0 and Phase 1 have LANDED (2026-08-18); everything from Phase 2 down is
+still unbuilt.** The phases below are left as written — they are the intent, not a
+progress log. ⚠ Current state lives in `docs/INVARIANTS.md` (§5 for the activity
+clock and the thread ordering, §9 for the bounded read), never here.
 Source of intent: `apps/desktop-ui/src/pages/channels-v2/MAPPING.md`. Source of current
 behaviour: `docs/INVARIANTS.md` §5 §6 §7 §8 §10 §11 §14 and the code, in that precedence
 order (repo CLAUDE.md).

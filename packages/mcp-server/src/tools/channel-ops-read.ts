@@ -38,6 +38,9 @@ import {
   formatThreadDetail,
   formatThreadLine,
 } from "./channel-render";
+// ⚠ The clipped-list wording lives with the other thread-render prose, stated
+// once — see INVARIANTS §9.
+import { threadsClippedNote } from "./channel-render-threads";
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 import { rosterAddressingRule } from "./channel-addressing";
 
@@ -242,9 +245,16 @@ export async function opListThreads(
 ): Promise<ToolResponse> {
   // Hot-path parity with read/await: ref straight to the route (slug-or-id +
   // visibility enforced there), no pre-resolve via listChannels.
+  //
+  // ⚠ THE ORDER IS THE SERVER'S AND IS NOT RE-DERIVED HERE. One repository read
+  // (`repository-tasks.ts › listTasksByChannel`) orders every thread list by
+  // last activity, so this listing and the operator's own sidebar cannot
+  // disagree about which exchange is live. Sorting these rows again would also
+  // be sorting the wrong rows — the server's LIMIT clipped against ITS order.
   let threads: ChannelThread[];
+  let truncated: boolean;
   try {
-    threads = await client.listChannelThreads(ref);
+    ({ threads, truncated } = await client.listChannelThreads(ref));
   } catch (e) {
     if (isNotFound(e)) return channelNotFound(ref);
     throw e;
@@ -255,12 +265,15 @@ export async function opListThreads(
     );
   }
   const lines = [
-    `## ${ref} — ${threads.length} thread${threads.length === 1 ? "" : "s"}\n`,
+    `## ${ref} — ${threads.length} thread${threads.length === 1 ? "" : "s"}, most recently active first\n`,
     // ⚠ Framing FIRST — titles/outcome summaries are peer-typed and
     // `listChannelTasks` is channel-transparent: every member receives every
     // thread's text, not just their own.
     `${UNTRUSTED_THREAD_HEADER}\n`,
   ];
+  // ⚠ The clip is stated ABOVE the rows, beside what it clipped — a reader who
+  // skims to the first line must not read a bounded page as the whole list.
+  if (truncated) lines.push(`${threadsClippedNote(ref)}\n`);
   // Extra call, but a cold op (not the poll loop) and fail-soft — see `memberNames`.
   const view = { selfUserId, names: await memberNames(client, ref) };
   for (const t of threads) lines.push(formatThreadLine(t, view));

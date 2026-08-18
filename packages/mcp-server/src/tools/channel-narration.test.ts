@@ -152,9 +152,9 @@ describe("Q1-B/C · thread title + outcome summary", () => {
 
   it("list_threads neutralizes both fields under a header", async () => {
     const client = stubClient({
-      listChannelThreads: vi.fn(async () => [
+      listChannelThreads: vi.fn(async () => ({ threads: [
         { ...THREAD, title: FORGERY, status: "closed", outcome: "completed", outcomeSummary: FORGERY },
-      ]),
+      ], truncated: false })),
     });
 
     const text = (await opListThreads(client, "general")).content[0].text;

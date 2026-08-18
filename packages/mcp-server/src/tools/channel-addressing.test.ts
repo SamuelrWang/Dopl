@@ -335,7 +335,7 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
         metadata: {},
         authorUserId: ME,
       })),
-      listChannelThreads: vi.fn(async () => []),
+      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
     });
   }
 
@@ -372,7 +372,7 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
         metadata: {},
         authorUserId: ME,
       })),
-      listChannelThreads: vi.fn(async () => []),
+      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
     });
 
     const text = (await opPost(client, "general", "please do X", { to: "p@x.com" }))
@@ -409,7 +409,7 @@ describe("thread reads — both parties (N-party)", () => {
 
   it("list_threads names who opened it and who it is for", async () => {
     const client = stubClient({
-      listChannelThreads: vi.fn(async () => [THREAD]),
+      listChannelThreads: vi.fn(async () => ({ threads: [THREAD], truncated: false })),
       listChannelMembers: roster,
     });
 
@@ -422,7 +422,7 @@ describe("thread reads — both parties (N-party)", () => {
 
   it("marks a thread nobody is on the hook for", async () => {
     const client = stubClient({
-      listChannelThreads: vi.fn(async () => [{ ...THREAD, targetUserId: null }]),
+      listChannelThreads: vi.fn(async () => ({ threads: [{ ...THREAD, targetUserId: null }], truncated: false })),
       listChannelMembers: roster,
     });
 
@@ -448,7 +448,7 @@ describe("thread reads — both parties (N-party)", () => {
     // ⚠ Naming is enrichment on a read that already succeeded — a roster that
     // 403s or times out must not turn it into a failure the agent retries.
     const client = stubClient({
-      listChannelThreads: vi.fn(async () => [THREAD]),
+      listChannelThreads: vi.fn(async () => ({ threads: [THREAD], truncated: false })),
       listChannelMembers: vi.fn(async () => {
         throw new Error("roster unavailable");
       }),

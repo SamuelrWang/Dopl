@@ -309,17 +309,23 @@ export async function pollChannelMessages(
 }
 
 /**
- * Every task in a channel the caller may read, newest first. Feeds the web's
- * `Map<taskId, overlay>` layering authoritative status / title / mode onto the
- * message thread. Gated by the transcript's visibility rule.
+ * Every task in a channel the caller may read, MOST RECENTLY ACTIVE FIRST, and
+ * whether the read clipped. Feeds the web's `Map<taskId, overlay>` layering
+ * authoritative status / title / mode onto the message thread, and the MCP
+ * `list_threads` listing — one read, so the two surfaces cannot disagree about
+ * which thread is live. Gated by the transcript's visibility rule.
+ *
+ * ⚠ `truncated` is not decoration: threads never leave this list, so the bound
+ * is real and a clipped list that renders like an exhausted one is the bug
+ * (INVARIANTS §9). Pass it on; never drop it.
  */
 export async function listChannelTasks(
   ctx: ChannelContext,
   ref: string
-): Promise<ChannelThread[]> {
+): Promise<{ threads: ChannelThread[]; truncated: boolean }> {
   const { channel } = await loadVisibleChannel(ctx, ref);
-  const rows = await repoTasks.listTasksByChannel(channel.id);
-  return rows.map(mapTaskRow);
+  const { rows, truncated } = await repoTasks.listTasksByChannel(channel.id);
+  return { threads: rows.map(mapTaskRow), truncated };
 }
 
 /**

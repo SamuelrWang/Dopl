@@ -71,7 +71,7 @@ function postClient(
       metadata,
       authorUserId: ME,
     })),
-    listChannelThreads: vi.fn(async () => []),
+    listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
   } as unknown as DoplClient;
 }
 

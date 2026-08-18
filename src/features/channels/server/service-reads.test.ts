@@ -36,6 +36,7 @@ import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
+  ChannelTaskActivityRow,
   ChannelTaskRow,
 } from "./dto";
 
@@ -295,7 +296,7 @@ describe("readMessages — thread scope", () => {
 describe("listChannelTasks / getChannelTask — reads", () => {
   const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
 
-  function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+  function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
     return {
       id: TASK_ID,
       channel_id: "chan-1",
@@ -310,21 +311,81 @@ describe("listChannelTasks / getChannelTask — reads", () => {
       updated_at: "2026-07-27T00:00:00Z",
       closed_at: null,
       outcome_summary: null,
+      last_activity_at: "2026-07-27T00:00:00Z",
       ...overrides,
     };
   }
 
-  it("lists the channel's tasks (visibility-gated) as DTOs", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([
-      taskRow({ id: TASK_ID, title: "A" }),
-      taskRow({ id: "other", title: "B", status: "closed", outcome: "completed" }),
-    ]);
+  /** The row shape a SINGLE-thread read returns — `channel_tasks` has no
+   *  activity column, so the derived one is simply not there. */
+  function withoutActivity(row: ChannelTaskActivityRow): ChannelTaskRow {
+    const copy: Record<string, unknown> = { ...row };
+    delete copy.last_activity_at;
+    return copy as unknown as ChannelTaskRow;
+  }
 
-    const tasks = await listChannelTasks(ctx, "general");
+  it("lists the channel's tasks (visibility-gated) as DTOs", async () => {
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [
+        taskRow({ id: TASK_ID, title: "A" }),
+        taskRow({
+          id: "other",
+          title: "B",
+          status: "closed",
+          outcome: "completed",
+        }),
+      ],
+      truncated: false,
+    });
+
+    const { threads, truncated } = await listChannelTasks(ctx, "general");
 
     expect(repoTasks.listTasksByChannel).toHaveBeenCalledWith("chan-1");
-    expect(tasks.map((t) => t.title)).toEqual(["A", "B"]);
-    expect(tasks[1].outcome).toBe("completed");
+    // ⚠ The REPOSITORY's order rides through untouched — the service does not
+    // re-sort, because the repository's LIMIT clipped against that order.
+    expect(threads.map((t) => t.title)).toEqual(["A", "B"]);
+    expect(threads[1].outcome).toBe("completed");
+    expect(truncated).toBe(false);
+  });
+
+  it("carries the derived activity clock onto the DTO", async () => {
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow({ last_activity_at: "2026-08-18T09:00:00Z" })],
+      truncated: false,
+    });
+
+    const { threads } = await listChannelTasks(ctx, "general");
+
+    // The sidebar's 24h window is arithmetic over THIS field, so losing it in
+    // the mapper renders every thread inactive rather than failing.
+    expect(threads[0].lastActivityAt).toBe("2026-08-18T09:00:00Z");
+  });
+
+  it("passes the CLIP through instead of swallowing it", async () => {
+    // A bounded read at its ceiling is indistinguishable from an exhausted one
+    // (INVARIANTS §9) — the flag is the only thing that tells them apart, and a
+    // service that drops it presents a partial list as the whole one.
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow()],
+      truncated: true,
+    });
+
+    const { truncated } = await listChannelTasks(ctx, "general");
+
+    expect(truncated).toBe(true);
+  });
+
+  it("does NOT claim an activity clock on a single-thread read", async () => {
+    // `get_thread` loads one row off `channel_tasks`, which has no such column.
+    // ⚠ Absent means "this view did not derive it", never "no activity" — a
+    // fallback to `createdAt` here would sort a live thread as cold.
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      withoutActivity(taskRow())
+    );
+
+    const task = await getChannelTask(ctx, "general", TASK_ID);
+
+    expect(task.lastActivityAt).toBeUndefined();
   });
 
   it("returns one task by id, scoped to the channel", async () => {

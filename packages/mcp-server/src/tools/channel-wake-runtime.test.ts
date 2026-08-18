@@ -47,7 +47,7 @@ function stubClient(overrides: Record<string, unknown> = {}): DoplClient {
   return {
     listChannels: vi.fn(async () => [CHANNEL]),
     listWorkspaceMembers: vi.fn(async () => [BOB]),
-    listChannelThreads: vi.fn(async () => []),
+    listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
     postChannelMessage: vi.fn(async () => ({
       id: "m1",
       seq: 12,

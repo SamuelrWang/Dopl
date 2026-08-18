@@ -24,6 +24,7 @@ import type {
   ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
+  ChannelThreadPage,
   ReadMessagesOptions,
   ThreadMode,
   ThreadOutcome,
@@ -71,7 +72,10 @@ export class ChannelMethods extends MemberMethods {
     return channel.awaitMessages(this.transport, channelId, opts);
   }
 
-  listChannelThreads(channelId: string): Promise<ChannelThread[]> {
+  /** One page of a channel's threads, most recently active first, plus whether
+   *  the server's ceiling clipped it. ⚠ Never re-sort the page — see
+   *  `channel.ts › listChannelThreads`. */
+  listChannelThreads(channelId: string): Promise<ChannelThreadPage> {
     return channel.listChannelThreads(this.transport, channelId);
   }
 
