@@ -31,6 +31,9 @@ import {
   CHAT_ADDRESSED_REFUSAL,
   postAddressLines,
 } from "./channel-post-notes";
+// "What may I do NEXT?" — the sparse main-room post and the @-tag, taught in the
+// RESULT because that is where the decision is made (INVARIANTS §10).
+import { postGuidanceLines } from "./channel-post-guidance";
 import {
   inlineOr,
   isErr,
@@ -258,6 +261,16 @@ export async function opPost(
       `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
       ...addressLines,
       ...(linkage ? [linkage] : []),
+      // ⚠ WHERE IT LANDED decides which capability is worth teaching here, and
+      // the answer comes off the STORED message like every other line above —
+      // a post that asked for a thread and did not get one is a MAIN-ROOM post,
+      // whatever the caller intended.
+      ...postGuidanceLines({
+        channelId: ch.id,
+        landedThread: metaString(message, "taskId"),
+        body,
+        message,
+      }),
       // ⚠ A `closedThreadNote(ch.id)` line rode here whenever the server
       // answered `threadClosed`. Both went with thread closing (wiring plan
       // Phase 4, 2026-08-18): nothing settles a thread, so nothing can raise it.

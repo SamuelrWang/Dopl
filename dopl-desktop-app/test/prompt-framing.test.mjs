@@ -446,6 +446,23 @@ test("the vocabulary names `thread=<id>` as the argument and refuses the agent t
   assert.ok(!/use each as given/i.test(flat), "the interchangeable-vocabulary reading is gone");
 });
 
+// Phase 11 (2026-08-18) — TWO CAPABILITIES AN AGENT DOES NOT HAVE UNTIL IT IS TOLD: the sparse
+// main-CHANNEL post, and the @-tag. The tag rule pinned here is the REAL one (exact match, from
+// `src/features/channels/lib/mentions.ts`); a friendlier rule in a prompt produces tags that
+// resolve to nobody. ⚠ It states the Tags INBOX and never a notification: the mention gating is
+// Phase 7, in `main/targeting.js`, and ships in a separate build.
+test("the vocabulary grants the sparse channel post and the @-tag, on both sides", () => {
+  for (const side of ["responder", "requester"]) {
+    const flat = buildFencedTurn({ side, message: "x", nonce: "p11", context: ids() }).replace(/\s+/g, " ");
+    assert.ok(/You MAY post to the CHANNEL itself/.test(flat), `${side}: the capability is granted`);
+    assert.ok(/needs a reason a human would name out loud/.test(flat), `${side}: with an applicable bar`);
+    assert.ok(/@-TAG A PERSON when you need one/.test(flat), `${side}: tagging is taught`);
+    assert.ok(/The match is exact/.test(flat), `${side}: …with the resolver's real rule`);
+    assert.ok(/Tags inbox/.test(flat), `${side}: what a tag DOES`);
+    assert.ok(/not an address and it starts no agent/.test(flat), `${side}: and what it does not do`);
+  }
+});
+
 // P0-1 — THE INVARIANT, ON EVERY BRANCH. deliverySection has four returns (requester and
 // responder, each with and without a resolved delivery call) and the rule has to be in all of
 // them: an agent re-reads the delivery section when it is about to send, which is exactly the

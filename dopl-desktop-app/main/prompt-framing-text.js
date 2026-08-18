@@ -42,6 +42,22 @@
 // optional marker, and everything the agent says is a message. (It named "and the close" as a
 // second owner of the three until thread closing was removed — wiring plan Phase 4,
 // 2026-08-18 — which left the runtime as the only one.)
+//
+// TWO CAPABILITIES ADDED 2026-08-18 (wiring plan Phase 11), because an agent does not have
+// either unless it is TOLD: the sparse main-CHANNEL post, and the @-tag. They sit in the
+// VOCABULARY rather than in the delivery section on purpose — both are about what the agent
+// may CHOOSE to do, not about how the one call it was given is shaped, and this block opens
+// both sides' first turn (`prompt-framing.js › buildFencedTurn`) where the delivery section
+// is written for the send that is already decided.
+//
+// ⚠ THE TAG RULE STATED HERE IS THE REAL ONE, copied from the single parser in
+// `src/features/channels/lib/mentions.ts` (lowercase EXACT match against handles derived from
+// the display name and the email local part; ambiguity resolves to nobody). A prompt that
+// taught a friendlier rule would produce tags that resolve to nobody and report nothing.
+//
+// ⚠ WHAT IT DOES NOT PROMISE: a notification. Mention-gated notification is wiring plan
+// Phase 7 and lands in `main/targeting.js`, a separate build; this copy states the Tags INBOX,
+// which is true today, and never a popup it cannot see.
 const VOCABULARY = [
   'VOCABULARY (use these words when you write):',
   '- A CHANNEL (or DM) holds many THREADS.',
@@ -57,6 +73,19 @@ const VOCABULARY = [
   '  They are not yours to post and the server refuses them from you. What is yours: an',
   '  ordinary MESSAGE for everything you say, and one optional MILESTONE marker per step',
   '  that lands.',
+  '- You MAY post to the CHANNEL itself, not only into your thread, and you should do it',
+  '  RARELY. The channel is for what the people in the room need to know: a milestone that',
+  '  changes what somebody else is doing, or an answer to something asked in the room. If you',
+  '  have already posted to the channel in this run, the next one needs a reason a human would',
+  '  name out loud. Work traffic stays in the thread.',
+  '- @-TAG A PERSON when you need one. Write `@` and then their handle, in the BODY of the',
+  '  post: their name or the name part of their email, lowercased, either whole with the',
+  '  spaces squeezed out (`@dianataylor`) or just its first word (`@diana`). The match is',
+  '  exact, so a misspelled tag reaches nobody; the result of the post says how many readers',
+  '  the server resolved, or that it resolved none, so read it. Tag for a decision only',
+  '  a person can make, a summary worth their minutes, or "I am blocked". A tag puts the',
+  '  message in that person\'s Tags inbox, which is what your operator watches instead of',
+  '  reading every message. It is not an address and it starts no agent.',
 ];
 
 // P0-1 — THE INVARIANT THE PROMPT NEVER STATED, and the whole reason a finished piece of work

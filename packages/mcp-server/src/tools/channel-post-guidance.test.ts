@@ -17,6 +17,7 @@ import { describe, it, expect, vi } from "vitest";
 import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { opPost } from "./channel-ops-write";
+import { tagOutcomeNote } from "./channel-post-guidance";
 import { opCreateThread } from "./channel-ops-threads";
 import { registerChannelTool } from "./channel";
 import type { RegisterTool } from "./respond";
@@ -264,5 +265,127 @@ describe("Q13 · the not-threaded note recommends only WRITABLE threads", () => 
     const text = await noteFor([thread("t-mine", ME, "u-b")], null);
     expect(text).toContain("NOT THREADED");
     expect(text).not.toContain("`t-mine`");
+  });
+});
+
+/**
+ * Phase 11 — THE TWO CAPABILITIES, TAUGHT IN THE RESULT. ⚠ Driven through
+ * `opPost` rather than asserted against the module's exported strings: a
+ * constant nobody splices teaches nothing, and the bug this guards is the wiring
+ * going missing, not the wording changing (INVARIANTS §14).
+ */
+describe("P11 · what a post's result teaches about what to do NEXT", () => {
+  const THREAD = "44444444-4444-4444-4444-444444444444";
+
+  /**
+   * A successful post that landed WHERE `taskId` says, with `body` as written
+   * and `mentions` as the SERVER stamped them — the whole point of the mention
+   * lines is that they read the server's own resolution, not the request.
+   */
+  async function resultOf(
+    body: string,
+    taskId?: string,
+    mentions?: unknown,
+  ): Promise<string> {
+    const client = stubClient({
+      postChannelMessage: vi.fn(async () => ({
+        id: "m1",
+        seq: 9,
+        kind: "message",
+        metadata: {
+          ...(taskId ? { taskId } : {}),
+          ...(mentions === undefined ? {} : { mentionedUserIds: mentions }),
+        },
+        authorUserId: "u-me",
+      })),
+      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
+    });
+    const res = await opPost(client, "eng", body, taskId ? { thread: taskId } : {});
+    expect(res.isError).toBeFalsy();
+    return res.content[0].text;
+  }
+
+  it("a MAIN-ROOM post is told the capability is real, and given the sparseness bar", async () => {
+    const text = await resultOf("the room should know the migration is applied");
+    expect(text).toContain("POSTED TO THE ROOM ITSELF");
+    expect(text).toContain("that is ALLOWED");
+    // ⚠ The bar has to be applicable to the agent's OWN next turn. "Be sparse"
+    // is not; a rule keyed on what it has already done in this run is.
+    expect(text).toContain("the next one needs a reason a human would name out loud");
+  });
+
+  it("…and NOT the tagging line — one line per post, or the advice is skipped", async () => {
+    const text = await resultOf("a room-wide heads-up");
+    expect(text).not.toContain("NOBODY IS TAGGED IN THIS POST");
+  });
+
+  it("a THREADED post that tagged nobody is told what a tag is FOR", async () => {
+    const text = await resultOf("here is the draft", THREAD);
+    expect(text).toContain("NOBODY IS TAGGED IN THIS POST");
+    expect(text).toContain("Tags inbox");
+    // ⚠ Never a notification promise: the gating is the desktop's (Phase 7) and
+    // ships in a separate build, so this package may state the INBOX and the
+    // direction of travel and nothing more.
+    expect(text).toContain("the direction of the product is");
+    // The tag must not read as a second way to ask for a machine.
+    expect(text).toContain("A tag is not an address");
+    expect(text).not.toContain("POSTED TO THE ROOM ITSELF");
+  });
+
+  it("drops the when-to-tag advice once the body carries a tag, and REPORTS instead", async () => {
+    const text = await resultOf("@diana confirm the cutover window", THREAD, ["u-diana"]);
+    expect(text).not.toContain("NOBODY IS TAGGED IN THIS POST");
+    expect(text).toContain("TAGGED 1 person");
+  });
+
+  it("reads the tag the way the SERVER's parser does — mid-word `@` counts", async () => {
+    // ⚠ `lib/mentions.ts › MENTION_TOKEN_RE` has no leading-boundary rule, so
+    // `ops@dopl` is a token to the resolver. Claiming "nobody is tagged" over a
+    // body the server reads as a tag is the disagreement this mirrors away.
+    const text = await resultOf("mail went to ops@dopl.example", THREAD);
+    expect(text).not.toContain("NOBODY IS TAGGED IN THIS POST");
+  });
+
+  it("CATCHES THE SILENT FAILURE: an `@` the server resolved to nobody", async () => {
+    // ⚠ The whole reason this reads the STAMP rather than the body: a misspelled
+    // handle posts fine, reaches nobody's inbox, and without this line the agent
+    // believes it escalated.
+    const text = await resultOf("@dia can you decide this", THREAD);
+    expect(text).toContain("YOUR `@` TAG RESOLVED TO NOBODY");
+    expect(text).toContain('op="members"');
+    // ⚠ Under-promises: an old server that does not stamp mentions is
+    // indistinguishable from here (INVARIANTS §13), so the copy must not assert
+    // a delivery failure it cannot prove.
+    expect(text).toContain("looks identical from here");
+  });
+
+  it("counts the SERVER's set, and a junk value counts as none rather than as trust", async () => {
+    expect(await resultOf("@a @b hi", THREAD, ["u-1", "u-2"])).toContain("TAGGED 2 people");
+    expect(await resultOf("@a hi", THREAD, "u-1")).toContain("RESOLVED TO NOBODY");
+    expect(await resultOf("@a hi", THREAD, [7, "u-1"])).toContain("TAGGED 1 person");
+  });
+
+  it("the DESCRIPTION's promise about the result is one the result keeps", () => {
+    // ⚠ A JOIN, not a prose pin. The description sends the agent to the post's
+    // result for whether a tag resolved; if the result line were deleted, the
+    // description would be a confident lie and nothing else would notice.
+    let described = "";
+    const cap: RegisterTool = ((name: string, d: string) => {
+      if (name === "dopl_channel") described = d;
+    }) as RegisterTool;
+    registerChannelTool(cap, {} as DoplClient);
+    expect(described).toContain("READ THE POST'S RESULT");
+    expect(tagOutcomeNote("chan-1", 0)).toContain("RESOLVED TO NOBODY");
+    expect(tagOutcomeNote("chan-1", 2)).toContain("TAGGED 2 people");
+  });
+
+  it("a tagged MAIN-ROOM post gets the report AND the sparseness line, nothing more", async () => {
+    // ⚠ The two lines are different lanes: one reports what this call did, the
+    // other is standing advice about the next one. The when-to-tag line must not
+    // also appear — that would be advice on a post that already tagged somebody.
+    const text = await resultOf("@diana the migration is applied", undefined, ["u-diana"]);
+    expect(text).toContain("TAGGED 1 person");
+    expect(text).toContain("POSTED TO THE ROOM ITSELF");
+    expect(text).not.toContain("NOBODY IS TAGGED IN THIS POST");
   });
 });

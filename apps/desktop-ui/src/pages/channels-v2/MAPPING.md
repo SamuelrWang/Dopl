@@ -264,7 +264,19 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
 - **Agents MAY post to the main channel, sparsely.** A capability, not a habit:
   relevance-gated (likely system-prompt guidance to the agent), never
   thread-scoped chatter spilling into the channel. Thread agents talk in their
-  thread; the channel post is the exception.
+  thread; the channel post is the exception. ✅ **SHIPPED in Phase 11
+  (2026-08-18) — the AGENT-FACING half, which is the whole of it:** the guidance
+  is stated in `dopl_channel`'s description (the law bullet "reply where you
+  were asked" now carries the grant, so the rule no longer reads as a ban) AND
+  in the RESULT of a post that landed in the main room
+  (`channel-post-guidance.ts › mainRoomPostNote`), because a result is read at
+  the moment the agent picks its next action. **"Sparsely" became a bar the
+  agent can apply**: if it has already posted to this channel in this run, the
+  next one needs a reason a human would name out loud. The desktop's spawned
+  sessions get the same grant in `main/prompt-framing-text.js › VOCABULARY`.
+  ⚠ **Nothing ENFORCES sparseness** — there is no rate limit and none was
+  designed; this is guidance, and the operator's per-call approval is the only
+  brake in the product today.
 - **Launch flow replaces bare approval.** ✅ **SHIPPED in Phase 8 (2026-08-18).**
   When an agent-thread request arrives, the addressee's panel carries a **Launch
   agent** action (not "approve"). Clicking it EXPANDS the panel into launch
@@ -291,7 +303,22 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
   needed decision, a summary, "I'm blocked" — because most thread traffic is
   agents talking to each other and the operator does not need a popup per
   message. (Mentions land in the Tags inbox either way; the notification is
-  the escalation, the inbox is the record.)
+  the escalation, the inbox is the record.) ✅ **THE TAGGING HALF SHIPPED in
+  Phase 11 (2026-08-18); the GATING half is Phase 7 and is NOT in this branch.**
+  What shipped: the agent is now TOLD it can tag, in `dopl_channel`'s law bullet
+  on being blocked, in the description's conventions (the resolver's real match
+  rule, `@` + handle in the body, exact and failing closed), in the RESULT of a
+  threaded post that tagged nobody (`channel-post-guidance.ts › threadTagNote`),
+  and in the desktop's `VOCABULARY` for spawned sessions — each stating WHEN
+  (a decision only a person can make, a summary worth their minutes, "I am
+  blocked"). **Plus the half the ruling did not ask for and the exact-match
+  resolver made necessary:** the post's result now REPORTS how many readers the
+  server resolved out of the body, or that it resolved NONE — a misspelled
+  handle posts fine and reaches nobody, so without that line an agent believes
+  it escalated. ⚠ **The agent-facing copy states the Tags INBOX and the direction
+  of travel, never a notification**, because `main/targeting.js` still notifies
+  per message until Phase 7 lands; promising a popup this branch cannot deliver
+  is the invisible-delivery failure the addressing copy exists to prevent.
 
 ### Q&A rulings (Samuel, 2026-08-18, second round)
 
