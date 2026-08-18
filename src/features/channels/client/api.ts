@@ -163,11 +163,12 @@ export async function removeChannelMember(
 // `PATCH /agents/[agentId]` (rename / set_status / disengage) had one each, and
 // the routes are gone with named agents (rollback §1).
 //
-// One route survives and deliberately has no wrapper here, exactly as before:
-// `GET /api/channels/[channelId]/agents -> { agents }`, the historical
-// attribution roster. `use-channel-agents.ts` reads it through `useApiQuery`,
-// which owns the cache key, and a second entry point would be a read the cache
-// never sees.
+// One route survives, `GET /api/channels/[channelId]/agents -> { agents }`, the
+// historical attribution roster — and ⚠ **it has NO CLIENT CALLER since the v2
+// cutover (2026-08-18)**: `use-channel-agents.ts` was its only one and went with
+// `channel-transcript.tsx`, the surface that rendered the handles. Filed as
+// F-218. It still has no wrapper here, and adding one would not give it a
+// reader; a read that bypasses `useApiQuery` is a read the cache never sees.
 
 // ─── Consent ────────────────────────────────────────────────────────
 

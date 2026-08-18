@@ -23,8 +23,10 @@
  * window: `main/trigger-outcomes.js` posts `task_failed{declined:true}` on a
  * consent DENY and `{interrupted:true}` on a mid-spawn death, and every
  * INSTALLED desktop keeps posting the full set until the floor rises
- * (INVARIANTS §13). The Declined receipt in `message-receipt.ts` and the muted
- * dot in `activity-event-row.tsx` are what read them.
+ * (INVARIANTS §13). ⚠ **ONE READER now, not two:** the Declined receipt in
+ * `message-receipt.ts`. The muted activity dot lived in
+ * `activity-event-row.tsx`, which was deleted with the two-pane page at the v2
+ * cutover (2026-08-18).
  *
  * ⚠ STRICT `=== true`, NEVER TRUTHINESS. `metadata` is an unbounded `z.record`
  * on the wire, so a truthy-but-not-true value ("yes", 1, {}) is

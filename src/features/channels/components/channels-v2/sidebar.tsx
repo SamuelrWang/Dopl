@@ -62,6 +62,12 @@ export interface ChannelsV2SidebarProps {
   /** The center pane is showing the inbox, so the Inbox row is the selected one. */
   inboxOpen: boolean;
   onOpenInbox: () => void;
+  /** `member` or better — below it the server refuses a create (both `+` hide). */
+  canCreate: boolean;
+  /** The Channels section's `+` — opens `create-channel-dialog.tsx`. */
+  onCreateChannel: () => void;
+  /** The Direct messages section's `+` — opens `direct-message-dialog.tsx`. */
+  onCreateDirect: () => void;
 }
 
 type SectionKey = "favorites" | "direct" | "rooms";
@@ -80,6 +86,9 @@ export function ChannelsV2Sidebar({
   consentCount,
   inboxOpen,
   onOpenInbox,
+  canCreate,
+  onCreateChannel,
+  onCreateDirect,
 }: ChannelsV2SidebarProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<SectionKey>>(
     () => new Set()
@@ -203,6 +212,17 @@ export function ChannelsV2Sidebar({
           title="Direct messages"
           open={!collapsed.has("direct")}
           onToggle={() => toggle("direct")}
+          actions={
+            canCreate ? (
+              <IconButton
+                icon={Plus}
+                label="New direct message"
+                size={13}
+                className="h-5 w-5"
+                onClick={onCreateDirect}
+              />
+            ) : undefined
+          }
         />
         {!collapsed.has("direct") && (
           <div className="flex flex-col gap-px px-2">
@@ -216,9 +236,18 @@ export function ChannelsV2Sidebar({
           open={!collapsed.has("rooms")}
           onToggle={() => toggle("rooms")}
           actions={
-            // Creating a channel is a WRITE; the dialog rides over in Phase 3
-            // with the rest of the channel-management surface.
-            <IconButton icon={Plus} label="Add channel" size={13} className="h-5 w-5" />
+            // WIRED at the cutover (wiring plan Phase 12): the old page's
+            // create dialog is the SAME dialog, re-hosted here — this `+` was
+            // the entry point the plan named for it.
+            canCreate ? (
+              <IconButton
+                icon={Plus}
+                label="Add channel"
+                size={13}
+                className="h-5 w-5"
+                onClick={onCreateChannel}
+              />
+            ) : undefined
           }
         />
         {!collapsed.has("rooms") && (

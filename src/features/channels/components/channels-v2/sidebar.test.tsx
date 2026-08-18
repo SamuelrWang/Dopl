@@ -51,6 +51,9 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsV2Sideb
     consentCount: 0,
     inboxOpen: false,
     onOpenInbox: vi.fn(),
+    canCreate: true,
+    onCreateChannel: vi.fn(),
+    onCreateDirect: vi.fn(),
     ...over,
   };
   render(<ChannelsV2Sidebar {...props} />);

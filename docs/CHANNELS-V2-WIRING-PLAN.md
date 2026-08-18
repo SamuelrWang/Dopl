@@ -1,13 +1,23 @@
 # Channels v2 — wiring plan
 
-Status: PLAN, partly executed. Written 2026-08-18 against the tree at `c18b64ea`.
-**Phase 0 and Phase 1 have LANDED (2026-08-18); everything from Phase 2 down is
-still unbuilt.** The phases below are left as written — they are the intent, not a
-progress log. ⚠ Current state lives in `docs/INVARIANTS.md` (§5 for the activity
-clock and the thread ordering, §9 for the bounded read), never here.
-Source of intent: `apps/desktop-ui/src/pages/channels-v2/MAPPING.md`. Source of current
-behaviour: `docs/INVARIANTS.md` §5 §6 §7 §8 §10 §11 §14 and the code, in that precedence
-order (repo CLAUDE.md).
+Status: ⛔ **EXECUTED. THE CUTOVER HAPPENED (2026-08-18).** Written 2026-08-18 against
+the tree at `c18b64ea`. **Phases 0–9 and 11–12 have LANDED. `channels-v2` IS `channels`:**
+the route, the page folder, the nav row, the deep-link key and the two-pane page
+(`channels-view-core.tsx` and everything under it) are all gone, and
+`/:workspaceSegment/channels` mounts the ported three-column surface.
+⚠ **PHASE 10 (the opt-in pop-out thread window) IS THE ONE PHASE THAT DID NOT LAND, and it
+is PARKED on Samuel's security decision, not skipped** — see § Phase 10 and risk 2 below;
+the cutover forecloses neither option.
+
+The phases below are left as written — they are the intent, not a progress log.
+⚠ **Current state lives in `docs/INVARIANTS.md`, never here** (§5 for the channels model
+and the one surviving surface, §6 for consent and the launch flow, §7 for the registered
+live surface, §9 for the bounded read, §11 for the desktop rules and the parked pop-out).
+Source of intent WAS `apps/desktop-ui/src/pages/channels-v2/MAPPING.md`; ⚠ **that file was
+DELETED at the cutover and its rulings migrated into INVARIANTS §5 §6 §7 §11 and one dated
+ENGINEERING.md stratum** — do not restore it, and do not read the sections below as
+current behaviour. Source of current behaviour: `docs/INVARIANTS.md` and the code, in that
+precedence order (repo CLAUDE.md).
 
 ## Shape of the port
 
@@ -601,6 +611,21 @@ loads at runtime.
 ---
 
 ## Phase 12 — Cutover and demolition
+
+✅ **LANDED 2026-08-18.** What actually shipped, where it differed: the deletes below all
+happened, plus four the plan did not list — `activity-event-row.tsx` and
+`address-picker.tsx` (orphaned by the transcript and the pane), and
+`hooks/use-channel-agents.ts` + `lib/agent-display.ts` (the historical agent-attribution
+chain, whose only reader was the deleted transcript — **F-218**). Every KEEP needed an
+entry point rebuilt, because each was reachable only from the deleted page:
+`components/channels-v2/channel-manage.tsx` hosts the management cluster on the pane
+header, the sidebar's two `+` buttons open the create and DM dialogs, and the first-run
+explainer moved to the no-channels branch. Two more keeps the plan did not name were
+carried over on the same argument rather than orphaned: `channel-settings-popover.tsx`
+(the per-channel tool profile is a containment control) and `direct-message-dialog.tsx`
+(the only way to start a DM). Two gaps the cutover EXPOSED rather than caused are
+**F-219** (a non-member public channel has a live composer and no join card) and
+**F-220** (the skeleton still draws two panes).
 
 **Size: M.**
 

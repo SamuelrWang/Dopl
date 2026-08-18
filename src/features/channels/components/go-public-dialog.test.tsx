@@ -10,12 +10,16 @@
  *     itself in from an effect, so `renderToStaticMarkup` of an OPEN dialog is
  *     the empty string. Same split `GroupChannelRoutingNote` uses.
  *
- *  2. THE WIRING. `channels-view-core.tsx` must route the menu's toggle through
- *     the confirm branch instead of straight to the write. That is a source
+ *  2. THE WIRING. The dialog's HOST must route the menu's toggle through the
+ *     confirm branch instead of straight to the write. That is a source
  *     assertion on purpose: the branch fires on a click, which a static render
  *     cannot deliver, and without it "delete the dialog" is a silent green.
  *     Same idiom as `shared/auth/write-gate-coverage.test.ts` — pin the seam
  *     the security property depends on, not the mechanism around it.
+ *     ⚠ THE HOST MOVED at the cutover (wiring plan Phase 12, 2026-08-18): it
+ *     was `channels-view-core.tsx`, which is deleted; it is now
+ *     `channels-v2/channel-manage.tsx`, the header cluster the v2 pane mounts.
+ *     The assertion follows the host, because what it pins is the branch.
  */
 
 import { describe, expect, it } from "vitest";
@@ -68,7 +72,10 @@ describe("the dialog's copy", () => {
 
 describe("the host wires the toggle THROUGH the confirm", () => {
   const view = readFileSync(
-    path.join(process.cwd(), "src/features/channels/components/channels-view-core.tsx"),
+    path.join(
+      process.cwd(),
+      "src/features/channels/components/channels-v2/channel-manage.tsx"
+    ),
     "utf8"
   );
 
@@ -78,7 +85,7 @@ describe("the host wires the toggle THROUGH the confirm", () => {
   });
 
   it("branches on `needsGoPublicConfirm` and renders the dialog", () => {
-    expect(view).toMatch(/needsGoPublicConfirm\(selected\.visibility\)/);
+    expect(view).toMatch(/needsGoPublicConfirm\(channel\.visibility\)/);
     expect(view).toMatch(/<GoPublicDialog/);
   });
 });

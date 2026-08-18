@@ -122,8 +122,11 @@ describe("app routes", () => {
   });
 
   it("mirrors the web app's page list", () => {
-    // `channels-v2` is the one desktop-only extra: the ported channels surface,
-    // live behind a temporary route until Phase 12 renames it to `channels`.
+    // ⚠ NO `channels-v2` ROW. It existed from Phase 2 to the CUTOVER (Phase 12,
+    // 2026-08-18) as a temporary path over the ported surface, beside a
+    // `channels` row that had no detail child. Both v2 rows were renamed to
+    // `channels` in one edit and the old page was deleted; a re-added
+    // `channels-v2` row would now resolve to nothing.
     expect(WORKSPACE_PAGES.map((page) => page.path)).toEqual([
       "overview",
       "ontology",
@@ -134,35 +137,38 @@ describe("app routes", () => {
       "skills/:skillSlug",
       "chats",
       "channels",
-      "channels-v2",
-      "channels-v2/:channelId",
+      "channels/:channelId",
       "members",
       "settings",
     ]);
+    expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("channels-v2");
   });
 
-  it("routes a named channel to the v2 page, with its id", () => {
+  it("routes a named channel to the channels page, with its id", () => {
     // THE DESKTOP NOTIFICATION'S LANDING ROUTE (wiring plan Phase 9). Main
-    // pushes `/{segment}/channels-v2/{channelId}` over the navigate bridge, so
-    // what this table owes is the match and the param — the page threads it
-    // into the v2 core's initial selection from there.
+    // pushes `/{segment}/channels/{channelId}` over the navigate bridge
+    // (`main/shell-mode.js › CHANNELS_PAGE`), so what this table owes is the
+    // match and the param — the page threads it into the channels core's
+    // initial selection from there.
     const router = createMemoryRouter(routes, {
-      initialEntries: ["/acme-ab12cd/channels-v2/7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90"],
+      initialEntries: ["/acme-ab12cd/channels/7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90"],
     });
     const match = router.state.matches.at(-1);
-    expect(match?.route.path).toBe("channels-v2/:channelId");
+    expect(match?.route.path).toBe("channels/:channelId");
     expect(match?.params.channelId).toBe("7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90");
   });
 
-  it("keeps the paramless row matching, and gives the SHIPPING page no detail child", () => {
-    // The pair the deep-link hand copy encodes (`channels-v2: true`,
-    // `channels: false`). A `channels/:channelId` row would either claim a
-    // detail view the v1 page does not have, or split one path across two page
-    // components — which is why the notification's route is v2's.
+  it("keeps the paramless row matching, and gives the SHIPPING page its detail child", () => {
+    // The pair the deep-link hand copy encodes, AFTER the cutover: `channels`
+    // is `true` there and there is no `channels-v2` key at all. The assertion
+    // INVERTED with the rename — until Phase 12 the shipping page had no detail
+    // view and a `channels/:channelId` row would have lied about it; the
+    // shipping page IS the detail-capable one now, and the two halves of the
+    // path are one page component.
     const paramless = createMemoryRouter(routes, {
-      initialEntries: ["/acme-ab12cd/channels-v2"],
+      initialEntries: ["/acme-ab12cd/channels"],
     });
-    expect(paramless.state.matches.at(-1)?.route.path).toBe("channels-v2");
-    expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("channels/:channelId");
+    expect(paramless.state.matches.at(-1)?.route.path).toBe("channels");
+    expect(WORKSPACE_PAGES.map((page) => page.path)).toContain("channels/:channelId");
   });
 });

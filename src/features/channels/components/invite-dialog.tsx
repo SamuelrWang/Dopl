@@ -49,7 +49,9 @@ const selectChannelMembers = (body: { members: ChannelMember[] }) =>
  * retires the implicit recipient, so every unaddressed ask after that reaches
  * nobody. An operator who believed otherwise was misled by the interface, not
  * by the code. The composer repeats the addressing half at send time
- * (`message-composer.tsx`); this is the half that explains WHY it appeared.
+ * (`channels-v2/composer.tsx`, "No agent addressed — this thread reaches
+ * nobody."; it was `message-composer.tsx` until the 2026-08-18 cutover deleted
+ * that file); this is the half that explains WHY it appeared.
  *
  * Shown from one member below the threshold, so the person doing the adding
  * reads it BEFORE the rule changes rather than after. Both sentences are

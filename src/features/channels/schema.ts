@@ -37,8 +37,9 @@ const VisibilitySchema = z.enum(["private", "public"]);
  * spliced into `dopl_channel` results as SERVER NARRATION (outside the
  * untrusted-content headers that disclaim message bodies), so a newline forges
  * a line. Length bounds alone are not enough. MCP renderers neutralize too, but
- * they are not the only consumers (`channels-list-pane` renders topic inline;
- * desktop listener builds prompts from channel context).
+ * they are not the only consumers (`channels-v2/sidebar.tsx` filters on the
+ * display name and the info tab renders the topic inline; the desktop listener
+ * builds prompts from channel context).
  *
  * ⚠ Rule lives in `@/shared/lib/safe-label`, shared with `DISPLAY_NAME_RE` in
  * `src/app/api/user/profile/route.ts` — same class, same error copy. Bans C0 /

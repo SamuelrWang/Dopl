@@ -59,7 +59,9 @@ function feedLiveSession(entry, m, myUserId) {
   // a `task_progress` MILESTONE (feeding those spends one peer turn per milestone, on a stream
   // the product tells agents to post freely). Widening it also un-does the loop brake where a
   // loop is cheapest to start. Rendering is unaffected: the web transcript still draws
-  // milestones (lib/group-thread.ts, components/activity-event-row.tsx).
+  // milestones (components/channels-v2/transcript.tsx, via `view-model.ts`). The files this
+  // comment used to name — lib/group-thread.ts, components/activity-event-row.tsx — were
+  // deleted in wiring plan Phases 5 and 12; the milestone lane itself was never touched.
   if (!m || m.kind !== 'message') return false;
   if (!myUserId || m.authorUserId === myUserId) return false;
   const taskId = targeting.firstClassTaskId(m);

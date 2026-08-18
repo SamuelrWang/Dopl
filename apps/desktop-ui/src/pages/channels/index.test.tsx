@@ -13,16 +13,38 @@ import type {
 } from "@/features/channels/types";
 
 /**
- * Channels page smoke test: REAL `ChannelsViewCore` tree over a mocked data
- * layer. `fetch` is the mock point — the seam both clients share (SPA's
- * `#/lib/api` and `@/shared/api/api-client`, which the channels feature client
- * calls directly for every mutation).
+ * Channels page smoke test, AFTER THE CUTOVER (wiring plan Phase 12,
+ * 2026-08-18). This file used to mount the two-pane `ChannelsViewCore`; that
+ * tree is deleted and `/:workspaceSegment/channels` now mounts the three-column
+ * surface (`components/channels-v2/channels-v2-core.tsx`) that lived behind a
+ * temporary `channels-v2` route until the rename.
+ *
+ * What is pinned here is the SEAM, not the surface — every column has its own
+ * suite next to the component:
+ *
+ *  - the page resolves the workspace once and every live surface issues its OWN
+ *    initial fetch, which is what keeps first paint correct with the realtime
+ *    doorbell silent;
+ *  - the `:channelId` route selects that channel (the desktop notification's
+ *    landing route — `main/shell-mode.js › CHANNELS_PAGE` builds it);
+ *  - the consent decision is IN THE INBOX and not in the transcript. That moved
+ *    with the surface: the old page rendered a launch panel at the end of the
+ *    scroller, the new one puts it behind the sidebar's Inbox row with a badge
+ *    (F-214 is the gap that leaves in the channel view). The WRITE is unchanged
+ *    — the same `PATCH /consent/[id]` with the same `"allow"`.
+ *  - the channel-management controls the cutover carried over are REACHABLE.
+ *    They were the old header's, and orphaning them was the demolition's one
+ *    real risk.
+ *
+ * `fetch` is the mock point — the seam both clients share (SPA's `#/lib/api`
+ * and `@/shared/api/api-client`, which the channels feature client calls
+ * directly for every mutation).
  *
  * ⚠ Supabase stubbed at the browser-client module: jsdom has no `window.dopl`,
  * so the realtime registry does NOT take its SPA short-circuit and would reach
- * for a Supabase config the renderer has none of. Stub keeps the four
- * subscriptions wiring for real without a websocket. Assertions deliberately do
- * NOT depend on a realtime event — every surface loads from its own fetch.
+ * for a Supabase config the renderer has none of. Stub keeps the subscriptions
+ * wiring for real without a websocket. Assertions deliberately do NOT depend on
+ * a realtime event — every surface loads from its own fetch.
  */
 
 vi.mock("@/shared/supabase/browser", () => {
@@ -47,6 +69,7 @@ vi.mock("@/shared/supabase/browser", () => {
 });
 
 const CHANNEL_ID = "ch-1";
+const OTHER_ID = "ch-2";
 
 /** ⚠ Fresh per test: realtime registry shares one channel per workspace id
  *  across mounts (module singleton + teardown grace window), so a reused id
@@ -54,7 +77,7 @@ const CHANNEL_ID = "ch-1";
 let workspaceId = "";
 let workspaceSeq = 0;
 
-const CHANNEL: Channel = {
+const baseChannel: Channel = {
   id: CHANNEL_ID,
   workspaceId: "",
   slug: "migration",
@@ -76,6 +99,14 @@ const CHANNEL: Channel = {
   myNotifyScope: "all",
   myAgentToolProfile: "full",
   onlineMemberCount: 1,
+};
+
+const OTHER: Channel = {
+  ...baseChannel,
+  id: OTHER_ID,
+  slug: "brand",
+  name: "brand",
+  topic: "Brand work",
 };
 
 const MESSAGES: ChannelMessage[] = [
@@ -212,16 +243,22 @@ beforeEach(() => {
     }
     if (path === `/api/workspaces/${SEGMENT}/members`) return json({ members: [] });
     if (path === "/api/channels") {
-      return json({ channels: [{ ...CHANNEL, workspaceId }] });
+      return json({
+        channels: [
+          { ...baseChannel, workspaceId },
+          { ...OTHER, workspaceId },
+        ],
+      });
     }
-    if (path === `/api/channels/${CHANNEL_ID}/messages`) {
-      return json({ messages: MESSAGES });
+    const channelId = /^\/api\/channels\/(ch-\d)\//.exec(path)?.[1];
+    if (channelId && path.endsWith("/messages")) {
+      return json({ messages: channelId === CHANNEL_ID ? MESSAGES : [] });
     }
-    if (path === `/api/channels/${CHANNEL_ID}/members`) {
-      return json({ members: MEMBERS });
+    if (channelId && path.endsWith("/members")) {
+      return json({ members: channelId === CHANNEL_ID ? MEMBERS : [] });
     }
-    if (path === `/api/channels/${CHANNEL_ID}/tasks`) return json({ tasks: [] });
-    if (path === `/api/channels/${CHANNEL_ID}/agents`) return json({ agents: [] });
+    if (channelId && path.endsWith("/tasks")) return json({ tasks: [] });
+    if (channelId && path.endsWith("/mentions")) return json({ mentions: [] });
     if (path === "/api/channels/consent") {
       return json({
         requests: consentDecided ? [] : [{ ...CONSENT, workspaceId }],
@@ -239,10 +276,18 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-function renderPage() {
+/** Both rows are the SAME page component; `channelId` is what differs. */
+function renderPage(channelId?: string) {
   const router = createMemoryRouter(
-    [{ path: "/:workspaceSegment/channels", element: <ChannelsPage /> }],
-    { initialEntries: [`/${SEGMENT}/channels`] }
+    [
+      { path: "/:workspaceSegment/channels", element: <ChannelsPage /> },
+      { path: "/:workspaceSegment/channels/:channelId", element: <ChannelsPage /> },
+    ],
+    {
+      initialEntries: [
+        channelId ? `/${SEGMENT}/channels/${channelId}` : `/${SEGMENT}/channels`,
+      ],
+    }
   );
   return render(
     <QueryClientProvider client={createQueryClient()}>
@@ -255,28 +300,27 @@ const requestsTo = (path: string, method = "GET") =>
   calls.filter((c) => c.url.split("?")[0] === path && c.method === method);
 
 describe("channels page", () => {
-  it("resolves the workspace, then loads the list and the transcript", async () => {
+  it("resolves the workspace, then loads the tree and the transcript", async () => {
     renderPage();
 
     expect(
       await screen.findByText("Picked it up, wiring the client queries now.")
     ).toBeInTheDocument();
-    // Twice on purpose: transcript + consent card body preview.
     expect(
-      screen.getAllByText("Can your agent take the channels port?")
-    ).toHaveLength(2);
+      screen.getByText("Can your agent take the channels port?")
+    ).toBeInTheDocument();
 
     expect(requestsTo("/api/boot", "POST")[0].body).toEqual({ segment: SEGMENT });
     expect(requestsTo("/api/workspaces/me")).toHaveLength(0);
 
     // ⚠ Every live surface needs its OWN initial fetch: that is what keeps the
-    // page correct on first paint with realtime no-op'd.
+    // page correct on first paint with the realtime doorbell silent.
     for (const path of [
       "/api/channels",
       `/api/channels/${CHANNEL_ID}/messages`,
       `/api/channels/${CHANNEL_ID}/members`,
       `/api/channels/${CHANNEL_ID}/tasks`,
-      `/api/channels/${CHANNEL_ID}/agents`,
+      `/api/channels/${CHANNEL_ID}/mentions`,
       "/api/channels/consent",
       "/api/channels/trust",
     ]) {
@@ -285,21 +329,33 @@ describe("channels page", () => {
     }
   });
 
-  it("renders the roster presence strip from the members read", async () => {
-    renderPage();
+  it("opens the channel the ROUTE names, not the first row", async () => {
+    // THE DESKTOP NOTIFICATION'S LANDING ROUTE (wiring plan Phase 9, renamed
+    // off `channels-v2` at the cutover). The page reads the param and hands it
+    // down; the shared tree is router-free and takes it as a plain prop.
+    renderPage(OTHER_ID);
 
-    // Header derives `agentOnline` from the roster, not `onlineMemberCount`.
-    expect(await screen.findByText("1 online")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(requestsTo(`/api/channels/${OTHER_ID}/messages`).length).toBeGreaterThan(0)
+    );
+    expect(requestsTo(`/api/channels/${CHANNEL_ID}/messages`)).toHaveLength(0);
   });
 
-  it("decides a pending consent request through the API", async () => {
+  it("decides a pending consent request from the INBOX, through the API", async () => {
     renderPage();
 
-    // ⚠ "Launch agent", not "Allow" — the consent CARD was retired for the
-    // launch panel (wiring plan Phase 8). The write below is unchanged: the
-    // same `PATCH /consent/[id]` with the same `"allow"` decision. In a plain
-    // browser there are no desktop launch settings to expand, so the first
-    // click IS the decision.
+    // The decision is NOT in the transcript any more: the Inbox nav row carries
+    // the badge and the launch panels (Phase 8), and the cutover made that the
+    // shipping behaviour. ⚠ "Launch agent", not "Allow" — the consent CARD was
+    // retired for the launch panel. In a plain browser there are no desktop
+    // launch settings to expand, so the first click IS the decision.
+    const inbox = await screen.findByRole("button", { name: /Inbox/ });
+    expect(
+      screen.queryByRole("button", { name: "Launch agent" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(inbox);
+
     const launch = await screen.findByRole("button", { name: "Launch agent" });
     expect(screen.getByText("Run the channels port")).toBeInTheDocument();
 
@@ -317,5 +373,22 @@ describe("channels page", () => {
         screen.queryByRole("button", { name: "Launch agent" })
       ).not.toBeInTheDocument()
     );
+  });
+
+  it("keeps the channel-management surface reachable after the demolition", async () => {
+    // The cutover deleted the page that owned these entry points. Every one of
+    // them was on the old header or its list pane, and the plan's KEEP list
+    // names them — an unreachable dialog is a deleted feature with a file still
+    // in the tree, which `npx knip` would not even flag.
+    renderPage();
+
+    await screen.findByText("Picked it up, wiring the client queries now.");
+    expect(screen.getByRole("button", { name: "Channel actions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Channel settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add channel" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "New direct message" })
+    ).toBeInTheDocument();
   });
 });

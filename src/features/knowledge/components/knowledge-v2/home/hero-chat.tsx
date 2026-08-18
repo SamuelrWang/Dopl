@@ -20,9 +20,12 @@ import styles from "../knowledge-v2.module.css";
  * `bg-card-surface-subtle` reads as a lid; `--shell-chip` is nav chrome.
  *
  * Reuses shared composer pieces (`SendButton`, auto-grow textarea, `CHIP` /
- * `RAISED_WELL`) but NOT the channel `MessageComposer`: that one is
- * feature-coupled (channel roster, intent pill, addressee picker, channel send
- * payload). Input well composes the `.concave-field` kit recipe instead.
+ * `RAISED_WELL`) but NOT the channels composer: that one is feature-coupled
+ * (channel roster, addressee panel, channel send payload). Input well composes
+ * the `.concave-field` kit recipe instead. ⚠ The composer named here was
+ * `channels/components/message-composer.tsx`, deleted at the v2 cutover
+ * (2026-08-18); its replacement, `channels-v2/composer.tsx`, is coupled the
+ * same way and the reason to keep them apart is unchanged.
  */
 
 /** ⚠ The one place this string is written. */

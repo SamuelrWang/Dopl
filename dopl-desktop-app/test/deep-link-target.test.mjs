@@ -50,6 +50,14 @@ const CHAN = "7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90";
 /** A canonical `{slug}-{publicId}` workspace segment. */
 const SEG = "acme-a1b2c3d4e5f6";
 
+/**
+ * The temporary route the ported channels surface lived behind from Phase 2 to
+ * the Phase 12 CUTOVER (2026-08-18). Named here as HISTORY: the assertion below
+ * is that it is absent, and a page table row with no SPA route hands the
+ * renderer something that matches nothing.
+ */
+const RETIRED_V2_PAGE = "channels-v2";
+
 // ── The scheme ───────────────────────────────────────────────────────────────
 
 test("the prefix is the scheme main/config.js registers (the drift alarm)", () => {
@@ -158,18 +166,19 @@ const END_TO_END = [
   [`dopl://open/${SEG}/knowledge/runbooks`, `/${SEG}/knowledge/runbooks`],
   [`dopl://open?target=${encodeURIComponent(`/${SEG}/settings`)}`, `/${SEG}/settings`],
   [`dopl://open?target=${encodeURIComponent("https://evil.example")}`, null],
-  [`dopl://open/${SEG}/channels-v2/${CHAN}`, `/${SEG}/channels-v2/${CHAN}`],
+  [`dopl://open/${SEG}/channels/${CHAN}`, `/${SEG}/channels/${CHAN}`],
   [`dopl://open/${SEG}/../../etc`, null],
   ["dopl://open/../secrets", null],
   ["dopl://open//evil.example", null],
   ["dopl://open/%2e%2e/secrets", null],
-  // PHASE 9 ENLARGED THE PROTECTED SURFACE, IT DID NOT EXEMPT IT. `channels-v2`
-  // now takes a third segment, so every raw-path attack has a NEW place to be
-  // tried — and each must still be refused by the same walk, end to end.
-  [`dopl://open/${SEG}/channels-v2/..`, null],
-  [`dopl://open/${SEG}/channels-v2/../../etc`, null],
-  [`dopl://open/${SEG}/channels-v2/%2e%2e`, null],
-  [`dopl://open/${SEG}/channels-v2/%2Fevil`, null],
+  // PHASE 9 ENLARGED THE PROTECTED SURFACE, IT DID NOT EXEMPT IT, and the
+  // Phase 12 cutover moved that surface onto `channels`. It takes a third
+  // segment, so every raw-path attack has a place to be tried there — and each
+  // must still be refused by the same walk, end to end.
+  [`dopl://open/${SEG}/channels/..`, null],
+  [`dopl://open/${SEG}/channels/../../etc`, null],
+  [`dopl://open/${SEG}/channels/%2e%2e`, null],
+  [`dopl://open/${SEG}/channels/%2Fevil`, null],
   ["dopl://open/canvas", HOME_ROUTE],
   ["dopl://open/onboarding", "/onboarding"],
 ];
@@ -215,25 +224,21 @@ const MAPPINGS = [
     `/${SEG}/${WORKSPACE_HOME_PAGE}`,
     "a retired page's detail link — the whole path goes, not just the leaf",
   ],
-  // PHASE 9: `channels-v2` grew a `:channelId` child, so its third segment is a
-  // route now — and `channels` deliberately did NOT, because the shipping v1
-  // page has no detail view to receive one. The pair is the whole point of the
-  // table's value meaning "has a `:param` detail child" rather than "exists".
-  [`/${SEG}/channels-v2`, `/${SEG}/channels-v2`, "the v2 page itself"],
+  // PHASE 9 gave the channels surface a `:channelId` child; the PHASE 12
+  // CUTOVER (2026-08-18) moved it onto `channels` itself, so the SHIPPING page
+  // is the one whose third segment is a route. Until then the pair was split —
+  // a temporary v2 path carried the child while `channels` refused one — which
+  // is why the table's value means "has a `:param` detail child", never
+  // "exists". `chats` below is the surviving no-detail-child case.
   [
-    `/${SEG}/channels-v2/${CHAN}`,
-    `/${SEG}/channels-v2/${CHAN}`,
+    `/${SEG}/channels/${CHAN}`,
+    `/${SEG}/channels/${CHAN}`,
     "a channel id — the notification's landing route",
   ],
   [
-    `/${SEG}/channels-v2/${CHAN}/deeper`,
-    `/${SEG}/channels-v2/${CHAN}`,
-    "deeper than the route goes — the extra segment is dropped, not refused",
-  ],
-  [
+    `/${SEG}/channels/${CHAN}/deeper`,
     `/${SEG}/channels/${CHAN}`,
-    `/${SEG}/channels`,
-    "the SHIPPING page has no detail child, so the id is noise and is dropped",
+    "deeper than the route goes — the extra segment is dropped, not refused",
   ],
   [`/${SEG}/knowledge/kb/entry/deeper`, `/${SEG}/knowledge/kb`, "deeper than any route goes"],
   [`/${SEG}/chats/whatever`, `/${SEG}/chats`, "a page with no detail child"],
@@ -261,12 +266,12 @@ const REFUSED = [
   ["/%2e%2e/secrets", "an encoded traversal"],
   ["/seg/%2Fchannels", "an encoded separator"],
   // The same refusals, one segment deeper — the surface Phase 9 opened.
-  [`/${SEG}/channels-v2/..`, "a traversal where a channel id goes"],
-  [`/${SEG}/channels-v2/%2e%2e`, "…encoded, which is why decoding comes first"],
-  [`/${SEG}/channels-v2/%2Fevil.example`, "an encoded separator in a channel id"],
-  [`/${SEG}/channels-v2/a b`, "whitespace in a channel id"],
-  [`/${SEG}/channels-v2/a:b`, "a colon in a channel id"],
-  [`/${SEG}/channels-v2/${"c".repeat(200)}`, "a channel id longer than the cap"],
+  [`/${SEG}/channels/..`, "a traversal where a channel id goes"],
+  [`/${SEG}/channels/%2e%2e`, "…encoded, which is why decoding comes first"],
+  [`/${SEG}/channels/%2Fevil.example`, "an encoded separator in a channel id"],
+  [`/${SEG}/channels/a b`, "whitespace in a channel id"],
+  [`/${SEG}/channels/a:b`, "a colon in a channel id"],
+  [`/${SEG}/channels/${"c".repeat(200)}`, "a channel id longer than the cap"],
   ["/seg/pa ge", "whitespace in a segment"],
   ["/seg/%", "a lone percent"],
   ["/seg/pa:ge", "a colon in a segment"],
@@ -372,7 +377,7 @@ test("isSafeSegment IS the rule pathSegments applies — one answer, two callers
   // question, and the point of exporting this is that there is no second regex
   // over there to drift from this one. So: whatever this admits, the walk must
   // admit, and whatever it refuses, the walk must refuse.
-  for (const good of [SEG, CHAN, "channels-v2", "a", "A1._-", "legacyslug"]) {
+  for (const good of [SEG, CHAN, "hyphen-ated", "a", "A1._-", "legacyslug"]) {
     assert.equal(isSafeSegment(good), true, `${good} must be usable`);
     assert.deepEqual(pathSegments(`/${good}`), [good]);
   }
@@ -384,12 +389,17 @@ test("isSafeSegment IS the rule pathSegments applies — one answer, two callers
   }
 });
 
-test("the detail flag is per PAGE, and channels-v2 is the one that has a child", () => {
+test("the detail flag is per PAGE, and channels is the one that has a child", () => {
   // The value means "this page has a `:param` detail child", never "this page
   // exists" — mixing those up is how a third segment becomes a route that
-  // matches nothing. Phase 9 flipped exactly one of these; Phase 12 swaps them.
-  assert.equal(WORKSPACE_PAGES['channels-v2'], true, "the v2 page took the :channelId row");
-  assert.equal(WORKSPACE_PAGES.channels, false, "the shipping v1 page has no detail view");
+  // matches nothing. Phase 9 flipped the temporary v2 page to true beside a
+  // `channels: false`; the Phase 12 CUTOVER (2026-08-18) swapped the pair and
+  // removed the v2 key entirely, because its route is gone from routes.tsx.
+  assert.equal(WORKSPACE_PAGES.channels, true, "the channels page took the :channelId row");
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(WORKSPACE_PAGES, RETIRED_V2_PAGE),
+    "the retired v2 page must not keep a row — a true with no route matches nothing"
+  );
 });
 
 // ── The drift alarm ──────────────────────────────────────────────────────────

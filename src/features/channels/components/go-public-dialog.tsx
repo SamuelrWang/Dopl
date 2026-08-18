@@ -19,11 +19,13 @@ import type { ChannelVisibility } from "../types";
  * (does this need a human? what does the human read?) live in one file next to
  * each other instead of being re-derived at the call site.
  *
- * ITS OWN FILE because `channel-pane.tsx` (493) and `channels-view-core.tsx`
- * (447) are both inside the §2 cap's last few lines, and because this is the
- * house pattern already: the menu reports intent upward and the host renders
- * the dialog beside the other three (`CreateChannelDialog`,
- * `DirectMessageDialog`, `InviteDialog`).
+ * ITS OWN FILE because both of its original hosts sat inside the §1 cap's last
+ * few lines, and because this is the house pattern already: the menu reports
+ * intent upward and the host renders the dialog beside the others
+ * (`CreateChannelDialog`, `DirectMessageDialog`, `InviteDialog`). ⚠ The host
+ * MOVED at the v2 cutover (2026-08-18) — it is
+ * `channels-v2/channel-manage.tsx` now, and the same cap argument applies
+ * there for the same reason.
  *
  * THE SERVER DOES NOT TRUST IT. `PATCH /api/channels/[channelId]` refuses the
  * `visibility` field outright for an agent caller (`SESSION_ONLY_FIELDS`), so

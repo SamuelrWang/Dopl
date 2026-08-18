@@ -1,9 +1,14 @@
 -- Channels demo seed — Samuel's Workspace (2026-08-18)
 --
 -- Seeds a demo cast + one "Website" channel + three threads + transcripts into
--- the LIVE project so the channels-v2 UI can be reviewed fleshed-out with only
--- one real human account. Requested by Samuel 2026-08-18 (MAPPING.md fourth
--- round: the demo-seed decision).
+-- the LIVE project so the channels UI can be reviewed fleshed-out with only
+-- one real human account. Requested by Samuel 2026-08-18 (the demo-seed decision,
+-- MAPPING.md fourth round — that file was migrated into INVARIANTS/ENGINEERING and
+-- deleted at the Phase 12 cutover).
+--
+-- ⚠ NOTHING HERE IS ROUTE-SHAPED. It seeds `channels` / `channel_members` /
+-- `channel_tasks` / `channel_messages` rows and nothing that names a page, so the
+-- `channels-v2` → `channels` rename did not touch it. Verified 2026-08-18.
 --
 -- PROPERTIES
 -- - Idempotent: every row is keyed on a fixed id in the de300000-* namespace

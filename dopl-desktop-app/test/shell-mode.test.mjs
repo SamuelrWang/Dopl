@@ -145,8 +145,12 @@ test("a clicked notification navigates to the CHANNEL, not just the page", () =>
   assert.match(chan, /deps\.showMainWindow\(\)/, "the window comes up either way");
   assert.match(chan, /navigateTo\(isSafeSegment\(channelId\) \? `\$\{page\}\/\$\{channelId\}` : page\)/,
     "a usable channel id deepens the route; anything else degrades to the page");
-  // The page is ONE named string, so Phase 12's rename is an edit and not a grep.
-  assert.match(SHELL, /const CHANNELS_PAGE = 'channels-v2';/);
+  // The page is ONE named string, which is what made the Phase 12 cutover's
+  // rename an edit rather than a grep: `channels-v2` → `channels`, 2026-08-18.
+  assert.match(SHELL, /const CHANNELS_PAGE = 'channels';/);
+  // The retired route may be NAMED as history in a comment; it may not survive
+  // as a string this file could navigate to.
+  assert.ok(!/'channels-v2'/.test(SHELL), "the retired v2 route must not survive as a value");
 });
 
 test("both interpolated values pass the ONE segment rule, and it is not a local copy", () => {

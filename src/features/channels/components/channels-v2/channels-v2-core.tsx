@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRefetchGate } from "@/shared/hooks/use-api-mutation";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import type { LinkLike } from "@/shared/ui/link-like";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { CONSENT_INBOX_POLL_MS, PRESENCE_REFETCH_DEBOUNCE_MS } from "../../constants";
 import { useChannels } from "../../hooks/use-channels";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
@@ -14,13 +16,18 @@ import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelsRealtime, usePresenceRealtime } from "../../client/realtime";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsSkeleton } from "../channels-skeleton";
+import { ChannelsOnboardingCore } from "../channels-onboarding-core";
+import {
+  ChannelsV2CreateDialogs,
+  ChannelsV2ManageActions,
+} from "./channel-manage";
 import { ChannelsV2Sidebar } from "./sidebar";
 import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
 import { useDesktopSessions } from "./agents-model";
-import type { ChannelMention } from "../../types";
+import type { Channel, ChannelMention } from "../../types";
 import {
   channelRows,
   indexMembers,
@@ -31,12 +38,22 @@ import { requestedThreadIds, sidebarThreads } from "./view-model-requested";
 
 export interface ChannelsV2CoreProps {
   workspaceId: string;
+  workspaceSlug: string;
   currentUserId: string;
+  role: Role;
+  /**
+   * Router-agnostic link — `next/link` on the web, react-router in the SPA.
+   * ⚠ ONE consumer, and it is the reason the prop exists at all: the first-run
+   * explainer's step cards (`channels-onboarding-core.tsx`). Nothing else in
+   * this tree routes, and nothing else may take it.
+   */
+  Link: LinkLike;
   /**
    * The channel a CALLER named, as an initial selection — the desktop's
-   * `/channels-v2/:channelId` route hands its param down (wiring plan Phase 9).
-   * A plain prop, deliberately: this tree is router-free, so the SPA page owns
-   * the param read and this owns nothing but the selection.
+   * `/channels/:channelId` route hands its param down (wiring plan Phase 9,
+   * renamed off `channels-v2` at the Phase 12 cutover). A plain prop,
+   * deliberately: this tree is router-free, so the SPA page owns the param read
+   * and this owns nothing but the selection.
    */
   initialChannelId?: string | null;
 }
@@ -45,14 +62,18 @@ export interface ChannelsV2CoreProps {
  * Channels v2 root — the three-column shell (channel tree · transcript ·
  * channel info) over the REAL channels reads, plus a FOURTH center-column
  * destination — the Inbox (`inbox-pane.tsx`), behind the sidebar's Inbox nav
- * row. The shipping `channels-view-core.tsx` page stays untouched and live
- * until the cutover (wiring plan Phase 12).
+ * row. **THIS IS THE SHIPPING CHANNELS PAGE** since the cutover (wiring plan
+ * Phase 12, 2026-08-18): `channels-view-core.tsx` and the two-pane surface
+ * under it are DELETED, and `/:workspaceSegment/channels` mounts this tree.
  *
  * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). THREE writers land from
  * this tree, all through the existing write layer, none a new endpoint: the
  * composer's send / request fan-out (Phase 3), the Tags inbox's mark-read
  * (Phase 6), and the Inbox pane's consent decision (Phase 8). All hold the
- * same `useRefetchGate` gate the reads register.
+ * same `useRefetchGate` gate the reads register. **The cutover added a fourth
+ * family** — the channel-management writes (create / invite / visibility /
+ * archive / delete / leave / tool profile / trust), which arrived WHOLESALE
+ * from the deleted page and live in `channel-manage.tsx` on the same `gate`.
  *
  * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
  * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
@@ -63,9 +84,11 @@ export interface ChannelsV2CoreProps {
  * `view-model.ts`, at the COMPONENT boundary, never a fork of the hook.
  *
  * ⚠ Next-free by construction so the desktop SPA can bundle it — the same
- * constraint `channels-view-core.tsx` documents. There is no `Link` prop
- * because nothing in this tree routes; the first-run explainer that needed one
- * is not part of the v2 surface.
+ * constraint the retired `channels-view-core.tsx` documented. The ONE router
+ * dependency arrives as the `Link` prop and has exactly one consumer, the
+ * first-run explainer (`channels-onboarding-core.tsx`), which the cutover
+ * rehomed onto this surface's no-channels branch — Samuel's ruling was KEEP
+ * for now, redesign later, and the old page was its only reachable entry.
  *
  * ⚠ REALTIME IS LIVE IN BOTH CLIENTS and this surface registers for it
  * (INVARIANTS §7 — any new live surface must). The SPA rides the ui-sync
@@ -91,10 +114,15 @@ export interface ChannelsV2CoreProps {
  */
 export function ChannelsV2Core({
   workspaceId,
+  workspaceSlug,
   currentUserId,
+  role,
+  Link,
   initialChannelId = null,
 }: ChannelsV2CoreProps) {
   const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [directOpen, setDirectOpen] = useState(false);
   const [requestedThreadId, setRequestedThreadId] = useState<string | null>(null);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
   // The Inbox nav row takes over the CENTER column — it is a nav destination,
@@ -296,9 +324,19 @@ export function ChannelsV2Core({
     markRead.mutate({ channelId: channel.id, messageIds: unread });
   };
 
+  // A create lands the operator ON the new channel — the same rule the retired
+  // page used, so a fresh room is never created into an unchanged view.
+  const onCreated = (created: Channel) => {
+    setSelectedId(created.id);
+    setRequestedThreadId(null);
+    setInboxOpen(false);
+    void refetchChannels();
+  };
+
   if (loading && channels.length === 0) return <ChannelsSkeleton />;
 
   const { direct, rooms } = splitChannels(channels);
+  const canCreate = meetsMinRole(role, "member");
 
   return (
     // `relative` is the agent view's containing block: it is absolutely
@@ -326,6 +364,9 @@ export function ChannelsV2Core({
         consentCount={requests.length}
         inboxOpen={inboxOpen}
         onOpenInbox={() => setInboxOpen(true)}
+        canCreate={canCreate}
+        onCreateChannel={() => setCreateOpen(true)}
+        onCreateDirect={() => setDirectOpen(true)}
       />
 
       {inboxOpen ? (
@@ -350,6 +391,22 @@ export function ChannelsV2Core({
             scrollTarget={scrollTarget}
             infoOpen={infoOpen}
             gate={gate}
+            manage={
+              <ChannelsV2ManageActions
+                channel={channel}
+                workspaceId={workspaceId}
+                workspaceSlug={workspaceSlug}
+                currentUserId={currentUserId}
+                role={role}
+                members={members}
+                gate={gate}
+                onDeselect={() => setSelectedId(null)}
+                onRosterChanged={() => {
+                  void refetchChannels();
+                  void refetchMembers();
+                }}
+              />
+            }
             onToggleInfo={() => setInfoOpen((open) => !open)}
             onExitThread={() => setRequestedThreadId(null)}
             onOpenThread={setRequestedThreadId}
@@ -377,9 +434,16 @@ export function ChannelsV2Core({
           )}
         </>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center justify-center px-10 text-caption text-text-muted">
-          No channels yet.
-        </div>
+        // THE FIRST-RUN EXPLAINER, rehomed here at the cutover. It says what
+        // channels are for and what responding needs; Samuel's third-round
+        // ruling was KEEP for now, redesign later, and the page that used to
+        // render it is deleted.
+        <ChannelsOnboardingCore
+          workspaceSlug={workspaceSlug}
+          canCreate={canCreate}
+          onCreate={() => setCreateOpen(true)}
+          Link={Link}
+        />
       )}
 
       {/* ⚠ The Sent lane reads the OPEN CHANNEL's transcript, so the panel takes
@@ -391,6 +455,20 @@ export function ChannelsV2Core({
         messages={messages}
         currentUserId={currentUserId}
         onClose={() => setOpenAgent(null)}
+      />
+
+      {/* Workspace-scoped, so they mount OUTSIDE the channel branch above — a
+          workspace with no channel at all is exactly when "create one" has to
+          work. */}
+      <ChannelsV2CreateDialogs
+        workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
+        currentUserId={currentUserId}
+        createOpen={createOpen}
+        directOpen={directOpen}
+        onCreateOpenChange={setCreateOpen}
+        onDirectOpenChange={setDirectOpen}
+        onCreated={onCreated}
       />
     </div>
   );

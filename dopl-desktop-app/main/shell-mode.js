@@ -19,14 +19,14 @@
 //   showMainWindow()                    — reveal/recreate (calls back in)
 //   appOrigin, diag
 
-// THE PAGE A CHANNEL NOTIFICATION LANDS ON, as one string. It is `channels-v2`
-// while the v2 surface lives behind its temporary route: v2 is where the Inbox
-// and the launch panel are, so the shipping v1 page is no longer the useful
-// destination for "come and answer this". Phase 12 renames the v2 routes to
-// `channels` and this constant changes with them — one edit, not a grep.
+// THE PAGE A CHANNEL NOTIFICATION LANDS ON, as one string. `channels` since the
+// CUTOVER (wiring plan Phase 12, 2026-08-18) — it held `channels-v2` between
+// Phase 9 and the cutover, while the Inbox and the launch panel lived behind a
+// temporary route beside the old two-pane page. One constant, so the rename was
+// one edit rather than a grep.
 // Mirrors a row in `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES`; the hand
 // copy that the drift test guards is `deep-link-target.js`, not this.
-const CHANNELS_PAGE = 'channels-v2';
+const CHANNELS_PAGE = 'channels';
 
 function makeShellHelpers(deps) {
   function createShellWindow(opts = {}) {

@@ -2813,3 +2813,88 @@ pin's fail-on-ADD forced is recorded in `test/preload-parity.test.mjs` beside th
 two new entries — and the reason it was worth forcing is that **a stop verb and a
 start verb look identical in a preload diff.** F-212's direct 1:1 lane is the
 start verb, and it is not built.
+
+## 2026-08-18 — `channels-v2` becomes `channels` (wiring plan Phase 12, the cutover)
+
+The arc this closes ran mock → port → cutover, and it is worth keeping because the
+SHAPE is reusable and the middle step is the one teams skip.
+
+**Mock.** `apps/desktop-ui/src/pages/channels-v2/` began as a design-review page of
+three columns of fixtures, behind a temporary route and a temporary nav row, beside
+the shipping two-pane page. Its intent lived in a `MAPPING.md` next to it — a table
+of every surface the mock drew against what the real model could answer, plus
+Samuel's rulings as they arrived.
+
+**Port.** Ten phases moved the mock onto real reads and real writes one concern at a
+time, each phase deleting the machinery it obsoleted in the same change. The
+temporary route is what made that possible: both pages were live and mountable, so
+every phase could be judged against a running comparison instead of against a plan.
+
+**Cutover.** The rename was four edits, and that is the point of naming things once:
+two rows in `routes.tsx`, one key in `main/deep-link-target.js › WORKSPACE_PAGES`,
+one constant in `main/shell-mode.js › CHANNELS_PAGE`, one NAV row in
+`app-sidebar-core.tsx`. Nothing grepped for a string.
+
+### The demolition's real risk was not a dangling import — it was an orphaned dialog
+
+Six components were scheduled for deletion and `npx knip` proved the sweep, finding
+two orphans the plan had not listed (`activity-event-row.tsx`, `address-picker.tsx`)
+and one chain it could only see the head of: `use-channel-agents.ts` →
+`lib/agent-display.ts` → the historical agent-attribution display (F-218).
+
+**But knip cannot see the failure that mattered.** Five channel-management dialogs
+were on the KEEP list, and every one of them was reachable ONLY from the deleted
+page's header or list pane. Left as they were, each would have kept its file, its
+test, its imports and its green suite — and no longer existed as a feature. A
+component imported by something that is itself unreachable is invisible to a
+reachability tool, because the tool's graph starts at modules, not at pixels. So the
+KEEP list was re-verified by asking *"what does a person click"*, the entry points
+were rebuilt on the new header (`components/channels-v2/channel-manage.tsx`), and
+`pages/channels/index.test.tsx` asserts the buttons by accessible name. **The test is
+the part that lasts:** the next person to move that header gets a failure instead of
+a silent feature deletion.
+
+The same question applied to the first-run explainer — kept by ruling, reachable only
+from the old page's empty state, rehomed onto the new surface's no-channels branch —
+and it is the single reason the router-free `ChannelsV2Core` takes a `Link` prop.
+
+### An intent document is deleted by MIGRATION, never by cleanup
+
+`MAPPING.md` was the port's spec and, by the end, half of it was history: struck
+paragraphs, superseded rulings, and two internally contradictory specs for the
+Threads tab (a status filter that a later ruling retired). It could not stay — a
+second statement of live behaviour drifts, and this repo's precedence rule
+(code > INVARIANTS > ENGINEERING) has no slot for a third document that claims to be
+current. It also could not simply be deleted: the rulings inside it were the only
+written record of decisions nothing in the code states.
+
+So it was read as three kinds of sentence, and each went somewhere different:
+
+- **Live rules** (the 24h-or-requested sidebar bound, the hardcoded-furniture list,
+  the mention-gating carve-out for addressed requests, threads-never-close /
+  activity ordering, pause-own-agents-only, the launch flow's UI-not-authorization
+  scope, the F-206 asymmetry) → **INVARIANTS**, §5 §6 §7 §11, and only where they
+  were not already there. Most had landed with their own phase; re-stating one would
+  have created exactly the drift the migration existed to prevent.
+- **Rationale worth keeping** → here. This section, plus the Phase 2 furniture entry
+  that already carried the hardcoded-vs-fabricated line.
+- **Dead intent** — mock deviations, fixture notes, specs a later ruling replaced —
+  → deleted with the file. Carrying a superseded spec forward is how two live specs
+  come to exist, which is what the Threads tab already had.
+
+### What the cutover deliberately did NOT do
+
+**Phase 10's pop-out thread window stays parked**, and it is parked on a security
+decision rather than on effort: every renderer-reachable `ipcMain.handle` is bound to
+the main window's top frame, so a second SPA window renders a surface whose every
+privileged call is refused with no error shape anyone would notice. Nothing here
+forecloses either option on the record (widen the binding, or reuse the session
+renderer) — INVARIANTS §11 states the constraint where the binding is described.
+
+**The `channels-v2` DIRECTORY name survives**, and that was a choice rather than an
+oversight. Route strings, the nav label, the deep-link key and `CHANNELS_PAGE` carry
+no `v2`; `src/features/channels/components/channels-v2/` is a component-family name
+under a feature already called `channels`, and renaming ~28 files to remove a word
+would have moved every symbol anchor in INVARIANTS on the same day the surface
+changed. The rule the tree now runs on is written into §5 so the next reader does not
+mistake the folder for an unshipped page.

@@ -17,16 +17,9 @@
  * the scroller and the scroll-to-message signal.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import {
-  Bookmark,
-  ChevronRight,
-  Hash,
-  Info,
-  MoreHorizontal,
-  Sparkles,
-} from "lucide-react";
+import { Bookmark, ChevronRight, Hash, Info, Sparkles } from "lucide-react";
 import { IconButton } from "./bits";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
@@ -57,6 +50,7 @@ export function ChannelsV2MessagePane({
   scrollTarget,
   infoOpen,
   gate,
+  manage,
   onToggleInfo,
   onExitThread,
   onOpenThread,
@@ -76,6 +70,12 @@ export function ChannelsV2MessagePane({
   infoOpen: boolean;
   /** The page's refetch coordinator, handed straight to the composer's writes. */
   gate: MutationGate;
+  /**
+   * The channel-management cluster (`channel-manage.tsx ›
+   * ChannelsV2ManageActions`), injected as a SLOT rather than imported: it is
+   * write-bearing and channel-scoped, and this file owns the chrome only.
+   */
+  manage?: ReactNode;
   onToggleInfo: () => void;
   onExitThread: () => void;
   /** Set by an in-transcript thread card — the channel view's way IN. */
@@ -118,6 +118,7 @@ export function ChannelsV2MessagePane({
         channelName={channelName}
         threadTitle={thread?.title ?? null}
         infoOpen={infoOpen}
+        manage={manage}
         onToggleInfo={onToggleInfo}
         onExitThread={onExitThread}
       />
@@ -151,12 +152,14 @@ function PaneHeader({
   channelName,
   threadTitle,
   infoOpen,
+  manage,
   onToggleInfo,
   onExitThread,
 }: {
   channelName: string;
   threadTitle: string | null;
   infoOpen: boolean;
+  manage?: ReactNode;
   onToggleInfo: () => void;
   onExitThread: () => void;
 }) {
@@ -188,7 +191,11 @@ function PaneHeader({
           assistant lane is its own surface. Both ride later phases. */}
       <IconButton icon={Bookmark} label="Bookmark channel" size={14} className="h-6 w-6" />
       <span className="flex-1" />
-      <IconButton icon={MoreHorizontal} label="More actions" />
+      {/* The channel-management cluster: settings, working folder, invite and
+          the kebab. It carried over WHOLESALE from the retired page at the
+          cutover (wiring plan Phase 12) and REPLACED an inert "More actions"
+          placeholder — the kebab inside it is the real one. */}
+      {manage}
       <IconButton icon={Sparkles} label="Ask the assistant" />
       <IconButton
         icon={Info}

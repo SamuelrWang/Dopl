@@ -57,12 +57,13 @@ const WORKSPACE_HOME_PAGE = 'overview';
  * is a page no deep link can ever reach, silently. The test reads routes.tsx and
  * fails when the two disagree.
  *
- * ⚠ `channels-v2` IS `true` SINCE 2026-08-18 (wiring plan Phase 9) because
- * `routes.tsx` grew a `channels-v2/:channelId` row: the desktop's notification
- * click navigates to that route, so a THIRD segment there is now a channel id
- * rather than noise. `channels` stays `false` — the shipping v1 page has no
- * detail child, and claiming one would hand the renderer a route that matches
- * nothing. Phase 12 renames v2 to `channels` and this pair swaps in one edit.
+ * ⚠ `channels` IS `true` SINCE 2026-08-18 (wiring plan Phase 12, the cutover)
+ * because `routes.tsx` carries a `channels/:channelId` row: the desktop's
+ * notification click navigates to that route, so a THIRD segment there is a
+ * channel id rather than noise. It was the `channels-v2` row that held the
+ * `true` between Phase 9 and the cutover, beside a `channels: false`; that row
+ * is GONE and this pair swapped in one edit. There is no `channels-v2` key
+ * here, and re-adding one would hand the renderer a route matching nothing.
  *
  * ⚠ THE THIRD SEGMENT IS NOT TRUSTED BECAUSE A ROUTE EXISTS FOR IT. It reaches
  * `${first}/${page}/${detail}` only after `pathSegments` decoded and
@@ -83,8 +84,7 @@ const WORKSPACE_PAGES = {
   knowledge: true,
   skills: true,
   chats: false,
-  channels: false,
-  'channels-v2': true,
+  channels: true,
   members: false,
   settings: false,
 };

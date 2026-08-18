@@ -30,10 +30,6 @@ export type NavSection =
   | "skills"
   | "chats"
   | "channels"
-  // TEMPORARY — desktop-only design-review page (hardcoded mock data). The web
-  // app has no channels-v2 route, so this nav row 404s there; acceptable while
-  // the website is being retired. Remove with the routes.tsx row when v2 lands.
-  | "channels-v2"
   | "ontology"
   | "members";
 
@@ -48,7 +44,6 @@ export const NAV: ReadonlyArray<{
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
   { label: "Channels", icon: Hash, section: "channels" },
-  { label: "Channels v2", icon: Hash, section: "channels-v2" },
   { label: "Members", icon: Users, section: "members" },
 ];
 

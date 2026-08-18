@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import { channel, member, ME, WS } from "./test-fixtures";
 
 /**
@@ -8,7 +9,7 @@ import { channel, member, ME, WS } from "./test-fixtures";
  *
  * ⚠ THE ONLY THING UNDER TEST IS "which channel is open, and who decided".
  * A clicked desktop notification focuses the app and pushes
- * `/{segment}/channels-v2/{channelId}`; the SPA page reads the param and hands
+ * `/{segment}/channels/{channelId}`; the SPA page reads the param and hands
  * it down as `initialChannelId`, because this tree is router-free by
  * construction (the web bundle imports it too). What that prop must buy — and
  * must NOT buy — is three things, and none of them is visible from the page:
@@ -97,18 +98,35 @@ vi.mock("./agent-panel", () => ({ ChannelsV2AgentPanel: () => null }));
 vi.mock("./inbox-pane", () => ({
   ChannelsV2InboxPane: () => <div data-testid="pane">inbox</div>,
 }));
+// The channel-management cluster arrived at the cutover (wiring plan Phase 12)
+// and drags three write hooks, two dialogs and a Supabase-backed auth read in
+// with it. It has nothing to say about which channel is open, which is the only
+// question this file asks.
+vi.mock("./channel-manage", () => ({
+  ChannelsV2ManageActions: () => null,
+  ChannelsV2CreateDialogs: () => null,
+}));
 
 // Imported AFTER the mock declarations for readability; `vi.mock` is hoisted.
 import { ChannelsV2Core } from "./channels-v2-core";
 
+const TestLink = ({ href, children }: { href: string; children: ReactNode }) => (
+  <a href={href}>{children}</a>
+);
+
+const core = (initialChannelId?: string | null) => (
+  <ChannelsV2Core
+    workspaceId={WS}
+    workspaceSlug="acme"
+    currentUserId={ME}
+    role="owner"
+    Link={TestLink}
+    initialChannelId={initialChannelId}
+  />
+);
+
 function renderCore(initialChannelId?: string | null) {
-  return render(
-    <ChannelsV2Core
-      workspaceId={WS}
-      currentUserId={ME}
-      initialChannelId={initialChannelId}
-    />
-  );
+  return render(core(initialChannelId));
 }
 
 afterEach(cleanup);
@@ -135,9 +153,7 @@ describe("ChannelsV2Core — the channel a caller names", () => {
     // channel with no sign anything happened — a silently dead notification.
     const { rerender } = renderCore(CH_B);
     expect(open()).toBe(CH_B);
-    rerender(
-      <ChannelsV2Core workspaceId={WS} currentUserId={ME} initialChannelId={CH_A} />
-    );
+    rerender(core(CH_A));
     expect(open()).toBe(CH_A);
   });
 
@@ -146,9 +162,7 @@ describe("ChannelsV2Core — the channel a caller names", () => {
     fireEvent.click(screen.getByText("pick brand"));
     expect(open()).toBe(CH_B);
     // A re-render that hands over the SAME value must not drag them back.
-    rerender(
-      <ChannelsV2Core workspaceId={WS} currentUserId={ME} initialChannelId={CH_A} />
-    );
+    rerender(core(CH_A));
     expect(open()).toBe(CH_B);
   });
 
@@ -158,21 +172,17 @@ describe("ChannelsV2Core — the channel a caller names", () => {
     const { rerender } = renderCore(CH_A);
     fireEvent.click(screen.getByText("open inbox"));
     expect(open()).toBe("inbox");
-    rerender(
-      <ChannelsV2Core workspaceId={WS} currentUserId={ME} initialChannelId={CH_B} />
-    );
+    rerender(core(CH_B));
     expect(open()).toBe(CH_B);
   });
 
   it("naming nothing again selects nothing — it does not reset the pick", () => {
-    // Going from `channels-v2/{id}` back to the paramless row names no channel;
+    // Going from `channels/{id}` back to the paramless row names no channel;
     // "no channel named" is not "select the first one all over again".
     const { rerender } = renderCore(CH_A);
     fireEvent.click(screen.getByText("pick brand"));
     expect(open()).toBe(CH_B);
-    rerender(
-      <ChannelsV2Core workspaceId={WS} currentUserId={ME} initialChannelId={null} />
-    );
+    rerender(core(null));
     expect(open()).toBe(CH_B);
   });
 });

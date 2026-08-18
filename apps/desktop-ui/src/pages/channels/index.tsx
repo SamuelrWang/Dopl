@@ -1,60 +1,67 @@
-import { ChannelsViewCore } from "@/features/channels/components/channels-view-core";
+import { useParams } from "react-router";
+import { ChannelsV2Core } from "@/features/channels/components/channels-v2/channels-v2-core";
 import { PageError, PageLoading } from "#/components/page-states";
 import { RouterLink } from "#/components/app-shell";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
 
 /**
- * /:workspaceSegment/channels — agent-to-agent collaboration surface. Only a
- * seam: the whole channels tree is REUSED by import, already client-side over
- * `apiRequest`, which transports over the Electron IPC bridge unchanged.
+ * /:workspaceSegment/channels — and `/channels/:channelId`, the SAME page with
+ * a channel named — the three-column channels surface, on real reads.
  *
- * `ChannelsViewCore`, not `ChannelsView`: the latter is the `next/link` binding
- * for the first-run explainer's step cards; pass `RouterLink` instead.
+ * ⚠ THIS IS THE CUTOVER (wiring plan Phase 12, 2026-08-18). Until then there
+ * were two pages: this seam over the two-pane `ChannelsViewCore`, and a
+ * temporary `channels-v2` route over the ported surface. The v2 route, its
+ * folder, its nav row and its deep-link entry are GONE and the ported surface
+ * took this path; `components/channels-view-core.tsx`, `channel-pane.tsx`,
+ * `channels-list-pane.tsx`, `rooms-sidebar.tsx`, `channel-transcript.tsx` and
+ * `message-composer.tsx` were deleted in the same change. **`ChannelsV2Core`
+ * keeps its name deliberately** — it is a component family under
+ * `components/channels-v2/`, not a route string, and renaming 27 files buys a
+ * word (wiring plan Phase 12, § the string sweep).
+ *
+ * ⚠ THE `:channelId` ROW IS THE DESKTOP NOTIFICATION'S LANDING SPOT (wiring
+ * plan Phase 9). Main focuses the window and pushes
+ * `/{segment}/channels/{channelId}` over the navigate bridge
+ * (`main/shell-mode.js › CHANNELS_PAGE`); this file is the ONLY place that
+ * reads the param, because `ChannelsV2Core` is Next-free AND router-free by
+ * construction (it is imported by the web tree too). The param is an INITIAL
+ * selection handed down as a plain prop — never a router dependency inside the
+ * shared tree.
+ *
+ * ⚠ ONLY A SEAM. The whole tree is REUSED by import from
+ * `@/features/channels/components/channels-v2/`, already client-side over
+ * `apiRequest`, which transports over the Electron IPC bridge unchanged. This
+ * file resolves the workspace and hands over; it owns no state and no fetching.
+ * `RouterLink` is passed for the SAME single consumer it always had — the
+ * first-run explainer's step cards, which the cutover rehomed onto the ported
+ * surface's no-channels branch.
  *
  * REALTIME IS LIVE HERE, over the ui-sync DOORBELL rather than a websocket in
- * this renderer (CSP `connect-src 'none'`). `shared-channel-registry.ts ›
- * subscribeSharedWorkspaceTables` routes to `› subscribeViaBridge` whenever the
- * bridge exposes `onSyncEvent` + `syncWatch`, which `renderer/app-preload.js`
- * does (pinned by `test/preload-parity.test.mjs › APP_OPS`); main watches
- * postgres_changes and forwards coalesced `{workspaceId, table}` events. All
- * five tables these hooks watch — `channels`, `channel_members`,
- * `channel_messages`, `channel_consent_requests`, `agent_presence` — are in
- * `main/ui-sync.js › SYNC_TABLES`, so `useChannelsRealtime` /
- * `useConsentRealtime` / `usePresenceRealtime` all deliver.
- *
- * ⚠ This docblock said the opposite until 2026-08-18 and was wrong from ~26
- * minutes after it was written — see F-199. Do not restate liveness from
- * memory; the bridge path is a capability check, and `SYNC_TABLES` is the list.
- *
- * - **An OLDER main with no sync surface** is the one dark case: the registry
- *   returns a no-op unsubscribe rather than opening a socket this renderer
- *   cannot reach, and the page falls back to mount-fetch plus this window's own
- *   writes plus TanStack focus revalidation.
- * - **Consent inbox** — `CONSENT_INBOX_POLL_MS` (30 s) is passed as the same
- *   BACKSTOP the web page passes, not as the delivery path.
- * - **Roster / presence** — fails safe in either direction: the 90 s freshness
- *   window is client-side arithmetic over `lastSeenAt`, so a stale roster reads
- *   offline, never falsely online.
- *
- * The consent card's desktop-only rows (working folder, permission preset) ARE
- * wired: `app-preload.js` exposes `window.dopl.channels` with `getFolderLabel`,
- * `chooseFolder`, `clearFolder`, `getPermissionPreset` and `setPermissionPreset`,
- * and `preload-parity.test.mjs` names `channels.chooseFolder` as "the consent
- * card's folder row" in its already-shipped-a-silent-bug list (F-200).
+ * this renderer (CSP `connect-src 'none'`) — see INVARIANTS §7 for the
+ * capability check and the table list. The core registers `useChannelsRealtime`
+ * + `usePresenceRealtime` through the refetch coordinator, which §7 requires of
+ * any live surface. ⚠ Three docblocks claimed the opposite for fifteen days
+ * (F-199, F-200); do not restate liveness from memory.
  */
 export default function ChannelsPage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
+  // Absent on the index row, which is the "no channel named" case the core
+  // already answers with its own first-row fallback.
+  const { channelId } = useParams<{ channelId: string }>();
 
   if (error) return <PageError error={error} onRetry={refetch} />;
-  if (isPending || !access) return <PageLoading label="Loading channels" variant="two-pane" />;
+  if (isPending || !access) {
+    return <PageLoading label="Loading channels" variant="two-pane" />;
+  }
 
   return (
-    <ChannelsViewCore
+    <ChannelsV2Core
       workspaceId={access.workspaceId}
       workspaceSlug={access.workspaceSlug}
       currentUserId={access.currentUserId}
       role={access.role}
       Link={RouterLink}
+      initialChannelId={channelId ?? null}
     />
   );
 }

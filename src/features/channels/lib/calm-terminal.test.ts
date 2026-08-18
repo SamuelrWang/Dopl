@@ -5,11 +5,13 @@
  * FEATURE (wiring plan Phase 5, 2026-08-18 — INVARIANTS §14: a mixed test file
  * whose feature is deleted is rewritten, never removed). That file asserted the
  * calm rules THROUGH `groupThread`'s session status, so its cases died with the
- * grouper; the rules themselves did not, because `message-receipt.ts` and
- * `activity-event-row.tsx` still read them off rows two surviving desktop
- * writers still post (`main/trigger-outcomes.js`, plus every installed build).
+ * grouper; the rules themselves did not, because `message-receipt.ts` still
+ * reads them off rows two surviving desktop writers still post
+ * (`main/trigger-outcomes.js`, plus every installed build). ⚠ `activity-event-row.tsx`
+ * was the SECOND reader and went with the two-pane page at the v2 cutover
+ * (2026-08-18), so this file now pins the rules for ONE caller.
  *
- * What is pinned here is exactly what those two callers depend on: the strict
+ * What is pinned here is exactly what that caller depends on: the strict
  * `=== true` rule, the kind gate, and the request-level-first precedence.
  */
 

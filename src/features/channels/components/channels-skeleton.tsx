@@ -5,9 +5,12 @@ import {
 } from "@/shared/ui/skeleton";
 
 /**
- * Two-pane channels skeleton — mirrors the loaded `.page-float` chrome
- * (master list + detail thread) so the swap to live data doesn't reflow.
- * Rendered by the view's initial-load branch (`channels-view-core.tsx`).
+ * Channels skeleton — mirrors the loaded `.page-float` chrome (a list column
+ * plus a detail column) so the swap to live data doesn't reflow. Rendered by
+ * the initial-load branch of `channels-v2/channels-v2-core.tsx`. ⚠ It was
+ * built for the two-pane page (`channels-view-core.tsx`, deleted at the v2
+ * cutover 2026-08-18) and is a rough fit for the three-column surface —
+ * a redesign is F-220, not a reason to hand-roll a second recipe.
  *
  * Composed from the shared kit rather than hand-rolled: this file used to
  * carry its own `animate-pulse` / `bg-surface-raised-2` recipe, which is

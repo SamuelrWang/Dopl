@@ -3,13 +3,20 @@
  * `to_agent_id` / `to_agent_ids` / `author_agent_id` from caller metadata and
  * never re-stamps them. Do NOT remove those `delete` lines as dead code.
  *
- * The WRITE path for named agents is gone; the READ path is deliberately alive,
- * because stored rows still carry `author_agent_id` and the transcript renders
- * them (`lib/agent-display.ts`, `channel-transcript.tsx`: "quartz · Ada's
- * agent"). So the key is a display credential with a live reader and NO
- * legitimate writer, which makes the strip the ENTIRE boundary: a caller able to
- * set it attributes their own words to somebody's retired agent on the other
- * member's screen. `to_agent_id` / `to_agent_ids` are a forged addressee.
+ * The WRITE path for named agents is gone. ⚠ **SO IS THE LAST READER, since the
+ * v2 cutover (wiring plan Phase 12, 2026-08-18):** `lib/agent-display.ts` and
+ * `channel-transcript.tsx` rendered a stored `author_agent_id` as "quartz ·
+ * Ada's agent", and both were deleted with the two-pane page. The v2 transcript
+ * never resolved the key — it labels an agent post off `authorKind` (INVARIANTS
+ * §5) — so the display regression is real and is filed as **F-218**.
+ *
+ * ⚠ THE STRIP STAYS, AND THAT IS NOT AN OVERSIGHT. INVARIANTS §5's rule reads
+ * "a key stays reserved with no writer only while something still RENDERS it",
+ * and its own corollary is "a reader coming back means the key comes back to the
+ * strip list FIRST". Removing the strip is a WIDENING — it would make
+ * `author_agent_id` caller-settable, so the day a reader returns the forgery
+ * lands with it. `to_agent_id` / `to_agent_ids` are a forged addressee on the
+ * same terms. Do NOT remove those `delete` lines as dead code.
  *
  * Drives the real `postMessage` and asserts the ABSENCE per key, across every
  * shape a caller can send one in.
