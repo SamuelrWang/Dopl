@@ -294,8 +294,11 @@ export function ChannelPane({
             aria-pressed={roomsOpen}
             title={roomsOpen ? "Hide rooms" : "Show rooms"}
             className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary",
-              roomsOpen && "concave-sel text-text-primary"
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:text-text-primary",
+              /* Open = the raised white face; the hover tint belongs to the
+                 resting state only — a `bg-*` utility outranks the kit layer
+                 and would flatten `.raised-tab`'s gradient. */
+              roomsOpen ? "raised-tab text-text-primary" : "hover:bg-surface-raised-1"
             )}
           >
             <PanelRight size={16} />

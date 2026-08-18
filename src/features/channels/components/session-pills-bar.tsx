@@ -150,9 +150,14 @@ export function SessionPillsBar({ channelId }: { channelId: string }) {
               session.threadTitle ? ` · ${session.threadTitle}` : ""
             }`}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border border-border-strong bg-bg-elevated px-2 py-0.5 text-caption font-medium text-text-primary transition-colors hover:bg-surface-raised-1",
+              "flex items-center gap-1.5 rounded-full border border-border-strong px-2 py-0.5 text-caption font-medium text-text-primary transition-colors",
               session.state === "ended" && "text-text-muted",
-              openId === session.sessionId && "concave-sel"
+              /* Open = the raised white face. Its fill and the resting
+                 fill/hover are mutually exclusive: a `bg-*` utility outranks
+                 the kit layer and would flatten `.raised-tab`'s gradient. */
+              openId === session.sessionId
+                ? "raised-tab"
+                : "bg-bg-elevated hover:bg-surface-raised-1"
             )}
           >
             <span

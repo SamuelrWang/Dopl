@@ -296,9 +296,9 @@ function ToolbarButton({
         variant === "header"
           ? // Flat icon button — app-wide compact-chrome idiom.
             active
-            ? "concave-sel cursor-pointer text-text-primary"
+            ? "raised-tab cursor-pointer text-text-primary"
             : "text-text-secondary hover:bg-surface-raised-1 hover:text-text-primary"
-          : cn("text-text-primary", active ? "btn-pressed" : "btn-light"),
+          : cn("text-text-primary", active ? "raised-tab" : "btn-light"),
         !disabled && "cursor-pointer",
         disabled && "opacity-40"
       )}

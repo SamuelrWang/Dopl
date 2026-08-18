@@ -201,17 +201,6 @@
 }
 .btn-light:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* Concave (pressed-in) selection — active state for controls / selected chrome. */
-.concave-sel,
-.btn-pressed {
-  background: #e9e9e7;
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 1px 1px rgba(0, 0, 0, 0.06),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.7),
-    0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-
 /* Floating page surface — the ONE raised card a full view renders into. */
 .page-float {
   flex: 1;

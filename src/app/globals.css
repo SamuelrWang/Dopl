@@ -623,18 +623,6 @@ html {
   cursor: not-allowed;
 }
 
-/* Concave selection — active state for .btn-light. ⚠ Border drawn as a box-shadow RING so
-   toggling it on borderless elements never shifts layout. `.btn-pressed` is a legacy alias. */
-.concave-sel,
-.btn-pressed {
-  background: #e9e9e7;
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 1px 1px rgba(0, 0, 0, 0.06),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.7),
-    0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-
 /* Brand mark as a raised black button — top highlight, bottom shade, drop. */
 .auth-logo-3d {
   border: 1px solid rgba(0, 0, 0, 0.55);

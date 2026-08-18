@@ -59,10 +59,9 @@ Utilities generated from `@theme` (values live in `:root`):
 | `.page-float`    | THE full-page surface: raised 14px-radius card floating on the shell's sidebar panel (margins `7px 8px 9px 8px`). One per page. Compose flex direction yourself. |
 | `.bento`         | Soft floating inner card (border-default, soft double shadow).          |
 | `.concave-field` | Pressed-in input well (`#e9eaec`, inset shadows, focus ring). Alias of `.auth-field-3d`. |
-| `.concave-sel`   | Pressed-in selected state (`#e9e9e7`) for tabs/rows. Alias of `.btn-pressed`. |
 | `.concave-track` | Recessed switcher track (radius 10, 4px pad) that tab pills sit inside. |
 | `.seg-pill`      | Resting face of one stadium pill in a TRACKLESS segmented row — flat `#e9eaec` fill, fully rounded ends, ring hairline. `SegmentedControl` renders one per option; active swaps to `.raised-tab` (2026-08-12). |
-| `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track` — also composed onto the active `.nav-chip`, the active `.seg-pill` option and the `Switch` thumb. ONE elevation with `.auth-btn-3d-light` (2026-08-15): identical gradient (`#fff → #f2f2f2`), hairline (`#d4d4d4`), bevel and drops. Its hairline is an `inset 0 0 0 1px` RING, not a `border`, because the class is toggled onto content-sized elements whose resting face has none — a real border would make every active chip 2px wider than its siblings. Resting face only; behavioural states belong to the consumer. |
+| `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track` — also composed onto the active `.nav-chip`, the active `.seg-pill` option and the `Switch` thumb. ONE elevation with `.auth-btn-3d-light` (2026-08-15): identical gradient (`#fff → #f2f2f2`), hairline (`#d4d4d4`), bevel and drops. Its hairline is an `inset 0 0 0 1px` RING, not a `border`, because the class is toggled onto content-sized elements whose resting face has none — a real border would make every active chip 2px wider than its siblings. THE selected state app-wide (2026-08-17) — toggled chrome (History/Rooms toggles, doc-toolbar marks) and open-menu triggers (session pills, composer intent pill) wear it too; there is no pressed-in selected face. ⚠ It supplies the FILL, so a consumer's resting `bg-*`/`hover:bg-*` utilities must be conditional on NOT-active: Tailwind's utility layer outranks the kit layer and a stray `bg-bg-elevated` flattens the gradient to nothing. Resting face only; behavioural states belong to the consumer. |
 | `.nav-chip`      | Hug-width sidebar/nav chip (`--shell-chip` fill on `--shell-surface`, radius 10, h36) for `<a>` and `<button>`. Active = `.nav-chip-active` + `.raised-tab`. THE nav recipe — app sidebar + settings modal both compose it; never fork it locally. |
 | `.btn-light`     | Small raised light button (toolbar / compact chrome).                   |
 | `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.) `.auth-btn-3d-light` is THE white-raised elevation reference: `.raised-tab` and the app-shell's `.brandPill` are the same face at other scales. |
@@ -80,8 +79,8 @@ Composition pattern (CSS modules welcome for layout, recipes come from kit):
 <div className={cn("page-float", styles.shell)}>         // page surface
 <div className={cn("concave-field", styles.search)}>     // search well
 <div className={cn("concave-track", styles.tabs)}>       // tab track
-<span className={cn("raised-tab", styles.tabThumb)}>     // active thumb
-<button className={cn(styles.tab, active && "concave-sel")}>
+<span className={cn("raised-tab", styles.tabThumb)}>     // sliding active thumb
+<button className={cn(styles.toggle, on ? "raised-tab" : "bg-bg-elevated")}>  // selected chrome
 ```
 
 Shared React primitives (`src/shared/ui` + `src/shared/hooks`):

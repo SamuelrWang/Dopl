@@ -499,7 +499,7 @@ Other env work: `NEXT_PUBLIC_*` → `import.meta.env.VITE_*`
 (`:3-6`); `src/app/globals.css` as source of truth (`:8-9`); an 8-step semantic type
 ramp with `text-sm`/`text-xs`/`text-[13px]` explicitly banned in app UI (`:18-34`);
 the color token table (`:36-52`); kit classes `.page-float`, `.bento`,
-`.concave-field`, `.concave-sel`, `.concave-track`, `.raised-tab`, `.btn-light`,
+`.concave-field`, `.concave-track`, `.raised-tab`, `.btn-light`,
 `.auth-btn-3d`, `.graph-*` (`:54-69`); the CSS-Modules-for-layout +
 kit-classes-for-recipes composition pattern (`:71-79`); and the `src/shared/ui/*`
 primitives table (`:81-99`).

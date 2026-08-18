@@ -274,7 +274,7 @@ export function SkillView({
           className={cn(
             "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium transition-colors",
             historyOpen
-              ? "concave-sel text-text-primary"
+              ? "raised-tab text-text-primary"
               : "btn-light text-text-primary"
           )}
         >

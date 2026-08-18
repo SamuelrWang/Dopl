@@ -77,9 +77,12 @@ export function ComposerIntentPill({
         className={cn(
           /* No `self-end`: the bubble is `items-end`, so the alignment is the
              parent's and a local override would be a second opinion about it. */
-          "flex shrink-0 items-center gap-1 rounded-full border border-border-strong bg-bg-elevated px-2 py-1 text-caption font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50",
+          "flex shrink-0 items-center gap-1 rounded-full border border-border-strong px-2 py-1 text-caption font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50",
           mode === "request" && "text-text-primary",
-          anchor !== null && "concave-sel"
+          /* Menu open = the raised white face; its fill replaces the resting
+             one, because a `bg-*` utility outranks the kit layer and would
+             flatten `.raised-tab`'s gradient. */
+          anchor !== null ? "raised-tab" : "bg-bg-elevated"
         )}
       >
         {label}
