@@ -62,7 +62,7 @@ function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
  * through the realtime hooks — ⚠ refetch, NEVER merge.
  *
  * ⚠ The writes live in three hooks, not here: `use-thread-writes` (send / open /
- * close / reopen), `use-channel-preference-writes` (tool profile, trust,
+ * fan out), `use-channel-preference-writes` (tool profile, trust,
  * consent), `use-channel-lifecycle-writes` (archive / visibility / delete /
  * join / leave). All three are on `useApiMutation` and patch the query cache
  * directly, so this file holds NO optimistic lens of its own.
@@ -178,8 +178,8 @@ export function ChannelsViewCore({
     void refetchChannels();
     void refetchMessages();
     void refetchMembers();
-    // create/close_thread post a message, so the signal that refreshes messages
-    // also refreshes the thread overlay. `set_thread_mode` posts none and is
+    // create_thread posts a message, so the signal that refreshes messages also
+    // refreshes the thread overlay. `set_thread_mode` posts none and is
     // eventually consistent.
     void refetchThreads();
   };
@@ -216,7 +216,7 @@ export function ChannelsViewCore({
   // single-target create has no caller HERE. `openThreadConfig` itself stays:
   // it is the web half of `create_thread`, which the desktop and MCP lanes
   // still post, and Phase 5's surfaces are its next callers.
-  const { send, threadOp } = useThreadWrites({
+  const { send } = useThreadWrites({
     workspaceId,
     currentUserId,
     currentUserName: me?.displayName ?? null,
@@ -244,29 +244,10 @@ export function ChannelsViewCore({
     });
   }
 
-  async function handleCloseThread(
-    threadId: string,
-    outcome: "completed" | "failed",
-    summary?: string
-  ) {
-    if (!selected) return;
-    await threadOp.mutateAsync({
-      channelId: selected.id,
-      threadId,
-      op: "close",
-      outcome,
-      summary,
-    });
-  }
-
-  async function handleReopenThread(threadId: string) {
-    if (!selected) return;
-    await threadOp.mutateAsync({
-      channelId: selected.id,
-      threadId,
-      op: "reopen",
-    });
-  }
+  // ⚠ `handleCloseThread` / `handleReopenThread` lived here and drove
+  // `threadOp` at `PATCH /tasks/[id]`. Both are DELETED with thread closing
+  // (wiring plan Phase 4, 2026-08-18), along with the mutation, the route arms
+  // and every control that called them.
 
   /**
    * ⚠ WIDENING TAKES A HUMAN: private→public opens the confirm dialog and the
@@ -358,8 +339,6 @@ export function ChannelsViewCore({
           trustBusyIds={trustBusyIds}
           consentBusyIds={consentBusyIds}
           onSend={handleSend}
-          onCloseThread={handleCloseThread}
-          onReopenThread={handleReopenThread}
           onInvite={() => setInviteOpen(true)}
           onSetToolProfile={handleSetToolProfile}
           toolProfileBusy={prefs.toolProfile.pending}

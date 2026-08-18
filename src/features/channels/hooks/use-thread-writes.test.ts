@@ -37,7 +37,6 @@ import type { ChannelMessage, ChannelThread } from "../types";
 import {
   openThreadConfig,
   sendConfig,
-  threadOpConfig,
   type ThreadWriteDeps,
 } from "./use-thread-writes";
 
@@ -261,9 +260,10 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
     expect(entry?.state.isInvalidated).toBe(false);
   });
 
-  /** ⚠ These must keep naming the transcript key: `openThread`'s opening message
-   *  is written server-side under a derived key and `threadOp`'s lifecycle echo
-   *  is server-rendered, so neither can be reconciled from the response. */
+  /** ⚠ This must keep naming the transcript key: `openThread`'s opening message
+   *  is written server-side under a derived key, so it cannot be reconciled from
+   *  the response. `threadOp` was the second such write and had the same test
+   *  below — deleted with thread closing (wiring plan Phase 4, 2026-08-18). */
   it("openThread names the same transcript key — the send now matches it, not the other way round", async () => {
     const h = harness();
     mountEmptyQuery(h.client, MESSAGES_ENTRY);
@@ -273,23 +273,6 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
       title: "Ship it",
       body: "please",
       toUserId: "u-ada",
-    });
-    await flush();
-    settle({ task: thread() });
-    await inFlight;
-
-    const entry = messagesEntry(h);
-    expect(entry).toBeDefined();
-    expect(entry?.state.isInvalidated).toBe(true);
-  });
-
-  it("threadOp names it too — a close/reopen's lifecycle echo is server-rendered", async () => {
-    const h = harness();
-    mountEmptyQuery(h.client, MESSAGES_ENTRY);
-    const { inFlight, settle } = run(h, threadOpConfig(h.deps), {
-      channelId: CHANNEL,
-      threadId: "t-1",
-      op: "reopen" as const,
     });
     await flush();
     settle({ task: thread() });

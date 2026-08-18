@@ -5,10 +5,16 @@
  *
  * ⚠ THE SEAM IS THE CREDENTIAL, not who the message says wrote it. Too wide and
  * the desktop runtime's own echoes stop (`main/session-window.js` posts on
- * Electron's Supabase cookies, so `source:"user"`) or the close route's echo
- * stops; too narrow and an agent's answer posted as `task_finished` renders
- * nowhere (`lib/group-thread.ts` folds terminal markers into `draft.endEvent`,
- * never `draft.entries`). Asserted in both directions.
+ * Electron's Supabase cookies, so `source:"user"`); too narrow and an agent's
+ * answer posted as `task_finished` renders nowhere (`lib/group-thread.ts` folds
+ * terminal markers into `draft.endEvent`, never `draft.entries`). Asserted in
+ * both directions.
+ *
+ * ⚠ REWRITTEN DOWN 2026-08-18 (wiring plan Phase 4). It also held the
+ * propose-then-confirm contract — `closeTask` refusing an agent token,
+ * `proposeTaskClose`'s idempotency anchor, the reserved close-proposal keys —
+ * and every one of those services is deleted. What is here is the lifecycle-kind
+ * guard, which is untouched by that removal.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -21,13 +27,7 @@ import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
-import { closeTask } from "./service-tasks-lifecycle";
-import { proposeTaskClose } from "./service-tasks-propose";
-import {
-  ChannelLifecycleKindForbiddenError,
-  TaskForbiddenError,
-  ThreadCloseIsHumanOnlyError,
-} from "./errors";
+import { ChannelLifecycleKindForbiddenError } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelMemberRow, ChannelMessageRow, ChannelRow, ChannelTaskRow } from "./dto";
 
@@ -134,8 +134,6 @@ beforeEach(() => {
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
-  // Re-proposal anchor. 0 = "nothing said in this thread yet".
-  vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(0);
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
       rows: [],
@@ -143,11 +141,6 @@ beforeEach(() => {
     });
   vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
     taskRow({ ...patch })
-  );
-  // Close goes through the CONDITIONAL update, so first-write-wins is decided
-  // by the statement rather than by a read.
-  vi.mocked(repoTasks.updateTaskIfStatus).mockImplementation(
-    async (_id, _status, patch) => taskRow({ ...patch })
   );
 });
 
@@ -238,17 +231,13 @@ describe("postMessage — the lanes the guard must NOT touch", () => {
     }
   );
 
-  it("the CLOSE ECHO is exempt even on an agent ctx (the server speaking, not the agent)", async () => {
-    // The one server-internal caller, exempted at its CALL SITE rather than by
-    // identity: a close raised over MCP arrives with an agent ctx and the echo
-    // still has to tell the peer's card the thread ended.
-    await closeTask(desktopCtx, "general", TASK_ID, "completed", "Shipped");
-    expect(inserted()?.kind).toBe("task_finished");
-    expect(inserted()?.body).toBe("Shipped");
-  });
-
-  it("the exemption is NOT a general agent-ctx hole", async () => {
-    // ⚠ A caller passing the key inside its own metadata gets no exemption.
+  // ⚠ THE POSITIVE HALF OF THIS PAIR IS GONE. `internalLifecycle`'s one caller
+  // was the close echo (`service-tasks-lifecycle.ts › closeTask`), deleted with
+  // thread closing (wiring plan Phase 4, 2026-08-18), so there is no server-
+  // internal lifecycle post left to drive it through. What survives is the half
+  // that matters more: the OPTION is the exemption, a caller's METADATA key of
+  // the same name is not.
+  it("`internalLifecycle` in a caller's METADATA is not an exemption", async () => {
     await expect(
       postMessage(agentCtx, "general", {
         body: "done",
@@ -256,158 +245,5 @@ describe("postMessage — the lanes the guard must NOT touch", () => {
         metadata: { internalLifecycle: true },
       })
     ).rejects.toBeInstanceOf(ChannelLifecycleKindForbiddenError);
-  });
-});
-
-// ── 3. propose-then-confirm ────────────────────────────────────────────────────
-
-describe("closeTask / proposeTaskClose — an agent proposes, a human closes", () => {
-  it("an AGENT TOKEN cannot close, and nothing about the thread changes", async () => {
-    await expect(
-      closeTask(agentCtx, "general", TASK_ID, "completed", "all done")
-    ).rejects.toBeInstanceOf(ThreadCloseIsHumanOnlyError);
-    expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("the refusal comes BEFORE any lookup, so it leaks nothing about the thread", async () => {
-    // ⚠ Non-party and nonexistent thread ids must answer IDENTICALLY, else the
-    // shape of the error is a probe.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
-    await expect(
-      closeTask(agentCtx, "general", TASK_ID, "completed")
-    ).rejects.toBeInstanceOf(ThreadCloseIsHumanOnlyError);
-    expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
-  });
-
-  it("a HUMAN closes exactly as before", async () => {
-    const { thread } = await closeTask(desktopCtx, "general", TASK_ID, "completed", "Shipped");
-    expect(thread.status).toBe("closed");
-    expect(vi.mocked(repoTasks.updateTaskIfStatus).mock.calls[0][2].status).toBe("closed");
-  });
-
-  it("an agent's PROPOSAL posts a marked, NON-TERMINAL note and touches no row", async () => {
-    const res = await proposeTaskClose(agentCtx, "general", TASK_ID, "completed", "Analysis is in.");
-
-    // ⚠ Thread UNTOUCHED — a proposal must not change routing, status, or
-    // anything the peer sees.
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
-    expect(repoTasks.updateTaskIfStatus).not.toHaveBeenCalled();
-    expect(res.thread.status).toBe("open");
-
-    const row = inserted();
-    // ⚠ Non-terminal by construction: `task_progress` is an `entries` row in
-    // `groupThread`, never an `endEvent`.
-    expect(row?.kind).toBe("task_progress");
-    expect(row?.body).toBe("Analysis is in.");
-    expect(row?.metadata).toMatchObject({
-      taskId: TASK_ID,
-      closeProposed: true,
-      closeOutcome: "completed",
-    });
-    expect(res.markerSeq).toBe(42);
-    expect(res.outcome).toBe("completed");
-  });
-
-  it("a proposal with no reason still says something a human can act on", async () => {
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "failed");
-    expect(inserted()?.body).toBe("I think this thread can be closed.");
-    expect(inserted()?.metadata).toMatchObject({ closeOutcome: "failed" });
-  });
-
-  /**
-   * ⚠ `propose_close` is RE-RAISABLE. Key is (thread, outcome, ACTIVITY ANCHOR)
-   * and the anchor EXCLUDES proposals — that is what keeps a retry deduping
-   * while a genuine re-proposal still writes. A `(thread, outcome)` key alone is
-   * one-shot forever and silently swallows the second real proposal.
-   * Both directions asserted: satisfying only one is the bug or the spam.
-   */
-  it("keys the proposal on (thread, outcome, activity anchor)", async () => {
-    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-    expect(inserted()?.client_msg_id).toBe(
-      `close-proposed-${TASK_ID}-completed-17`
-    );
-    expect(repoMessages.latestThreadActivitySeq).toHaveBeenCalledWith(
-      "chan-1",
-      TASK_ID
-    );
-  });
-
-  it("a RETRY with nothing said in between still collapses to one prompt", async () => {
-    // Anchor excludes proposals, so posting one does not move it — retries all
-    // recompute the SAME key and hit the idempotency short-circuit.
-    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-    const first = inserted()?.client_msg_id;
-
-    vi.mocked(repoMessages.insertMessage).mockClear();
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-
-    expect(inserted()?.client_msg_id).toBe(first);
-  });
-
-  it("a proposal raised AFTER more exchange writes a NEW prompt", async () => {
-    // propose → human keeps it open → work continues → propose again. Thread
-    // moved, so anchor moved, so the key is new.
-    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-    const first = inserted()?.client_msg_id;
-
-    vi.mocked(repoMessages.insertMessage).mockClear();
-    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(31);
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-
-    expect(inserted()?.client_msg_id).not.toBe(first);
-    expect(inserted()?.client_msg_id).toBe(
-      `close-proposed-${TASK_ID}-completed-31`
-    );
-  });
-
-  it("the outcome still separates two proposals at the same anchor", async () => {
-    // ⚠ "this failed" and "this is done" are different claims — must not dedupe.
-    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(9);
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-    const completed = inserted()?.client_msg_id;
-
-    vi.mocked(repoMessages.insertMessage).mockClear();
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "failed");
-
-    expect(inserted()?.client_msg_id).not.toBe(completed);
-  });
-
-  it("does NOT share a key namespace with the stale-thread cron", async () => {
-    // ⚠ Different authors, different claims, DIFFERENT KEYS — sharing a key lets
-    // a scheduled sweep landing first replace an agent's stated reason.
-    vi.mocked(repoMessages.latestThreadActivitySeq).mockResolvedValue(17);
-    await proposeTaskClose(agentCtx, "general", TASK_ID, "completed");
-    expect(inserted()?.client_msg_id).not.toBe(`stale-swept-${TASK_ID}-17`);
-    expect(inserted()?.client_msg_id?.startsWith("close-proposed-")).toBe(true);
-  });
-
-  it("a member who could not CLOSE the thread cannot PROPOSE on it either", async () => {
-    // ⚠ Proposing raises a one-click prompt in front of a human — must not be
-    // reachable by somebody the close itself would refuse.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: "someone-else", target_user_id: "another" })
-    );
-    await expect(
-      proposeTaskClose(agentCtx, "general", TASK_ID, "completed")
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("the close-proposal keys are RESERVED: a caller cannot forge the prompt", async () => {
-    // ⚠ A peer able to stamp `closeProposed` on somebody else's thread could
-    // manufacture the confirm prompt, so the keys are stripped from caller
-    // metadata unconditionally and re-stamped only server-internally.
-    await postMessage(agentCtx, "general", {
-      body: "nothing to see here",
-      kind: "task_progress",
-      metadata: { taskId: TASK_ID, closeProposed: true, closeOutcome: "completed" },
-    });
-    const meta = inserted()?.metadata as Record<string, unknown>;
-    expect(meta.closeProposed).toBeUndefined();
-    expect(meta.closeOutcome).toBeUndefined();
   });
 });

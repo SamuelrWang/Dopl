@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArrowRight, Check, ListTodo } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
@@ -11,7 +11,6 @@ import type {
   ChannelMessage,
   ChannelThread,
   ThreadMode,
-  ThreadOutcome,
 } from "../types";
 import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
 
@@ -24,7 +23,14 @@ const STATUS_LABEL: Record<ThreadDisplayStatus, string> = {
   failed: "Thread failed",
 };
 
-/** Open thread = active; a closed one is failed (outcome) or complete. */
+/**
+ * Active, unless this is a LEGACY row closed before thread closing was removed
+ * (wiring plan Phase 4, 2026-08-18). ⚠ `status` / `outcome` are legacy and no
+ * longer written (INVARIANTS §5); this is the one surviving READ of them, and it
+ * is here so an old transcript still explains itself rather than showing every
+ * settled exchange as live. Nothing branches on it — the row renders the same
+ * either way and there are no controls behind it.
+ */
 function displayStatus(thread: ChannelThread): ThreadDisplayStatus {
   if (thread.status === "open") return "active";
   return thread.outcome === "failed" ? "failed" : "done";
@@ -44,17 +50,9 @@ interface Props {
   latestMilestone?: Map<string, ChannelMessage>;
   /** Navigate to the thread's grouped card (scroll + transient highlight). */
   onSelectThread: (threadId: string) => void;
-  /** ⚠ Gates the per-row Close / Reopen controls to a thread's creator or
-   *  target. Absent hides the controls entirely. */
+  /** ⚠ Decides the read-only marker on a thread the viewer is not a party to.
+   *  Absent means "unknown viewer", which claims nothing. */
   currentUserId?: string;
-  /** Close a thread with an outcome + optional summary. Absent hides Close. */
-  onCloseThread?: (
-    threadId: string,
-    outcome: ThreadOutcome,
-    summary: string
-  ) => Promise<void>;
-  /** Reopen a closed thread. Absent hides Reopen. */
-  onReopenThread?: (threadId: string) => Promise<void>;
 }
 
 /**
@@ -67,7 +65,12 @@ interface Props {
  * "You" wherever they appear, a thread with no addressee says so rather than
  * rendering a lone creator, and a non-party thread carries a read-only marker.
  * Reads are channel-transparent by design, but the server refuses that member's
- * writes ({@link isThreadParty}), and only a party gets Close / Reopen.
+ * writes ({@link isThreadParty}).
+ *
+ * ⚠ THE PER-ROW CLOSE / REOPEN STRIP (`ThreadRowActions`) WAS DELETED HERE with
+ * thread closing (wiring plan Phase 4, 2026-08-18) — with it the `onCloseThread`
+ * / `onReopenThread` props and the summary well. Threads do not close; the
+ * operator pauses or ends an AGENT.
  */
 export function ThreadPanel({
   threads,
@@ -77,8 +80,6 @@ export function ThreadPanel({
   latestMilestone,
   onSelectThread,
   currentUserId,
-  onCloseThread,
-  onReopenThread,
 }: Props) {
   const memberById = useMemo(
     () => new Map(members.map((m) => [m.userId, m])),
@@ -135,12 +136,12 @@ export function ThreadPanel({
             const milestone = latestMilestone?.get(thread.id);
             // The thread's two parties are its creator and its addressee — the
             // same pair the server's write gate enforces. A viewer outside that
-            // pair may read this row (reads are channel-transparent) and may
-            // not close, reopen, or post into it.
-            const isParty = isThreadParty(thread, currentUserId);
-            // "Not a party" is only sayable when we know who is looking; an
-            // absent `currentUserId` means unknown, and claims nothing.
-            const showReadOnly = !!currentUserId && !isParty;
+            // pair may read this row (reads are channel-transparent) and may not
+            // post into it. ⚠ "Not a party" is only sayable when we know who is
+            // looking; an absent `currentUserId` means unknown, and claims
+            // nothing.
+            const showReadOnly =
+              !!currentUserId && !isThreadParty(thread, currentUserId);
             return (
               <div key={thread.id} className="flex flex-col">
                 <button
@@ -195,153 +196,13 @@ export function ThreadPanel({
 
                   <span className="text-micro text-text-muted">
                     {formatChannelTimestamp(thread.createdAt)}
-                    {thread.closedAt &&
-                      ` · closed ${formatChannelTimestamp(thread.closedAt)}`}
                   </span>
-
-                  {thread.status === "closed" && thread.outcomeSummary && (
-                    <span
-                      className={cn(
-                        "text-caption",
-                        thread.outcome === "failed"
-                          ? "text-danger"
-                          : "text-text-secondary"
-                      )}
-                    >
-                      {thread.outcomeSummary}
-                    </span>
-                  )}
                 </button>
-                {isParty && (
-                  <ThreadRowActions
-                    thread={thread}
-                    onCloseThread={onCloseThread}
-                    onReopenThread={onReopenThread}
-                  />
-                )}
               </div>
             );
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * The per-row Close / Reopen control strip, shown under a thread row only for
- * its creator or target. An open thread gets a Close affordance that expands
- * into an optional summary well plus Mark complete / Mark failed; a closed
- * thread gets a single Reopen button. Each direction renders only when its
- * callback is wired (absent until the integration pass). Buttons disable while
- * a write is in flight so a double-click can't fire two writes.
- */
-function ThreadRowActions({
-  thread,
-  onCloseThread,
-  onReopenThread,
-}: {
-  thread: ChannelThread;
-  onCloseThread?: (
-    threadId: string,
-    outcome: ThreadOutcome,
-    summary: string
-  ) => Promise<void>;
-  onReopenThread?: (threadId: string) => Promise<void>;
-}) {
-  const [closing, setClosing] = useState(false);
-  const [summary, setSummary] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function run(fn: () => Promise<void>) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await fn();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (thread.status === "closed") {
-    if (!onReopenThread) return null;
-    return (
-      <div className="flex justify-end px-3 pb-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => run(() => onReopenThread(thread.id))}
-          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
-        >
-          Reopen thread
-        </button>
-      </div>
-    );
-  }
-
-  if (!onCloseThread) return null;
-
-  if (!closing) {
-    return (
-      <div className="flex justify-end px-3 pb-2">
-        <button
-          type="button"
-          onClick={() => setClosing(true)}
-          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
-        >
-          Close thread
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5 px-3 pb-2">
-      <input
-        type="text"
-        value={summary}
-        onChange={(event) => setSummary(event.target.value)}
-        disabled={busy}
-        maxLength={2000}
-        placeholder="Closing summary (optional)"
-        className="concave-field w-full rounded-[8px] px-2.5 py-1.5 text-caption text-text-primary placeholder:text-text-muted"
-      />
-      <div className="flex items-center justify-end gap-1.5">
-        <button
-          type="button"
-          onClick={() => setClosing(false)}
-          disabled={busy}
-          className="btn-light rounded-[8px] px-2 py-1 text-caption font-medium text-text-secondary disabled:opacity-60"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            run(async () => {
-              await onCloseThread(thread.id, "failed", summary.trim());
-              setClosing(false);
-            })
-          }
-          className="btn-light rounded-[8px] px-2 py-1 text-caption font-medium text-danger disabled:opacity-60"
-        >
-          Mark failed
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            run(async () => {
-              await onCloseThread(thread.id, "completed", summary.trim());
-              setClosing(false);
-            })
-          }
-          className="btn-light rounded-[8px] px-2 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
-        >
-          Mark complete
-        </button>
-      </div>
     </div>
   );
 }

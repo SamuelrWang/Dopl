@@ -335,24 +335,25 @@ describe("SessionCard render", () => {
   });
 });
 
-/** Thread controls on the card: Close only. Reopen lives in the thread panel,
- *  so a closed thread's footer carries no thread mutation at all. */
+/**
+ * ⚠ REWRITTEN 2026-08-18 (wiring plan Phase 4). This block used to pin the
+ * card's own Close affordance — offered to a party of an open thread, absent on
+ * a closed one, never a Reopen (that was the thread panel's). Thread closing is
+ * REMOVED, and `session-card-close.tsx` (the propose-then-confirm PROMPT and the
+ * close FORM) is deleted, so the card settles nothing. The surviving assertion
+ * is the absence, held for a party and a legacy closed row alike.
+ */
 describe("SessionCard thread controls", () => {
-  const closeThread = async () => {};
-
-  it("keeps the Close affordance for an open thread the viewer manages", () => {
+  it("offers no close, prompt or reopen — to a party, on an open thread", () => {
     const markup = renderToStaticMarkup(
-      <SessionCard
-        session={session()}
-        thread={thread()}
-        currentUserId={ME}
-        onCloseThread={closeThread}
-      />
+      <SessionCard session={session()} thread={thread()} currentUserId={ME} />
     );
-    expect(markup).toContain("Close thread");
+    expect(markup).not.toContain("Close thread");
+    expect(markup).not.toContain("Reopen thread");
+    expect(markup).not.toContain("can be closed");
   });
 
-  it("offers NO reopen control for a closed thread the viewer manages", () => {
+  it("offers none of them on a LEGACY closed row either", () => {
     const markup = renderToStaticMarkup(
       <SessionCard
         session={session({ status: "done" })}
@@ -362,7 +363,6 @@ describe("SessionCard thread controls", () => {
           closedAt: "2026-07-28T00:05:00.000Z",
         })}
         currentUserId={ME}
-        onCloseThread={closeThread}
       />
     );
     expect(markup).not.toContain("Reopen thread");
@@ -385,7 +385,6 @@ describe("SessionCard thread party", () => {
         session={session()}
         thread={thread(OTHER_PAIR)}
         currentUserId={ME}
-        onCloseThread={async () => {}}
       />
     );
     expect(markup).toContain("Read-only");

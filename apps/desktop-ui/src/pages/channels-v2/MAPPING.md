@@ -27,7 +27,8 @@ here** (repo CLAUDE.md precedence).
 | Posted request card: title, preview, **one pill per real addressee**, Open thread | **WIRED** — N fan-out threads grouped by the server-stamped `metadata.fanoutGroup` |
 | Card `Requested` chip | **WIRED, ONE-DIRECTIONAL** — true for a thread the VIEWER owes an answer on; a request you SENT shows none (F-206) |
 | Info tab: creator / created / status / thread count / members + presence | **WIRED** — `use-channel-members`, 90s window client-side |
-| Threads tab: activity-ordered list, clipped note, Open | **WIRED** — no status filter (activity ordering replaced it) |
+| Threads tab: activity-ordered list, clipped note, Open | **WIRED** — no status filter (activity ordering replaced it), and since Phase 4 there is no status to filter ON |
+| Thread close / propose / reopen | **DELETED, NOT PORTED** — wiring plan Phase 4 (2026-08-18). A thread has no finished state on any surface; the operator ends an AGENT |
 | Realtime | **WIRED** — `useChannelsRealtime` + `usePresenceRealtime` through the refetch coordinator |
 | Composer typing, @-autocomplete, agent-request pills | **WIRED** — pills are the real roster |
 | **Composer SEND** | **WIRED** — panel open → the request fan-out (`POST /tasks` with `toUserIds`); panel closed → a plain chat message (`intent:"chat"`) |
@@ -300,14 +301,18 @@ Vocabulary: **channel** = the main channel chat; **thread** = threads.
 - **Session pills / session cards are replaced** by the Agents tab + agent
   view. The pop-out thread window is the session window REDESIGNED — but it is
   a THREAD view (the thread, not the session, is what it shows).
-- **THREAD CLOSING IS REMOVED.** The close machinery existed to make agents
-  stop; with pause/end living on the AGENT (agent view), an open/closed thread
-  status buys nothing. No close, no propose-then-confirm, no reopen — the user
-  pauses or ends agents instead. (Port note: this retires a large slice of
-  INVARIANTS §5 — close/propose/confirm/reopen, calm-flag terminal reads —
-  at port time. The mock's Active/Inactive filter therefore maps to something
-  DERIVED — e.g. "has a running agent / recent traffic" — not a stored status.
-  How threads age out of the sidebar is an OPEN question.)
+- **THREAD CLOSING IS REMOVED.** ✅ **LANDED 2026-08-18 — wiring plan Phase 4.**
+  The close machinery existed to make agents stop; with pause/end living on the
+  AGENT (agent view), an open/closed thread status buys nothing. No close, no
+  propose-then-confirm, no reopen — the user pauses or ends agents instead.
+  (Port note, now history: this retired a large slice of INVARIANTS §5 —
+  close/propose/confirm/reopen and the stale-threads cron that proposed on the
+  product's behalf. ⚠ **The CALM-FLAG terminal reads were the one thing the note
+  named that did NOT go**, and the distinction is worth keeping: a calm flag is
+  about one member's SESSION ending, which was never an outcome for the shared
+  thread, so deleting those readers would have taken the consent-DENY receipt
+  with them. The mock's Active/Inactive filter mapped to activity ordering, per
+  the third-round ruling below, rather than to anything derived from agents.)
 - **Lifecycle events** (started/finished/failed): answered by the above — the
   agent's run state lives in the agent view, not as transcript rows.
 - **Channel management maps over wholesale** (create, invite, visibility,
@@ -356,8 +361,10 @@ per-addressee keys derived server-side).
 Still port-time work, not design questions: the consent DECISION surfaces
 themselves (the mock renders each decision's outcome on the card, never the
 Allow/Deny control or the trust settings behind it — and see F-206 for why the
-requester cannot render the outcome at all), and the close = propose-then-confirm
-flow, which Phase 4 deletes rather than ports.
+requester cannot render the outcome at all). ⚠ **The close = propose-then-confirm
+flow was on this list and is OFF it: Phase 4 deleted it rather than porting it
+(2026-08-18).** Nothing in the mock renders a thread's settled state, which is
+why its absence cost this list a line rather than a redesign.
 
 ⚠ **STRUCK 2026-08-18: "realtime (OFF in the SPA — polling/refetch only)" used to sit in
 that list and it was false.** The SPA rides the ui-sync doorbell and every channels table

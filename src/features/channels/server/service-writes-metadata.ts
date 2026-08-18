@@ -7,14 +7,9 @@ import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
 import {
   isLegacyThreadParticipant,
-  isThreadClosed,
   isThreadParticipant,
 } from "./service-writes-metadata-thread";
-import {
-  CLOSE_PROPOSAL_KEYS,
-  REOPEN_MARKER_KEY,
-  takeCalmFlags,
-} from "./service-writes-metadata-markers";
+import { takeCalmFlags } from "./service-writes-metadata-markers";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -24,11 +19,13 @@ import type { ChannelContext } from "./service-shared";
  * server-validated values: `to_user_id`, `summary`, `runtime`, `appVersion`,
  * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
  * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
- * `handoff`, `fanoutGroup`, the six calm-terminal flags, the two close-proposal
- * keys, and `threadReopened`. `taskId` stays caller-settable, but every thread id —
- * first-class or legacy — must BELONG to the poster (see
- * {@link resolvePostMetadata}). Marker keys live in
- * `service-writes-metadata-markers.ts`, the thread half in
+ * `handoff`, `fanoutGroup`, and the six calm-terminal flags. ⚠ The two
+ * close-proposal keys and `threadReopened` LEFT this list with thread closing
+ * (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the dead agent keys
+ * below, no RENDERER either. `service-writes-metadata-markers.ts` records why.
+ * `taskId` stays caller-settable, but every thread id — first-class or legacy —
+ * must BELONG to the poster (see {@link resolvePostMetadata}). Marker keys live
+ * in `service-writes-metadata-markers.ts`, the thread half in
  * `service-writes-metadata-thread.ts`.
  *
  * ⚠ The three agent keys have no writer left but MUST stay in the strip list:
@@ -62,10 +59,15 @@ async function resolveDirectPeer(
 }
 
 /**
- * Single OPEN task of a direct channel whose participants are exactly
- * {author, peer}, else null. All-or-nothing: with 2+ candidates a guess would
- * attach a turn to the wrong card and route it to the wrong session window on
- * the peer's machine.
+ * Single task of a direct channel whose participants are exactly {author, peer},
+ * else null. All-or-nothing: with 2+ candidates a guess would attach a turn to
+ * the wrong card and route it to the wrong session window on the peer's machine.
+ *
+ * ⚠ THE `status === "open"` FILTER IS GONE (wiring plan Phase 4, 2026-08-18).
+ * Threads do not close, so the only rows it could ever exclude are legacy ones
+ * closed before the removal — and excluding those makes a pair with one old
+ * thread inherit nothing, which reads as inheritance being broken. The column is
+ * legacy and unread; this was one of its readers.
  */
 async function resolveInheritableTask(
   channel: ChannelRow,
@@ -79,47 +81,38 @@ async function resolveInheritableTask(
   const { rows: tasks } = await repoTasks.listTasksByChannel(channel.id);
   const candidates = tasks.filter(
     (task) =>
-      task.status === "open" &&
-      ((task.created_by === authorUserId &&
+      (task.created_by === authorUserId &&
         task.target_user_id === peerUserId) ||
-        (task.created_by === peerUserId &&
-          task.target_user_id === authorUserId))
+      (task.created_by === peerUserId && task.target_user_id === authorUserId)
   );
   return candidates.length === 1 ? candidates[0] : null;
 }
 
 /**
- * Stored `metadata` plus the one notice nothing downstream could re-derive
- * without a second query. The thread row is resolved here and NOWHERE else on
- * the write path, so this is the only place that can see a post landing in a
- * CLOSED thread. ⚠ Rides out as a notice, never stamped into `metadata` — the
- * message is not different for being late, only the caller's report is.
+ * Stored `metadata`.
+ *
+ * ⚠ IT CARRIED A SECOND FIELD, `threadClosed`, until thread closing was removed
+ * (wiring plan Phase 4, 2026-08-18): the thread row is resolved here and nowhere
+ * else on the write path, so this was the only place that could see a post
+ * landing in a closed thread, and the notice rode out to the caller (and into the
+ * MCP `post` result). With no closer left, the only threads it could ever fire on
+ * are legacy ones — the column is unread now, so the notice went with it.
  */
 export interface PostMetadataResult {
   metadata: Record<string, unknown>;
-  /** True when the post landed in a thread whose row is no longer open. */
-  threadClosed: boolean;
 }
 
 /**
  * Server-internal inputs to the metadata fold — no HTTP caller can supply
  * these; they are not fields of `ChannelMessageCreateInput` and no route parses
  * them.
+ *
+ * ⚠ TWO OPTIONS ENDED HERE with thread closing (Phase 4, 2026-08-18):
+ * `closeProposal` (stamped the close-proposal marker keys for the deleted
+ * `proposeTaskClose`) and `reopened` (stamped `threadReopened` for the deleted
+ * `reopenTask`).
  */
 export interface PostMetadataOptions {
-  /**
-   * Stamp as CLOSE PROPOSAL with that outcome. Only caller:
-   * `service-tasks-propose.proposeTaskClose`, which has already checked poster
-   * is the thread's creator or target.
-   */
-  closeProposal?: "completed" | "failed";
-  /**
-   * Stamp as the REOPEN ECHO. Only caller:
-   * `service-tasks-lifecycle.reopenTask`, which has already checked poster is
-   * creator or target and that the row really moved `closed` -> `open`. See
-   * {@link REOPEN_MARKER_KEY}.
-   */
-  reopened?: boolean;
   /**
    * Stamp reserved `metadata.handoff` true. Only caller:
    * `service-tasks.createTask`, forwarding validated `TaskCreateInput.handoff`.
@@ -201,12 +194,10 @@ export interface PostMetadataOptions {
  *    live session; a session sending no header is simply unattributed.
  * 7. **Calm-terminal flags.** Re-stamped only when a thread tag the poster is
  *    entitled to survived (4); a flag on a foreign thread drops with its tag.
- * 7b. **Reopen marker.** `threadReopened` on the same condition — the echo
- *    carrying this key IS the doorbell, since `channel_tasks` is in no realtime
- *    table set.
- * 8. **Closed-thread notice.** Resolved row's `status`. Changes NOTHING about
- *    the message; rides out on {@link PostMetadataResult}. See
- *    {@link isThreadClosed} for why this warns rather than refuses.
+ *
+ * ⚠ Folds 7b (the `threadReopened` marker) and 8 (the closed-thread notice read
+ * off the resolved row's `status`) were DELETED with thread closing (wiring plan
+ * Phase 4, 2026-08-18).
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
@@ -215,10 +206,6 @@ export async function resolvePostMetadata(
   opts: PostMetadataOptions = {}
 ): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
-  // ⚠ Stripped BEFORE anything decides whether a stamp is coming, like
-  // `session_id` below. {@link CLOSE_PROPOSAL_KEYS}, {@link REOPEN_MARKER_KEY}.
-  for (const key of CLOSE_PROPOSAL_KEYS) delete metadata[key];
-  delete metadata[REOPEN_MARKER_KEY];
   delete metadata.to_user_id;
   // Stripped, never re-stamped: consumer is gone, but a name the docs call
   // server-owned must not stay forgeable.
@@ -325,22 +312,6 @@ export async function resolvePostMetadata(
     for (const key of calmFlags) metadata[key] = true;
   }
 
-  // Close proposal — same condition as the calm flags. Belt and braces
-  // (`proposeTaskClose` already checked creator-or-target); the belt is what
-  // makes "a prompt to close this thread" unforgeable, not merely unforged.
-  if (opts.closeProposal && typeof metadata.taskId === "string") {
-    metadata.closeProposed = true;
-    metadata.closeOutcome = opts.closeProposal;
-  }
-
-  // Reopen echo marker, on the close proposal's exact condition. `reopenTask`
-  // already established creator-or-target and that the row really moved to
-  // `open`. ⚠ Literal boolean, read `=== true` by the client, so a
-  // truthy-but-not-true value never counts.
-  if (opts.reopened === true && typeof metadata.taskId === "string") {
-    metadata[REOPEN_MARKER_KEY] = true;
-  }
-
   // Spawn-with-handoff, same discipline: only onto a thread tag the poster is
   // entitled to (the opening message always is). ⚠ ROUTING HINT, NOT an
   // authorization — desktop still requires the identity pair (author === me,
@@ -357,8 +328,5 @@ export async function resolvePostMetadata(
     metadata.fanoutGroup = opts.fanoutGroupId;
   }
 
-  // Read off the row the folds already resolved. An INHERITED task can never be
-  // closed (`resolveInheritableTask` filters to `open`), so this fires only for
-  // a caller-supplied first-class id.
-  return { metadata, threadClosed: isThreadClosed(task) };
+  return { metadata };
 }

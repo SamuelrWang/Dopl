@@ -319,24 +319,28 @@ test("F-139: a Dopl tool's name is stripped for a server segment with underscore
 
 test("M4: the diag distinguishes a marker allow from a message allow", () => {
   const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
-  const propose = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "propose_close", thread: "T1", outcome: "completed" });
-  assert.match(propose.logged[0], /^session gate: dopl_channel op=propose_close allow auto-outbound-marker /);
   const milestone = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "milestone", thread: "T1", body: "step" });
   assert.match(milestone.logged[0], /^session gate: dopl_channel op=milestone allow auto-outbound-marker /);
   // A post keeps its OWN code: "did my agent send a message?" is a different audit question.
   const post = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "post", body: "hi" });
   assert.match(post.logged[0], /^session gate: dopl_channel op=post allow auto-outbound /);
-  // ...and the close itself still stops, in the posture that auto-allows its proposal.
-  const close = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "close_thread", thread: "T1" });
-  assert.match(close.logged[0], /^session gate: dopl_channel op=close_thread gate channel-op-approval-required /);
+  // ⚠ `propose_close` was the marker set's other member and `close_thread` was pinned here as
+  // the op that STILL gated in the very posture that auto-allowed its proposal. Both left the
+  // tool's enum with thread closing (wiring plan Phase 4, 2026-08-18). An unclassified op
+  // resolves to `gate`, which is the safe direction, so this is the pin that they do:
+  for (const op of ["propose_close", "close_thread"]) {
+    const gated = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op, thread: "T1" });
+    assert.match(gated.logged[0], new RegExp(`^session gate: dopl_channel op=${op} gate `),
+      `${op} must never resolve to an allow`);
+  }
 });
 
 test("M4: an own-channel marker that GATES says message approval, not 'this operation'", () => {
   // The old code claimed "message approval covers this channel's messages, not this operation",
-  // which stopped being true for these two the moment the axis started covering them.
+  // which stopped being true for a marker the moment the axis started covering it.
   const ask = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
-    DOPL_CHANNEL_TOOL, { op: "propose_close", thread: "T1", outcome: "completed" });
-  assert.match(ask.logged[0], /op=propose_close gate message-approval-required /);
+    DOPL_CHANNEL_TOOL, { op: "milestone", thread: "T1", body: "one line" });
+  assert.match(ask.logged[0], /op=milestone gate message-approval-required /);
   // A marker aimed elsewhere (a SLUG is the common case) gets the code that names the fix.
   const away = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" } },
     DOPL_CHANNEL_TOOL, { op: "milestone", channel: "team-alpha", thread: "T1", body: "x" });

@@ -177,25 +177,13 @@ export class ChannelLifecycleKindForbiddenError extends ChannelError {
 }
 
 /**
- * An AGENT-token caller tried to CLOSE a thread. 403.
- *
- * ⚠ Thread close is PROPOSE-then-CONFIRM. Closing settles the SHARED thread for
- * BOTH members, and an agent deciding the work "looks done" is not the human
- * deciding they are finished with the exchange. An agent's terminal act is
- * `op:"propose_close"`; the close stays on the HUMAN lane.
- *
- * ⚠ The line is the CREDENTIAL — the only one the wire can draw. Consequence:
- * closing from an external CLI over MCP is impossible; the human closes in the
- * app (web thread card, desktop session window, or SPA).
+ * ⚠ `ThreadCloseIsHumanOnlyError` (403 `CHANNEL_CLOSE_IS_HUMAN_ONLY`) USED TO
+ * LIVE HERE and was deleted with thread closing (wiring plan Phase 4,
+ * 2026-08-18). It guarded a human-only lane over a shared thread's settlement;
+ * there is no settlement left to guard — the operator pauses or ends an AGENT,
+ * and nothing anywhere moves `channel_tasks.status`. Do not reintroduce the
+ * code; the MCP classifier arm that read it is gone too.
  */
-export class ThreadCloseIsHumanOnlyError extends ChannelError {
-  constructor() {
-    super(
-      "An agent cannot close a thread — closing settles it for both members and is the human's decision. " +
-        'Propose it instead (op:"propose_close"), and your operator confirms.'
-    );
-  }
-}
 
 /** A direct channel would target the caller themselves — a self-DM is refused. */
 export class DirectSelfTargetError extends ChannelError {

@@ -63,7 +63,7 @@ globalThis.doplSession = {
   agentName: () => Promise.resolve(nameAnswer),
   permission: (...a) => sent.push(["permission", ...a]),
   interrupt: () => sent.push(["interrupt"]),
-  end() {}, closeTask() {}, consentDecision() {}, setToolMode() {}, setMessageMode() {}, inboundDecision() {},
+  end() {}, consentDecision() {}, setToolMode() {}, setMessageMode() {}, inboundDecision() {},
   folder: {
     get: () => Promise.resolve({ label: "~/Downloads" }),
     choose: () => Promise.resolve({ label: null }),

@@ -271,7 +271,7 @@ half-closable.
 
 **Deletes.**
 - Server: `service-tasks-lifecycle.ts` (`› closeTask`, `› reopenTask`, `› closeEchoClientMsgId`,
-  `› reopenEchoClientMsgId`), `service-tasks-propose.ts › proposeTaskClose`, the `close` /
+  `› reopenEchoClientMsgId`), `service-tasks-propose.ts`'s `proposeTaskClose`, the `close` /
   `propose_close` / `reopen` arms of `schema.ts › TaskUpdateSchema`, the matching arms of
   `src/app/api/channels/[channelId]/tasks/[taskId]/route.ts › handlePatch`, the
   `CHANNEL_CLOSE_IS_HUMAN_ONLY` error, `repository-tasks.ts › updateTaskIfStatus`

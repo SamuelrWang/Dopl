@@ -157,13 +157,10 @@ class Api {
     return this.request('GET', `/api/channels/${channelId}/tasks/${threadId}`);
   }
 
-  closeThread(channelId, threadId) {
-    return this.request('PATCH', `/api/channels/${channelId}/tasks/${threadId}`, {
-      op: 'close',
-      outcome: 'completed',
-      summary: 'live contract harness teardown',
-    });
-  }
+  // ⚠ `closeThread` was here — `PATCH … {op:'close'}` — and is DELETED with thread closing
+  // (wiring plan Phase 4, 2026-08-18). The route arm is gone, so a call would now 400 on the
+  // discriminator rather than 403 as it used to. It had no caller in `run.js` either; see the
+  // teardown note there.
 
   // ── the session surface that replaced the roster (F-142 / F-144 / F-147) ──────
 

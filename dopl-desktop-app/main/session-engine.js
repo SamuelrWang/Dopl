@@ -18,7 +18,8 @@ const sessionReopen = require('./session-reopen');
 const sessionSummary = require('./session-summary'); // §3.3: THE session-pill projection
 const sessionPark = require('./session-park');
 const framing = require('./prompt-framing');
-const { closeTask } = require('./session-close-task'); // §2 split: the engine holds no HTTP dep
+// `session-close-task.js` was required here (the `closeTask` effect) and is DELETED — threads
+// do not close (wiring plan Phase 4, 2026-08-18). The §2 split's point stands: no HTTP dep here.
 const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-in
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const { getSdk } = require('./sdk-loader');
@@ -125,8 +126,7 @@ function runEffect(s, eff) {
     case 'clearIdle': if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; } break;
     case 'resumeQuery': sessionPark.resumeParked(s); break; // P1 lazy resume: the SAME object
     case 'lifecycle': runLifecycle(s, eff.kind, eff.extra, eff.body); break;
-    case 'closeTask': closeTask(s, eff.outcome, eff.summary); break;
-    case 'settle': settle(s, eff.outcome, eff.keepWindow === true); break;
+    case 'settle': settle(s, eff.outcome, eff.keepWindow === true); break; // a `closeTask` case sat above this one until Phase 4 (2026-08-18)
     default: diag('session-engine: unknown effect', eff && eff.type);
   }
 }
@@ -192,8 +192,8 @@ function runLifecycle(s, kind, extra, body) {
   } catch (err) { diag('session-engine: lifecycle handler error', err && err.message); }
 }
 
-// The task status flip (op:"close") lives in session-close-task.js (§2 split); the lifecycle echo stays here.
-// Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it), free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
+// The lifecycle echo lives here; its sibling, session-close-task.js's status flip, is deleted
+// with thread closing (Phase 4, 2026-08-18). Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it), free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
 // `keepWindow` — the abandonment case alone; the argument is at session-effects.endEffects.
 // Everything below still runs (terminal either way); only the painted transcript survives.
 function settle(s, outcome, keepWindow) {

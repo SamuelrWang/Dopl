@@ -258,10 +258,9 @@ describe("postMessage — DM task-id inheritance", () => {
     expect(capturedMetadata().to_user_id).toBe(PEER);
   });
 
-  it("ignores CLOSED tasks and tasks whose participants are not {author, peer}", async () => {
+  it("ignores tasks whose participants are not {author, peer}", async () => {
     vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
       rows: [
-      taskRow({ status: "closed", outcome: "completed" }),
       taskRow({ id: OTHER_TASK_ID, created_by: THIRD, target_user_id: USER }),
       taskRow({ id: OTHER_TASK_ID, created_by: USER, target_user_id: null }),
     ],
@@ -273,6 +272,24 @@ describe("postMessage — DM task-id inheritance", () => {
     const meta = capturedMetadata();
     expect(has(meta, "taskId")).toBe(false);
     expect(has(meta, "taskMode")).toBe(false);
+  });
+
+  // ⚠ THE RULE INVERTED ON 2026-08-18 (wiring plan Phase 4). This used to assert
+  // the opposite — `resolveInheritableTask` filtered `status === "open"` and a
+  // legacy `closed` row was skipped. Threads no longer close, so the filter's
+  // only remaining effect was to make a pair whose one thread was closed BEFORE
+  // the removal inherit nothing at all, which reads as inheritance being broken.
+  // `channel_tasks.status` is legacy and unread (INVARIANTS §5); this is the pin
+  // that a new `=== "open"` filter here is a regression, not a tightening.
+  it("inherits a LEGACY closed thread — status is not read any more", async () => {
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+      rows: [taskRow({ status: "closed", outcome: "completed" })],
+      truncated: false,
+    });
+
+    await postMessage(ctx, "dm", { body: "reply", toUserId: PEER });
+
+    expect(capturedMetadata().taskId).toBe(TASK_ID);
   });
 
   it("a caller-supplied taskId suppresses inheritance (explicit threading wins)", async () => {

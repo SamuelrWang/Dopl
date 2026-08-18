@@ -23,14 +23,11 @@ import type {
   ChannelMessagePosted,
   ChannelSessionState,
   ChannelThread,
-  ChannelThreadCloseProposed,
-  ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
   ChannelThreadPage,
   ReadMessagesOptions,
   ThreadMode,
-  ThreadOutcome,
 } from "./channel-types.js";
 
 const enc = encodeURIComponent;
@@ -159,25 +156,24 @@ export async function inviteToChannel(
 }
 
 /**
- * Post a message. `threadClosed` rides in the response ENVELOPE beside the
- * message (like `echoSeq`), not inside it, and is normalized to a boolean HERE:
- * an older deployment sends no key, a post into an open thread sends no key,
- * and both must read `false`, not `undefined` for the caller to re-decide.
+ * Post a message.
+ *
+ * ⚠ The response envelope carried a second key, `threadClosed`, until thread
+ * closing was removed (wiring plan Phase 4, 2026-08-18) — normalized to a
+ * boolean HERE, because an older deployment sent no key and the caller must not
+ * have to tell "false" from "unknown". The shape of that rule still applies to
+ * every additive envelope field this client reads.
  */
 export async function postMessage(
   t: DoplTransport,
   channelId: string,
   input: ChannelMessageInput
 ): Promise<ChannelMessagePosted> {
-  const data = await t.request<{
-    message: ChannelMessage;
-    threadClosed?: boolean;
-  }>(`/api/channels/${enc(channelId)}/messages`, {
-    method: "POST",
-    body: input,
-    toolName: "channel_post",
-  });
-  return { ...data.message, threadClosed: data.threadClosed === true };
+  const data = await t.request<{ message: ChannelMessage }>(
+    `/api/channels/${enc(channelId)}/messages`,
+    { method: "POST", body: input, toolName: "channel_post" }
+  );
+  return data.message;
 }
 
 // ─── Threads ────────────────────────────────────────────────────────
@@ -260,62 +256,12 @@ export async function createChannelThread(
 }
 
 /**
- * PROPOSE closing a thread — the agent lane's terminal act; agents cannot reach
- * {@link closeChannelThread}. Same route and payload shape, different op: a
- * proposal IS the close it asks a human to confirm, so the confirm hands these
- * two values straight back to `op:"close"`. Writes nothing to the thread row.
+ * ⚠ TWO BINDINGS ENDED HERE with thread closing (wiring plan Phase 4,
+ * 2026-08-18): `proposeChannelThreadClose` (`PATCH … {op:"propose_close"}`, the
+ * agent lane's terminal act) and `closeChannelThread` (`{op:"close"}`, human
+ * lane only). The route arms behind both are deleted, so a resurrected binding
+ * would 400 on the discriminator rather than fail quietly.
  */
-export async function proposeChannelThreadClose(
-  t: DoplTransport,
-  channelId: string,
-  threadId: string,
-  input: { outcome: ThreadOutcome; summary?: string }
-): Promise<ChannelThreadCloseProposed> {
-  const data = await t.request<{
-    task: ChannelThread;
-    markerSeq?: number | null;
-    proposedOutcome?: ThreadOutcome;
-  }>(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {
-    method: "PATCH",
-    body: { op: "propose_close", outcome: input.outcome, summary: input.summary },
-    toolName: "channel_propose_close",
-  });
-  return {
-    thread: data.task,
-    // Additive on the route; same discipline as `echoSeq` — an absent field is
-    // null, never a number the caller could arm a wait on.
-    markerSeq: typeof data.markerSeq === "number" ? data.markerSeq : null,
-    outcome: data.proposedOutcome ?? input.outcome,
-  };
-}
-
-/**
- * Close a thread. ⚠ HUMAN LANE ONLY — the server refuses an agent-token caller
- * (`ThreadCloseIsHumanOnlyError`); the agent path is
- * {@link proposeChannelThreadClose}. Kept as the one binding for a real route
- * op — a human surface on this client closes through here.
- */
-export async function closeChannelThread(
-  t: DoplTransport,
-  channelId: string,
-  threadId: string,
-  input: { outcome: ThreadOutcome; summary?: string }
-): Promise<ChannelThreadClosed> {
-  const data = await t.request<{ task: ChannelThread; echoSeq?: number | null }>(
-    `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
-    {
-      method: "PATCH",
-      body: { op: "close", outcome: input.outcome, summary: input.summary },
-      toolName: "channel_close_thread",
-    }
-  );
-  // `echoSeq` is additive, like `openingSeq` on create — an older deployment
-  // omits it, reads as null, so the caller looks its cursor up.
-  return {
-    thread: data.task,
-    echoSeq: typeof data.echoSeq === "number" ? data.echoSeq : null,
-  };
-}
 
 export async function setChannelThreadMode(
   t: DoplTransport,

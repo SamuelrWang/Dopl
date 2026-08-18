@@ -363,19 +363,13 @@ function sessionReducer(state, event) {
     return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'operator') };
   }
 
-  if (type === 'close_task') {
-    const kind = event.outcome === 'completed' ? 'task_finished' : 'task_failed';
-    return {
-      state: clone(state, { phase: 'ended' }),
-      effects: [
-        { type: 'closeTask', outcome: event.outcome, summary: event.summary },
-        { type: 'abortQuery' },
-        { type: 'lifecycle', kind: kind, extra: {} },
-        endedEmit(state, event.outcome, 'close_task', event.summary),
-        { type: 'settle', outcome: event.outcome },
-      ],
-    };
-  }
+  // ⚠ A `close_task` branch sat here — the operator's Close in the session window. It flipped
+  // `channel_tasks.status`, echoed task_finished/task_failed, aborted the query and settled the
+  // session in one move. DELETED with thread closing (wiring plan Phase 4, 2026-08-18): threads
+  // do not close, and 'end' above is what the operator reaches for instead. ⚠ Note what 'end'
+  // does NOT do, and why that is now the whole story: it leaves the exchange exactly where it
+  // is and posts a NON-TERMINAL `session_ended` marker, because one member's window closing was
+  // never an outcome for the shared thread.
 
   if (type === 'idle_timeout') {
     // P1: PARK, do not end. Already parked (a stale timer that survived the clear) is a no-op; NOT
@@ -470,7 +464,7 @@ function sessionReducer(state, event) {
     //
     // C3 (CRITICAL): `abortQuery` comes FIRST. A crash used to settle a session whose SDK query
     // was still live, so the transport kept running behind a window that had already said "ended"
-    // — every other terminal path (end / cap / close_task) aborts first, and this one must too.
+    // — every other terminal path (end / cap) aborts first, and this one must too.
     return {
       state: clone(state, { phase: 'ended' }),
       effects: [

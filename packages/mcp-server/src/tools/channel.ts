@@ -16,8 +16,7 @@
  *   - `channel-ops-open.ts`   — open / invite
  *   - `channel-ops-write.ts`  — post (+ `channel-post-notes.ts` /
  *                               `channel-post-linkage.ts` for its result lines)
- *   - `channel-ops-threads.ts`— create_thread / propose_close / close_thread /
- *                               set_thread_mode
+ *   - `channel-ops-threads.ts`— create_thread / set_thread_mode
  *   - `channel-render.ts`     — read renderers + untrusted-content headers,
  *                               shared with the write side
  *
@@ -49,12 +48,7 @@ import {
 import { opAwait } from "./channel-ops-await";
 import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
-import {
-  closeThreadIsHumansToMake,
-  opCreateThread,
-  opProposeClose,
-  opSetThreadMode,
-} from "./channel-ops-threads";
+import { opCreateThread, opSetThreadMode } from "./channel-ops-threads";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
 /**
@@ -220,29 +214,13 @@ export function registerChannelTool(
             args.handoff,
           );
         }
-        // ⚠ PROPOSE-THEN-CONFIRM: an agent's terminal act is a PROPOSAL its
-        // operator confirms. A close settles the SHARED thread for both members.
-        case "propose_close": {
-          const miss = missingParams("propose_close", args, [
-            "channel",
-            "thread",
-            "outcome",
-          ]);
-          if (miss) return miss;
-          return opProposeClose(
-            client,
-            args.channel as string,
-            args.thread as string,
-            args.outcome as "completed" | "failed",
-            args.summary,
-          );
-        }
-        // ⚠ Answered, not removed: dropping `close_thread` from the enum turns
-        // an older agent's call into a zod "invalid enum value" at the moment
-        // it most needs telling what to do instead. Teaching, not the gate —
-        // the server refuses an agent-token close (`ThreadCloseIsHumanOnlyError`).
-        case "close_thread":
-          return closeThreadIsHumansToMake();
+        // ⚠ TWO CASES ENDED HERE with thread closing (wiring plan Phase 4,
+        // 2026-08-18): "propose_close" (the agent's terminal act, confirmed by
+        // its operator) and "close_thread" (answered with a teaching refusal
+        // rather than dropped from the enum, so an older agent got a sentence
+        // instead of a zod error). Both left the enum in `channel-schema.ts`,
+        // so a stale caller now gets an invalid-enum -32602 — the accepted cost
+        // of the words not surviving anywhere in the shipped surface.
         case "set_thread_mode": {
           const miss = missingParams("set_thread_mode", args, [
             "channel",

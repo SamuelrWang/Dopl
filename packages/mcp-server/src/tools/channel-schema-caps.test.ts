@@ -51,9 +51,12 @@ describe("F5 — the minimums the route has always enforced", () => {
 
 
 describe("F5 — what stays deliberately unmirrored", () => {
-  it("keeps `summary` at the LOOSER 2000, so a close summary is never refused here", () => {
-    // ⚠ An over-length POST summary stays the ROUTE's to reject — one param,
-    // two caps, and tightening client-side breaks close_thread.
+  it("keeps `summary` at the LOOSER 2000, so the ROUTE is what refuses one", () => {
+    // ⚠ An over-length POST summary stays the ROUTE's to reject, because the
+    // route names the field and a client-side refusal is an opaque -32602. The
+    // 2000 was originally the close summary's cap; thread closing is gone
+    // (wiring plan Phase 4, 2026-08-18) and the looser number stays anyway, for
+    // that reason alone.
     expect(accepts({ summary: "s".repeat(201) })).toBe(true);
     expect(accepts({ summary: "s".repeat(2000) })).toBe(true);
     expect(accepts({ summary: "s".repeat(2001) })).toBe(false);

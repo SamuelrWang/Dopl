@@ -72,8 +72,6 @@ function render(over: {
       memberNames={MEMBER_NAMES}
       onSelectThread={() => {}}
       currentUserId={over.currentUserId}
-      onCloseThread={async () => {}}
-      onReopenThread={async () => {}}
     />
   );
 }
@@ -89,7 +87,12 @@ describe("ThreadPanel copy — THREAD vocabulary", () => {
     expect(render()).toContain("Thread active");
   });
 
-  it("labels a completed thread 'Thread complete'", () => {
+  // ⚠ THE NEXT TWO ARE ABOUT LEGACY ROWS. Nothing closes a thread since the
+  // wiring plan's Phase 4 (2026-08-18), so a `closed` row is one settled before
+  // the removal; `displayStatus` is the last surviving READ of `status` and it
+  // exists so an old transcript still explains itself. The `closed <time>` line
+  // and the outcome summary under the row went with the close.
+  it("labels a legacy completed thread 'Thread complete'", () => {
     const markup = render({
       threads: [
         thread({
@@ -103,7 +106,7 @@ describe("ThreadPanel copy — THREAD vocabulary", () => {
     expect(markup).not.toContain("Thread active");
   });
 
-  it("labels a failed thread 'Thread failed'", () => {
+  it("labels a legacy failed thread 'Thread failed'", () => {
     const markup = render({
       threads: [
         thread({
@@ -116,25 +119,19 @@ describe("ThreadPanel copy — THREAD vocabulary", () => {
     expect(markup).toContain("Thread failed");
   });
 
-  it("offers 'Close thread' to a thread's creator while it is open", () => {
-    const markup = render({ currentUserId: ME });
-    expect(markup).toContain("Close thread");
-    expect(markup).not.toContain("Reopen thread");
-  });
-
-  it("offers 'Reopen thread' to a thread's creator once it is closed", () => {
-    const markup = render({
-      currentUserId: ME,
-      threads: [thread({ status: "closed", outcome: "completed" })],
-    });
-    expect(markup).toContain("Reopen thread");
-    expect(markup).not.toContain("Close thread");
-  });
-
-  it("hides both controls from a member who is neither creator nor target", () => {
-    const markup = render({ currentUserId: "u-stranger" });
-    expect(markup).not.toContain("Close thread");
-    expect(markup).not.toContain("Reopen thread");
+  // ⚠ THREE TESTS ENDED HERE, and they were the whole per-row Close / Reopen
+  // strip: offered to a thread's creator while open, swapped for Reopen once
+  // closed, hidden from a non-party. Thread closing was REMOVED (wiring plan
+  // Phase 4, 2026-08-18) and `ThreadRowActions` with it. What replaces them is
+  // the absence assertion below — this panel offers no settlement control at all
+  // now, whoever is looking.
+  it("offers NO close or reopen control, to a party or to anyone else", () => {
+    for (const currentUserId of [ME, "u-stranger", undefined]) {
+      const markup = render({ currentUserId });
+      expect(markup).not.toContain("Close thread");
+      expect(markup).not.toContain("Reopen thread");
+      expect(markup).not.toContain("Mark complete");
+    }
   });
 
   it("says 'no addressee' rather than rendering a lone creator", () => {

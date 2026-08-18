@@ -271,15 +271,17 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       `This is YOUR session on that thread, running on your operator's machine.`,
       `The GOAL is delimited below. Another workspace member's agent will reply in the`,
       `channel from its OWN session, and each reply returns to you as your next turn.`,
-      // ⚠ PROPOSE, NEVER CLOSE. Closing settles the SHARED thread for BOTH members off one
-      // machine's judgment. The agent's terminal act is a PROPOSAL the human confirms. The
-      // server enforces this too (an agent-token close is refused), so this is the prompt half
-      // of a rule that does not depend on the prompt.
-      `Respond and loop until the goal is met, then STOP and propose closing: op "propose_close"`,
-      `on this thread, with a one-line summary. That asks your operator to confirm; it does not`,
-      `close anything. You never close a thread yourself, and you do not propose one early: a`,
-      `thread is shared, and your operator may still have things to say in it.`,
-      `Do not loop past a met goal. Closing settles the thread for both members, so it is theirs.`,
+      // ⚠ THERE IS NO TERMINAL ACT ANY MORE. This block used to teach PROPOSE-NEVER-CLOSE —
+      // op "propose_close", which asked the operator to confirm and settled nothing itself.
+      // Thread closing was removed (wiring plan Phase 4, 2026-08-18): the op is gone from the
+      // MCP enum, the route arm is gone, and a prompt naming it orders a call the SDK answers
+      // with -32602. What replaces it is the same STOP, said without a settlement: the risk
+      // this paragraph exists for is an agent that loops past a met goal, not one that fails
+      // to file paperwork.
+      `Respond and loop until the goal is met, then STOP and report to your operator.`,
+      `Do not loop past a met goal. A thread has no finished state — nothing marks one done,`,
+      `there is no op that ends one, and it is not waiting on you to settle it. Your operator`,
+      `ends this SESSION when they are finished; the thread stays where it is.`,
       ``,
       ...firstActions('requester', ctx),
       ``,

@@ -49,6 +49,33 @@ const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]> = [
   ["the thread-open handshake", /thread-open-|handshake/i],
   ["the agent lifecycle ops", /rename_agent|set_agent_status|disengage_agent|join_thread|leave_thread/],
   ["the agents roster op", /op="agents"/],
+  // ── THREAD CLOSING, removed 2026-08-18 (wiring plan Phase 4) ──────────────
+  // No close, no propose-then-confirm, no reopen. The operator pauses or ends an
+  // AGENT. ⚠ These are the sharpest entries in this table: a thread's state is
+  // exactly what an agent polls and waits on, so a single surviving sentence
+  // sends it looking for a transition that can never arrive — and the two op
+  // names left the enum, so a description mentioning one names a call the SDK
+  // answers with -32602.
+  ["the propose_close op", /propose_close/],
+  ["the close_thread op", /close_thread/],
+  // Verb + THREAD in either order, so "close the thread", "closing a thread",
+  // "the thread is closed" and "thread closed" all land. ⚠ Deliberately NOT a
+  // bare /clos/: "fail-closed", "the enum is closed" and "closes the window" are
+  // live, correct English about other things.
+  [
+    "closing a thread",
+    /\bclos(e|es|ed|ing)\s+(the\s+|a\s+|this\s+|that\s+|its\s+)?thread|\bthread('s)?\s+(is\s+|was\s+|been\s+)?clos(e|ed|ing)/i,
+  ],
+  // Reopen has no other meaning on this surface — the tool never had an op for
+  // reopening anything else.
+  ["reopening a thread", /\breopen/i],
+  // The reserved marker keys the close machinery stamped. They left the
+  // re-stamp list entirely, so a string naming one is naming nothing.
+  ["the close-proposal / reopen markers", /closeProposed|closeOutcome|threadReopened/],
+  // The thread lifecycle FIELDS `list_threads` / `get_thread` used to render.
+  // The columns survive as legacy storage; the surface must not report them,
+  // because reporting a state is how an agent learns to wait on it.
+  ["thread status / outcome vocabulary", /\bthread('s)?\s+(status|outcome)\b|\boutcome summar(y|ies)\b/i],
 ];
 
 describe("THE LAW is stated, in full, in the tool description", () => {
@@ -232,7 +259,6 @@ describe("the removed ops are absent from the published op set", () => {
       "list_threads",
       "get_thread",
       "create_thread",
-      "propose_close",
       "set_thread_mode",
     ]) {
       expect(DESCRIPTION, `op="${op}" lost its documentation`).toContain(

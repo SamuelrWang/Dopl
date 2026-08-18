@@ -39,22 +39,25 @@ const READS = profiles.OWN_CHANNEL_READ_OPS;
 // who is in the room, or reaches past the session's own channel — the v1.9 FIX H1 exfil surface,
 // whose reasoning M3 does not touch. `list` is the interesting one: it is read-only AND it stays,
 // because it enumerates every channel and DM this account can reach, so it is not own-channel
-// scoped at all. `close_thread` is in the enum only to earn a teaching refusal; it gates too.
+// scoped at all.
 // REQUIREMENT CHANGE, M4 (2026-08-05, F-139): `propose_close` and `milestone` LEFT this set.
 // They are own-channel CONTENT ops, strictly less powerful than the `post` that `auto_outbound`
-// already auto-allows into the same channel — a proposal closes nothing (the operator's confirm
-// is the consent point and is untouched) and a milestone carries no deliverable. Gating them
-// cost a click per exchange and removed no consent point. They are pinned under the OUTBOUND
-// half below; `close_thread` stays here, unconditionally, and is never conflated with its
-// proposal. Everything else in this list is unchanged from M3.
+// already auto-allows into the same channel — a proposal settled nothing (the operator's confirm
+// was the consent point and was untouched) and a milestone carries no deliverable. Gating them
+// cost a click per exchange and removed no consent point. The survivor is pinned under the
+// OUTBOUND half below.
+// ⚠ TWO OPS LEFT THE TOOL'S ENUM ENTIRELY with thread closing (wiring plan Phase 4,
+// 2026-08-18): `propose_close` and `close_thread`. `close_thread` was in this ALWAYS_GATED
+// list unconditionally and was never conflated with its proposal — the rule that put it there
+// still applies to anything that settles SHARED state. Naming ops the tool does not publish
+// would make this table read as coverage it does not have, so both are out.
 // The six named-agent / breakout ops that were listed here (`join_thread`, `leave_thread`,
 // `summon_agent`, `rename_agent`, `set_agent_status`, `disengage_agent`) are gone with the
 // tool's own enum (channels rollback §1), and naming ops the tool does not publish would make
 // this table read as coverage it does not have.
-const ALWAYS_GATED = ["open", "invite", "create_thread", "close_thread",
-  "set_thread_mode", "list"];
-// M4: the two ops that moved, kept as their own name so every test below can say which is which.
-const MARKERS = ["propose_close", "milestone"];
+const ALWAYS_GATED = ["open", "invite", "create_thread", "set_thread_mode", "list"];
+// M4: the op that moved, kept as its own name so every test below can say which is which.
+const MARKERS = ["milestone"];
 
 // ── the read set ──────────────────────────────────────────────────────────────────
 
@@ -120,23 +123,28 @@ test("M3: every channel-CHANGING op still gates at auto_both, exactly as before"
     "gate", "a cross-channel post is still the exfil surface");
   assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "open", direct: true, member: "evil@x" }, messageMode: "auto_both" }),
     "gate", "'read my own room' is not consent to open a DM with a stranger");
-  // M4: close_thread is named EXPLICITLY, because the op beside it in the enum now auto-allows.
-  // Closing settles a SHARED thread for both members; it is the operator's act, the server
-  // refuses it from an agent token, and no posture on this machine may stand in for that.
-  for (const messageMode of profiles.MESSAGE_MODES) {
-    for (const toolMode of profiles.TOOL_MODES) {
-      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "close_thread", channel: CH, thread: "T1" }, messageMode, toolMode }),
-        "gate", `close_thread @ msg=${messageMode} tool=${toolMode}`);
+  // ⚠ M4 named `close_thread` EXPLICITLY here, because the op beside it in the enum
+  // auto-allowed: closing settled a SHARED thread for both members, so no posture on this
+  // machine could stand in for the operator's act. Both ops left the enum with thread closing
+  // (wiring plan Phase 4, 2026-08-18). The rule outlives them and is what this now pins: an
+  // op this table does not classify resolves to `gate` in EVERY posture, which is the safe
+  // direction and the reason a deleted name never needs an explicit deny.
+  for (const op of ["close_thread", "propose_close"]) {
+    for (const messageMode of profiles.MESSAGE_MODES) {
+      for (const toolMode of profiles.TOOL_MODES) {
+        assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, thread: "T1" }, messageMode, toolMode }),
+          "gate", `${op} @ msg=${messageMode} tool=${toolMode}`);
+      }
     }
   }
 });
 
 // ── M4 (F-139): the own-channel MARKERS follow the OUTBOUND half ───────────────────
 
-test("M4: an own-channel propose_close / milestone is ALLOWED under auto_outbound / auto_both", () => {
+test("M4: an own-channel milestone is ALLOWED under auto_outbound / auto_both", () => {
   for (const op of MARKERS) {
     for (const channel of [undefined, CH]) { // absent means this session's own channel, as for a post
-      const input = { op, channel, thread: "T1", outcome: "completed", body: "one line" };
+      const input = { op, channel, thread: "T1", body: "one line" };
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_both" }), "allow", `${op} @ auto_both`);
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_outbound" }), "allow", `${op} @ auto_outbound`);
       // It puts CONTENT into the channel, so the INBOUND half does not answer it, and `ask` asks.
@@ -148,7 +156,7 @@ test("M4: an own-channel propose_close / milestone is ALLOWED under auto_outboun
 
 test("M4: a CROSS-channel marker keeps gating, and no TOOL posture can ever answer one", () => {
   for (const op of MARKERS) {
-    const away = { op, channel: "OTHER", thread: "T1", outcome: "completed", body: "x" };
+    const away = { op, channel: "OTHER", thread: "T1", body: "x" };
     for (const messageMode of profiles.MESSAGE_MODES) {
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: away, messageMode }), "gate", `${op} -> other channel @ ${messageMode}`);
     }
@@ -161,11 +169,13 @@ test("M4: a CROSS-channel marker keeps gating, and no TOOL posture can ever answ
 });
 
 test("M4: isOwnChannelMarker scopes by channel exactly as isOwnChannelPost does", () => {
-  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close" }, CH), true);
-  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close", channel: CH }, CH), true);
-  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close", channel: "OTHER" }, CH), false);
+  assert.equal(profiles.isOwnChannelMarker({ op: "milestone" }, CH), true);
   assert.equal(profiles.isOwnChannelMarker({ op: "milestone", channel: CH }, CH), true);
-  assert.equal(profiles.isOwnChannelMarker({ op: "close_thread", channel: CH }, CH), false, "the close is not the proposal");
+  assert.equal(profiles.isOwnChannelMarker({ op: "milestone", channel: "OTHER" }, CH), false);
+  // ⚠ The two ops thread closing took with it must never re-enter this ALLOW list — an
+  // unclassified op resolves to `gate`, which is the safe direction and where they belong.
+  assert.equal(profiles.isOwnChannelMarker({ op: "propose_close", channel: CH }, CH), false);
+  assert.equal(profiles.isOwnChannelMarker({ op: "close_thread", channel: CH }, CH), false);
   assert.equal(profiles.isOwnChannelMarker({ op: "post", channel: CH }, CH), false, "a post has its own predicate");
   assert.equal(profiles.isOwnChannelMarker({}, CH), false);
   assert.equal(profiles.isOwnChannelMarker(undefined, CH), false);

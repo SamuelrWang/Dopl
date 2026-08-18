@@ -94,8 +94,6 @@ export type {
   ChannelMessageKind,
   ChannelSessionState,
   ChannelThread,
-  ChannelThreadCloseProposed,
-  ChannelThreadClosed,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
   ChannelThreadPage,

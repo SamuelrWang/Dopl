@@ -303,10 +303,9 @@ export async function deleteChannel(
  * Post a message (or activity event) into a channel. ONE write — an idempotent
  * hit returns the stored row and writes nothing at all.
  *
- * ⚠ The return carries one notice, `threadClosed`, about THIS CALL rather than
- * the message. A closed thread still ACCEPTS the post (see `isThreadClosed`), so
- * the stored row is unchanged; only the caller is told. Set only on the path
- * that actually resolved the thread, so an IDEMPOTENT REPLAY does not carry it.
+ * ⚠ It used to carry one extra notice, `threadClosed`, about THIS CALL rather
+ * than the message — deleted with thread closing (wiring plan Phase 4,
+ * 2026-08-18). The return is now the stored message and nothing else.
  */
 export async function postMessage(
   ctx: ChannelContext,
@@ -354,17 +353,10 @@ export async function postMessage(
   // Addressing, the reserved-key anti-spoof fold and
   // task-key stamping all live in `service-writes-metadata.ts` — ONE place
   // decides what a caller may put in `metadata`.
-  const { metadata, threadClosed } = await resolvePostMetadata(
-    ctx,
-    channel,
-    input,
-    {
-      closeProposal: opts.closeProposal,
-      reopened: opts.reopened,
-      handoff: opts.handoff,
-      fanoutGroupId: opts.fanoutGroupId,
-    }
-  );
+  const { metadata } = await resolvePostMetadata(ctx, channel, input, {
+    handoff: opts.handoff,
+    fanoutGroupId: opts.fanoutGroupId,
+  });
 
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included).
@@ -394,10 +386,7 @@ export async function postMessage(
   }
 
   await repo.touchChannel(ctx.workspaceId, channel.id);
-  const message = await hydrateOne(row);
-  // ⚠ Added ONLY when true, so a post into an open thread (or none) returns
-  // byte-for-byte the object it always did.
-  return threadClosed ? { ...message, threadClosed: true } : message;
+  return hydrateOne(row);
 }
 
 async function hydrateOne(row: ChannelMessageRow): Promise<ChannelMessage> {

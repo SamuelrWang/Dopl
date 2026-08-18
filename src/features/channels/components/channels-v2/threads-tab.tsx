@@ -99,7 +99,8 @@ export function ThreadsTab({
  *
  * The subline is `lastActivityAt` — the newest message tagged for the thread,
  * derived off `channel_messages` and NEVER `channel_tasks.updated_at`, whose
- * only writers are close / set_mode / reopen (INVARIANTS §5). Absent means this
+ * only writer is `set_mode` since close and reopen were removed (INVARIANTS §5,
+ * wiring plan Phase 4, 2026-08-18). Absent means this
  * read did not derive it, which `formatRelativeTime` renders as an em dash
  * rather than as "no activity".
  */

@@ -150,12 +150,17 @@ test("buildFencedTurn requester: frames the GOAL as data and tells the agent to 
   assert.ok(out.includes("BEGIN-REQUEST-abc123") && out.includes("END-REQUEST-abc123"));
   assert.ok(out.includes("Ship the Q3 report"), "the goal body is included");
   assert.ok(/DRIVING a thread/i.test(out), "requester drives the thread");
-  // DECISION 2 (2026-08-04): the requester PROPOSES a close and a human confirms it. The old
-  // copy said "close the THREAD", and a close settles the SHARED thread for both members off
-  // one machine's judgment — while the operator may still have things to say in it.
-  assert.ok(/op "propose_close"/.test(out), "requester proposes the close when the goal is met");
-  assert.ok(/never close a thread yourself/i.test(out), "…and is told it never closes one");
-  assert.ok(!/\bclose the THREAD\b/.test(out), "the old direct-close instruction is gone");
+  // ⚠ THE STOP RULE OUTLIVED BOTH ITS PREVIOUS FORMS. v1 said "close the THREAD" (one
+  // machine settling a shared exchange); DECISION 2 (2026-08-04) replaced it with
+  // `op "propose_close"` plus a human confirm. Thread closing was removed entirely (wiring
+  // plan Phase 4, 2026-08-18), so the prompt now says STOP with no settlement attached — and
+  // must say the absence out loud, or an agent taught to file a proposal keeps looking for the
+  // op. The risk this paragraph exists for was never the paperwork: it is looping past a met
+  // goal.
+  assert.ok(/STOP and report to your operator/.test(out), "the requester stops at a met goal");
+  assert.ok(/no finished state/i.test(out), "…and is told the thread has none to set");
+  assert.ok(!/propose_close/.test(out), "the retired op is never ordered");
+  assert.ok(!/\bclose the THREAD\b/.test(out), "nor the older direct-close instruction");
   assert.ok(out.includes("Q3 report"), "task title appears when provided");
   assert.ok(/dopl_channel/.test(out), "delivery is via the dopl_channel tool");
 });

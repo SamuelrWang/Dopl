@@ -231,7 +231,7 @@ describe("Q13 · the not-threaded note recommends only WRITABLE threads", () => 
     expect(text).toContain("`t-for-me`");
   });
 
-  it("recommends nothing when every open thread belongs to other pairs", async () => {
+  it("recommends nothing when every thread belongs to other pairs", async () => {
     const text = await noteFor([thread("t-cd", "u-c", "u-d"), thread("t-ce", "u-c", "u-e")]);
 
     expect(text).toContain("NOT THREADED");
@@ -242,9 +242,20 @@ describe("Q13 · the not-threaded note recommends only WRITABLE threads", () => 
     expect(text).toContain('op="create_thread"');
   });
 
-  it("stays silent when the channel has no open threads at all", async () => {
-    const text = await noteFor([{ ...thread("t-old", ME, "u-b"), status: "closed" }]);
+  it("stays silent when the channel has no threads at all", async () => {
+    const text = await noteFor([]);
     expect(text).not.toContain("NOT THREADED");
+  });
+
+  // ⚠ INVERTED 2026-08-18 (wiring plan Phase 4). This case used to pass a
+  // LEGACY `closed` row and assert the note stayed silent, because the filter
+  // above it was `status === "open"`. Threads do not close, so that filter's
+  // only remaining effect was to withhold the caller's OWN readable, postable
+  // exchange from the one line that catches a silent tag drop.
+  it("offers a LEGACY closed thread of the caller's own — status is not read", async () => {
+    const text = await noteFor([{ ...thread("t-old", ME, "u-b"), status: "closed" }]);
+    expect(text).toContain("NOT THREADED");
+    expect(text).toContain("`t-old`");
   });
 
   it("recommends nothing when the post carries no author to check against", async () => {

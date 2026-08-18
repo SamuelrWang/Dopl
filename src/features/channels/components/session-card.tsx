@@ -11,20 +11,16 @@ import {
 import { Avatar } from "@/shared/ui/avatar";
 import { pendingRow } from "@/shared/ui/pending";
 import { isPendingId } from "../lib/optimistic-cache";
-import {
-  readCloseProposal,
-  splitSessionEntries,
-  type SessionGroup,
-} from "../lib/group-thread";
-import type { ChannelThread, ThreadOutcome } from "../types";
+import { splitSessionEntries, type SessionGroup } from "../lib/group-thread";
+import type { ChannelThread } from "../types";
 import {
   CALM_TERMINAL_NOTE,
   ModeBadge,
   StatusChip,
 } from "./session-card-status";
-// The close PROMPT and close FORM are their own module — one seam, "how a thread
-// gets closed"; this file is the card around it.
-import { CloseProposalPrompt, ThreadCloseForm } from "./session-card-close";
+// ⚠ `session-card-close.tsx` (the close PROMPT and the close FORM) was DELETED
+// with thread closing — wiring plan Phase 4, 2026-08-18. Threads do not close;
+// the operator pauses or ends an AGENT.
 import { isThreadParty, ReadOnlyThreadBadge } from "./thread-party";
 
 /**
@@ -52,23 +48,16 @@ export function SessionCard({
   highlighted = false,
   thread,
   currentUserId,
-  onCloseThread,
 }: {
   session: SessionGroup;
   /** Transient ring while the thread panel has navigated to this card. */
   highlighted?: boolean;
   /** Authoritative thread row (`channel_tasks`) carrying `createdBy` /
-   *  `targetUserId` / `status`; gates the Close control. Absent for a legacy
-   *  session, in which case no thread controls render. */
+   *  `targetUserId`. Absent for a legacy session, in which case the card
+   *  claims nothing about who the parties are. */
   thread?: ChannelThread;
-  /** Viewer's user id — controls show only for a thread's creator or target. */
+  /** Viewer's user id — decides the read-only badge for a non-party. */
   currentUserId?: string;
-  /** Close this thread with an outcome + optional summary. Absent hides Close. */
-  onCloseThread?: (
-    threadId: string,
-    outcome: ThreadOutcome,
-    summary: string
-  ) => Promise<void>;
 }) {
   // Per-entry collapse. Every entry present AT MOUNT starts collapsed; entries
   // that ARRIVE while mounted are deliberately NOT added — live activity the
@@ -92,26 +81,13 @@ export function SessionCard({
       return next;
     });
 
-  // ⚠ Only a thread's creator or target may close it, and only when the callback
-  // is wired. Reopen lives in the thread panel, never on the card.
-  const [closing, setClosing] = useState(false);
+  // ⚠ THE WHOLE CLOSE AFFORDANCE ENDED HERE (wiring plan Phase 4, 2026-08-18):
+  // the "Close thread" button, the propose-then-confirm PROMPT an agent's
+  // marked note raised, and the local "Keep open" dismissal that went with it.
+  // Threads do not close, so the card has no decision to offer — the operator
+  // pauses or ends an AGENT instead. `isThreadParty` survives for the read-only
+  // badge below, which is about who may POST, not about who may settle.
   const canManageThread = !!thread && isThreadParty(thread, currentUserId);
-  const showClose =
-    canManageThread && thread?.status === "open" && !!onCloseThread;
-  // PROPOSE-THEN-CONFIRM, human half. An agent posts a marked non-terminal note
-  // and its OPERATOR decides; this turns that note into a decision, with Close
-  // pre-filled to the proposed outcome.
-  //
-  // ⚠ Gated on the SAME rule as the close itself (`showClose`) — a prompt nobody
-  // can act on tells a third member somebody else's thread is finished and hands
-  // them a button that 403s. A stale proposal disappears with the control.
-  const proposal = showClose ? readCloseProposal(session) : null;
-  // ⚠ Dismissal is LOCAL and never persisted. "Keep open" means "not now", and
-  // the thread staying open IS the persisted state — a stored suppression makes
-  // the next real proposal invisible.
-  const [proposalDismissed, setProposalDismissed] = useState<string | null>(null);
-  const showProposal =
-    !!proposal && !closing && proposalDismissed !== proposal.message.id;
   // Provably someone else's thread. Without the row (legacy session) or a viewer
   // id the parties are unknown, so keep the normal footer rather than guess.
   const viewerIsOutsider = !!thread && !!currentUserId && !canManageThread;
@@ -281,15 +257,6 @@ export function SessionCard({
             {session.outcomeSummary}
           </span>
         )}
-        {showClose && !closing && (
-          <button
-            type="button"
-            onClick={() => setClosing(true)}
-            className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
-          >
-            Close thread
-          </button>
-        )}
         {viewerIsOutsider ? (
           <ReadOnlyThreadBadge />
         ) : (
@@ -300,26 +267,6 @@ export function SessionCard({
         )}
         <StatusChip status={session.status} />
       </footer>
-      {showProposal && proposal && (
-        <CloseProposalPrompt
-          proposal={proposal}
-          onKeepOpen={() => setProposalDismissed(proposal.message.id)}
-          onClose={() => setClosing(true)}
-        />
-      )}
-      {showClose && closing && thread && onCloseThread && (
-        <ThreadCloseForm
-          // The proposal's reason seeds the close summary — the agent already
-          // wrote the sentence, and retyping it turns a good outcome summary
-          // into an empty one.
-          initialSummary={proposal?.message.body.trim() ?? ""}
-          onSubmit={async (outcome, summary) => {
-            await onCloseThread(thread.id, outcome, summary);
-            setClosing(false);
-          }}
-          onCancel={() => setClosing(false)}
-        />
-      )}
     </article>
   );
 }

@@ -87,18 +87,17 @@ export interface ChannelMessage {
 }
 
 /**
- * POST result: stored message + `threadClosed`.
+ * POST result: the stored message.
  *
- * NON-OPTIONAL BY CONSTRUCTION (same additive-field discipline as `openingSeq`
- * / `echoSeq`): the server sends the key only on a post into a CLOSED thread,
- * and an older deployment sends none. Both must read `false`, never
- * `undefined` — `postMessage` normalizes on the way out.
- *
- * A closed thread still ACCEPTS the post: a report, not a failure.
+ * ⚠ IT CARRIED ONE MORE FIELD, `threadClosed`, until thread closing was removed
+ * (wiring plan Phase 4, 2026-08-18) — non-optional by construction, because the
+ * server sent the key only on a post into a closed thread and an older
+ * deployment sent none, and both had to read `false` rather than `undefined`.
+ * That normalize-an-additive-field-to-a-value discipline still governs
+ * `openingSeq`; this alias keeps the write result named apart from the read
+ * shape so a future post-time notice has somewhere to go.
  */
-export interface ChannelMessagePosted extends ChannelMessage {
-  threadClosed: boolean;
-}
+export type ChannelMessagePosted = ChannelMessage;
 
 export interface ChannelMember {
   channelId: string;
@@ -131,6 +130,7 @@ export interface ChannelThread {
   channelId: string;
   workspaceId: string;
   title: string;
+  /** ⚠ LEGACY, UNREAD — see {@link ThreadStatus}. Four fields, one story. */
   status: ThreadStatus;
   outcome: ThreadOutcome | null;
   mode: ThreadMode;
@@ -139,7 +139,6 @@ export interface ChannelThread {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
-  /** Null while open, or when closed without one. */
   outcomeSummary: string | null;
   /**
    * When the thread last saw real activity — the newest message tagged for it,
@@ -227,35 +226,17 @@ export interface ChannelThreadCreated {
 }
 
 /**
- * `closeChannelThread` result: closed thread + `echoSeq`, the seq of the
- * `task_finished` / `task_failed` marker the close posted — `openingSeq`'s
- * mirror at the other end of a thread, since closing writes a message and so
- * moves the channel cursor. ⚠ Guessing it (last known seq + 1) once landed the
- * cursor PAST a peer reply already in the channel; the hold waited forever.
+ * ⚠ TWO RESULT SHAPES ENDED HERE with thread closing (wiring plan Phase 4,
+ * 2026-08-18): `ChannelThreadClosed` (thread + `echoSeq`, the seq of the
+ * `task_finished` / `task_failed` marker a close posted) and
+ * `ChannelThreadCloseProposed` (thread + `markerSeq` + the proposed outcome).
  *
- * `null` = older deployment, or a failed marker post. Both mean: do NOT derive
- * a cursor from it, look it up.
+ * The rule they both carried is live on {@link ChannelThreadCreated.openingSeq}
+ * and is the reason they existed at all: **a write that also posts a message
+ * hands its seq BACK.** Guessing one (last known seq + 1) once armed a hold past
+ * a peer reply already in the channel and the wait never returned. `null` means
+ * look it up, never "one past the last seq you saw".
  */
-export interface ChannelThreadClosed {
-  thread: ChannelThread;
-  echoSeq: number | null;
-}
-
-/**
- * Close-PROPOSAL result. ⚠ An agent may not close a thread — closing settles
- * the shared exchange for both members and is the human's call — so it proposes
- * and the human's surfaces render a confirmable prompt.
- *
- * NOTHING ABOUT THE THREAD CHANGES: `thread` comes back still open; a proposal
- * writes only a marked, non-terminal message. `markerSeq` mirrors
- * `ChannelThreadClosed.echoSeq` so a caller advances its cursor past its own
- * marker instead of guessing. Null = the marker post failed; safe to retry.
- */
-export interface ChannelThreadCloseProposed {
-  thread: ChannelThread;
-  markerSeq: number | null;
-  outcome: ThreadOutcome;
-}
 
 export interface ChannelMessageInput {
   body: string;

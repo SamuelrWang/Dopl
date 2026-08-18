@@ -24,6 +24,13 @@ import "server-only";
  * whether the other side's card reads calm or red, and the message receipt shows
  * Declined / Interrupted off the same bits. ⚠ Reserved: a member able to set
  * them on someone else's thread could fabricate that thread's outcome.
+ *
+ * ⚠ THESE SURVIVED PHASE 4 (2026-08-18) WHILE THE CLOSE MARKERS DID NOT, and the
+ * difference is what they describe. A calm flag is about ONE MEMBER'S SESSION
+ * ending — `declined` is still written by the consent DENY echo in the desktop's
+ * `trigger.js`, `session_ended` by the operator End — and a session ending is not
+ * an outcome for the shared thread. `closeProposed` / `closeOutcome` /
+ * `threadReopened` described a thread SETTLEMENT, which no longer exists.
  */
 export const CALM_FLAG_KEYS = [
   "declined",
@@ -60,40 +67,24 @@ export function takeCalmFlags(
 }
 
 /**
- * Keys a CLOSE PROPOSAL stamps. ⚠ Reserved on the same terms as `runtime` /
- * `session_id` — a caller able to set them could raise a "Close?" prompt on a
- * thread it is not a party to, in front of a human whose one click settles the
- * exchange for both members.
+ * ⚠ TWO MARKER SETS ENDED HERE with thread closing (wiring plan Phase 4,
+ * 2026-08-18), and they LEFT the reserved list rather than staying in it with no
+ * writer:
  *
- * Two keys because the prompt prefills the proposed outcome: `closeProposed` is
- * what the surfaces match on, `closeOutcome` is what the confirm hands straight
- * back to `closeTask`.
+ *  - `CLOSE_PROPOSAL_KEYS` = `closeProposed` / `closeOutcome`, stamped by the
+ *    deleted `service-tasks-propose.ts › proposeTaskClose` and by the deleted
+ *    stale-threads cron. They raised a "Close?" prompt on a human's card.
+ *  - `REOPEN_MARKER_KEY` = `threadReopened`, stamped by the deleted
+ *    `service-tasks-lifecycle.ts › reopenTask` as the echo that rang the
+ *    `channel_messages` doorbell for a status change `channel_tasks` (in no
+ *    realtime table set) could not deliver itself.
+ *
+ * ⚠ WHY THESE LEAVE AND {@link CALM_FLAG_KEYS} STAYS. The strip list exists to
+ * keep a key UNFORGEABLE for as long as anything RENDERS it — that is why the
+ * dead agent-attribution keys are still stripped with no writer left (stored rows
+ * still render them, INVARIANTS §5). Nothing renders a close prompt or a reopen
+ * notice any more: the prompt component, `readCloseProposal` and
+ * `isThreadReopenedMarker` are all deleted in the same change. A key nobody reads
+ * is not a forgery surface. **If a reader ever comes back, the key comes back
+ * here FIRST.**
  */
-export const CLOSE_PROPOSAL_KEYS = ["closeProposed", "closeOutcome"] as const;
-
-/**
- * The key a REOPEN ECHO stamps.
- *
- * ⚠ Why an echo exists: `channel_tasks` is in NEITHER realtime table set
- * (`constants.ts` `CHANNEL_TABLES`, `main/ui-sync.js` `SYNC_TABLES`). A close
- * gets away with it only because it POSTS — the terminal marker rings the
- * `channel_messages` doorbell and peers refetch the thread row behind it.
- * Without an echo, the peer's ThreadPanel row, card chip and sidebar dot read
- * "closed" until an unrelated message lands. ⚠ The fix is the echo, NOT adding
- * `channel_tasks` to the publication — `channel_messages` is already subscribed.
- *
- * ⚠ Its OWN key, never a reused one: a reopen is not a close, not a proposal and
- * not a session ending, and conflating them makes a close → reopen → close
- * transcript read as two closes with a stray line between.
- *
- * ⚠ Reserved, and the sharpest case of the rule: the marker's whole job is to
- * say "this settled exchange is live again", so a member who could stamp it in
- * raw metadata could reopen somebody else's thread ON SCREEN without the row
- * changing. `reopenTask` checks creator-or-target before asking for the stamp,
- * and the stamp lands only onto a surviving thread tag on top of that.
- *
- * ONE key, not two. A reopen prompts nothing and settles nothing, so there is no
- * value for a follow-up to read. The outcome it UNDID is nulled off the row, so
- * it is preserved in the echo's BODY where the transcript can show it.
- */
-export const REOPEN_MARKER_KEY = "threadReopened";

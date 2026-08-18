@@ -170,9 +170,6 @@ export type ChannelMessageCreateInput = z.infer<
 /** Task execution mode. `set_task_mode` governs the creator's own machine. */
 const TaskModeSchema = z.enum(["interactive", "autonomous"]);
 
-/** How a closed task ended. */
-const TaskOutcomeSchema = z.enum(["completed", "failed"]);
-
 /**
  * Create a task. `title` = queryable header; `body` = initial request (posted
  * as the task's first message, addressed to `toUserId`); `mode` defaults
@@ -263,29 +260,22 @@ export function isTaskFanOutInput(
 }
 
 /**
- * Update a task. Authz per op:
- *   - `close` — creator or target, HUMAN LANE ONLY.
- *   - `propose_close` — creator or target; the agent's terminal act.
+ * Update a task. ONE op survives:
  *   - `set_mode` — creator only.
- *   - `reopen` — creator or target, web-only (no MCP counterpart); no payload.
  *
- * Discriminated union so ops can't bleed fields. `propose_close` mirrors
- * `close`'s payload on purpose: the confirming surface hands those same two
- * values straight to `close`.
+ * ⚠ THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). The `close`,
+ * `propose_close` and `reopen` arms are DELETED along with the services behind
+ * them; a stale caller sending one now fails the discriminator with an invalid
+ * enum value rather than reaching a handler. The operator pauses or ends an
+ * AGENT, not a thread.
+ *
+ * ⚠ STILL A DISCRIMINATED UNION AT ONE ARM, ON PURPOSE. The wire shape is
+ * `{op, …}` and every installed caller sends it; collapsing to a bare object
+ * would make `op` optional-by-omission and accept a body that names no op at
+ * all. A second op goes in beside this one.
  */
 export const TaskUpdateSchema = z.discriminatedUnion("op", [
-  z.object({
-    op: z.literal("close"),
-    outcome: TaskOutcomeSchema,
-    summary: z.string().trim().max(2000).optional(),
-  }),
-  z.object({
-    op: z.literal("propose_close"),
-    outcome: TaskOutcomeSchema,
-    summary: z.string().trim().max(2000).optional(),
-  }),
   z.object({ op: z.literal("set_mode"), mode: TaskModeSchema }),
-  z.object({ op: z.literal("reopen") }),
 ]);
 export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
 

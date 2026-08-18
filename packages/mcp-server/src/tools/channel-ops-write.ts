@@ -25,7 +25,7 @@ import type {
 } from "@dopl/client";
 import { ok, err, type ToolResponse } from "./respond";
 // "Did it thread?" — the question a sender cannot otherwise settle.
-import { closedThreadNote, threadLinkageNote } from "./channel-post-linkage";
+import { threadLinkageNote } from "./channel-post-linkage";
 // "What did the ADDRESSING do?" — conflict note + addressed/chat/unaddressed line.
 import {
   CHAT_ADDRESSED_REFUSAL,
@@ -75,7 +75,7 @@ const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
  */
 function lifecycleKindRefusal(kind: string): ToolResponse {
   return err(
-    `Nothing was sent: \`kind="${kind}"\` is a LIFECYCLE MARKER, not a way to say something, and it is not yours to post. Those three kinds ("task_started" / "task_finished" / "task_failed") are written by the runtime that starts and stops a session and by a thread close, and the other member's thread card renders a terminal marker as a STATUS CHIP — its body is not shown at all, so an answer sent this way is delivered nowhere. Re-send it as an ordinary message: drop \`kind\` entirely and post the same text. Everything substantive you send, your FINAL ANSWER included, is a plain message. To mark that a step LANDED, that is dopl_channel(op="milestone", thread="<id>", body="<one line>") — a marker, not a delivery.`,
+    `Nothing was sent: \`kind="${kind}"\` is a LIFECYCLE MARKER, not a way to say something, and it is not yours to post. Those three kinds ("task_started" / "task_finished" / "task_failed") are written by the runtime that starts and stops a session, and the other member's thread card renders a terminal marker as a STATUS CHIP — its body is not shown at all, so an answer sent this way is delivered nowhere. Re-send it as an ordinary message: drop \`kind\` entirely and post the same text. Everything substantive you send, your FINAL ANSWER included, is a plain message. To mark that a step LANDED, that is dopl_channel(op="milestone", thread="<id>", body="<one line>") — a marker, not a delivery.`,
   );
 }
 
@@ -258,10 +258,9 @@ export async function opPost(
       `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
       ...addressLines,
       ...(linkage ? [linkage] : []),
-      // ⚠ Read off the SERVER's answer, never guessed. A closed thread still
-      // ACCEPTS the post — warn, never refuse: a 403 breaks the legitimate
-      // final-word-after-the-close-echo pattern.
-      ...(message.threadClosed ? [closedThreadNote(ch.id)] : []),
+      // ⚠ A `closedThreadNote(ch.id)` line rode here whenever the server
+      // answered `threadClosed`. Both went with thread closing (wiring plan
+      // Phase 4, 2026-08-18): nothing settles a thread, so nothing can raise it.
       // ⚠ Whether the await outlives this turn is `channel-wake-guidance.ts`'s
       // to assert, off the caller's observed runtime — never promise it here.
       //
@@ -272,7 +271,7 @@ export async function opPost(
         ch.id,
         message.seq,
         opts.runtime ?? null,
-        `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first (op="read" for new activity — a working agent posts task_progress as it goes; op="get_thread" for status). Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when the thread is closed or failed, or when nothing has come from that member for ~30+ minutes.`,
+        `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first with op="read" for new activity — a working agent posts task_progress as it goes. Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`,
       ),
     ].join("\n"),
   );

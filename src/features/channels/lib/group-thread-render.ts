@@ -1,8 +1,7 @@
 /**
  * Thread grouping — THE READ SIDE. Everything the session card asks of a session
  * AFTER `groupThread` built it: which lane an entry renders in, whether a
- * terminal marker's body is content, what the live close proposal is, how a
- * header line is trimmed.
+ * terminal marker's body is content, how a header line is trimmed.
  *
  * ⚠ These change when the CARD changes; the state machine changes when the
  * transcript's shape does. Nothing here reads or writes a `Draft`, and nothing
@@ -11,11 +10,9 @@
  */
 
 import type { ChannelMessage } from "../types";
-import type { CloseProposal } from "./group-thread-types";
 import {
   calmTerminalStatus,
   isSessionEndedMarker,
-  isThreadReopenedMarker,
 } from "./group-thread-markers";
 
 /** Collapse whitespace and cap length with an ellipsis (header previews). */
@@ -26,24 +23,13 @@ export function truncateSummary(text: string, max = 120): string {
 }
 
 /**
- * The LATEST close proposal in a session, or null. ⚠ Latest, not first — a long
- * exchange can be proposed on, continue, and be proposed on again, and the live
- * prompt is the most recent.
+ * ⚠ `readCloseProposal` USED TO LIVE HERE — it walked a session BACKWARDS for
+ * the newest `closeProposed` marker, because a long exchange could be proposed
+ * on, continue, and be proposed on again, and the live prompt was the most
+ * recent. DELETED with thread closing (wiring plan Phase 4, 2026-08-18): nothing
+ * writes the marker, no card raises the prompt, and the two keys left the
+ * reserved list with it.
  */
-export function readCloseProposal(session: {
-  entries: ChannelMessage[];
-}): CloseProposal | null {
-  for (let i = session.entries.length - 1; i >= 0; i -= 1) {
-    const message = session.entries[i];
-    if (message.metadata.closeProposed !== true) continue;
-    const outcome = message.metadata.closeOutcome;
-    return {
-      message,
-      outcome: outcome === "failed" ? "failed" : "completed",
-    };
-  }
-  return null;
-}
 
 /**
  * The bodies the RUNTIME and the close route generate for a terminal marker.
@@ -54,11 +40,13 @@ export function readCloseProposal(session: {
  * the difference renderable.
  *
  * Enumerated rather than guessed at by length, because the guess fails in both
- * directions: "Task failed" is short and generated, and a one-line human close
- * summary is short and real. The sources are `channel-post.postTaskEvent`'s
- * `bodies` map, `session-window.onEnded`'s derived bodies, `session-effects`'
- * `endLifecycle`, and `service-tasks.closeTask`'s default echo — the four places
- * that write a terminal marker at all.
+ * directions: "Task failed" is short and generated, and a one-line human note is
+ * short and real. The live sources are `channel-post.postTaskEvent`'s `bodies`
+ * map, `session-window.onEnded`'s derived bodies and `session-effects`'
+ * `endLifecycle`. ⚠ A fourth writer, the close route's default echo, is GONE
+ * (wiring plan Phase 4, 2026-08-18) — but `"Task completed"` / `"Task failed"`
+ * STAY in this set: rows it already wrote are still in the transcript and would
+ * otherwise be promoted into the reply lane as if they were somebody's words.
  */
 const GENERATED_TERMINAL_BODIES: ReadonlySet<string> = new Set([
   "Finished this request.",
@@ -111,9 +99,10 @@ export interface SessionLanes {
   /** Chat replies (plus a terminal marker that carried real content). */
   replies: ChannelMessage[];
   /**
-   * STATUS lines about the thread itself, not about the work: the
-   * server-stamped reopen echo and the `session_ended` marker (F-183).
-   * Rendered as a calm one-liner — never a ✓, never a deliverable. See
+   * STATUS lines about the exchange itself, not about the work: today just the
+   * `session_ended` marker (F-183) — the server-stamped REOPEN echo shared this
+   * lane until thread closing was removed (Phase 4, 2026-08-18). Rendered as a
+   * calm one-liner — never a ✓, never a deliverable. See
    * {@link splitSessionEntries}.
    */
   notices: ChannelMessage[];
@@ -137,16 +126,20 @@ export interface SessionLanes {
  * was two things at once here: an agent's accomplishment log, and the carrier
  * for reserved server-stamped markers that must never be terminal. The lane
  * split treated the second as the first, so the REOPEN echo — the message whose
- * whole content is "this settled exchange is live again" — rendered under a
+ * whole content was "this settled exchange is live again" — rendered under a
  * heading called "Milestones" with a green ✓ beside it. On a thread that had
- * just come back from closed, the one glyph on screen said "done".
+ * just come back from closed, the one glyph on screen said "done". ⚠ That echo
+ * is GONE (thread closing was removed, wiring plan Phase 4, 2026-08-18) and the
+ * lane is not: `session_ended` is the same shape of claim, and the incident is
+ * about the SHAPE.
  *
  * The `notices` lane is that distinction made structural, and it is drawn by
  * FLAG BEFORE STRING like every other status/content line in this module
- * ({@link substantiveEndBody} draws the same one for terminal bodies): the echo's
- * copy is server-generated and already has two forms, so a renderer that matched
- * on its wording would regress to the ✓ the first time the copy improved. An
- * ordinary agent milestone carries no reserved marker and is untouched.
+ * ({@link substantiveEndBody} draws the same one for terminal bodies): the
+ * marker's copy is server-generated and already has more than one form, so a
+ * renderer that matched on its wording would regress to the ✓ the first time the
+ * copy improved. An ordinary agent milestone carries no reserved marker and is
+ * untouched.
  */
 export function splitSessionEntries(entries: ChannelMessage[]): SessionLanes {
   const milestones: ChannelMessage[] = [];
@@ -154,12 +147,12 @@ export function splitSessionEntries(entries: ChannelMessage[]): SessionLanes {
   const notices: ChannelMessage[] = [];
   for (const entry of entries) {
     if (entry.kind === "task_progress") {
-      // F-183: BOTH reserved markers are status, not accomplishments. The
+      // F-183: a reserved status marker is not an accomplishment. The
       // `session_ended` marker additionally drives `calmEndStatus` — that is
       // CURRENT STATE (cleared by a later restart), while this lane entry is
       // chronological HISTORY; they are different jobs, so the marker moves
       // lanes here and the state note stays.
-      if (isThreadReopenedMarker(entry) || isSessionEndedMarker(entry)) {
+      if (isSessionEndedMarker(entry)) {
         notices.push(entry);
       } else milestones.push(entry);
     } else if (entry.kind === "message") replies.push(entry);

@@ -131,7 +131,9 @@ function register(internals) {
 
   ipcMain.handle('session:interrupt', (e) => withSession(e, (s) => engine.dispatch(s, { type: 'interrupt' })));
   ipcMain.handle('session:end', (e) => withSession(e, (s) => engine.dispatch(s, { type: 'end' })));
-  ipcMain.handle('session:close-task', (e, p) => withSession(e, (s) => engine.dispatch(s, { type: 'close_task', outcome: p && p.outcome, summary: p && p.summary })));
+  // ⚠ `session:close-task` was handled here and is DELETED (wiring plan Phase 4, 2026-08-18)
+  // along with the renderer's close panel, the reducer's `close_task` branch and the server's
+  // close route. Threads do not close; what this window ends is the AGENT ('session:end').
 
   // ── v2.9 THE TWO AXES, replacing the single `session:set-auto-approve` channel (which is
   // DELETED, not aliased — the renderer ships in the same bundle, so there is no version to

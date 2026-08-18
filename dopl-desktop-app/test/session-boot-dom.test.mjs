@@ -68,7 +68,7 @@ globalThis.doplSession = {
   // FIX F10 is about (the tests below add it, then assert the stamp waits for it).
   permission: (...a) => sent.push(["permission", ...a]),
   interrupt: () => sent.push(["interrupt"]),
-  end() {}, closeTask() {}, consentDecision() {}, setAutoApprove() {},
+  end() {}, consentDecision() {}, setAutoApprove() {},
   folder: {
     get: () => Promise.resolve({ label: "~/Downloads" }),
     choose: () => Promise.resolve({ label: null }),

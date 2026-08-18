@@ -147,9 +147,12 @@ describe("substantiveEndBody — status is not content", () => {
 // ── 3. the other two content shapes the belt exists for ────────────────────────
 
 describe("the belt covers every terminal that carries real words", () => {
-  it("a human's CLOSE SUMMARY (the echo's body) renders", () => {
-    // `closeTask` writes the operator's one-line outcome as the echo body — the
-    // most-read sentence on a finished thread.
+  it("a LEGACY close summary (the echo's body) still renders", () => {
+    // ⚠ `closeTask` wrote the operator's one-line outcome as the echo body and
+    // is DELETED (wiring plan Phase 4, 2026-08-18) — nothing writes one now.
+    // The case stays because the ROWS stay: a terminal marker whose body is not
+    // one of the generated ones is somebody's words, and the belt is what gives
+    // it a render path. The desktop's `bodyOverride` ends are the live writer.
     const SUMMARY = "Shipped in 1.8.5; the listener now probes the bundled binary.";
     const session = onlySession(
       groupThread([

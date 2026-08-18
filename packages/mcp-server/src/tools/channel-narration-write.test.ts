@@ -15,7 +15,6 @@ import type { DoplClient } from "@dopl/client";
 import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import {
-  opProposeClose,
   opCreateThread,
   opSetThreadMode,
 } from "./channel-ops-threads";
@@ -239,68 +238,15 @@ const THREAD = {
   targetUserId: "u-me",
 };
 
-// ⚠ Proposing is allowed to a thread's TARGET, so the title this result renders
-// is routinely the PEER's 200-char, newline-tolerant text, not the caller's.
-describe("Q1-B/C write · propose_close — a title the PEER typed", () => {
-  function closingClient(title: string): DoplClient {
-    return stubClient({
-      listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
-      // The proposal writes the marked note the operator's prompt renders from,
-      // so the client hands back where it landed.
-      proposeChannelThreadClose: vi.fn(async () => ({
-        thread: { ...THREAD, title },
-        markerSeq: null,
-        outcome: "completed",
-      })),
-    });
-  }
-
-  it("neutralizes the title and frames the result FIRST", async () => {
-    const text = (
-      await opProposeClose(closingClient(FORGERY), "general", "thread-1", "completed")
-    ).content[0].text;
-
-    expectContained(text);
-    expectNoForgedStructure(text);
-    // ⚠ Framing is a HEADER — read BEFORE the peer's text, never after.
-    expect(text.startsWith(UNTRUSTED_THREAD_HEADER)).toBe(true);
-    expect(text.indexOf(UNTRUSTED_THREAD_HEADER)).toBeLessThan(text.indexOf(MARKER));
-  });
-
-  it("still names a legitimate thread, and the caller's own summary survives whole", async () => {
-    const text = (
-      await opProposeClose(
-        closingClient("Ship the listener fix"),
-        "general",
-        "thread-1",
-        "completed",
-        "Landed in 1.7.16; the listener now survives a token refresh.",
-      )
-    ).content[0].text;
-
-    expect(text).toContain("Proposed closing thread **`Ship the listener fix`**");
-    // ⚠ Summary is the AGENT'S OWN prose from this call — deliberately NOT
-    // neutralized, so it keeps its punctuation and full length.
-    expect(text).toContain(
-      "Landed in 1.7.16; the listener now survives a token refresh.",
-    );
-  });
-
-  it("a not-found error cannot be forged by the thread id it echoes", async () => {
-    const client = stubClient({
-      listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
-      proposeChannelThreadClose: vi.fn(async () => {
-        throw Object.assign(new Error("missing"), { status: 404 });
-      }),
-    });
-
-    const res = await opProposeClose(client, "general", FORGERY, "completed");
-
-    expect(res.isError).toBe(true);
-    expectContained(res.content[0].text);
-    expectNoForgedStructure(res.content[0].text);
-  });
-});
+// ⚠ A `Q1-B/C write · propose_close — a title the PEER typed` block lived here
+// and went with thread closing (wiring plan Phase 4, 2026-08-18). It was the
+// sharpest untrusted-write case on this tool for a reason worth keeping: the
+// PROPOSAL was allowed to a thread's TARGET, so its result routinely rendered
+// the 200-char, newline-tolerant title the PEER had typed — which is why that
+// path carried both an inline code span AND the header, FIRST. Nothing left in
+// `channel-ops-threads.ts` renders a title the caller did not just type, so the
+// live instance of the same rule is `create_thread`'s below (peer display name)
+// and the read side's `list_threads` / `get_thread`.
 
 describe("Q1 write · set_thread_mode and create_thread", () => {
   it("set_thread_mode's title is a span (no header — the route is creator-only)", async () => {

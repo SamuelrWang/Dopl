@@ -20,30 +20,21 @@ import { isFirstClassThreadId } from "./channel-render-threads";
 /** Fallback for peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 
-/** Open thread ids listed in the not-threaded warning before it truncates. */
+/** Thread ids listed in the not-threaded warning before it truncates. */
 const OPEN_THREAD_WARN_MAX = 5;
 
 /**
- * THE POST LANDED IN A CLOSED THREAD. Spends `threadClosed` off the post response.
+ * ⚠ `closedThreadNote()` USED TO LIVE HERE — the line a post spent
+ * `threadClosed` on. It went with thread closing (wiring plan Phase 4,
+ * 2026-08-18) and so did the server field behind it.
  *
- * ⚠ WARNING, NOT A FAILURE — wording must carry that or the agent retries a post
- * that already landed (it IS stored, attributed, and on the thread's card).
- *
- * ⚠ Copy is scoped to the PASSIVE lane only, because that is all any layer
- * enforces: an updated desktop skips the passive thread-lane wake off a status
- * cache lagging up to ~5 min, an older build still wakes, an ADDRESSED post
- * delivers either way, and the server accepts the post regardless of status.
- * Never claim a silence nothing guarantees.
- *
- * ⚠ Reopen is named as a HUMAN action: the route exists
- * (`PATCH /tasks/[id] {op:"reopen"}`) and the web drives it, but this tool has
- * no `reopen` op — "reopen it" sends the agent hunting for an op that does not
- * exist. ⚠ Address a PERSON only; naming an agent-addressing param here teaches
- * an argument the schema refuses with -32602.
+ * Two rules it carried are worth not relearning. **WARNING, NOT A FAILURE**: the
+ * post LANDED, and wording that reads as an error gets an agent to retry a
+ * write that already succeeded. **Never claim a silence nothing enforces**: its
+ * copy was scoped to the passive lane alone, because an updated desktop skipped
+ * the passive wake off a status cache up to ~5 min stale while an older build
+ * still woke, and an ADDRESSED post delivered either way.
  */
-export function closedThreadNote(channelId: string): string {
-  return `THAT THREAD IS CLOSED, and the post landed anyway (it is stored, attributed, and on the thread's card). Closing records the OUTCOME and stops the thread's PASSIVE routing: peers' sessions stop being woken by activity in it, so an unaddressed post here can sit unread. It does NOT stop the thread accepting posts, and addressing a PERSON still reaches them: to="<member>" triggers that member's machine, and their side decides what runs. There is no way to address an agent by name. If this was a final word after the close echo, you are done. If it is new work, open a new thread with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="..."), or ask a human to reopen the closed one (reopening is a web action; this tool has no reopen op).`;
-}
 
 /**
  * ⚠ Answer is read back off the STORED message, not off the request:
@@ -59,10 +50,10 @@ export function closedThreadNote(channelId: string): string {
  *
  * Three shapes, descending urgency:
  *   1. asked for a thread and got none — the tag-drop signature;
- *   2. no thread but caller has open ones — reads as a NEW request;
+ *   2. no thread but the caller has some — reads as a NEW request;
  *   3. threaded — name it so the sender can check.
- * No open threads + unthreaded post says nothing; open threads belonging only to
- * OTHER pairs says so without offering them.
+ * No threads + unthreaded post says nothing; threads belonging only to OTHER
+ * pairs says so without offering them.
  */
 export async function threadLinkageNote(
   client: DoplClient,
@@ -119,12 +110,12 @@ export async function threadLinkageNote(
     // converge on the same `metadata.taskId`, and `mismatch` fires only when
     // `askedThread` is present AND differs). The server is the only party that
     // knows. State the RULE too, not just the fact: `resolveInheritableTask`
-    // attaches the ONE open thread between these two members and returns null
+    // attaches the ONE thread between these two members and returns null
     // when `candidates.length !== 1`, so opening a second thread makes
     // inheritance stop — which reads as a regression unless the rule is known.
     const inherited =
       !askedThread
-        ? ` You named no thread — the server attached this to your one open exchange with that member. Pass thread=${safeLanded} explicitly to keep it there: once a SECOND thread is open between you, nothing is inherited and an untagged post reads as a new request.`
+        ? ` You named no thread — the server attached this to your one exchange with that member. Pass thread=${safeLanded} explicitly to keep it there: once a SECOND thread exists between you, nothing is inherited and an untagged post reads as a new request.`
         : "";
     return `THREADED into ${named} — the other side reads this as a continuation of that exchange.${mismatch}${inherited}`;
   }
@@ -149,14 +140,19 @@ export async function threadLinkageNote(
   // already succeeded, the threads it can suggest are the most recently active
   // ones, and it never says a thread does not exist — it says this post is not
   // in one, which is true whatever the page held.
-  let open;
+  // ⚠ NO `status === "open"` FILTER any more (wiring plan Phase 4,
+  // 2026-08-18). Threads do not close, so the only rows it could exclude are
+  // legacy ones settled before the removal — and those are still readable,
+  // still postable, and still the caller's own exchange. `channel_tasks.status`
+  // is legacy and unread (INVARIANTS §5); this was one of its readers.
+  let all;
   try {
     const page = await client.listChannelThreads(channelId);
-    open = page.threads.filter((t) => t.status === "open");
+    all = page.threads;
   } catch {
     return null;
   }
-  if (open.length === 0) return null;
+  if (all.length === 0) return null;
 
   // ⚠ RECOMMEND ONLY WHAT THE CALLER CAN WRITE INTO. Thread READS are
   // channel-transparent (`listChannelTasks` unfiltered) but thread WRITES are
@@ -169,12 +165,12 @@ export async function threadLinkageNote(
   // against — no round-trip, and no way to disagree with the gate.
   const me = message.authorUserId;
   const mine = me
-    ? open.filter((t) => t.createdBy === me || t.targetUserId === me)
+    ? all.filter((t) => t.createdBy === me || t.targetUserId === me)
     : [];
   if (mine.length === 0) {
     // ⚠ COUNT only, never another pair's title — nothing peer-authored renders
     // on this branch beyond the channel name, so it needs no header.
-    return `NOT THREADED — this reads as a NEW request on the other side, not a continuation. **${safeChannelName}** has ${open.length} open thread${open.length === 1 ? "" : "s"}, but ${open.length === 1 ? "it belongs" : "they belong"} to other members — a thread accepts posts only from its creator or the member it is addressed to, so re-posting into one would be refused. Leave this standalone, or open your own with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="...").`;
+    return `NOT THREADED — this reads as a NEW request on the other side, not a continuation. **${safeChannelName}** has ${all.length} thread${all.length === 1 ? "" : "s"}, but ${all.length === 1 ? "it belongs" : "they belong"} to other members — a thread accepts posts only from its creator or the member it is addressed to, so re-posting into one would be refused. Leave this standalone, or open your own with dopl_channel(op="create_thread", channel="${channelId}", title="...", body="...", to="...").`;
   }
   // Same peer-typed title, same unframed narration line — neutralize.
   const shown = mine.slice(0, OPEN_THREAD_WARN_MAX).map((t) => {
@@ -185,5 +181,5 @@ export async function threadLinkageNote(
     mine.length > shown.length ? `; +${mine.length - shown.length} more` : "";
   // ⚠ Only branch that renders peer TEXT, so only branch that is framed —
   // header FIRST, above the titles it frames.
-  return `${UNTRUSTED_THREAD_HEADER}\n\nNOT THREADED — this reads as a NEW request on the other side, not a continuation, and you have ${mine.length} open thread${mine.length === 1 ? "" : "s"} in **${safeChannelName}** you can post into: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
+  return `${UNTRUSTED_THREAD_HEADER}\n\nNOT THREADED — this reads as a NEW request on the other side, not a continuation, and you have ${mine.length} thread${mine.length === 1 ? "" : "s"} in **${safeChannelName}** you can post into: ${shown.join("; ")}${more}. If this belongs to one, re-post it with thread="<that id>".`;
 }

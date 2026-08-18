@@ -94,16 +94,20 @@ export interface ChannelTaskPage {
  * OPENED in. Threads no longer close, so nothing ever leaves this list and
  * opening order buries the live exchange under whatever was started most
  * recently. WHY NOT `channel_tasks.updated_at` either: {@link updateTask} is
- * its only writer, reached from close / set_mode / reopen alone, so it equals
- * `created_at` for every thread that was never closed — that was C-1, and the
- * fix is not to write to it more.
+ * its only writer, and since Phase 4 (2026-08-18) `set_mode` is its only
+ * caller, so it equals `created_at` for nearly every thread — that was C-1, and
+ * the fix is not to write to it more.
  *
- * THE CLOCK IS `channel_messages`, DERIVED ONCE, IN SQL. `channel_tasks_activity`
- * (migration `20260818120000`) carries the identical lateral
- * `channel_tasks_stale` uses — same definition of activity, written once, so the
- * ordering the sidebar sees and the ordering `list_threads` renders cannot
- * disagree. ⚠ Do not re-sort the result anywhere; the ORDER is what the LIMIT
- * clips against, so a caller that re-sorts is looking at the wrong 200 rows.
+ * THE CLOCK IS `channel_messages`, DERIVED ONCE, IN SQL, AND NOW THERE IS ONLY
+ * ONE OF IT. `channel_tasks_activity` (migration `20260818120000`) is the whole
+ * definition of thread activity. It used to be written twice — the
+ * `channel_tasks_stale` RPC (`20260807160000`) carried a verbatim copy of the
+ * same lateral for the stale sweep, which is what F-202 was filed about. The
+ * sweep is DELETED (wiring plan Phase 4, 2026-08-18) and the RPC has no caller,
+ * so the second statement is no longer a clock that can disagree with this one;
+ * dropping it is filed as F-207. ⚠ Do not re-sort the result anywhere; the ORDER
+ * is what the LIMIT clips against, so a caller that re-sorts is looking at the
+ * wrong 200 rows.
  *
  * ⚠ ONE WRITE-PATH CALLER, AND IT IS A DM-ONLY PATH:
  * `service-writes-metadata.ts › resolveInheritableTask` runs only after a
@@ -132,77 +136,40 @@ export async function listTasksByChannel(
 }
 
 /**
- * One row of the stale sweep's candidate list — the shape
- * `channel_tasks_stale` returns (migration `20260807160000`).
+ * ⚠ `listStaleOpenThreads` + its `StaleThreadRow` USED TO LIVE HERE, calling the
+ * `channel_tasks_stale` RPC for `/api/cron/stale-threads`. Both are DELETED with
+ * thread closing (wiring plan Phase 4, 2026-08-18): the sweep's only act was to
+ * post a close PROPOSAL, and there is no close to propose. The route and its
+ * `vercel.json` cron entry went with them. **The RPC itself still exists in the
+ * database with no caller — dropping it is a migration, filed as debt in
+ * REFACTOR-FINDINGS F-207 rather than taken here.** ⚠ The `channel_tasks_activity`
+ * VIEW (`20260818120000`) is a DIFFERENT object and is load-bearing: it is what
+ * {@link listTasksByChannel} reads.
  */
-export interface StaleThreadRow {
-  id: string;
-  channel_id: string;
-  workspace_id: string;
-  title: string;
-  /**
-   * The newest non-proposal message in the thread, falling back to the thread's
-   * own `created_at`. NOT `channel_tasks.updated_at` — see below.
-   */
-  last_activity_at: string;
-  /** Newest non-proposal `seq`; 0 for a thread nobody has posted into. */
-  anchor_seq: number;
-}
 
 /**
- * Open threads whose LAST REAL ACTIVITY predates `before` (C-1, 2026-08-08,
- * F-171). Backs `/api/cron/stale-threads` and has no other caller.
- *
- * WHY THIS IS NOT A `.from("channel_tasks")` QUERY. The sweep used to filter on
- * `channel_tasks.updated_at`, and this repository's own {@link updateTask} is
- * the ONLY writer to that column — reached solely from close / set_mode /
- * reopen. `postMessage` bumps `channels.updated_at` and never touches the task
- * row. So `updated_at == created_at` for every thread that was never closed,
- * and the sweep swept a thread with hourly traffic as "no activity for a
- * while" while `set_thread_mode` reset the clock with zero activity. Activity
- * lives in `channel_messages`, so that is where the clock is read from; the
- * migration header records why this is a read-side derivation rather than a
- * trigger or a write-path touch (O(open threads) reads once a day beats
- * O(messages) writes forever).
- *
- * The RPC also refuses to select a thread whose newest message is already a
- * close proposal, so the sweep can never post over — and visually replace — an
- * agent's own stated reason.
+ * ⚠ ONE FIELD LEFT. `status` / `outcome` / `closed_at` / `outcome_summary` were
+ * patchable here until thread closing was removed (Phase 4, 2026-08-18); those
+ * COLUMNS survive carrying legacy `closed` rows, but nothing writes them any
+ * more and nothing reads them.
  */
-export async function listStaleOpenThreads(
-  before: string,
-  limit: number
-): Promise<StaleThreadRow[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db.rpc("channel_tasks_stale", {
-    p_before: before,
-    p_limit: limit,
-  });
-  if (error) throw error;
-  return (data ?? []) as StaleThreadRow[];
-}
-
 type TaskPatch = Partial<{
-  status: string;
-  outcome: string | null;
   mode: string;
-  closed_at: string | null;
-  outcome_summary: string | null;
 }>;
 
 /**
- * Patch a task's status / mode. `updated_at` is always bumped. The patch never
- * touches `workspace_id` / `channel_id`, so the workspace-consistency guard
- * (which fires only on UPDATE OF those columns) is never re-triggered.
+ * Patch a task's mode. `updated_at` is always bumped. The patch never touches
+ * `workspace_id` / `channel_id`, so the workspace-consistency guard (which fires
+ * only on UPDATE OF those columns) is never re-triggered.
  *
  * ⚠ THIS IS THE ONLY WRITER TO `channel_tasks.updated_at`, AND THAT COLUMN IS
- * NOT AN ACTIVITY CLOCK. It means "this ROW was modified", i.e. close /
- * set_mode / reopen — the only three paths that reach here. Posting into a
- * thread does not touch it (`postMessage` bumps `channels.updated_at`), so it
- * is equal to `created_at` for every thread that was never closed. Anything
- * that wants "when did this thread last see activity" must read
- * {@link listStaleOpenThreads}, never this column: that mistake was C-1, and it
- * made the stale sweep fire hardest on the busiest threads.
+ * NOT AN ACTIVITY CLOCK. It means "this ROW was modified" — and since close and
+ * reopen were deleted (Phase 4), `set_mode` is the ONLY path that reaches here,
+ * so the column now equals `created_at` for every thread whose mode was never
+ * changed. Posting into a thread does not touch it (`postMessage` bumps
+ * `channels.updated_at`). Anything that wants "when did this thread last see
+ * activity" reads `channel_tasks_activity.last_activity_at` via
+ * {@link listTasksByChannel}, never this column: that mistake was C-1.
  */
 export async function updateTask(
   taskId: string,
@@ -220,43 +187,17 @@ export async function updateTask(
 }
 
 /**
- * Patch a task ONLY IF its `status` is still `expectedStatus` — the atomic half
- * of the close / reopen guards (C-30, 2026-08-08). Returns the updated row, or
- * `null` when the row's status had already moved (or the row is gone).
+ * ⚠ `updateTaskIfStatus` USED TO LIVE HERE — the conditional
+ * `UPDATE … WHERE status = $expected` that made FIRST CLOSE WIN (C-30,
+ * 2026-08-08) when both parties to a thread clicked Close with different
+ * outcomes. It is DELETED with thread closing (wiring plan Phase 4,
+ * 2026-08-18): there is no transition left to serialize, and `set_mode` is
+ * last-write-wins by design (the creator's own machine, one writer).
  *
- * WHY A CONDITIONAL UPDATE AND NOT A READ-THEN-WRITE. `closeTask` used to read
- * the row and write unconditionally, so BOTH parties to a thread could close it
- * — A as `completed`, B as `failed` — and the shared, permanent record of how
- * the exchange ended was whoever's UPDATE landed second. Reading `status` in the
- * service first narrows that window to the few milliseconds between the read and
- * the write; it does not close it, and "both parties clicked Close" is exactly
- * the situation the audit described. `.eq("status", expectedStatus)` inside the
- * UPDATE makes the transition itself the arbiter: PostgreSQL serializes the two
- * statements on the row, the first flips `open -> closed`, and the second matches
- * nothing and comes back `null`. FIRST WRITE WINS, and the loser is TOLD (the
- * service re-reads and reports the stored outcome) rather than silently
- * overwriting it.
- *
- * `.maybeSingle()` rather than `.single()` precisely because zero rows is the
- * EXPECTED answer here — `.single()` would turn the loser's ordinary no-op into
- * a thrown PostgREST error on a path whose whole point is that it did not fail.
- *
- * Same `updated_at` caveat as {@link updateTask}: this bumps it, and that column
- * is still not an activity clock.
+ * The reusable half of it is worth keeping in mind and is NOT re-derivable from
+ * the surviving code: **when two writers can disagree about a value, put the
+ * guard inside the UPDATE statement, not in a read before it** — a service-level
+ * pre-read narrows the race to milliseconds and never closes it. If a
+ * compare-and-swap is ever needed on this table again, that is the shape (and
+ * `.maybeSingle()`, because zero rows is the EXPECTED answer for the loser).
  */
-export async function updateTaskIfStatus(
-  taskId: string,
-  expectedStatus: "open" | "closed",
-  patch: TaskPatch
-): Promise<ChannelTaskRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_tasks")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", taskId)
-    .eq("status", expectedStatus)
-    .select("*")
-    .maybeSingle();
-  if (error) throw error;
-  return (data as ChannelTaskRow | null) ?? null;
-}

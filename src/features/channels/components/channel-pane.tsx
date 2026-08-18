@@ -56,13 +56,9 @@ interface Props {
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
   onSend: (body: string, opts?: SendOptions) => Promise<void>;
-  onCloseThread: (
-    threadId: string,
-    outcome: "completed" | "failed",
-    summary?: string
-  ) => Promise<void>;
-  /** ⚠ Thread panel's control only — session cards never reopen. */
-  onReopenThread: (threadId: string) => Promise<void>;
+  // ⚠ `onCloseThread` / `onReopenThread` were props here until thread closing
+  // was removed (wiring plan Phase 4, 2026-08-18). Nothing below the pane
+  // settles a thread any more.
   onInvite: () => void;
   onSetToolProfile: (profile: AgentToolProfile) => void;
   /** Tool-profile write in flight — the Tools panel goes inert, like the
@@ -99,8 +95,6 @@ export function ChannelPane({
   trustBusyIds,
   consentBusyIds,
   onSend,
-  onCloseThread,
-  onReopenThread,
   onInvite,
   onSetToolProfile,
   toolProfileBusy,
@@ -267,8 +261,6 @@ export function ChannelPane({
             latestMilestone={latestMilestone}
             currentUserId={currentUserId}
             onSelectThread={handleSelectThread}
-            onCloseThread={onCloseThread}
-            onReopenThread={onReopenThread}
           />
         )}
 
@@ -360,7 +352,6 @@ export function ChannelPane({
                   threadsLoading={threadsLoading}
                   currentUserId={currentUserId}
                   highlightedThreadId={highlightedThreadId}
-                  onCloseThread={onCloseThread}
                   agents={agents}
                 />
               )}

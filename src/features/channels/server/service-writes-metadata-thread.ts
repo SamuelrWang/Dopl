@@ -71,28 +71,15 @@ export async function isLegacyThreadParticipant(
 }
 
 /**
- * F6 — IS THIS THREAD CLOSED? The post path resolved the thread row and then
- * read only its participation columns, so a thread closed at #355 accepted five
- * more posts with no refusal and no notice. `status` / `closed_at` were written
- * on close (`service-tasks.ts`) and cleared on reopen, and read NOWHERE on the
- * write path.
+ * ⚠ `isThreadClosed` USED TO LIVE HERE (F6) — the one read of
+ * `channel_tasks.status` on the write path, which raised the `threadClosed`
+ * notice on a post into a settled thread. DELETED with thread closing (wiring
+ * plan Phase 4, 2026-08-18): nothing closes a thread, so the only rows it could
+ * ever fire on are legacy ones, and the COLUMN is now legacy and unread
+ * (INVARIANTS §5).
  *
- * WARN, DO NOT REFUSE, and that is a decided product call rather than a first
- * cut. A hard 403 would break the legitimate "one last word after the close
- * echo" pattern — an agent that closes a thread and then answers a question
- * about it is behaving correctly — and the remedy a refusal would point at
- * (`reopen`) has no MCP counterpart at all, so the agent would be told to do
- * something it cannot do. So the post LANDS, and the caller is told what it
- * landed in; `postMessage` carries the flag out and the MCP `post` result says
- * it in words.
- *
- * `!== "open"` rather than `=== "closed"`: a status this predicate does not
- * recognize is not evidence the thread is accepting work, and warning on it
- * costs one line while missing it costs the silence this fix exists to end.
- *
- * A LEGACY id has no `channel_tasks` row and therefore no status — it can never
- * be "closed" in this sense, which is one more reason it is not a thread.
+ * The product call it embodied is worth keeping: **the post LANDED, so warn,
+ * never refuse** — a 403 over a state the caller cannot change tells an agent to
+ * do something it has no op for. If a thread-state warning ever returns, that is
+ * still the shape.
  */
-export function isThreadClosed(task: ChannelTaskRow | null): boolean {
-  return task !== null && task.status !== "open";
-}
