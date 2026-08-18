@@ -19,7 +19,6 @@ vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   hasMessagesAfter,
-  latestThreadActivitySeq,
   listMessages,
 } from "./repository-messages";
 import type { ChannelMessageRow } from "./dto";
@@ -217,38 +216,14 @@ describe("author exclusion — NULL-safe, and identical in the read and the prob
 });
 
 /**
- * The RE-PROPOSAL WINDOW. `latestThreadActivitySeq` is what `proposeTaskClose`
- * keys idempotency on. ⚠ Proposals MUST be excluded from the anchor — otherwise
- * a proposal moves its own anchor and every retry writes a new prompt.
+ * ⚠ A `latestThreadActivitySeq — the anchor a re-proposal is keyed on` block
+ * ended here (wiring plan Phase 4, 2026-08-18). The repository function went
+ * with `proposeTaskClose`; ⚠ **this file's import of it was the only thing
+ * keeping `npx knip` quiet about the orphan**, which is why the deletion had to
+ * be found by grep rather than by the gate.
+ *
+ * The NULL-safety half of what it pinned is live and is asserted above, on
+ * `excludeAuthorFilter`: a `metadata->>` / column filter over a key that is
+ * ABSENT on ordinary rows yields NULL, and a bare `neq` there drops every row it
+ * was meant to keep.
  */
-describe("latestThreadActivitySeq — the anchor a re-proposal is keyed on", () => {
-  it("scopes to the thread and EXCLUDES close proposals, newest first", async () => {
-    const calls = makeAdmin([messageRow(17, THREAD_UUID)]);
-
-    const seq = await latestThreadActivitySeq(CHANNEL, THREAD_UUID);
-
-    expect(seq).toBe(17);
-    expect(eqFilters(calls)).toEqual({
-      channel_id: CHANNEL,
-      "metadata->>taskId": THREAD_UUID,
-    });
-    // ⚠ NULL-safe like the author filter: `closeProposed` is ABSENT on an
-    // ordinary message, so `->>` yields NULL and a bare `neq` drops every real
-    // message in the thread — inverting the anchor.
-    expect(calls.find((c) => c.op === "or")?.args).toEqual([
-      "metadata->>closeProposed.is.null,metadata->>closeProposed.neq.true",
-    ]);
-    expect(calls.find((c) => c.op === "order")?.args).toEqual([
-      "seq",
-      { ascending: false },
-    ]);
-    expect(calls.find((c) => c.op === "limit")?.args).toEqual([1]);
-  });
-
-  it("is 0, not null, for a thread with no non-proposal message", async () => {
-    // ⚠ Must be a total function, or the first proposal's `client_msg_id` reads
-    // `...-undefined`.
-    makeAdmin([]);
-    await expect(latestThreadActivitySeq(CHANNEL, THREAD_UUID)).resolves.toBe(0);
-  });
-});

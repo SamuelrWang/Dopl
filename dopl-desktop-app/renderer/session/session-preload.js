@@ -13,7 +13,8 @@ const asDecision = (d) => {
   const s = asStr(d);
   return s === 'allow-once' || s === 'allow-task' || s === 'deny' ? s : 'deny';
 };
-const asOutcome = (o) => (asStr(o) === 'failed' ? 'failed' : 'completed');
+// `asOutcome` coerced the close outcome and went with `closeTask` (wiring plan Phase 4,
+// 2026-08-18) — threads do not close, so no payload here carries an outcome.
 // ⚠ FAIL-CLOSED: anything but an explicit accept (once, or for this session) is a decline, so
 // a forged/garbled value never feeds the agent. `accept-task` is the WIRE value (wire `task` ==
 // domain `thread`); the grant it arms lives on the session object and a park clears it.
@@ -148,9 +149,6 @@ contextBridge.exposeInMainWorld('doplSession', {
   },
   end() {
     ipcRenderer.invoke('session:end', {});
-  },
-  closeTask(outcome, summary) {
-    ipcRenderer.invoke('session:close-task', { outcome: asOutcome(outcome), summary: asStr(summary) });
   },
   // Pre-consent Accept/Deny. ⚠ Main re-derives the consent row from event.sender; the payload
   // carries only the coerced decision.

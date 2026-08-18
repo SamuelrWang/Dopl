@@ -8,13 +8,14 @@
  *   2. ⚠ A seq here is REPORTED, never derived. Guessing a marker/echo seq
  *      (last known + 1) and arming the wait one past it silently skips the
  *      peer's deliverable sitting below that guess. When the server reports no
- *      seq, the result says NOTHING about one.
+ *      seq, the result says NOTHING about one. The block that pinned that on
+ *      `propose_close` is gone with thread closing (Phase 4, 2026-08-18); the
+ *      note at the bottom of this file says where the rule lives now.
  */
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opRead } from "./channel-ops-read";
-import { opProposeClose } from "./channel-ops-threads";
 
 const CHANNEL = {
   id: "chan-1",
@@ -207,52 +208,11 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 });
 
-// ── 2. propose_close reports the marker seq ──────────────────────────────
+// ── 2. THE MARKER-SEQ BLOCK IS GONE ──────────────────────────────────────
 //
-// ⚠ The seq an agent must never guess is the PROPOSAL MARKER's: guessing it and
-// arming `await` past it silently skips the peer's whole deliverable.
-
-describe("opProposeClose — the marker's seq is REPORTED, never guessed", () => {
-  function proposingClient(markerSeq: number | null): DoplClient {
-    return stubClient({
-      proposeChannelThreadClose: vi.fn(async () => ({
-        thread: { id: "thread-1", title: "Ship it" },
-        markerSeq,
-        outcome: "completed",
-      })),
-    });
-  }
-
-  it("names the seq and tells the caller to use it as `since`", async () => {
-    const text = (await opProposeClose(proposingClient(57), "general", "thread-1", "completed"))
-      .content[0].text;
-
-    expect(text).toContain(
-      "Proposal note posted at seq 57 — if you re-arm a wait, use since=57 (or your last READ seq), never a guessed seq.",
-    );
-    expect(text).toContain("Proposed closing thread **`Ship it`** in **`General`** as completed");
-  });
-
-  it("reports the FAILURE rather than a seq when no marker landed", () => {
-    // ⚠ A proposal that did not post means NOTHING WAS PROPOSED — the operator
-    // has no prompt, and the agent would otherwise wait forever on a
-    // confirmation nobody was asked for. So this branch must speak.
-    return opProposeClose(proposingClient(null), "general", "thread-1", "completed").then((res) => {
-      const text = res.content[0].text;
-      expect(text).toContain("did NOT post");
-      expect(text).toContain("The thread is untouched");
-      expect(text).not.toContain("Proposal note posted at seq");
-      expect(text).toContain("Proposed closing thread **`Ship it`**");
-    });
-  });
-
-  it("keeps the summary note beside the marker line, not merged into it", async () => {
-    const text = (
-      await opProposeClose(proposingClient(58), "general", "thread-1", "completed", "Shipped v2")
-    ).content[0].text;
-
-    const lines = text.split("\n");
-    expect(lines[lines.length - 2]).toContain("as completed — Shipped v2.");
-    expect(lines[lines.length - 1]).toContain("Proposal note posted at seq 58");
-  });
-});
+// ⚠ `opProposeClose — the marker's seq is REPORTED, never guessed` lived here
+// and went with thread closing (wiring plan Phase 4, 2026-08-18). The rule it
+// pinned did not go anywhere: A WRITE THAT ALSO POSTS A MESSAGE HANDS ITS SEQ
+// BACK, because guessing one (last known + 1) armed an `await` past a peer's
+// whole deliverable. `opCreateThread`'s `openingSeq` is the surviving instance,
+// pinned in `channel-ops.test.ts`.

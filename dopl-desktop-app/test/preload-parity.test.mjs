@@ -155,7 +155,9 @@ const SESSION_OPS = [
   "auth.get",
   "auth.onNotice",
   "auth.signIn",
-  "closeTask",
+  // ⚠ `closeTask` was here and is REMOVED (wiring plan Phase 4, 2026-08-18) with the whole
+  // close lane — the panel, the `session:close-task` IPC handler and the reducer branch.
+  // This pin fails on ADD as well as on REMOVE, which is why the removal is stated.
   "consentDecision",
   "end",
   "folder.choose",

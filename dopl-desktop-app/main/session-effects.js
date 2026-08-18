@@ -16,9 +16,10 @@ function gatePhase(state, phase) {
   return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
 }
 
-// The effect set shared by every non-close_task end (operator End, turn/cost cap): abort the
-// query, tell the renderer, settle the record. ⚠ Leaves the channel TASK open (resumable) — no
-// task_finished. A real end ALSO posts a CALM lifecycle so the web card stops pulsing
+// The effect set shared by every end (operator End, turn/cost cap): abort the query, tell the
+// renderer, settle the record. ⚠ Leaves the channel TASK untouched — no task_finished, and
+// since thread closing was removed (wiring plan Phase 4, 2026-08-18) there is no other end that
+// touches it either. A real end ALSO posts a CALM lifecycle so the web card stops pulsing
 // "Working…". ⚠ Idle never reaches here; it PARKS instead.
 function endedEmit(state, outcome, reason, summary) {
   const payload = { type: 'ended', outcome: outcome, totalCostUsd: state.costUsd, reason: reason };
@@ -27,7 +28,7 @@ function endedEmit(state, outcome, reason, summary) {
 }
 
 // The calm lifecycle a real end posts. All ride metadata like `interrupted` — no server-stamped
-// keys, no closeTask. Any other reason posts nothing.
+// keys, and nothing that touches the thread row. Any other reason posts nothing.
 //
 // ⚠ A LOCAL SESSION ENDING IS NOT A THREAD FAILURE. `task_failed` is TERMINAL whatever metadata
 // rides it: group-thread.ts folds it into `endEvent` and computeStatus reads a terminal marker

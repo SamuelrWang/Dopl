@@ -133,8 +133,6 @@ function render(
       trustBusyIds={new Set()}
       consentBusyIds={new Set()}
       onSend={noopAsync}
-      onCloseThread={noopAsync}
-      onReopenThread={noopAsync}
       onInvite={noop}
       onSetToolProfile={noop}
       toolProfileBusy={false}

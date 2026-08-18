@@ -21,8 +21,6 @@ export function ThreadsButton({
   latestMilestone,
   currentUserId,
   onSelectThread,
-  onCloseThread,
-  onReopenThread,
 }: {
   threads: ChannelThread[];
   threadsLoading: boolean;
@@ -31,12 +29,6 @@ export function ThreadsButton({
   latestMilestone: Map<string, ChannelMessage>;
   currentUserId: string;
   onSelectThread: (threadId: string) => void;
-  onCloseThread: (
-    threadId: string,
-    outcome: "completed" | "failed",
-    summary?: string
-  ) => Promise<void>;
-  onReopenThread: (threadId: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -67,8 +59,6 @@ export function ThreadsButton({
             onSelectThread(threadId);
           }}
           currentUserId={currentUserId}
-          onCloseThread={onCloseThread}
-          onReopenThread={onReopenThread}
         />
       </Popover>
     </div>

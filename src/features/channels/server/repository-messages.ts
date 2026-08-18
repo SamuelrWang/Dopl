@@ -123,40 +123,24 @@ export async function hasMessagesAfter(
 }
 
 /**
- * Newest `seq` in a thread that is NOT itself a close proposal, or 0.
- * THIS NUMBER IS THE RE-PROPOSAL WINDOW — `proposeTaskClose` keys idempotency
- * on it. A `(thread, outcome)` key alone is one-shot forever: the agent's second
- * genuine proposal hits `postMessage`'s `client_msg_id` short-circuit and is
- * silently swallowed, while the client (`readCloseProposal` takes the LATEST,
- * `session-card.tsx` dismisses per message id) waits for a row never written.
+ * ⚠ `latestThreadActivitySeq` USED TO LIVE HERE — the newest `seq` in a thread
+ * that was not itself a close proposal. Its ONE caller was
+ * `service-tasks-propose.ts › proposeTaskClose`, which keyed a re-proposal on
+ * it; both are DELETED with thread closing (wiring plan Phase 4, 2026-08-18).
  *
- * ⚠ THE ANCHOR MUST EXCLUDE PROPOSALS. A proposal IS a message, so keying on the
- * plain newest seq moves the anchor the moment one lands and every retry writes
- * a new row. Excluding them pins the anchor to the last REAL exchange:
- *   • retry — nothing else happened, same anchor, same key, dedupes;
- *   • genuine re-proposal — thread moved on, new anchor, new key, new prompt;
- *   • "keep open" with nothing said after — same anchor, dedupes (correct).
+ * ⚠ IT WAS THE PRODUCTION ORPHAN THIS PHASE ALMOST LEFT BEHIND, and the reason
+ * is worth knowing: `npx knip` did NOT flag it, because its `.test.ts` still
+ * imported it and knip counts a test as a consumer. **A test-only export is
+ * invisible to the orphan check.** When a service goes, grep its repository
+ * helpers by hand.
  *
- * ⚠ The `metadata->>` filters are NULL-safe by construction (`closeProposed` is
- * absent on ordinary messages), the same trap `excludeAuthorFilter` documents.
+ * Two rules it demonstrated survive it. **An idempotency anchor must EXCLUDE the
+ * rows it keys** — a proposal is a message, so keying on the plain newest seq
+ * moved the anchor the instant one landed and turned every retry into a new
+ * row. And **a `metadata->>` filter is NULL-safe only by construction**: the key
+ * is ABSENT on ordinary rows, so `->>` yields NULL and a bare `neq` drops every
+ * real message — the same trap `excludeAuthorFilter` documents above.
  */
-export async function latestThreadActivitySeq(
-  channelId: string,
-  threadId: string
-): Promise<number> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("seq")
-    .eq("channel_id", channelId)
-    .eq("metadata->>taskId", threadId)
-    .or("metadata->>closeProposed.is.null,metadata->>closeProposed.neq.true")
-    .order("seq", { ascending: false })
-    .limit(1);
-  if (error) throw error;
-  const rows = (data ?? []) as Array<{ seq: number }>;
-  return rows.length > 0 ? Number(rows[0].seq) : 0;
-}
 
 export async function findMessageByClientId(
   channelId: string,

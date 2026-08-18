@@ -336,13 +336,18 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     ).content[0].text;
 
     for (const text of [timedOut, withMessages]) {
-      // ⚠ Exit is the THREAD's state (closed/failed, or a genuinely silent
-      // peer), checked periodically — an empty hold is evidence of nothing.
+      // ⚠ THE EXIT IS THE ADDRESSEE'S SILENCE, AND NOW IT IS THE ONLY ONE. It
+      // used to have a cheaper first half — "stop when the thread is closed or
+      // failed" — and thread closing was removed (wiring plan Phase 4,
+      // 2026-08-18), taking the state and `get_thread`'s report of it. ⚠ The
+      // absence must be SAID, not merely dropped: an agent trained on the old
+      // surface waits for a close forever if nothing tells it there is none.
       expect(text).toContain("STOP and report");
-      expect(text).toContain("closed or failed");
       expect(text).toContain("30+ minutes");
       expect(text).toContain("operator");
-      expect(text).toContain('op="get_thread"');
+      expect(text).toContain("no finished STATE to wait for");
+      expect(text).not.toContain("closed or failed");
+      expect(text).not.toContain('op="get_thread"');
       expect(text).toContain("task_progress");
       // ⚠ A flat "stop after N timeouts" abandons a peer heads-down on a long
       // job — the exact case this feature exists for.
@@ -363,7 +368,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     // a look at the thread, and the look decides.
     expect(text).toContain("re-arm the wait NOW");
     expect(text).toMatch(/every ~3 empty holds[\s\S]{0,80}check/i);
-    expect(text).toContain("Keep re-arming while the thread is OPEN");
+    expect(text).toContain("Keep re-arming while something came from that member");
   });
 
   // ── FIX M1: the untrusted-content caveat is a HEADER, not a footnote ──

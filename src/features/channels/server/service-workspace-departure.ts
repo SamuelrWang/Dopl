@@ -45,11 +45,14 @@ import * as repo from "./repository";
  * its roster intact and self-heals on rejoin; interrupted the other way, you get
  * exactly the one-member DM this exists to prevent.
  *
- * ⚠ Deliberately does NOT sweep `channel_tasks`. An open thread whose creator or
- * target left is left alone: addressing already fails closed and the survivor
- * keeps `closeTask`. Posting a system note would mean minting channel messages
- * with no member author, and no marker idiom covers "a participant left the
- * workspace". The survivor learns nothing; that half of C-20 stays open.
+ * ⚠ Deliberately does NOT sweep `channel_tasks`. A thread whose creator or
+ * target left is left alone: addressing already fails closed. ⚠ **This bullet
+ * used to add "and the survivor keeps `closeTask`" — a way to settle the
+ * stranded exchange. Thread closing was removed (wiring plan Phase 4,
+ * 2026-08-18) and the survivor now has NOTHING**, which makes that half of C-20
+ * slightly worse rather than merely open. Posting a system note would still mean
+ * minting channel messages with no member author, and no marker idiom covers "a
+ * participant left the workspace".
  */
 
 /** What one sweep actually did — for the caller's log line and for tests. */

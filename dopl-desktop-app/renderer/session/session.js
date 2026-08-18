@@ -16,14 +16,12 @@
 
   const attendedUi = globalThis.DoplSessionAttendedUI || null; // F-118 consent-card button
   const modesUi = globalThis.DoplSessionModesUI || null; // FIX 2: the posture selects + their revert
-  const closeUi = globalThis.DoplSessionCloseUI || null; // P1-6: the human close affordance
   const folderUi = globalThis.DoplSessionFolderUI || null; // §2 cap: the working-folder pill
   // §3.2 the composer addressee pill. BOTH modules are OPTIONAL at boot: session.html always
   // loads them, but a harness that stubs only VM / chrome / render degrades to a steer-only
   // composer, which is what this window did between rollback §1 and this phase.
   const address = globalThis.DoplSessionAddress || null;
   const addressUi = globalThis.DoplSessionAddressUI || null;
-  let closeThread = null;
   // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
   // session-address.js (the view-model is at its 500-line cap) and run over its output.
   const reduce = address ? (st, evt) => address.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
@@ -34,7 +32,7 @@
   const resolved = () => Promise.resolve({ label: null });
   const bridge = window.doplSession || {
     sessionId: "", onEvent: noop, send: noop, permission: noop,
-    inboundDecision: noop, interrupt: noop, end: noop, closeTask: noop,
+    inboundDecision: noop, interrupt: noop, end: noop,
     consentDecision: noop, setToolMode: noop, setMessageMode: noop, setModel: noop,
     folder: { get: resolved, choose: resolved, clear: resolved },
   };
@@ -54,10 +52,6 @@
     consentView: $("consentView"), endedBanner: $("endedBanner"), thinking: $("thinkingChip"),
     steerInput: $("steerInput"), send: $("btnSend"),
     targetPill: $("btnTarget"), targetLabel: $("targetLabel"), targetPop: $("targetPop"),
-    // P1-6: the close affordance (session-close-ui.js owns everything it does).
-    closeBtn: $("btnCloseThread"), closePanel: $("closePanel"), closeNote: $("closeNote"),
-    closeSummary: $("closeSummary"), closeCancel: $("btnCloseCancel"),
-    closeDone: $("btnCloseDone"), closeFailed: $("btnCloseFailed"),
   };
 
   let state = vm.initialState();
@@ -168,7 +162,6 @@
     // FIX 2: dead during the accept -> init adoption gap. It also owns the unconditional repaint
     // of all three selects, the bypass tint and the context meter (its own strip, and §2 cap).
     if (modesUi) modesUi.sync(els, state);
-    if (closeThread) closeThread.paint(state);
   }
 
   function renderFolder() {
@@ -453,15 +446,9 @@
       confirmed: () => ({ tool: state.toolMode, message: state.messageMode, model: state.modelChoice }),
       notice: (text) => { state = reduce(state, { type: "notice", level: "error", text }); renderAll(); } });
 
-    // P1-6 (2026-08-04): THE CLOSE AFFORDANCE IS BACK, through the seam v3.1 left intact.
-    // v3.1 removed the panel because closing settles the SHARED thread for both members and so
-    // belongs to the thread — true, and not enough: nothing else closed either, and decision 2
-    // now makes the human the ONLY closer. session-close-ui.js owns the control; this file
-    // keeps one mount and one paint, the same arrangement session-modes-ui.js has.
-    if (closeUi) {
-      closeThread = closeUi.mount({ els, bridge,
-        notice: (text) => { state = reduce(state, { type: "notice", level: "error", text }); renderAll(); } });
-    }
+    // The close affordance and its `closeUi.mount(...)` / `closeThread.paint(...)` pair were
+    // DELETED here (2026-08-18, wiring plan Phase 4) along with session-close-ui.js: threads do
+    // not close, and what this window ends is the AGENT ("End session", above).
 
     // The working-folder pill moved to session-folder-ui.js at the §2 cap (2026-08-04).
     // A folder change persists per-channel and takes effect on the NEXT session (O-5).

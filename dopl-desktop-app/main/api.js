@@ -1,6 +1,7 @@
 // Shared authenticated HTTP helper for the newer main-process modules
-// (mcp-config, consent, presence, session-history, session-peer-post,
-// session-close-task). The Channels listener still keeps its own SEND (E2E-
+// (mcp-config, consent, presence, session-history, session-peer-post; and
+// session-close-task, until that module was deleted with thread closing —
+// wiring plan Phase 4, 2026-08-18). The Channels listener still keeps its own SEND (E2E-
 // verified — its long-poll wires a caller abort signal into the controller and
 // its timeouts are load-bearing), but the two no longer keep separate 401
 // REPAIRS: that half is api-repair.js and both call it. Keeping a second copy of
@@ -44,7 +45,7 @@ async function sendOnce(pathname, opts) {
 // 401 REPAIR (Phase 2 — desktop-main.md B3/R1). `api.js` had NO repair at all:
 // only the listener retried on 401 (channel-listener.js:102-115), so presence
 // skipped a cycle and consent, mcp-config, session-history, session-peer-post and
-// session-close-task simply failed. Today the remote page hides that by keeping
+// the since-deleted session-close-task simply failed. Today the remote page hides that by keeping
 // the cookie jar fresh; the bundled SPA removes the page and with it the
 // refresher, and `getAuthCookie()` only repairs an EMPTY jar, never a STALE one.
 //

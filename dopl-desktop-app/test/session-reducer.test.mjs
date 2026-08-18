@@ -412,24 +412,19 @@ test("end (operator End): -> ended + a NON-TERMINAL session_ended signal, task s
   assert.equal(findEff(r.effects, "settle").outcome, "ended");
 });
 
-test("close_task completed: closeTask + abort + lifecycle(task_finished) + ended + settle(completed)", () => {
+// ⚠ TWO `close_task` CASES ENDED HERE (wiring plan Phase 4, 2026-08-18). They pinned the
+// operator's Close in the session window: a `closeTask` effect flipping `channel_tasks.status`,
+// then abort, a task_finished/task_failed lifecycle echo, an `ended` emit carrying the summary,
+// and a settle on the chosen outcome. Threads do not close, so the branch is deleted.
+//
+// What replaces them is the pin that it stays deleted, driven through the reducer rather than
+// asserted about the source: an UNKNOWN event is inert here, so a resurrected renderer sending
+// `close_task` changes nothing and settles nothing rather than half-ending a live session.
+test("close_task is no longer an event: it changes nothing and emits nothing", () => {
   const s = running();
   const r = sessionReducer(s, { type: "close_task", outcome: "completed", summary: "done" });
-  assert.equal(r.state.phase, "ended");
-  assert.deepEqual(effTypes(r.effects), ["closeTask", "abortQuery", "lifecycle", "emit", "settle"]);
-  assert.equal(findEff(r.effects, "lifecycle").kind, "task_finished");
-  assert.deepEqual(findEff(r.effects, "closeTask"), { type: "closeTask", outcome: "completed", summary: "done" });
-  const ended = findEff(r.effects, "emit");
-  assert.equal(ended.payload.reason, "close_task");
-  assert.equal(ended.payload.summary, "done");
-  assert.equal(findEff(r.effects, "settle").outcome, "completed");
-});
-
-test("close_task failed maps to lifecycle(task_failed) + settle(failed)", () => {
-  const s = running();
-  const r = sessionReducer(s, { type: "close_task", outcome: "failed", summary: "nope" });
-  assert.equal(findEff(r.effects, "lifecycle").kind, "task_failed");
-  assert.equal(findEff(r.effects, "settle").outcome, "failed");
+  assert.equal(r.state.phase, "running", "the session is untouched");
+  assert.deepEqual(r.effects, [], "no closeTask, no lifecycle, no settle");
 });
 
 test("cost_cap event ends the session directly (reason cost_cap) + capped lifecycle", () => {

@@ -90,9 +90,17 @@ function describeFailure(e: unknown): string {
  * activity: a five-member channel always has someone posting, so "any activity
  * in the last 30 minutes" keeps an agent re-arming forever over an exchange its
  * own counterparty abandoned.
+ *
+ * ⚠ AND IT IS NOW THE ONLY STOP CONDITION. It used to have a second half —
+ * "stop when the thread is closed or failed" — which was the CHEAP exit, a state
+ * the server would eventually show. Thread closing was removed (wiring plan
+ * Phase 4, 2026-08-18), `get_thread` no longer reports a status, and a stop rule
+ * naming a state that can never arrive is a rule to re-arm forever. Say the
+ * absence out loud rather than dropping the clause: an agent that has been
+ * taught to wait for a close will otherwise keep waiting for one.
  */
 export function rearmStopRule(ref: string): string {
-  return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="get_thread", channel="${ref}", thread=<id>) for its status, and dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while the thread is OPEN and something came from that member in roughly the last 30 minutes. STOP and report to your operator when the thread is closed or failed, or when that member has shown nothing at all for ~30+ minutes.`;
+  return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while something came from that member in roughly the last 30 minutes. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`;
 }
 
 /**

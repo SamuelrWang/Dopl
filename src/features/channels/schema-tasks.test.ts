@@ -143,27 +143,24 @@ describe("TaskCreatePayloadSchema — one POST, two shapes", () => {
 });
 
 describe("TaskUpdateSchema", () => {
-  it("close: requires outcome completed|failed", () => {
-    expect(TaskUpdateSchema.safeParse({ op: "close", outcome: "completed" }).success).toBe(true);
-    expect(TaskUpdateSchema.safeParse({ op: "close", outcome: "failed" }).success).toBe(true);
-    expect(TaskUpdateSchema.safeParse({ op: "close" }).success).toBe(false);
-    expect(TaskUpdateSchema.safeParse({ op: "close", outcome: "meh" }).success).toBe(false);
-  });
-
   it("set_mode: requires mode interactive|autonomous", () => {
     expect(TaskUpdateSchema.safeParse({ op: "set_mode", mode: "interactive" }).success).toBe(true);
     expect(TaskUpdateSchema.safeParse({ op: "set_mode" }).success).toBe(false);
   });
 
-  it("reopen: bare op, no payload required (extra keys stripped)", () => {
-    expect(TaskUpdateSchema.safeParse({ op: "reopen" }).success).toBe(true);
-    // Extra key stripped by the object schema, never reaching the service.
-    const parsed = TaskUpdateSchema.safeParse({ op: "reopen", outcome: "completed" });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data).toEqual({ op: "reopen" });
+  // ⚠ THE OTHER THREE OPS ARE GONE (wiring plan Phase 4, 2026-08-18): `close`
+  // and `propose_close` each carried an outcome, `reopen` was a bare op. This is
+  // the pin that they stay gone, and that a stale caller sending one is REFUSED
+  // rather than silently reaching `set_mode` — a union of one still discriminates.
+  it.each(["close", "propose_close", "reopen"])(
+    "refuses the retired op %s",
+    (op) => {
+      expect(TaskUpdateSchema.safeParse({ op }).success).toBe(false);
+      expect(
+        TaskUpdateSchema.safeParse({ op, outcome: "completed" }).success
+      ).toBe(false);
     }
-  });
+  );
 
   it("discriminated union: fields can't bleed across ops", () => {
     // Wrong op's field is stripped; a set_mode without `mode` still fails.

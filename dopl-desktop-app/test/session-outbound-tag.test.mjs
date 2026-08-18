@@ -133,7 +133,9 @@ test("isOutboundPost is the gate: a cross-channel post or a non-post op is never
   assert.equal(tag.isOutboundPost(DOPL_CHANNEL_TOOL, post(), CH), true);
   assert.equal(tag.isOutboundPost(DOPL_CHANNEL_TOOL, post({ channel: "other" }), CH), false,
     "a cross-channel post is the exfiltration shape, not ours to rewrite");
-  for (const op of ["create_thread", "close_thread", "read", "await", "list"]) {
+  // `close_thread` was in this list until it left the tool's enum with thread
+  // closing (wiring plan Phase 4, 2026-08-18).
+  for (const op of ["create_thread", "set_thread_mode", "read", "await", "list"]) {
     assert.equal(tag.isOutboundPost(DOPL_CHANNEL_TOOL, { op, channel: CH }, CH), false, op);
   }
   assert.equal(tag.isOutboundPost("Bash", post(), CH), false, "and never another tool");

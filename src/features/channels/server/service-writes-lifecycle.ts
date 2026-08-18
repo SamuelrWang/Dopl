@@ -30,37 +30,28 @@ export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
  */
 export interface PostMessageOptions {
   /**
-   * Post a LIFECYCLE kind on behalf of the server itself. The ONE caller is the
-   * close route's echo (`service-tasks-lifecycle.closeTask`).
+   * Post a LIFECYCLE kind on behalf of the server itself.
    *
-   * ⚠ IN PRACTICE A NO-OP, and deliberately kept anyway. `closeTask` opens with
-   * `if (ctx.source === "agent") throw new ThreadCloseIsHumanOnlyError()` ahead
-   * of every lookup, so this flag's only caller can never hold an agent ctx and
-   * the guard would return early regardless. The REOPEN echo does not restore
-   * the lane either: it posts `task_progress`, not one of
-   * {@link LIFECYCLE_KINDS}, so it passes the guard on its own merits.
+   * ⚠ NO CALLER TODAY. Its one caller was the close route's echo
+   * (`service-tasks-lifecycle.ts › closeTask`), DELETED with thread closing
+   * (wiring plan Phase 4, 2026-08-18). It was already documentary before that:
+   * `closeTask` refused an agent ctx ahead of every lookup, so the flag could
+   * never be the thing that let a post through.
    *
-   * The value is DOCUMENTARY — it states at the CALL SITE that the post is the
-   * server speaking, which is what stops the rule being re-derived from
-   * identity. It remains the seam if a server-internal caller ever genuinely
-   * needs a lifecycle KIND from an agent-ctx request.
+   * KEPT ANYWAY, AND NOT AS A LEFTOVER. It is the declared SEAM for "this post
+   * is the server speaking", stated at the call site rather than re-derived from
+   * identity — the shape any future server-internal lifecycle post must use.
+   * `service-writes-lifecycle-guard.test.ts` pins that it exempts the call
+   * OPTION and never a caller's `metadata` key of the same name.
    */
   internalLifecycle?: boolean;
   /**
-   * Stamp this post as a CLOSE PROPOSAL carrying that outcome (DECISION 2). The
-   * one caller is `service-tasks-propose.proposeTaskClose`. Reserved rather than
-   * caller-settable because the marker is what raises a one-click "close this
-   * thread?" prompt in front of a human.
+   * ⚠ TWO OPTIONS ENDED HERE with thread closing (Phase 4, 2026-08-18):
+   * `closeProposal` (stamped the close-proposal prompt keys for the deleted
+   * `service-tasks-propose.ts`) and `reopened` (stamped `threadReopened` for the
+   * deleted `reopenTask`). Both were reserved because the marker they wrote
+   * changed how the OTHER member's card read; neither has a renderer left.
    */
-  closeProposal?: "completed" | "failed";
-  /**
-   * Stamp this post as the REOPEN ECHO (C-26). The one caller is
-   * `service-tasks-lifecycle.reopenTask`. Reserved rather than caller-settable
-   * because the marker says a settled exchange is LIVE AGAIN on the other
-   * member's screen, and `channel_tasks` is in no realtime table set — so a
-   * forged one would show a live thread the server still considers closed.
-   */
-  reopened?: boolean;
   /**
    * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
    * flag on this post's stored metadata. The one caller is
@@ -106,13 +97,15 @@ export interface PostMessageOptions {
  *     SUPABASE COOKIES — no agent token, `source: "user"` — and declare
  *     `authorKind:"agent"` in the body. They are untouched.
  *   - The web app posts on cookies too, same answer.
- *   - The CLOSE ECHO was named as the one real overlap. IT IS NOT ONE — the
- *     close refuses an agent ctx outright, so its `internalLifecycle` exemption
- *     is documentary rather than load-bearing. See {@link PostMessageOptions}.
- *   - The REOPEN ECHO (C-26) is agent-reachable and deliberately does NOT use the
- *     exemption: it posts `task_progress`, which is not a lifecycle kind, so an
- *     agent-triggered reopen writes its marker through the ordinary lane. That is
- *     the shape to copy — earn the pass, do not ask for one.
+ *   - The CLOSE ECHO was named as the one real overlap. It never was one (the
+ *     close refused an agent ctx outright), and it is GONE — thread closing was
+ *     removed in the wiring plan's Phase 4 (2026-08-18), so
+ *     `internalLifecycle` now has no caller at all. See
+ *     {@link PostMessageOptions}.
+ *   - The reopen echo that went with it deliberately did NOT use the exemption:
+ *     it posted `task_progress`, not a lifecycle kind, so it passed the guard on
+ *     its own merits. That is still the shape to copy — earn the pass, do not
+ *     ask for one.
  *
  * Placed beside `assertChatIsUnaddressed` and for the same reason: both must
  * precede the idempotency short-circuit, so a refused post is refused on the

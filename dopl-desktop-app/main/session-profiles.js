@@ -147,8 +147,9 @@ function isOwnChannelPost(input, sessionChannelId) {
 // `await` is the same read long-polled — gating it gates waiting itself. `members` is a roster
 // the session's prompt framing already carries.
 // ⚠ `list` is read-only but is NOT here: it enumerates EVERY channel and DM this account can
-// reach, so it is not own-channel-scoped. `open`, `invite`, `create_thread`, `close_thread`,
-// `set_thread_mode` and every post stay gated in every posture.
+// reach, so it is not own-channel-scoped. `open`, `invite`, `create_thread`, `set_thread_mode`
+// and every post stay gated in every posture. (`close_thread` was named here too and left the
+// tool's enum with thread closing — wiring plan Phase 4, 2026-08-18.)
 const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members'];
 
 // Read twin of isOwnChannelPost, SAME scoping rule and safe failure: a `channel` naming
@@ -161,16 +162,17 @@ function isOwnChannelRead(input, sessionChannelId) {
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
 }
 
-// OWN-CHANNEL MARKERS (Axis B outbound). Both are STRICTLY LESS POWERFUL than the own-channel
-// `post` `auto_outbound` already auto-allows, into the same channel from the same session:
-//   propose_close  closes NOTHING — thread stays open and live until the human confirms
-//                  (packages/mcp-server channel-description; server refuses an agent-token
-//                  close outright). The confirm IS the consent point.
+// OWN-CHANNEL MARKERS (Axis B outbound). STRICTLY LESS POWERFUL than the own-channel `post`
+// that `auto_outbound` already auto-allows, into the same channel from the same session:
 //   milestone      one-line marker, addresses nobody, no deliverable; prompt-framing INSTRUCTS
 //                  the agent to log them.
-// ⚠ `close_thread` is NOT here — it settles a SHARED thread and is never conflated with its
-// proposal. Neither op is reachable by `auto_inbound` alone.
-const OWN_CHANNEL_MARKER_OPS = ['propose_close', 'milestone'];
+// ⚠ `propose_close` WAS THE OTHER MEMBER and is gone with thread closing (wiring plan Phase 4,
+// 2026-08-18) — the op left the MCP enum entirely. The rule that admitted it is what to keep:
+// a marker earns the outbound half by SAYING LESS than the post already auto-allowed beside
+// it. Anything that settles shared state never qualified — `close_thread` was deliberately
+// never on this list for exactly that reason. ⚠ Dropping a name from this ALLOW list makes the
+// op gate, which is the safe direction; nothing here is a deny list.
+const OWN_CHANNEL_MARKER_OPS = ['milestone'];
 
 // Outbound twin of isOwnChannelRead, SAME footing as isOwnChannelPost: scoped by CHANNEL only.
 // The THREAD is deliberately not scoped — the gate gets channelId, not taskId; a wrong thread

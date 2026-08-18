@@ -40,12 +40,15 @@ const BASE = "https://api.example.test";
  *   68 — PLUS ONE: `consumeCredits`, added with the `BillingMethods` link
  *        (`client-billing.ts`). First ADDITION this list has recorded — every
  *        prior delta was a removal — so stated as one, not folded in.
+ *   66 — less the TWO that went with thread closing (wiring plan Phase 4,
+ *        2026-08-18): `closeChannelThread` and `proposeChannelThreadClose`.
+ *        The `PATCH /tasks/[id]` route arms behind them are deleted too, so
+ *        restoring either binding would 400 rather than fail quietly.
  */
 const PUBLIC_SURFACE = [
   "appendChatMessages",
   "awaitChannelMessages",
   "claimOntologyAnchor",
-  "closeChannelThread",
   "consumeCredits",
   "createChannel",
   "createChannelThread",
@@ -95,7 +98,6 @@ const PUBLIC_SURFACE = [
   "moveKbByPath",
   "pingMcpStatus",
   "postChannelMessage",
-  "proposeChannelThreadClose",
   "readChannelMessages",
   "readKbFileByPath",
   "readSkillBody",

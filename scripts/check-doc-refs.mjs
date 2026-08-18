@@ -114,6 +114,13 @@ const SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.claude', 'out', 'c
 // "cleaned up". DO NOT ADD A LIVE DOC HERE — fix its reference instead.
 const DATED_CAPTURES = new Map([
   ['docs/AUDIT-FIX-VERIFICATION.md', 'captured 2026-05-04'],
+  // ⚠ Added 2026-08-18, when the wiring plan's Phase 4 deleted the stale-threads cron and
+  // `service-tasks-propose.ts` and three of this doc's C-numbered findings went dead with them.
+  // It qualifies on the list's own terms rather than on convenience: it is titled with its
+  // capture date, its header states the method and the tree it read, and its findings are
+  // numbered claims about that tree. Repointing them at today's code would delete the record of
+  // what was audited.
+  ['docs/CHANNELS-AUDIT-2026-08-07.md', 'audited 2026-08-07'],
   ['docs/CLEANUP.md', 'generated + executed 2026-06-12'],
   ['docs/DATA-LOADING-AUDIT.md', 'audited 2026-06-20'],
   ['docs/M5-M6-M10-AUDIT-FINDINGS.md', 'captured 2026-05-04'],

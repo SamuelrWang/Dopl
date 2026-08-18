@@ -13,7 +13,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { hasRule, declsOf } from "./helpers/source-probe.mjs";
@@ -67,7 +67,7 @@ test("the pause click still routes to the EXISTING interrupt IPC, unchanged", ()
 
 // ── 2. THE HEADER ────────────────────────────────────────────────────────────
 
-test("the header holds End session and Close thread, and Stop is still deleted", () => {
+test("the header holds End session, and Stop and Close thread are both deleted", () => {
   // v3.1 deleted BOTH extra controls. Stop stays deleted — the send button's pause morph
   // covers every in-flight state and a second control only competed with it.
   assert.match(HTML, /id="btnEnd"[^>]*>End session</);
@@ -77,46 +77,37 @@ test("the header holds End session and Close thread, and Stop is still deleted",
   }
   assert.ok(!/closeOutcome|seg-btn/.test(JS), "nor any dead outcome bookkeeping");
 
-  // P1-6 (2026-08-04): CLOSE THREAD IS BACK, and the reason v3.1 removed it is the reason it
-  // had to return. "Closing belongs with the thread, not with one member's window" was true and
-  // insufficient: nothing else closed either — no layer linked a responder's "I am finished" to
-  // channel_tasks, and threads sat open for months — and decision 2 now makes the HUMAN the only
-  // closer at all. Removing it from the window where the operator watches the work, while also
-  // removing it from the agent, left the thread open unless somebody remembered another surface.
-  assert.match(HTML, /id="btnCloseThread"[^>]*>Close thread</);
-  assert.ok(HTML.includes('id="closePanel"'), "the panel is in the markup");
-  assert.ok(HTML.includes('id="closeSummary"'), "with a summary field");
-  // HIDDEN BY DEFAULT, on both the button and the panel: the control paints itself in only for a
-  // session that has a first-class thread and has not settled.
-  assert.match(HTML, /id="btnCloseThread"[^>]*hidden/);
-  assert.match(HTML, /id="closePanel"[^>]*hidden/);
+  // ⚠ CLOSE THREAD IS GONE FOR GOOD (wiring plan Phase 4, 2026-08-18), and this file has
+  // watched it leave twice. v3.1 removed the CONTROL on the argument that closing belongs with
+  // the thread rather than with one member's window; P1-6 (2026-08-04) brought it back because
+  // nothing else closed either. What settles it is that THREADS DO NOT CLOSE at all now — the
+  // route, the service, the reducer branch, the IPC handler and session-close-ui.js are all
+  // deleted, so there is no seam left to return through. What the operator ends here is the
+  // AGENT, and "End session" is that control.
+  for (const gone of ["btnCloseThread", "closePanel", "closeSummary", "closeNote",
+    "btnCloseCancel", "btnCloseDone", "btnCloseFailed"]) {
+    assert.ok(!HTML.includes(`id="${gone}"`), `#${gone} is gone from the markup`);
+    assert.ok(!JS.includes(`"${gone}"`), `#${gone} is gone from the controller`);
+  }
+  // ⚠ The SCRIPT TAG, not the name: the markup's own comment names the deleted module on
+  // purpose, which is the annotate-as-history rule `test/removed-vocabulary.test.mjs` enforces
+  // on the main tree. A bare name check would punish the annotation it wants.
+  assert.ok(!/<script[^>]*session-close-ui\.js/.test(HTML), "and the module is not loaded");
 });
 
-test("the close SEAM is reached by exactly one module, and it is not the controller", () => {
-  // The bridge + IPC + reducer branch were always the seam; what changed is that a renderer path
-  // exists again. It lives in session-close-ui.js (session.js is at the §2 cap), so the
-  // controller still never calls closeTask itself — it mounts and paints.
-  assert.ok(!/closeTask\(/.test(JS), "the controller never calls it directly");
-  assert.match(JS, /closeUi\.mount\(/, "…it mounts the module that does");
-  const CLOSE_UI = readFileSync(R("session-close-ui.js"), "utf8");
-  assert.match(CLOSE_UI, /bridge\.closeTask\(outcome, /, "and that module reaches the bridge");
+test("no layer of the session window can still close a thread", () => {
+  // ⚠ THE WHOLE LANE, END TO END. The bridge + IPC + reducer branch were the seam a renderer
+  // path could always return through — which is exactly how the control came back in P1-6. It
+  // is gone at every layer now, so a future control would have to rebuild all of it (and would
+  // find no route to call).
+  assert.ok(!/closeTask/.test(JS), "the controller has no call and no mount");
+  assert.ok(!existsSync(R("session-close-ui.js")), "the renderer module is gone from disk");
   const PRELOAD = readFileSync(R("session-preload.js"), "utf8");
-  assert.match(PRELOAD, /closeTask\(outcome, summary\)/, "the bridge member is still declared");
+  assert.ok(!/closeTask\(outcome/.test(PRELOAD), "the bridge member is undeclared");
   const REDUCER = readFileSync(fileURLToPath(new URL("../main/session-reducer.js", import.meta.url)), "utf8");
-  assert.match(REDUCER, /if \(type === 'close_task'\)/, "and main still knows how to close one");
-});
-
-test("the close control refuses to appear where it would do nothing", () => {
-  // Not a permission check — the server owns that (creator or target only) and a refusal comes
-  // back as a notice. These two are about a button that would be inert:
-  //   NO THREAD    `closeTask` is a no-op without a first-class id (main/session-close-task.js).
-  //   ALREADY ENDED  this session has settled; the thread may still be open, but not from here.
-  const { canClose } = require(R("session-close-ui.js"));
-  assert.equal(canClose({ taskId: "t1" }), true);
-  assert.equal(canClose({ taskId: "t1", ended: true }), false);
-  assert.equal(canClose({ taskId: "" }), false);
-  assert.equal(canClose({}), false);
-  assert.equal(canClose(null), false);
+  assert.ok(!/if \(type === 'close_task'\)/.test(REDUCER), "main has no close_task branch");
+  const IPC = readFileSync(fileURLToPath(new URL("../main/session-ipc.js", import.meta.url)), "utf8");
+  assert.ok(!/ipcMain\.handle\('session:close-task'/.test(IPC), "and no IPC handler");
 });
 
 // ── 3. THE THINKING CHIP ─────────────────────────────────────────────────────

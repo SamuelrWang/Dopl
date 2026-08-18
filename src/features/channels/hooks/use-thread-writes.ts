@@ -36,12 +36,7 @@ import {
   type MessagesCache,
   type ThreadsCache,
 } from "../lib/optimistic-cache";
-import type {
-  ChannelMessage,
-  ChannelThread,
-  MessageIntent,
-  ThreadOutcome,
-} from "../types";
+import type { ChannelMessage, ChannelThread, MessageIntent } from "../types";
 
 /**
  * THE FLAGSHIP WRITE PATH — sending a message and starting a session, made
@@ -79,13 +74,11 @@ export interface OpenThreadDraft {
   toUserId: string;
 }
 
-export interface ThreadOpDraft {
-  channelId: string;
-  threadId: string;
-  op: "close" | "reopen";
-  outcome?: ThreadOutcome;
-  summary?: string;
-}
+// ⚠ `ThreadOpDraft` and {@link threadOpConfig} USED TO LIVE HERE — the PATCH that
+// drove `{op:"close"}` / `{op:"reopen"}` from the thread card and the thread
+// panel. Both are DELETED with thread closing (wiring plan Phase 4, 2026-08-18);
+// the route arms behind them are gone too, so a resurrected caller would 400 on
+// the discriminator rather than fail quietly.
 
 // ⚠ Re-exported, not re-declared: `use-thread-writes-shared.ts` is where these
 // live now, and every existing importer keeps its import path.
@@ -244,55 +237,6 @@ export function openThreadConfig(
   };
 }
 
-export function threadOpConfig(
-  deps: ThreadWritesParams
-): UseApiMutationConfig<ThreadOpDraft, { task: ChannelThread }> {
-  return {
-    request: (draft) => ({
-      path: `${channelThreadsPath(draft.channelId)}/${encodeURIComponent(
-        draft.threadId
-      )}`,
-      method: "PATCH",
-      workspaceId: deps.workspaceId,
-      body:
-        draft.op === "close"
-          ? { op: "close", outcome: draft.outcome, summary: draft.summary }
-          : { op: "reopen" },
-    }),
-    // The thread row IS the transcript's status overlay, so patching it flips
-    // the card's chip on the click rather than after two round trips.
-    optimistic: (draft) =>
-      patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) => {
-        const current = cache?.tasks.find((t) => t.id === draft.threadId);
-        if (!cache || !current) return cache;
-        return upsertThread(cache, {
-          ...current,
-          status: draft.op === "close" ? "closed" : "open",
-          outcome: draft.op === "close" ? draft.outcome ?? null : null,
-          outcomeSummary: draft.op === "close" ? draft.summary ?? null : null,
-          closedAt: draft.op === "close" ? new Date().toISOString() : null,
-        });
-      }),
-    reconcile: (data, draft) =>
-      patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) =>
-        upsertThread(cache, data.task)
-      ),
-    // A close/reopen posts a lifecycle echo only the server can render.
-    invalidate: (draft) => [
-      messagesKey(draft.channelId),
-      channelKeys.list().all,
-    ],
-    settleWith: deps.gate,
-    onError: (err, draft) =>
-      failed(
-        err,
-        draft.op === "close"
-          ? "Couldn't close the thread"
-          : "Couldn't reopen the thread"
-      ),
-  };
-}
-
 export function useThreadWrites(params: ThreadWritesParams) {
   // ⚠ Rebuilt every render on purpose — `useApiMutationWith` reads its config
   // through a ref, so these closures are always the current render's.
@@ -309,21 +253,12 @@ export function useThreadWrites(params: ThreadWritesParams) {
     FanOutThreadsDraft,
     FanOutThreadsResponse
   >(channelRequest, fanOutThreadsConfig(deps));
-  const threadOp = useApiMutationWith<ThreadOpDraft, { task: ChannelThread }>(
-    channelRequest,
-    threadOpConfig(params)
-  );
 
   return {
     send,
     openThread,
     fanOutThreads,
-    threadOp,
-    /** True while any of the four writes is in flight. */
-    pending:
-      send.pending ||
-      openThread.pending ||
-      fanOutThreads.pending ||
-      threadOp.pending,
+    /** True while any of the three writes is in flight. */
+    pending: send.pending || openThread.pending || fanOutThreads.pending,
   };
 }

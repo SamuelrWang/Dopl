@@ -41,17 +41,12 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMessageCreateSchema);
     const ctx = buildChannelContext(auth);
-    // ⚠ `threadClosed` is a notice about THIS POST, not a field of the message, so it rides in
-    // the ENVELOPE (like `echoSeq` on the close route) — a read would never carry it. Additive.
-    const { threadClosed, ...message } = await postMessage(
-      ctx,
-      requireChannelId(auth.params),
-      input
-    );
-    return NextResponse.json(
-      threadClosed ? { message, threadClosed: true } : { message },
-      { status: 201 }
-    );
+    // ⚠ The envelope carried a second key, `threadClosed`, until thread closing was removed
+    // (wiring plan Phase 4, 2026-08-18). Its shape is the rule worth keeping: a notice about
+    // THIS POST rather than a field of the message rides in the ENVELOPE, never inside
+    // `message`, because a READ of the same row could never carry it.
+    const message = await postMessage(ctx, requireChannelId(auth.params), input);
+    return NextResponse.json({ message }, { status: 201 });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

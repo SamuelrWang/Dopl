@@ -15,8 +15,16 @@
  *    never become the exchange's OUTCOME rides on `task_progress` by
  *    construction (`groupThread` can only make an `endEvent` from a terminal
  *    kind). Reading the flag off a terminal kind launders exactly the shape the
- *    construction prevents, so `isSessionEndedMarker` and
- *    `isThreadReopenedMarker` both REQUIRE `task_progress`.
+ *    construction prevents, so `isSessionEndedMarker` REQUIRES `task_progress`.
+ *
+ * ⚠ WHAT LEFT, AND WHAT DID NOT (wiring plan Phase 4, 2026-08-18). The REOPEN
+ * marker (`THREAD_REOPENED_KEY` / `isThreadReopenedMarker`) was deleted with
+ * thread closing — no reopen, no echo, no reader. The CALM TERMINAL reads below
+ * SURVIVED, and the distinction is what they describe: a calm flag says ONE
+ * MEMBER'S SESSION ended (`declined` still written by the desktop's consent DENY
+ * echo, `ended` by the operator End), which is not, and never was, an outcome
+ * for the shared thread. Deleting them would have taken the Declined receipt and
+ * the muted chip with them.
  */
 
 import type { ChannelMessage } from "../types";
@@ -107,35 +115,16 @@ export function isSessionEndedMarker(message: ChannelMessage): boolean {
 }
 
 /**
- * THE REOPEN ECHO. `channel_tasks` is in NEITHER realtime table set, so a status
- * change reaches no peer surface by itself; reopen rings the `channel_messages`
- * doorbell instead — `service-tasks-lifecycle.reopenTask` posts
- * `kind:"task_progress"` with `metadata:{ taskId, threadReopened:true }`.
+ * ⚠ `THREAD_REOPENED_KEY` + `isThreadReopenedMarker` USED TO LIVE HERE — the
+ * read side of the REOPEN ECHO. `channel_tasks` is in neither realtime table
+ * set, so a status change reached no peer surface by itself and `reopenTask`
+ * rang the `channel_messages` doorbell with a `task_progress` carrying
+ * `threadReopened:true`. DELETED with thread closing (wiring plan Phase 4,
+ * 2026-08-18): the service, the reserved write-side key and the notices-lane
+ * routing all went in the same change.
  *
- * Write-side mirror: `server/service-writes-metadata-markers.REOPEN_MARKER_KEY`,
- * where it is RESERVED (stripped from caller metadata, re-stamped only from
- * `PostMessageOptions.reopened` onto a tag that survived the participation
- * gate). That reservation is what makes rendering off the flag safe.
- *
- * ⚠ THE KIND IS NOT NEGOTIABLE. `task_progress` is chosen so the echo can never
- * become an `endEvent`, and so `task_started` cannot take over `draft.head` or
- * open the fallback window. This predicate fixes only the RENDERING layer:
- * `splitSessionEntries` routes every `task_progress` to the milestones lane, so
- * a reopened thread announces itself with a green ✓ under "Milestones".
- *
- * ⚠ STATUS IS DECIDED BY FLAG, NOT BY STRING. The echo's body is
- * server-generated and has two forms already; matching `"Thread reopened"`
- * regresses the first time somebody improves the copy.
+ * Two rules it demonstrated are still live in this file and worth not
+ * relearning: a marker that must never become the exchange's OUTCOME rides a
+ * NON-TERMINAL kind by construction, and status is decided by FLAG rather than
+ * by matching server-generated body copy.
  */
-export const THREAD_REOPENED_KEY = "threadReopened";
-
-/**
- * The server-stamped "thread reopened" echo — `task_progress` carrying
- * {@link THREAD_REOPENED_KEY} strictly. ⚠ STATUS, not a milestone.
- */
-export function isThreadReopenedMarker(message: ChannelMessage): boolean {
-  return (
-    message.kind === "task_progress" &&
-    message.metadata[THREAD_REOPENED_KEY] === true
-  );
-}

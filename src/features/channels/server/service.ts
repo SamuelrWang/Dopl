@@ -15,10 +15,6 @@ import "server-only";
  *                            the server stamps (addressing, task keys, the
  *                            fan-out group)
  *   - `service-tasks.ts`   — first-class task lifecycle (create / set mode)
- *   - `service-tasks-lifecycle.ts` — the two status transitions (close / reopen),
- *                            each guarded against a double-apply and each echoed
- *                            into the transcript (`channel_tasks` is in no
- *                            realtime table set, so the echo IS the doorbell)
  *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
  *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
@@ -84,19 +80,12 @@ export type { TaskCreateOptions, TaskCreateResult } from "./service-tasks";
 export { createTaskFanOut } from "./service-tasks-fanout";
 export type { TaskFanOutResult } from "./service-tasks-fanout";
 
-// C-26 / C-30 (2026-08-08): CLOSE and REOPEN are the only two writes that move a
-// thread's `status`, and they now share one shape — guard the transition
-// atomically, echo it into the transcript, degrade to `echoSeq: null` if the echo
-// is lost. Their own module because that shape is the reason they change.
-export { closeTask, reopenTask } from "./service-tasks-lifecycle";
-export type {
-  TaskCloseResult,
-  TaskReopenResult,
-} from "./service-tasks-lifecycle";
-
-// DECISION 2 (2026-08-04): an agent PROPOSES, a human CLOSES. Its own module
-// because the two acts have different authorities over one shared thread.
-export { proposeTaskClose } from "./service-tasks-propose";
+// THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). `service-tasks-
+// lifecycle.ts` (closeTask / reopenTask) and `service-tasks-propose.ts`
+// (proposeTaskClose) are DELETED, and with them the only writes that ever moved
+// `channel_tasks.status`. The column and its CHECK survive carrying legacy
+// `closed` rows; nothing reads them. The operator pauses or ends an AGENT, not a
+// thread.
 
 export {
   createConsentRequest,

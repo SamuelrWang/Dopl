@@ -29,7 +29,6 @@ import { computeStatus, computeSummary, type Draft } from "./group-thread-draft"
 // ⚠ Public surface — callers import from `./group-thread`; the sibling modules
 // are an internal layout detail.
 export type {
-  CloseProposal,
   SessionGroup,
   SessionStatus,
   ThreadItem,
@@ -40,12 +39,9 @@ export {
   calmTerminalStatus,
   isCalmTerminalStatus,
   isSessionEndedMarker,
-  isThreadReopenedMarker,
   SESSION_ENDED_KEY,
-  THREAD_REOPENED_KEY,
 } from "./group-thread-markers";
 export {
-  readCloseProposal,
   splitSessionEntries,
   substantiveEndBody,
   truncateSummary,
@@ -299,9 +295,10 @@ export function groupThread(
         // card's honest end note — recorded HERE rather than in `endEvent`
         // precisely so it can never become the exchange's outcome.
         //
-        // ⚠ The REOPEN echo also rides `task_progress` for that guarantee; only
-        // the LANE SPLIT tells it apart. Deliberately NOT wired into
-        // `sessionEndedEvent` — a reopen is the opposite signal.
+        // ⚠ The REOPEN echo used to ride `task_progress` for the same guarantee
+        // and was told apart only by the LANE SPLIT; it went with thread closing
+        // (wiring plan Phase 4, 2026-08-18), and it was deliberately never wired
+        // into `sessionEndedEvent` because a reopen was the opposite signal.
         if (isSessionEndedMarker(message)) draft.sessionEndedEvent = message;
         break;
       default:

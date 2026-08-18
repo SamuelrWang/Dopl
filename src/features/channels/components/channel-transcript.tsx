@@ -59,7 +59,6 @@ export function ChannelTranscript({
   threadsLoading,
   currentUserId,
   highlightedThreadId,
-  onCloseThread,
   agents,
 }: {
   messages: ChannelMessage[];
@@ -77,18 +76,11 @@ export function ChannelTranscript({
   /** Thread the panel navigated to — its {@link SessionCard} shows a transient
    *  ring. Null / undefined highlights nothing. */
   highlightedThreadId?: string | null;
-  /** ⚠ Close only — reopen is the thread panel's job, so no reopen callback
-   *  comes through the transcript. */
-  onCloseThread?: (
-    threadId: string,
-    outcome: "completed" | "failed",
-    summary?: string
-  ) => Promise<void>;
 }) {
   const items = useMemo(() => {
     const overlays = new Map(threads.map((t) => [t.id, threadOverlayFrom(t)]));
     const grouped = groupThread(messages, overlays);
-    // Flicker suppression: an OPEN thread whose id is UUID-shaped has an
+    // Flicker suppression: a thread whose id is UUID-shaped has an
     // authoritative overlay, but before that overlay loads `groupThread`
     // falls back to the message-derived status — a delivered reply reads "done"
     // ("Thread complete"), then snaps to its real status once threads arrive. While
@@ -120,7 +112,6 @@ export function ChannelTranscript({
               highlighted={highlightedThreadId === item.session.taskId}
               thread={threads.find((t) => t.id === item.session.taskId)}
               currentUserId={currentUserId}
-              onCloseThread={onCloseThread}
             />
           );
         }

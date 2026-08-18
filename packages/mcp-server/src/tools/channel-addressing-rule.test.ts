@@ -109,9 +109,12 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
   });
 
   it("REFUSES every removed op at the enum, before any handler runs", () => {
-    // ⚠ DROPPED rather than kept for a teaching refusal, unlike `close_thread`
-    // whose capability MOVED to `propose_close`. These capabilities are gone,
-    // so "invalid enum value" is the honest answer.
+    // ⚠ DROPPED rather than kept for a teaching refusal: these capabilities are
+    // gone, so "invalid enum value" is the honest answer. `close_thread` WAS the
+    // counter-example here — kept in the enum because its capability had moved
+    // to `propose_close` — and both left with thread closing (wiring plan
+    // Phase 4, 2026-08-18), which is the rule stated the other way round: a
+    // teaching refusal is only honest while there is something to teach.
     for (const op of [
       "agents",
       "summon_agent",
@@ -141,16 +144,30 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
       "list_threads",
       "get_thread",
       "create_thread",
-      "propose_close",
-      // ⚠ Kept in the enum ON PURPOSE — an older agent gets a teaching refusal
-      // naming `propose_close`, not an opaque enum error.
-      "close_thread",
+      // ⚠ `propose_close` and `close_thread` were on this list until thread
+      // closing was removed (wiring plan Phase 4, 2026-08-18). `close_thread`
+      // was kept in the enum ON PURPOSE so an older agent got a teaching
+      // refusal rather than an opaque enum error — a trade that only pays
+      // while there is something to do instead.
       "set_thread_mode",
     ]) {
       expect(
         CHANNEL_INPUT_SHAPE.op.safeParse(op).success,
         `op="${op}" was lost`,
       ).toBe(true);
+    }
+  });
+
+  it("refuses the two ops thread closing took with it", () => {
+    // ⚠ The enum is the gate: `close_thread` used to be IN it, answered with a
+    // teaching refusal. With nothing to teach instead, a stale caller gets a
+    // -32602 — which is the accepted cost of the words surviving nowhere in the
+    // shipped surface (`channel-law.test.ts › REMOVED_VOCABULARY`).
+    for (const op of ["propose_close", "close_thread"]) {
+      expect(
+        CHANNEL_INPUT_SHAPE.op.safeParse(op).success,
+        `op="${op}" came back`,
+      ).toBe(false);
     }
   });
 });

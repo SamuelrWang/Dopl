@@ -237,9 +237,11 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).toContain("since=7");
     expect(text).toContain("RETURNS INSIDE your current turn");
     expect(text).toContain("Some MCP clients background a call still pending");
-    // ⚠ Stop rule rides with EVERY re-arm instruction.
-    expect(text).toContain("Keep re-arming while the thread is OPEN");
-    expect(text).toContain("closed or failed");
+    // ⚠ Stop rule rides with EVERY re-arm instruction — and since thread
+    // closing was removed (wiring plan Phase 4, 2026-08-18) it is the
+    // addressee's silence, said out loud as the ONLY signal there is.
+    expect(text).toContain("Keep re-arming while something came from that member");
+    expect(text).toContain("no finished STATE to wait for");
   });
 
   it("an await that RETURNED messages re-arms on the new cursor", async () => {

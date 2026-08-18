@@ -21,6 +21,14 @@
  * WHAT THE OLD KIND WAS ACTUALLY BUYING was the honest "Working…" replacement,
  * and that is kept: the marker feeds `calmEndStatus` directly. Both halves are
  * pinned below — the status must NOT move, and the note must still appear.
+ *
+ * ⚠ THE LANE-SPLIT BLOCK AT THE BOTTOM WAS INHERITED (2026-08-18, wiring plan
+ * Phase 4) from `group-thread-reopen.test.ts`, which was deleted with thread
+ * closing. F-176 was found on the REOPEN echo — every `task_progress` went to
+ * the check-marked milestones lane, so the message whose whole content was "this
+ * settled exchange is live again" rendered with a green ✓. `session_ended` is
+ * the same shape of claim and now the only marker in the `notices` lane, so the
+ * guard lives here or nowhere.
  */
 
 import { describe, it, expect } from "vitest";
@@ -28,6 +36,7 @@ import {
   groupThread,
   isSessionEndedMarker,
   SESSION_ENDED_KEY,
+  splitSessionEntries,
   type SessionGroup,
   type ThreadOverlay,
 } from "./group-thread";
@@ -56,6 +65,7 @@ function msg(over: Partial<ChannelMessage> = {}): ChannelMessage {
 
 const started = () =>
   msg({ kind: "task_started", body: "Started working on this request." });
+const milestone = (body: string) => msg({ kind: "task_progress", body });
 const sessionEnded = () =>
   msg({
     kind: "task_progress",
@@ -163,5 +173,60 @@ describe("what it must still do — the note the old kind was buying", () => {
     expect(session.calmEndStatus).toBeNull();
     expect(session.status).toBe("active");
     expect(session.entries).toHaveLength(0);
+  });
+});
+
+// ── the lane split (F-176) ────────────────────────────────────────────────────
+
+describe("the lane split — a reserved STATUS marker is not an accomplishment", () => {
+  it("routes the marker to NOTICES, never to the check-marked milestones lane", () => {
+    const { milestones, replies, notices } = splitSessionEntries([sessionEnded()]);
+    expect(notices.map((n) => n.body)).toEqual(["Session ended"]);
+    // The regression itself: a green ✓ beside a line that reports a stop.
+    expect(milestones).toHaveLength(0);
+    // And it is not a deliverable either — it says nothing about the work.
+    expect(replies).toHaveLength(0);
+  });
+
+  it("leaves an ordinary agent milestone in the milestones lane", () => {
+    const { milestones, notices } = splitSessionEntries([
+      milestone("Read the schema"),
+      sessionEnded(),
+      milestone("Wrote the migration"),
+    ]);
+    expect(milestones.map((m) => m.body)).toEqual([
+      "Read the schema",
+      "Wrote the migration",
+    ]);
+    expect(notices).toHaveLength(1);
+  });
+
+  it("draws the line by FLAG, not by the marker's wording", () => {
+    // The body is server-generated; a later build may word it differently. A
+    // string-matching renderer would regress to the ✓.
+    const reworded = msg({
+      kind: "task_progress",
+      body: "This window was closed.",
+      metadata: { taskId: THREAD, [SESSION_ENDED_KEY]: true },
+    });
+    expect(splitSessionEntries([reworded]).notices).toHaveLength(1);
+    // The converse: the FAMILIAR WORDING with no flag is somebody typing a
+    // milestone, and it stays a milestone.
+    const impostor = msg({ kind: "task_progress", body: "Session ended" });
+    expect(splitSessionEntries([impostor]).milestones).toHaveLength(1);
+    expect(splitSessionEntries([impostor]).notices).toHaveLength(0);
+  });
+
+  it("keeps every lane in seq order", () => {
+    const { milestones, replies, notices } = splitSessionEntries([
+      milestone("one"),
+      msg({ body: "a reply" }),
+      sessionEnded(),
+      milestone("two"),
+      msg({ body: "another reply" }),
+    ]);
+    expect(milestones.map((m) => m.body)).toEqual(["one", "two"]);
+    expect(replies.map((r) => r.body)).toEqual(["a reply", "another reply"]);
+    expect(notices).toHaveLength(1);
   });
 });

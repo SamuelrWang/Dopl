@@ -103,7 +103,9 @@ test("DECLINE is LOCAL: nothing is pushed, nothing is posted, no grant is record
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.activity, "idle");
   assert.ok(!r.effects.some((e) => e.type === "pushInbound"), "the agent never sees a declined message");
-  // No server write of ANY kind — a decline is not an echo, a close, or a lifecycle event.
+  // No server write of ANY kind — a decline is not an echo or a lifecycle event. `closeTask`
+  // was a real effect type until thread closing (wiring plan Phase 4, 2026-08-18) and stays on
+  // this list deliberately: the ban must not quietly narrow when an effect goes away.
   for (const banned of ["lifecycle", "closeTask", "persist", "settle"]) {
     assert.ok(!r.effects.some((e) => e.type === banned), `a decline must not ${banned}`);
   }

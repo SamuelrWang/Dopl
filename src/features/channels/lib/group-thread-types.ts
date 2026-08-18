@@ -87,16 +87,8 @@ export type ThreadItem =
   | { type: "session"; key: string; session: SessionGroup };
 
 /**
- * The CLOSE PROPOSAL a card renders as a confirmable prompt. ⚠ Reserved and
- * server-stamped (`service-writes-metadata.CLOSE_PROPOSAL_KEYS`), so a marker on
- * the wire is a proposal somebody was ENTITLED to make, never a claim a peer
- * wrote into their own metadata.
- *
- * The OUTCOME rides with it because the confirm prefills from it — the human
- * agrees or disagrees with a specific thing rather than re-deciding.
+ * ⚠ `CloseProposal` USED TO LIVE HERE — the shape a card rendered as a
+ * confirmable "close this thread?" prompt, read off the reserved server-stamped
+ * `closeProposed` / `closeOutcome` keys. DELETED with thread closing (wiring
+ * plan Phase 4, 2026-08-18): no proposal, no prompt, no reserved keys.
  */
-export interface CloseProposal {
-  /** The proposing message — its body is the reason, its author is who asked. */
-  message: ChannelMessage;
-  outcome: "completed" | "failed";
-}

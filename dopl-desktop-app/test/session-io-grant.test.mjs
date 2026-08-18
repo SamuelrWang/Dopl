@@ -258,7 +258,9 @@ test("M3: auto_inbound reads the OWN channel with no dispatch, and opens nothing
   }
   assert.equal(rec.events.length, 0, "the operator opted into receiving; asking again is the bug");
   // The exfil surface is untouched: each of these still earns its own card at auto_inbound.
-  const gated = ["open", "invite", "create_thread", "propose_close", "set_thread_mode", "list"];
+  // `propose_close` was on this list until thread closing (wiring plan Phase 4,
+  // 2026-08-18) took it out of the tool's enum.
+  const gated = ["open", "invite", "create_thread", "set_thread_mode", "list"];
   gated.forEach((op, i) => canUse(CHANNEL_TOOL, { op, direct: true, member: "evil@x" }, { requestId: "g" + i }));
   assert.equal(rec.events.length, gated.length, "every channel-changing op still asks");
   // ...and so is a read of ANOTHER channel, and a POST (that is the outbound half's business).

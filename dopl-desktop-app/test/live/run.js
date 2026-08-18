@@ -237,13 +237,14 @@ async function setup(ctx, who, tg) {
     });
     if (res.ok) {
       ctx.thread = res.json.task;
-      // NO CLEANUP STEP FOR THE THREAD, and this is not an oversight. CLOSING A THREAD IS
-      // HUMAN-ONLY (`CHANNEL_CLOSE_IS_HUMAN_ONLY`): an agent may propose a close, a person
-      // confirms it, and this harness holds an agent credential. The first version
-      // registered a `closeThread` teardown step and every run ended by SHOUTING that it
-      // had left a thread behind — the server refusing exactly as designed, reported as
-      // harness debris. Deleting the CHANNEL takes its threads with it, which is why the
-      // channel step is the only one needed.
+      // NO CLEANUP STEP FOR THE THREAD, and this is not an oversight — it is now simply
+      // impossible. ⚠ THREADS DO NOT CLOSE AT ALL (wiring plan Phase 4, 2026-08-18): no close,
+      // no propose, no reopen, and the `PATCH` arms behind them are deleted. Before that they
+      // were HUMAN-ONLY (`CHANNEL_CLOSE_IS_HUMAN_ONLY`) and this harness holds an agent
+      // credential, so the first version's `closeThread` teardown step ended every run by
+      // SHOUTING that it had left a thread behind — the server refusing exactly as designed,
+      // reported as harness debris. Deleting the CHANNEL takes its threads with it, which is
+      // why the channel step is the only one needed.
     } else {
       say(`NOTE: create_thread refused: HTTP ${res.status} ${res.text.slice(0, 300)}`);
     }

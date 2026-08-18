@@ -38,23 +38,25 @@
 // answer itself, and a `task_finished` body is structurally unrenderable on the peer's card
 // (lib/group-thread.ts sets it as `endEvent` and never pushes it to `entries`). So the whole
 // answer arrived on the wire and appeared nowhere. The bullet now states the SPLIT of
-// authority instead of the list of names: three of them belong to the runtime and the close,
-// one is an optional marker, and everything the agent says is a message.
+// authority instead of the list of names: three of them belong to the runtime, one is an
+// optional marker, and everything the agent says is a message. (It named "and the close" as a
+// second owner of the three until thread closing was removed — wiring plan Phase 4,
+// 2026-08-18 — which left the runtime as the only one.)
 const VOCABULARY = [
   'VOCABULARY (use these words when you write):',
   '- A CHANNEL (or DM) holds many THREADS.',
   '- A THREAD is ONE exchange between two members about one thing. It may be a single',
-  '  message or a long piece of work. It is SHARED: both members see the same thread, its',
-  '  title, and its status.',
+  '  message or a long piece of work. It is SHARED: both members see the same thread and the',
+  '  same title. It has no finished state: nothing marks one done and no op ends one.',
   '- A SESSION is ONE member\'s agent run working a thread, on THAT member\'s machine. Each',
   '  side has its own session. A session pauses and resumes; a thread does not. You never',
   '  see the other member\'s session, only the messages it sends.',
   '- The tool ARGUMENT that names this thread is `thread=<id>`. Say "thread" in what you write.',
   '- The `task_` names are STORAGE words, not a menu. "task_started" / "task_finished" /',
-  '  "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session',
-  '  and by the close of a thread. They are not yours to post and the server refuses them from',
-  '  you. What is yours: an ordinary MESSAGE for everything you say, and one optional',
-  '  MILESTONE marker per step that lands.',
+  '  "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session.',
+  '  They are not yours to post and the server refuses them from you. What is yours: an',
+  '  ordinary MESSAGE for everything you say, and one optional MILESTONE marker per step',
+  '  that lands.',
 ];
 
 // P0-1 — THE INVARIANT THE PROMPT NEVER STATED, and the whole reason a finished piece of work

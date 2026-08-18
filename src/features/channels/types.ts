@@ -34,10 +34,20 @@ export type ChannelDirectPeer = {
 /** How a thread is worked: interactive (multi-turn) or autonomous. */
 export type ThreadMode = "interactive" | "autonomous";
 
-/** Thread lifecycle status: open until an explicit close. */
+/**
+ * ⚠ LEGACY AND UNREAD SINCE 2026-08-18 (wiring plan Phase 4). THREADS DO NOT
+ * CLOSE — no close, no propose-then-confirm, no reopen; the operator pauses or
+ * ends an AGENT. `channel_tasks.status` and its CHECK constraint survive carrying
+ * rows closed before the removal (dropping the column is a migration behind a
+ * desktop-floor raise, INVARIANTS §13), and this type is the projection of that
+ * column. **Nothing writes it and nothing may branch on it.** A new `=== "open"`
+ * filter is a bug: it hides legacy rows from a list that is supposed to hold
+ * everything.
+ */
 export type ThreadStatus = "open" | "closed";
 
-/** How a closed thread ended. Null while the thread is still open. */
+/** Legacy, on {@link ThreadStatus}'s terms — the outcome of a close that can no
+ *  longer happen. Null on every thread opened since. */
 export type ThreadOutcome = "completed" | "failed";
 
 /**
@@ -50,6 +60,7 @@ export type ChannelThread = {
   channelId: string;
   workspaceId: string;
   title: string;
+  /** ⚠ LEGACY, UNREAD — see {@link ThreadStatus}. Four columns, one story. */
   status: ThreadStatus;
   outcome: ThreadOutcome | null;
   mode: ThreadMode;
@@ -58,13 +69,12 @@ export type ChannelThread = {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
-  /** Null while open, or when closed without one. */
   outcomeSummary: string | null;
   /**
    * When this thread last saw real activity — the newest message tagged for it,
    * or its own `createdAt` when nobody has posted. Derived off `channel_messages`
-   * by the `channel_tasks_activity` view; ⚠ NEVER `updatedAt`, whose only
-   * writers are close / set_mode / reopen (C-1).
+   * by the `channel_tasks_activity` view; ⚠ NEVER `updatedAt`, whose only writer
+   * is `set_mode` since close and reopen were removed (C-1).
    *
    * ⚠ ABSENT means THIS READ DID NOT DERIVE IT (a single-thread load), never
    * "no activity". Only the channel thread LIST carries it, and it is what that
@@ -264,17 +274,15 @@ export type ChannelMessage = {
 };
 
 /**
- * A message the caller just POSTED plus the notices that write raised.
+ * A message the caller just POSTED.
  *
- * ⚠ RESPONSE-ONLY, never stored: the post is accepted unchanged whether or not
- * the thread was closed, so this rides BESIDE the row, not inside `metadata`.
- * Present only when true (existing post shapes unchanged) and never on a READ —
- * `mapMessageRow` has no idea a thread was ever closed.
+ * ⚠ IT CARRIED ONE NOTICE, `threadClosed`, until thread closing was removed
+ * (wiring plan Phase 4, 2026-08-18) — a response-only flag, never stored, saying
+ * the post had landed in a settled thread. Nothing settles a thread now. The
+ * alias survives so the write path keeps a name distinct from the READ shape;
+ * a future post-time notice goes here rather than into `metadata`.
  */
-export type ChannelMessagePosted = ChannelMessage & {
-  /** True when the post landed in a thread whose row is no longer open. */
-  threadClosed?: true;
-};
+export type ChannelMessagePosted = ChannelMessage;
 
 export type ChannelMember = {
   channelId: string;

@@ -41,7 +41,8 @@ const GATE_REASONS = [
   'granted-for-session', //      the operator's scoped allowForTask key covers this exact shape
   'auto-outbound', //            AXIS B auto_outbound / auto_both on an own-channel post
   'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
-  'auto-outbound-marker', //     M4: the same outbound half on an own-channel propose_close / milestone
+  'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
+  //                             sibling `propose_close` went with thread closing, Phase 4)
   'tool-mode', //                AXIS A: the current toolMode covers this tool
 ];
 
@@ -61,10 +62,11 @@ function makeGateReason(deps) {
     if (!d.postFieldsOk(a.input)) return 'malformed-post-fields';
     if (d.isOwnChannelPost(a.input, a.channelId)) return 'message-approval-required';
     if (d.isOwnChannelRead(a.input, a.channelId)) return 'read-approval-required';
-    // M4: an own-channel propose_close / milestone now follows the OUTBOUND half of the axis
-    // exactly as a post does, so it stops on the same fact and must say the same thing.
+    // M4: an own-channel milestone follows the OUTBOUND half of the axis exactly as a post
+    // does, so it stops on the same fact and must say the same thing.
     // 'channel-op-approval-required' ("message approval covers this channel's messages, not
-    // this operation") became FALSE for these two the moment the axis started covering them.
+    // this operation") became FALSE for it the moment the axis started covering it. (Its
+    // sibling `propose_close` was on this branch until thread closing, Phase 4, 2026-08-18.)
     if (d.isOwnChannelMarker(a.input, a.channelId)) return 'message-approval-required';
     const op = a.input && a.input.op;
     // A SLUG lands here too, and that is the single most confusing gate in the product: the

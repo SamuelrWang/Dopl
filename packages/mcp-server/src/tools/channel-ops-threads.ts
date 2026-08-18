@@ -1,7 +1,7 @@
 /**
- * `dopl_channel` THREAD op handlers: create_thread / close_thread /
- * set_thread_mode. ⚠ `channel-` filename prefix required by the parity
- * split-scan (parity.test.ts).
+ * `dopl_channel` THREAD op handlers: create_thread / set_thread_mode.
+ * ⚠ `channel-` filename prefix required by the parity split-scan
+ * (parity.test.ts).
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`.
  *
@@ -11,16 +11,15 @@
  *     the caller was never invited to. 120 chars, NO charset rule, so newlines
  *     are possible. Neutralized at every site.
  *   - `thread.title` — typed by whoever OPENED the thread (200 chars, interior
- *     newlines allowed), frequently NOT the caller since a close is permitted to
- *     the thread's TARGET. Hence header AND code span on that path.
+ *     newlines allowed), and NOT necessarily the caller on every path. Hence
+ *     header AND code span wherever it is rendered.
  *   - `member.label` — already render-safe: `resolveMemberOr` neutralizes at the
  *     source (`memberLabel` in channel-shared.ts). Do not re-wrap.
  */
 
-import type { DoplClient, ThreadMode, ThreadOutcome } from "@dopl/client";
+import type { DoplClient, ThreadMode } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { inlineOr, isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
-import { UNTRUSTED_THREAD_HEADER } from "./channel-render";
 // ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
 import { createThreadReplyLines } from "./channel-wake-guidance";
@@ -150,98 +149,30 @@ export async function opCreateThread(
         cursor,
         member.label,
         runtime,
-        `Keep re-arming while the exchange is alive; ${member.label}'s agent may work for a long stretch before answering. Every ~3 empty holds, check first: dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}") for status, and op="read" for progress milestones. STOP and report to your operator when the thread is closed or failed, or when nothing at all has come from them for ~30+ minutes.`,
+        `Keep re-arming while the exchange is alive; ${member.label}'s agent may work for a long stretch before answering. Every ~3 empty holds, check first with op="read" for progress milestones. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`,
       ),
     ].join("\n"),
   );
 }
 
 /**
- * ⚠ `close_thread` IS NOT AN AGENT'S OP. A close settles the SHARED thread for
- * BOTH members: "the work looks done" and "I am finished with this exchange"
- * are DIFFERENT judgments, and only the human makes the second.
+ * ⚠ TWO OPS ENDED HERE with thread closing (wiring plan Phase 4, 2026-08-18):
  *
- * ⚠ ANSWERED, NOT REMOVED — the op stays in the enum so an agent trained on the
- * old surface gets this sentence instead of a zod "invalid enum value" at the
- * moment it most needs telling what to do instead. The real gate is the
- * server's `ThreadCloseIsHumanOnlyError`, not this.
- */
-export function closeThreadIsHumansToMake(): ToolResponse {
-  return err(
-    `Nothing was closed: closing a thread is your OPERATOR's decision, not yours. A close settles the exchange for BOTH members and takes it off the open list, and only the person you work for knows whether they are finished with it — the work being done is not the same judgment. PROPOSE it instead and they confirm: dopl_channel(op="propose_close", channel="<id>", thread="<id>", outcome="completed"|"failed", summary="<one line saying what came of it>"). That posts a marked note in the thread which surfaces to your operator as a confirmable prompt; the thread stays open and fully live until they act on it. Do not propose early. Propose once per STATE of the thread: an immediate repeat collapses into the prompt they already have, but if they keep it open and the work moves on, propose again when it is done again.`,
-  );
-}
-
-/**
- * PROPOSE a close — the agent's terminal act on a thread, and the only one it
- * has (see {@link closeThreadIsHumansToMake}).
+ *  - `closeThreadIsHumansToMake()` — the teaching refusal for `close_thread`.
+ *    It was ANSWERED rather than removed from the enum, so an agent trained on
+ *    the old surface got a sentence telling it what to do instead of a zod
+ *    "invalid enum value". That trade only pays while there IS something to do
+ *    instead; there is not, and the words themselves now teach a feature that
+ *    does not exist, so the op left the enum too.
+ *  - `opProposeClose()` — the agent's terminal act, a marked non-terminal
+ *    `task_progress` its operator confirmed. Nothing to confirm.
  *
- * ⚠ Proposing is allowed to the thread's CREATOR **or its TARGET**, so the
- * common shape is a peer's thread and a peer's 200-char newline-tolerant TITLE
- * rendered as our own narration. So: title is one inline code span (a value,
- * never structure), and {@link UNTRUSTED_THREAD_HEADER} comes FIRST.
+ * The rendering rules they demonstrated are still the file's: a peer-typed TITLE
+ * goes in one inline code span with `channel-render.ts`'s
+ * `UNTRUSTED_THREAD_HEADER` FIRST, and a returned cursor is STATED from the
+ * server's own seq, never guessed. ⚠ Nothing left here renders a title the
+ * caller did not just type, so the header has no site in this file today.
  */
-export async function opProposeClose(
-  client: DoplClient,
-  channelRef: string,
-  threadId: string,
-  outcome: ThreadOutcome,
-  summary?: string,
-): Promise<ToolResponse> {
-  const ch = await resolveChannelOr(client, channelRef);
-  if (isErr(ch)) return ch;
-  const chName = inlineOr(ch.name, NO_NAME);
-  // ⚠ A proposal WRITES a message (a marked, NON-terminal `task_progress` the
-  // operator's surfaces render as a prompt), so it MOVES the channel cursor.
-  // `markerSeq` is where it landed — `openingSeq`'s mirror at the other end.
-  let proposed;
-  try {
-    proposed = await client.proposeChannelThreadClose(ch.id, threadId, {
-      outcome,
-      summary,
-    });
-  } catch (e) {
-    // ⚠ `threadId` round-trips: an agent copies it from a `read` legend, and a
-    // legend id is `metadata.taskId`, peer-set verbatim for any non-UUID value.
-    // A hand-built code span is not a container — one backtick opens it.
-    const safeId = inlineOr(threadId, NO_ID);
-    if (isNotFound(e)) {
-      return err(`No thread ${safeId} in **${chName}**.`);
-    }
-    if (isForbidden(e)) {
-      return err(
-        `You can't propose a close on thread ${safeId} — only its creator or the member it's addressed to may, and nothing was posted.`,
-      );
-    }
-    throw e;
-  }
-  // Caller's OWN summary from this very call, echoed unchanged: not peer text
-  // (the stored `outcomeSummary` is neutralized by the READ ops), runs to 2000
-  // chars, and neutralizing would clip the operator-facing outcome for no threat.
-  const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
-  // ⚠ THE CURSOR IS STATED, NEVER DERIVED: a guessed echo seq (last known + 1)
-  // armed an await past the peer's main deliverable, which was already below
-  // it. Either the number the server returned, or no seq at all.
-  const marker =
-    proposed.markerSeq === null
-      ? [
-          `The proposal note did NOT post (your operator has no prompt to act on). The thread is untouched, so this is safe to retry once.`,
-        ]
-      : [
-          `Proposal note posted at seq ${proposed.markerSeq} — if you re-arm a wait, use since=${proposed.markerSeq} (or your last READ seq), never a guessed seq.`,
-        ];
-  return ok(
-    [
-      UNTRUSTED_THREAD_HEADER,
-      ``,
-      // ⚠ A proposal changes NOTHING about the thread — it stays open, routes,
-      // and accepts posts whether or not anyone acts on the prompt. Claiming
-      // finality makes an agent go quiet on a thread that is still live.
-      `Proposed closing thread **${inlineOr(proposed.thread.title, NO_TITLE)}** in **${chName}** as ${proposed.outcome}${summaryNote}. NOTHING IS CLOSED: your operator sees this as a prompt and decides, and until they do the thread is open and fully live — it routes, it accepts posts, and a reply may still arrive. Repeating this call with nothing new said collapses into the same prompt — do not retry it idly. If the exchange CONTINUES and later concludes again, a fresh proposal is legitimate and will raise a new prompt. In the meantime, keep working the thread and answer what comes in.`,
-      ...marker,
-    ].join("\n"),
-  );
-}
 
 /**
  * Set a thread's mode. Title neutralized as everywhere else, but ⚠ NO untrusted

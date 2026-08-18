@@ -157,12 +157,13 @@ function onLaunched(info) {
     .catch((err) => diag('session onLaunched echo error', err && err.message));
 }
 
-// task_finished / task_failed when the session ends (End / cap / close_task / crash).
+// task_finished / task_failed when the session ends (End / cap / crash).
 // The engine is authoritative: it passes the resolved `kind`, the `extra` metadata (e.g.
 // { interrupted:true }), and — for P3 (v1.7.4) — an explicit calm `bodyOverride`. IDLE
 // no longer calls this at all (it parks). The turn/cost caps ride { capped:true } and
 // the operator End rides { ended:true }, so the web renders a calm terminal state
-// (P4) exactly like the interrupted/declined echoes; the task stays OPEN (no closeTask).
+// (P4) exactly like the interrupted/declined echoes; the thread row is never touched — a
+// session ending is not, and since Phase 4 (2026-08-18) cannot be, an outcome for it.
 // `bodyOverride` wins; else we derive a generic body from the metadata flags.
 function onEnded(info, kind, extra, bodyOverride) {
   const meta = extra || {};
