@@ -2079,7 +2079,7 @@ The fix is an **arm**, not a setting (`main/channel-prefs.js`), enforced three w
 
 `test/session-preset-start.test.mjs` previously regex-matched reducer SOURCE TEXT and never drove `recreateParkedShell` or `session-park.startResume` — the two paths that actually re-applied the preset — so it could not have failed while the bug was live. It now drives the real construction site and asserts the resulting axes per shape.
 
-**H3 — `main/channel-dir-ipc.js` was renderer-reachable with no sender binding.** All SIX handlers validated their payload and never their caller, while `renderer/preload.js` exposes them on the window that loads REMOTE `usedopl.com` content. `setPermissionPreset` was the HIGH (chained with H2 it was zero-click local execution), but `chooseFolder` (native dialog on demand), `clearFolder`, `getFolderLabel` (leaks a local path fragment), `getPermissionPreset` and `sessions:reopen` were all equally unbound. Every handler now goes through `mainOnly()`, which checks **two** things: the sender is the main window's `webContents`, **and** it is that window's TOP frame — a cross-origin iframe SHARES its host's `webContents`, so identity alone would let embedded content drive all six. Fails closed on a missing/destroyed/unbuilt window, on a `senderFrame` getter that throws (a detached frame), and when `register()` is given no `getMainWindow` accessor at all. The refusal shape deliberately matches an invalid-payload rejection so a hostile page cannot use the difference to probe. `index.js` passes a lazy accessor (the window is built after `register()` and replaced on reopen). A structural test asserts every `ipcMain.handle` in the file is wrapped, so a new op cannot be added unbound.
+**H3 — `main/channel-dir-ipc.js` was renderer-reachable with no sender binding.** All SIX handlers validated their payload and never their caller, while `renderer/preload.js` exposes them on the window that loads REMOTE `usedopl.com` content. `setPermissionPreset` was the HIGH (chained with H2 it was zero-click local execution), but `chooseFolder` (native dialog on demand), `clearFolder`, `getFolderLabel` (leaks a local path fragment), `getPermissionPreset` and `sessions:reopen` were all equally unbound. ⚠ SUPERSEDED 2026-08-18 (wiring plan Phase 10): the wrapper is `appWindowOnly()` and its subject is `main/app-windows.js`'s registry rather than the one main window — see the dated Phase 10 stratum at the end of this file, and INVARIANTS §11 for the live rule. As of H3: Every handler now goes through `mainOnly()`, which checks **two** things: the sender is the main window's `webContents`, **and** it is that window's TOP frame — a cross-origin iframe SHARES its host's `webContents`, so identity alone would let embedded content drive all six. Fails closed on a missing/destroyed/unbuilt window, on a `senderFrame` getter that throws (a detached frame), and when `register()` is given no `getMainWindow` accessor at all. The refusal shape deliberately matches an invalid-payload rejection so a hostile page cannot use the difference to probe. `index.js` passes a lazy accessor (the window is built after `register()` and replaced on reopen). A structural test asserts every `ipcMain.handle` in the file is wrapped, so a new op cannot be added unbound.
 
 **§2 splits this required** (all three parents were at or within one line of the 500-line cap): `main/session-query.js` (SDK option assembly + `startQuery`/`consume`/`abortInFlight`, out of `session-engine.js`); `main/session-effects.js` (the reducer's pure effect builders — `gatePhase`, `endedEmit`, `endLifecycle`, `endEffects`, `modesEmit`, `parkEffects` — out of `session-reducer.js`); `main/trigger-outcomes.js` (the no-reply terminal echoes, out of `trigger.js`). `session-reducer.js` requires the effect builders at module scope ABOVE its sentinel, so inside the block they are free vars and the two sentinel blocks CONCATENATE back into the standalone program the extraction tests always evaluated. **`test/_reducer-block.mjs` is now the one place that slices them** — eight test files share it, so the next split costs one edit instead of eight.
 
@@ -2898,3 +2898,93 @@ under a feature already called `channels`, and renaming ~28 files to remove a wo
 would have moved every symbol anchor in INVARIANTS on the same day the surface
 changed. The rule the tree now runs on is written into §5 so the next reader does not
 mistake the folder for an unshipped page.
+
+## 2026-08-18 — Widening a fail-closed guard on purpose (wiring plan Phase 10, the pop-out thread window)
+
+**The ruling, first, because it is the whole entry.** Phase 10 sat parked through the
+cutover on a security decision that was Samuel's to make, not the plan's. Every
+renderer-reachable `ipcMain.handle` was bound to THE MAIN WINDOW's `webContents` and
+its top frame, so a second SPA window would have had every `apiRequest` refused and
+would have rendered nothing while reporting nothing. Two ways out were on the record:
+
+- **(a) widen the binding** to a registry of app-owned windows — a change to a
+  fail-closed guard that exists because a cross-origin iframe SHARES its host's
+  `webContents`; or
+- **(b) reuse the session window's renderer** — cheaper, already contained, and a
+  DIFFERENT renderer from the SPA, so the thread view would be built twice.
+
+**Samuel took (a), explicitly, on 2026-08-18**, with two conditions attached: it is
+done deliberately, and it ships with **an enumerating test of the bound senders** plus
+**the refusal shape for unbound senders pinned unchanged**. (b) was rejected on the
+stated ground that building the thread view twice is exactly the duplication the
+channels port exists to remove.
+
+### Why "widen the guard" was the safe answer here and is not a general one
+
+The instinct that a widened security check is a weakened one is usually right, and it
+is wrong in this shape for a reason worth naming: **the widening moved WHO may call
+from a variable to a registry that only main can write.** `register(win)` takes a live
+`BrowserWindow` — an object no renderer can name, let alone hand across IPC — it is
+behind no `ipcMain.handle`, and no preload mentions it. A renderer cannot enlarge the
+set it is judged against; the most it can do is ask main to open a window that main
+itself then registers, and the op that does so is under the same binding as everything
+else. **The iframe check, the fail-closed direction and the byte-shape of every
+refusal did not move at all** — which is the part the test now asserts rather than the
+part a reviewer remembers.
+
+The generalization: *widening an authorization check is safe exactly when the widened
+subject is still written by the trusted side.* Had the registry been keyed on anything
+the renderer supplies — a window id, a name, a token — (b) would have been correct.
+
+### The pin that survives an evolution is the one that fails on ADD
+
+P5 hardened `channel-ipc-sender.test.mjs` so that every `ipcMain.handle` must be
+VISIBLY wrapped at its registration site, asserted by COUNT as well as by name. That
+pin had to change here — the wrapper is renamed and the op list grew — and the
+temptation in that position is to relax it to whatever the new code does. What it got
+instead: the count assertion stayed, the structural belt stayed, **and it gained a
+refusal that the retired `mainOnly(` name survives nowhere in the file**, so the
+evolution cannot leave a half-migrated site behind. The enumerating half is new:
+`bootIpc` now binds TWO windows and drives every op from both, from a third
+unregistered one, from an iframe inside a bound one, and against an unbound surface.
+**An editor's memory of who may call is what the plan asked us to replace, and a list
+that is DRIVEN is the only kind that cannot be wrong.**
+
+### The failure mode that has no error shape, twice
+
+The reason Phase 10 was ever blocked is that a refused IPC call in this design is not
+an exception the user sees — it is a component that renders nothing. That same shape
+turned up again inside the phase, on the way OUT: three main→renderer pushes each
+targeted ONE window (`ui-sync.js`'s doorbell, `session-summary.js`'s projection,
+`ui-bridge.js`'s auth broadcast). A pop-out would have opened, rendered correctly
+once, and then quietly frozen — a transcript that stops updating, an Agents panel that
+stops moving, and, worst, a window still showing a signed-out session's data. **All
+three were widened to the same registry the guards are bound to, so "a window main
+owns" means one thing in both directions.** One remains bounded rather than solved and
+is filed: ui-sync watches ONE workspace, last-writer-wins (F-222). It logs the
+transition by name instead of being silent about it, which is the smallest honest
+thing to do with a known bound.
+
+### Two files were split BEFORE the feature, and both seams were already drawn
+
+`main/ui-sync.js` sat at EXACTLY 500 lines and `channels-v2-core.tsx` within thirty of
+it, so neither could take the change. Neither split was invented for the occasion:
+ui-sync's own header already called its pure half "a pure function of injected values,
+testable without a socket, clock or BrowserWindow" and had FENCED it with sentinels
+three test files slice — those moved to `main/ui-sync-core.js` byte for byte, and the
+three tests changed one path each. The core's realtime→refetch plumbing became
+`live.ts`. **A file at its cap is telling you where its seam is; the cap is not the
+problem, the missing seam is** — and a split done under feature pressure is cheap only
+when the seam predates the pressure.
+
+### The route that did not need to be invented
+
+The sketch assumed a pop-out might need a thread-scoped deep route, with the
+`WORKSPACE_PAGES` hand copy and its drift test riding along. It did not: **a thread is
+not a page — it is which transcript the channels page has open.** So the pop-out lands
+on `/{segment}/channels/{channelId}` (the row Phase 9 built and the cutover renamed)
+with `?thread=` as a SELECTION, read by the SPA page and handed down as a plain prop
+exactly as `:channelId` already was. `routes.tsx`, `deep-link-target.js` and the drift
+test were untouched. **The question to ask before adding a route is whether the thing
+is a DESTINATION or a STATE of one** — and the tree had already answered it once, in
+the same file, for the same surface.

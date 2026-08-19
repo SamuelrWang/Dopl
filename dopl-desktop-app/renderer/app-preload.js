@@ -12,8 +12,12 @@
 //     main builds every header, Authorization included. A page that can set headers can forge
 //     identity or reach a third party.
 //
-// Main additionally binds every handler to THIS window's top frame (main/ui-bridge.js), so a
-// payload can never target another window.
+// Main additionally binds every handler to an APP-OWNED window's top frame
+// (main/ui-bridge.js, main/channel-dir-ipc.js), so a payload can never target another window.
+// ⚠ "APP-OWNED" WIDENED ON 2026-08-18 (wiring plan Phase 10) from "the main window" to
+// "anything main/app-windows.js registered at creation" — the shell plus a pop-out thread
+// window. This preload is what a pop-out gets too, deliberately: a pop-out is an app window,
+// and REGISTRATION is what authorizes it, not a second, narrower bridge.
 
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -204,6 +208,26 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.invoke('sessions:end', {
         channelId: asId(channelId),
         taskId: asId(taskId),
+      }),
+  },
+
+  // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). `openWindow` asks MAIN to
+  // open a second window on this same bundle, landing on `/{segment}/channels/{channelId}`
+  // with `{threadId}` selected. The thread view's header renders the button only when this
+  // op exists, so a plain browser and an older main both simply have no affordance.
+  // ⚠ ASKS FOR A WINDOW; IT IS NOT ONE. No handle, no window id and no reference of any kind
+  // comes back — main creates the window, main registers it in `main/app-windows.js`, and the
+  // answer is `{ ok }`. That is the whole reason widening the sender binding is safe: the
+  // renderer cannot enlarge the set of bound senders, it can only ask main to.
+  // ⚠ Every value is coerced here and RE-VALIDATED in main — the channel id as a UUID, the
+  // segment and thread id through `deep-link-target.js › isSafeSegment`, the one character
+  // rule for a string entering a router path.
+  threads: {
+    openWindow: (segment, channelId, threadId) =>
+      ipcRenderer.invoke('threads:openWindow', {
+        segment: asId(segment),
+        channelId: asId(channelId),
+        threadId: asId(threadId),
       }),
   },
 

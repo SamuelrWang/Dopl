@@ -1,4 +1,4 @@
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { ChannelsV2Core } from "@/features/channels/components/channels-v2/channels-v2-core";
 import { PageError, PageLoading } from "#/components/page-states";
 import { RouterLink } from "#/components/app-shell";
@@ -28,6 +28,16 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * selection handed down as a plain prop — never a router dependency inside the
  * shared tree.
  *
+ * ⚠ `?thread=` IS THE POP-OUT THREAD WINDOW'S LANDING (wiring plan Phase 10,
+ * 2026-08-18) AND IT IS DELIBERATELY NOT A ROUTE. Main opens a second window on
+ * `/{segment}/channels/{channelId}?thread={threadId}`
+ * (`main/popout-window.js › threadRoute`), and a thread is not a page — it is
+ * which transcript this page has open — so it rides the SAME `:channelId` row
+ * the cutover built, adds no `routes.tsx` entry, and leaves the deep-link hand
+ * copy in `main/deep-link-target.js › WORKSPACE_PAGES` and its drift test
+ * untouched. Read here for the same reason `:channelId` is: `ChannelsV2Core` is
+ * router-free by construction, so the param becomes a plain prop.
+ *
  * ⚠ ONLY A SEAM. The whole tree is REUSED by import from
  * `@/features/channels/components/channels-v2/`, already client-side over
  * `apiRequest`, which transports over the Electron IPC bridge unchanged. This
@@ -48,6 +58,10 @@ export default function ChannelsPage() {
   // Absent on the index row, which is the "no channel named" case the core
   // already answers with its own first-row fallback.
   const { channelId } = useParams<{ channelId: string }>();
+  // Absent on every route but a pop-out's landing; the core treats an unknown id
+  // as no selection, so a stale link cannot strand the pane.
+  const [search] = useSearchParams();
+  const threadId = search.get("thread");
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) {
@@ -62,6 +76,7 @@ export default function ChannelsPage() {
       role={access.role}
       Link={RouterLink}
       initialChannelId={channelId ?? null}
+      initialThreadId={threadId}
     />
   );
 }

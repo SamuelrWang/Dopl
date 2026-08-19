@@ -77,6 +77,83 @@ test("createShellWindow is the ONE factory, and the gate is its only branch", ()
   assert.ok(!/deps\.createMainWindow/.test(fn), "the remote factory must not be reachable");
 });
 
+// ── THE SHELL IS BOUND AS AN APP WINDOW (wiring plan Phase 10, 2026-08-18) ──
+
+/** The real module, evaluated with a stub `require` — it has no module-scope dependencies. */
+function loadShell() {
+  const stub = (id) => {
+    if (id === "./update-required-window") {
+      return {
+        createUpdateRequiredWindow: () => ({ id: "update-screen", on() {}, show() {} }),
+        closeUpdateRequiredWindow: () => {},
+      };
+    }
+    if (id === "./deep-link-target") return { isSafeSegment: () => true };
+    throw new Error("unexpected require: " + id);
+  };
+  const mod = { exports: {} };
+  new Function("require", "module", "exports", SHELL)(stub, mod, mod.exports);
+  return mod.exports;
+}
+
+function shellHelpers({ blocked = false } = {}) {
+  const registered = [];
+  const made = [];
+  let mainWindow = null;
+  const helpers = loadShell().makeShellHelpers({
+    getMainWindow: () => mainWindow,
+    setMainWindow: (w) => { mainWindow = w; },
+    createSpaWindow: (opts) => {
+      const w = { opts, on() {}, show() {}, isDestroyed: () => false };
+      made.push(w);
+      return w;
+    },
+    registerAppWindow: (w) => { registered.push(w); return w; },
+    versionGate: { isBlocked: () => blocked },
+    showMainWindow: () => {},
+    appOrigin: "https://www.usedopl.com",
+    diag: () => {},
+  });
+  return { helpers, registered, made, current: () => mainWindow };
+}
+
+test("createShellWindow BINDS the shell in the app-window registry", () => {
+  // ⚠ THE SINGLE MOST LOAD-BEARING LINE OF PHASE 10. Since the sender binding's subject is
+  // the registry rather than the main-window slot, a shell that is never registered has its
+  // ENTIRE privileged IPC surface refused — every `apiRequest`, silently, with no error
+  // shape anywhere. Nothing else in the suite would notice.
+  const ctx = shellHelpers();
+  const win = ctx.helpers.createShellWindow({ show: false });
+  assert.equal(ctx.made.length, 1);
+  assert.deepEqual(ctx.registered, [win], "the window main just built is bound at creation");
+  assert.equal(ctx.current(), win, "…and it is still the main-window slot");
+});
+
+test("the UPDATE-REQUIRED screen is deliberately NOT bound", () => {
+  // It takes its own preload and reaches no `dopl:*` handler. A blocking screen holding the
+  // app's privileged surface would be the min-version block leaking a door.
+  const ctx = shellHelpers({ blocked: true });
+  ctx.helpers.createShellWindow({ show: false });
+  assert.equal(ctx.made.length, 0, "the SPA factory is not reached while blocked");
+  assert.deepEqual(ctx.registered, [], "the update screen is not an app window");
+});
+
+test("registration is optional at the WIRING level and fatal at neither end", () => {
+  // A mid-wave caller / a harness with no registry must still get a window — the guards
+  // fail closed on their own, which is the correct place for that decision.
+  const mod = loadShell();
+  let mainWindow = null;
+  const helpers = mod.makeShellHelpers({
+    getMainWindow: () => mainWindow,
+    setMainWindow: (w) => { mainWindow = w; },
+    createSpaWindow: () => ({ on() {}, show() {}, isDestroyed: () => false }),
+    versionGate: { isBlocked: () => false },
+    showMainWindow: () => {},
+    diag: () => {},
+  }); // no registerAppWindow
+  assert.doesNotThrow(() => helpers.createShellWindow({ show: false }));
+});
+
 // ── the watch replay is IDENTITY-SCOPED ─────────────────────────────────────
 
 test("the same operator signing back in gets the feed put back", () => {

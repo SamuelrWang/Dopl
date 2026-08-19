@@ -41,7 +41,19 @@ vi.mock("../../hooks/use-channel-members", () => ({
 }));
 vi.mock("../../hooks/use-channel-threads", () => ({
   useChannelThreads: () => ({
-    threads: [],
+    // ONE thread, so the pop-out landing below has something real to select.
+    // `openThread` is DERIVED from this list — a thread id that is not in it is a
+    // stale pick and falls back to the channel view, which is asserted too.
+    threads: [
+      {
+        id: "t-1",
+        channelId: "ch-1",
+        title: "Ship the release",
+        status: "open",
+        createdAt: "2026-08-18T10:00:00.000Z",
+        updatedAt: "2026-08-18T10:00:00.000Z",
+      },
+    ],
     truncated: false,
     loading: false,
     refetch: () => {},
@@ -89,8 +101,17 @@ vi.mock("./sidebar", () => ({
   ),
 }));
 vi.mock("./message-pane", () => ({
-  ChannelsV2MessagePane: ({ channelId }: { channelId: string }) => (
-    <div data-testid="pane">{channelId}</div>
+  ChannelsV2MessagePane: ({
+    channelId,
+    thread,
+  }: {
+    channelId: string;
+    thread: { id: string } | null;
+  }) => (
+    <>
+      <div data-testid="pane">{channelId}</div>
+      <span data-testid="thread">{thread?.id ?? "none"}</span>
+    </>
   ),
 }));
 vi.mock("./info-panel", () => ({ ChannelsV2InfoPanel: () => null }));
@@ -114,7 +135,7 @@ const TestLink = ({ href, children }: { href: string; children: ReactNode }) => 
   <a href={href}>{children}</a>
 );
 
-const core = (initialChannelId?: string | null) => (
+const core = (initialChannelId?: string | null, initialThreadId?: string | null) => (
   <ChannelsV2Core
     workspaceId={WS}
     workspaceSlug="acme"
@@ -122,11 +143,12 @@ const core = (initialChannelId?: string | null) => (
     role="owner"
     Link={TestLink}
     initialChannelId={initialChannelId}
+    initialThreadId={initialThreadId}
   />
 );
 
-function renderCore(initialChannelId?: string | null) {
-  return render(core(initialChannelId));
+function renderCore(initialChannelId?: string | null, initialThreadId?: string | null) {
+  return render(core(initialChannelId, initialThreadId));
 }
 
 afterEach(cleanup);
@@ -184,5 +206,43 @@ describe("ChannelsV2Core — the channel a caller names", () => {
     expect(open()).toBe(CH_B);
     rerender(core(null));
     expect(open()).toBe(CH_B);
+  });
+});
+
+// ── The POP-OUT's landing (wiring plan Phase 10, 2026-08-18) ─────────────────
+//
+// ⚠ A THREAD IS A SELECTION, NOT A ROUTE. Main opens the pop-out on
+// `/{segment}/channels/{channelId}?thread={threadId}` — the SAME row the cutover built,
+// with no new `routes.tsx` entry and no deep-link grammar change — and the SPA page hands
+// the search param down here as a plain prop, exactly as it does the channel.
+
+const openThread = () => screen.getByTestId("thread").textContent;
+
+describe("ChannelsV2Core — the thread a pop-out names", () => {
+  it("opens the named thread on mount, inside the named channel", () => {
+    renderCore(CH_A, "t-1");
+    expect(open()).toBe(CH_A);
+    expect(openThread()).toBe("t-1");
+  });
+
+  it("names no thread by default — every other caller lands on the channel view", () => {
+    renderCore(CH_A);
+    expect(openThread()).toBe("none");
+  });
+
+  it("falls back to the CHANNEL view for a thread this channel does not have", () => {
+    // Derived, never stored: a stale link (thread aged past the read's ceiling, or moved)
+    // must not render an empty thread transcript.
+    renderCore(CH_A, "t-does-not-exist");
+    expect(open()).toBe(CH_A);
+    expect(openThread()).toBe("none");
+  });
+
+  it("is an initial selection, not a lock", () => {
+    const { rerender } = renderCore(CH_A, "t-1");
+    expect(openThread()).toBe("t-1");
+    // The same values handed over again must not fight the operator's own navigation.
+    rerender(core(CH_A, "t-1"));
+    expect(openThread()).toBe("t-1");
   });
 });

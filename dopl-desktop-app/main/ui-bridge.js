@@ -7,10 +7,16 @@
 // (apps/desktop-ui/src/lib/api.ts) so the IPC and dev-in-browser transports share one decoder.
 //
 // ⚠ SENDER BINDING (§B.3): every handler re-derives its subject from `event.sender` and refuses
-// anything that is not the SPA window's own TOP FRAME — an iframe SHARES its host's
+// anything that is not an APP-OWNED window's own TOP FRAME — an iframe SHARES its host's
 // webContents, so identity alone is not enough. main/channel-dir-ipc.js keeps its OWN copy of
 // this predicate because its pure block is sliced by test/channel-ipc-sender.test.mjs; do NOT
 // "de-duplicate" it out from under that test.
+//
+// ⚠ WIDENED 2026-08-18 (wiring plan Phase 10, Samuel's ruling — option (a)): the subject was
+// "the MAIN window" and is now "any window in main/app-windows.js's registry" — the shell plus
+// any pop-out thread window. Read that module's header for why the registry cannot be enlarged
+// from a renderer. THE IFRAME CHECK DID NOT MOVE, the fail-closed direction did not move, and
+// the refusal shape did not move; only the identity half is wider.
 //
 // NOT WIRED YET. See dopl-desktop-app/WIRING.md.
 
@@ -50,13 +56,23 @@ const DESKTOP_UI_RUNTIME = 'desktop-ui';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// TRUE only for the given window's own TOP frame. `win` resolved at CALL time, so a destroyed
-// or not-yet-built window fails closed rather than throwing. ⚠ `senderFrame` is a getter that
-// THROWS once the frame is detached — read defensively; a frame we cannot read is refused.
-function isWindowSender(event, win) {
-  if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) return false;
+// TRUE only for an APP-OWNED window's own TOP frame. `senderIds` is the LIVE set of bound
+// `webContents.id`s (main/app-windows.js › senderIds), resolved at CALL time — so a window
+// built after register() ran is admitted, and a destroyed one has already left the set. An
+// absent or empty set is a DEAD surface, never an open one.
+//
+// ⚠ TWO CHECKS, BECAUSE ONE IS NOT ENOUGH:
+//   1. the sender's webContents id is one main itself registered at window creation; AND
+//   2. the calling frame is that webContents' TOP frame — a cross-origin iframe SHARES its
+//      host's webContents and would otherwise pass check 1 unchallenged.
+// ⚠ `senderFrame` is a getter that THROWS once the frame is detached — read defensively; a
+// frame we cannot read is refused.
+function isAppWindowSender(event, senderIds) {
+  if (!senderIds || typeof senderIds.has !== 'function') return false;
   const sender = event && event.sender;
-  if (!sender || sender !== win.webContents) return false;
+  if (!sender) return false;
+  if (typeof sender.isDestroyed === 'function' && sender.isDestroyed()) return false;
+  if (typeof sender.id !== 'number' || !senderIds.has(sender.id)) return false;
   let frame;
   try {
     frame = event.senderFrame;
@@ -240,12 +256,13 @@ function ensureMcpConfig(reason) {
 }
 
 /**
- * Register the bridge. `opts.getMainWindow()` returns the live SPA BrowserWindow (or null) —
- * the ONE sender every handler is bound to. ⚠ Absent, every handler fails CLOSED.
+ * Register the bridge. `opts.getSenderIds()` returns the LIVE set of app-owned `webContents`
+ * ids (main/app-windows.js › senderIds) — the senders every handler here is bound to.
+ * ⚠ Absent, every handler fails CLOSED: an unbound privileged surface is not a usable one.
  */
 function register(opts = {}) {
-  const getWindow =
-    typeof opts.getMainWindow === 'function' ? opts.getMainWindow : () => null;
+  const getSenderIds =
+    typeof opts.getSenderIds === 'function' ? opts.getSenderIds : () => null;
 
   // In whenReady, BEFORE createShellWindow — the earliest point a token rotation can start.
   primeAuth();
@@ -253,8 +270,8 @@ function register(opts = {}) {
   // ⚠ Refusals REJECT rather than returning a synthetic HTTP status: a refused call is a caller
   // bug (or an attack), never a server answer, and must not be decodable as one.
   const bound = (name, fn) => async (event, ...args) => {
-    if (!isWindowSender(event, getWindow())) {
-      diag('ui-bridge: refused', name, '— sender is not the SPA window top frame');
+    if (!isAppWindowSender(event, getSenderIds())) {
+      diag('ui-bridge: refused', name, '— sender is not an app window top frame');
       throw new Error('dopl: refused');
     }
     return fn(event, ...args);
@@ -406,16 +423,33 @@ function register(opts = {}) {
 }
 
 /**
- * Push a fresh auth state to the SPA window (`window.dopl.onAuthState`). Called on sign-in,
+ * Push a fresh auth state to EVERY app window (`window.dopl.onAuthState`). Called on sign-in,
  * sign-out and refresh; nothing polls. ⚠ Token-free by contract — `{ signedIn, userId }` only.
+ *
+ * ⚠ FANS OUT SINCE 2026-08-18 (Phase 10). `targets` is the app-window registry's live list; a
+ * bare window is still accepted, because every caller used to pass one. A pop-out that never
+ * learns about a SIGN-OUT keeps rendering the previous session's data with no way to say so —
+ * the same silent-staleness failure the pop-out's realtime fan-out answers, but with a
+ * credential behind it, so this one is not optional. One dead window must not stop the rest.
  */
-function broadcastAuthState(win, state) {
-  if (!win || win.isDestroyed()) return;
+function broadcastAuthState(targets, state) {
+  const wins = Array.isArray(targets) ? targets : targets ? [targets] : [];
   const s = state || getAuthState();
-  win.webContents.send(AUTH_STATE_EVENT, {
+  const payload = {
     signedIn: Boolean(s.signedIn),
     userId: s.userId == null ? null : String(s.userId),
-  });
+  };
+  let sent = 0;
+  for (const win of wins) {
+    if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) continue;
+    try {
+      win.webContents.send(AUTH_STATE_EVENT, payload);
+      sent += 1;
+    } catch (err) {
+      diag('ui-bridge: auth push failed —', (err && err.message) || String(err));
+    }
+  }
+  return sent;
 }
 
 module.exports = {
@@ -425,6 +459,6 @@ module.exports = {
   isExternalUrl,
   isAllowedExternalUrl,
   isWorkspaceId,
-  isWindowSender,
+  isAppWindowSender,
   AUTH_STATE_EVENT,
 };

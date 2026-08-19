@@ -82,6 +82,53 @@ function wasOpenedHidden() {
   }
 }
 
+// THE PRELOAD + SANDBOX SHAPE EVERY APP-OWNED SPA WINDOW GETS, as one function.
+//
+// ⚠ SHARED WITH THE POP-OUT (main/popout-window.js, wiring plan Phase 10). The pop-out
+// takes the SAME preload deliberately: it is an app window rendering the same bundle, and
+// what AUTHORIZES it is main/app-windows.js's registry, not a second, narrower bridge. A
+// pop-out with its own preload would be the "build the thread view twice" outcome Samuel's
+// ruling rejected — and a narrowed one would silently break every privileged call the
+// thread view already makes. ⚠ A window built with these preferences MUST also take
+// `policeNavigation` below and MUST be registered in `app-windows.js`; the three go
+// together, and `test/popout-window.test.mjs` pins that they do.
+function spaWebPreferences() {
+  return {
+    // The renderer's document origin is file:// — user-facing URLs (MCP
+    // endpoints, join links) must come from the REAL app origin, passed
+    // as a preload constant, never derived from the document.
+    additionalArguments: [`--dopl-app-origin=${require('./config').APP_ORIGIN}`],
+    preload: PRELOAD,
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+    spellcheck: true,
+  };
+}
+
+// Deny every `window.open`, and police EVERY top-frame steering primitive with the one
+// predicate above: direct navigation, server-issued redirects, and subframe navigations
+// (frames are frame-src 'none' in the built CSP, but dev loadURL carries no CSP).
+// ⚠ HASH navigation is not a navigation event, which is why the SPA's hash router routes
+// freely inside a window this locks down — and why a pop-out can be LANDED on a route by
+// loading the index with a hash rather than by being handed a URL.
+function policeNavigation(win) {
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  const indexHref = require('node:url').pathToFileURL(INDEX_HTML).href;
+  const police = (event, url) => {
+    if (!isAllowedNavigation(url, devUrl(), indexHref)) event.preventDefault();
+  };
+  win.webContents.on('will-navigate', police);
+  win.webContents.on('will-redirect', police);
+  win.webContents.on('will-frame-navigate', (event) => {
+    // Only the main frame may navigate at all; any subframe navigation is
+    // refused outright.
+    if (!event.isMainFrame) { event.preventDefault(); return; }
+    police(event, event.url);
+  });
+  return win;
+}
+
 // `opts.show === true` FORCES the window visible once painted even on a hidden login
 // launch — an explicit open (tray, notification click, deep link) must always surface it.
 // Anything else defers to `wasOpenedHidden()`, which is what makes a background-listener
@@ -98,17 +145,7 @@ function createSpaWindow(opts = {}) {
     // --bg-base from the design tokens, so the first paint is not white flash.
     backgroundColor: '#f5f7fa',
     show: false,
-    webPreferences: {
-      // The renderer's document origin is file:// — user-facing URLs (MCP
-      // endpoints, join links) must come from the REAL app origin, passed
-      // as a preload constant, never derived from the document.
-      additionalArguments: [`--dopl-app-origin=${require('./config').APP_ORIGIN}`],
-      preload: PRELOAD,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      spellcheck: true,
-    },
+    webPreferences: spaWebPreferences(),
   });
 
   if (dev) {
@@ -122,24 +159,17 @@ function createSpaWindow(opts = {}) {
   win.once('ready-to-show', () => { if (forceShow || !wasOpenedHidden()) win.show(); });
 
   // Defense in depth on top of the page CSP. This window is never a browser.
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  // The same predicate polices EVERY top-frame steering primitive: direct
-  // navigation, server-issued redirects, and subframe navigations (frames are
-  // frame-src 'none' in the built CSP, but dev loadURL carries no CSP).
-  const indexHref = require('node:url').pathToFileURL(INDEX_HTML).href;
-  const policeNavigation = (event, url) => {
-    if (!isAllowedNavigation(url, devUrl(), indexHref)) event.preventDefault();
-  };
-  win.webContents.on('will-navigate', policeNavigation);
-  win.webContents.on('will-redirect', policeNavigation);
-  win.webContents.on('will-frame-navigate', (event) => {
-    // Only the main frame may navigate at all; any subframe navigation is
-    // refused outright.
-    if (!event.isMainFrame) { event.preventDefault(); return; }
-    policeNavigation(event, event.url);
-  });
+  policeNavigation(win);
 
   return win;
 }
 
-module.exports = { createSpaWindow, isAllowedNavigation, wasOpenedHidden, INDEX_HTML };
+module.exports = {
+  createSpaWindow,
+  isAllowedNavigation,
+  wasOpenedHidden,
+  spaWebPreferences,
+  policeNavigation,
+  devUrl,
+  INDEX_HTML,
+};

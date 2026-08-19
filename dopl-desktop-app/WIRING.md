@@ -38,9 +38,16 @@ uiBridge.register({ getMainWindow: () => mainWindow });
 and swap the window factory: `createMainWindow()` (`main/index.js:366`) becomes
 `mainWindow = spaWindow.createSpaWindow()`.
 
-`getMainWindow` is read lazily on every IPC call, exactly like
+The accessor is read lazily on every IPC call, exactly like
 `channelDirIpc.register`, because the window outlives `register()` and is rebuilt
-on reopen. If it returns null, every handler fails closed.
+on reopen. If it answers nothing, every handler fails closed.
+
+⚠ **THE OPTION NAME CHANGED ON 2026-08-18** (wiring plan Phase 10, Samuel's ruling —
+option (a)). Both `register()` calls above now take `getSenderIds: () => appWindows.senderIds()`
+rather than `getMainWindow`: the sender binding's subject is `main/app-windows.js`'s
+registry of APP-OWNED windows — the shell plus any pop-out thread window — not the one
+main-window slot. The lazy-accessor reasoning is unchanged and now covers one more case
+(a pop-out can appear or close at any moment). Live rule: INVARIANTS §11.
 
 ## Before flipping the switch, know what else moves
 

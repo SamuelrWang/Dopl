@@ -96,7 +96,7 @@ test("CHANGE: a subscriber gets the report entries when the projection first mov
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
   assert.equal(seen[0][0].key, "chan-1:task-1");
@@ -109,7 +109,7 @@ test("CHANGE: a burst of dispatches with nothing moving costs ZERO further event
   const s = session();
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([[s.key, s]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
   // One turn is dozens of engine dispatches — tool results, token counts, cost deltas.
@@ -130,14 +130,14 @@ test("CHANGE: a REBUILT renderer repaints but is NOT a change — the two gates 
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(m.sent.length, 1);
   assert.equal(seen.length, 1);
   // The SPA window is closed and reopened: `start()` resets the window's digest so the
   // fresh renderer is painted. Nothing about the SESSIONS changed, so the server must not
   // be written to — a window rebuild is not an event the server has any interest in.
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(m.sent.length, 2, "the renderer is repainted");
   assert.equal(seen.length, 1, "and the server is not");
@@ -148,7 +148,7 @@ test("CHANGE: an event that reached NO window still counts — delivery is not t
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => null }); // headless: the SPA window is not built
+  m.start({ getWindows: () => [] }); // headless: the SPA window is not built
   await settle(m);
   assert.equal(m.sent.length, 0);
   assert.equal(seen.length, 1, "a session runs whether or not anyone is looking at it");
@@ -160,7 +160,7 @@ test("CHANGE: unsubscribing stops it, and the renderer feed is untouched", async
   const s = session();
   const off = m.subscribe((entries) => seen.push(entries));
   m.bind({ sessions: new Map([[s.key, s]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
   off();
@@ -183,7 +183,7 @@ test("CHANGE: a THROWING subscriber cannot break the engine's dispatch", async (
   m.subscribe(() => { throw new Error("writer exploded"); });
   m.subscribe((entries) => after.push(entries)); // registered after the thrower
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   // `touch()` is called from the engine's dispatch, so an exception here would unwind into
   // the SDK event loop. The frame still lands, the next subscriber still runs, and the
@@ -199,7 +199,7 @@ test("CHANGE: ending a session is a change, and so is its pill leaving", async (
   m.subscribe((entries) => seen.push(entries));
   const s = session();
   m.bind({ sessions: new Map([[s.key, s]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
   // The abandonment: the window survives, so the pill (and the row) stay as `ended`.

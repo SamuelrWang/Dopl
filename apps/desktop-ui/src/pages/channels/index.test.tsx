@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -173,6 +173,26 @@ const MEMBERS: ChannelMember[] = [
   },
 ];
 
+/** ONE thread on the primary channel — the pop-out's landing needs something real
+ *  to select, and the `?thread=` case below is the whole reason it is here. */
+const THREAD_ID = "t-1";
+const THREAD = {
+  id: THREAD_ID,
+  channelId: CHANNEL_ID,
+  workspaceId: "",
+  title: "Ship the release",
+  status: "open",
+  outcome: null,
+  mode: "collab",
+  createdBy: "u-1",
+  targetUserId: null,
+  createdAt: "2026-08-01T11:00:00.000Z",
+  updatedAt: "2026-08-01T11:00:00.000Z",
+  closedAt: null,
+  outcomeSummary: null,
+  lastActivityAt: "2026-08-01T12:00:00.000Z",
+};
+
 const CONSENT: ChannelConsentRequest = {
   id: "cr-1",
   channelId: CHANNEL_ID,
@@ -257,7 +277,9 @@ beforeEach(() => {
     if (channelId && path.endsWith("/members")) {
       return json({ members: channelId === CHANNEL_ID ? MEMBERS : [] });
     }
-    if (channelId && path.endsWith("/tasks")) return json({ tasks: [] });
+    if (channelId && path.endsWith("/tasks")) {
+      return json({ tasks: channelId === CHANNEL_ID ? [THREAD] : [] });
+    }
     if (channelId && path.endsWith("/mentions")) return json({ mentions: [] });
     if (path === "/api/channels/consent") {
       return json({
@@ -276,8 +298,9 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-/** Both rows are the SAME page component; `channelId` is what differs. */
-function renderPage(channelId?: string) {
+/** Both rows are the SAME page component; `channelId` is what differs — and,
+ *  since wiring plan Phase 10, an optional `?thread=` SELECTION on the second one. */
+function renderPage(channelId?: string, threadId?: string) {
   const router = createMemoryRouter(
     [
       { path: "/:workspaceSegment/channels", element: <ChannelsPage /> },
@@ -285,7 +308,9 @@ function renderPage(channelId?: string) {
     ],
     {
       initialEntries: [
-        channelId ? `/${SEGMENT}/channels/${channelId}` : `/${SEGMENT}/channels`,
+        channelId
+          ? `/${SEGMENT}/channels/${channelId}${threadId ? `?thread=${threadId}` : ""}`
+          : `/${SEGMENT}/channels`,
       ],
     }
   );
@@ -339,6 +364,32 @@ describe("channels page", () => {
       expect(requestsTo(`/api/channels/${OTHER_ID}/messages`).length).toBeGreaterThan(0)
     );
     expect(requestsTo(`/api/channels/${CHANNEL_ID}/messages`)).toHaveLength(0);
+  });
+
+  it("opens the THREAD the query names — the pop-out window's landing", async () => {
+    // ⚠ NOT A ROUTE (wiring plan Phase 10, 2026-08-18). Main opens the pop-out on
+    // `/{segment}/channels/{channelId}?thread={threadId}` — the SAME `:channelId` row
+    // above, with no new `routes.tsx` entry and no deep-link grammar change, because a
+    // thread is not a page: it is which transcript this page has open. The page reads the
+    // search param and hands it down as a plain prop, exactly as it does the channel.
+    renderPage(CHANNEL_ID, THREAD_ID);
+
+    // The thread view replaces the channel's own rows: the crumb becomes
+    // `# channel / title` and the channel crumb is THE WAY BACK (a button).
+    const crumb = await screen.findByLabelText("Breadcrumb");
+    await waitFor(() =>
+      expect(within(crumb).getByRole("button", { name: "migration" })).toBeInTheDocument()
+    );
+    expect(within(crumb).getByText("Ship the release")).toBeInTheDocument();
+  });
+
+  it("lands on the CHANNEL view when the query names no thread", async () => {
+    renderPage(CHANNEL_ID);
+    await screen.findByText("Picked it up, wiring the client queries now.");
+    // No crumb trail: the channel name is plain text, with nothing to go back to.
+    const crumb = screen.getByLabelText("Breadcrumb");
+    expect(within(crumb).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(crumb).getByText("migration")).toBeInTheDocument();
   });
 
   it("decides a pending consent request from the INBOX, through the API", async () => {

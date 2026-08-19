@@ -47,8 +47,10 @@
 // `event.sender` (the frozen §B.3 contract) precisely so a window that does not
 // own the thing being changed cannot change it; this file was the one privileged
 // surface that skipped that step, while being exposed on the window that loads
-// REMOTE usedopl.com content. `mainOnly` below is that missing half, applied to
-// all six ops — not just the permission preset that made it a HIGH:
+// REMOTE usedopl.com content. `appWindowOnly` below is that missing half (it was
+// NAMED `mainOnly` from H3 until Phase 10 widened its subject — see the note under
+// the op list), applied to every op — not just the permission preset that made it
+// a HIGH:
 //
 //   setPermissionPreset  arms EXECUTION permission for a channel (the H3 report)
 //   getPermissionPreset  discloses the posture a channel is armed with
@@ -58,11 +60,21 @@
 //   sessions:reopen      opens/recreates session windows for arbitrary threads
 //   sessions:pause       (Phase 5) interrupts the turn my agent is running on a thread
 //   sessions:end         (Phase 5) ends my agent on a thread — terminal, and never the thread
+//   threads:openWindow   (Phase 10) opens a pop-out window on ONE thread
 //
-// Two checks, because one is not enough: the sender must be the main window's
+// Two checks, because one is not enough: the sender must be an APP-OWNED window's
 // webContents, AND it must be that window's TOP frame. A cross-origin iframe
 // SHARES its host's webContents, so identity alone would still let embedded
 // third-party content drive every op above.
+//
+// ⚠ THE FIRST HALF WIDENED ON 2026-08-18 (wiring plan Phase 10, Samuel's ruling —
+// option (a)): the subject was "the MAIN window" and is now "any window in
+// `main/app-windows.js`'s registry", which is the shell plus any pop-out thread
+// window. `mainOnly` is `appWindowOnly` for the same reason. Read app-windows.js's
+// header for why a renderer cannot enlarge that registry. ⚠ NOTHING ELSE MOVED:
+// the top-frame check is unchanged, the direction is still fail-closed, and each
+// op's refusal is still byte-identical to its own bad-payload rejection so a
+// hostile page cannot probe which window it is running in.
 
 const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');
@@ -80,16 +92,28 @@ function isUuid(v) {
 // No electron/require refs below, so test/channel-ipc-sender.test.mjs slices this
 // and drives it with fakes (the CHANNEL-DIR-RESOLVE idiom).
 
-// TRUE only for the main window's own TOP frame. `win` is resolved at CALL time
-// (the window is built after register() runs, and is replaced on reopen), so a
-// destroyed or not-yet-built window fails closed rather than throwing.
+// TRUE only for an APP-OWNED window's own TOP frame. `senderIds` is the LIVE set
+// of bound `webContents.id`s (main/app-windows.js › senderIds), resolved at CALL
+// time — register() runs before any window exists, the shell is replaced on
+// reopen, and a pop-out may appear at any moment — so an absent, empty or stale
+// set fails closed rather than throwing.
 //
 // `senderFrame` is a getter that THROWS once the frame is detached, so it is read
 // defensively: a frame we cannot read is refused, never waved through.
-function isMainWindowSender(event, win) {
-  if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) return false;
+//
+// ⚠ THE FRAME CHECK IS FAIL-CLOSED ON AN ABSENT FRAME AS OF PHASE 10, matching
+// `main/ui-bridge.js › isAppWindowSender`. The pre-Phase-10 form here read
+// `if (frame && sender.mainFrame && frame !== sender.mainFrame) return false`,
+// which WAVED THROUGH a `senderFrame` that read as null/undefined while the
+// bridge's copy refused it — two copies of "the same" predicate disagreeing about
+// the more privileged surface (this file arms permission presets). Closed in the
+// same security change that widened the identity half; recorded as F-221.
+function isAppWindowSender(event, senderIds) {
+  if (!senderIds || typeof senderIds.has !== 'function') return false;
   const sender = event && event.sender;
-  if (!sender || sender !== win.webContents) return false;
+  if (!sender) return false;
+  if (typeof sender.isDestroyed === 'function' && sender.isDestroyed()) return false;
+  if (typeof sender.id !== 'number' || !senderIds.has(sender.id)) return false;
   let frame;
   try {
     frame = event.senderFrame;
@@ -97,40 +121,41 @@ function isMainWindowSender(event, win) {
     return false; // frame already detached — nothing legitimate calls from there
   }
   // An iframe shares the host's webContents; only the top frame may drive these.
-  if (frame && sender.mainFrame && frame !== sender.mainFrame) return false;
+  if (!frame || !sender.mainFrame || frame !== sender.mainFrame) return false;
   return true;
 }
 // ─── END CHANNEL-IPC-SENDER ─────
 
 // `opts.onChanged()` (optional) lets index.js refresh the tray so the menu-bar
 // "Channel folders" submenu and the in-app control never drift after a set/clear.
-// `opts.getMainWindow()` returns the live main BrowserWindow (or null) — the ONE
-// sender every handler here is bound to. Absent (a mid-wave caller, a harness),
-// every handler fails CLOSED: an unbound privileged surface is not a usable one.
+// `opts.getSenderIds()` returns the LIVE set of app-owned `webContents` ids
+// (main/app-windows.js › senderIds) — the senders every handler here is bound to.
+// Absent (a mid-wave caller, a harness), every handler fails CLOSED: an unbound
+// privileged surface is not a usable one.
 function register(opts = {}) {
   const onChanged = typeof opts.onChanged === 'function' ? opts.onChanged : () => {};
-  const getMainWindow = typeof opts.getMainWindow === 'function' ? opts.getMainWindow : () => null;
+  const getSenderIds = typeof opts.getSenderIds === 'function' ? opts.getSenderIds : () => null;
 
-  // Wrap a handler so it only ever runs for the bound sender. `refusal` is what a
+  // Wrap a handler so it only ever runs for a bound sender. `refusal` is what a
   // rejected call sees — deliberately the SAME shape a bad channel id already
   // returns, so a hostile page learns nothing from the difference.
-  const mainOnly = (name, refusal, fn) => (event, ...args) => {
-    if (!isMainWindowSender(event, getMainWindow())) {
-      diag('channel-dir ipc: refused', name, '— sender is not the main window top frame');
+  const appWindowOnly = (name, refusal, fn) => (event, ...args) => {
+    if (!isAppWindowSender(event, getSenderIds())) {
+      diag('channel-dir ipc: refused', name, '— sender is not an app window top frame');
       return refusal;
     }
     return fn(event, ...args);
   };
 
   // Read the current abbreviated label. Label only — never the absolute path.
-  ipcMain.handle('channels:getFolderLabel', mainOnly('getFolderLabel', null, (_event, channelId) => {
+  ipcMain.handle('channels:getFolderLabel', appWindowOnly('getFolderLabel', null, (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     return channelDirs.liveChannelDirLabel(channelId);
   }));
 
   // Open the native picker (user-driven), store the pick, return the fresh label.
   // On cancel the stored dir is unchanged, so the prior label is returned.
-  ipcMain.handle('channels:chooseFolder', mainOnly('chooseFolder', null, async (_event, channelId) => {
+  ipcMain.handle('channels:chooseFolder', appWindowOnly('chooseFolder', null, async (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     try {
       await channelDirs.promptAndSetChannelDir(channelId);
@@ -142,7 +167,7 @@ function register(opts = {}) {
   }));
 
   // Reset to the sandbox default; there is no custom label afterwards.
-  ipcMain.handle('channels:clearFolder', mainOnly('clearFolder', null, (_event, channelId) => {
+  ipcMain.handle('channels:clearFolder', appWindowOnly('clearFolder', null, (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     channelDirs.clearChannelDir(channelId);
     onChanged();
@@ -161,7 +186,7 @@ function register(opts = {}) {
   // card that shows that posture, before it applies to anything — and if they do
   // not, it expires. See the header of channel-prefs.js for the full contract.
   //
-  // Same guards as the folder ops, plus two more: the sender is bound (mainOnly)
+  // Same guards as the folder ops, plus two more: the sender is bound (appWindowOnly)
   // and the renderer is NEVER trusted with the values. channelId is UUID-gated
   // here; both modes are re-validated in channel-prefs against the frozen enums
   // and an unknown value on either axis writes nothing ({ ok: false }).
@@ -169,7 +194,7 @@ function register(opts = {}) {
   // → { tools, messages } for the channel, or null when nothing is armed (the
   //   card then shows the defaults without claiming they were chosen). Reading
   //   NEVER extends the arm's life.
-  ipcMain.handle('channels:getPermissionPreset', mainOnly('getPermissionPreset', null, (_event, channelId) => {
+  ipcMain.handle('channels:getPermissionPreset', appWindowOnly('getPermissionPreset', null, (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     return channelPrefs.getPermissionPreset(channelId);
   }));
@@ -177,7 +202,7 @@ function register(opts = {}) {
   // → { ok: true } when BOTH axes validated and the pair was armed; { ok: false }
   //   for a bad channel id or an unknown mode. Fail-closed: nothing is written on
   //   a partial or unknown pair.
-  ipcMain.handle('channels:setPermissionPreset', mainOnly('setPermissionPreset', { ok: false }, (_event, payload) => {
+  ipcMain.handle('channels:setPermissionPreset', appWindowOnly('setPermissionPreset', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     return channelPrefs.armPermissionPreset(p.channelId, p.preset);
@@ -191,7 +216,7 @@ function register(opts = {}) {
   // T2-added export; if it is not wired yet (mid-wave), fail closed with
   // { ok: false } rather than throwing. Lazy-require to avoid any load-time
   // cycle — the engine is only touched when a reopen is actually requested.
-  ipcMain.handle('sessions:reopen', mainOnly('sessions:reopen', { ok: false }, (_event, payload) => {
+  ipcMain.handle('sessions:reopen', appWindowOnly('sessions:reopen', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     const engine = require('./session-engine');
@@ -215,7 +240,7 @@ function register(opts = {}) {
   // ⚠ There is no cross-machine control here and there must not be: the registry holds only
   // this operator's own sessions, so an unresolvable key answers { ok: false } rather than
   // reaching for anything else. Pause/end is own-agents-only (MAPPING.md, Samuel's ruling).
-  // ⚠ THE BODY IS SHARED, THE WRAPPING IS NOT. `mainOnly(...)` appears literally at each
+  // ⚠ THE BODY IS SHARED, THE WRAPPING IS NOT. `appWindowOnly(...)` appears literally at each
   // `ipcMain.handle` call below, because test/channel-ipc-sender.test.mjs's structural belt
   // reads exactly that shape — every registered handler must be visibly sender-bound at its
   // registration site. Hiding the wrap inside a factory would pass review and silently
@@ -231,8 +256,42 @@ function register(opts = {}) {
       action: action,
     });
   };
-  ipcMain.handle('sessions:pause', mainOnly('sessions:pause', { ok: false }, control('pause')));
-  ipcMain.handle('sessions:end', mainOnly('sessions:end', { ok: false }, control('end')));
+  ipcMain.handle('sessions:pause', appWindowOnly('sessions:pause', { ok: false }, control('pause')));
+  ipcMain.handle('sessions:end', appWindowOnly('sessions:end', { ok: false }, control('end')));
+
+  // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). The thread view's
+  // "Open as new window" button — a SECOND window on the SAME SPA bundle, landing on the
+  // channel route with this thread selected. It is the op the whole sender-binding
+  // widening exists for, and it is the only one that can MINT a window.
+  //
+  // ⚠ THE PAYLOAD IS THREE STRINGS ENTERING A ROUTER PATH, and none of them is trusted:
+  // `channelId` is UUID-gated like every op above, and `segment` + `threadId` pass
+  // `deep-link-target.js › isSafeSegment` — the ONE character rule for a string entering a
+  // router path (INVARIANTS §11). A second regex here would be a second answer to it.
+  // Required LAZILY so this file keeps its load-time dependency set at three modules.
+  // ⚠ THE VERSION FLOOR APPLIES. `createShellWindow` is the min-version gate's single
+  // enforcement point (main/shell-mode.js), and a factory that bypassed it would be a window
+  // the block does not cover — so a blocked build refuses here rather than growing a second
+  // door. There is nothing to pop out of anyway: the shell is the update screen.
+  // ⚠ REFUSES IN THE SAME `{ ok: false }` SHAPE as a bad channel id, a foreign sender and a
+  // full window budget alike — a hostile page must not learn which one it hit.
+  ipcMain.handle('threads:openWindow', appWindowOnly('threads:openWindow', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const { isSafeSegment } = require('./deep-link-target');
+    if (!isSafeSegment(p.segment) || !isSafeSegment(p.threadId)) return { ok: false };
+    try {
+      if (require('./version-gate').isBlocked()) {
+        diag('channel-dir ipc: refused threads:openWindow — the version floor is blocking');
+        return { ok: false };
+      }
+    } catch (_err) { /* mid-wave / harness: no gate is not a block */ }
+    return require('./popout-window').openThreadWindow({
+      segment: p.segment,
+      channelId: p.channelId,
+      threadId: p.threadId,
+    });
+  }));
 }
 
 module.exports = { register };

@@ -266,9 +266,13 @@ test("in-window navigation is locked to the EXACT app origin, not the domain fam
   // itself and STRICTER: `isAllowedNavigation` locks to the bundled index file rather than
   // to the app origin, and it covers will-redirect and will-frame-navigate too, which the
   // old branch did not. `isAppOrigin` survives as the nonce gate's own predicate.
+  // ⚠ …AND IT IS SHARED NOW (2026-08-18, wiring plan Phase 10). `policeNavigation(win)` is
+  // the exported policy the POP-OUT thread window takes verbatim, so the two windows cannot
+  // drift; the per-event handler inside it is `police`.
   const SPA = readFileSync(join(HERE, "..", "main", "spa-window.js"), "utf8");
-  assert.match(SPA, /on\('will-navigate', policeNavigation\)/, "the live lock is the SPA window's");
-  assert.match(SPA, /on\('will-redirect', policeNavigation\)/, "…and it covers redirects too");
+  assert.match(SPA, /on\('will-navigate', police\)/, "the live lock is the SPA window's");
+  assert.match(SPA, /on\('will-redirect', police\)/, "…and it covers redirects too");
+  assert.match(SPA, /function policeNavigation\(win\)/, "one policy, applied to every app window");
   assert.match(SPA, /if \(!isAllowedNavigation\(url, devUrl\(\), indexHref\)\) event\.preventDefault\(\)/);
 });
 

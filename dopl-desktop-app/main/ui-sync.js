@@ -50,153 +50,27 @@ const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./config');
 const { describeSubscribeError, isAuthFailure } = require('./realtime-core');
 const { diag } = require('./diag');
 
-// ─── BEGIN UI-SYNC-PURE (no electron/require refs below) ─────────────────────
-// Every decision — which tables to bind, which topic to join under, when a burst becomes
-// one send, how long to wait, whether a frame may be forwarded — is a pure function of
-// injected values, testable without a socket, clock or BrowserWindow. Sliced verbatim by
-// test/ui-sync.test.mjs.
-
-// THE CONTENT TABLES — the UNION of what the SPA's feature hooks watch
-// (src/features/*/client/realtime.ts) minus the listener-owned ones below. That union is the
-// contract: a table a hook watches but this list omits is a page that never updates live, so
-// test/ui-sync-tables.test.mjs re-derives it from those files and checks each name against
-// supabase/migrations for publication AND a `workspace_id` column — following RENAMES
-// (skill_versions was skill_file_versions) and BARE `DROP TABLE`s, not just `ALTER PUBLICATION
-// … DROP`. Not ceremony: `skill_files` sat here until review caught 20260716064733 dropping the
-// table while its 20260502100200 publication ADD stayed — and ONE dead name makes realtime
-// refuse the whole channel, i.e. no live updates at all.
-// THE 5 `workflow_*` TABLES LEFT 2026-08-07 (Phase 5 / D8), PAIRED with migration
-// 20260807100000 — dropping the publication alone leaves a binding that joins, says SUBSCRIBED
-// and delivers nothing. They and `clusters` were DROPPED by 20260811120000, with the feature.
-const SYNC_TABLES = Object.freeze([
-  'knowledge_bases', 'knowledge_folders', 'knowledge_entries',
-  'skills', 'skill_versions',
-  'ontology_clusters', 'ontology_objects', 'ontology_memberships',
-  'ontology_relationships',
-  'chats', 'chat_messages', 'chat_folders',
-  'channel_consent_requests', 'channels', 'channel_members',
-  'channel_messages', 'agent_presence',
-]);
-
-// Historically the channels exemption excluded the three listener tables from this feed; the UI
-// needs them (see header), so the set is empty — kept because the coverage test unions it in.
-const LISTENER_OWNED_TABLES = Object.freeze([]);
-
-// A burst on one (workspace, table) — an agent importing 40 knowledge entries — must cost
-// ONE refetch signal, not one per row. 250ms swallows a multi-statement transaction and
-// stays imperceptible.
-const COALESCE_MS = 250;
-
-// Reconnect ladder, mirroring shared-channel-registry.ts's. Capped: a machine offline for
-// a week must retry forever without ever hammering (F-072).
-const RECONNECT_DELAYS_MS = Object.freeze([500, 1000, 2000, 4000, 8000, 15000]);
-
-// BACKSTOP re-read of the access token on a live connection (refreshAuth() is the prompt
-// path). Realtime keeps authorizing rejoins with whatever setAuth last received, so a
-// connection outliving its token silently stops rejoining.
-const AUTH_RECHECK_MS = 5 * 60 * 1000;
-
-// A join holds a single-flight latch across an AWAITED token read, and getAccessToken()
-// can refresh in line (an HTTP call). A machine sleeping mid-flight leaves that promise
-// pending FOREVER — latch closed, no timer, feed dead until quit. So the read is raced
-// against this deadline; a timeout is "no credential".
-const AUTH_READ_TIMEOUT_MS = 20_000;
-
-// MODULE-scoped, never reset by a teardown — see shared-channel-registry.ts's generation
-// counter. A per-connection one would restart at 1 after stop()/start() and mint a
-// byte-identical topic while realtime-js still holds the leaving channel (no-op subscribe).
-let topicSeq = 1;
-
-function nextTopic(workspaceId) { return `dopl-ui-sync-${workspaceId}-g${topicSeq++}`; }
-
-// Delay before the Nth consecutive retry (0-based), holding the ladder's ceiling.
-function backoffMs(attempt) {
-  const v = Number(attempt);
-  const n = Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
-  return RECONNECT_DELAYS_MS[Math.min(n, RECONNECT_DELAYS_MS.length - 1)];
-}
-
-// The one field ever read out of a payload. Both shapes accepted (realtime-js
-// normalizes `record` to `new`); `old` last so an UPDATE still names its workspace.
-// null is NOT an error and no replica identity can fix it: apply_rls redacts a DELETE's
-// old_record to the PRIMARY KEY whenever RLS is on. Deletes reach here bare, always.
-function payloadWorkspaceId(payload) {
-  const p = payload || {};
-  for (const rec of [p.new, p.record, p.old, p.old_record]) {
-    const id = rec && rec.workspace_id;
-    if (typeof id === 'string' && id.length > 0) return id;
-  }
-  return null;
-}
-
-// May this frame become a renderer event? Four gates, each guarding a real failure:
-// STARTED/WATCHED — a frame arriving during teardown must not send into a window the
-// caller let go of. GENERATION — the leave push settles asynchronously, so a channel we
-// just left keeps delivering for a beat, and attributing that to the workspace switched
-// TO is a wrong-workspace refetch. TABLE — only a table we deliberately bound, so the
-// channels exemption is refused on the way OUT too. WORKSPACE — a payload naming a
-// DIFFERENT workspace is refused; one naming none is forwarded (migration 20260807150000
-// is what scopes DELETEs server-side; they still arrive bare, so dropping them breaks all).
-function shouldForward(state, event) {
-  const s = state || {};
-  const e = event || {};
-  if (!s.started || !s.watched) return false;
-  if (e.generation !== s.generation) return false;
-  if (!SYNC_TABLES.includes(e.table)) return false;
-  if (e.workspaceId != null && e.workspaceId !== s.watched) return false;
-  return true;
-}
-
-// Collapse a burst into at most one send per (workspace, table) per window. One
-// shared timer, not one per key: a transaction touching six tables produces six
-// sends in ONE flush. `timers` is injectable for tests.
-function createSyncCoalescer(windowMs, onFlush, timers) {
-  const T = timers || { setTimeout, clearTimeout };
-  const pending = new Map(); // `${workspaceId}|${table}` -> { workspaceId, table }
-  let timer = null;
-  function flush() {
-    timer = null;
-    const batch = Array.from(pending.values());
-    pending.clear();
-    // One bad send must not drop the rest of the batch.
-    for (const item of batch) { try { onFlush(item); } catch (_err) { /* noop */ } }
-  }
-  function mark(workspaceId, table) {
-    if (!workspaceId || !table) return;
-    pending.set(`${workspaceId}|${table}`, { workspaceId, table });
-    if (!timer) timer = T.setTimeout(flush, windowMs);
-  }
-  // Drop the queue WITHOUT sending — a workspace switch must not deliver the old
-  // workspace's pending signals into the new view.
-  function cancel() {
-    if (timer) T.clearTimeout(timer);
-    timer = null;
-    pending.clear();
-  }
-  return { mark, flush, cancel, size: () => pending.size };
-}
-
-// What a (re)SUBSCRIBED owes the renderer: events during a disconnect are simply gone
-// (postgres_changes has no replay), so a fresh join means "you may have missed
-// anything". ONE event with an EMPTY table, not one per table — the registry implements
-// exactly that contract (shared-channel-registry.ts: `if (e.table &&
-// !s.tables.has(e.table)) continue`, so an empty table fires EVERY subscriber). The
-// per-table batch instead made each hook refetch once per table it watches: four
-// refetches for the ontology page on every reconnect or wake, a self-inflicted burst on
-// the very DB this phase exists to unload. NOT coalesced — a reconnect must reach the UI
-// now.
-function catchUpBatch(workspaceId) {
-  if (!workspaceId) return [];
-  return [{ workspaceId, table: '' }];
-}
-// ─── END UI-SYNC-PURE ────────────────────────────────────────────────────────
+// ── THE DECISION CORE (main/ui-sync-core.js) ─────────────────────────────────
+// Which tables to bind, which topic to join under, when a burst becomes one send, how long
+// to wait, whether a frame may be forwarded — every one of those is a pure function of
+// injected values, and they live NEXT DOOR since 2026-08-18 (wiring plan Phase 10) because
+// this file sat at exactly the §2 500-line cap. The `BEGIN/END UI-SYNC-PURE` sentinels the
+// three ui-sync test files slice went with them, verbatim; nothing inside changed.
+// ⚠ Re-exported below, unchanged, so `require('./ui-sync')` still answers the whole
+// Phase-3 surface index.js and the tests are told to call.
+const {
+  SYNC_TABLES, LISTENER_OWNED_TABLES,
+  COALESCE_MS, RECONNECT_DELAYS_MS, AUTH_RECHECK_MS, AUTH_READ_TIMEOUT_MS,
+  nextTopic, backoffMs, payloadWorkspaceId, shouldForward,
+  createSyncCoalescer, catchUpBatch,
+} = require('./ui-sync-core');
 
 const SYNC_EVENT = 'dopl:sync-event';
 
 // ── Live state (the electron/network boundary) ───────────────────────────────
 let client = null;
 let started = false;
-let getWindowFn = null;
+let getWindowsFn = null;
 let getTokenFn = null;
 let watched = null; // the workspace the renderer is viewing; null = nothing
 let generation = 0; // bumped by every watch() and every connect attempt
@@ -216,22 +90,35 @@ function describeState() {
     + `attempt=${attempt} tables=${SYNC_TABLES.length}`;
 }
 
-// The ONE place an event crosses into the renderer. `getWindow` is called at SEND time,
-// never captured: the SPA window is rebuilt on reopen, and a dead window (or webContents
-// torn down mid-send) must fail closed, not throw into a realtime callback.
-function sendToWindow(item) {
-  let win = null;
-  try { win = getWindowFn ? getWindowFn() : null; } catch (_err) { return false; }
-  if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) return false;
-  const wc = win.webContents;
-  if (!wc || (typeof wc.isDestroyed === 'function' && wc.isDestroyed())) return false;
-  try {
-    wc.send(SYNC_EVENT, { workspaceId: item.workspaceId, table: item.table });
-  } catch (err) {
-    diag('ui-sync send error', err && err.message);
-    return false;
+// The ONE place an event crosses into the renderer. `getWindows` is called at SEND time,
+// never captured: the SPA window is rebuilt on reopen, a pop-out can appear or close at any
+// moment, and a dead window (or webContents torn down mid-send) must fail closed, not throw
+// into a realtime callback.
+//
+// ⚠ FANS OUT SINCE 2026-08-18 (wiring plan Phase 10). This pushed to ONE webContents, so a
+// pop-out thread window would have shown a transcript that simply stopped updating, with no
+// error and nothing in the log — the silent-staleness failure INVARIANTS §11 names. The
+// targets are `main/app-windows.js`'s registry, the same set the sender guards are bound to,
+// so "a window main owns" means one thing in both directions.
+// ⚠ ONE DEAD WINDOW MUST NOT SWALLOW THE REST: each send is guarded on its own, and the
+// answer is "did ANY window take it".
+function sendToWindows(item) {
+  let wins = null;
+  try { wins = getWindowsFn ? getWindowsFn() : null; } catch (_err) { return false; }
+  if (!Array.isArray(wins) || wins.length === 0) return false;
+  let sent = 0;
+  for (const win of wins) {
+    if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) continue;
+    const wc = win.webContents;
+    if (!wc || (typeof wc.isDestroyed === 'function' && wc.isDestroyed())) continue;
+    try {
+      wc.send(SYNC_EVENT, { workspaceId: item.workspaceId, table: item.table });
+      sent += 1;
+    } catch (err) {
+      diag('ui-sync send error', err && err.message);
+    }
   }
-  return true;
+  return sent > 0;
 }
 
 function ensureClient() {
@@ -315,7 +202,7 @@ function onChange(myGen, table, payload) {
 
 function sendCatchUp(workspaceId) {
   let sent = 0;
-  for (const item of catchUpBatch(workspaceId)) if (sendToWindow(item)) sent += 1;
+  for (const item of catchUpBatch(workspaceId)) if (sendToWindows(item)) sent += 1;
   diag('ui-sync catch-up', short(workspaceId), `sent=${sent}`);
 }
 
@@ -403,16 +290,23 @@ function armAuthRecheck() {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/** Start the feed. Idempotent. `getWindow()` returns the live SPA BrowserWindow (or
- *  null), called at SEND time; `getAccessToken()` returns a valid Supabase access JWT
- *  (main/auth-tokens.js), called at every JOIN — neither is captured once. Nothing
- *  subscribes until `watch()` names a workspace. */
+/** Start the feed. Idempotent. `getWindows()` returns the LIVE app windows
+ *  (main/app-windows.js › liveWindows), called at SEND time; `getAccessToken()` returns a
+ *  valid Supabase access JWT (main/auth-tokens.js), called at every JOIN — neither is
+ *  captured once. Nothing subscribes until `watch()` names a workspace.
+ *
+ *  ⚠ ONE WATCHED WORKSPACE FOR ALL WINDOWS, and that is a known bound (F-222): the feed
+ *  holds ONE realtime channel filtered on ONE `workspace_id`, and `dopl:sync-watch` is
+ *  last-writer-wins across every window. Both windows normally view the same workspace, so
+ *  this is invisible — but switching workspaces in the MAIN window while a pop-out is open
+ *  leaves the pop-out's workspace unwatched. `watch()` logs that transition by name rather
+ *  than making it silent. */
 function start(opts = {}) {
   if (started) return;
-  getWindowFn = typeof opts.getWindow === 'function' ? opts.getWindow : null;
+  getWindowsFn = typeof opts.getWindows === 'function' ? opts.getWindows : null;
   getTokenFn = typeof opts.getAccessToken === 'function' ? opts.getAccessToken : null;
   started = true;
-  coalescer = createSyncCoalescer(COALESCE_MS, sendToWindow);
+  coalescer = createSyncCoalescer(COALESCE_MS, sendToWindows);
   armAuthRecheck();
   diag('ui-sync start', describeState());
   if (watched) connect();
@@ -424,6 +318,9 @@ function start(opts = {}) {
 function watch(workspaceId) {
   const next = workspaceId ? String(workspaceId) : null;
   if (next === watched) return;
+  // ⚠ NAMED, NOT SILENT (F-222). With more than one app window this is last-writer-wins over
+  // a single-workspace feed, so a switch here can leave another window's workspace unwatched.
+  if (watched && next) diag('ui-sync: the watched workspace MOVED while windows were open');
   diag('ui-sync watch', short(watched), '->', short(next));
   watched = next;
   generation += 1;

@@ -1,7 +1,7 @@
 // Desktop migration Phase 2 — the SPA bridge's security predicates, pinned.
 //
 // Every ported page's data flows through main/ui-bridge.js, and its two
-// gates are the whole story: `isWindowSender` decides WHO may call, and
+// gates are the whole story: `isAppWindowSender` decides WHO may call, and
 // `resolveApiUrl` decides WHERE main will fetch on the caller's behalf —
 // with the caller's Bearer credential attached once auth is wired. The
 // scaffold review found both original forms wanting (a character-blacklist
@@ -36,9 +36,9 @@ function slice(src, name) {
 
 const BRIDGE = M("ui-bridge.js");
 const bridgePure = slice(BRIDGE, "UI-BRIDGE-PURE");
-const { isWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId } =
+const { isAppWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId } =
   new Function(
-    `${bridgePure}; return { isWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId };`
+    `${bridgePure}; return { isAppWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId };`
   )();
 
 const API_BASE = "https://www.usedopl.com";
@@ -93,26 +93,34 @@ test("resolveApiUrl never returns a href on a foreign origin", () => {
   }
 });
 
-test("isWindowSender fails CLOSED on unreadable/missing frames", () => {
-  const wc = { mainFrame: {} };
-  const win = { isDestroyed: () => false, webContents: wc };
-  // Happy path: sender is the window's webContents, frame is its top frame.
+// ⚠ WIDENED 2026-08-18 (wiring plan Phase 10, Samuel's ruling — option (a)). The subject of
+// this guard was "the MAIN window"; it is now the LIVE SET of `webContents` ids
+// `main/app-windows.js` registered at window creation — the shell plus any pop-out thread
+// window. Without it a second SPA window would have had every `apiRequest` refused and
+// would have rendered nothing while reporting nothing. What did NOT change: the top-frame
+// check (an iframe shares its host's webContents), the fail-closed direction, and the
+// refusal shape. `test/app-windows.test.mjs` holds the other half — that nothing
+// renderer-reachable can enlarge that set.
+
+test("isAppWindowSender fails CLOSED on unreadable/missing frames", () => {
+  const wc = { id: 1, mainFrame: {}, isDestroyed: () => false };
+  const bound = new Set([1]);
+  // Happy path: sender is a REGISTERED webContents, frame is its top frame.
   assert.equal(
-    isWindowSender({ sender: wc, senderFrame: wc.mainFrame }, win),
+    isAppWindowSender({ sender: wc, senderFrame: wc.mainFrame }, bound),
     true
   );
   // senderFrame null/undefined → REFUSED (the old form waved this through).
-  assert.equal(isWindowSender({ sender: wc, senderFrame: null }, win), false);
-  assert.equal(isWindowSender({ sender: wc, senderFrame: undefined }, win), false);
+  assert.equal(isAppWindowSender({ sender: wc, senderFrame: null }, bound), false);
+  assert.equal(isAppWindowSender({ sender: wc, senderFrame: undefined }, bound), false);
   // mainFrame missing on the webContents → refused.
-  const wcNoMain = {};
-  const winNoMain = { isDestroyed: () => false, webContents: wcNoMain };
+  const wcNoMain = { id: 2, isDestroyed: () => false };
   assert.equal(
-    isWindowSender({ sender: wcNoMain, senderFrame: {} }, winNoMain),
+    isAppWindowSender({ sender: wcNoMain, senderFrame: {} }, new Set([2])),
     false
   );
   // A subframe (different object) → refused.
-  assert.equal(isWindowSender({ sender: wc, senderFrame: {} }, win), false);
+  assert.equal(isAppWindowSender({ sender: wc, senderFrame: {} }, bound), false);
   // senderFrame getter that throws (detached frame) → refused.
   const evt = { sender: wc };
   Object.defineProperty(evt, "senderFrame", {
@@ -120,16 +128,40 @@ test("isWindowSender fails CLOSED on unreadable/missing frames", () => {
       throw new Error("frame disposed");
     },
   });
-  assert.equal(isWindowSender(evt, win), false);
-  // Destroyed / absent window → refused.
-  assert.equal(isWindowSender({ sender: wc, senderFrame: wc.mainFrame }, null), false);
+  assert.equal(isAppWindowSender(evt, bound), false);
+  // Destroyed sender whose id is still in the set → refused (the sweep can lose a race).
+  const dead = { id: 3, mainFrame: {}, isDestroyed: () => true };
   assert.equal(
-    isWindowSender(
-      { sender: wc, senderFrame: wc.mainFrame },
-      { isDestroyed: () => true, webContents: wc }
-    ),
+    isAppWindowSender({ sender: dead, senderFrame: dead.mainFrame }, new Set([3])),
     false
   );
+});
+
+test("isAppWindowSender admits EVERY registered window and NOTHING else", () => {
+  // The enumeration, at the predicate level: the pop-out is as legitimate a caller as the
+  // shell BECAUSE main registered it, and an unregistered window is refused however
+  // well-formed it looks.
+  const shell = { id: 10, mainFrame: {}, isDestroyed: () => false };
+  const popout = { id: 11, mainFrame: {}, isDestroyed: () => false };
+  const stranger = { id: 12, mainFrame: {}, isDestroyed: () => false };
+  const bound = new Set([10, 11]);
+  assert.equal(isAppWindowSender({ sender: shell, senderFrame: shell.mainFrame }, bound), true);
+  assert.equal(isAppWindowSender({ sender: popout, senderFrame: popout.mainFrame }, bound), true);
+  assert.equal(
+    isAppWindowSender({ sender: stranger, senderFrame: stranger.mainFrame }, bound),
+    false,
+    "a session window, a consent window, or anything else main did not register"
+  );
+});
+
+test("isAppWindowSender fails CLOSED on an absent/empty/non-Set registry", () => {
+  // An unbound privileged surface is the bug, not a compatibility mode: register() runs
+  // before any window exists, and until one does every handler must be dead.
+  const wc = { id: 1, mainFrame: {}, isDestroyed: () => false };
+  const e = { sender: wc, senderFrame: wc.mainFrame };
+  for (const registry of [null, undefined, new Set(), {}, [1]]) {
+    assert.equal(isAppWindowSender(e, registry), false, JSON.stringify(String(registry)));
+  }
 });
 
 test("isExternalUrl: http(s) only", () => {

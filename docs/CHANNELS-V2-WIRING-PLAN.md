@@ -1,18 +1,20 @@
 # Channels v2 — wiring plan
 
-Status: ⛔ **EXECUTED. THE CUTOVER HAPPENED (2026-08-18).** Written 2026-08-18 against
-the tree at `c18b64ea`. **Phases 0–9 and 11–12 have LANDED. `channels-v2` IS `channels`:**
+Status: ⛔ **EXECUTED IN FULL. THE CUTOVER HAPPENED (2026-08-18).** Written 2026-08-18 against
+the tree at `c18b64ea`. **Every phase, 0 through 12, has LANDED. `channels-v2` IS `channels`:**
 the route, the page folder, the nav row, the deep-link key and the two-pane page
 (`channels-view-core.tsx` and everything under it) are all gone, and
 `/:workspaceSegment/channels` mounts the ported three-column surface.
-⚠ **PHASE 10 (the opt-in pop-out thread window) IS THE ONE PHASE THAT DID NOT LAND, and it
-is PARKED on Samuel's security decision, not skipped** — see § Phase 10 and risk 2 below;
-the cutover forecloses neither option.
+✅ **PHASE 10 (the opt-in pop-out thread window) LANDED 2026-08-18, AFTER the cutover and
+UN-PARKED by Samuel's explicit security ruling: OPTION (a) — widen the IPC sender binding
+to a registry of app-owned windows.** Option (b) (reuse the session-window renderer) was
+REJECTED: the thread view must not be built twice. See § Phase 10 and risk 2 below for
+what shipped and where it differed.
 
 The phases below are left as written — they are the intent, not a progress log.
 ⚠ **Current state lives in `docs/INVARIANTS.md`, never here** (§5 for the channels model
 and the one surviving surface, §6 for consent and the launch flow, §7 for the registered
-live surface, §9 for the bounded read, §11 for the desktop rules and the parked pop-out).
+live surface, §9 for the bounded read, §11 for the desktop rules and the pop-out thread window).
 Source of intent WAS `apps/desktop-ui/src/pages/channels-v2/MAPPING.md`; ⚠ **that file was
 DELETED at the cutover and its rulings migrated into INVARIANTS §5 §6 §7 §11 and one dated
 ENGINEERING.md stratum** — do not restore it, and do not read the sections below as
@@ -544,14 +546,50 @@ here, so the gate is about the release, not the server; state which).
 
 ## Phase 10 — The pop-out thread window, opt-in
 
+✅ **LANDED 2026-08-18, UN-PARKED BY SAMUEL'S RULING: OPTION (a).** Widen the sender
+binding, deliberately, with an enumerating test of the bound senders and the refusal shape
+pinned unchanged. Option (b) was rejected on the record — building the thread view twice is
+the duplication this port exists to remove.
+
+**What shipped, and where it differed from the sketch below:**
+
+- **The registry is `dopl-desktop-app/main/app-windows.js`.** It holds live `BrowserWindow`s
+  and DERIVES the bound `webContents.id` set on every read; both lifecycle events plus a
+  sweep-on-read take a dead window out. `register(win)` is main-only by construction — no
+  IPC handler, no preload mention, two call sites — and `test/app-windows.test.mjs` asserts
+  that over the real tree rather than by assurance.
+- **`mainOnly(...)` is `appWindowOnly(...)`**, still written literally at every registration
+  site (the P5 structural belt survives and now also refuses the retired name). The
+  ui-bridge half is `isAppWindowSender(event, senderIds)`. **One hardening rode along and is
+  stated, not smuggled: F-221** — channel-dir-ipc's frame check admitted an absent
+  `senderFrame` while ui-bridge's copy refused it, on the more privileged of the two files.
+- **The landing route needed NO new route shape.** `/{segment}/channels/{channelId}` is the
+  row Phase 9 built and the cutover renamed; the thread rides it as a `?thread=` SELECTION
+  (`initialThreadId`, a plain prop — this tree is router-free). So `routes.tsx`,
+  `deep-link-target.js › WORKSPACE_PAGES` and the drift test were untouched, and there was
+  no deep-link hand copy to ride along. The window is landed on the HASH at creation
+  (`loadFile(INDEX_HTML, { hash })`), not steered afterwards, so there is no mount race.
+- **`main/popout-window.js`** takes `spa-window.js`'s `spaWebPreferences()` and
+  `policeNavigation()` verbatim — same preload, same sandbox, same deny, same navigation
+  lock — refuses while the min-version gate is blocking, dedupes per (channel, thread) and
+  caps at 4 windows.
+- **Three fan-outs were widened in the same phase**, because a pop-out that renders stale
+  data silently is the §11 failure mode: the ui-sync doorbell, the session-summary push and
+  the auth-state broadcast. ⚠ One bound remains, **F-222**: ui-sync watches ONE workspace,
+  last-writer-wins.
+- **Two files were SPLIT before the feature, both at the 500-line cap:**
+  `main/ui-sync-core.js` (the pure decision core, sentinels moved byte-for-byte) and
+  `src/features/channels/components/channels-v2/live.ts` (the realtime→refetch wiring).
+
 **Size: L.** The riskiest desktop phase. Do not fold it into Phase 9.
 
 **Goal.** Each opened thread view gets an "open as new window" button — a movable pop-out
 that shows the THREAD (not the session).
 
-⚠ **The blocking constraint, found while planning:** every renderer-reachable
-`ipcMain.handle` is bound to the MAIN window's `webContents` and its top frame —
-`main/ui-bridge.js`'s guard and `main/channel-dir-ipc.js › isMainWindowSender`, both
+⚠ **The blocking constraint, found while planning** (and RESOLVED by option (a) above — the
+symbol it named is now `main/channel-dir-ipc.js › isAppWindowSender`): every
+renderer-reachable `ipcMain.handle` was bound to the MAIN window's `webContents` and its top
+frame — `main/ui-bridge.js`'s guard and channel-dir-ipc's own copy, both
 fail-closed with a refusal shaped like an invalid payload so a hostile page learns nothing.
 **A second SPA window would therefore have every `apiRequest` refused and would render
 nothing while reporting nothing** — precisely the silent-feature-deletion failure mode
@@ -675,7 +713,7 @@ P5 removes lifecycle rendering) — sequence those three edits or land them in o
 lower-risk order: it exercises the reused controls before the new shell is load-bearing.
 
 **P7 needs P6 deployed, not merely merged** (the mention key must be stamped by a live
-server). **P10 needs its security decision before it needs any code.**
+server). **P10 needed its security decision before it needed any code** — it got one (risk 2 below) and shipped after the cutover.
 
 ---
 
@@ -686,9 +724,12 @@ server). **P10 needs its security decision before it needs any code.**
    consent row's `auto_allowed` path and `consent-service.ts › revalidateAutoAllow` keep
    working exactly as they do; the launch panel must not read or write trust, and must not
    present the permission arm as a stored preference. **Revisit before wiring.**
-2. **Pop-out windows vs. the fail-closed IPC sender binding** (Phase 10). A second SPA window
-   gets every privileged call refused, silently. Decide (a) widen the binding or (b) reuse
-   the session renderer, on the record, before any pop-out work starts.
+2. ✅ **SETTLED 2026-08-18 — Samuel took OPTION (a).** Pop-out windows vs. the fail-closed IPC
+   sender binding (Phase 10): a second SPA window got every privileged call refused, silently.
+   The binding was WIDENED from "the main window" to a registry of app-owned windows
+   (`main/app-windows.js`), deliberately, with an enumerating test of the bound senders and
+   the refusal shape pinned unchanged. Option (b) — reuse the session renderer — was rejected
+   because the thread view must not be built twice. Current rule: INVARIANTS §11.
 3. **How threads age out of the sidebar is OPEN** and Phase 1 forces the answer, because the
    read needs a bound regardless (INVARIANTS §9: a read at its ceiling counts as clipped, and
    a cap that renders identically to an exhausted list is the bug).

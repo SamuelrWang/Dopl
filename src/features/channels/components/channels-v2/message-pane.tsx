@@ -51,6 +51,7 @@ export function ChannelsV2MessagePane({
   infoOpen,
   gate,
   manage,
+  popOut,
   onToggleInfo,
   onExitThread,
   onOpenThread,
@@ -76,6 +77,14 @@ export function ChannelsV2MessagePane({
    * write-bearing and channel-scoped, and this file owns the chrome only.
    */
   manage?: ReactNode;
+  /**
+   * "Open as new window" (`pop-out.tsx › PopOutThreadButton`), a SLOT for the
+   * same reason `manage` is: it needs the workspace segment, which this file
+   * has no business knowing. THREAD VIEW ONLY — the channel view has no thread
+   * to pop out — and it renders itself away outside the desktop shell (wiring
+   * plan Phase 10).
+   */
+  popOut?: ReactNode;
   onToggleInfo: () => void;
   onExitThread: () => void;
   /** Set by an in-transcript thread card — the channel view's way IN. */
@@ -119,6 +128,7 @@ export function ChannelsV2MessagePane({
         threadTitle={thread?.title ?? null}
         infoOpen={infoOpen}
         manage={manage}
+        popOut={popOut}
         onToggleInfo={onToggleInfo}
         onExitThread={onExitThread}
       />
@@ -153,6 +163,7 @@ function PaneHeader({
   threadTitle,
   infoOpen,
   manage,
+  popOut,
   onToggleInfo,
   onExitThread,
 }: {
@@ -160,6 +171,7 @@ function PaneHeader({
   threadTitle: string | null;
   infoOpen: boolean;
   manage?: ReactNode;
+  popOut?: ReactNode;
   onToggleInfo: () => void;
   onExitThread: () => void;
 }) {
@@ -190,6 +202,10 @@ function PaneHeader({
       {/* Bookmarking a channel is a WRITE with no column behind it; the
           assistant lane is its own surface. Both ride later phases. */}
       <IconButton icon={Bookmark} label="Bookmark channel" size={14} className="h-6 w-6" />
+      {/* THREAD VIEW ONLY — it pops out the open thread, and the channel view
+          has none. Sits beside the crumb it acts on rather than in the
+          channel-scoped cluster on the right (wiring plan Phase 10). */}
+      {threadTitle !== null && popOut}
       <span className="flex-1" />
       {/* The channel-management cluster: settings, working folder, invite and
           the kebab. It carried over WHOLESALE from the retired page at the

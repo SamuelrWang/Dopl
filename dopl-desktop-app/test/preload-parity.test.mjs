@@ -115,7 +115,8 @@ const APP_OPS = [
   // the ADD, which is the review this comment records:
   //   • The main-process handlers EXIST and were checked before this list was edited —
   //     `main/channel-dir-ipc.js` registers `sessions:pause` / `sessions:end`, both wrapped in
-  //     the same `mainOnly()` sender binding as `sessions:reopen` and the folder ops, both
+  //     the same sender binding as `sessions:reopen` and the folder ops (`mainOnly()` when this
+  //     entry was written; `appWindowOnly()` since Phase 10 widened its subject), both
   //     UUID-gating `channelId`. A pinned op with no handler is a promise the bridge cannot
   //     keep; that is the check this rule exists to force.
   //   • THEY WIDEN NOTHING. Each resolves (channel, thread) against main's OWN session
@@ -132,6 +133,23 @@ const APP_OPS = [
   "sessions.summaries",
   "signOut",
   "syncWatch",
+  // ⚠ ONE JOINED HERE ON 2026-08-18 (wiring plan Phase 10): `threads.openWindow`, the
+  // thread view's "Open as new window". The pin failed on the ADD, which is the review this
+  // comment records:
+  //   • The main-process handler EXISTS and was checked before this list was edited —
+  //     `main/channel-dir-ipc.js` registers `threads:openWindow` under the same
+  //     `appWindowOnly()` sender binding as every op above, UUID-gates `channelId`, and runs
+  //     the segment and the thread id through `deep-link-target.js › isSafeSegment` (the ONE
+  //     character rule for a string entering a router path). A pinned op with no handler is
+  //     a promise the bridge cannot keep; that is the check this rule exists to force.
+  //   • IT ASKS FOR A WINDOW; IT DOES NOT GET ONE. No handle, window id or reference comes
+  //     back — main creates the window and main registers it in `main/app-windows.js`. That
+  //     is precisely why widening the sender binding in this phase is safe: the renderer
+  //     cannot enlarge the set of bound senders, only ask main to.
+  //   • The failure directions are all refusals in ONE shape (`{ ok: false }`): a bad id, a
+  //     blocking version floor, a full window budget. Nothing here starts a query, wakes a
+  //     shell, grants a tool or posts anything.
+  "threads.openWindow",
 ];
 
 test("the app preload exposes exactly its pinned surface, on `dopl`", () => {

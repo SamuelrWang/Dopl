@@ -1,22 +1,37 @@
 // H3 (2026-07-31) — SENDER BINDING on main/channel-dir-ipc.js.
+// PHASE 10 (2026-08-18) — THE SUBJECT OF THAT BINDING WIDENED, DELIBERATELY.
 //
-// THE DEFECT. Every handler in that file validated its PAYLOAD (channelId as a UUID, both
-// permission modes against frozen enums) and never validated its CALLER. Meanwhile
-// renderer/preload.js exposes all of them on the window that loads REMOTE usedopl.com
-// content. So any XSS, any compromised script, any injected third-party bundle on that
-// origin could call them directly — and the worst of the six is
-// `channels:setPermissionPreset`, which arms the permission posture a spawned agent runs
-// with. Chained with H2 (before it was fixed) that was zero-click local code execution:
-// the page arms bypass/auto_both for every channel id it can see, and the next spawn on
-// any of those channels runs with Bash/WebFetch pre-approved and auto-outbound posting.
+// THE DEFECT H3 FIXED. Every handler in that file validated its PAYLOAD (channelId as a
+// UUID, both permission modes against frozen enums) and never validated its CALLER, while
+// the preload exposed all of them on a window that loaded REMOTE usedopl.com content. So
+// any XSS, any compromised script, any injected third-party bundle on that origin could
+// call them directly — and the worst is `channels:setPermissionPreset`, which arms the
+// permission posture a spawned agent runs with. Chained with H2 (before it was fixed) that
+// was zero-click local code execution.
 //
-// main/session-ipc.js has always re-derived its target from `event.sender` (the frozen
-// §B.3 contract) for exactly this reason. This file pins that the same discipline now
-// covers all SIX ops here, and that it is enforced two ways — because one is not enough:
+// WHAT PHASE 10 CHANGED, AND WHAT IT DID NOT. The binding's subject was "THE MAIN WINDOW"
+// and is now "any window main itself registered at creation" — `main/app-windows.js`'s
+// registry, which is the shell plus any POP-OUT THREAD WINDOW. Samuel's ruling, 2026-08-18,
+// option (a): widen the guard rather than build the thread view a second time on the
+// session-window renderer. Everything else is unchanged and this file is what says so:
 //
-//   1. the sender must be the MAIN WINDOW's webContents; and
-//   2. it must be that window's TOP FRAME, because a cross-origin iframe SHARES its
+//   1. the sender must be a REGISTERED webContents — and the registry is written only by
+//      main, at window creation, so a renderer cannot enlarge the set it is judged against
+//      (`test/app-windows.test.mjs` proves that half); AND
+//   2. it must be that webContents' TOP FRAME, because a cross-origin iframe SHARES its
 //      host's webContents and would otherwise pass check 1 unchallenged.
+//
+// ⚠ THE BOUND SENDERS ARE ENUMERATED HERE, NOT REMEMBERED. The plan asked for exactly
+// that: a widened guard needs a test that lists who may call, rather than an editor's
+// recollection of who may. `bootIpc` binds TWO windows (a shell and a pop-out) and every op
+// is driven from both, from a THIRD unregistered window, from an iframe inside a bound one,
+// and against an unbound surface — with the refusal VALUE pinned identical in every case.
+//
+// ⚠ ONE HARDENING RODE ALONG AND IS STATED RATHER THAN SMUGGLED (F-221): the frame check
+// here read `if (frame && sender.mainFrame && frame !== sender.mainFrame)`, which WAVED
+// THROUGH a `senderFrame` reading as null/undefined, while `main/ui-bridge.js`'s copy of
+// "the same" predicate refused it. Two copies disagreeing, with the more privileged surface
+// on the lenient side. Now fail-closed on both, and asserted below.
 //
 // Run: `node --test dopl-desktop-app/test/channel-ipc-sender.test.mjs`
 
@@ -40,72 +55,127 @@ assert.notEqual(from, -1, "BEGIN CHANNEL-IPC-SENDER sentinel missing");
 assert.ok(to > from, "CHANNEL-IPC-SENDER sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
-const { isMainWindowSender } = new Function(`${BLOCK}\n return { isMainWindowSender };`)();
+const { isAppWindowSender } = new Function(`${BLOCK}\n return { isAppWindowSender };`)();
 
+let nextWcId = 1;
 const mkWin = () => {
   const mainFrame = { name: "top" };
-  const webContents = { id: 1, mainFrame };
+  const webContents = { id: nextWcId++, mainFrame, isDestroyed: () => false };
   return { win: { isDestroyed: () => false, webContents }, webContents, mainFrame };
 };
 const evt = (sender, senderFrame) => ({ sender, senderFrame });
+/** The registry's answer: the live set of bound webContents ids. */
+const idsOf = (...wcs) => new Set(wcs.map((wc) => wc.id));
 
-test("the guard ACCEPTS the main window's own top frame", () => {
-  const { win, webContents, mainFrame } = mkWin();
-  assert.equal(isMainWindowSender(evt(webContents, mainFrame), win), true);
+test("the guard ACCEPTS a registered window's own top frame", () => {
+  const { webContents, mainFrame } = mkWin();
+  assert.equal(isAppWindowSender(evt(webContents, mainFrame), idsOf(webContents)), true);
 });
 
-test("the guard REFUSES a different window's webContents", () => {
-  const { win } = mkWin();
-  const other = mkWin();
-  assert.equal(isMainWindowSender(evt(other.webContents, other.mainFrame), win), false,
-    "a session window, a consent window, or anything else, cannot speak for the main window");
+test("the guard ACCEPTS EVERY registered window — this is the Phase 10 widening", () => {
+  // The whole point of the change: a pop-out thread window is as legitimate a caller as
+  // the shell, because main registered both at creation.
+  const shell = mkWin();
+  const popout = mkWin();
+  const bound = idsOf(shell.webContents, popout.webContents);
+  assert.equal(isAppWindowSender(evt(shell.webContents, shell.mainFrame), bound), true,
+    "the shell");
+  assert.equal(isAppWindowSender(evt(popout.webContents, popout.mainFrame), bound), true,
+    "the pop-out thread window");
 });
 
-test("the guard REFUSES an IFRAME inside the main window (same webContents, different frame)", () => {
-  // This is the check that identity alone would miss: an embedded cross-origin frame
-  // shares its host's webContents, so `event.sender === win.webContents` is TRUE for it.
-  const { win, webContents } = mkWin();
+test("the guard REFUSES a window that is NOT in the registry", () => {
+  // A session window, a consent window, the update-required screen, or anything else main
+  // did not bind — the widening admitted registered windows, not all windows.
+  const shell = mkWin();
+  const stranger = mkWin();
+  assert.equal(
+    isAppWindowSender(evt(stranger.webContents, stranger.mainFrame), idsOf(shell.webContents)),
+    false
+  );
+});
+
+test("the guard REFUSES a window that has LEFT the registry (a closed pop-out)", () => {
+  const shell = mkWin();
+  const popout = mkWin();
+  // Its id fell out of the set when the window died; a stale id must not stay bound.
+  assert.equal(
+    isAppWindowSender(evt(popout.webContents, popout.mainFrame), idsOf(shell.webContents)),
+    false
+  );
+});
+
+test("the guard REFUSES an IFRAME inside a registered window (same webContents, different frame)", () => {
+  // This is the check identity alone would miss, and it did NOT move in Phase 10: an
+  // embedded cross-origin frame shares its host's webContents, so the id matches for it.
+  const { webContents } = mkWin();
   const iframe = { name: "an-embedded-frame" };
-  assert.equal(isMainWindowSender(evt(webContents, iframe), win), false);
+  assert.equal(isAppWindowSender(evt(webContents, iframe), idsOf(webContents)), false);
 });
 
-test("the guard FAILS CLOSED on a missing / destroyed / unbuilt window", () => {
+test("the guard FAILS CLOSED on a missing / empty / non-Set registry", () => {
   const { webContents, mainFrame } = mkWin();
   const e = evt(webContents, mainFrame);
-  assert.equal(isMainWindowSender(e, null), false, "register ran before the window existed");
-  assert.equal(isMainWindowSender(e, undefined), false, "no accessor was supplied at all");
-  assert.equal(isMainWindowSender(e, {}), false, "not a BrowserWindow shape");
-  assert.equal(isMainWindowSender(e, { isDestroyed: () => true, webContents }), false,
-    "a destroyed window can never be a legitimate caller");
+  assert.equal(isAppWindowSender(e, null), false, "register ran before any window existed");
+  assert.equal(isAppWindowSender(e, undefined), false, "no accessor was supplied at all");
+  assert.equal(isAppWindowSender(e, new Set()), false, "no window is bound yet");
+  assert.equal(isAppWindowSender(e, {}), false, "not a Set — an unbound surface, not an open one");
+  assert.equal(isAppWindowSender(e, [webContents.id]), false, "an array is not the contract");
+});
+
+test("the guard FAILS CLOSED on a DESTROYED sender whose id is still bound", () => {
+  // The registry sweeps, but a webContents can die between the sweep and the call.
+  const { webContents, mainFrame } = mkWin();
+  webContents.isDestroyed = () => true;
+  assert.equal(isAppWindowSender(evt(webContents, mainFrame), idsOf(webContents)), false);
 });
 
 test("the guard FAILS CLOSED on a senderFrame getter that THROWS (a detached frame)", () => {
   // Electron's `senderFrame` throws once the frame is gone. Reading it defensively must
   // refuse, never wave the call through.
-  const { win, webContents } = mkWin();
+  const { webContents } = mkWin();
   const hostile = { sender: webContents };
   Object.defineProperty(hostile, "senderFrame", {
     get() { throw new Error("frame detached"); },
   });
-  assert.equal(isMainWindowSender(hostile, win), false);
+  assert.equal(isAppWindowSender(hostile, idsOf(webContents)), false);
 });
 
-test("the guard FAILS CLOSED on a missing sender or a missing event", () => {
-  const { win } = mkWin();
+test("F-221 — the guard FAILS CLOSED on an ABSENT frame, matching ui-bridge's copy", () => {
+  // The pre-Phase-10 form here was `if (frame && sender.mainFrame && frame !== …)`, which
+  // ADMITTED a null/undefined senderFrame while main/ui-bridge.js's copy refused it. This
+  // file is the more privileged of the two (it arms permission presets), so the divergence
+  // ran the wrong way. Closed in the same security change.
+  const { webContents } = mkWin();
+  const bound = idsOf(webContents);
+  assert.equal(isAppWindowSender(evt(webContents, null), bound), false);
+  assert.equal(isAppWindowSender(evt(webContents, undefined), bound), false);
+  // …and a webContents with no mainFrame at all.
+  const noMain = { id: 999, isDestroyed: () => false };
+  assert.equal(isAppWindowSender(evt(noMain, {}), new Set([999])), false);
+});
+
+test("the guard FAILS CLOSED on a missing sender, a missing event, or a non-numeric id", () => {
+  const { webContents } = mkWin();
+  const bound = idsOf(webContents);
   for (const e of [null, undefined, {}, { sender: null }, { sender: undefined }]) {
-    assert.equal(isMainWindowSender(e, win), false, JSON.stringify(e));
+    assert.equal(isAppWindowSender(e, bound), false, JSON.stringify(e));
   }
+  const weird = { id: "1", mainFrame: {}, isDestroyed: () => false };
+  assert.equal(isAppWindowSender(evt(weird, weird.mainFrame), new Set(["1"])), false,
+    "a string id must not be admitted by a set that happens to hold the same string");
 });
 
-// ── The wiring: all SIX handlers are wrapped, and refuse an unbound sender ───
+// ── The wiring: every handler is wrapped, and refuses an unbound sender ──────
 
 // The real file, evaluated with a stub `require` so the real guard + the real UUID gate
-// are the ones under test; only electron and the two store-backed modules are swapped.
-function bootIpc() {
+// are the ones under test; only electron and the store/window-backed modules are swapped.
+function bootIpc({ blocked = false } = {}) {
   const handlers = {};
   const writes = [];
   const dialogs = [];
   const reopens = [];
+  const popouts = [];
   const stubRequire = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./channel-prefs") {
@@ -125,23 +195,39 @@ function bootIpc() {
     if (id === "./session-engine") {
       return { reopenByTask: (a) => { reopens.push(a); return { ok: true }; } };
     }
+    // The REAL character rule — a second regex in channel-dir-ipc.js would be a second
+    // answer to it, so the test drives the real one rather than a permissive fake.
+    if (id === "./deep-link-target") {
+      return { isSafeSegment: (v) => typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(v) };
+    }
+    if (id === "./version-gate") return { isBlocked: () => blocked };
+    if (id === "./popout-window") {
+      return { openThreadWindow: (t) => { popouts.push(t); return { ok: true }; } };
+    }
     if (id === "./diag") return { diag: () => {} };
     throw new Error("unexpected require: " + id);
   };
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);
-  const { win, webContents, mainFrame } = mkWin();
-  mod.exports.register({ getMainWindow: () => win });
+
+  // TWO bound windows — the shell and a pop-out thread window. This is the enumeration:
+  // both must work, and nothing else may.
+  const shell = mkWin();
+  const popout = mkWin();
+  const stranger = mkWin();
+  mod.exports.register({ getSenderIds: () => idsOf(shell.webContents, popout.webContents) });
   return {
-    handlers, writes, dialogs, reopens,
-    bound: evt(webContents, mainFrame),
-    iframe: evt(webContents, { name: "embedded" }),
-    foreign: (() => { const o = mkWin(); return evt(o.webContents, o.mainFrame); })(),
+    handlers, writes, dialogs, reopens, popouts,
+    shell: evt(shell.webContents, shell.mainFrame),
+    popout: evt(popout.webContents, popout.mainFrame),
+    iframe: evt(shell.webContents, { name: "embedded" }),
+    foreign: evt(stranger.webContents, stranger.mainFrame),
   };
 }
 
 const CH = "44444444-4444-4444-8444-444444444444";
 const PRESET = { tools: "bypass", messages: "auto_both" };
+const POPOUT_PAYLOAD = { segment: "acme-a1b2", channelId: CH, threadId: "task-1" };
 
 // name -> [payload, the value a REFUSED call must return]
 const OPS = [
@@ -155,10 +241,15 @@ const OPS = [
   // operator's OWN agent. They are STOP verbs — `interrupt` (the session window's pause
   // morph) and `end` ("End session") — dispatched through main's own reducer, so neither can
   // start a query, wake a parked shell, grant a tool or post anything. They sit under the
-  // same `mainOnly` binding and the same UUID gate as every op above, which is the whole
+  // same sender binding and the same UUID gate as every op above, which is the whole
   // reason this list is asserted by COUNT as well as by name.
   ["sessions:pause", { channelId: CH, taskId: "t1" }, { ok: false }],
   ["sessions:end", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ AND ONE MORE 2026-08-18 (wiring plan Phase 10): the pop-out thread window. It is the
+  // only op here that can MINT a window, which is exactly why it lives under the same
+  // binding — and why its own guards (UUID channel, isSafeSegment on the other two, the
+  // version floor, the window budget) all answer in this same `{ ok: false }` shape.
+  ["threads:openWindow", POPOUT_PAYLOAD, { ok: false }],
 ];
 
 test("every privileged op in the file is registered", () => {
@@ -166,27 +257,29 @@ test("every privileged op in the file is registered", () => {
   for (const [name] of OPS) assert.equal(typeof handlers[name], "function", name);
 });
 
-test("every op REFUSES a foreign sender, and does no work at all", async () => {
+test("every op REFUSES an unregistered sender, and does no work at all", async () => {
   for (const [name, payload, refusal] of OPS) {
     const ipc = bootIpc();
     assert.deepEqual(await ipc.handlers[name](ipc.foreign, payload), refusal, name);
     assert.deepEqual(ipc.writes, [], `${name} must not write`);
     assert.deepEqual(ipc.dialogs, [], `${name} must not pop a native dialog`);
-    assert.deepEqual(ipc.reopens, [], `${name} must not open a window`);
+    assert.deepEqual(ipc.reopens, [], `${name} must not open a session window`);
+    assert.deepEqual(ipc.popouts, [], `${name} must not open a pop-out window`);
   }
 });
 
-test("every op REFUSES an iframe inside the main window", async () => {
+test("every op REFUSES an iframe inside a registered window", async () => {
   for (const [name, payload, refusal] of OPS) {
     const ipc = bootIpc();
     assert.deepEqual(await ipc.handlers[name](ipc.iframe, payload), refusal, name);
     assert.deepEqual(ipc.writes, [], `${name} must not write for an iframe`);
     assert.deepEqual(ipc.dialogs, [], `${name} must not pop a dialog for an iframe`);
+    assert.deepEqual(ipc.popouts, [], `${name} must not open a window for an iframe`);
   }
 });
 
-test("every op REFUSES when no window accessor was supplied (an unbound surface)", async () => {
-  // A mid-wave caller / a harness that forgets `getMainWindow` must get a DEAD surface,
+test("every op REFUSES when no registry accessor was supplied (an unbound surface)", async () => {
+  // A mid-wave caller / a harness that forgets `getSenderIds` must get a DEAD surface,
   // not an open one — an unbound privileged handler is the bug, not a compatibility mode.
   const handlers = {};
   const stub = (id) => {
@@ -194,27 +287,38 @@ test("every op REFUSES when no window accessor was supplied (an unbound surface)
     if (id === "./channel-prefs") return { getPermissionPreset: () => PRESET, armPermissionPreset: () => ({ ok: true }), clearPermissionPreset: () => {} };
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
+    if (id === "./deep-link-target") return { isSafeSegment: () => true };
+    if (id === "./version-gate") return { isBlocked: () => false };
+    if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
     throw new Error("unexpected require: " + id);
   };
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
-  mod.exports.register({}); // no getMainWindow
+  mod.exports.register({}); // no getSenderIds
   const { webContents, mainFrame } = mkWin();
   for (const [name, payload, refusal] of OPS) {
     assert.deepEqual(await handlers[name](evt(webContents, mainFrame), payload), refusal, name);
   }
 });
 
-test("the BOUND sender still gets the real behaviour (the guard is not a mute)", async () => {
-  const ipc = bootIpc();
-  assert.equal(await ipc.handlers["channels:getFolderLabel"](ipc.bound, CH), "~/Downloads/secret-repo");
-  assert.deepEqual(await ipc.handlers["channels:getPermissionPreset"](ipc.bound, CH), PRESET);
-  assert.deepEqual(await ipc.handlers["channels:setPermissionPreset"](ipc.bound, { channelId: CH, preset: PRESET }), { ok: true });
-  assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], "the legitimate write lands");
-  await ipc.handlers["channels:chooseFolder"](ipc.bound, CH);
-  assert.equal(ipc.dialogs.length, 1, "the operator's own picker still opens");
-  assert.deepEqual(await ipc.handlers["sessions:reopen"](ipc.bound, { channelId: CH, taskId: "t1" }), { ok: true });
+test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out alike", async () => {
+  // The enumeration, driven rather than remembered: whatever the registry holds must WORK,
+  // or the widening bought a window that renders nothing (the failure Phase 10 exists to
+  // prevent), and whatever it does not hold must not.
+  for (const which of ["shell", "popout"]) {
+    const ipc = bootIpc();
+    const sender = ipc[which];
+    assert.equal(await ipc.handlers["channels:getFolderLabel"](sender, CH), "~/Downloads/secret-repo", which);
+    assert.deepEqual(await ipc.handlers["channels:getPermissionPreset"](sender, CH), PRESET, which);
+    assert.deepEqual(await ipc.handlers["channels:setPermissionPreset"](sender, { channelId: CH, preset: PRESET }), { ok: true }, which);
+    assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
+    await ipc.handlers["channels:chooseFolder"](sender, CH);
+    assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);
+    assert.deepEqual(await ipc.handlers["sessions:reopen"](sender, { channelId: CH, taskId: "t1" }), { ok: true }, which);
+    assert.deepEqual(await ipc.handlers["threads:openWindow"](sender, POPOUT_PAYLOAD), { ok: true }, which);
+    assert.deepEqual(ipc.popouts, [POPOUT_PAYLOAD], `${which}: the pop-out target crosses whole`);
+  }
 });
 
 test("a refusal is INDISTINGUISHABLE from a bad-payload rejection", async () => {
@@ -223,24 +327,67 @@ test("a refusal is INDISTINGUISHABLE from a bad-payload rejection", async () => 
   const ipc = bootIpc();
   for (const [name, payload, refusal] of OPS) {
     const badPayload = typeof payload === "string" ? "not-a-uuid" : { ...payload, channelId: "not-a-uuid" };
-    assert.deepEqual(await ipc.handlers[name](ipc.bound, badPayload), refusal, `${name} bad payload`);
+    assert.deepEqual(await ipc.handlers[name](ipc.shell, badPayload), refusal, `${name} bad payload`);
     assert.deepEqual(await ipc.handlers[name](ipc.foreign, payload), refusal, `${name} bad sender`);
   }
 });
 
+// ── The pop-out op's own gates ───────────────────────────────────────────────
+
+test("threads:openWindow character-checks the segment and the thread id, not just the channel", () => {
+  // Both are interpolated into a router path. The channel is UUID-gated like every op
+  // here; the other two go through the ONE character rule (deep-link-target ›
+  // isSafeSegment), and a local regex in channel-dir-ipc.js would be a second answer to it.
+  assert.match(SRC, /require\('\.\/deep-link-target'\)/, "the shared rule, required lazily");
+  assert.match(SRC, /isSafeSegment\(p\.segment\)/);
+  assert.match(SRC, /isSafeSegment\(p\.threadId\)/);
+});
+
+test("threads:openWindow refuses every unusable target in the SAME shape", async () => {
+  const ipc = bootIpc();
+  for (const bad of [
+    undefined,
+    {},
+    { ...POPOUT_PAYLOAD, channelId: "not-a-uuid" },
+    { ...POPOUT_PAYLOAD, segment: "../../etc" },
+    { ...POPOUT_PAYLOAD, segment: "" },
+    { ...POPOUT_PAYLOAD, threadId: "a/b" },
+    { ...POPOUT_PAYLOAD, threadId: "%2e%2e" },
+    { ...POPOUT_PAYLOAD, threadId: null },
+  ]) {
+    assert.deepEqual(await ipc.handlers["threads:openWindow"](ipc.shell, bad), { ok: false },
+      JSON.stringify(bad));
+  }
+  assert.deepEqual(ipc.popouts, [], "nothing reached the window factory");
+});
+
+test("threads:openWindow refuses while the MIN-VERSION GATE is blocking", async () => {
+  // `createShellWindow` is the gate's single enforcement point, so a second window factory
+  // has to refuse on its own or the block stops being total. Same refusal shape.
+  const ipc = bootIpc({ blocked: true });
+  assert.deepEqual(await ipc.handlers["threads:openWindow"](ipc.shell, POPOUT_PAYLOAD), { ok: false });
+  assert.deepEqual(ipc.popouts, [], "a blocked build must not mint a window");
+});
+
 // ── The wiring index.js is responsible for ───────────────────────────────────
 
-test("index.js passes the LIVE main window, lazily (it is rebuilt on reopen)", () => {
+test("index.js passes the LIVE registry, lazily (windows come and go)", () => {
   const INDEX = M("index.js");
-  assert.match(INDEX, /channelDirIpc\.register\(\{[^}]*getMainWindow: \(\) => mainWindow[^}]*\}\)/,
-    "an accessor, not a snapshot: register() runs before the window exists and it is replaced on reopen");
+  assert.match(INDEX, /channelDirIpc\.register\(\{[^}]*getSenderIds: \(\) => appWindows\.senderIds\(\)[^}]*\}\)/,
+    "an accessor, not a snapshot: register() runs before any window exists, the shell is " +
+      "rebuilt on reopen, and a pop-out can appear or close at any moment");
 });
 
 test("no handler in the file skips the wrapper", () => {
-  // Structural belt: every ipcMain.handle in this file must go through mainOnly, so a new
-  // op cannot be added unbound by simply forgetting to wrap it.
+  // Structural belt: every ipcMain.handle in this file must go through appWindowOnly, so a
+  // new op cannot be added unbound by simply forgetting to wrap it. ⚠ The wrap is written
+  // literally at each registration site for exactly this reason — hiding it inside a
+  // factory would pass review and silently disarm this check.
   const calls = SRC.match(/ipcMain\.handle\(/g) || [];
-  const wrapped = SRC.match(/ipcMain\.handle\('[^']+', mainOnly\(/g) || [];
+  const wrapped = SRC.match(/ipcMain\.handle\('[^']+', appWindowOnly\(/g) || [];
   assert.equal(calls.length, OPS.length, "the op count changed — update OPS above");
   assert.equal(wrapped.length, calls.length, "every registered handler is sender-bound");
+  assert.equal(SRC.match(/mainOnly\(/g), null,
+    "`mainOnly(` is gone: the binding's subject is the app-window registry now, and a " +
+      "surviving call site would be an op still bound to the main window alone");
 });

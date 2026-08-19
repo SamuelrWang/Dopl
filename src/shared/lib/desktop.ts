@@ -32,12 +32,32 @@ export interface DoplSessionsBridge {
   ) => Promise<{ ok: boolean; reason?: "no-thread" | "busy" }>;
 }
 
+/**
+ * THE POP-OUT THREAD WINDOW (`window.dopl.threads`), desktop shell only — wiring plan
+ * Phase 10, 2026-08-18. Asks MAIN to open a second window on the same bundle, landing on
+ * the channels route with one thread selected.
+ *
+ * ⚠ ASKS FOR A WINDOW; IT DOES NOT GET ONE. No handle and no window reference crosses back
+ * — `{ ok: false }` covers a rejected id, a blocking version floor and a full window budget
+ * alike, so a caller cannot tell them apart. Main owns creation, and main is what registers
+ * the new window as a bound IPC sender.
+ */
+export interface DoplThreadWindowsBridge {
+  openWindow: (
+    /** The canonical `{slug}-{publicId}` workspace segment links are built from. */
+    segment: string,
+    channelId: string,
+    threadId: string
+  ) => Promise<{ ok: boolean }>;
+}
+
 export interface DoplDesktopBridge {
   isDesktop: boolean;
   platform?: string;
   versions?: { electron?: string; chrome?: string };
   channels?: DoplChannelsBridge;
   sessions?: DoplSessionsBridge;
+  threads?: DoplThreadWindowsBridge;
 }
 
 /**
@@ -68,4 +88,12 @@ export function getDesktopChannelFolders(): DoplChannelsBridge | null {
 export function getDesktopSessions(): DoplSessionsBridge | null {
   const sessions = doplBridge()?.sessions;
   return sessions && typeof sessions.reopen === "function" ? sessions : null;
+}
+
+/** Pop-out-thread-window bridge, else null. Feature-detected on `threads.openWindow` so a
+ *  plain browser and an older desktop build both yield null — and the header affordance
+ *  that needs it renders NOTHING rather than offering a button that cannot work. */
+export function getDesktopThreadWindows(): DoplThreadWindowsBridge | null {
+  const threads = doplBridge()?.threads;
+  return threads && typeof threads.openWindow === "function" ? threads : null;
 }

@@ -32,7 +32,11 @@ import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "ui-sync.js"), "utf8");
-const PURE = between(SRC, "// ─── BEGIN UI-SYNC-PURE", "// ─── END UI-SYNC-PURE",
+// ⚠ THE PURE CORE MOVED to main/ui-sync-core.js on 2026-08-18 (wiring plan Phase 10):
+// ui-sync.js sat at exactly the 500-line cap, so the fan-out could not be written until
+// something moved. The sentinels came with it byte for byte; nothing inside changed.
+const CORE = readFileSync(join(HERE, "..", "main", "ui-sync-core.js"), "utf8");
+const PURE = between(CORE, "// ─── BEGIN UI-SYNC-PURE", "// ─── END UI-SYNC-PURE",
   "ui-sync pure block");
 
 const {
@@ -72,7 +76,7 @@ test("the topic names its workspace, advances, and rides a MODULE-scoped counter
   // Per-connection, the counter would restart at 1 after stop()/start() and mint a
   // byte-identical topic while realtime-js still holds the leaving channel.
   assert.match(PURE, /^let topicSeq = 1;$/m);
-  assert.match(fnOf(SRC, "nextTopic"), /topicSeq\+\+/, "the topic consumes the shared counter");
+  assert.match(fnOf(CORE, "nextTopic"), /topicSeq\+\+/, "the topic consumes the shared counter");
 });
 
 // ── BACKOFF LADDER ──────────────────────────────────────────────────────────
@@ -187,7 +191,7 @@ test("the workspace id is read from whichever record shape realtime-js delivers"
 });
 
 test("nothing but workspace_id is ever read out of a payload", () => {
-  const fn = fnOf(SRC, "payloadWorkspaceId");
+  const fn = fnOf(CORE, "payloadWorkspaceId");
   const fields = [...fn.matchAll(/rec && rec\.(\w+)/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(fields)], ["workspace_id"]);
 });
@@ -294,13 +298,73 @@ test("a (re)SUBSCRIBED sends the catch-up; an error status climbs the ladder", (
   assert.match(fn, /describeSubscribeError\(err\)/, "a bare CHANNEL_ERROR names nothing");
 });
 
-test("the renderer send is window-guarded and resolves the window at SEND time", () => {
-  const fn = fnOf(SRC, "sendToWindow");
-  assert.match(fn, /getWindowFn \? getWindowFn\(\) : null/, "the window is rebuilt on reopen");
+test("the renderer send is window-guarded and resolves the windows at SEND time", () => {
+  // ⚠ FANS OUT SINCE 2026-08-18 (wiring plan Phase 10). This pushed to ONE webContents, so
+  // the pop-out thread window would have shown a transcript that simply stopped updating,
+  // with no error and nothing in the log — the silent-staleness failure INVARIANTS §11
+  // names. The targets are main/app-windows.js's registry, the same set the sender guards
+  // are bound to, so "a window main owns" means one thing in both directions.
+  const fn = fnOf(SRC, "sendToWindows");
+  assert.match(fn, /getWindowsFn \? getWindowsFn\(\) : null/,
+    "the shell is rebuilt on reopen and a pop-out can appear at any moment");
+  assert.match(fn, /for \(const win of wins\)/, "every app window, not just the first");
   assert.match(fn, /win\.isDestroyed\(\)/);
   assert.match(fn, /wc\.isDestroyed\(\)/, "webContents can die independently of the window");
   assert.match(fn, /wc\.send\(SYNC_EVENT, \{ workspaceId: item\.workspaceId, table: item\.table \}\)/);
+  assert.match(fn, /return sent > 0/, "one dead window must not swallow the rest of the fan-out");
+  assert.ok(!/\breturn false;\s*\n\s*\}\s*$/.test(fn.slice(fn.indexOf("for (const win"))),
+    "a per-window failure continues the loop rather than aborting it");
   assert.match(SRC, /const SYNC_EVENT = 'dopl:sync-event';/);
+});
+
+test("the doorbell reaches EVERY app window, and a dead one does not swallow the rest", () => {
+  // Driven, not grepped (INVARIANTS §14): the function is lifted into a bare scope with its
+  // three free names injected. This is the assertion that would have gone red on the
+  // pre-Phase-10 single-window send, which is the whole point of writing it.
+  const sendToWindows = new Function(
+    "getWindowsFn", "SYNC_EVENT", "diag",
+    `${fnOf(SRC, "sendToWindows")}\n return sendToWindows;`
+  );
+  const mkWin = (log, { dead = false, wcDead = false, throws = false } = {}) => ({
+    isDestroyed: () => dead,
+    webContents: {
+      isDestroyed: () => wcDead,
+      send: (channel, payload) => {
+        if (throws) throw new Error("render process gone");
+        log.push({ channel, payload });
+      },
+    },
+  });
+  const shell = [];
+  const popout = [];
+  const wins = [
+    mkWin([], { dead: true }),
+    mkWin(shell),
+    mkWin([], { wcDead: true }),
+    mkWin([], { throws: true }),
+    mkWin(popout),
+  ];
+  const item = { workspaceId: WS, table: "channel_messages" };
+  const send = sendToWindows(() => wins, "dopl:sync-event", () => {});
+  assert.equal(send(item), true, "at least one window took it");
+  assert.deepEqual(shell, [{ channel: "dopl:sync-event", payload: item }], "the shell");
+  assert.deepEqual(popout, [{ channel: "dopl:sync-event", payload: item }],
+    "and the pop-out, PAST a destroyed window and a throwing one");
+
+  // No windows at all (headless / pre-launch) is a quiet false, never a throw.
+  assert.equal(sendToWindows(() => [], "dopl:sync-event", () => {})(item), false);
+  assert.equal(sendToWindows(() => null, "dopl:sync-event", () => {})(item), false);
+  assert.equal(
+    sendToWindows(() => { throw new Error("registry gone"); }, "dopl:sync-event", () => {})(item),
+    false,
+    "a throwing accessor must not escape into a realtime callback"
+  );
+});
+
+test("start() takes the app-window REGISTRY, not one window", () => {
+  const st = fnOf(SRC, "start");
+  assert.match(st, /opts\.getWindows/, "the registry accessor, read at send time");
+  assert.ok(!/opts\.getWindow\b/.test(st), "the single-window contract is gone");
 });
 
 test("watch() drops the old workspace's queue and invalidates its in-flight frames", () => {
@@ -316,7 +380,7 @@ test("start() is idempotent, and stop() clears `watched` before releasing", () =
   const st = fnOf(SRC, "start");
   assert.match(st, /if \(started\) return;/);
   assert.match(st, /if \(watched\) connect\(\)/, "a watch() before start() must still connect");
-  assert.match(st, /createSyncCoalescer\(COALESCE_MS, sendToWindow\)/);
+  assert.match(st, /createSyncCoalescer\(COALESCE_MS, sendToWindows\)/);
   // Without the clear, a later start() rejoins the PREVIOUS session's workspace —
   // after a sign-out, another user's — before the renderer re-issues its watch.
   const fn = fnOf(SRC, "stop");

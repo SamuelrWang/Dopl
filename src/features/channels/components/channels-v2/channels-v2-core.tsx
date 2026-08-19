@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRefetchGate } from "@/shared/hooks/use-api-mutation";
+import { useMemo, useState } from "react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
-import { CONSENT_INBOX_POLL_MS, PRESENCE_REFETCH_DEBOUNCE_MS } from "../../constants";
+import { CONSENT_INBOX_POLL_MS } from "../../constants";
 import { useChannels } from "../../hooks/use-channels";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
@@ -13,7 +12,6 @@ import { useChannelThreads } from "../../hooks/use-channel-threads";
 import { useChannelMentions } from "../../hooks/use-channel-mentions";
 import { useMentionWrites } from "../../hooks/use-mention-writes";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
-import { useChannelsRealtime, usePresenceRealtime } from "../../client/realtime";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsOnboardingCore } from "../channels-onboarding-core";
@@ -26,6 +24,8 @@ import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
+import { PopOutThreadButton } from "./pop-out";
+import { useChannelsV2Live } from "./live";
 import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
 import {
@@ -56,6 +56,19 @@ export interface ChannelsV2CoreProps {
    * and this owns nothing but the selection.
    */
   initialChannelId?: string | null;
+  /**
+   * The thread a CALLER named, as an initial selection inside `initialChannelId`
+   * — the POP-OUT THREAD WINDOW's landing (wiring plan Phase 10, 2026-08-18).
+   * Main creates the window on `/{segment}/channels/{channelId}?thread={id}` and
+   * the SPA page reads the search param down to here.
+   *
+   * ⚠ A SELECTION, NOT A ROUTE. A thread is not a page: it is which transcript
+   * the channels page has open, so this rides the SAME row the cutover built and
+   * adds no route, no `WORKSPACE_PAGES` entry and no deep-link grammar. It is
+   * also DERIVED-CHECKED below like every other pick — a thread id not in this
+   * channel's list falls back to the channel view rather than an empty thread.
+   */
+  initialThreadId?: string | null;
 }
 
 /**
@@ -119,11 +132,14 @@ export function ChannelsV2Core({
   role,
   Link,
   initialChannelId = null,
+  initialThreadId = null,
 }: ChannelsV2CoreProps) {
   const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
   const [createOpen, setCreateOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
-  const [requestedThreadId, setRequestedThreadId] = useState<string | null>(null);
+  const [requestedThreadId, setRequestedThreadId] = useState<string | null>(
+    initialThreadId
+  );
   const [openAgent, setOpenAgent] = useState<string | null>(null);
   // The Inbox nav row takes over the CENTER column — it is a nav destination,
   // not an overlay, and Phase 9's notification click needs somewhere to land.
@@ -149,7 +165,10 @@ export function ChannelsV2Core({
     setRoutedId(initialChannelId);
     if (initialChannelId) {
       setSelectedId(initialChannelId);
-      setRequestedThreadId(null);
+      // ⚠ The NAMED thread, not `null` (Phase 10). A notification names no thread,
+      // so this stays the clear it always was; a pop-out landing names one, and
+      // re-routing to a different channel must not silently drop it.
+      setRequestedThreadId(initialThreadId);
       setInboxOpen(false);
     }
   }
@@ -207,16 +226,14 @@ export function ChannelsV2Core({
   // two absences differently.
   const agentSessions = useDesktopSessions();
 
-  // Realtime → coalesced refetch, deferred while a local write is in flight.
-  //
-  // ⚠ The refs are written in an EFFECT, not during render — the same shape
-  // `use-api-mutation.ts › useRefetchGate` uses for its own `runRef`. A ref
-  // assigned in the render pass is a `react-hooks/refs` error and, worse, is
-  // read by a subscription callback that may fire before the render commits.
-  const refetchRef = useRef<() => void>(() => {});
-  const membersRefetchRef = useRef<() => void>(() => {});
-  useEffect(() => {
-    refetchRef.current = () => {
+  // Realtime → coalesced refetch, deferred while a local write is in flight. The whole
+  // wiring is `live.ts`, split out at the Phase 10 cap; what stays here is WHAT a doorbell
+  // invalidates, which is the core's own business.
+  // ⚠ `gate` is handed to every writer on this surface, and `live.ts` hands the SAME
+  // coordinator to the subscriptions — one coordinator, both ends (INVARIANTS §7/§8).
+  const { gate } = useChannelsV2Live({
+    workspaceId,
+    refetchAll: () => {
       void refetchChannels();
       void refetchMessages();
       void refetchMembers();
@@ -226,36 +243,13 @@ export function ChannelsV2Core({
       // the publication (INVARIANTS §7; migration `20260818140000` states why),
       // so this refetch is the whole delivery path for a mention arriving.
       void refetchMentions();
-    };
-    membersRefetchRef.current = () => void refetchMembers();
+    },
+    refetchMembers: () => void refetchMembers(),
   });
-  // ⚠ `gate` is handed to the composer's writes and `signal` to the realtime
-  // subscriptions — the SAME coordinator on both ends, which is the whole point
-  // (INVARIANTS §7/§8): a remote event mid-send must not clobber the local
-  // optimistic patch.
-  const { signal, gate } = useRefetchGate(() => refetchRef.current());
   // ⚠ THE SAME gate the reads register — the mark-read write holds the realtime
   // doorbell open for its own life, or a coalesced refetch mid-flight reverts
   // the optimistic `read` flag under the click that set it.
   const { markRead } = useMentionWrites({ workspaceId, gate });
-  useChannelsRealtime(workspaceId, signal);
-  // Presence is high-churn (~30s per listener) and never clobbers a send, so it
-  // bypasses the coordinator — but refetches the ROSTER only, on a trailing
-  // debounce. The 90s freshness window means coalescing a burst loses nothing.
-  const presenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (presenceTimerRef.current) clearTimeout(presenceTimerRef.current);
-    },
-    []
-  );
-  usePresenceRealtime(workspaceId, () => {
-    if (presenceTimerRef.current) return;
-    presenceTimerRef.current = setTimeout(() => {
-      presenceTimerRef.current = null;
-      membersRefetchRef.current();
-    }, PRESENCE_REFETCH_DEBOUNCE_MS);
-  });
 
   const index = useMemo(
     () => indexMembers(members, currentUserId),
@@ -391,6 +385,18 @@ export function ChannelsV2Core({
             scrollTarget={scrollTarget}
             infoOpen={infoOpen}
             gate={gate}
+            // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
+            // hides ITSELF outside the desktop shell (feature detection), so the
+            // web tree gets no affordance for a window it cannot open.
+            popOut={
+              openThread ? (
+                <PopOutThreadButton
+                  workspaceSlug={workspaceSlug}
+                  channelId={channel.id}
+                  threadId={openThread.id}
+                />
+              ) : null
+            }
             manage={
               <ChannelsV2ManageActions
                 channel={channel}

@@ -24,9 +24,12 @@ import { dirname, join } from "node:path";
 import { between } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// ⚠ THE PURE CORE MOVED to main/ui-sync-core.js on 2026-08-18 (wiring plan Phase 10):
+// ui-sync.js sat at exactly the 500-line cap. The sentinels came with it byte for byte.
 const SRC = readFileSync(join(HERE, "..", "main", "ui-sync.js"), "utf8");
+const CORE = readFileSync(join(HERE, "..", "main", "ui-sync-core.js"), "utf8");
 
-const PURE = between(SRC, "// ─── BEGIN UI-SYNC-PURE", "// ─── END UI-SYNC-PURE",
+const PURE = between(CORE, "// ─── BEGIN UI-SYNC-PURE", "// ─── END UI-SYNC-PURE",
   "ui-sync pure block");
 const { SYNC_TABLES } = new Function(`${PURE}\n return { SYNC_TABLES };`)();
 

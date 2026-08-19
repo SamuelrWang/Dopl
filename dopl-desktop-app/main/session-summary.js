@@ -255,7 +255,7 @@ const MAX_ENDED = 12;
 const ledger = new Map(); // sessionKey -> { channelId, name }
 let endedKept = []; // oldest first: { key, sessionId, channelId, taskId, channelName, threadTitle, win }
 let deps = { sessions: null };
-let getWindowFn = null;
+let getWindowsFn = null;
 let pushTimer = null;
 let lastDigest = null;
 // ⚠ The SERVER writer's gate, separate from the window's — see `subscribe`.
@@ -267,10 +267,11 @@ function bind(d) {
   deps = { sessions: (d && d.sessions) || null };
 }
 
-/** Arm the push. ⚠ `getWindow()` is called at SEND time, never captured — the window is rebuilt
- *  on reopen. Idempotent. */
+/** Arm the push. ⚠ `getWindows()` is called at SEND time, never captured — the window is
+ *  rebuilt on reopen and a pop-out can appear at any moment (wiring plan Phase 10; it fans
+ *  out over main/app-windows.js's registry). Idempotent. */
 function start(opts) {
-  getWindowFn = opts && typeof opts.getWindow === 'function' ? opts.getWindow : null;
+  getWindowsFn = opts && typeof opts.getWindows === 'function' ? opts.getWindows : null;
   lastDigest = null; // a fresh window has seen nothing; the next touch must reach it
   touch();
 }
@@ -381,20 +382,27 @@ function keptWindow(channelId, taskId) {
 }
 
 // ⚠ The ONE place a summaries frame crosses into the renderer (modelled on ui-sync's
-// sendToWindow): window resolved at send time, a dead one fails closed.
-function sendToWindow(payload) {
-  let win = null;
-  try { win = getWindowFn ? getWindowFn() : null; } catch (_err) { return false; }
-  if (!windowAlive(win)) return false;
-  const wc = win.webContents;
-  if (!wc || (typeof wc.isDestroyed === 'function' && wc.isDestroyed())) return false;
-  try {
-    wc.send(SESSIONS_EVENT, payload);
-  } catch (err) {
-    diag('session-summary send error', err && err.message);
-    return false;
+// sendToWindows): windows resolved at send time, a dead one fails closed.
+// ⚠ FANS OUT SINCE 2026-08-18 (wiring plan Phase 10). A pop-out reads the same Agents
+// projection; pushing to one window would have frozen it there with no error anywhere.
+// One dead window must not swallow the rest — the answer is "did ANY window take it".
+function sendToWindows(payload) {
+  let wins = null;
+  try { wins = getWindowsFn ? getWindowsFn() : null; } catch (_err) { return false; }
+  if (!Array.isArray(wins) || wins.length === 0) return false;
+  let sent = 0;
+  for (const win of wins) {
+    if (!windowAlive(win)) continue;
+    const wc = win.webContents;
+    if (!wc || (typeof wc.isDestroyed === 'function' && wc.isDestroyed())) continue;
+    try {
+      wc.send(SESSIONS_EVENT, payload);
+      sent += 1;
+    } catch (err) {
+      diag('session-summary send error', err && err.message);
+    }
   }
-  return true;
+  return sent > 0;
 }
 
 /**
@@ -431,7 +439,7 @@ function flush() {
   if (digest === lastDigest) return; // nothing a pill could show has moved
   // ⚠ Record delivered only when it really was: a send into a window that is not there yet
   // must not suppress the next identical frame.
-  if (sendToWindow({ sessions: entries.map(wireSummary) })) lastDigest = digest;
+  if (sendToWindows({ sessions: entries.map(wireSummary) })) lastDigest = digest;
 }
 
 /**

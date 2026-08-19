@@ -23,6 +23,10 @@ const { diag } = require('./diag');
 // v1.9 Session Window: engine seam + window factory / lifecycle echoes + window-mode.
 const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
+// Phase 10: the registry of APP-OWNED windows — the shell plus any pop-out thread window.
+// It is what every renderer-reachable ipcMain.handle is bound to, and registration happens
+// only at window creation, in main. See main/app-windows.js's header.
+const appWindows = require('./app-windows');
 const { makeShellHelpers, wireSpaServices, spaSignOut } = require('./shell-mode');
 const deepLinkModule = require('./deep-link');
 const uiBridge = require('./ui-bridge');
@@ -79,6 +83,9 @@ const shellHelpers = makeShellHelpers({
   getMainWindow: () => mainWindow,
   setMainWindow: (win) => { mainWindow = win; },
   createSpaWindow: spaWindow.createSpaWindow,
+  // Phase 10: bind the shell as an app window the moment it is built. Without this the
+  // guards have nothing to admit and the whole privileged surface is dead.
+  registerAppWindow: appWindows.register,
   // The min-version gate rides this ONE factory (see shell-mode.js).
   versionGate,
   showMainWindow: (...a) => showMainWindow(...a),
@@ -212,11 +219,13 @@ if (!gotLock) {
     // webview) reaches the native folder picker through these three narrow,
     // label-only IPC handlers. onChanged refreshes the tray so its "Channel
     // folders" submenu stays in sync with a change made from the web control.
-    // H3: `getMainWindow` BINDS every handler in that file to this window's own
-    // top frame — the remote page can no longer be spoken for by anything else
-    // (or by an iframe inside it). Lazy, because the window outlives register()
-    // and is rebuilt on reopen.
-    channelDirIpc.register({ onChanged: () => tray.refresh(), getMainWindow: () => mainWindow });
+    // H3: the sender binding — every handler in that file answers only an APP-OWNED
+    // window's own top frame, never an iframe inside it. ⚠ WIDENED 2026-08-18 (wiring
+    // plan Phase 10, Samuel's ruling — option (a)): `getSenderIds` was `getMainWindow`,
+    // so the subject is now the registry (shell + pop-outs) rather than the one slot.
+    // An ACCESSOR, not a snapshot: register() runs before any window exists, the shell is
+    // rebuilt on reopen, and a pop-out can appear or close at any moment.
+    channelDirIpc.register({ onChanged: () => tray.refresh(), getSenderIds: () => appWindows.senderIds() });
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download with
     // progress on the tray; the tray gains an "Update ready — restart to
@@ -262,7 +271,11 @@ if (!gotLock) {
         uiBridge, authTokens, uiSync, diag,
         sessionSummary: require('./session-summary'), // §3.3: the session-pill push
         sessionStatePush: require('./session-state-push'), // §3.5 / F-147: the server half
-        getMainWindow: () => mainWindow,
+        // Phase 10: the bridge is bound to the REGISTRY, and every main→renderer push fans
+        // out over it — a pop-out that never hears the doorbell, the summaries or a
+        // SIGN-OUT is the silent-staleness failure INVARIANTS §11 names.
+        getSenderIds: () => appWindows.senderIds(),
+        getAppWindows: () => appWindows.liveWindows(),
       });
       createShellWindow({ show: false });
     }

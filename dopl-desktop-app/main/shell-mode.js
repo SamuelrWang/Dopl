@@ -8,13 +8,20 @@
 // of the retirement, so the rollback led to 404s.
 //
 // ONE SHELL NOW, AND THE SINGLE-FACTORY RULE STILL MATTERS — for a different reason. The
-// MIN-VERSION GATE rides `createShellWindow`, so that being the only way to make a window is
-// what makes the block total. A second factory is a window the gate does not cover.
+// MIN-VERSION GATE rides `createShellWindow`, so that being the only way to make a SHELL is
+// what makes the block total. A second SHELL factory is a window the gate does not cover.
+//
+// ⚠ THE POP-OUT (main/popout-window.js, wiring plan Phase 10) IS NOT A SECOND SHELL AND DOES
+// NOT WEAKEN THAT. It is never the main-window slot, it is never resurrected by activate/tray/
+// notification, and it refuses to open at all while the gate is blocking — the refusal lives
+// at its ONE entry point (`channel-dir-ipc.js › threads:openWindow`), so the block stays
+// total without a second interception point here.
 //
 // State stays in index.js; this module is given accessors, never the
 // variables. `deps`:
 //   getMainWindow()/setMainWindow(win)  — the one main-window slot
 //   createSpaWindow()                   — the bundled factory
+//   registerAppWindow(win)              — main/app-windows.js › register (Phase 10)
 //   versionGate                         — the min-version gate module
 //   showMainWindow()                    — reveal/recreate (calls back in)
 //   appOrigin, diag
@@ -26,6 +33,9 @@
 // one edit rather than a grep.
 // Mirrors a row in `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES`; the hand
 // copy that the drift test guards is `deep-link-target.js`, not this.
+// ⚠ EXPORTED SINCE 2026-08-18 (Phase 10) and read by `main/popout-window.js ›
+// openThreadWindow`, which lands a pop-out on the same page: a second `'channels'`
+// literal over there would be a second spelling of a route the cutover renamed once.
 const CHANNELS_PAGE = 'channels';
 
 function makeShellHelpers(deps) {
@@ -50,6 +60,14 @@ function makeShellHelpers(deps) {
     }
     const win = deps.createSpaWindow(opts);
     deps.setMainWindow(win);
+    // ⚠ BIND IT AS AN APP WINDOW (wiring plan Phase 10). This is what makes every
+    // renderer-reachable `ipcMain.handle` answer the shell at all — the guards ask the
+    // registry, not the main-window slot, since the widening. Registration happens HERE,
+    // at CREATION, in main; nothing renderer-reachable can add to that set.
+    // ⚠ THE UPDATE-REQUIRED SCREEN IS DELIBERATELY *NOT* REGISTERED: it takes its own
+    // preload, reaches no `dopl:*` handler, and a blocking screen with the app's privileged
+    // surface bound to it would be the block leaking a door.
+    if (deps.registerAppWindow) deps.registerAppWindow(win);
     win.on('closed', () => deps.setMainWindow(null));
     if (opts.show !== false) win.show();
     return win;
@@ -146,10 +164,21 @@ function resumeWatchTarget(stash, userId) {
 // fan-out (stop the sync feed on sign-out, restart + rotate on sign-in),
 // the ui-sync start, (§3.3) the session-pill push and (§3.5) the session-state
 // writer. `deps` adds: uiBridge, authTokens, uiSync, sessionSummary,
-// sessionStatePush, broadcastTo() → the live window.
+// sessionStatePush, and the app-window registry accessors.
+//
+// ⚠ EVERY MAIN→RENDERER PUSH BELOW FANS OUT OVER THE REGISTRY SINCE 2026-08-18 (wiring plan
+// Phase 10), not over the main-window slot. A pop-out that renders stale data with no error
+// anywhere is the failure mode INVARIANTS §11 names, and it applies to all three feeds: the
+// ui-sync doorbell (the transcript stops updating), the summaries push (the Agents surface
+// freezes) and the auth state (the worst — a window still showing a signed-out session's
+// data). `getAppWindows()` is read at SEND time, never captured.
 function wireSpaServices(deps) {
+  const appWindows = () => {
+    try { return typeof deps.getAppWindows === 'function' ? deps.getAppWindows() : []; }
+    catch (_err) { return []; }
+  };
   const startUiSync = () =>
-    deps.uiSync.start({ getWindow: deps.getMainWindow, getAccessToken: deps.authTokens.getAccessToken });
+    deps.uiSync.start({ getWindows: appWindows, getAccessToken: deps.authTokens.getAccessToken });
   // SESSION PILLS (rollback plan §3.3). SPA-only, like the sync feed: the retired remote
   // shell has no pills bar to feed. Unlike ui-sync it holds no socket and no credential —
   // it projects in-memory session state — so it is armed once here and never stopped on
@@ -157,7 +186,7 @@ function wireSpaServices(deps) {
   // by a sign-out (the engine owns their lifetime). `getWindow` is read at SEND time.
   const startSessionSummary = () => {
     if (!deps.sessionSummary) return; // mid-wave / harness
-    deps.sessionSummary.start({ getWindow: deps.getMainWindow });
+    deps.sessionSummary.start({ getWindows: appWindows });
   };
   // THE SESSION-STATE WRITER (rollback §3.5 / F-147) — the server half of the same
   // projection, so `read_sessions` can answer "what is flint doing?" over MCP. It is armed
@@ -175,9 +204,9 @@ function wireSpaServices(deps) {
   };
   let stash = null; // { workspaceId, userId } — what the feed was watching when it stopped
   let lastUserId = null; // the operator it was watching FOR (signed-out carries no id)
-  deps.uiBridge.register({ getMainWindow: deps.getMainWindow });
+  deps.uiBridge.register({ getSenderIds: deps.getSenderIds });
   deps.authTokens.subscribe((state) => {
-    try { deps.uiBridge.broadcastAuthState(deps.getMainWindow(), state); } catch (_err) { /* window gone */ }
+    try { deps.uiBridge.broadcastAuthState(appWindows(), state); } catch (_err) { /* windows gone */ }
     const status = state && state.status;
     if (state && state.userId) lastUserId = state.userId;
     if (status === 'signed-out') {
@@ -220,4 +249,4 @@ function spaSignOut(deps) {
   });
 }
 
-module.exports = { makeShellHelpers, wireSpaServices, spaSignOut };
+module.exports = { makeShellHelpers, wireSpaServices, spaSignOut, CHANNELS_PAGE };

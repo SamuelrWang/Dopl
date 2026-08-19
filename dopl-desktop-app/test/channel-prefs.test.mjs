@@ -316,6 +316,11 @@ function bootIpc() {
         clearChannelDir: () => {},
       };
     }
+    // Lazily required by ops this file does not drive, but stubbed so a typo in a
+    // registration path surfaces here rather than as a mystery throw.
+    if (id === "./deep-link-target") return { isSafeSegment: () => true };
+    if (id === "./version-gate") return { isBlocked: () => false };
+    if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
     throw new Error("unexpected require: " + id);
   };
@@ -326,9 +331,10 @@ function bootIpc() {
     mod.exports
   );
   const mainFrame = { name: "top" };
-  const webContents = { id: 1, mainFrame };
-  const win = { isDestroyed: () => false, webContents };
-  mod.exports.register({ getMainWindow: () => win });
+  const webContents = { id: 1, mainFrame, isDestroyed: () => false };
+  // ⚠ THE BINDING'S SUBJECT WIDENED 2026-08-18 (wiring plan Phase 10): handlers are bound
+  // to the set of `webContents` ids main registered at window creation, not to one window.
+  mod.exports.register({ getSenderIds: () => new Set([webContents.id]) });
   const event = { sender: webContents, senderFrame: mainFrame };
   return { handlers, map, event };
 }

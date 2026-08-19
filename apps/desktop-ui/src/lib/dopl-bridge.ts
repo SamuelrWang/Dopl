@@ -143,6 +143,21 @@ export interface DoplBridge {
       taskId: string
     ): Promise<{ ok: boolean; reason?: string }>;
   };
+  /** THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). Asks main to open a
+   *  second window on this same bundle, landing on `/{segment}/channels/{channelId}` with
+   *  `{threadId}` selected. Optional: an older main has none and the thread header simply
+   *  renders no button. Same declaration in `@/shared/lib/desktop` for shared modules —
+   *  the thread view lives in the shared tree and feature-detects it there.
+   *
+   *  ⚠ NO WINDOW HANDLE COMES BACK. Main creates the window AND registers it as a bound
+   *  IPC sender (`main/app-windows.js`); the renderer can only ask. */
+  threads?: {
+    openWindow(
+      segment: string,
+      channelId: string,
+      threadId: string
+    ): Promise<{ ok: boolean }>;
+  };
 }
 
 declare global {

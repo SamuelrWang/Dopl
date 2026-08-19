@@ -392,7 +392,7 @@ test("PUSH: the event name and payload are the shape the preload forwards", asyn
   const m = load();
   assert.equal(m.SESSIONS_EVENT, "dopl:sessions");
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1);
   assert.equal(m.sent[0].channel, "dopl:sessions");
@@ -403,7 +403,7 @@ test("PUSH: the event name and payload are the shape the preload forwards", asyn
 test("PUSH: a burst of dispatches costs ONE frame", async () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   for (let i = 0; i < 50; i += 1) m.touch(); // one turn is many engine events
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1);
@@ -413,7 +413,7 @@ test("PUSH: nothing is sent when nothing a pill could show has moved", async () 
   const m = load();
   const s = session();
   m.bind({ sessions: new Map([[s.key, s]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1);
   // A cost delta / token count / tool result all dispatch and change no pill.
@@ -432,7 +432,7 @@ test("PUSH: a frame that never reached a window is re-sent, not swallowed", asyn
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   let win = null; // the SPA window is not built yet
-  m.start({ getWindow: () => win });
+  m.start({ getWindows: () => (win ? [win] : []) });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 0);
   win = m.spaWindow;
@@ -445,24 +445,43 @@ test("PUSH: a destroyed window fails closed rather than throwing into the engine
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   m.spaWindow.destroyed = true;
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 0);
-  // And a getWindow that throws is the same non-event.
-  m.start({ getWindow: () => { throw new Error("gone"); } });
+  // And a getWindows that throws is the same non-event.
+  m.start({ getWindows: () => { throw new Error("gone"); } });
   m.touch();
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 0);
 });
 
+test("PUSH: EVERY app window gets the frame, and one dead one does not swallow the rest", async () => {
+  // ⚠ FANS OUT SINCE 2026-08-18 (wiring plan Phase 10). This pushed to ONE window, so a
+  // pop-out thread window's Agents surface would have frozen with no error anywhere — the
+  // silent-staleness failure INVARIANTS §11 names. The targets are main/app-windows.js's
+  // registry, the same set the sender guards are bound to.
+  const m = load();
+  const popout = load().spaWindow; // a second window with its OWN send log
+  const popoutSent = [];
+  popout.webContents.send = (channel, payload) => popoutSent.push({ channel, payload });
+  const dead = load().spaWindow;
+  dead.destroyed = true;
+  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.start({ getWindows: () => [dead, m.spaWindow, popout] });
+  await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
+  assert.equal(m.sent.length, 1, "the shell got it");
+  assert.equal(popoutSent.length, 1, "and so did the pop-out");
+  assert.deepEqual(popoutSent[0].payload, m.sent[0].payload, "the same frame, not a re-derivation");
+});
+
 test("PUSH: a rebuilt window is repainted, not left with the previous frame's digest", async () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1);
   // The SPA window is closed and reopened: same summaries, new renderer, nothing painted.
-  m.start({ getWindow: () => m.spaWindow });
+  m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 2, "a fresh renderer has seen nothing; the digest must reset");
 });
