@@ -1,8 +1,23 @@
 /**
- * Client-side status line for MY own outgoing human message, derived purely from
- * the thread events that follow it. ⚠ NO writes, NO acks, and deliberately NO
- * "Received"/"Read": the desktop does not ack a delivery, so claiming one is a
- * lie. Reports only what the transcript proves.
+ * THE RECEIPT VOCABULARY — what a transcript may say about how an exchange
+ * ended, and the two derivations that produce it.
+ *
+ * 1. {@link deriveMessageReceipt} — the status line for MY own outgoing human
+ *    message, derived from the thread events that follow it.
+ * 2. {@link lifecycleReceiptStatus} — the status of ONE terminal lifecycle row,
+ *    read off that row alone. This is what `components/channels-v2/view-model.ts`
+ *    renders as the transcript's slim muted receipt line.
+ *
+ * ⚠ **THIS MODULE WAS ORPHANED BETWEEN 2026-08-18 (Phase 5) AND THE WAVE-2 FIX
+ * PASS, AND THAT WAS THE BUG.** Phase 5 deleted the session card that consumed
+ * it and Phase 12's reader dropped every lifecycle kind on sight, so a consent
+ * DENY — `task_failed{declined:true}`, still posted by `main/trigger-outcomes.js`
+ * on THIS build — rendered as nothing at all. The vocabulary was kept at P5 for
+ * exactly this re-use; (2) is what re-uses it.
+ *
+ * ⚠ NO writes, NO acks, and deliberately NO "Received"/"Read": the desktop does
+ * not ack a delivery, so claiming one is a lie. Reports only what the transcript
+ * proves.
  *
  * ⚠ EVERY MESSAGE RENDERS STANDALONE NOW. This used to note that a message with
  * an explicit `metadata.taskId` grouped into a session card and so never reached
@@ -19,6 +34,13 @@
 import type { ChannelMessage } from "../types";
 import { calmTerminalStatus } from "./calm-terminal";
 
+/**
+ * ⚠ `capped` / `ended` / `finished` are produced ONLY by
+ * {@link lifecycleReceiptStatus}. {@link deriveMessageReceipt} cannot return
+ * them — it reports on MY outgoing ask, and those three are statements about
+ * how a RUN stopped, which is a different question. One union because it is one
+ * vocabulary: a second enum is how two spellings of "Declined" get shipped.
+ */
 export type ReceiptStatus =
   | "sent"
   | "working"
@@ -26,7 +48,10 @@ export type ReceiptStatus =
   | "declined"
   | "failed"
   | "interrupted"
-  | "dropped";
+  | "dropped"
+  | "capped"
+  | "ended"
+  | "finished";
 
 /** The addressed recipient of a message (`metadata.to_user_id`), or null. */
 function metaToUserId(message: ChannelMessage): string | null {
@@ -124,6 +149,37 @@ export function deriveMessageReceipt(
   return "sent";
 }
 
+/**
+ * THE TRANSCRIPT'S LIFECYCLE RECEIPT — the status one terminal row announces,
+ * or null when the row is machine noise the reader should drop.
+ *
+ * ⚠ **`task_started` IS NEVER A RECEIPT.** "Started working on this request." is
+ * a fact about a runtime, and an agent's run state lives in the Agents tab, not
+ * as transcript rows (INVARIANTS §5, MAPPING.md § Q&A rulings). Only the two
+ * TERMINAL kinds can produce a line, because only an ending changes how the
+ * peer reads the exchange: an unanswered ask and a DECLINED one look identical
+ * without it.
+ *
+ * ⚠ **STATUS COMES FROM THE FLAG, NEVER FROM THE BODY COPY** — the same rule
+ * `lib/calm-terminal.ts` states, and for the same reason: matching body text
+ * regresses the first time somebody improves the wording, and `metadata` is
+ * strict `=== true` so a truthy-but-not-true value cannot disguise a real
+ * failure as a calm ending. The BODY is consulted for exactly one thing: whether
+ * the row says anything at all. A flagless terminal row with an empty body is a
+ * bare state transition with no human content, and it stays dropped.
+ */
+export function lifecycleReceiptStatus(
+  message: ChannelMessage,
+): ReceiptStatus | null {
+  if (message.kind !== "task_failed" && message.kind !== "task_finished") {
+    return null;
+  }
+  const calm = calmTerminalStatus(message);
+  if (calm !== null) return calm;
+  if (message.body.trim().length === 0) return null;
+  return message.kind === "task_finished" ? "finished" : "failed";
+}
+
 /** Label for a receipt status. ⚠ No fabricated acks. */
 export const RECEIPT_LABEL: Record<ReceiptStatus, string> = {
   sent: "Sent",
@@ -133,17 +189,24 @@ export const RECEIPT_LABEL: Record<ReceiptStatus, string> = {
   failed: "Failed",
   interrupted: "Interrupted",
   dropped: "Reply not sent",
+  capped: "Stopped at its limit",
+  ended: "Ended by the operator",
+  finished: "Finished",
 };
 
 /** Calm receipt terminals — operator-chosen endings keeping the muted chip
- *  treatment, ⚠ never the alarm ink of a real `failed`. */
+ *  treatment, ⚠ never the alarm ink of a real `failed`. Mirrors
+ *  `lib/calm-terminal.ts › CalmTerminalStatus` exactly; `finished` is absent
+ *  because it is a plain success, not an ending somebody chose. */
 const CALM_RECEIPT_STATUSES: ReadonlySet<ReceiptStatus> = new Set([
   "declined",
   "dropped",
   "interrupted",
+  "capped",
+  "ended",
 ]);
 
-/** True for the calm receipt terminals (declined/dropped/interrupted). */
+/** True for the calm receipt terminals (declined/dropped/interrupted/capped/ended). */
 export function isCalmReceiptStatus(status: ReceiptStatus): boolean {
   return CALM_RECEIPT_STATUSES.has(status);
 }

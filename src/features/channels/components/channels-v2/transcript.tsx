@@ -31,7 +31,7 @@ import {
   buildMentionIndex,
   resolveMentionToken,
 } from "../../lib/mentions";
-import { shortName, type AuthorIndex, type MessageRow, type ThreadCardRow, type TranscriptRow } from "./view-model";
+import { shortName, type AuthorIndex, type MessageRow, type ReceiptRow, type ThreadCardRow, type TranscriptRow } from "./view-model";
 
 export function Transcript({
   rows,
@@ -69,6 +69,9 @@ export function Transcript({
             </p>
           );
         }
+        if (row.kind === "receipt") {
+          return <Receipt key={row.id} row={row} />;
+        }
         if (row.kind === "thread-card") {
           return (
             <ThreadCardMessage
@@ -91,6 +94,44 @@ export function Transcript({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * HOW THE EXCHANGE ENDED — one slim, centred, muted line.
+ *
+ * ⚠ **NOT A MESSAGE BUBBLE, and the restraint is the design.** A receipt is the
+ * transcript narrating itself, so it wears the `SystemRow` treatment (centred,
+ * `text-caption`, `text-text-muted`) rather than a side, an avatar or a name:
+ * nobody said this. The dot is the whole ornament.
+ *
+ * ⚠ **ONLY A REAL `failed` GETS ALARM INK.** Every other terminal is an ending
+ * somebody CHOSE — declined, cancelled, interrupted, capped, ended — and
+ * painting those red would report an operator's decision as a fault. That
+ * distinction is the entire reason the desktop stores a calm flag beside the
+ * `task_failed` kind (INVARIANTS §5; `lib/calm-terminal.ts`).
+ *
+ * ⚠ **The LABEL is flag-derived** (`lib/message-receipt.ts › RECEIPT_LABEL`),
+ * never the row's own body — body copy is caller-influenceable and an outcome
+ * is not a thing a caller may assert.
+ */
+function Receipt({ row }: { row: ReceiptRow }) {
+  return (
+    <p
+      data-message-id={row.id}
+      data-receipt-status={row.status}
+      className="flex items-center justify-center gap-1.5 text-caption text-text-muted"
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          row.calm ? "bg-text-disabled" : "bg-danger"
+        )}
+      />
+      <span className={cn(!row.calm && "text-danger")}>{row.label}</span>
+      <span className="text-micro text-text-muted">{row.time}</span>
+    </p>
   );
 }
 

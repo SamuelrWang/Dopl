@@ -139,10 +139,13 @@ export async function listTasksByChannel(
  * ⚠ `listStaleOpenThreads` + its `StaleThreadRow` USED TO LIVE HERE, calling the
  * `channel_tasks_stale` RPC for `/api/cron/stale-threads`. Both are DELETED with
  * thread closing (wiring plan Phase 4, 2026-08-18): the sweep's only act was to
- * post a close PROPOSAL, and there is no close to propose. The route and its
- * `vercel.json` cron entry went with them. **The RPC itself still exists in the
- * database with no caller — dropping it is a migration, filed as debt in
- * REFACTOR-FINDINGS F-207 rather than taken here.** ⚠ The `channel_tasks_activity`
+ * post a close PROPOSAL, and there is no close to propose. ⚠ **The route went in
+ * Phase 4; its `vercel.json` schedule did NOT, and survived until 2026-08-18
+ * (wave-2 fix pass), when the entry was actually deleted — until then every
+ * deploy re-registered a cron whose only possible answer was 404.** **The RPC
+ * itself still exists in the database with no caller — dropping it is a
+ * migration, filed as debt in REFACTOR-FINDINGS F-207 rather than taken here.**
+ * ⚠ The `channel_tasks_activity`
  * VIEW (`20260818120000`) is a DIFFERENT object and is load-bearing: it is what
  * {@link listTasksByChannel} reads.
  */

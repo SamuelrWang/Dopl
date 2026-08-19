@@ -10,10 +10,11 @@
  * of somebody else's screen their words land on. `author_user_id` is always
  * `ctx.userId` and is the signal the layout hangs off.
  *
- * Also pinned: lifecycle echoes render as NOTHING (wiring plan, Risk 4 —
- * installed desktops keep posting them), a thread's opening message becomes a
- * CARD in the channel view while the rest of its messages stay in the thread
- * view, and the scroll-target row carries `data-message-id`.
+ * Also pinned: `task_started` renders as NOTHING while a TERMINAL lifecycle row
+ * renders as a slim receipt line (the shipping desktop's trigger lanes still
+ * post both — INVARIANTS §5), a thread's opening message becomes a CARD in the
+ * channel view while the rest of its messages stay in the thread view, and the
+ * scroll-target row carries `data-message-id`.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -193,26 +194,127 @@ describe("channels-v2 transcript — channel view vs thread view", () => {
   });
 });
 
-describe("channels-v2 transcript — what it refuses to render", () => {
-  it("drops lifecycle echoes entirely", () => {
-    // Old desktops keep posting these after Phase 5; the transcript renders
-    // them as nothing rather than as mystery rows.
+/**
+ * THE LIFECYCLE RECEIPT. The property: **an ENDING is not run state.**
+ *
+ * `task_started` is a fact about a runtime and belongs to the Agents tab, so it
+ * renders as nothing on every build, forever. A TERMINAL row does not: the
+ * shipping desktop's `main/trigger-outcomes.js` posts `task_failed` +
+ * `{declined:true}` on a consent deny, and dropping that left the requester
+ * staring at an ask nobody appeared to have answered.
+ */
+describe("channels-v2 transcript — lifecycle receipts", () => {
+  it("renders a DECLINED consent outcome as a receipt line, not as its body", () => {
+    // Byte-shaped like `main/trigger-outcomes.js › inboundDenied`.
     renderRows(
       channelRows(
         [
-          message({ id: "s", seq: 1, kind: "task_started", body: "STARTED" }),
-          message({ id: "f", seq: 2, kind: "task_finished", body: "FINISHED" }),
-          message({ id: "x", seq: 3, kind: "task_failed", body: "FAILED" }),
-          message({ id: "p", seq: 4, kind: "task_progress", body: "PROGRESS" }),
+          message({
+            id: "x",
+            seq: 1,
+            kind: "task_failed",
+            authorKind: "agent",
+            body: "Request declined",
+            metadata: { declined: true },
+          }),
         ],
         [],
         INDEX,
         formatChannelTimestamp
       )
     );
+    const line = screen.getByText("Declined").closest("p") as HTMLElement;
+    expect(line.dataset.receiptStatus).toBe("declined");
+    // Flag-derived label only: the row's own (caller-influenceable) copy is
+    // never what states the outcome.
+    expect(screen.queryByText("Request declined")).toBeNull();
+    // A calm ending must not wear alarm ink.
+    expect(line.innerHTML).not.toContain("text-danger");
+  });
+
+  it("renders the headless lane's flagless task_finished as a receipt", () => {
+    // `main/trigger-headless.js › openOutboundReview` posts this with no calm
+    // flag and `channel-post.js`'s default body.
+    renderRows(
+      channelRows(
+        [
+          message({
+            id: "f",
+            seq: 1,
+            kind: "task_finished",
+            authorKind: "agent",
+            body: "Finished this request.",
+          }),
+        ],
+        [],
+        INDEX,
+        formatChannelTimestamp
+      )
+    );
+    const line = screen.getByText("Finished").closest("p") as HTMLElement;
+    expect(line.dataset.receiptStatus).toBe("finished");
+  });
+
+  it("drops a bare task_started, and drops an old build's task_started too", () => {
+    renderRows(
+      channelRows(
+        [
+          // Today's headless lane: `postTaskEvent` fills the default body.
+          message({
+            id: "s1",
+            seq: 1,
+            kind: "task_started",
+            body: "Started working on this request.",
+          }),
+          // A pre-Phase-5 session-window echo, body and all.
+          message({ id: "s2", seq: 2, kind: "task_started", body: "STARTED" }),
+          // A flagless terminal row with nothing human in it is machine noise.
+          message({ id: "n", seq: 3, kind: "task_failed", body: "   " }),
+        ],
+        [],
+        INDEX,
+        formatChannelTimestamp
+      )
+    );
+    expect(screen.queryByText("Started working on this request.")).toBeNull();
     expect(screen.queryByText("STARTED")).toBeNull();
-    expect(screen.queryByText("FINISHED")).toBeNull();
-    expect(screen.queryByText("FAILED")).toBeNull();
+    expect(screen.queryByText("Accepted, agent working")).toBeNull();
+    expect(screen.queryByText("Failed")).toBeNull();
+    expect(screen.getByText("Nothing posted here yet.")).not.toBeNull();
+  });
+
+  it("paints a FLAGLESS task_failed — a real fault — in alarm ink", () => {
+    renderRows(
+      channelRows(
+        [
+          message({
+            id: "x",
+            seq: 1,
+            kind: "task_failed",
+            body: "Could not complete this request.",
+          }),
+        ],
+        [],
+        INDEX,
+        formatChannelTimestamp
+      )
+    );
+    const line = screen.getByText("Failed").closest("p") as HTMLElement;
+    expect(line.dataset.receiptStatus).toBe("failed");
+    expect(line.innerHTML).toContain("text-danger");
+  });
+});
+
+describe("channels-v2 transcript — what it refuses to render", () => {
+  it("keeps task_progress prose, which is not a lifecycle kind", () => {
+    renderRows(
+      channelRows(
+        [message({ id: "p", seq: 1, kind: "task_progress", body: "PROGRESS" })],
+        [],
+        INDEX,
+        formatChannelTimestamp
+      )
+    );
     // `task_progress` is prose an agent wrote — it stays.
     expect(screen.getByText("PROGRESS")).not.toBeNull();
   });

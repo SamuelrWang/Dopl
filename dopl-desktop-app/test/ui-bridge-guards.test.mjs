@@ -278,6 +278,34 @@ const { isAllowedNavigation } = new Function(
 
 const INDEX = pathToFileURL("/app/renderer/app/index.html").href;
 
+test("navigation: only the loaded bundle's file URL, exact on HOST as well as path", () => {
+  // ⚠ THE HOST HALF WAS MISSING UNTIL 2026-08-18. A `file:` URL carries an
+  // AUTHORITY, so a remote-looking one with the SAME pathname parsed clean and
+  // was admitted — the predicate compared `t.pathname === allowed.pathname` and
+  // nothing else, and its comment said "exact on the path", so the gap read as
+  // intentional. `pathToFileURL` yields an empty host, so anything non-empty is
+  // somebody else's authority.
+  assert.equal(
+    isAllowedNavigation("file://evil.example/app/renderer/app/index.html", "", INDEX),
+    false,
+    "a foreign authority on the same path is not the same document"
+  );
+  // ⚠ `localhost` is NOT an exception written into the predicate — the WHATWG
+  // parser erases it (`file://localhost/x` normalizes to host ""), so it is the
+  // SAME URL as the bundled index and is admitted for that reason. Stated here
+  // so nobody "hardens" it into a refusal and breaks a legitimate href.
+  assert.equal(
+    isAllowedNavigation("file://localhost/app/renderer/app/index.html", "", INDEX),
+    true,
+    "localhost normalizes to the empty host: the same document, not a foreign one"
+  );
+  // The reverse direction: whatever host the real index href HAS is the one
+  // admitted, so this is exact equality and not an empty-host special case.
+  const hosted = "file://somehost/app/renderer/app/index.html";
+  assert.equal(isAllowedNavigation(hosted, "", hosted), true);
+  assert.equal(isAllowedNavigation(INDEX, "", hosted), false);
+});
+
 test("navigation: only the loaded bundle's file URL, exact on path", () => {
   assert.equal(isAllowedNavigation(INDEX, "", INDEX), true);
   // Hash / query variants of the SAME document are the router working.

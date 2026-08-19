@@ -15,7 +15,6 @@ import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { toast } from "@/shared/ui/toast";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceMemberView } from "@/features/members/types";
-import { GROUP_CHANNEL_MIN_MEMBERS } from "../constants";
 import type { ChannelMember } from "../types";
 import {
   addChannelMember,
@@ -41,39 +40,43 @@ const selectChannelMembers = (body: { members: ChannelMember[] }) =>
   body.members ?? [];
 
 /**
- * The two rules a group channel runs on that a DM hides, stated where the
- * member count is about to cross into them.
+ * The two rules a channel runs on, stated where a person changes its roster.
  *
- * This dialog is the only place a person changes how a channel routes, and
- * until now it said nothing about it: adding one member to a pair silently
- * retires the implicit recipient, so every unaddressed ask after that reaches
- * nobody. An operator who believed otherwise was misled by the interface, not
- * by the code. The composer repeats the addressing half at send time
- * (`channels-v2/composer.tsx`, "No agent addressed — this thread reaches
- * nobody."; it was `message-composer.tsx` until the 2026-08-18 cutover deleted
- * that file); this is the half that explains WHY it appeared.
+ * This dialog is the only place someone CHANGES how a channel routes, and it is
+ * where the addressing rule and the thread rule are stated in the channels tree
+ * (INVARIANTS §5 names this file as one of the web's two statements of it).
  *
- * Shown from one member below the threshold, so the person doing the adding
- * reads it BEFORE the rule changes rather than after. Both sentences are
- * present tense and conditional on the count, so the note is true whether the
- * channel has two members or twenty. Pure and exported so it renders (and
- * asserts) without the dialog's query provider.
+ * ⚠ **NO LONGER COUNT-KEYED, AND THAT IS THE FIX.** Phase 3 (2026-08-18) made
+ * addressing explicit at EVERY member count — the implicit 1:1 trigger and the
+ * server-side DM auto-address were retired together — but this note kept the
+ * old shape: copy reading "In a channel of 3 or more…" behind a
+ * `memberCount < GROUP_CHANNEL_MIN_MEMBERS - 1` gate. **Both halves taught the
+ * retired rule.** A two-person channel is precisely where the interface most
+ * strongly implies an implicit recipient, so gating the note there hid it from
+ * the person most likely to be wrong about it.
+ *
+ * ⚠ **THE CALL, STATED: it shows ALWAYS, and takes no props.** The alternatives
+ * were "never" (the composer already says it) and "always". Never is wrong:
+ * `channels-v2/composer.tsx`'s "No agent addressed — this thread reaches
+ * nobody." speaks at SEND time inside the New-agent-thread panel — it reports a
+ * draft's state, and it never explains the thread rule (channel-visible reads,
+ * pair-only writes) at all, which is this note's second sentence and is stated
+ * nowhere else on this surface. Unconditional also removes the note's own
+ * flash-on-load problem: there is no roster length to wait for, so nothing
+ * appears a beat after the dialog opens.
+ *
+ * Pure and exported so it renders (and asserts) without the dialog's query
+ * provider.
  */
-export function GroupChannelRoutingNote({
-  memberCount,
-}: {
-  /** Members the channel has RIGHT NOW, before any add in this dialog. */
-  memberCount: number;
-}) {
-  if (memberCount < GROUP_CHANNEL_MIN_MEMBERS - 1) return null;
+export function GroupChannelRoutingNote() {
   return (
     <div className="flex gap-1.5 rounded-[10px] border border-border-subtle bg-bg-inset px-3 py-2 text-caption text-text-secondary">
       <Info size={13} className="mt-0.5 shrink-0 text-text-muted" />
       <p>
-        In a channel of {GROUP_CHANNEL_MIN_MEMBERS} or more, a message reaches
-        an agent only if you address it to someone. Unaddressed messages reach
-        nobody. Threads stay between two people: everyone in the channel can
-        read one, only its two participants can post into it.
+        A message reaches an agent only when you address it to someone. That is
+        true at every channel size, a two-person channel included — unaddressed
+        messages reach nobody. Threads stay between two people: everyone in the
+        channel can read one, only its two participants can post into it.
       </p>
     </div>
   );
@@ -188,7 +191,7 @@ export function InviteDialog({
           </p>
         </div>
 
-        <GroupChannelRoutingNote memberCount={channelMembers?.length ?? 0} />
+        <GroupChannelRoutingNote />
 
         <SearchField
           value={query}

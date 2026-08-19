@@ -86,9 +86,10 @@ function rosterClient(userIds: string[]): DoplClient {
 
 describe("the group-channel threshold is not restated per lane", () => {
   it("matches the web app's GROUP_CHANNEL_MIN_MEMBERS", () => {
-    // ⚠ Web composer hint and invite-dialog note key on the same constant, and
-    // this package cannot import across the boundary — pin the copy rather than
-    // trust it to stay in step.
+    // ⚠ This package cannot import across the boundary — pin the copy rather
+    // than trust it to stay in step. (The web tree's last BRANCH on the number
+    // went with the invite-dialog note on 2026-08-18; the constant is still
+    // declared there, and the two declarations must not drift.)
     const web = readFileSync("../../src/features/channels/constants.ts", "utf8");
     const declared = /GROUP_CHANNEL_MIN_MEMBERS = (\d+)/.exec(web);
     expect(declared, "the web constant moved or was renamed").not.toBeNull();

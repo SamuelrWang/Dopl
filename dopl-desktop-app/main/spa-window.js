@@ -39,7 +39,18 @@ const PRELOAD = path.join(__dirname, '../renderer/app-preload.js');
 // the pathToFileURL href of the ONE local document this window may show. A
 // bare `file://` prefix test would admit ANY local document — which inherits
 // the window.dopl bridge and (CSP being a per-document <meta>) carries no CSP
-// — so the file: comparison is exact on the path, ignoring query/hash.
+// — so the file: comparison is exact on the HOST AND the path, ignoring
+// query/hash.
+//
+// ⚠ THE HOST CONJUNCT IS LOAD-BEARING AND WAS MISSING UNTIL 2026-08-18 (wave-2
+// fix pass); the comment said "exact on the path" and meant it. A `file:` URL
+// has an AUTHORITY component, so `file://evil.example/…/index.html` parses with
+// the SAME pathname as the real page and passed. `pathToFileURL` produces an
+// empty host on every platform this app ships to, so the check is exact
+// equality against `allowed.host` rather than an allowlist — whatever the real
+// index href's host is, that is the only one admitted, and a UNC-style remote
+// authority can never match a local one.
+//
 // Parsing is defensive: a URL we cannot parse is refused, never waved through.
 function isAllowedNavigation(url, devUrl, indexHref) {
   const target = String(url || '');
@@ -48,7 +59,11 @@ function isAllowedNavigation(url, devUrl, indexHref) {
     try {
       const t = new URL(target);
       const allowed = new URL(indexHref);
-      return t.protocol === 'file:' && t.pathname === allowed.pathname;
+      return (
+        t.protocol === 'file:' &&
+        t.host === allowed.host &&
+        t.pathname === allowed.pathname
+      );
     } catch (_err) {
       return false;
     }

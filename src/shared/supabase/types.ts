@@ -271,6 +271,52 @@ export type Database = {
           },
         ]
       }
+      channel_mention_reads: {
+        Row: {
+          channel_id: string
+          message_id: string
+          read_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          message_id: string
+          read_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          message_id?: string
+          read_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_mention_reads_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_mention_reads_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "channel_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_mention_reads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_messages: {
         Row: {
           author_kind: string
@@ -2242,7 +2288,26 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      channel_tasks_activity: {
+        Row: {
+          channel_id: string | null
+          client_msg_id: string | null
+          closed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string | null
+          last_activity_at: string | null
+          mode: string | null
+          outcome: string | null
+          outcome_summary: string | null
+          status: string | null
+          target_user_id: string | null
+          title: string | null
+          updated_at: string | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       cascade_hard_delete_cluster: {
