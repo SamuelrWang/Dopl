@@ -23,6 +23,7 @@ import {
   reconcileMessage,
   removeTrustRuleRow,
   retagPendingMessage,
+  setFavorite,
   setToolProfile,
   upsertThread,
   type MessagesCache,
@@ -223,6 +224,37 @@ describe("the writes that used to be hand-rolled overrides", () => {
       "read_only",
       "full",
     ]);
+  });
+
+  /**
+   * THE FAVOURITE'S PATCH IS A NULLABLE TIMESTAMP, NOT A FLAG, and the
+   * un-favourite is the case that has to be spelled out: it writes `null` into
+   * the row rather than leaving the field where it was. The sidebar's section
+   * membership is `myFavoritedAt !== null`, so a patch that dropped the field on
+   * `false` would leave the shortcut row standing under a bookmark the operator
+   * just cleared.
+   */
+  it("sets and CLEARS a channel's favourite in the list cache", () => {
+    const cache = {
+      channels: [
+        { id: CHANNEL, myFavoritedAt: null },
+        { id: "other", myFavoritedAt: null },
+      ] as never,
+    };
+    const on = setFavorite(cache, CHANNEL, true, "2026-08-19T10:00:00.000Z");
+    expect(on?.channels.map((c) => c.myFavoritedAt)).toEqual([
+      "2026-08-19T10:00:00.000Z",
+      null,
+    ]);
+
+    const off = setFavorite(on, CHANNEL, false);
+    expect(off?.channels.map((c) => c.myFavoritedAt)).toEqual([null, null]);
+  });
+
+  it("declines on a cold cache, like every other patch here", () => {
+    // ⚠ Writing a one-channel list into a query that never loaded renders a
+    // sidebar of exactly that channel and then flips when the read lands.
+    expect(setFavorite(undefined, CHANNEL, true)).toBeUndefined();
   });
 
   /**

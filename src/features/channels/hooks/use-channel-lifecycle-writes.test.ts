@@ -79,6 +79,7 @@ function channel(over: Partial<Channel> = {}): Channel {
     unread: false,
     myNotifyScope: null,
     myAgentToolProfile: null,
+    myFavoritedAt: null,
     onlineMemberCount: 0,
     ...over,
   };

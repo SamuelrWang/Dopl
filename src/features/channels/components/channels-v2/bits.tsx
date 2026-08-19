@@ -149,6 +149,7 @@ export function IconButton({
   label,
   size = 15,
   active,
+  filled,
   onClick,
   className,
 }: {
@@ -157,6 +158,15 @@ export function IconButton({
   size?: number;
   /** Omit for a plain button; pass a boolean to make it a toggle. */
   active?: boolean;
+  /**
+   * FILL the glyph. Separate from `active` on purpose: `active` is a CHROME
+   * state (this control's surface is raised), `filled` is a claim about the
+   * THING the glyph stands for — a filled bookmark reads as saved. The outline
+   * is always drawn, so the glyph does not change size between states, which is
+   * the same rule the knowledge card's bookmark follows
+   * (`knowledge-v2/home/base-card.tsx`).
+   */
+  filled?: boolean;
   onClick?: () => void;
   className?: string;
 }) {
@@ -175,7 +185,7 @@ export function IconButton({
         className
       )}
     >
-      <Icon size={size} />
+      <Icon size={size} fill={filled ? "currentColor" : "none"} />
     </button>
   );
 }

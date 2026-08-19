@@ -17,8 +17,16 @@ import type { ChannelThread } from "../../types";
 
 const DEPTH_PAD = ["pl-2", "pl-5"] as const;
 
-/** The shared row shell: fixed height, glyph gutter, trailing badge slot. */
-export function SidebarRow({
+/**
+ * The shared row shell: fixed height, glyph gutter, trailing badge slot.
+ *
+ * ⚠ NOT EXPORTED since 2026-08-19. `sidebar.tsx` was its one outside consumer,
+ * for the hardcoded Favorites rows; that section renders real `ChannelRow`s now
+ * and nothing outside this file composes the bare shell. Re-export it when a
+ * second file needs a row face — not before, or `npx knip` grows another entry
+ * nobody can tell from a real one.
+ */
+function SidebarRow({
   label,
   active,
   indent = 0,

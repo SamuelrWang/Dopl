@@ -4,11 +4,17 @@
  * ⚠ Samuel's ruling, 2026-08-18 (wiring plan § Risks 9; fourth round of the
  * port's intent doc, deleted at the Phase 12 cutover — the live statement is
  * INVARIANTS §5's hardcoded-furniture bullet): the activity heatmap,
- * Linked threads, Favorites and the
+ * Linked threads and the
  * Assistant / Drafts / Saved-items nav rows keep their mock UI through the
  * wiring. They have **no backing data of any kind** — not an empty table, not a
  * nullable column: nothing anywhere projects them. They are wired later as
  * their own work.
+ *
+ * ⚠ FAVORITES LEFT THIS FILE ON 2026-08-19 (Samuel), and the shape of its
+ * departure is the template for the ones still here: it did NOT get a fixture
+ * replaced by a prettier fixture, it got a COLUMN (`channel_members.favorited_at`)
+ * and a write. `HARDCODED_FAVORITE_ROWS` is deleted rather than kept "for
+ * reference" — a fixture nothing renders is the next thing somebody renders.
  *
  * The rule this file exists to make checkable: **a fixture feeding a WIRED
  * component is a bug; a fixture feeding a component marked
@@ -17,15 +23,14 @@
  * marker. Nothing here is read by the sidebar's channel list, the transcript,
  * the roster or the Threads tab — those are real.
  *
- * ⚠ Never render ZEROS from missing backing data instead: an empty heatmap and
- * an empty Favorites section are claims ("no activity", "nothing starred") that
- * no read established.
+ * ⚠ Never render ZEROS from missing backing data instead: an empty heatmap is a
+ * claim ("no activity") that no read established. The Favorites section may now
+ * render empty-and-absent precisely BECAUSE a read established it.
  */
 
 import {
   Bookmark,
   FileText,
-  Hash,
   Inbox,
   Sparkles,
   type LucideIcon,
@@ -61,23 +66,6 @@ export const INBOX_NAV_ROW: NavRowSpec = {
   label: "Inbox",
   icon: Inbox,
 };
-
-/** A starred row in the Favorites section. */
-export interface FavoriteRowSpec {
-  id: string;
-  label: string;
-  icon: LucideIcon;
-}
-
-/**
- * HARDCODED — no backing data yet (Samuel 2026-08-18).
- * Favourites are a client-side preference with no column and no local store
- * (the port's intent doc § Sidebar, deleted at the cutover — INVARIANTS §5).
- */
-export const HARDCODED_FAVORITE_ROWS: FavoriteRowSpec[] = [
-  { id: "fav-design", label: "Design system", icon: Hash },
-  { id: "fav-release", label: "Release notes", icon: Hash },
-];
 
 /**
  * HARDCODED — no backing data yet (Samuel 2026-08-18).

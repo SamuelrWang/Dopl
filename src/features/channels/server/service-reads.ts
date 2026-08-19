@@ -59,6 +59,10 @@ function toChannelDto(
     notifyScope: (membership?.notify_scope as Channel["myNotifyScope"]) ?? null,
     agentToolProfile:
       (membership?.agent_tool_profile as Channel["myAgentToolProfile"]) ?? null,
+    // The FAVOURITE, straight off the caller's own membership row — the row
+    // `listChannels` already loaded to resolve `role` and the watermark. The
+    // sidebar's Favorites section is a partition of THIS list and adds no read.
+    favoritedAt: membership?.favorited_at ?? null,
     onlineMemberCount: extras.online.get(row.id) ?? 0,
     directPeer: extras.directPeers.get(row.id) ?? null,
   });

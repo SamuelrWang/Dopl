@@ -50,6 +50,7 @@ function member(over: Partial<ChannelMember> = {}): ChannelMember {
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: null,
+    favoritedAt: null,
     agentOnline: false,
     lastSeenAt: null,
     addedBy: null,

@@ -87,6 +87,11 @@ export type ChannelMemberRow = {
   last_read_at: string | null;
   notify_scope: string;
   agent_tool_profile: string;
+  /** When this member favourited this channel; null = not favourited
+   *  (`20260819120000`). A PRIVATE per-member preference — same class as
+   *  `agent_tool_profile`, and scrubbed by the same rule in
+   *  {@link mapMemberRow}. */
+  favorited_at: string | null;
   added_by: string | null;
   joined_at: string;
 };
@@ -122,6 +127,13 @@ export interface ChannelViewerState {
   notifyScope: NotifyScope | null;
   /** The caller's own agent tool profile, null when they are not a member. */
   agentToolProfile: AgentToolProfile | null;
+  /**
+   * When the CALLER favourited this channel; null = not favourited, and null
+   * for a non-member. ⚠ Read off the caller's OWN membership row, which
+   * `listChannels` already loads — this is what lets the sidebar's Favorites
+   * section exist with no extra read and no new endpoint.
+   */
+  favoritedAt: string | null;
   /** Members whose agent is currently online. */
   onlineMemberCount: number;
   /** The resolved peer for a direct channel; null for a normal channel. */
@@ -183,6 +195,7 @@ export function mapChannelRow(
     unread,
     myNotifyScope: state.notifyScope,
     myAgentToolProfile: state.agentToolProfile,
+    myFavoritedAt: state.favoritedAt,
     onlineMemberCount: state.onlineMemberCount,
   };
 }
@@ -209,11 +222,16 @@ export function mapMessageRow(
 
 /**
  * Member row → DTO. The privacy scrub lives HERE, not at each caller:
- * `notify_scope` and `agent_tool_profile` are the member's own preferences and
- * are nulled for everyone but the viewer, so the roster read AND the single-row
- * returns from addMember / updateMyMemberSettings all get it. Presence IS
- * public to the workspace — you need it to know whether the agent you are
- * addressing is live.
+ * `notify_scope`, `agent_tool_profile` and `favorited_at` are the member's own
+ * preferences and are nulled for everyone but the viewer, so the roster read AND
+ * the single-row returns from addMember / updateMyMemberSettings all get it.
+ * Presence IS public to the workspace — you need it to know whether the agent
+ * you are addressing is live.
+ *
+ * ⚠ `favoritedAt` rides here so the members PATCH's own response tells the truth
+ * about what it just wrote. The SIDEBAR does not read it from this DTO — it
+ * reads `Channel.myFavoritedAt` off the channel list, which already loads the
+ * caller's membership row. One column, two mappers, one scrub rule.
  *
  * ⚠ THIS SCRUB IS NOT THE ONLY LINE OF DEFENCE AND NEVER WAS SUFFICIENT ALONE:
  * this DTO is not on every path. `channel_members` is in the realtime
@@ -227,7 +245,9 @@ export function mapMessageRow(
  * ⚠ KEEP THIS SCRUB — defence in depth, and it is what shapes the API response
  * (the server reads as service_role, so the column privilege redacts nothing on
  * THIS path). A new per-member SETTING must be added to the scrub AND left out
- * of that migration's GRANT list.
+ * of that migration's GRANT list. `favorited_at` (`20260819120000`) is the
+ * worked example: it is scrubbed below and it appears in no GRANT, so it is
+ * service_role-only for PostgREST and CDC both.
  */
 export function mapMemberRow(
   row: ChannelMemberRow,
@@ -245,6 +265,7 @@ export function mapMemberRow(
     agentToolProfile: isSelf
       ? ((row.agent_tool_profile as AgentToolProfile) ?? "full")
       : null,
+    favoritedAt: isSelf ? (row.favorited_at ?? null) : null,
     agentOnline: presence?.online ?? false,
     lastSeenAt: presence?.lastSeenAt ?? null,
     addedBy: row.added_by,

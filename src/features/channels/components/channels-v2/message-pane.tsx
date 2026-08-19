@@ -23,8 +23,17 @@
  * panel's SETTINGS tab** (`channel-manage.tsx` → `settings-tab.tsx`), the sparkle
  * was DELETED rather than moved because it was decoration with no handler, and
  * what is left on the right is the info toggle, with the thread view's pop-out
- * immediately to its left. The breadcrumb keeps its bookmark: that is title
- * furniture, not an action cluster.
+ * immediately to its left. The breadcrumb keeps its bookmark, which stays beside
+ * the title rather than joining the right-hand cluster: it acts on WHAT THE CRUMB
+ * NAMES, not on the pane.
+ *
+ * ⚠ THE BOOKMARK IS REAL NOW (Samuel, 2026-08-19, superseding the keep-hardcoded
+ * ruling for Favorites specifically — the rest of the furniture in `fixtures.ts`
+ * stays). It favourites the OPEN CHANNEL for the viewer alone
+ * (`channel_members.favorited_at`), and the sidebar's Favorites section is the
+ * list it feeds. **THREAD VIEW FAVOURITES THE CHANNEL TOO** — a thread is not a
+ * favouritable thing (no per-(user, thread) row exists) and the crumb still names
+ * the channel, so the control's meaning does not change when a thread opens.
  *
  * ⚠ TWO CHROMES, ONE PANE (`chrome`). `"page"` is the surface above. `"window"`
  * is the POP-OUT THREAD WINDOW (`thread-window.tsx`): the same transcript,
@@ -186,10 +195,12 @@ export function ChannelsV2MessagePane({
   requested,
   scrollTarget,
   infoOpen = false,
+  favorited = false,
   gate,
   popOut,
   chrome = "page",
   onToggleInfo = NOOP,
+  onToggleFavorite = NOOP,
   onExitThread = NOOP,
   onOpenThread = NOOP,
 }: {
@@ -207,6 +218,10 @@ export function ChannelsV2MessagePane({
   scrollTarget: ScrollTarget | null;
   /** `"page"` chrome only — the info toggle's pressed state. */
   infoOpen?: boolean;
+  /** `"page"` chrome only — the viewer has favourited THIS CHANNEL
+   *  (`Channel.myFavoritedAt !== null`). Drives the bookmark's fill and its
+   *  `aria-pressed`. */
+  favorited?: boolean;
   /** The page's refetch coordinator, handed straight to the composer's writes. */
   gate: MutationGate;
   /**
@@ -222,6 +237,8 @@ export function ChannelsV2MessagePane({
   chrome?: "page" | "window";
   /** `"page"` chrome only. */
   onToggleInfo?: () => void;
+  /** `"page"` chrome only — flips the viewer's favourite on this channel. */
+  onToggleFavorite?: () => void;
   /** `"page"` chrome only — the channel crumb is the way back out of a thread. */
   onExitThread?: () => void;
   /** Set by an in-transcript thread card — the channel view's way IN. */
@@ -293,9 +310,11 @@ export function ChannelsV2MessagePane({
         channelName={channelName}
         threadTitle={thread?.title ?? null}
         infoOpen={infoOpen}
+        favorited={favorited}
         popOut={popOut}
         chrome={chrome}
         onToggleInfo={onToggleInfo}
+        onToggleFavorite={onToggleFavorite}
         onExitThread={onExitThread}
       />
       <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
@@ -339,17 +358,21 @@ function PaneHeader({
   channelName,
   threadTitle,
   infoOpen,
+  favorited,
   popOut,
   chrome,
   onToggleInfo,
+  onToggleFavorite,
   onExitThread,
 }: {
   channelName: string;
   threadTitle: string | null;
   infoOpen: boolean;
+  favorited: boolean;
   popOut?: ReactNode;
   chrome: "page" | "window";
   onToggleInfo: () => void;
+  onToggleFavorite: () => void;
   onExitThread: () => void;
 }) {
   // THE POP-OUT WINDOW'S HEADER: the crumb reduced to the thread's own title,
@@ -390,10 +413,28 @@ function PaneHeader({
           </>
         )}
       </nav>
-      {/* Bookmarking a channel is a WRITE with no column behind it. Title
-          furniture, so it stays with the crumb while the ACTION cluster does
-          not (Samuel, 2026-08-19). */}
-      <IconButton icon={Bookmark} label="Bookmark channel" size={14} className="h-6 w-6" />
+      {/* THE FAVOURITE TOGGLE. Stays with the crumb because it acts on what the
+          crumb NAMES; the right-hand cluster acts on the pane.
+
+          ⚠ THE LABEL NAMES THE CHANNEL, matching the knowledge card's wording
+          family exactly (`knowledge-v2/home/base-card.tsx`: "Bookmark {name}" /
+          "Remove bookmark from {name}") — one save affordance across the app
+          means one sentence for it, and a screen-reader user in a thread needs
+          the label to say WHICH thing gets bookmarked, since the crumb reads
+          two. `aria-pressed` and the fill both come off the same boolean. */}
+      <IconButton
+        icon={Bookmark}
+        label={
+          favorited
+            ? `Remove bookmark from ${channelName}`
+            : `Bookmark ${channelName}`
+        }
+        size={14}
+        className="h-6 w-6"
+        active={favorited}
+        filled={favorited}
+        onClick={onToggleFavorite}
+      />
       <span className="flex-1" />
       {/* THREAD VIEW ONLY — it pops out the open thread, and the channel view
           has none. Immediately LEFT of the info toggle, same `IconButton` face

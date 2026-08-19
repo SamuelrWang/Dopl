@@ -257,6 +257,16 @@ export type Channel = {
   /** ⛔ Dead since F-170 — nothing sets or reads it. See `NotifyScope`. */
   myNotifyScope: NotifyScope | null;
   myAgentToolProfile: AgentToolProfile | null;
+  /**
+   * When the CALLER favourited this channel; null = not favourited, and null
+   * for a non-member. Caller-relative like `role` and `lastReadAt` — a
+   * favourite is one person's shortcut, never a property of the channel.
+   *
+   * ⚠ THE SIDEBAR'S FAVORITES SECTION READS THIS AND NOTHING ELSE. It rides the
+   * channel list the sidebar already has, so the section costs no extra read and
+   * no new endpoint.
+   */
+  myFavoritedAt: string | null;
   /** Members whose agent heartbeat is within PRESENCE_ONLINE_WINDOW_MS. */
   onlineMemberCount: number;
 };
@@ -333,6 +343,10 @@ export type ChannelMember = {
   notifyScope: NotifyScope | null;
   /** ⚠ Private preference — present ONLY on the caller's own row. */
   agentToolProfile: AgentToolProfile | null;
+  /** ⚠ Private preference — present ONLY on the caller's own row. The
+   *  favourite-toggle PATCH echoes it back; the sidebar reads
+   *  `Channel.myFavoritedAt` instead, off a list it already has. */
+  favoritedAt: string | null;
   agentOnline: boolean;
   lastSeenAt: string | null;
   addedBy: string | null;

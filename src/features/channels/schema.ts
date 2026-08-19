@@ -323,15 +323,27 @@ export const TaskUpdateSchema =
 const AgentToolProfileSchema = z.enum(["full", "dopl_only", "read_only"]);
 
 /**
- * PATCH /members: member updates their OWN per-channel agent tool profile.
+ * PATCH /members: member updates their OWN per-channel settings — the agent
+ * tool profile, and whether this channel is one of their favourites.
  * Self-only — service always targets the caller's row. Empty patch rejected.
+ *
+ * ⚠ NO MEMBER IDENTIFIER, BY CONSTRUCTION, AND THAT IS THE SECOND HALF OF THE
+ * SELF-ONLY GUARANTEE. Zod STRIPS unknown keys, so a body naming `userId` (or
+ * `user_id`, or `memberId`) parses to a patch that names nobody, and the service
+ * writes `ctx.userId`'s row. Adding a member field here would turn one write
+ * into two decisions.
  *
  * `notifyScope` is now an unknown key (F-170 removed it) and zod STRIPS it: a
  * stale client sending it alone hits the empty-patch refusal. Intended.
+ *
+ * `favorite` is a BOOLEAN on the wire and a nullable timestamp in storage
+ * (`channel_members.favorited_at`, `20260819120000`): the client asks for a
+ * state, the server stamps the clock.
  */
 export const ChannelMemberSelfUpdateSchema = z
   .object({
     agentToolProfile: AgentToolProfileSchema.optional(),
+    favorite: z.boolean().optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelMemberSelfUpdateInput = z.infer<
@@ -393,81 +405,12 @@ export const AwaitQuerySchema = z.object({
 });
 export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
 
-// ─── Consent (inbound consent + outbound review) ────────────────────────────
-
 /**
- * Triggering message's `seq`. ⚠ NOT coerced — arrives in a JSON body, where
- * `z.coerce.number()` turns `null` / `""` / `[]` into 0 and `true` into 1, and
- * a de-dupe key must never be manufactured from junk. `seq` is 1-based, so 0 is
- * never real. Coercion belongs on query strings only.
- */
-const ConsentMessageSeqSchema = z.number().int().positive();
-
-/** Fields every consent create carries, whatever the kind. */
-const consentCreateBase = {
-  channelId: z.string().uuid(),
-  summary: z.string().trim().max(200).optional().default(""),
-  bodyPreview: z.string().max(16000).optional().default(""),
-};
-
-/**
- * Create a consent request (desktop POSTs on trigger / on drafted reply).
- *
- * ⚠ `operatorUserId` is NEVER in the body — always the authenticated caller, so
- * a caller can only raise a request addressed to themselves. `requesterUserId`
- * derived server-side from the triggering message.
- *
- * Discriminated on `kind`: only OUTBOUND carries `proposedReply` — accepting it
- * on inbound would let a caller pre-seed the outbound review's payload.
- * `messageSeq` is the de-dupe key for BOTH kinds, so retries can't stack cards.
- */
-export const ConsentCreateSchema = z.discriminatedUnion("kind", [
-  z.object({
-    ...consentCreateBase,
-    kind: z.literal("inbound"),
-    messageSeq: ConsentMessageSeqSchema.optional(),
-  }),
-  z.object({
-    ...consentCreateBase,
-    kind: z.literal("outbound"),
-    messageSeq: ConsentMessageSeqSchema.optional(),
-    proposedReply: z.string().max(16000).optional(),
-  }),
-]);
-export type ConsentCreateInput = z.infer<typeof ConsentCreateSchema>;
-
-/**
- * Which human surface recorded the decision — persisted verbatim into
- * `decided_by` for audit. ⚠ `trust` is server-generated only (standing rule,
- * not a human click) and deliberately NOT accepted from a caller.
- */
-const ConsentDecidedBySchema = z.enum(["web", "desktop"]);
-
-/** PATCH /consent/[id] body: the operator's decision + which surface made it. */
-export const ConsentDecisionSchema = z.object({
-  decision: z.enum(["allow", "deny"]),
-  decidedBy: ConsentDecidedBySchema.optional().default("web"),
-});
-export type ConsentDecisionInput = z.infer<typeof ConsentDecisionSchema>;
-
-/**
- * Consent inbox filter. `pending` (default, web inbox) = still needs an answer.
- * `decided` = audit view; ONLY way to read the `auto_allowed` rows a trust rule
- * writes ("your agent ran N times without asking"). `all` = both.
- */
-const ConsentStatusFilterSchema = z.enum(["pending", "decided", "all"]);
-export type ConsentStatusFilter = z.infer<typeof ConsentStatusFilterSchema>;
-
-/** `?channelId=<uuid>&status=<pending|decided|all>` for the consent inbox. */
-export const ConsentListQuerySchema = z.object({
-  channelId: z.string().uuid().optional(),
-  status: ConsentStatusFilterSchema.optional().default("pending"),
-});
-export type ConsentListQuery = z.infer<typeof ConsentListQuerySchema>;
-
-/**
- * Session-state schemas live in `schema-sessions.ts`; re-exported here so every
- * existing `@/features/channels/schema` import stays unchanged.
+ * Session-state schemas live in `schema-sessions.ts`, and the CONSENT / TRUST /
+ * PRESENCE schemas in `schema-collab.ts` (split 2026-08-19 at the 500-line cap,
+ * on the boundary `server/repository-collab.ts` already draws). Both are
+ * re-exported here so every existing `@/features/channels/schema` import stays
+ * unchanged — this file is the barrel, and there is no third path to a symbol.
  */
 export {
   SessionStateQuerySchema,
@@ -479,22 +422,18 @@ export type {
   SessionStateReportInput,
 } from "./schema-sessions";
 
-// ─── Trust (per-teammate standing consent) ──────────────────────────────────
-
-/** POST / DELETE /trust body: the teammate whose agent is (un)trusted. */
-export const TrustMutateSchema = z.object({
-  trustedUserId: z.string().uuid(),
-});
-export type TrustMutateInput = z.infer<typeof TrustMutateSchema>;
-
-// ─── Presence (desktop heartbeat) ───────────────────────────────────────────
-
-/**
- * POST /presence body: optional status label (defaults 'listening').
- * ⚠ Closed enum, not free text — a matching CHECK constraint backs the column,
- * and the value is surfaced in the UI as listener state.
- */
-export const PresenceHeartbeatSchema = z.object({
-  status: z.enum(["listening", "busy", "paused", "offline"]).optional(),
-});
-export type PresenceHeartbeatInput = z.infer<typeof PresenceHeartbeatSchema>;
+export {
+  ConsentCreateSchema,
+  ConsentDecisionSchema,
+  ConsentListQuerySchema,
+  PresenceHeartbeatSchema,
+  TrustMutateSchema,
+} from "./schema-collab";
+export type {
+  ConsentCreateInput,
+  ConsentDecisionInput,
+  ConsentListQuery,
+  ConsentStatusFilter,
+  PresenceHeartbeatInput,
+  TrustMutateInput,
+} from "./schema-collab";

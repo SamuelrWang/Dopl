@@ -80,6 +80,7 @@ function memberRow(userId: string, notifyScope: string): ChannelMemberRow {
     last_read_at: null,
     notify_scope: notifyScope,
     agent_tool_profile: "full",
+    favorited_at: null,
     added_by: USER,
     joined_at: "2026-07-20T00:00:00Z",
   };

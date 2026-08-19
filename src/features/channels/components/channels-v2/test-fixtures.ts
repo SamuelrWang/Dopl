@@ -42,6 +42,9 @@ export function channel(over: Partial<Channel> = {}): Channel {
     unread: false,
     myNotifyScope: null,
     myAgentToolProfile: "full",
+    /** ⚠ Defaults to NOT favourited — the state the sidebar's Favorites
+     *  section must be absent in, and the one a bookmark toggle starts from. */
+    myFavoritedAt: null,
     onlineMemberCount: 1,
     ...over,
   };
@@ -55,6 +58,7 @@ export function member(over: Partial<ChannelMember> = {}): ChannelMember {
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: "full",
+    favoritedAt: null,
     agentOnline: true,
     lastSeenAt: new Date().toISOString(),
     addedBy: null,

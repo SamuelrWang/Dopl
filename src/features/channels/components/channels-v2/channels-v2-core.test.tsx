@@ -73,6 +73,12 @@ vi.mock("../../hooks/use-consent-inbox", () => ({
 vi.mock("../../hooks/use-mention-writes", () => ({
   useMentionWrites: () => ({ markRead: { mutate: () => {} } }),
 }));
+// The header bookmark's favourite write (2026-08-19). Mocked for the same
+// reason the mention write is: it says nothing about which channel is open, and
+// unmocked it pulls the real `useApiMutationWith` out of the stub below.
+vi.mock("../../hooks/use-channel-preference-writes", () => ({
+  useChannelPreferenceWrites: () => ({ favorite: { mutate: () => {} } }),
+}));
 vi.mock("../../client/realtime", () => ({
   useChannelsRealtime: () => {},
   usePresenceRealtime: () => {},

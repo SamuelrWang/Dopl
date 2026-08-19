@@ -12,6 +12,10 @@
  *  - **A SCROLL TARGET OUTSIDE THE LOADED TRANSCRIPT SAYS SO.** A mention click
  *    marks read and navigates whether or not the row is in the page; when it is
  *    not, nothing moved and the operator was told nothing.
+ *  - **THE HEADER BOOKMARK IS THE FAVOURITE TOGGLE** (2026-08-19). Its two
+ *    states are a label and a fill — both invisible to a smoke test that only
+ *    checks the button exists, which is what it was for a day when the control
+ *    was inert furniture.
  *
  * ⚠ JSDOM HAS NO LAYOUT, so `scrollHeight` / `clientHeight` / `scrollTop` are
  * all 0 and `scrollIntoView` does not exist. They are stubbed on the prototype
@@ -109,7 +113,9 @@ function paneProps(over: Partial<Props> = {}): Props {
     requested: new Set<string>(),
     scrollTarget: null,
     infoOpen: false,
+    favorited: false,
     gate: { begin: vi.fn(), end: vi.fn() },
+    onToggleFavorite: vi.fn(),
     onToggleInfo: vi.fn(),
     onExitThread: vi.fn(),
     onOpenThread: vi.fn(),
@@ -127,10 +133,10 @@ function scrollerOf(container: HTMLElement): HTMLElement {
 }
 
 function mount(over: Partial<Props> = {}) {
-  const { container, rerender } = render(
-    <ChannelsV2MessagePane {...paneProps(over)} />
-  );
+  const props = paneProps(over);
+  const { container, rerender } = render(<ChannelsV2MessagePane {...props} />);
   return {
+    props,
     scroller: scrollerOf(container),
     rerender: (next: Partial<Props> = {}) =>
       rerender(<ChannelsV2MessagePane {...paneProps({ ...over, ...next })} />),
@@ -223,6 +229,66 @@ describe("the mention scroll target and the pin", () => {
     scroller.scrollTop = 0; // where the jump left the box
     rerender({ scrollTarget: TARGET, rows: rowsOf(messages(4)) });
     expect(scroller.scrollTop).toBe(0);
+  });
+});
+
+/**
+ * THE HEADER BOOKMARK — the favourite toggle for the OPEN CHANNEL.
+ *
+ * ⚠ The wording is pinned deliberately, not incidentally: it matches the
+ * knowledge card's family verbatim ("Bookmark {name}" / "Remove bookmark from
+ * {name}", `knowledge-v2/home/base-card.tsx`), because one save affordance
+ * across the app should be one sentence. A drift here is a drift there.
+ */
+describe("the header's favourite toggle", () => {
+  it("reads UNFAVOURITED as an unpressed, unfilled Bookmark naming the channel", () => {
+    mount();
+    const button = screen.getByRole("button", { name: "Bookmark Website" });
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.querySelector("svg")?.getAttribute("fill")).toBe("none");
+  });
+
+  it("reads FAVOURITED as pressed, filled, and offering the removal", () => {
+    mount({ favorited: true });
+    const button = screen.getByRole("button", {
+      name: "Remove bookmark from Website",
+    });
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    // The fill IS the state — the outline is always drawn so the glyph does not
+    // change size between the two.
+    expect(button.querySelector("svg")?.getAttribute("fill")).toBe(
+      "currentColor"
+    );
+  });
+
+  it("calls back on click, in both directions", () => {
+    const { props } = mount();
+    fireEvent.click(screen.getByRole("button", { name: "Bookmark Website" }));
+    expect(props.onToggleFavorite).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    const on = mount({ favorited: true });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove bookmark from Website" })
+    );
+    expect(on.props.onToggleFavorite).toHaveBeenCalledTimes(1);
+  });
+
+  it("still names the CHANNEL with a thread open — it is what the crumb names", () => {
+    // A thread is not a favouritable thing: there is no per-(user, thread) row
+    // anywhere, and the control's meaning must not change under the operator
+    // when a thread opens.
+    mount({ thread: thread({ id: "t-1", title: "UI-kit design" }) });
+    expect(
+      screen.getByRole("button", { name: "Bookmark Website" })
+    ).not.toBeNull();
+  });
+
+  it("is ABSENT in the pop-out window's chrome", () => {
+    // That header is the thread's own title and nothing else: no info panel, no
+    // channel to go back to — and no channel-scoped control either.
+    mount({ chrome: "window", thread: thread({ id: "t-1" }) });
+    expect(screen.queryByRole("button", { name: /ookmark/ })).toBeNull();
   });
 });
 

@@ -52,8 +52,9 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
 
 // PATCH writes only the caller's OWN per-channel prefs, so any channel member may call it
 // regardless of workspace role; the service enforces membership and always targets ctx.userId.
-// Its only field is `agentToolProfile` (`ChannelMemberSelfUpdateSchema`), which is why the gate
-// below is per-METHOD: there is nothing else here for an agent to legitimately write.
+// TWO fields since 2026-08-19 (`ChannelMemberSelfUpdateSchema`): `agentToolProfile` and
+// `favorite`. The gate below stays per-METHOD — see its own note for why the second field did
+// not turn it into a field gate.
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMemberSelfUpdateSchema);
@@ -81,6 +82,17 @@ export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
  * `full` profile has live Bash (`sdk-loader.js` fences only `Read/Grep/Glob` from secret paths).
  * Ungated, the agent reads its own bearer off disk and PATCHes itself back to `full` after the
  * operator tightens it — DURABLY, since the column outlives the session.
+ *
+ * ⚠ THE METHOD NOW CARRIES A SECOND FIELD AND IS STILL METHOD-GATED (2026-08-19). INVARIANTS §3
+ * says per-method and per-field coincided here only because `agentToolProfile` was the sole
+ * field — so `favorite` is exactly the case that rule told us to re-decide rather than inherit.
+ * It stays per-METHOD because the answer to "is this a write an agent may legitimately make?" is
+ * NO for both fields, for different reasons: the tool profile is a containment control, and a
+ * favourite is the OPERATOR's own sidebar shortcut list — an agent reordering a human's sidebar
+ * is not a capability with a use, and the cost of refusing it is that nobody can favourite from
+ * an MCP session, which nobody asked to do. A field gate would buy an agent-writable `favorite`
+ * and cost a second `SESSION_ONLY_FIELDS` route (§3: that is a conscious edit to the coverage
+ * test, not a free choice).
  *
  * `GET` stays open; `POST`/`DELETE` (add/remove a member) are deliberately UNGATED — invites are
  * a separate, unmade decision.

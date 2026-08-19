@@ -132,25 +132,48 @@ export async function removeMember(
 }
 
 /**
- * Update the CALLER's own per-channel preferences (notification scope and /
- * or responding-agent tool profile). Any channel member may set their own
- * (they are personal preferences, not management actions); a non-member is
- * refused. Always targets the caller's row. Returns the updated membership
- * DTO.
+ * Update the CALLER's own per-channel preferences (responding-agent tool
+ * profile, and whether this channel is one of their favourites). Any channel
+ * member may set their own (they are personal preferences, not management
+ * actions); a non-member is refused. Returns the updated membership DTO.
+ *
+ * ⚠ ALWAYS TARGETS `ctx.userId`'S ROW, AND THAT IS PINNED SERVER-SIDE, NOT BY
+ * THE SCHEMA'S SILENCE. `ChannelMemberSelfUpdateSchema` carries no member
+ * identifier at all and zod strips unknown keys, so a body naming another user
+ * arrives here as an ordinary patch — and the row it lands on is decided by the
+ * line below, which reads the authenticated caller and nothing from the input.
+ * There is no parameterised-member path to get wrong.
+ *
+ * ⚠ `favorite: false` CLEARS the column, so the patch value is `null` — a real
+ * value, not an omission. Built by testing `!== undefined`, never truthiness
+ * (INVARIANTS §8: `0`/`false`/`null` are not "unset").
  */
 export async function updateMyMemberSettings(
   ctx: ChannelContext,
   ref: string,
-  patch: { notifyScope?: NotifyScope; agentToolProfile?: AgentToolProfile }
+  patch: {
+    notifyScope?: NotifyScope;
+    agentToolProfile?: AgentToolProfile;
+    favorite?: boolean;
+  }
 ): Promise<ChannelMember> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("update settings for this channel");
   }
-  const dbPatch: { notify_scope?: string; agent_tool_profile?: string } = {};
+  const dbPatch: {
+    notify_scope?: string;
+    agent_tool_profile?: string;
+    favorited_at?: string | null;
+  } = {};
   if (patch.notifyScope !== undefined) dbPatch.notify_scope = patch.notifyScope;
   if (patch.agentToolProfile !== undefined) {
     dbPatch.agent_tool_profile = patch.agentToolProfile;
+  }
+  if (patch.favorite !== undefined) {
+    // ⚠ Stamped by the SERVER, never taken from the caller: the column records
+    // WHEN, and a client-supplied clock is a value nothing verified.
+    dbPatch.favorited_at = patch.favorite ? new Date().toISOString() : null;
   }
   const row = await repo.updateMemberPrefs(channel.id, ctx.userId, dbPatch);
   const profiles = await profilesById([ctx.userId]);

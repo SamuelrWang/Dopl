@@ -62,6 +62,7 @@ function memberRow(): ChannelMemberRow {
     last_read_at: null,
     notify_scope: "all",
     agent_tool_profile: "full",
+    favorited_at: null,
     added_by: USER,
     joined_at: "2026-07-20T00:00:00Z",
   };

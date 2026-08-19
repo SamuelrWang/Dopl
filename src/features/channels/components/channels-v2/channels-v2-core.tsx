@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { CONSENT_INBOX_POLL_MS } from "../../constants";
@@ -11,6 +10,7 @@ import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
 import { useChannelMentions } from "../../hooks/use-channel-mentions";
 import { useMentionWrites } from "../../hooks/use-mention-writes";
+import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsSkeleton } from "../channels-skeleton";
@@ -29,9 +29,8 @@ import { useChannelsV2Live } from "./live";
 import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
 // Kept on one line each: this file sits a handful of lines inside the 500-line cap.
-import { indexMembers, splitChannels } from "./view-model";
-import { channelRows, threadRows } from "./view-model-rows";
-import { consentExemptThreadIds, requestedThreadIds, sidebarThreads } from "./view-model-requested";
+import { splitChannels } from "./view-model";
+import { useChannelsV2Derivations } from "./derivations";
 
 export interface ChannelsV2CoreProps {
   workspaceId: string;
@@ -76,14 +75,20 @@ export interface ChannelsV2CoreProps {
  * Phase 12, 2026-08-18): `channels-view-core.tsx` and the two-pane surface
  * under it are DELETED, and `/:workspaceSegment/channels` mounts this tree.
  *
- * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). FOUR write families land
+ * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). FIVE write families land
  * from this tree (INVARIANTS §7), all through the existing write layer, none a
  * new endpoint: the composer's send / request fan-out (Phase 3), the Tags
- * inbox's mark-read (Phase 6), the Inbox pane's consent decision (Phase 8), and
+ * inbox's mark-read (Phase 6), the Inbox pane's consent decision (Phase 8),
  * the channel-management writes the CUTOVER added (create / invite / visibility
  * / archive / delete / leave / tool profile / trust), which arrived WHOLESALE
- * from the deleted page and live in `channel-manage.tsx`. All four hold the
- * same `useRefetchGate` gate the reads register.
+ * from the deleted page and live in `channel-manage.tsx`, and the header
+ * bookmark's FAVOURITE (2026-08-19), which rides the same per-member preference
+ * route as the tool profile. All five hold the same `useRefetchGate` gate the
+ * reads register.
+ *
+ * ⚠ A FAVOURITE IS A SHORTCUT, NOT A MOVE (Slack semantics). The favourited
+ * channel keeps its row in Channels or Direct messages and gains a second one in
+ * Favorites; both select it. The sidebar's docblock owns the rest of the rule.
  *
  * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
  * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
@@ -250,46 +255,24 @@ export function ChannelsV2Core({
   // doorbell open for its own life, or a coalesced refetch mid-flight reverts
   // the optimistic `read` flag under the click that set it.
   const { markRead } = useMentionWrites({ workspaceId, gate });
+  // THE FAVOURITE TOGGLE (Samuel, 2026-08-19) — a FIFTH write family on this
+  // surface, on the same gate as the other four, and the existing per-member
+  // preference route rather than a new one (`PATCH /members`, `favorite`).
+  const { favorite } = useChannelPreferenceWrites({
+    workspaceId,
+    currentUserId,
+    gate,
+  });
 
-  const index = useMemo(
-    () => indexMembers(members, currentUserId),
-    [members, currentUserId]
-  );
-  // DERIVED, never stored: a thread id that is not in THIS channel's list is a
-  // stale pick (channel switched, thread aged past the read's ceiling), and the
-  // pane falls back to the channel view rather than rendering an empty thread.
-  const openThread = requestedThreadId
-    ? (threads.find((t) => t.id === requestedThreadId) ?? null)
-    : null;
-  // REQUESTED, derived from the viewer's OWN consent inbox joined to this
-  // channel's transcript on the triggering seq (`view-model-requested.ts`). It
-  // feeds three surfaces — the sidebar's admission rule, its Clock glyph, and
-  // the card's `PendingChip` — from ONE derivation, so they cannot disagree.
-  const requested = useMemo(
-    () => requestedThreadIds(messages, requests),
-    [messages, requests]
-  );
-  // ⚠ THE SECOND ARM, AND DELIBERATELY NOT `requested`: a pending inbound row
-  // may legally carry no `message_seq`, names no thread, and so cannot earn a
-  // Clock glyph — but it must still keep the threads it might be about
-  // REACHABLE past the 24h window (`view-model-requested.ts`).
-  const consentExempt = useMemo(
-    () => consentExemptThreadIds(threads, requests),
-    [threads, requests]
-  );
-  const treeThreads = useMemo(
-    // `undefined` keeps the derivation's own `Date.now()` default.
-    () => sidebarThreads(threads, requested, undefined, consentExempt),
-    [threads, requested, consentExempt]
-  );
-
-  const rows = useMemo(
-    () =>
-      openThread
-        ? threadRows(messages, openThread.id, index, formatChannelTimestamp)
-        : channelRows(messages, threads, index, formatChannelTimestamp),
-    [messages, threads, openThread, index]
-  );
+  const { index, openThread, requested, treeThreads, rows } =
+    useChannelsV2Derivations({
+      members,
+      currentUserId,
+      messages,
+      threads,
+      requests,
+      openThreadId: requestedThreadId,
+    });
 
   const channelName = channel
     ? channelDisplayName(channel, members, currentUserId)
@@ -393,6 +376,16 @@ export function ChannelsV2Core({
             requested={requested}
             scrollTarget={scrollTarget}
             infoOpen={infoOpen}
+            // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
+            // rendering — never a flip inside the mutation. Two fast clicks send
+            // `true` then `false` and converge; a toggle verb would race.
+            favorited={channel.myFavoritedAt !== null}
+            onToggleFavorite={() =>
+              favorite.mutate({
+                channelId: channel.id,
+                favorite: channel.myFavoritedAt === null,
+              })
+            }
             gate={gate}
             // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
             // hides ITSELF outside the desktop shell (feature detection), so the

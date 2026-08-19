@@ -98,6 +98,7 @@ const baseChannel: Channel = {
   unread: false,
   myNotifyScope: "all",
   myAgentToolProfile: "full",
+  myFavoritedAt: null,
   onlineMemberCount: 1,
 };
 
@@ -148,6 +149,7 @@ const MEMBERS: ChannelMember[] = [
     lastReadAt: null,
     notifyScope: "all",
     agentToolProfile: "full",
+    favoritedAt: null,
     agentOnline: true,
     lastSeenAt: "2026-08-01T12:00:00.000Z",
     addedBy: null,
@@ -163,6 +165,7 @@ const MEMBERS: ChannelMember[] = [
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: null,
+    favoritedAt: null,
     agentOnline: false,
     lastSeenAt: null,
     addedBy: "u-1",

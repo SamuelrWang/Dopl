@@ -46,6 +46,7 @@ function viewerState(overrides: Partial<ChannelViewerState> = {}): ChannelViewer
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: null,
+    favoritedAt: null,
     onlineMemberCount: 0,
     directPeer: null,
     ...overrides,
@@ -140,6 +141,7 @@ describe("mapMemberRow", () => {
     last_read_at: "2026-07-21T00:00:00Z",
     notify_scope: "addressed",
     agent_tool_profile: "read_only",
+    favorited_at: null,
     added_by: "user-1",
     joined_at: "2026-07-20T00:00:00Z",
   };
@@ -166,10 +168,31 @@ describe("mapMemberRow", () => {
     // returns a member DTO (roster read, addMember, updateMyMemberSettings)
     // gets it for free. A teammate must not learn who muted the channel or
     // how tightly another operator's agent is scoped.
-    expect(mapMemberRow(row, undefined, { viewerUserId: "someone-else" })).toMatchObject({
+    expect(
+      mapMemberRow(
+        { ...row, favorited_at: "2026-08-19T10:00:00Z" },
+        undefined,
+        { viewerUserId: "someone-else" }
+      )
+    ).toMatchObject({
       userId: "user-2",
       notifyScope: null,
       agentToolProfile: null,
+      // ⚠ `favorited_at` joined the scrub in the same change that added the
+      // column (2026-08-19). It is one half of INVARIANTS §2's two-edit rule for
+      // a new per-member setting; the other half is its absence from
+      // `20260810120000`'s GRANT list, which is what binds PostgREST and CDC.
+      favoritedAt: null,
+    });
+  });
+
+  it("shows favoritedAt on the viewer's OWN row", () => {
+    expect(
+      mapMemberRow({ ...row, favorited_at: "2026-08-19T10:00:00Z" }, undefined, asSelf)
+    ).toMatchObject({ favoritedAt: "2026-08-19T10:00:00Z" });
+    // Not favourited is `null`, never absent — the field always answers.
+    expect(mapMemberRow(row, undefined, asSelf)).toMatchObject({
+      favoritedAt: null,
     });
   });
 

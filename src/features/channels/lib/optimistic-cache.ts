@@ -256,6 +256,26 @@ export function setToolProfile(
 }
 
 /**
+ * The favourite toggle's optimistic patch — a nullable TIMESTAMP, so the
+ * un-favourite writes `null` rather than dropping the field.
+ *
+ * ⚠ The client stamps its own clock for the optimistic frame and the SERVER
+ * stamps the stored one; they differ by the round trip and nothing renders the
+ * value, only its nullness. If a surface ever orders by it, this is the line
+ * that would have to stop inventing a time.
+ */
+export function setFavorite(
+  cache: ChannelsCache | undefined,
+  channelId: string,
+  favorited: boolean,
+  now: string = new Date().toISOString()
+): ChannelsCache | undefined {
+  return patchChannel(cache, channelId, {
+    myFavoritedAt: favorited ? now : null,
+  });
+}
+
+/**
  * Trust renders from the RULE LIST, so the optimistic add needs a ROW, not a
  * flag. Only `trustedUserId` is read by the view's lens; the rest is filled so
  * the row is a valid `AgentTrustRule` needing no special case.

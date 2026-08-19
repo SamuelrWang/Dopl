@@ -17,6 +17,7 @@ import {
   addTrustRuleRow,
   dropConsentRequest,
   removeTrustRuleRow,
+  setFavorite,
   setToolProfile,
   type ChannelsCache,
   type ConsentCache,
@@ -49,7 +50,10 @@ import type {
  *
  * There were FOUR of these until 2026-08-08, when notify scope was removed
  * from the product (F-170) — its mutation, its cache patch and its bell
- * popover went together.
+ * popover went together. FOUR again since 2026-08-19: the channel FAVOURITE
+ * joined them, on the same route as the tool profile (`PATCH /members`, whose
+ * schema now carries `favorite`) and patching the same channel-list cache the
+ * sidebar's Favorites section reads.
  */
 
 export interface PreferenceWritesParams {
@@ -73,6 +77,12 @@ export interface TrustDraft {
 export interface ConsentDraft {
   id: string;
   decision: "allow" | "deny";
+}
+/** ⚠ The DESIRED state, never a "toggle" verb: two clicks racing must converge
+ *  on the same answer, and a flip-relative write cannot. */
+export interface FavoriteDraft {
+  channelId: string;
+  favorite: boolean;
 }
 
 export function useChannelPreferenceWrites({
@@ -98,6 +108,37 @@ export function useChannelPreferenceWrites({
     settleWith: gate,
     onError: (err) => failed(err, "Couldn't update agent tools"),
   });
+
+  /**
+   * FAVOURITE / UN-FAVOURITE the caller's own membership row.
+   *
+   * ⚠ NO MEMBER IN THE BODY, deliberately: the route writes `ctx.userId`'s row
+   * and the schema carries no member field, so there is nothing here for a
+   * caller to point somewhere else.
+   *
+   * ⚠ NO `coldKeys` (INVARIANTS §8 rule 1). The one surface this write feeds —
+   * the sidebar's Favorites section — is a partition of the SAME channel list
+   * the toggle was rendered from, so the cache is warm by construction: there is
+   * no bookmark button to press on a channel list that never loaded.
+   */
+  const favorite = useApiMutationWith<FavoriteDraft, { member: ChannelMember }>(
+    channelRequest,
+    {
+      request: (draft) => ({
+        path: channelMembersPath(draft.channelId),
+        method: "PATCH",
+        workspaceId,
+        body: { favorite: draft.favorite },
+      }),
+      optimistic: (draft) =>
+        patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
+          setFavorite(cache, draft.channelId, draft.favorite)
+        ),
+      invalidate: () => [channelKeys.list().all],
+      settleWith: gate,
+      onError: (err) => failed(err, "Couldn't update favourites"),
+    }
+  );
 
   const trust = useApiMutationWith<TrustDraft, { rule?: AgentTrustRule }>(
     channelRequest,
@@ -143,5 +184,5 @@ export function useChannelPreferenceWrites({
     onError: (err) => failed(err, "Couldn't record decision"),
   });
 
-  return { toolProfile, trust, consent };
+  return { toolProfile, favorite, trust, consent };
 }

@@ -181,7 +181,9 @@ describe("the header slot", () => {
     ]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }
-    // The crumb's bookmark is title furniture and STAYS.
-    expect(screen.getByRole("button", { name: "Bookmark channel" })).toBeTruthy();
+    // The crumb's bookmark STAYS — and since 2026-08-19 it is the real
+    // favourite toggle, so it names the channel rather than saying "channel"
+    // (`message-pane.test.tsx › the header's favourite toggle` owns its states).
+    expect(screen.getByRole("button", { name: "Bookmark general" })).toBeTruthy();
   });
 });

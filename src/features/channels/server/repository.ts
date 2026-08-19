@@ -432,11 +432,20 @@ export async function updateLastRead(
  * Update a member's OWN per-channel preferences; returns the updated row.
  * The workspace-guard trigger fires only on UPDATE OF workspace_id/channel_id,
  * so this never trips it.
+ *
+ * ⚠ `favorited_at` is nullable and CLEARING it is a real patch value — the
+ * un-favourite is `{ favorited_at: null }`, which is why the type is
+ * `string | null` and not `string`. The service builds the patch by checking
+ * `!== undefined`, never truthiness (INVARIANTS §8).
  */
 export async function updateMemberPrefs(
   channelId: string,
   userId: string,
-  patch: { notify_scope?: string; agent_tool_profile?: string }
+  patch: {
+    notify_scope?: string;
+    agent_tool_profile?: string;
+    favorited_at?: string | null;
+  }
 ): Promise<ChannelMemberRow> {
   const db = supabaseAdmin();
   const { data, error } = await db

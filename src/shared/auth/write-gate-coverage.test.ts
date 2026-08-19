@@ -130,10 +130,13 @@ describe("H-3 write-gate coverage", () => {
         // permanent standing consent.
         "channels/consent/[id]/route.ts",
         "channels/trust/route.ts",
-        // PATCH writes `agentToolProfile` and nothing else. The profile is a
-        // CONTAINMENT control: a Bash-capable session could otherwise read its
-        // own bearer off disk and durably re-widen its own profile. GET and
-        // member add/remove on that file stay ungated.
+        // PATCH writes `agentToolProfile` and `favorite` (2026-08-19). The
+        // profile is a CONTAINMENT control: a Bash-capable session could
+        // otherwise read its own bearer off disk and durably re-widen its own
+        // profile. The favourite is the operator's own sidebar shortcut list,
+        // which an agent has no business writing either — so the second field
+        // did NOT turn this into a field gate. GET and member add/remove on that
+        // file stay ungated.
         "channels/[channelId]/members/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",

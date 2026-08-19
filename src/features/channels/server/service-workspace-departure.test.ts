@@ -67,6 +67,7 @@ function memberRow(channelId: string, userId: string): ChannelMemberRow {
     role: "member",
     last_read_at: null,
     agent_tool_profile: "full",
+    favorited_at: null,
     added_by: SURVIVOR,
     joined_at: "2026-08-10T00:00:00Z",
   } as ChannelMemberRow;

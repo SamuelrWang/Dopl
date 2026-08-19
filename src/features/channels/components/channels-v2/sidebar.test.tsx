@@ -10,7 +10,10 @@
  *    a number no read established;
  *  - selection MIRRORS the center pane (thread wins over its channel);
  *  - the section chevrons COLLAPSE and the search FILTERS, per Samuel's
- *    interaction-completeness ruling (2026-08-18).
+ *    interaction-completeness ruling (2026-08-18);
+ *  - FAVORITES IS REAL (2026-08-19) — a partition of the same channel list, with
+ *    Slack semantics (a favourite is a shortcut, not a move) and a section that
+ *    is ABSENT rather than empty.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -242,6 +245,112 @@ describe("the sidebar's 24h window", () => {
     expect(
       sidebarThreads([bare], new Set(["asked"]), now).map((t) => t.id)
     ).toEqual(["asked"]);
+  });
+});
+
+/**
+ * THE FAVORITES SECTION (Samuel, 2026-08-19 — the one piece of design furniture
+ * that got a column instead of staying hardcoded).
+ *
+ * Every case here pins a decision that a redesign would silently reverse: that a
+ * favourite does not MOVE the row, that DMs can be favourited too, that the
+ * order is alphabetical rather than the list's own recency, and that an empty
+ * section takes its header with it while a FILTERED-empty one does not.
+ */
+describe("the sidebar's real Favorites section", () => {
+  const FAV_ROOMS = [
+    channel({ id: "ch-web", name: "Website", myFavoritedAt: "2026-08-19T10:00:00.000Z" }),
+    channel({ id: "ch-fe", name: "Front-end" }),
+    channel({ id: "ch-api", name: "API", myFavoritedAt: "2026-08-19T09:00:00.000Z" }),
+  ];
+
+  it("is ABSENT — header and all — when nothing is favourited", () => {
+    renderSidebar();
+    // ⚠ Not "renders an empty section". Unlike Channels and Direct messages,
+    // which always say "No channels yet.", favouriting is optional
+    // organisation and a header for an unused feature is noise.
+    expect(screen.queryByRole("button", { name: "Favorites" })).toBeNull();
+  });
+
+  it("renders the favourited channels and NOTHING else", () => {
+    renderSidebar({ rooms: FAV_ROOMS });
+    expect(screen.getByRole("button", { name: "Favorites" })).not.toBeNull();
+    // Two favourites → two rows in the section, plus every channel's own row in
+    // the tree below.
+    expect(screen.getAllByRole("button", { name: "Website" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "API" })).toHaveLength(2);
+    // ⚠ SLACK SEMANTICS: a favourite is a SHORTCUT, not a move. An
+    // un-favourited channel still has exactly one row, and a favourited one
+    // still has its row in the tree.
+    expect(screen.getAllByRole("button", { name: "Front-end" })).toHaveLength(1);
+  });
+
+  it("favourites a DM by its resolved peer, with the DM row face", () => {
+    renderSidebar({
+      direct: [
+        channel({
+          id: "ch-dm",
+          isDirect: true,
+          name: "dm",
+          myFavoritedAt: "2026-08-19T10:00:00.000Z",
+          directPeer: { userId: PEER, displayName: "Diana Taylor", avatarUrl: null },
+        }),
+      ],
+    });
+    // Named by the peer in BOTH places — the section reuses `ChannelRow`, so a
+    // DM is a face and a channel is a hash tile in Favorites exactly as below.
+    expect(screen.getAllByRole("button", { name: "Diana Taylor" })).toHaveLength(2);
+  });
+
+  it("orders favourites BY NAME, not by the list's own order", () => {
+    // The list arrives Website-first (recency, as `listChannels` returns it);
+    // the section must read API, Website. A shortcut list is used by pointing.
+    renderSidebar({ rooms: FAV_ROOMS });
+    const list = screen.getByRole("complementary", { name: "Channels" });
+    const labels = within(list)
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label") ?? b.textContent);
+    const header = labels.indexOf("Favorites");
+    expect(labels.slice(header + 1, header + 3)).toEqual(["API", "Website"]);
+    // …while the tree below keeps the LIST's own order — the sort belongs to
+    // the shortcut section and must not have reordered the tree with it.
+    // (Nested thread rows dropped: the tree interleaves them, Favorites does
+    // not, and this case is about channel order.)
+    const treeRows = labels
+      .slice(labels.indexOf("Channels") + 1)
+      .filter((l) => l !== "UI-kit design" && l !== "Add channel");
+    expect(treeRows).toEqual(["Website", "Front-end", "API"]);
+  });
+
+  it("selects the channel from a favourite row, and wears the selection there too", () => {
+    const props = renderSidebar({ rooms: FAV_ROOMS, selectedChannelId: "ch-api" });
+    const [favRow] = screen.getAllByRole("button", { name: "API" });
+    expect(favRow.getAttribute("aria-current")).toBe("true");
+    fireEvent.click(favRow);
+    expect(props.onSelectChannel).toHaveBeenCalledWith("ch-api");
+  });
+
+  it("collapses like any other section", () => {
+    renderSidebar({ rooms: FAV_ROOMS });
+    fireEvent.click(screen.getByRole("button", { name: "Favorites" }));
+    // The tree row survives the collapse; only the shortcut goes.
+    expect(screen.getAllByRole("button", { name: "Website" })).toHaveLength(1);
+  });
+
+  it("KEEPS its header and says NO MATCHES when the filter empties it", () => {
+    // ⚠ The exception to the absent-section rule, and the same
+    // two-different-facts rule the sections below follow: "you have no
+    // favourites" and "none of them match what you typed" are opposite claims
+    // that look identical as a blank space.
+    renderSidebar({ rooms: FAV_ROOMS });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
+      target: { value: "front" },
+    });
+    expect(screen.getByRole("button", { name: "Favorites" })).not.toBeNull();
+    // Three emptied sections now: Favorites, Direct messages... and not
+    // Channels, which still has Front-end.
+    expect(screen.getAllByText(SIDEBAR_NO_MATCHES)).toHaveLength(2);
   });
 });
 

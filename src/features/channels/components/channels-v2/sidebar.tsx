@@ -25,19 +25,43 @@
  * INTERACTION COMPLETENESS (Samuel, 2026-08-18): the section chevrons COLLAPSE
  * for real and the header's search FILTERS the list. Nothing in this column is
  * inert chrome except the furniture explicitly marked hardcoded.
+ *
+ * ⚠ FAVORITES IS REAL (Samuel, 2026-08-19), superseding the keep-hardcoded
+ * ruling for THIS section only — the Assistant / Drafts / Saved-items nav rows
+ * above it are still `fixtures.ts` furniture. Four properties, each of which a
+ * redesign would lose quietly:
+ *
+ *  1. **A FAVOURITE IS A SHORTCUT, NOT A MOVE — Slack semantics.** A favourited
+ *     channel renders HERE *and* in its normal section below, and the two rows
+ *     select the same channel. It is the same channel seen twice, deliberately:
+ *     a favourite that hid the row from the tree would make the tree lie about
+ *     what the workspace contains, and would move rows around under people who
+ *     favourite by muscle memory.
+ *  2. **SAME ROW ANATOMY as the sections below** — `ChannelRow`, so a DM's
+ *     favourite is its peer's face and a channel's is the hash tile, and the
+ *     unread dot rides along. A second row face would be a second answer to
+ *     "what does a channel look like in this column".
+ *  3. **ORDERED BY NAME**, not by `favoritedAt` and not by the list's own
+ *     recency. A shortcut list is used by POINTING, and alphabetical is the only
+ *     order that never reorders under traffic. (The column stores WHEN anyway —
+ *     see the migration; a boolean could not be turned into an order later.)
+ *  4. **NO FAVOURITES → NO SECTION HEADER AT ALL.** Unlike the two sections
+ *     below, which always say "No channels yet.", an empty Favorites section is
+ *     not a fact worth a line: favouriting is optional organisation, and a
+ *     header for a feature you have never used is noise in the one column that
+ *     has to stay scannable. ⚠ THE FILTER IS THE EXCEPTION and it is the same
+ *     two-different-facts rule the sections below follow: a query that empties a
+ *     section which HAS rows keeps its header and says `SIDEBAR_NO_MATCHES`,
+ *     because "you have no favourites" and "none of them match what you typed"
+ *     are opposite claims that look identical as a blank space.
  */
 
 import { useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { SearchField } from "@/shared/ui/search-field";
 import { IconButton, NewPill, SectionHeader } from "./bits";
-import { ChannelRow, NavRow, SidebarRow, ThreadRow } from "./sidebar-rows";
-import { IconTile } from "./bits";
-import {
-  HARDCODED_FAVORITE_ROWS,
-  HARDCODED_NAV_ROWS,
-  INBOX_NAV_ROW,
-} from "./fixtures";
+import { ChannelRow, NavRow, ThreadRow } from "./sidebar-rows";
+import { HARDCODED_NAV_ROWS, INBOX_NAV_ROW } from "./fixtures";
 import {
   channelDisplayName,
   channelDisplayPeerPerson,
@@ -130,6 +154,13 @@ export function ChannelsV2Sidebar({
   // two `.filter()` calls would let the guard and the list disagree.
   const directShown = direct.filter(matches);
   const roomsShown = rooms.filter(matches);
+  // FAVORITES — a partition of the SAME two lists, never a third read: DMs and
+  // channels both, ordered by name (see the docblock). `localeCompare` rather
+  // than `<`, so accented and non-ASCII names sort where a reader expects.
+  const favorites = [...direct, ...rooms].filter((c) => c.myFavoritedAt !== null);
+  const favoritesShown = favorites
+    .filter(matches)
+    .sort((a, b) => name(a).localeCompare(name(b)));
 
   const branch = (channel: Channel) => (
     <ChannelBranch
@@ -201,24 +232,47 @@ export function ChannelsV2Sidebar({
           />
         </nav>
 
-        <SectionHeader
-          title="Favorites"
-          open={!collapsed.has("favorites")}
-          onToggle={() => toggle("favorites")}
-        />
-        {!collapsed.has("favorites") && (
-          <div className="flex flex-col gap-px px-2">
-            {/* HARDCODED — no backing data yet (Samuel 2026-08-18). Favourites
-                are a client-side preference with no column and no local store. */}
-            {HARDCODED_FAVORITE_ROWS.map(({ id, label, icon: Icon }) => (
-              <SidebarRow key={id} label={label}>
-                <IconTile>
-                  <Icon size={14} />
-                </IconTile>
-                <span className="truncate">{label}</span>
-              </SidebarRow>
-            ))}
-          </div>
+        {/* ⚠ THE WHOLE SECTION IS ABSENT WITH NO FAVOURITES — header included.
+            The guard reads the UNFILTERED list, which is what keeps the header
+            standing (and saying "No matches.") when a query emptied a section
+            that does have rows. */}
+        {favorites.length > 0 && (
+          <>
+            <SectionHeader
+              title="Favorites"
+              open={!collapsed.has("favorites")}
+              onToggle={() => toggle("favorites")}
+            />
+            {!collapsed.has("favorites") && (
+              <div className="flex flex-col gap-px px-2">
+                {/* No thread nesting here, and that is not an omission: a
+                    favourite is a SHORTCUT to a channel, and the tree that
+                    nests threads is the one below. Selection still lights up,
+                    so the open channel is visibly the open one in both places. */}
+                {favoritesShown.map((channel) => (
+                  <ChannelRow
+                    key={channel.id}
+                    label={name(channel)}
+                    person={channelDisplayPeerPerson(
+                      channel,
+                      members,
+                      currentUserId
+                    )}
+                    selected={
+                      channel.id === selectedChannelId &&
+                      !threadSelected &&
+                      !inboxOpen
+                    }
+                    unread={channel.unread}
+                    onSelect={() => onSelectChannel(channel.id)}
+                  />
+                ))}
+                {favoritesShown.length === 0 && (
+                  <EmptyRow label={SIDEBAR_NO_MATCHES} />
+                )}
+              </div>
+            )}
+          </>
         )}
 
         <SectionHeader
