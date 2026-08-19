@@ -183,13 +183,15 @@ describe("knowledge home stars", () => {
     await screen.findByRole("article", { name: "Product specs" });
     expect(order()).toEqual(["Product specs", "Sales playbook"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Star Sales playbook" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Bookmark Sales playbook" })
+    );
 
     await waitFor(() => {
       expect(order()).toEqual(["Sales playbook", "Product specs"]);
     });
     expect(
-      screen.getByRole("button", { name: "Unstar Sales playbook" })
+      screen.getByRole("button", { name: "Remove bookmark from Sales playbook" })
     ).toHaveAttribute("aria-pressed", "true");
     expect(paths()).toContain("/api/knowledge/bases/base-b/star");
 
@@ -208,7 +210,9 @@ describe("knowledge home stars", () => {
     renderAt(`/${SEGMENT}/knowledge`);
     await screen.findByRole("article", { name: "Product specs" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Star Sales playbook" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Bookmark Sales playbook" })
+    );
     await waitFor(() => {
       expect(order()).toEqual(["Sales playbook", "Product specs"]);
     });
@@ -222,7 +226,7 @@ describe("knowledge home stars", () => {
       expect(order()).toEqual(["Product specs", "Sales playbook"]);
     });
     expect(
-      screen.getByRole("button", { name: "Star Sales playbook" })
+      screen.getByRole("button", { name: "Bookmark Sales playbook" })
     ).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("article", { name: "Sales playbook" }).textContent)
       .toContain("2 entries");
@@ -232,7 +236,9 @@ describe("knowledge home stars", () => {
     const router = renderAt(`/${SEGMENT}/knowledge`);
     await screen.findByRole("article", { name: "Sales playbook" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Star Sales playbook" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Bookmark Sales playbook" })
+    );
 
     await waitFor(() => {
       expect(paths()).toContain("/api/knowledge/bases/base-b/star");
@@ -246,7 +252,9 @@ describe("knowledge home stars", () => {
     await screen.findByRole("article", { name: "Product specs" });
     const before = screen.getAllByRole("tab").map((t) => t.textContent);
 
-    fireEvent.click(screen.getByRole("button", { name: "Star Sales playbook" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Bookmark Sales playbook" })
+    );
 
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(before);
   });

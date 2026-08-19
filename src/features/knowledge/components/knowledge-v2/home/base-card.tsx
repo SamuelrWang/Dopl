@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Star } from "lucide-react";
+import { ArrowRight, Bookmark } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { kbScope, type KbScope } from "../../../scope";
 import type { KnowledgeBase, KnowledgeBaseStats } from "../../../types";
@@ -26,16 +26,17 @@ interface Props {
 /**
  * One knowledge base on the home grid.
  *
- * ⚠ Container is an `<article>`, NOT a `<button>` — the star and Open must be
- * sibling controls; `<button>` inside `<button>` is invalid HTML and browsers
+ * ⚠ Container is an `<article>`, NOT a `<button>` — the bookmark and Open must
+ * be sibling controls; `<button>` inside `<button>` is invalid HTML and browsers
  * reparent the inner one out of the card. Contracts that must hold:
  *
- *   - ONE keyboard Open action (the Open button). Tab order: star, then Open.
+ *   - ONE keyboard Open action (the Open button). Tab order: bookmark, then
+ *     Open.
  *   - Container `onClick` is a MOUSE duplicate of Open; both real buttons stop
  *     propagation so one click fires exactly one thing.
  *   - `aria-label` names every control by its base — otherwise the grid is N
  *     buttons all called "Open".
- *   - `aria-pressed` on the star: it's a toggle, state must be in the a11y
+ *   - `aria-pressed` on the bookmark: it's a toggle, state must be in the a11y
  *     tree, not only the fill colour.
  */
 /** Binds `--kv-scope` (see `.card` in the module) to this base's hue. ⚠ Applied
@@ -99,12 +100,19 @@ export function BaseCard({
         </div>
 
         <div className={styles.cardFoot}>
+          {/* ⚠ Icon and COPY are Bookmark — one save affordance across the app,
+              matching channels (`channels-v2/message-pane.tsx`, lucide
+              `Bookmark` at size 14). The DATA verb stays "star"
+              (`onToggleStar`, `/knowledge/bases/[baseId]/star`): that is the
+              route/service vocabulary and it did not change with the icon. */}
           <button
             type="button"
             className={cn(styles.cardStar, starred && styles.cardStarOn)}
             aria-pressed={starred}
             aria-label={
-              starred ? `Unstar ${base.name}` : `Star ${base.name}`
+              starred
+                ? `Remove bookmark from ${base.name}`
+                : `Bookmark ${base.name}`
             }
             onClick={(e) => {
               // ⚠ Else the card's onClick opens the base under the toggle.
@@ -112,10 +120,10 @@ export function BaseCard({
               onToggleStar(base.id, !starred);
             }}
           >
-            <Star
+            <Bookmark
               size={14}
-              // Fill is the state; outline always drawn so the size does not
-              // change between states.
+              // Fill is the state — a filled bookmark reads as saved; outline
+              // always drawn so the size does not change between states.
               fill={starred ? "currentColor" : "none"}
               aria-hidden="true"
             />

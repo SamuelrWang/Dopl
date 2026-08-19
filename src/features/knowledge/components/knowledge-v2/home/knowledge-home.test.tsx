@@ -92,7 +92,8 @@ function renderHome(
 }
 
 /** Container is an `<article>` labelled by base name; controls are
- *  `Open {name}` / `Star {name}`, so a BUTTON role+name query is ambiguous. */
+ *  `Open {name}` / `Bookmark {name}`, so a BUTTON role+name query is
+ *  ambiguous. */
 function card(name: string) {
   return screen.getByRole("article", { name });
 }
@@ -185,7 +186,7 @@ describe("KnowledgeHome grid", () => {
     renderHome();
     const specs = card("Product specs");
     const [star, open] = within(specs).getAllByRole("button");
-    expect(star.getAttribute("aria-label")).toBe("Star Product specs");
+    expect(star.getAttribute("aria-label")).toBe("Bookmark Product specs");
     expect(open.getAttribute("aria-label")).toBe("Open Product specs");
     expect(star.getAttribute("tabindex")).toBeNull();
     expect(open.getAttribute("tabindex")).toBeNull();
@@ -247,10 +248,14 @@ describe("KnowledgeHome stars", () => {
     // `aria-pressed` makes this a TOGGLE; the label names the ACTION.
     renderHome({ starredBaseIds: ["kb-2"] });
 
-    const unstarred = screen.getByRole("button", { name: "Star Product specs" });
+    const unstarred = screen.getByRole("button", {
+      name: "Bookmark Product specs",
+    });
     expect(unstarred.getAttribute("aria-pressed")).toBe("false");
 
-    const starred = screen.getByRole("button", { name: "Unstar Runbooks" });
+    const starred = screen.getByRole("button", {
+      name: "Remove bookmark from Runbooks",
+    });
     expect(starred.getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -258,10 +263,14 @@ describe("KnowledgeHome stars", () => {
     // Sends the END state (route verbs are idempotent) and stops propagation.
     const props = renderHome({ starredBaseIds: ["kb-2"] });
 
-    fireEvent.click(screen.getByRole("button", { name: "Star Product specs" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Bookmark Product specs" })
+    );
     expect(props.onToggleStar).toHaveBeenCalledWith("kb-1", true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Unstar Runbooks" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove bookmark from Runbooks" })
+    );
     expect(props.onToggleStar).toHaveBeenCalledWith("kb-2", false);
 
     expect(props.onOpenBase).not.toHaveBeenCalled();
