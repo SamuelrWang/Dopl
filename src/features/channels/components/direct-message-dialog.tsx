@@ -154,13 +154,15 @@ export function DirectMessageDialog({
 
         {error && <p className="text-caption text-danger">{error}</p>}
 
-        <button
-          type="button"
-          onClick={close}
-          className="h-10 rounded-[9px] text-body font-medium text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
-        >
-          Cancel
-        </button>
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={close}
+            className="auth-btn-3d-light h-10 rounded-[9px] px-4 text-body font-medium text-text-primary"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </ModalShell>
   );

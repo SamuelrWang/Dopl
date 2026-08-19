@@ -284,14 +284,16 @@ export function InviteDialog({
           </ul>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-[9px] text-body font-medium text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
-        >
-          <Check size={14} />
-          Done
-        </button>
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="auth-btn-3d-light flex h-10 items-center justify-center gap-1.5 rounded-[9px] px-4 text-body font-medium text-text-primary"
+          >
+            <Check size={14} />
+            Done
+          </button>
+        </div>
       </div>
 
       {/* SELF-REMOVAL STAYS ON THIS ROW rather than routing to the pane's
