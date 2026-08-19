@@ -148,7 +148,7 @@ function reopenByTask(a) {
 // ⚠ OWN AGENTS ONLY, AND THAT IS FREE HERE RATHER THAN ENFORCED. The registry holds only
 // sessions THIS machine is running for THIS operator, so a key that resolves is by construction
 // the caller's own. There is no cross-machine control op and this is not the seam to add one:
-// a peer's paused agent is rendered from PRESENCE on the reading side (MAPPING.md), never
+// a peer's paused agent is rendered from PRESENCE on the reading side (INVARIANTS §11), never
 // driven from here.
 // ⚠ RESOLVED BY (channel, thread) like `reopenByTask`, never by `sessionId` — that id is
 // ephemeral across a park+recreate and is a React key on the wire, not an address.

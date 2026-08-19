@@ -8,7 +8,8 @@
  * Every card is one live entry from this machine's own session projection —
  * `agents-model.ts`, over `spa-bridge.ts › DesktopSessionSummary` — including
  * the context and token numbers, which the desktop measures and the server
- * stores none of (MAPPING.md § Agents tab).
+ * stores none of (INVARIANTS §5's Agents-tab bullet; the ruling arrived in the
+ * port's intent doc, deleted at the Phase 12 cutover).
  *
  * It is an OPERATOR surface, not a roster, and that is structural: the feed IS
  * one machine's own registry, so another member's agent cannot appear here.

@@ -2,8 +2,9 @@
 
 /**
  * Channels v2 — THE CHANNEL-MANAGEMENT SURFACE, carried over WHOLESALE at the
- * cutover (MAPPING.md § Q&A second round: "channel management maps over
- * wholesale — create, invite, visibility, delete, folders").
+ * cutover — INVARIANTS §5 records the ruling ("channel management maps over
+ * wholesale — create, invite, visibility, delete, folders", second round of the
+ * port's intent doc, deleted with the mock folder at that cutover).
  *
  * ⚠ THIS FILE EXISTS BECAUSE THE OLD PAGE'S HEADER WAS THE ONLY ENTRY POINT TO
  * FIVE LIVE CONTROLS. `channels-view-core.tsx` and `channel-pane.tsx` were

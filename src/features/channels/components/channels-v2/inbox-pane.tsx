@@ -4,8 +4,9 @@
  * Channels v2 — THE INBOX, in the center column: every request that is waiting
  * on THIS viewer, each one as a launch panel (`components/launch-panel.tsx`).
  *
- * It lives behind the sidebar's Inbox nav row (MAPPING.md § Q&A, second round:
- * "consent inbox lives in the sidebar Inbox nav row"), whose badge has counted
+ * It lives behind the sidebar's Inbox nav row (a second-round ruling in the
+ * port's intent doc, deleted at the Phase 12 cutover: "consent inbox lives in
+ * the sidebar Inbox nav row"), whose badge has counted
  * these same rows since Phase 2. Phase 8 gives the count somewhere to go.
  *
  * ⚠ THIS IS THE ADDRESSEE'S SIDE, and it is the only side that exists. A

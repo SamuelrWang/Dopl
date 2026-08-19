@@ -10,7 +10,7 @@
  * unmeasured metric is `null` and the UI renders its ABSENCE (INVARIANTS §11 —
  * UNKNOWN is not EMPTY).
  *
- * THE SOURCE IS LOCAL RUNTIME STATE, NOT A TABLE (MAPPING.md § Agents tab).
+ * THE SOURCE IS LOCAL RUNTIME STATE, NOT A TABLE (INVARIANTS §5).
  * `spa-bridge.ts › DesktopSessionSummary` over `sessions.summaries` /
  * `sessions.onSummaries`, projected by `dopl-desktop-app/main/session-summary.js`.
  * The server stores none of it: `session-state-push.js › rowFor` picks the
@@ -234,7 +234,7 @@ export type AgentControl = "pause" | "end";
  * ⚠ OWN AGENTS ONLY, and there is no other kind reachable from here: the ops
  * resolve `(channelId, taskId)` against MAIN'S OWN session registry, which holds
  * nothing but this operator's sessions on this machine. Nobody pauses another
- * member's agent (MAPPING.md, Samuel's ruling) — a peer's paused agent reads as
+ * member's agent (Samuel's ruling, INVARIANTS §11) — a peer's paused agent reads as
  * inactive/offline PRESENCE on their side, never as a stalled thread.
  *
  * ⚠ NEITHER OP TOUCHES A THREAD. `end` ends the AGENT; a thread has no finished

@@ -112,7 +112,8 @@ export function ChannelRow({
  * thread (`view-model-requested.ts › requestedThreadIds`, off the consent inbox
  * the page already reads). `Bot` = everything else: an agent is party to it.
  * Same shape as the card's `PendingChip`, so one glyph means "waiting on
- * approval" in both columns (MAPPING.md § Sidebar glyph legend).
+ * approval" in both columns (the port's intent doc § Sidebar glyph legend,
+ * deleted at the Phase 12 cutover).
  *
  * ⚠ `requested` is the VIEWER's own state and cannot be anybody else's — a
  * consent read is scoped to `(operator, workspace)` (INVARIANTS §6). A thread

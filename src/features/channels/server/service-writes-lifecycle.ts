@@ -14,7 +14,9 @@ import type { ChannelContext } from "./service-shared";
  * The three kinds that STATE A RUNTIME FACT — session started / finished /
  * failed — and are therefore not an agent's to post. ⚠ `task_progress` is absent
  * on purpose: it claims nothing about a lifecycle, its body is the one `task_*`
- * body a renderer shows (`splitSessionEntries`), and it is the milestone lane.
+ * body a renderer shows, and it is the milestone lane. (⚠ The reader that used
+ * to say so, `splitSessionEntries`, was deleted with the session card in wiring
+ * plan Phase 5, 2026-08-18; the body is still rendered — INVARIANTS §5.)
  */
 export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
   "task_started",

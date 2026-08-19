@@ -1,8 +1,10 @@
 /**
  * Channels v2 — the HARDCODED design furniture that survived the port.
  *
- * ⚠ Samuel's ruling, 2026-08-18 (wiring plan § Risks 9, MAPPING.md fourth
- * round): the activity heatmap, Linked threads, Favorites and the
+ * ⚠ Samuel's ruling, 2026-08-18 (wiring plan § Risks 9; fourth round of the
+ * port's intent doc, deleted at the Phase 12 cutover — the live statement is
+ * INVARIANTS §5's hardcoded-furniture bullet): the activity heatmap,
+ * Linked threads, Favorites and the
  * Assistant / Drafts / Saved-items nav rows keep their mock UI through the
  * wiring. They have **no backing data of any kind** — not an empty table, not a
  * nullable column: nothing anywhere projects them. They are wired later as
@@ -41,7 +43,8 @@ export interface NavRowSpec {
  * HARDCODED — no backing data yet (Samuel 2026-08-18).
  *
  * ⚠ The INBOX row is NOT in this list. It is the consent inbox
- * (MAPPING.md § Q&A rulings, second round) and its badge is a real count off
+ * (a second-round ruling in the port's intent doc, deleted at the cutover —
+ * INVARIANTS §7) and its badge is a real count off
  * `use-consent-inbox`, so the sidebar renders it separately rather than letting
  * it ride along with three rows that stand for nothing.
  */
@@ -69,7 +72,7 @@ export interface FavoriteRowSpec {
 /**
  * HARDCODED — no backing data yet (Samuel 2026-08-18).
  * Favourites are a client-side preference with no column and no local store
- * (MAPPING.md § Sidebar).
+ * (the port's intent doc § Sidebar, deleted at the cutover — INVARIANTS §5).
  */
 export const HARDCODED_FAVORITE_ROWS: FavoriteRowSpec[] = [
   { id: "fav-design", label: "Design system", icon: Hash },

@@ -95,10 +95,11 @@ export function AgentChip({ className }: { className?: string }) {
  * ⚠ TRUE IN ONE DIRECTION ONLY. A consent read is scoped to
  * `(operator, workspace)`, so this can only ever say "YOU have not answered" —
  * never "your addressee has not answered". A requester's own card carries no
- * chip, and that is a missing projection, not a settled request (F-203).
+ * chip, and that is a missing projection, not a settled request (F-206).
  *
  * `Clock`, matching the sidebar's thread glyph: one shape means "waiting on
- * approval" in both columns (MAPPING.md § Sidebar glyph legend).
+ * approval" in both columns (the port's intent doc § Sidebar glyph legend,
+ * deleted at the Phase 12 cutover).
  */
 export function PendingChip({ className }: { className?: string }) {
   return (

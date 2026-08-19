@@ -48,8 +48,10 @@ function setWindowMode(v) {
 // request opened a window per thread the instant it arrived — before anyone had
 // looked at it — and the notification click opened another. The new default is
 // the opposite: the notification FOCUSES the main app and navigates to the
-// channel, where the Inbox's launch panel is the decision surface (MAPPING.md
-// § Wiring intent, "Windowing inverts").
+// channel, where the Inbox's launch panel is the decision surface. The ruling
+// ("windowing inverts") arrived in the port's intent doc, which was migrated
+// into INVARIANTS/ENGINEERING and deleted at the Phase 12 cutover — the live
+// statement is INVARIANTS §11.
 //
 // ⚠ THIS IS A DIFFERENT SWITCH FROM `getWindowMode()` AND MUST STAY ONE. That
 // one governs the OPERATOR'S OWN RUNS — the live session window, the tray's

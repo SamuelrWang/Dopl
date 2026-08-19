@@ -13,7 +13,8 @@
  * Why it is a panel and not a tab: the thread transcript is party-to-party
  * traffic, and much of what an agent does is addressed to its OPERATOR rather
  * than to the thread. That lane needs somewhere to live, and it is not the
- * transcript (MAPPING.md § Agents tab & the agent view).
+ * transcript (INVARIANTS §5's Agents-tab bullet; the ruling arrived in the
+ * port's intent doc, deleted at the Phase 12 cutover).
  *
  * ⚠ THE MOCK DREW THREE LANES. ONE OF THEM HAS A BACKING TODAY, AND THIS PANEL
  * SHOWS ONLY THAT ONE:
@@ -26,7 +27,7 @@
  *     (`session:event`), which this renderer is not on; the summaries feed
  *     carries a coarse state and no history. Fabricating a line here would be a
  *     claim about work a real machine did or did not do — worse than an absent
- *     lane, and exactly what MAPPING.md's "dropped rather than faked" rules out.
+ *     lane, and exactly what "dropped rather than faked" rules out (INVARIANTS §5).
  *  3. **The direct 1:1 lane** (me ↔ this agent, out of band) — ❌ NOT BUILT.
  *     There is no transport for it: a channel post is not out-of-band, and the
  *     desktop's own steer is bound to the session window's sender. Filed as

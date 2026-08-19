@@ -12,8 +12,10 @@
  */
 /**
  * ONE LIVE SESSION as the desktop projects it — wire shape emitted by
- * `dopl-desktop-app/main/session-summary.js`. Channel-pane SESSION PILLS render
- * from these.
+ * `dopl-desktop-app/main/session-summary.js`. **The AGENTS TAB renders from
+ * these** (`components/channels-v2/agents-tab.tsx` over `› agents-model.ts`,
+ * INVARIANTS §5). ⚠ It used to be the channel pane's session pills; those and
+ * `channel-pane.tsx` were deleted in wiring plan Phase 5 / the Phase 12 cutover.
  *
  * ⚠ `state` is three-valued: "thinking" needs `includePartialMessages`, which is
  * off, so it can never be derived. `taskId` is the wire spelling of THREAD, and

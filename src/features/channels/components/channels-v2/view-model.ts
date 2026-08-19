@@ -88,11 +88,11 @@ function isLifecycleKind(message: ChannelMessage): boolean {
  * for storing the flag — so it renders.
  *
  * Still nothing, and the line is drawn at the KIND: **`task_started` always**
- * (run state lives in the Agents tab, MAPPING.md § Q&A rulings), and a terminal
- * row with no calm flag AND no body (a bare state transition, nothing human in
- * it). The derivation is `lib/message-receipt.ts › lifecycleReceiptStatus` — the
- * receipt VOCABULARY the retired page already spoke, so there is one spelling of
- * "Declined" rather than two.
+ * (run state lives in the Agents tab — INVARIANTS §5; the ruling arrived in the
+ * port's intent doc, deleted at the Phase 12 cutover), and a terminal row with
+ * no calm flag AND no body (a bare state transition, nothing human in it). The
+ * derivation is `lib/message-receipt.ts › lifecycleReceiptStatus` — the receipt
+ * VOCABULARY the retired page spoke, so "Declined" has one spelling, not two.
  */
 function toReceiptRow(
   message: ChannelMessage,
@@ -115,7 +115,7 @@ function toReceiptRow(
 }
 
 /** Which side of the transcript a row hangs on. An agent hangs on its
- *  operator's side — never in a third column (MAPPING.md § Message alignment). */
+ *  operator's side — never in a third column (INVARIANTS §5). */
 export type MessageSide = "peer" | "me";
 
 export interface MessageRow {

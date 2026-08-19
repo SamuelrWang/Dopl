@@ -4,7 +4,8 @@
  *
  *  - **NO STATUS FILTER.** The mock's Active/Inactive `SegmentedControl` did not
  *    survive the port — threads never close, so activity ordering replaced it
- *    (MAPPING.md third round).
+ *    (a third-round ruling in the port's intent doc, deleted at the cutover —
+ *    INVARIANTS §5).
  *  - **THE SERVER'S ORDER IS RENDERED VERBATIM.** The read is clipped against
  *    that order, so a re-sort here is the wrong rows in a plausible order
  *    (INVARIANTS §5).

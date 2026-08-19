@@ -41,7 +41,11 @@
 --   ⚠ The proposal exclusion is inherited, not re-argued. Close proposals are
 --   retired in Phase 4 of the wiring plan, at which point the predicate goes
 --   inert here and `channel_tasks_stale` loses its only caller — see
---   docs/REFACTOR-FINDINGS.md F-201 for what merges then.
+--   docs/REFACTOR-FINDINGS.md F-207 for what merges then.
+--   ⚠ CORRECTED 2026-08-18 (fix wave 3): this line read F-201 until now. Written
+--   at Phase 1, it GUESSED the id Phase 4 would file and guessed wrong — F-201 is
+--   the SPA sidebar's consent poll, a different finding entirely. Comment-only;
+--   the SQL below is byte-identical, so replay is unaffected (INVARIANTS §12).
 --
 -- ── COST ────────────────────────────────────────────────────────────────────
 -- The lateral is answered from `channel_messages_thread_activity_idx`

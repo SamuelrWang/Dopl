@@ -80,5 +80,7 @@ The four that are routinely forgotten, because none of them is a test suite:
 4. `npx tsx scripts/check-knowledge-type-drift.ts` — knowledge types, server vs SDK.
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
-green.** Neither lint step sets `--max-warnings`, so CI fails on errors, not warnings — both trees
-measured 0/0 on 2026-08-11, but nothing enforces that.
+green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new
+warning fails CI; the DESKTOP one runs a bare `npm run lint`, so only a new error does. Both trees
+measured 0/0 on 2026-08-11 — the root zero is enforced, the desktop zero is not. Full table:
+docs/INVARIANTS.md §14.

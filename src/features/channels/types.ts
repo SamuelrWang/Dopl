@@ -163,9 +163,13 @@ export type ConsentDecisionSurface = "web" | "desktop";
 export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
 
 /**
- * SESSION PILL STATE. The three states desktop `session-summary.js` reduces
+ * SESSION RUN STATE. The three states desktop `session-summary.js` reduces
  * every engine phase/activity to, and the ONLY vocabulary session state is ever
- * reported in — over IPC to the pills, over MCP to an external agent.
+ * reported in — over IPC to the **Agents tab** (`components/channels-v2/
+ * agents-tab.tsx`, INVARIANTS §5), over MCP to an external agent. ⚠ The TYPE
+ * name is still `SessionPillState` and the desktop reducer's is still
+ * `pillState`: the web's session PILLS were deleted in wiring plan Phase 5
+ * (2026-08-18) and the names outlived them on the desktop side.
  *
  * ⚠ No `thinking` state, and NOT because streaming is off (F-146 corrected that
  * wrong reason in four places) — `session-chrome.js#thinkingVisible` renders a

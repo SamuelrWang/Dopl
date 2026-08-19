@@ -33,9 +33,10 @@ function setHandlers(h) {
 // ONE DESTINATION FOR EVERY PRODUCER, deliberately. Three call sites reach here
 // — the inbound REQUEST notification (trigger.js), the silent FYI (trigger.js
 // › sendFyi) and the passive task-reply notice (task-notify.js) — and the
-// per-kind alternative would be the Inbox for requests only. MAPPING.md's ruling
-// names the channel first ("auto-navigates to the channel/DM where the request
-// was made"), the Inbox is WORKSPACE-WIDE by construction and would discard the
+// per-kind alternative would be the Inbox for requests only. The ruling names
+// the channel first ("auto-navigates to the channel/DM where the request was
+// made" — the port's intent doc, deleted at the Phase 12 cutover; the live
+// statement is INVARIANTS §11), the Inbox is WORKSPACE-WIDE by construction and would discard the
 // one fact the notification carried, and `entry` does not distinguish the kinds
 // anyway. The sidebar's Inbox badge is visible the moment the operator lands.
 //

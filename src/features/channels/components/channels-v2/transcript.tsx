@@ -5,7 +5,7 @@
  *
  * Authorship is a SIDE, not a style: peers left, the viewer right, and an agent
  * hangs on its OPERATOR's side with an "Agent" chip beside the name — never in
- * a third column (MAPPING.md § Message alignment).
+ * a third column (INVARIANTS §5).
  *
  * ⚠ THE SIDE COMES FROM `author_user_id`, NEVER FROM `authorKind`.
  * `authorKind` is CALLER-ASSERTABLE — an explicit body value wins over
@@ -238,7 +238,7 @@ function Message({
  * projection, and a consent read is scoped to `(operator, workspace)` with the
  * operator always `ctx.userId` (INVARIANTS §6) — so the REQUESTER cannot see
  * their addressees' decisions at all, and "no pending row" would report
- * never-asked as approved. Filed as REFACTOR-FINDINGS F-203; the pill states the
+ * never-asked as approved. Filed as REFACTOR-FINDINGS F-206; the pill states the
  * party and nothing else until a projection exists.
  *
  * ⚠ What IS derivable is the mirror image: a thread addressed to the VIEWER

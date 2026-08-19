@@ -4,7 +4,8 @@
  * Channels v2 — CENTER COLUMN: breadcrumb header, the transcript and the
  * composer card.
  *
- * TWO views over one column (MAPPING.md § the center-pane state machine):
+ * TWO views over one column (the port's intent doc § the center-pane state
+ * machine, deleted at the Phase 12 cutover — INVARIANTS §5):
  *
  * - **Channel view** (`thread === null`) — the channel's own posts plus one
  *   card per thread, crumb `# <channel>`.

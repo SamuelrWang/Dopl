@@ -22,7 +22,8 @@ import type {
  * `requested` state, derived rather than stored.
  *
  * There is no `requested` status on `channel_tasks` and there never was
- * (MAPPING.md § New agent thread). Server-side the state is: a thread whose
+ * (the port's intent doc § New agent thread, deleted at the Phase 12 cutover —
+ * INVARIANTS §5). Server-side the state is: a thread whose
  * addressee's machine raised a consent request that is still `pending`
  * (INVARIANTS §6). This joins the two reads the page already has — the consent
  * inbox and the transcript — on the one column that links them, the triggering
@@ -34,7 +35,7 @@ import type {
  * addressee has answered — no projection exposes that, and inventing one from
  * "no pending row" would report never-asked as approved. So this returns the
  * threads addressed TO the viewer, and a request the viewer SENT carries no
- * requested state at all. See REFACTOR-FINDINGS F-203.
+ * requested state at all. See REFACTOR-FINDINGS F-206.
  *
  * ⚠ Matched on `(channelId, messageSeq)`, not on `messageSeq` alone. `seq` is
  * globally unique today (INVARIANTS §5), so the channel is redundant — and it

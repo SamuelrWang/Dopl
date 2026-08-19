@@ -200,8 +200,8 @@ async function handleTrigger(entry, m) {
   // notification; the poke below makes the watcher resolve it at once. A pending
   // row gets the Allow/Dismiss notification — Dismiss PARKS (stays pending).
   if (!created.status || created.status === 'pending') {
-    // PHASE 9 — THE PRE-CONSENT WINDOW IS NO LONGER THE DEFAULT (wiring plan §9,
-    // MAPPING.md "Windowing inverts"). Item 8 opened this window IMMEDIATELY on every
+    // PHASE 9 — THE PRE-CONSENT WINDOW IS NO LONGER THE DEFAULT (wiring plan §9;
+    // the "windowing inverts" ruling, INVARIANTS §11). Item 8 opened this window IMMEDIATELY on every
     // inbound request: a new window per thread, minted before anyone had looked at the
     // request. The default is now the inversion — nothing is minted here, the native
     // notification fires, and CLICKING it focuses the main app on the channel, where

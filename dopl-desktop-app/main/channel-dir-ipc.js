@@ -239,7 +239,7 @@ function register(opts = {}) {
   // direction of a forged call is an agent that stops, which is the safe one.
   // ⚠ There is no cross-machine control here and there must not be: the registry holds only
   // this operator's own sessions, so an unresolvable key answers { ok: false } rather than
-  // reaching for anything else. Pause/end is own-agents-only (MAPPING.md, Samuel's ruling).
+  // reaching for anything else. Pause/end is own-agents-only (Samuel's ruling, INVARIANTS §11).
   // ⚠ THE BODY IS SHARED, THE WRAPPING IS NOT. `appWindowOnly(...)` appears literally at each
   // `ipcMain.handle` call below, because test/channel-ipc-sender.test.mjs's structural belt
   // reads exactly that shape — every registered handler must be visibly sender-bound at its

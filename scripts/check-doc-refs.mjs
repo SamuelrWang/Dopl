@@ -72,6 +72,21 @@
 //       still fires the moment a named file is deleted or renamed, which is the
 //       failure that actually happened.
 //
+//   (d) FINDING IDS IN SOURCE — every `F-NNN` mention in the SOURCE trees
+//       (`src/`, `packages/*/src`, `apps/`, `dopl-desktop-app/`, `scripts/`,
+//       `supabase/`) must resolve exactly as class (b) requires inside `docs/`.
+//       ADDED 2026-08-18 (F-224), after a review found five source files citing
+//       `F-203` where they meant `F-206` and this script had never looked
+//       outside `docs/`. **STATE THE CEILING, because it is the same ceiling
+//       (b) has: this catches a DANGLING id, never a MIS-CITED one.** `F-203`
+//       is a live entry, so those five would have passed even under this class
+//       — what it catches is the id that resolves to nothing at all, which is
+//       the failure that rots silently when an entry is deleted as resolved.
+//       Measured at the time it was added: 208 source files carry an `F-NNN`
+//       and every id in them resolved, so this went in green rather than with
+//       a backlog. `dist/` is skipped here (and only here) — the committed
+//       build output is generated, so an id in it is not a claim anybody wrote.
+//
 //   (b) FINDING IDS — every `F-NNN` mention in `docs/*.md` must resolve to
 //       either a live `### F-NNN:` heading in REFACTOR-FINDINGS.md, or a
 //       mention inside that file's HEADER BLOCK (everything above its first
@@ -141,7 +156,22 @@ const KNOWN_DEAD_REFS = new Set([
   'docs/LAUNCH-READINESS-ROADMAP.md::skills-trash-modal.tsx:174',
 ]);
 
-const SOURCE_EXT = 'ts|tsx|mts|cts|js|jsx|mjs|cjs|sql';
+// `md` joined 2026-08-18 (F-224). A doc that names another doc with a line
+// number or a `›` anchor rots exactly like one naming a `.ts` file, and this
+// list was the only reason those went unchecked. It changes classes (a) and (c)
+// only. ⚠ It does NOT catch a BARE path with no `:NNN` and no `›` — 42 live
+// citations of a deleted `MAPPING.md` passed this script for that reason, and
+// bare-path checking is deliberately still not a class: `a MAPPING.md next to
+// it` is prose, and a checker with false failures gets switched off.
+const SOURCE_EXT = 'ts|tsx|mts|cts|js|jsx|mjs|cjs|sql|md';
+
+// Class (d)'s roots: where a `F-NNN` in a COMMENT is a claim somebody wrote.
+// `docs/` is absent because classes (a)–(c) already own it.
+const SOURCE_ID_ROOTS = ['src', 'packages', 'apps', 'dopl-desktop-app', 'scripts', 'supabase'];
+const SOURCE_ID_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|sql)$/;
+// Generated output carries whatever its source carried; an id in it is not a
+// second claim. This is the one place `dist/` is skipped (see SKIP_DIRS above).
+const SOURCE_ID_SKIP = new Set([...SKIP_DIRS, 'dist']);
 
 // The leading lookbehind blocks a match that starts mid-token: it keeps
 // `index.d.ts:69` whole instead of matching the `d.ts:69` tail, and it lets a
@@ -273,6 +303,40 @@ function main() {
   const badFileRefs = [];
   const badIds = [];
   const badAnchors = [];
+  const badSourceIds = [];
+  let sourceIdRefCount = 0;
+  let sourceFileCount = 0;
+
+  /** Class (d): every `F-NNN` in a source comment resolves, same rule as (b). */
+  const walkSourceIds = (dir, rel) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      if (SOURCE_ID_SKIP.has(entry.name)) continue;
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walkSourceIds(path.join(dir, entry.name), childRel);
+      } else if (entry.isFile() && SOURCE_ID_EXT.test(entry.name)) {
+        sourceFileCount += 1;
+        const src = fs.readFileSync(path.join(dir, entry.name), 'utf8').split('\n');
+        src.forEach((line, i) => {
+          for (const m of line.matchAll(F_ID_RE)) {
+            sourceIdRefCount += 1;
+            const id = Number(m[1]);
+            if (!liveIds.has(id) && !recordedIds.has(id)) {
+              badSourceIds.push({ doc: childRel, line: i + 1, id: `F-${m[1]}` });
+            }
+          }
+        });
+      }
+    }
+  };
+  for (const root of SOURCE_ID_ROOTS) walkSourceIds(path.join(REPO_ROOT, root), root);
   let fileRefCount = 0;
   let idRefCount = 0;
   let anchorCount = 0;
@@ -352,6 +416,9 @@ function main() {
     `  not enforced: ${skippedCaptureRefs} dead ref(s) inside ${DATED_CAPTURES.size} dated captures · ` +
       `${allowedDeadRefs}/${KNOWN_DEAD_REFS.size} allowed dead ref(s) in live docs`,
   );
+  console.log(
+    `  source trees: ${sourceFileCount} files scanned · ${sourceIdRefCount} F-id ref(s) outside docs/`,
+  );
 
   if (badFileRefs.length) {
     console.error(`\n✗ ${badFileRefs.length} file reference(s) point at a path that does not exist:`);
@@ -381,7 +448,22 @@ function main() {
     );
   }
 
-  if (badFileRefs.length || badIds.length || badAnchors.length) {
+  if (badSourceIds.length) {
+    const uniq = [...new Set(badSourceIds.map((b) => b.id))].sort();
+    console.error(
+      `\n✗ ${badSourceIds.length} SOURCE reference(s) to ${uniq.length} F-id(s) with no live entry and no header record:`,
+    );
+    console.error(`    ids: ${uniq.join(', ')}`);
+    for (const b of badSourceIds) console.error(`    ${b.doc}:${b.line}  →  ${b.id}`);
+    console.error(
+      `\n  A code comment citing a finding is read with the same trust as a doc citing one, and\n` +
+        `  nothing checked these until 2026-08-18 (F-224). Fix by repointing the comment, or — if the\n` +
+        `  entry was deleted as resolved — record the id on a dated prune-list line in\n` +
+        `  ${FINDINGS_REL}'s header. ⚠ This check cannot see a MIS-cite to a LIVE id; only a human can.`,
+    );
+  }
+
+  if (badFileRefs.length || badIds.length || badAnchors.length || badSourceIds.length) {
     console.error('\ncheck-doc-refs: FAIL');
     process.exit(1);
   }

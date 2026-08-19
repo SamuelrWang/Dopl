@@ -44,8 +44,9 @@ import type { ChannelMessage, ChannelThread, MessageIntent } from "../types";
  *   1. mint a `clientMsgId` — the server's idempotency key, so a retry of a
  *      failed send cannot double-post;
  *   2. write the message into the transcript cache as a pending row; a REQUEST
- *      also gets a pending OPEN thread row, ⚠ or its session card computes to
- *      "complete" from a lone unanswered human message;
+ *      also gets a pending thread row, so the transcript has a thread to render
+ *      the card against (⚠ history: it was added because the DELETED session
+ *      card computed to "complete" from a lone unanswered human message);
  *   3. clear the composer (its own state, before the await);
  *   4. send the POST.
  * The response is USED — a chat send swaps its pending row for the saved one in
@@ -191,9 +192,9 @@ export function openThreadConfig(
               authorUserId: deps.currentUserId,
               authorName: deps.currentUserName,
               authorAvatarUrl: deps.currentUserAvatarUrl,
-              // `taskId` binds the row into a session card; `to_user_id` draws
-              // the addressee line. ⚠ Wire spellings, so the pending card is the
-              // real component.
+              // `taskId` binds the row into its THREAD — the transcript's thread
+              // card; `to_user_id` draws the addressee line. ⚠ Wire spellings,
+              // so the pending card is the real component.
               metadata: { taskId: threadId, to_user_id: draft.toUserId },
             })
           )

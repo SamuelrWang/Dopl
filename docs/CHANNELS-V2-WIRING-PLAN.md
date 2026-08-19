@@ -546,6 +546,11 @@ here, so the gate is about the release, not the server; state which).
 
 ## Phase 10 — The pop-out thread window, opt-in
 
+⚠ **Mechanics stated in this section were true AT LANDING; current state lives in
+INVARIANTS §11.** Everything below is written in the present tense because it was a plan —
+read it as "what this phase set out to build", never as a description of the tree. Where the
+two disagree, INVARIANTS wins (repo CLAUDE.md's precedence rule).
+
 ✅ **LANDED 2026-08-18, UN-PARKED BY SAMUEL'S RULING: OPTION (a).** Widen the sender
 binding, deliberately, with an enumerating test of the bound senders and the refusal shape
 pinned unchanged. Option (b) was rejected on the record — building the thread view twice is
@@ -650,6 +655,10 @@ loads at runtime.
 
 ## Phase 12 — Cutover and demolition
 
+⚠ **Mechanics stated in this section were true AT LANDING; current state lives in
+INVARIANTS §5 (the one channels surface) and §11 (`CHANNELS_PAGE`, `WORKSPACE_PAGES`).**
+Read the present tense below as intent, not as a description of the tree.
+
 ✅ **LANDED 2026-08-18.** What actually shipped, where it differed: the deletes below all
 happened, plus four the plan did not list — `activity-event-row.tsx` and
 `address-picker.tsx` (orphaned by the transcript and the pane), and
@@ -667,7 +676,13 @@ carried over on the same argument rather than orphaned: `channel-settings-popove
 
 **Size: M.**
 
-**Goal.** `channels-v2` becomes `channels`. Nothing v2-shaped remains.
+**Goal.** `channels-v2` becomes `channels` **as a ROUTE, a nav label and a deep-link key**.
+⚠ **CORRECTED 2026-08-18: the original wording, "Nothing v2-shaped remains", is false about the
+tree the cutover produced and was read as a promise it never kept.** The COMPONENT DIRECTORY
+`src/features/channels/components/channels-v2/` stays, by choice — renaming it would have moved
+every symbol anchor in INVARIANTS on the same day the surface changed, and it is a
+component-family name under a feature already called `channels`, not a route. INVARIANTS §5
+records that decision and the file count with its date.
 
 **Deletes.** `apps/desktop-ui/src/pages/channels-v2/` in full (including `MAPPING.md`,
 whose rulings have by then moved into INVARIANTS and ENGINEERING); the `channels-v2` rows in

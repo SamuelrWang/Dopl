@@ -75,8 +75,10 @@ export interface PendingMessageInput {
   authorUserId: string;
   authorName?: string | null;
   authorAvatarUrl?: string | null;
-  /** `taskId` binds the row into a session card; `to_user_id` renders the
-   *  addressee line. ⚠ Wire spellings, as the transcript reads them. */
+  /** `taskId` binds the row into its THREAD — the transcript's thread card
+   *  (`channels-v2/view-model.ts › threadIdOf`); it bound a session card until
+   *  wiring plan Phase 5 deleted that. `to_user_id` renders the addressee line.
+   *  ⚠ Wire spellings, as the transcript reads them. */
   metadata?: Record<string, unknown>;
   /** Injected in tests; defaults to now. */
   createdAt?: string;
@@ -171,10 +173,16 @@ export function retagPendingMessage(
 }
 
 /**
- * The thread row that makes a pending session card read as ACTIVE.
- * ⚠ Without it the card derives from messages alone, and a lone human message
- * with no agent reply and no lifecycle marker computes to "done" — a request
- * would read "Thread complete" the instant it was sent.
+ * The pending THREAD row, so a request has a thread to render against the frame
+ * it was sent in. It is still the row `use-thread-writes.ts` and
+ * `use-thread-writes-fanout.ts` patch in at submit.
+ * ⚠ HISTORY, kept because it is why this function exists at all: it was written
+ * to make a pending SESSION CARD read as ACTIVE — without the row that card
+ * derived from messages alone, and a lone human message with no agent reply and
+ * no lifecycle marker computed to "done", so a request read "Thread complete"
+ * the instant it was sent. The session card was deleted in wiring plan Phase 5
+ * (2026-08-18) and threads no longer have a finished state at all (INVARIANTS
+ * §5), so that particular misreading is gone with it.
  */
 export function buildPendingThread(input: {
   id: string;

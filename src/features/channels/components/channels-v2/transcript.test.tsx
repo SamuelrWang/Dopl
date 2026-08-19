@@ -450,7 +450,7 @@ describe("channels-v2 transcript — the request fan-out", () => {
   it("states NO approval on the pills — no projection says who allowed", () => {
     renderFanOut();
     // ⚠ `AddresseePill` renders an SR-only verdict when `approved` is passed at
-    // all. Nothing may pass it here (F-203): "no pending row" would report
+    // all. Nothing may pass it here (F-206): "no pending row" would report
     // never-asked as approved.
     expect(screen.queryByText(/approved/)).toBeNull();
     expect(screen.queryByText(/awaiting approval/)).toBeNull();

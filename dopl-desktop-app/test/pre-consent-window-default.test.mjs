@@ -2,7 +2,7 @@
 //
 // WHAT INVERTED. Until 2026-08-18 an inbound channel request minted a window per
 // thread the instant it arrived — before anyone had looked at it — and clicking the
-// notification opened the app on top of that. MAPPING.md's ruling turns it around:
+// notification opened the app on top of that. The ruling turns it around (INVARIANTS §11):
 // the notification FOCUSES the main app and lands on the channel, where the Inbox's
 // launch panel is the decision surface, and the per-thread window becomes opt-in.
 //

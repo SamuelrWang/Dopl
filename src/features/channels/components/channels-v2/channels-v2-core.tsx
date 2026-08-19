@@ -80,14 +80,14 @@ export interface ChannelsV2CoreProps {
  * Phase 12, 2026-08-18): `channels-view-core.tsx` and the two-pane surface
  * under it are DELETED, and `/:workspaceSegment/channels` mounts this tree.
  *
- * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). THREE writers land from
- * this tree, all through the existing write layer, none a new endpoint: the
- * composer's send / request fan-out (Phase 3), the Tags inbox's mark-read
- * (Phase 6), and the Inbox pane's consent decision (Phase 8). All hold the
- * same `useRefetchGate` gate the reads register. **The cutover added a fourth
- * family** — the channel-management writes (create / invite / visibility /
- * archive / delete / leave / tool profile / trust), which arrived WHOLESALE
- * from the deleted page and live in `channel-manage.tsx` on the same `gate`.
+ * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). FOUR write families land
+ * from this tree (INVARIANTS §7), all through the existing write layer, none a
+ * new endpoint: the composer's send / request fan-out (Phase 3), the Tags
+ * inbox's mark-read (Phase 6), the Inbox pane's consent decision (Phase 8), and
+ * the channel-management writes the CUTOVER added (create / invite / visibility
+ * / archive / delete / leave / tool profile / trust), which arrived WHOLESALE
+ * from the deleted page and live in `channel-manage.tsx`. All four hold the
+ * same `useRefetchGate` gate the reads register.
  *
  * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
  * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
@@ -115,12 +115,11 @@ export interface ChannelsV2CoreProps {
  *
  * ⚠ The refetch rides `shared/realtime/refetch-coordinator.ts` through
  * `useRefetchGate`, which INVARIANTS §7 requires of every live surface — a
- * remote event mid-edit must not clobber an unsent local change. All three
- * writers hand their `settleWith` to this ONE gate — the composer (Phase 3),
- * the Tags inbox's mark-read (Phase 6) and the Inbox pane's consent decision
- * (Phase 8) — which is the whole point: a coordinator retrofitted after the
- * first write is a coordinator that was missing for exactly the window it was
- * needed.
+ * remote event mid-edit must not clobber an unsent local change. All FOUR write
+ * families above hand their `settleWith` to this ONE gate (the fourth, channel
+ * management, arrived at the cutover) — which is the whole point: a coordinator
+ * retrofitted after the first write is a coordinator that was missing for
+ * exactly the window it was needed.
  *
  * ⚠ AN EVENT IS A DOORBELL, NEVER CONTENT — the signal triggers a filtered
  * refetch and no payload is ever merged, so RLS and the service filters stay
@@ -179,8 +178,8 @@ export function ChannelsV2Core({
     false
   );
 
-  // Explicit pick that still exists wins, else the first row — the same rule
-  // `channels-view-core.tsx` uses, so a deleted channel cannot strand the pane.
+  // Explicit pick that still exists wins, else the first row — the same rule the
+  // deleted `channels-view-core.tsx` used, so a deleted channel cannot strand the pane.
   const effectiveId = useMemo(() => {
     if (selectedId && channels.some((c) => c.id === selectedId)) return selectedId;
     return channels[0]?.id ?? null;

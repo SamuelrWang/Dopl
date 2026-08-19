@@ -155,7 +155,7 @@ export function deriveMessageReceipt(
  *
  * ⚠ **`task_started` IS NEVER A RECEIPT.** "Started working on this request." is
  * a fact about a runtime, and an agent's run state lives in the Agents tab, not
- * as transcript rows (INVARIANTS §5, MAPPING.md § Q&A rulings). Only the two
+ * as transcript rows (INVARIANTS §5). Only the two
  * TERMINAL kinds can produce a line, because only an ending changes how the
  * peer reads the exchange: an unanswered ask and a DECLINED one look identical
  * without it.

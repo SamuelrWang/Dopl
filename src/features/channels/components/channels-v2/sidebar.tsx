@@ -8,7 +8,8 @@
  * second name-and-chevron in this column was two claims to the same thing.
  *
  * ACTIVE threads nest one indent step under the channel they belong to
- * (MAPPING.md § Sidebar). ⚠ Only under the OPEN channel: `use-channel-threads`
+ * (the port's intent doc § Sidebar, deleted at the Phase 12 cutover —
+ * INVARIANTS §5). ⚠ Only under the OPEN channel: `use-channel-threads`
  * is a per-channel read and this phase adds no fetch paths, so the tree can
  * only nest what has been read. Nesting every channel at once is a
  * workspace-wide thread read that does not exist and would be a new endpoint,
@@ -186,8 +187,9 @@ export function ChannelsV2Sidebar({
               trailing={isNew ? <NewPill /> : undefined}
             />
           ))}
-          {/* WIRED: the consent inbox lives in this row (MAPPING.md § Q&A,
-              second round), its badge is the real pending count, and since
+          {/* WIRED: the consent inbox lives in this row (a second-round ruling
+              in the port's intent doc, deleted at the cutover — INVARIANTS §7),
+              its badge is the real pending count, and since
               Phase 8 the row OPENS the inbox — the center column lists every
               request waiting on this viewer as a launch panel. */}
           <NavRow

@@ -7,7 +7,7 @@
  * you" is not, because a consent read is scoped to `(operator, workspace)` with
  * the operator always `ctx.userId` (INVARIANTS §6). A future change that starts
  * reporting the second from the absence of a pending row would report
- * NEVER-ASKED as APPROVED — see REFACTOR-FINDINGS F-203.
+ * NEVER-ASKED as APPROVED — see REFACTOR-FINDINGS F-206.
  */
 
 import { describe, expect, it } from "vitest";

@@ -72,8 +72,9 @@ const NO_SETTINGS_ON_THE_SERVER = () => false;
 
 /**
  * A pending human-in-the-loop decision, as the ADDRESSEE sees it: **Launch
- * agent**, not Allow (MAPPING.md § Q&A, third round — the verb is the launch,
- * because what a yes does is start somebody's agent on this machine).
+ * agent**, not Allow (INVARIANTS §6 — the verb is the launch, because what a
+ * yes does is start somebody's agent on this machine; the ruling arrived in the
+ * port's intent doc, deleted at the Phase 12 cutover).
  *
  * ⚠ THE SURFACE CHANGED; THE AUTHORIZATION MODEL DID NOT (INVARIANTS §6). This
  * panel writes the SAME consent decision `consent-card.tsx` wrote — the same
@@ -85,7 +86,7 @@ const NO_SETTINGS_ON_THE_SERVER = () => false;
  *
  * ⚠ NO TRUST, ANYWHERE IN HERE. "Auto-launch with saved settings for this
  * person" is the shape trust would take in this flow and Samuel has put it ON
- * HOLD (MAPPING.md § Q&A, second round). `POST /trust` / `DELETE /trust` stay
+ * HOLD (INVARIANTS §6). `POST /trust` / `DELETE /trust` stay
  * `sessionOnly` and stay unreferenced by this file — the seam is left open and
  * nothing is built into it.
  *

@@ -6,7 +6,8 @@
  *
  * ⚠ NO STATUS FILTER. The mock's Active/Inactive `SegmentedControl` does not
  * survive the port: threads never close and never leave the list, so
- * ACTIVITY ORDERING replaced the filter (MAPPING.md, third round; wiring plan
+ * ACTIVITY ORDERING replaced the filter (a third-round ruling in the port's
+ * intent doc, deleted at the cutover — INVARIANTS §5; wiring plan
  * Phase 1). `channel_tasks.status` is still selected and still stored — only the
  * ORDERING stopped depending on it, and this tab reads neither.
  *

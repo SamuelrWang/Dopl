@@ -16,8 +16,10 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * `channels-list-pane.tsx`, `rooms-sidebar.tsx`, `channel-transcript.tsx` and
  * `message-composer.tsx` were deleted in the same change. **`ChannelsV2Core`
  * keeps its name deliberately** — it is a component family under
- * `components/channels-v2/`, not a route string, and renaming 27 files buys a
- * word (wiring plan Phase 12, § the string sweep).
+ * `components/channels-v2/`, not a route string, and renaming the whole
+ * directory buys a word (wiring plan Phase 12, § the string sweep). **35 files
+ * measured 2026-08-18** — re-run rather than quote:
+ * `ls src/features/channels/components/channels-v2 | wc -l`.
  *
  * ⚠ THE `:channelId` ROW IS THE DESKTOP NOTIFICATION'S LANDING SPOT (wiring
  * plan Phase 9). Main focuses the window and pushes

@@ -25,7 +25,10 @@ export const PRESENCE_TABLES = ["agent_presence"] as const;
  * The poll only earns its keep when the socket is broken, so 30s: worst case it
  * covers is a reconnect. 120 req/h from an idle focused tab, not 900 at 4s.
  *
- * ⚠ Passed ONLY by the channels-page inbox (`channels-view`). The
+ * ⚠ Passed ONLY by the channels page's consent inbox —
+ * `components/channels-v2/channels-v2-core.tsx` calling `useConsentInbox`.
+ * (This anchor read `channels-view` until the Phase 12 cutover deleted that
+ * page, 2026-08-18.) The
  * always-mounted sidebar badge stays realtime-only — an interval there is a
  * workspace-wide background poll on every page. TanStack's default
  * `refetchIntervalInBackground: false` pauses this while the tab is hidden.
