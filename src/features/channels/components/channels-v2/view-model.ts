@@ -17,6 +17,11 @@
 
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import { mentionedUserIdsOf } from "../../lib/mentions";
+import {
+  RECEIPT_LABEL,
+  lifecycleReceiptStatus,
+  type ReceiptStatus,
+} from "../../lib/message-receipt";
 import type {
   Channel,
   ChannelMember,
@@ -58,21 +63,55 @@ export function fanoutGroupOf(message: ChannelMessage): string | null {
 }
 
 /**
- * Lifecycle echoes render as NOTHING in this transcript.
- *
- * `task_started` / `task_finished` / `task_failed` state a fact about a RUNTIME,
- * and under the v2 model an agent's run state lives in the agent view, not as
- * transcript rows (MAPPING.md § Q&A rulings). Installed desktops keep posting
- * them long after the surface that read them is gone (wiring plan, Risk 4), so
- * the reader drops them rather than waiting on a server-side tightening that
- * cannot happen until the desktop floor is raised (INVARIANTS §13).
+ * The three RUNTIME-STATE kinds. Never a message bubble on any surface — the
+ * most a lifecycle row can be is a receipt, and `task_started` cannot even be
+ * that. ⚠ `task_progress` is deliberately absent: the calm `session_ended` note
+ * is the milestone lane and its BODY is real prose a peer needs (INVARIANTS §5).
  */
-function isLifecycleEcho(message: ChannelMessage): boolean {
+function isLifecycleKind(message: ChannelMessage): boolean {
   return (
     message.kind === "task_started" ||
     message.kind === "task_finished" ||
     message.kind === "task_failed"
   );
+}
+
+/**
+ * A terminal lifecycle row's RECEIPT ROW, or null when it renders as nothing.
+ *
+ * ⚠ **THIS USED TO DROP ALL THREE KINDS, AND THAT SILENCED THIS BUILD'S OWN
+ * CONSENT OUTCOMES.** `main/trigger-outcomes.js` posts `task_failed` +
+ * `{declined:true}` / `{dropped:true}` / `{interrupted:true}` on the SHIPPING
+ * desktop and the headless lane posts the full set, so a peer who DECLINED left
+ * the requester looking at an unanswered ask. A calm ending changes how the peer
+ * reads the exchange — INVARIANTS §5's calm-flag rationale is the whole argument
+ * for storing the flag — so it renders.
+ *
+ * Still nothing, and the line is drawn at the KIND: **`task_started` always**
+ * (run state lives in the Agents tab, MAPPING.md § Q&A rulings), and a terminal
+ * row with no calm flag AND no body (a bare state transition, nothing human in
+ * it). The derivation is `lib/message-receipt.ts › lifecycleReceiptStatus` — the
+ * receipt VOCABULARY the retired page already spoke, so there is one spelling of
+ * "Declined" rather than two.
+ */
+function toReceiptRow(
+  message: ChannelMessage,
+  formatTime: (iso: string) => string
+): ReceiptRow | null {
+  const status = lifecycleReceiptStatus(message);
+  if (status === null) return null;
+  return {
+    kind: "receipt",
+    id: message.id,
+    seq: message.seq,
+    status,
+    label: RECEIPT_LABEL[status],
+    // ⚠ `failed` is the ONE lifecycle status that is not an operator-chosen
+    // ending, so it is the only one that may wear alarm ink — the distinction
+    // `lib/calm-terminal.ts` exists to preserve.
+    calm: status !== "failed",
+    time: formatTime(message.createdAt),
+  };
 }
 
 /** Which side of the transcript a row hangs on. An agent hangs on its
@@ -111,6 +150,27 @@ export interface SystemRow {
   id: string;
   seq: number;
   body: string;
+}
+
+/**
+ * A RECEIPT: how one exchange ENDED, on a slim muted line of its own. No side,
+ * no avatar, no author, because it is not somebody's words — the same shape as
+ * {@link SystemRow} on purpose: both are the transcript narrating itself.
+ *
+ * ⚠ The desktop's own body copy is NOT carried here. `label` comes from the
+ * FLAG via `lib/message-receipt.ts › RECEIPT_LABEL`, so a caller-influenceable
+ * sentence can never state the outcome (INVARIANTS §5).
+ */
+export interface ReceiptRow {
+  kind: "receipt";
+  id: string;
+  seq: number;
+  status: ReceiptStatus;
+  /** Flag-derived label — never the row's own body. */
+  label: string;
+  /** An operator-chosen ending; only a REAL `failed` is false. */
+  calm: boolean;
+  time: string;
 }
 
 /**
@@ -159,7 +219,11 @@ export function ownThreadOf(
   );
 }
 
-export type TranscriptRow = MessageRow | SystemRow | ThreadCardRow;
+export type TranscriptRow =
+  | MessageRow
+  | SystemRow
+  | ThreadCardRow
+  | ReceiptRow;
 
 /** The people-lookup the rows are built against. */
 export interface AuthorIndex {
@@ -304,9 +368,20 @@ export function channelRows(
   let previous: ChannelMessage | null = null;
 
   for (const message of messages) {
-    if (isLifecycleEcho(message)) continue;
     const threadId = threadIdOf(message);
     const thread = threadId ? threadById.get(threadId) : undefined;
+    if (isLifecycleKind(message)) {
+      // ⚠ A receipt for a KNOWN thread belongs to THAT thread's transcript, by
+      // the same rule the thread's other messages follow — the channel shows
+      // the card, not the exchange. A legacy `task-<channel>-<seq>` tag names
+      // no `channel_tasks` row, so the desktop trigger lane's outcomes land
+      // here, beside the ask they answer, which is where they were asked.
+      if (!thread) {
+        const receipt = toReceiptRow(message, formatTime);
+        if (receipt) rows.push(receipt);
+      }
+      continue;
+    }
     if (thread) {
       const group = fanoutGroupOf(message);
       // ⚠ The dedupe key is the GROUP where there is one, the thread otherwise.
@@ -346,8 +421,14 @@ export function threadRows(
   const rows: TranscriptRow[] = [];
   let previous: ChannelMessage | null = null;
   for (const message of messages) {
-    if (isLifecycleEcho(message)) continue;
     if (threadIdOf(message) !== threadId) continue;
+    if (isLifecycleKind(message)) {
+      const receipt = toReceiptRow(message, formatTime);
+      if (receipt) rows.push(receipt);
+      // ⚠ `previous` is UNCHANGED across a receipt: it is not authored, so it
+      // must neither break nor extend the run of messages around it.
+      continue;
+    }
     rows.push(toMessageRow(message, previous, index, formatTime));
     previous = message;
   }

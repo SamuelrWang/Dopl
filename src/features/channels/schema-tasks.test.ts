@@ -151,14 +151,27 @@ describe("TaskUpdateSchema", () => {
   // ⚠ THE OTHER THREE OPS ARE GONE (wiring plan Phase 4, 2026-08-18): `close`
   // and `propose_close` each carried an outcome, `reopen` was a bare op. This is
   // the pin that they stay gone, and that a stale caller sending one is REFUSED
-  // rather than silently reaching `set_mode` — a union of one still discriminates.
+  // rather than silently reaching `set_mode`.
+  //
+  // ⚠ AND THAT THE REFUSAL SAYS WHAT REPLACED THEM. Deleting the arms outright
+  // left zod answering `invalid_union` / "No matching discriminator", whose
+  // message is the literal "Invalid input" — an installed desktop asking to
+  // close a thread was told its body was malformed and had nothing to act on.
+  // `schema.ts › removedOp` is the op-level form of the `removedParam` pattern
+  // this file already relies on elsewhere.
   it.each(["close", "propose_close", "reopen"])(
-    "refuses the retired op %s",
+    "refuses the retired op %s, NAMING the replacement",
     (op) => {
-      expect(TaskUpdateSchema.safeParse({ op }).success).toBe(false);
-      expect(
-        TaskUpdateSchema.safeParse({ op, outcome: "completed" }).success
-      ).toBe(false);
+      for (const body of [{ op }, { op, outcome: "completed" }]) {
+        const parsed = TaskUpdateSchema.safeParse(body);
+        expect(parsed.success).toBe(false);
+        const message = parsed.error?.issues[0]?.message ?? "";
+        expect(message).toBe(
+          "Threads no longer close; pause or end the agent instead."
+        );
+        // The regression this guards: the generic 400 it used to be.
+        expect(message).not.toBe("Invalid input");
+      }
     }
   );
 

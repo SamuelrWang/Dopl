@@ -20,17 +20,18 @@ export interface DoplChannelsBridge {
 }
 
 /**
- * "Reopen session window" bridge (`window.dopl.sessions`), desktop shell only.
- * Reveals/fronts an existing LIVE session window for a (channel, task). ⚠ Never
- * starts a query. `{ ok: false }` when no live session exists — a settled task's
- * window is destroyed on settle and is not reopenable.
+ * ⚠ `DoplSessionsBridge` + `getDesktopSessions` USED TO LIVE HERE — the
+ * "reopen session window" slice of `window.dopl.sessions`. DELETED 2026-08-18
+ * (wave-2 fix pass): their last caller was `components/session-card.tsx`, which
+ * went with the session card in wiring plan Phase 5, and a typed slice nobody
+ * reads is a claim about the wire that nothing checks.
+ *
+ * ⚠ **THE IPC IS NOT GONE — only this tree's description of it.** `main/channel-dir-ipc.js`
+ * still registers `sessions:reopen` (plus `sessions:pause` / `sessions:end`) and the
+ * preload still exposes them; the SPA describes the slice IT uses in
+ * `apps/desktop-ui/src/lib/dopl-bridge.ts`. This module's own rule is that each
+ * side types only the slice it uses, and the web side uses none of it.
  */
-export interface DoplSessionsBridge {
-  reopen: (
-    channelId: string,
-    taskId: string
-  ) => Promise<{ ok: boolean; reason?: "no-thread" | "busy" }>;
-}
 
 /**
  * THE POP-OUT THREAD WINDOW (`window.dopl.threads`), desktop shell only — wiring plan
@@ -56,7 +57,6 @@ export interface DoplDesktopBridge {
   platform?: string;
   versions?: { electron?: string; chrome?: string };
   channels?: DoplChannelsBridge;
-  sessions?: DoplSessionsBridge;
   threads?: DoplThreadWindowsBridge;
 }
 
@@ -81,13 +81,6 @@ export function isDesktopApp(): boolean {
 export function getDesktopChannelFolders(): DoplChannelsBridge | null {
   const channels = doplBridge()?.channels;
   return channels && typeof channels.chooseFolder === "function" ? channels : null;
-}
-
-/** Session-reopen bridge, else null. Feature-detected on `sessions.reopen` so a
- *  plain browser and an older desktop build both yield null. */
-export function getDesktopSessions(): DoplSessionsBridge | null {
-  const sessions = doplBridge()?.sessions;
-  return sessions && typeof sessions.reopen === "function" ? sessions : null;
 }
 
 /** Pop-out-thread-window bridge, else null. Feature-detected on `threads.openWindow` so a

@@ -131,6 +131,59 @@ test("its three IPC handlers are SENDER-BOUND to this window's top frame", () =>
   }
 });
 
+// ── F-221: the THIRD copy of the frame guard ─────────────────────────────────
+//
+// The predicate has three copies (channel-dir-ipc.js, ui-bridge.js, and this
+// one). Two were closed at Phase 10; THIS one kept the lenient
+// `if (frame && sender.mainFrame && frame !== sender.mainFrame)` form, which
+// WAVES THROUGH a `senderFrame` reading as null/undefined — on the window whose
+// two live ops END THE PROCESS. Closed 2026-08-18 (wave-2 fix pass).
+//
+// Driven rather than grepped, the `test/channel-ipc-sender.test.mjs` idiom: the
+// real source is sliced out and executed, so a regression in the BRANCH fails
+// here even if the surrounding text still matches.
+
+const gateGuard = (win) =>
+  new Function("win", `${fnOf(WINDOW, "isGateSender")}\n return isGateSender;`)(win);
+
+const mkGateWin = () => {
+  const mainFrame = { name: "top" };
+  const webContents = { mainFrame, isDestroyed: () => false };
+  return { win: { isDestroyed: () => false, webContents }, webContents, mainFrame };
+};
+
+test("the gate guard ACCEPTS its own window's top frame", () => {
+  const { win, webContents, mainFrame } = mkGateWin();
+  assert.equal(gateGuard(win)({ sender: webContents, senderFrame: mainFrame }), true);
+});
+
+test("F-221 — the gate guard FAILS CLOSED on an ABSENT frame, like the other two copies", () => {
+  const { win, webContents } = mkGateWin();
+  const guard = gateGuard(win);
+  assert.equal(guard({ sender: webContents, senderFrame: null }), false, "null frame");
+  assert.equal(guard({ sender: webContents, senderFrame: undefined }), false, "undefined frame");
+  // …and a webContents with no mainFrame at all.
+  const noMain = { isDestroyed: () => false };
+  const orphan = { isDestroyed: () => false, webContents: noMain };
+  assert.equal(gateGuard(orphan)({ sender: noMain, senderFrame: {} }), false, "no mainFrame");
+});
+
+test("the gate guard REFUSES an iframe, a stranger, a destroyed window and a throwing frame", () => {
+  const { win, webContents, mainFrame } = mkGateWin();
+  const guard = gateGuard(win);
+  assert.equal(guard({ sender: webContents, senderFrame: { name: "embedded" } }), false, "iframe");
+  const other = mkGateWin();
+  assert.equal(guard({ sender: other.webContents, senderFrame: other.mainFrame }), false, "another window");
+  const hostile = { sender: webContents };
+  Object.defineProperty(hostile, "senderFrame", {
+    get() { throw new Error("frame detached"); },
+  });
+  assert.equal(guard(hostile), false, "detached frame");
+  const dead = { isDestroyed: () => true, webContents };
+  assert.equal(gateGuard(dead)({ sender: webContents, senderFrame: mainFrame }), false, "destroyed window");
+  assert.equal(gateGuard(null)({ sender: webContents, senderFrame: mainFrame }), false, "no window at all");
+});
+
 test("the handlers are registered ONCE, not per window", () => {
   // ipcMain.handle throws on a duplicate channel, and the window is rebuilt on
   // every re-block.

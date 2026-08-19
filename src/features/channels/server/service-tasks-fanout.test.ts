@@ -244,3 +244,79 @@ describe("createTaskFanOut — N addressees are N rows", () => {
     expect(fanoutGroupId(USER, BASE)).not.toBe(fanoutGroupId(A, BASE));
   });
 });
+
+/**
+ * THE ATOMICITY SEAM. A fan-out has no transaction across its N threads, and
+ * that is fine ONLY for failures a retry can heal. A DETERMINISTIC refusal — a
+ * pill naming somebody who is not a channel member, a departed teammate, the
+ * sender's own name — is not one of those: the retry refuses at the same
+ * addressee forever, so every thread created before it stays created, on real
+ * people's machines, while the caller is told the send failed.
+ *
+ * The fix is a PRE-FLIGHT, and these two tests are its two halves: a
+ * deterministic refusal writes NOTHING, and a transient one still leaves the
+ * landed threads standing for the retry to converge on.
+ */
+describe("createTaskFanOut — a refusal must not be a partial send", () => {
+  it("refuses the WHOLE send when one addressee is not a channel member, with ZERO rows inserted", async () => {
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === B ? null : memberRow(uid)
+    );
+
+    await expect(createTaskFanOut(ctx, "chan-1", input([A, B, C]))).rejects.toThrow(
+      /not a member of this channel/
+    );
+
+    // ⚠ THE ASSERTION THAT MATTERS. Without the pre-flight, A's thread exists
+    // and A's desktop has been prompted — and the caller saw a 400.
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("refuses before any write when a pill names the SENDER", async () => {
+    await expect(
+      createTaskFanOut(ctx, "chan-1", input([A, USER]))
+    ).rejects.toThrow(/addressed to yourself/);
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+  });
+
+  it("refuses before any write when an addressee has LEFT the workspace", async () => {
+    vi.mocked(repo.isActiveWorkspaceMember).mockImplementation(
+      async (_ws, uid) => uid !== C
+    );
+
+    await expect(createTaskFanOut(ctx, "chan-1", input([A, B, C]))).rejects.toThrow(
+      /not a member of this channel/
+    );
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+  });
+
+  it("a TRANSIENT mid-loop failure leaves the landed threads for a retry to converge on", async () => {
+    // What non-atomicity is allowed to look like: the second insert blows up on
+    // something a re-run can get past.
+    const real = vi.mocked(repoTasks.insertTask).getMockImplementation()!;
+    let calls = 0;
+    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) => {
+      calls += 1;
+      if (calls === 2) throw new Error("connection reset");
+      return real(row);
+    });
+
+    await expect(createTaskFanOut(ctx, "chan-1", input([A, B]))).rejects.toThrow(
+      "connection reset"
+    );
+    expect(calls).toBe(2);
+
+    // The retry: A converges on its stored row, B is created, and the card is
+    // the same one — which is the whole argument for not wrapping this in a
+    // transaction.
+    vi.mocked(repoTasks.insertTask).mockImplementation(real);
+    const { threads, groupId } = await createTaskFanOut(
+      ctx,
+      "chan-1",
+      input([A, B])
+    );
+    expect(threads).toHaveLength(2);
+    expect(groupId).toBe(fanoutGroupId(USER, BASE));
+  });
+});

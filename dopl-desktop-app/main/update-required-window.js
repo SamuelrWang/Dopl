@@ -38,6 +38,15 @@ let registered = false;
 // TRUE only for this window's own top frame. Resolved at CALL time (the window
 // is rebuilt whenever the gate re-blocks) and defensive about `senderFrame`,
 // which throws once a frame is detached: a frame we cannot read is refused.
+//
+// ⚠ THE THIRD COPY OF THE F-221 GUARD, and it was the last lenient one. Until
+// 2026-08-18 (wave-2 fix pass) this read
+// `if (frame && sender.mainFrame && frame !== sender.mainFrame) return false`,
+// which WAVES THROUGH a `senderFrame` that reads as null/undefined — the exact
+// pre-Phase-10 form that `main/channel-dir-ipc.js › isAppWindowSender` and
+// `main/ui-bridge.js › isAppWindowSender` were both closed to. It is now
+// byte-consistent with them. ⚠ A predicate with three copies is a predicate
+// that WILL drift; if a fourth is ever needed, extract it instead.
 function isGateSender(event) {
   if (!win || win.isDestroyed()) return false;
   const sender = event && event.sender;
@@ -48,7 +57,8 @@ function isGateSender(event) {
   } catch (_) {
     return false;
   }
-  if (frame && sender.mainFrame && frame !== sender.mainFrame) return false;
+  // ⚠ FAIL CLOSED: an unreadable frame, or a webContents whose mainFrame is gone, is refused.
+  if (!frame || !sender.mainFrame || frame !== sender.mainFrame) return false;
   return true;
 }
 

@@ -44,11 +44,18 @@ export const CONSENT_INBOX_POLL_MS = 30_000;
  * trigger turns the loop brake into a storm; never add one).
  *
  * ⚠ COPY threshold, not a gate — nothing here decides routing, and now nothing
- * downstream branches on it either. Shared by the invite dialog's group note and
- * its deliberate duplicate in
- * `packages/mcp-server/src/tools/channel-addressing.ts`, pinned together by
- * `channel-addressing-rule.test.ts`, so one tree cannot restate the rule and
- * leave the other saying the old thing.
+ * downstream branches on it either.
+ *
+ * ⚠ **ONE READER LEFT, AND IT IS IN THE OTHER TREE.** Its deliberate duplicate
+ * `packages/mcp-server/src/tools/channel-addressing.ts › GROUP_CHANNEL_MIN_MEMBERS`
+ * still picks whether the ROSTER LINE names a count or says "the other member",
+ * and `channel-addressing-rule.test.ts` pins the two numbers together so one
+ * tree cannot restate the rule and leave the other saying the old thing.
+ * **`components/invite-dialog.tsx › GroupChannelRoutingNote` stopped reading it
+ * on 2026-08-18 (wave-2 fix pass)**: that note both gated on the threshold and
+ * recited it ("In a channel of 3 or more…"), which taught the trigger rule
+ * Phase 3 retired and hid the note from the two-member channel that needs it
+ * most. Nothing in `src/**` outside this file names the constant now.
  */
 export const GROUP_CHANNEL_MIN_MEMBERS = 3;
 

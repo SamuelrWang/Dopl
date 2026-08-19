@@ -29,6 +29,25 @@ const REMOVED_AUTHOR_AGENT =
   "Named-agent authorship was removed. A message is its human author's; there is no agent identity to post as.";
 const REMOVED_PARTICIPANTS =
   "Breakout-room participants were removed. A thread is between its creator and the member in `toUserId`.";
+const REMOVED_THREAD_CLOSE =
+  "Threads no longer close; pause or end the agent instead.";
+
+/**
+ * {@link removedParam}, at the OP level: a retired arm of a discriminated union
+ * that parses far enough to say what replaced it, then always fails.
+ *
+ * ⚠ **DELETING THE ARM IS NOT THE SAME THING.** `z.discriminatedUnion` answers
+ * an unrecognized discriminator with `invalid_union` / "No matching
+ * discriminator", message **"Invalid input"** — so an installed desktop asking
+ * to close a thread was told its body was malformed, with no hint that the
+ * CONCEPT is gone. The refusal is a `custom` issue at the ROOT path, which
+ * `shared/api/parse-json.ts` promotes into `error.message` for a form route and
+ * carries in `details` for everyone else. Delete the arm outright once no build
+ * in the field still sends the op.
+ */
+function removedOp(op: string, message: string) {
+  return z.object({ op: z.literal(op) }).refine(() => false, { error: message });
+}
 
 const VisibilitySchema = z.enum(["private", "public"]);
 
@@ -264,21 +283,41 @@ export function isTaskFanOutInput(
  * Update a task. ONE op survives:
  *   - `set_mode` — creator only.
  *
- * ⚠ THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). The `close`,
- * `propose_close` and `reopen` arms are DELETED along with the services behind
- * them; a stale caller sending one now fails the discriminator with an invalid
- * enum value rather than reaching a handler. The operator pauses or ends an
- * AGENT, not a thread.
+ * ⚠ THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). The services
+ * behind `close`, `propose_close` and `reopen` are DELETED, and the operator
+ * pauses or ends an AGENT, not a thread.
  *
- * ⚠ STILL A DISCRIMINATED UNION AT ONE ARM, ON PURPOSE. The wire shape is
- * `{op, …}` and every installed caller sends it; collapsing to a bare object
- * would make `op` optional-by-omission and accept a body that names no op at
- * all. A second op goes in beside this one.
+ * ⚠ **THE THREE SURVIVE AS TOMBSTONES ({@link removedOp}), WHICH IS NOT THE
+ * SAME AS KEEPING THEM** — each parses, then always fails, naming the
+ * replacement. **This docblock used to say a stale caller "fails the
+ * discriminator with an invalid enum value"; zod does no such thing** — it
+ * reports `invalid_union` / "No matching discriminator", message "Invalid
+ * input", so an installed desktop's close request came back as a generic
+ * malformed-body 400 with nothing to act on.
+ *
+ * ⚠ STILL A DISCRIMINATED UNION, ON PURPOSE: the wire shape is `{op, …}` and a
+ * bare object would make `op` optional-by-omission. ⚠ **ONE LIVE ARM** — the
+ * tombstones accept nothing; a second real op goes in beside `set_mode`.
  */
-export const TaskUpdateSchema = z.discriminatedUnion("op", [
+const TaskUpdateUnion = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set_mode"), mode: TaskModeSchema }),
+  removedOp("close", REMOVED_THREAD_CLOSE),
+  removedOp("propose_close", REMOVED_THREAD_CLOSE),
+  removedOp("reopen", REMOVED_THREAD_CLOSE),
 ]);
-export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
+
+/**
+ * ⚠ THE PARSED TYPE IS THE LIVE ARM ALONE. A tombstone never PRODUCES a value
+ * (its refinement always fails), so the union's inferred output describes three
+ * results the parser cannot return and a handler would write dead branches for
+ * them. `Extract` states what `safeParse` can actually hand back.
+ */
+export type TaskUpdateInput = Extract<
+  z.infer<typeof TaskUpdateUnion>,
+  { op: "set_mode" }
+>;
+export const TaskUpdateSchema =
+  TaskUpdateUnion as unknown as z.ZodType<TaskUpdateInput>;
 
 /** Per-member responding-agent tool scope (self-service preference). */
 const AgentToolProfileSchema = z.enum(["full", "dopl_only", "read_only"]);
