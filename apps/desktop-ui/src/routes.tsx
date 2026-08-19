@@ -15,6 +15,7 @@ import SettingsPage from "#/pages/settings";
 import ChannelsPage from "#/pages/channels";
 import BootPage from "#/pages/boot";
 import OnboardingPage from "#/pages/onboarding";
+import ThreadWindowPage from "#/pages/thread-window";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.
@@ -77,12 +78,41 @@ export const WORKSPACE_PAGES: PageRoute[] = [
 /** The workspace index redirect target — every "go home" funnel lands here. */
 export const WORKSPACE_HOME_PATH = "overview";
 
+/**
+ * THE POP-OUT THREAD WINDOW'S PAGE SEGMENT (Samuel, 2026-08-19) — one string, so
+ * the SPA and `dopl-desktop-app/main/popout-window.js › THREAD_WINDOW_PAGE` name
+ * one route. `test/popout-window.test.mjs` reads this export and fails on drift;
+ * main cannot import TypeScript, so the copy over there is a hand copy like
+ * `deep-link-target.js`'s page table.
+ */
+export const THREAD_WINDOW_PATH = "thread-window";
+
 export const routes: RouteObject[] = [
   {
     // Runs BEFORE a workspace exists — deliberately outside
     // /:workspaceSegment. Static segment outranks the param route.
     path: "/onboarding",
     element: <OnboardingPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    // ⚠ WORKSPACE-SCOPED BUT OUTSIDE `AppShellLayout`, WHICH IS THE POINT. The
+    // pop-out window shows ONE thread — no app sidebar, no channels tree, no
+    // info panel — and a layout route cannot be opted out of from inside it, so
+    // this is a sibling of `/:workspaceSegment` rather than a child. The channel
+    // rides the path and the thread rides `?thread=`, exactly as the pop-out's
+    // old landing did.
+    //
+    // ⚠ IT IS **NOT** IN `WORKSPACE_PAGES` AND MUST NOT BE ADDED TO IT, and it
+    // is not in `main/deep-link-target.js › ROOT_ROUTES` either, unlike
+    // `/onboarding`. Both absences are the same decision: a `dopl://` link must
+    // not be able to open a bare thread window — a pop-out is created by MAIN,
+    // at a window main built and registered. An unknown page inside a real
+    // workspace opens that workspace's home page, which is where such a link
+    // lands. The deep-link drift test reads the `WORKSPACE_PAGES` block only, so
+    // a row HERE keeps it green by construction.
+    path: `/:workspaceSegment/${THREAD_WINDOW_PATH}/:channelId`,
+    element: <ThreadWindowPage />,
     errorElement: <RouteErrorBoundary />,
   },
   {

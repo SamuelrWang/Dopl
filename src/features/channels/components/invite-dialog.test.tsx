@@ -15,7 +15,8 @@
  *
  * Rendered statically: the dialog itself needs a TanStack provider, so the note
  * is a pure exported component and these cases drive it directly — the same
- * split `ChannelActionsMenuItems` uses.
+ * split `channels-v2/settings-tab.tsx` uses for the rows that replaced the
+ * header kebab (2026-08-19).
  */
 
 import { describe, expect, it } from "vitest";

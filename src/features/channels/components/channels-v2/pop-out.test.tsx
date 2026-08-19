@@ -14,6 +14,12 @@
  * ⚠ AND IT ASSERTS THE HEADER PLACEMENT, because the button is only correct in the THREAD
  * view — the channel view has no thread to pop out, and a button that pops out "the current
  * transcript" from there would open a window on nothing.
+ *
+ * ⚠ THE PLACEMENT IS NOW AN ORDER, NOT ONLY A PRESENCE (Samuel, 2026-08-19). It sat beside
+ * the breadcrumb until then, on the left of a header whose right side held the whole
+ * channel-management cluster. The cluster moved to the Settings tab, and this button moved
+ * to where it acts: immediately LEFT of the info toggle, wearing the same `IconButton`
+ * face. A test that only asked "is it in the header" would stay green through the move.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -138,5 +144,44 @@ describe("the header slot", () => {
     withBridge(vi.fn(async () => ({ ok: true })));
     renderPane(null);
     expect(screen.queryByRole("button", { name: POP_OUT_THREAD_LABEL })).toBeNull();
+  });
+
+  it("sits immediately LEFT of the info toggle, and is its LAST left-hand neighbour", () => {
+    withBridge(vi.fn(async () => ({ ok: true })));
+    renderPane(THREAD);
+    const popOut = screen.getByRole("button", { name: POP_OUT_THREAD_LABEL });
+    const info = screen.getByRole("button", { name: "Channel info" });
+    expect(popOut.nextElementSibling).toBe(info);
+  });
+
+  it("wears the SAME face as the info toggle, glyph size included", () => {
+    // A 14px glyph in a 15px button reads as a smaller control beside it, which
+    // is exactly what it looked like while it lived beside the crumb.
+    withBridge(vi.fn(async () => ({ ok: true })));
+    renderPane(THREAD);
+    const popOut = screen.getByRole("button", { name: POP_OUT_THREAD_LABEL });
+    const info = screen.getByRole("button", { name: "Channel info" });
+    expect(popOut.className).toBe(info.className);
+    const size = (el: Element) => el.querySelector("svg")?.getAttribute("width");
+    expect(size(popOut)).toBe(size(info));
+  });
+
+  it("leaves NOTHING else on the right of the header", () => {
+    // The action cluster (settings / folder / invite / kebab) moved to the
+    // Settings tab and the inert sparkle was deleted outright — a decorative
+    // button with no handler is not a feature to rehome (Samuel, 2026-08-19).
+    withBridge(vi.fn(async () => ({ ok: true })));
+    renderPane(THREAD);
+    for (const gone of [
+      "Ask the assistant",
+      "Channel actions",
+      "Channel settings",
+      "Add members",
+      "Agent folder",
+    ]) {
+      expect(screen.queryByRole("button", { name: gone })).toBeNull();
+    }
+    // The crumb's bookmark is title furniture and STAYS.
+    expect(screen.getByRole("button", { name: "Bookmark channel" })).toBeTruthy();
   });
 });

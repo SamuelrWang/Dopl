@@ -59,10 +59,12 @@ export function PopOutThreadButton({
   if (!available) return null;
 
   return (
+    // ⚠ NO SIZE OVERRIDE. It sits immediately left of the info toggle and must
+    // wear the SAME face (Samuel, 2026-08-19); it carried a 14px glyph while it
+    // lived beside the crumb, which reads as a smaller button next to the ⓘ.
     <IconButton
       icon={ExternalLink}
       label={POP_OUT_THREAD_LABEL}
-      size={14}
       onClick={() => {
         const bridge = getDesktopThreadWindows();
         if (!bridge) return;

@@ -33,9 +33,10 @@
 // one edit rather than a grep.
 // Mirrors a row in `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES`; the hand
 // copy that the drift test guards is `deep-link-target.js`, not this.
-// ⚠ EXPORTED SINCE 2026-08-18 (Phase 10) and read by `main/popout-window.js ›
-// openThreadWindow`, which lands a pop-out on the same page: a second `'channels'`
-// literal over there would be a second spelling of a route the cutover renamed once.
+// ⚠ EXPORTED SINCE 2026-08-18 (Phase 10). `main/popout-window.js` was its one outside
+// reader and IS NO LONGER ONE (2026-08-19): the pop-out lands on its own thread-only route
+// now, and carries that page string itself. The export stays for the tests that slice this
+// file; nothing else in main navigates to the channels page.
 const CHANNELS_PAGE = 'channels';
 
 function makeShellHelpers(deps) {

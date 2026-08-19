@@ -16,6 +16,24 @@
  * The rows themselves are `transcript.tsx`; the derivation is
  * `view-model.ts › channelRows` / `› threadRows`. This file owns the chrome,
  * the scroller and the scroll-to-message signal.
+ *
+ * ⚠ THE HEADER'S RIGHT SIDE IS ONE BUTTON (Samuel, 2026-08-19). It used to carry
+ * the whole channel-management cluster — settings sliders, working folder,
+ * invite, kebab — plus an inert sparkle. **The cluster moved into the right
+ * panel's SETTINGS tab** (`channel-manage.tsx` → `settings-tab.tsx`), the sparkle
+ * was DELETED rather than moved because it was decoration with no handler, and
+ * what is left on the right is the info toggle, with the thread view's pop-out
+ * immediately to its left. The breadcrumb keeps its bookmark: that is title
+ * furniture, not an action cluster.
+ *
+ * ⚠ TWO CHROMES, ONE PANE (`chrome`). `"page"` is the surface above. `"window"`
+ * is the POP-OUT THREAD WINDOW (`thread-window.tsx`): the same transcript,
+ * scroller and composer with the crumb reduced to the thread's own title and no
+ * chrome at all — there is no info panel to toggle, no channel to go back to and
+ * no sidebar beside it. Rendering it here rather than assembling a second pane
+ * out of `transcript.tsx` + `composer.tsx` is deliberate: the stick-to-bottom
+ * rules and the scroll-target contract below are this file's, and a second copy
+ * of them is a second answer.
  */
 
 import {
@@ -27,7 +45,7 @@ import {
   type RefObject,
 } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { Bookmark, ChevronRight, Hash, Info, Sparkles } from "lucide-react";
+import { Bookmark, ChevronRight, Hash, Info } from "lucide-react";
 import { IconButton } from "./bits";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
@@ -74,6 +92,13 @@ const MISSING_NOTICE_MS = 6000;
  * to read history is not, and yanking them down is the classic chat bug.
  */
 const STICK_SLACK_PX = 64;
+
+/**
+ * The default for the three callbacks only the `"page"` chrome can fire. The
+ * pop-out window has no info panel to toggle, no channel view to return to and
+ * no thread cards in its rows, so it hands over none of them.
+ */
+const NOOP = () => {};
 
 /**
  * STICK TO BOTTOM — the behaviour the retired page had and this pane lost at
@@ -160,13 +185,13 @@ export function ChannelsV2MessagePane({
   loading,
   requested,
   scrollTarget,
-  infoOpen,
+  infoOpen = false,
   gate,
-  manage,
   popOut,
-  onToggleInfo,
-  onExitThread,
-  onOpenThread,
+  chrome = "page",
+  onToggleInfo = NOOP,
+  onExitThread = NOOP,
+  onOpenThread = NOOP,
 }: {
   channelId: string;
   workspaceId: string;
@@ -180,27 +205,27 @@ export function ChannelsV2MessagePane({
   /** Thread ids the viewer has been asked about and has not answered. */
   requested: ReadonlySet<string>;
   scrollTarget: ScrollTarget | null;
-  infoOpen: boolean;
+  /** `"page"` chrome only — the info toggle's pressed state. */
+  infoOpen?: boolean;
   /** The page's refetch coordinator, handed straight to the composer's writes. */
   gate: MutationGate;
   /**
-   * The channel-management cluster (`channel-manage.tsx ›
-   * ChannelsV2ManageActions`), injected as a SLOT rather than imported: it is
-   * write-bearing and channel-scoped, and this file owns the chrome only.
-   */
-  manage?: ReactNode;
-  /**
-   * "Open as new window" (`pop-out.tsx › PopOutThreadButton`), a SLOT for the
-   * same reason `manage` is: it needs the workspace segment, which this file
+   * "Open as new window" (`pop-out.tsx › PopOutThreadButton`), injected as a
+   * SLOT rather than imported: it needs the workspace segment, which this file
    * has no business knowing. THREAD VIEW ONLY — the channel view has no thread
    * to pop out — and it renders itself away outside the desktop shell (wiring
-   * plan Phase 10).
+   * plan Phase 10). It sits immediately LEFT of the info toggle and wears the
+   * same `IconButton` face (Samuel, 2026-08-19).
    */
   popOut?: ReactNode;
-  onToggleInfo: () => void;
-  onExitThread: () => void;
+  /** Which header this pane wears — see the file docblock. */
+  chrome?: "page" | "window";
+  /** `"page"` chrome only. */
+  onToggleInfo?: () => void;
+  /** `"page"` chrome only — the channel crumb is the way back out of a thread. */
+  onExitThread?: () => void;
   /** Set by an in-transcript thread card — the channel view's way IN. */
-  onOpenThread: (id: string) => void;
+  onOpenThread?: (id: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   // ⚠ DECLARED FIRST. Its effects must run BEFORE the scroll-target effect
@@ -268,8 +293,8 @@ export function ChannelsV2MessagePane({
         channelName={channelName}
         threadTitle={thread?.title ?? null}
         infoOpen={infoOpen}
-        manage={manage}
         popOut={popOut}
+        chrome={chrome}
         onToggleInfo={onToggleInfo}
         onExitThread={onExitThread}
       />
@@ -314,19 +339,33 @@ function PaneHeader({
   channelName,
   threadTitle,
   infoOpen,
-  manage,
   popOut,
+  chrome,
   onToggleInfo,
   onExitThread,
 }: {
   channelName: string;
   threadTitle: string | null;
   infoOpen: boolean;
-  manage?: ReactNode;
   popOut?: ReactNode;
+  chrome: "page" | "window";
   onToggleInfo: () => void;
   onExitThread: () => void;
 }) {
+  // THE POP-OUT WINDOW'S HEADER: the crumb reduced to the thread's own title,
+  // and nothing else. Every control the page header carries acts on something
+  // this window does not have.
+  if (chrome === "window") {
+    return (
+      <header className="flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4">
+        <Hash size={14} className="shrink-0 text-text-muted" />
+        <h1 className="truncate text-body font-semibold text-text-primary">
+          {threadTitle ?? channelName}
+        </h1>
+      </header>
+    );
+  }
+
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4">
       <Hash size={14} className="shrink-0 text-text-muted" />
@@ -351,20 +390,15 @@ function PaneHeader({
           </>
         )}
       </nav>
-      {/* Bookmarking a channel is a WRITE with no column behind it; the
-          assistant lane is its own surface. Both ride later phases. */}
+      {/* Bookmarking a channel is a WRITE with no column behind it. Title
+          furniture, so it stays with the crumb while the ACTION cluster does
+          not (Samuel, 2026-08-19). */}
       <IconButton icon={Bookmark} label="Bookmark channel" size={14} className="h-6 w-6" />
-      {/* THREAD VIEW ONLY — it pops out the open thread, and the channel view
-          has none. Sits beside the crumb it acts on rather than in the
-          channel-scoped cluster on the right (wiring plan Phase 10). */}
-      {threadTitle !== null && popOut}
       <span className="flex-1" />
-      {/* The channel-management cluster: settings, working folder, invite and
-          the kebab. It carried over WHOLESALE from the retired page at the
-          cutover (wiring plan Phase 12) and REPLACED an inert "More actions"
-          placeholder — the kebab inside it is the real one. */}
-      {manage}
-      <IconButton icon={Sparkles} label="Ask the assistant" />
+      {/* THREAD VIEW ONLY — it pops out the open thread, and the channel view
+          has none. Immediately LEFT of the info toggle, same `IconButton` face
+          (Samuel, 2026-08-19); it was beside the crumb until then. */}
+      {threadTitle !== null && popOut}
       <IconButton
         icon={Info}
         label="Channel info"

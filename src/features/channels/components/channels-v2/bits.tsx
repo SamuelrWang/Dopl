@@ -309,6 +309,39 @@ export function SectionHeader({
   );
 }
 
+/**
+ * ONE metadata row in the right-hand panel: a glyph, a label, and whatever
+ * states the value on the right.
+ *
+ * ⚠ It was module-private in `info-tab.tsx` until 2026-08-19, when the SETTINGS
+ * tab became a second caller — a labelled row with a control on the right is
+ * exactly the same object, and a local copy over there is how two panels in one
+ * column come to sit at different heights.
+ *
+ * `h-10` is the resting height; a row whose control needs more (a description
+ * line) passes `className` rather than forking the recipe.
+ */
+export function MetaRow({
+  icon: Icon,
+  label,
+  className,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("flex h-10 items-center gap-2 rounded-[8px] px-2", className)}>
+      <Icon size={14} className="shrink-0 text-text-muted" />
+      <span className="text-small text-text-secondary">{label}</span>
+      <span className="flex-1" />
+      <span className="flex items-center gap-1.5">{children}</span>
+    </div>
+  );
+}
+
 /** Bold section title inside the right-hand info panel. */
 export function PanelHeading({
   title,

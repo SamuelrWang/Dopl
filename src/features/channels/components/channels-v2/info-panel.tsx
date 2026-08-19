@@ -2,12 +2,17 @@
 
 /**
  * Channels v2 — RIGHT COLUMN: the channel's tabs. Info (`info-tab.tsx`),
- * Threads (`threads-tab.tsx`), Agents (`agents-tab.tsx`) and Links, which is a
- * deliberate empty state.
+ * Threads (`threads-tab.tsx`), Agents (`agents-tab.tsx`) and Settings, which is
+ * the pane header's evicted action cluster (`channel-manage.tsx` →
+ * `settings-tab.tsx`, injected as a slot for the same reason the panes take
+ * theirs: it is write-bearing and this file owns the tab row only).
  *
- * ⚠ Files left this row on 2026-08-18 — where a channel's files land is still
- * an OPEN QUESTION (wiring plan, Risk 10), and an empty tab was answering it
- * with "here".
+ * ⚠ THE FOURTH TAB WAS **LINKS** UNTIL 2026-08-19, and it was a deliberate empty
+ * state ("No links in this channel yet.") — Files had left the row on 2026-08-18
+ * because where a channel's files land is still an OPEN QUESTION (wiring plan,
+ * Risk 10) and an empty tab was answering it with "here". The same argument
+ * retires Links: it renders nothing and reserves the answer. **Nothing was
+ * rehomed out of it** — there was nothing in it.
  *
  * Local state: the active tab, and nothing else. The center pane's open thread,
  * the open AGENT and the mentions read-state are all lifted to
@@ -15,7 +20,7 @@
  * them back.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
@@ -33,7 +38,7 @@ const TABS = [
   { key: "info", label: "Info" },
   { key: "threads", label: "Threads" },
   { key: "agents", label: "Agents" },
-  { key: "links", label: "Links" },
+  { key: "settings", label: "Settings" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -56,6 +61,7 @@ export function ChannelsV2InfoPanel({
   mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
+  settings,
 }: {
   channel: Channel;
   channelName: string;
@@ -85,6 +91,14 @@ export function ChannelsV2InfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
+  /**
+   * The SETTINGS tab's body — `channel-manage.tsx › ChannelsV2ManageActions`,
+   * injected rather than imported because it is write-bearing and channel-scoped
+   * and this file owns the tab row. ⚠ Mounted only while the tab is open, which
+   * is deliberate: its three write hooks and four dialogs have no business being
+   * live behind the Info tab.
+   */
+  settings?: ReactNode;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
 
@@ -127,9 +141,7 @@ export function ChannelsV2InfoPanel({
           onOpenAgent={onOpenAgent}
         />
       ) : (
-        <p className="px-4 py-8 text-center text-caption text-text-muted">
-          No links in this channel yet.
-        </p>
+        settings
       )}
     </aside>
   );

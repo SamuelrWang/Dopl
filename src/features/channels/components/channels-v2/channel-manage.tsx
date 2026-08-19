@@ -6,13 +6,20 @@
  * wholesale — create, invite, visibility, delete, folders", second round of the
  * port's intent doc, deleted with the mock folder at that cutover).
  *
+ * ⚠ IT NO LONGER HANGS OFF THE PANE HEADER (Samuel, 2026-08-19). The header's
+ * right side is the info toggle and nothing else; this cluster is the RIGHT
+ * PANEL'S SETTINGS TAB now, where the LINKS empty state used to be. What moved
+ * is the HOST, not the controls: this file still owns every dialog, every write
+ * hook and the one `gate`, and `settings-tab.tsx` is the rows it renders into.
+ * The one control that changed shape is the kebab — `ChannelActionsMenu` was
+ * deleted and its items are explicit rows, with both confirmations unchanged.
+ *
  * ⚠ THIS FILE EXISTS BECAUSE THE OLD PAGE'S HEADER WAS THE ONLY ENTRY POINT TO
  * FIVE LIVE CONTROLS. `channels-view-core.tsx` and `channel-pane.tsx` were
  * deleted at the cutover (wiring plan Phase 12) and they owned the dialogs'
  * open state, the lifecycle/preference writes and the confirm dialogs. Nothing
  * below is new product surface: every component, hook and copy string is the
- * one the shipping page rendered, re-hosted on the v2 header so the cutover
- * orphans none of them.
+ * one the shipping page rendered, re-hosted so the cutover orphans none of them.
  *
  * ⚠ SPLIT OUT OF `channels-v2-core.tsx` RATHER THAN INLINED — the core is the
  * three-column shell plus its reads, and this is the write-bearing chrome that
@@ -25,7 +32,6 @@
  */
 
 import { useState } from "react";
-import { UserPlus } from "lucide-react";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
@@ -34,13 +40,12 @@ import { useChannelLifecycleWrites } from "../../hooks/use-channel-lifecycle-wri
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { useTrustRules } from "../../hooks/use-trust-rules";
 import { channelDisplayName } from "../../lib/channel-display";
-import { ChannelActionsMenu } from "../channel-actions-menu";
-import { ChannelFolderControl } from "../channel-folder-control";
 import { ChannelSettingsPopover } from "../channel-settings-popover";
 import { CreateChannelDialog } from "../create-channel-dialog";
 import { DirectMessageDialog } from "../direct-message-dialog";
 import { GoPublicDialog, needsGoPublicConfirm } from "../go-public-dialog";
 import { InviteDialog } from "../invite-dialog";
+import { ChannelsV2SettingsTab } from "./settings-tab";
 import type { AgentToolProfile, Channel, ChannelMember } from "../../types";
 
 export interface ChannelsV2ManageProps {
@@ -59,9 +64,10 @@ export interface ChannelsV2ManageProps {
 }
 
 /**
- * The v2 pane header's manage cluster: per-channel settings, the desktop-only
- * working folder, invite, and the kebab (visibility / archive / delete / leave)
- * with its confirm dialogs.
+ * The right panel's SETTINGS tab, whole: per-channel settings, the desktop-only
+ * working folder, invite, and the lifecycle rows (visibility / archive / delete
+ * / leave) with their confirm dialogs. It rendered as a header icon cluster
+ * until 2026-08-19 — see the file docblock.
  *
  * ⚠ ALL THREE WRITE HOOKS TAKE THE PAGE'S `gate`, not a second coordinator.
  * INVARIANTS §7/§8: one `useRefetchGate` per live surface, or a realtime
@@ -141,38 +147,25 @@ export function ChannelsV2ManageActions({
 
   return (
     <>
-      {channel.isMember && (
-        <ChannelSettingsPopover
-          channel={settingsChannel}
-          otherMembers={otherMembers}
-          trustedIds={trustedIds}
-          trustBusyIds={trustBusyIds}
-          onSetToolProfile={handleSetToolProfile}
-          toolProfileBusy={prefs.toolProfile.pending}
-          onToggleTrust={handleToggleTrust}
-        />
-      )}
-
-      {/* Desktop-only: the responding agent's working folder. Renders nothing
-          in a plain browser (feature-detected on window.dopl). */}
-      {channel.isMember && <ChannelFolderControl channelId={channel.id} />}
-
-      {/* A DM is a fixed 1:1 pair — no invite affordance (server also rejects). */}
-      {channel.isMember && !channel.isDirect && (
-        <button
-          type="button"
-          onClick={() => setInviteOpen(true)}
-          aria-label="Add members"
-          title="Add members"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-        >
-          <UserPlus size={16} />
-        </button>
-      )}
-
-      <ChannelActionsMenu
+      <ChannelsV2SettingsTab
         channel={channel}
         canManage={canManage}
+        // The popover is carried AS-IS into the tab's first row; its product
+        // fate is a separate open ruling and this change does not touch it.
+        settings={
+          channel.isMember ? (
+            <ChannelSettingsPopover
+              channel={settingsChannel}
+              otherMembers={otherMembers}
+              trustedIds={trustedIds}
+              trustBusyIds={trustBusyIds}
+              onSetToolProfile={handleSetToolProfile}
+              toolProfileBusy={prefs.toolProfile.pending}
+              onToggleTrust={handleToggleTrust}
+            />
+          ) : null
+        }
+        onInvite={() => setInviteOpen(true)}
         onToggleVisibility={handleToggleVisibility}
         onToggleArchive={lifecycle.toggleArchive}
         onRequestDelete={() => setConfirmDelete(true)}

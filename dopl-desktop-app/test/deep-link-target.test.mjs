@@ -389,6 +389,32 @@ test("isSafeSegment IS the rule pathSegments applies — one answer, two callers
   }
 });
 
+test("a dopl:// link can NOT open a bare pop-out thread window", () => {
+  // ⚠ THE POP-OUT'S LANDING BECAME A ROUTE OF ITS OWN ON 2026-08-19
+  // (`/{segment}/thread-window/{channelId}?thread=`, outside the SPA's app shell) so that a
+  // window opened to read one thread stops arriving with the sidebar, the tree and the info
+  // panel. It is deliberately absent from BOTH tables here, and the two absences are one
+  // decision: a pop-out is created by MAIN, at a window main built and registered, and a
+  // grammar that could mint one from an arbitrary caller's URL would be a new surface.
+  //
+  // What such a link resolves to is the table's existing rule for an unknown page inside a
+  // real workspace — that workspace's HOME page. It is asserted rather than assumed,
+  // because "it happens to fall through" is exactly the property a later edit breaks.
+  const PAGE = "thread-window";
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(WORKSPACE_PAGES, PAGE),
+    "a workspace-page row would make the thread window deep-linkable"
+  );
+  assert.ok(
+    !targetModule.ROOT_ROUTES.has(PAGE),
+    "a ROOT_ROUTES entry would too — that is what it does for `onboarding`"
+  );
+  const home = `/${SEG}/${WORKSPACE_HOME_PAGE}`;
+  assert.equal(webPathToRoute(`/${SEG}/${PAGE}/${CHAN}`), home);
+  assert.equal(webPathToRoute(`/${SEG}/${PAGE}`), home);
+  assert.equal(webPathToRoute(`/${PAGE}/${SEG}/${CHAN}`), `/${PAGE}/${WORKSPACE_HOME_PAGE}`);
+});
+
 test("the detail flag is per PAGE, and channels is the one that has a child", () => {
   // The value means "this page has a `:param` detail child", never "this page
   // exists" — mixing those up is how a third segment becomes a route that

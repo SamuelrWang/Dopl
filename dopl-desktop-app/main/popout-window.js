@@ -1,8 +1,18 @@
 // THE POP-OUT THREAD WINDOW, opt-in (wiring plan Phase 10, 2026-08-18).
 //
-// WHAT IT IS. A second window on the SAME SPA bundle, landing on the channels route with
-// ONE thread selected — the thread view's "Open as new window" affordance. Not a session
-// window: it shows the THREAD (the shared transcript), not an agent's run.
+// WHAT IT IS. A second window on the SAME SPA bundle showing ONE THREAD and nothing else —
+// the thread view's "Open as new window" affordance. Not a session window: it shows the
+// THREAD (the shared transcript), not an agent's run.
+//
+// ⚠ IT LANDED ON THE WHOLE CHANNELS PAGE UNTIL 2026-08-19, AND THAT WAS THE BUG SAMUEL
+// CALLED. A window opened to read one exchange arrived carrying the app sidebar, the
+// channels tree and the info panel — every surface the operator already had open behind it.
+// The landing is now a route of its own, OUTSIDE the SPA's `AppShellLayout`
+// (`apps/desktop-ui/src/pages/thread-window/index.tsx`), whose whole content is the
+// transcript, the composer and the thread's title. Its default size moved with it: 520x600,
+// the OLD SESSION WINDOW'S footprint (`main/session-window.js`), because that is the shape a
+// single-column transcript beside another app wants — the 720x820 it used before was sized
+// for a three-column page.
 //
 // ⚠ WHY IT COULD NOT EXIST BEFORE. Every renderer-reachable `ipcMain.handle` was bound to
 // the MAIN window's top frame, so a second SPA window would have had every `apiRequest`
@@ -18,21 +28,31 @@
 // identical sandbox, the identical `setWindowOpenHandler` deny, and the identical
 // navigation lock (only the one local index document, or the Vite origin in dev).
 //
-// ⚠ THE LANDING ROUTE IS THE ONE PHASE 9 AND THE PHASE 12 CUTOVER ALREADY BUILT —
-// `/{segment}/channels/{channelId}`, with the thread named as a `?thread=` SELECTION on
-// it. No new route row, no new `WORKSPACE_PAGES` entry, no change to the deep-link hand
-// copy or its drift test: a thread is not a page, it is which transcript the channels page
-// has open, and that has been a plain prop since the cutover
-// (`channels-v2-core.tsx › initialThreadId`). ⚠ It rides the HASH, because the SPA is a
-// hash router over a `file://` document (`apps/desktop-ui/src/app.tsx`) — which also means
-// the pop-out is landed at CREATION rather than steered afterwards over the navigate
-// bridge, so there is no mount race to lose.
+// ⚠ THE LANDING ROUTE IS THE THREAD WINDOW'S OWN — `/{segment}/thread-window/{channelId}`,
+// with the thread named as a `?thread=` SELECTION on it, exactly as before. It is a
+// TOP-LEVEL row in `apps/desktop-ui/src/routes.tsx`, deliberately outside the workspace
+// layout, and deliberately NOT in `WORKSPACE_PAGES` nor in `deep-link-target.js ›
+// ROOT_ROUTES`: a `dopl://` link must not be able to mint a bare thread window, because a
+// pop-out is created by MAIN at a window main built and registered. Such a link is an
+// unknown page inside a real workspace and opens that workspace's HOME page — the table's
+// existing rule, asserted in `test/deep-link-target.test.mjs`. The `WORKSPACE_PAGES` drift
+// test reads only that block of `routes.tsx`, so this row keeps it green by construction.
+// ⚠ It rides the HASH, because the SPA is a hash router over a `file://` document
+// (`apps/desktop-ui/src/app.tsx`) — which also means the pop-out is landed at CREATION
+// rather than steered afterwards over the navigate bridge, so there is no mount race.
 
 const { BrowserWindow } = require('electron');
 const appWindows = require('./app-windows');
 const spaWindow = require('./spa-window');
-const { CHANNELS_PAGE } = require('./shell-mode');
 const { diag } = require('./diag');
+
+// ⚠ A HAND COPY of `apps/desktop-ui/src/routes.tsx › THREAD_WINDOW_PATH` (main cannot
+// import the SPA's TypeScript — the same constraint `deep-link-target.js`'s page table is
+// under). It lives HERE rather than in `shell-mode.js` because this module is its only
+// reader: `CHANNELS_PAGE` is exported over there because `navigateToChannels` needs it, and
+// a route nobody else navigates to has no business in that file. `test/popout-window.test.mjs`
+// reads the SPA export and fails on drift.
+const THREAD_WINDOW_PAGE = 'thread-window';
 
 // ⚠ A RENDERER-DRIVEN WINDOW FACTORY WITH NO CEILING IS A RESOURCE PRIMITIVE. Four is well
 // above what a person opens on purpose and far below what a compromised page would want;
@@ -58,8 +78,8 @@ function popoutKey(channelId, threadId) {
  * UUID gate on the channel and `deep-link-target.js › isSafeSegment` on the other two).
  * This function refuses an EMPTY one and interpolates the rest — it is deliberately NOT a
  * second copy of the character rule, because a second copy is a second answer to it
- * (INVARIANTS §11). `page` is passed in so the ONE `CHANNELS_PAGE` string stays the only
- * spelling of that route in main.
+ * (INVARIANTS §11). `page` is passed in so the rule stays testable against any page string
+ * and the module's ONE spelling of the route lives at its single call site.
  */
 function threadRoute(segment, page, channelId, threadId) {
   if (!segment || !page || !channelId || !threadId) return null;
@@ -77,12 +97,20 @@ function sweep() {
 
 // The window itself. Same bundle, same preload, same navigation lock as the shell —
 // smaller, and freely movable/resizable, because it exists to sit beside something else.
+//
+// ⚠ 520x600 IS THE OLD SESSION WINDOW'S FOOTPRINT, taken deliberately (`session-window.js`,
+// item 7 of v2.2: default size = the MIN size, so the window opens at its most compact and
+// the operator grows it only when they want to). This window holds ONE single-column
+// transcript now, and that is the shape it was already proven at. ⚠ `title` is the
+// PRE-PAINT name only — the renderer sets `document.title` to "Dopl — <thread>" once the
+// thread loads and Electron copies it onto the window (`thread-window.tsx ›
+// threadWindowTitle`); nothing here disables that, and it must not start to.
 function createPopoutWindow(route) {
   const win = new BrowserWindow({
-    width: 720,
-    height: 820,
-    minWidth: 460,
-    minHeight: 420,
+    width: 520,
+    height: 600,
+    minWidth: 520,
+    minHeight: 600,
     title: 'Dopl',
     // --bg-base from the design tokens, so the first paint is not a white flash.
     backgroundColor: '#f5f7fa',
@@ -117,7 +145,7 @@ function createPopoutWindow(route) {
  */
 function openThreadWindow(target) {
   const t = target || {};
-  const route = threadRoute(t.segment, CHANNELS_PAGE, t.channelId, t.threadId);
+  const route = threadRoute(t.segment, THREAD_WINDOW_PAGE, t.channelId, t.threadId);
   if (!route) return { ok: false };
 
   const key = popoutKey(t.channelId, t.threadId);
@@ -163,6 +191,7 @@ module.exports = {
   openThreadWindow,
   count,
   MAX_POPOUTS,
+  THREAD_WINDOW_PAGE,
   // The pure half, for callers that need the rule rather than the window.
   threadRoute,
   popoutKey,

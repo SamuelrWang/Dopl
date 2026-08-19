@@ -54,14 +54,14 @@ export interface ChannelsV2CoreProps {
    */
   initialChannelId?: string | null;
   /**
-   * The thread a CALLER named, as an initial selection inside `initialChannelId`
-   * — the POP-OUT THREAD WINDOW's landing (wiring plan Phase 10, 2026-08-18).
-   * Main creates the window on `/{segment}/channels/{channelId}?thread={id}` and
-   * the SPA page reads the search param down to here.
+   * The thread a CALLER named, as an initial selection inside `initialChannelId`,
+   * read off `?thread=` by the SPA page (wiring plan Phase 10, 2026-08-18).
+   * ⚠ IT WAS THE POP-OUT WINDOW'S LANDING UNTIL 2026-08-19 — the pop-out has a
+   * thread-ONLY route of its own now (`pages/thread-window/`) and never lands here.
    *
    * ⚠ A SELECTION, NOT A ROUTE. A thread is not a page: it is which transcript
-   * the channels page has open, so this rides the SAME row the cutover built and
-   * adds no route, no `WORKSPACE_PAGES` entry and no deep-link grammar. It is
+   * the channels page has open, so this rides the `channels/:channelId` row the
+   * cutover built and adds no route and no deep-link grammar. It is
    * also DERIVED-CHECKED below like every other pick — a thread id not in this
    * channel's list falls back to the channel view rather than an empty thread.
    */
@@ -406,22 +406,6 @@ export function ChannelsV2Core({
                 />
               ) : null
             }
-            manage={
-              <ChannelsV2ManageActions
-                channel={channel}
-                workspaceId={workspaceId}
-                workspaceSlug={workspaceSlug}
-                currentUserId={currentUserId}
-                role={role}
-                members={members}
-                gate={gate}
-                onDeselect={() => setSelectedId(null)}
-                onRosterChanged={() => {
-                  void refetchChannels();
-                  void refetchMembers();
-                }}
-              />
-            }
             onToggleInfo={() => setInfoOpen((open) => !open)}
             onExitThread={() => setRequestedThreadId(null)}
             onOpenThread={setRequestedThreadId}
@@ -445,6 +429,24 @@ export function ChannelsV2Core({
               mentionsLoading={mentionsLoading}
               onOpenMention={openMention}
               onMarkAllMentionsRead={markAllMentionsRead}
+              // THE SETTINGS TAB (Samuel, 2026-08-19). This cluster hung off the
+              // pane HEADER until then; the header keeps only the info toggle.
+              settings={
+                <ChannelsV2ManageActions
+                  channel={channel}
+                  workspaceId={workspaceId}
+                  workspaceSlug={workspaceSlug}
+                  currentUserId={currentUserId}
+                  role={role}
+                  members={members}
+                  gate={gate}
+                  onDeselect={() => setSelectedId(null)}
+                  onRosterChanged={() => {
+                    void refetchChannels();
+                    void refetchMembers();
+                  }}
+                />
+              }
             />
           )}
         </>

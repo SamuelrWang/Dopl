@@ -13,10 +13,16 @@
 //   2. IT IS LOCKED DOWN LIKE THE SHELL. Same preload, same sandbox/contextIsolation, the
 //      same `setWindowOpenHandler` deny and the same navigation policing — SHARED from
 //      spa-window.js rather than re-declared, so the two cannot drift apart.
-//   3. IT LANDS ON THE ROUTE PHASE 9 AND THE CUTOVER ALREADY BUILT, via the hash, with the
-//      thread as a `?thread=` SELECTION. No new route, no new deep-link grammar.
+//   3. IT LANDS ON THE THREAD-ONLY ROUTE, via the hash, with the thread as a `?thread=`
+//      SELECTION. ⚠ It landed on the whole channels page until 2026-08-19, which is what
+//      made a window opened to read one exchange arrive with the sidebar, the tree and the
+//      info panel. The page string is a HAND COPY of the SPA's, so the last case in this
+//      file reads `routes.tsx` and fails on drift — a route main navigates to and the SPA
+//      does not have renders the "Not found" placeholder with nothing to say why.
 //   4. IT IS BOUNDED AND DEDUPED. A renderer-driven window factory with no ceiling is a
 //      resource primitive; asking twice for one thread fronts the window that has it.
+//   5. IT OPENS AT THE OLD SESSION WINDOW'S FOOTPRINT (520x600, min == default), which is
+//      the shape a single-column transcript beside another app was already proven at.
 //
 // Run: `node --test dopl-desktop-app/test/popout-window.test.mjs`
 
@@ -102,7 +108,6 @@ function load({ dev = "" } = {}) {
         policeNavigation: (win) => { policed.push(win); return win; },
       };
     }
-    if (id === "./shell-mode") return { CHANNELS_PAGE: "channels" };
     if (id === "./diag") return { diag: () => {} };
     throw new Error("unexpected require: " + id);
   };
@@ -114,31 +119,38 @@ function load({ dev = "" } = {}) {
 
 // ── The route ────────────────────────────────────────────────────────────────
 
-test("the landing route is the channels row the cutover built, with the thread as a SELECTION", () => {
+const PAGE = "thread-window";
+
+test("the landing route is the THREAD-ONLY one, with the thread as a `?thread=` SELECTION", () => {
   const { api } = load();
+  assert.equal(api.THREAD_WINDOW_PAGE, PAGE);
   assert.equal(
-    api.threadRoute(SEGMENT, "channels", CH, TH),
-    `/${SEGMENT}/channels/${CH}?thread=${TH}`
+    api.threadRoute(SEGMENT, PAGE, CH, TH),
+    `/${SEGMENT}/${PAGE}/${CH}?thread=${TH}`
   );
 });
 
-test("the route names NO page of its own — the ONE `channels` string comes from shell-mode", () => {
-  // A second `'channels'` literal here would be a second spelling of a route the Phase 12
-  // cutover renamed in one edit. It is passed IN, and the module reads it from shell-mode.
-  assert.match(SRC, /require\('\.\/shell-mode'\)/);
-  assert.match(SRC, /CHANNELS_PAGE/);
-  assert.equal(CODE.match(/'channels'/g), null, "no local copy of the page string");
+test("it does NOT land on the channels page any more", () => {
+  // ⚠ THE BUG SAMUEL CALLED. Landing there meant a window opened to read ONE thread
+  // arrived carrying the app sidebar, the channels tree and the info panel — every surface
+  // the operator already had open behind it.
+  const ctx = load();
+  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: TH });
+  const [, opts] = ctx.created[0].calls.loadFile[0];
+  assert.ok(!opts.hash.includes("/channels/"), `landed on ${opts.hash}`);
+  assert.equal(CODE.match(/'channels'/g), null, "no channels-page literal left here");
+  assert.ok(!/shell-mode/.test(CODE), "shell-mode's CHANNELS_PAGE is no longer a dependency");
 });
 
 test("an empty part yields NO route — the caller then refuses in its own shape", () => {
   const { api } = load();
   for (const args of [
-    ["", "channels", CH, TH],
+    ["", PAGE, CH, TH],
     [SEGMENT, "", CH, TH],
-    [SEGMENT, "channels", "", TH],
-    [SEGMENT, "channels", CH, ""],
-    [null, "channels", CH, TH],
-    [SEGMENT, "channels", CH, undefined],
+    [SEGMENT, PAGE, "", TH],
+    [SEGMENT, PAGE, CH, ""],
+    [null, PAGE, CH, TH],
+    [SEGMENT, PAGE, CH, undefined],
   ]) {
     assert.equal(api.threadRoute(...args), null, JSON.stringify(args));
   }
@@ -188,7 +200,7 @@ test("production loads the LOCAL index with the route on the HASH — never a UR
   ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: TH });
   const [file, opts] = ctx.created[0].calls.loadFile[0];
   assert.equal(file, "/app/renderer/app/index.html");
-  assert.deepEqual(opts, { hash: `/${SEGMENT}/channels/${CH}?thread=${TH}` });
+  assert.deepEqual(opts, { hash: `/${SEGMENT}/${PAGE}/${CH}?thread=${TH}` });
   assert.equal(ctx.created[0].calls.loadURL.length, 0, "no remote URL is ever loaded");
 });
 
@@ -196,7 +208,7 @@ test("dev loads the Vite origin with the same hash", () => {
   const ctx = load({ dev: "http://localhost:5173" });
   ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: TH });
   assert.deepEqual(ctx.created[0].calls.loadURL, [
-    `http://localhost:5173#/${SEGMENT}/channels/${CH}?thread=${TH}`,
+    `http://localhost:5173#/${SEGMENT}/${PAGE}/${CH}?thread=${TH}`,
   ]);
   assert.equal(ctx.created[0].calls.loadFile.length, 0);
 });
@@ -208,15 +220,77 @@ test("the pop-out is SHOWN once painted — somebody just asked for it", () => {
   assert.equal(ctx.created[0].wasShown(), true);
 });
 
+test("it opens at the OLD SESSION WINDOW'S 520x600, and that IS its floor", () => {
+  // Samuel's ruling (2026-08-19): the pop-out holds ONE single-column transcript now, and
+  // that is the footprint `main/session-window.js` was already proven at — default size ==
+  // min size, so the window opens at its most compact and the operator grows it by hand.
+  // The 720x820 it used before was sized for the three-column page it used to land on.
+  const ctx = load();
+  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: TH });
+  const o = ctx.created[0].options;
+  assert.equal(o.width, 520);
+  assert.equal(o.height, 600);
+  assert.equal(o.minWidth, 520);
+  assert.equal(o.minHeight, 600);
+});
+
 test("it is MOVABLE and resizable — the point of a pop-out", () => {
   const ctx = load();
   ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: TH });
   const o = ctx.created[0].options;
-  assert.equal(typeof o.width, "number");
-  assert.equal(typeof o.height, "number");
-  assert.ok(o.minWidth > 0 && o.minHeight > 0, "a floor, not a fixed size");
   assert.notEqual(o.resizable, false);
   assert.notEqual(o.movable, false);
+});
+
+test("the window is NAMED by the renderer, and main does not stop it", () => {
+  // Main creates this window from three ids and has no thread title — titles live behind an
+  // authenticated read the renderer is already making. Electron copies `document.title` onto
+  // the window by default; `thread-window.tsx › threadWindowTitle` writes "Dopl — <thread>",
+  // and the option below is the PRE-PAINT fallback for a window that never finishes loading.
+  const ctx = load();
+  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: TH });
+  assert.equal(ctx.created[0].options.title, "Dopl");
+  assert.ok(
+    !/page-title-updated/.test(CODE),
+    "main must not intercept the page title — the renderer is the only thing that knows it"
+  );
+});
+
+// ── The drift alarm ──────────────────────────────────────────────────────────
+
+test("the page string matches the SPA's route table", () => {
+  // Main cannot import the SPA's TypeScript, so `THREAD_WINDOW_PAGE` is a hand copy — the
+  // same shape (and the same risk) as `deep-link-target.js`'s page table. A route main
+  // navigates to and the SPA does not have renders the "Not found" placeholder, silently.
+  const routesSrc = readFileSync(
+    join(HERE, "..", "..", "apps", "desktop-ui", "src", "routes.tsx"),
+    "utf8"
+  );
+  const spa = /export const THREAD_WINDOW_PATH = "([^"]+)"/.exec(routesSrc);
+  assert.ok(spa, "could not find THREAD_WINDOW_PATH in routes.tsx");
+  assert.equal(load().api.THREAD_WINDOW_PAGE, spa[1]);
+  // And the row is really there, really outside the workspace layout.
+  assert.match(
+    routesSrc,
+    /path: `\/:workspaceSegment\/\$\{THREAD_WINDOW_PATH\}\/:channelId`/
+  );
+});
+
+test("the SPA route is NOT deep-linkable — a bare thread window is main's to make", () => {
+  // `WORKSPACE_PAGES` is the deep-link grammar's page table; a row there would let
+  // `dopl://open/{seg}/thread-window/{id}` mint one from an arbitrary caller's URL.
+  const routesSrc = readFileSync(
+    join(HERE, "..", "..", "apps", "desktop-ui", "src", "routes.tsx"),
+    "utf8"
+  );
+  const block = routesSrc.slice(
+    routesSrc.indexOf("export const WORKSPACE_PAGES"),
+    routesSrc.indexOf("export const WORKSPACE_HOME_PATH")
+  );
+  assert.ok(!block.includes("thread-window"), "the thread window must not be a workspace page");
+  // The other half — that it is not a ROOT_ROUTE either, and what a link naming it
+  // actually resolves to — lives in `test/deep-link-target.test.mjs`, which owns the
+  // grammar.
 });
 
 // ── Reuse and the budget ─────────────────────────────────────────────────────
@@ -279,7 +353,6 @@ test("a factory that THROWS answers `{ ok: false }` rather than taking the handl
     if (id === "./spa-window") {
       return { INDEX_HTML: "x", devUrl: () => "", spaWebPreferences: () => ({}), policeNavigation: (w) => w };
     }
-    if (id === "./shell-mode") return { CHANNELS_PAGE: "channels" };
     if (id === "./diag") return { diag: () => {} };
     throw new Error("unexpected require: " + id);
   };

@@ -30,15 +30,18 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * selection handed down as a plain prop — never a router dependency inside the
  * shared tree.
  *
- * ⚠ `?thread=` IS THE POP-OUT THREAD WINDOW'S LANDING (wiring plan Phase 10,
- * 2026-08-18) AND IT IS DELIBERATELY NOT A ROUTE. Main opens a second window on
- * `/{segment}/channels/{channelId}?thread={threadId}`
- * (`main/popout-window.js › threadRoute`), and a thread is not a page — it is
- * which transcript this page has open — so it rides the SAME `:channelId` row
- * the cutover built, adds no `routes.tsx` entry, and leaves the deep-link hand
- * copy in `main/deep-link-target.js › WORKSPACE_PAGES` and its drift test
- * untouched. Read here for the same reason `:channelId` is: `ChannelsV2Core` is
- * router-free by construction, so the param becomes a plain prop.
+ * ⚠ `?thread=` IS A SELECTION, NOT A ROUTE (wiring plan Phase 10, 2026-08-18):
+ * a thread is not a page, it is which transcript this page has open, so it
+ * rides the SAME `:channelId` row the cutover built, adds no `WORKSPACE_PAGES`
+ * entry, and leaves the deep-link hand copy in
+ * `main/deep-link-target.js › WORKSPACE_PAGES` and its drift test untouched.
+ * Read here for the same reason `:channelId` is: `ChannelsV2Core` is router-free
+ * by construction, so the param becomes a plain prop.
+ *   ⚠ **THE POP-OUT WINDOW NO LONGER LANDS HERE (2026-08-19).** It opened a
+ *   second window on THIS page until then, which meant a window opened to read
+ *   one thread arrived carrying the sidebar, the tree and the info panel. It has
+ *   a thread-ONLY route now — `pages/thread-window/index.tsx`, outside the app
+ *   shell — and `main/popout-window.js › threadRoute` builds that instead.
  *
  * ⚠ ONLY A SEAM. The whole tree is REUSED by import from
  * `@/features/channels/components/channels-v2/`, already client-side over

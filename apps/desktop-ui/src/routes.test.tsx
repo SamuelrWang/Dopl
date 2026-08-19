@@ -3,7 +3,12 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
-import { WORKSPACE_HOME_PATH, WORKSPACE_PAGES, routes } from "#/routes";
+import {
+  THREAD_WINDOW_PATH,
+  WORKSPACE_HOME_PATH,
+  WORKSPACE_PAGES,
+  routes,
+} from "#/routes";
 
 // The layout is now the real AppShellLayout, which fetches the workspace
 // list + segment resolution on mount — same transport mock as its own test.
@@ -170,5 +175,48 @@ describe("app routes", () => {
     });
     expect(paramless.state.matches.at(-1)?.route.path).toBe("channels");
     expect(WORKSPACE_PAGES.map((page) => page.path)).toContain("channels/:channelId");
+  });
+});
+
+// ── The pop-out thread window (Samuel, 2026-08-19) ───────────────────────────
+//
+// ⚠ THE WHOLE POINT OF THE ROW IS THAT IT IS **OUTSIDE** `AppShellLayout`. The pop-out
+// landed on the channels page until now, so a window opened to read ONE thread arrived
+// carrying the app sidebar, the channels tree and the info panel. A layout route cannot be
+// opted out of from inside, so the thread-only surface needs a row of its own — and a test
+// that only checked "the route matches" would stay green if somebody nested it back.
+
+describe("the thread-window route", () => {
+  it("matches, with its channel param and its `?thread=` selection", () => {
+    const router = createMemoryRouter(routes, {
+      initialEntries: [`/acme-ab12cd/${THREAD_WINDOW_PATH}/ch-1?thread=t-1`],
+    });
+    const match = router.state.matches.at(-1);
+    expect(match?.route.path).toBe(`/:workspaceSegment/${THREAD_WINDOW_PATH}/:channelId`);
+    expect(match?.params.channelId).toBe("ch-1");
+    expect(router.state.location.search).toBe("?thread=t-1");
+  });
+
+  it("is a TOP-LEVEL row — the app shell is not in its match chain", () => {
+    const shell = createMemoryRouter(routes, {
+      initialEntries: ["/acme-ab12cd/channels"],
+    });
+    const shellRoot = shell.state.matches[0]?.route.path;
+    expect(shellRoot).toBe("/:workspaceSegment");
+
+    const window = createMemoryRouter(routes, {
+      initialEntries: [`/acme-ab12cd/${THREAD_WINDOW_PATH}/ch-1`],
+    });
+    expect(window.state.matches).toHaveLength(1);
+    expect(window.state.matches[0]?.route.path).not.toBe("/:workspaceSegment");
+  });
+
+  it("is NOT a workspace page, so no deep link can reach it", () => {
+    // `WORKSPACE_PAGES` is what `main/deep-link-target.js` hand-copies; a row here would let
+    // `dopl://open/{seg}/thread-window/{id}` mint a bare thread window from any caller's
+    // URL. A pop-out is created by MAIN, at a window main built and registered.
+    const paths = WORKSPACE_PAGES.map((page) => page.path);
+    expect(paths).not.toContain(THREAD_WINDOW_PATH);
+    expect(paths.some((p) => p.startsWith(`${THREAD_WINDOW_PATH}/`))).toBe(false);
   });
 });

@@ -26,13 +26,19 @@ import {
   Tag,
   UserPlus,
   UserRound,
-  type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { cn } from "@/shared/lib/utils";
 import { formatShortDate } from "@/shared/lib/format-time";
-import { CountBadge, IconButton, PanelHeading, RolePill, StatusPill } from "./bits";
+import {
+  CountBadge,
+  IconButton,
+  MetaRow,
+  PanelHeading,
+  RolePill,
+  StatusPill,
+} from "./bits";
 import { MentionsList } from "./mentions-list";
 import {
   HARDCODED_LINKED_THREADS,
@@ -231,25 +237,6 @@ export function InfoTab({
           </p>
         )}
       </div>
-    </div>
-  );
-}
-
-function MetaRow({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: LucideIcon;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex h-10 items-center gap-2 rounded-[8px] px-2">
-      <Icon size={14} className="shrink-0 text-text-muted" />
-      <span className="text-small text-text-secondary">{label}</span>
-      <span className="flex-1" />
-      <span className="flex items-center gap-1.5">{children}</span>
     </div>
   );
 }

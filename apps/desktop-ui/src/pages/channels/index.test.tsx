@@ -347,11 +347,16 @@ describe("channels page", () => {
       `/api/channels/${CHANNEL_ID}/tasks`,
       `/api/channels/${CHANNEL_ID}/mentions`,
       "/api/channels/consent",
-      "/api/channels/trust",
     ]) {
       expect(requestsTo(path).length).toBeGreaterThan(0);
       expect(requestsTo(path)[0].headers["x-workspace-id"]).toBe(workspaceId);
     }
+
+    // ⚠ `/api/channels/trust` is NOT in that list any more (2026-08-19). The
+    // manage cluster moved off the pane header into the right panel's SETTINGS
+    // tab, so `useTrustRules` mounts with the tab rather than with the page —
+    // which is the point: a read behind a closed tab is a read nobody asked for.
+    expect(requestsTo("/api/channels/trust")).toHaveLength(0);
   });
 
   it("opens the channel the ROUTE names, not the first row", async () => {
@@ -431,15 +436,45 @@ describe("channels page", () => {
     // them was on the old header or its list pane, and the plan's KEEP list
     // names them — an unreachable dialog is a deleted feature with a file still
     // in the tree, which `npx knip` would not even flag.
+    //
+    // ⚠ THEY MOVED AGAIN ON 2026-08-19, WHICH IS WHY THIS TEST OPENS A TAB. The
+    // pane header now carries the info toggle and nothing else; the cluster is
+    // the right panel's SETTINGS tab, where the Links empty state used to be.
+    // The sidebar's two `+` entries did NOT move.
     renderPage();
 
     await screen.findByText("Picked it up, wiring the client queries now.");
-    expect(screen.getByRole("button", { name: "Channel actions" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Channel settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add channel" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "New direct message" })
     ).toBeInTheDocument();
+
+    // Nothing channel-scoped is on the header any more — not even mounted.
+    expect(screen.queryByRole("button", { name: "Channel settings" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
+    // The settings popover is carried AS-IS; the kebab's four items are rows.
+    expect(screen.getByRole("button", { name: "Channel settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make public" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete channel" })).toBeInTheDocument();
+
+    // And the tab's own read arrives with it, not before it.
+    await waitFor(() =>
+      expect(requestsTo("/api/channels/trust").length).toBeGreaterThan(0)
+    );
+  });
+
+  it("has no Links tab left to render an empty state into", async () => {
+    // It was a deliberate empty state ("No links in this channel yet.") holding
+    // the slot Settings took. Nothing was rehomed out of it — there was nothing
+    // in it — and where a channel's files and links land is still open.
+    renderPage();
+
+    await screen.findByText("Picked it up, wiring the client queries now.");
+    expect(screen.queryByRole("tab", { name: "Links" })).toBeNull();
+    expect(screen.queryByText("No links in this channel yet.")).toBeNull();
   });
 });
