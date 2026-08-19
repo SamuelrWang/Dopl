@@ -86,6 +86,20 @@ describe("channels-v2 threads tab", () => {
     expect(note.textContent).not.toMatch(/no threads/i);
   });
 
+  /**
+   * ⚠ AND IT MAY NOT OVER-ASSERT IN THE OTHER DIRECTION. The note used to say
+   * the channel "holds more than one page", which this read NEVER established:
+   * a page AT the ceiling counts as clipped precisely because a full page and
+   * an exhausted one are indistinguishable from here (INVARIANTS §9). A channel
+   * with exactly the limit was being told there was more.
+   */
+  it("claims nothing about what is NOT shown", () => {
+    renderTab({ truncated: true });
+    const note = screen.getByText(THREADS_CLIPPED_NOTE);
+    expect(note.textContent).not.toMatch(/more than one page/i);
+    expect(note.textContent).not.toMatch(/there are more/i);
+  });
+
   it("stays silent when the page was not clipped", () => {
     renderTab();
     expect(screen.queryByText(THREADS_CLIPPED_NOTE)).toBeNull();
@@ -94,6 +108,21 @@ describe("channels-v2 threads tab", () => {
   it("names the two parties, with the viewer as 'you'", () => {
     renderTab();
     expect(screen.getAllByText("you · Diana T.").length).toBeGreaterThan(0);
+  });
+
+  it("names a party with NO display name and NO email rather than rendering a gap", () => {
+    // ⚠ `view-model.ts › shortName` used to answer "" here, because `""` is
+    // not nullish and walked straight past its own "Member" fallback. The card
+    // then showed the avatar of somebody the byline did not name.
+    const nameless = indexMembers(
+      [
+        member({ userId: ME, displayName: "Sam Wang" }),
+        member({ userId: PEER, displayName: null, email: null, role: "member" }),
+      ],
+      ME
+    );
+    renderTab({ index: nameless });
+    expect(screen.getAllByText("you · Member").length).toBeGreaterThan(0);
   });
 
   it("marks the open thread's card as Viewing and opens the other", () => {

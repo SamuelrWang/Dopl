@@ -106,6 +106,41 @@ export function buildMentionIndex(
   return index;
 }
 
+/**
+ * THE HANDLE A PICKER SHOULD INSERT for a chosen member: the first handle they
+ * claim that {@link buildMentionIndex} resolves BACK to them, or `null` when
+ * every one of them is ambiguous.
+ *
+ * ⚠ THIS IS WHAT MAKES THE COMPOSER'S AUTOCOMPLETE AGREE WITH THE RESOLVER BY
+ * CONSTRUCTION RATHER THAN BY KEEPING TWO RULES IN STEP (F-210). The picker
+ * suggests on a SUBSTRING match, which is wider than the resolver's exact
+ * equality and correctly so — a human then confirms. What was missing is that
+ * the confirmation had to insert text the resolver accepts, and the only place
+ * that can be decided is here, beside the derivation it has to match. A picker
+ * that inserted `@Diana Taylor` (or `@Taylor`) would show a name and tag
+ * nobody.
+ *
+ * ⚠ IT ASKS THE INDEX, NOT JUST {@link handlesOf}. Rule 5 fails ambiguity
+ * CLOSED, so a handle two members claim maps to `null` — inserting it would be
+ * inserting a token that resolves to nobody. Falling back through the member's
+ * remaining handles is exactly right: `@dianataylor` still lands when `@diana`
+ * is contested. `null` means every handle they answer to is contested, and the
+ * caller must not offer them.
+ *
+ * ⚠ ORDER IS THE INDEX'S OWN (squashed display name, its first word, then the
+ * same two off the email local part), so the inserted token is the one the
+ * index claimed FIRST for that person.
+ */
+export function insertableHandle(
+  candidate: MentionCandidate,
+  index: MentionIndex
+): string | null {
+  for (const handle of handlesOf(candidate)) {
+    if (index.get(handle) === candidate.userId) return handle;
+  }
+  return null;
+}
+
 /** A token (`@diana,`) -> its comparable handle (`diana`), or null when the
  *  token carries no handle at all. */
 export function mentionHandleOf(token: string): string | null {

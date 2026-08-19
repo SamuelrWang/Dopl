@@ -72,6 +72,12 @@ export interface ChannelsV2SidebarProps {
 
 type SectionKey = "favorites" | "direct" | "rooms";
 
+/** What a section says when the FILTER emptied it — distinct from what it says
+ *  when the section is genuinely empty. ⚠ Exported for the test: a silent
+ *  section and a section saying "nothing matches" look identical to a
+ *  screenshot and are opposite facts. */
+export const SIDEBAR_NO_MATCHES = "No matches.";
+
 export function ChannelsV2Sidebar({
   rooms,
   direct,
@@ -118,6 +124,11 @@ export function ChannelsV2Sidebar({
   // center pane, and with the inbox open the pane is showing neither.
   const threadSelected =
     openThreadId !== null && threads.some((t) => t.id === openThreadId);
+
+  // Filtered ONCE, per section, and read by both the rows and the empty line —
+  // two `.filter()` calls would let the guard and the list disagree.
+  const directShown = direct.filter(matches);
+  const roomsShown = rooms.filter(matches);
 
   const branch = (channel: Channel) => (
     <ChannelBranch
@@ -226,8 +237,22 @@ export function ChannelsV2Sidebar({
         />
         {!collapsed.has("direct") && (
           <div className="flex flex-col gap-px px-2">
-            {direct.filter(matches).map(branch)}
-            {direct.length === 0 && <EmptyRow label="No direct messages yet." />}
+            {directShown.map(branch)}
+            {/* ⚠ THE GUARD READS THE FILTERED LIST, NOT THE RAW ONE. Reading
+                `direct.length` meant a query that matched nothing rendered
+                NEITHER rows nor an empty line — a section that looked broken
+                rather than one that had answered. The two absences are also
+                different facts and are worded differently: "none exist" is not
+                "none match what you typed". */}
+            {directShown.length === 0 && (
+              <EmptyRow
+                label={
+                  direct.length === 0
+                    ? "No direct messages yet."
+                    : SIDEBAR_NO_MATCHES
+                }
+              />
+            )}
           </div>
         )}
 
@@ -252,8 +277,14 @@ export function ChannelsV2Sidebar({
         />
         {!collapsed.has("rooms") && (
           <div className="flex flex-col gap-px px-2">
-            {rooms.filter(matches).map(branch)}
-            {rooms.length === 0 && <EmptyRow label="No channels yet." />}
+            {roomsShown.map(branch)}
+            {roomsShown.length === 0 && (
+              <EmptyRow
+                label={
+                  rooms.length === 0 ? "No channels yet." : SIDEBAR_NO_MATCHES
+                }
+              />
+            )}
           </div>
         )}
       </div>

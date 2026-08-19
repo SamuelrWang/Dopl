@@ -34,7 +34,8 @@ import {
   splitChannels,
   threadRows,
 } from "./view-model";
-import { requestedThreadIds, sidebarThreads } from "./view-model-requested";
+// Kept on one line: this file sits a handful of lines inside the 500-line cap.
+import { consentExemptThreadIds, requestedThreadIds, sidebarThreads } from "./view-model-requested";
 
 export interface ChannelsV2CoreProps {
   workspaceId: string;
@@ -224,7 +225,11 @@ export function ChannelsV2Core({
   // slices it; `null` means "could not ask" (plain browser, or an older main)
   // and is deliberately carried as null all the way to the tab, which words the
   // two absences differently.
-  const agentSessions = useDesktopSessions();
+  // ⚠ `refresh` is the REFUSAL path only (`agents-model.ts ›
+  // DesktopSessionsFeed`) — main answering `{ok:false}` is the one fact no
+  // push announces. Not a poll.
+  const { sessions: agentSessions, refresh: refreshAgents } =
+    useDesktopSessions();
 
   // Realtime → coalesced refetch, deferred while a local write is in flight. The whole
   // wiring is `live.ts`, split out at the Phase 10 cap; what stays here is WHAT a doorbell
@@ -269,9 +274,18 @@ export function ChannelsV2Core({
     () => requestedThreadIds(messages, requests),
     [messages, requests]
   );
+  // ⚠ THE SECOND ARM, AND DELIBERATELY NOT `requested`: a pending inbound row
+  // may legally carry no `message_seq`, names no thread, and so cannot earn a
+  // Clock glyph — but it must still keep the threads it might be about
+  // REACHABLE past the 24h window (`view-model-requested.ts`).
+  const consentExempt = useMemo(
+    () => consentExemptThreadIds(threads, requests),
+    [threads, requests]
+  );
   const treeThreads = useMemo(
-    () => sidebarThreads(threads, requested),
-    [threads, requested]
+    // `undefined` keeps the derivation's own `Date.now()` default.
+    () => sidebarThreads(threads, requested, undefined, consentExempt),
+    [threads, requested, consentExempt]
   );
 
   const rows = useMemo(
@@ -461,6 +475,7 @@ export function ChannelsV2Core({
         messages={messages}
         currentUserId={currentUserId}
         onClose={() => setOpenAgent(null)}
+        onRefreshSessions={refreshAgents}
       />
 
       {/* Workspace-scoped, so they mount OUTSIDE the channel branch above — a

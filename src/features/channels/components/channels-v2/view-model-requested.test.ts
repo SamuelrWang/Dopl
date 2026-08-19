@@ -11,9 +11,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { requestedThreadIds } from "./view-model-requested";
-import { CHANNEL_ID, message, ME, PEER } from "./test-fixtures";
-import type { ChannelConsentRequest } from "../../types";
+import {
+  consentExemptThreadIds,
+  requestedThreadIds,
+  sidebarThreads,
+} from "./view-model-requested";
+import { CHANNEL_ID, message, thread, ME, PEER } from "./test-fixtures";
+import { SIDEBAR_THREAD_ACTIVE_WINDOW_MS } from "../../constants";
+import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 
 function consent(
   over: Partial<ChannelConsentRequest> = {}
@@ -70,7 +75,37 @@ describe("requestedThreadIds", () => {
   it("ignores a seq-less request rather than guessing which thread it names", () => {
     // ⚠ A seq-less row is also the one the de-dupe index does not cover
     // (INVARIANTS §6) — there is no trigger identity to match on, either.
+    // ⚠ THE DROP IS DELIBERATE AND STAYS: this set wears the Clock glyph and
+    // the words "awaiting your approval", which are an assertion about ONE
+    // thread. What such a row costs the operator is answered separately, by
+    // `consentExemptThreadIds` below.
     expect(requestedThreadIds([OPENER], [consent({ messageSeq: null })]).size).toBe(0);
+  });
+
+  it("ignores an ABSENT seq the same way it ignores a null one", () => {
+    // ⚠ `messageSeq !== null` let `undefined` straight through, and the key it
+    // then built was the literal `"ch-1:undefined"`.
+    const absent = { ...consent() } as Partial<ChannelConsentRequest>;
+    delete absent.messageSeq;
+    expect(
+      requestedThreadIds([OPENER], [absent as ChannelConsentRequest]).size
+    ).toBe(0);
+  });
+
+  it("does NOT let two missing values agree with each other", () => {
+    // ⚠ THE SELF-MATCH. With the seq absent on BOTH sides, the old key
+    // `"ch-1:undefined"` matched `"ch-1:undefined"` and marked a thread
+    // requested on the strength of nothing at all. Both sides must be numbers.
+    const seqless = { ...consent() } as Partial<ChannelConsentRequest>;
+    delete seqless.messageSeq;
+    const untimed = { ...OPENER } as Partial<ChannelMessage>;
+    delete untimed.seq;
+    expect(
+      requestedThreadIds(
+        [untimed as ChannelMessage],
+        [seqless as ChannelConsentRequest]
+      ).size
+    ).toBe(0);
   });
 
   it("matches on (channel, seq), not seq alone", () => {
@@ -97,5 +132,88 @@ describe("requestedThreadIds", () => {
       [consent(), consent({ id: "c-2", messageSeq: 4 })]
     );
     expect([...ids].sort()).toEqual(["t-1", "t-2"]);
+  });
+});
+
+/**
+ * THE OTHER HALF OF A SEQ-LESS ASK.
+ *
+ * A pending inbound consent row with no `message_seq` is LEGAL — the de-dupe
+ * index is partial on `message_seq IS NOT NULL` precisely because a request
+ * raised without a triggering seq has no trigger identity (migration
+ * `20260726140000`). Dropping it from `requestedThreadIds` is right: the row
+ * carries no thread reference of any kind (there is no task/thread column on
+ * `channel_consent_requests`), so naming one would be a guess wearing the words
+ * "awaiting your approval".
+ *
+ * ⚠ BUT THE SAME SET ALSO DROVE THE SIDEBAR'S 24h-WINDOW EXEMPTION, and there
+ * the drop meant the operator had a live pending ask with NO ROW ANYWHERE to
+ * walk into once its thread aged out. REACHABILITY is not an assertion, so it
+ * can be answered by the join that IS possible: channel + requester + the
+ * operator who must decide, against a thread's two parties (INVARIANTS §5).
+ */
+describe("consentExemptThreadIds — the join a seq-less ask DOES support", () => {
+  const ASKED = thread({
+    id: "t-asked",
+    createdBy: PEER, // the requester opened it…
+    targetUserId: ME, // …addressed to the viewer, who must decide
+  });
+  const seqless = (over: Partial<ChannelConsentRequest> = {}) =>
+    consent({ messageSeq: null, ...over });
+
+  it("admits the thread this requester opened for this operator, in this channel", () => {
+    expect([...consentExemptThreadIds([ASKED], [seqless()])]).toEqual(["t-asked"]);
+  });
+
+  it("admits NOTHING from a row that CAN name its thread — that one is `requested`", () => {
+    // A row with a seq is placed exactly by `requestedThreadIds`; a second,
+    // looser answer for it would put rows in the tree that surface never marked.
+    expect(consentExemptThreadIds([ASKED], [consent()]).size).toBe(0);
+  });
+
+  it("does not reach across channels, requesters, or addressees", () => {
+    expect(
+      consentExemptThreadIds([ASKED], [seqless({ channelId: "ch-other" })]).size
+    ).toBe(0);
+    expect(
+      consentExemptThreadIds([ASKED], [seqless({ requesterUserId: "u-third" })]).size
+    ).toBe(0);
+    expect(
+      consentExemptThreadIds([ASKED], [seqless({ operatorUserId: "u-third" })]).size
+    ).toBe(0);
+  });
+
+  it("drops a row whose requester is GONE rather than matching every thread", () => {
+    // `requester_user_id` is ON DELETE SET NULL. Matching a null against a
+    // thread's `createdBy` is not a join, it is a wildcard.
+    expect(
+      consentExemptThreadIds([ASKED], [seqless({ requesterUserId: null })]).size
+    ).toBe(0);
+  });
+
+  it("ignores decided and outbound rows, like every other consent read here", () => {
+    expect(consentExemptThreadIds([ASKED], [seqless({ status: "denied" })]).size).toBe(0);
+    expect(consentExemptThreadIds([ASKED], [seqless({ kind: "outbound" })]).size).toBe(0);
+  });
+});
+
+describe("the sidebar's exemption arm", () => {
+  const now = Date.parse("2026-08-18T12:00:00.000Z");
+  const stale = thread({
+    id: "t-stale",
+    createdBy: PEER,
+    targetUserId: ME,
+    lastActivityAt: new Date(now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000).toISOString(),
+  });
+
+  it("keeps an aged thread reachable when a seq-less ask points at it", () => {
+    const exempt = consentExemptThreadIds([stale], [consent({ messageSeq: null })]);
+    expect(sidebarThreads([stale], new Set(), now, exempt).map((t) => t.id)).toEqual([
+      "t-stale",
+    ]);
+  });
+
+  it("still drops it with no pending ask at all", () => {
+    expect(sidebarThreads([stale], new Set(), now, new Set())).toEqual([]);
   });
 });

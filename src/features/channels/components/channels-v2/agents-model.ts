@@ -29,7 +29,7 @@
  * shell name or a truthy `window.dopl`.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSpaBridge, type DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 
 /**
@@ -49,6 +49,24 @@ export function agentKey(session: {
 }
 
 /**
+ * The desktop's session feed, plus the one imperative way to re-read it.
+ *
+ * ⚠ `refresh` EXISTS FOR THE REFUSAL PATH AND NOTHING ELSE. The feed is a PUSH
+ * and stays one: main dispatches, the projection moves, the push re-renders.
+ * The single case a push cannot cover is a control main REFUSED — the operator
+ * pressed Pause on an agent whose registry entry was already gone, so nothing
+ * changed on that side and nothing will be pushed. Re-reading is how the panel
+ * stops showing a live-looking agent that is not there. It is NOT a poll and
+ * must not become one.
+ */
+export interface DesktopSessionsFeed {
+  /** `null` = could not ask; `[]` = asked, nothing is running. Never collapse
+   *  one into the other (INVARIANTS §11 — UNKNOWN is not EMPTY). */
+  sessions: DesktopSessionSummary[] | null;
+  refresh: () => void;
+}
+
+/**
  * Subscribe to the desktop's own session feed.
  *
  * `null` = no bridge, or a main without the feed. `[]` = a bridge with nothing
@@ -56,8 +74,32 @@ export function agentKey(session: {
  * reading it while rendering makes the server and the first client render
  * disagree — the subscription effect is the only place it is read.
  */
-export function useDesktopSessions(): DesktopSessionSummary[] | null {
+export function useDesktopSessions(): DesktopSessionsFeed {
   const [summaries, setSummaries] = useState<DesktopSessionSummary[] | null>(null);
+  // ONE mounted flag for the imperative re-read. The subscription below keeps
+  // its own `live` local because it is scoped to a single effect run; a
+  // refresh fired from a click has no effect to be scoped to, and an answer
+  // that lands after unmount must not set state.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const refresh = useCallback(() => {
+    const sessions = getSpaBridge()?.sessions;
+    if (typeof sessions?.summaries !== "function") return;
+    void sessions
+      .summaries()
+      .then((r) => {
+        if (mounted.current) setSummaries(r.sessions);
+      })
+      // A failed re-read leaves the last pushed frame standing. It is strictly
+      // less wrong than replacing a real feed with "could not ask".
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const sessions = getSpaBridge()?.sessions;
@@ -93,7 +135,7 @@ export function useDesktopSessions(): DesktopSessionSummary[] | null {
     };
   }, []);
 
-  return summaries;
+  return { sessions: summaries, refresh };
 }
 
 /**
@@ -156,12 +198,32 @@ export function metric(value: number | null | undefined): number | null {
 
 /** Whether the pause / end controls can be offered at all. Feature-detected like
  *  every other bridge capability: an older main has the feed and not the
- *  controls, and must show no buttons rather than buttons that do nothing. */
+ *  controls, and must show no buttons rather than buttons that do nothing.
+ *
+ *  ⚠ THIS GATES THE STOP VERBS AND NOTHING ELSE. It used to gate the whole
+ *  control strip, which hid "Open window" on every main that had `reopen` and
+ *  not `pause`/`end` — a real build shape, since `reopen` is the OLD op shared
+ *  by both preloads and the other two arrived with the SPA. Three independent
+ *  capabilities, three detections; see {@link canOpenAgentWindow}. */
 export function canControlAgents(): boolean {
   const sessions = getSpaBridge()?.sessions;
   return (
     typeof sessions?.pause === "function" && typeof sessions?.end === "function"
   );
+}
+
+/**
+ * Whether this agent's own window can be revealed — a SEPARATE question from
+ * {@link canControlAgents}, and the older capability of the two.
+ *
+ * ⚠ `reopen` is declared NON-OPTIONAL on `SpaBridgeSurface["sessions"]`, which
+ * is a claim about the type and not about the preload on the machine actually
+ * running: a main predating the op ships a `sessions` object without it, and
+ * the type cannot know. Detected at the call site like every other bridge
+ * member (INVARIANTS §11).
+ */
+export function canOpenAgentWindow(): boolean {
+  return typeof getSpaBridge()?.sessions?.reopen === "function";
 }
 
 export type AgentControl = "pause" | "end";
@@ -201,5 +263,11 @@ export async function openAgentWindow(session: {
   channelId: string;
   taskId: string;
 }): Promise<void> {
-  await getSpaBridge()?.sessions?.reopen(session.channelId, session.taskId);
+  // ⚠ The optional chain covered `sessions` and not `reopen`, so on a main
+  // without the op this threw "reopen is not a function" out of a click
+  // handler. Same detection as the gate that hides the button, so the two
+  // cannot disagree.
+  const sessions = getSpaBridge()?.sessions;
+  if (typeof sessions?.reopen !== "function") return;
+  await sessions.reopen(session.channelId, session.taskId);
 }

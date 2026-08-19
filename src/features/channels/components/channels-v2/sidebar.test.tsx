@@ -15,7 +15,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { ChannelsV2Sidebar } from "./sidebar";
+import { ChannelsV2Sidebar, SIDEBAR_NO_MATCHES } from "./sidebar";
 import { SIDEBAR_THREAD_ACTIVE_WINDOW_MS } from "../../constants";
 import { channel, member, thread, ME, PEER } from "./test-fixtures";
 import { sidebarThreads } from "./view-model-requested";
@@ -143,6 +143,47 @@ describe("channels-v2 sidebar", () => {
     });
     expect(screen.getByRole("button", { name: "Front-end" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Website" })).toBeNull();
+  });
+
+  /**
+   * ⚠ A SECTION THAT MATCHES NOTHING MUST SAY SO. The empty-state guards read
+   * the UNFILTERED arrays, so a non-matching query rendered NEITHER rows nor an
+   * empty line — a blank column that looks broken rather than one that has
+   * answered. And "none exist" is not "none match": the two are different
+   * facts and are worded differently.
+   */
+  it("says NO MATCHES when the filter empties a section that has rows", () => {
+    renderSidebar();
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
+      target: { value: "zzz-nothing" },
+    });
+    expect(screen.queryByRole("button", { name: "Website" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Diana Taylor" })).toBeNull();
+    // Once per emptied section — Channels and Direct messages both.
+    expect(screen.getAllByText(SIDEBAR_NO_MATCHES)).toHaveLength(2);
+    // ⚠ And NOT the genuinely-empty wording: nothing was established about
+    // whether this workspace has channels.
+    expect(screen.queryByText("No channels yet.")).toBeNull();
+    expect(screen.queryByText("No direct messages yet.")).toBeNull();
+  });
+
+  it("keeps the genuinely-empty wording when there is no query at all", () => {
+    renderSidebar({ rooms: [], direct: [] });
+    expect(screen.getByText("No channels yet.")).not.toBeNull();
+    expect(screen.getByText("No direct messages yet.")).not.toBeNull();
+    expect(screen.queryByText(SIDEBAR_NO_MATCHES)).toBeNull();
+  });
+
+  it("keeps the genuinely-empty wording even under a query", () => {
+    // An empty section cannot have been emptied BY the filter.
+    renderSidebar({ rooms: [], direct: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
+      target: { value: "anything" },
+    });
+    expect(screen.getByText("No channels yet.")).not.toBeNull();
+    expect(screen.queryByText(SIDEBAR_NO_MATCHES)).toBeNull();
   });
 
   it("selects a channel and opens a thread through its callbacks", () => {

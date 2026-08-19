@@ -38,9 +38,17 @@ import type { ChannelThread } from "../../types";
  *
  * ⚠ It may NOT let the clip pass as an absence: "this channel has no such
  * thread" is an assertion this read never established.
+ *
+ * ⚠ AND IT MAY NOT OVER-ASSERT IN THE OTHER DIRECTION EITHER. It used to say
+ * "this channel holds more than one page", which the read never established: a
+ * page AT the ceiling counts as clipped (INVARIANTS §9) precisely BECAUSE the
+ * reader cannot tell a full page from an exhausted one, and a channel with
+ * exactly `CHANNEL_THREAD_LIST_LIMIT` threads was being told there were more.
+ * The wording now states only what IS on screen — the count, and that the
+ * order is activity — and claims nothing whatever about what is not.
  */
 export const THREADS_CLIPPED_NOTE =
-  "Showing the most recently active threads — this channel holds more than one page. Nothing here was closed or archived; older exchanges are simply below the cut.";
+  "Showing the most recently active threads, up to this list's limit. Nothing here was closed or archived; anything not listed is simply below the cut.";
 
 export function ThreadsTab({
   threads,

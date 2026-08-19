@@ -152,6 +152,37 @@ describe("channels-v2 mentions inbox", () => {
     expect(screen.queryByText(MENTIONS_CLIPPED_NOTE)).toBeNull();
   });
 
+  /**
+   * ⚠ THE CLIP NOTE MAY NOT OVER-ASSERT EITHER. It used to say "there are more
+   * than one page", which this read never established: a page AT the ceiling
+   * counts as clipped precisely because a full page and an exhausted one are
+   * indistinguishable from here (INVARIANTS §9).
+   */
+  it("the clipped note claims nothing about what is NOT shown", () => {
+    open({ truncated: true });
+    const note = screen.getByText(MENTIONS_CLIPPED_NOTE);
+    expect(note.textContent).not.toMatch(/more than one page/i);
+    expect(note.textContent).not.toMatch(/there are more/i);
+  });
+
+  /**
+   * ⚠ A ROW ALWAYS NAMES ITS AUTHOR. `view-model.ts › shortName` used to answer
+   * "" for an author the roster and the projection can both only describe as
+   * blank — and `""` is not nullish, so its own "Member" fallback never fired.
+   * The row then rendered a dot, an avatar and no name at all.
+   */
+  it("names an author with nothing to name them by rather than rendering a gap", () => {
+    const anonymous = mention({
+      messageId: "m-anon",
+      authorUserId: "u-ghost",
+      authorName: null,
+      snippet: "no name anywhere",
+    });
+    open({ rows: [anonymous] });
+    const item = screen.getByText("no name anywhere").closest("button")!;
+    expect(within(item).getByText("Member")).not.toBeNull();
+  });
+
   it("an empty inbox says nothing tags you rather than rendering a clipped note", () => {
     open({ rows: [] });
     expect(

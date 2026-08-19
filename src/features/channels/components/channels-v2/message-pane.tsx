@@ -17,7 +17,14 @@
  * the scroller and the scroll-to-message signal.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { Bookmark, ChevronRight, Hash, Info, Sparkles } from "lucide-react";
 import { IconButton } from "./bits";
@@ -35,6 +42,109 @@ import type { ChannelMember, ChannelThread } from "../../types";
 export interface ScrollTarget {
   messageId: string;
   nonce: number;
+}
+
+/**
+ * What a scroll target that is NOT IN THE LOADED TRANSCRIPT says out loud.
+ *
+ * ⚠ The click still marks the mention read and still navigates — those are
+ * correct and they happen. What could not happen is the scroll, because the row
+ * is below the transcript read's own ceiling. Silently doing two of three
+ * things is the failure: the operator clicks a tag, the panel visibly reacts,
+ * and the transcript does not move, with nothing anywhere saying why.
+ *
+ * ⚠ IT PROMISES NO REMEDY, because there is none to offer: this pane has no
+ * page argument and no deeper read (the same shape the two clip notes are in —
+ * INVARIANTS §9). It states what happened and stops.
+ */
+export const SCROLL_TARGET_MISSING_NOTE =
+  "That message is older than the loaded history, so the transcript did not move.";
+
+/** How long the flash tint stands on a row that WAS found. */
+const FLASH_MS = 1600;
+/** How long the "older than the loaded history" line stands. Longer than the
+ *  flash: a tint is glanced at, a sentence is read. */
+const MISSING_NOTICE_MS = 6000;
+
+/**
+ * How close to the bottom still counts as being AT the bottom. A reader who has
+ * drifted a line is still following the conversation; one who has scrolled up
+ * to read history is not, and yanking them down is the classic chat bug.
+ */
+const STICK_SLACK_PX = 64;
+
+/**
+ * STICK TO BOTTOM — the behaviour the retired page had and this pane lost at
+ * the cutover. A transcript that renders oldest-first and never scrolls opens
+ * on the oldest message in the channel, which is the wrong end of every chat
+ * surface ever built.
+ *
+ * THREE RULES, and the third is the one the old page got wrong:
+ *
+ *  1. A CHANNEL OR THREAD SWITCH LANDS AT THE BOTTOM. A new view has no reading
+ *     position to preserve, so there is nothing to be polite about.
+ *  2. NEW ROWS FOLLOW, while the reader is at the bottom.
+ *  3. ⚠ A READER SCROLLED UP IS NEVER YANKED. The old page followed
+ *     unconditionally, so a message arriving mid-scrollback threw the reader
+ *     back to the end of the conversation. The near-bottom guard is one
+ *     subtraction and is strictly better.
+ *
+ * ⚠ REFS, NOT STATE, AND THAT IS NOT A MICRO-OPTIMISATION.
+ * `react-hooks/set-state-in-effect` is an ERROR in this tree; a pin held in
+ * state would also re-render the whole transcript on every scroll event, to
+ * decide something nothing renders.
+ *
+ * ⚠ THE PIN IS MEASURED ON THE USER'S OWN SCROLL AND NOWHERE ELSE — the same
+ * rule the desktop's session stream keeps (`renderer/session/session.js`,
+ * `bottomGap`). A row that GROWS after paint must not silently un-pin a reader
+ * sitting at the bottom; only a scroll says "I moved away".
+ *
+ * Returns `release`, which the mention jump calls: a deliberate landing in
+ * history is a reading position, and the next arriving message must not undo
+ * it.
+ */
+function useStickToBottom(
+  scrollerRef: RefObject<HTMLDivElement | null>,
+  /** Channel + thread — the identity of the VIEW, so a switch is one change. */
+  viewKey: string,
+  rowCount: number
+) {
+  const pinned = useRef(true);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      pinned.current =
+        el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_SLACK_PX;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [scrollerRef]);
+
+  // Rule 1. Re-arms the pin as well as moving: the previous view's reading
+  // position says nothing about this one.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    pinned.current = true;
+    el.scrollTop = el.scrollHeight;
+  }, [scrollerRef, viewKey]);
+
+  // Rules 2 and 3. ⚠ DECLARED BEFORE THE SCROLL-TARGET EFFECT BELOW, which is
+  // load-bearing: effects run in declaration order, so on the commit where a
+  // mention click both swapped the view and asked for a jump, the jump runs
+  // LAST and wins. A stick-to-bottom that ran afterwards would land the reader
+  // at the newest message they did not ask for.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || !pinned.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [scrollerRef, rowCount]);
+
+  return useCallback(() => {
+    pinned.current = false;
+  }, []);
 }
 
 export function ChannelsV2MessagePane({
@@ -91,35 +201,64 @@ export function ChannelsV2MessagePane({
   onOpenThread: (id: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  // ⚠ DECLARED FIRST. Its effects must run BEFORE the scroll-target effect
+  // below, so a mention jump is never overwritten by a stick-to-bottom in the
+  // same commit — see the hook's own note.
+  const releasePin = useStickToBottom(
+    scrollerRef,
+    `${channelId}:${thread?.id ?? ""}`,
+    rows.length
+  );
+
   // The flash is DERIVED: a target flashes until its nonce is marked spent by
   // the timeout. No synchronous setState in the effect — the render pass
   // already knows the flash is on the moment the target lands.
   const [spentNonce, setSpentNonce] = useState(0);
-  const flashId =
-    scrollTarget && scrollTarget.nonce !== spentNonce
-      ? scrollTarget.messageId
-      : null;
+  const live = scrollTarget !== null && scrollTarget.nonce !== spentNonce;
+  // ⚠ ANSWERED FROM `rows`, NOT FROM THE DOM. Whether the target is inside the
+  // loaded transcript is a PURE question about the data this pane was handed,
+  // and answering it during render is what lets the notice below exist without
+  // a `set-state-in-effect` violation. Every row kind carries its message id as
+  // `row.id` and renders it as `data-message-id`, so this and the query below
+  // ask the same question of the same key.
+  const loaded = live && rows.some((row) => row.id === scrollTarget.messageId);
+  const flashId = loaded ? scrollTarget.messageId : null;
+  // ⚠ NOT while the read is still in flight: "older than the loaded history" is
+  // a claim about a FINISHED transcript, and an unloaded one has no history yet.
+  const missing = live && !loading && !loaded;
 
   // Runs POST-render, so when a mention click also swapped the view, the new
   // transcript is already in the DOM by the time we look the row up. Smooth
   // scroll unless the user asked for reduced motion; the flash fades on its own
   // via the row's colour transition.
   useEffect(() => {
-    if (!scrollTarget) return;
+    // Wait for the rows rather than spending the nonce against an empty
+    // transcript — a target dropped mid-load is a silently lost navigation.
+    if (!scrollTarget || loading) return;
     const row = scrollerRef.current?.querySelector(
       `[data-message-id="${scrollTarget.messageId}"]`
     );
-    if (!row) return;
-    const reduceMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    row.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-      block: "center",
-    });
-    const timer = setTimeout(() => setSpentNonce(scrollTarget.nonce), 1600);
+    if (row) {
+      // A deliberate landing in history IS a reading position: the next message
+      // to arrive must not drag the reader back down out of it.
+      releasePin();
+      const reduceMotion =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      row.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "center",
+      });
+    }
+    // ⚠ THE NONCE IS SPENT EITHER WAY. It used to be spent only on a HIT — a
+    // miss returned early, so the flash state pinned on that nonce forever and
+    // the next click on the same message was a no-op on top of a no-op.
+    const timer = setTimeout(
+      () => setSpentNonce(scrollTarget.nonce),
+      row ? FLASH_MS : MISSING_NOTICE_MS
+    );
     return () => clearTimeout(timer);
-  }, [scrollTarget]);
+  }, [scrollTarget, loading, releasePin]);
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -133,6 +272,17 @@ export function ChannelsV2MessagePane({
         onExitThread={onExitThread}
       />
       <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        {/* ⚠ INSIDE THE SCROLLER, ABOVE THE ROWS — beside the transcript it is
+            about, not in a footer a skimmer drops. Same placement rule the clip
+            notes follow. */}
+        {missing && (
+          <p
+            role="status"
+            className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-muted"
+          >
+            {SCROLL_TARGET_MISSING_NOTE}
+          </p>
+        )}
         {loading ? (
           <p role="status" aria-busy="true" className="sr-only">
             Loading transcript

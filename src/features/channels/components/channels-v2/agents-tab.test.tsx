@@ -21,10 +21,14 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { AgentsTab } from "./agents-tab";
-import { agentSentMessages, ChannelsV2AgentPanel } from "./agent-panel";
+import {
+  AGENT_CONTROL_REFUSED,
+  agentSentMessages,
+  ChannelsV2AgentPanel,
+} from "./agent-panel";
 import { agentKey, agentsForChannel, formatTokens } from "./agents-model";
 import { CHANNEL_ID, ME, PEER, message } from "./test-fixtures";
 
@@ -272,7 +276,7 @@ describe("ChannelsV2AgentPanel", () => {
     expect(screen.queryByLabelText(/Message this agent directly/i)).toBeNull();
   });
 
-  it("hides the pause / end controls when the bridge cannot offer them", () => {
+  it("hides EVERY control when the bridge cannot offer any of them", () => {
     // No `window.dopl` at all — a plain browser, or a main older than the ops.
     const agent = summary();
     render(
@@ -286,6 +290,7 @@ describe("ChannelsV2AgentPanel", () => {
     );
     expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
     expect(screen.queryByRole("button", { name: "End" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open window" })).toBeNull();
   });
 
   it("offers pause / end on a live agent and calls the bridge with (channel, thread)", () => {
@@ -350,5 +355,144 @@ describe("ChannelsV2AgentPanel", () => {
     const text = (container.textContent ?? "").toLowerCase();
     expect(text).not.toContain("agent session");
     expect(text).not.toContain("channel session");
+  });
+});
+
+/**
+ * THE THREE CAPABILITIES ARE THREE GATES.
+ *
+ * ⚠ `reopen` is the OLD op, shared by both preloads (main has ONE reopen path);
+ * `pause` / `end` arrived with the SPA. A single `canControlAgents()` gate over
+ * the whole strip therefore hid "Open window" on every main that has `reopen`
+ * and neither stop verb — a real build shape, and the affordance it hid is the
+ * one that still worked. The matrix below is the old-preload matrix: a feed
+ * with no controls, and controls with no reopen.
+ */
+describe("the agent view's control strip — one gate per capability", () => {
+  const mountPanel = (agent = summary()) =>
+    render(
+      <ChannelsV2AgentPanel
+        openAgent={agentKey(agent)}
+        sessions={[agent]}
+        messages={[]}
+        currentUserId={ME}
+        onClose={noop}
+      />
+    );
+
+  it("offers OPEN WINDOW on a main that has reopen and neither stop verb", () => {
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { reopen: vi.fn() },
+    };
+    mountPanel();
+    expect(screen.getByRole("button", { name: "Open window" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "End" })).toBeNull();
+  });
+
+  it("offers the STOP VERBS on a main that has them and no reopen", () => {
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { pause: vi.fn(), end: vi.fn() },
+    };
+    mountPanel();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "End" })).toBeTruthy();
+    // ⚠ And NOT a button that would throw "reopen is not a function".
+    expect(screen.queryByRole("button", { name: "Open window" })).toBeNull();
+  });
+
+  it("calls reopen with (channel, thread) when it IS there", () => {
+    const reopen = vi.fn().mockResolvedValue({ ok: true });
+    (window as { dopl?: unknown }).dopl = { apiRequest: vi.fn(), sessions: { reopen } };
+    mountPanel();
+    screen.getByRole("button", { name: "Open window" }).click();
+    expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, "t-1");
+  });
+});
+
+/**
+ * A REFUSED STOP VERB IS SAID OUT LOUD.
+ *
+ * ⚠ `state === "ended"` is a frame old at best: an agent that ends between the
+ * paint and the click leaves both buttons enabled, main answers `{ok:false}`,
+ * and the boolean used to be DISCARDED — the operator saw a pressed button and
+ * no consequence, indistinguishable from success. And because main changed
+ * NOTHING, no push follows to correct the panel, which is why the feed is
+ * re-read on the same path.
+ */
+describe("the just-ended race", () => {
+  const mountPanel = (onRefreshSessions?: () => void) => {
+    const agent = summary();
+    render(
+      <ChannelsV2AgentPanel
+        openAgent={agentKey(agent)}
+        sessions={[agent]}
+        messages={[]}
+        currentUserId={ME}
+        onClose={noop}
+        onRefreshSessions={onRefreshSessions}
+      />
+    );
+  };
+
+  it("shows the refusal and re-reads the feed when main says {ok:false}", async () => {
+    const pause = vi.fn().mockResolvedValue({ ok: false, reason: "no such session" });
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { reopen: vi.fn(), pause, end: vi.fn() },
+    };
+    const refresh = vi.fn();
+    mountPanel(refresh);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    });
+
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(AGENT_CONTROL_REFUSED)).toBeTruthy();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays silent on a control that WORKED", async () => {
+    const end = vi.fn().mockResolvedValue({ ok: true });
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { reopen: vi.fn(), pause: vi.fn(), end },
+    };
+    const refresh = vi.fn();
+    mountPanel(refresh);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "End" }));
+    });
+
+    expect(screen.queryByText(AGENT_CONTROL_REFUSED)).toBeNull();
+    // ⚠ No re-read on success either: a successful stop DOES move main's
+    // projection, and the push is the delivery path. This must not become a poll.
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("clears the notice when the operator tries again", async () => {
+    const pause = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true });
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { reopen: vi.fn(), pause, end: vi.fn() },
+    };
+    mountPanel();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    });
+    expect(screen.getByText(AGENT_CONTROL_REFUSED)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    });
+    expect(screen.queryByText(AGENT_CONTROL_REFUSED)).toBeNull();
   });
 });

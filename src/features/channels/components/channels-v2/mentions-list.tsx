@@ -41,9 +41,15 @@ import type { ChannelMention } from "../../types";
  *
  * ⚠ It may NOT let the clip pass as an absence: "nothing else tags you here" is
  * an assertion this read never established.
+ *
+ * ⚠ NOR MAY IT OVER-ASSERT THE CLIP. It used to say "there are more than one
+ * page", which the read never established: a page AT the ceiling counts as
+ * clipped (INVARIANTS §9) exactly because a full page and an exhausted one are
+ * indistinguishable from here, so an inbox holding precisely the limit was
+ * being told there was more. The wording now states what IS shown and stops.
  */
 export const MENTIONS_CLIPPED_NOTE =
-  "Showing your most recent tags in this channel — there are more than one page. Nothing here was dismissed; older ones are simply below the cut.";
+  "Showing your most recent tags in this channel, up to this list's limit. Nothing here was dismissed; anything not listed is simply below the cut.";
 
 export function MentionsList({
   mentions,

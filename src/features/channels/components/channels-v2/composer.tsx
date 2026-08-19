@@ -28,16 +28,20 @@
 import { useMemo, useState } from "react";
 import { AtSign, Bot, Expand, Mic, Paperclip, Smile, X, Zap } from "lucide-react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { Avatar } from "@/shared/ui/avatar";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { FIELD_WELL } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 import { AgentTargetPill, IconButton } from "./bits";
 import { agentLabel } from "./fixtures";
-import { memberLabel } from "../../lib/channel-display";
+import {
+  insertMentionHandle,
+  mentionQuery,
+  mentionSuggestions,
+  MentionPopover,
+  type MentionSuggestion,
+} from "./composer-mentions";
 import { useThreadWrites } from "../../hooks/use-thread-writes";
 import { newClientMsgId } from "../../lib/optimistic-cache";
-import { memberPerson } from "./view-model";
 import type { ChannelMember } from "../../types";
 
 /**
@@ -49,12 +53,6 @@ function sendHint(panelOpen: boolean, canSend: boolean, pending: boolean): strin
   if (pending) return "Sending…";
   if (!panelOpen) return "Write a message first";
   return "A request needs a title and at least one agent";
-}
-
-/** The trailing `@token` of a draft, or null when the caret is not in one. */
-function mentionQuery(draft: string): string | null {
-  const match = /(?:^|\s)@([^\s@]*)$/.exec(draft);
-  return match ? match[1].toLowerCase() : null;
 }
 
 export function ChannelsV2Composer({
@@ -101,13 +99,26 @@ export function ChannelsV2Composer({
     [members, currentUserId]
   );
 
+  // THE @-PICKER (F-210). `query === null` = the caret is not in a token, so
+  // there is no popover at all; an empty ARRAY is a token that matches nobody,
+  // which the popover states rather than vanishing on.
   const query = mentionQuery(draft);
-  const suggestions = useMemo(() => {
-    if (query === null) return [];
-    return members
-      .filter((m) => memberLabel(m).toLowerCase().includes(query))
-      .slice(0, 5);
-  }, [members, query]);
+  const suggestions = useMemo(
+    () => (query === null ? [] : mentionSuggestions(members, query)),
+    [members, query]
+  );
+  // Which row Enter/Tab takes. ⚠ CLAMPED at read rather than reset in an
+  // effect: the list re-filters on every keystroke, and a stale index would
+  // insert whoever happened to land in that slot.
+  const [highlight, setHighlight] = useState(0);
+  const active = Math.min(highlight, Math.max(suggestions.length - 1, 0));
+  const pickMention = (suggestion: MentionSuggestion) => {
+    // ⚠ The HANDLE, never the label. `insertableHandle` derived it from the
+    // resolver's own index, so what lands in the draft resolves to this member
+    // by construction rather than by two rules agreeing.
+    setDraft((prev) => insertMentionHandle(prev, suggestion.handle));
+    setHighlight(0);
+  };
 
   // Re-opening resets the addressees to ALL. A request you dropped everyone
   // from is not a draft worth restoring — the next one starts whole.
@@ -169,7 +180,13 @@ export function ChannelsV2Composer({
 
   return (
     <div className="relative shrink-0 px-4 pb-4 pt-1">
-      {suggestions.length > 0 && <MentionPopover members={suggestions} />}
+      {query !== null && (
+        <MentionPopover
+          suggestions={suggestions}
+          active={active}
+          onPick={pickMention}
+        />
+      )}
       {/*
         The card itself carries NO row gap — the panel's own spacing rides
         inside the collapsing region, so a closed panel leaves no phantom gap
@@ -207,13 +224,41 @@ export function ChannelsV2Composer({
           <div className="flex items-start gap-2">
             <textarea
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                // A new token is a new shortlist — start at the top of it.
+                setHighlight(0);
+              }}
               onKeyDown={(e) => {
-                // Enter sends, Shift+Enter breaks the line — and an IME
-                // composition never sends, or a mid-word confirm posts.
-                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) {
-                  return;
+                // ⚠ THE IME GUARD COVERS THE WHOLE HANDLER, NOT JUST SEND. A
+                // composition's own Enter CONFIRMS a candidate and its arrows
+                // MOVE through one; stealing either posts a half-typed word or
+                // silently rewrites what the IME is offering. This was already
+                // the rule for Enter and now guards the picker's keys too.
+                if (e.nativeEvent.isComposing) return;
+                if (suggestions.length > 0) {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const step = e.key === "ArrowDown" ? 1 : -1;
+                    // Wraps, so the list has no dead end in either direction.
+                    setHighlight(
+                      (active + step + suggestions.length) % suggestions.length
+                    );
+                    return;
+                  }
+                  // ⚠ THE PICKER OUTRANKS SEND while it is open. Enter with a
+                  // highlighted candidate confirms the candidate — posting the
+                  // half-typed `@dia` instead is the behaviour every chat
+                  // client trained the reader out of expecting.
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    if (e.key === "Enter" && e.shiftKey) return;
+                    e.preventDefault();
+                    pickMention(suggestions[active]);
+                    return;
+                  }
                 }
+                // Enter sends, Shift+Enter breaks the line.
+                if (e.key !== "Enter" || e.shiftKey) return;
                 e.preventDefault();
                 submit();
               }}
@@ -341,35 +386,6 @@ function AgentRequestPanel({
           "h-8 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted"
         )}
       />
-    </div>
-  );
-}
-
-/** Roster-resolved @-mention candidates for the token being typed. */
-function MentionPopover({ members }: { members: ChannelMember[] }) {
-  return (
-    <div className="bento absolute bottom-[calc(100%-4px)] left-4 z-10 w-[220px] p-1.5">
-      <p className="px-2 pb-1 pt-0.5 text-label font-semibold uppercase tracking-wide text-text-muted">
-        Members
-      </p>
-      {members.map((member, i) => (
-        <div
-          key={member.userId}
-          className={cn(
-            "flex h-8 items-center gap-2 rounded-[8px] px-2 text-small",
-            i === 0
-              ? "bg-surface-raised-3 font-medium text-text-primary"
-              : "text-text-secondary"
-          )}
-        >
-          <Avatar
-            person={memberPerson(member)}
-            size="xs"
-            className="h-[20px] w-[20px] text-micro"
-          />
-          <span className="truncate">{memberLabel(member)}</span>
-        </div>
-      ))}
     </div>
   );
 }

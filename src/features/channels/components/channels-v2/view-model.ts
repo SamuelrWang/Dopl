@@ -400,8 +400,19 @@ export function threadParties(
 /** "Diana Taylor" → "Diana T."; the viewer is always "you". */
 export function shortName(person: AvatarPerson, currentUserId: string): string {
   if (person.userId === currentUserId) return "you";
-  const [first, last] = (person.displayName ?? person.email ?? "").split(" ");
-  return last ? `${first} ${last.charAt(0)}.` : (first ?? "Member");
+  // ⚠ `??` IS NOT ENOUGH, AND THE FALLBACK IS THE WHOLE POINT. Both fields are
+  // free text a profile may legitimately carry BLANK, and `""` is not nullish —
+  // so `displayName ?? email ?? ""` kept the empty string, `"".split(" ")` gave
+  // `[""]`, and `first ?? "Member"` never fired because `""` is not nullish
+  // either. The row then rendered as NOTHING: no name, no fallback, a party
+  // silently missing from a thread's byline. Pick the first source that
+  // actually SAYS something, and only then shorten it.
+  const source = [person.displayName, person.email]
+    .map((value) => (value ?? "").trim())
+    .find((value) => value.length > 0);
+  if (source === undefined) return "Member";
+  const [first, last] = source.split(/\s+/);
+  return last ? `${first} ${last.charAt(0)}.` : first;
 }
 
 /** Direct channels are the DM section; everything else is the channel tree. */

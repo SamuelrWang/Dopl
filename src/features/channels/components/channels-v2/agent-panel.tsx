@@ -47,7 +47,7 @@
  * elevation but cannot keep a 14px radius against the page edge.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bot, CornerDownRight, PanelTop, Pause, Square, X } from "lucide-react";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatChannelTimestamp, formatRelativeTime } from "@/shared/lib/format-time";
@@ -58,6 +58,7 @@ import { AgentLiveness, IconButton } from "./bits";
 import {
   agentKey,
   canControlAgents,
+  canOpenAgentWindow,
   formatTokens,
   metric,
   openAgentWindow,
@@ -96,6 +97,7 @@ export function ChannelsV2AgentPanel({
   messages,
   currentUserId,
   onClose,
+  onRefreshSessions,
 }: {
   /** `agentKey(session)` of the open agent, or `null` for closed. */
   openAgent: string | null;
@@ -104,6 +106,9 @@ export function ChannelsV2AgentPanel({
   messages: readonly ChannelMessage[];
   currentUserId: string;
   onClose: () => void;
+  /** Re-read the desktop's session feed. Called ONLY when main refuses a stop
+   *  verb, which is the one state change no push announces. */
+  onRefreshSessions?: () => void;
 }) {
   const live =
     (openAgent &&
@@ -132,7 +137,7 @@ export function ChannelsV2AgentPanel({
         <>
           <AgentPanelHeader agent={agent} onClose={onClose} />
           <AgentStats agent={agent} />
-          <AgentControls agent={agent} />
+          <AgentControls agent={agent} onRefreshSessions={onRefreshSessions} />
           <SentFeed
             messages={agentSentMessages(messages, agent.taskId, currentUserId)}
             threadTitle={agent.threadTitle}
@@ -212,50 +217,121 @@ function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
 }
 
 /**
- * PAUSE · END · OPEN WINDOW. All three feature-detected: an older main has the
- * feed and not the controls, and must show no buttons rather than buttons that
+ * What a refused stop verb says. ⚠ Exported for the test: a swallowed refusal
+ * and a successful stop are indistinguishable on screen, which is the whole
+ * failure — the operator presses Pause, nothing visible happens, and they are
+ * left to guess whether it worked.
+ */
+export const AGENT_CONTROL_REFUSED =
+  "This agent already ended — nothing was changed.";
+
+/** How long the refusal notice stands before clearing itself. */
+const REFUSAL_NOTICE_MS = 6000;
+
+/**
+ * PAUSE · END · OPEN WINDOW. All feature-detected: an older main has the feed
+ * and not the controls, and must show no buttons rather than buttons that
  * silently do nothing.
+ *
+ * ⚠ TWO GATES, NOT ONE, BECAUSE THEY ARE TWO CAPABILITIES. `pause`/`end`
+ * arrived with the SPA; `reopen` is the older op shared by both preloads. A
+ * single `canControlAgents()` gate over the whole strip hid "Open window" on
+ * every main that has `reopen` and neither stop verb — a real build shape, and
+ * the affordance it hid is the one that still worked.
  *
  * ⚠ AN ENDED AGENT OFFERS NEITHER STOP VERB. Its registry entry is gone (the
  * pill outlives it by the retention rule), so main would answer `{ok:false}` —
  * disabled here is the honest face of that, not a guess.
+ *
+ * ⚠ AND THE RACE IS SAID OUT LOUD. `state === "ended"` is a frame old at best:
+ * an agent that ends between the paint and the click leaves both buttons
+ * enabled, main answers `{ok:false}`, and the boolean used to be DISCARDED —
+ * the operator saw a pressed button and no consequence. The refusal now
+ * renders, and the feed is re-read so the panel stops showing a live agent
+ * that is not there.
  */
-function AgentControls({ agent }: { agent: DesktopSessionSummary }) {
+function AgentControls({
+  agent,
+  onRefreshSessions,
+}: {
+  agent: DesktopSessionSummary;
+  /** Re-read the desktop's feed after a refusal — see `agents-model.ts ›
+   *  DesktopSessionsFeed`. Absent in a tree that has no feed to refresh. */
+  onRefreshSessions?: () => void;
+}) {
   const control = useAgentControls();
   const [pending, setPending] = useState<AgentControl | null>(null);
-  if (!canControlAgents()) return null;
+  const [refused, setRefused] = useState(false);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    },
+    []
+  );
+
+  const canControl = canControlAgents();
+  const canOpen = canOpenAgentWindow();
+  if (!canControl && !canOpen) return null;
   const stopped = agent.state === "ended";
 
   const run = (which: AgentControl) => {
     setPending(which);
+    setRefused(false);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
     // The feed is the source of truth for what happened: main dispatches, the
     // projection moves, the push re-renders this panel. Nothing is stamped
     // optimistically — an agent that did not stop must not look stopped.
-    void control(which, agent).finally(() => setPending(null));
+    void control(which, agent)
+      .then((ok) => {
+        if (ok) return;
+        // ⚠ A REFUSAL IS NOT A PUSH. Main changed nothing, so nothing will
+        // arrive to correct the panel; the re-read is what closes that gap.
+        setRefused(true);
+        noticeTimer.current = setTimeout(
+          () => setRefused(false),
+          REFUSAL_NOTICE_MS
+        );
+        onRefreshSessions?.();
+      })
+      .finally(() => setPending(null));
   };
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border-default px-3.5 py-2">
-      <ControlButton
-        icon={Pause}
-        label="Pause"
-        title="Stop the turn it is running. It stays yours and keeps its context."
-        disabled={stopped || pending !== null}
-        onClick={() => run("pause")}
-      />
-      <ControlButton
-        icon={Square}
-        label="End"
-        title="End this agent. The thread is untouched."
-        disabled={stopped || pending !== null}
-        onClick={() => run("end")}
-      />
-      <ControlButton
-        icon={PanelTop}
-        label="Open window"
-        title="Reveal this agent's own window. Starts nothing."
-        onClick={() => void openAgentWindow(agent)}
-      />
+    <div className="flex shrink-0 flex-col gap-1.5 border-b border-border-default px-3.5 py-2">
+      <div className="flex items-center gap-2">
+        {canControl && (
+          <>
+            <ControlButton
+              icon={Pause}
+              label="Pause"
+              title="Stop the turn it is running. It stays yours and keeps its context."
+              disabled={stopped || pending !== null}
+              onClick={() => run("pause")}
+            />
+            <ControlButton
+              icon={Square}
+              label="End"
+              title="End this agent. The thread is untouched."
+              disabled={stopped || pending !== null}
+              onClick={() => run("end")}
+            />
+          </>
+        )}
+        {canOpen && (
+          <ControlButton
+            icon={PanelTop}
+            label="Open window"
+            title="Reveal this agent's own window. Starts nothing."
+            onClick={() => void openAgentWindow(agent)}
+          />
+        )}
+      </div>
+      {refused && (
+        <p role="status" className="text-caption text-text-muted">
+          {AGENT_CONTROL_REFUSED}
+        </p>
+      )}
     </div>
   );
 }

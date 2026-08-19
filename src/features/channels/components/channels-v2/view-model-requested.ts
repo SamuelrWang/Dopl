@@ -40,13 +40,22 @@ import type {
  * globally unique today (INVARIANTS §5), so the channel is redundant — and it
  * is exactly the kind of redundancy to keep, because the day it stops being
  * unique this read would silently mark the wrong thread.
+ *
+ * ⚠ THE SEQ IS COMPARED AS A NUMBER, NOT AS "NOT NULL". `message_seq` is a
+ * NULLABLE bigint and the DTO types it `number | null` — but a wire row that
+ * omits the key entirely arrives as `undefined`, which sails through a
+ * `!== null` guard and then stringifies to the key `"ch-1:undefined"`. A
+ * message whose own `seq` ever went absent would produce that SAME key and
+ * self-match, marking a thread requested on the strength of two missing values
+ * agreeing with each other. Both sides are therefore required to be finite
+ * numbers before either is put in a key.
  */
 export function requestedThreadIds(
   messages: ChannelMessage[],
   consentRequests: ChannelConsentRequest[]
 ): ReadonlySet<string> {
   const pending = consentRequests.filter(
-    (r) => r.kind === "inbound" && r.status === "pending" && r.messageSeq !== null
+    (r) => isPendingInbound(r) && isSeq(r.messageSeq)
   );
   if (pending.length === 0) return EMPTY_REQUESTED;
   const keys = new Set(pending.map((r) => `${r.channelId}:${r.messageSeq}`));
@@ -54,7 +63,74 @@ export function requestedThreadIds(
   for (const message of messages) {
     const threadId = threadIdOf(message);
     if (!threadId) continue;
+    if (!isSeq(message.seq)) continue;
     if (keys.has(`${message.channelId}:${message.seq}`)) ids.add(threadId);
+  }
+  return ids;
+}
+
+/** A pending INBOUND consent row — the only kind that says "you have been asked
+ *  and have not answered". An outbound review is about this operator's own
+ *  reply, and a decided row is answered. */
+function isPendingInbound(r: ChannelConsentRequest): boolean {
+  return r.kind === "inbound" && r.status === "pending";
+}
+
+/** A usable `seq`. ⚠ Never `!= null`: `undefined` passes that and then
+ *  stringifies into a key that matches another absence. */
+function isSeq(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * THREADS A SEQ-LESS PENDING ASK MAKES REACHABLE — the sidebar's window
+ * exemption for the requests {@link requestedThreadIds} cannot place.
+ *
+ * ⚠ WHY THIS IS A SECOND FUNCTION AND NOT A WIDENING OF THE FIRST. A consent
+ * row carries NO thread reference of any kind — the table is
+ * `(channel_id, workspace_id, operator_user_id, requester_user_id, kind,
+ * message_seq, …)` and nothing else links it to `channel_tasks` (migration
+ * `20260726100000`). A seq-less row is LEGAL: the de-dupe index is partial on
+ * `message_seq IS NOT NULL` precisely because a request raised without a
+ * triggering seq has no trigger identity (migration `20260726140000`). So for
+ * such a row there is no honest way to say WHICH thread is waiting — and
+ * {@link requestedThreadIds} keeps dropping it, because its answer wears the
+ * Clock glyph and the words "awaiting your approval", which are an assertion
+ * about one thread.
+ *
+ * ⚠ BUT DROPPING IT TWICE WAS THE BUG. The same set also drives the sidebar's
+ * 24h-window exemption, and there the cost of the drop is that the operator has
+ * a live pending ask with NO ROW ANYWHERE to walk into once the thread ages
+ * out. That is a reachability question, not an assertion, so it can be answered
+ * by the join that IS possible: the row names a CHANNEL, a REQUESTER, and the
+ * OPERATOR who must decide — and a thread is one requester + one target
+ * (INVARIANTS §5). Threads in that channel that this requester opened AND
+ * addressed to this operator are the candidate set. It may admit more than one
+ * thread, which is exactly why it is kept out of the glyph: showing a reader a
+ * row they can open over-claims nothing, and calling that row "awaiting your
+ * approval" would.
+ *
+ * ⚠ A NULL `requesterUserId` (the requester's account was deleted) joins to
+ * nothing and is dropped — matching every thread with no `createdBy` is not a
+ * join, it is a wildcard.
+ */
+export function consentExemptThreadIds(
+  threads: ChannelThread[],
+  consentRequests: ChannelConsentRequest[]
+): ReadonlySet<string> {
+  const seqless = consentRequests.filter(
+    (r) => isPendingInbound(r) && !isSeq(r.messageSeq) && r.requesterUserId !== null
+  );
+  if (seqless.length === 0) return EMPTY_REQUESTED;
+  const ids = new Set<string>();
+  for (const thread of threads) {
+    const named = seqless.some(
+      (r) =>
+        r.channelId === thread.channelId &&
+        r.requesterUserId === thread.createdBy &&
+        r.operatorUserId === thread.targetUserId
+    );
+    if (named) ids.add(thread.id);
   }
   return ids;
 }
@@ -83,14 +159,22 @@ const EMPTY_REQUESTED: ReadonlySet<string> = new Set<string>();
  * ⚠ ORDER IS PRESERVED, never re-sorted: the server clipped its page against
  * the activity order, so a re-sorted page is the wrong rows in a plausible
  * order (INVARIANTS §5).
+ *
+ * ⚠ `exempt` IS THE SAME ARM WITH A WEAKER CLAIM ({@link consentExemptThreadIds}):
+ * a seq-less pending ask cannot name its thread, so those threads are made
+ * REACHABLE here without being marked requested anywhere the reader can see. It
+ * is deliberately a separate argument rather than unioned into `requested` by
+ * the caller — the union would put a Clock glyph on every candidate.
  */
 export function sidebarThreads(
   threads: ChannelThread[],
   requested: ReadonlySet<string> = EMPTY_REQUESTED,
-  now: number = Date.now()
+  now: number = Date.now(),
+  exempt: ReadonlySet<string> = EMPTY_REQUESTED
 ): ChannelThread[] {
   return threads.filter((thread) => {
     if (requested.has(thread.id)) return true;
+    if (exempt.has(thread.id)) return true;
     if (!thread.lastActivityAt) return false;
     const ts = new Date(thread.lastActivityAt).getTime();
     if (Number.isNaN(ts)) return false;
