@@ -44,7 +44,10 @@ export function Avatar({
     return (
       <span
         className={cn(
-          "shrink-0 overflow-hidden rounded-full",
+          // `block`, or the size utilities are dead letters: an inline span
+          // ignores width/height, and the img inside then renders at natural
+          // size. The initials branch never hit this because `flex` blockifies.
+          "block shrink-0 overflow-hidden rounded-full",
           SIZE[size],
           className
         )}
