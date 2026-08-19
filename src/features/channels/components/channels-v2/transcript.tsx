@@ -31,7 +31,8 @@ import {
   buildMentionIndex,
   resolveMentionToken,
 } from "../../lib/mentions";
-import { shortName, type AuthorIndex, type MessageRow, type ReceiptRow, type ThreadCardRow, type TranscriptRow } from "./view-model";
+import { shortName, type AuthorIndex } from "./view-model";
+import type { MessageRow, ReceiptRow, ThreadCardRow, TranscriptRow } from "./view-model-rows";
 
 export function Transcript({
   rows,

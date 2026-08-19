@@ -20,7 +20,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Transcript } from "./transcript";
-import { channelRows, indexMembers, threadRows } from "./view-model";
+import { indexMembers } from "./view-model";
+import { channelRows, threadRows } from "./view-model-rows";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { member, message, thread, ME, PEER } from "./test-fixtures";
 

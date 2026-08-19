@@ -28,13 +28,9 @@ import { PopOutThreadButton } from "./pop-out";
 import { useChannelsV2Live } from "./live";
 import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
-import {
-  channelRows,
-  indexMembers,
-  splitChannels,
-  threadRows,
-} from "./view-model";
-// Kept on one line: this file sits a handful of lines inside the 500-line cap.
+// Kept on one line each: this file sits a handful of lines inside the 500-line cap.
+import { indexMembers, splitChannels } from "./view-model";
+import { channelRows, threadRows } from "./view-model-rows";
 import { consentExemptThreadIds, requestedThreadIds, sidebarThreads } from "./view-model-requested";
 
 export interface ChannelsV2CoreProps {

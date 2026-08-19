@@ -38,7 +38,8 @@ import {
   SCROLL_TARGET_MISSING_NOTE,
   type ScrollTarget,
 } from "./message-pane";
-import { channelRows, indexMembers } from "./view-model";
+import { indexMembers } from "./view-model";
+import { channelRows } from "./view-model-rows";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { CHANNEL_ID, ME, PEER, member, message, thread } from "./test-fixtures";
 import type { ChannelMessage } from "../../types";

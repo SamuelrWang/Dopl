@@ -82,7 +82,7 @@ function pendingAddresseeKey(base: string, toUserId: string): string {
  *
  * ⚠ N PENDING OPENING MESSAGES, not one. The server writes one opening message
  * per thread and the transcript collapses every opener sharing a `fanoutGroup`
- * into a single card (`components/channels-v2/view-model.ts › channelRows`), so
+ * into a single card (`components/channels-v2/view-model-rows.ts › channelRows`), so
  * a single optimistic row would draw a card with ONE pill and then grow to N
  * when the read lands. Writing the real shape optimistically means the frame
  * after the click already says who was addressed.

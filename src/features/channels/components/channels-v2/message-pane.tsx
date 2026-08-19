@@ -31,7 +31,8 @@ import { Bookmark, ChevronRight, Hash, Info, Sparkles } from "lucide-react";
 import { IconButton } from "./bits";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
-import type { AuthorIndex, TranscriptRow } from "./view-model";
+import type { AuthorIndex } from "./view-model";
+import type { TranscriptRow } from "./view-model-rows";
 import type { ChannelMember, ChannelThread } from "../../types";
 
 /**

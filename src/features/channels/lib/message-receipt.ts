@@ -5,7 +5,7 @@
  * 1. {@link deriveMessageReceipt} — the status line for MY own outgoing human
  *    message, derived from the thread events that follow it.
  * 2. {@link lifecycleReceiptStatus} — the status of ONE terminal lifecycle row,
- *    read off that row alone. This is what `components/channels-v2/view-model.ts`
+ *    read off that row alone. This is what `components/channels-v2/view-model-rows.ts`
  *    renders as the transcript's slim muted receipt line.
  *
  * ⚠ **THIS MODULE WAS ORPHANED BETWEEN 2026-08-18 (Phase 5) AND THE WAVE-2 FIX
