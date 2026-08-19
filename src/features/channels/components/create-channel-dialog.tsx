@@ -345,21 +345,21 @@ export function CreateChannelDialog({
 
           {error && <p className="text-caption text-danger">{error}</p>}
 
-          <div className="flex flex-col gap-1.5 pt-1">
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={close}
+              className="auth-btn-3d-light h-10 rounded-[9px] px-4 text-body font-medium text-text-primary"
+            >
+              Cancel
+            </button>
             <button
               type="button"
               onClick={() => void submit()}
               disabled={submitting || name.trim() === ""}
-              className="auth-btn-3d h-10 rounded-[9px] text-body font-medium text-white disabled:opacity-40"
+              className="auth-btn-3d h-10 rounded-[9px] px-4 text-body font-medium text-white disabled:opacity-40"
             >
               {submitting ? "Creating…" : "Create channel"}
-            </button>
-            <button
-              type="button"
-              onClick={close}
-              className="h-10 rounded-[9px] text-body font-medium text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
-            >
-              Cancel
             </button>
           </div>
         </div>
@@ -409,11 +409,11 @@ export function CreateChannelDialog({
             </div>
           </div>
 
-          <div className="pt-1">
+          <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={close}
-              className="auth-btn-3d h-10 w-full rounded-[9px] text-body font-medium text-white"
+              className="auth-btn-3d h-10 rounded-[9px] px-4 text-body font-medium text-white"
             >
               {hasCustomFolder ? "Done" : "Skip"}
             </button>
