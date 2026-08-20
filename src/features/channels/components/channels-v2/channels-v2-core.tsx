@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { CONSENT_INBOX_POLL_MS } from "../../constants";
@@ -20,7 +20,7 @@ import {
   ChannelsV2ManageActions,
 } from "./channel-manage";
 import { ChannelsV2Sidebar } from "./sidebar";
-import { ChannelsV2MessagePane, type ScrollTarget } from "./message-pane";
+import { ChannelsV2MessagePane } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
@@ -28,11 +28,14 @@ import { PopOutThreadButton } from "./pop-out";
 import { useChannelsV2Live } from "./live";
 import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
-// Kept on one line each: this file sits a handful of lines inside the 500-line cap.
+// Kept on one line each: this file has repeatedly sat within a handful of lines
+// of the 500-line cap, and CROSSED it on 2026-08-20 (453 after the selection
+// split below; re-measure, do not quote).
 import { splitChannels } from "./view-model";
 import { useInlineConsent } from "./use-inline-consent";
 import { useChannelsV2Derivations } from "./derivations";
 import { useAgentsPanel } from "./use-agents-panel";
+import { useChannelsV2Selection } from "./use-channels-v2-selection";
 
 export interface ChannelsV2CoreProps {
   workspaceId: string;
@@ -126,44 +129,10 @@ export function ChannelsV2Core({
   initialChannelId = null,
   initialThreadId = null,
 }: ChannelsV2CoreProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [directOpen, setDirectOpen] = useState(false);
-  const [requestedThreadId, setRequestedThreadId] = useState<string | null>(
-    initialThreadId
-  );
-  const [openAgent, setOpenAgent] = useState<string | null>(null);
-  // The Inbox nav row takes over the CENTER column — it is a nav destination,
-  // not an overlay, and Phase 9's notification click needs somewhere to land.
-  const [inboxOpen, setInboxOpen] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(true);
-  const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
-
-  // A SECOND notification, with the page already mounted, changes the route but
-  // not the component — the initial `useState` above would never see it. So the
-  // named channel is re-applied whenever it CHANGES, and only then: a value the
-  // caller keeps handing us unchanged must not fight the operator's own clicks.
-  // Going back to the paramless row (`initialChannelId` → null) names nothing
-  // and therefore selects nothing; the current pick stands.
-  //
-  // ⚠ ADJUSTED DURING RENDER, NOT IN AN EFFECT — React's own "adjusting state
-  // when a prop changes" shape, and `react-hooks/set-state-in-effect` is an
-  // ERROR here (measured 2026-08-18), not a preference. The effect version
-  // paints the OLD channel first and the named one on a second pass, which on
-  // this surface is a visible flash of the wrong transcript. React re-runs this
-  // component before committing anything, so the extra pass costs no DOM.
-  const [routedId, setRoutedId] = useState<string | null>(initialChannelId);
-  if (initialChannelId !== routedId) {
-    setRoutedId(initialChannelId);
-    if (initialChannelId) {
-      setSelectedId(initialChannelId);
-      // ⚠ The NAMED thread, not `null` (Phase 10). A notification names no thread,
-      // so this stays the clear it always was; a pop-out landing names one, and
-      // re-routing to a different channel must not silently drop it.
-      setRequestedThreadId(initialThreadId);
-      setInboxOpen(false);
-    }
-  }
+  // WHAT THIS PAGE HAS OPEN — `use-channels-v2-selection.ts`, including the
+  // render-time re-application of a routed `initialChannelId` (a second
+  // notification changes the route but not the component).
+  const sel = useChannelsV2Selection({ initialChannelId, initialThreadId });
 
   const { channels, loading, refetch: refetchChannels } = useChannels(
     workspaceId,
@@ -173,9 +142,10 @@ export function ChannelsV2Core({
   // Explicit pick that still exists wins, else the first row — the same rule the
   // deleted `channels-view-core.tsx` used, so a deleted channel cannot strand the pane.
   const effectiveId = useMemo(() => {
-    if (selectedId && channels.some((c) => c.id === selectedId)) return selectedId;
+    const picked = sel.selectedId;
+    if (picked && channels.some((c) => c.id === picked)) return picked;
     return channels[0]?.id ?? null;
-  }, [selectedId, channels]);
+  }, [sel.selectedId, channels]);
   const channel = channels.find((c) => c.id === effectiveId) ?? null;
 
   const {
@@ -264,7 +234,7 @@ export function ChannelsV2Core({
       messages,
       threads,
       requests,
-      openThreadId: requestedThreadId,
+      openThreadId: sel.requestedThreadId,
     });
 
   // Inline consent (card/strip decision + thread send box) — `use-inline-consent.ts`.
@@ -282,8 +252,8 @@ export function ChannelsV2Core({
   // the swapped transcript is in the DOM before it looks for the message row.
   //
   // ⚠ The mark-read is OPTIMISTIC (`use-mention-writes.ts`), which is what makes
-  // the badge drop in the same frame as the navigation. The scroll target is
-  // NONCED, so clicking the same mention twice re-scrolls.
+  // the badge drop in the same frame as the navigation. The nonced scroll signal
+  // is `use-channels-v2-selection.ts › jumpToMessage`.
   const openMention = (mention: ChannelMention) => {
     if (!mention.read && channel) {
       markRead.mutate({
@@ -291,11 +261,7 @@ export function ChannelsV2Core({
         messageIds: [mention.messageId],
       });
     }
-    setRequestedThreadId(mention.threadId);
-    setScrollTarget((prev) => ({
-      messageId: mention.messageId,
-      nonce: (prev?.nonce ?? 0) + 1,
-    }));
+    sel.jumpToMessage(mention.threadId, mention.messageId);
   };
 
   // ⚠ MARK-ALL SENDS THE IDS IT IS DISPLAYING, never a flag. The list is
@@ -312,9 +278,7 @@ export function ChannelsV2Core({
   // A create lands the operator ON the new channel — the same rule the retired
   // page used, so a fresh room is never created into an unchanged view.
   const onCreated = (created: Channel) => {
-    setSelectedId(created.id);
-    setRequestedThreadId(null);
-    setInboxOpen(false);
+    sel.selectChannel(created.id);
     void refetchChannels();
   };
 
@@ -336,34 +300,23 @@ export function ChannelsV2Core({
         currentUserId={currentUserId}
         selectedChannelId={channel?.id ?? null}
         openThreadId={openThread?.id ?? null}
-        onSelectChannel={(id) => {
-          setSelectedId(id);
-          setRequestedThreadId(null);
-          setInboxOpen(false);
-        }}
-        onOpenThread={(id) => {
-          setRequestedThreadId(id);
-          setInboxOpen(false);
-        }}
+        onSelectChannel={sel.selectChannel}
+        onOpenThread={sel.openThread}
         requestedThreads={requested}
         consentCount={requests.length}
-        inboxOpen={inboxOpen}
-        onOpenInbox={() => setInboxOpen(true)}
+        inboxOpen={sel.inboxOpen}
+        onOpenInbox={sel.openInbox}
         canCreate={canCreate}
-        onCreateChannel={() => setCreateOpen(true)}
-        onCreateDirect={() => setDirectOpen(true)}
+        onCreateChannel={() => sel.setCreateOpen(true)}
+        onCreateDirect={() => sel.setDirectOpen(true)}
       />
 
-      {inboxOpen ? (
+      {sel.inboxOpen ? (
         <ChannelsV2InboxPane
           requests={requests}
           onDecide={(id, decision) => consent.mutate({ id, decision })}
           busy={consentBusy}
-          onOpen={(channelId) => {
-            setSelectedId(channelId);
-            setRequestedThreadId(null);
-            setInboxOpen(false);
-          }}
+          onOpen={sel.selectChannel}
         />
       ) : channel ? (
         <>
@@ -381,8 +334,8 @@ export function ChannelsV2Core({
             outboundAsk={openThread ? (outboundByThread.get(openThread.id) ?? null) : null}
             outboundBusy={consentBusy}
             onDecideOutbound={decideOutbound}
-            scrollTarget={scrollTarget}
-            infoOpen={infoOpen}
+            scrollTarget={sel.scrollTarget}
+            infoOpen={sel.infoOpen}
             // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
             // rendering — never a flip inside the mutation. Two fast clicks send
             // `true` then `false` and converge; a toggle verb would race.
@@ -406,11 +359,11 @@ export function ChannelsV2Core({
                 />
               ) : null
             }
-            onToggleInfo={() => setInfoOpen((open) => !open)}
-            onExitThread={() => setRequestedThreadId(null)}
-            onOpenThread={setRequestedThreadId}
+            onToggleInfo={sel.toggleInfo}
+            onExitThread={() => sel.openThread(null)}
+            onOpenThread={sel.openThread}
           />
-          {infoOpen && (
+          {sel.infoOpen && (
             <ChannelsV2InfoPanel
               channel={channel}
               channelName={channelName}
@@ -420,7 +373,7 @@ export function ChannelsV2Core({
               threadsLoading={threadsLoading}
               index={index}
               openThreadId={openThread?.id ?? null}
-              onOpenThread={setRequestedThreadId}
+              onOpenThread={sel.openThread}
               agentSessions={agentSessions}
               peerSessions={agentsPanel.peerSessions}
               canLaunchAgent={
@@ -431,8 +384,8 @@ export function ChannelsV2Core({
               }
               launchBusy={agentsPanel.launchBusy}
               onLaunchAgent={(id) => void agentsPanel.launchAgent(id)}
-              openAgent={openAgent}
-              onOpenAgent={setOpenAgent}
+              openAgent={sel.openAgent}
+              onOpenAgent={sel.setOpenAgent}
               mentions={mentions}
               mentionsTruncated={mentionsTruncated}
               mentionsLoading={mentionsLoading}
@@ -449,7 +402,7 @@ export function ChannelsV2Core({
                   role={role}
                   members={members}
                   gate={gate}
-                  onDeselect={() => setSelectedId(null)}
+                  onDeselect={() => sel.selectChannel(null)}
                   onRosterChanged={() => {
                     void refetchChannels();
                     void refetchMembers();
@@ -467,7 +420,7 @@ export function ChannelsV2Core({
         <ChannelsOnboardingCore
           workspaceSlug={workspaceSlug}
           canCreate={canCreate}
-          onCreate={() => setCreateOpen(true)}
+          onCreate={() => sel.setCreateOpen(true)}
           Link={Link}
         />
       )}
@@ -476,11 +429,11 @@ export function ChannelsV2Core({
           `messages` rather than fetching: one read, and the panel cannot show a
           message the transcript beside it does not have. */}
       <ChannelsV2AgentPanel
-        openAgent={openAgent}
+        openAgent={sel.openAgent}
         sessions={agentSessions}
         messages={messages}
         currentUserId={currentUserId}
-        onClose={() => setOpenAgent(null)}
+        onClose={() => sel.setOpenAgent(null)}
         onRefreshSessions={refreshAgents}
       />
 
@@ -491,10 +444,10 @@ export function ChannelsV2Core({
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         currentUserId={currentUserId}
-        createOpen={createOpen}
-        directOpen={directOpen}
-        onCreateOpenChange={setCreateOpen}
-        onDirectOpenChange={setDirectOpen}
+        createOpen={sel.createOpen}
+        directOpen={sel.directOpen}
+        onCreateOpenChange={sel.setCreateOpen}
+        onDirectOpenChange={sel.setDirectOpen}
         onCreated={onCreated}
       />
 

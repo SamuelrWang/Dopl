@@ -1,0 +1,144 @@
+"use client";
+
+/**
+ * WHAT THE CHANNELS PAGE HAS OPEN — the selection and nav state of
+ * `channels-v2-core.tsx`, split out at the 500-line cap (§1) on the seam that
+ * file's siblings already use: `use-inline-consent.ts` took the consent
+ * decisions, `use-agents-panel.ts` the peer poll and the launch, `derivations.ts`
+ * the row math. This takes the eight pieces of "which surface am I looking at",
+ * and nothing else.
+ *
+ * ⚠ IT IS STATE PLUS ONE RENDER-TIME ADJUSTMENT, and the adjustment is why this
+ * is a hook rather than a reducer file: `initialChannelId` is re-applied DURING
+ * RENDER (React's own "adjusting state when a prop changes" shape), which only
+ * works inside the render pass of the component that owns the state. A custom
+ * hook runs in that pass; an effect does not, and
+ * `react-hooks/set-state-in-effect` is an ERROR in this tree.
+ *
+ * ⚠ THE THREE COMPOSITE ACTIONS ARE THE POINT, not a convenience. `selectChannel`
+ * and `openThread` each move two or three pieces at once, and the page had four
+ * hand-written copies of those combinations — one of which (the Inbox row's
+ * `onOpen`) is a different surface reaching the same conclusion. A copy that
+ * forgets `setInboxOpen(false)` navigates to a channel nobody can see.
+ */
+
+import { useCallback, useState } from "react";
+import type { ScrollTarget } from "./message-pane";
+
+export interface ChannelsV2Selection {
+  /** The operator's explicit channel pick; `null` means "take the first row". */
+  selectedId: string | null;
+  /** The open thread, or `null` for the channel view. */
+  requestedThreadId: string | null;
+  /** `agentsModel › agentKey` of the open agent view, or `null`. */
+  openAgent: string | null;
+  /** The Inbox has taken over the CENTER column — a nav destination, not an overlay. */
+  inboxOpen: boolean;
+  infoOpen: boolean;
+  scrollTarget: ScrollTarget | null;
+  createOpen: boolean;
+  directOpen: boolean;
+  setOpenAgent: (key: string | null) => void;
+  setInfoOpen: (open: boolean) => void;
+  setCreateOpen: (open: boolean) => void;
+  setDirectOpen: (open: boolean) => void;
+  /** Land on a channel: clears the thread and leaves the Inbox. */
+  selectChannel: (id: string | null) => void;
+  /** Open a thread in the current channel, leaving the Inbox. */
+  openThread: (id: string | null) => void;
+  openInbox: () => void;
+  toggleInfo: () => void;
+  /** The Tags inbox's jump: a thread AND a nonced scroll signal. */
+  jumpToMessage: (threadId: string | null, messageId: string) => void;
+}
+
+export function useChannelsV2Selection({
+  initialChannelId = null,
+  initialThreadId = null,
+}: {
+  initialChannelId?: string | null;
+  initialThreadId?: string | null;
+}): ChannelsV2Selection {
+  const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [directOpen, setDirectOpen] = useState(false);
+  const [requestedThreadId, setRequestedThreadId] = useState<string | null>(
+    initialThreadId
+  );
+  const [openAgent, setOpenAgent] = useState<string | null>(null);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(true);
+  const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
+
+  // A SECOND notification, with the page already mounted, changes the route but
+  // not the component — the initial `useState` above would never see it. So the
+  // named channel is re-applied whenever it CHANGES, and only then: a value the
+  // caller keeps handing us unchanged must not fight the operator's own clicks.
+  // Going back to the paramless row (`initialChannelId` → null) names nothing
+  // and therefore selects nothing; the current pick stands.
+  //
+  // ⚠ ADJUSTED DURING RENDER, NOT IN AN EFFECT — React's own "adjusting state
+  // when a prop changes" shape, and `react-hooks/set-state-in-effect` is an
+  // ERROR here (measured 2026-08-18), not a preference. The effect version
+  // paints the OLD channel first and the named one on a second pass, which on
+  // this surface is a visible flash of the wrong transcript. React re-runs the
+  // calling component before committing anything, so the extra pass costs no DOM.
+  const [routedId, setRoutedId] = useState<string | null>(initialChannelId);
+  if (initialChannelId !== routedId) {
+    setRoutedId(initialChannelId);
+    if (initialChannelId) {
+      setSelectedId(initialChannelId);
+      // ⚠ The NAMED thread, not `null` (Phase 10). A notification names no thread,
+      // so this stays the clear it always was; a pop-out landing names one, and
+      // re-routing to a different channel must not silently drop it.
+      setRequestedThreadId(initialThreadId);
+      setInboxOpen(false);
+    }
+  }
+
+  const selectChannel = useCallback((id: string | null) => {
+    setSelectedId(id);
+    setRequestedThreadId(null);
+    setInboxOpen(false);
+  }, []);
+
+  const openThread = useCallback((id: string | null) => {
+    setRequestedThreadId(id);
+    setInboxOpen(false);
+  }, []);
+
+  const openInbox = useCallback(() => setInboxOpen(true), []);
+  const toggleInfo = useCallback(() => setInfoOpen((open) => !open), []);
+
+  // ⚠ THE SCROLL SIGNAL IS NONCED, so clicking the same mention twice
+  // re-scrolls — a plain `{messageId}` object would be swallowed the moment
+  // somebody "optimizes" the state update with an equality check
+  // (`message-pane.tsx › ScrollTarget`).
+  const jumpToMessage = useCallback(
+    (threadId: string | null, messageId: string) => {
+      setRequestedThreadId(threadId);
+      setScrollTarget((prev) => ({ messageId, nonce: (prev?.nonce ?? 0) + 1 }));
+    },
+    []
+  );
+
+  return {
+    selectedId,
+    requestedThreadId,
+    openAgent,
+    inboxOpen,
+    infoOpen,
+    scrollTarget,
+    createOpen,
+    directOpen,
+    setOpenAgent,
+    setInfoOpen,
+    setCreateOpen,
+    setDirectOpen,
+    selectChannel,
+    openThread,
+    openInbox,
+    toggleInfo,
+    jumpToMessage,
+  };
+}
