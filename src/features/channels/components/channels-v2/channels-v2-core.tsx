@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { CONSENT_INBOX_POLL_MS } from "../../constants";
 import { useChannels } from "../../hooks/use-channels";
+import { channelKeys } from "../../client/query-keys";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
@@ -134,6 +136,7 @@ export function ChannelsV2Core({
   // render-time re-application of a routed `initialChannelId` (a second
   // notification changes the route but not the component).
   const sel = useChannelsV2Selection({ initialChannelId, initialThreadId });
+  const queryClient = useQueryClient();
 
   const { channels, loading, refetch: refetchChannels } = useChannels(
     workspaceId,
@@ -193,6 +196,16 @@ export function ChannelsV2Core({
   const { sessions: agentSessions, refresh: refreshAgents } =
     useDesktopSessions();
 
+  // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
+  // ⚠ DECLARED ABOVE THE LIVE WIRING because `refetchAll` names its `refetch`.
+  const agentsPanel = useAgentsPanel({
+    channel,
+    workspaceId,
+    currentUserId,
+    threads,
+    refreshDesktopSessions: refreshAgents,
+  });
+
   // Realtime → coalesced refetch, deferred while a local write is in flight. The whole
   // wiring is `live.ts`, split out at the Phase 10 cap; what stays here is WHAT a doorbell
   // invalidates, which is the core's own business.
@@ -201,7 +214,13 @@ export function ChannelsV2Core({
   const { gate } = useChannelsV2Live({
     workspaceId,
     refetchAll: () => {
-      void refetchChannels();
+      // ⚠ INVALIDATE THE PREFIX, don't refetch ONE observer. `query.refetch()`
+      // revalidates only the mounted key-variant, so any other variant of the
+      // channels list (`include=archived` is the one that exists) stays stale
+      // behind a doorbell that fired for it. `client/query-keys.ts` designs the
+      // WRITE path around prefix invalidation for exactly this reason; the
+      // realtime path had not followed.
+      void queryClient.invalidateQueries({ queryKey: channelKeys.list().all });
       void refetchMessages();
       void refetchMembers();
       void refetchThreads();
@@ -210,6 +229,14 @@ export function ChannelsV2Core({
       // the publication (INVARIANTS §7; migration `20260818140000` states why),
       // so this refetch is the whole delivery path for a mention arriving.
       void refetchMentions();
+      // PEER AGENT CARDS (2026-08-20). `channel_sessions` is UNPUBLISHED and stays
+      // that way (INVARIANTS §7): its row is rewritten on every projection move, so
+      // publishing it would buy WAL decode plus a per-subscriber RLS evaluation on
+      // each of those, for every member — the cost that §7's first bullet refuses.
+      // A peer agent that does anything visible POSTS, and that `channel_messages`
+      // doorbell is already paid for. So the cards ride it, and the 30s poll drops
+      // back to being the idle backstop it should always have been.
+      void agentsPanel.refetch();
     },
     refetchMembers: () => void refetchMembers(),
   });
@@ -246,13 +273,6 @@ export function ChannelsV2Core({
     ? channelDisplayName(channel, members, currentUserId)
     : "";
   // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
-  const agentsPanel = useAgentsPanel({
-    channel,
-    workspaceId,
-    currentUserId,
-    threads,
-    refreshDesktopSessions: refreshAgents,
-  });
 
   // The Tags inbox's click: mark read, land the center pane on the right
   // transcript, then signal the scroll. The scroll effect runs POST-render, so

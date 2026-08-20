@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { channel, member, ME, WS } from "./test-fixtures";
 
 /**
@@ -152,7 +153,17 @@ const TestLink = ({ href, children }: { href: string; children: ReactNode }) => 
   <a href={href}>{children}</a>
 );
 
+/**
+ * ⚠ A REAL `QueryClientProvider` SINCE 2026-08-20. Every read this file needs is
+ * mocked, but the core itself now calls `useQueryClient()` — its realtime
+ * `refetchAll` invalidates the channels-list PREFIX rather than refetching one
+ * mounted observer, so a non-mounted key variant stops going stale behind a
+ * doorbell that fired for it. `useQueryClient` THROWS with no provider, so this
+ * wrapper is load-bearing rather than decorative. A fresh client per render keeps
+ * the cases isolated.
+ */
 const core = (initialChannelId?: string | null, initialThreadId?: string | null) => (
+  <QueryClientProvider client={new QueryClient()}>
   <ChannelsV2Core
     workspaceId={WS}
     workspaceSlug="acme"
@@ -162,6 +173,7 @@ const core = (initialChannelId?: string | null, initialThreadId?: string | null)
     initialChannelId={initialChannelId}
     initialThreadId={initialThreadId}
   />
+  </QueryClientProvider>
 );
 
 function renderCore(initialChannelId?: string | null, initialThreadId?: string | null) {
