@@ -109,9 +109,11 @@ test("the peer-skew line states a fact and offers no action", () => {
 // ── Where the items land ────────────────────────────────────────────────────
 
 test("the restart item is a CALL TO ACTION at the top, not buried under the submenus", () => {
+  // The submenu anchor was 'Sessions' until the window-mode retirement removed it
+  // (2026-08-20, settings.js header); 'Channel folders' is the surviving submenu.
   const menu = fnOf(TRAY, "buildMenu");
   assert.ok(
-    orderOf(menu, "updateItem.ready", "label: 'Sessions'", "update before the submenus"),
+    orderOf(menu, "updateItem.ready", "label: 'Channel folders'", "update before the submenus"),
     "the update item used to sit below Channel folders, where nobody found it"
   );
   assert.match(menu, /click: \(\) => handlers\.onUpdate && handlers\.onUpdate\(\)/);

@@ -128,19 +128,20 @@ function classify(m, entry, myId) {
   // thing in it as anywhere else.
 
   const toUserId = metaStr(m, 'to_user_id');
-  // TASK-REPLY, requester side: an inbound reply on an INTERACTIVE task I created, addressed
-  // back to me, is passive news — no consent, no spawn, silent notification only. task* keys
-  // are stamped SERVER-SIDE so they cannot be spoofed. taskCreatedBy === me separates
-  // REQUESTER from RESPONDER; taskTarget === author binds the suppression to the responder,
-  // so a THIRD member posting into my task still triggers. Sits BEFORE the addressed rules.
-  // ⚠ AGENT-ONLY. This predicate is exactly the shape of a HUMAN responder @-tagging the
-  // requester back, and a passive notice has no consent row and no Accept — a person's
-  // addressed message would be swallowed into a banner. A 'user' author must fall through to
-  // the addressed rule and return 'trigger'.
+  // TASK-REPLY, requester side: an inbound reply on a task I created, addressed back to me,
+  // is passive news — no consent, no spawn, silent notification only. task* keys are stamped
+  // SERVER-SIDE so they cannot be spoofed. taskCreatedBy === me separates REQUESTER from
+  // RESPONDER; taskTarget === author binds the suppression to the responder, so a THIRD
+  // member posting into my task still triggers. Sits BEFORE the addressed rules.
+  // ⚠ EVERY MODE AND EVERY AUTHOR KIND (widened 2026-08-20, Samuel's session-window
+  // retirement). This carried `taskMode === 'interactive'` and `authorKind === 'agent'`
+  // conjuncts when the requester ran a live session window that consumed replies first: an
+  // autonomous-mode or human-authored reply was left to the addressed rule so the window
+  // lane could claim it. With that lane retired, either conjunct failing turned the
+  // counterparty's reply IN MY OWN THREAD into a consent card against myself. A reply is
+  // read in the thread view; the exchange's decidable surface is the ASK, not its answers.
   if (
-    m.authorKind === 'agent' &&
     metaStr(m, 'taskId') &&
-    metaStr(m, 'taskMode') === 'interactive' &&
     toUserId === myId &&
     metaStr(m, 'taskCreatedBy') === myId &&
     metaStr(m, 'taskTarget') === m.authorUserId
@@ -152,11 +153,11 @@ function classify(m, entry, myId) {
   // a legacy request posts a reply that looks like a fresh request on the requester's machine
   // and spawns a counter-session against itself.
   // ⚠ Provenance cannot come off the wire — a legacy id is caller-settable, so any member
-  // could claim one. It comes from the LOCAL registry of threads *I* opened. Same AGENT-ONLY
-  // rule as above. Fails safe toward 'trigger' (unknown id, cap eviction, restart, unclassified
-  // first-watch backlog all fall to the addressed path where consent is the net).
+  // could claim one. It comes from the LOCAL registry of threads *I* opened. Every author
+  // kind, same as the first-class branch above (widened 2026-08-20). Fails safe toward
+  // 'trigger' (unknown id, cap eviction, restart, unclassified first-watch backlog all fall
+  // to the addressed path where consent is the net).
   if (
-    m.authorKind === 'agent' &&
     toUserId === myId &&
     knownLegacyReply(m, myId)
   ) return 'task-reply';

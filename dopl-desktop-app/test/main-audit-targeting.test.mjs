@@ -1,23 +1,22 @@
-// AUDIT D1 — an @-tagged HUMAN message must never be swallowed as a passive notification.
+// THE REQUESTER-SIDE SUPPRESSION COVERS EVERY AUTHOR KIND AND EVERY MODE (2026-08-20).
 //
 // main/targeting.js's 'task-reply' verdict is the REQUESTER-side suppression: an inbound
-// reply belonging to an interactive thread I created, addressed back to me, authored by the
-// thread's target, is passive news and gets a silent OS banner (channel-listener routes it to
-// taskNotify.notifyTaskReply — NO consent row, NO gate, NO spawn, and no Accept anywhere).
+// reply belonging to a thread I created, addressed back to me, authored by the thread's
+// target, is passive news — NO consent row, NO spawn. The @-tag gates only the NOTICE, one
+// layer up in listener-messages.js.
 //
-// That predicate is ALSO the exact shape of a human responder @-tagging the requester back:
-// the 1.7.9 peer-post path (main/session-peer-post.js postBody) posts authorKind 'user' with
-// metadata.taskId, and the server stamps the same taskMode / taskCreatedBy / taskTarget keys.
-// The three pre-classify routes in session-dispatch usually claim it first, but feedLiveSession
-// needs a LIVE session and maybeSurfaceRequesterReply needs a durable record plus window budget;
-// when both miss, classify decides — and a person's addressed message became a banner nobody
-// could answer. CHOICE: exempt authorKind 'user' from the suppression (rather than bolting an
-// Accept onto the passive notice), so a human addressing me falls through to the ordinary
-// addressed rule and returns 'trigger' — the full consent gate. The agent reply the branch was
-// designed for is unchanged.
+// HISTORY, BECAUSE THIS FILE USED TO PIN THE OPPOSITE (AUDIT D1): the branch carried
+// `authorKind === 'agent'` and `taskMode === 'interactive'` conjuncts when the requester ran
+// a live SESSION WINDOW that consumed replies first — a human's addressed reply was left to
+// the addressed rule so the window's inbound gate (its Accept) could claim it. Window mode
+// was retired 2026-08-20 (settings.js header): there is no Accept for a reply any more and
+// nothing to swallow it FROM — the reply renders in the thread view, which is the surface.
+// With the window lane gone, either conjunct failing turned the counterparty's reply IN MY
+// OWN THREAD into a consent card against myself (the self-trigger bug, observed live
+// 2026-08-20). What must still trigger is anybody OUTSIDE the (my thread, its target) pair.
 //
 // SOURCE EXTRACTION (the classify.test.mjs idiom): classify / metaStr are private, so we read
-// the real source and evaluate those two function bodies verbatim.
+// the real source and evaluate those function bodies verbatim.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -72,8 +71,7 @@ const entry = (over = {}) => ({
   channel: { id: "chan-abcdef01", name: "General", memberCount: 2, isMember: true, ...over },
 });
 
-// A reply inside an interactive thread I created, addressed back to me, authored by the
-// thread's target. `authorKind` is the ONE thing under test.
+// A reply inside a thread I created, addressed back to me, authored by the thread's target.
 const reply = (authorKind, over = {}) => ({
   id: "m1",
   seq: 9,
@@ -91,59 +89,52 @@ const reply = (authorKind, over = {}) => ({
   },
 });
 
-// ── the bug ──────────────────────────────────────────────────────────────────────
+// ── the pair suppresses, whoever and however it answers ──────────────────────────
 
-test("D1: a HUMAN @-tagging me inside my own interactive thread -> trigger, never task-reply", () => {
+test("a HUMAN reply in my own thread -> task-reply, never a consent card against myself", () => {
   const got = classify(reply("user"), entry(), ME);
-  assert.equal(got, "trigger", "a person addressing me always gates (consent + spawn)");
-  assert.notEqual(got, "task-reply", "a human message must never be swallowed as a passive banner");
+  assert.equal(got, "task-reply", "the counterparty answering me is passive news, not a fresh ask");
 });
 
-test("D1: the human path gates in a GROUP channel and a public one too", () => {
-  // The suppression sat ABOVE the addressed rules, so member count / membership never saved it.
-  assert.equal(classify(reply("user"), entry({ memberCount: 5 }), ME), "trigger");
-  assert.equal(classify(reply("user"), entry({ memberCount: 3, isMember: false }), ME), "trigger");
-  // A leftover per-channel notify scope on the entry changes nothing either.
-  // It never suppressed an explicit address, and since F-170 (2026-08-08) the
-  // preference is removed from the product and read nowhere at all.
-  assert.equal(classify(reply("user"), entry({ myNotifyScope: "none" }), ME), "trigger");
-});
-
-test("D1: this is the shape session-peer-post actually posts (authorKind user + taskId)", () => {
-  // main/session-peer-post.js postBody: { body, authorKind: 'user', metadata: { taskId } }.
-  // The server stamps the rest of the task keys, so the peer sees exactly `reply('user')`.
-  const PEER_POST_SRC = readFileSync(join(HERE, "..", "main", "session-peer-post.js"), "utf8");
-  assert.ok(PEER_POST_SRC.includes("authorKind: 'user'"), "the peer-post path is human-authored");
-  assert.equal(classify(reply("user"), entry(), ME), "trigger");
-});
-
-// ── the branch the suppression WAS designed for is untouched ─────────────────────
-
-test("D1: an AGENT reply in the same thread still suppresses to the passive task-reply notice", () => {
+test("an AGENT reply in the same thread -> task-reply, in every channel shape", () => {
   assert.equal(classify(reply("agent"), entry(), ME), "task-reply");
   assert.equal(classify(reply("agent"), entry({ memberCount: 5, isMember: false }), ME), "task-reply");
 });
 
-test("D1: every other task-reply guard still decides before authorKind can matter", () => {
+test("mode is not read: an AUTONOMOUS thread's reply suppresses the same", () => {
+  assert.equal(classify(reply("agent", { taskMode: "autonomous" }), entry(), ME), "task-reply");
+  assert.equal(classify(reply("user", { taskMode: "autonomous" }), entry(), ME), "task-reply");
+});
+
+test("the shape session-peer-post posts (authorKind user + taskId) is covered too", () => {
+  // main/session-peer-post.js postBody: { body, authorKind: 'user', metadata: { taskId } }.
+  // The server stamps the rest of the task keys, so the peer sees exactly `reply('user')`.
+  assert.equal(classify(reply("user"), entry(), ME), "task-reply");
+});
+
+// ── everybody OUTSIDE the (my thread, its target) pair still gates ───────────────
+
+test("the pair guards still decide: not-my-thread and third-party posts trigger", () => {
   // Not my thread -> the RESPONDER side, unchanged.
   assert.equal(classify(reply("agent", { taskCreatedBy: THIRD }), entry(), ME), "trigger");
-  // Autonomous mode -> never suppressed.
-  assert.equal(classify(reply("agent", { taskMode: "autonomous" }), entry(), ME), "trigger");
+  assert.equal(classify(reply("user", { taskCreatedBy: THIRD }), entry(), ME), "trigger");
   // A third member posting into my thread (author !== taskTarget) -> never suppressed.
   assert.equal(classify({ ...reply("agent"), authorUserId: THIRD }, entry({ memberCount: 3 }), ME), "trigger");
+  assert.equal(classify({ ...reply("user"), authorUserId: THIRD }, entry({ memberCount: 3 }), ME), "trigger");
   // The kind guard still wins over everything.
   assert.equal(classify({ ...reply("agent"), kind: "task_finished" }, entry(), ME), "ignore");
   // 'system' and friends are still ignored outright.
   assert.equal(classify(reply("system"), entry(), ME), "ignore");
 });
 
-test("D1: the fix is the authorKind test itself, ahead of the metadata reads", () => {
+test("the widening is structural: no authorKind or taskMode conjunct in the branch", () => {
   const body = extractFn("classify");
   const at = body.indexOf("return 'task-reply'");
   assert.notEqual(at, -1, "the task-reply verdict still exists");
   const branch = body.slice(body.lastIndexOf("if (", at), at);
   assert.ok(
-    branch.includes("m.authorKind === 'agent'"),
-    "the task-reply branch must be AGENT-ONLY, so a human author can never reach it"
+    !branch.includes("authorKind") && !branch.includes("taskMode"),
+    "the task-reply branch reads only the server-stamped pair (taskCreatedBy/taskTarget) plus the address — " +
+      "an authorKind or taskMode conjunct reintroduces the self-trigger the 2026-08-20 widening removed"
   );
 });

@@ -335,12 +335,17 @@ export function channelRows(
     }
     if (thread) {
       const group = fanoutGroupOf(message);
-      // ⚠ The dedupe key is the GROUP where there is one, the thread otherwise.
-      // Keying on the thread alone would draw N cards for one request.
-      const key = group ?? thread.id;
-      if (openerSeen.has(key)) continue;
-      openerSeen.add(key);
+      // ⚠ The seen-set carries BOTH identities. The GROUP key alone would draw
+      // N cards for one request — but only OPENERS carry `fanoutGroup` (the
+      // server strips it from every other post), so a group-only key lets the
+      // thread's replies re-emit the card as their own. Every member thread's
+      // id is marked when the card is drawn, so a reply suppresses whichever
+      // identity it arrives under.
+      if (openerSeen.has(thread.id) || (group != null && openerSeen.has(group)))
+        continue;
       const cardThreads = (group && groups.get(group)) || [thread];
+      if (group != null) openerSeen.add(group);
+      for (const member of cardThreads) openerSeen.add(member.id);
       rows.push({
         kind: "thread-card",
         id: message.id,

@@ -355,10 +355,13 @@ test("(task-b) same task but created by someone else -> trigger (responder side,
   );
 });
 
-test("(task-c) interactive but autonomous mode -> trigger (never task-reply)", () => {
+test("(task-c) mode is not read: an autonomous thread's reply suppresses too (widened 2026-08-20)", () => {
+  // Carried a taskMode === 'interactive' conjunct while the requester's session window
+  // consumed replies first; with window mode retired, an autonomous reply falling to
+  // 'trigger' raised a consent card against the requester's own thread.
   assert.equal(
     classify(taskReply({ taskMode: "autonomous" }), makeEntry({ memberCount: 2, isMember: true }), ME),
-    "trigger"
+    "task-reply"
   );
 });
 

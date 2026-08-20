@@ -453,6 +453,25 @@ describe("channels-v2 transcript — the request fan-out", () => {
     expect(screen.queryByText("you")).toBeNull();
   });
 
+  it("keeps a fan-out thread's REPLY out of the channel — one card, not two", () => {
+    // ⚠ Only OPENERS carry `fanoutGroup` (the server strips it from every
+    // other post), so a reply arrives under the thread's OTHER identity, its
+    // `taskId`. A group-only seen-key let it re-emit the card as its own
+    // (observed live 2026-08-20: the addressee's first agent reply rendered as
+    // a second "Agent thread" card in the main transcript).
+    const reply = message({
+      id: "re-a",
+      seq: 3,
+      body: "AGENT-REPLY",
+      authorUserId: PEER,
+      authorKind: "agent",
+      metadata: { taskId: "t-a" },
+    });
+    renderRows(channelRows([...OPENERS, reply], THREADS, FANOUT_INDEX, formatChannelTimestamp), new Set(), FANOUT_INDEX);
+    expect(screen.getAllByText("Agent thread")).toHaveLength(1);
+    expect(screen.queryByText("AGENT-REPLY")).toBeNull();
+  });
+
   it("states NO approval on the pills — no projection says who allowed", () => {
     renderFanOut();
     // ⚠ `AddresseePill` renders an SR-only verdict when `approved` is passed at

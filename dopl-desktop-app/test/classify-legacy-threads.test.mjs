@@ -81,10 +81,13 @@ test("(legacy-d) only the member I ADDRESSED can answer my thread", () => {
   assert.equal(c(fromThird, makeEntry({ memberCount: 3, isMember: true }), ME), "trigger");
 });
 
-test("(legacy-e) a HUMAN author is never suppressed, even on a thread I opened (AUDIT D1)", () => {
+test("(legacy-e) a HUMAN reply on a thread I opened suppresses too (widened 2026-08-20)", () => {
+  // The AGENT-ONLY conjunct existed for the session window's inbound Accept; with window
+  // mode retired there is nothing to claim the reply, and 'trigger' meant a consent card
+  // against the requester's own thread. The kind guard still wins.
   const c = fresh();
   c(myAsk(7), chan(), ME);
-  assert.equal(c({ ...legacyReply(7), authorKind: "user" }, chan(), ME), "trigger");
+  assert.equal(c({ ...legacyReply(7), authorKind: "user" }, chan(), ME), "task-reply");
   assert.equal(c({ ...legacyReply(7), authorKind: "system" }, chan(), ME), "ignore"); // guard wins
 });
 

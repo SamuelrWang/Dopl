@@ -190,15 +190,8 @@ if (!gotLock) {
         if (latestPendingSegment) navigateToChannels(latestPendingSegment);
         else showMainWindow();
       },
-      windowMode: settings.getWindowMode(),
-      onToggleWindowMode: () => {
-        const on = settings.setWindowMode(!settings.getWindowMode());
-        tray.setWindowMode(on);
-        diag('setting: sessionWindowMode ->', on);
-      },
-      // Item 10: the "Sessions" submenu lists live sessions; a hidden one reopens.
-      getSessions: () => sessionEngine.listLiveSessions(),
-      onReopenSession: (id) => sessionEngine.reopenWindow(id),
+      // ⚠ The windowMode toggle and the "Sessions" submenu accessors are GONE with
+      // window mode (2026-08-20, settings.js header) — no session window is ever minted.
       // Round C "Channel folders": accessors read fresh on every rebuild; the chosen
       // path stays local (channel-dirs.js). A set/clear rebuilds the menu.
       getChannels: () => listener.listWatchedChannels(),

@@ -1,12 +1,17 @@
-// Session-window settings (v1.9). ONE home for the "Run sessions in a window"
-// toggle and the loop-safety caps (turn / idle-TTL / cost), so the tray toggle
-// (index.js), the launch paths (channel-listener.js / trigger.js), and the session
-// engine (session-engine.js, T1) all read the SAME source of truth.
+// Session settings. ONE home for the loop-safety caps (turn / idle-TTL / cost), so
+// the launch paths (channel-listener.js / trigger.js) and the session engine
+// (session-engine.js, T1) all read the SAME source of truth.
 //
-// WINDOW MODE DEFAULTS ON (§B.3): with the setting unset, sessions run in a native
-// window (the v1.9 default executor). Turning it OFF restores today's behavior
-// byte-for-byte — headless spawn + approve-out review. That default lives in
-// getWindowMode() below (undefined -> true), so a fresh install is window-mode.
+// ⚠ WINDOW MODE IS RETIRED — HARD OFF (2026-08-20, Samuel's live-test ruling; it
+// defaulted ON from v1.9 until then). Every session runs HEADLESS: consent decides
+// on the channels surfaces (LaunchPanel in the inbox / transcript card / thread
+// strip / arrival pop-up), replies render in the thread view, and the operator
+// watches runs in the Agents tab. getWindowMode() answers false UNCONDITIONALLY —
+// it is not a default that a stored key can override, because the session window
+// is not a product surface any more. That one answer disarms, at their own guards:
+// session-dispatch's requester routes (the sender-side session pop-up that
+// launched the operator's own agent against their own thread), trigger.js's
+// windowed-responder upgrade, and the pre-consent window's outer switch.
 //
 // Kept electron-store-only (no electron UI, no fs beyond the store) so it stays a
 // thin, dependency-light module the engine can require without pulling BrowserWindow.
@@ -17,7 +22,7 @@ const store = new Store();
 
 // electron-store keys (namespaced so they never collide with v1.x keys like
 // `runInTerminal` — retired in v1.9 — or `claudeSessions`).
-const WINDOW_MODE_KEY = 'sessionWindowMode'; // boolean; unset -> ON
+// ⚠ `sessionWindowMode` is a RETIRED key: never read, never written (see header).
 const PRE_CONSENT_WINDOW_KEY = 'preConsentWindowMode'; // boolean; unset -> OFF
 const TURN_CAP_KEY = 'sessionTurnCap'; // number; unset -> DEFAULT_TURN_CAP
 const IDLE_TTL_KEY = 'sessionIdleTtlMs'; // number ms; unset -> DEFAULT_IDLE_TTL_MS
@@ -31,15 +36,14 @@ const DEFAULT_TURN_CAP = 24;
 const DEFAULT_IDLE_TTL_MS = 15 * 60 * 1000;
 const MAX_SESSION_WINDOWS = 6;
 
-// ── Window mode (the v1.9 executor switch) ───────────────────────────────────
+// ── Window mode — RETIRED, hard OFF (see header) ─────────────────────────────
 function getWindowMode() {
-  const v = store.get(WINDOW_MODE_KEY);
-  return v === undefined ? true : v === true; // DEFAULT ON
+  return false; // no stored key can turn the session window back on
 }
-function setWindowMode(v) {
-  const val = !!v;
-  store.set(WINDOW_MODE_KEY, val);
-  return val;
+function setWindowMode() {
+  // ⚠ Deliberately does NOT write the store: a persisted `true` would lie in wait
+  // for any future reader of the raw key. The tray toggle that called this is gone.
+  return false;
 }
 
 // ── The PRE-CONSENT window (wiring plan Phase 9: windowing inverts) ───────────

@@ -334,9 +334,12 @@ describe("channels page", () => {
     expect(
       await screen.findByText("Picked it up, wiring the client queries now.")
     ).toBeInTheDocument();
+    // TWICE: the transcript row, and the ARRIVAL POP-UP's preview — the open
+    // channel carries a pending inbound ask, so the decision panel floats over
+    // the page (arrival-ask.tsx, 2026-08-20).
     expect(
-      screen.getByText("Can your agent take the channels port?")
-    ).toBeInTheDocument();
+      screen.getAllByText("Can your agent take the channels port?")
+    ).toHaveLength(2);
 
     expect(requestsTo("/api/boot", "POST")[0].body).toEqual({ segment: SEGMENT });
     expect(requestsTo("/api/workspaces/me")).toHaveLength(0);
@@ -408,7 +411,12 @@ describe("channels page", () => {
     // shipping behaviour. ⚠ "Launch agent", not "Allow" — the consent CARD was
     // retired for the launch panel. In a plain browser there are no desktop
     // launch settings to expand, so the first click IS the decision.
+    // ⚠ Since 2026-08-20 the ARRIVAL POP-UP offers the same panel the moment
+    // the page lands on a channel with a pending ask — dismissing it must
+    // leave the ask decidable from the Inbox (nothing here is the only door).
     const inbox = await screen.findByRole("button", { name: /Inbox/ });
+    await screen.findByRole("button", { name: "Launch agent" });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(
       screen.queryByRole("button", { name: "Launch agent" })
     ).not.toBeInTheDocument();

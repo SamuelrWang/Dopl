@@ -13,7 +13,6 @@ let updateReadyVersion = null; // staged-update version; see refreshUpdateReady(
 let updateNote = null; // { text, busy } — what the updater is doing right now
 let peerSkew = null; // Q10: the newest older-build peer seen this run ({ peer, mine, who })
 let versionFloor = null; // min-version gate, WARNING state only ({ tray, ... }) or null
-let windowMode = true; // v1.9: reflect the "Run sessions in a window" setting (default ON)
 let pendingCount = 0; // Round B: number of pending consent requests (inbound + review)
 
 function iconPath() {
@@ -57,35 +56,10 @@ function channelFoldersSubmenu() {
   return items;
 }
 
-// The "Sessions" submenu. The executor switch (ON = native session windows, default;
-// OFF = headless spawn + approve-out) plus, v2.0 item 10, the live sessions: a hidden
-// window (closed but kept alive) shows "Reopen — {channel}" and reopens it; a visible
-// one shows "Show — {channel}" and brings it to front. The list is read fresh on every
-// tray rebuild via the injected getSessions accessor.
-function sessionsSubmenu() {
-  const items = [
-    {
-      label: 'Run sessions in a window',
-      type: 'checkbox',
-      checked: windowMode,
-      click: () => handlers.onToggleWindowMode && handlers.onToggleWindowMode(),
-    },
-    { type: 'separator' },
-  ];
-  const live = (handlers.getSessions && handlers.getSessions()) || [];
-  if (live.length) {
-    for (const s of live) {
-      const name = s.channelName || 'Session';
-      items.push({
-        label: `${s.hidden ? 'Reopen' : 'Show'} — ${name}`,
-        click: () => handlers.onReopenSession && handlers.onReopenSession(s.sessionId),
-      });
-    }
-    items.push({ type: 'separator' });
-  }
-  items.push({ label: windowMode ? 'On: native session windows' : 'Off: headless fallback', enabled: false });
-  return items;
-}
+// ⚠ The "Sessions" tray submenu is GONE with window mode (2026-08-20, settings.js
+// header). It held the "Run sessions in a window" executor checkbox and the live
+// session windows' Reopen/Show rows — with no session window ever minted, both
+// were permanently empty chrome. Sessions are headless, watched in the Agents tab.
 
 // ─── BEGIN TRAY-AUTH (pure; unit-tested via source extraction) ──────────────
 // Q4 fix 3: the tray was the ONLY surface that knew the listener was signed out,
@@ -251,7 +225,6 @@ function buildMenu() {
   });
   if (checkItem.note) template.push({ label: checkItem.note, enabled: false });
   template.push(
-    { label: 'Sessions', submenu: sessionsSubmenu() },
     { label: 'Channel folders', submenu: channelFoldersSubmenu() },
     { type: 'separator' }
   );
@@ -269,7 +242,6 @@ function buildMenu() {
 
 function create(opts) {
   handlers = opts || {};
-  if (typeof handlers.windowMode === 'boolean') windowMode = handlers.windowMode;
   const img = nativeImage.createFromPath(iconPath());
   if (!img.isEmpty()) img.setTemplateImage(true);
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
@@ -332,11 +304,6 @@ function setVersionFloor(notice) {
   if (tray) buildMenu();
 }
 
-function setWindowMode(on) {
-  windowMode = !!on;
-  if (tray) buildMenu();
-}
-
 // Round B: update the "Pending: N" tray item. Called from the consent watcher via
 // index.js whenever a pending request is created or resolved.
 function setPendingCount(n) {
@@ -358,5 +325,5 @@ function destroy() {
 
 module.exports = {
   create, update, setUpdateReady, setUpdateNote, setPeerSkew, setVersionFloor,
-  setWindowMode, setPendingCount, refresh, destroy,
+  setPendingCount, refresh, destroy,
 };
