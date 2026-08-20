@@ -301,6 +301,74 @@ test("PUSH: the event name and payload are the shape the preload forwards", asyn
   assert.equal(m.sent[0].payload.sessions[0].name, "quartz");
 });
 
+// ── REGISTRATION IS A PROJECTION MOVE (2026-08-20) ───────────────────────────────────
+// The defect this pair exists for: `startSession` registered the session and then waited for
+// the SDK's `system/init` to produce the FIRST dispatch, which is the only thing that used to
+// call `touch()`. So a freshly launched agent was invisible in the Agents tab for as long as
+// the claude child + its MCP servers took to boot — and `session-query.js`'s own C-4 comment
+// records that a child can boot and NEVER emit `system/init`, in which case the pill never
+// arrived at all and only a reload (the `sessions:summaries` invoke, which reads the registry
+// directly) could show it.
+
+test("PUSH: a session that has only been REGISTERED is pushed — no dispatch required", async () => {
+  const m = load();
+  const sessions = new Map();
+  m.bind({ sessions });
+  m.start({ getWindows: () => [m.spaWindow] });
+  await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
+  assert.equal(m.sent.length, 1);
+  assert.deepEqual(m.sent[0].payload.sessions, [], "an empty machine pushes an empty list");
+  // Exactly what startSession now does: put it in the registry, touch. NOTHING else — no
+  // state move, no noteActivity, no `launched` event. `phase: 'launching'` is what the
+  // engine really holds at this point (baseRecord's own comment).
+  const s = session({ state: { phase: "launching", activity: "idle", parked: false } });
+  sessions.set(s.key, s);
+  m.touch();
+  await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
+  assert.equal(m.sent.length, 2, "registration alone must reach the renderer");
+  assert.equal(m.sent[1].payload.sessions.length, 1);
+  assert.equal(m.sent[1].payload.sessions[0].state, "idle", "a launching session reads idle, not absent");
+  assert.equal(m.sent[1].payload.sessions[0].channelId, "chan-1");
+});
+
+test("PUSH: a rolled-back registration leaves no phantom pill", async () => {
+  const m = load();
+  const sessions = new Map();
+  m.bind({ sessions });
+  m.start({ getWindows: () => [m.spaWindow] });
+  await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
+  assert.equal(m.sent.length, 1);
+  // startSession's two rollback shapes (a window factory that threw, and a windowless spawn
+  // held on a missing credential) both `sessions.delete` and touch again. The two touches
+  // coalesce into ONE flush, which must see the registry as it finally is.
+  const s = session();
+  sessions.set(s.key, s);
+  m.touch();
+  sessions.delete(s.key);
+  m.touch();
+  await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
+  assert.equal(m.sent.length, 1, "nothing moved, so nothing is sent");
+});
+
+// ⚠ THE WEAK HALF, AND LABELLED AS SUCH (INVARIANTS §14 — a regex over source text is not a
+// behavioural assertion). `session-engine.js` requires electron and cannot be driven here, so
+// the two cases above pin the CONTRACT and this pins the CALL SITE. It goes green on a
+// refactor that renamed nothing; what it cannot do is stay green if the touch is deleted.
+test("ENGINE: every startSession registry mutation is accompanied by a touch", () => {
+  const startSession = ENGINE.slice(
+    ENGINE.indexOf("async function startSession("),
+    ENGINE.indexOf("async function launch(")
+  );
+  assert.ok(startSession.length > 0, "startSession not found in session-engine.js");
+  const mutations = startSession
+    .split("\n")
+    .filter((line) => /sessions\.(set|delete)\(/.test(line));
+  assert.equal(mutations.length, 3, "the registration + its two rollbacks");
+  for (const line of mutations) {
+    assert.match(line, /sessionSummary\.touch\(\)/, `registry mutation without a touch: ${line.trim()}`);
+  }
+});
+
 test("PUSH: a burst of dispatches costs ONE frame", async () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });

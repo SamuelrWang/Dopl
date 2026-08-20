@@ -93,6 +93,7 @@ export function ChannelsV2InfoPanel({
   peerSessions = [],
   canLaunchAgent = false,
   launchBusy = false,
+  launchError = null,
   onLaunchAgent,
   openAgent,
   onOpenAgent,
@@ -122,6 +123,9 @@ export function ChannelsV2InfoPanel({
   peerSessions?: readonly ChannelPeerSession[];
   canLaunchAgent?: boolean;
   launchBusy?: boolean;
+  /** The last launch refusal's copy, or null. Passed through — the tab owns
+   *  where it sits. */
+  launchError?: string | null;
   onLaunchAgent?: (threadId: string) => void;
   /** `agentsModel › agentKey` of the agent whose view is open — read only to
    *  mark its card "Viewing". The panel itself renders at page level, over this
@@ -206,6 +210,7 @@ export function ChannelsV2InfoPanel({
           peers={peerSessions}
           canLaunch={canLaunchAgent}
           launchBusy={launchBusy}
+          launchError={launchError}
           onLaunchAgent={onLaunchAgent}
           openAgent={openAgent}
           onOpenAgent={onOpenAgent}

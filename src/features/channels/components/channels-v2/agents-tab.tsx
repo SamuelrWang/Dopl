@@ -67,6 +67,7 @@ export function AgentsTab({
   peers = [],
   canLaunch = false,
   launchBusy = false,
+  launchError = null,
   onLaunchAgent,
   openAgent,
   onOpenAgent,
@@ -87,6 +88,10 @@ export function AgentsTab({
   /** The launch button (thread view only; desktop only). */
   canLaunch?: boolean;
   launchBusy?: boolean;
+  /** Copy for the last launch main REFUSED, or null. ⚠ A refusal is not a
+   *  push — nothing announces it, so the button's own row is the only place it
+   *  can be said (`use-agents-panel.ts › launchRefusalText`). */
+  launchError?: string | null;
   onLaunchAgent?: (threadId: string) => void;
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
@@ -102,15 +107,22 @@ export function AgentsTab({
   const peerCards = peerCardsFor(peers, currentUserId, openThreadId);
 
   const launchRow = canLaunch && openThreadId && onLaunchAgent && (
-    <button
-      type="button"
-      disabled={launchBusy}
-      onClick={() => onLaunchAgent(openThreadId)}
-      className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
-    >
-      <Plus size={13} aria-hidden />
-      {launchBusy ? "Launching…" : "Launch agent"}
-    </button>
+    <div className="mb-3">
+      <button
+        type="button"
+        disabled={launchBusy}
+        onClick={() => onLaunchAgent(openThreadId)}
+        className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
+      >
+        <Plus size={13} aria-hidden />
+        {launchBusy ? "Launching\u2026" : "Launch agent"}
+      </button>
+      {launchError && (
+        <p role="alert" className="mt-1.5 px-0.5 text-caption text-danger">
+          {launchError}
+        </p>
+      )}
+    </div>
   );
 
   if (sessions === null) {

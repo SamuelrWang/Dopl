@@ -75,8 +75,15 @@ export interface DesktopSessionsFeed {
  * reading it while rendering makes the server and the first client render
  * disagree — the subscription effect is the only place it is read.
  */
+/** Re-probes for the preload global before settling on "could not ask". Five
+ *  tries at 200ms is one second — long enough for a slow first paint, short
+ *  enough that a plain browser reaches its honest `null` inside a blink. */
+const BRIDGE_PROBE_LIMIT = 5;
+const BRIDGE_PROBE_MS = 200;
+
 export function useDesktopSessions(): DesktopSessionsFeed {
   const [summaries, setSummaries] = useState<DesktopSessionSummary[] | null>(null);
+  const [probe, setProbe] = useState(0);
   // ONE mounted flag for the imperative re-read. The subscription below keeps
   // its own `live` local because it is scoped to a single effect run; a
   // refresh fired from a click has no effect to be scoped to, and an answer
@@ -104,13 +111,24 @@ export function useDesktopSessions(): DesktopSessionsFeed {
 
   useEffect(() => {
     const sessions = getSpaBridge()?.sessions;
-    if (!sessions) return;
     // Both members are optional on the interface: an older main has `reopen` and
     // neither of these, and must degrade to "could not ask" rather than to a
     // broken call.
-    const canRead = typeof sessions.summaries === "function";
-    const canListen = typeof sessions.onSummaries === "function";
-    if (!canRead || !canListen) return;
+    const canRead = typeof sessions?.summaries === "function";
+    const canListen = typeof sessions?.onSummaries === "function";
+    // ⚠ A BOUNDED RE-PROBE, ADDED 2026-08-20 — the effect used to run ONCE on
+    // `[]` deps, so a first mount that raced the preload's global left the feed
+    // permanently `null` and the Agents tab permanently said "could not ask".
+    // BOUNDED on purpose: `null` is the CORRECT terminal answer for a plain
+    // browser and for a main without the feed (INVARIANTS §11 — UNKNOWN is not
+    // EMPTY), so this must converge on it rather than poll for a bridge that is
+    // never coming. It is not a data poll — it re-probes a window global and
+    // stops.
+    if (!canRead || !canListen) {
+      if (probe >= BRIDGE_PROBE_LIMIT) return;
+      const timer = setTimeout(() => setProbe((n) => n + 1), BRIDGE_PROBE_MS);
+      return () => clearTimeout(timer);
+    }
 
     let live = true;
     // READ ONCE, THEN LISTEN. The feed is a push, and a push-only surface leaves
@@ -127,14 +145,14 @@ export function useDesktopSessions(): DesktopSessionsFeed {
         if (live) setSummaries((prev) => prev ?? []);
       });
 
-    const off = sessions.onSummaries?.((e) => {
+    const off = sessions?.onSummaries?.((e) => {
       if (live) setSummaries(e.sessions);
     });
     return () => {
       live = false;
       off?.();
     };
-  }, []);
+  }, [probe]);
 
   return { sessions: summaries, refresh };
 }

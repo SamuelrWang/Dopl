@@ -246,7 +246,13 @@ export function ChannelsV2Core({
     ? channelDisplayName(channel, members, currentUserId)
     : "";
   // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
-  const agentsPanel = useAgentsPanel({ channel, workspaceId, currentUserId, threads });
+  const agentsPanel = useAgentsPanel({
+    channel,
+    workspaceId,
+    currentUserId,
+    threads,
+    refreshDesktopSessions: refreshAgents,
+  });
 
   // The Tags inbox's click: mark read, land the center pane on the right
   // transcript, then signal the scroll. The scroll effect runs POST-render, so
@@ -400,6 +406,7 @@ export function ChannelsV2Core({
                   openThread.targetUserId === currentUserId)
               }
               launchBusy={agentsPanel.launchBusy}
+              launchError={agentsPanel.launchError}
               onLaunchAgent={(id) => void agentsPanel.launchAgent(id)}
               openAgent={sel.openAgent}
               onOpenAgent={sel.setOpenAgent}

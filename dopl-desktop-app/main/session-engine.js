@@ -333,11 +333,11 @@ async function startSession(spec, sdk) {
     lastInboundSeq: Number.isFinite(Number(spec.triggerSeq)) ? Number(spec.triggerSeq) : null,
     win: null, query: null, abortController: null, pushIterator: null,
   };
-  sessions.set(s.key, s);
+  sessions.set(s.key, s); sessionSummary.touch(); // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for the SDK's first dispatch (§11)
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
   // The spawn SURFACE: a window (adopting an open pre-consent card), or — `spec.windowless` — none; session-windowless.js owns the branch.
   if (!sessionWindowless.attachSurface(s, spec, { windowFactory, sessionConsent, sessionShell })) {
-    sessions.delete(s.key);
+    sessions.delete(s.key); sessionSummary.touch(); // ...and a ROLLBACK is one too: the registration above already scheduled a flush
     return null;
   }
   emit(s, { type: 'modes', tool: state.toolMode, message: state.messageMode }); // v3.1: the header must state the PRESET posture, not the defaults
@@ -354,7 +354,7 @@ async function startSession(spec, sdk) {
   if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }
   // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window):
   // roll back so launch() reports auth-hold and the caller answers honestly.
-  if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); return { authHold: true }; }
+  if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
   // Q6 PREFLIGHT: a machine with no Claude Code sign-in can only produce a dead session, so HOLD the
   // launch on the sign-in action instead. Nothing is settled, echoed, or thrown away; the request runs
   // the moment sign-in succeeds.
