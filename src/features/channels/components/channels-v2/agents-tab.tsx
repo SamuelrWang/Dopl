@@ -43,10 +43,11 @@ import { memberPerson } from "./view-model";
 import { AgentLiveness, CARD_BUTTON, PANEL_CARD } from "./bits";
 import {
   agentKey,
-  agentsForChannel,
   agentsPerThread,
   formatTokens,
   metric,
+  ownAgentsFor,
+  peerCardsFor,
 } from "./agents-model";
 
 /** Absolute epoch ms → the relative phrase the cards use. `formatRelativeTime`
@@ -94,12 +95,10 @@ export function AgentsTab({
   const me = currentUserId ? (byUser.get(currentUserId) ?? null) : null;
   // Peers: other members' live rows, thread-scoped like everything on the tab.
   // Own rows are excluded — the LOCAL feed below is the richer truth for mine.
-  const peerCards = peers.filter(
-    (p) =>
-      p.userId !== currentUserId &&
-      p.state !== "ended" &&
-      (!openThreadId || p.threadId === openThreadId)
-  );
+  // ⚠ THE PREDICATE IS `agents-model.ts › peerCardsFor`, NOT AN INLINE FILTER
+  // (2026-08-20): the tab-row badge counts the same rows this list draws, and a
+  // second copy of the rule is how a badge comes to say 3 over a list of 2.
+  const peerCards = peerCardsFor(peers, currentUserId, openThreadId);
 
   const launchRow = canLaunch && openThreadId && onLaunchAgent && (
     <button
@@ -125,10 +124,9 @@ export function AgentsTab({
     );
   }
 
-  const inChannel = agentsForChannel(sessions, channelId);
-  const mine = openThreadId
-    ? inChannel.filter((a) => a.taskId === openThreadId)
-    : inChannel;
+  // ⚠ Same one-derivation rule as `peerCards` above — `ownAgentsFor` is what the
+  // tab row's badge counts, so the list and the number are one function.
+  const mine = ownAgentsFor(sessions, channelId, openThreadId);
   const perThread = agentsPerThread(mine);
 
   return (

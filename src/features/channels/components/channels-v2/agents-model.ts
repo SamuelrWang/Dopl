@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSpaBridge, type DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 
 /**
  * THE STABLE IDENTITY OF ONE AGENT, and the id the open-agent state holds.
@@ -157,6 +158,51 @@ export function agentsForChannel(
   const order = [...new Set(mine.map((s) => s.taskId))];
   return [...mine].sort(
     (a, b) => order.indexOf(a.taskId) - order.indexOf(b.taskId)
+  );
+}
+
+/**
+ * MY agents on the surface as it is currently scoped: `agentsForChannel`, then
+ * the thread narrowing the tab applies in thread view.
+ *
+ * ⚠ IT EXISTS SO THE TAB'S LIST AND THE TAB'S BADGE CANNOT DISAGREE (2026-08-20).
+ * The Agents tab wrote this narrowing inline and the tab-row count would have
+ * had to write it a second time — which is F-142's defect exactly ("the web chip
+ * shows Idle while the desktop works": two readers, two derivations, one of them
+ * wrong). A badge that says 3 over a list of 2 is the same class of lie, and the
+ * only structural fix is that both callers run the same function.
+ */
+export function ownAgentsFor(
+  sessions: readonly DesktopSessionSummary[],
+  channelId: string,
+  openThreadId: string | null = null
+): DesktopSessionSummary[] {
+  const inChannel = agentsForChannel(sessions, channelId);
+  return openThreadId
+    ? inChannel.filter((a) => a.taskId === openThreadId)
+    : inChannel;
+}
+
+/**
+ * OTHER members' agents on the same surface — the peer cards, and the peer half
+ * of the tab's badge. Same one-derivation argument as {@link ownAgentsFor}.
+ *
+ * ⚠ THREE PREDICATES, ALL LOAD-BEARING. Own rows are excluded because the LOCAL
+ * feed is the richer truth for mine (a peer row carries no metrics); `ended` is
+ * excluded because the server row outlives the run it describes; and the thread
+ * narrowing matches the tab's own scope. Dropping any one of them makes the
+ * badge count rows the list does not draw.
+ */
+export function peerCardsFor(
+  peers: readonly ChannelPeerSession[],
+  currentUserId: string | null,
+  openThreadId: string | null = null
+): ChannelPeerSession[] {
+  return peers.filter(
+    (p) =>
+      p.userId !== currentUserId &&
+      p.state !== "ended" &&
+      (!openThreadId || p.threadId === openThreadId)
   );
 }
 

@@ -26,6 +26,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
+import { ownAgentsFor, peerCardsFor } from "./agents-model";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import type { AuthorIndex } from "./view-model";
 import type {
@@ -43,6 +44,40 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+/**
+ * THE TAB-ROW BADGES (2026-08-20). `SegmentedControl` has carried an optional
+ * `count` since the knowledge home's scope pills
+ * (`knowledge-v2/home/knowledge-home.tsx` over `use-knowledge-v2-controller.ts ›
+ * filterCounts`); this row simply had none. Nothing new is rendered — the same
+ * primitive, the same two faces.
+ *
+ * ⚠ `undefined` IS THE "CANNOT SAY" ANSWER AND IT IS LOAD-BEARING.
+ * `SegmentedControl` draws no badge for `undefined`, which is exactly what
+ * `agentSessions === null` needs: "could not ask" (a plain browser, or a main
+ * without the feed) must NOT render as a confident `0`. UNKNOWN is not EMPTY
+ * (INVARIANTS §11), and a `0` on this tab is a claim about the operator's own
+ * machine that the web cannot make.
+ *
+ * ⚠ INFO AND SETTINGS GET NO BADGE, deliberately. The Info tab already carries
+ * the mentions unread count INSIDE it (`info-tab.tsx`, arithmetic over the rows
+ * it displays); a second number on its tab would leave the reader guessing which
+ * of the two it is.
+ *
+ * ⚠ THREADS COUNTS THE LOADED LIST. The read is bounded and `threadsTruncated`
+ * says so in the tab body — the same rule the mentions badge follows (count what
+ * is displayed, and say when the display clipped), rather than a second, wider
+ * count nothing renders.
+ */
+function tabCount(
+  key: TabKey,
+  threads: readonly unknown[],
+  agentCount: number | undefined
+): number | undefined {
+  if (key === "threads") return threads.length;
+  if (key === "agents") return agentCount;
+  return undefined;
+}
 
 export function ChannelsV2InfoPanel({
   channel,
@@ -112,13 +147,31 @@ export function ChannelsV2InfoPanel({
 }) {
   const [tab, setTab] = useState<TabKey>("info");
 
+  // ⚠ THE BADGE RUNS THE TAB'S OWN PREDICATES (`agents-model.ts › ownAgentsFor`
+  // / `› peerCardsFor`), which is why they are exported rather than inline in
+  // `agents-tab.tsx`: two derivations of one list is F-142's defect, and here it
+  // would show as a number that disagrees with the rows under it.
+  // ⚠ `null` sessions => `undefined`, never `0` — see `tabCount`.
+  const agentCount =
+    agentSessions === null
+      ? undefined
+      : ownAgentsFor(agentSessions, channel.id, openThreadId).length +
+        peerCardsFor(peerSessions, index.currentUserId, openThreadId).length;
+
   return (
     <aside
       aria-label="Channel info"
       className="flex w-[340px] shrink-0 flex-col border-l border-border-default"
     >
       <div className="flex h-[56px] shrink-0 items-center border-b border-border-default px-3">
-        <SegmentedControl options={TABS} value={tab} onChange={setTab} />
+        <SegmentedControl
+          options={TABS.map((t) => ({
+            ...t,
+            count: tabCount(t.key, threads, agentCount),
+          }))}
+          value={tab}
+          onChange={setTab}
+        />
       </div>
 
       {tab === "info" ? (
