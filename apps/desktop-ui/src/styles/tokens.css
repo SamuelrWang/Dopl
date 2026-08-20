@@ -148,7 +148,8 @@
        body    default body, row titles, inputs
        lead    prose/document body, emphasized text
        title   pane headers, card titles
-       display page/document titles */
+       display page/document titles
+       stat    large dashboard figures — pair with font-mono */
   --text-micro: 10.5px;
   --text-micro--line-height: 1.4;
   --text-label: 11px;
@@ -165,6 +166,8 @@
   --text-title--line-height: 1.4;
   --text-display: 18px;
   --text-display--line-height: 1.375;
+  --text-stat: 26px;
+  --text-stat--line-height: 1.05;
 }
 
 :root {

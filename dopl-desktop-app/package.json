@@ -5,6 +5,7 @@
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
+    "dev": "DOPL_UI_DEV_URL=http://localhost:5173 electron .",
     "smoke": "electron scripts/smoke-test.js",
     "lint": "eslint .",
     "test": "node --test 'test/**/*.mjs'",

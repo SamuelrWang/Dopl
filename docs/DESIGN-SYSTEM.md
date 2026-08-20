@@ -9,7 +9,7 @@ Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
-dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings,
+dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings, Overview,
 Workspaces (invite/join/create cards), Billing, MCP-connect.
 Exempt: marketing pages and auth + onboarding (their own glass/3D
 kit). The F-022 legacy Button/Dialog primitives are retired (deleted
@@ -29,6 +29,7 @@ Semantic `text-*` utilities (Tailwind, from `@theme`). Pick by role, not px:
 | `text-lead`    | 13px    | prose/document body, emphasized text                         |
 | `text-title`   | 14px    | pane headers, card titles                                    |
 | `text-display` | 18px    | page/document titles                                         |
+| `text-stat`    | 26px    | large dashboard figures (stat cards, period totals) — always `font-mono tabular-nums`, never prose |
 
 No sizes between or outside these. `text-sm`/`text-xs`/`text-[13px]` are all
 forbidden in app UI (marketing/landing pages excepted).
