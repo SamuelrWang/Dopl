@@ -197,7 +197,7 @@
 
   /* Text */
   --text-primary: #232a31;
-  --text-secondary: #646d78;
+  --text-secondary: #57606b; /* darkened from #646d78 (Samuel, 2026-08-19) */
   --text-muted: #98a2ad;
   --text-disabled: #c4cad1;
 

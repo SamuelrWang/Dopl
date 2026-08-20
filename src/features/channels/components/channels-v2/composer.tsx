@@ -25,7 +25,7 @@
  * request twice (INVARIANTS §8).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AtSign, Bot, Expand, Mic, Paperclip, Smile, X, Zap } from "lucide-react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
@@ -76,6 +76,23 @@ export function ChannelsV2Composer({
   gate: MutationGate;
 }) {
   const [draft, setDraft] = useState("");
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  // AUTO-GROW to three visible lines, then scroll (Samuel, 2026-08-20 — the
+  // second line was clipping invisibly at rows={1}). A style mutation in an
+  // effect, NOT state: the height is derived from content the DOM already
+  // holds, and a state copy would re-render the composer per keystroke for a
+  // number only the element needs. jsdom's scrollHeight of 0 makes this a
+  // harmless no-op in tests.
+  useEffect(() => {
+    const el = draftRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const line = Number.parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const max = Math.ceil(line * 3) + 8;
+    const next = Math.min(el.scrollHeight, max);
+    if (next > 0) el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [draft]);
   const [title, setTitle] = useState("");
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [removedAgents, setRemovedAgents] = useState<ReadonlySet<string>>(
@@ -192,7 +209,11 @@ export function ChannelsV2Composer({
         inside the collapsing region, so a closed panel leaves no phantom gap
         above the text line.
       */}
-      <div className="bento flex flex-col px-3 py-2.5">
+      {/* `bg-white` overrides `.bento`'s `--panel-surface` fill — Samuel ruled
+          the composer PURE white (2026-08-19), same exception as the agent
+          thread card's inner panel. The utility layer outranks
+          `@layer components`, so the override is reliable. */}
+      <div className="bento flex flex-col bg-white px-3 py-2.5">
         {/*
           Height animates through the grid-rows 0fr→1fr idiom rather than a
           measured pixel height: the panel's own content decides how far the
@@ -223,6 +244,7 @@ export function ChannelsV2Composer({
         <div className="flex flex-col gap-2">
           <div className="flex items-start gap-2">
             <textarea
+              ref={draftRef}
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value);

@@ -41,7 +41,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | Utility                                       | Value            | Role                       |
 | --------------------------------------------- | ---------------- | -------------------------- |
 | `text-text-primary`                           | `#232a31`        | primary ink                |
-| `text-text-secondary`                         | `#646d78`        | secondary / muted labels   |
+| `text-text-secondary`                         | `#57606b`        | secondary / muted labels (darkened 2026-08-19) |
 | `text-text-muted`                             | `#98a2ad`        | faint / placeholders       |
 | `text-text-disabled`                          | `#c4cad1`        | disabled                   |
 | `text-danger` / `bg-danger/10`                | red              | destructive text / soft bg |

@@ -24,7 +24,7 @@
 import { Bot } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
-import { AddresseePill, CARD_BUTTON, MESSAGE_CARD, PendingChip } from "./bits";
+import { AddresseePill, CARD_BUTTON, PendingChip } from "./bits";
 import { AgentChip } from "./bits";
 import {
   MENTION_TOKEN_RE,
@@ -39,6 +39,7 @@ export function Transcript({
   index,
   flashId,
   requested,
+  onDecideThread,
   onOpenThread,
 }: {
   rows: TranscriptRow[];
@@ -47,6 +48,8 @@ export function Transcript({
   flashId: string | null;
   /** Thread ids the viewer has been asked about and has not answered. */
   requested: ReadonlySet<string>;
+  /** Decide a pending ask inline, right on the card (Samuel, 2026-08-20). */
+  onDecideThread: (threadId: string, decision: "allow" | "deny") => void;
   onOpenThread: (id: string) => void;
 }) {
   if (rows.length === 0) {
@@ -57,7 +60,7 @@ export function Transcript({
     );
   }
   return (
-    <div className="flex max-w-[720px] flex-col gap-5">
+    <div className="flex flex-col gap-5">
       {rows.map((row) => {
         if (row.kind === "system") {
           return (
@@ -81,6 +84,7 @@ export function Transcript({
               index={index}
               flash={row.id === flashId}
               requested={requested}
+              onDecide={onDecideThread}
               onOpen={() => onOpenThread(row.openThreadId)}
             />
           );
@@ -210,24 +214,21 @@ function AuthoredRow({
  * `author_user_id`). The TEXT inside it reads left-aligned like every other
  * paragraph in the app once it wraps.
  *
- * ⚠ `max-w-[75%]` IS WHAT MAKES THAT ANCHORING VISIBLE, and it is load-bearing,
- * not taste (Samuel, 2026-08-19, second look at the same review). `items-end`
- * alone does NOT right-anchor a long body: align-self sizes a child to
- * `fit-content(available)`, and once the text's max-content exceeds the column,
- * fit-content collapses to the FULL available width. The `<p>` then spans the
- * whole column and its left-aligned lines start at the LEFT edge — a wrapped own
- * message read as a full-width peer row while a short "test" still sat right.
- * Capping the body below the column is what leaves `items-end` something to pull.
+ * ⚠ THE CAP IS 92%, DOWN FROM 75% AND UP FROM SAMUEL'S THIRD LOOK (2026-08-19):
+ * text runs (nearly) the pane's full width, symmetric margins, matching the
+ * pane border gutters — the transcript column's old 720px cap left with the
+ * same ruling. The residual 8% is not taste: `items-end` alone does NOT
+ * right-anchor a long body (align-self sizes a child to
+ * `fit-content(available)`; once max-content exceeds the column it collapses
+ * to FULL width and a wrapped own message reads as a full-width peer row), so
+ * SOME cap below the column is what leaves `items-end` something to pull. 92%
+ * keeps the anchoring legible at one line-indent's cost.
  *
- * ⚠ A PERCENTAGE, not a px measure, and BOTH SIDES wear it. A fixed cap
- * (e.g. `MESSAGE_CARD`'s 460px) stops capping the moment the column is narrower
- * than it — the pop-out thread window — which is exactly where the bug would
- * come back. 75% of the column always leaves the gap. Peer rows keep hugging
- * left either way, so the symmetric measure costs them nothing and reads better.
- * The thread-card body needs none of this: `MESSAGE_CARD` is already
- * `w-full max-w-[460px]`, and receipts are centred, not sided.
+ * ⚠ A PERCENTAGE, not a px measure, and BOTH SIDES wear it — a fixed cap stops
+ * capping wherever the column is narrower (the pop-out thread window). Peer
+ * rows keep hugging left either way.
  */
-const MESSAGE_BODY = "wrap-anywhere max-w-[75%] text-lead text-text-primary";
+const MESSAGE_BODY = "wrap-anywhere max-w-[92%] text-lead text-text-primary";
 
 function Message({
   row,
@@ -263,7 +264,7 @@ function Message({
 /**
  * THE POSTED REQUEST — what a "New agent thread" send leaves in the channel.
  *
- * Same `MESSAGE_CARD` face as the mock drew, because it is the same object: a
+ * Dark-shell card (2026-08-19) — no longer the `MESSAGE_CARD` face: a
  * body the message points at rather than says. **ONE CARD, N THREADS** — the
  * fan-out writes one `channel_tasks` row per addressee (INVARIANTS §5: a thread
  * is one requester + one target) and they share a server-stamped `fanoutGroup`,
@@ -288,16 +289,22 @@ function ThreadCardMessage({
   index,
   flash,
   requested,
+  onDecide,
   onOpen,
 }: {
   row: ThreadCardRow;
   index: AuthorIndex;
   flash: boolean;
   requested: ReadonlySet<string>;
+  onDecide: (threadId: string, decision: "allow" | "deny") => void;
   onOpen: () => void;
 }) {
   const first = row.threads[0];
   const waiting = row.threads.some((t) => requested.has(t.id));
+  // The thread on this card THIS viewer owes an answer on (at most one — a
+  // fan-out raises one thread per addressee).
+  const ownedPending =
+    row.threads.find((t) => requested.has(t.id))?.id ?? null;
   return (
     <AuthoredRow
       id={row.id}
@@ -309,18 +316,29 @@ function ThreadCardMessage({
       continuation={false}
       flash={flash}
     >
-      <div className={cn(MESSAGE_CARD, "flex flex-col gap-2 text-left")}>
-        <div className="flex items-center gap-1.5">
-          <Bot size={13} aria-hidden className="shrink-0 text-text-muted" />
-          <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+      {/* Dark shell (Samuel, 2026-08-19, from the "AI Tools" reference): the
+          card is a CTA-ink container whose top bar carries the label in white,
+          with the white panel INSET inside it, own rounded corners — the
+          `--surface-cta` / `--text-on-cta` pair, the same ink `.auth-btn-3d`
+          wears, never a literal hex. */}
+      <div className="mt-1 w-full max-w-[460px] overflow-hidden rounded-[14px] bg-surface-cta text-left ring-1 ring-surface-cta">
+        <div className="flex items-center gap-1.5 px-3 py-2">
+          <Bot size={13} aria-hidden className="shrink-0 text-text-on-cta" />
+          <span className="text-small font-medium text-text-on-cta">
             Agent thread
           </span>
           <span className="flex-1" />
           {waiting && <PendingChip />}
         </div>
+        {/* `m-0.5 mt-0`: the sliver of ink left visible around the white panel
+            is the reference's border-line (thinned from m-1, Samuel
+            2026-08-19); the bar above supplies the top. `bg-white` is a ruled
+            exception to the token surfaces — Samuel wants this panel PURE
+            white, not `--bg-elevated`'s near-white. */}
+        <div className="m-0.5 mt-0 flex flex-col gap-2 rounded-[12px] bg-white p-3">
         {/* ⚠ Same `wrap-anywhere` rule as the body, for the same reason: a
             title or a preview with no spaces in it would otherwise size this
-            card's column off its min-content width and run past the `.bento`
+            card's column off its min-content width and run past the card
             edge (the `line-clamp` only hides the overflow, it does not stop
             it). */}
         <span className="wrap-anywhere text-body font-semibold text-text-primary">
@@ -362,9 +380,35 @@ function ThreadCardMessage({
 
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-caption text-text-muted" />
+          {/* INLINE DECISION (Samuel, 2026-08-20; closes F-214's one-click
+              gap): when THIS viewer owes an answer on one of the card's
+              threads, the accept lives here — not one unmarked nav hop away
+              in the Inbox. Same consent mutation, same CAS, same gate; the
+              Inbox pane stays as the full launch-settings path. Launch = the
+              consent ALLOW; a fan-out addresses one thread at this viewer, so
+              the first owed thread is the one being decided. */}
+          {ownedPending && (
+            <>
+              <button
+                type="button"
+                onClick={() => onDecide(ownedPending, "deny")}
+                className={CARD_BUTTON}
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                onClick={() => onDecide(ownedPending, "allow")}
+                className="auth-btn-3d h-8 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white"
+              >
+                Accept
+              </button>
+            </>
+          )}
           <button type="button" onClick={onOpen} className={CARD_BUTTON}>
             Open thread
           </button>
+        </div>
         </div>
       </div>
     </AuthoredRow>

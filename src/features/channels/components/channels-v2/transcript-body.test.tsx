@@ -23,7 +23,7 @@
  *     wrapped own messages still read full-width left). `items-end` sizes a
  *     child to `fit-content(available)`, which for a body whose max-content
  *     exceeds the column IS the full column — so the anchoring had nothing to
- *     pull against. `max-w-[75%]` is what leaves the gap, and it is a
+ *     pull against. `max-w-[92%]` is what leaves the gap (92 since Samuel widened the text 2026-08-19), and it is a
  *     PERCENTAGE so a narrow column (the pop-out thread window) cannot outgrow
  *     it. Both sides carry it; peer rows hug left either way.
  *
@@ -60,6 +60,7 @@ function renderRows(rows: TranscriptRow[]) {
       index={INDEX}
       flashId={null}
       requested={new Set()}
+      onDecideThread={vi.fn()}
       onOpenThread={vi.fn()}
     />
   );
@@ -175,12 +176,12 @@ describe("channels-v2 transcript — my own message: anchored right, text left",
     // its left-aligned lines start at the column's left edge: the row reads
     // full-width and left-anchored, which is the bug this pins shut.
     renderBothSides();
-    expect(bodyFor(UNBROKEN).className).toContain("max-w-[75%]");
+    expect(bodyFor(UNBROKEN).className).toContain("max-w-[92%]");
   });
 
   it("caps the PEER side to the same measure — symmetric, still hugging left", () => {
     renderBothSides();
-    expect(bodyFor("THEIR-TEXT").className).toContain("max-w-[75%]");
+    expect(bodyFor("THEIR-TEXT").className).toContain("max-w-[92%]");
     expect(bodyFor("THEIR-TEXT").parentElement?.className).not.toContain(
       "items-end"
     );
@@ -209,6 +210,6 @@ describe("channels-v2 transcript — my own message: anchored right, text left",
     expect(run.className).toContain("flex-row-reverse");
     expect(run.firstElementChild?.className).toContain("w-10");
     expect(bodyFor(UNBROKEN).parentElement?.className).toContain("items-end");
-    expect(bodyFor(UNBROKEN).className).toContain("max-w-[75%]");
+    expect(bodyFor(UNBROKEN).className).toContain("max-w-[92%]");
   });
 });

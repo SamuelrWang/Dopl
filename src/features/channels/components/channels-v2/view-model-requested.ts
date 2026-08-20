@@ -70,6 +70,35 @@ export function requestedThreadIds(
   return ids;
 }
 
+/**
+ * THREAD → PENDING CONSENT-REQUEST ID, the join {@link requestedThreadIds}
+ * makes, kept as a MAP so the transcript's request card can carry an inline
+ * decision (Samuel, 2026-08-20 — the recipient had no accept affordance
+ * anywhere but the Inbox pane, one unmarked nav hop away; F-214's fix).
+ * Same seq-keyed join, same honesty rule: a seq-less row maps no thread.
+ */
+export function pendingRequestIdByThread(
+  messages: ChannelMessage[],
+  consentRequests: ChannelConsentRequest[]
+): ReadonlyMap<string, string> {
+  const map = new Map<string, string>();
+  const pending = consentRequests.filter(
+    (r) => isPendingInbound(r) && isSeq(r.messageSeq)
+  );
+  if (pending.length === 0) return map;
+  const byKey = new Map(
+    pending.map((r) => [`${r.channelId}:${r.messageSeq}`, r.id])
+  );
+  for (const message of messages) {
+    const threadId = threadIdOf(message);
+    if (!threadId) continue;
+    if (!isSeq(message.seq)) continue;
+    const id = byKey.get(`${message.channelId}:${message.seq}`);
+    if (id) map.set(threadId, id);
+  }
+  return map;
+}
+
 /** A pending INBOUND consent row — the only kind that says "you have been asked
  *  and have not answered". An outbound review is about this operator's own
  *  reply, and a decided row is answered. */

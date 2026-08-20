@@ -107,6 +107,7 @@ const STICK_SLACK_PX = 64;
  * pop-out window has no info panel to toggle, no channel view to return to and
  * no thread cards in its rows, so it hands over none of them.
  */
+const DECIDE_NOOP = () => {};
 const NOOP = () => {};
 
 /**
@@ -193,6 +194,7 @@ export function ChannelsV2MessagePane({
   members,
   loading,
   requested,
+  onDecideThread = DECIDE_NOOP,
   scrollTarget,
   infoOpen = false,
   favorited = false,
@@ -215,6 +217,8 @@ export function ChannelsV2MessagePane({
   loading: boolean;
   /** Thread ids the viewer has been asked about and has not answered. */
   requested: ReadonlySet<string>;
+  /** Inline decision from the transcript's request card (Samuel, 2026-08-20). */
+  onDecideThread?: (threadId: string, decision: "allow" | "deny") => void;
   scrollTarget: ScrollTarget | null;
   /** `"page"` chrome only — the info toggle's pressed state. */
   infoOpen?: boolean;
@@ -317,6 +321,30 @@ export function ChannelsV2MessagePane({
         onToggleFavorite={onToggleFavorite}
         onExitThread={onExitThread}
       />
+      {/* AWAITING-YOUR-ANSWER STRIP (Samuel, 2026-08-20): a thread opened
+          BEFORE it was accepted keeps its decision in view — Accept/Decline
+          here, the same consent mutation the card and the Inbox use. */}
+      {thread && requested.has(thread.id) && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-6 py-1.5">
+          <span className="min-w-0 flex-1 truncate text-caption text-text-secondary">
+            This request is awaiting your answer.
+          </span>
+          <button
+            type="button"
+            onClick={() => onDecideThread(thread.id, "deny")}
+            className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
+          >
+            Decline
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecideThread(thread.id, "allow")}
+            className="auth-btn-3d h-7 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white"
+          >
+            Accept
+          </button>
+        </div>
+      )}
       {/* ⚠ THE SCROLLER OWNS THE TRANSCRIPT'S GUTTER, and it is the only thing
           that may (Samuel, 2026-08-19: the rows ran "a little too close" to the
           pane edge). `px-6` → `px-8` is one step on the scale this tree actually
@@ -349,6 +377,7 @@ export function ChannelsV2MessagePane({
             index={index}
             flashId={flashId}
             requested={requested}
+            onDecideThread={onDecideThread}
             onOpenThread={onOpenThread}
           />
         )}

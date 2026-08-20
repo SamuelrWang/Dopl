@@ -30,6 +30,8 @@ import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
 // Kept on one line each: this file sits a handful of lines inside the 500-line cap.
 import { splitChannels } from "./view-model";
+import { ChannelsV2ArrivalAsk } from "./arrival-ask";
+import { useInlineConsent } from "./use-arrival-ask";
 import { useChannelsV2Derivations } from "./derivations";
 
 export interface ChannelsV2CoreProps {
@@ -108,26 +110,12 @@ export interface ChannelsV2CoreProps {
  * rehomed onto this surface's no-channels branch — Samuel's ruling was KEEP
  * for now, redesign later, and the old page was its only reachable entry.
  *
- * ⚠ REALTIME IS LIVE IN BOTH CLIENTS and this surface registers for it
- * (INVARIANTS §7 — any new live surface must). The SPA rides the ui-sync
- * DOORBELL rather than a websocket: `shared-channel-registry.ts ›
- * subscribeSharedWorkspaceTables` takes `› subscribeViaBridge` whenever the
- * preload exposes `onSyncEvent` + `syncWatch`, and `channels`,
- * `channel_members`, `channel_messages`, `channel_consent_requests` and
- * `agent_presence` are all in `dopl-desktop-app/main/ui-sync.js › SYNC_TABLES`.
- * The three docblocks that claimed otherwise were corrected 2026-08-18 (F-199).
- *
- * ⚠ The refetch rides `shared/realtime/refetch-coordinator.ts` through
- * `useRefetchGate`, which INVARIANTS §7 requires of every live surface — a
- * remote event mid-edit must not clobber an unsent local change. All FOUR write
- * families above hand their `settleWith` to this ONE gate (the fourth, channel
- * management, arrived at the cutover) — which is the whole point: a coordinator
- * retrofitted after the first write is a coordinator that was missing for
- * exactly the window it was needed.
- *
- * ⚠ AN EVENT IS A DOORBELL, NEVER CONTENT — the signal triggers a filtered
- * refetch and no payload is ever merged, so RLS and the service filters stay
- * authoritative.
+ * ⚠ REALTIME IS LIVE IN BOTH CLIENTS and this surface registers for it; the
+ * SPA rides the ui-sync DOORBELL, not a websocket (INVARIANTS §7, F-199 —
+ * `live.ts` carries the mechanism). Every write family hands `settleWith` to
+ * the ONE `useRefetchGate` the reads register, and AN EVENT IS A DOORBELL,
+ * NEVER CONTENT: the signal triggers a filtered refetch, no payload is merged,
+ * so RLS and the service filters stay authoritative.
  */
 export function ChannelsV2Core({
   workspaceId,
@@ -261,7 +249,9 @@ export function ChannelsV2Core({
   // THE FAVOURITE TOGGLE (Samuel, 2026-08-19) — a FIFTH write family on this
   // surface, on the same gate as the other four, and the existing per-member
   // preference route rather than a new one (`PATCH /members`, `favorite`).
-  const { favorite } = useChannelPreferenceWrites({
+  // `consent` also decides INLINE (card / thread strip / arrival pop-up,
+  // Samuel 2026-08-20) — same mutation the Inbox pane uses, same gate.
+  const { favorite, consent } = useChannelPreferenceWrites({
     workspaceId,
     currentUserId,
     gate,
@@ -276,6 +266,10 @@ export function ChannelsV2Core({
       requests,
       openThreadId: requestedThreadId,
     });
+
+  // Inline consent (card/strip decision + arrival pop-up) — `use-arrival-ask.ts`.
+  const { decideThread, arrivalAsk, arrivalThreadId, dismissAsk } =
+    useInlineConsent({ channel, messages, requests, consent });
 
   const channelName = channel
     ? channelDisplayName(channel, members, currentUserId)
@@ -377,6 +371,7 @@ export function ChannelsV2Core({
             members={members}
             loading={messagesLoading}
             requested={requested}
+            onDecideThread={decideThread}
             scrollTarget={scrollTarget}
             infoOpen={infoOpen}
             // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
@@ -484,6 +479,21 @@ export function ChannelsV2Core({
         onDirectOpenChange={setDirectOpen}
         onCreated={onCreated}
       />
+
+      {arrivalAsk && !inboxOpen && (
+        <ChannelsV2ArrivalAsk
+          ask={arrivalAsk}
+          threadId={arrivalThreadId}
+          busy={consent.pending}
+          onDecide={(d) => consent.mutate({ id: arrivalAsk.id, decision: d })}
+          onOpenThread={(threadId) => {
+            setRequestedThreadId(threadId);
+            setInboxOpen(false);
+            dismissAsk(arrivalAsk.id);
+          }}
+          onDismiss={() => dismissAsk(arrivalAsk.id)}
+        />
+      )}
     </div>
   );
 }

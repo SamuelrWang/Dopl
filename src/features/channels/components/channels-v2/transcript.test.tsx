@@ -50,6 +50,7 @@ function renderRows(
       index={index}
       flashId={null}
       requested={requested}
+      onDecideThread={vi.fn()}
       onOpenThread={onOpenThread}
     />
   );
@@ -435,7 +436,8 @@ describe("channels-v2 transcript — the request fan-out", () => {
         index={FANOUT_INDEX}
         flashId={null}
         requested={requested}
-        onOpenThread={onOpenThread}
+        onDecideThread={vi.fn()}
+      onOpenThread={onOpenThread}
       />
     );
     return { onOpenThread };

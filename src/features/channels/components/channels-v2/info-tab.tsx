@@ -35,6 +35,7 @@ import {
   CountBadge,
   IconButton,
   MetaRow,
+  MetaRowDivider,
   PanelHeading,
   RolePill,
   StatusPill,
@@ -117,11 +118,13 @@ export function InfoTab({
             <span className="text-body text-text-muted">Not in this channel</span>
           )}
         </MetaRow>
+        <MetaRowDivider />
         <MetaRow icon={Calendar} label="Date of creation">
           <span className="text-body text-text-primary">
             {formatShortDate(channel.createdAt)}
           </span>
         </MetaRow>
+        <MetaRowDivider />
         <MetaRow icon={CircleDot} label="Status">
           {channel.archivedAt ? (
             <span className="text-body text-text-muted">Archived</span>
@@ -129,6 +132,7 @@ export function InfoTab({
             <StatusPill label="Active" />
           )}
         </MetaRow>
+        <MetaRowDivider />
         {/* The mentions inbox — label kept "Tags" from the reference design.
             WIRED (Phase 6): the list is the real projection and the count is
             LIVE UNREAD over it, not a total. The chevron flips open. */}
@@ -136,7 +140,7 @@ export function InfoTab({
           type="button"
           onClick={() => setTagsOpen((open) => !open)}
           aria-expanded={tagsOpen}
-          className="flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left transition-colors hover:bg-surface-raised-1"
+          className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left transition-colors hover:bg-surface-raised-1"
         >
           <Tag size={14} className="shrink-0 text-text-muted" />
           <span className="text-small text-text-secondary">Tags</span>
@@ -166,6 +170,7 @@ export function InfoTab({
             onMarkAllRead={onMarkAllMentionsRead}
           />
         )}
+        <MetaRowDivider />
         {/* WIRED: the channel's thread count, off the same bounded list the
             Threads tab renders. */}
         <MetaRow icon={ListChecks} label="Threads">

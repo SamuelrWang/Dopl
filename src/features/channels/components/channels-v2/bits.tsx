@@ -328,8 +328,9 @@ export function SectionHeader({
  * exactly the same object, and a local copy over there is how two panels in one
  * column come to sit at different heights.
  *
- * `h-10` is the resting height; a row whose control needs more (a description
- * line) passes `className` rather than forking the recipe.
+ * `h-9` is the resting height (h-10 until 2026-08-19 — Samuel tightened the
+ * Main-info rhythm); a row whose control needs more (a description line)
+ * passes `className` rather than forking the recipe.
  */
 export function MetaRow({
   icon: Icon,
@@ -343,13 +344,23 @@ export function MetaRow({
   children: ReactNode;
 }) {
   return (
-    <div className={cn("flex h-10 items-center gap-2 rounded-[8px] px-2", className)}>
+    <div className={cn("flex h-9 items-center gap-2 rounded-[8px] px-2", className)}>
       <Icon size={14} className="shrink-0 text-text-muted" />
       <span className="text-small text-text-secondary">{label}</span>
       <span className="flex-1" />
       <span className="flex items-center gap-1.5">{children}</span>
     </div>
   );
+}
+
+/**
+ * Inset hairline between Main-info rows (Samuel, 2026-08-19). `mx-2` keeps it
+ * off the panel edges — it separates the rows, it does not frame the box —
+ * and with the flush `h-9` rows above and below it sits exactly midway
+ * between their content lines.
+ */
+export function MetaRowDivider() {
+  return <div aria-hidden className="mx-2 border-t border-border-subtle" />;
 }
 
 /** Bold section title inside the right-hand info panel. */
