@@ -226,6 +226,33 @@ export function canOpenAgentWindow(): boolean {
   return typeof getSpaBridge()?.sessions?.reopen === "function";
 }
 
+/** Whether this build can LAUNCH an agent onto a thread (2026-08-20). */
+export function canLaunchAgents(): boolean {
+  return typeof getSpaBridge()?.sessions?.launch === "function";
+}
+
+/**
+ * ATTACH MY OWN AGENT TO A THREAD — the Agents tab's launch button (Samuel,
+ * 2026-08-20). Windowless requester-side session; the click IS the consent (own
+ * agent, own thread — no row is raised) and MAIN owns the posture (inbound
+ * auto-consumed; out per the channel's auto-send setting).
+ */
+export async function launchAgentOnThread(payload: {
+  channelId: string;
+  taskId: string;
+  workspaceId: string;
+  channelName: string;
+  threadTitle: string | null;
+  counterpartyId: string | null;
+  toolProfile: string | null;
+  direct: boolean;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const sessions = getSpaBridge()?.sessions;
+  if (typeof sessions?.launch !== "function") return { ok: false, reason: "no-bridge" };
+  const res = await sessions.launch(payload);
+  return { ok: res?.ok === true, reason: res?.reason };
+}
+
 export type AgentControl = "pause" | "end";
 
 /**

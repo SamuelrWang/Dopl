@@ -249,6 +249,9 @@ const OPS = [
   // reason this list is asserted by COUNT as well as by name.
   ["sessions:pause", { channelId: CH, taskId: "t1" }, { ok: false }],
   ["sessions:end", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ JOINED 2026-08-20: the Agents tab's launch — the one START verb, own-thread
+  // only, UUID-gated on BOTH ids, posture owned by main (see preload-parity).
+  ["sessions:launch", { channelId: CH, taskId: "t1" }, { ok: false }],
   // ⚠ AND ONE MORE 2026-08-18 (wiring plan Phase 10): the pop-out thread window. It is the
   // only op here that can MINT a window, which is exactly why it lives under the same
   // binding — and why its own guards (UUID channel, isSafeSegment on the other two, the

@@ -32,6 +32,7 @@ import type { Channel, ChannelMention } from "../../types";
 import { splitChannels } from "./view-model";
 import { useInlineConsent } from "./use-inline-consent";
 import { useChannelsV2Derivations } from "./derivations";
+import { useAgentsPanel } from "./use-agents-panel";
 
 export interface ChannelsV2CoreProps {
   workspaceId: string;
@@ -273,6 +274,8 @@ export function ChannelsV2Core({
   const channelName = channel
     ? channelDisplayName(channel, members, currentUserId)
     : "";
+  // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
+  const agentsPanel = useAgentsPanel({ channel, workspaceId, currentUserId, threads });
 
   // The Tags inbox's click: mark read, land the center pane on the right
   // transcript, then signal the scroll. The scroll effect runs POST-render, so
@@ -417,6 +420,10 @@ export function ChannelsV2Core({
               openThreadId={openThread?.id ?? null}
               onOpenThread={setRequestedThreadId}
               agentSessions={agentSessions}
+              peerSessions={agentsPanel.peerSessions}
+              canLaunchAgent={agentsPanel.canLaunch}
+              launchBusy={agentsPanel.launchBusy}
+              onLaunchAgent={(id) => void agentsPanel.launchAgent(id)}
               openAgent={openAgent}
               onOpenAgent={setOpenAgent}
               mentions={mentions}

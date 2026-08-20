@@ -140,6 +140,15 @@ const APP_OPS = [
   //   • Own agents only, structurally: the registry holds nothing but this operator's sessions
   //     on this machine, so there is no cross-member control surface to abuse.
   "sessions.end",
+  // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.launch`, the Agents tab's "Launch
+  // agent" button — attach MY OWN agent to a thread, windowless. Handler exists
+  // (`main/channel-dir-ipc.js › sessions:launch`, appWindowOnly, UUID-gated channel
+  // AND task). It DOES start a query — the materially different shape Phase 5's
+  // stop verbs called out — and that is the feature: the same authority the
+  // consent Allow exercises, here exercised by the operator on their OWN thread
+  // with no peer involved. Posture is main's (auto_inbound / channel auto-send);
+  // the renderer hands over ids and display strings only.
+  "sessions.launch",
   "sessions.onSummaries",
   "sessions.pause",
   "sessions.reopen",

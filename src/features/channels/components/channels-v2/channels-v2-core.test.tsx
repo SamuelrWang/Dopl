@@ -82,6 +82,14 @@ vi.mock("../../hooks/use-channel-preference-writes", () => ({
     consent: { mutate: () => {}, pending: false },
   }),
 }));
+vi.mock("./use-agents-panel", () => ({
+  useAgentsPanel: () => ({
+    peerSessions: [],
+    canLaunch: false,
+    launchBusy: false,
+    launchAgent: async () => {},
+  }),
+}));
 vi.mock("../../client/realtime", () => ({
   useChannelsRealtime: () => {},
   usePresenceRealtime: () => {},

@@ -221,6 +221,47 @@ function register(opts = {}) {
     return { ok: true, on: channelPrefs.setAutoSend(p.channelId, p.on === true) };
   }));
 
+  // LAUNCH MY OWN AGENT ONTO A THREAD (2026-08-20, the Agents tab's button). A
+  // WINDOWLESS requester-side session: the clicking human IS the consent (it is
+  // their own agent on their own thread — no row is raised), the message axis is
+  // floored at auto_inbound, and the OUT half is the channel's auto-send posture.
+  // UUID-gated channel; taskId must be a UUID too (first-class threads only —
+  // a legacy exchange has no thread to attach to). Fail shape: { ok: false }.
+  ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, async (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId) || !isUuid(p.taskId)) return { ok: false };
+    const engine = require('./session-engine');
+    const channelPrefs = require('./channel-prefs');
+    const { normalizeProfile } = require('./tool-profiles');
+    const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
+    const res = await engine.launchRequesterSession({
+      channelId: p.channelId,
+      taskId: p.taskId,
+      workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
+      goal: title
+        ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.`
+        : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.',
+      counterpartyId: isUuid(p.counterpartyId) ? p.counterpartyId : null,
+      direct: p.direct === true,
+      context: {
+        channelName: typeof p.channelName === 'string' ? p.channelName.slice(0, 120) : '',
+        taskTitle: title || null,
+        channelId: p.channelId,
+        workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
+        taskId: p.taskId,
+      },
+      toolProfile: normalizeProfile(p.toolProfile),
+      mode: 'interactive',
+      windowless: true,
+      startModes: {
+        tools: 'manual',
+        messages: channelPrefs.getAutoSend(p.channelId) ? 'auto_both' : 'auto_inbound',
+      },
+    });
+    if (res && res.sessionId) return { ok: true, sessionId: res.sessionId };
+    return { ok: false, reason: (res && res.skipped) || 'unknown' };
+  }));
+
   // Reveal a LIVE session window for a (channel, task) from the MAIN window.
   // channelId is UUID-validated (the same anti-probe guard as the folder ops);
   // taskId is an opaque string (a legacy `task-{channel}-{seq}` id or a

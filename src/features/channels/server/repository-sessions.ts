@@ -125,6 +125,32 @@ function sessionRowMatches(
  * and the desktop logs it once per workspace per run — which is the true state
  * of the world, said once.
  */
+/**
+ * EVERY member's session rows for ONE channel (the Agents tab's peer cards,
+ * 2026-08-20), newest change first. ⚠ The caller (session-state-service) has
+ * already proved the reader may read this channel — this read is
+ * channel-fenced, not user-fenced, and that is the point: it is the projection
+ * peers may see (name / state / thread), nothing more.
+ */
+export async function listChannelSessionStates(
+  workspaceId: string,
+  channelId: string
+): Promise<SessionStateRow[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_sessions")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("channel_id", channelId)
+    .order("updated_at", { ascending: false })
+    .limit(SESSION_ROWS_LIMIT);
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as SessionStateRow[];
+}
+
 export async function replaceSessionStates(
   userId: string,
   workspaceId: string,

@@ -205,6 +205,9 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.on(SESSIONS_EVENT, listener);
       return () => ipcRenderer.removeListener(SESSIONS_EVENT, listener);
     },
+    // LAUNCH (2026-08-20): attach MY OWN agent to a thread, windowless. The
+    // payload is display strings + ids; main validates and owns the posture.
+    launch: (payload) => ipcRenderer.invoke('sessions:launch', payload || {}),
     pause: (channelId, taskId) =>
       ipcRenderer.invoke('sessions:pause', {
         channelId: asId(channelId),

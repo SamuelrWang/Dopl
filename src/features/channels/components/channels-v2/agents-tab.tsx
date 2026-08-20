@@ -31,11 +31,15 @@
  * or "channel session" — the noun on this surface is the AGENT.
  */
 
-import { Bot, CornerDownRight } from "lucide-react";
+import { Bot, CornerDownRight, Plus } from "lucide-react";
+import { Avatar } from "@/shared/ui/avatar";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
+import type { ChannelMember } from "../../types";
+import { memberPerson } from "./view-model";
 import { AgentLiveness, CARD_BUTTON, PANEL_CARD } from "./bits";
 import {
   agentKey,
@@ -55,6 +59,13 @@ function relative(at: number | null): string {
 export function AgentsTab({
   sessions,
   channelId,
+  openThreadId = null,
+  members = [],
+  currentUserId = null,
+  peers = [],
+  canLaunch = false,
+  launchBusy = false,
+  onLaunchAgent,
   openAgent,
   onOpenAgent,
 }: {
@@ -62,14 +73,51 @@ export function AgentsTab({
    *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
   sessions: readonly DesktopSessionSummary[] | null;
   channelId: string;
+  /** The OPEN thread (2026-08-20): scopes the tab — thread view shows that
+   *  thread's agents alone; channel view shows the whole channel's. */
+  openThreadId?: string | null;
+  /** The roster, for the owner avatar every card wears. */
+  members?: ChannelMember[];
+  currentUserId?: string | null;
+  /** EVERY member's session STATE for this channel (the server projection) —
+   *  peers render as state-only cards, never openable. */
+  peers?: readonly ChannelPeerSession[];
+  /** The launch button (thread view only; desktop only). */
+  canLaunch?: boolean;
+  launchBusy?: boolean;
+  onLaunchAgent?: (threadId: string) => void;
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
 }) {
+  const byUser = new Map(members.map((m) => [m.userId, m]));
+  const me = currentUserId ? (byUser.get(currentUserId) ?? null) : null;
+  // Peers: other members' live rows, thread-scoped like everything on the tab.
+  // Own rows are excluded — the LOCAL feed below is the richer truth for mine.
+  const peerCards = peers.filter(
+    (p) =>
+      p.userId !== currentUserId &&
+      p.state !== "ended" &&
+      (!openThreadId || p.threadId === openThreadId)
+  );
+
+  const launchRow = canLaunch && openThreadId && onLaunchAgent && (
+    <button
+      type="button"
+      disabled={launchBusy}
+      onClick={() => onLaunchAgent(openThreadId)}
+      className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
+    >
+      <Plus size={13} aria-hidden />
+      {launchBusy ? "Launching…" : "Launch agent"}
+    </button>
+  );
+
   if (sessions === null) {
     return (
-      <div className="px-4 py-8 text-center">
-        <p className="text-caption text-text-muted">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
+        {peerCards.length > 0 && <PeerCards peers={peerCards} byUser={byUser} />}
+        <p className="px-0.5 py-6 text-center text-caption text-text-muted">
           Your agents run on your own machine, so this list needs the Dopl
           desktop app. Nothing about them is stored on the server.
         </p>
@@ -77,18 +125,25 @@ export function AgentsTab({
     );
   }
 
-  const mine = agentsForChannel(sessions, channelId);
+  const inChannel = agentsForChannel(sessions, channelId);
+  const mine = openThreadId
+    ? inChannel.filter((a) => a.taskId === openThreadId)
+    : inChannel;
   const perThread = agentsPerThread(mine);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
+      {launchRow}
       <p className="pb-3 text-caption text-text-muted">
-        Your agents working in this channel. Other members&apos; agents run in
-        their own window.
+        {openThreadId
+          ? "Agents on this thread. Yours first."
+          : "Agents in this channel. Yours first."}
       </p>
-      {mine.length === 0 ? (
+      {mine.length === 0 && peerCards.length === 0 ? (
         <p className="py-6 text-center text-caption text-text-muted">
-          Nothing of yours is running in this channel.
+          {openThreadId
+            ? "No agents on this thread yet."
+            : "No agents running in this channel."}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -96,14 +151,61 @@ export function AgentsTab({
             <AgentCard
               key={agentKey(agent)}
               agent={agent}
+              owner={me}
               siblings={(perThread.get(agent.taskId) ?? 1) - 1}
               viewing={agentKey(agent) === openAgent}
               onOpen={() => onOpenAgent(agentKey(agent))}
             />
           ))}
+          <PeerCards peers={peerCards} byUser={byUser} />
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Other members' agents — STATE ONLY, never openable (Samuel, 2026-08-20): the
+ * card exists so the operator can see who else has an agent on the exchange
+ * and whether it is working; nothing private is reachable from it.
+ */
+function PeerCards({
+  peers,
+  byUser,
+}: {
+  peers: readonly ChannelPeerSession[];
+  byUser: ReadonlyMap<string, ChannelMember>;
+}) {
+  if (peers.length === 0) return null;
+  return (
+    <>
+      {peers.map((peer) => {
+        const owner = byUser.get(peer.userId) ?? null;
+        const ownerName = owner?.displayName || "A teammate";
+        return (
+          <div key={`${peer.userId}:${peer.name}:${peer.threadId ?? ""}`} className={PANEL_CARD}>
+            <div className="flex items-center gap-2">
+              {owner ? (
+                <Avatar person={memberPerson(owner)} size="xs" />
+              ) : (
+                <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
+              )}
+              <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
+                {peer.name}
+              </span>
+              <AgentLiveness running={peer.state === "working"} />
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
+              <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
+              <span className="min-w-0 truncate">
+                {ownerName}&apos;s agent
+                {peer.threadTitle ? ` · ${peer.threadTitle}` : ""}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -122,11 +224,14 @@ export function AgentsTab({
  */
 function AgentCard({
   agent,
+  owner = null,
   siblings,
   viewing,
   onOpen,
 }: {
   agent: DesktopSessionSummary;
+  /** The card's owner (me) — every card wears its member's avatar (2026-08-20). */
+  owner?: ChannelMember | null;
   siblings: number;
   viewing: boolean;
   onOpen: () => void;
@@ -147,7 +252,11 @@ function AgentCard({
   return (
     <div className={cn(PANEL_CARD, viewing && "border-border-highlight")}>
       <div className="flex items-center gap-2">
-        <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
+        {owner ? (
+          <Avatar person={memberPerson(owner)} size="xs" />
+        ) : (
+          <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
+        )}
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
           {agent.name}
         </span>

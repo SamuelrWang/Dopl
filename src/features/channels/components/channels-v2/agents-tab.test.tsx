@@ -67,14 +67,14 @@ describe("AgentsTab — the two absences", () => {
     expect(screen.getByText(/desktop app/i)).toBeTruthy();
     // ⚠ It must not fall back to the empty-list wording — that would report
     // "you have no agents" on a surface that could not ask.
-    expect(screen.queryByText(/Nothing of yours is running/i)).toBeNull();
+    expect(screen.queryByText(/No agents running in this channel/i)).toBeNull();
   });
 
   it("says nothing is running when the desktop answered with an empty feed", () => {
     render(
       <AgentsTab sessions={[]} channelId={CHANNEL_ID} openAgent={null} onOpenAgent={noop} />
     );
-    expect(screen.getByText(/Nothing of yours is running/i)).toBeTruthy();
+    expect(screen.getByText(/No agents running in this channel/i)).toBeTruthy();
     expect(screen.queryByText(/desktop app/i)).toBeNull();
   });
 });

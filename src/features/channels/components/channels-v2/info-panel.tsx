@@ -26,6 +26,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
+import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import type { AuthorIndex } from "./view-model";
 import type {
   Channel,
@@ -54,6 +55,10 @@ export function ChannelsV2InfoPanel({
   openThreadId,
   onOpenThread,
   agentSessions,
+  peerSessions = [],
+  canLaunchAgent = false,
+  launchBusy = false,
+  onLaunchAgent,
   openAgent,
   onOpenAgent,
   mentions,
@@ -78,6 +83,11 @@ export function ChannelsV2InfoPanel({
    *  browser, or a main without it). ⚠ Passed through, never collapsed to `[]`:
    *  the Agents tab words the two cases differently. */
   agentSessions: readonly DesktopSessionSummary[] | null;
+  /** EVERY member's session STATE (server projection) — the peer cards. */
+  peerSessions?: readonly ChannelPeerSession[];
+  canLaunchAgent?: boolean;
+  launchBusy?: boolean;
+  onLaunchAgent?: (threadId: string) => void;
   /** `agentsModel › agentKey` of the agent whose view is open — read only to
    *  mark its card "Viewing". The panel itself renders at page level, over this
    *  column. */
@@ -137,6 +147,13 @@ export function ChannelsV2InfoPanel({
         <AgentsTab
           sessions={agentSessions}
           channelId={channel.id}
+          openThreadId={openThreadId}
+          members={members}
+          currentUserId={index.currentUserId}
+          peers={peerSessions}
+          canLaunch={canLaunchAgent}
+          launchBusy={launchBusy}
+          onLaunchAgent={onLaunchAgent}
           openAgent={openAgent}
           onOpenAgent={onOpenAgent}
         />

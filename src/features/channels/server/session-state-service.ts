@@ -4,6 +4,7 @@ import type { ChannelSessionState } from "../types";
 import { mapSessionStateRow, type SessionStateUpsert } from "./collab-dto";
 import * as sessionRepo from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
+import { loadVisibleChannel } from "./service-shared";
 
 /**
  * SESSION-STATE SERVICE — the read half of "what is flint doing?" over MCP. A
@@ -13,9 +14,11 @@ import type { ChannelContext } from "./service-shared";
  * op renders. ⚠ The SAME derivation the pills show — the server stores and
  * returns, and adds no second derivation.
  *
- * ⚠ ALWAYS SCOPED TO THE CALLER (`ctx.userId`): a session runs on one member's
- * machine, and the read never reaches another member's — in service authz AND
- * in the table's RLS.
+ * ⚠ TWO READS, TWO SCOPES (2026-08-20): {@link listSessionStates} stays scoped
+ * to the CALLER (`ctx.userId`) — "what are MY agents doing" — while
+ * {@link listChannelSessions} is CHANNEL-scoped for the Agents tab's peer
+ * cards, fenced by `loadVisibleChannel` and matched by the member SELECT
+ * policy (20260820200000). Peers see the state projection alone.
  *
  * Delivery is PUSH ON STATE CHANGE ({@link reportSessionStates}, called by
  * `main/session-state-push.js`), never a heartbeat. An empty answer is reported
@@ -32,6 +35,26 @@ export async function listSessionStates(
     channelId
   );
   return rows.map(mapSessionStateRow);
+}
+
+/**
+ * EVERY member's sessions in ONE channel — the Agents tab's PEER CARDS
+ * (Samuel, 2026-08-20). ⚠ NOT caller-scoped, and that is deliberate and
+ * bounded: the reader must be able to READ the channel (`loadVisibleChannel`,
+ * the same fence every channel read uses), and what comes back is the STATE
+ * projection alone — `userId` rides so the card can wear its owner's avatar;
+ * no transcript, no tools, no tokens exist in the table to leak.
+ */
+export async function listChannelSessions(
+  ctx: ChannelContext,
+  ref: string
+): Promise<Array<ChannelSessionState & { userId: string }>> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  const rows = await sessionRepo.listChannelSessionStates(
+    ctx.workspaceId,
+    channel.id
+  );
+  return rows.map((row) => ({ ...mapSessionStateRow(row), userId: row.user_id }));
 }
 
 /** API shape → column shape. ⚠ The one place the two vocabularies meet, and

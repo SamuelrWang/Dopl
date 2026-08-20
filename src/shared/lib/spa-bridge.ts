@@ -96,7 +96,18 @@ export interface SpaBridgeSurface {
     onSummaries?(cb: (e: { sessions: DesktopSessionSummary[] }) => void): () => void;
     /** Interrupt the turn in flight — the session window's send-button pause
      *  morph, reached from the Agents tab. The session stays live and named. */
-    pause?(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
+    /** Attach MY OWN agent to a thread, windowless (2026-08-20). */
+  launch?(payload: {
+    channelId: string;
+    taskId: string;
+    workspaceId: string;
+    channelName: string;
+    threadTitle: string | null;
+    counterpartyId: string | null;
+    toolProfile: string | null;
+    direct: boolean;
+  }): Promise<{ ok: boolean; sessionId?: string; reason?: string }>;
+  pause?(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
     /** End the AGENT — the session window's "End session". Terminal for the
      *  session, and it touches NO thread: a thread has no finished state. */
     end?(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
