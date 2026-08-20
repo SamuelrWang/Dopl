@@ -40,14 +40,11 @@
 // ⚠ FALLBACK IS 'idle' BY CHOICE. "working" over a dead session makes the operator wait with no
 // natural end and no feedback; "idle" over a working one only makes them re-ask.
 //
-// NO 'thinking' PILL, and the reason is NOT "no token stream" (`includePartialMessages: false`
-// is LOAD-BEARING for the outbound card, but the session window's Thinking chip is derived
-// without a stream — session-chrome.js `thinkingVisible` = "turn in flight AND last transcript
-// item is not agent output"). The real obstacle is WHERE THE FACT LIVES: `pillState`'s entire
-// input is the reducer's `{ phase, activity, parked }`, which says nothing about what has been
-// RENDERED this turn. A fourth state needs that fact lifted into the reducer or a second source
-// spliced in here. A stream would buy a FINER signal (thinking vs tool-running vs drafting),
-// not this one.
+// ⚠ STILL NO 'thinking' PILL, AND THE REASON MOVED (2026-08-20). The obstacle this header used
+// to name — that `pillState`'s input says nothing about what has been RENDERED this turn — is
+// SOLVED by session-detail.js. What keeps the PILL at three values is now a harder fact: `state`
+// is the SERVER's vocabulary, and one row carrying a fourth value 400s the whole push,
+// unretryably, forever. The finer signal rides BESIDE it as `detail` + `toolLabel`, local-only.
 //
 // ── ENDED SESSIONS: THE RETENTION RULE ───────────────────────────────────────────────
 // ⚠ An ended session's pill survives exactly as long as its WINDOW does, and no longer.
@@ -59,15 +56,16 @@
 // channel transcript already carries the record. Needs no TTL, ring or persistence — the
 // retained set is bounded by MAX_SESSION_WINDOWS and swept on the next projection.
 
-// ⚠ The module's only three dependencies, all ABOVE the sentinel: everything from there to
+// ⚠ The module's only four dependencies, all ABOVE the sentinel: everything from there to
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
 // verbatim with these injected.
 const { pickAgentName } = require('./agent-names');
 const { contextWindowFor } = require('./session-model');
+const { noteEvent, detailFor } = require('./session-detail');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
-// `pickAgentName`, `contextWindowFor` and `diag` are free vars from here down.
+// The five names above are free vars from here down.
 
 const PILL_WORKING = 'working';
 const PILL_IDLE = 'idle';
@@ -172,6 +170,7 @@ function metrics(s) {
 /** One LIVE session object -> its summary. `name` is handed in (the ledger is the caller's). */
 function liveSummary(s, name) {
   const ctx = (s && s.context) || {};
+  const pill = pillState(s && s.state);
   return {
     sessionId: String((s && s.sessionId) || ''),
     channelId: String((s && s.channelId) || ''),
@@ -179,7 +178,11 @@ function liveSummary(s, name) {
     // first-class thread collapses it.
     taskId: String((s && s.taskId) || ''),
     name: name,
-    state: pillState(s && s.state),
+    state: pill,
+    // ⚠ BESIDE THE PILL, NEVER INSTEAD OF IT (header; session-detail.js). `detail` is null
+    // over any pill but `working`; `toolLabel` means something only under `detail: 'tool'`.
+    detail: detailFor(s && s.state, s && s.lastEventKind, pill),
+    toolLabel: (s && s.lastToolLabel) || null,
     channelName: displayText(ctx.channelName),
     threadTitle: displayText(ctx.taskTitle),
     ...metrics(s),
@@ -198,6 +201,10 @@ function endedSummary(e, name) {
     taskId: String((e && e.taskId) || ''),
     name: name,
     state: PILL_ENDED,
+    // Nothing finer to say about a session that is doing nothing, and a retained detail
+    // would outlive the run it described.
+    detail: null,
+    toolLabel: null,
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
     contextUsed: metricOrNull(e && e.contextUsed),
@@ -443,17 +450,21 @@ function flush() {
 }
 
 /**
- * A session's state just moved: STAMP its activity, then touch.
+ * A session's state just moved: STAMP its activity, RECORD what moved it, then touch.
  *
  * ⚠ THE STAMP LIVES HERE, WITH THE PROJECTION THAT READS IT, and is taken at the engine's ONE
  * dispatch funnel — the only caller. `lastActivityAt` feeds the Agents tab's "Last activity"
  * line and nothing else; keeping it beside `metrics()` is what stops a second writer appearing
  * somewhere that fires on a different clock.
- * ⚠ IT COSTS NO EXTRA PUSH. `dispatch` already calls `touch()`, so the stamp moves exactly as
- * often as the digest is already recomputed — it is NOT a timer and NOT per SDK event.
+ * ⚠ `event` JOINED THE SIGNATURE ON 2026-08-20 and is OPTIONAL: without one `noteEvent` no-ops
+ * and `detailFor` falls through to `thinking` over a working pill — the honest answer for "a
+ * turn is running and this build cannot say what it is doing".
+ * ⚠ IT COSTS NO EXTRA PUSH. `dispatch` already calls `touch()`, so both stamps move exactly as
+ * often as the digest is already recomputed — it is NOT a timer and NOT a second traversal.
  */
-function noteActivity(s) {
+function noteActivity(s, event) {
   if (s) s.lastActivityAt = Date.now();
+  noteEvent(s, event);
   touch();
 }
 

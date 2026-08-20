@@ -42,6 +42,7 @@ import type { ChannelMember } from "../../types";
 import { memberPerson } from "./view-model";
 import { AgentLiveness, CARD_BUTTON, PANEL_CARD } from "./bits";
 import {
+  agentDetailLabel,
   agentKey,
   agentsPerThread,
   formatTokens,
@@ -258,7 +259,12 @@ function AgentCard({
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
           {agent.name}
         </span>
-        <AgentLiveness running={agent.state === "working"} />
+        {/* ⚠ MY OWN cards get the finer sentence; the peer cards above do not,
+            because the cross-machine wire carries the coarse state alone. */}
+        <AgentLiveness
+          running={agent.state === "working"}
+          detail={agentDetailLabel(agent)}
+        />
       </div>
 
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">

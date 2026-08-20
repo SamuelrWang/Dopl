@@ -174,6 +174,11 @@ contextBridge.exposeInMainWorld('dopl', {
   // main/session-summary.js. Read once on mount, then listen — a push-only surface leaves a
   // freshly opened channel blank until the next state change, which on a quiet machine is
   // never.
+  // ⚠ TWO MORE FIELDS SINCE 2026-08-20: `detail` (thinking | tool | posting | permission |
+  // awaiting_peer | awaiting_inbound, or null) and `toolLabel`, from main/session-detail.js.
+  // They refine the coarse state for the operator's OWN cards and are LOCAL-ONLY — the pill
+  // vocabulary stays three-valued because it is the SERVER's, and session-state-push.js picks
+  // the row's columns by name so neither field can reach `channel_sessions`.
   // ⚠ SPA-ONLY, deliberately: absent from renderer/preload.js, which belongs to the window
   // hosting the RETIRED website and does not grow new capabilities. The parity invariant runs
   // remote ⊆ SPA, so this widens nothing; test/preload-parity records the divergence.

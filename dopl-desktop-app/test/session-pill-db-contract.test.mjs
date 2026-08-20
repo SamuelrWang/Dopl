@@ -27,6 +27,16 @@
 // (What a `thinking` pill does NOT need is `includePartialMessages`. The window ships a
 // Thinking chip today with no stream at all — renderer/session/session-chrome.js
 // #thinkingVisible. See the corrected note atop main/session-summary.js.)
+//
+// ⚠ THIS FILE'S ARGUMENT WAS TAKEN, AND THE ANSWER WAS NOT A MIGRATION (2026-08-20). The
+// operator's own cards now say "Thinking…" / "Running Bash", and NOTHING below changed —
+// because the finer signal was added BESIDE the pill (`main/session-detail.js › detailFor`,
+// on the wire as `detail` + `toolLabel`) rather than inside its vocabulary. `reportRow` picks
+// the server row's columns by name, so the local field cannot reach the INSERT this file
+// guards. That is the shape to copy for the NEXT "can we show X on a card" question: ask
+// whether X has to cross to another machine before you ask what the column allows. Nothing
+// here is softened — a `thinking` PILL still needs the migration, and still would break
+// every peer surface and the MCP renderer's membership set on the way.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

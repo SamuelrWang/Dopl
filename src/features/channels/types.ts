@@ -171,11 +171,23 @@ export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
  * `pillState`: the web's session PILLS were deleted in wiring plan Phase 5
  * (2026-08-18) and the names outlived them on the desktop side.
  *
- * ⚠ No `thinking` state, and NOT because streaming is off (F-146 corrected that
- * wrong reason in four places) — `session-chrome.js#thinkingVisible` renders a
- * Thinking chip with no stream. What blocks the PILL is its INPUT: `pillState`
- * sees only the reducer's `{ phase, activity, parked }`, never what has been
- * RENDERED this turn. A fourth state needs that lifted into the reducer.
+ * ⚠ No `thinking` state, and the REASON CHANGED on 2026-08-20 — re-read it
+ * before quoting it, because both earlier reasons are now retired. It was never
+ * that streaming is off (F-146 corrected that in four places). Nor is it still
+ * "pillState cannot see what has been RENDERED this turn": the desktop lifted
+ * that fact at the engine's dispatch funnel, and
+ * `dopl-desktop-app/main/session-detail.js` derives a six-valued `detail` from
+ * it today.
+ *
+ * What keeps THIS type at three values is that it is the SERVER's vocabulary and
+ * a wire contract with three enforcers — `channel_sessions.state`'s CHECK, the
+ * `z.enum` in `schema-sessions.ts`, and the membership set the MCP renderer
+ * splices through (`channel-ops-read.ts`). The write path validates the ARRAY, so
+ * a single row carrying a fourth value 400s the desktop's whole push
+ * unretryably and silently stops every later one for that workspace. **The finer
+ * signal is deliberately LOCAL to the machine running the agent** and rides the
+ * IPC summaries wire as `DesktopSessionSummary["detail"]`, never this table
+ * (INVARIANTS §11).
  */
 export type SessionPillState = "working" | "idle" | "ended";
 

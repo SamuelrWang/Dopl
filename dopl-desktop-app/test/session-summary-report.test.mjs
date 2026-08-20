@@ -43,9 +43,15 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
   // ⚠ The five measurement fields joined the wire in Phase 5 (2026-08-18) and they are
   // NOT report-only: the Agents tab is their whole audience. What stays report-only is
   // still exactly two, and the point of this case is that the narrowing did not widen.
+  // ⚠ `detail` and `toolLabel` joined on 2026-08-20 and are NOT report-only either — they
+  // are LOCAL-only, which is a different claim and is asserted where it bites: the server
+  // never sees them because `session-state-push.js › reportRow` picks columns by name, and
+  // `session-state-push.test.mjs` pins that row shape. Here the claim is narrower and
+  // unchanged: whatever the wire carries, the two REPORT fields are not on it.
   assert.deepEqual(Object.keys(m.list()[0]).sort(), [
-    "channelId", "channelName", "contextUsed", "contextWindow", "lastActivityAt",
+    "channelId", "channelName", "contextUsed", "contextWindow", "detail", "lastActivityAt",
     "name", "sessionId", "startedAt", "state", "taskId", "threadTitle", "tokensSpent",
+    "toolLabel",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
   assert.equal("key" in m.list()[0], false);

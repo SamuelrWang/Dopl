@@ -10,9 +10,10 @@
 // added there and quietly fall through this table's default.
 //
 // SOURCE EXTRACTION with INJECTION lives in `_session-summary-harness.mjs` — shared with
-// `session-summary-report.test.mjs` (F-147), which carries the report view and the change
-// subscription. This file keeps the mapping, the naming, the wire shape, the ended
-// retention rule and the renderer frame.
+// `session-summary-report.test.mjs` (F-147: the report view and the change subscription) and
+// with `session-summary-shape.test.mjs` (2026-08-20: the wire shape, moved out whole when
+// this file hit 499 of the cap and the `detail` widening's review comment did not fit).
+// This file keeps the mapping, the naming, the ended retention rule and the renderer frame.
 //
 // Run: `node --test dopl-desktop-app/test/session-summary.test.mjs`
 
@@ -222,106 +223,6 @@ test("NAMES: a window's own handle is the SAME one its pill shows, either way ro
   // on the next projection, which releases every key `list()` did not see.
   assert.equal(m.nameForSession(null), null);
   assert.equal(m.nameForSession({}), null);
-});
-
-// ── 3. THE SUMMARY SHAPE ─────────────────────────────────────────────────────────────
-
-test("SHAPE: a live summary carries exactly what the Agents tab and the agent view need", () => {
-  // ⚠ WIDENED 2026-08-18 (wiring plan Phase 5): the five MEASUREMENT fields joined the
-  // identity + state ones when session cards died and the Agents tab replaced them. They
-  // are read from where they already lived on the session object — nothing here starts a
-  // counter — and none of them reaches the server (`session-state-push.js › rowFor` picks
-  // its columns by name).
-  const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  assert.deepEqual(m.list(), [
-    {
-      sessionId: "sess-1",
-      channelId: "chan-1",
-      taskId: "task-1",
-      name: "quartz",
-      state: "working",
-      channelName: "general",
-      threadTitle: "Ship the thing",
-      contextUsed: 84000,
-      contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
-      tokensSpent: 1200000,
-      startedAt: 1700000000000,
-      lastActivityAt: 1700000600000,
-    },
-  ]);
-});
-
-test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
-  // ⚠ THE FAILURE THIS CASE EXISTS FOR: `Number(null)` is 0, so a coercion-only guard
-  // reports an empty context window on a session that has simply not reported usage yet,
-  // and the meter paints 0% of a window that may be nearly full. Three absences land
-  // here — a session before its first turn, an engine that predates the stamps, and a
-  // MODEL THIS BUILD HAS NO WINDOW FOR (which must show raw tokens, never a made-up
-  // percentage: session-model.js says so in as many words).
-  const m = load();
-  const s = session({
-    promptTokens: undefined,
-    liveModel: "some-model-from-the-future",
-    tokensSpent: undefined,
-    startedAt: undefined,
-    lastActivityAt: undefined,
-  });
-  m.bind({ sessions: new Map([[s.key, s]]) });
-  const row = m.list()[0];
-  assert.equal(row.contextUsed, null);
-  assert.equal(row.contextWindow, null, "an unknown model gets NO denominator, not 0");
-  assert.equal(row.tokensSpent, null);
-  assert.equal(row.startedAt, null);
-  assert.equal(row.lastActivityAt, null);
-  // …and the identity half is untouched by any of it.
-  assert.equal(row.name, "quartz");
-  assert.equal(row.state, "working");
-});
-
-test("SHAPE: a RETAINED ENDED pill keeps the measurement it settled with", () => {
-  // The session object is gone by then, so a live read would blank every number at
-  // exactly the moment the operator wants to read what the run cost. `noteEnded` freezes
-  // them with the identity.
-  const m = load();
-  const s = session();
-  m.bind({ sessions: new Map() });
-  assert.equal(m.noteEnded(s, true), true);
-  const [row] = m.list();
-  assert.equal(row.state, "ended");
-  assert.equal(row.contextUsed, 84000);
-  assert.equal(row.contextWindow, 200000);
-  assert.equal(row.tokensSpent, 1200000);
-  assert.equal(row.startedAt, 1700000000000);
-});
-
-test("SHAPE: counterparty-influenced text is bounded and single-line", () => {
-  const m = load();
-  m.bind({
-    sessions: new Map([
-      ["chan-1:task-1", session({ context: { channelName: "a\nb\tc", taskTitle: "x".repeat(200) } })],
-    ]),
-  });
-  const row = m.list()[0];
-  assert.equal(row.channelName, "a b c");
-  assert.equal(row.threadTitle.length, 80);
-  // Same discipline session-store.durableName applies, and for the same reason.
-});
-
-test("SHAPE: a thread-less responder session is a real row, not a dropped one", () => {
-  const m = load();
-  const s = session({ taskId: "", context: {} });
-  m.bind({ sessions: new Map([[s.key, s]]) });
-  const row = m.list()[0];
-  assert.equal(row.taskId, "");
-  assert.equal(row.threadTitle, null);
-  assert.equal(row.channelName, null);
-});
-
-test("SHAPE: a settled registry entry is never listed", () => {
-  const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ settled: true })]]) });
-  assert.deepEqual(m.list(), []);
 });
 
 // ── 4. THE ENDED RETENTION RULE ──────────────────────────────────────────────────────

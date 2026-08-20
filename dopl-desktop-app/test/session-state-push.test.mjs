@@ -61,6 +61,36 @@ test("ROW: the payload is the schema's shape, field for field", () => {
   });
 });
 
+// ⚠ THE BELT ON A WIDENED WIRE SHAPE (2026-08-20, the `detail` signal). This is the guard
+// the whole local-only design leans on, so it is asserted rather than assumed.
+//
+// `reportRow` picks the server row's columns BY NAME, which is what let the five runtime
+// metrics ride the summaries wire in Phase 5 without widening `channel_sessions` — and what
+// now lets `detail` / `toolLabel` do the same. THE FAILURE IT PREVENTS IS NOT A COSMETIC
+// ONE: the endpoint's zod schema validates the ARRAY, so ONE row carrying an unknown key or
+// a fourth `state` value rejects the WHOLE payload; `retryable(400)` is false, so the digest
+// is never recorded and EVERY LATER PUSH for that workspace fails identically — for the
+// valid sessions too. `read_sessions` then answers [] for this machine and the stale rows
+// are never cleared. A row shape that grows by accident is that outage.
+test("ROW: a widened summary entry does NOT widen the wire row", () => {
+  const m = load();
+  const wide = entry({
+    detail: "tool",
+    toolLabel: "Bash",
+    contextUsed: 84_000,
+    contextWindow: 200_000,
+    tokensSpent: 1_200_000,
+    startedAt: 1_700_000_000_000,
+    lastActivityAt: 1_700_000_600_000,
+  });
+  assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
+    "channelId", "channelName", "name", "sessionKey", "state", "threadId", "threadTitle",
+  ]);
+  // And the pill value itself is untouched: `state` is the SERVER's closed vocabulary, and
+  // a `detail` of "tool" must not leak into it.
+  assert.equal(m.reportRow(wide).state, "working");
+});
+
 // C-2 — THE FIXTURE IS THE TEST. The row above used to read `chan-1:task-1`, which the
 // server's `SESSION_KEY_RE` and `threadId: z.string().uuid()` both reject, so this suite
 // was green about a payload that 400s. Pinned against the shipped regexes so a drift in

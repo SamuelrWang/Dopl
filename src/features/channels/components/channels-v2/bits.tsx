@@ -411,11 +411,26 @@ export function RolePill({ owner }: { owner: boolean }) {
  */
 export function AgentLiveness({
   running,
+  detail = null,
   className,
 }: {
   running: boolean;
+  /**
+   * The finer sentence, when this machine can say one
+   * (`agents-model.ts › agentDetailLabel`). It REPLACES "Running" rather than
+   * joining it — "Running · Thinking…" says one thing twice, and the dot already
+   * carries the liveness.
+   *
+   * ⚠ ONLY OVER A RUNNING AGENT, enforced here rather than trusted from the
+   * caller: a detail under an idle dot would be the card contradicting itself,
+   * and this is the one component both the tab and the panel render through.
+   * ⚠ PEER CARDS PASS NOTHING. The cross-machine wire carries the coarse state
+   * only, by design (INVARIANTS §11) — there is no `detail` on a peer row to pass.
+   */
+  detail?: string | null;
   className?: string;
 }) {
+  const label = running ? (detail ?? "Running") : "Idle";
   return (
     <span
       className={cn(
@@ -431,7 +446,7 @@ export function AgentLiveness({
           running ? "bg-success" : "bg-text-disabled"
         )}
       />
-      {running ? "Running" : "Idle"}
+      {label}
     </span>
   );
 }

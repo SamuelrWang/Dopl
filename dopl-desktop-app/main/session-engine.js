@@ -87,7 +87,7 @@ const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 // turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);
-  s.state = state; sessionSummary.noteActivity(s); // §3.3: a pill's state moves here, and so does its activity stamp
+  s.state = state; sessionSummary.noteActivity(s, event); // §3.3: a pill's state moves here, and so do its activity stamp + detail (session-detail.js)
   let resolvedLive = false;
   for (const eff of effects) resolvedLive = runEffect(s, eff) === true || resolvedLive;
   return resolvedLive;

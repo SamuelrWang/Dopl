@@ -17,9 +17,19 @@
  * INVARIANTS §5). ⚠ It used to be the channel pane's session pills; those and
  * `channel-pane.tsx` were deleted in wiring plan Phase 5 / the Phase 12 cutover.
  *
- * ⚠ `state` is three-valued: "thinking" needs `includePartialMessages`, which is
- * off, so it can never be derived. `taskId` is the wire spelling of THREAD, and
- * `""` is a real value — a responder session with no first-class thread.
+ * ⚠ `state` IS THREE-VALUED BECAUSE THE SERVER'S VOCABULARY IS — corrected
+ * 2026-08-20. This docblock used to say "thinking needs `includePartialMessages`,
+ * which is off, so it can never be derived", which was already the wrong reason
+ * when F-146 corrected it in four other places (the session window derived a
+ * Thinking chip with no stream). The live reason is that `state` is handed
+ * straight to `channel_sessions.state`, whose CHECK and whose zod enum both admit
+ * exactly working/idle/ended — and zod validates the ARRAY, so one row carrying a
+ * fourth value 400s the whole push unretryably. The finer signal is {@link
+ * DesktopSessionSummary.detail}, which rides BESIDE the pill and never reaches
+ * the server.
+ *
+ * `taskId` is the wire spelling of THREAD, and `""` is a real value — a responder
+ * session with no first-class thread.
  */
 export interface DesktopSessionSummary {
   /** ⚠ Opaque and NOT stable across park/recreate — a React key, never an
@@ -30,6 +40,30 @@ export interface DesktopSessionSummary {
   /** Friendly handle ("flint"). Per channel, stable across park/resume. */
   name: string;
   state: "working" | "idle" | "ended";
+  /**
+   * WHAT IT IS DOING RIGHT NOW, one step finer than the pill (2026-08-20).
+   * Derived by `dopl-desktop-app/main/session-detail.js › detailFor` from the
+   * reducer event that last moved the session, and LOCAL-ONLY — it never reaches
+   * `channel_sessions` (`session-state-push.js › reportRow` picks its columns by
+   * name), so a peer's card never sees it.
+   *
+   * ⚠ NULL OVER ANY PILL BUT `working`, by construction: it REFINES the pill and
+   * never contradicts it. A card showing "Idle" and "Thinking…" at once is the
+   * two-readers-one-fact defect in miniature.
+   * ⚠ Optional: an older main omits it, exactly like the five metrics below.
+   */
+  detail?:
+    | "thinking"
+    | "tool"
+    | "posting"
+    | "permission"
+    | "awaiting_peer"
+    | "awaiting_inbound"
+    | null;
+  /** The short name of the tool in flight, bounded. Meaningful only under
+   *  `detail: "tool"`; `null` when the tool could not be named, which the copy
+   *  degrades to "Running a command" rather than to a blank. */
+  toolLabel?: string | null;
   channelName: string | null;
   threadTitle: string | null;
   // ── THE AGENT-VIEW NUMBERS (wiring plan Phase 5, 2026-08-18) ───────────────

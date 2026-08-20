@@ -27,6 +27,11 @@ export const SRC = readFileSync(join(MAIN, "session-summary.js"), "utf8");
 const req = createRequire(import.meta.url);
 const { pickAgentName } = req(join(MAIN, "agent-names.js"));
 const { contextWindowFor } = req(join(MAIN, "session-model.js"));
+// ⚠ THE FOURTH ABOVE-SENTINEL DEPENDENCY, JOINED 2026-08-20 (the `detail` signal). Injected
+// REAL, like the two above and for the same reason: these cases are about THIS module's
+// projection carrying the detail, not about re-testing the table that derives it —
+// `session-detail.test.mjs` owns that. Injecting a stub here would let the two drift.
+const { noteEvent, detailFor } = req(join(MAIN, "session-detail.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
 const from = SRC.indexOf(BEGIN);
@@ -58,9 +63,13 @@ export function load() {
   const api = new Function(
     "pickAgentName",
     "contextWindowFor",
+    "noteEvent",
+    "detailFor",
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-  )(pickAgentName, contextWindowFor, (...parts) => logged.push(parts.join(" ")));
+  )(pickAgentName, contextWindowFor, noteEvent, detailFor, (...parts) =>
+    logged.push(parts.join(" "))
+  );
   const spaWindow = {
     destroyed: false,
     isDestroyed() { return this.destroyed; },

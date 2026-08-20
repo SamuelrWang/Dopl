@@ -57,6 +57,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelMessage } from "../../types";
 import { AgentLiveness, IconButton } from "./bits";
 import {
+  agentDetailLabel,
   agentKey,
   canControlAgents,
   canOpenAgentWindow,
@@ -170,7 +171,10 @@ function AgentPanelHeader({
           </span>
         </span>
       </span>
-      <AgentLiveness running={agent.state === "working"} />
+      <AgentLiveness
+        running={agent.state === "working"}
+        detail={agentDetailLabel(agent)}
+      />
       <IconButton icon={X} label="Close agent view" size={15} onClick={onClose} />
     </header>
   );

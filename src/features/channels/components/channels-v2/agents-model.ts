@@ -219,6 +219,54 @@ export function agentsPerThread(
   return out;
 }
 
+/**
+ * WHAT THIS AGENT IS DOING, IN WORDS — the ONE place the desktop's `detail` key
+ * becomes copy (2026-08-20).
+ *
+ * ⚠ THE KEY IS DERIVED ON THE DESKTOP, THE SENTENCE IS WRITTEN HERE, and the
+ * split is deliberate. `main/session-detail.js` owns "which of six situations is
+ * this", because that is a fact about the engine and there must be exactly one
+ * answer to it (the ONE MODULE, ONE DERIVATION rule `session-summary.js` is built
+ * on). What a human reads is a product decision that belongs in the tree with the
+ * design tokens — and shipping the sentence over IPC would mean a copy change
+ * needing a desktop release.
+ *
+ * ⚠ AN UNKNOWN KEY RENDERS NOTHING, NOT THE RAW KEY. A newer main can emit a
+ * seventh value; "awaiting_handoff" appearing verbatim on a card is worse than
+ * falling back to the pill's own word, which is always true.
+ * ⚠ ABSENT IS ALSO NOTHING — an older main omits the field entirely, and the
+ * cards then read exactly as they did before this existed.
+ */
+export function agentDetailLabel(session: {
+  detail?: DesktopSessionSummary["detail"];
+  toolLabel?: string | null;
+}): string | null {
+  switch (session.detail) {
+    case "thinking":
+      return "Thinking…";
+    case "tool":
+      // ⚠ The unnamed case is a REAL one, not a defensive stub: `toolLabel` is
+      // null whenever the tool name could not be shortened to anything. "Running
+      // a command" is true either way, which is why it is the fallback rather
+      // than a blank or the word "tool".
+      return session.toolLabel
+        ? `Running ${session.toolLabel}`
+        : "Running a command";
+    case "posting":
+      return "Sending a message";
+    case "permission":
+      // The one detail that is about the OPERATOR rather than the agent: it is
+      // blocked on a click, and the card is where they find out.
+      return "Waiting on you";
+    case "awaiting_peer":
+      return "Waiting for a reply";
+    case "awaiting_inbound":
+      return "Message waiting";
+    default:
+      return null;
+  }
+}
+
 /** `84_000` → `"84k"`. Tokens are only ever glanced at here; the exact integer is
  *  noise at caption size, and above a million the thousands are too. */
 export function formatTokens(value: number): string {
