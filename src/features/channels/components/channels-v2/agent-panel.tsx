@@ -230,7 +230,24 @@ function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
 export const AGENT_CONTROL_REFUSED =
   "This agent already ended — nothing was changed.";
 
-/** How long the refusal notice stands before clearing itself. */
+/**
+ * What "Open window" says when there is no window to open (2026-08-20).
+ *
+ * ⚠ IT IS NOT AN ERROR MESSAGE, and the wording carries that. Since the
+ * session-window retirement (INVARIANTS §11) every responder and every
+ * Agents-tab launch runs WINDOWLESS, so this is the ORDINARY answer, not a
+ * failure — main is telling the truth about a surface that does not exist yet
+ * (F-212's agent window). Until then the honest thing is to say where the work
+ * IS visible, which is this panel.
+ *
+ * ⚠ Exported for the test for the same reason `AGENT_CONTROL_REFUSED` is: a
+ * swallowed refusal and a success are indistinguishable on screen, and this
+ * button was swallowing one on nearly every agent.
+ */
+export const AGENT_WINDOW_UNAVAILABLE =
+  "This agent runs without a window. What it sent is below.";
+
+/** How long a refusal notice stands before clearing itself. */
 const REFUSAL_NOTICE_MS = 6000;
 
 /**
@@ -266,7 +283,10 @@ function AgentControls({
 }) {
   const control = useAgentControls();
   const [pending, setPending] = useState<AgentControl | null>(null);
-  const [refused, setRefused] = useState(false);
+  // ⚠ ONE notice slot for both refusal kinds, not two: they occupy the same
+  // line under the same buttons, and two independent timers there race to blank
+  // each other's message.
+  const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -280,9 +300,16 @@ function AgentControls({
   if (!canControl && !canOpen) return null;
   const stopped = agent.state === "ended";
 
+  /** Show one refusal line, replacing any that is already standing. */
+  const say = (message: string) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setNotice(message);
+    noticeTimer.current = setTimeout(() => setNotice(null), REFUSAL_NOTICE_MS);
+  };
+
   const run = (which: AgentControl) => {
     setPending(which);
-    setRefused(false);
+    setNotice(null);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     // The feed is the source of truth for what happened: main dispatches, the
     // projection moves, the push re-renders this panel. Nothing is stamped
@@ -292,14 +319,30 @@ function AgentControls({
         if (ok) return;
         // ⚠ A REFUSAL IS NOT A PUSH. Main changed nothing, so nothing will
         // arrive to correct the panel; the re-read is what closes that gap.
-        setRefused(true);
-        noticeTimer.current = setTimeout(
-          () => setRefused(false),
-          REFUSAL_NOTICE_MS
-        );
+        say(AGENT_CONTROL_REFUSED);
         onRefreshSessions?.();
       })
       .finally(() => setPending(null));
+  };
+
+  /**
+   * "Open window", which on a windowless agent opens nothing — and now says so.
+   *
+   * ⚠ NO `onRefreshSessions` HERE, unlike the stop verbs. A refused reopen
+   * changed nothing on main AND tells us nothing new about the session's state,
+   * so re-reading the feed would be a request that answers a question nobody
+   * asked. The stop verbs re-read because their refusal means "this agent is
+   * already gone", which the panel IS showing wrongly.
+   */
+  const reveal = () => {
+    void openAgentWindow(agent).then((res) => {
+      if (res.ok) return;
+      say(
+        res.reason === "windowless"
+          ? AGENT_WINDOW_UNAVAILABLE
+          : AGENT_CONTROL_REFUSED
+      );
+    });
   };
 
   return (
@@ -328,13 +371,13 @@ function AgentControls({
             icon={PanelTop}
             label="Open window"
             title="Reveal this agent's own window. Starts nothing."
-            onClick={() => void openAgentWindow(agent)}
+            onClick={reveal}
           />
         )}
       </div>
-      {refused && (
+      {notice && (
         <p role="status" className="text-caption text-text-muted">
-          {AGENT_CONTROL_REFUSED}
+          {notice}
         </p>
       )}
     </div>

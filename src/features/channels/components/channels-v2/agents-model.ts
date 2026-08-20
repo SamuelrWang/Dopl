@@ -376,18 +376,29 @@ export function useAgentControls() {
   );
 }
 
-/** Reveal this agent's own window. The SAME op every other "open" calls — main
- *  has ONE reopen path and a second would be a second set of bugs. It opens a
- *  window and starts nothing: no query, no gated tool, no wake. */
+/**
+ * Reveal this agent's own window. The SAME op every other "open" calls — main
+ * has ONE reopen path and a second would be a second set of bugs. It opens a
+ * window and starts nothing: no query, no gated tool, no wake.
+ *
+ * ⚠ IT RETURNS MAIN'S VERDICT NOW (2026-08-20), and the caller must render it.
+ * This used to answer `void`, so every refusal was swallowed — which was
+ * harmless while `reopen` always opened something, and stopped being harmless
+ * the moment `{ ok: false, reason: "windowless" }` became the ORDINARY answer
+ * (the session-window retirement made every responder and every Agents-tab
+ * launch windowless). A button that visibly does nothing and says nothing is
+ * the failure `AGENT_CONTROL_REFUSED` already names for the stop verbs.
+ */
 export async function openAgentWindow(session: {
   channelId: string;
   taskId: string;
-}): Promise<void> {
+}): Promise<{ ok: boolean; reason?: string }> {
   // ⚠ The optional chain covered `sessions` and not `reopen`, so on a main
   // without the op this threw "reopen is not a function" out of a click
   // handler. Same detection as the gate that hides the button, so the two
   // cannot disagree.
   const sessions = getSpaBridge()?.sessions;
-  if (typeof sessions?.reopen !== "function") return;
-  await sessions.reopen(session.channelId, session.taskId);
+  if (typeof sessions?.reopen !== "function") return { ok: false, reason: "no-bridge" };
+  const res = await sessions.reopen(session.channelId, session.taskId);
+  return { ok: res?.ok === true, reason: res?.reason };
 }

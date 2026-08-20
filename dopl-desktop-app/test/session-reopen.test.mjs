@@ -181,3 +181,48 @@ test("reopenWindow shows a hidden live window by internal sessionId", () => {
   assert.equal(s.calls.show, 1);
   assert.equal(h.reopenWindow("nope"), false);
 });
+
+// ── THE WINDOWLESS SESSION: NOTHING TO REVEAL, AND IT SAYS SO ────────────────────
+//
+// ⚠ THE SHAPE THIS FIXES WAS THE ORDINARY ONE, WHICH IS WHY IT MATTERED. Since the
+// session-window retirement (INVARIANTS §11) every responder launch and every Agents-tab
+// launch runs windowless, so `s.win` is null on most live sessions. The live-window branch
+// therefore missed, `keptWindow` answered null, and the call fell into
+// `recreateParkedShell`, whose FIRST line is `if (existing && !existing.settled) return
+// { ok: true }` — a verdict that is correct for the case it was written for (a live session
+// whose window is being rebuilt) and a LIE here. The agent view's "Open window" button
+// reported success having opened nothing at all, on nearly every agent.
+//
+// The fix is a branch, not a new machinery: ONE reopen path is the rule this module is
+// built on, and F-212's agent window is what will eventually answer this click.
+
+test("a WINDOWLESS live session answers ok:false with a reason, never a silent ok:true", () => {
+  const h = harness({ recreate: () => ({ ok: true }) });
+  // The windowless shape as `session-windowless.js › attachSurface` really builds it:
+  // registered, unsettled, `windowless: true`, and `win` never assigned.
+  const s = fakeSession({ win: null, windowless: true });
+  h.sessions.set(KEY, s);
+  assert.deepEqual(h.reopenByTask(task), { ok: false, reason: "windowless" });
+  assert.equal(
+    h.calls.recreate.length,
+    0,
+    "it must NOT fall through to the recreate — that is the branch whose ok:true was the lie"
+  );
+});
+
+test("the windowless branch does not swallow a session that DOES have a window", () => {
+  // Belt on the guard's precision: the flag is read, not inferred from a null `win`.
+  const h = harness({ recreate: () => ({ ok: true }) });
+  const s = fakeSession({ windowless: true });
+  s.win.destroyed = false;
+  h.sessions.set(KEY, s);
+  assert.deepEqual(h.reopenByTask(task), { ok: true }, "a live window still wins");
+  assert.equal(s.calls.show, 1);
+});
+
+test("a SETTLED windowless session still falls through — the branch is for live ones", () => {
+  const h = harness({ recreate: () => ({ ok: true }) });
+  h.sessions.set(KEY, fakeSession({ win: null, windowless: true, settled: true }));
+  assert.deepEqual(h.reopenByTask(task), { ok: true });
+  assert.equal(h.calls.recreate.length, 1, "a settled key is the recreate's business");
+});

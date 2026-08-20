@@ -26,8 +26,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import { AgentsTab } from "./agents-tab";
+import { AGENT_WINDOW_UNAVAILABLE, ChannelsV2AgentPanel } from "./agent-panel";
 import { AgentLiveness } from "./bits";
-import { agentDetailLabel } from "./agents-model";
+import { agentDetailLabel, agentKey } from "./agents-model";
 import { CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
 afterEach(cleanup);
@@ -160,5 +161,91 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
     expect(screen.getByText("onyx")).toBeTruthy();
     expect(screen.getByText("Running")).toBeTruthy();
     expect(screen.queryByText("Thinking…")).toBeNull();
+  });
+});
+
+/**
+ * "OPEN WINDOW" ON A WINDOWLESS AGENT (2026-08-20) — the F-212 honesty half.
+ *
+ * ⚠ WHY THIS IS WORTH A TEST AT ALL. Before the fix, main answered `{ok:true}`
+ * having opened nothing (the recreate fallback's existing-session branch), and
+ * the renderer discarded the verdict anyway — two independent swallows over one
+ * click, on nearly every agent, since the session-window retirement made
+ * windowless the ordinary shape. The button visibly did nothing and said
+ * nothing, which is the exact failure `AGENT_CONTROL_REFUSED` already names for
+ * the stop verbs.
+ */
+describe("the Open window button reports what main actually did", () => {
+  const AGENT = { channelId: CHANNEL_ID, taskId: "t-1" };
+
+  function bridgeWith(reopen: () => Promise<unknown>) {
+    (window as unknown as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { reopen },
+    };
+  }
+  afterEach(() => {
+    delete (window as { dopl?: unknown }).dopl;
+  });
+
+  it("passes main's refusal and its reason back to the caller", async () => {
+    bridgeWith(() => Promise.resolve({ ok: false, reason: "windowless" }));
+    const { openAgentWindow } = await import("./agents-model");
+    expect(await openAgentWindow(AGENT)).toEqual({ ok: false, reason: "windowless" });
+  });
+
+  it("passes a success through unchanged", async () => {
+    bridgeWith(() => Promise.resolve({ ok: true }));
+    const { openAgentWindow } = await import("./agents-model");
+    expect(await openAgentWindow(AGENT)).toEqual({ ok: true, reason: undefined });
+  });
+
+  // An older main has no `reopen` at all; the caller must get a verdict rather
+  // than a thrown "reopen is not a function" out of a click handler.
+  it("answers a verdict, not a throw, on a main without the op", async () => {
+    (window as unknown as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: {},
+    };
+    const { openAgentWindow } = await import("./agents-model");
+    expect(await openAgentWindow(AGENT)).toEqual({ ok: false, reason: "no-bridge" });
+  });
+});
+
+describe("…and the panel puts that verdict on screen", () => {
+  afterEach(() => {
+    delete (window as { dopl?: unknown }).dopl;
+  });
+
+  function mountPanel(reopen: () => Promise<unknown>) {
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { reopen },
+    };
+    const agent = summary();
+    render(
+      <ChannelsV2AgentPanel
+        openAgent={agentKey(agent)}
+        sessions={[agent]}
+        messages={[]}
+        currentUserId={ME}
+        onClose={() => {}}
+      />
+    );
+  }
+
+  // ⚠ THE NOTICE IS NOT AN ERROR, and the copy carries that: windowless is the
+  // ordinary shape now, so this reads as "here is where the work IS visible".
+  it("says the agent has no window rather than doing nothing visible", async () => {
+    mountPanel(() => Promise.resolve({ ok: false, reason: "windowless" }));
+    screen.getByRole("button", { name: "Open window" }).click();
+    expect(await screen.findByText(AGENT_WINDOW_UNAVAILABLE)).toBeTruthy();
+  });
+
+  it("says nothing at all when main really did open a window", async () => {
+    mountPanel(() => Promise.resolve({ ok: true }));
+    screen.getByRole("button", { name: "Open window" }).click();
+    await Promise.resolve();
+    expect(screen.queryByText(AGENT_WINDOW_UNAVAILABLE)).toBeNull();
   });
 });

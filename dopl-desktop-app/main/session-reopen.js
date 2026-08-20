@@ -100,6 +100,10 @@ function reopenWindow(sessionId) {
 //   { ok: true }                    a window is open for this thread. Live, recreated from a
 //                                   record, or built from the channel — all three are "opened",
 //                                   and the web card must show NO note for any of them.
+//   { ok: false, reason: 'windowless' } this session RUNS WITH NO WINDOW (the 2026-08-20 shape
+//                                   for every responder and every Agents-tab launch), so there
+//                                   is nothing to reveal. NOT an error — the honest answer to
+//                                   "show me this agent" until the agent window exists (F-212).
 //   { ok: false, reason: 'no-thread' }  this operator cannot open this channel at all (not a
 //                                   member, gone, or signed out). THE one note case.
 //   { ok: false, reason: 'busy' }   the window budget is spent and nothing could be freed; a
@@ -119,6 +123,19 @@ function reopenByTask(a) {
   if (!deps.sessions) return { ok: false };
   const s = deps.sessions.get(store.sessionKey(channelId, taskId));
   if (s && !s.settled && s.win && !s.win.isDestroyed()) { showLive(s); return { ok: true }; }
+  // ⚠ A WINDOWLESS SESSION HAS NOTHING TO REVEAL, AND SAYING SO IS THE FIX (2026-08-20).
+  // Before this branch the call fell through to `recreateParkedShell`, whose FIRST line is
+  // `if (existing && !existing.settled) return { ok: true }` — correct for the case it was
+  // written for (a live session whose window is being rebuilt) and a LIE for this one, which
+  // is now the ordinary shape: since the session-window retirement (INVARIANTS §11) every
+  // responder and every Agents-tab launch runs windowless, so the agent view's "Open window"
+  // button answered `ok:true` having opened nothing at all. A swallowed refusal and a
+  // success are indistinguishable on screen — the same argument `agent-panel.tsx`'s
+  // AGENT_CONTROL_REFUSED makes about the stop verbs.
+  // ⚠ THIS IS THE HONESTY HALF OF F-212 ONLY. The agent WINDOW that should answer this click
+  // is the entry's own remaining work; a `reason` the renderer can word is what makes the
+  // gap visible instead of silent in the meantime.
+  if (s && !s.settled && s.windowless === true) return { ok: false, reason: 'windowless' };
   const kept = deps.keptWindow ? deps.keptWindow(channelId, taskId) : null;
   // No `windowHidden` flag and no tray refresh to do — the entry left the registry when it
   // settled, so this is a plain reveal of a window nothing else is tracking.
