@@ -102,7 +102,7 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
   // future edit that drops the gate would otherwise satisfy a pin written before it existed.
   assert.match(
     LISTENER,
-    /else if \(verdict === 'task-reply' && targeting\.mentionsMe\(m, myUserId\)\) taskNotify\.notifyTaskReply\(entry, m\);/
+    /else if \(verdict === 'task-reply' && \(m\.authorKind === 'user' \|\| targeting\.mentionsMe\(m, myUserId\)\)\) taskNotify\.notifyTaskReply\(entry, m\);/
   );
   // The passive path is exactly that: no consent row, no watcher record, no spawn. The
   // strongest available pin is the module's DEPENDENCY set — it cannot reach the consent,

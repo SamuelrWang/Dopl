@@ -357,6 +357,8 @@ export function ChannelsV2Core({
       {inboxOpen ? (
         <ChannelsV2InboxPane
           requests={requests}
+          onDecide={(id, decision) => consent.mutate({ id, decision })}
+          busy={consentBusy}
           onOpen={(channelId) => {
             setSelectedId(channelId);
             setRequestedThreadId(null);
@@ -421,7 +423,12 @@ export function ChannelsV2Core({
               onOpenThread={setRequestedThreadId}
               agentSessions={agentSessions}
               peerSessions={agentsPanel.peerSessions}
-              canLaunchAgent={agentsPanel.canLaunch}
+              canLaunchAgent={
+                agentsPanel.canLaunch &&
+                !!openThread &&
+                (openThread.createdBy === currentUserId ||
+                  openThread.targetUserId === currentUserId)
+              }
               launchBusy={agentsPanel.launchBusy}
               onLaunchAgent={(id) => void agentsPanel.launchAgent(id)}
               openAgent={openAgent}

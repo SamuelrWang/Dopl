@@ -230,9 +230,16 @@ function register(opts = {}) {
   ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, async (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId) || !isUuid(p.taskId)) return { ok: false };
+    if (!isUuid(p.counterpartyId)) return { ok: false, reason: 'no-counterparty' };
     const engine = require('./session-engine');
     const channelPrefs = require('./channel-prefs');
-    const { normalizeProfile } = require('./tool-profiles');
+    const targeting = require('./targeting');
+    const listener = require('./channel-listener');
+    // ⚠ CONTAINMENT: the profile comes from MAIN's own watched-channel record
+    // (the server DTO), never the renderer's claim — a forged call must not
+    // widen it. An unwatched channel fails restrictive.
+    const watched = (listener.listWatchedChannels() || []).find((c) => c.id === p.channelId);
+    const toolProfile = watched ? targeting.resolveToolProfile(watched) : 'read_only';
     const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
     const res = await engine.launchRequesterSession({
       channelId: p.channelId,
@@ -249,8 +256,9 @@ function register(opts = {}) {
         channelId: p.channelId,
         workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
         taskId: p.taskId,
+        workspaceSegment: typeof p.workspaceSegment === 'string' ? p.workspaceSegment : null,
       },
-      toolProfile: normalizeProfile(p.toolProfile),
+      toolProfile,
       mode: 'interactive',
       windowless: true,
       startModes: {

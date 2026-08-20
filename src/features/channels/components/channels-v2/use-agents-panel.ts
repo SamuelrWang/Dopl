@@ -44,6 +44,7 @@ export function useAgentsPanel({
         ? thread.targetUserId
         : thread.createdBy
       : null;
+    if (!counterpartyId) return; // a thread with no other party has nothing to converse with
     setLaunchBusy(true);
     try {
       await launchAgentOnThread({
@@ -53,7 +54,6 @@ export function useAgentsPanel({
         channelName: channel.name,
         threadTitle: thread?.title ?? null,
         counterpartyId,
-        toolProfile: channel.myAgentToolProfile ?? null,
         direct: channel.isDirect,
       });
       void refetch();

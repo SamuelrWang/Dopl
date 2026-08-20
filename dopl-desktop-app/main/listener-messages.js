@@ -101,7 +101,10 @@ async function dispatchMessage(entry, m, myUserId) {
   // operator here — there is no consent row and no launch, so no flow depends on the banner.
   // ⚠ ONE PREDICATE, TWO READERS: `targeting.mentionsMe` is the same function classify's 'fyi'
   // verdict is conjoined with, on the isChatIntent precedent above.
-  else if (verdict === 'task-reply' && targeting.mentionsMe(m, myUserId)) taskNotify.notifyTaskReply(entry, m);
+  // ⚠ A HUMAN-typed reply notifies untagged (2026-08-20 review): the widened
+  // suppression removed its consent card, and a person's addressed words must
+  // not become invisible. Agent replies stay mention-gated (the Phase 7 rule).
+  else if (verdict === 'task-reply' && (m.authorKind === 'user' || targeting.mentionsMe(m, myUserId))) taskNotify.notifyTaskReply(entry, m);
 }
 
 // ─── BEGIN DISPATCH-DEFERRAL (pure; unit-tested via source extraction) ───────

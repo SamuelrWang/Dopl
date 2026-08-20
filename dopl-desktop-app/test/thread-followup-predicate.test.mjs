@@ -168,7 +168,7 @@ test("SEAM: route (6) runs AFTER classify, inside the 'trigger' branch, and guar
   // here: its own gate lives inside classify, where the verdict is produced.
   assert.match(
     LISTENER,
-    /else if \(verdict === 'task-reply' && targeting\.mentionsMe\(m, myUserId\)\) taskNotify\.notifyTaskReply\(entry, m\);/
+    /else if \(verdict === 'task-reply' && \(m\.authorKind === 'user' \|\| targeting\.mentionsMe\(m, myUserId\)\)\) taskNotify\.notifyTaskReply\(entry, m\);/
   );
   assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
 });

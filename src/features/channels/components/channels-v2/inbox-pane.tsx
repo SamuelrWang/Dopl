@@ -4,9 +4,12 @@
  * Channels v2 — THE INBOX, in the center column: a PASSIVE LIST (Samuel,
  * 2026-08-20 — this DEMOTES the Phase 8 launch-panel inbox). Every request
  * still waiting on THIS viewer renders as a ROW, and a row does exactly one
- * thing: navigate to its channel, where the deciding happens — the transcript
- * card / thread strip for an inbound ask, the thread view's send box for an
- * outbound draft. NO buttons here, no consent write, no launch settings.
+ * thing when clicked: navigate to its channel. ⚠ IT ALSO CARRIES THE DECISION
+ * (restored 2026-08-20, same-day review): the seq→thread join cannot place
+ * every row (untagged triggers, aged-out pages, deliberately seq-less outbound
+ * drafts), and a row no surface can decide is a hung agent — so the Inbox is
+ * the DURABLE decision home of last resort, same CAS'd mutation as the inline
+ * surfaces. No launch settings.
  * The launch ARM stays reachable on the channel's Settings tab
  * (`settings-agent.tsx`), which is the same arm the panel used to expand into.
  *
@@ -29,12 +32,17 @@ import type { ChannelConsentRequest } from "../../types";
 export function ChannelsV2InboxPane({
   requests,
   onOpen,
+  onDecide,
+  busy = false,
 }: {
   /** The viewer's pending requests, workspace-wide — the same array the
    *  sidebar's Inbox badge counts. */
   requests: ChannelConsentRequest[];
-  /** Navigate to the row's channel — the row's ONLY affordance. */
+  /** Navigate to the row's channel (the row body's click). */
   onOpen: (channelId: string) => void;
+  /** The CAS'd consent decision — the last-resort home for unplaceable rows. */
+  onDecide: (id: string, decision: "allow" | "deny") => void;
+  busy?: boolean;
 }) {
   return (
     <section aria-label="Inbox" className="flex min-w-0 flex-1 flex-col">
@@ -63,6 +71,8 @@ export function ChannelsV2InboxPane({
                 key={request.id}
                 request={request}
                 onOpen={() => onOpen(request.channelId)}
+                onDecide={onDecide}
+                busy={busy}
               />
             ))
           )}
@@ -80,18 +90,24 @@ export function ChannelsV2InboxPane({
 function InboxRow({
   request,
   onOpen,
+  onDecide,
+  busy,
 }: {
   request: ChannelConsentRequest;
   onOpen: () => void;
+  onDecide: (id: string, decision: "allow" | "deny") => void;
+  busy: boolean;
 }) {
   const outbound = request.kind === "outbound";
   const preview = outbound ? request.proposedReply : request.bodyPreview;
   const requester = request.requesterName ?? "A teammate";
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className="flex w-full items-start gap-3 rounded-[10px] border border-border-default bg-bg-inset px-3.5 py-2.5 text-left transition-colors hover:border-border-strong"
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      className="flex w-full cursor-pointer items-start gap-3 rounded-[10px] border border-border-default bg-bg-inset px-3.5 py-2.5 text-left transition-colors hover:border-border-strong"
     >
       {outbound ? (
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-default bg-bg-inset text-text-secondary">
@@ -128,7 +144,25 @@ function InboxRow({
             {preview}
           </span>
         ) : null}
+        <span className="flex items-center gap-1.5 pt-1">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={(e) => { e.stopPropagation(); onDecide(request.id, "deny"); }}
+            className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
+          >
+            {outbound ? "Cancel" : "Decline"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={(e) => { e.stopPropagation(); onDecide(request.id, "allow"); }}
+            className="auth-btn-3d h-7 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white disabled:opacity-60"
+          >
+            {outbound ? "Send" : "Launch agent"}
+          </button>
+        </span>
       </span>
-    </button>
+    </div>
   );
 }

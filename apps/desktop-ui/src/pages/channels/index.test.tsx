@@ -400,28 +400,25 @@ describe("channels page", () => {
     expect(within(crumb).getByText("migration")).toBeInTheDocument();
   });
 
-  it("decides a pending ask INLINE; the Inbox is a passive list that navigates", async () => {
+  it("decides a pending ask INLINE; the Inbox row both navigates and decides", async () => {
     renderPage();
 
-    // The decision lives on the transcript's own surfaces now (Samuel,
-    // 2026-08-20): the thread card carries Launch agent / Decline. The Inbox
-    // is a PASSIVE list — a row navigates to its channel and renders no verb.
+    // The decision lives on the transcript's own surfaces (Samuel, 2026-08-20):
+    // the thread card carries Launch agent / Decline. The Inbox row navigates —
+    // and (same-day review) ALSO carries the decision, because the seq→thread
+    // join cannot place every row and an undecidable row is a hung agent.
     const inbox = await screen.findByRole("button", { name: /Inbox/ });
     // The card's decision is already on the transcript before any nav.
     await screen.findByRole("button", { name: "Launch agent" });
 
     fireEvent.click(inbox);
-    // The pane lists the waiting ask, but offers no decision.
     const row = await screen.findByText("Ada's agent is asking");
-    expect(
-      screen.queryByRole("button", { name: "Launch agent" })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Decline" })
-    ).not.toBeInTheDocument();
+    // The row carries the same verbs the inline card does.
+    expect(screen.getByRole("button", { name: "Launch agent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
 
-    // The row is the navigation: back to the channel, where the card decides.
-    fireEvent.click(row.closest("button")!);
+    // The row body is the navigation: back to the channel, where the card decides.
+    fireEvent.click(row.closest("[role=button]")!);
     const cardLaunch = await screen.findByRole("button", {
       name: "Launch agent",
     });

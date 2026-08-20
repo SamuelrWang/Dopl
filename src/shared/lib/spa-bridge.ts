@@ -104,7 +104,6 @@ export interface SpaBridgeSurface {
     channelName: string;
     threadTitle: string | null;
     counterpartyId: string | null;
-    toolProfile: string | null;
     direct: boolean;
   }): Promise<{ ok: boolean; sessionId?: string; reason?: string }>;
   pause?(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;

@@ -335,8 +335,7 @@ async function startSession(spec, sdk) {
   };
   sessions.set(s.key, s);
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
-  // The spawn SURFACE: a window (adopting an open pre-consent card, Item 8 step 4), or —
-  // `spec.windowless` (2026-08-20) — none at all; session-windowless.js owns the branch.
+  // The spawn SURFACE: a window (adopting an open pre-consent card), or — `spec.windowless` — none; session-windowless.js owns the branch.
   if (!sessionWindowless.attachSurface(s, spec, { windowFactory, sessionConsent, sessionShell })) {
     sessions.delete(s.key);
     return null;
@@ -353,6 +352,9 @@ async function startSession(spec, sdk) {
   if (reqItem) emit(s, reqItem);
   // P2: a parked shell starts NO query (session-park paints the header/note; it waits for a lazy wake). Everything else launches now.
   if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }
+  // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window):
+  // roll back so launch() reports auth-hold and the caller answers honestly.
+  if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); return { authHold: true }; }
   // Q6 PREFLIGHT: a machine with no Claude Code sign-in can only produce a dead session, so HOLD the
   // launch on the sign-in action instead. Nothing is settled, echoed, or thrown away; the request runs
   // the moment sign-in succeeds.
@@ -370,18 +372,15 @@ async function launch(a) {
   // (channel, agent) while the checks ask about (channel, ''), so launch could report a free
   // slot for an agent that is running and then have startSession overwrite it.
   const slot = { channelId: a.channelId, taskId: a.taskId, agentId: a.agentId || null };
-  // H1 (LOW): distinguish "a session is working here" from "a session is HELD here waiting for
-  // a sign-in" so the caller can post the truth instead of asking the peer to resend into a
-  // slot nothing will ever free on its own.
+  // H1 (LOW): a HELD slot (sign-in wait) answers auth-hold, never busy — post the truth.
   if (isAuthHeldSession(slot)) return { skipped: 'auth-hold' };
   if (hasLiveSession(slot)) return { skipped: 'busy' };
   // Adopting a pre-consent window is net-zero on the budget; only a FRESH window counts against the shared cap.
   // AUDIT D4: at the cap, free an untouched parked shell first (sessionPark.atCapAfterEvict) instead of
   // degrading a REAL inbound trigger to headless. Fail-restrictive: still a cap skip if nothing frees.
   const adoptable = sessionConsent.has(key);
-  if (a.windowless) {
-    // The window budget cannot count what mints no window; bound on live sessions instead.
-    if (sessionWindowless.liveCount(sessions) >= settings.MAX_SESSION_WINDOWS) return { skipped: 'cap' };
+  if (a.windowless) { // no window to budget — bound on live sessions instead
+    if (sessionWindowless.liveCount(sessions) >= MAX_WINDOWS) return { skipped: 'cap' };
   } else if (!adoptable && sessionPark.atCapAfterEvict()) return { skipped: 'cap' };
   let sdk;
   try { sdk = await getSdk(); } catch (err) {
@@ -410,6 +409,7 @@ async function launch(a) {
     triggerSeq: a.triggerSeq, // the ask's seq — the outbound bridge's seq-join floor
   }, sdk);
   if (!s) return { skipped: 'disabled' };
+  if (s.authHold === true) return { skipped: 'auth-hold' };
   return { sessionId: s.sessionId };
 }
 

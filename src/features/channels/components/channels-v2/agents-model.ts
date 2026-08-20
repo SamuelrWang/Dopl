@@ -244,7 +244,6 @@ export async function launchAgentOnThread(payload: {
   channelName: string;
   threadTitle: string | null;
   counterpartyId: string | null;
-  toolProfile: string | null;
   direct: boolean;
 }): Promise<{ ok: boolean; reason?: string }> {
   const sessions = getSpaBridge()?.sessions;

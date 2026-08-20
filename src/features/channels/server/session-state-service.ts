@@ -17,8 +17,10 @@ import { loadVisibleChannel } from "./service-shared";
  * ⚠ TWO READS, TWO SCOPES (2026-08-20): {@link listSessionStates} stays scoped
  * to the CALLER (`ctx.userId`) — "what are MY agents doing" — while
  * {@link listChannelSessions} is CHANNEL-scoped for the Agents tab's peer
- * cards, fenced by `loadVisibleChannel` and matched by the member SELECT
- * policy (20260820200000). Peers see the state projection alone.
+ * cards, fenced by `loadVisibleChannel` — ⚠ which admits a PUBLIC channel's
+ * non-member readers (§5's channel-visible rule); the member SELECT policy
+ * (20260820200000) is the PostgREST belt, not this admin-client path's fence.
+ * Peers see the state projection alone.
  *
  * Delivery is PUSH ON STATE CHANGE ({@link reportSessionStates}, called by
  * `main/session-state-push.js`), never a heartbeat. An empty answer is reported

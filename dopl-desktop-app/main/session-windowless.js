@@ -87,6 +87,7 @@ async function bridgeOutbound(s, payload, decide) {
   // pendingOutboundByThread): the latest inbound turn's seq, the trigger's as the floor.
   // A second draft against the same seq collides with the de-dupe key — retried seq-less,
   // which keeps it decidable from the Inbox list (a NULL seq is unconstrained, §6).
+  if (!s.watchedOutboundRows) s.watchedOutboundRows = new Set();
   let created = await consent.createConsentRequest(s.workspaceId, {
     channelId: s.channelId,
     kind: 'outbound',
@@ -95,7 +96,13 @@ async function bridgeOutbound(s, payload, decide) {
     bodyPreview: body,
     proposedReply: body,
   });
-  if (!created && s.lastInboundSeq != null) {
+  // ⚠ THE SEQ DE-DUPE RETURNS THE EXISTING ROW, NOT A FAILURE (consent-service
+  // findConsentByTrigger, ANY status). A row that is already decided — or already
+  // carrying ANOTHER draft of this session — must never authorize THIS draft's
+  // bytes: one Send may approve exactly the body the operator reviewed. Re-create
+  // seq-less (a NULL seq is unconstrained, INVARIANTS §6); it stays decidable from
+  // the notification and the Inbox list.
+  if (created && ((created.status && created.status !== 'pending') || s.watchedOutboundRows.has(created.rowId))) {
     created = await consent.createConsentRequest(s.workspaceId, {
       channelId: s.channelId,
       kind: 'outbound',
@@ -111,6 +118,7 @@ async function bridgeOutbound(s, payload, decide) {
     return;
   }
   const rowId = created.rowId;
+  s.watchedOutboundRows.add(rowId);
   diag('windowless outbound gated', 'row', String(rowId).slice(0, 8), 'thread', String(s.taskId).slice(0, 8));
   consent.notifyOutbound({
     channelName,
@@ -118,12 +126,17 @@ async function bridgeOutbound(s, payload, decide) {
     // The notification's SEND action decides immediately; the body CLICK only
     // navigates — to the THREAD, where the send box is (Samuel, 2026-08-20).
     onSend: () => {
-      void consent.submitDecision(s.workspaceId, rowId, 'allow', { decidedBy: 'desktop' });
+      void consent.submitDecision(s.workspaceId, rowId, 'allow', { channelName });
     },
     onOpen: () => {
       try {
         targeting.openChannelForEntry(
-          { channel: { id: s.channelId, name: channelName }, workspaceId: s.workspaceId },
+          {
+            channel: { id: s.channelId, name: channelName },
+            workspaceId: s.workspaceId,
+            // openChannelForEntry no-ops without the SEGMENT — it rides the context.
+            workspaceSegment: (s.context && s.context.workspaceSegment) || null,
+          },
           { threadId: s.taskId }
         );
       } catch (_) { /* navigation is best-effort */ }
@@ -137,12 +150,18 @@ async function bridgeOutbound(s, payload, decide) {
 async function watchRow(s, rowId, requestId, decide) {
   for (;;) {
     await sleep(POLL_MS);
-    if (s.settled || !s.pendingPermissions.has(requestId)) return;
+    if (s.settled || !s.pendingPermissions.has(requestId)) {
+      // The tool call this row was gating is gone (park deny-closed it, or the
+      // session ended). A row left `pending` would take a Send that posts
+      // NOTHING — cancel it so the surface tells the truth. Best-effort.
+      void consent.submitDecision(s.workspaceId, rowId, 'deny', {});
+      return;
+    }
     const status = await consent.pollStatus(s.workspaceId, rowId);
     if (status === null || status === 'pending') continue;
     const allow = status === 'allowed' || status === 'auto_allowed';
     diag('windowless outbound decided', allow ? 'allow' : `deny (${status})`, 'row', String(rowId).slice(0, 8));
-    decide(requestId, allow ? 'allow' : 'deny');
+    decide(requestId, allow ? 'allow-once' : 'deny');
     return;
   }
 }
