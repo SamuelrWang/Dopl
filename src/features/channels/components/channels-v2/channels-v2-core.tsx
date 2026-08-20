@@ -86,9 +86,12 @@ export interface ChannelsV2CoreProps {
  * route as the tool profile. All five hold the same `useRefetchGate` gate the
  * reads register.
  *
- * ⚠ A FAVOURITE IS A SHORTCUT, NOT A MOVE (Slack semantics). The favourited
- * channel keeps its row in Channels or Direct messages and gains a second one in
- * Favorites; both select it. The sidebar's docblock owns the rest of the rule.
+ * ⚠ A FAVOURITE IS A MOVE, NOT A SHORTCUT (Samuel, 2026-08-19 — superseding the
+ * SHORTCUT / Slack-semantics ruling of the same day). The favourited channel
+ * leaves Channels or Direct messages and renders only in Favorites; one channel
+ * is one row. The sidebar's docblock owns the rest of the rule.
+ * ⚠ Every read of `myFavoritedAt` is `!= null`, never `!==` — version skew;
+ * `sidebar.tsx › isFavorite` carries the reason.
  *
  * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
  * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
@@ -379,11 +382,11 @@ export function ChannelsV2Core({
             // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
             // rendering — never a flip inside the mutation. Two fast clicks send
             // `true` then `false` and converge; a toggle verb would race.
-            favorited={channel.myFavoritedAt !== null}
+            favorited={channel.myFavoritedAt != null}
             onToggleFavorite={() =>
               favorite.mutate({
                 channelId: channel.id,
-                favorite: channel.myFavoritedAt === null,
+                favorite: channel.myFavoritedAt == null,
               })
             }
             gate={gate}

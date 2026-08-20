@@ -230,8 +230,9 @@ describe("the writes that used to be hand-rolled overrides", () => {
    * THE FAVOURITE'S PATCH IS A NULLABLE TIMESTAMP, NOT A FLAG, and the
    * un-favourite is the case that has to be spelled out: it writes `null` into
    * the row rather than leaving the field where it was. The sidebar's section
-   * membership is `myFavoritedAt !== null`, so a patch that dropped the field on
-   * `false` would leave the shortcut row standing under a bookmark the operator
+   * membership is `myFavoritedAt != null`, so a patch that dropped the field on
+   * `false` would strand the channel in Favorites — and, since a favourite is a
+   * MOVE (2026-08-19), out of its home section — under a bookmark the operator
    * just cleared.
    */
   it("sets and CLEARS a channel's favourite in the list cache", () => {

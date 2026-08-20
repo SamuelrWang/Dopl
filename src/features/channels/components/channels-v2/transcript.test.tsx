@@ -15,6 +15,9 @@
  * post both — INVARIANTS §5), a thread's opening message becomes a CARD in the
  * channel view while the rest of its messages stay in the thread view, and the
  * scroll-target row carries `data-message-id`.
+ *
+ * How a body WRAPS and which way its text reads is `transcript-body.test.tsx` —
+ * a separate file because this one has no headroom under the 500-line cap.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";

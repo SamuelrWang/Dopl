@@ -14,6 +14,15 @@
  * The one control that changed shape is the kebab — `ChannelActionsMenu` was
  * deleted and its items are explicit rows, with both confirmations unchanged.
  *
+ * ⚠ AND THE POPOVERS DIED LATER THE SAME DAY (Samuel, live review — the ruling
+ * INVARIANTS §5 used to carry as open). `ChannelSettingsPopover` and
+ * `ChannelFolderControl` were **deleted**, their controls rebuilt INLINE as
+ * `settings-agent.tsx › ChannelAgentSettings`, which this file mounts into the
+ * tab's `agent` slot. ⚠ **The wiring is untouched by that**: the same
+ * `prefs.toolProfile`, the same `prefs.trust` + `trustBusyIds` guard, the same
+ * `useTrustRules` read, the same bridges. Only the chrome changed, and a future
+ * reader must not conclude a write moved.
+ *
  * ⚠ THIS FILE EXISTS BECAUSE THE OLD PAGE'S HEADER WAS THE ONLY ENTRY POINT TO
  * FIVE LIVE CONTROLS. `channels-view-core.tsx` and `channel-pane.tsx` were
  * deleted at the cutover (wiring plan Phase 12) and they owned the dialogs'
@@ -40,11 +49,11 @@ import { useChannelLifecycleWrites } from "../../hooks/use-channel-lifecycle-wri
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { useTrustRules } from "../../hooks/use-trust-rules";
 import { channelDisplayName } from "../../lib/channel-display";
-import { ChannelSettingsPopover } from "../channel-settings-popover";
 import { CreateChannelDialog } from "../create-channel-dialog";
 import { DirectMessageDialog } from "../direct-message-dialog";
 import { GoPublicDialog, needsGoPublicConfirm } from "../go-public-dialog";
 import { InviteDialog } from "../invite-dialog";
+import { ChannelAgentSettings } from "./settings-agent";
 import { ChannelsV2SettingsTab } from "./settings-tab";
 import type { AgentToolProfile, Channel, ChannelMember } from "../../types";
 
@@ -109,12 +118,9 @@ export function ChannelsV2ManageActions({
     displayName === "Direct message" ? "your teammate" : displayName;
   const otherMembers = members.filter((m) => m.userId !== currentUserId);
   // ⚠ A row with no profile resolves the way the DESKTOP resolves it
-  // (INVARIANTS §6). The settings popover renders this as a containment claim,
-  // so the web must never pick a wider answer than the machine will run.
-  const settingsChannel: Channel = {
-    ...channel,
-    myAgentToolProfile: channel.myAgentToolProfile ?? UNRESOLVED_TOOL_PROFILE,
-  };
+  // (INVARIANTS §6). The Tools control renders this as a containment claim, so
+  // the web must never pick a wider answer than the machine will run.
+  const toolProfile = channel.myAgentToolProfile ?? UNRESOLVED_TOOL_PROFILE;
 
   /** ⚠ WIDENING TAKES A HUMAN: private→public confirms; public→private does not. */
   function handleToggleVisibility() {
@@ -150,12 +156,14 @@ export function ChannelsV2ManageActions({
       <ChannelsV2SettingsTab
         channel={channel}
         canManage={canManage}
-        // The popover is carried AS-IS into the tab's first row; its product
-        // fate is a separate open ruling and this change does not touch it.
-        settings={
+        // The agent half, INLINE (2026-08-19 ruling — see the file docblock).
+        // A non-member has no agent settings of their own here, and passing
+        // nothing is what gives them the tab's empty state.
+        agent={
           channel.isMember ? (
-            <ChannelSettingsPopover
-              channel={settingsChannel}
+            <ChannelAgentSettings
+              channelId={channel.id}
+              profile={toolProfile}
               otherMembers={otherMembers}
               trustedIds={trustedIds}
               trustBusyIds={trustBusyIds}

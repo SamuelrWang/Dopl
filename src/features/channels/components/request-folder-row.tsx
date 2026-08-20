@@ -7,9 +7,9 @@ import { useChannelFolder } from "../hooks/use-channel-folder";
 /**
  * The desktop-only "working folder" row: which folder the session spawns into
  * when the operator launches, plus the affordance to change it before deciding.
- * It drives the SAME per-channel bridge as the header folder control
+ * It drives the SAME per-channel bridge as the Settings tab's Agent-folder row
  * ({@link useChannelFolder}), so whatever this row shows is what the desktop
- * spawn uses, and a change made here shows up in the header too.
+ * spawn uses, and a change made here shows up in the tab too.
  *
  * Renders NOTHING outside the desktop shell (no bridge = no dead control), and
  * nothing on the first paint either, since the bridge is feature-detected after

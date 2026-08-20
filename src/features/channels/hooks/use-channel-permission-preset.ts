@@ -52,7 +52,7 @@ export const DEFAULT_PERMISSION_PRESET: PermissionPreset = {
 /**
  * ⚠ Hand-copied from `ARM_TTL_MS` in `main/channel-prefs.js` — restated ONLY so
  * the UI can say it out loud. The desktop is the authority; nothing on the web
- * enforces it. `channel-settings-popover.test.tsx` pins it against the desktop
+ * enforces it. `channels-v2/settings-tab.test.tsx` pins it against the desktop
  * source so the copy cannot drift from the clock it describes.
  */
 export const PERMISSION_ARM_TTL_MS = 30 * 60_000;
@@ -60,7 +60,7 @@ export const PERMISSION_ARM_TTL_MS = 30 * 60_000;
 /**
  * Every mounted reader of one channel's arm, keyed by channel id.
  *
- * ⚠ Several surfaces show this pair at once (request card, settings popover, and
+ * ⚠ Several surfaces show this pair at once (request card, Settings tab, and
  * there can be two request cards). With a PRIVATE mount snapshot each writing
  * `{...snapshot, ...patch}`, the second writer reverts the axis the first just
  * changed while the first keeps displaying a value it no longer has — and the

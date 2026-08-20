@@ -176,7 +176,9 @@ function AuthoredRow({
       <div className={cn("flex min-w-0 flex-1 flex-col gap-1.5", mine && "items-end")}>
         {!continuation && (
           <div className={cn("flex items-baseline gap-2", mine && "flex-row-reverse")}>
-            <span className="text-body font-semibold text-text-primary">
+            {/* `wrap-anywhere` for the same reason as the body: a roster name
+                with no spaces in it must not widen the row past the pane. */}
+            <span className="wrap-anywhere text-body font-semibold text-text-primary">
               {authorLabel}
             </span>
             {agent && <AgentChip className="self-center" />}
@@ -189,6 +191,44 @@ function AuthoredRow({
   );
 }
 
+/**
+ * THE BODY PARAGRAPH's face — one recipe, both views and both chromes.
+ *
+ * ⚠ `wrap-anywhere` (`overflow-wrap: anywhere`) IS THE WHOLE FIX, and it is not
+ * interchangeable with `break-words` (Samuel, 2026-08-19: a run of
+ * "segwegwtestets…" escaped the pane and clipped at its edge). `anywhere`
+ * shrinks the element's MIN-CONTENT width, which `break-word` does not — and
+ * min-content is exactly what an `items-end` (fit-content) own-message column
+ * sizes itself from, so `break-word` would leave the block as wide as the
+ * unbroken run and only wrap inside it. `break-all` is the other wrong answer:
+ * it breaks ordinary prose mid-word too.
+ *
+ * ⚠ NO `text-right` ON OWN MESSAGES (same ruling; re-affirmed on a fourth look
+ * after briefly flipping the other way). The BLOCK stays anchored right — that
+ * is `items-end` on the column in `AuthoredRow` and it is unchanged, so a short
+ * message still sits on the viewer's side (INVARIANTS §5, side comes from
+ * `author_user_id`). The TEXT inside it reads left-aligned like every other
+ * paragraph in the app once it wraps.
+ *
+ * ⚠ `max-w-[75%]` IS WHAT MAKES THAT ANCHORING VISIBLE, and it is load-bearing,
+ * not taste (Samuel, 2026-08-19, second look at the same review). `items-end`
+ * alone does NOT right-anchor a long body: align-self sizes a child to
+ * `fit-content(available)`, and once the text's max-content exceeds the column,
+ * fit-content collapses to the FULL available width. The `<p>` then spans the
+ * whole column and its left-aligned lines start at the LEFT edge — a wrapped own
+ * message read as a full-width peer row while a short "test" still sat right.
+ * Capping the body below the column is what leaves `items-end` something to pull.
+ *
+ * ⚠ A PERCENTAGE, not a px measure, and BOTH SIDES wear it. A fixed cap
+ * (e.g. `MESSAGE_CARD`'s 460px) stops capping the moment the column is narrower
+ * than it — the pop-out thread window — which is exactly where the bug would
+ * come back. 75% of the column always leaves the gap. Peer rows keep hugging
+ * left either way, so the symmetric measure costs them nothing and reads better.
+ * The thread-card body needs none of this: `MESSAGE_CARD` is already
+ * `w-full max-w-[460px]`, and receipts are centred, not sided.
+ */
+const MESSAGE_BODY = "wrap-anywhere max-w-[75%] text-lead text-text-primary";
+
 function Message({
   row,
   index,
@@ -198,7 +238,6 @@ function Message({
   index: AuthorIndex;
   flash: boolean;
 }) {
-  const mine = row.side === "me";
   return (
     <AuthoredRow
       id={row.id}
@@ -212,10 +251,7 @@ function Message({
     >
       {row.body.split("\n").map((paragraph, i) =>
         paragraph.trim().length === 0 ? null : (
-          <p
-            key={i}
-            className={cn("text-lead text-text-primary", mine && "text-right")}
-          >
+          <p key={i} className={MESSAGE_BODY}>
             <Body text={paragraph} index={index} mentionsMe={row.mentionsMe} />
           </p>
         )
@@ -282,10 +318,17 @@ function ThreadCardMessage({
           <span className="flex-1" />
           {waiting && <PendingChip />}
         </div>
-        <span className="text-body font-semibold text-text-primary">
+        {/* ⚠ Same `wrap-anywhere` rule as the body, for the same reason: a
+            title or a preview with no spaces in it would otherwise size this
+            card's column off its min-content width and run past the `.bento`
+            edge (the `line-clamp` only hides the overflow, it does not stop
+            it). */}
+        <span className="wrap-anywhere text-body font-semibold text-text-primary">
           {first.title}
         </span>
-        <p className="line-clamp-3 text-caption text-text-muted">{row.preview}</p>
+        <p className="line-clamp-3 wrap-anywhere text-caption text-text-muted">
+          {row.preview}
+        </p>
 
         <div className="flex flex-wrap gap-1.5">
           {row.threads.map((thread) => {

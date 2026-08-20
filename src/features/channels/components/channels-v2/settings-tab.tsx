@@ -13,31 +13,32 @@
  * being rehomed: where a channel's files and links land is still an open
  * question (wiring plan, Risk 10) and an empty tab was answering it with "here".
  *
- * ⚠ NOTHING BELOW IS NEW PRODUCT SURFACE, AND TWO CONTROLS ARE CARRIED VERBATIM.
- * `ChannelSettingsPopover` (the per-channel tool profile, the permission arm and
- * the per-teammate trust toggles) and `ChannelFolderControl` (the desktop-only
- * working folder) are mounted AS THEY ARE, popover and all — their product fate
- * is a separate open ruling and this change must not pre-empt it. What DID
- * change shape is the kebab: `ChannelActionsMenu` was deleted and its four items
- * are explicit rows here, because a kebab nested inside a tab is a menu hiding
- * inside a menu. **The destructive pair still routes through the confirm
- * dialogs** — these rows report intent upward exactly as the menu items did, and
- * `channel-manage.tsx` still owns every dialog.
+ * ⚠ THE POPOVERS ARE GONE — SECOND RULING, SAME DAY (Samuel, live review).
+ * The first pass carried `ChannelSettingsPopover` and `ChannelFolderControl`
+ * AS-IS, each behind a 7×7 icon button, and left their product fate open. It is
+ * settled now: **every setting is INLINE, visible without a click** — see
+ * `settings-agent.tsx`, which holds the arm, the tool profile, the folder and
+ * the trust roster, and which both popover files were DELETED for. Nothing
+ * below is new product surface; the writes are the ones that already existed.
+ * The kebab changed shape at the same cutover: `ChannelActionsMenu` was deleted
+ * and its four items are the explicit rows here, because a kebab nested inside a
+ * tab is a menu hiding inside a menu. **The destructive pair still routes
+ * through the confirm dialogs** — these rows report intent upward exactly as the
+ * menu items did, and `channel-manage.tsx` still owns every dialog.
  *
- * ⚠ NO DEAD ROWS (INVARIANTS §5 — every row on this surface functions). Both
- * desktop-only controls are gated on their own bridge, so a plain browser gets
- * no labelled row with nothing in it, and a non-member viewing a public channel
- * gets the empty state rather than a heading over nothing.
+ * ⚠ NO DEAD ROWS (INVARIANTS §5 — every row on this surface functions). The
+ * desktop-only controls are gated on their own bridge INSIDE `settings-agent`,
+ * so a plain browser gets no labelled row with nothing in it, and a non-member
+ * viewing a public channel gets the empty state rather than a heading over
+ * nothing.
  */
 
 import {
   Archive,
   ArchiveRestore,
-  Folder,
   Hash,
   LogOut,
   Settings2,
-  SlidersHorizontal,
   Trash2,
   UserPlus,
   type LucideIcon,
@@ -45,9 +46,7 @@ import {
 import type { ReactNode } from "react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { cn } from "@/shared/lib/utils";
-import { ChannelFolderControl } from "../channel-folder-control";
-import { useChannelFolder } from "../../hooks/use-channel-folder";
-import { MetaRow, PanelHeading } from "./bits";
+import { PanelHeading } from "./bits";
 import type { Channel } from "../../types";
 
 export interface ChannelsV2SettingsTabProps {
@@ -55,11 +54,18 @@ export interface ChannelsV2SettingsTabProps {
   /** True for the channel owner — gates the manage half, as the kebab did. */
   canManage: boolean;
   /**
-   * `ChannelSettingsPopover`, injected as a SLOT: it needs the roster, the trust
-   * set and three write handlers, all of which live in `channel-manage.tsx`.
-   * `null` for a non-member, who has no settings of their own here.
+   * `settings-agent.tsx › ChannelAgentSettings`, injected as a SLOT: it needs
+   * the roster, the trust set and three write handlers, all of which live in
+   * `channel-manage.tsx`. `null` for a non-member, who has no agent settings of
+   * their own here — and its absence is what turns this tab into the empty
+   * state rather than a heading over nothing.
+   *
+   * ⚠ IT IS THE WHOLE AGENT + ALWAYS-ALLOW HALF, headings included, not a
+   * control dropped into a row of this file's making. That is the shape change
+   * the inlining ruling forced: there is no longer a single icon-button to hang
+   * off a label.
    */
-  settings?: ReactNode;
+  agent?: ReactNode;
   onInvite: () => void;
   onToggleVisibility: () => void;
   onToggleArchive: () => void;
@@ -76,19 +82,13 @@ export interface ChannelsV2SettingsTabProps {
 export function ChannelsV2SettingsTab({
   channel,
   canManage,
-  settings,
+  agent,
   onInvite,
   onToggleVisibility,
   onToggleArchive,
   onRequestDelete,
   onRequestLeave,
 }: ChannelsV2SettingsTabProps) {
-  // ⚠ READ FOR THE BRIDGE ALONE — the control below owns the label, the picker
-  // and the busy flag. Asking here is what lets the ROW disappear in a plain
-  // browser instead of standing empty; the hook is a bounded read either way
-  // (one `getFolderLabel` over IPC) and is already shared by two surfaces.
-  const { bridge: folderBridge } = useChannelFolder(channel.id);
-
   // A DM is a fixed 1:1 pair — no invite affordance (the server also rejects).
   const canInvite = channel.isMember && !channel.isDirect;
   // A DM is always private (immutable), so it has no visibility toggle.
@@ -100,10 +100,9 @@ export function ChannelsV2SettingsTab({
   const canLeave = channel.isMember && !canManage && !channel.isDirect;
   const canDelete = canManage || (channel.isMember && channel.isDirect);
 
-  const hasControls = Boolean(settings) || Boolean(folderBridge);
   const hasActions = canInvite || canToggleVisibility || canManage || canDelete || canLeave;
 
-  if (!hasControls && !hasActions) {
+  if (!agent && !hasActions) {
     return (
       <EmptyState
         icon={Settings2}
@@ -115,23 +114,7 @@ export function ChannelsV2SettingsTab({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      {hasControls && (
-        <>
-          <PanelHeading title="Agent" />
-          <div className="px-2">
-            {settings && (
-              <MetaRow icon={SlidersHorizontal} label="Permissions, sends & tools">
-                {settings}
-              </MetaRow>
-            )}
-            {folderBridge && (
-              <MetaRow icon={Folder} label="Agent folder">
-                <ChannelFolderControl channelId={channel.id} />
-              </MetaRow>
-            )}
-          </div>
-        </>
-      )}
+      {agent}
 
       {hasActions && (
         <>
@@ -173,8 +156,14 @@ export function ChannelsV2SettingsTab({
 }
 
 /**
- * One action row — the `MetaRow` geometry as a button, so the two sections in
- * this tab and the Info tab beside it read as one column.
+ * One action row — the `MetaRow` geometry as a button, so this section and the
+ * Info tab beside it read as one column.
+ *
+ * ⚠ THESE KEEP THEIR GLYPHS while the settings above shed theirs, and the split
+ * is the rule, not an oversight: an ACTION row is a verb the reader is scanning
+ * for (add / archive / delete / leave), where a glyph is the fastest way in. A
+ * SETTING row is a noun with a value beside it, and an icon per row there was
+ * exactly the visual noise the inlining ruling removed.
  *
  * `destructive` is INK ONLY: the row opens a confirm dialog, it never performs
  * the write.

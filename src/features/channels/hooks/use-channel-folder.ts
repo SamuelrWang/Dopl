@@ -26,9 +26,12 @@ export interface ChannelFolderState {
 
 /**
  * Shared per-channel working-folder state over the desktop bridge
- * (`window.dopl.channels`) — used by BOTH the channel-header folder control and
- * the pending-request card's "Runs in" row, so neither duplicates the
- * detect / load-label / pick dance.
+ * (`window.dopl.channels`) — used by BOTH the Settings tab's Agent-folder row
+ * (`channels-v2/settings-agent.tsx`) and the launch panel's folder pill
+ * (`request-folder-row.tsx`), so neither duplicates the detect / load-label /
+ * pick dance. ⚠ It fed a header POPOVER (`channel-folder-control.tsx`) until
+ * 2026-08-19, when that file was deleted for the tab's inline row; the hook is
+ * unchanged, and `clear()` still has a caller.
  *
  * Presence is feature-detected AFTER mount (window-only) so SSR and the first
  * client render agree (hydration-safe): `bridge` is null on that first paint and

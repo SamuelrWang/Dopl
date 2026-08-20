@@ -39,9 +39,12 @@ export function needsGoPublicConfirm(visibility: ChannelVisibility): boolean {
  * THE COPY IS EXPORTED, not inlined in the JSX, because `ModalShell` portals
  * itself in from an effect — a static render of an open dialog is the empty
  * string, so there is no other way for a test to hold this wording to account.
- * Same split `GroupChannelRoutingNote` and `ChannelSettingsMenuView` use.
+ * Same split `GroupChannelRoutingNote` and
+ * `channels-v2/settings-agent.tsx › ChannelAgentSettingsView` use.
  * (`ChannelActionsMenuItems` was the third until its kebab was deleted for the
- * Settings tab's explicit rows, 2026-08-19.)
+ * Settings tab's explicit rows, 2026-08-19; `ChannelSettingsMenuView` was the
+ * fourth until the settings popover was deleted for the tab's inline controls
+ * later the same day.)
  */
 export function goPublicTitle(displayName: string): string {
   return `Make "${displayName}" public?`;

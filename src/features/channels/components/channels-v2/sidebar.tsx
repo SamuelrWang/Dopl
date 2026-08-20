@@ -31,16 +31,23 @@
  * above it are still `fixtures.ts` furniture. Four properties, each of which a
  * redesign would lose quietly:
  *
- *  1. **A FAVOURITE IS A SHORTCUT, NOT A MOVE — Slack semantics.** A favourited
- *     channel renders HERE *and* in its normal section below, and the two rows
- *     select the same channel. It is the same channel seen twice, deliberately:
- *     a favourite that hid the row from the tree would make the tree lie about
- *     what the workspace contains, and would move rows around under people who
- *     favourite by muscle memory.
- *  2. **SAME ROW ANATOMY as the sections below** — `ChannelRow`, so a DM's
- *     favourite is its peer's face and a channel's is the hash tile, and the
- *     unread dot rides along. A second row face would be a second answer to
- *     "what does a channel look like in this column".
+ *  1. **A FAVOURITE IS A MOVE, NOT A SHORTCUT (Samuel, 2026-08-19 — this
+ *     supersedes the SHORTCUT / Slack-semantics ruling of the same day).** A
+ *     favourited channel renders HERE and NOWHERE ELSE; un-favouriting returns
+ *     it to Channels or Direct messages. ONE channel is ONE row in this column,
+ *     which is what keeps the unread dot and the selection ring unambiguous —
+ *     the same channel seen twice was two places to look for one fact, and two
+ *     rows to reconcile after every write.
+ *     ⚠ A HOME SECTION EMPTIED BY THE MOVE still renders its header and its
+ *     "none yet" line, exactly as it would with no channels at all: the rows
+ *     are one section up, and the reader is looking at the column that holds
+ *     them. No second wording — "they all moved" is not a fact worth a line.
+ *  2. **SAME ROW ANATOMY *and the same thread nesting* as the sections below** —
+ *     `ChannelBranch`, so a DM's favourite is its peer's face and a channel's is
+ *     the hash tile, the unread dot rides along, and the OPEN channel's active
+ *     threads nest under it here. Under move semantics this section IS the
+ *     channel's home, so a favourited channel that lost its thread rows would
+ *     have lost them from the sidebar entirely.
  *  3. **ORDERED BY NAME**, not by `favoritedAt` and not by the list's own
  *     recency. A shortcut list is used by POINTING, and alphabetical is the only
  *     order that never reorders under traffic. (The column stores WHEN anyway —
@@ -150,14 +157,23 @@ export function ChannelsV2Sidebar({
   const threadSelected =
     openThreadId !== null && threads.some((t) => t.id === openThreadId);
 
-  // Filtered ONCE, per section, and read by both the rows and the empty line —
-  // two `.filter()` calls would let the guard and the list disagree.
-  const directShown = direct.filter(matches);
-  const roomsShown = rooms.filter(matches);
+  // ⚠ `!= null`, NOT `!== null`: an older deployed server has no `favorited_at`
+  // column to send, so the field arrives `undefined` and a strict compare would
+  // read every channel as favourited (INVARIANTS §5, §13's ship order).
+  const isFavorite = (c: Channel) => c.myFavoritedAt != null;
   // FAVORITES — a partition of the SAME two lists, never a third read: DMs and
   // channels both, ordered by name (see the docblock). `localeCompare` rather
   // than `<`, so accented and non-ASCII names sort where a reader expects.
-  const favorites = [...direct, ...rooms].filter((c) => c.myFavoritedAt !== null);
+  const favorites = [...direct, ...rooms].filter(isFavorite);
+  // A MOVE, so each home list is what did NOT move. The guards below read these
+  // and not `direct` / `rooms`: an all-favourited section is empty for the same
+  // reason an unpopulated one is, and says the same thing.
+  const directHome = direct.filter((c) => !isFavorite(c));
+  const roomsHome = rooms.filter((c) => !isFavorite(c));
+  // Filtered ONCE, per section, and read by both the rows and the empty line —
+  // two `.filter()` calls would let the guard and the list disagree.
+  const directShown = directHome.filter(matches);
+  const roomsShown = roomsHome.filter(matches);
   const favoritesShown = favorites
     .filter(matches)
     .sort((a, b) => name(a).localeCompare(name(b)));
@@ -245,28 +261,13 @@ export function ChannelsV2Sidebar({
             />
             {!collapsed.has("favorites") && (
               <div className="flex flex-col gap-px px-2">
-                {/* No thread nesting here, and that is not an omission: a
-                    favourite is a SHORTCUT to a channel, and the tree that
-                    nests threads is the one below. Selection still lights up,
-                    so the open channel is visibly the open one in both places. */}
-                {favoritesShown.map((channel) => (
-                  <ChannelRow
-                    key={channel.id}
-                    label={name(channel)}
-                    person={channelDisplayPeerPerson(
-                      channel,
-                      members,
-                      currentUserId
-                    )}
-                    selected={
-                      channel.id === selectedChannelId &&
-                      !threadSelected &&
-                      !inboxOpen
-                    }
-                    unread={channel.unread}
-                    onSelect={() => onSelectChannel(channel.id)}
-                  />
-                ))}
+                {/* THE SAME `branch` THE SECTIONS BELOW RENDER, threads and all.
+                    It was a bare `ChannelRow` while a favourite was a shortcut
+                    and the tree below still held the channel; with the MOVE
+                    (2026-08-19) this section is the channel's only row, so
+                    dropping the nesting here would drop the open channel's
+                    threads out of the column altogether. */}
+                {favoritesShown.map(branch)}
                 {favoritesShown.length === 0 && (
                   <EmptyRow label={SIDEBAR_NO_MATCHES} />
                 )}
@@ -295,15 +296,17 @@ export function ChannelsV2Sidebar({
           <div className="flex flex-col gap-px px-2">
             {directShown.map(branch)}
             {/* ⚠ THE GUARD READS THE FILTERED LIST, NOT THE RAW ONE. Reading
-                `direct.length` meant a query that matched nothing rendered
+                the unfiltered length meant a query that matched nothing rendered
                 NEITHER rows nor an empty line — a section that looked broken
                 rather than one that had answered. The two absences are also
                 different facts and are worded differently: "none exist" is not
-                "none match what you typed". */}
+                "none match what you typed". ⚠ And the wording reads `directHome`,
+                not `direct`: with everything favourited the section has nothing
+                to show and nobody typed anything, so it is the "none yet" line. */}
             {directShown.length === 0 && (
               <EmptyRow
                 label={
-                  direct.length === 0
+                  directHome.length === 0
                     ? "No direct messages yet."
                     : SIDEBAR_NO_MATCHES
                 }
@@ -337,7 +340,7 @@ export function ChannelsV2Sidebar({
             {roomsShown.length === 0 && (
               <EmptyRow
                 label={
-                  rooms.length === 0 ? "No channels yet." : SIDEBAR_NO_MATCHES
+                  roomsHome.length === 0 ? "No channels yet." : SIDEBAR_NO_MATCHES
                 }
               />
             )}

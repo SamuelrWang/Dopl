@@ -219,8 +219,8 @@ export function ChannelsV2MessagePane({
   /** `"page"` chrome only — the info toggle's pressed state. */
   infoOpen?: boolean;
   /** `"page"` chrome only — the viewer has favourited THIS CHANNEL
-   *  (`Channel.myFavoritedAt !== null`). Drives the bookmark's fill and its
-   *  `aria-pressed`. */
+   *  (`Channel.myFavoritedAt != null`, computed by the caller). Drives the
+   *  bookmark's fill and its `aria-pressed`. */
   favorited?: boolean;
   /** The page's refetch coordinator, handed straight to the composer's writes. */
   gate: MutationGate;
@@ -317,7 +317,17 @@ export function ChannelsV2MessagePane({
         onToggleFavorite={onToggleFavorite}
         onExitThread={onExitThread}
       />
-      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      {/* ⚠ THE SCROLLER OWNS THE TRANSCRIPT'S GUTTER, and it is the only thing
+          that may (Samuel, 2026-08-19: the rows ran "a little too close" to the
+          pane edge). `px-6` → `px-8` is one step on the scale this tree actually
+          uses — there is no `px-7` anywhere in `src/` — so a row's content edge
+          moves 24px → 32px. The rows' own `-mx-2 … px-2` pair cancels out of
+          that sum by design: it exists so the flash tint can bleed 8px wider
+          than the text WITHOUT moving it, which is why per-row margins are the
+          wrong knob here — they would compound with that pair and with the
+          avatar gutter, and the two chromes would drift apart. Both chromes and
+          both views scroll through this one box. */}
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-8 py-5">
         {/* ⚠ INSIDE THE SCROLLER, ABOVE THE ROWS — beside the transcript it is
             about, not in a footer a skimmer drops. Same placement rule the clip
             notes follow. */}

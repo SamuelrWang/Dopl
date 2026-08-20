@@ -453,12 +453,15 @@ describe("channels page", () => {
     ).toBeInTheDocument();
 
     // Nothing channel-scoped is on the header any more — not even mounted.
-    expect(screen.queryByRole("button", { name: "Channel settings" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Tools" })).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
 
-    // The settings popover is carried AS-IS; the kebab's four items are rows.
-    expect(screen.getByRole("button", { name: "Channel settings" })).toBeInTheDocument();
+    // ⚠ THE PER-CHANNEL SETTINGS ARE THE TAB ITSELF NOW (2026-08-19, second
+    // ruling the same day): the popover behind "Channel settings" was DELETED
+    // and its controls are inline, so the entry point to look for is the
+    // control, not a button that opens one. The kebab's four items are rows.
+    expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make public" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
