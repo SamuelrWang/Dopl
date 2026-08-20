@@ -7,18 +7,18 @@ import {
   HubSpotMark,
   NotionMark,
   SlackMark,
-} from "./framework-marks";
+} from "./ontology-marks";
 
 /**
  * Four static vignettes, one per Framework tab (mounted by
- * ./framework-section). No real data, nothing interactive.
+ * ./ontology-section). No real data, nothing interactive.
  *
  * ⚠ ONE vertical geometry across all four: three 44px items + 22px gaps = 176px
  * = every connector viewBox height here, so y = 22 / 88 / 154 are the item
  * centres in stages 1-4. Change a tile height or gap and you MUST change the
  * viewBox with it, or the curves leave the boxes they point at.
  *
- * ⚠ ONE box: marketing.css pins .lp-fw-window to the "Unify Data" height so the
+ * ⚠ ONE box: marketing.css pins .lp-ont-window to the "Unify Data" height so the
  * glass never resizes between tabs. A vignette that outgrows it is a bug in the
  * vignette, not a reason to unpin.
  */
@@ -38,7 +38,7 @@ function Avatar({ id }: { id: string }) {
     <img
       src={`/img/avatars/${id}.jpg`}
       alt=""
-      className="lp-fw-avatar"
+      className="lp-ont-avatar"
       width={30}
       height={30}
       draggable={false}
@@ -54,9 +54,12 @@ function Avatar({ id }: { id: string }) {
  * DIVERGING (4) is that read backwards.
  *
  * ⚠ SPLIT (2) is NOT diverging-minus-trunk. One shared origin (0,88) reads as
- * the 1-to-3 split it replaces. Each line gets its OWN origin, y = 34 / 88 /
- * 142 → row centres 22 / 88 / 154. Straight, no joint — over 12px, easing
- * cubics only read as a wobble.
+ * the 1-to-3 split it replaces. Each line gets its OWN origin, and since the
+ * rewrite that origin IS its destination: three PARALLEL horizontals at the row
+ * centres y = 22 / 88 / 154. No joint, no tilt. Earlier cuts angled the outer
+ * two (cubics, then diagonals) off a 34 / 142 origin; both read as a wobble in
+ * an otherwise ruled drawing, and the diagonals read as crooked on the real
+ * banner. Parallel-flat is the settled look — do not re-introduce a slope.
  */
 const FUNNEL_PATHS = [
   "M0 22C23 22 23 88 46 88",
@@ -75,8 +78,8 @@ const FANOUT_PATHS = [
 const FANOUT_JOINT = 26;
 
 /** ⚠ Top / middle / bottom, IN THAT ORDER — the stage-2 sequence draws them by
- *  DOM position (marketing.css › .lp-fw-fan-line:nth-child). */
-const SPLIT_PATHS = ["M0 34L72 22", "M0 88H72", "M0 142L72 154"];
+ *  DOM position (marketing.css › .lp-ont-fan-line:nth-child). */
+const SPLIT_PATHS = ["M0 22H72", "M0 88H72", "M0 154H72"];
 
 /**
  * Decorative — the boxes either side carry the meaning.
@@ -87,7 +90,7 @@ const SPLIT_PATHS = ["M0 34L72 22", "M0 88H72", "M0 142L72 154"];
 function Connector({
   paths,
   joint,
-  className = "lp-fw-funnel",
+  className = "lp-ont-funnel",
 }: {
   paths: readonly string[];
   joint: number;
@@ -128,11 +131,11 @@ function Connector({
  */
 function SplitConnector() {
   return (
-    <div className="lp-fw-fan" aria-hidden="true">
+    <div className="lp-ont-fan" aria-hidden="true">
       {SPLIT_PATHS.map((d) => (
-        <div key={d} className="lp-fw-fan-line">
+        <div key={d} className="lp-ont-fan-line">
           <svg
-            className="lp-fw-fan-svg"
+            className="lp-ont-fan-svg"
             viewBox="0 0 72 176"
             preserveAspectRatio="none"
             focusable="false"
@@ -158,39 +161,39 @@ const KB_FILES = ["positioning.md", "pricing-notes.md", "call-transcript.md"];
 
 export function KnowledgeWindow() {
   return (
-    <div className="lp-fw-win lp-fw-win--unify">
-      <div className="lp-fw-sources">
-        <div className="lp-fw-source">
+    <div className="lp-ont-win lp-ont-win--unify">
+      <div className="lp-ont-sources">
+        <div className="lp-ont-source">
           <HubSpotMark />
         </div>
-        <div className="lp-fw-source">
+        <div className="lp-ont-source">
           <SlackMark />
         </div>
-        <div className="lp-fw-source">
+        <div className="lp-ont-source">
           <NotionMark />
         </div>
       </div>
 
       <Connector paths={FUNNEL_PATHS} joint={FUNNEL_JOINT} />
 
-      <div className="lp-fw-kb">
-        <p className="lp-fw-win-label">Knowledge base</p>
-        <h3 className="lp-fw-win-title">Launch Runbook</h3>
+      <div className="lp-ont-kb">
+        <p className="lp-ont-win-label">Knowledge base</p>
+        <h3 className="lp-ont-win-title">Launch Runbook</h3>
 
-        <ul className="lp-fw-files">
+        <ul className="lp-ont-files">
           {KB_FILES.map((file) => (
-            <li key={file} className="lp-fw-file">
+            <li key={file} className="lp-ont-file">
               <FileText
                 size={14}
                 strokeWidth={1.5}
-                className="lp-fw-file-icon"
+                className="lp-ont-file-icon"
               />
               {file}
             </li>
           ))}
         </ul>
 
-        <p className="lp-fw-win-foot">3 sources · synced now</p>
+        <p className="lp-ont-win-foot">3 sources · synced now</p>
       </div>
     </div>
   );
@@ -225,15 +228,15 @@ const SAM_FIELDS: readonly SamField[] = [
 
 function TraitRows({ traits }: { traits: readonly Trait[] }) {
   return (
-    <ul className="lp-fw-traits">
+    <ul className="lp-ont-traits">
       {traits.map(([name, kind]) => (
-        <li key={name} className="lp-fw-trait">
-          <span className="lp-fw-trait-name">{name}</span>
+        <li key={name} className="lp-ont-trait">
+          <span className="lp-ont-trait-name">{name}</span>
           <span
             className={
               kind === "Skill"
-                ? "lp-fw-badge lp-fw-badge--skill"
-                : "lp-fw-badge"
+                ? "lp-ont-badge lp-ont-badge--skill"
+                : "lp-ont-badge"
             }
           >
             {kind}
@@ -246,23 +249,23 @@ function TraitRows({ traits }: { traits: readonly Trait[] }) {
 
 export function ObjectWindow() {
   return (
-    <div className="lp-fw-win lp-fw-win--objects">
-      <div className="lp-fw-tpl">
-        <p className="lp-fw-win-label">Object template</p>
-        <h3 className="lp-fw-win-title">Sales Rep</h3>
+    <div className="lp-ont-win lp-ont-win--objects">
+      <div className="lp-ont-tpl">
+        <p className="lp-ont-win-label">Object template</p>
+        <h3 className="lp-ont-win-title">Sales Rep</h3>
         <TraitRows traits={TEMPLATE_TRAITS} />
       </div>
 
       <SplitConnector />
 
-      <div className="lp-fw-stamp">
-        <ul className="lp-fw-instances">
+      <div className="lp-ont-stamp">
+        <ul className="lp-ont-instances">
           {PEOPLE.map((person) => (
-            <li key={person.id} className="lp-fw-inst">
+            <li key={person.id} className="lp-ont-inst">
               <Avatar id={person.id} />
-              <span className="lp-fw-who">
-                <span className="lp-fw-who-name">{person.name}</span>
-                <span className="lp-fw-who-role">Sales Rep</span>
+              <span className="lp-ont-who">
+                <span className="lp-ont-who-name">{person.name}</span>
+                <span className="lp-ont-who-role">Sales Rep</span>
               </span>
             </li>
           ))}
@@ -271,27 +274,27 @@ export function ObjectWindow() {
         {/* Expanded Sam — exists ONLY for the sequence. ⚠ Absolutely
             positioned: a panel in the flow would resize the column it collapses
             into. `aria-hidden` — the list above already says "Sam". */}
-        <div className="lp-fw-sam" aria-hidden="true">
-          <div className="lp-fw-sam-card">
-            {/* ⚠ Sized/padded to .lp-fw-inst's row so the collapse's last frame
+        <div className="lp-ont-sam" aria-hidden="true">
+          <div className="lp-ont-sam-card">
+            {/* ⚠ Sized/padded to .lp-ont-inst's row so the collapse's last frame
                 IS the compact card and the cross-fade has nothing to move. */}
-            <div className="lp-fw-sam-id">
+            <div className="lp-ont-sam-id">
               <Avatar id="sam" />
-              <span className="lp-fw-who">
-                <span className="lp-fw-who-name">Sam</span>
-                <span className="lp-fw-who-role">@sam</span>
+              <span className="lp-ont-who">
+                <span className="lp-ont-who-name">Sam</span>
+                <span className="lp-ont-who-role">@sam</span>
               </span>
             </div>
 
-            <ul className="lp-fw-traits lp-fw-sam-list">
+            <ul className="lp-ont-traits lp-ont-sam-list">
               {SAM_FIELDS.map(([name, value, kind]) => (
-                <li key={name} className="lp-fw-trait">
-                  <span className="lp-fw-trait-name">{name}</span>
+                <li key={name} className="lp-ont-trait">
+                  <span className="lp-ont-trait-name">{name}</span>
                   <span
                     className={
                       kind === "Skill"
-                        ? "lp-fw-badge lp-fw-badge--val lp-fw-badge--skill"
-                        : "lp-fw-badge lp-fw-badge--val"
+                        ? "lp-ont-badge lp-ont-badge--val lp-ont-badge--skill"
+                        : "lp-ont-badge lp-ont-badge--val"
                     }
                   >
                     {value}
@@ -318,36 +321,36 @@ const CLIENT_FIELDS: readonly (readonly [string, string])[] = [
 
 export function RelationshipWindow() {
   return (
-    <div className="lp-fw-win lp-fw-win--rel">
-      <div className="lp-fw-rel-row">
-        <ul className="lp-fw-chips">
+    <div className="lp-ont-win lp-ont-win--rel">
+      <div className="lp-ont-rel-row">
+        <ul className="lp-ont-chips">
           {PEOPLE.map((person) => (
-            <li key={person.id} className="lp-fw-chip">
+            <li key={person.id} className="lp-ont-chip">
               <Avatar id={person.id} />
-              <span className="lp-fw-chip-name">{person.name}</span>
+              <span className="lp-ont-chip-name">{person.name}</span>
             </li>
           ))}
         </ul>
 
         <Connector paths={FUNNEL_PATHS} joint={FUNNEL_JOINT} />
 
-        <div className="lp-fw-client">
-          <p className="lp-fw-win-label">Object · Client</p>
-          <h3 className="lp-fw-win-title">Acme Corp</h3>
+        <div className="lp-ont-client">
+          <p className="lp-ont-win-label">Object · Client</p>
+          <h3 className="lp-ont-win-title">Acme Corp</h3>
 
-          <dl className="lp-fw-fields">
+          <dl className="lp-ont-fields">
             {CLIENT_FIELDS.map(([key, value]) => (
-              <div key={key} className="lp-fw-field">
-                <dt className="lp-fw-field-key">{key}</dt>
-                <dd className="lp-fw-field-value">{value}</dd>
+              <div key={key} className="lp-ont-field">
+                <dt className="lp-ont-field-key">{key}</dt>
+                <dd className="lp-ont-field-value">{value}</dd>
               </div>
             ))}
           </dl>
         </div>
       </div>
 
-      <p className="lp-fw-rule">
-        <span className="lp-fw-badge">Rule</span>
+      <p className="lp-ont-rule">
+        <span className="lp-ont-badge">Rule</span>
         After call → update owner
       </p>
     </div>
@@ -375,13 +378,13 @@ const OUTCOMES: readonly {
 
 export function AgentWindow() {
   return (
-    <div className="lp-fw-win lp-fw-win--action">
-      <div className="lp-fw-actor">
-        <div className="lp-fw-actor-id">
+    <div className="lp-ont-win lp-ont-win--action">
+      <div className="lp-ont-actor">
+        <div className="lp-ont-actor-id">
           <Avatar id="sam" />
-          <span className="lp-fw-who">
-            <span className="lp-fw-who-name">Sam</span>
-            <span className="lp-fw-who-role">Sales Rep</span>
+          <span className="lp-ont-who">
+            <span className="lp-ont-who-name">Sam</span>
+            <span className="lp-ont-who-role">Sales Rep</span>
           </span>
         </div>
         <TraitRows traits={SAM_CONTEXT} />
@@ -389,10 +392,10 @@ export function AgentWindow() {
 
       {/* Below 560px the row becomes a column; these hairlines stand in for the
           horizontal wires, which squeezing cannot rotate. */}
-      <span className="lp-fw-vwire" aria-hidden="true" />
+      <span className="lp-ont-vwire" aria-hidden="true" />
 
       <svg
-        className="lp-fw-wire"
+        className="lp-ont-wire"
         viewBox="0 0 34 176"
         preserveAspectRatio="none"
         aria-hidden="true"
@@ -409,25 +412,25 @@ export function AgentWindow() {
         />
       </svg>
 
-      <div className="lp-fw-source lp-fw-brain">
+      <div className="lp-ont-source lp-ont-brain">
         <ClaudeMark />
       </div>
 
       <Connector
         paths={FANOUT_PATHS}
         joint={FANOUT_JOINT}
-        className="lp-fw-funnel lp-fw-funnel--out"
+        className="lp-ont-funnel lp-ont-funnel--out"
       />
 
-      <span className="lp-fw-vwire" aria-hidden="true" />
+      <span className="lp-ont-vwire" aria-hidden="true" />
 
-      <ul className="lp-fw-outcomes">
+      <ul className="lp-ont-outcomes">
         {OUTCOMES.map((outcome) => (
-          <li key={outcome.id} className="lp-fw-outcome">
-            <span className="lp-fw-source lp-fw-source--sm">
+          <li key={outcome.id} className="lp-ont-outcome">
+            <span className="lp-ont-source lp-ont-source--sm">
               {outcome.mark}
             </span>
-            <span className="lp-fw-outcome-text">{outcome.text}</span>
+            <span className="lp-ont-outcome-text">{outcome.text}</span>
           </li>
         ))}
       </ul>

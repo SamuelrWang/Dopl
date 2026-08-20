@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { audioContext, routeMediaElement } from "../audio-context";
 import { setSoundOn } from "../sound-preference";
 import { SpeakerIcon, SpeakerMutedIcon } from "./icons";
 
@@ -29,7 +30,16 @@ import { SpeakerIcon, SpeakerMutedIcon } from "./icons";
 
 const AUDIO_SRC = "/audio/landing-ambient.mp3";
 
-const VOLUME = 0.75;
+/** A TRIM on the master, not the loudness itself. The asset was re-mastered
+ *  +14.5 dB on 2026-08-16 and now peaks at -3.3 dB (re-measure with
+ *  `ffmpeg -i public/audio/landing-ambient.mp3 -af volumedetect -f null -`), so
+ *  this sits mid-scale deliberately: there is room to go up AND down from here.
+ *
+ *  ⚠ 1 is a HARD CEILING, not a tuning choice. `HTMLMediaElement.volume` is
+ *  spec'd to 0..1 and THROWS `IndexSizeError` above it, which `fadeTo` would hit
+ *  the moment a ramp landed. Wanting more than 1 means re-mastering the asset or
+ *  adding a Web Audio gain stage — it cannot be done from this constant. */
+const VOLUME = 0.6;
 
 /** Every start/stop AND every loop seam rides this ramp. Pause only after the
  *  ramp reaches silence. */
@@ -66,7 +76,10 @@ function fadeTo(el: HTMLAudioElement, holder: Fade, target: number, onDone?: () 
   const step = (now: number) => {
     const t = Math.min(1, (now - start) / FADE_MS);
     if (t < 1) {
-      el.volume = from + (target - from) * t;
+      // ⚠ Clamped: the interpolation can land a hair outside [0,1] on float
+      // error (observed -0.000221 fading to 0), and `HTMLMediaElement.volume`
+      // THROWS on out-of-range rather than clamping.
+      el.volume = Math.min(1, Math.max(0, from + (target - from) * t));
       holder.id = requestAnimationFrame(step);
     } else {
       land();
@@ -136,6 +149,30 @@ export function AmbientAudio() {
       void el.play().catch(() => {});
     };
 
+    /**
+     * ⚠ NO visibility handler here, deliberately. A `fadeTo`-based one cannot
+     * work: rAF stops the instant a tab hides, so its ramp lands via the
+     * ~1s-clamped timer backstop and reads as a hold-then-CUT. The tab-hide
+     * fade lives where it can actually run — the element is routed through the
+     * shared context's master bus (below), and `audio-context.ts ›
+     * armVisibility` ramps that bus on the AUDIO THREAD, which background
+     * throttling cannot touch. The element keeps playing (silently, into a
+     * suspended context) while hidden, so returning fades back in mid-track.
+     * Re-adding a pause or `el.volume` fade on visibilitychange here would
+     * fight that bus fade.
+     *
+     * ⚠ Routed via `routeMediaElement`, never a bare `createMediaElementSource`
+     * here: that call is once-per-element FOREVER, and StrictMode's double
+     * effect run makes a second call against the same element a certainty — the
+     * bare version left the bed captured by a disconnected source, permanently
+     * silent with a live-looking mute button. The helper caches the source per
+     * element and reconnects on remount. `el.volume` still applies on the
+     * routed path, so every ramp in this file (toggle, loop seam, start) works
+     * unchanged on top of the bus.
+     */
+    const ac = audioContext();
+    const bedSource = ac ? routeMediaElement(ac, el) : null;
+
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("timeupdate", onTimeUpdate);
@@ -167,6 +204,9 @@ export function AmbientAudio() {
       el.removeEventListener("pause", onPause);
       el.removeEventListener("timeupdate", onTimeUpdate);
       el.removeEventListener("ended", onEnded);
+      // Disconnect only — the source stays cached in audio-context for this
+      // element, and the next mount reconnects it (see routeMediaElement).
+      bedSource?.disconnect();
       cancelFade(holder);
       disarm();
     };

@@ -188,7 +188,11 @@ export function SiteNav() {
                 {label}
               </Link>
             ) : (
-              <a key={label} href="#">
+              // Placeholder until the page exists. preventDefault is
+              // load-bearing: a naked `#` navigation rewrites the URL to `/#`
+              // and jump-scrolls to top, tearing the scroll-scrubbed sections
+              // mid-animation.
+              <a key={label} href="#" onClick={(e) => e.preventDefault()}>
                 {label}
               </a>
             )
@@ -272,12 +276,29 @@ export function SiteNav() {
               role="menu"
               aria-label={MENU_LABEL}
             >
-              {/* TODO: no destination for Product yet — non-navigating. */}
-              <a role="menuitem" className="lp-nav-menu-item" href="#" onClick={() => closeMenu()}>
+              {/* TODO: no destination for Product yet — non-navigating.
+                  preventDefault keeps `#` from rewriting the URL to `/#`. */}
+              <a
+                role="menuitem"
+                className="lp-nav-menu-item"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  closeMenu();
+                }}
+              >
                 Product
               </a>
               {/* TODO: no destination for Services yet — non-navigating. */}
-              <a role="menuitem" className="lp-nav-menu-item" href="#" onClick={() => closeMenu()}>
+              <a
+                role="menuitem"
+                className="lp-nav-menu-item"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  closeMenu();
+                }}
+              >
                 Services
               </a>
               <Link

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { DOWNLOAD_URL } from "@/features/marketing/constants";
-import { Logo } from "@/features/marketing/components/logo";
+import { AUTH_GLASS_SLOT_ID } from "@/shared/layout/auth-split";
 import { InstallAnimation } from "./install-animation";
 
 export interface GetStartedScreenProps {
@@ -20,63 +21,79 @@ const AUTOSTART_DELAY_MS = 500;
  * accounts from landing "Get Started", and returning users bounced off a
  * retired app route (this page is the retirement plan's `/retired`) — hence
  * instruction copy. Heading promises three steps, so keep exactly three.
+ *
+ * ⚠ This is the FORM-COLUMN HALF of the shared `(auth)` split layout — the
+ * banner, glass and brand live in `src/app/(auth)/layout.tsx` and persist
+ * across the `/authenticate` → here navigation, which is what makes that
+ * transition seamless. The install animation is PORTALED onto the layout's
+ * glass (`AUTH_GLASS_SLOT_ID`); rendering it inline here would put it in the
+ * left column. Styling lives in `../get-started.css`, matched to the auth
+ * form column's type.
  */
 export function GetStartedScreen({ asset }: GetStartedScreenProps) {
   const sink = useAutoDownload();
 
   return (
-    <div className="lp gs">
-      <section className="gs-panel">
-        <header className="gs-brand">
-          <Logo />
-        </header>
+    <>
+      <div className="gs-copy">
+        <h1 className="gs-title">Open Dopl in 3 steps</h1>
 
-        <div className="gs-copy">
-          <h1 className="gs-title">Open Dopl in 3 steps:</h1>
+        <ol className="gs-steps">
+          <Step n={1}>Open your Downloads folder.</Step>
+          <Step n={2}>
+            {asset ? (
+              <>
+                Double-click <code className="gs-code">{asset}</code>.
+              </>
+            ) : (
+              <>Double-click the Dopl installer you just downloaded.</>
+            )}
+          </Step>
+          <Step n={3}>Drag Dopl into Applications, open it, and sign in.</Step>
+        </ol>
 
-          <ol className="gs-steps">
-            <li>Open your Downloads folder.</li>
-            <li>
-              {asset ? (
-                <>
-                  Double-click <code>{asset}</code>.
-                </>
-              ) : (
-                <>Double-click the Dopl installer you just downloaded.</>
-              )}
-            </li>
-            <li>Drag Dopl into Applications, open it, and sign in.</li>
-          </ol>
-
-          <p className="gs-retry">
-            Not working?{" "}
-            {/* ⚠ REAL link, not a re-run of the effect: auto-start fails
-                silently (`useAutoDownload`), so recovery must be a user click —
-                also the only navigation allowed to leave this page. */}
-            <a href={DOWNLOAD_URL}>Try again</a>.
-          </p>
+        <div className="gs-retry">
+          <span className="gs-retry-note">Not working?</span>
+          {/* ⚠ REAL link, not a re-run of the effect: auto-start fails silently
+              (`useAutoDownload`), so recovery must be a user click. Kit pill —
+              `auth-btn-3d` is the auth surfaces' button face. */}
+          <a href={DOWNLOAD_URL} className="auth-btn-3d gs-retry-btn">
+            Try again
+          </a>
         </div>
+      </div>
 
-        {/* Live region: the download starts silently, so this is the only
-            thing that says so. */}
-        <footer className="gs-footer">
-          <p className="gs-status" role="status">
-            <span className="gs-status-dot" aria-hidden="true" />
-            <span>
-              Downloading <span className="gs-status-file">{asset ?? "the Dopl installer"}</span>
-            </span>
-          </p>
-          <p className="gs-foot">macOS on Apple silicon.</p>
-        </footer>
-      </section>
-
-      <section className="gs-field">
+      <GlassSlot>
         <InstallAnimation />
-      </section>
+      </GlassSlot>
 
       {sink}
-    </div>
+    </>
   );
+}
+
+function Step({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <li className="gs-step">
+      <span className="gs-step-n">{n}</span>
+      <span className="gs-step-body">{children}</span>
+    </li>
+  );
+}
+
+/** Project children onto the shared layout's glass panel. Mount-gated: the
+ *  slot is layout-owned DOM, only findable client-side. The rAF defer keeps the
+ *  lookup out of the effect's synchronous body (react-hooks/set-state-in-effect)
+ *  and costs one frame nobody sees — the panel fades in over 500ms anyway. */
+function GlassSlot({ children }: { children: ReactNode }) {
+  const [target, setTarget] = useState<Element | null>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setTarget(document.getElementById(AUTH_GLASS_SLOT_ID));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return target ? createPortal(children, target) : null;
 }
 
 /**

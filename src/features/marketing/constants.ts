@@ -12,12 +12,13 @@ export const NAV_LINKS = ["Product", "Services", "Career", "Pricing", "About"] a
 export const GET_STARTED_LABEL = "Get Started";
 
 /**
- * Route: `src/app/signup/page.tsx`. NEW accounts only — middleware,
+ * Route: `src/app/(auth)/authenticate/page.tsx`, opened in sign-up by the
+ * `mode` param. NEW accounts only — middleware,
  * `/auth/callback`, reset-password and OAuth consent bounce existing accounts
  * to `/login`. ⚠ `signup` must stay in RESERVED_WORKSPACE_SLUGS
  * (`config/index.ts`) or a workspace can claim it.
  */
-export const GET_STARTED_URL = "/signup";
+export const GET_STARTED_URL = "/authenticate?mode=signup";
 
 export const MENU_LABEL = "Menu";
 

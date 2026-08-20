@@ -8,13 +8,15 @@ import {
   KnowledgeWindow,
   ObjectWindow,
   RelationshipWindow,
-} from "./framework-windows";
+} from "./ontology-windows";
 import { ArrowUpRight } from "./icons";
+import { ScrollReveal } from "./scroll-reveal";
+import { useGlassScrub } from "./use-glass-scrub";
 
 /**
- * "Framework" — four-stage tab tour. Window content IS the tab; vignettes live
- * in ./framework-windows. Add/reorder stages via STAGES.
- *
+ * "Ontology" — four-stage tab tour. Window content IS the tab; vignettes live
+ * in ./ontology-windows. Add/reorder stages via STAGES.
+ * *
  * ⚠ THE `key` IS LOAD-BEARING, not a fade detail. "Define Objects" is a ~4.7s
  * CSS sequence with no state of its own, and remount on tab change is the ONLY
  * thing that restarts it — drop the key and it plays once per page load.
@@ -57,10 +59,13 @@ const STAGES: readonly Stage[] = [
   },
 ];
 
-export function FrameworkSection() {
+export function OntologySection() {
   const [active, setActive] = useState(0);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const stage = STAGES[active];
+  // Tab-independent: the window height is pinned in CSS, so the full box is the
+  // same whichever stage is selected and this never sees `active`.
+  const { mode: glassMode, bannerRef, glassRef } = useGlassScrub();
 
   /** Roving tabindex: only the selected tab is tabbable, arrows move between. */
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -75,14 +80,14 @@ export function FrameworkSection() {
   }
 
   return (
-    <section className="lp-fw">
-      <div className="lp-fw-inner">
-        <p className="lp-fw-eyebrow">Framework</p>
-        <h2 className="lp-fw-heading">
+    <ScrollReveal className="lp-ont">
+      <div className="lp-ont-inner">
+        <p className="lp-ont-eyebrow">Ontology</p>
+        <h2 className="lp-ont-heading">
           Unify disconnected data into structured context systems
         </h2>
 
-        <div className="lp-fw-banner">
+        <div className="lp-ont-banner" data-glass={glassMode} ref={bannerRef}>
           {/* Decorative; the window on top carries the meaning. Plain <img>:
               static public/ file in a CSS-sized box. ⚠ Source is PORTRAIT —
               `object-position` in marketing.css keeps the peak in frame. */}
@@ -90,31 +95,46 @@ export function FrameworkSection() {
           <img
             src="/img/framework-banner.jpg"
             alt=""
-            className="lp-fw-banner-img"
+            className="lp-ont-banner-img"
             draggable={false}
           />
 
-          {/* Glass is static here, so backdrop-filter is safe — nothing
-              animates its box. */}
-          <div className="lp-fw-glass">
-            <LiquidGlass radius={20} className="lp-fw-glass-card">
+          {/* ⚠ The wrapper's box is SCRUBBED in `scrub` mode — square → full
+              rectangle and back, driven by ./use-glass-scrub. `staticMap`
+              goes with that for the reason hero-banner records: an animating
+              box would otherwise rebuild the displacement map every frame and
+              the <feImage> swap pops the refraction. */}
+          <div className="lp-ont-glass" ref={glassRef}>
+            <LiquidGlass
+              radius={20}
+              staticMap={glassMode === "scrub"}
+              className="lp-ont-glass-card"
+            >
               <div
-                key={stage.id}
-                id="lp-fw-panel"
+                id="lp-ont-panel"
                 role="tabpanel"
-                aria-labelledby={`lp-fw-tab-${stage.id}`}
-                className="lp-fw-window"
+                aria-labelledby={`lp-ont-tab-${stage.id}`}
+                className="lp-ont-window"
               >
-                {stage.window}
+                {/* ⚠ The key is on the CONTENT, not the white panel: the panel
+                    itself must sit fixed across tab switches (matching the dev
+                    terminal, which keys only its command line) — only what is
+                    inside fades. The key is still LOAD-BEARING for stage 2's
+                    stamp sequence: that ~4.7s CSS run has no state of its own
+                    and the remount of this wrapper is the only thing that
+                    restarts it. */}
+                <div key={stage.id} className="lp-ont-window-swap">
+                  {stage.window}
+                </div>
               </div>
             </LiquidGlass>
           </div>
         </div>
 
         <div
-          className="lp-fw-tabs"
+          className="lp-ont-tabs"
           role="tablist"
-          aria-label="Framework stages"
+          aria-label="Ontology stages"
           onKeyDown={onKeyDown}
         >
           {STAGES.map((item, i) => {
@@ -122,38 +142,38 @@ export function FrameworkSection() {
             return (
               <button
                 key={item.id}
-                id={`lp-fw-tab-${item.id}`}
+                id={`lp-ont-tab-${item.id}`}
                 ref={(node) => {
                   tabRefs.current[i] = node;
                 }}
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                aria-controls="lp-fw-panel"
+                aria-controls="lp-ont-panel"
                 tabIndex={selected ? 0 : -1}
-                className="lp-fw-tab"
+                className="lp-ont-tab"
                 data-active={selected}
                 onClick={() => setActive(i)}
               >
-                <span className="lp-fw-tab-title">{item.title}</span>
+                <span className="lp-ont-tab-title">{item.title}</span>
                 {selected ? (
-                  <span className="lp-fw-tab-blurb">{item.blurb}</span>
+                  <span className="lp-ont-tab-blurb">{item.blurb}</span>
                 ) : null}
               </button>
             );
           })}
         </div>
 
-        <div className="lp-fw-cta">
+        <div className="lp-ont-cta">
           <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
             Get started
             <ArrowUpRight size={14} />
           </a>
-          <a href={DOWNLOAD_URL} className="lp-fw-secondary">
+          <a href={DOWNLOAD_URL} className="lp-ont-secondary">
             Download the app
           </a>
         </div>
       </div>
-    </section>
+    </ScrollReveal>
   );
 }

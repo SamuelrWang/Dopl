@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { audioBus, audioContext, noiseBuffer } from "../audio-context";
 import { isSoundOn } from "../sound-preference";
 
 /**
@@ -13,7 +14,7 @@ import { isSoundOn } from "../sound-preference";
  * and jitter per press.
  *
  * ⚠ ONE delegated document listener, not a prop per button — the `.lp-btn`
- * markup is spread across nav, hero, plan cards, framework windows, `/pricing`
+ * markup is spread across nav, hero, plan cards, the Ontology windows, `/pricing`
  * and `/get-started`. Delegation also covers anything added later.
  *
  * ⚠ `pointerdown`, not `click`. `click` fires on RELEASE: press feedback that
@@ -26,7 +27,7 @@ import { isSoundOn } from "../sound-preference";
  * `.lp` stylesheet.
  */
 
-/** Peak gain of the transient. Full scale is 1; bed sits at 0.75, and a click
+/** Peak gain of the transient. Full scale is 1; bed now sits AT 1, and a click
  *  competing with it stops being punctuation. */
 const CLICK_VOLUME = 0.2;
 
@@ -50,41 +51,17 @@ const BODY_DECAY_S = 0.05;
  *  nobody hears. */
 const NOISE_S = 0.05;
 
-let ctx: AudioContext | null = null;
-let noise: AudioBuffer | null = null;
-
-/** ⚠ ONE context for the page. A fresh `AudioContext` per press leaks graph
- *  nodes and Chrome hard-caps the count — a chatty visitor eventually gets
- *  silence. Built on first press, not at mount, to avoid opening a suspended
- *  context the page may never use. */
-function audio(): AudioContext | null {
-  if (typeof AudioContext === "undefined") return null;
-  ctx ??= new AudioContext();
-  // Pre-gesture contexts start suspended; a gesture-time resume is what the
-  // autoplay policy wants. Sole caller is a pointerdown handler.
-  if (ctx.state === "suspended") void ctx.resume();
-  return ctx;
-}
-
-/** Filled once and reused — the bandpass throws most of ~2200 fresh random
- *  samples away anyway. */
-function noiseBuffer(ac: AudioContext): AudioBuffer {
-  if (noise) return noise;
-  const length = Math.floor(ac.sampleRate * NOISE_S);
-  noise = ac.createBuffer(1, length, ac.sampleRate);
-  const samples = noise.getChannelData(0);
-  for (let i = 0; i < length; i += 1) samples[i] = Math.random() * 2 - 1;
-  return noise;
-}
-
 function playClick(): void {
-  const ac = audio();
+  // ⚠ Context and noise are SHARED (`../audio-context`), not local. The banner
+  // hum needs the same one — a second `AudioContext` is not a second mixer,
+  // Chrome caps them per document and the page eventually goes silent.
+  const ac = audioContext();
   if (!ac) return;
   const t = ac.currentTime;
 
   // Layer 1 — transient: band-passed noise, open in 1ms, gone in ~26.
   const burst = ac.createBufferSource();
-  burst.buffer = noiseBuffer(ac);
+  burst.buffer = noiseBuffer(ac, NOISE_S);
 
   const band = ac.createBiquadFilter();
   band.type = "bandpass";
@@ -99,7 +76,7 @@ function playClick(): void {
   burstGain.gain.linearRampToValueAtTime(CLICK_VOLUME, t + 0.001);
   burstGain.gain.exponentialRampToValueAtTime(0.0001, t + CLICK_DECAY_S);
 
-  burst.connect(band).connect(burstGain).connect(ac.destination);
+  burst.connect(band).connect(burstGain).connect(audioBus(ac));
   burst.start(t);
   burst.stop(t + CLICK_DECAY_S + 0.01);
 
@@ -115,7 +92,7 @@ function playClick(): void {
   bodyGain.gain.linearRampToValueAtTime(BODY_VOLUME, t + 0.002);
   bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + BODY_DECAY_S);
 
-  body.connect(bodyGain).connect(ac.destination);
+  body.connect(bodyGain).connect(audioBus(ac));
   body.start(t);
   body.stop(t + BODY_DECAY_S + 0.01);
 
@@ -147,6 +124,15 @@ function shouldClick(event: PointerEvent): boolean {
 
 export function ClickSound() {
   useEffect(() => {
+    // ⚠ Built at MOUNT, not on first press, and the reason is the banner hum.
+    // A context created here starts suspended and arms `audio-context`'s
+    // one-shot gesture unlock immediately, so the visitor's FIRST click resumes
+    // it. Deferring construction to the first press meant the hum — which is
+    // driven by scroll, and scroll is not user activation — only armed the
+    // unlock once someone had already scrolled past it in silence, and then
+    // needed a second pass to be heard. A suspended context costs nothing.
+    audioContext();
+
     const onPointerDown = (event: PointerEvent) => {
       // Read at fire time, not mount: this handler outlives every toggle flip.
       if (!isSoundOn()) return;

@@ -1,5 +1,8 @@
+"use client";
+
 import { MultiplayerCard, type MultiplayerCardProps } from "./multiplayer-card";
 import { AgentProfileVisual, ChatVisual, ToolGridVisual } from "./multiplayer-visuals";
+import { useMultiplayerScrub } from "./use-multiplayer-scrub";
 
 const BENEFITS: MultiplayerCardProps[] = [
   {
@@ -19,19 +22,28 @@ const BENEFITS: MultiplayerCardProps[] = [
   },
 ];
 
+/** Markup only. Scroll maths, beats, mode selection: ./use-multiplayer-scrub. */
 export function MultiplayerSection() {
-  return (
-    <section className="lp-mp">
-      <div className="lp-mp-inner">
-        <p className="lp-mp-eyebrow">Multiplayer</p>
-        <h2 className="lp-mp-heading">Peer-to-peer agent collaboration</h2>
+  const { mode, sceneRef, cardsRef } = useMultiplayerScrub();
 
-        <div className="lp-mp-cards">
-          {BENEFITS.map((benefit) => (
-            <MultiplayerCard key={benefit.title} {...benefit} />
-          ))}
-        </div>
+  return (
+    <div className="lp-mp-scene" data-mode={mode} ref={sceneRef}>
+      <div className="lp-mp-stage">
+        <section className="lp-mp">
+          <div className="lp-mp-inner">
+            <p className="lp-mp-eyebrow">Multiplayer</p>
+            <h2 className="lp-mp-heading">Peer-to-peer agent collaboration</h2>
+
+            {/* ⚠ Cards are addressed as this row's CHILDREN by the engine —
+                keep it a plain list, one element per benefit. */}
+            <div className="lp-mp-cards" ref={cardsRef}>
+              {BENEFITS.map((benefit) => (
+                <MultiplayerCard key={benefit.title} {...benefit} />
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   );
 }

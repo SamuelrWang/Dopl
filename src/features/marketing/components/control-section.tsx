@@ -1,8 +1,15 @@
 import { ArrowRight, BadgeCheck, Check, Copy, MoreHorizontal } from "lucide-react";
 
 import { GET_STARTED_URL } from "../constants";
+import { ScrollReveal } from "./scroll-reveal";
 
-/** ⚠ Static on purpose — no hooks, no modes. Keep it a server component. */
+/** ⚠ Static on purpose — no hooks, no modes. Keep it a server component.
+ *
+ *  `<ScrollReveal>` is a client component and renders the `<section>` element
+ *  itself, but that is the ONLY client boundary: everything below is passed as
+ *  `children` and still arrives server-rendered. Do not "simplify" it by adding
+ *  `"use client"` here and calling a hook — that would pull the whole card,
+ *  bullet list and icon set into the bundle for one IntersectionObserver. */
 
 /** ⚠ Order is the argument: identity → consent → rules → record. */
 const BULLETS: readonly string[] = [
@@ -14,7 +21,7 @@ const BULLETS: readonly string[] = [
 
 export function ControlSection() {
   return (
-    <section className="lp-ctl">
+    <ScrollReveal className="lp-ctl">
       <div className="lp-ctl-inner">
         <div className="lp-ctl-copy">
           <p className="lp-ctl-eyebrow">Control</p>
@@ -34,10 +41,11 @@ export function ControlSection() {
               Learn more
               <ArrowRight size={14} strokeWidth={2} aria-hidden />
             </a>
-            {/* TODO: no contact route yet — placeholder, must not navigate. */}
-            <a href="#" className="lp-ctl-secondary">
-              Talk to the team
-            </a>
+            {/* TODO: no contact route yet — placeholder. No `href` on purpose:
+                this file is a server component (no handlers), and `href="#"`
+                would rewrite the URL to `/#` and jump-scroll mid-scrub. An
+                hrefless <a> keeps the styling and navigates nowhere. */}
+            <a className="lp-ctl-secondary">Talk to the team</a>
           </div>
         </div>
 
@@ -81,6 +89,6 @@ export function ControlSection() {
           </div>
         </div>
       </div>
-    </section>
+    </ScrollReveal>
   );
 }

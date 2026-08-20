@@ -1,246 +1,98 @@
-/* `/get-started` — post-auth download page. Two full-height fields, neither
-   scrolls at desktop (page IS the viewport).
+/* ── /get-started form column ────────────────────────────────────────────
+   The left half of the shared (auth) split layout. Everything here mirrors the
+   auth form column's type (login-form-core): same face via the layout, same
+   heading spec, same palette. Plain CSS on purpose — the auth surfaces style
+   with utility classes, but this feature keeps its own sheet so the column
+   renders identically regardless of build tooling. */
 
-   ⚠ SCOPED UNDER `.lp` — root carries BOTH `lp` and `gs`, so `--grotesk`,
-   `--ink`, `--line`, `--gutter` come from marketing.css; declare none here.
-   Field colours: left `--ink`, right `--rail-tile`/`--rail` (globals.css).
-   Illustration palette + clock: `install-animation.css`. */
-
-.gs {
-  /* One accent for page + illustration; `--link` = globals.css's only blue. */
-  --gs-accent: var(--link);
-
-  /* On-dark ink: alphas of one white, no new greys/hues — marketing.css has no
-     muted tier for dark surfaces. */
-  --gs-on-dark: #ffffff;
-  --gs-on-dark-body: rgba(255, 255, 255, 0.78);
-  --gs-on-dark-muted: rgba(255, 255, 255, 0.5);
-  --gs-on-dark-faint: rgba(255, 255, 255, 0.34);
-
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  /* No page scroll; `.gs-panel` has its own `overflow-y: auto` so a short
-     window still reaches the steps. */
-  overflow: hidden;
-  background: var(--ink);
-  display: grid;
-  grid-template-columns: 43fr 57fr;
-  /* ⚠ Explicit row required: `.gs-field` has `container-type: size` so it
-     contributes NOTHING to an auto row, leaving height to the copy column. */
-  grid-template-rows: minmax(0, 1fr);
-}
-
-/* ── Left field: the instructions ────────────────────────────────────── */
-
-.gs-panel {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 26px var(--gutter) 30px;
-  background: var(--ink);
-  color: var(--gs-on-dark);
-  overflow-y: auto;
-}
-
-.gs-brand {
-  flex: none;
-}
-
-/* `.lp-brand` paints itself `--ink` = this field's background; flip its ink. */
-.gs-brand .lp-brand {
-  color: var(--gs-on-dark);
-}
-
-/* ⚠ `flex-shrink: 0` — shrinkable, copy spills over the footer with no
-   scrollbar instead of scrolling. */
 .gs-copy {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 40px 0;
+  width: 100%;
+  max-width: 384px;
+  animation: loginFadeIn 0.6s ease-out both;
 }
 
-/* ⚠ `--font-playfair` is Newsreader, loaded by `next/font/google` in
-   src/app/layout.tsx (name predates the switch). KEEP `, Georgia, serif`:
-   undefined variable with no fallback invalidates the whole declaration and
-   silently inherits the grotesk. */
+/* Must match `login-form-core`'s heading: weight 400, same clamp + tracking. */
 .gs-title {
   margin: 0;
-  max-width: 7.4em;
-  font-family: var(--font-playfair), Georgia, serif;
-  font-size: clamp(34px, 3.6vw, 58px);
   font-weight: 400;
-  line-height: 1.06;
-  letter-spacing: -0.015em;
-  color: var(--gs-on-dark);
+  font-size: clamp(23px, 2.5vw, 37px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #181818;
 }
 
 .gs-steps {
-  margin: 34px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin: 36px 0 0;
   padding: 0;
   list-style: none;
-  counter-reset: gs-step;
+}
+.gs-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+}
+.gs-step-n {
+  flex: none;
   display: grid;
-  gap: 13px;
-  max-width: 30em;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: #f2f2f2;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #181818;
+}
+.gs-step-body {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #3c3c3c;
 }
 
-/* ⚠ Numeral out of flow, NOT a grid/flex sibling: step text is inline
-   (`Double-click <code>…</code>.`) and item-based layout breaks the sentence
-   into one item per node, one character wide. */
-.gs-steps li {
-  counter-increment: gs-step;
-  position: relative;
-  padding-left: 27px;
-  font-size: clamp(14px, 1.05vw, 16px);
-  line-height: 1.55;
-  color: var(--gs-on-dark-body);
-}
-
-.gs-steps li::before {
-  content: counter(gs-step) ".";
-  position: absolute;
-  left: 0;
-  top: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--gs-on-dark-muted);
-}
-
-.gs-steps code {
-  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9em;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.09);
-  color: var(--gs-on-dark);
-  word-break: break-all;
+/* The dmg name — reads as an artifact, not prose: mono, chip background,
+   hairline. */
+.gs-code {
+  padding: 2px 8px 3px;
+  border-radius: 7px;
+  background: #f4f4f5;
+  border: 1px solid #e6e6e8;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  color: #181818;
+  white-space: nowrap;
 }
 
 .gs-retry {
-  margin: 26px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 44px;
+}
+.gs-retry-note {
   font-size: 13.5px;
-  color: var(--gs-on-dark-muted);
+  color: #9a9a9a;
 }
-
-.gs-retry a {
-  color: var(--gs-on-dark);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* ── Bottom-left: live status ─────────────────────────────────────────── */
-.gs-footer {
-  flex: none;
-  margin-top: auto;
-  /* ⚠ padding, not margin: stacked layout leaves `margin-top: auto` no free
-     space to eat. */
-  padding-top: 36px;
-  display: grid;
-  gap: 7px;
-}
-
-.gs-status {
+/* The kit pill (`auth-btn-3d`, globals.css) carries the surface; this only
+   sizes it — small, like the auth submit at reduced scale. */
+.gs-retry-btn {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--gs-on-dark-muted);
-}
-
-.gs-status-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
+  height: 38px;
+  padding: 0 20px;
   border-radius: 999px;
-  background: var(--gs-accent);
-  animation: gs-pulse 1.6s ease-in-out infinite;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
 }
 
-.gs-status-file {
-  color: var(--gs-on-dark-body);
-}
-
-.gs-foot {
-  margin: 0;
-  font-size: 12px;
-  color: var(--gs-on-dark-faint);
-}
-
-@keyframes gs-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
-/* Download frame. ⚠ Zero-sized, NOT display:none — a display:none frame is
-   not guaranteed to load, and the load is the point. Absolute so it is not a
-   grid item and cannot open a row. */
 .gs-sink {
   position: absolute;
   width: 0;
   height: 0;
   border: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* ── Right field: the illustration's surface ─────────────────────────── */
-
-/* ⚠ `container-type: size` is load-bearing: the illustration is a fixed coord
-   space scaled by ONE factor off this element's box (`install-animation.css`).
-   Container units make that factor read the FIELD, not the viewport — the only
-   reason the same scale works in the stacked layout. */
-.gs-field {
-  position: relative;
-  min-width: 0;
-  overflow: hidden;
-  background: linear-gradient(180deg, var(--rail-tile) 0%, var(--rail) 100%);
-  container-type: size;
-}
-
-/* ── Responsive ──────────────────────────────────────────────────────── */
-
-/* Below 900px fields stack: instructions first, illustration at a fixed
-   proportion of width. Crop is the field's `overflow`, not the viewport's. */
-@media (max-width: 900px) {
-  .gs {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    overflow-y: auto;
-  }
-
-  .gs-panel {
-    overflow: visible;
-    padding-bottom: 44px;
-  }
-
-  .gs-copy {
-    padding: 44px 0 0;
-  }
-
-  .gs-footer {
-    padding-top: 30px;
-  }
-
-  .gs-field {
-    aspect-ratio: 640 / 620;
-  }
-}
-
-/* ── Reduced motion ──────────────────────────────────────────────────── */
-
-/* Dot stops too — infinite pulse is exactly what the preference asks about,
-   and the sentence beside it already carries the meaning. */
-@media (prefers-reduced-motion: reduce) {
-  .gs-status-dot {
-    animation: none;
-  }
 }

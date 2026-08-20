@@ -1,8 +1,8 @@
 /**
- * Vendor marks for ./framework-windows, each on its own official grid.
+ * Vendor marks for ./ontology-windows, each on its own official grid.
  *
  * ⚠ INLINE SVG deliberately — no network request, no CDN hotlink. Sizing lives
- * in marketing.css (.lp-fw-source-mark / .lp-fw-source-img); nothing here
+ * in marketing.css (.lp-ont-source-mark / .lp-ont-source-img); nothing here
  * carries a dimension.
  */
 
@@ -54,7 +54,7 @@ const GMAIL_PATHS: readonly (readonly [string, string])[] = [
 export function HubSpotMark() {
   return (
     <svg
-      className="lp-fw-source-mark"
+      className="lp-ont-source-mark"
       viewBox="0 0 24 24"
       role="img"
       aria-label="HubSpot"
@@ -67,7 +67,7 @@ export function HubSpotMark() {
 export function SlackMark() {
   return (
     <svg
-      className="lp-fw-source-mark"
+      className="lp-ont-source-mark"
       viewBox="0 0 24 24"
       role="img"
       aria-label="Slack"
@@ -82,7 +82,7 @@ export function SlackMark() {
 export function NotionMark() {
   return (
     <svg
-      className="lp-fw-source-mark"
+      className="lp-ont-source-mark"
       viewBox="0 0 24 24"
       role="img"
       aria-label="Notion"
@@ -95,7 +95,7 @@ export function NotionMark() {
 export function ClaudeMark() {
   return (
     <svg
-      className="lp-fw-source-mark"
+      className="lp-ont-source-mark"
       viewBox="0 0 24 24"
       role="img"
       aria-label="Claude"
@@ -108,7 +108,7 @@ export function ClaudeMark() {
 export function GmailMark() {
   return (
     <svg
-      className="lp-fw-source-mark"
+      className="lp-ont-source-mark"
       viewBox={GMAIL_VIEWBOX}
       role="img"
       aria-label="Gmail"
@@ -127,7 +127,7 @@ export function DoplMark() {
     <img
       src="/favicons/android-chrome-512x512.png"
       alt="Dopl"
-      className="lp-fw-source-img"
+      className="lp-ont-source-img"
       width={19}
       height={19}
     />

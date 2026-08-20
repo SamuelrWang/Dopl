@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createBannerHum } from "../banner-hum";
+import { clamp01, ease, easeOut, lerp, ramp } from "../motion";
 
 /**
  * Scroll-scrub engine for the pinned banner scene. Markup: hero-banner.tsx;
@@ -24,22 +26,28 @@ import { useEffect, useRef, useState } from "react";
  */
 
 /** Scrub breakpoints, in progress units (0→1 across the pinned range). */
-export const CURSOR_START = 0.05;
-export const CURSOR_END = 0.28;
+const CURSOR_START = 0.05;
+const CURSOR_END = 0.28;
 /** Press: dip starts, peaks at the click, cursor back up by DIP_END. */
-export const PRESS_START = 0.28;
-export const CLICK_AT = 0.3;
-export const DIP_END = 0.325;
+const PRESS_START = 0.28;
+const CLICK_AT = 0.3;
+const DIP_END = 0.325;
 /** Progress must fall this far below CLICK_AT before the ripple re-arms. */
-export const CLICK_REARM = 0.02;
-export const EXPAND_START = 0.36;
-export const EXPAND_END = 0.75;
-export const NOTIF_FADE_START = 0.36;
-export const NOTIF_FADE_END = 0.5;
-export const CURSOR_FADE_START = 0.36;
-export const CURSOR_FADE_END = 0.5;
-export const SLOT_FADE_START = 0.8;
-export const SLOT_FADE_END = 0.95;
+const CLICK_REARM = 0.02;
+const EXPAND_START = 0.36;
+const EXPAND_END = 0.75;
+const NOTIF_FADE_START = 0.36;
+const NOTIF_FADE_END = 0.5;
+const CURSOR_FADE_START = 0.36;
+const CURSOR_FADE_END = 0.5;
+/** ⚠ The white demo slot is a threshold FLIP with hysteresis, never a scrubbed
+ *  ramp — scrubbed, a scroll stopping mid-band parks it half-transparent. The
+ *  engine writes only 0 or 1 into `--lp-slot-opacity`; the fixed-duration fade
+ *  is the CSS `transition` on `.lp-banner-demo-slot`. Shows crossing SHOW_AT
+ *  forward, hides falling below HIDE_AT — the gap keeps scroll jitter at the
+ *  boundary from strobing it. */
+const SLOT_SHOW_AT = 0.85;
+const SLOT_HIDE_AT = 0.8;
 
 /**
  * Glass geometry. Start = notification seat (top-right of picture); end = inset.
@@ -64,15 +72,6 @@ const MIN_SCRUB_WIDTH = 900;
  * `scrub`   — the pinned scene.
  */
 export type BannerMode = "static" | "reduced" | "scrub";
-
-const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-/** smoothstep. */
-const ease = (t: number) => t * t * (3 - 2 * t);
-/** easeOutQuad. Quad, not cubic: cubic spent the back half of the travel range
- *  creeping through the last few percent of the path. */
-const easeOut = (t: number) => 1 - (1 - t) ** 2;
-const ramp = (p: number, from: number, to: number) => clamp01((p - from) / (to - from));
 
 type Box = { x: number; y: number; w: number; h: number };
 type Point = { x: number; y: number };
@@ -168,6 +167,14 @@ export function useBannerScrub() {
     let frame = 0;
     // Ripple's whole state — the one beat not a function of progress.
     let armed = true;
+    // The slot flip's whole state; `slotFirst` forces the initial write so a
+    // scene entered mid-scroll lands on the right side without a crossing.
+    let slotShown = false;
+    let slotFirst = true;
+    // Low generator hum under the expansion. One voice per live scene, released
+    // with it; idle until the expansion actually moves. Position sets presence,
+    // scroll speed sets swell — see ../banner-hum.
+    const hum = createBannerHum();
 
     // ⚠ EXACT box every frame, no buckets, no residual scale. LiquidGlass
     // `staticMap` builds the displacement map once and stretches it with the
@@ -186,6 +193,10 @@ export function useBannerScrub() {
       const t = ease(ramp(p, EXPAND_START, EXPAND_END));
       const box = glassBox(W, H, t);
 
+      // The EASED value deliberately: the hum should track the growth the eye
+      // sees, which slows at both ends, not the raw scroll behind it.
+      hum.update(t);
+
       glass.style.width = `${box.w}px`;
       glass.style.height = `${box.h}px`;
       glass.style.transform = `translate3d(${box.x}px, ${box.y}px, 0)`;
@@ -203,7 +214,13 @@ export function useBannerScrub() {
         "--lp-notif-opacity",
         `${1 - ramp(p, NOTIF_FADE_START, NOTIF_FADE_END)}`,
       );
-      scene.style.setProperty("--lp-slot-opacity", `${ramp(p, SLOT_FADE_START, SLOT_FADE_END)}`);
+      // 0 or 1 only — the CSS transition is the fade. See SLOT_SHOW_AT.
+      const slotNext = slotShown ? p > SLOT_HIDE_AT : p >= SLOT_SHOW_AT;
+      if (slotNext !== slotShown || slotFirst) {
+        slotShown = slotNext;
+        scene.style.setProperty("--lp-slot-opacity", slotShown ? "1" : "0");
+      }
+      slotFirst = false;
 
       if (ripple) {
         if (armed && p >= CLICK_AT) {
@@ -228,13 +245,32 @@ export function useBannerScrub() {
       if (!frame) frame = requestAnimationFrame(render);
     };
 
+    /** ⚠ Back/forward-cache revival. Navigating away froze this document with
+     *  `frame` possibly holding a scheduled rAF id; some engines discard that
+     *  callback instead of resuming it, and then the `if (!frame)` latch in
+     *  `schedule` swallows every scroll event forever — the whole scene is
+     *  dead until a manual reload. On a persisted pageshow the id is worthless:
+     *  drop the latch and paint the restored scroll position immediately. (If
+     *  the engine DID keep the callback it just runs `render` twice — both
+     *  reset `frame`, so the double fire is harmless.) */
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      frame = 0;
+      render();
+    };
+
     render();
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule, { passive: true });
+    window.addEventListener("pageshow", onPageShow);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
+      window.removeEventListener("pageshow", onPageShow);
+      // Owns oscillators and a rAF of its own; neither is reachable once this
+      // effect is gone, so it has to be told.
+      hum.dispose();
       // Hand the boxes back to the stylesheet when mode flips out of scrub.
       glass.style.cssText = "";
       cursor.style.cssText = "";

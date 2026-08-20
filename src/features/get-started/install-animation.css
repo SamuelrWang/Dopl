@@ -1,360 +1,381 @@
-/* `/get-started` install illustration — COMPOSITION only. Page shell + copy:
-   `get-started.css`. Timeline: `install-animation-motion.css`. ⚠ Positions
-   here and keyframes there share one coordinate space — edit in sync.
+/* ── /get-started install animation ─────────────────────────────────────
+   The DMG window portaled onto the auth layout's glass panel. Markup:
+   features/get-started/components/install-animation.tsx.
 
-   ⚠ ONE FIXED COORDINATE SPACE: 640×660, scaled whole by `--gs-k`. Every
-   position is a literal px pair; a percentage layout puts the cursor beside
-   the folder at one width and inside it at another. `--gs-k` derives from the
-   FIELD (container units — hence `container-type: size` next door), not the
-   viewport, so one factor is correct in the stacked layout too.
+   ONE clock (`--gs-t`) for every track — the beats below are % of it, so a
+   tempo change is one edit and nothing can drift:
 
-   `--gs-accent` declared on `.gs` in `get-started.css`; greys here are local. */
+      0–16%   rest
+     16–30%   cursor flies in from the lower right, decelerating onto the icon
+     30–34%   press (cursor dips, icon presses)
+     34–56%   drag: ghost + cursor arc to Applications
+     56–62%   drop: ghost lands in the folder, folder receives it (bounce)
+     60–72%   green check pops; cursor drifts away and fades
+     72–90%   hold on the finished state
+     90–100%  everything fades back to rest
 
-.gs-field {
-  --gs-chrome: #f6f6f7; /* window/toolbar fill */
-  --gs-chrome-line: #dcdcdf; /* window hairline */
-  --gs-page: #ffffff; /* the "web page" and the volume's body */
-  --gs-tile: #f1f1f3; /* icon tile at rest */
-  --gs-tile-hot: color-mix(in srgb, var(--gs-accent) 12%, #ffffff);
-  --gs-ghost: #c9c9cf; /* traffic lights, arrow */
-  --gs-label: #6a6a72; /* icon labels, toolbar glyphs, window title */
-  --gs-radius: 12px;
+   ⚠ Curved, natural motion comes from SPLIT AXES: X and Y are separate
+   keyframe tracks on nested wrappers with different easings per segment. Do
+   not collapse them into one translate track — a single track moves on a
+   straight line and reads as a machine.
 
-  /* ⚠ One clock: every keyframe is a percentage of THIS, which is what keeps
-     ten independent animations in step with no animation-delay to drift. */
-  --gs-dur: 11s;
-}
+   ⚠ Coordinates are px in a fixed 400×250 stage, centred in the glass and
+   clipped by it if the panel runs narrow (the split layout hides the whole
+   right pane below md, so the exposure is a band of mid widths). Keep new
+   positions inside the stage. */
 
-/* Smaller of two fits: width keeps the browser fragment bleeding past the left
-   edge, height keeps the window mock's bottom (stage y 618) above the fold on a
-   short wide field. Length ÷ length = the plain number `scale()` wants. */
-.gs-stage-frame {
-  --gs-k: min(calc(100cqw / 640px), calc(100cqh / 636px));
+.gs-glass-pad {
   position: absolute;
   inset: 0;
-}
-
-.gs-stage {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 640px;
-  height: 660px;
-  transform: scale(var(--gs-k));
-  transform-origin: top left;
-}
-
-/* ── The browser fragment ────────────────────────────────────────────── */
-
-/* Negative left AND top — field's `overflow: hidden` crops it into a window
-   past the screen corner. Only right corners visible, so only they round. */
-.gs-browser {
-  position: absolute;
-  left: -72px;
-  top: -40px;
-  width: 620px;
-  height: 150px;
-  border: 1px solid var(--gs-chrome-line);
-  border-radius: 0 var(--gs-radius) var(--gs-radius) 0;
-  background: var(--gs-chrome);
-  overflow: hidden;
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.3);
-  animation: gs-browser var(--gs-dur) linear infinite;
-}
-
-.gs-tab {
-  position: absolute;
-  left: 96px;
-  top: 22px;
-  width: 190px;
-  height: 40px;
-  border-radius: 8px 8px 0 0;
-  background: var(--gs-page);
-}
-
-.gs-toolbar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 62px;
-  height: 44px;
-  background: var(--gs-chrome);
-  border-bottom: 1px solid var(--gs-chrome-line);
-}
-
-/* ⚠ Absolute, not flex: cursor click target is a literal stage coordinate,
-   so the downloads button must not move when a sibling's width changes. */
-.gs-tool {
-  position: absolute;
-  top: 14px;
-  width: 16px;
-  height: 16px;
-  color: var(--gs-label);
-}
-
-.gs-tool--reload {
-  left: 26px;
-}
-
-.gs-tool--share {
-  left: 508px;
-}
-
-.gs-tool--newtab {
-  left: 542px;
-}
-
-.gs-tool--tabs {
-  left: 576px;
-}
-
-.gs-urlbar {
-  position: absolute;
-  left: 54px;
-  top: 9px;
-  width: 300px;
-  height: 26px;
-  border-radius: 999px;
-  background: var(--gs-page);
-  border: 1px solid var(--gs-chrome-line);
-}
-
-/* Downloads button: highlighted at REST (file just arrived), pressed on the beat. */
-.gs-tray {
-  position: absolute;
-  left: 468px;
-  top: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--gs-accent) 40%, #ffffff);
-  background: var(--gs-tile-hot);
-  color: var(--gs-accent);
-  animation: gs-tray var(--gs-dur) linear infinite;
-}
-
-.gs-page-body {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 106px;
-  bottom: 0;
-  background: var(--gs-page);
-}
-
-/* ── The download chip that drops out of the toolbar ─────────────────── */
-
-/* ⚠ Stage-level sibling, not a child of the fragment: hangs BELOW the
-   fragment's bottom edge and must not inherit its recede. `left` is chosen
-   so the tray button's centre (stage x 409) falls inside it. */
-.gs-chip {
-  position: absolute;
-  left: 236px;
-  top: 92px;
-  width: 210px;
-  padding: 11px 13px;
-  border: 1px solid var(--gs-chrome-line);
-  border-radius: 10px;
-  background: var(--gs-page);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
-  animation: gs-chip var(--gs-dur) linear infinite;
-}
-
-.gs-chip-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.gs-chip-icon {
-  border-radius: 5px;
-}
-
-.gs-chip-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.gs-chip-track {
-  margin-top: 9px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--gs-tile);
+  display: grid;
+  place-items: center;
   overflow: hidden;
 }
 
-.gs-chip-bar {
-  height: 100%;
-  width: 0;
-  border-radius: 999px;
-  background: var(--gs-accent);
-  animation: gs-chip-bar var(--gs-dur) linear infinite;
-}
-
-/* ── The mounted volume, lower right ─────────────────────────────────── */
-
+/* The white panel IS the Finder window. */
 .gs-dmg {
-  position: absolute;
-  left: 176px;
-  top: 322px;
-  width: 440px;
-  height: 296px;
-  border: 1px solid var(--gs-chrome-line);
-  border-radius: 14px;
-  background: var(--gs-page);
+  position: relative;
+  width: min(400px, 92%);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.14),
+    0 10px 22px rgba(8, 10, 15, 0.28),
+    0 30px 60px rgba(8, 10, 15, 0.3);
   overflow: hidden;
-  box-shadow: 0 34px 74px rgba(0, 0, 0, 0.36);
-  animation: gs-dmg var(--gs-dur) linear infinite;
+  animation: loginFadeIn 0.5s ease-out 0.15s both;
 }
 
+/* Titlebar — the part that most says "macOS": real traffic-light colours,
+   centred title, the subtle top-light gradient Finder uses. */
 .gs-dmg-bar {
   position: relative;
-  height: 40px;
-  background: var(--gs-chrome);
-  border-bottom: 1px solid var(--gs-chrome-line);
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  background: linear-gradient(#fafafa, #f0f0f0);
+  border-bottom: 1px solid #e2e2e2;
 }
-
 .gs-lights {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
   display: inline-flex;
   gap: 8px;
 }
-
 .gs-light {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
-  background: var(--gs-ghost);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
 }
-
+.gs-light--close {
+  background: #ff5f57;
+}
+.gs-light--min {
+  background: #febc2e;
+}
+.gs-light--zoom {
+  background: #28c840;
+}
 .gs-dmg-title {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  transform: translateX(-50%);
   font-size: 13px;
-  font-weight: 500;
-  color: var(--gs-label);
+  font-weight: 600;
+  color: #4a4a4a;
 }
 
-.gs-dmg-glyph {
-  border-radius: 4px;
-}
-
+/* Body: icon → Applications, the canonical DMG layout. */
 .gs-dmg-body {
   position: relative;
-  height: calc(100% - 40px);
+  height: 212px;
+  background: #fbfbfd;
 }
-
-/* ⚠ Both tiles share the cursor track's coordinate space. */
-.gs-tile {
+.gs-well {
   position: absolute;
-  top: 58px;
-  width: 112px;
-  height: 112px;
-  border-radius: 20px;
+  top: 46px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  width: 120px;
 }
-
-.gs-tile--app {
-  left: 62px;
-  animation: gs-drag var(--gs-dur) linear infinite;
+.gs-well--app {
+  left: 34px;
 }
-
-.gs-tile--folder {
-  left: 246px;
-  border: 1px dashed var(--gs-chrome-line);
-  background: var(--gs-tile);
-  animation: gs-folder var(--gs-dur) linear infinite;
+.gs-well--apps {
+  right: 34px;
 }
-
 .gs-app-icon {
-  width: 96px;
-  height: 96px;
-  border-radius: 22px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+  width: 78px;
+  height: 78px;
+  border-radius: 17px;
+  animation: gs-app-press var(--gs-t) linear infinite;
 }
-
 .gs-folder-icon {
-  width: 74px;
-  height: 74px;
-  color: var(--gs-accent);
+  width: 84px;
+  height: 70px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+  animation: gs-folder-receive var(--gs-t) linear infinite;
 }
-
-.gs-tile-label {
-  position: absolute;
-  top: 178px;
-  width: 112px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--gs-label);
+.gs-well-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #3c3c3c;
 }
-
-/* Label fades with its icon but must NOT travel — a sliding word reads as a
-   bug, not a drag. Opacity only, on the icon's own track. */
-.gs-tile-label--app {
-  left: 62px;
-  animation: gs-drag-label var(--gs-dur) linear infinite;
-}
-
-.gs-tile-label--folder {
-  left: 246px;
-}
-
 .gs-arrow {
   position: absolute;
-  left: 182px;
-  top: 107px;
+  left: 50%;
+  top: 84px;
   width: 56px;
-  color: var(--gs-ghost);
+  transform: translateX(-50%);
+  color: #b8b8bd;
 }
 
+/* Check badge on the folder, macOS-green. */
 .gs-check {
   position: absolute;
-  left: 336px;
-  top: 46px;
-  width: 26px;
-  height: 26px;
+  right: 16px;
+  top: 52px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
-  background: var(--gs-accent);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #28c840;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   opacity: 0;
-  animation: gs-check var(--gs-dur) linear infinite;
+  animation: gs-check-pop var(--gs-t) linear infinite;
 }
 
-/* ── The cursor ──────────────────────────────────────────────────────── */
-
-/* ⚠ Negative margin puts the arrow's TIP on the translate coordinate — every
-   keyframe in the motion file reads as "where it points". */
+/* ── The travellers ──────────────────────────────────────────────────────
+   Ghost and cursor share waypoint GEOMETRY but not easings — the ghost is
+   carried (steady), the hand leads (decelerating into each stop). Both sit at
+   the app icon's centre at rest; the cursor tip meets the icon there. */
+.gs-ghost-y,
+.gs-cursor-y {
+  position: absolute;
+  left: 94px; /* app icon centre x */
+  top: 85px; /* app icon centre y */
+  width: 0;
+  height: 0;
+}
+.gs-ghost {
+  position: absolute;
+  left: -39px;
+  top: -39px;
+  width: 78px;
+  height: 78px;
+  border-radius: 17px;
+  opacity: 0;
+}
 .gs-cursor {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 30px;
-  height: 30px;
-  margin: -6px 0 0 -6px;
-  color: var(--ink);
-  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.38));
-  animation: gs-cursor var(--gs-dur) linear infinite;
+  width: 17px;
+  height: 24px;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
 }
 
-.gs-cursor-edge {
-  stroke: #ffffff;
+.gs-cursor-x {
+  animation: gs-cursor-x var(--gs-t) linear infinite;
+}
+.gs-cursor-y {
+  animation: gs-cursor-y var(--gs-t) linear infinite;
+}
+.gs-cursor {
+  animation: gs-cursor-life var(--gs-t) linear infinite;
+}
+.gs-ghost-x {
+  animation: gs-ghost-x var(--gs-t) linear infinite;
+}
+.gs-ghost-y {
+  animation: gs-ghost-y var(--gs-t) linear infinite;
+}
+.gs-ghost {
+  animation: gs-ghost-life var(--gs-t) linear infinite;
 }
 
+/* X waypoints. 212 = distance app centre → folder centre. The cursor starts
+   beyond the window's lower-right and lands ON the icon with a long
+   deceleration; the exit drifts right and down. */
+@keyframes gs-cursor-x {
+  0%,
+  16% {
+    transform: translateX(260px);
+    animation-timing-function: cubic-bezier(0.16, 0.8, 0.3, 1);
+  }
+  30%,
+  34% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  56%,
+  62% {
+    transform: translateX(212px);
+    animation-timing-function: ease-in;
+  }
+  74%,
+  100% {
+    transform: translateX(300px);
+  }
+}
+@keyframes gs-cursor-y {
+  0%,
+  16% {
+    transform: translateY(170px);
+    animation-timing-function: cubic-bezier(0.3, 0.6, 0.35, 1);
+  }
+  30%,
+  34% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  /* The arc's crest: the hand lifts mid-drag rather than tracking level. */
+  45% {
+    transform: translateY(-16px);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
+  }
+  56%,
+  62% {
+    transform: translateY(0);
+    animation-timing-function: ease-in;
+  }
+  74%,
+  100% {
+    transform: translateY(150px);
+  }
+}
+/* Press dip + fade-out on exit. */
+@keyframes gs-cursor-life {
+  0%,
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  32% {
+    transform: scale(0.86);
+  }
+  34%,
+  56% {
+    transform: scale(1);
+  }
+  62% {
+    opacity: 1;
+  }
+  72%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Ghost: appears at the press, is CARRIED (flatter easing than the hand),
+   shrinks slightly into the folder at the drop, gone until next lap. */
+@keyframes gs-ghost-x {
+  0%,
+  34% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  56%,
+  100% {
+    transform: translateX(212px);
+  }
+}
+@keyframes gs-ghost-y {
+  0%,
+  34% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
+  }
+  45% {
+    transform: translateY(-16px);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
+  }
+  56%,
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes gs-ghost-life {
+  0%,
+  33% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  35%,
+  56% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0;
+    transform: scale(0.42);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The stationary pieces' reactions. */
+@keyframes gs-app-press {
+  0%,
+  30%,
+  34%,
+  100% {
+    transform: scale(1);
+  }
+  32% {
+    transform: scale(0.96);
+  }
+}
+@keyframes gs-folder-receive {
+  0%,
+  56% {
+    transform: scale(1);
+  }
+  59% {
+    transform: scale(1.1);
+  }
+  62%,
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes gs-check-pop {
+  0%,
+  58% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  63%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* One clock. ~9s: unhurried, with a long rest so it reads as a demonstration
+   rather than a gif. */
+.gs-dmg {
+  --gs-t: 9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-dmg *,
+  .gs-app-icon,
+  .gs-folder-icon {
+    animation: none !important;
+  }
+  /* Rest state, plus the outcome: the check shown, travellers hidden. */
+  .gs-check {
+    opacity: 1;
+  }
+  .gs-cursor,
+  .gs-ghost {
+    display: none;
+  }
+}

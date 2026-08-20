@@ -1,0 +1,56 @@
+/* Playground-only chrome. The shell geometry (surface / sidebar / brand / nav)
+   is REUSED from shared/layout/app-shell/app-shell.module.css — this module
+   adds only what embedding changes: the real `.root` is `position: fixed;
+   inset: 0` (it IS the window), while the playground mirror sits below the
+   marketing nav as an in-page block. Paint mirrors `.root` value for value,
+   all off the same :root shell tokens. */
+
+.frame {
+  position: relative;
+  /* Floating rounded panel, like the landing page's banner panels
+     (`.lp-banner`: radius 24 + overflow hidden) — the mirror sits ON the page,
+     not flush against it. Marketing surface, so raw values are allowed here
+     (docs/DESIGN-SYSTEM.md exemption). */
+  margin: 14px var(--gutter) 72px;
+  border-radius: 24px;
+  border: 1px solid rgba(10, 10, 10, 0.1);
+  box-shadow:
+    0 1px 2px rgba(10, 10, 10, 0.05),
+    0 24px 48px -24px rgba(10, 10, 10, 0.22);
+  /* ~viewport minus the marketing nav; generous floor so the mirror always
+     reads as an app window, never a strip. */
+  height: calc(100vh - 150px);
+  min-height: 620px;
+  background: var(--shell-surface);
+  color: var(--ink);
+  font-family: var(--font-app), system-ui, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.frame *,
+.frame *::before,
+.frame *::after {
+  box-sizing: border-box;
+}
+
+/* The real brand slot is the workspace switcher (a live button). Static twin:
+   same `.brandPill` face, interactivity off — `pointer-events: none` also
+   suppresses the pill's hover/active shadow states. */
+.brandStatic {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Column beside the sidebar: connect strip on top, the active pane filling
+   the rest. `min-width: 0` so pane content truncates instead of widening the
+   shell surface. */
+.paneColumn {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
