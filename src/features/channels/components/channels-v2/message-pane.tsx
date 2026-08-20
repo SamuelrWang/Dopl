@@ -40,22 +40,17 @@
  * scroller and composer with the crumb reduced to the thread's own title and no
  * chrome at all — there is no info panel to toggle, no channel to go back to and
  * no sidebar beside it. Rendering it here rather than assembling a second pane
- * out of `transcript.tsx` + `composer.tsx` is deliberate: the stick-to-bottom
- * rules and the scroll-target contract below are this file's, and a second copy
- * of them is a second answer.
+ * out of `transcript.tsx` + `composer.tsx` is deliberate: the scroll-target
+ * contract below and the stick-to-bottom rules (`use-stick-to-bottom.ts`, split
+ * out at the cap on 2026-08-20 and called from HERE alone) have exactly one
+ * implementation, and a second copy of either is a second answer.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { Bookmark, ChevronRight, Hash, Info } from "lucide-react";
 import { IconButton } from "./bits";
+import { useStickToBottom } from "./use-stick-to-bottom";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
 import { ThreadAwaitingStrip, ThreadSendBox } from "./thread-consent";
@@ -101,13 +96,6 @@ const FLASH_MS = 1600;
 const MISSING_NOTICE_MS = 6000;
 
 /**
- * How close to the bottom still counts as being AT the bottom. A reader who has
- * drifted a line is still following the conversation; one who has scrolled up
- * to read history is not, and yanking them down is the classic chat bug.
- */
-const STICK_SLACK_PX = 64;
-
-/**
  * The default for the three callbacks only the `"page"` chrome can fire. The
  * pop-out window has no info panel to toggle, no channel view to return to and
  * no thread cards in its rows, so it hands over none of them.
@@ -115,80 +103,6 @@ const STICK_SLACK_PX = 64;
 const DECIDE_NOOP = () => {};
 const DECIDE_OUTBOUND_NOOP = () => {};
 const NOOP = () => {};
-
-/**
- * STICK TO BOTTOM — the behaviour the retired page had and this pane lost at
- * the cutover. A transcript that renders oldest-first and never scrolls opens
- * on the oldest message in the channel, which is the wrong end of every chat
- * surface ever built.
- *
- * THREE RULES, and the third is the one the old page got wrong:
- *
- *  1. A CHANNEL OR THREAD SWITCH LANDS AT THE BOTTOM. A new view has no reading
- *     position to preserve, so there is nothing to be polite about.
- *  2. NEW ROWS FOLLOW, while the reader is at the bottom.
- *  3. ⚠ A READER SCROLLED UP IS NEVER YANKED. The old page followed
- *     unconditionally, so a message arriving mid-scrollback threw the reader
- *     back to the end of the conversation. The near-bottom guard is one
- *     subtraction and is strictly better.
- *
- * ⚠ REFS, NOT STATE, AND THAT IS NOT A MICRO-OPTIMISATION.
- * `react-hooks/set-state-in-effect` is an ERROR in this tree; a pin held in
- * state would also re-render the whole transcript on every scroll event, to
- * decide something nothing renders.
- *
- * ⚠ THE PIN IS MEASURED ON THE USER'S OWN SCROLL AND NOWHERE ELSE — the same
- * rule the desktop's session stream keeps (`renderer/session/session.js`,
- * `bottomGap`). A row that GROWS after paint must not silently un-pin a reader
- * sitting at the bottom; only a scroll says "I moved away".
- *
- * Returns `release`, which the mention jump calls: a deliberate landing in
- * history is a reading position, and the next arriving message must not undo
- * it.
- */
-function useStickToBottom(
-  scrollerRef: RefObject<HTMLDivElement | null>,
-  /** Channel + thread — the identity of the VIEW, so a switch is one change. */
-  viewKey: string,
-  rowCount: number
-) {
-  const pinned = useRef(true);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      pinned.current =
-        el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_SLACK_PX;
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [scrollerRef]);
-
-  // Rule 1. Re-arms the pin as well as moving: the previous view's reading
-  // position says nothing about this one.
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    pinned.current = true;
-    el.scrollTop = el.scrollHeight;
-  }, [scrollerRef, viewKey]);
-
-  // Rules 2 and 3. ⚠ DECLARED BEFORE THE SCROLL-TARGET EFFECT BELOW, which is
-  // load-bearing: effects run in declaration order, so on the commit where a
-  // mention click both swapped the view and asked for a jump, the jump runs
-  // LAST and wins. A stick-to-bottom that ran afterwards would land the reader
-  // at the newest message they did not ask for.
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el || !pinned.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [scrollerRef, rowCount]);
-
-  return useCallback(() => {
-    pinned.current = false;
-  }, []);
-}
 
 export function ChannelsV2MessagePane({
   channelId,
@@ -209,6 +123,7 @@ export function ChannelsV2MessagePane({
   favorited = false,
   gate,
   popOut,
+  peerActivity,
   chrome = "page",
   onToggleInfo = NOOP,
   onToggleFavorite = NOOP,
@@ -251,6 +166,15 @@ export function ChannelsV2MessagePane({
    * same `IconButton` face (Samuel, 2026-08-19).
    */
   popOut?: ReactNode;
+  /**
+   * "Anthony's agent is working…" (`peer-activity.tsx › PeerActivityRow`), a
+   * SLOT for the same reason `popOut` is — it needs a read this file has no
+   * business making — and wanted by BOTH chromes. ⚠ Its place is between the
+   * send box and the composer: above the composer so it reads as context for
+   * what you are about to type, below the send box so it never separates a
+   * decision from the draft it is about.
+   */
+  peerActivity?: ReactNode;
   /** Which header this pane wears — see the file docblock. */
   chrome?: "page" | "window";
   /** `"page"` chrome only. */
@@ -384,6 +308,7 @@ export function ChannelsV2MessagePane({
         busy={outboundBusy}
         onDecide={onDecideOutbound}
       />
+      {peerActivity}
       <ChannelsV2Composer
         channelId={channelId}
         workspaceId={workspaceId}

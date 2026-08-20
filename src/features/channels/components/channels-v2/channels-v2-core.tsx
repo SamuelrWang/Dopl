@@ -25,6 +25,7 @@ import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelsV2AgentPanel } from "./agent-panel";
 import { PopOutThreadButton } from "./pop-out";
+import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import { useChannelsV2Live } from "./live";
 import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
@@ -356,6 +357,22 @@ export function ChannelsV2Core({
                   workspaceSlug={workspaceSlug}
                   channelId={channel.id}
                   threadId={openThread.id}
+                />
+              ) : null
+            }
+            // "Anthony's agent is working…", from the peer projection the
+            // Agents tab already polls. Thread view only — the row is about ONE
+            // exchange, and the channel view has no thread to be about.
+            peerActivity={
+              openThread ? (
+                <PeerActivityRow
+                  peers={peerWorkingOn(
+                    agentsPanel.peerSessions,
+                    currentUserId,
+                    openThread.id
+                  )}
+                  byUser={index.byId}
+                  currentUserId={currentUserId}
                 />
               ) : null
             }

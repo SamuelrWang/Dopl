@@ -329,3 +329,48 @@ describe("a scroll target outside the loaded transcript", () => {
     }
   });
 });
+
+/**
+ * THE PEER-ACTIVITY SLOT (2026-08-20). The pane does not decide whether a peer's
+ * agent is working — `peer-activity.tsx` does, and `peer-activity.test.tsx` pins
+ * it. What is this file's is the PLACEMENT, which is the part a redesign moves
+ * without noticing: above the composer so it reads as context for what you are
+ * about to type, below the send box so it never separates a decision from the
+ * draft it is about.
+ */
+describe("the peer-activity slot", () => {
+  const SLOT = <div data-testid="peer-activity">someone is working</div>;
+
+  it("renders between the send box and the composer", () => {
+    const { container } = render(
+      <ChannelsV2MessagePane {...paneProps({ peerActivity: SLOT })} />
+    );
+    const slot = container.querySelector('[data-testid="peer-activity"]')!;
+    const composer = container.querySelector("textarea")!;
+    // ⚠ DOCUMENT ORDER, not a class name: the assertion is about where a reader's
+    // eye lands, and comparing positions survives every styling change.
+    expect(
+      slot.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    const scroller = scrollerOf(container);
+    expect(
+      scroller.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  // ⚠ BOTH CHROMES. The pop-out is a real thread surface, and a peer agent
+  // working on the thread you popped out is exactly what that window is for.
+  it("renders in the pop-out window chrome too", () => {
+    const { container } = render(
+      <ChannelsV2MessagePane
+        {...paneProps({ peerActivity: SLOT, chrome: "window", thread: thread({ id: "t-1" }) })}
+      />
+    );
+    expect(container.querySelector('[data-testid="peer-activity"]')).not.toBeNull();
+  });
+
+  it("renders nothing when the caller hands over no slot", () => {
+    const { container } = render(<ChannelsV2MessagePane {...paneProps()} />);
+    expect(container.querySelector('[data-testid="peer-activity"]')).toBeNull();
+  });
+});

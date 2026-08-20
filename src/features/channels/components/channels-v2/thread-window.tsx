@@ -46,6 +46,7 @@ import { CONSENT_INBOX_POLL_MS } from "../../constants";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
+import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { ChannelsV2MessagePane } from "./message-pane";
@@ -54,6 +55,8 @@ import { indexMembers } from "./view-model";
 import { threadRows } from "./view-model-rows";
 import { requestedThreadIds } from "./view-model-requested";
 import { useInlineConsent } from "./use-inline-consent";
+import { PEER_SESSIONS_POLL_MS } from "./use-agents-panel";
+import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 
 /**
  * The window's name, as one function so the fallback and the loaded title are
@@ -143,6 +146,19 @@ export function ChannelsV2ThreadWindow({
   });
   const { decideThread, outboundByThread, decideOutbound, consentBusy } =
     useInlineConsent({ messages, requests, consent });
+
+  // EVERY member's session state for this channel — the peer-activity row above
+  // the composer (2026-08-20). ⚠ THIS WINDOW NEEDS ITS OWN READ. The three-column
+  // core polls the same endpoint for the Agents tab, but that is a different
+  // React tree in a different BrowserWindow; a pop-out that inherited nothing
+  // would render no indicator and report no reason, which is the silent
+  // feature-deletion shape INVARIANTS §11 names. `channel_sessions` is
+  // unpublished (§7), so it polls, on the SAME exported interval the core uses.
+  const { sessions: peerSessions } = useChannelAgentSessions(
+    channelId,
+    workspaceId,
+    PEER_SESSIONS_POLL_MS
+  );
   const requested = useMemo(
     () => requestedThreadIds(messages, requests),
     [messages, requests]
@@ -205,6 +221,13 @@ export function ChannelsV2ThreadWindow({
         outboundBusy={consentBusy}
         onDecideOutbound={decideOutbound}
         scrollTarget={null}
+        peerActivity={
+          <PeerActivityRow
+            peers={peerWorkingOn(peerSessions, currentUserId, thread.id)}
+            byUser={index.byId}
+            currentUserId={currentUserId}
+          />
+        }
         gate={gate}
       />
     </div>

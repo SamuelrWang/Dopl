@@ -13,8 +13,15 @@ import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions"
 import { canLaunchAgents, launchAgentOnThread } from "./agents-model";
 import type { Channel, ChannelThread } from "../../types";
 
-/** `channel_sessions` is unpublished (INVARIANTS §7), so the tab polls. */
-const PEER_SESSIONS_POLL_MS = 30_000;
+/**
+ * `channel_sessions` is unpublished (INVARIANTS §7), so the peer projection polls.
+ *
+ * ⚠ EXPORTED SINCE 2026-08-20, when the pop-out thread window became a second
+ * reader (`thread-window.tsx`, for the peer-activity row). Two surfaces polling
+ * one table on two different intervals is two answers to "how fresh is fresh
+ * enough"; one exported number is the whole fix.
+ */
+export const PEER_SESSIONS_POLL_MS = 30_000;
 
 export function useAgentsPanel({
   channel,

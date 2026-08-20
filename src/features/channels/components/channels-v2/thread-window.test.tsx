@@ -82,7 +82,21 @@ vi.mock("../../hooks/use-channel-preference-writes", () => ({
   }),
 }));
 
+// THE PEER PROJECTION (2026-08-20) — this window makes its OWN read of it, and
+// that is the fact worth pinning: the three-column core reads the same endpoint
+// for the Agents tab, but that is a different React tree in a different
+// BrowserWindow. A pop-out inheriting nothing renders no indicator and reports
+// no reason, which is the silent feature-deletion shape INVARIANTS §11 names.
+const { peerSessions } = vi.hoisted(() => ({ peerSessions: vi.fn(() => []) }));
+vi.mock("../../hooks/use-channel-agent-sessions", () => ({
+  useChannelAgentSessions: (...args: unknown[]) => ({
+    sessions: peerSessions(...(args as [])),
+    refetch: () => {},
+  }),
+}));
+
 import { ChannelsV2ThreadWindow, threadWindowTitle } from "./thread-window";
+import { PEER_SESSIONS_POLL_MS } from "./use-agents-panel";
 
 afterEach(() => {
   cleanup();
@@ -147,6 +161,43 @@ describe("the window is a LIVE surface", () => {
     mount();
     const arg: LiveArgs = live.mock.calls[0][0];
     expect(typeof arg.refetchAll).toBe("function");
+  });
+
+  // ⚠ ASSERTED AS A REGISTRATION, like the doorbell above, rather than by
+  // rendering a peer row: what breaks silently is this window not making the
+  // read at all, and `peer-activity.test.tsx` already owns what the row says.
+  it("makes its OWN peer-session read — it inherits nothing from the main window", () => {
+    mount();
+    expect(peerSessions).toHaveBeenCalled();
+  });
+
+  it("polls that read on the SAME interval the three-column core uses", () => {
+    // Two surfaces on two intervals is two answers to "how fresh is fresh
+    // enough"; the constant is exported from `use-agents-panel.ts` for this.
+    mount();
+    expect(peerSessions.mock.calls[0]).toEqual([
+      CHANNEL_ID,
+      WS,
+      PEER_SESSIONS_POLL_MS,
+    ]);
+  });
+
+  it("renders the peer row when a teammate's agent is live on THIS thread", () => {
+    peerSessions.mockReturnValue([
+      {
+        userId: PEER,
+        channelId: CHANNEL_ID,
+        threadId: "t-1",
+        name: "onyx",
+        state: "working",
+        channelName: "Website",
+        threadTitle: "Ship the release",
+        updatedAt: new Date().toISOString(),
+      },
+    ] as never);
+    mount();
+    expect(screen.getByText(/agent is working…$/)).toBeTruthy();
+    peerSessions.mockReturnValue([]);
   });
 });
 
