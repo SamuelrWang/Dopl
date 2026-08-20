@@ -53,7 +53,15 @@ export const GET = withUserAuth(
         teams,
         resources: matrix.resources,
       });
-      return NextResponse.json({ rows });
+
+      // ⚠ SELF NEVER RECEIVES `level: null` ROWS. Naming the resources somebody
+      // was deliberately not given leaks the shape of the workspace to the one
+      // person the boundary was drawn against — and a payload they can read in
+      // devtools is a leak whether or not the UI renders it. Admins auditing
+      // ANOTHER member get the full matrix, negative space included.
+      const visible =
+        targetUserId === userId ? rows.filter((r) => r.level !== null) : rows;
+      return NextResponse.json({ rows: visible });
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(

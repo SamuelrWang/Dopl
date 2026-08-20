@@ -5,6 +5,7 @@ import type { Role } from "../types";
 import { canGrantRole, memberManageDenial } from "../member-policy";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { removeWorkspaceDepartedMember } from "@/features/channels/server/service";
+import { recordActivity } from "@/features/members/server/activity";
 import { requireWorkspaceRole } from "./authz";
 import { findMembership } from "./repository";
 
@@ -84,6 +85,13 @@ export async function updateMemberRole(
     .eq("workspace_id", workspaceId)
     .eq("user_id", targetUserId);
   if (error) throw error;
+
+  await recordActivity({
+    workspaceId,
+    actorUserId: callerId,
+    verb: "member.role_changed",
+    metadata: { subjectUserId: targetUserId, from: target.role, to: newRole },
+  });
 }
 
 /**
@@ -166,6 +174,16 @@ export async function removeMember(
       `[membership-admin] syncSeatQuantity failed for workspace ${workspaceId}:`,
       err instanceof Error ? err.message : err
     );
+  });
+
+  // ⚠ LAST, so it cannot interleave into the delete → channels-sweep sequence
+  // above, which is an ordering invariant with a test on it. Recording is an
+  // observation of a write that already happened.
+  await recordActivity({
+    workspaceId,
+    actorUserId: callerId,
+    verb: "member.removed",
+    metadata: { subjectUserId: targetUserId, role: target.role },
   });
 }
 

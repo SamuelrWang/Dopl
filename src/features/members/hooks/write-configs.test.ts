@@ -204,11 +204,15 @@ describe("member role — the stale-value select", () => {
 
     net.settle(undefined);
     await run;
-    // Roster just computed is NOT re-downloaded; the server-resolved access
-    // pane, which it cannot compute, is.
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    // Roster just computed is NOT re-downloaded; the two server-resolved panes
+    // it cannot compute are — access (role sets the ceiling) and activity
+    // (the write records a `member.role_changed` row).
+    expect(invalidate).toHaveBeenCalledTimes(2);
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: [`/api/workspaces/acme/members/u-1/access`],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: [`/api/workspaces/acme/members/u-1/activity`],
     });
   });
 });
@@ -389,9 +393,10 @@ describe("team delete — the grants that go with it", () => {
     net.settle(undefined);
     await run;
     // Team row is computable here; what the server resolves for the member it
-    // granted through is not.
+    // granted through is not — access, and the activity row the delete records.
     expect(invalidate.mock.calls.map(([args]) => args)).toEqual([
       { queryKey: accessKey("u-1") },
+      { queryKey: [`/api/workspaces/acme/members/u-1/activity`] },
     ]);
   });
 });

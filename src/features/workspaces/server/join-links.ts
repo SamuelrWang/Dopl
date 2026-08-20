@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { canGrantRole } from "../member-policy";
 import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
+import { recordActivity } from "@/features/members/server/activity";
 import { requireWorkspaceRole } from "./authz";
 import { findMembership, findWorkspaceById } from "./repository";
 
@@ -328,6 +329,15 @@ export async function resolveJoinRequest(
         { onConflict: "workspace_id,user_id" }
       );
       if (memberError) throw memberError;
+
+      // The actor is the person who JOINED, not the admin who approved: the
+      // feed answers "what has this member done", and joining is theirs.
+      await recordActivity({
+        workspaceId,
+        actorUserId: row.user_id,
+        verb: "member.joined",
+        metadata: { via: "join-link", role: action.role },
+      });
 
       // Reconcile Pro subscription quantity. Best-effort: a billing hiccup
       // must not fail the approval.

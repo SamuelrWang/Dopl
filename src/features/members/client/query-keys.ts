@@ -30,6 +30,11 @@ export function memberAccessPath(slug: string, userId: string): string {
   return `${memberPath(slug, userId)}/access`;
 }
 
+/** One member's activity feed, already filtered by the caller server-side. */
+export function memberActivityPath(slug: string, userId: string): string {
+  return `${memberPath(slug, userId)}/activity`;
+}
+
 export function invitationsPath(slug: string): string {
   return workspacePath(slug, "/invitations");
 }
@@ -88,6 +93,8 @@ export const memberKeys = {
   members: (slug: string): ApiResourceKeys => apiResource(membersPath(slug)),
   memberAccess: (slug: string, userId: string): ApiResourceKeys =>
     apiResource(memberAccessPath(slug, userId)),
+  memberActivity: (slug: string, userId: string): ApiResourceKeys =>
+    apiResource(memberActivityPath(slug, userId)),
   invitations: (slug: string): ApiResourceKeys =>
     apiResource(invitationsPath(slug)),
   teams: (slug: string): ApiResourceKeys => apiResource(teamsPath(slug)),

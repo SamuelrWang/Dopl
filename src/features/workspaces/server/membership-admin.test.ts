@@ -55,6 +55,13 @@ function primeSupabase() {
       op = "update";
       return builder;
     },
+    // Both writes record a `workspace_activity_events` row. It is awaited, so
+    // the mock has to answer it; `recordActivity` swallows failures, so an
+    // absent stub would only show up as stderr noise.
+    insert: () => {
+      op = "insert";
+      return builder;
+    },
     select: () => {
       op = "select";
       return builder;
@@ -148,6 +155,9 @@ describe("removeMember — the departure reaches into channels", () => {
       `channels:delete:${ROOM}`,
       `channels:close:${DM}`,
       `channels:delete:${DM}`,
+      // The activity row is recorded LAST, deliberately outside the
+      // delete → sweep sequence this test pins.
+      "db:insert:workspace_activity_events",
     ]);
   });
 

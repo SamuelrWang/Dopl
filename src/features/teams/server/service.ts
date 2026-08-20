@@ -1,6 +1,7 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { requireWorkspaceRole } from "@/features/workspaces/server/authz";
+import { recordActivity } from "@/features/members/server/activity";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type { AccessLevel, AccessMode, TeamResourceType } from "../access-levels";
 import type {
@@ -72,6 +73,15 @@ export async function createTeam(
     await deleteTeamRow(team.id).catch(() => {});
     throw err;
   }
+
+  await recordActivity({
+    workspaceId,
+    actorUserId: callerId,
+    verb: "team.created",
+    resourceType: "team",
+    resourceId: team.id,
+    metadata: { label: team.name },
+  });
 
   return hydrateTeamView(team);
 }
@@ -148,6 +158,17 @@ export async function addTeamMembers(
   if (!team) throw new TeamNotFoundError();
   await assertActiveMembers(workspaceId, userIds);
   await insertTeamMembers(teamId, workspaceId, userIds, callerId);
+
+  for (const userId of userIds) {
+    await recordActivity({
+      workspaceId,
+      actorUserId: userId,
+      verb: "team.member_added",
+      resourceType: "team",
+      resourceId: teamId,
+      metadata: { label: team.name, addedBy: callerId },
+    });
+  }
 }
 
 export async function removeTeamMember(
@@ -160,6 +181,15 @@ export async function removeTeamMember(
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   await deleteTeamMemberRow(teamId, userId);
+
+  await recordActivity({
+    workspaceId,
+    actorUserId: userId,
+    verb: "team.member_removed",
+    resourceType: "team",
+    resourceId: teamId,
+    metadata: { label: team.name, removedBy: callerId },
+  });
 }
 
 /* ----------------------------- grants ----------------------------- */

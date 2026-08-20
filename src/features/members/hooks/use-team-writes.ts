@@ -61,13 +61,14 @@ export interface TeamWrites {
   pending: boolean;
 }
 
-/** Every touched member's server-computed access pane. ⚠ One key per member:
- *  these keys are whole PATHS and TanStack matches per array element, so
- *  `[…/members]` reaches no `[…/members/<id>/access]` entry. */
+/** Every touched member's server-computed access pane AND activity feed. ⚠ One
+ *  key per member: these keys are whole PATHS and TanStack matches per array
+ *  element, so `[…/members]` reaches no `[…/members/<id>/access]` entry. */
 function accessKeys(workspaceSlug: string, userIds: string[]): QueryKey[] {
-  return userIds.map(
-    (userId) => memberKeys.memberAccess(workspaceSlug, userId).all
-  );
+  return userIds.flatMap((userId) => [
+    memberKeys.memberAccess(workspaceSlug, userId).all,
+    memberKeys.memberActivity(workspaceSlug, userId).all,
+  ]);
 }
 
 /** Exported so the write-config suite drives the SHIPPED config through

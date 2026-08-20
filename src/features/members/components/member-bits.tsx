@@ -62,7 +62,7 @@ export function resourceMeta(type: TeamResourceType): {
  * ⚠ `team.grants` still carries `workflow` rows (`teams/server/repository.ts`
  * selects grants with no `resource_type` filter, on purpose), so counting it
  * straight captions "3 scoped resources" above a list of 2. Both call sites
- * (`members-list-pane`, `member-detail`) must count through here.
+ * (the teams list and the team pane) must count through here.
  */
 export function scopedResourceCount(team: Pick<TeamView, "grants">): number {
   return withoutRetiredResources(team.grants).length;

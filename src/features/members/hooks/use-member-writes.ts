@@ -53,8 +53,11 @@ export function memberRoleConfig(
     // ⚠ Role sets the CEILING on effective access and short-circuits for
     // admins, so the member's server-resolved access pane (its own key) is the
     // one cache this write cannot compute.
+    // The activity feed gains a `member.role_changed` row this write cannot
+    // compute either.
     invalidate: (draft) => [
       memberKeys.memberAccess(workspaceSlug, draft.userId).all,
+      memberKeys.memberActivity(workspaceSlug, draft.userId).all,
     ],
   };
 }

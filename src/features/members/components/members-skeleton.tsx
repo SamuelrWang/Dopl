@@ -1,7 +1,7 @@
 /**
  * Skeleton for the members TABLE, mirroring `members-tab.tsx` row-for-row so
  * the swap to live data doesn't reflow.
- * ⚠ Table only, not the console: `members-view.tsx` is a 372px two-pane
+ * ⚠ Table only, not the console: the console is a two-pane
  * surface and loads `TwoPaneListSkeleton` + `SkeletonRow` instead — this
  * grid's fixed 140px columns don't fit that pane.
  */

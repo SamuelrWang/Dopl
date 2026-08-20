@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
+import { recordActivity } from "@/features/members/server/activity";
 import { requireWorkspaceRole } from "./authz";
 import {
   type InvitationRow,
@@ -115,6 +116,17 @@ export async function createInvitation(
   if (teamIds.length > 0) {
     await replaceInvitationTeams(invitation.id, teamIds);
   }
+
+  // ⚠ NOT recorded on the reuse branch above: re-issuing a live invitation is
+  // not a second act. `member.invited` is admin-only in the read filter — the
+  // address belongs to nobody until it is accepted.
+  await recordActivity({
+    workspaceId: input.workspaceId,
+    actorUserId: input.invitedBy,
+    verb: "member.invited",
+    metadata: { email: normalizedEmail, role: input.role },
+  });
+
   return { ...invitation, teamIds };
 }
 
@@ -337,6 +349,13 @@ export async function acceptInvitationByToken(
 
   // Membership is active now, so the team_members trigger accepts the rows.
   await joinInvitationTeams(status.invitation.id, status.invitation.workspaceId, userId);
+
+  await recordActivity({
+    workspaceId: status.invitation.workspaceId,
+    actorUserId: userId,
+    verb: "member.joined",
+    metadata: { via: "invitation", role: status.invitation.invitedRole },
+  });
 
   // Reconcile the Pro subscription quantity. Best-effort: a billing hiccup
   // must not fail the join.

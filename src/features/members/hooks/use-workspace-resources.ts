@@ -8,12 +8,12 @@ import type { ResourcesCache } from "../lib/optimistic-cache";
 /**
  * ⚠ Where workflows leave the access-matrix INVENTORY. `workflow` stays a
  * valid grantable type in the DB and in the payload; it only stops rendering,
- * and it must stop HERE rather than per-component because `members-view`
+ * and it must stop HERE rather than per-component because the members console
  * DERIVES the Access tab's default selection from `resourceList[0]` (a
  * workflow left in would open with no click) and `create-team-dialog` builds
  * its grant rows from the same array.
  * ⚠ The matrix has a SECOND half this does not reach — each team's `grants`,
- * filtered in `members-list-pane` / `member-detail`. Predicate lives in
+ * filtered per-pane. Predicate lives in
  * `teams/access-levels`.
  */
 const selectResources = (body: ResourcesCache) =>
