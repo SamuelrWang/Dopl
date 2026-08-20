@@ -1,164 +1,116 @@
 import { render, screen, within } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryRouter } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createQueryClient } from "#/lib/query-client";
-import { AppShellLayout } from "#/components/app-shell";
+import { describe, expect, it } from "vitest";
 import OverviewPage from "./index";
+import {
+  CHART_BARS,
+  MEMBER_LOAD_ROWS,
+  PERIOD_STATS,
+  STAT_CARDS,
+  UPCOMING_ROWS,
+} from "./overview-data";
 
 /**
- * Overview smoke test: real page, real shell, real query stack. Only the
- * TRANSPORT is mocked — `#/lib/api-transport` is the one seam bytes leave
- * through — so assertions cover actual request paths.
+ * The page is STATIC — no transport, no router, no query client. So this is a
+ * structure test: every section is present and every row of `overview-data.ts`
+ * reaches the DOM. It asserts SETS and LENGTHS, not representative members —
+ * the old suite checked one stat card and missed a card being deleted
+ * (ENGINEERING.md, overview stat row).
  */
 
-const { sendRequest } = vi.hoisted(() => ({ sendRequest: vi.fn() }));
-vi.mock("#/lib/api-transport", () => ({ sendRequest }));
-
-const WORKSPACE = {
-  id: "ws-1",
-  ownerId: "user-1",
-  name: "Acme",
-  slug: "acme",
-  publicId: "ab12cd",
-  description: null,
-  iconUrl: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-};
-
-const MEMBERS = [
-  { userId: "user-1", displayName: "Ada", email: "ada@acme.test", avatarUrl: null },
-  { userId: "user-2", displayName: "Grace", email: "grace@acme.test", avatarUrl: null },
-];
-
-function ok(body: unknown) {
-  return { status: 200, statusText: "OK", hasBody: true, body };
-}
-
-function mockApi() {
-  sendRequest.mockImplementation(({ path }: { path: string }) => {
-    // Workspace read is `POST /api/boot`: resolve's answer plus role/caller-id.
-    if (path === "/api/boot") {
-      return Promise.resolve(
-        ok({
-          isOnboarded: true,
-          surveyCompleted: true,
-          userId: "user-1",
-          workspace: WORKSPACE,
-          segment: "acme-ab12cd",
-          needsRedirect: false,
-          role: "owner",
-          myAccess: { defaultLevel: "edit", overrides: [] },
-        })
-      );
-    }
-    if (path.startsWith("/api/workspaces/resolve")) {
-      return Promise.resolve(
-        ok({ workspace: WORKSPACE, canonical: "acme-ab12cd", needsRedirect: false })
-      );
-    }
-    if (path === "/api/workspaces") {
-      return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
-    }
-    if (path === "/api/workspaces/acme-ab12cd/overview-counts") {
-      return Promise.resolve(
-        ok({
-          knowledgeBases: 7,
-          skills: 11,
-          members: 2,
-          isMcpConnected: true,
-        })
-      );
-    }
-    if (path === "/api/workspaces/acme-ab12cd/members") {
-      return Promise.resolve(ok({ members: MEMBERS }));
-    }
-    return Promise.resolve({ status: 404, statusText: "Not Found", hasBody: false });
-  });
-}
-
-function renderOverview(path = "/acme-ab12cd/overview") {
-  const router = createMemoryRouter(
-    [
-      {
-        path: "/:workspaceSegment",
-        element: <AppShellLayout />,
-        children: [{ path: "overview", element: <OverviewPage /> }],
-      },
-    ],
-    { initialEntries: [path] }
-  );
-  render(
-    <QueryClientProvider client={createQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  );
-  return router;
-}
-
 describe("overview page", () => {
-  beforeEach(mockApi);
+  it("renders the header, both actions and the six sections", () => {
+    render(<OverviewPage />);
 
-  it("renders the workspace header, counts and members off the API", async () => {
-    renderOverview();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Samuel, here is the workspace" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Good evening")).toBeInTheDocument();
+    expect(
+      screen.getByText("Today at a glance, and how the last 30 days have gone.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analytics" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Invite members" })).toBeInTheDocument();
 
-    expect(await screen.findByRole("heading", { name: "Acme" })).toBeInTheDocument();
-    expect(screen.getByText("/acme")).toBeInTheDocument();
-    expect(await screen.findByText("Agent connected")).toBeInTheDocument();
-
-    // ⚠ Assert the WHOLE stat row, never one card: a card count change once
-    // slipped through because only Skills was checked, and the "2 people in
-    // this workspace" line is MembersWidgetCore copy, not a card. Deleting
-    // "Knowledge bases" or "Members" must fail HERE. The row doubles as
-    // navigation, so each href is a real route and the length check is what
-    // stops a fourth card linking to "Not found".
-    const skills = screen.getByRole("link", { name: /Skills 11 agent playbooks/ });
-    const statRow = skills.parentElement as HTMLElement;
-    const cards = within(statRow).getAllByRole("link");
-    expect(cards).toHaveLength(3);
-    expect(cards.map((card) => card.getAttribute("href"))).toEqual([
-      "/acme-ab12cd/knowledge",
-      "/acme-ab12cd/skills",
-      "/acme-ab12cd/members",
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
+    ).toEqual([
+      "Last 30 days",
+      "Messages per day",
+      "Still to come today",
+      "Member load, last 30 days",
     ]);
-    expect(cards.map((card) => within(card).getByText(/^\d+$/).textContent)).toEqual([
-      "7",
-      "11",
-      "2",
-    ]);
-
-    expect(await screen.findByText("2 people in this workspace")).toBeInTheDocument();
   });
 
-  it("reads counts and members through the canonical segment", async () => {
-    renderOverview();
-    await screen.findByRole("heading", { name: "Acme" });
+  it("renders every stat card and every period stat", () => {
+    render(<OverviewPage />);
 
-    const paths = sendRequest.mock.calls.map(([req]) => req.path);
-    expect(paths).toContain("/api/boot");
-    // ⚠ Segment travels in the boot BODY, not the query string.
-    expect(sendRequest.mock.calls.map(([req]) => req.body)).toContainEqual({
-      segment: "acme-ab12cd",
-    });
-    expect(paths).not.toContain("/api/workspaces/me");
-    expect(paths).toContain("/api/workspaces/acme-ab12cd/overview-counts");
-    expect(paths).toContain("/api/workspaces/acme-ab12cd/members");
-  });
+    for (const card of STAT_CARDS) {
+      expect(screen.getByText(card.label)).toBeInTheDocument();
+      expect(screen.getByText(card.value)).toBeInTheDocument();
+      expect(screen.getByText(card.note)).toBeInTheDocument();
+    }
+    for (const stat of PERIOD_STATS) {
+      expect(screen.getByText(stat.label)).toBeInTheDocument();
+      expect(screen.getByText(stat.value)).toBeInTheDocument();
+      expect(screen.getByText(stat.note)).toBeInTheDocument();
+    }
 
-  it("surfaces a failed workspace resolve as the shared page error", async () => {
-    sendRequest.mockImplementation(({ path }: { path: string }) =>
-      path === "/api/boot"
-        ? Promise.resolve({
-            status: 404,
-            statusText: "Not Found",
-            hasBody: true,
-            body: { error: { code: "WORKSPACE_NOT_FOUND", message: "Workspace not found" } },
-          })
-        : Promise.resolve(ok({}))
+    // Every card carries its own overflow control — one per figure, no more.
+    expect(screen.getAllByRole("button", { name: /options$/ })).toHaveLength(
+      STAT_CARDS.length + PERIOD_STATS.length
     );
-    renderOverview();
+    // Only the two declining period stats wear a delta pill.
+    const deltas = PERIOD_STATS.filter((stat) => stat.delta);
+    expect(deltas).toHaveLength(2);
+    for (const stat of deltas) {
+      expect(screen.getByText(stat.delta as string)).toBeInTheDocument();
+    }
+  });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Workspace not found");
+  it("plots one bar and one x-axis tick per day in the period", () => {
+    render(<OverviewPage />);
+
+    expect(CHART_BARS).toHaveLength(31);
+    expect(screen.getByText("12,480 in the period")).toBeInTheDocument();
+    expect(screen.getByTitle(/^1\/7 · /)).toBeInTheDocument();
+    expect(screen.getByTitle(/^31\/7 · /)).toBeInTheDocument();
+  });
+
+  it("renders every upcoming row with its status chip", () => {
+    render(<OverviewPage />);
+
+    const list = screen.getByRole("heading", { name: "Still to come today" })
+      .parentElement as HTMLElement;
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(UPCOMING_ROWS.length);
+
+    for (const [index, row] of UPCOMING_ROWS.entries()) {
+      const scope = within(rows[index]);
+      expect(scope.getByText(row.name)).toBeInTheDocument();
+      expect(scope.getByText(`${row.time} · ${row.owner}`)).toBeInTheDocument();
+      expect(scope.getByText(row.status)).toBeInTheDocument();
+    }
+    // Chip variety is the point of the panel: three distinct tones.
+    expect(new Set(UPCOMING_ROWS.map((row) => row.tone)).size).toBe(3);
+  });
+
+  it("renders one member-load row per member, with its percent", () => {
+    render(<OverviewPage />);
+
+    const panel = screen.getByRole("heading", { name: "Member load, last 30 days" })
+      .parentElement as HTMLElement;
+    const rows = within(panel).getAllByRole("listitem");
+    expect(rows).toHaveLength(MEMBER_LOAD_ROWS.length);
+
+    for (const [index, row] of MEMBER_LOAD_ROWS.entries()) {
+      const scope = within(rows[index]);
+      expect(scope.getByText(row.name)).toBeInTheDocument();
+      expect(scope.getByText(`${row.percent}%`)).toBeInTheDocument();
+    }
+    expect(
+      screen.getByText(
+        "Share of 735 sessions (denominator shown, as everywhere)"
+      )
+    ).toBeInTheDocument();
   });
 });
