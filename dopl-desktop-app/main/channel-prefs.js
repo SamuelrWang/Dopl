@@ -234,7 +234,33 @@ function clearPermissionPreset(channelId) {
   if (had) diag('channel-prefs cleared', String(channelId).slice(0, 8));
 }
 
+// ── AUTO-SEND (2026-08-20, the session-window retirement) — a DURABLE per-channel
+// setting, deliberately unlike the arm above: it narrows nothing (it governs whether the
+// operator's OWN agent's reply posts without a Send click), it is chosen on the channel's
+// Settings tab, and it must survive restarts or the operator would re-opt-in per session.
+// Default OFF — ask-first: an absent, corrupt, or non-boolean record reads false.
+const AUTO_SEND_KEY = 'channelAutoSend'; // { [channelId]: true }
+
+function getAutoSend(channelId) {
+  if (!channelId) return false;
+  const map = store.get(AUTO_SEND_KEY);
+  return !!(map && typeof map === 'object' && map[channelId] === true);
+}
+
+function setAutoSend(channelId, on) {
+  if (!channelId) return false;
+  const map = store.get(AUTO_SEND_KEY);
+  const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
+  if (on === true) next[channelId] = true;
+  else delete next[channelId];
+  store.set(AUTO_SEND_KEY, next);
+  diag('channel-prefs: autoSend', String(channelId).slice(0, 8), on === true ? 'on' : 'off');
+  return on === true;
+}
+
 module.exports = {
+  getAutoSend,
+  setAutoSend,
   TOOL_MODES,
   MESSAGE_MODES,
   DEFAULT_PRESET,

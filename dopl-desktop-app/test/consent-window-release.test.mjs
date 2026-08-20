@@ -192,7 +192,7 @@ function approver(over = {}) {
       toSession: (key, a) => calls.toSession.push(a),
     },
     { getWindowMode: () => cfg.windowMode },
-    { consumePermissionPreset: () => null },
+    { consumePermissionPreset: () => null, getAutoSend: () => cfg.autoSend === true },
     {
       launchResponderSession: async () => cfg.launch,
       releaseConsentWindow: (key, reason) => calls.released.push(reason),
@@ -254,11 +254,12 @@ test("HEADLESS FALLBACK: cap / no-sdk / disabled all answer headlessly, so all t
   }
 });
 
-test("WINDOW MODE OFF: the release is a harmless no-op (no card was ever opened)", async () => {
+test("WINDOW MODE OFF: the WINDOWLESS launch runs anyway — the switch gates windows, not sessions (2026-08-20)", async () => {
   const a = approver({ windowMode: false });
   await a.inboundApproved(rec, {});
-  assert.deepEqual(a.calls.released, ["headless-fallback"]);
-  assert.equal(a.calls.headless.length, 1);
+  assert.deepEqual(a.calls.released, [], "a launched session releases nothing");
+  assert.equal(a.calls.toSession.length, 1);
+  assert.equal(a.calls.headless.length, 0);
 });
 
 test("the release can never break the request: it is wrapped, and it is the engine's call", () => {

@@ -133,6 +133,9 @@ function surface(s, item, hadFocus) {
 // left, and `a.threadId` was `''` end to end. AXIS B (autoInbound) is the only opt-out now.
 function enqueue(s, a) {
   const auto = autoInbound(s);
+  // The latest inbound turn's seq — the windowless outbound bridge keys its consent
+  // row on it so the send box lands on the right thread (a non-finite seq keeps the last).
+  if (Number.isFinite(Number(a.seq))) s.lastInboundSeq = Number(a.seq);
   const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName };
   const disp = io.queueInbound(s, item, !auto);
   // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this

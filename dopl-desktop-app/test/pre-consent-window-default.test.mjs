@@ -91,16 +91,23 @@ test("handleTrigger still gates the pre-consent window on BOTH switches", () => 
   assert.equal((TRIGGER.match(/sessionEngine\.openConsentWindow\(/g) || []).length, 1);
 });
 
-test("inboundApproved still asks the master switch, so approved requests run HEADLESS", () => {
-  // With getWindowMode() hard false, this conjunction is what routes every approved
-  // request to the headless lane. Removing the guard would resurrect the windowed
-  // responder behind the retirement's back.
+test("inboundApproved launches WINDOWLESS, and only the engine's own skips reach headless", () => {
+  // 2026-08-20 (retirement, second half): an approved request runs a windowless SDK
+  // session — no master-switch conjunct any more, because launch() itself refuses a
+  // WINDOWED shape when the switch is off and a windowless one never asks it. The
+  // headless lane survives strictly as the engine-skip fallback (cap / no-sdk).
   const fn = fnOf(TRIGGER, "inboundApproved");
-  assert.match(fn, /if \(settings\.getWindowMode\(\) && \(await launchResponderSession\(/);
+  assert.match(fn, /if \(await launchResponderSession\(/);
+  assert.ok(!/getWindowMode/.test(fn), "no master-switch read here — the engine owns its own gate");
+  assert.match(fn, /runHeadlessApproved\(/, "the headless fallback survives");
   assert.ok(
     !/getPreConsentWindow/.test(fn),
     "the pre-consent default must not decide how an APPROVED request runs"
   );
+  // ...and the responder launch itself is the windowless shape, with the ask's seq.
+  const launch = fnOf(TRIGGER, "launchResponderSession");
+  assert.match(launch, /windowless: true/);
+  assert.match(launch, /triggerSeq: m\.seq/);
 });
 
 /** Comments stripped, so a docblock POINTING at the gate is not read as one. */

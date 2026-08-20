@@ -41,13 +41,19 @@ function setHandlers(h) {
 // anyway. The sidebar's Inbox badge is visible the moment the operator lands.
 //
 // Wired from index.js; no-op until handlers are registered.
-function openChannelForEntry(entry) {
+function openChannelForEntry(entry, opts) {
   try {
     if (!handlers.openChannel || !entry || !entry.workspaceSegment) return;
     // Never fabricated: an entry with no channel navigates to the page, which is
     // what this did for every entry until Phase 9. The id's character check is
     // the navigator's (shell-mode → deep-link-target.isSafeSegment), not ours.
-    handlers.openChannel(entry.workspaceSegment, (entry.channel && entry.channel.id) || null);
+    // 2026-08-20: an optional THREAD lands the operator on the thread view —
+    // the outbound send box's home — over the same one destination.
+    handlers.openChannel(
+      entry.workspaceSegment,
+      (entry.channel && entry.channel.id) || null,
+      (opts && opts.threadId) || null
+    );
   } catch (_) { /* window may be gone */ }
 }
 

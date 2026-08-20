@@ -30,7 +30,8 @@ const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
 const sessionHistory = require('./session-history'); // v2.5 D3: reopened-shell history
-const sessionShell = require('./session-shell'); // §2 split: the electron window plumbing
+const sessionShell = require('./session-shell');
+const sessionWindowless = require('./session-windowless'); // §2 split: the electron window plumbing
 
 // settings.js owns the window-mode switch + caps; required defensively so the engine still
 // loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
@@ -142,10 +143,12 @@ function denyPendingPermissions(s, message) {
   s.pendingNames.clear();
 }
 
-// A hidden window RESHOWS on anything that needs the operator: a gated tool request (item 10), a `counterparty` reply
-// (v2.2 item 3), a HELD inbound message (v2.5 D1), or an outbound post awaiting Send / Deny on its card (v2.7 L3). Surfacing runs NO gated tool; emits ride the replay.
+// A hidden window RESHOWS on anything that needs the operator: a gated tool request, a
+// `counterparty` reply, a HELD inbound, or an outbound post awaiting Send (v2.7 L3).
 const RESHOW_TYPES = new Set(['permission_request', 'counterparty', 'inbound_pending', 'outbound_gate']);
 function emit(s, payload) {
+  // 2026-08-20: a WINDOWLESS session's pending gate bridges to a consent row (outbound post) or denies — session-windowless.js owns the policy.
+  if (sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }))) return;
   if (!s.win || s.win.isDestroyed()) return;
   if (s.windowHidden && payload && RESHOW_TYPES.has(payload.type)) {
     try { s.win.show(); } catch (_) { /* best effort */ }
@@ -255,13 +258,10 @@ async function startSession(spec, sdk) {
   // sessionConsent.has(key) it computes to decide whether this spawn ADOPTS the card's window.
   // The gate rides the KEY, because the arm is entry-keyed: a null key takes nothing.
   //
-  // FIX 4 — OPERATOR-ARMED, the one thing that reaches a PARKED SHELL. A shell is normally woken
-  // by something that is NOT the approving human, so it refuses a handed-in posture. THE CASE IT
-  // WAS BUILT FOR IS GONE — `session-team.js` spawned every team session as a parked shell, and
-  // it was deleted with summoning (channels rollback §1). The gate stays because the CONSENT arm
-  // is a real producer: it opens for a consent card just accepted, or a caller that explicitly
-  // threads `operatorArmed`; a bare recreate, reopen, resume or wake sets neither. That arm is
-  // now the ONLY producer — the whole picture, not a gap (F-119 residual (d), moot).
+  // FIX 4 — OPERATOR-ARMED, the one thing that reaches a PARKED SHELL. A shell is normally
+  // woken by something that is NOT the approving human, so it refuses a handed-in posture
+  // unless the consent arm (or an explicit `operatorArmed`) says a human chose it just now;
+  // a bare recreate, reopen, resume or wake sets neither (F-119 residual (d), moot).
   const consentModes = sessionConsent.takeStartModes(spec.adoptsConsent === true ? spec.key : null);
   const armedModes = consentModes || spec.startModes;
   const operatorArmed = !!consentModes || spec.operatorArmed === true;
@@ -330,22 +330,17 @@ async function startSession(spec, sdk) {
     freshFraming: spec.parkedShell === true && !spec.resumeSdkId,
     idleTimer: null,
     settled: false, windowHidden: false,
+    lastInboundSeq: Number.isFinite(Number(spec.triggerSeq)) ? Number(spec.triggerSeq) : null,
     win: null, query: null, abortController: null, pushIterator: null,
   };
   sessions.set(s.key, s);
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
-  // Item 8 step 4: ADOPT an open pre-consent window (no flash — the renderer flips consent->running on `init`), else open a fresh one.
-  const adopted = sessionConsent.takeForAdopt(s.key);
-  try {
-    s.win = (adopted && adopted.win && !adopted.win.isDestroyed()) ? adopted.win : windowFactory(sessionId);
-    if (!s.win) throw new Error('window factory returned nothing');
-  } catch (err) {
+  // The spawn SURFACE: a window (adopting an open pre-consent card, Item 8 step 4), or —
+  // `spec.windowless` (2026-08-20) — none at all; session-windowless.js owns the branch.
+  if (!sessionWindowless.attachSurface(s, spec, { windowFactory, sessionConsent, sessionShell })) {
     sessions.delete(s.key);
-    diag('session-engine: window factory failed', err && err.message);
     return null;
   }
-  sessionShell.bindWindow(s);
-  sessionShell.emitFolder(s);
   emit(s, { type: 'modes', tool: state.toolMode, message: state.messageMode }); // v3.1: the header must state the PRESET posture, not the defaults
   emit(s, { type: 'model', choice: s.model }); // ...and WHICH MODEL, so the third select never claims a pick nothing applied
   // Item 1/5/6 + C5: avatars reach the renderer ONLY as `avatars` events (the replay ring splits a warm one off `init`).
@@ -367,7 +362,7 @@ async function startSession(spec, sdk) {
 }
 
 async function launch(a) {
-  if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
+  if (!a.windowless && (!windowModeEnabled() || !windowFactory)) return { skipped: 'disabled' };
   const key = store.slotKey(a);
   // FIX N1: the busy checks must ask about the SAME slot `key` names. They were rebuilding
   // `{ channelId, taskId }` by hand, stripping `agentId` — the latent bug D2 fixed in
@@ -384,7 +379,10 @@ async function launch(a) {
   // AUDIT D4: at the cap, free an untouched parked shell first (sessionPark.atCapAfterEvict) instead of
   // degrading a REAL inbound trigger to headless. Fail-restrictive: still a cap skip if nothing frees.
   const adoptable = sessionConsent.has(key);
-  if (!adoptable && sessionPark.atCapAfterEvict()) return { skipped: 'cap' };
+  if (a.windowless) {
+    // The window budget cannot count what mints no window; bound on live sessions instead.
+    if (sessionWindowless.liveCount(sessions) >= settings.MAX_SESSION_WINDOWS) return { skipped: 'cap' };
+  } else if (!adoptable && sessionPark.atCapAfterEvict()) return { skipped: 'cap' };
   let sdk;
   try { sdk = await getSdk(); } catch (err) {
     diag('session-engine: SDK unavailable', err && err.message);
@@ -408,6 +406,8 @@ async function launch(a) {
     // shown for the operator's own goal), so a requester window starts at manual/ask.
     startModes: a.startModes,
     adoptsConsent: adoptable, // FIX 1b: the ONLY spawn allowed to spend that card's single-use arm
+    windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
+    triggerSeq: a.triggerSeq, // the ask's seq — the outbound bridge's seq-join floor
   }, sdk);
   if (!s) return { skipped: 'disabled' };
   return { sessionId: s.sessionId };

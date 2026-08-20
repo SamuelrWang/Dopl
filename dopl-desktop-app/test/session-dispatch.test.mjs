@@ -104,7 +104,8 @@ test("feed: a live peer reply from the task's counterparty feeds the session", (
   assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
   assert.equal(h.calls.feedInbound.length, 1);
   assert.deepEqual(h.calls.feedInbound[0], {
-    channelId: "c1", taskId: TASK, message: "reply body", authorName: `name:${PEER}`,
+    channelId: "c1", taskId: TASK, message: "reply body", seq: h.calls.feedInbound[0].seq,
+    authorName: `name:${PEER}`,
   });
 });
 
@@ -127,10 +128,12 @@ test("feed: my OWN message never feeds; a non-message kind never feeds", () => {
   assert.equal(h.feedLiveSession(entry, peerMsg({ kind: "task_started" }), ME), false);
 });
 
-test("feed: window-mode OFF short-circuits (no engine call at all)", () => {
-  const h = harness({ windowMode: false, live: true });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false);
-  assert.equal(h.calls.feedInbound.length, 0);
+test("feed: window-mode OFF feeds anyway — windowless sessions ARE the live sessions (2026-08-20)", () => {
+  // Route (1) claims nothing into existence; a live session's own existence is the
+  // gate. Routes (2)/(3)/(5) keep their windowMode guards and stay disarmed.
+  const h = harness({ windowMode: false, live: true, counterparty: PEER });
+  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
+  assert.equal(h.calls.feedInbound.length, 1);
 });
 
 // ── (2) maybeOpenRequesterSession ──────────────────────────────────────────────

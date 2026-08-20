@@ -100,8 +100,21 @@ const APP_OPS = [
   "beginSignIn",
   "channels.chooseFolder",
   "channels.clearFolder",
+  // ⚠ TWO OPS JOINED HERE ON 2026-08-20 (the auto-send posture): the pin failed on the
+  // ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
+  //     registers `channels:getAutoSend` / `channels:setAutoSend`, both `appWindowOnly`,
+  //     both UUID-gating `channelId`, storage in `main/channel-prefs.js › get/setAutoSend`
+  //     (durable, default OFF, boolean-only writes).
+  //   • THEY WIDEN LITTLE, AND IN THE STATED DIRECTION: the setting governs whether the
+  //     operator's OWN agent's drafted reply posts without a Send click. A forged `set`
+  //     from an app window can flip a channel to auto-send — the same authority the
+  //     Settings tab hands the operator — and never grants a tool, reads a secret, or
+  //     reaches another member's machine.
+  "channels.getAutoSend",
   "channels.getFolderLabel",
   "channels.getPermissionPreset",
+  "channels.setAutoSend",
   "channels.setPermissionPreset",
   "getAuthState",
   "onAuthState",

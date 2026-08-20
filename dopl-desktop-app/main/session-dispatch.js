@@ -51,7 +51,8 @@ function authorLabel(m) {
 // host-bound import.
 
 function feedLiveSession(entry, m, myUserId) {
-  if (!settings.getWindowMode()) return false;
+  // ⚠ NOT gated on window mode (2026-08-20): windowless sessions are the live sessions
+  // now, and a live session's own existence is the gate — nothing here MINTS one.
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
   // session at all. Safe only because the server refuses task_* kinds from an agent
   // (service-writes.assertLifecycleKindIsServerOwned), so prose can no longer ride in one. What
@@ -73,6 +74,7 @@ function feedLiveSession(entry, m, myUserId) {
     channelId: entry.channel.id,
     taskId,
     message: m.body,
+    seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
     authorName: authorLabel(m), // the AUTHOR, not just the account — see authorLabel
   });
 }

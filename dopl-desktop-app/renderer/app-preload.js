@@ -149,6 +149,12 @@ contextBridge.exposeInMainWorld('dopl', {
           messages: asMode(preset && preset.messages),
         },
       }),
+    // AUTO-SEND (2026-08-20): the DURABLE per-channel posture for the operator's own
+    // agent's replies — unlike the single-use arm above. A boolean over the wire, nothing else.
+    getAutoSend: (channelId) =>
+      ipcRenderer.invoke('channels:getAutoSend', asId(channelId)),
+    setAutoSend: (channelId, on) =>
+      ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
   },
 
   // `reopen` — the session card's "Open thread" button, the SAME op renderer/preload.js

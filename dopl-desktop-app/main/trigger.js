@@ -253,11 +253,13 @@ async function handleTrigger(entry, m) {
         // reads the row's REAL status either way.
         consent.submitDecision(entry.workspaceId, created.rowId, 'allow', {
           channelName: entry.channel.name,
-          onOpen: () => targeting.openChannelForEntry(entry),
+          onOpen: () => targeting.openChannelForEntry(entry, { threadId: inboundTaskId || null }),
         });
         watcher.poke(key);
       },
-      onOpen: () => targeting.openChannelForEntry(entry),
+      // Body click lands on the THREAD (the strip is the decision surface there);
+      // a legacy/absent id degrades to the channel, where the card carries it.
+      onOpen: () => targeting.openChannelForEntry(entry, { threadId: inboundTaskId || null }),
     });
   }
   watcher.poke(key);
@@ -335,11 +337,11 @@ async function inboundApproved(rec, meta) {
     : null;
   if (startModes) diag('inbound approved with an operator-chosen posture:', startModes.tools, '/', startModes.messages);
 
-  // v1.9 DEFAULT EXECUTOR: a native session window (visible turns, live Allow/Deny
-  // buttons, steering, cost) REPLACES headless + approve-out for session runs
-  // (§G Q1). Window-mode OFF — or an engine skip (window cap / no SDK / disabled) —
-  // falls back to today's headless + approve-out path, byte-for-byte.
-  if (settings.getWindowMode() && (await launchResponderSession(entry, m, rec, { taskId, startModes }))) {
+  // 2026-08-20 DEFAULT EXECUTOR: a WINDOWLESS SDK session (registers in the engine, so
+  // the Agents tab / pause / end / metrics all work; inbound auto-consumed; outbound per
+  // the channel's auto-send posture via the consent bridge). An engine skip (session cap /
+  // no SDK) falls back to the headless + approve-out path, byte-for-byte.
+  if (await launchResponderSession(entry, m, rec, { taskId, startModes })) {
     return; // a live session (or a busy→resend) now owns this request
   }
   // C-9: the fallback answers this request headlessly, so no window session will ever adopt
@@ -361,11 +363,20 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
   // carries one (server-stamped), else autonomous — either way the session runs
   // under the turn / idle / cost caps, so it cannot self-sustain unbounded.
   const mode = targeting.metaStr(m, 'taskMode') || 'autonomous';
+  // 2026-08-20 — THE WINDOWLESS POSTURE. There is no Accept UI, so the message axis is
+  // floored at auto_inbound; the OUT half is the channel's durable auto-send setting
+  // (channel-prefs), widened — never narrowed — by an operator-armed auto posture.
+  const armMsg = startModes && startModes.messages;
+  const autoOut = channelPrefs.getAutoSend(entry.channel.id)
+    || armMsg === 'auto_outbound' || armMsg === 'auto_both';
+  const messages = autoOut ? 'auto_both' : 'auto_inbound';
   const res = await sessionEngine.launchResponderSession({
     channelId: entry.channel.id,
     taskId: rec.taskId || taskId,
     workspaceId: entry.workspaceId,
     message: m.body,
+    windowless: true,
+    triggerSeq: m.seq, // the ask's seq — the outbound bridge's seq-join floor
     // FIX L1: the responder's counterparty is the requester who addressed me — the
     // inbound message's author. The listener only feeds this member's later replies.
     counterpartyId: m.authorUserId,
@@ -383,13 +394,13 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
       channelName: entry.channel.name, authorName: rec.requesterName,
       authorKind: m.authorKind, taskTitle: targeting.metaStr(m, 'taskTitle') || null,
       channelId: entry.channel.id, workspaceId: entry.workspaceId, taskId: rec.taskId || taskId,
+      workspaceSegment: entry.workspaceSegment || null, // the outbound bridge's nav target
     },
     toolProfile: rec.toolProfile,
     mode,
-    // H2: the posture the operator picked on the card they just approved, or absent.
-    // startSession applies it ONLY when it is handed in like this; every other spawn
-    // shape passes nothing and starts at the reducer's own manual/ask.
-    startModes: startModes || undefined,
+    // H2 still holds for the TOOL axis: the operator's armed pick, else manual/ask.
+    // The MESSAGE axis is the windowless posture derived above.
+    startModes: { tools: (startModes && startModes.tools) || 'manual', messages },
   });
   if (res && res.sessionId) {
     diag('responder session launched', String(res.sessionId).slice(0, 8), 'profile', rec.toolProfile);
@@ -422,7 +433,7 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
   diag('responder session skipped:', (res && res.skipped) || 'unknown', '— headless fallback');
   if (res && res.skipped === 'cap') {
     notifyLocal(
-      'Dopl: session window limit reached',
+      'Dopl: session limit reached',
       `Answering "${entry.channel.name}" headlessly instead.`
     );
   }

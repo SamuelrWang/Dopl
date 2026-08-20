@@ -236,6 +236,10 @@ const OPS = [
   ["channels:clearFolder", CH, null],
   ["channels:getPermissionPreset", CH, null],
   ["channels:setPermissionPreset", { channelId: CH, preset: PRESET }, { ok: false }],
+  // ⚠ TWO JOINED HERE 2026-08-20 (the auto-send posture): the durable per-channel
+  // send setting, boolean-only, same sender binding + UUID gate as every op above.
+  ["channels:getAutoSend", CH, false],
+  ["channels:setAutoSend", { channelId: CH, on: true }, { ok: false }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
   // ⚠ TWO JOINED HERE 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the
   // operator's OWN agent. They are STOP verbs — `interrupt` (the session window's pause

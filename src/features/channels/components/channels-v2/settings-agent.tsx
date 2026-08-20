@@ -50,6 +50,8 @@ import { Check } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { Switch } from "@/shared/ui/switch";
+import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
+import { AgentFolderRows, AutoSendRows } from "./settings-desktop-rows";
 import { cn } from "@/shared/lib/utils";
 import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
 import {
@@ -133,9 +135,6 @@ const TRUST_SCOPE_HINT = "Applies across the whole workspace";
  */
 const TRUST_EMPTY_COPY = "Nobody else in this channel yet";
 
-/** The desktop's own folder when the channel names none. */
-const FOLDER_DEFAULT_LABEL = "Sandbox (default)";
-
 export interface ChannelAgentSettingsProps {
   /** The channel's DB UUID — handed to both desktop bridges as-is. */
   channelId: string;
@@ -161,6 +160,7 @@ export interface ChannelAgentSettingsProps {
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const arm = useChannelPermissionPreset(props.channelId);
   const folder = useChannelFolder(props.channelId);
+  const autoSend = useChannelAutoSend(props.channelId);
 
   return (
     <ChannelAgentSettingsView
@@ -177,6 +177,15 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
               busy: folder.busy,
               onChoose: () => void folder.choose(),
               onClear: () => void folder.clear(),
+            }
+          : null
+      }
+      autoSend={
+        autoSend.bridge
+          ? {
+              on: autoSend.on,
+              busy: autoSend.busy,
+              onToggle: (next) => void autoSend.update(next),
             }
           : null
       }
@@ -214,6 +223,8 @@ export interface ChannelAgentSettingsViewProps {
   onChangePreset: (patch: Partial<PermissionPreset>) => void;
   /** The working folder, or null outside the desktop shell (row absent). */
   folder: AgentFolderState | null;
+  /** Auto-send (2026-08-20), or null outside the desktop shell (row absent). */
+  autoSend?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
   otherMembers: ChannelMember[];
   trustedIds: ReadonlySet<string>;
   trustBusyIds: ReadonlySet<string>;
@@ -228,6 +239,7 @@ export function ChannelAgentSettingsView({
   presetBusy,
   onChangePreset,
   folder,
+  autoSend = null,
   otherMembers,
   trustedIds,
   trustBusyIds,
@@ -324,43 +336,10 @@ export function ChannelAgentSettingsView({
           })}
         </div>
 
-        {/* The working folder — desktop-only, and the whole group disappears
-            without the bridge rather than standing as a labelled empty row.
-            ⚠ FOR DEVELOPERS, and no longer printed (Samuel, 2026-08-19): this is
-            where this channel's agent RUNS on the operator's Mac — CONTEXT, NOT
-            A SANDBOX. The tool profile applies on top whatever the cwd is
-            (`main/tool-profiles.js`), so changing the folder never changes what
-            the agent may do; an unset or vanished path falls back to the
-            isolated sandbox. The row's own label said "Context, not a sandbox"
-            until the copy cut. */}
-        {folder && (
-          <>
-            <SettingName>Agent folder</SettingName>
-            <p className="truncate rounded-[8px] border border-border-subtle bg-bg-inset px-2.5 py-1.5 text-body text-text-primary">
-              {folder.label ?? FOLDER_DEFAULT_LABEL}
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              <button
-                type="button"
-                onClick={folder.onChoose}
-                disabled={folder.busy}
-                className="btn-light rounded-[8px] px-2.5 py-1.5 text-caption font-medium text-text-primary disabled:opacity-60"
-              >
-                {folder.busy ? "Opening picker…" : "Change folder…"}
-              </button>
-              {folder.label && (
-                <button
-                  type="button"
-                  onClick={folder.onClear}
-                  disabled={folder.busy}
-                  className="rounded-[8px] px-2.5 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary disabled:opacity-60"
-                >
-                  Use default
-                </button>
-              )}
-            </div>
-          </>
-        )}
+        {/* The two DESKTOP-ONLY groups — each vanishes whole without its
+            bridge (no dead rows); `settings-desktop-rows.tsx` owns both. */}
+        {folder && <AgentFolderRows folder={folder} SettingName={SettingName} />}
+        {autoSend && <AutoSendRows autoSend={autoSend} SettingName={SettingName} />}
       </div>
 
       {/* ⚠ ONE hint line, and it is the SCOPE — see {@link TRUST_SCOPE_HINT} for

@@ -104,13 +104,17 @@ function makeShellHelpers(deps) {
   // nowhere; an unusable channel id degrades to the page, which is exactly what
   // a notification with no channel already does. Required LAZILY (the tray.js
   // idiom above) so this file keeps its module-scope dependency freedom.
-  function navigateToChannels(segment, channelId) {
+  function navigateToChannels(segment, channelId, threadId) {
     deps.showMainWindow();
     if (!segment) return;
     const { isSafeSegment } = require('./deep-link-target');
     if (!isSafeSegment(segment)) return;
     const page = `/${segment}/${CHANNELS_PAGE}`;
-    navigateTo(isSafeSegment(channelId) ? `${page}/${channelId}` : page);
+    if (!isSafeSegment(channelId)) return navigateTo(page);
+    // `?thread=` is a SELECTION the channels page already reads (Phase 10); a
+    // notification about a THREAD lands on the thread (Samuel, 2026-08-20).
+    const suffix = isSafeSegment(threadId) ? `?thread=${threadId}` : '';
+    navigateTo(`${page}/${channelId}${suffix}`);
   }
 
   // Replace whatever is on screen with the window the CURRENT gate verdict calls

@@ -208,6 +208,19 @@ function register(opts = {}) {
     return channelPrefs.armPermissionPreset(p.channelId, p.preset);
   }));
 
+  // AUTO-SEND (2026-08-20) — the durable per-channel send posture (channel-prefs.js
+  // owns storage + the default-off rule). Boolean in, boolean out, UUID-gated like
+  // every op here; a bad id reads false and writes nothing.
+  ipcMain.handle('channels:getAutoSend', appWindowOnly('getAutoSend', false, (_event, channelId) => {
+    if (!isUuid(channelId)) return false;
+    return channelPrefs.getAutoSend(channelId);
+  }));
+  ipcMain.handle('channels:setAutoSend', appWindowOnly('setAutoSend', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    return { ok: true, on: channelPrefs.setAutoSend(p.channelId, p.on === true) };
+  }));
+
   // Reveal a LIVE session window for a (channel, task) from the MAIN window.
   // channelId is UUID-validated (the same anti-probe guard as the folder ops);
   // taskId is an opaque string (a legacy `task-{channel}-{seq}` id or a

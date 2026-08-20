@@ -218,10 +218,14 @@ test("a clicked notification navigates to the CHANNEL, not just the page", () =>
   // the window, push a route) already existed — what was missing was the
   // channel, which every caller's `entry` had carried the whole time.
   const chan = fnOf(SHELL, "navigateToChannels");
-  assert.match(chan, /function navigateToChannels\(segment, channelId\)/);
+  assert.match(chan, /function navigateToChannels\(segment, channelId, threadId\)/);
   assert.match(chan, /deps\.showMainWindow\(\)/, "the window comes up either way");
-  assert.match(chan, /navigateTo\(isSafeSegment\(channelId\) \? `\$\{page\}\/\$\{channelId\}` : page\)/,
-    "a usable channel id deepens the route; anything else degrades to the page");
+  // A usable channel id deepens the route; anything else degrades to the page —
+  // and a usable THREAD id (2026-08-20) deepens it once more, as the `?thread=`
+  // SELECTION the channels page already reads. Same one segment rule for all three.
+  assert.match(chan, /if \(!isSafeSegment\(channelId\)\) return navigateTo\(page\);/);
+  assert.match(chan, /const suffix = isSafeSegment\(threadId\) \? `\?thread=\$\{threadId\}` : '';/);
+  assert.match(chan, /navigateTo\(`\$\{page\}\/\$\{channelId\}\$\{suffix\}`\)/);
   // The page is ONE named string, which is what made the Phase 12 cutover's
   // rename an edit rather than a grep: `channels-v2` → `channels`, 2026-08-18.
   assert.match(SHELL, /const CHANNELS_PAGE = 'channels';/);
@@ -260,8 +264,8 @@ test("the notification seam hands the channel over, and never invents one", () =
   const fn = fnOf(TW, "openChannelForEntry");
   assert.match(
     fn,
-    /handlers\.openChannel\(entry\.workspaceSegment, \(entry\.channel && entry\.channel\.id\) \|\| null\)/,
-    "an entry with no channel must degrade to the page, never to a fabricated id"
+    /handlers\.openChannel\(\s*entry\.workspaceSegment,\s*\(entry\.channel && entry\.channel\.id\) \|\| null,\s*\(opts && opts\.threadId\) \|\| null\s*\)/,
+    "an entry with no channel must degrade to the page, never to a fabricated id — and the thread is the CALLER's claim or nothing"
   );
   assert.match(fn, /if \(!handlers\.openChannel \|\| !entry \|\| !entry\.workspaceSegment\) return;/);
   // index.js still wires this seam to the shell helper that grew the parameter.

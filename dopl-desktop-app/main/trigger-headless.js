@@ -17,6 +17,7 @@
 // watcher.settle, deterministic taskId / clientMsgId.
 
 const consent = require('./consent');
+const channelPrefs = require('./channel-prefs');
 const watcher = require('./consent-watcher');
 const targeting = require('./targeting');
 const spawner = require('./session-spawner');
@@ -124,6 +125,14 @@ async function openOutboundReview(entry, m, rec, { taskId, startedAt, text }) {
     return;
   }
   watcher.toOutbound(rec.key, { rowId: created.rowId, taskId, startedAt, proposedReply: reply });
+  // AUTO-SEND (2026-08-20): the channel's durable posture decides the row itself — the
+  // row still exists (the audit trail and the CAS), but no notification and no wait.
+  // The watcher's poll posts on the allow exactly as if a human clicked Send.
+  if (channelPrefs.getAutoSend(entry.channel.id)) {
+    void consent.submitDecision(rec.workspaceId, created.rowId, 'allow', {});
+    watcher.poke(rec.key);
+    return;
+  }
   if (!created.status || created.status === 'pending') {
     consent.notifyOutbound({
       channelName: entry.channel.name,
@@ -132,11 +141,13 @@ async function openOutboundReview(entry, m, rec, { taskId, startedAt, text }) {
         // F-067: a Send whose PATCH dies re-notifies instead of vanishing.
         consent.submitDecision(rec.workspaceId, created.rowId, 'allow', {
           channelName: entry.channel.name,
-          onOpen: () => targeting.openChannelForEntry(entry),
+          // Body click NAVIGATES — to the thread, where the send box is (2026-08-20).
+    onOpen: () => targeting.openChannelForEntry(entry, { threadId: rec.taskId || null }),
         });
         watcher.poke(rec.key);
       },
-      onOpen: () => targeting.openChannelForEntry(entry),
+      // Body click NAVIGATES — to the thread, where the send box is (2026-08-20).
+    onOpen: () => targeting.openChannelForEntry(entry, { threadId: rec.taskId || null }),
     });
   }
   watcher.poke(rec.key); // resolve a born-decided outbound row at once
