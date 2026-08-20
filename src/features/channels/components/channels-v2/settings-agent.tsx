@@ -1,9 +1,19 @@
 "use client";
 
 /**
- * Channels v2 — the SETTINGS tab's AGENT half: the permission arm, the durable
- * per-channel tool profile, the desktop-only working folder, and the standing
- * per-teammate trust roster. All of it INLINE.
+ * Channels v2 — the SETTINGS tab's AGENT half: the durable launch posture, the
+ * durable per-channel tool profile, the desktop-only working folder, and the
+ * standing per-teammate trust roster. All of it INLINE, and all of it DURABLE.
+ *
+ * ⚠ THE PERMISSION ARM IS NO LONGER ON THIS TAB (2026-08-20). It used to be, and
+ * being here is what broke it: a single-use, 30-minute fuse rendered among four
+ * durable settings reads as a fifth one. The operator picked Bypass, the first
+ * consent-approved launch consumed it, every later session started manual/ask,
+ * and this control went on displaying "Bypass". The arm went back to the request
+ * card (`launch-panel.tsx › RequestPermissionRow`) unchanged; the two selects
+ * below now write the DURABLE posture (`use-channel-launch-posture.ts`), whose
+ * one consumer is the Agents tab's Launch button. `main/channel-prefs.js` is the
+ * statement of record for the split, and H2 holds because it is by CONSUMER.
  *
  * ⚠ THIS FILE IS THE 2026-08-19 RULING (Samuel, live review) AND IT REPLACED TWO
  * POPOVERS. `components/channel-settings-popover.tsx` (a 7×7 icon button opening
@@ -15,11 +25,12 @@
  * sits.** INVARIANTS §5 records the ruling; the open "product fate" question it
  * used to record is closed by this file.
  *
- * ⚠ NO NEW WRITES, NO NEW PATHS. The arm is still
- * {@link useChannelPermissionPreset} over the desktop bridge, the folder is
- * still {@link useChannelFolder}, and the tool profile and trust rows still call
- * back into `channel-manage.tsx`'s mutations on the page's ONE `gate`. What
- * changed is the chrome.
+ * ⚠ NO NEW WRITES, NO NEW PATHS — as of the 2026-08-19 inlining, which is what
+ * that ruling was about. (The 2026-08-20 split above DID change one: these two
+ * selects moved from the arm's bridge ops to the posture's. Nothing else here
+ * did.) The folder is still {@link useChannelFolder}, and the tool profile and
+ * trust rows still call back into `channel-manage.tsx`'s mutations on the page's
+ * ONE `gate`.
  *
  * ⚠ NO DEAD ROWS (INVARIANTS §5). Both desktop-only groups are gated on their
  * own bridge, so a plain browser renders neither the controls NOR a heading over
@@ -55,13 +66,12 @@ import { AgentFolderRows, AutoSendRows } from "./settings-desktop-rows";
 import { cn } from "@/shared/lib/utils";
 import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
 import {
-  useChannelPermissionPreset,
   type MessageMode,
   type PermissionPreset,
   type ToolMode,
 } from "../../hooks/use-channel-permission-preset";
+import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
 import { useChannelFolder } from "../../hooks/use-channel-folder";
-import { LAUNCH_SETTINGS_HEADING } from "../launch-panel";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
 import { PanelHeading } from "./bits";
 import { memberPerson } from "./view-model";
@@ -158,7 +168,7 @@ export interface ChannelAgentSettingsProps {
  * the only thing that needs one.
  */
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
-  const arm = useChannelPermissionPreset(props.channelId);
+  const launchPosture = useChannelLaunchPosture(props.channelId);
   const folder = useChannelFolder(props.channelId);
   const autoSend = useChannelAutoSend(props.channelId);
 
@@ -167,9 +177,9 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
       profile={props.profile}
       onSetToolProfile={props.onSetToolProfile}
       toolProfileBusy={props.toolProfileBusy}
-      preset={arm.bridge ? arm.preset : null}
-      presetBusy={arm.busy}
-      onChangePreset={(patch) => void arm.update(patch)}
+      posture={launchPosture.bridge ? launchPosture.posture : null}
+      postureBusy={launchPosture.busy}
+      onChangePosture={(patch) => void launchPosture.update(patch)}
       folder={
         folder.bridge
           ? {
@@ -216,11 +226,13 @@ export interface ChannelAgentSettingsViewProps {
    *  is the DURABLE containment control, so a second pick landing on top of an
    *  unsettled one is the case worth refusing. */
   toolProfileBusy: boolean;
-  /** The permission arm, or null outside the desktop shell (subsection absent). */
-  preset: PermissionPreset | null;
-  /** True while an arm write is in flight — both arm selects go inert. */
-  presetBusy: boolean;
-  onChangePreset: (patch: Partial<PermissionPreset>) => void;
+  /** The DURABLE launch posture, or null outside the desktop shell (subsection
+   *  absent). ⚠ NOT the arm — `use-channel-launch-posture.ts` says why they are
+   *  two records with two consumers. */
+  posture: PermissionPreset | null;
+  /** True while a posture write is in flight — both selects go inert. */
+  postureBusy: boolean;
+  onChangePosture: (patch: Partial<PermissionPreset>) => void;
   /** The working folder, or null outside the desktop shell (row absent). */
   folder: AgentFolderState | null;
   /** Auto-send (2026-08-20), or null outside the desktop shell (row absent). */
@@ -235,9 +247,9 @@ export function ChannelAgentSettingsView({
   profile,
   onSetToolProfile,
   toolProfileBusy,
-  preset,
-  presetBusy,
-  onChangePreset,
+  posture,
+  postureBusy,
+  onChangePosture,
   folder,
   autoSend = null,
   otherMembers,
@@ -249,36 +261,47 @@ export function ChannelAgentSettingsView({
     <>
       <PanelHeading title="Agent" />
       <div className="flex flex-col gap-1 px-3.5">
-        {/* THE ARM. Absent entirely in a plain browser — no bridge, no dead rows.
-            ⚠ Its heading is shared verbatim with the launch panel's disclosure
-            (`launch-panel.tsx › LAUNCH_SETTINGS_HEADING`), because the two
-            surfaces show the SAME pair and one sentence may not drift into
-            two. It is an ARM, never "this channel", never "always".
-            ⚠ SINCE 2026-08-19 THE HEADING CARRIES THAT ALONE. The sentence
-            under it — "…then expires after 30 minutes. Every other session
-            starts at Ask each time." — was cut with every other explainer on
-            this tab. The TTL is unchanged (`main/channel-prefs.js ARM_TTL_MS`);
-            it is simply not printed here, and the heading is what keeps the
-            surface from reading as a stored preference. */}
-        {preset && (
+        {/* THE DURABLE LAUNCH POSTURE — 2026-08-20, AND IT REPLACED THE ARM ON
+            THIS TAB. Absent entirely in a plain browser — no bridge, no dead rows.
+
+            ⚠ WHAT CHANGED AND WHY. These two selects used to write the SINGLE-USE
+            ARM (`use-channel-permission-preset.ts`), under the launch panel's own
+            heading, on the reasoning that one sentence must not drift into two.
+            The heading was carrying the entire distinction — and it could not.
+            The rows sat among the durable group below (tool profile, folder,
+            auto-send), so the operator read them as settings, picked Bypass, and
+            got manual/ask on every session after the first: the arm is spent by
+            the launch that consumes it and expires 30 minutes later, while this
+            control went on displaying the value they chose. A fuse drawn as a
+            switch is worse than either one.
+
+            ⚠ THE ARM DID NOT MOVE OR CHANGE — it went back to being consent-only.
+            It still renders on the request card (`launch-panel.tsx ›
+            RequestPermissionRow`), still single-use, still 30 minutes, still
+            consumed by `trigger.js › inboundApproved` alone. H2 is intact
+            because the SPLIT IS BY CONSUMER: the arm answers a peer's request a
+            human is approving right now; this pair answers the Launch button
+            that same human is pressing on their own thread.
+            `main/channel-prefs.js` is the statement of record. */}
+        {posture && (
           <>
-            <GroupLabel>{LAUNCH_SETTINGS_HEADING}</GroupLabel>
+            <GroupLabel>{LAUNCH_POSTURE_HEADING}</GroupLabel>
             <SettingRow name="Permissions">
               <SelectMenu<ToolMode>
-                value={preset.tools}
+                value={posture.tools}
                 options={TOOL_OPTIONS}
-                onChange={(tools) => onChangePreset({ tools })}
-                ariaLabel="Permissions for the next request you allow"
-                disabled={presetBusy}
+                onChange={(tools) => onChangePosture({ tools })}
+                ariaLabel="Permissions for agents you launch"
+                disabled={postureBusy}
               />
             </SettingRow>
             <SettingRow name="Sends">
               <SelectMenu<MessageMode>
-                value={preset.messages}
+                value={posture.messages}
                 options={MESSAGE_OPTIONS}
-                onChange={(messages) => onChangePreset({ messages })}
-                ariaLabel="Sends for the next request you allow"
-                disabled={presetBusy}
+                onChange={(messages) => onChangePosture({ messages })}
+                ariaLabel="Sends for agents you launch"
+                disabled={postureBusy}
               />
             </SettingRow>
           </>
@@ -409,10 +432,20 @@ function TrustRow({
   );
 }
 
-/** The sub-heading that separates the ARM from the DURABLE group. ⚠ The split is
- *  by BACKING STORE AND LIFETIME, and it is stated by heading rather than by
- *  ordering — presenting the arm as a stored preference is the H2 defect's own
- *  mental model (`use-channel-permission-preset.ts`). */
+/**
+ * The heading over the launch posture. ⚠ IT NAMES THE ACT, NOT A TIME WINDOW.
+ * The arm's heading ("For the next request you allow") was doing the entire job
+ * of saying "this is single-use" and could not carry it; this pair really is
+ * durable, so the honest sentence is the one that says WHICH launches it governs
+ * — the ones the operator starts. It must never read "for every session": a
+ * peer's request is answered on the ARM, and this pair has nothing to do with it.
+ */
+const LAUNCH_POSTURE_HEADING = "When you launch an agent";
+
+/** The sub-heading that separates each group. ⚠ Every group on this tab is now
+ *  DURABLE, and the headings say what each one governs rather than how long it
+ *  lasts — the single-use arm went back to the request card, which is the only
+ *  surface that can honestly show it (`use-channel-launch-posture.ts`). */
 function GroupLabel({ children }: { children: ReactNode }) {
   return (
     <p className="pt-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">

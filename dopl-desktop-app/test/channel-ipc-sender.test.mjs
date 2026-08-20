@@ -183,6 +183,13 @@ function bootIpc({ blocked = false } = {}) {
         getPermissionPreset: () => ({ tools: "bypass", messages: "auto_both" }),
         armPermissionPreset: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         clearPermissionPreset: () => {},
+        // The DURABLE half of the 2026-08-20 split. A REFUSED `set` must reach
+        // neither writer, so both record into the same `writes` ledger.
+        getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
+        setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
+        launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
+        getAutoSend: () => false,
+        setAutoSend: () => false,
       };
     }
     if (id === "./channel-dirs") {
@@ -240,6 +247,12 @@ const OPS = [
   // send setting, boolean-only, same sender binding + UUID gate as every op above.
   ["channels:getAutoSend", CH, false],
   ["channels:setAutoSend", { channelId: CH, on: true }, { ok: false }],
+  // ⚠ TWO MORE JOINED 2026-08-20 (the arm-vs-durable-posture split): the DURABLE
+  // launch posture, same two axes as the arm, same sender binding + UUID gate.
+  // A refused `get` must not disclose the posture and a refused `set` must not
+  // write one — both are asserted by the shared loop below.
+  ["channels:getLaunchPosture", CH, null],
+  ["channels:setLaunchPosture", { channelId: CH, preset: PRESET }, { ok: false }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
   // ⚠ TWO JOINED HERE 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the
   // operator's OWN agent. They are STOP verbs — `interrupt` (the session window's pause
@@ -291,7 +304,7 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
   const handlers = {};
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
-    if (id === "./channel-prefs") return { getPermissionPreset: () => PRESET, armPermissionPreset: () => ({ ok: true }), clearPermissionPreset: () => {} };
+    if (id === "./channel-prefs") return { getPermissionPreset: () => PRESET, armPermissionPreset: () => ({ ok: true }), clearPermissionPreset: () => {}, getLaunchPosture: () => PRESET, setLaunchPosture: () => ({ ok: true }), launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }), getAutoSend: () => false, setAutoSend: () => false };
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };

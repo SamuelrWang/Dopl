@@ -14,20 +14,37 @@ import { installBridge } from "#/test-utils/bridge";
  * did not go with the chrome, and they are the same two the popover suite was
  * written for:
  *
- *  1. the arm section and the folder row exist ONLY with their bridge, and
- *     choosing a mode WRITES through it;
- *  2. ⚠ TWO surfaces showing one channel's arm must not revert each other. A
+ *  1. the permission section and the folder row exist ONLY with their bridge,
+ *     and choosing a mode WRITES through it;
+ *  2. ⚠ TWO surfaces showing one channel's pair must not revert each other. A
  *     per-mount private snapshot makes the second writer send
  *     `{...staleSnapshot, ...patch}`, walking the other's axis back while still
- *     displaying the value it no longer has. The launch panel's contract is that
- *     the launch runs what it SHOWS.
+ *     displaying the value it no longer has.
  *
- * Permissions and Sends are the desktop permission ARM (`main/channel-prefs.js`)
- * over `window.dopl.channels.get/setPermissionPreset`; the folder is
- * `window.dopl.channels.chooseFolder/clearFolder`; Tools is a CLOUD write and
- * belongs to the caller. Copy and the bridge-free rendering are pinned in the
- * ROOT suite (`channels-v2/settings-tab.test.tsx`); what needs a real bridge and
- * a real DOM is here.
+ * ⚠ WHAT THESE ROWS WRITE CHANGED ON 2026-08-20, AND RULE 2's SUBJECT CHANGED
+ * WITH IT. Permissions and Sends on THIS tab wrote the single-use consent ARM;
+ * they write the DURABLE LAUNCH POSTURE now
+ * (`window.dopl.channels.get/setLaunchPosture`, stored under
+ * `channelLaunchPosture` in `main/channel-prefs.js`), consumed by exactly one
+ * caller — `channel-dir-ipc.js › sessions:launch`, the Agents tab's own button.
+ * The ARM is untouched and went back to being consent-only, on the request card
+ * (`RequestPermissionRow`): still single-use, still 30 minutes, still consumed by
+ * `trigger.js › inboundApproved` alone. H2 holds because the split is by
+ * CONSUMER, not by lifetime.
+ *
+ * The defect that forced it: the tab rendered a FUSE among durable settings (tool
+ * profile, folder, auto-send). The operator picked Bypass, the first
+ * consent-approved launch spent it, every later session started manual/ask — and
+ * the control went on displaying "Bypass", because it re-reads only on mount.
+ *
+ * So the two surfaces no longer share a record, and the last suite pins BOTH
+ * halves: they must not cross-write, and two readers of the SAME record (the tab
+ * in the main window and in a pop-out) must still merge rather than clobber.
+ *
+ * The folder is `window.dopl.channels.chooseFolder/clearFolder`; Tools is a CLOUD
+ * write and belongs to the caller. Copy and the bridge-free rendering are pinned
+ * in the ROOT suite (`channels-v2/settings-agent-posture.test.tsx` and
+ * `› settings-tab.test.tsx`); what needs a real bridge and a real DOM is here.
  *
  * ⚠ THE TAB'S EXPLAINER COPY WAS CUT ON 2026-08-19 (Samuel, live review, third
  * ruling of the day — "we should not be explaining everything to the user").
@@ -59,10 +76,16 @@ function member(over: Partial<ChannelMember> = {}): ChannelMember {
 }
 
 /**
- * `window.dopl` carrying the permission-preset half of the channels bridge over
- * a real in-memory store, so a write is observable the way main stores it and a
- * later read sees it — the point of the last suite below. `folder: true` adds
- * the folder half, feature-detected on `chooseFolder`.
+ * `window.dopl` carrying BOTH permission halves of the channels bridge over two
+ * real, SEPARATE in-memory stores, so a write is observable the way main stores
+ * it and a later read sees it — the point of the last suite below.
+ * `folder: true` adds the folder half, feature-detected on `chooseFolder`.
+ *
+ * ⚠ TWO STORES, NOT ONE, AND THAT IS THE 2026-08-20 SPLIT (see the file header).
+ * `channelPermissionPresets` is the single-use ARM the request card writes;
+ * `channelLaunchPosture` is the DURABLE posture the Settings tab writes. One
+ * fake store behind both ops would make this suite green over exactly the bug
+ * the split fixes — a Settings-tab pick that a consent launch silently spends.
  */
 function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}) {
   const stored: { value: unknown } = { value: null };
@@ -72,6 +95,13 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
     stored.value = preset;
     return Promise.resolve({ ok: true });
   });
+  const posture: { value: unknown } = { value: null };
+  const getLaunchPosture = vi.fn(() => Promise.resolve(posture.value));
+  const setLaunchPosture = vi.fn((_id: string, next: unknown) => {
+    if (opts.ok === false) return Promise.resolve({ ok: false });
+    posture.value = next;
+    return Promise.resolve({ ok: true });
+  });
   const getFolderLabel = vi.fn(() => Promise.resolve<string | null>("~/Downloads/repo"));
   const chooseFolder = vi.fn(() => Promise.resolve<string | null>("~/code/dopl"));
   const clearFolder = vi.fn(() => Promise.resolve());
@@ -79,6 +109,8 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
   if (opts.present !== false) {
     channels.getPermissionPreset = getPermissionPreset;
     channels.setPermissionPreset = setPermissionPreset;
+    channels.getLaunchPosture = getLaunchPosture;
+    channels.setLaunchPosture = setLaunchPosture;
   }
   if (opts.folder) {
     channels.getFolderLabel = getFolderLabel;
@@ -86,7 +118,11 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
     channels.clearFolder = clearFolder;
   }
   installBridge({ apiRequest: vi.fn(), channels });
-  return { getPermissionPreset, setPermissionPreset, chooseFolder, clearFolder, stored };
+  return {
+    getPermissionPreset, setPermissionPreset, stored,
+    getLaunchPosture, setLaunchPosture, posture,
+    chooseFolder, clearFolder,
+  };
 }
 
 afterEach(() => {
@@ -112,25 +148,30 @@ function mountAgent(over: Partial<Parameters<typeof ChannelAgentSettings>[0]> = 
   return { onSetToolProfile, onToggleTrust };
 }
 
-const permissions = () =>
-  screen.getByLabelText("Permissions for the next request you allow");
-const sends = () => screen.getByLabelText("Sends for the next request you allow");
+// The SETTINGS TAB's two selects. ⚠ They read the DURABLE posture since
+// 2026-08-20; the arm's labels below belong to the REQUEST CARD alone.
+const permissions = () => screen.getByLabelText("Permissions for agents you launch");
+const sends = () => screen.getByLabelText("Sends for agents you launch");
 const queryPermissions = () =>
-  screen.queryByLabelText("Permissions for the next request you allow");
+  screen.queryByLabelText("Permissions for agents you launch");
+/** The request card's ARM select — a DIFFERENT record, deliberately. */
+const armTools = () => screen.getByLabelText("What this thread's agent may do");
 const item = (name: RegExp | string) => screen.getByRole("menuitem", { name });
 
-describe("the arm section exists only where the arm does", () => {
+describe("the posture section exists only where the bridge does", () => {
   it("shows Permissions and Sends inside the desktop shell", async () => {
     bridge();
     mountAgent();
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
     expect(sends()).toBeInTheDocument();
-    // ⚠ The HEADING is what says this is an arm, and since the 2026-08-19
-    // minimal-copy ruling it is the only thing that does — the "expires after
-    // 30 minutes" sentence under it was cut with every other explainer on this
-    // tab. The TTL is unchanged; the root suite still cross-checks it against
-    // `main/channel-prefs.js`.
-    expect(screen.getByText("For the next request you allow")).toBeInTheDocument();
+    // ⚠ THE HEADING NAMES THE ACT, NOT A TIME WINDOW (2026-08-20). It read
+    // "For the next request you allow" — the ARM's heading — while these rows
+    // wrote the arm, and it was carrying the whole single-use disclosure on its
+    // own. It could not: the rows sit among durable settings, so the operator
+    // read them as one. The rows are durable now and the arm's heading belongs
+    // to the request card alone.
+    expect(screen.getByText("When you launch an agent")).toBeInTheDocument();
+    expect(screen.queryByText("For the next request you allow")).toBeNull();
     expect(screen.queryByText(/expires after 30 minutes/)).toBeNull();
   });
 
@@ -140,14 +181,12 @@ describe("the arm section exists only where the arm does", () => {
       expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeInTheDocument()
     );
     expect(queryPermissions()).toBeNull();
-    expect(
-      screen.queryByLabelText("Sends for the next request you allow")
-    ).toBeNull();
+    expect(screen.queryByLabelText("Sends for agents you launch")).toBeNull();
     // ⚠ No heading over nothing either.
-    expect(screen.queryByText("For the next request you allow")).toBeNull();
+    expect(screen.queryByText("When you launch an agent")).toBeNull();
   });
 
-  it("shows neither on a desktop build without the preset API", async () => {
+  it("shows neither on a desktop build without the posture API", async () => {
     bridge({ present: false });
     mountAgent();
     await waitFor(() =>
@@ -158,18 +197,23 @@ describe("the arm section exists only where the arm does", () => {
 });
 
 describe("choosing, inline", () => {
-  it("arms the tool axis and shows the new posture on the control itself", async () => {
+  it("sets the tool axis and shows the new posture on the control itself", async () => {
     const b = bridge();
     mountAgent();
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
     fireEvent.click(permissions());
     fireEvent.click(item(/^Bypass/));
     await waitFor(() =>
-      expect(b.setPermissionPreset).toHaveBeenCalledWith(CHANNEL, {
+      expect(b.setLaunchPosture).toHaveBeenCalledWith(CHANNEL, {
         tools: "bypass",
         messages: "ask",
       })
     );
+    // ⚠ AND IT DOES NOT TOUCH THE ARM. The Settings tab writing the consent arm
+    // is the bug the split fixes; a launch the operator configures here must not
+    // consume, extend, or overwrite the pair a consent card would show.
+    expect(b.setPermissionPreset).not.toHaveBeenCalled();
+    expect(b.stored.value).toBeNull();
     // ⚠ No drill-back: the value is on the row the whole time.
     await waitFor(() => expect(permissions().textContent).toContain("Bypass"));
   });
@@ -180,6 +224,7 @@ describe("choosing, inline", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Read only/ }));
     expect(onSetToolProfile).toHaveBeenCalledWith("read_only");
     expect(b.setPermissionPreset).not.toHaveBeenCalled();
+    expect(b.setLaunchPosture).not.toHaveBeenCalled();
   });
 
   it("reverts the shown posture when the desktop refuses the write", async () => {
@@ -241,11 +286,10 @@ describe("the Agent folder row", () => {
   });
 });
 
-describe("two surfaces, one arm", () => {
-  it("does not let the Settings tab revert the launch panel's axis", async () => {
-    const b = bridge();
-    // Both on the same channel — the ordinary case.
-    render(
+describe("two records, two surfaces — the split, end to end", () => {
+  /** The tab and the request card, side by side on one channel: the ordinary case. */
+  function bothSurfaces() {
+    return render(
       <>
         <RequestPermissionRow channelId={CHANNEL} />
         <ChannelAgentSettings
@@ -260,32 +304,108 @@ describe("two surfaces, one arm", () => {
         />
       </>
     );
-    await waitFor(() =>
-      expect(screen.getByLabelText("What this thread's agent may do")).toBeInTheDocument()
-    );
-    fireEvent.click(screen.getByLabelText("What this thread's agent may do"));
+  }
+
+  it("keeps the Settings tab and the request card on SEPARATE records", async () => {
+    // ⚠ THIS SUITE INVERTED ON 2026-08-20, AND THE INVERSION IS THE FIX.
+    // It used to assert these two surfaces shared ONE arm and had to merge
+    // rather than clobber each other. They no longer share anything: the card
+    // arms a single-use pair for the next request a human ALLOWS, and the tab
+    // sets a durable posture for launches that human STARTS. Cross-writing was
+    // the whole defect — a Settings pick that a consent launch silently spent,
+    // leaving the tab displaying a posture nothing would ever use again.
+    const b = bridge();
+    bothSurfaces();
+    await waitFor(() => expect(queryPermissions()).not.toBeNull());
+
+    // The CARD arms bypass.
+    fireEvent.click(armTools());
     fireEvent.click(item(/^Bypass/));
     await waitFor(() => expect(b.setPermissionPreset).toHaveBeenCalledTimes(1));
+    expect(b.setLaunchPosture).not.toHaveBeenCalled();
 
-    // The tab sets the MESSAGES axis, from a component mounted before the
-    // panel's write existed.
+    // The TAB sets its own messages axis. It must not have inherited the card's
+    // tools pick, and must not write it back.
     fireEvent.click(sends());
     fireEvent.click(item(/^Automatic/));
-
-    // Both axes survive.
     await waitFor(() =>
-      expect(b.setPermissionPreset).toHaveBeenLastCalledWith(CHANNEL, {
+      expect(b.setLaunchPosture).toHaveBeenLastCalledWith(CHANNEL, {
+        tools: "manual",
+        messages: "auto_both",
+      })
+    );
+    expect(b.setPermissionPreset).toHaveBeenCalledTimes(1);
+    // Each store holds exactly what its own surface put there.
+    expect(b.stored.value).toEqual({ tools: "bypass", messages: "ask" });
+    expect(b.posture.value).toEqual({ tools: "manual", messages: "auto_both" });
+  });
+
+  it("does not let one surface revert another reader of the SAME record", async () => {
+    // The merge rule did not go away — it moved to where two readers really do
+    // share a record: two mounts of the tab (the main window and a pop-out).
+    // A private mount snapshot makes the second writer send
+    // `{...staleSnapshot, ...patch}`, walking the first's axis back while still
+    // displaying the value it no longer has.
+    const b = bridge();
+    render(
+      <>
+        <ChannelAgentSettings
+          channelId={CHANNEL}
+          profile="full"
+          otherMembers={[member()]}
+          trustedIds={new Set()}
+          trustBusyIds={new Set()}
+          toolProfileBusy={false}
+          onSetToolProfile={vi.fn()}
+          onToggleTrust={vi.fn()}
+        />
+        <ChannelAgentSettings
+          channelId={CHANNEL}
+          profile="full"
+          otherMembers={[member()]}
+          trustedIds={new Set()}
+          trustBusyIds={new Set()}
+          toolProfileBusy={false}
+          onSetToolProfile={vi.fn()}
+          onToggleTrust={vi.fn()}
+        />
+      </>
+    );
+    await waitFor(() =>
+      expect(screen.getAllByLabelText("Permissions for agents you launch")).toHaveLength(2)
+    );
+    const [firstTools] = screen.getAllByLabelText("Permissions for agents you launch");
+    fireEvent.click(firstTools);
+    fireEvent.click(item(/^Bypass/));
+    await waitFor(() => expect(b.setLaunchPosture).toHaveBeenCalledTimes(1));
+
+    const [, secondSends] = screen.getAllByLabelText("Sends for agents you launch");
+    fireEvent.click(secondSends);
+    fireEvent.click(item(/^Automatic/));
+
+    // Both axes survive — the second write merged onto what is STORED.
+    await waitFor(() =>
+      expect(b.setLaunchPosture).toHaveBeenLastCalledWith(CHANNEL, {
         tools: "bypass",
         messages: "auto_both",
       })
     );
   });
 
-  it("repaints the OTHER surface, so neither displays a posture it no longer has", async () => {
+  it("repaints the OTHER reader, so neither displays a posture it no longer has", async () => {
     bridge();
     render(
       <>
-        <RequestPermissionRow channelId={CHANNEL} />
+        <ChannelAgentSettings
+          channelId={CHANNEL}
+          profile="full"
+          otherMembers={[member()]}
+          trustedIds={new Set()}
+          trustBusyIds={new Set()}
+          toolProfileBusy={false}
+          onSetToolProfile={vi.fn()}
+          onToggleTrust={vi.fn()}
+        />
         <ChannelAgentSettings
           channelId={CHANNEL}
           profile="full"
@@ -298,16 +418,15 @@ describe("two surfaces, one arm", () => {
         />
       </>
     );
-    await waitFor(() => expect(queryPermissions()).not.toBeNull());
-    fireEvent.click(permissions());
-    fireEvent.click(item(/^Bypass/));
-
-    // The panel's pill names the current value; must not still read "Ask each
-    // time" after the tab armed something else.
     await waitFor(() =>
-      expect(screen.getByLabelText("What this thread's agent may do").textContent).toContain(
-        "Bypass"
-      )
+      expect(screen.getAllByLabelText("Permissions for agents you launch")).toHaveLength(2)
     );
+    const [firstTools] = screen.getAllByLabelText("Permissions for agents you launch");
+    fireEvent.click(firstTools);
+    fireEvent.click(item(/^Bypass/));
+    await waitFor(() => {
+      const [, second] = screen.getAllByLabelText("Permissions for agents you launch");
+      expect(second.textContent).toContain("Bypass");
+    });
   });
 });

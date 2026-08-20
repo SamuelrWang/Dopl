@@ -54,6 +54,8 @@
 //
 //   setPermissionPreset  arms EXECUTION permission for a channel (the H3 report)
 //   getPermissionPreset  discloses the posture a channel is armed with
+//   setLaunchPosture     sets the DURABLE execution posture for MY OWN launches
+//   getLaunchPosture     discloses that posture
 //   chooseFolder         pops a native OS dialog on demand (UI-jacking / nagging)
 //   clearFolder          silently resets where a channel's agent runs
 //   getFolderLabel       discloses a fragment of the operator's LOCAL path
@@ -208,6 +210,23 @@ function register(opts = {}) {
     return channelPrefs.armPermissionPreset(p.channelId, p.preset);
   }));
 
+  // THE DURABLE LAUNCH POSTURE (2026-08-20). Same two axes as the arm above and
+  // the same validation, but a DIFFERENT record with a different consumer —
+  // channel-prefs.js's own block is the statement of the split, read it before
+  // changing either op. Same `appWindowOnly` + UUID gating as everything here;
+  // both modes are re-validated in channel-prefs against the frozen enums, so an
+  // unknown value on either axis writes nothing.
+  // → the EFFECTIVE pair, never null (an unset channel really is manual/ask).
+  ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, (_event, channelId) => {
+    if (!isUuid(channelId)) return null;
+    return channelPrefs.getLaunchPosture(channelId);
+  }));
+  ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    return channelPrefs.setLaunchPosture(p.channelId, p.preset);
+  }));
+
   // AUTO-SEND (2026-08-20) — the durable per-channel send posture (channel-prefs.js
   // owns storage + the default-off rule). Boolean in, boolean out, UUID-gated like
   // every op here; a bad id reads false and writes nothing.
@@ -261,10 +280,20 @@ function register(opts = {}) {
       toolProfile,
       mode: 'interactive',
       windowless: true,
-      startModes: {
-        tools: 'manual',
-        messages: channelPrefs.getAutoSend(p.channelId) ? 'auto_both' : 'auto_inbound',
-      },
+      // THE DURABLE POSTURE, CONSUMED HERE AND NOWHERE ELSE (2026-08-20).
+      // ⚠ `tools` was PINNED to 'manual' and the operator's Settings-tab pick was
+      // never read on this lane at all, so "Tools = Bypass" did nothing for the
+      // one launch shape the button in front of them starts. It is a real read
+      // now — and this is the ONLY call site, which is what keeps H2 intact: the
+      // click on Launch is the human decision this posture applies to, exactly
+      // like the consent Allow is the arm's. A peer wake, a resume and a
+      // recreate still pass nothing and still inherit manual/ask.
+      // ⚠ MESSAGES WIDENS, NEVER NARROWS, and it is floored at auto_inbound for
+      // the windowless reason (no Accept UI exists). Auto-send is the durable
+      // OUT switch; an auto_outbound / auto_both posture is a second way to say
+      // the same thing, so either turns the floor into auto_both — and neither
+      // can drop below it.
+      startModes: channelPrefs.launchStartModes(p.channelId),
     });
     if (res && res.sessionId) return { ok: true, sessionId: res.sessionId };
     return { ok: false, reason: (res && res.skipped) || 'unknown' };

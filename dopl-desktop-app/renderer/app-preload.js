@@ -149,6 +149,20 @@ contextBridge.exposeInMainWorld('dopl', {
           messages: asMode(preset && preset.messages),
         },
       }),
+    // THE DURABLE LAUNCH POSTURE (2026-08-20): the same two axes as the arm above, on a
+    // SEPARATE record with a separate consumer — `channel-dir-ipc.js › sessions:launch`,
+    // the operator's own Launch button. `main/channel-prefs.js` states the split; the arm
+    // stays single-use and consent-only. Same `asMode` coercion, same fail-closed write.
+    getLaunchPosture: (channelId) =>
+      ipcRenderer.invoke('channels:getLaunchPosture', asId(channelId)),
+    setLaunchPosture: (channelId, preset) =>
+      ipcRenderer.invoke('channels:setLaunchPosture', {
+        channelId: asId(channelId),
+        preset: {
+          tools: asMode(preset && preset.tools),
+          messages: asMode(preset && preset.messages),
+        },
+      }),
     // AUTO-SEND (2026-08-20): the DURABLE per-channel posture for the operator's own
     // agent's replies — unlike the single-use arm above. A boolean over the wire, nothing else.
     getAutoSend: (channelId) =>

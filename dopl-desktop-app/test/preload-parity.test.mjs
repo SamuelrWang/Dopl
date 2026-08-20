@@ -113,8 +113,25 @@ const APP_OPS = [
   //     reaches another member's machine.
   "channels.getAutoSend",
   "channels.getFolderLabel",
+  // ⚠ TWO MORE JOINED HERE ON 2026-08-20 (the arm-vs-durable-posture split): the pin failed
+  // on the ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
+  //     registers `channels:getLaunchPosture` / `channels:setLaunchPosture`, both
+  //     `appWindowOnly`, both UUID-gating `channelId`, with BOTH axes re-validated against
+  //     the frozen enums in `main/channel-prefs.js › normalizePreset` (a half-valid pair is
+  //     rejected whole and writes nothing).
+  //   • THEY WIDEN THE SAME AUTHORITY THE SETTINGS TAB ALREADY HANDS THE OPERATOR, on a
+  //     record with exactly ONE consumer: `sessions:launch`, the operator's own Launch
+  //     button. It is SUPERVISION, not containment — a forged `set` to `bypass` cannot
+  //     escape the channel's tool profile or `session-profiles.js › SESSION_HARD_DENY`, and
+  //     Axis B still refuses to let any tool posture send a message.
+  //   • ⚠ IT IS NOT THE ARM. `channels.get/setPermissionPreset` stays single-use, 30-minute,
+  //     consent-only (H2). Wiring either pair to the other's consumer re-opens the failure
+  //     H2 exists to prevent — `main/channel-prefs.js` states the split in full.
+  "channels.getLaunchPosture",
   "channels.getPermissionPreset",
   "channels.setAutoSend",
+  "channels.setLaunchPosture",
   "channels.setPermissionPreset",
   "getAuthState",
   "onAuthState",

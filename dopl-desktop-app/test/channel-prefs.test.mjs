@@ -39,32 +39,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { prefs, CH_A, CH_B } from "./_channel-prefs-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const SRC = M("channel-prefs.js");
 
-const BEGIN = "// ─── BEGIN CHANNEL-PREFS-VALIDATE";
-const END = "// ─── END CHANNEL-PREFS-VALIDATE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN CHANNEL-PREFS-VALIDATE sentinel missing");
-assert.notEqual(to, -1, "END CHANNEL-PREFS-VALIDATE sentinel missing");
-assert.ok(to > from, "channel-prefs sentinels out of order");
-const BLOCK = SRC.slice(from, to);
-
-// The sliced block must stay electron/fs/store-free (§H-7). Scan CODE only
-// (strip // comments — they legitimately say "electron-free").
-const CODE = BLOCK.split("\n")
-  .map((l) => {
-    const i = l.indexOf("//");
-    return i === -1 ? l : l.slice(0, i);
-  })
-  .join("\n");
-for (const banned of ["require(", "electron", "store.", "fs.", "os.", "process."]) {
-  assert.ok(!CODE.includes(banned), `CHANNEL-PREFS-VALIDATE block must not reference ${banned}`);
-}
-
+// ⚠ THE SLICER MOVED TO `_channel-prefs-block.mjs` (2026-08-20) when the durable
+// posture's cases pushed this file past the cap. Same block, one copy, two suites —
+// see that file's header. This one keeps the ARM; `channel-launch-posture.test.mjs`
+// takes the durable half.
 const {
   TOOL_MODES,
   MESSAGE_MODES,
@@ -78,13 +61,8 @@ const {
   armInto,
   takeArmFrom,
   sweepExpired,
-} = new Function(
-  `${BLOCK}\n return { TOOL_MODES, MESSAGE_MODES, DEFAULT_PRESET, ARM_TTL_MS, normalizePreset,
-     armIsLive, resolveArm, defaultPreset, readArmFrom, armInto, takeArmFrom, sweepExpired };`
-)();
+} = prefs;
 
-const CH_A = "44444444-4444-4444-8444-444444444444";
-const CH_B = "55555555-5555-4555-8555-555555555555";
 const OK = { tools: "accept_edits", messages: "auto_inbound" };
 const NOW = 1_700_000_000_000;
 
@@ -404,3 +382,4 @@ test("a missing payload never throws (the page controls the argument)", async ()
   const { handlers, event } = bootIpc();
   assert.deepEqual(await handlers["channels:setPermissionPreset"](event, undefined), { ok: false });
 });
+

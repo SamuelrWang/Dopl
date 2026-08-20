@@ -159,6 +159,67 @@ function takeArmFrom(map, channelId, now) {
   return found;
 }
 
+// ── THE DURABLE LAUNCH POSTURE (2026-08-20) ─────────────────────────────────
+// A SECOND, SEPARATE pair with the same two axes and the OPPOSITE lifetime, and
+// the difference is the whole point of both.
+//
+// ⚠ READ THE H2 BLOCK ABOVE BEFORE TOUCHING ANY OF THIS. What H2 forbids is not
+// DURABILITY — it is an AMBIENT read at a spawn no human is attending.
+// `session-engine.startSession` is the single construction site for every spawn
+// shape, so a durable pair folded in THERE re-armed peer-driven wakes, crash
+// resumes, recreated parked shells and requester auto-opens alike: bypass /
+// auto_both chosen once became a standing, clickless grant for the channel.
+//
+// SO THE SPLIT IS BY CONSUMER, NOT BY LIFETIME, AND IT IS NOT NEGOTIABLE:
+//   THE ARM (above)      single use, 30-min TTL, ONE consumer —
+//                        `trigger.js › inboundApproved`, the consent-APPROVED
+//                        responder launch. A peer's request; a human clicking
+//                        Allow on a card they are looking at right now.
+//   THIS POSTURE         durable, no TTL, ONE consumer —
+//                        `channel-dir-ipc.js › sessions:launch`, the Agents
+//                        tab's own button. The operator launching THEIR OWN
+//                        agent onto THEIR OWN thread, with no peer involved and
+//                        no consent row raised, because the click IS the
+//                        consent.
+//
+// ⚠ NEITHER IS EVER READ BY `startSession` ITSELF. Both travel as `spec.startModes`,
+// handed in per launch by a caller executing a decision a human is making right
+// now; anything that passes nothing inherits the reducer's manual/ask. A bare
+// recreate, reopen, resume or peer wake passes nothing and must keep passing
+// nothing. `test/session-preset-start.test.mjs` pins that this module's
+// `getLaunchPosture` appears in `channel-dir-ipc.js` and NOWHERE ELSE.
+//
+// WHY IT IS DURABLE AT ALL. It is rendered on the channel's SETTINGS tab beside
+// the tool profile, the working folder and auto-send — all durable — and the
+// single-use arm shown there was indistinguishable from a setting: the operator
+// picked bypass, the first launch spent it (or 30 minutes passed), and every
+// later session silently started manual/ask while the control still read
+// "Bypass". A fuse rendered as a switch is worse than either.
+//
+// WHAT IT CANNOT DO. It is SUPERVISION, never CONTAINMENT: `bypass` is still
+// bounded by the channel's tool profile and by session-profiles' SESSION_HARD_DENY,
+// and Axis B still refuses to let ANY tool posture send a message. It is
+// local-only (electron-store), never POSTed, never in a channel message.
+// Default OFF-equivalent: an absent, corrupt or half-valid record reads
+// manual/ask, the same restrictive floor an unset arm has.
+
+// The channel's stored posture, or null when nothing valid is stored. ⚠ NO `at`
+// and NO expiry check — that asymmetry with `readArmFrom` is the entire
+// difference between the two records and must not be "tidied" into symmetry.
+function readPostureFrom(map, channelId) {
+  if (!map || !channelId) return null;
+  return normalizePreset(map[channelId]);
+}
+
+// Write the pair in place. { ok: false } and NO mutation when the id is missing
+// or either axis is unknown — same fail-closed rule as `armInto`.
+function postureInto(map, channelId, raw) {
+  const preset = normalizePreset(raw);
+  if (!map || !channelId || !preset) return { ok: false };
+  map[channelId] = { tools: preset.tools, messages: preset.messages };
+  return { ok: true, preset: preset };
+}
+
 // Drop every expired/invalid record. Returns true when the map changed, so the
 // caller only writes the store when there is something to write (F-072 spirit:
 // no pointless writes on a read path).
@@ -258,9 +319,85 @@ function setAutoSend(channelId, on) {
   return on === true;
 }
 
+// ── Storage for the durable posture ─────────────────────────────────────────
+const POSTURE_KEY = 'channelLaunchPosture'; // { [channelId]: { tools, messages } }
+
+function getAllPostures() {
+  const map = store.get(POSTURE_KEY);
+  return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+}
+
+/**
+ * THE EFFECTIVE launch posture for this channel — the stored pair, or the
+ * restrictive default. ⚠ NEVER null, unlike `getPermissionPreset`: an arm that
+ * is absent has NOT been chosen and the card must not claim it was, but a
+ * durable setting that is absent IS manual/ask, and saying so is the truth.
+ * Reading never writes.
+ */
+function getLaunchPosture(channelId) {
+  return readPostureFrom(getAllPostures(), channelId) || defaultPreset();
+}
+
+/**
+ * Persist the channel's launch posture. { ok: true } only when BOTH axes
+ * validated; an unknown value on either writes NOTHING.
+ * ⚠ SPENT BY NOTHING. There is no consume twin on purpose — that is what makes
+ * this the durable half of the split described above.
+ */
+function setLaunchPosture(channelId, raw) {
+  const map = getAllPostures();
+  const res = postureInto(map, channelId, raw);
+  if (!res.ok) return { ok: false };
+  store.set(POSTURE_KEY, map);
+  diag('channel-prefs posture', String(channelId).slice(0, 8), res.preset.tools, res.preset.messages);
+  return { ok: true, preset: res.preset };
+}
+
+/**
+ * THE WINDOWLESS MESSAGE AXIS — ONE derivation, both windowless lanes.
+ *
+ * A windowless session has NO Accept UI, so the IN half is floored at
+ * `auto_inbound` on every shape (INVARIANTS §11: the consent that admitted the
+ * thread is the human decision, and a counterparty reply feeds as a turn). The
+ * OUT half is the channel's durable auto-send switch, WIDENED — never narrowed —
+ * by a picked posture that already says "send out".
+ *
+ * ⚠ ONE FUNCTION BECAUSE THE TWO LANES MUST NOT DRIFT. `trigger.js ›
+ * launchResponderSession` derives it from the consumed ARM; `channel-dir-ipc.js
+ * › sessions:launch` from the DURABLE posture. The inputs differ and the rule
+ * does not; two copies of "does this pick mean auto-out" is how one lane starts
+ * posting without the other.
+ * ⚠ WIDEN-ONLY: there is no return value below `auto_inbound`. A posture of
+ * `ask` cannot switch the floor off, because there is nothing to ask on.
+ */
+function windowlessMessageMode(channelId, picked) {
+  const autoOut = getAutoSend(channelId) || picked === 'auto_outbound' || picked === 'auto_both';
+  return autoOut ? 'auto_both' : 'auto_inbound';
+}
+
+/**
+ * The `spec.startModes` for the OPERATOR'S OWN windowless launch (the Agents
+ * tab's button) — the durable posture's tool axis, and the shared message
+ * derivation above. The one place the durable posture becomes a spawn.
+ */
+function launchStartModes(channelId) {
+  const posture = getLaunchPosture(channelId);
+  return {
+    tools: posture.tools,
+    messages: windowlessMessageMode(channelId, posture.messages),
+  };
+}
+
 module.exports = {
   getAutoSend,
   setAutoSend,
+  // The DURABLE launch posture — see the block above for why it is not the arm.
+  readPostureFrom,
+  postureInto,
+  getLaunchPosture,
+  setLaunchPosture,
+  windowlessMessageMode,
+  launchStartModes,
   TOOL_MODES,
   MESSAGE_MODES,
   DEFAULT_PRESET,

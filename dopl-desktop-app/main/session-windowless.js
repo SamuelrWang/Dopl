@@ -23,6 +23,7 @@
 
 const consent = require('./consent');
 const targeting = require('./targeting');
+const channelPost = require('./channel-post'); // notifyLocal: the denial notice, local-only
 const { diag } = require('./diag');
 
 const POLL_MS = 10_000;
@@ -74,9 +75,44 @@ function claimGate(s, payload, decide) {
     setImmediate(() => decide(rid, 'deny'));
     diag('windowless session: gated tool denied (no surface to ask on)',
       String(payload.name || '').slice(0, 40));
+    notifyDenied(s, payload);
     return true;
   }
   return false;
+}
+
+// ── The denial NOTICE (2026-08-20) ───────────────────────────────────────────
+// ⚠ A SILENT DENY IS THE WORST HALF OF THIS SHAPE, AND IT IS NOT WHAT THE
+// OPERATOR THINKS THEY CONFIGURED. `bypass` is a POSITIVE ALLOW-LIST
+// (`session-profiles.js` — "Unknown therefore GATES IN EVERY MODE, `bypass`
+// included"), so it covers the classified work set and nothing else: `Task`,
+// `AskUserQuestion`, the plan-mode ops, any built-in a newer CLI ships, and
+// EVERY tool from the operator's own connected MCP servers all still reach the
+// gate. In a windowless session a gate is a deny, and until now the only trace
+// was a diag line — so an operator who had set Tools = Bypass watched their
+// agent quietly fail to do things and had nothing to read.
+//
+// ⚠ IT IS A NOTICE, NOT A DECISION SURFACE. The deny has already been dispatched
+// above; nothing here can reverse it, and nothing here posts into the channel.
+// Bridging these to a consent row the way an outbound post is bridged is a
+// LATER wave — the shape is real (`bridgeOutbound`) but the product question
+// (which gated tools deserve an interruption) is Samuel's, not this file's.
+//
+// ⚠ NAMES THE TOOL AND THE CHANNEL, and nothing else. The tool NAME is a
+// counterparty-influenceable string on its way to an OS notification, so it is
+// bounded the same way every other display string on this path is.
+function notifyDenied(s, payload) {
+  try {
+    const tool = String((payload && payload.name) || 'A tool')
+      .replace(/[\r\n\t]+/g, ' ')
+      .trim()
+      .slice(0, 40);
+    const channelName = (s.context && s.context.channelName) || 'this channel';
+    channelPost.notifyLocal(
+      `Dopl: ${tool} was not allowed`,
+      `Your agent in "${channelName}" asked to use it. Nothing was running to ask on, so it was denied.`
+    );
+  } catch (_) { /* best-effort — a notice must never break the deny */ }
 }
 
 async function bridgeOutbound(s, payload, decide) {

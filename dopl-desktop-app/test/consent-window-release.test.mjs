@@ -192,7 +192,19 @@ function approver(over = {}) {
       toSession: (key, a) => calls.toSession.push(a),
     },
     { getWindowMode: () => cfg.windowMode },
-    { consumePermissionPreset: () => null, getAutoSend: () => cfg.autoSend === true },
+    // ⚠ `windowlessMessageMode` JOINED 2026-08-20 and is the REAL rule, not a stub
+    // returning a constant: it is the ONE derivation of the windowless message axis
+    // and `channel-dir-ipc.js › sessions:launch` calls the same function. A fake here
+    // would let this suite stay green while the two lanes drifted apart, which is the
+    // exact failure the shared function removes.
+    {
+      consumePermissionPreset: () => null,
+      getAutoSend: () => cfg.autoSend === true,
+      windowlessMessageMode: (_channelId, picked) =>
+        (cfg.autoSend === true || picked === "auto_outbound" || picked === "auto_both")
+          ? "auto_both"
+          : "auto_inbound",
+    },
     {
       launchResponderSession: async () => cfg.launch,
       releaseConsentWindow: (key, reason) => calls.released.push(reason),

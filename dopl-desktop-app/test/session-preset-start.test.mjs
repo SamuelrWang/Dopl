@@ -37,6 +37,7 @@ const TRIGGER = read("trigger.js");
 const CONTEXT = read("channel-context.js");
 const PREFS = read("channel-prefs.js");
 const WATCHER = read("consent-watcher.js");
+const DIRIPC = read("channel-dir-ipc.js");
 
 const { initialSessionState } = loadReducer();
 
@@ -121,9 +122,19 @@ test("H2: startResume (the crash/interrupted resume) passes NO startModes either
   assert.ok(!/startModes/.test(body), "a resume is not a fresh human decision");
 });
 
-test("H2: the requester launch passes NO startModes (no card is ever shown for it)", () => {
+test("H2: the requester launch mints NO posture of its own — it forwards its caller's", () => {
+  // ⚠ THIS ASSERTION SURVIVED THE 2026-08-20 SPLIT UNCHANGED, AND ITS REASON DID NOT.
+  // It used to read "no card is ever shown for it", i.e. this lane opens at manual/ask
+  // FULL STOP. That stopped being the whole truth when the Agents tab grew a Launch
+  // button: the operator clicking it IS the human decision, so the DURABLE posture now
+  // reaches this lane — from the CALLER, as an explicit `spec.startModes`, exactly like
+  // the arm reaches the responder lane. What must stay true is the engine seam itself:
+  // `launchRequesterSession` reads no stored posture, so a caller that hands it nothing
+  // still inherits the reducer's manual/ask.
   const body = ENGINE.slice(ENGINE.indexOf("function launchRequesterSession("), ENGINE.indexOf("function hasLiveSession("));
-  assert.ok(!/startModes/.test(body), "the operator's own goal opens at manual/ask");
+  assert.ok(!/startModes/.test(body), "the engine wrapper neither reads nor defaults one");
+  assert.ok(!/channel-prefs|channelPrefs/.test(stripComments(ENGINE)),
+    "and the engine reaches the prefs store on no path at all");
 });
 
 // ── 3. THE ONE CONSUMER ──────────────────────────────────────────────────────
@@ -138,6 +149,48 @@ test("H2: exactly ONE place in main/ consumes the arm, and it is the consent-app
   for (const [name, src] of [["session-engine", ENGINE], ["session-park", PARK], ["channel-context", CONTEXT]]) {
     assert.ok(!/consumePermissionPreset/.test(src), `${name} must not consume the arm`);
   }
+});
+
+// ── 3b. THE DURABLE POSTURE'S ONE CONSUMER (2026-08-20) ──────────────────────
+// The split: the ARM stays single-use / expiring / consent-only, and a SECOND
+// durable record serves the one launch shape where the operator's own click is
+// the decision. H2 is not about durability — it is about an AMBIENT read at a
+// spawn nobody is attending — so the rule these pin is the CONSUMER COUNT, which
+// is what actually kept the failure closed. If either record ever gains a second
+// reader, H2 is re-openable and these are the tests that must go red first.
+
+test("H2/split: the DURABLE posture is read by sessions:launch and by nothing else", () => {
+  const body = DIRIPC.slice(DIRIPC.indexOf("ipcMain.handle('sessions:launch'"));
+  assert.match(body, /channelPrefs\.launchStartModes\(p\.channelId\)/, "consumed here");
+  // ...and the pinned 'manual' it replaced is really gone from this handler.
+  assert.ok(!/tools: 'manual'/.test(body.slice(0, body.indexOf("ipcMain.handle('sessions:reopen'"))),
+    "the hard-pinned tool axis that ignored the operator's pick is gone");
+  for (const [name, src] of [
+    ["session-engine", ENGINE], ["session-park", PARK],
+    ["channel-context", CONTEXT], ["trigger", TRIGGER],
+  ]) {
+    const code = stripComments(src);
+    assert.ok(!/getLaunchPosture|launchStartModes/.test(code),
+      `${name} must not read the durable posture — an ambient read here IS H2`);
+  }
+});
+
+test("H2/split: the RESPONDER lane still consumes the arm, and never the posture", () => {
+  const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
+  assert.match(body, /startModes && startModes\.tools/, "the tool axis is the ARM's");
+  assert.ok(!/getLaunchPosture/.test(stripComments(body)),
+    "a peer-driven launch must not inherit a setting the operator left on a tab");
+});
+
+test("H2/split: ONE derivation of the windowless message axis, shared by both lanes", () => {
+  // Two copies of "does this pick mean auto-out" is how one lane starts posting
+  // without the other. The rule lives in channel-prefs; both lanes call it.
+  assert.match(PREFS, /function windowlessMessageMode\(channelId, picked\)/);
+  assert.match(TRIGGER, /channelPrefs\.windowlessMessageMode\(/);
+  assert.match(PREFS, /function launchStartModes\(channelId\)/);
+  const rule = PREFS.slice(PREFS.indexOf("function windowlessMessageMode("));
+  assert.match(rule.slice(0, 260), /autoOut \? 'auto_both' : 'auto_inbound'/,
+    "WIDEN-ONLY: there is no return below the auto_inbound floor");
 });
 
 // Comments legitimately NAME the deleted seam (they explain why it is gone), so the

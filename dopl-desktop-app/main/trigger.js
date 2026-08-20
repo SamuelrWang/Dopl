@@ -364,12 +364,17 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
   // under the turn / idle / cost caps, so it cannot self-sustain unbounded.
   const mode = targeting.metaStr(m, 'taskMode') || 'autonomous';
   // 2026-08-20 — THE WINDOWLESS POSTURE. There is no Accept UI, so the message axis is
-  // floored at auto_inbound; the OUT half is the channel's durable auto-send setting
-  // (channel-prefs), widened — never narrowed — by an operator-armed auto posture.
-  const armMsg = startModes && startModes.messages;
-  const autoOut = channelPrefs.getAutoSend(entry.channel.id)
-    || armMsg === 'auto_outbound' || armMsg === 'auto_both';
-  const messages = autoOut ? 'auto_both' : 'auto_inbound';
+  // floored at auto_inbound; the OUT half is the channel's durable auto-send setting,
+  // widened — never narrowed — by an operator-armed auto posture.
+  // ⚠ THE RULE LIVES IN channel-prefs (`windowlessMessageMode`) AND IS SHARED WITH THE
+  // REQUESTER LANE (`channel-dir-ipc.js › sessions:launch`). It was inlined here while
+  // that lane pinned its own answer, which is exactly the drift the shared function
+  // removes: the INPUTS differ (this lane's arm vs. that lane's durable posture) and
+  // the derivation must not.
+  const messages = channelPrefs.windowlessMessageMode(
+    entry.channel.id,
+    startModes && startModes.messages
+  );
   const res = await sessionEngine.launchResponderSession({
     channelId: entry.channel.id,
     taskId: rec.taskId || taskId,

@@ -38,59 +38,21 @@
  * writes, exactly as it did when the intent came from a menu item.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChannelsV2SettingsTab } from "./settings-tab";
-import {
-  ChannelAgentSettings,
-  ChannelAgentSettingsView,
-  type ChannelAgentSettingsViewProps,
-} from "./settings-agent";
+import { ChannelAgentSettings } from "./settings-agent";
 import { channel, member as makeMember } from "./test-fixtures";
-import {
-  DEFAULT_PERMISSION_PRESET,
-  PERMISSION_ARM_TTL_MS,
-} from "../../hooks/use-channel-permission-preset";
+import { agentView, copy, desktopSource, disabled } from "./settings-agent-harness";
 import { UNRESOLVED_TOOL_PROFILE } from "../../constants";
 import type { Channel } from "../../types";
 
 afterEach(cleanup);
 
-/** The desktop modules this tab's remaining claims are ABOUT. ⚠ Off
- *  `process.cwd()` (the vitest root), not `import.meta.url`: under the jsdom
- *  environment this file declares, a module-relative URL misses the tree. */
-function desktopSource(file: string) {
-  return readFileSync(resolve(process.cwd(), "dopl-desktop-app/main", file), "utf8");
-}
-const CHANNEL_PREFS = desktopSource("channel-prefs.js");
 const TOOL_PROFILES = desktopSource("tool-profiles.js");
 
 const dm = { isDirect: true, visibility: "private" as const };
 const noop = () => {};
-
-/** The agent half on its own, with the two desktop-only halves injected — the
- *  view renders with no window and no bridge, which is the whole reason it is
- *  split from `ChannelAgentSettings`. */
-function agentView(over: Partial<ChannelAgentSettingsViewProps> = {}) {
-  return render(
-    <ChannelAgentSettingsView
-      profile="full"
-      onSetToolProfile={noop}
-      toolProfileBusy={false}
-      preset={DEFAULT_PERMISSION_PRESET}
-      presetBusy={false}
-      onChangePreset={noop}
-      folder={null}
-      otherMembers={[makeMember({ userId: "u-alice", displayName: "Alice" })]}
-      trustedIds={new Set()}
-      trustBusyIds={new Set()}
-      onToggleTrust={noop}
-      {...over}
-    />
-  );
-}
 
 /** The whole tab, with the agent half mounted through its REAL bridge-detecting
  *  wrapper (jsdom = a plain browser). */
@@ -129,14 +91,7 @@ function mount(over: Partial<Channel>, canManage: boolean, handlers = {}) {
 }
 
 const row = (name: string) => screen.queryByRole("button", { name });
-/** ⚠ The root suite has no jest-dom — `toBeDisabled` does not exist here. */
-const disabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 const option = (name: RegExp | string) => screen.getByRole("radio", { name });
-/** Rendered copy, the way a person reads it — assertions span elements. */
-const copy = (over: Partial<ChannelAgentSettingsViewProps> = {}) =>
-  agentView(over).container.textContent ?? "";
-const armTools = () => screen.getByLabelText("Permissions for the next request you allow");
-const armSends = () => screen.getByLabelText("Sends for the next request you allow");
 
 describe("the DM has no Leave", () => {
   it("offers the non-owner DM peer Delete conversation, never Leave channel", () => {
@@ -251,51 +206,6 @@ describe("no dead rows, and nothing behind a click", () => {
     mount({ role: "owner" }, true);
     expect(screen.queryByRole("menu")).toBeNull();
     expect(screen.queryByRole("menuitem")).toBeNull();
-  });
-});
-
-describe("the ARM renders with its current values, and changes on selection", () => {
-  it("shows both axes' current values without opening anything", () => {
-    agentView({ preset: { tools: "bypass", messages: "auto_both" } });
-    expect(armTools().textContent).toContain("Bypass");
-    expect(armSends().textContent).toContain("Automatic");
-  });
-
-  it("writes the picked mode back on the axis it belongs to", () => {
-    const onChangePreset = vi.fn();
-    agentView({ onChangePreset });
-    fireEvent.click(armTools());
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
-    expect(onChangePreset).toHaveBeenCalledWith({ tools: "bypass" });
-  });
-
-  it("goes inert while an arm write is in flight", () => {
-    agentView({ presetBusy: true });
-    expect(disabled(armTools())).toBe(true);
-    expect(disabled(armSends())).toBe(true);
-  });
-
-  it("is an ARM by HEADING alone, over a desktop that really is short-lived", () => {
-    // ⚠ Since the 2026-08-19 copy cut these two headings state the BACKING
-    // STORE AND LIFETIME split and nothing else does. The expiry is no longer
-    // printed, so the heading is honest only while the desktop stays single-use
-    // and 30-minute — retuning `channel-prefs.js` ARM_TTL_MS is what this catches.
-    const text = copy();
-    expect(text).toContain("For the next request you allow");
-    expect(text).toContain("For every session on this channel");
-    expect(CHANNEL_PREFS).toContain("const ARM_TTL_MS = 30 * 60 * 1000");
-    expect(PERMISSION_ARM_TTL_MS).toBe(30 * 60 * 1000);
-    expect(CHANNEL_PREFS).toContain("SINGLE USE");
-    expect(text).not.toMatch(/Permissions[^.]*\balways\b/i);
-  });
-
-  it("drops the whole arm subsection, heading included, with no bridge", () => {
-    const text = copy({ preset: null });
-    expect(text).not.toContain("For the next request you allow");
-    expect(screen.queryByText("Permissions")).toBeNull();
-    expect(screen.queryByText("Sends")).toBeNull();
-    // The durable control survives — it is not desktop-gated.
-    expect(screen.getByRole("radio", { name: /Full access/ })).toBeTruthy();
   });
 });
 
