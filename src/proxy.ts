@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { explicitPostAuthTarget, WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
-import { AUTH_ENTRY_ROUTES, isAuthEntryRoute } from "@/shared/auth/auth-routes";
+import { AUTH_ENTRY_ROUTES, isAuthEntryRoute, isLoopCountedAuthRoute } from "@/shared/auth/auth-routes";
 import {
   LOGIN_BOUNCE_COOKIE,
   LOGIN_BOUNCE_LIMIT,
@@ -40,16 +40,15 @@ const PUBLIC_ROUTES = [
   "/terms",
   "/privacy",
   "/pricing",
-  // The landing page's Download button. It resolves the newest notarized mac
-  // build out of the release feed and 307s to GitHub — a visitor who has never
-  // had an account is the entire audience, so a session gate here would bounce
-  // the download to /login, which is the CTA the landing page just stopped
-  // advertising. See src/app/download/route.ts.
+  // The landing page's Download button: resolves the newest notarized mac build
+  // and 307s to GitHub (src/app/download/route.ts). A visitor with no account is
+  // the entire audience — a session gate would bounce the download to /login.
   "/download",
-  // Canvas invite acceptance — invitee may not be signed in yet. The
-  // landing page shows what they're being invited to; the underlying
-  // accept POST is still auth-gated by withUserAuth, so non-members
-  // still bounce to /login at the click.
+  "/playground", // public demo page — its whole audience has no account (same rationale as /download)
+  "/receipt-test", // temporary receipt-print animation demo page
+  // Canvas invite acceptance — invitee may not be signed in yet. The landing page
+  // shows what they're being invited to; the accept POST itself is still auth-gated
+  // by withUserAuth, so non-members still bounce to /login at the click.
   "/invite/",
   "/api/workspaces/invitations/",
   // Shareable join links, for the same reason as /invite/ and with a stronger
@@ -97,6 +96,8 @@ const PUBLIC_ROUTES = [
 // marketing pages are session-AWARE, so they still need the claims read.
 const SELF_AUTH_ROUTES = [
   "/api/mcp",
+  // Playground machine surface: /session provisions anonymously (per-IP limited inside); /mcp/<token> self-authenticates by the guest bearer. The /playground PAGE is PUBLIC_ROUTES.
+  "/api/playground",
   "/api/oauth",
   "/.well-known/oauth-",
   "/api/billing/webhook",
@@ -253,24 +254,23 @@ export async function proxy(request: NextRequest) {
     return redirectPreservingSession(url, supabaseResponse, 308);
   }
 
-  // Read PER REQUEST, so the flip is an env change and never a deploy. Twice
-  // below: the retirement map at the bottom, and the default signed-in landing
-  // right here — because `/canvas` is itself on the RETIRE list.
+  // Read PER REQUEST, so the flip is an env change and never a deploy. Used
+  // twice: the retirement map below, and the default signed-in landing here.
   const retired = isWebsiteRetired();
 
-  // If authenticated, redirect the landing page and BOTH auth entry routes in.
+  // If authenticated, redirect the landing page and every auth entry route in.
   if (userId && (pathname === "/" || isAuthEntryRoute(pathname))) {
-    // Q4: only `/login` can loop — it is the only path a server component
-    // redirects to (`if (!user) redirect("/login")`, 19 call sites), and
-    // nothing redirects to `/` or to `/signup`.
-    const bounces =
-      pathname === "/login" ? readLoginBounce(request).count : 0;
+    // Q4: the cycle arrives at `/login` (sole server-component redirect
+    // target), but `/login` 307s to `/authenticate`, so the two share the
+    // counter — `shared/auth/auth-routes.ts › LOOP_COUNTED_AUTH_ROUTES`.
+    // Nothing redirects to `/` or `/signup`; neither is counted.
+    const bounces = isLoopCountedAuthRoute(pathname) ? readLoginBounce(request).count : 0;
     if (bounces >= LOGIN_BOUNCE_LIMIT) {
-      // Break the cycle: serve the login screen (what this request would get if
-      // it were signed out) rather than bouncing into a page that will send it
-      // straight back. `/login` is a PUBLIC_ROUTE, so passing through here is
-      // the same response the branch further down would return. The
-      // `?redirectTo=` stays in the URL, so the form still honours it.
+      // Break the cycle: serve the request (what it would get signed out)
+      // rather than bouncing into a page that sends it straight back. Both
+      // counted routes are PUBLIC_ROUTES; at `/login` "serve" means the 307 to
+      // `/authenticate`, whose bounce this branch then stops via the same
+      // cookie count. `?redirectTo=` stays honoured.
       clearLoginBounces(supabaseResponse);
       return supabaseResponse;
     }
@@ -322,7 +322,7 @@ export async function proxy(request: NextRequest) {
       if (isAuthEntryRoute(pathname)) url.search = "";
     }
     const response = redirectPreservingSession(url, supabaseResponse);
-    if (pathname === "/login") {
+    if (isLoopCountedAuthRoute(pathname)) {
       setLoginBounce(request, response, bounces + 1, url.pathname);
     }
     return response;

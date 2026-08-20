@@ -112,6 +112,9 @@ describe("login form core", () => {
     render(<LoginFormCore actions={acts} defaultMode="signup" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Log In" }));
+    // The switch is a crossfade now: the swap lands SWITCH_FADE_MS after the
+    // click, so wait for the heading before submitting — same as a person.
+    await screen.findByRole("heading", { name: "Log In" });
     type("Email Address", "sam@usedopl.com");
     type("Password", VALID_PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Log In" }));

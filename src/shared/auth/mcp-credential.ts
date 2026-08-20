@@ -29,6 +29,16 @@ export const DEVICE_CLIENT_ID = "dopl_client_device_cli";
 export const DEVICE_CLIENT_NAME = "Dopl Desktop (device tokens)";
 
 /**
+ * Reserved first-party client backing every landing-page playground guest
+ * token (`features/playground/server/service.ts`). Same FK rationale as the
+ * device client above. ⚠ Deliberately NOT a new `McpCredentialKind`: widening
+ * that union ripples into every identity renderer, and "oauth-app" with this
+ * label describes the credential truthfully enough for a 24-hour demo.
+ */
+export const PLAYGROUND_CLIENT_ID = "dopl_client_playground";
+export const PLAYGROUND_CLIENT_NAME = "Dopl Playground";
+
+/**
  * How the credential was obtained.
  *   - `device` — minted from an interactive session for a CLI/desktop listener
  *     (`POST /api/auth/mcp-device-token`, cookie-only).

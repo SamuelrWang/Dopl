@@ -1,8 +1,13 @@
 /**
  * `/get-started` — where a web sign-in ends and the desktop app begins. Funnel: landing "Get
- * Started" → `/login` → here. The dmg downloads on mount; the last step sends the user into the
- * app for the browser-OAuth handoff (`/auth/desktop-start` → `dopl://auth`). Capturing the
- * account BEFORE the download is the point: install drop-off becomes countable.
+ * Started" → `/authenticate` → here. The dmg downloads on mount; the last step sends the user
+ * into the app for the browser-OAuth handoff (`/auth/desktop-start` → `dopl://auth`). Capturing
+ * the account BEFORE the download is the point: install drop-off becomes countable.
+ *
+ * ⚠ Lives in the `(auth)` route group ON PURPOSE: the shared layout owns the split shell, so
+ * arriving from `/authenticate` keeps the banner + glass mounted and only the form column
+ * swaps — the seamless-transition requirement. The install animation is portaled onto that
+ * layout's glass by `GetStartedScreen`.
  *
  * ⚠ AUTH-REQUIRED TWICE: deliberately absent from `proxy.ts` PUBLIC_ROUTES, and the `getUser()`
  * below is the second lock — the middleware decides from LOCALLY verified claims and this from
@@ -18,10 +23,8 @@ import { resolveMacDownloadAsset } from "@/shared/version/mac-download";
 import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 import { GetStartedScreen } from "@/features/get-started";
 
-import "@/features/marketing/marketing.css";
 import "@/features/get-started/get-started.css";
 import "@/features/get-started/install-animation.css";
-import "@/features/get-started/install-animation-motion.css";
 
 export const metadata = {
   title: "Get Dopl for Mac",

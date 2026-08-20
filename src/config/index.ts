@@ -22,6 +22,10 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "admin",
   "api",
   "auth",
+  // The one auth page (`src/app/(auth)/authenticate/page.tsx`, 2026-08-16);
+  // `/login` and `/signup` 307 to it and stay reserved below for the same
+  // shadowing reason.
+  "authenticate",
   "browse",
   "build",
   "canvas",
@@ -49,7 +53,7 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "privacy",
   "settings",
   // Re-added 2026-08-13, on the condition S-13 set when it removed this: the
-  // public signup page landed (`src/app/signup/page.tsx`), so a workspace
+  // public signup page landed (`src/app/(auth)/signup/page.tsx`), so a workspace
   // slugged "signup" would now be silently shadowed by it.
   "signup",
   "terms",

@@ -76,6 +76,8 @@ const RESERVED_TOP_LEVEL = new Set([
   "admin",
   "api",
   "auth",
+  // The one auth page; `/login` + `/signup` 307 to it (kept below).
+  "authenticate",
   "billing",
   "download",
   "favicon.ico",

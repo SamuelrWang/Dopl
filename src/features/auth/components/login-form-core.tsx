@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLoginCore, type LoginActions, type LoginMode } from "../hooks/use-login-core";
 import { PasswordRequirements } from "./password-requirements";
 
@@ -10,9 +10,20 @@ export type LegalLinkProps = { href: string; className?: string; children: React
 export type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
 
 /** Mode-switch renderer input: destination mode + class/label of in-place
- *  fallback, so host's link is same control, not lookalike. */
-export type ModeSwitchProps = { to: LoginMode; className: string; children: ReactNode };
+ *  fallback, so host's link is same control, not lookalike. `onSelect` is the
+ *  core's ANIMATED switch (fade out → swap → fade in) — a host that wants the
+ *  in-place transition calls it instead of navigating; a host that navigates
+ *  may ignore it. */
+export type ModeSwitchProps = {
+  to: LoginMode;
+  className: string;
+  children: ReactNode;
+  onSelect: () => void;
+};
 export type ModeSwitchComponent = (props: ModeSwitchProps) => ReactNode;
+
+/** One leg of the switch crossfade — out, then in, so the whole beat is 2×. */
+const SWITCH_FADE_MS = 180;
 
 export interface LoginFormCoreProps {
   /** Absent member disables that control and prints one-line reason. */
@@ -72,6 +83,34 @@ export function LoginFormCore({
 
   const [showPassword, setShowPassword] = useState(false);
   const busy = pending !== null;
+
+  /**
+   * The animated mode switch: fade the column to transparent, swap the mode
+   * while nothing is visible, let the transition carry it back up. `exitingTo`
+   * doubles as the re-entry guard — a second click mid-fade is ignored rather
+   * than queued — and the effect owns the swap timer, so unmount mid-fade
+   * cleans it up for free. The wrapper div below owns the opacity; content is
+   * never unmounted, so typed email/password survive the switch (sign-up ⇄
+   * sign-in share fields).
+   */
+  const [exitingTo, setExitingTo] = useState<LoginMode | null>(null);
+  const requestModeSwitch = (to: LoginMode) => {
+    if (busy || exitingTo !== null || to === mode) return;
+    setExitingTo(to);
+  };
+  useEffect(() => {
+    if (exitingTo === null) return;
+    const id = window.setTimeout(() => {
+      setMode(exitingTo);
+      setExitingTo(null);
+    }, SWITCH_FADE_MS);
+    return () => window.clearTimeout(id);
+    // ⚠ `setMode` deliberately not a dep: `useLoginCore` rebuilds it every
+    // render, so keying on it would restart this timer on any re-render and a
+    // fade could stretch or never land. `exitingTo` is the one real input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exitingTo]);
+
   const isSignUp = mode === "signup";
   // Heading + submit label share one string — screen can't claim one flow
   // while running the other.
@@ -98,6 +137,15 @@ export function LoginFormCore({
 
   return (
     <div className="w-full max-w-[336px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
+      {/* ⚠ The switch crossfade needs its OWN element. The root's `loginFadeIn`
+          runs with fill `both`, and a filled animation outranks a transition on
+          the same property — opacity set on the root would simply lose. */}
+      <div
+        style={{
+          opacity: exitingTo !== null ? 0 : 1,
+          transition: `opacity ${SWITCH_FADE_MS}ms ease`,
+        }}
+      >
       {brand && (
         <div className="mb-7 flex flex-col items-start gap-1.5">
           {brand}
@@ -213,11 +261,16 @@ export function LoginFormCore({
           item of socials block (28px break). */}
       <div className="mt-3 flex justify-end leading-[1.55]">
         {modeSwitch ? (
-          modeSwitch({ to: switchTo, className: switchClass, children: switchLabel })
+          modeSwitch({
+            to: switchTo,
+            className: switchClass,
+            children: switchLabel,
+            onSelect: () => requestModeSwitch(switchTo),
+          })
         ) : (
           <button
             type="button"
-            onClick={() => setMode(switchTo)}
+            onClick={() => requestModeSwitch(switchTo)}
             disabled={busy}
             className={switchClass}
           >
@@ -251,6 +304,7 @@ export function LoginFormCore({
         <LegalLink href="/terms" className="text-[#181818] underline">Terms of Service</LegalLink> and{" "}
         <LegalLink href="/privacy" className="text-[#181818] underline">Privacy Policy</LegalLink>.
       </p>
+      </div>
     </div>
   );
 }

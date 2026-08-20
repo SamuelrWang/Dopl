@@ -47,8 +47,20 @@ export function AuthSplitLayout({
           centred container below must NOT become its containing block. */}
       {brand && (
         <div
-          className="absolute z-10 flex h-[42px] items-center"
-          style={{ top: 22, left: "clamp(20px, 4vw, 56px)" }}
+          className="absolute z-10"
+          // 42px row + centring mirrors the landing nav's brand cell: `.lp-nav`
+          // pads 22px top and its tallest control (`.lp-icon-btn`) makes the
+          // grid row 42px with the brand centred in it — lockup centre lands
+          // 43px from the viewport top on both pages. Inline (not Tailwind
+          // arbitrary classes) so the geometry cannot be dropped by the
+          // scanner — see WebBrand in `src/app/(auth)/layout.tsx`.
+          style={{
+            top: 22,
+            left: "clamp(20px, 4vw, 56px)",
+            height: 42,
+            display: "flex",
+            alignItems: "center",
+          }}
         >
           {brand}
         </div>
@@ -67,11 +79,11 @@ export function AuthSplitLayout({
 
 /**
  * Right pane: same banner image as
- * `features/marketing/components/framework-section.tsx` › FrameworkSection,
+ * `features/marketing/components/ontology-section.tsx` › OntologySection,
  * under the same `LiquidGlass` primitive at the landing card's `radius={20}`.
  *
  * ⚠ Nothing copied from `marketing.css` — the glass is a React component and
- * `.lp-fw-glass*` are only that section's centring + 544px cap. Slab sized by
+ * `.lp-ont-glass*` are only that section's centring + 544px cap. Slab sized by
  * percentage insets with NO transform (a transform on a `backdrop-filter`
  * element is a rendering coin flip), plus a px floor for short viewports.
  *
@@ -100,10 +112,33 @@ function AuthBannerPanel({ src }: { src: string }) {
         className="h-full w-full object-cover object-center"
       />
 
+      {/* ⚠ Geometry is INLINE STYLE, not utility classes, and must stay that
+          way: Tailwind's scan does not reliably emit this file's arbitrary
+          values for every route chain (measured 2026-08-17 — `top-[32%]` /
+          `min-h-[220px]` absent from every built stylesheet), and when the
+          classes are missing the glass drops into static flow below the
+          full-height image and the panel's overflow clips it to nothing. */}
       <LiquidGlass
         radius={20}
-        className="absolute inset-x-[8%] top-[32%] h-[36%] min-h-[220px]"
-      />
+        style={{
+          position: "absolute",
+          left: "8%",
+          right: "8%",
+          top: "32%",
+          height: "36%",
+          minHeight: 220,
+        }}
+      >
+        {/* Portal target — a PAGE may project content onto the glass (the
+            get-started install animation does) while the layout, and therefore
+            the banner + glass, persists across auth-group navigations. Empty on
+            every other surface, including the desktop SPA. */}
+        <div id={AUTH_GLASS_SLOT_ID} style={{ width: "100%", height: "100%" }} />
+      </LiquidGlass>
     </div>
   );
 }
+
+/** Where `GlassSlot` portals land — one AuthSplitLayout per document, so a
+ *  static id is safe. */
+export const AUTH_GLASS_SLOT_ID = "auth-glass-slot";

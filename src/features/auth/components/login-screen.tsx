@@ -1,48 +1,30 @@
 "use client";
 
-import Link from "next/link";
-import { AuthSplitLayout } from "@/shared/layout/auth-split";
 import { GoogleOneTap } from "./google-one-tap";
 import { LoginForm } from "./login-form";
 import type { LoginMode } from "../hooks/use-login-core";
 
-/** Two-pane sign-in: left form column, right banner/glass panel (shared with
- *  onboarding). Panel collapses on mobile.
+/**
+ * The auth entry FORM COLUMN — what `/login` and `/signup` render.
  *
- *  `defaultMode` threaded from page, never defaulted here — on web it's a
- *  property of the ROUTE (`/signup`→signup, `/login`→signin) and the switch
- *  NAVIGATES (`./login-form`). Desktop SPA has its own binding
- *  (`apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`), no routes. */
+ * ⚠ No `AuthSplitLayout` here. The split shell (banner, glass, brand lockup)
+ * lives in `src/app/(auth)/layout.tsx` so it PERSISTS across navigation between
+ * the two routes — wrapping it here again would remount the banner on every
+ * switch and bring back the decode flash that layout exists to kill. Desktop's
+ * signed-out screen composes its own shell
+ * (`apps/desktop-ui/src/pages/boot/signed-out-screen.tsx`).
+ *
+ * `defaultMode` threaded from page, never defaulted here — on web it's a
+ * property of the URL (`/authenticate?mode=signup`→signup, else signin; the
+ * legacy `/signup` and `/login` slugs 307 in). The in-form switch swaps mode IN
+ * PLACE and rewrites the query to match (`./login-form`), so the URL still
+ * always names the flow on screen.
+ */
 export function LoginScreen({ defaultMode }: { defaultMode: LoginMode }) {
   return (
-    <AuthSplitLayout brand={<WebBrand />}>
+    <>
       <GoogleOneTap />
       <LoginForm defaultMode={defaultMode} />
-    </AuthSplitLayout>
-  );
-}
-
-/** Brand lockup, auth page upper-left. ⚠ Must stay in sync with
- *  `.lp-brand`/`.lp-brand-mark`/`.lp-brand-word` in
- *  `features/marketing/marketing.css`: 26px mark, 6px radius, 11px gap,
- *  Playfair italic wordmark. */
-function WebBrand() {
-  return (
-    <Link href="/" className="inline-flex items-center gap-[11px]" aria-label="Dopl">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/favicons/android-chrome-512x512.png"
-        alt="Dopl"
-        width={26}
-        height={26}
-        className="auth-logo-3d block h-[26px] w-[26px] rounded-[6px]"
-      />
-      <span
-        className="text-[21px] font-medium text-[#181818]"
-        style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
-      >
-        Dopl
-      </span>
-    </Link>
+    </>
   );
 }

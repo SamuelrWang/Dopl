@@ -21,7 +21,7 @@ import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME, describeCredential, type McpCrede
 export const MCP_SCOPES = ["dopl.read", "dopl.write"] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 
-const ACCESS_PREFIX = "dopl_at_";
+export const ACCESS_PREFIX = "dopl_at_";
 const REFRESH_PREFIX = "dopl_rt_";
 const CODE_PREFIX = "dopl_ac_";
 const CLIENT_PREFIX = "dopl_client_";
@@ -41,11 +41,11 @@ export const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
 const lastUsedTouched = new Map<string, number>();
 const LAST_USED_TOUCH_MS = 60_000;
 
-function sha256(input: string): string {
+export function sha256(input: string): string {
   return createHash("sha256").update(input).digest("hex");
 }
 
-function randToken(prefix: string): string {
+export function randToken(prefix: string): string {
   return prefix + randomBytes(32).toString("hex");
 }
 

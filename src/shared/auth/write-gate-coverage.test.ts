@@ -63,6 +63,10 @@ const EXEMPT: Record<string, string> = {
   "oauth/register/route.ts": "OAuth AS dynamic client registration — public per spec.",
   "oauth/authorize/route.ts": "OAuth AS authorize/consent endpoint.",
   "billing/webhook/route.ts": "Stripe webhook — authenticated by Stripe signature, not a user bearer.",
+  "playground/session/route.ts":
+    "Anonymous playground provisioning — the audience has no account by definition. Per-IP rate-limited in the service; creates only its own throwaway guest user/workspace/token.",
+  "playground/mcp/[token]/route.ts":
+    "The /api/mcp transport under a URL-embedded bearer (desktop MCP clients cannot send headers). Delegates to mcp/route.ts, which authenticates via authenticateMcpRequest — same exemption rationale as mcp/route.ts.",
 };
 
 const files = routeFiles(API_ROOT);
