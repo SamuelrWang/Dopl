@@ -42,13 +42,18 @@ import { MessageSquareOff } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { TranscriptSkeleton } from "@/shared/ui/skeleton";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { CONSENT_INBOX_POLL_MS } from "../../constants";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
+import { useConsentInbox } from "../../hooks/use-consent-inbox";
+import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { ChannelsV2MessagePane } from "./message-pane";
 import { useChannelsV2Live } from "./live";
 import { indexMembers } from "./view-model";
 import { threadRows } from "./view-model-rows";
+import { requestedThreadIds } from "./view-model-requested";
+import { useInlineConsent } from "./use-inline-consent";
 
 /**
  * The window's name, as one function so the fallback and the loaded title are
@@ -122,6 +127,27 @@ export function ChannelsV2ThreadWindow({
     refetchMembers: () => void refetchMembers(),
   });
 
+  // The awaiting-strip's whole diet (Samuel, 2026-08-20): this window is a
+  // decision surface like the in-page thread view — an undecided ask opened
+  // here must be decidable here, not one window switch away. Channel-scoped
+  // read, same poll the main page uses, same CAS'd consent mutation.
+  const { requests } = useConsentInbox(
+    workspaceId,
+    channelId,
+    CONSENT_INBOX_POLL_MS
+  );
+  const { consent } = useChannelPreferenceWrites({
+    workspaceId,
+    currentUserId,
+    gate,
+  });
+  const { decideThread, outboundByThread, decideOutbound, consentBusy } =
+    useInlineConsent({ messages, requests, consent });
+  const requested = useMemo(
+    () => requestedThreadIds(messages, requests),
+    [messages, requests]
+  );
+
   const index = useMemo(
     () => indexMembers(members, currentUserId),
     [members, currentUserId]
@@ -173,13 +199,14 @@ export function ChannelsV2ThreadWindow({
         index={index}
         members={members}
         loading={messagesLoading}
-        requested={EMPTY_REQUESTED}
+        requested={requested}
+        onDecideThread={decideThread}
+        outboundAsk={thread ? (outboundByThread.get(thread.id) ?? null) : null}
+        outboundBusy={consentBusy}
+        onDecideOutbound={decideOutbound}
         scrollTarget={null}
         gate={gate}
       />
     </div>
   );
 }
-
-/** No Tags inbox in this window, so nothing can be REQUESTED from it. */
-const EMPTY_REQUESTED: ReadonlySet<string> = new Set<string>();

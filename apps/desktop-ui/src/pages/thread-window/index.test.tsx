@@ -146,6 +146,8 @@ beforeEach(() => {
       if (path.endsWith("/messages")) return json({ messages: MESSAGES });
       if (path.endsWith("/members")) return json({ members: MEMBERS });
       if (path.endsWith("/tasks")) return json({ tasks: [{ ...THREAD, workspaceId }] });
+      // The decision surfaces' channel-scoped consent read (2026-08-20).
+      if (path === "/api/channels/consent") return json({ requests: [] });
       throw new Error(`unexpected request: ${url}`);
     })
   );
@@ -193,10 +195,12 @@ describe("the thread window page", () => {
   it("issues only the reads ONE thread needs", async () => {
     renderWindow();
     await screen.findByText("in the thread");
-    // No channel LIST, no consent inbox, no mentions, no trust — those belong to
-    // surfaces this window does not have.
+    // No channel LIST, no mentions, no trust — those belong to surfaces this
+    // window does not have. ⚠ The CONSENT read is here BY DESIGN since
+    // 2026-08-20: this window is a decision surface (the awaiting strip and
+    // the send box render in it), and its read is CHANNEL-SCOPED.
     expect(paths).not.toContain("/api/channels");
-    expect(paths).not.toContain("/api/channels/consent");
+    expect(paths).toContain("/api/channels/consent");
     expect(paths.some((p) => p.endsWith("/mentions"))).toBe(false);
   });
 

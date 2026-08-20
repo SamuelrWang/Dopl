@@ -119,7 +119,7 @@ const MESSAGES: ChannelMessage[] = [
     authorKind: "user",
     kind: "message",
     body: "Can your agent take the channels port?",
-    metadata: {},
+    metadata: { taskId: "t-1" },
     clientMsgId: null,
     createdAt: "2026-08-01T11:59:00.000Z",
     authorName: "Ada",
@@ -334,12 +334,9 @@ describe("channels page", () => {
     expect(
       await screen.findByText("Picked it up, wiring the client queries now.")
     ).toBeInTheDocument();
-    // TWICE: the transcript row, and the ARRIVAL POP-UP's preview — the open
-    // channel carries a pending inbound ask, so the decision panel floats over
-    // the page (arrival-ask.tsx, 2026-08-20).
     expect(
-      screen.getAllByText("Can your agent take the channels port?")
-    ).toHaveLength(2);
+      screen.getByText("Can your agent take the channels port?")
+    ).toBeInTheDocument();
 
     expect(requestsTo("/api/boot", "POST")[0].body).toEqual({ segment: SEGMENT });
     expect(requestsTo("/api/workspaces/me")).toHaveLength(0);
@@ -403,30 +400,32 @@ describe("channels page", () => {
     expect(within(crumb).getByText("migration")).toBeInTheDocument();
   });
 
-  it("decides a pending consent request from the INBOX, through the API", async () => {
+  it("decides a pending ask INLINE; the Inbox is a passive list that navigates", async () => {
     renderPage();
 
-    // The decision is NOT in the transcript any more: the Inbox nav row carries
-    // the badge and the launch panels (Phase 8), and the cutover made that the
-    // shipping behaviour. ⚠ "Launch agent", not "Allow" — the consent CARD was
-    // retired for the launch panel. In a plain browser there are no desktop
-    // launch settings to expand, so the first click IS the decision.
-    // ⚠ Since 2026-08-20 the ARRIVAL POP-UP offers the same panel the moment
-    // the page lands on a channel with a pending ask — dismissing it must
-    // leave the ask decidable from the Inbox (nothing here is the only door).
+    // The decision lives on the transcript's own surfaces now (Samuel,
+    // 2026-08-20): the thread card carries Launch agent / Decline. The Inbox
+    // is a PASSIVE list — a row navigates to its channel and renders no verb.
     const inbox = await screen.findByRole("button", { name: /Inbox/ });
+    // The card's decision is already on the transcript before any nav.
     await screen.findByRole("button", { name: "Launch agent" });
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    fireEvent.click(inbox);
+    // The pane lists the waiting ask, but offers no decision.
+    const row = await screen.findByText("Ada's agent is asking");
     expect(
       screen.queryByRole("button", { name: "Launch agent" })
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Decline" })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(inbox);
-
-    const launch = await screen.findByRole("button", { name: "Launch agent" });
-    expect(screen.getByText("Run the channels port")).toBeInTheDocument();
-
-    fireEvent.click(launch);
+    // The row is the navigation: back to the channel, where the card decides.
+    fireEvent.click(row.closest("button")!);
+    const cardLaunch = await screen.findByRole("button", {
+      name: "Launch agent",
+    });
+    fireEvent.click(cardLaunch);
 
     await waitFor(() =>
       expect(requestsTo("/api/channels/consent/cr-1", "PATCH")).toHaveLength(1)

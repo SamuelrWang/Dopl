@@ -99,6 +99,36 @@ export function pendingRequestIdByThread(
   return map;
 }
 
+/**
+ * THREAD → PENDING OUTBOUND REVIEW, the send-box join (Samuel, 2026-08-20):
+ * when this operator's own agent has drafted a reply awaiting their Send, the
+ * THREAD VIEW is where the send box renders — the outbound row's `messageSeq`
+ * is the TRIGGERING ask's seq, so the same seq-keyed join places it on the
+ * thread the reply belongs to. Same honesty rule: a seq-less row maps no
+ * thread and stays reachable from the Inbox list only.
+ */
+export function pendingOutboundByThread(
+  messages: ChannelMessage[],
+  consentRequests: ChannelConsentRequest[]
+): ReadonlyMap<string, ChannelConsentRequest> {
+  const map = new Map<string, ChannelConsentRequest>();
+  const pending = consentRequests.filter(
+    (r) => r.kind === "outbound" && r.status === "pending" && isSeq(r.messageSeq)
+  );
+  if (pending.length === 0) return map;
+  const byKey = new Map(
+    pending.map((r) => [`${r.channelId}:${r.messageSeq}`, r])
+  );
+  for (const message of messages) {
+    const threadId = threadIdOf(message);
+    if (!threadId) continue;
+    if (!isSeq(message.seq)) continue;
+    const request = byKey.get(`${message.channelId}:${message.seq}`);
+    if (request && !map.has(threadId)) map.set(threadId, request);
+  }
+  return map;
+}
+
 /** A pending INBOUND consent row — the only kind that says "you have been asked
  *  and have not answered". An outbound review is about this operator's own
  *  reply, and a decided row is answered. */

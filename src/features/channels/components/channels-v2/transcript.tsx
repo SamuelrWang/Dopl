@@ -382,11 +382,13 @@ function ThreadCardMessage({
           <span className="min-w-0 flex-1 truncate text-caption text-text-muted" />
           {/* INLINE DECISION (Samuel, 2026-08-20; closes F-214's one-click
               gap): when THIS viewer owes an answer on one of the card's
-              threads, the accept lives here — not one unmarked nav hop away
-              in the Inbox. Same consent mutation, same CAS, same gate; the
-              Inbox pane stays as the full launch-settings path. Launch = the
-              consent ALLOW; a fan-out addresses one thread at this viewer, so
-              the first owed thread is the one being decided. */}
+              threads, the decision lives here — the card and the thread
+              strip are the ONLY inbound decision surfaces (the arrival
+              pop-up is deleted; the Inbox is a passive list). Same consent
+              mutation, same CAS, same gate. "Launch agent" = the consent
+              ALLOW, one click, saved/default launch settings; a fan-out
+              addresses one thread at this viewer, so the first owed thread
+              is the one being decided. */}
           {ownedPending && (
             <>
               <button
@@ -401,7 +403,7 @@ function ThreadCardMessage({
                 onClick={() => onDecide(ownedPending, "allow")}
                 className="auth-btn-3d h-8 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white"
               >
-                Accept
+                Launch agent
               </button>
             </>
           )}

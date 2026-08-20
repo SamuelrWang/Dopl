@@ -4,9 +4,9 @@
 //
 // ⚠ WINDOW MODE IS RETIRED — HARD OFF (2026-08-20, Samuel's live-test ruling; it
 // defaulted ON from v1.9 until then). Every session runs HEADLESS: consent decides
-// on the channels surfaces (LaunchPanel in the inbox / transcript card / thread
-// strip / arrival pop-up), replies render in the thread view, and the operator
-// watches runs in the Agents tab. getWindowMode() answers false UNCONDITIONALLY —
+// on the channels surfaces (the transcript card and the thread strip — the arrival
+// pop-up and the Inbox's decision role both retired later the same day), replies
+// render in the thread view, and the operator watches runs in the Agents tab. getWindowMode() answers false UNCONDITIONALLY —
 // it is not a default that a stored key can override, because the session window
 // is not a product surface any more. That one answer disarms, at their own guards:
 // session-dispatch's requester routes (the sender-side session pop-up that

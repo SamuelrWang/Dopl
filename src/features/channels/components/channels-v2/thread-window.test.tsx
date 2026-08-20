@@ -70,6 +70,18 @@ vi.mock("../../hooks/use-channel-threads", () => ({
   useChannelThreads: () => ({ ...threadsState, truncated: false, refetch: () => {} }),
 }));
 
+// The awaiting-strip's diet (2026-08-20): consent reads/writes are real hooks
+// on the window now — mocked here like the other reads, no QueryClient in this
+// suite. The strip's own behaviour is pinned in message-pane's suite.
+vi.mock("../../hooks/use-consent-inbox", () => ({
+  useConsentInbox: () => ({ requests: [], inbound: [], outbound: [] }),
+}));
+vi.mock("../../hooks/use-channel-preference-writes", () => ({
+  useChannelPreferenceWrites: () => ({
+    consent: { mutate: () => {}, pending: false },
+  }),
+}));
+
 import { ChannelsV2ThreadWindow, threadWindowTitle } from "./thread-window";
 
 afterEach(() => {

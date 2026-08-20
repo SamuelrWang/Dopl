@@ -77,7 +77,10 @@ vi.mock("../../hooks/use-mention-writes", () => ({
 // reason the mention write is: it says nothing about which channel is open, and
 // unmocked it pulls the real `useApiMutationWith` out of the stub below.
 vi.mock("../../hooks/use-channel-preference-writes", () => ({
-  useChannelPreferenceWrites: () => ({ favorite: { mutate: () => {} } }),
+  useChannelPreferenceWrites: () => ({
+    favorite: { mutate: () => {} },
+    consent: { mutate: () => {}, pending: false },
+  }),
 }));
 vi.mock("../../client/realtime", () => ({
   useChannelsRealtime: () => {},

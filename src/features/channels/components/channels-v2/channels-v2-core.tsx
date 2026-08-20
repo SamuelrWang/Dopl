@@ -30,8 +30,7 @@ import { useDesktopSessions } from "./agents-model";
 import type { Channel, ChannelMention } from "../../types";
 // Kept on one line each: this file sits a handful of lines inside the 500-line cap.
 import { splitChannels } from "./view-model";
-import { ChannelsV2ArrivalAsk } from "./arrival-ask";
-import { useInlineConsent } from "./use-arrival-ask";
+import { useInlineConsent } from "./use-inline-consent";
 import { useChannelsV2Derivations } from "./derivations";
 
 export interface ChannelsV2CoreProps {
@@ -249,8 +248,8 @@ export function ChannelsV2Core({
   // THE FAVOURITE TOGGLE (Samuel, 2026-08-19) — a FIFTH write family on this
   // surface, on the same gate as the other four, and the existing per-member
   // preference route rather than a new one (`PATCH /members`, `favorite`).
-  // `consent` also decides INLINE (card / thread strip / arrival pop-up,
-  // Samuel 2026-08-20) — same mutation the Inbox pane uses, same gate.
+  // `consent` also decides INLINE (card / thread strip, Samuel 2026-08-20 —
+  // the arrival pop-up is gone) — same mutation, same gate.
   const { favorite, consent } = useChannelPreferenceWrites({
     workspaceId,
     currentUserId,
@@ -267,9 +266,9 @@ export function ChannelsV2Core({
       openThreadId: requestedThreadId,
     });
 
-  // Inline consent (card/strip decision + arrival pop-up) — `use-arrival-ask.ts`.
-  const { decideThread, arrivalAsk, arrivalThreadId, dismissAsk } =
-    useInlineConsent({ channel, messages, requests, consent });
+  // Inline consent (card/strip decision + thread send box) — `use-inline-consent.ts`.
+  const { decideThread, outboundByThread, decideOutbound, consentBusy } =
+    useInlineConsent({ messages, requests, consent });
 
   const channelName = channel
     ? channelDisplayName(channel, members, currentUserId)
@@ -354,10 +353,12 @@ export function ChannelsV2Core({
 
       {inboxOpen ? (
         <ChannelsV2InboxPane
-          workspaceId={workspaceId}
-          currentUserId={currentUserId}
           requests={requests}
-          gate={gate}
+          onOpen={(channelId) => {
+            setSelectedId(channelId);
+            setRequestedThreadId(null);
+            setInboxOpen(false);
+          }}
         />
       ) : channel ? (
         <>
@@ -372,6 +373,9 @@ export function ChannelsV2Core({
             loading={messagesLoading}
             requested={requested}
             onDecideThread={decideThread}
+            outboundAsk={openThread ? (outboundByThread.get(openThread.id) ?? null) : null}
+            outboundBusy={consentBusy}
+            onDecideOutbound={decideOutbound}
             scrollTarget={scrollTarget}
             infoOpen={infoOpen}
             // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
@@ -480,20 +484,6 @@ export function ChannelsV2Core({
         onCreated={onCreated}
       />
 
-      {arrivalAsk && !inboxOpen && (
-        <ChannelsV2ArrivalAsk
-          ask={arrivalAsk}
-          threadId={arrivalThreadId}
-          busy={consent.pending}
-          onDecide={(d) => consent.mutate({ id: arrivalAsk.id, decision: d })}
-          onOpenThread={(threadId) => {
-            setRequestedThreadId(threadId);
-            setInboxOpen(false);
-            dismissAsk(arrivalAsk.id);
-          }}
-          onDismiss={() => dismissAsk(arrivalAsk.id)}
-        />
-      )}
     </div>
   );
 }
