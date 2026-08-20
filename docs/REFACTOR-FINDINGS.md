@@ -517,7 +517,7 @@ COMMIT;
 - Location: `src/features/channels/types.ts:327-351` (`ChannelConsentRequest` carries no profile field); `src/features/channels/components/consent-card.tsx` (zero references to a profile)
 - Found during: Q5 review (2026-07-31)
 - Severity: smell (copy that gestures at a bound it cannot state)
-- Description: under a `read_only` or `dopl_only` profile the SDK's `disallowedTools` plus the credential-path deny rules fence the session at the tool-binding layer, where no permission axis can reach. The COPY half was fixed (`components/permission-preset-row.tsx:52` reads "Auto approving every command the tool profile allows", carried verbatim into `renderer/session/session-labels.js` and pinned in both suites). **The plumbing half was not.** Note the correction this entry already carries: the channel MEMBERSHIP preference IS plumbed (`types.ts` `AgentToolProfile`/`myAgentToolProfile`, `server/dto.ts`, `server/service-reads.ts`, `constants.ts` `AGENT_TOOL_PROFILE_LABELS`, rendered by `components/channel-settings-popover.tsx`) — it is the CONSENT REQUEST that has none, so the card can say "the tool profile" and not WHICH one.
+- Description: under a `read_only` or `dopl_only` profile the SDK's `disallowedTools` plus the credential-path deny rules fence the session at the tool-binding layer, where no permission axis can reach. The COPY half was fixed (`components/permission-preset-row.tsx:52` reads "Auto approving every command the tool profile allows", carried verbatim into `renderer/session/session-labels.js` and pinned in both suites). **The plumbing half was not.** Note the correction this entry already carries: the channel MEMBERSHIP preference IS plumbed (`types.ts` `AgentToolProfile`/`myAgentToolProfile`, `server/dto.ts`, `server/service-reads.ts`, `constants.ts` `AGENT_TOOL_PROFILE_LABELS`, rendered by `components/channels-v2/settings-agent.tsx` — `channel-settings-popover.tsx` was its renderer until that file was deleted for the tab's inline controls, 2026-08-19) — it is the CONSENT REQUEST that has none, so the card can say "the tool profile" and not WHICH one.
 - Proposed resolution: fix-now — plumb the profile onto the consent-request DTO so the card states the real blast radius. The desktop status strip already names it via `permissionPostureText(toolMode, messageMode, profileLabel)`.
 - Status: open (needs a server push)
 
@@ -1189,18 +1189,6 @@ COMMIT;
 - **Commit archaeology (verified, 2026-08-18).** `24862c76` "feat(desktop): channels bridge surface on the SPA preload" landed 00:32:10 -0700 on 2026-08-03 — **under three minutes after** `1f614c1a` wrote the denial at 00:29:43
 - Fixed in this change: the docblock now states the exposed surface and cites the parity pin
 - Status: open only as a LESSON, same shape as F-199 and from the same night
-
-## F-201 — The SPA sidebar's consent poll is justified by F-199's false claim, and it is the one thing `CONSENT_INBOX_POLL_MS` tells callers not to do (2026-08-18)
-
-- Location: `apps/desktop-ui/src/components/app-shell/app-shell.tsx › AppShellLayout` passes `CONSENT_INBOX_POLL_MS` as `useConsentInbox`'s third argument
-- The rule it breaks is written in the constant itself: `src/features/channels/constants.ts › CONSENT_INBOX_POLL_MS` says **"Passed ONLY by the channels-page inbox … The always-mounted sidebar badge stays realtime-only — an interval there is a workspace-wide background poll on every page."** The web tree obeys it: `src/features/channels/components/channels-view-core.tsx` is the only other caller, and the web sidebar passes nothing
-- Found during: verifying F-199's second site
-- Severity: low, bounded, and NOT urgent — TanStack's default `refetchIntervalInBackground: false` pauses it while the window is hidden, so the cost is one `/api/channels/consent` request every 30 s per focused desktop client, on every page, forever
-- Why it exists: the comment above it said realtime was a no-op in the SPA. That was false from ~26 minutes after it was written (F-199); `useConsentInbox` calls `useConsentRealtime`, and `channel_consent_requests` has been in `dopl-desktop-app/main/ui-sync.js › SYNC_TABLES` since `90201de5`. **The badge is live without the interval.**
-- Deliberately NOT fixed here: dropping the argument is a behaviour change and Phase 0 is docs-only. The comment now states what is true and points here
-- Proposed resolution: drop the third argument, so the SPA sidebar matches the web sidebar and the constant's own instruction. Worth doing alongside the plan's Phase 8, which moves the consent inbox to the sidebar "Inbox" nav row and will make this the badge's only read path
-- Status: open (actionable-now, one argument)
-
 
 ## F-203 — Tracked `packages/*/dist` is stale against `src`, and a plain rebuild proves it (2026-08-18)
 

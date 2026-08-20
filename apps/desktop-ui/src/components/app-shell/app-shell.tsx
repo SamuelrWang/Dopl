@@ -9,7 +9,6 @@ import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
-import { CONSENT_INBOX_POLL_MS } from "@/features/channels/constants";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { JoinRequestNoticesCore } from "@/features/workspaces/components/join-request-notices-core";
 import { ConnectAgentBanner } from "@/features/onboarding/components/connect-agent-banner";
@@ -50,21 +49,15 @@ export function AppShellLayout() {
     useWorkspaceRoute();
 
   // Shares the channels page's exact cache key — zero extra requests when both
-  // are mounted; self-disables on a falsy id.
-  // ⚠ The interval's stated reason — "realtime is a no-op in the SPA" — was
-  // FALSE from ~26 minutes after it was written (F-199): `useConsentInbox` runs
-  // `useConsentRealtime`, and `channel_consent_requests` rides the ui-sync
-  // bridge like every other table in `main/ui-sync.js › SYNC_TABLES`. So this
-  // badge is live WITHOUT the poll, and passing the interval here is exactly
-  // what `CONSENT_INBOX_POLL_MS`'s own docblock forbids (channels page only —
-  // an always-mounted interval is a workspace-wide background poll on every
-  // page). Left running rather than removed, because dropping it is a
-  // behaviour change and not this change's job — F-201.
-  const { requests: consentRequests } = useConsentInbox(
-    workspace?.id,
-    undefined,
-    CONSENT_INBOX_POLL_MS
-  );
+  // are mounted; self-disables on a falsy id. NO POLL INTERVAL, deliberately
+  // (F-201, resolved 2026-08-19): the badge is live over the ui-sync bridge —
+  // `useConsentInbox` runs `useConsentRealtime`, and `channel_consent_requests`
+  // is in `main/ui-sync.js › SYNC_TABLES` — so an interval here would be the
+  // workspace-wide background poll on every page that
+  // `CONSENT_INBOX_POLL_MS`'s own docblock forbids. The channels page keeps
+  // its interval as the realtime BACKSTOP; an always-mounted badge does not
+  // get one.
+  const { requests: consentRequests } = useConsentInbox(workspace?.id);
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Seeded to the gear's section: Escape-then-reopen must not flash the wrong pane.
