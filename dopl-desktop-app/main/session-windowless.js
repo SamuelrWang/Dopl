@@ -28,6 +28,23 @@ const { diag } = require('./diag');
 
 const POLL_MS = 10_000;
 
+// ── THE CONCURRENCY CEILING FOR THIS LANE ────────────────────────────────────
+// ⚠ THE NAME MOVED HERE ON 2026-08-20, AND THE NUMBER DID NOT CHANGE. `MAX_CONCURRENT_SESSIONS`
+// used to name the HEADLESS pool's guard (`session-pool.js`, 4) while the windowless engine
+// enforced a SEPARATE number under a window's name (`settings.MAX_SESSION_WINDOWS`, 6). Two
+// ceilings, one of them called a window budget, and the lane that is actually left was the one
+// with the misleading name. The headless pool goes with its lane; this is the ceiling that
+// survives, so it takes the name INVARIANTS §11 already uses for it.
+//
+// ⚠ IT IS A COST CEILING, NOT JUST A CONCURRENCY ONE: EVERY PER-SESSION BOUND IS
+// MULTIPLICATIVE AGAINST IT (§11). The narration ring, the pending-inbound queue, the
+// retained-ended set and the gated-body ledger are each N times this number in the worst case.
+// Raising it is a memory decision as much as a concurrency one.
+//
+// VALUE UNCHANGED FROM WHAT THE ENGINE ALREADY ENFORCED, deliberately — this wave moves where
+// the number lives and nothing about what it is.
+const MAX_CONCURRENT_SESSIONS = 6;
+
 // ── The spawn surface: a window, an adopted card, or nothing at all ──────────
 // Returns true when the session has its surface; false = the caller rolls back.
 function attachSurface(s, spec, deps) {
@@ -206,4 +223,4 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-module.exports = { attachSurface, liveCount, claimGate };
+module.exports = { attachSurface, liveCount, claimGate, MAX_CONCURRENT_SESSIONS };

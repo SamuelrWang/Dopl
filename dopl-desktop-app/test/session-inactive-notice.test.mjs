@@ -27,7 +27,7 @@
 // v2 transcript renders the note as an ordinary milestone row instead. What survives is the
 // only part that ever mattered here: a `task_progress` cannot be an outcome, and it is the
 // ONE lifecycle post this desktop still makes — the three terminal kinds went in the same
-// change (session-window.js, pinned by session-window-echoid.test.mjs).
+// change (trigger-outcomes.js, pinned by lifecycle-echo.test.mjs).
 //
 // Run: `node --test dopl-desktop-app/test/session-inactive-notice.test.mjs`
 
@@ -40,7 +40,7 @@ import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const WINDOW_SRC = M("session-window.js");
+const ECHO_SRC = M("trigger-outcomes.js"); // the lifecycle echo (moved off session-window.js, 2026-08-20)
 const PARK = M("session-park.js");
 
 const {
@@ -194,11 +194,11 @@ test("EVICTION: the bare settle() call is GONE from session-park — one path, n
 // Two of the three can reach the SAME session: a held session is PARKED, and a parked
 // untouched shell is precisely what evictIdleShell takes.
 
-const BEGIN = "// ─── BEGIN SESSION-WINDOW-PURE";
-const END = "// ─── END SESSION-WINDOW-PURE";
-const BLOCK = WINDOW_SRC.slice(WINDOW_SRC.indexOf(BEGIN), WINDOW_SRC.indexOf(END));
+const BEGIN = "// ─── BEGIN LIFECYCLE-ECHO-PURE";
+const END = "// ─── END LIFECYCLE-ECHO-PURE";
+const BLOCK = ECHO_SRC.slice(ECHO_SRC.indexOf(BEGIN), ECHO_SRC.indexOf(END));
 for (const banned of ["require(", "electron", "child_process"]) {
-  assert.ok(!BLOCK.includes(banned), `SESSION-WINDOW-PURE must not reference ${banned}`);
+  assert.ok(!BLOCK.includes(banned), `LIFECYCLE-ECHO-PURE must not reference ${banned}`);
 }
 const win = () => new Function(
   `${BLOCK}\n return { echoTargets, firstInactiveNote, MAX_REMEMBERED_ENDS };`
@@ -231,7 +231,7 @@ test("GUARD: it is keyed on the echo id, so it agrees with the server's own dedu
   // channel-post builds clientMsgId as `${kind}-${channelId}-${seq}`; keying the local guard
   // on the same seq means the two agree by construction rather than by coincidence.
   assert.match(M("channel-post.js"), /clientMsgId: \(opts && opts\.clientMsgId\) \|\| `\$\{kind\}-\$\{entry\.channel\.id\}-\$\{m\.seq\}`/);
-  const onEnded = WINDOW_SRC.slice(WINDOW_SRC.indexOf("function onEnded("));
+  const onEnded = ECHO_SRC.slice(ECHO_SRC.indexOf("function onEnded("));
   assert.match(onEnded, /if \(meta\.session_ended === true && !firstInactiveNote\(entry\.channel\.id, m\.seq\)\)/);
   // ⚠ The id is derived BEFORE the guard reads it — a `-1` from a renamed call would make
   // this comparison pass vacuously, so the presence of the derivation is asserted first.
@@ -245,11 +245,11 @@ test("GUARD: the ledger is bounded — this tree has been bitten by a set that o
   const w = win();
   for (let i = 0; i < w.MAX_REMEMBERED_ENDS * 3; i += 1) w.firstInactiveNote("c1", `seq-${i}`);
   assert.equal(w.firstInactiveNote("c1", "seq-0"), true, "the oldest entry was released first");
-  assert.ok(w.MAX_REMEMBERED_ENDS >= 6 * 2, "and the bound is well above the six windows a Mac can hold");
+  assert.ok(w.MAX_REMEMBERED_ENDS >= 4 * 2, "and the bound is well above the concurrent sessions a Mac can hold");
 });
 
 test("GUARD: it fences ONLY the calm note — a real terminal is never suppressed", () => {
-  const onEnded = WINDOW_SRC.slice(WINDOW_SRC.indexOf("function onEnded("));
+  const onEnded = ECHO_SRC.slice(ECHO_SRC.indexOf("function onEnded("));
   assert.match(onEnded, /meta\.session_ended === true &&/, "the guard is conditioned on the marker");
   // A `task_failed` for a cap or a crash carries no session_ended, so it can never be dropped
   // by this — and its own P2-9 keying already collapses cycles on the server.

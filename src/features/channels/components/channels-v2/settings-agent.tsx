@@ -69,7 +69,7 @@ import {
   type MessageMode,
   type PermissionPreset,
   type ToolMode,
-} from "../../hooks/use-channel-permission-preset";
+} from "../../lib/permission-modes";
 import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
 import { useChannelFolder } from "../../hooks/use-channel-folder";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";

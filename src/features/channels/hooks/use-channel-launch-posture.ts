@@ -5,7 +5,7 @@ import {
   DEFAULT_PERMISSION_PRESET,
   normalizePermissionPreset,
   type PermissionPreset,
-} from "./use-channel-permission-preset";
+} from "../lib/permission-modes";
 
 /**
  * Per-channel DURABLE LAUNCH POSTURE over the desktop bridge

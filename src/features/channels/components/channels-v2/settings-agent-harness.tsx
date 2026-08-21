@@ -22,7 +22,7 @@ import {
   type ChannelAgentSettingsViewProps,
 } from "./settings-agent";
 import { member as makeMember } from "./test-fixtures";
-import { DEFAULT_PERMISSION_PRESET } from "../../hooks/use-channel-permission-preset";
+import { DEFAULT_PERMISSION_PRESET } from "../../lib/permission-modes";
 
 /** The desktop modules these claims are ABOUT. ⚠ Off `process.cwd()` (the vitest
  *  root), not `import.meta.url`: under the jsdom environment these files declare, a

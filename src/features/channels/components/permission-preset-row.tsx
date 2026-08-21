@@ -2,12 +2,12 @@
 
 import { MessageSquare, Wrench } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import { useChannelPermissionPreset } from "../hooks/use-channel-permission-preset";
 import {
-  useChannelPermissionPreset,
   type MessageMode,
   type PermissionPreset,
   type ToolMode,
-} from "../hooks/use-channel-permission-preset";
+} from "../lib/permission-modes";
 
 /**
  * The inbound consent card's PERMISSION PRESET row: the two axes the operator

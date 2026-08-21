@@ -16,7 +16,7 @@
 // channel.
 //
 // ⚠ THE RING IS BOUNDED AT THE SOURCE, AND THE BOUND IS MULTIPLICATIVE. Every per-session
-// bound is multiplied by `MAX_CONCURRENT_SESSIONS` (4, `session-pool.js`) — INVARIANTS §11
+// bound is multiplied by `MAX_CONCURRENT_SESSIONS` (`session-windowless.js`) — INVARIANTS §11
 // says so and this is one of them. 200 entries x ~200 bytes x 4 sessions is well under a
 // megabyte, and the ring dies with the session object (no persistence, no TTL, no sweep).
 //

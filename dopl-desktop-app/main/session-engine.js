@@ -380,7 +380,7 @@ async function launch(a) {
   // degrading a REAL inbound trigger to headless. Fail-restrictive: still a cap skip if nothing frees.
   const adoptable = sessionConsent.has(key);
   if (a.windowless) { // no window to budget — bound on live sessions instead
-    if (sessionWindowless.liveCount(sessions) >= MAX_WINDOWS) return { skipped: 'cap' };
+    if (sessionWindowless.liveCount(sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
   } else if (!adoptable && sessionPark.atCapAfterEvict()) return { skipped: 'cap' };
   let sdk;
   try { sdk = await getSdk(); } catch (err) {

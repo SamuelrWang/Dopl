@@ -8,12 +8,12 @@ import {
   RequestPermissionRowView,
   TOOL_OPTIONS,
 } from "./permission-preset-row";
+import { getDesktopPermissionPresets } from "../hooks/use-channel-permission-preset";
 import {
   DEFAULT_PERMISSION_PRESET,
-  getDesktopPermissionPresets,
   normalizePermissionPreset,
   type PermissionPreset,
-} from "../hooks/use-channel-permission-preset";
+} from "../lib/permission-modes";
 
 const CHANNEL_ID = "44444444-4444-4444-8444-444444444444";
 const noop = () => {};

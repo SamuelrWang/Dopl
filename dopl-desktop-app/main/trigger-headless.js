@@ -26,16 +26,12 @@ const queued = require('./queued-notice');
 const { postTaskEvent, postResult, postCourtesy, notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
 
-const RESEND =
-  "I'm still finishing a previous request in this channel — please resend in a moment.";
-
-// H1 (LOW): the HONEST version of the above for the one case where "still finishing" is false.
-// A session HELD on the sign-in action occupies the registry slot while running nothing, so the
-// old copy told the peer to resend into a slot that will not free itself — the operator has to
-// sign in on that Mac first, and nothing was saying so. No local detail leaks: it names the
-// state, not the machine, the account, or the error.
-const AUTH_HELD_REPLY =
-  "I can't run this right now — my Claude Code sign-in on this machine needs attention. I'll pick it up once that's sorted.";
+// ⚠ THE TWO PEER-FACING COURTESY REPLIES MOVED OUT ON 2026-08-20 —
+// `main/trigger-outcomes.js › RESEND` / `› AUTH_HELD_REPLY`. Both are consumed on the
+// SURVIVING windowless path (`trigger.js`'s busy and auth-hold terminals), so they had to
+// leave ahead of this file's deletion or the deletion would have taken two live strings
+// with it. This file still imports them, for its own busy defer.
+const { RESEND, AUTH_HELD_REPLY } = require('./trigger-outcomes');
 
 // Headless mode: spawn, then (on a clean reply) open an outbound review. D4:
 // task_started fires from onStart, which runs only once the pool slot is claimed for a
@@ -153,4 +149,4 @@ async function openOutboundReview(entry, m, rec, { taskId, startedAt, text }) {
   watcher.poke(rec.key); // resolve a born-decided outbound row at once
 }
 
-module.exports = { AUTH_HELD_REPLY, RESEND, runHeadlessApproved };
+module.exports = { runHeadlessApproved };

@@ -46,7 +46,8 @@ const queued = require('./queued-notice'); // the in-thread "queued, not ignored
 // it is its own reason to change: the session lane below is the default executor and
 // this is what answers when window mode is off or the engine skips.
 const headless = require('./trigger-headless');
-const { AUTH_HELD_REPLY, RESEND, runHeadlessApproved } = headless;
+const { runHeadlessApproved } = headless;
+const { AUTH_HELD_REPLY, RESEND } = outcomes; // the two courtesy replies (moved off trigger-headless, 2026-08-20)
 const { diag } = require('./diag');
 
 // Rebuild the minimal `entry` / `m` the post + spawn helpers need from a persisted

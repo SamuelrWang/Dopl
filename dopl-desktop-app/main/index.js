@@ -34,6 +34,7 @@ const authTokens = require('./auth-tokens');
 const uiSync = require('./ui-sync');
 const settings = require('./settings');
 const sessionWindow = require('./session-window');
+const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle echo seam (2026-08-20)
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -276,8 +277,13 @@ if (!gotLock) {
     deepLink.flushPending();
 
     // Session seam: factory + lifecycle handlers, then init() (registers session IPC + reloads records) BEFORE listener.start.
+    // ⚠ THE LIFECYCLE ECHO NO LONGER COMES FROM `session-window.js` (2026-08-20). It is the
+    // calm `session_ended` note a WAITING PEER needs, it is nothing to do with windows, and
+    // it now lives with the other non-reply channel echoes in `trigger-outcomes.js`. The
+    // window factory below is unreachable (F-228) and goes in the same sweep; this line does
+    // not go with it.
     sessionEngine.setWindowFactory(sessionWindow.createSessionWindow);
-    sessionEngine.setLifecycleHandlers(sessionWindow.lifecycleHandlers);
+    sessionEngine.setLifecycleHandlers(triggerOutcomes.lifecycleHandlers);
     try { sessionEngine.init(); } catch (err) { diag('sessionEngine.init error', err && err.message); }
 
     // Q11: the legacy-reply registry is durable now. targeting.js stays

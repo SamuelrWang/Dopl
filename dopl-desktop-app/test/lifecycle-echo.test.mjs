@@ -1,7 +1,12 @@
-// Tests for the v1.7.4 FIX #2 lifecycle clientMsgId derivation (main/session-window.js
-// echoSeq/echoTargets). SOURCE EXTRACTION: session-window.js requires electron at the top,
-// but the SESSION-WINDOW-PURE block (echoSeq/echoTargets) references only its `info`
+// Tests for the v1.7.4 FIX #2 lifecycle clientMsgId derivation (main/trigger-outcomes.js
+// echoSeq/echoTargets). SOURCE EXTRACTION: trigger-outcomes.js requires electron at the top,
+// but the LIFECYCLE-ECHO-PURE block (echoSeq/echoTargets) references only its `info`
 // argument, so we slice it and evaluate it verbatim in a plain Node context.
+//
+// ⚠ RENAMED AND REPOINTED 2026-08-20 (was `session-window-echoid.test.mjs`). The code it
+// pins MOVED — the echo was never about windows, and `main/session-window.js` is being
+// deleted with the window model (F-228). Moving the test WITH its subject, ahead of the
+// deletion, is what keeps this rule from being swept up as window coverage.
 //
 // The server dedupes lifecycle posts on clientMsgId = `${kind}-${channelId}-${seq}`
 // (channel-post.postTaskEvent). This pins the seq contract: a NEW resume cycle posts a NEW
@@ -28,19 +33,19 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "session-window.js"), "utf8");
+const SRC = readFileSync(join(HERE, "..", "main", "trigger-outcomes.js"), "utf8");
 
-const BEGIN = "// ─── BEGIN SESSION-WINDOW-PURE";
-const END = "// ─── END SESSION-WINDOW-PURE";
+const BEGIN = "// ─── BEGIN LIFECYCLE-ECHO-PURE";
+const END = "// ─── END LIFECYCLE-ECHO-PURE";
 const from = SRC.indexOf(BEGIN);
 const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN SESSION-WINDOW-PURE sentinel missing");
-assert.notEqual(to, -1, "END SESSION-WINDOW-PURE sentinel missing");
-assert.ok(to > from, "session-window sentinels out of order");
+assert.notEqual(from, -1, "BEGIN LIFECYCLE-ECHO-PURE sentinel missing");
+assert.notEqual(to, -1, "END LIFECYCLE-ECHO-PURE sentinel missing");
+assert.ok(to > from, "lifecycle-echo sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
 for (const banned of ["require(", "electron", "process.", "child_process", "@anthropic"]) {
-  assert.ok(!BLOCK.includes(banned), `SESSION-WINDOW-PURE block must not reference ${banned}`);
+  assert.ok(!BLOCK.includes(banned), `LIFECYCLE-ECHO-PURE block must not reference ${banned}`);
 }
 
 const { echoSeq, echoTargets } = new Function(`${BLOCK}\n return { echoSeq, echoTargets };`)();
@@ -113,8 +118,8 @@ test("an explicit `seq` still wins over everything (the live-trigger path)", () 
 
 // ── THE THREE RUNTIME KINDS ARE NOT POSTED (wiring plan Phase 5, 2026-08-18) ─────────
 //
-// Executed, not grepped. `session-window.js` requires `electron` (BrowserWindow, for the
-// factory), `./channel-post` and `./diag`; every one is faked here, and `postTaskEvent` is
+// Executed, not grepped. `trigger-outcomes.js` requires `electron` (Notification, for the
+// replied notice) plus five leaf modules; every one is faked here, and `postTaskEvent` is
 // the seam the assertion watches. What it pins is the ASYMMETRY the phase depends on:
 // this desktop stops CLAIMING a runtime in a shared transcript, while the calm milestone —
 // the one thing a waiting peer needs — still goes out.
@@ -123,16 +128,22 @@ test("an explicit `seq` still wins over everything (the live-trigger path)", () 
 // installed build still posts them (INVARIANTS §13, desktop floor); the reader dropped them
 // (`channels-v2/view-model.ts › isLifecycleEcho`), which is the half that can ship alone.
 
-function loadSessionWindow() {
+// ⚠ THE STUB LIST IS AN ASSERTION, NOT PLUMBING. An unlisted require THROWS by name, so a
+// future edit that reaches for a new dependency from this file fails here and is reviewed —
+// the same idiom `session-window.js` used, carried over with the code.
+function loadLifecycleEcho() {
   const posts = [];
   const stub = (id) => {
-    if (id === "electron") return { BrowserWindow: function () {} };
+    if (id === "electron") return { Notification: function () {} };
     if (id === "./channel-post") {
       return { postTaskEvent: (...args) => { posts.push(args); return Promise.resolve(); } };
     }
     if (id === "./diag") return { diag: () => {} };
-    if (id === "path") return { join: (...p) => p.join("/") };
-    throw new Error(`session-window.js must not require ${JSON.stringify(id)}`);
+    if (id === "./targeting") return { truncate: (s) => s };
+    if (id === "./consent-watcher") return { settle: () => {} };
+    if (id === "./session-engine") return { closeConsentWindow: () => {} };
+    if (id === "./channel-prefs") return { clearPermissionPreset: () => {} };
+    throw new Error(`trigger-outcomes.js must not require ${JSON.stringify(id)}`);
   };
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
@@ -142,13 +153,13 @@ function loadSessionWindow() {
 const INFO = { channelId: "c1", taskId: "t1", key: "c1:t1", sessionId: "s", workspaceId: "w" };
 
 test("onLaunched posts NOTHING — a launch is a runtime fact, and the Agents tab reports it", () => {
-  const { api, posts } = loadSessionWindow();
+  const { api, posts } = loadLifecycleEcho();
   api.lifecycleHandlers.onLaunched(INFO);
   assert.deepEqual(posts, [], "task_started is no longer a transcript row");
 });
 
 test("onEnded refuses task_finished and task_failed — a session ending is not a thread outcome", () => {
-  const { api, posts } = loadSessionWindow();
+  const { api, posts } = loadLifecycleEcho();
   api.lifecycleHandlers.onEnded(INFO, "task_finished", {});
   api.lifecycleHandlers.onEnded(INFO, "task_failed", { capped: true }, "Limit reached");
   api.lifecycleHandlers.onEnded(INFO, "task_failed", { interrupted: true });
@@ -160,7 +171,7 @@ test("onEnded refuses task_finished and task_failed — a session ending is not 
 });
 
 test("onEnded STILL posts the calm session-ended milestone — the waiting peer is told", () => {
-  const { api, posts } = loadSessionWindow();
+  const { api, posts } = loadLifecycleEcho();
   api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
   assert.equal(posts.length, 1, "the quit guard's 'went inactive' note depends on this");
   const [entry, m, kind, taskId, meta, body] = posts[0];
@@ -173,7 +184,7 @@ test("onEnded STILL posts the calm session-ended milestone — the waiting peer 
 });
 
 test("C-5 survives: the calm note is said ONCE per (thread, cycle)", () => {
-  const { api, posts } = loadSessionWindow();
+  const { api, posts } = loadLifecycleEcho();
   api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
   api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
   assert.equal(posts.length, 1, "an eviction reaching a held session must not say it twice");

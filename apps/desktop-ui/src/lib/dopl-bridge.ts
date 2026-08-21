@@ -110,10 +110,9 @@ export interface DoplBridge {
       preset: { tools: string; messages: string }
     ): Promise<{ ok: boolean }>;
   };
-  /** `reopen`: reveal (or recreate parked) this thread's session window — the
-   *  agent view's way back into the window. Opens a window only, starts no
-   *  query. Web tree feature-detects it, so an absent one silently hides the
-   *  control.
+  /** `reopen`: open the AGENT WINDOW for this thread's session — the agent
+   *  view's way in. Opens a window only, starts no query. Web tree
+   *  feature-detects it, so an absent one silently hides the control.
    *
    *  ⚠ `summaries` / `onSummaries` / `pause` / `end` are SPA-ONLY —
    *  deliberately absent from the remote preload, whose window hosts the
@@ -164,12 +163,26 @@ export interface DoplBridge {
     onSummaries?(
       callback: (event: { sessions: DesktopSessionSummary[] }) => void
     ): () => void;
-    /** Interrupt the turn in flight (the session window's pause morph). */
+    /** ⚠ JOINED THIS MIRROR 2026-08-20. `launch` shipped in the preload and in
+     *  `@/shared/lib/spa-bridge` but never here, so two of the THREE places this
+     *  docblock says must stay in sync carried it and this one did not. Attach MY
+     *  OWN agent to a thread, windowless: the click IS the consent (own agent, own
+     *  thread, no consent row) and main owns the posture. */
+    launch?(payload: {
+      channelId: string;
+      taskId: string;
+      workspaceId: string;
+      channelName: string;
+      threadTitle: string | null;
+      counterpartyId: string | null;
+      direct: boolean;
+    }): Promise<{ ok: boolean; sessionId?: string; reason?: string }>;
+    /** Interrupt the turn in flight. The session stays live and named. */
     pause?(
       channelId: string,
       taskId: string
     ): Promise<{ ok: boolean; reason?: string }>;
-    /** End the AGENT (the session window's "End session"). Never a thread. */
+    /** End the AGENT. Never a thread — a thread has no finished state. */
     end?(
       channelId: string,
       taskId: string

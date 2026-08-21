@@ -25,29 +25,15 @@ import { useCallback, useEffect, useState } from "react";
  * a value main would reject.
  */
 
-/** AXIS A — what this machine's agent may DO. */
-export const TOOL_MODES = ["manual", "accept_edits", "auto", "bypass"] as const;
-export type ToolMode = (typeof TOOL_MODES)[number];
-
-/** AXIS B — what CROSSES between the two machines. */
-export const MESSAGE_MODES = [
-  "ask",
-  "auto_inbound",
-  "auto_outbound",
-  "auto_both",
-] as const;
-export type MessageMode = (typeof MESSAGE_MODES)[number];
-
-export interface PermissionPreset {
-  tools: ToolMode;
-  messages: MessageMode;
-}
-
-/** What an unset channel starts on: the most restrictive pair on both axes. */
-export const DEFAULT_PERMISSION_PRESET: PermissionPreset = {
-  tools: "manual",
-  messages: "ask",
-};
+// ⚠ THE TWO AXES, THE PRESET TYPE, ITS DEFAULT AND ITS NORMALIZER MOVED OUT ON
+// 2026-08-20 — `../lib/permission-modes`. They are shared vocabulary the DURABLE
+// LAUNCH POSTURE also speaks, and this hook is being deleted with the arm; they were
+// moved ahead of that so the deletion cannot take them with it.
+import {
+  DEFAULT_PERMISSION_PRESET,
+  normalizePermissionPreset,
+  type PermissionPreset,
+} from "../lib/permission-modes";
 
 /**
  * ⚠ Hand-copied from `ARM_TTL_MS` in `main/channel-prefs.js` — restated ONLY so
@@ -88,19 +74,6 @@ export interface DoplPermissionPresetBridge {
     channelId: string,
     preset: PermissionPreset
   ) => Promise<{ ok: boolean }>;
-}
-
-/**
- * Coerce a bridge reply into a preset, or null. ⚠ Both axes must be known — a
- * half-valid pair is rejected WHOLE, like the main-process validator, so a
- * version-skewed desktop can never render as a posture the web cannot name.
- */
-export function normalizePermissionPreset(raw: unknown): PermissionPreset | null {
-  if (!raw || typeof raw !== "object") return null;
-  const { tools, messages } = raw as { tools?: unknown; messages?: unknown };
-  const t = TOOL_MODES.find((m) => m === tools);
-  const m = MESSAGE_MODES.find((v) => v === messages);
-  return t && m ? { tools: t, messages: m } : null;
 }
 
 /**
