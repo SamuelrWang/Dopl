@@ -22,6 +22,27 @@ import { canSetAgentMode, setAgentMode } from "./agents-controls";
 export const POSTURE_REFUSED = "That didn't apply. The agent may have just ended.";
 
 /**
+ * THE LIVE MESSAGE AXIS, FLOORED — F-236's SPA half (2026-08-20).
+ *
+ * ⚠ `"ask"` IS NOT OFFERED ON A RUNNING AGENT, and this is not a style choice.
+ * A windowless session has NO ACCEPT SURFACE: picking "Ask each time" used to
+ * hold the peer's next message in `session-gate.js › enqueue` with every release
+ * path deleted, parking the session at `awaiting_inbound` permanently with no
+ * error anywhere. Main now CLAMPS it (`session-profiles.js ›
+ * floorWindowlessMessage`), so the live failure is gone — but an option that
+ * silently snaps back to something else is a control lying about what it did,
+ * which is the defect this surface has been fixed for twice.
+ *
+ * ⚠ THE FLOOR IS MAIN'S AND STAYS MAIN'S. This list must never become the
+ * enforcement — it is the same rule stated where the operator can see it, and a
+ * newer main that grows an accept surface should be able to widen the axis
+ * without this file being the thing that forbids it.
+ * ⚠ The DURABLE posture on the Settings tab keeps all four: it governs the NEXT
+ * spawn, whose lane floors at launch, and "ask" is a meaningful thing to store.
+ */
+const LIVE_MESSAGE_OPTIONS = MESSAGE_OPTIONS.filter((o) => o.value !== "ask");
+
+/**
  * THE LIVE PERMISSION CONTROLS (Samuel, 2026-08-20) — both axes, on a RUNNING session.
  *
  * ⚠ THEY APPLY FROM THE VERY NEXT GATE DECISION, NOT THE NEXT LAUNCH, and that is a
@@ -83,8 +104,11 @@ export function PostureControls({
           disabled={busy}
         />
         <SelectMenu<MessageMode>
-          value={(agent.messageMode as MessageMode) ?? "ask"}
-          options={MESSAGE_OPTIONS}
+          // ⚠ The FALLBACK stays `auto_inbound`, not `"ask"`: that is the floor a
+          // windowless session actually runs on, and defaulting the display to a
+          // value the list no longer offers would render an empty control.
+          value={(agent.messageMode as MessageMode) ?? "auto_inbound"}
+          options={LIVE_MESSAGE_OPTIONS}
           onChange={(next) => apply("messages", next)}
           prefix="Messages"
           ariaLabel="Message permissions for this agent"

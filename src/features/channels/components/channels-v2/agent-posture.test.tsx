@@ -84,6 +84,47 @@ describe("what the controls show", () => {
       /Ask each time/
     );
   });
+
+  /**
+   * F-236's SPA HALF (2026-08-20). A windowless session has NO ACCEPT SURFACE, so
+   * `"ask"` on the MESSAGE axis held the peer's next message with every release
+   * path deleted — the session parked at `awaiting_inbound` permanently and the
+   * message was invisible to the agent, with no error anywhere. Main now floors
+   * the live axis (`session-profiles.js › floorWindowlessMessage`), so the option
+   * can no longer strand a reply; offering it anyway would leave a control that
+   * silently snaps back, which is the lie this surface has been fixed for twice.
+   *
+   * ⚠ THE TOOL AXIS IS UNTOUCHED — "Ask each time" there is a real, working
+   * posture, and asserting its presence is what stops this being read as a blanket
+   * ban on the phrase.
+   */
+  it("does NOT offer Ask each time on the live MESSAGE axis — there is no accept surface", () => {
+    install(vi.fn());
+    mount();
+    fireEvent.click(screen.getByLabelText("Message permissions for this agent"));
+    expect(screen.queryByRole("menuitem", { name: /^Ask each time/ })).toBeNull();
+    // The three that remain all resolve at or above the floor.
+    expect(screen.getByRole("menuitem", { name: /^Auto accept in/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /^Auto send out/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /^Automatic/ })).toBeTruthy();
+  });
+
+  it("still offers Ask each time on the TOOL axis — that one has a live gate", () => {
+    install(vi.fn());
+    mount();
+    fireEvent.click(screen.getByLabelText("Tool permissions for this agent"));
+    expect(screen.getByRole("menuitem", { name: /^Ask each time/ })).toBeTruthy();
+  });
+
+  it("shows the FLOOR, not 'ask', when an older main sends no message posture", () => {
+    install(vi.fn());
+    mount({ toolMode: undefined, messageMode: undefined });
+    // Defaulting the display to a value the list no longer carries renders an
+    // empty control; `auto_inbound` is what such a session actually runs on.
+    expect(
+      screen.getByLabelText("Message permissions for this agent").textContent
+    ).toMatch(/Auto accept in/);
+  });
 });
 
 describe("what a change does", () => {

@@ -28,12 +28,16 @@ export const PEER_SESSIONS_POLL_MS = 30_000;
 
 /**
  * WHY A REFUSED LAUNCH NEEDS COPY (2026-08-20). `sessions:launch` answers
- * `{ ok: false, reason }` for five real conditions — main's own
+ * `{ ok: false, reason }` for SEVEN real conditions — main's own
  * `channel-dir-ipc.js › sessions:launch` and `session-engine.js › launch`
- * between them produce `no-counterparty`, `busy`, `cap`, `no-sdk` and
- * `auth-hold`, plus the bridge's own `no-bridge`. The result was DISCARDED, so a
- * launch main refused looked exactly like a launch that succeeded and had not
+ * between them produce `no-counterparty`, `busy`, `cap`, `no-sdk`, `auth-hold`
+ * and `disabled`, plus the bridge's own `no-bridge`. The result was DISCARDED, so
+ * a launch main refused looked exactly like a launch that succeeded and had not
  * pushed yet: nothing appeared, and nothing said why.
+ *
+ * ⚠ THE COUNT IS THE MAP'S OWN LENGTH — this docblock said "five" while listing
+ * six and keying seven, which is what a hand-maintained number does. Read the
+ * keys; INVARIANTS §11 states the same set from main's side.
  *
  * ⚠ ONE SHORT LINE EACH, per the minimal-copy ruling (INVARIANTS §5) — a label,
  * not an explanation. An unrecognized reason falls back rather than rendering a
@@ -46,7 +50,11 @@ const LAUNCH_REFUSALS: Record<string, string> = {
   cap: "Session limit reached",
   "no-sdk": "No Claude runtime on this Mac",
   "auth-hold": "Sign in to Claude to start an agent",
-  disabled: "Sessions are turned off",
+  // ⚠ REACHABLE, and NOT a settings state. It is the `attachSurface` rollback —
+  // the spawn was refused on the way up. The old copy ("Sessions are turned off")
+  // described the deleted session-window master switch and sent the operator
+  // looking for a toggle that no longer exists.
+  disabled: "The agent could not be started",
 };
 
 export function launchRefusalText(reason: string | undefined): string {
