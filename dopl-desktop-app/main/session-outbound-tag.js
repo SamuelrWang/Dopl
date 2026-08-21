@@ -119,7 +119,6 @@ function wrapAllow(resolve, tag) {
 }
 
 module.exports = {
-  THREAD_ARG,
   isOutboundPost,
   suppliedThreadId,
   threadTagFor,

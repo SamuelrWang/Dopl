@@ -110,38 +110,41 @@ function liveChannelDirLabel(channelId) {
   return raw ? abbreviateHome(raw, os.homedir()) : null;
 }
 
-// ── Spawn cwd (session-spawner) ──────────────────────────────────────────────
-// The cwd for a channel's spawn: the operator's chosen dir when it still exists,
-// else the sandbox fallback. SELF-HEAL: a stored dir that was deleted since it was
-// chosen is cleared here so the tray stops offering a dead path and the next set
-// starts clean. Only the LOCATION is decided; the tool profile still bounds the
-// spawn (cwd is context, not a fence).
-function spawnDirFor(channelId, sandboxDir) {
-  const stored = getChannelDir(channelId);
-  const { dir, usingCustom } = resolveSpawnDir(stored, sandboxDir, isDir);
-  if (stored && !usingCustom) clearChannelDir(channelId); // deleted → drop it
-  return dir;
-}
-
-// ── Session-window cwd (item 6/7) — hardcoded ~/Downloads default, no setting/tray ──
-// Item 6: the default session dir is ~/Downloads when it exists, else the homedir
-// (never a non-existent path). Computed OUTSIDE the pure block (uses fs/os) and passed
-// INTO resolveSpawnDir as the fallback (§H-7), so the pure block stays electron-free.
+// ── The default spawn dir — ~/Downloads, no setting and no tray control ──────
+// The default session dir is ~/Downloads when it exists, else the homedir (never a
+// non-existent path). Computed OUTSIDE the pure block (uses fs/os) and passed INTO
+// resolveSpawnDir as the fallback (§H-7), so the pure block stays electron-free.
 function defaultSessionDir() {
   const downloads = path.join(os.homedir(), 'Downloads');
   return isDir(downloads) ? downloads : os.homedir();
 }
 
-// Item 7: the SDK cwd for a channel's session window — the stored per-channel dir when
-// it still exists, else ~/Downloads. This is what session-engine.buildSdkOptions reads
-// at launch so per-channel persistence is finally honored. No self-heal here (a pure
-// read path used by resolvedDirLabel too); spawnDirFor still owns the deleted-dir sweep.
+// ── THE SPAWN CWD (main/session-query.js › buildSdkOptions) ──────────────────
+// The stored per-channel dir when it still exists, else ~/Downloads. Only the LOCATION is
+// decided; the tool profile still bounds the spawn (cwd is context, not a fence).
+//
+// ⚠ IT OWNS THE SELF-HEAL NOW (2026-08-20, F-235's audit). A stored dir the operator has
+// since DELETED is cleared here, so the tray stops offering a dead path and the next `set`
+// starts clean. That sweep used to live in `spawnDirFor(channelId, sandboxDir)`, the CLI
+// lane's cwd resolver — and this function's own docblock deferred to it in terms
+// ("spawnDirFor still owns the deleted-dir sweep"). ⚠ `spawnDirFor` LOST ITS LAST CALLER
+// when the `claude -p` headless lane was deleted (2026-08-20, Samuel's ruling), so from that
+// moment NOTHING swept: the deferral pointed at a dead function and the stale entry lived
+// forever. The sweep moved here rather than being dropped, because the read that resolves
+// the cwd is exactly the moment the staleness is discovered.
+//
+// ⚠ IT IS STILL A PURE ANSWER TO ITS CALLER: the clear is a side effect on the STORE, never
+// on the returned dir, and the fallback is identical either way. `resolvedDirLabel` reads
+// through it, so the label the operator sees and the cwd the agent gets cannot disagree.
 function sessionSpawnDir(channelId) {
-  return resolveSpawnDir(getChannelDir(channelId), defaultSessionDir(), isDir).dir;
+  const stored = getChannelDir(channelId);
+  const { dir, usingCustom } = resolveSpawnDir(stored, defaultSessionDir(), isDir);
+  if (stored && !usingCustom) clearChannelDir(channelId); // deleted since it was chosen → drop it
+  return dir;
 }
 
-// Item 5: the abbreviated LABEL for the folder pill — ALWAYS a real dir short-form
-// ("~/Downloads" unset, "~/Downloads/repo" when a per-channel dir is set), never null.
+// The abbreviated LABEL for the folder pill — ALWAYS a real dir short-form ("~/Downloads"
+// unset, "~/Downloads/repo" when a per-channel dir is set), never null.
 // Label-only crosses the bridge; the abs path never does (§H-9).
 function resolvedDirLabel(channelId) {
   return abbreviateHome(sessionSpawnDir(channelId), os.homedir());
@@ -178,18 +181,16 @@ async function promptAndSetChannelDir(channelId) {
   return res.ok ? { set: true, dir } : { failed: true };
 }
 
+// ⚠ THE EXPORT LIST IS THE LIVE SURFACE, NOT A CATALOGUE (pruned 2026-08-20). Seven names
+// here had no reader anywhere in the tree — `spawnDirFor` (deleted outright with the CLI
+// lane; its sweep moved into `sessionSpawnDir`), `resolvedDirLabel` (no caller since the
+// folder pill moved), and five exported-but-internal helpers. What remains is what another
+// module actually calls, plus the two pure functions the extraction suite slices by name.
 module.exports = {
-  resolveSpawnDir,
-  abbreviateHome,
-  getAllChannelDirs,
-  getChannelDir,
-  setChannelDir,
+  resolveSpawnDir, // sliced by test/channel-dirs.test.mjs (the CHANNEL-DIR-RESOLVE block)
+  abbreviateHome, // same
   clearChannelDir,
   liveChannelDirLabel,
-  spawnDirFor,
-  defaultSessionDir,
   sessionSpawnDir,
-  resolvedDirLabel,
-  pickDirectory,
   promptAndSetChannelDir,
 };

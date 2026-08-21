@@ -94,9 +94,6 @@ function pruneSettled(settled, now) {
 // ─── END CONSENT-STORE-PURE ──────────────────────────────────────────────────
 
 module.exports = {
-  WATCHED_KEY,
-  SETTLED_KEY,
-  SETTLED_TTL_MS,
   durable,
   loadWatched,
   loadSettled,

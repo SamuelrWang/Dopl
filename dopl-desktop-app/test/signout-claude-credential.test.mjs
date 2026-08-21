@@ -2,8 +2,9 @@
 //
 // THE BUG. `main/claude-token.js` holds an `sk-ant-*` Claude OAuth token, and
 // BOTH spawn paths inject it as `CLAUDE_CODE_OAUTH_TOKEN`:
-//   claude-resolve.spawnEnv      — the headless channel-answering spawn
-//   session-auth.withStoredCredential — the session-window path
+//   claude-resolve.spawnEnv      — the headless channel-answering spawn (⚠ that lane and that
+//                                  function are BOTH deleted, 2026-08-20; see the case below)
+//   session-auth.withStoredCredential — the SDK session path, and the only one left
 // `clearStoredOAuthToken()` existed and had ZERO callers, and signOut()'s own
 // comment enumerated what it did not cover while omitting this credential
 // entirely. So: sign out, hand the Mac to the next person, they sign in — and
@@ -70,15 +71,36 @@ test("the ONLY writer is Dopl's own setup-token flow, so the credential is ours 
     "the token is captured from a child THIS APP started");
 });
 
-test("both spawn paths really do inject it, so a residue is a live billing surface", () => {
-  assert.match(fnOf(RESOLVE, "spawnEnv"), /env\.CLAUDE_CODE_OAUTH_TOKEN = token;/);
-  assert.match(fnOf(SESSION_AUTH, "withStoredCredential"), /env\.CLAUDE_CODE_OAUTH_TOKEN = token;/);
-  // The headless path injects it UNCONDITIONALLY (no source ordering), which is why
-  // "the CLI has its own sign-in too" does not make the residue harmless.
-  assert.ok(
-    !/credentialState|source/.test(fnOf(RESOLVE, "spawnEnv")),
-    "spawnEnv injects whenever a token exists"
-  );
+test("the ONE spawn path really does inject it, so a residue is a live billing surface", () => {
+  // ⚠ THIS CASE COVERED TWO PATHS AND NOW COVERS ONE (2026-08-20). It asserted the SOURCE TEXT
+  // of `claude-resolve.spawnEnv` — the `claude -p` headless lane's env builder — alongside the
+  // SDK lane's. That lane was deleted on 2026-08-20 (Samuel's ruling) and `spawnEnv` lost its
+  // last caller with it, so the assertion was green over a spawn that cannot happen: coverage
+  // of a lane, reported as coverage of a rule. `spawnEnv` is deleted, and its half of this
+  // case with it.
+  //
+  // ⚠ THE RULE IS UNCHANGED AND IS WHY THIS FILE STILL EXISTS. One path injects the token now,
+  // it injects UNCONDITIONALLY (no source ordering, no `credentialState` check), and "the CLI
+  // has its own sign-in too" therefore does not make a residue harmless. Everything below —
+  // the single writer, the teardown, the ordering — is untouched.
+  const fn = fnOf(SESSION_AUTH, "withStoredCredential");
+  assert.match(fn, /env\.CLAUDE_CODE_OAUTH_TOKEN = token;/);
+  // ⚠ AND THE SURVIVING PATH IS CONDITIONAL, WHICH THE DELETED ONE WAS NOT — stated rather
+  // than asserted away. This case used to add "`spawnEnv` injects whenever a token exists",
+  // and that unconditional injection was the argument for why a residue was dangerous even
+  // though the CLI has its own sign-in. `withStoredCredential` gates on
+  // `credentialState().source === 'stored-token'`, so it injects only when OUR stored token is
+  // the credential actually in use.
+  //
+  // ⚠ THAT IS A NARROWER SURFACE AND NOT A SAFE ONE, which is why the teardown below is
+  // unchanged: `source` resolves to `stored-token` exactly when the machine has no env key and
+  // no CLI sign-in of its own — i.e. precisely the state the NEXT operator is in before they
+  // sign in. A residue is billed to the first operator in the one case that matters.
+  assert.match(fn, /state\.source !== 'stored-token'/,
+    "the SDK lane injects only when the stored token IS the credential — the residue case");
+  // ...and the deleted builder must not come back without this case being re-read.
+  assert.equal(/function spawnEnv\s*\(/.test(RESOLVE), false,
+    "the headless env builder is deleted — a revival needs a lane, and there is none");
 });
 
 // ── the teardown ────────────────────────────────────────────────────────────

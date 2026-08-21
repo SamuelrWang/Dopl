@@ -11,19 +11,19 @@
 // probing common install dirs + the user's login-shell PATH, cache it, and pass
 // an augmented PATH to execFile. Spawning is gated on resolution success.
 
+// ⚠ FOUR REQUIRES AND ONE CONSTANT WENT WITH `spawnEnv` / `channelCwd` (2026-08-20):
+// `electron`'s `app` and `fs.mkdirSync` built the per-channel scratch dir, `claude-token`'s
+// `getStoredOAuthToken` injected the headless spawn's credential, and `UUID_RE` guarded the
+// channel id on its way into a filesystem path. All three were the deleted lane's, and this
+// module's SIXTH copy of the UUID rule went with them — see `main/ipc-guards.js`.
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { app } = require('electron');
 const Store = require('electron-store');
-const { getStoredOAuthToken } = require('./claude-token');
 
 const store = new Store();
 const CLAUDE_BIN_KEY = 'claudeBinPath'; // electron-store override for the CLI path
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 let resolvedClaude = null; // string path | false (resolved+missing) | null (unresolved)
 let resolving = null; // in-flight resolution promise (coalesces concurrent probes)
@@ -120,30 +120,24 @@ function augmentedEnv(binPath) {
   return { ...process.env, PATH: merged };
 }
 
-// Env for a channel-answering spawn: PATH-augmented, plus a Feature-D
-// CLAUDE_CODE_OAUTH_TOKEN when `claude setup-token` printed one for us to hold
-// (when claude stored the credential itself, none is set and it uses its own
-// store). The token is injected via env, never argv, and never logged.
-function spawnEnv(bin) {
-  const env = augmentedEnv(bin);
-  const token = getStoredOAuthToken();
-  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-  return env;
-}
-
-// Per-channel scratch dir so each session has an isolated working directory.
-// L7: channelId is interpolated into a filesystem path, so validate it is a UUID
-// before use; anything else falls back to the userData root.
-function channelCwd(channelId) {
-  if (!UUID_RE.test(String(channelId))) return app.getPath('userData');
-  const dir = path.join(app.getPath('userData'), 'channel-sessions', channelId);
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-  } catch (_) {
-    /* fall back to userData root below */
-  }
-  return fs.existsSync(dir) ? dir : app.getPath('userData');
-}
+// ⚠ `spawnEnv(bin)` AND `channelCwd(channelId)` STOOD HERE AND ARE DELETED (2026-08-20,
+// F-235's audit). Both belonged to the `claude -p` HEADLESS LANE, which Samuel's ruling
+// deleted the same day (`session-spawner.js` is a re-export facade over what survived), and
+// both had ZERO callers afterwards:
+//
+//   spawnEnv     built the channel-answering spawn's env — PATH-augmented plus a
+//                CLAUDE_CODE_OAUTH_TOKEN when `claude setup-token` had printed one for us to
+//                hold. The SDK lane does not use it: `session-query.js › buildSdkOptions` is
+//                the only spawn left and it does not go through this module at all.
+//   channelCwd   minted a per-channel SCRATCH dir under userData for that spawn to run in.
+//                The surviving cwd rule is `channel-dirs.js › sessionSpawnDir` — the
+//                operator's chosen folder, else ~/Downloads — which is a different answer to
+//                a different question and has been the live one since Round C.
+//
+// ⚠ THE OAUTH-TOKEN INJECTION IS NOT LOST, and that is worth stating because deleting an env
+// builder looks like deleting a credential path. `session-auth.js` injects the same token on
+// the SDK lane (its own comment names this function as the precedent), and `signOut()` still
+// clears it. What went is the builder for a spawn that no longer happens.
 
 // Best-effort probe so the listener can warn if the CLI is missing AND gate
 // spawning. Resolves true only when an absolute claude binary was found.
@@ -164,11 +158,11 @@ function cliEnv(bin) {
   return augmentedEnv(bin);
 }
 
+// ⚠ THE LIVE SURFACE ONLY (pruned 2026-08-20). `resolveClaude` and `augmentedEnv` are internal
+// — `claudeAvailable` / `getClaudeBinPath` / `cliEnv` are the three names other modules import
+// (through `session-spawner.js`'s facade), and exporting the internals invited a fourth caller
+// to reach past them.
 module.exports = {
-  resolveClaude,
-  augmentedEnv,
-  spawnEnv,
-  channelCwd,
   claudeAvailable,
   getClaudeBinPath,
   cliEnv,

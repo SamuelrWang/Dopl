@@ -231,17 +231,14 @@ function setRecordPhase(key, phase) {
   store.set(RECORDS_KEY, all);
 }
 
-function getRecord(key) {
-  return loadRecords()[key] || null;
-}
-
-function removeRecord(key) {
-  const all = loadRecords();
-  if (key in all) {
-    delete all[key];
-    store.set(RECORDS_KEY, all);
-  }
-}
+// ⚠ `getRecord(key)` AND `removeRecord(key)` STOOD HERE AND ARE DELETED (2026-08-20), both
+// with zero callers. `removeRecord`'s caller-lessness is itself a RECORDED FINDING —
+// `test/main-audit-record-prune.test.mjs` opens by naming it ("records were never pruned;
+// session-store.removeRecord existed with no caller"), and the fix that closed it was
+// `pruneRecords`'s LRU sweep, not this function. Keeping a single-key delete beside a sweep is
+// two answers to "how does a record leave", and the one with no callers is the one that would
+// have been reached for first. `getRecord` went the same way: the live readers take
+// `loadRecords()` (the whole map) or `getSdkSessionId(key)` (the one field a resume needs).
 
 // AUDIT D5: apply the policy above. Called ONCE per app start (session-engine.init, AFTER the
 // interrupted-record scan, so a crashed session still gets its echo + resume offer before it can
@@ -298,8 +295,6 @@ module.exports = {
   loadRecords,
   saveRecord,
   setRecordPhase,
-  getRecord,
-  removeRecord,
   pruneRecords, // AUDIT D5: bound the durable set (called from session-engine.init)
   // resume map
   getSdkSessionId,

@@ -260,7 +260,6 @@ module.exports = {
   READ_BUILTINS,
   WEB_TOOLS,
   DENIED_BUILTINS,
-  TOOL_PROFILES,
   normalizeProfile,
   buildAllowedTools,
   buildDeniedTools,

@@ -124,7 +124,6 @@ module.exports = {
   resolveAvatarDataUri,
   isAllowedAvatarUrl,
   isBoundedImageDataUri,
-  AVATAR_HOST_ALLOWLIST,
   AVATAR_STORAGE_ORIGIN,
   MAX_DATA_URI_LEN,
 };

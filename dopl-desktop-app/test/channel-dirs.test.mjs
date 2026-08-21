@@ -137,3 +137,52 @@ test("resolvedDirLabel: abbreviates the resolved dir, never null", () => {
   assert.equal(dirLabel(null, () => true), "~/Downloads", "the default reads ~/Downloads");
   assert.equal(dirLabel(CHANNEL_DIR, (p) => p === CHANNEL_DIR), "~/Downloads/project", "a set per-channel dir shows abbreviated");
 });
+
+// ── THE DELETED-DIR SELF-HEAL, AND WHERE IT LIVES ────────────────────────────
+// ⚠ IT MOVED ON 2026-08-20, AND IT WAS NOT RUNNING BEFORE THAT. The sweep — clear a stored
+// dir the operator has since DELETED, so the tray stops offering a dead path — lived in
+// `spawnDirFor`, the `claude -p` lane's cwd resolver. That lane was deleted on 2026-08-20
+// (Samuel's ruling) and `spawnDirFor` lost its last caller with it, while `sessionSpawnDir`'s
+// docblock still deferred to it in terms ("spawnDirFor still owns the deleted-dir sweep").
+// So for that interval NOTHING swept and a stale entry lived forever.
+//
+// It is `sessionSpawnDir`'s now, because the read that resolves the cwd is exactly the moment
+// the staleness is discovered. Asserted against the STORE side-effect rather than the return
+// value: the returned dir was always correct (it fell back), and a test over the fallback
+// alone is what let the missing sweep go unnoticed.
+
+test("sessionSpawnDir CLEARS a stored dir that has been deleted since it was chosen", () => {
+  const store = { [CHANNEL_DIR]: true };
+  const cleared = [];
+  // The composition as it ships, with the two fs-backed edges injected.
+  const sessionSpawnDir = (channelId) => {
+    const stored = store[channelId] ? CHANNEL_DIR : null;
+    const { dir, usingCustom } = resolveSpawnDir(stored, DOWNLOADS, () => false); // the dir is gone
+    if (stored && !usingCustom) cleared.push(channelId);
+    return dir;
+  };
+  assert.equal(sessionSpawnDir(CHANNEL_DIR), DOWNLOADS, "the caller still gets a usable cwd");
+  assert.deepEqual(cleared, [CHANNEL_DIR], "and the dead entry is dropped, not left to rot");
+});
+
+test("sessionSpawnDir clears NOTHING when the stored dir is still there, or when none is set", () => {
+  const cleared = [];
+  const run = (stored, exists) => {
+    const { dir, usingCustom } = resolveSpawnDir(stored, DOWNLOADS, exists);
+    if (stored && !usingCustom) cleared.push(stored);
+    return dir;
+  };
+  assert.equal(run(CHANNEL_DIR, (p) => p === CHANNEL_DIR), CHANNEL_DIR);
+  assert.equal(run(null, () => true), DOWNLOADS);
+  assert.equal(run("", () => true), DOWNLOADS);
+  assert.deepEqual(cleared, [], "a live dir and an unset one are both left alone");
+});
+
+test("the sweep really lives in sessionSpawnDir, and spawnDirFor is gone", () => {
+  // Source-level, because the composition above is a mirror: if the mirror and the module ever
+  // part company, these two assertions are what says so.
+  const fn = SRC.slice(SRC.indexOf("function sessionSpawnDir("), SRC.indexOf("function resolvedDirLabel("));
+  assert.match(fn, /clearChannelDir\(channelId\)/, "the self-heal is in the live read path");
+  assert.equal(/function spawnDirFor\s*\(/.test(SRC), false,
+    "the CLI lane's resolver is deleted — reviving it would be a second answer to one question");
+});

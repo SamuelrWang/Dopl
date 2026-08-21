@@ -197,7 +197,6 @@ module.exports = {
   MODEL_CHOICES,
   normalizeModel,
   modelArg,
-  CONTEXT_WINDOWS,
   contextWindowFor,
   promptTokens,
   sessionTokens,

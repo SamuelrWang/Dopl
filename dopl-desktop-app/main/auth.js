@@ -136,9 +136,11 @@ function beginPendingAuth(opts) {
   return nonce;
 }
 
-function hasValidPendingAuth() {
-  return readPendingAuth().length > 0;
-}
+// ⚠ `hasValidPendingAuth()` STOOD HERE AND IS DELETED (2026-08-20) — zero callers. It answered
+// "is any auth flow in flight", which nothing asks: the gate is `takePendingAuth(nonce)`, which
+// CONSUMES a specific record, and a boolean "something is pending" is the shape that invites a
+// caller to branch on presence instead of spending the nonce (INVARIANTS §11: a mismatch must
+// match nothing, never fall back to presence+TTL).
 
 // Single-use: consumes (deletes) the matching pending record and returns whether
 // one was found. The OTHER live records survive — a completed password sign-in
@@ -432,13 +434,11 @@ async function getAuthCookie() {
 module.exports = {
   captureFromFragment,
   beginPendingAuth,
-  hasValidPendingAuth,
   clearPendingAuth,
   getUserId,
   getUserIdFromCookies,
   getAccessToken,
   getAccessTokenInfo,
-  isAccessExpired,
   refresh,
   ensureFresh,
   getSessionCookieHeader: cookies.getSessionCookieHeader,
@@ -453,5 +453,6 @@ module.exports = {
   signedInSource: state.signedInSource,
   identityMismatch: state.identityMismatch, // S4: the jar and the blob name different users
   signOut: state.signOut,
-  _appName: () => (app && app.getName ? app.getName() : 'Dopl'),
+  // ⚠ `_appName` STOOD HERE AND IS DELETED (2026-08-20) — an underscore-prefixed test hook with
+  // zero readers, in tests or anywhere else.
 };

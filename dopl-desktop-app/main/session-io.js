@@ -478,8 +478,6 @@ module.exports = {
   postKindOf, // MEDIUM-2: the lifecycle kind it claims (null for a plain message)
   withPostSurface,
   summarizeInput,
-  safeInput,
-  summarizeResult,
   initialRequestPayload: seed.initialRequestPayload, // the initiating ask, display-only (§2 split)
   isOutboundPost,
   sdkRenderEvents,

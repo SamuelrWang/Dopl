@@ -189,7 +189,12 @@ test("every surviving mention of a deleted module is annotated as history, not s
 // that ran an older build may STILL CARRY `sessionWindowMode: true` on disk. Nothing reads it.
 // A reader added back would resurrect the sender-side session pop-up for precisely the installs
 // that used to have it — the self-trigger bug the whole retirement was ruled from.
-const RETIRED_STORE_KEYS = ["sessionWindowMode", "preConsentWindowMode"];
+// ⚠ `claudeSessions` JOINED 2026-08-20. It was the `claude -p` headless lane's resumable
+// session-id map; that lane was deleted the same day (Samuel's ruling) and the key was left
+// with no reader — recorded in `session-spawner.js`'s header but pinned nowhere, which is the
+// asymmetry this list exists to close. A reader for it would resume a session against an
+// executor that no longer exists.
+const RETIRED_STORE_KEYS = ["sessionWindowMode", "preConsentWindowMode", "claudeSessions"];
 
 test("no retired window store key has a reader anywhere in main/", () => {
   for (const key of RETIRED_STORE_KEYS) {

@@ -369,6 +369,6 @@ module.exports = {
   // against each other. Change here => change there.
   TOOL_MODES, MESSAGE_MODES, EDIT_TOOLS, ESCALATION_TOOLS,
   AUTO_TOOLS, BYPASS_TOOLS, DOPL_READ_TOOLS, DOPL_WRITE_TOOLS,
-  normalizeToolMode, normalizeMessageMode, toolModeAllows, autoInboundMode, autoOutboundMode,
+  normalizeToolMode, normalizeMessageMode, toolModeAllows, autoInboundMode,
   floorWindowlessMessage, // AXIS B's windowless floor — one statement, two lanes (F-236)
 };

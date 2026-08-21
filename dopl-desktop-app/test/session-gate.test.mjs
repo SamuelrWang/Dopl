@@ -82,7 +82,7 @@ function harness(over = {}) {
 
   const api = new Function(
     "crypto", "Notification", "io", "store", "sessionPark", "diag",
-    `${BLOCK}\n return { bind, inboundNotice, autoInbound, enqueue, feedInbound };`
+    `${BLOCK}\n return { bind, autoInbound, enqueue, feedInbound };`
   )(crypto, FakeNotification, io, store, sessionPark, diag);
   // A faithful mini-dispatch: the engine's dispatch runs the reducer, which is what
   // arms the standing grant mid-decision (the drain below depends on that ordering).
@@ -121,8 +121,10 @@ test("feedInbound HOLDS the reply on the session queue and dispatches inbound_ar
   assert.deepEqual(evTypes(h.calls), ["inbound_arrived"]);
   assert.equal(h.calls.dispatch[0].message, "ping");
   // ⚠ NO OS NOTIFICATION ANY MORE (2026-08-20, F-228). The banner existed to point the
-  // operator at the WINDOW holding the card; `inboundNotice`'s COPY survives — `trigger.js`
-  // still sends it — but the gate no longer raises one itself.
+  // operator at the WINDOW holding the card, and the gate no longer raises one itself.
+  // ⚠ THE COPY BUILDER WENT TOO (F-235, same day): this comment used to add that
+  // "`inboundNotice`'s COPY survives — `trigger.js` still sends it", which was never true —
+  // trigger.js sends `consent.notifyInbound`, a different function. It is deleted.
   assert.equal(h.calls.notices.length, 0);
 });
 

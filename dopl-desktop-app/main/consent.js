@@ -311,7 +311,6 @@ function notifyOutbound({ channelName, proposedReply, onSend, onOpen }) {
 
 module.exports = {
   clampBody,
-  clampSummary,
   truncate,
   createConsentRequest,
   patchDecision,

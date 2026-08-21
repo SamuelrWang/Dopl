@@ -195,5 +195,4 @@ module.exports = {
   THREAD_WINDOW_PAGE,
   // The pure half, for callers that need the rule rather than the window.
   threadRoute,
-  popoutKey,
 };

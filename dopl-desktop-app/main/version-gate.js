@@ -280,6 +280,8 @@ module.exports = {
   act,
   onUpdaterState,
   onWake,
-  // Read by the tests and useful in the field log; never a control surface.
-  currentVerdict: () => verdict,
+  // ⚠ `currentVerdict: () => verdict` STOOD HERE AND IS DELETED (2026-08-20). Its comment said
+  // "read by the tests", and no test reads it — the suites drive `screen()` / `subscribe()`,
+  // which is the surface an operator actually meets. An accessor justified by a reader that
+  // does not exist is the shape this sweep was looking for.
 };

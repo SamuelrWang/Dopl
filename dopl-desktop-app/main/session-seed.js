@@ -263,7 +263,6 @@ module.exports = {
   historyTranscript, // v2.5 D3
   noteGatedBody, // FIX F1
   isGatedEntry, // FIX F4
-  pendingTranscript,
   takeFraming,
   withSeed,
 };

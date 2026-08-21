@@ -117,17 +117,14 @@ async function onInterrupted(rec) {
   await postTaskEvent(entry, m, 'task_failed', deps.taskIdFor(rec), { interrupted: true }, 'Request interrupted');
 }
 
-function notifyReplied(entry, reply) {
-  try {
-    if (Notification.isSupported()) {
-      new Notification({
-        title: `Dopl: replied in "${entry.channel.name}"`,
-        body: targeting.truncate(reply, 120),
-        silent: true,
-      }).show();
-    }
-  } catch (_) { /* best-effort */ }
-}
+// ⚠ `notifyReplied(entry, reply)` STOOD HERE AND IS DELETED (2026-08-20) — zero callers. It
+// raised a local "Dopl: replied in <channel>" banner carrying the REPLY TEXT, and its caller
+// was the `claude -p` headless lane, which handed a reply STRING back for the desktop to post
+// on the agent's behalf. That lane is deleted (Samuel's ruling, the same day) and the surviving
+// executor posts its own bytes, so there is no moment at which main holds a reply to announce.
+// ⚠ IT IS ALSO THE SHAPE INVARIANTS §11 RETIRED: per-message desktop notifications are gone —
+// the MENTION is the escalation and the Tags inbox is the record. Reviving this would be a new
+// notification producer, and there are exactly three.
 
 // ── (2) THE SESSION LIFECYCLE ECHO (engine → channel) ────────────────────────
 // The engine's runLifecycle hands a flat info object { channelId, taskId, workspaceId,
@@ -249,7 +246,6 @@ module.exports = {
   inboundDenied,
   inboundExpired,
   onInterrupted,
-  notifyReplied,
   // (2) the engine's lifecycle seam — index.js hands this to setLifecycleHandlers.
   lifecycleHandlers,
   // the peer-facing courtesy replies, all read by trigger.js's terminals

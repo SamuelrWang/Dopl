@@ -139,5 +139,4 @@ module.exports = {
   count,
   // The pure half, for callers that need the rule rather than the registry.
   isLiveWindow,
-  liveSenderId,
 };

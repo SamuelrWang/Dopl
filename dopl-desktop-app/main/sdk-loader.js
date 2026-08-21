@@ -226,7 +226,6 @@ function buildScrubbedEnv() {
 module.exports = {
   getSdk,
   resolveClaudeExecutable,
-  rewriteAsarUnpacked,
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above
   buildSecretPathDenyRules, // credential-path deny every session runs with

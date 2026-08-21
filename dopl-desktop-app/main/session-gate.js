@@ -37,27 +37,6 @@ function bind(d) {
   deps = d || null;
 }
 
-const NOTICE_NAME_CAP = 60;
-const NOTICE_BODY_CAP = 120;
-
-// One line, whitespace collapsed, capped. The same bound every counterparty-controlled
-// display string gets before it is shown (never a blob, never multi-line).
-function oneLine(value, cap) {
-  if (value == null) return '';
-  const s = String(value).replace(/\s+/g, ' ').trim();
-  return s.length > cap ? s.slice(0, cap - 1).trimEnd() + '…' : s;
-}
-
-// PURE: the OS notification copy for a held reply. Plain voice, no em dash.
-function inboundNotice(item) {
-  const who = oneLine(item && item.authorName, NOTICE_NAME_CAP);
-  const detail = oneLine(item && item.message, NOTICE_BODY_CAP);
-  return {
-    title: who ? 'Message from ' + who : 'New channel message',
-    body: detail || 'Open the session window to accept or decline it.',
-  };
-}
-
 // PURE: may this session feed an inbound turn with NO prompt? v2.9 reads AXIS B (the MESSAGE
 // axis) — auto_inbound / auto_both — or the standing "Accept for this session" grant. The TOOL
 // axis is deliberately not consulted: `bypass` grants Bash, never an incoming message.
@@ -78,12 +57,17 @@ function autoInbound(s) {
 // answers true and `enqueue` dispatches straight through. Every FIX F1 seed-exclusion rule
 // below survives untouched — those are about what an agent SEES, not about a surface.
 //
-// ⚠ `inboundNotice` SURVIVES WITH NO CALLER, AND ITS COPY IS NOW WRONG — filed as F-235. It
-// built the banner `notifyInbound` raised, its fallback body says "Open the session window to
-// accept or decline it.", and there is neither a window nor a control. It is kept rather than
-// deleted because a windowless session that DOES need to tell the operator something about an
-// inbound turn is a real gap, and this is the only statement of what that copy should say —
-// but nobody may wire it as it stands.
+// ⚠ `inboundNotice` OUTLIVED THEM BY ONE WAVE AND IS NOW DELETED TOO (2026-08-20, Samuel's
+// ruling; F-235 closed). It built the banner `notifyInbound` raised, and it had ZERO callers.
+// The previous pass kept it as "the only statement of what that copy should say" if a
+// windowless inbound notice were ever built — but its fallback body was *"Open the session
+// window to accept or decline it."*, naming a surface that does not exist and an action with
+// no control behind it. That is worse than a dead function: it is dead COPY, and copy is what
+// a future wiring reuses without re-reading. **NO SUCH NOTICE IS COMING**: the windowless
+// message axis is FLOORED at auto (`session-profiles.js › floorWindowlessMessage`, F-236) on
+// both the launch lanes AND the live one, so nothing is ever held and there is nothing to
+// notify anybody about. If that floor is ever lifted, the notice is a NEW design — write the
+// copy for the surface that exists then, rather than reviving this.
 
 // Enqueue one inbound reply on a session that exists (live OR parked). Returns false
 // only when the bounded queue is FULL, so the caller (the listener) can fall through
@@ -157,7 +141,6 @@ function feedInbound(a) {
 
 module.exports = {
   bind,
-  inboundNotice,
   autoInbound,
   feedInbound,
 };

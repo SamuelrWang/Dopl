@@ -431,7 +431,6 @@ module.exports = {
   sleep,
   getCursor,
   setCursor,
-  isSeeded,
   markSeeded,
   seedModeFor,
   shouldSeed,

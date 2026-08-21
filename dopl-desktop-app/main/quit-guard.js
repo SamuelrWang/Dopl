@@ -260,7 +260,6 @@ module.exports = {
   onBeforeQuit,
   // constants + the pure core (exported for the test; nothing else reads them)
   FLUSH_DEADLINE_MS,
-  WAIT_POLL_MS,
   WAIT_CAP_MS,
   BUTTON_QUIT,
   BUTTON_WAIT,
