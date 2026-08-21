@@ -28,6 +28,7 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import {
   agentView,
   copy,
+  desktopMainFilesContaining,
   desktopSource,
   disabled,
   postureSends,
@@ -97,9 +98,15 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     expect(CHANNEL_PREFS).not.toMatch(/const PRESETS_KEY\s*=/);
     expect(CHANNEL_PREFS).not.toMatch(/const ARM_TTL_MS\s*=/);
     expect(CHANNEL_PREFS).not.toMatch(/^function (arm|consume|clear)PermissionPreset/m);
-    // The one consumer, named. A second reader of this record is the failure H2
+    // The one consumer, COUNTED. A second reader of this record is the failure H2
     // exists to prevent, and it would not look like one from here.
-    expect(desktopSource("channel-dir-ipc.js")).toContain("channelPrefs.launchStartModes(p.channelId)");
+    // ⚠ COUNTED, NOT NAMED, SINCE 2026-08-20 (F-237). This asserted the read lived
+    // in `channel-dir-ipc.js`; the desktop split that file and the read moved to
+    // `session-ipc-ops.js`, reddening this suite on a change that did not touch the
+    // rule. The file it lives in is the desktop's business; that there is exactly
+    // ONE is ours. `channel-prefs.js` is excluded as the definition site.
+    const readers = desktopMainFilesContaining("channelPrefs.launchStartModes(");
+    expect(readers).toHaveLength(1);
   });
 
   it("drops the whole posture subsection, heading included, with no bridge", () => {
