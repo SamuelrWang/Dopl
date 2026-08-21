@@ -310,6 +310,13 @@ const OPS = [
   //     than assuming one.
   ["sessions:openAgentWindow", { segment: "acme-a1b2", channelId: CH, taskId: "t1" }, { ok: false }],
   ["sessions:message", { channelId: CH, taskId: "t1", text: "hello" }, { ok: false }],
+  // ⚠ JOINED 2026-08-20: the agent view's LIVE permission controls. Same binding, same UUID
+  // gate; the axis is restricted to two literals here and the mode is re-validated against
+  // `session-profiles.js`'s frozen enums before it reaches the reducer, which coerces again.
+  // ⚠ It widens SUPERVISION (is the operator asked?), never CONTAINMENT (what is reachable
+  // at all) — the profile is checked first and no posture can widen it. `preload-parity`
+  // carries the full review.
+  ["sessions:setMode", { channelId: CH, taskId: "t1", axis: "tools", mode: "bypass" }, { ok: false }],
   ["sessions:narration", { channelId: CH, taskId: "t1" }, { entries: [] }],
 ];
 

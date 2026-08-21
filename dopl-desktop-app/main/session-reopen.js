@@ -150,6 +150,62 @@ function controlByTask(a) {
   return { ok: true };
 }
 
+// ── THE LIVE PERMISSION POSTURE: BOTH AXES, ON A RUNNING SESSION ─────────────────
+//
+// Samuel, 2026-08-20. The agent view can move a LIVE session's posture, and it applies from
+// the very next gate decision rather than the next launch.
+//
+// ⚠ WHY "THE NEXT GATE" IS A FACT AND NOT A HOPE. `session-io.js › grantArgs` reads BOTH
+// axes off `s.state` at CALL time — its own comment says so ("Both axes are read LIVE …: a
+// mode changed mid-turn applies to the next call"). So there is nothing to invalidate and no
+// cache to bust: moving the reducer's state IS the change. That is also why this dispatches
+// the reducer's own `set_tool_mode` / `set_message_mode` rather than assigning `s.state`
+// directly — the reducer coerces fail-closed (`coerceMode`) and emits the `modes` echo, and a
+// second writer to the same field is how two readers come to disagree about one posture.
+//
+// ⚠ WHAT IT DOES NOT DO: RE-DECIDE ANYTHING ALREADY PENDING. The reducer's own branch has
+// carried that argument since v2.9 — `pendingPermissions` holds requestIds only, so it cannot
+// tell a queued Bash from a queued `op=open`, and a blanket drain would let the TOOL axis
+// answer a MESSAGE operation. ⚠ IN THE WINDOWLESS SHAPE THE QUESTION IS MOOT ANYWAY, which is
+// worth stating because it is not obvious: `session-windowless.js › claimGate` DENIES a gated
+// tool immediately (`setImmediate(() => decide(rid, 'deny'))`) and bridges an outbound post to
+// a consent row the server decides. Nothing is ever HELD locally waiting for a posture to
+// change, so "re-evaluate pending gates" has no pending gates to re-evaluate. The inbound
+// half's `drainInbound` went with the v1 purge for the same reason (`session-gate.js`: a
+// windowless session's message axis is floored at `auto_inbound`, so the queue never holds).
+//
+// ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT — the security shape, and the reason this is a
+// safe op to expose. The two axes decide whether the OPERATOR is asked; the PROFILE decides
+// what is reachable at all, is checked FIRST, and no posture can widen it
+// (`session-profiles.js`: `SESSION_HARD_DENY` is unconditional, and `bypass` is a POSITIVE
+// allow-list — an unclassified tool gates in every mode, `bypass` included). So the worst a
+// forged call can do is stop asking about tools the operator's own channel profile already
+// permits: exactly the authority the durable launch posture hands the same operator at spawn
+// (`channel-prefs.js`), exercised a few minutes later on a session already running.
+function setModeByTask(a) {
+  const channelId = String((a && a.channelId) || '');
+  const taskId = String((a && a.taskId) || '');
+  const axis = a && a.axis;
+  if (!deps.sessions || !deps.dispatch) return { ok: false };
+  if (axis !== 'tools' && axis !== 'messages') return { ok: false, reason: 'bad-axis' };
+  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  try {
+    deps.dispatch(s, {
+      type: axis === 'tools' ? 'set_tool_mode' : 'set_message_mode',
+      mode: a && a.mode,
+    });
+  } catch (_) {
+    return { ok: false };
+  }
+  // ⚠ ANSWER WITH MAIN'S OWN POST-DISPATCH VALUES, never an echo of what was asked for. The
+  // reducer coerces fail-closed, so a renderer that stamped its own request would show a
+  // posture nothing is enforcing — the exact lie the deleted session window's selects earned
+  // a fix for twice.
+  const st = s.state || {};
+  return { ok: true, tools: st.toolMode, messages: st.messageMode };
+}
+
 // ── THE DIRECT 1:1 LANE: THE OPERATOR TALKS TO THEIR OWN AGENT ───────────────────
 //
 // F-212's third lane, closed 2026-08-20. The entry parked it on a security decision and
@@ -270,4 +326,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, messageByTask, listOrphanRisk, endLiveSessions };
+module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask, listOrphanRisk, endLiveSessions };

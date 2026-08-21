@@ -44,12 +44,12 @@ import { AgentLiveness } from "./bits";
 import {
   agentDetailLabel,
   agentKey,
-  canMessageAgent,
   formatTokens,
-  messageAgent,
   metric,
   useDesktopSessions,
 } from "./agents-model";
+import { canMessageAgent, messageAgent } from "./agents-controls";
+import { PostureControls } from "./agent-posture";
 import { useAgentNarration, type AgentNarrationEntry } from "./use-agent-narration";
 
 /** The window's name. ⚠ `main/agent-window.js` carries the bare "Dopl" as the PRE-PAINT
@@ -127,6 +127,9 @@ export function ChannelsV2AgentWindow({
     <div className="page-float flex min-h-0 flex-1 flex-col antialiased">
       <AgentWindowHeader agent={agent} />
       <AgentWindowStats agent={agent} />
+      {agent && (
+        <PostureControls agent={agent} channelId={channelId} taskId={taskId} />
+      )}
       <WorkStream entries={entries} supported={supported} sent={sent} />
       <AgentComposer channelId={channelId} taskId={taskId} name={agent?.name ?? null} />
     </div>

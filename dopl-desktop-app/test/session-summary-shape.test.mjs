@@ -66,6 +66,20 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // rule's own answer, and the fixture's state (no `lastEventKind` stamped).
       detail: "thinking",
       toolLabel: null,
+      // ⚠ WIDENED AGAIN 2026-08-20 by the LIVE POSTURE pair. The pin failed on the ADD,
+      // which is the review this comment records:
+      //   • READ-ONLY ON THIS WIRE, and it is the REDUCER's state — not the channel's
+      //     stored launch posture. Different facts: the whole point of the agent view's
+      //     controls is that a running session can be moved OFF what it launched on, and a
+      //     control that cannot read back what it set lies after the auth hold resets both
+      //     axes, after a resume, and after a change made in another window.
+      //   • THEY DO NOT REACH THE SERVER, by the property the metrics and `detail` already
+      //     rely on: `session-state-push.js › reportRow` picks its columns BY NAME. The
+      //     row-shape case in `session-state-push.test.mjs` is the belt.
+      //   • The values are the reducer's own, coerced there; an absent state reads
+      //     fail-closed (`manual` / `ask`), exactly as `session-io.js › grantArgs` treats it.
+      toolMode: "manual",
+      messageMode: "ask",
       channelName: "general",
       threadTitle: "Ship the thing",
       contextUsed: 84000,

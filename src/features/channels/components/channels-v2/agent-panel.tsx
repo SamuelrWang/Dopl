@@ -67,14 +67,16 @@ import { AgentLiveness, IconButton } from "./bits";
 import {
   agentDetailLabel,
   agentKey,
-  canControlAgents,
-  canOpenAgentWindow,
   formatTokens,
   metric,
-  openAgentWindow,
-  useAgentControls,
-  type AgentControl,
 } from "./agents-model";
+import {
+  canControlAgents,
+  canOpenAgentWindow,
+  openAgentWindow,
+  type AgentControl,
+  useAgentControls,
+} from "./agents-controls";
 
 /**
  * WHAT THIS AGENT POSTED. Pure and exported for the test.

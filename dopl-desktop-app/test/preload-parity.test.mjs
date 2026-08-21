@@ -215,6 +215,29 @@ const APP_OPS = [
   "sessions.openAgentWindow",
   "sessions.pause",
   "sessions.reopen",
+  // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.setMode`, the agent view's LIVE permission
+  // controls. The pin failed on the ADD, which is the review this comment records:
+  //   • The main-process handler EXISTS and was checked first — `main/channel-dir-ipc.js`
+  //     registers `sessions:setMode`, `appWindowOnly`, UUID-gating `channelId`, with the
+  //     AXIS restricted to the two literals and the MODE re-validated against
+  //     `session-profiles.js`'s frozen enums (the same normalizers `channel-prefs.js`
+  //     uses) — and the reducer coerces AGAIN fail-closed via `coerceMode`, so an unknown
+  //     value lands on the most restrictive member of its axis rather than half-applying.
+  //   • ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT — the review this op turns on. The two
+  //     axes decide whether the OPERATOR IS ASKED. The PROFILE decides what is reachable at
+  //     all, is checked FIRST, and no posture can widen it: `SESSION_HARD_DENY` is
+  //     unconditional, and `bypass` is a POSITIVE allow-list, so an unclassified tool (any
+  //     built-in a newer CLI ships, every tool from the operator's own MCP servers) gates in
+  //     EVERY mode, `bypass` included. So the worst a forged call achieves is to stop asking
+  //     about tools this operator's own channel profile ALREADY PERMITS.
+  //   • THAT IS THE SAME AUTHORITY THE DURABLE POSTURE ALREADY HANDS THEM. `channels.
+  //     setLaunchPosture` sets exactly these two axes for the next spawn; this sets them on a
+  //     session already running. A forged call buys a few minutes' head start on a decision
+  //     the operator can make from the Settings tab, and reaches no other machine.
+  //   • ⚠ IT IS NOT THAT DURABLE POSTURE AND MUST NOT BE WIRED TO IT. This writes NOTHING —
+  //     it moves one live session's reducer state, and the channel's stored posture is
+  //     untouched. Collapsing the two would make a per-session decision permanent.
+  "sessions.setMode",
   "sessions.summaries",
   "signOut",
   "syncWatch",

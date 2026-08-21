@@ -250,6 +250,22 @@ contextBridge.exposeInMainWorld('dopl', {
         taskId: asId(taskId),
       }),
 
+    // THE LIVE PERMISSION POSTURE (2026-08-20) — both axes, on a session already running,
+    // applying from the very next gate decision rather than the next launch.
+    // ⚠ NOT `channels.setLaunchPosture`, which writes the per-channel record governing the
+    // NEXT spawn. This moves ONE live session's reducer state and stores nothing.
+    // ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT: the axes decide whether the operator is
+    // ASKED, the profile decides what is reachable at all and is checked first. Main
+    // re-validates both strings against the frozen enums, and the reducer coerces again
+    // fail-closed, so an unknown value lands on the most restrictive member of its axis.
+    setMode: (channelId, taskId, axis, mode) =>
+      ipcRenderer.invoke('sessions:setMode', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+        axis: asMode(axis),
+        mode: asMode(mode),
+      }),
+
     // ⚠ `message` IS THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and it is the only
     // reason this namespace's failure direction is not simply "an agent that stops".
     // The operator types to their OWN agent out of band; main resolves (channel, thread)

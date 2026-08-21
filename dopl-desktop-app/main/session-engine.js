@@ -469,5 +469,5 @@ module.exports = {
   // test/main-exports-defined.test.mjs now pins every main export against what its file binds.
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
-  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, messageByTask: sessionReopen.messageByTask, narrationFor: (k) => sessionNarration.ringFor(sessions.get(k)), // item 2 + Phase 5 pause/end + F-212's 1:1 lane and work lane — the MAIN-window bridge (channel-dir-ipc)
+  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, setModeByTask: sessionReopen.setModeByTask, messageByTask: sessionReopen.messageByTask, narrationFor: (k) => sessionNarration.ringFor(sessions.get(k)), // item 2 + Phase 5 pause/end + F-212's 1:1 lane and work lane — the MAIN-window bridge (channel-dir-ipc)
 };

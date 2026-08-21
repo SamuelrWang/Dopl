@@ -59,9 +59,13 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
   // `session-state-push.test.mjs` pins that row shape. Here the claim is narrower and
   // unchanged: whatever the wire carries, the two REPORT fields are not on it.
   assert.deepEqual(Object.keys(m.list()[0]).sort(), [
+    // ⚠ `toolMode` / `messageMode` joined 2026-08-20 (the agent view's live controls) and
+    // are LOCAL-only for the same reason `detail` is — asserted where it bites, in
+    // `session-state-push.test.mjs`'s row shape. Here the claim is the narrower one and is
+    // unchanged: whatever the wire carries, the two REPORT fields are not on it.
     "channelId", "channelName", "contextUsed", "contextWindow", "detail", "lastActivityAt",
-    "name", "sessionId", "startedAt", "state", "taskId", "threadTitle", "tokensSpent",
-    "toolLabel",
+    "messageMode", "name", "sessionId", "startedAt", "state", "taskId", "threadTitle",
+    "tokensSpent", "toolLabel", "toolMode",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
   assert.equal("key" in m.list()[0], false);

@@ -60,7 +60,7 @@
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
 // verbatim with these injected.
 const { pickAgentName } = require('./agent-names');
-const { contextWindowFor } = require('./session-model');
+const { metricOrNull, metrics } = require('./session-metrics');
 const { noteEvent, detailFor } = require('./session-detail');
 const { diag } = require('./diag');
 
@@ -125,47 +125,6 @@ function nameFor(ledger, key, channelId) {
   return name;
 }
 
-/**
- * A NUMBER OR NOTHING. `null` is the honest answer for "this build cannot say" and for "nothing
- * has been measured yet" alike, and the renderer draws neither as a zero — a context meter at
- * 0/0 and a meter with no denominator are different claims, and only one of them is true before
- * the first turn reports usage. ⚠ Never coerce a missing metric to 0 here: an amber meter that
- * says the window is empty is a lie the operator acts on.
- */
-function metricOrNull(value) {
-  // ⚠ `typeof` FIRST, never a bare Number(): `Number(null)` is 0 and `Number('')`
-  // is 0, so a coercion-only guard turns every one of the absences above into a
-  // confident zero — which is the exact lie this function exists to prevent.
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
-  return value;
-}
-
-/**
- * THE AGENT-VIEW NUMBERS, from wherever they already are on the live session object. Split out
- * so `liveSummary` reads as identity + state and this reads as measurement.
- *
- * ⚠ EVERY ONE OF THESE ALREADY EXISTED — nothing here starts a counter:
- *   contextUsed    `s.promptTokens`, written by session-model's observer from the LAST assistant
- *                  message's own usage (occupancy, output excluded — see that file's header).
- *   contextWindow  `contextWindowFor(s.liveModel)`, the frozen model->window table. `null` for a
- *                  model this build has never heard of, which is what makes the meter show raw
- *                  tokens instead of a made-up percentage.
- *   tokensSpent    `s.tokensSpent`, the lifetime accumulation session-io.js keeps beside the
- *                  identical cost arithmetic. A DIFFERENT question from occupancy.
- *   startedAt      `s.startedAt`, stamped when the engine created this session object.
- *   lastActivityAt `s.lastActivityAt`, stamped at the engine's one dispatch funnel.
- * ⚠ NONE of them reaches the server: `session-state-push.js › rowFor` picks its columns by name,
- * so a widened wire shape does not widen `channel_sessions`. Runtime metrics stay local.
- */
-function metrics(s) {
-  return {
-    contextUsed: metricOrNull(s && s.promptTokens),
-    contextWindow: metricOrNull(contextWindowFor(s && s.liveModel)),
-    tokensSpent: metricOrNull(s && s.tokensSpent),
-    startedAt: metricOrNull(s && s.startedAt),
-    lastActivityAt: metricOrNull(s && s.lastActivityAt),
-  };
-}
 
 /** One LIVE session object -> its summary. `name` is handed in (the ledger is the caller's). */
 function liveSummary(s, name) {
@@ -183,6 +142,13 @@ function liveSummary(s, name) {
     // over any pill but `working`; `toolLabel` means something only under `detail: 'tool'`.
     detail: detailFor(s && s.state, s && s.lastEventKind, pill),
     toolLabel: (s && s.lastToolLabel) || null,
+    // ⚠ THE LIVE POSTURE (2026-08-20), read-only here: a control that cannot read back what
+    // it set lies after the auth hold resets both axes, after a resume, and after a change
+    // made in another window. ⚠ THE REDUCER's state, NOT the channel's stored launch posture
+    // — different facts, and this pair exists because a session can be moved off what it
+    // launched on. Absent reads fail-closed, as `session-io.js › grantArgs` treats it.
+    toolMode: (s && s.state && s.state.toolMode) || 'manual',
+    messageMode: (s && s.state && s.state.messageMode) || 'ask',
     channelName: displayText(ctx.channelName),
     threadTitle: displayText(ctx.taskTitle),
     ...metrics(s),
@@ -205,6 +171,9 @@ function endedSummary(e, name) {
     // would outlive the run it described.
     detail: null,
     toolLabel: null,
+    // No posture to change; a retained one would offer a control over nothing.
+    toolMode: null,
+    messageMode: null,
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
     contextUsed: metricOrNull(e && e.contextUsed),

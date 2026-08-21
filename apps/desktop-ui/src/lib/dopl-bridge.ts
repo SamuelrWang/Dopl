@@ -148,6 +148,14 @@ export interface DoplBridge {
       taskId: string,
       text: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    /** Move a LIVE session's permission posture — supervision, not containment.
+     *  See `@/shared/lib/spa-bridge` for the full shape; main owns it. */
+    setMode?(
+      channelId: string,
+      taskId: string,
+      axis: "tools" | "messages",
+      mode: string
+    ): Promise<{ ok: boolean; reason?: string; tools?: string; messages?: string }>;
     /** The agent's work ring: read once on mount, then listen. */
     narration?(
       channelId: string,

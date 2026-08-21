@@ -10,7 +10,10 @@
 
 import { useState } from "react";
 import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions";
-import { canLaunchAgents, launchAgentOnThread } from "./agents-model";
+import {
+  canLaunchAgents,
+  launchAgentOnThread,
+} from "./agents-controls";
 import type { Channel, ChannelThread } from "../../types";
 
 /**

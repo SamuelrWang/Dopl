@@ -193,7 +193,7 @@ describe("Open agent always opens the agent view", () => {
   it("prefers the dedicated op and hands it the segment the route needs", async () => {
     const openWin = vi.fn().mockResolvedValue({ ok: true });
     bridgeWith({ reopen: vi.fn(), openAgentWindow: openWin });
-    const { openAgentWindow } = await import("./agents-model");
+    const { openAgentWindow } = await import("./agents-controls");
     expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: true, reason: undefined });
     expect(openWin).toHaveBeenCalledWith(SEGMENT, CHANNEL_ID, "t-1");
   });
@@ -205,13 +205,13 @@ describe("Open agent always opens the agent view", () => {
   it("falls back to reopen, WITH the segment, on a main without the new op", async () => {
     const reopen = vi.fn().mockResolvedValue({ ok: true });
     bridgeWith({ reopen });
-    const { openAgentWindow } = await import("./agents-model");
+    const { openAgentWindow } = await import("./agents-controls");
     expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: true, reason: undefined });
     expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, "t-1", SEGMENT);
   });
 
   it("offers the button when EITHER op is present, and not when neither is", async () => {
-    const { canOpenAgentWindow } = await import("./agents-model");
+    const { canOpenAgentWindow } = await import("./agents-controls");
     bridgeWith({ openAgentWindow: vi.fn() });
     expect(canOpenAgentWindow()).toBe(true);
     bridgeWith({ reopen: vi.fn() });
@@ -222,7 +222,7 @@ describe("Open agent always opens the agent view", () => {
 
   it("answers a verdict, not a throw, on a main without either op", async () => {
     bridgeWith({});
-    const { openAgentWindow } = await import("./agents-model");
+    const { openAgentWindow } = await import("./agents-controls");
     expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: false, reason: "no-bridge" });
   });
 });

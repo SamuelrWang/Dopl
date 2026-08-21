@@ -25,21 +25,11 @@
 // enums — the renderer can never store a mode that is not one of the eight known
 // strings, and a bad pair writes nothing. See main/channel-prefs.js.
 //
-// The one additional handler here, `sessions:reopen`, is the main-window bridge
-// for the web session-card's "Open session" button. It asks the session engine to
-// SHOW an existing LIVE session window for a (channel, task) the operator owns; when
-// none survives, the engine's P2 fallback (recreateParkedShell) recreates a DORMANT,
-// parked window from the durable record + retained sdkSessionId (subject to the shared
-// window cap). Either way it starts NO query and runs NO gated tool — a window show()
-// or a query-less parked shell (F-072: no read-triggered server/realtime writes) — and
-// returns `{ ok }` (ok:false only for a truly-closed thread). channelId is UUID-validated
-// like the folder ops; reopenByTask may return a Promise (the fallback is async), which
-// ipcMain.handle awaits before replying.
-//
-// v3.0 VOCABULARY: "Open session" opens the operator's OWN window on a shared THREAD.
-// It never starts the agent — only a steer or an accepted inbound resumes a parked
-// shell. Wire name `task` == domain name `thread` (the ids stay `taskId`).
-// Pinned by test/open-session-no-query.test.mjs.
+// ⚠ REWRITTEN 2026-08-20: this described the v1 session window `sessions:reopen` used to
+// show or recreate, deleted whole (F-228). `reopenByTask` has two answers now — a LIVE
+// session opens the AGENT WINDOW (`main/agent-window.js`), anything else refuses. It still
+// starts NO query and runs NO gated tool (test/open-session-no-query.test.mjs pins that
+// half). Wire name `task` == domain name `thread`.
 //
 // H3 (2026-07-31) — SENDER BINDING. Every handler below used to answer ANY
 // renderer that could reach the channel name: the payload was validated, but the
@@ -63,6 +53,8 @@
 //   sessions:end         (Phase 5) ends my agent on a thread — terminal, and never the thread
 //   threads:openWindow   (Phase 10) opens a pop-out window on ONE thread
 //   sessions:openAgentWindow  (F-212) opens the AGENT window on one of my own agents
+//   sessions:setMode     moves a LIVE session's two permission axes — supervision, not
+//                        containment; see its own block
 //   sessions:message     (F-212) ⚠ THE ONE OP HERE THAT STARTS A TURN — see its own block
 //   sessions:narration   (F-212) reads my own agent's work ring, for that window's first paint
 //
@@ -375,6 +367,37 @@ function register(opts = {}) {
   //   • an EMPTY body after trimming is refused rather than dispatched — a blank turn
   //     wakes a parked agent to read nothing.
   //   • the version floor applies: a blocked build must not be able to start work.
+  // THE LIVE PERMISSION POSTURE (Samuel, 2026-08-20) — both axes, on a session ALREADY
+  // RUNNING, applying from the very next gate decision rather than the next launch.
+  // ⚠ NOT `channels:setLaunchPosture` above: that writes a per-channel RECORD governing the
+  // NEXT spawn, this moves ONE live session's reducer state and stores nothing. Collapsing
+  // the two makes a per-session decision permanent.
+  // ⚠ SECURITY, in one line because the argument lives with the code that acts on it
+  // (`main/session-reopen.js › setModeByTask`, and the review at `test/preload-parity.test.mjs`):
+  // it widens SUPERVISION (is the operator asked?), never CONTAINMENT (what is reachable at
+  // all) — the profile is checked first and no posture can widen it.
+  //
+  // BOUNDS HERE, because this is the boundary: sender-bound; `channelId` UUID-gated; the AXIS
+  // restricted to two literals (it cannot coerce — there is no "most restrictive axis"); the
+  // MODE re-validated against `session-profiles.js`'s frozen enums, after which the reducer
+  // coerces AGAIN fail-closed onto the most restrictive member of its axis.
+  ipcMain.handle('sessions:setMode', appWindowOnly('sessions:setMode', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const axis = p.axis === 'tools' || p.axis === 'messages' ? p.axis : null;
+    if (!axis) return { ok: false, reason: 'bad-axis' };
+    const { normalizeToolMode, normalizeMessageMode } = require('./session-profiles');
+    const mode = axis === 'tools' ? normalizeToolMode(p.mode) : normalizeMessageMode(p.mode);
+    const engine = require('./session-engine');
+    if (typeof engine.setModeByTask !== 'function') return { ok: false };
+    return engine.setModeByTask({
+      channelId: p.channelId,
+      taskId: String(p.taskId || ''),
+      axis: axis,
+      mode: mode,
+    });
+  }));
+
   ipcMain.handle('sessions:message', appWindowOnly('sessions:message', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };

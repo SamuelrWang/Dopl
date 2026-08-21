@@ -64,6 +64,20 @@ export interface DesktopSessionSummary {
    *  `detail: "tool"`; `null` when the tool could not be named, which the copy
    *  degrades to "Running a command" rather than to a blank. */
   toolLabel?: string | null;
+  /**
+   * THE LIVE PERMISSION POSTURE (2026-08-20) — what this RUNNING session is
+   * actually on, so the agent view's controls can show the value they set.
+   *
+   * ⚠ THE REDUCER'S STATE, NOT THE CHANNEL'S STORED LAUNCH POSTURE. Different
+   * facts: the launch posture governs the next spawn, this is where the session
+   * has been moved to since. A control that read the stored one would go wrong
+   * the moment either is changed without the other — which is the normal case,
+   * since the whole point of these controls is to move a session off what it
+   * launched on.
+   * ⚠ `null` on an ENDED session (nothing to change), absent on an older main.
+   */
+  toolMode?: "manual" | "accept_edits" | "auto" | "bypass" | null;
+  messageMode?: "ask" | "auto_inbound" | "auto_outbound" | "auto_both" | null;
   channelName: string | null;
   threadTitle: string | null;
   // ── THE AGENT-VIEW NUMBERS (wiring plan Phase 5, 2026-08-18) ───────────────
@@ -180,6 +194,24 @@ export interface SpaBridgeSurface {
       taskId: string,
       text: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    /**
+     * Move a LIVE session's permission posture. Applies from the very next gate
+     * decision — `session-io.js › grantArgs` reads both axes off the reducer
+     * state at CALL time, so moving that state IS the change.
+     *
+     * ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT: the axes decide whether the
+     * operator is ASKED; the profile decides what is reachable at all, is
+     * checked first, and no posture can widen it. The answer carries MAIN's own
+     * post-dispatch values, never an echo of the request — the reducer coerces
+     * fail-closed and a renderer that stamped its own ask would show a posture
+     * nothing is enforcing.
+     */
+    setMode?(
+      channelId: string,
+      taskId: string,
+      axis: "tools" | "messages",
+      mode: string
+    ): Promise<{ ok: boolean; reason?: string; tools?: string; messages?: string }>;
     /** The agent's WORK RING — its own text, its tool calls with names, their
      *  results, what it posted. Read once on mount, then listen; a push-only
      *  surface leaves a freshly opened window blank until the next event. */

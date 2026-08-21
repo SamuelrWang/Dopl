@@ -80,7 +80,7 @@ function harness(over = {}) {
   const api = new Function(
     "store",
     "framing",
-    `${BLOCK}\n return { bind, listLiveSessions, reopenByTask, controlByTask, messageByTask,
+    `${BLOCK}\n return { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
        listOrphanRisk, endLiveSessions };`
   )(store, framing);
   const sessions = new Map();
@@ -332,4 +332,81 @@ test("MESSAGE: an AUTH-HELD session refuses and SAYS SO rather than eating the w
   h.sessions.set(KEY, fakeSession({ state: { authHeld: true } }));
   assert.deepEqual(h.messageByTask({ ...task, text: "hi" }), { ok: false, reason: "auth-hold" });
   assert.equal(h.calls.dispatch.length, 0);
+});
+
+// ── THE LIVE PERMISSION POSTURE (Samuel, 2026-08-20) ────────────────────────────
+//
+// ⚠ WHAT MAKES "IMMEDIATE" A FACT RATHER THAN A HOPE, and the reason these cases assert the
+// DISPATCH rather than a re-decision: `session-io.js › grantArgs` reads both axes off
+// `s.state` at CALL time (its own comment: "a mode changed mid-turn applies to the next
+// call"). There is no cache to bust — moving the reducer's state IS the change, so what is
+// worth pinning is that the reducer's own event is what moves it.
+//
+// ⚠ AND WHY NOTHING PENDING IS RE-DECIDED. In the windowless shape there is nothing pending:
+// `session-windowless.js › claimGate` denies a gated tool immediately and bridges an outbound
+// post to a server-decided consent row. "Re-evaluate held gates" has no held gates.
+
+test("MODE: it dispatches the REDUCER's own event, one axis at a time", () => {
+  const h = harness({});
+  h.sessions.set(KEY, fakeSession({ win: null, windowless: true }));
+  h.setModeByTask({ ...task, axis: "tools", mode: "bypass" });
+  h.setModeByTask({ ...task, axis: "messages", mode: "auto_both" });
+  assert.deepEqual(
+    h.calls.dispatch.map(([, e]) => [e.type, e.mode]),
+    [["set_tool_mode", "bypass"], ["set_message_mode", "auto_both"]],
+    "a second writer to the same field is how two readers disagree about one posture"
+  );
+});
+
+test("MODE: it answers with MAIN's post-dispatch values, never an echo of the ask", () => {
+  // The reducer coerces fail-closed; a renderer that stamped its own request would show a
+  // posture nothing is enforcing.
+  const h = harness({});
+  const s = fakeSession({ win: null, windowless: true });
+  h.sessions.set(KEY, s);
+  // The fake dispatch does not run the reducer, so main's own read is what comes back.
+  s.state = { toolMode: "auto", messageMode: "ask" };
+  assert.deepEqual(h.setModeByTask({ ...task, axis: "tools", mode: "bypass" }), {
+    ok: true,
+    tools: "auto",
+    messages: "ask",
+  });
+});
+
+test("MODE: an unknown AXIS is refused — it is not coerced to a default one", () => {
+  // A mode coerces fail-closed; an axis cannot, because there is no "most restrictive axis".
+  const h = harness({});
+  h.sessions.set(KEY, fakeSession({ win: null, windowless: true }));
+  for (const axis of ["tool", "", null, undefined, "profile"]) {
+    assert.deepEqual(h.setModeByTask({ ...task, axis, mode: "bypass" }), {
+      ok: false,
+      reason: "bad-axis",
+    });
+  }
+  assert.equal(h.calls.dispatch.length, 0);
+});
+
+test("MODE: an unknown or SETTLED key answers no-session — own agents only", () => {
+  // ⚠ STRUCTURAL, not checked: the registry holds nothing but this operator's own sessions
+  // on this machine, so an unresolvable key has nothing else to reach for.
+  const h = harness({});
+  assert.deepEqual(h.setModeByTask({ ...task, axis: "tools", mode: "bypass" }), {
+    ok: false,
+    reason: "no-session",
+  });
+  h.sessions.set(KEY, fakeSession({ settled: true }));
+  assert.deepEqual(h.setModeByTask({ ...task, axis: "tools", mode: "bypass" }), {
+    ok: false,
+    reason: "no-session",
+  });
+  assert.equal(h.calls.dispatch.length, 0);
+});
+
+test("MODE: the mode string is passed through for the REDUCER to coerce, not pre-judged here", () => {
+  // Main's IPC layer normalizes against the frozen enums and the reducer coerces again; this
+  // function is deliberately not a third opinion on the vocabulary.
+  const h = harness({});
+  h.sessions.set(KEY, fakeSession({ win: null, windowless: true }));
+  h.setModeByTask({ ...task, axis: "tools", mode: "not-a-mode" });
+  assert.equal(h.calls.dispatch[0][1].mode, "not-a-mode");
 });

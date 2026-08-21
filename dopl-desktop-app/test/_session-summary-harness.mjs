@@ -26,7 +26,11 @@ export const MAIN = join(HERE, "..", "main");
 export const SRC = readFileSync(join(MAIN, "session-summary.js"), "utf8");
 const req = createRequire(import.meta.url);
 const { pickAgentName } = req(join(MAIN, "agent-names.js"));
-const { contextWindowFor } = req(join(MAIN, "session-model.js"));
+// ⚠ THE METRICS MOVED OUT ON 2026-08-20 (session-metrics.js) — one file, one reason to
+// change: this projection answers "what STATE is this session in", the metrics answer "what
+// has it COST". Injected REAL, like every other dependency here, so these cases still drive
+// one program rather than a slice plus a stub.
+const { metricOrNull, metrics } = req(join(MAIN, "session-metrics.js"));
 // ⚠ THE FOURTH ABOVE-SENTINEL DEPENDENCY, JOINED 2026-08-20 (the `detail` signal). Injected
 // REAL, like the two above and for the same reason: these cases are about THIS module's
 // projection carrying the detail, not about re-testing the table that derives it —
@@ -67,12 +71,13 @@ export function load() {
   const logged = [];
   const api = new Function(
     "pickAgentName",
-    "contextWindowFor",
+    "metricOrNull",
+    "metrics",
     "noteEvent",
     "detailFor",
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-  )(pickAgentName, contextWindowFor, noteEvent, detailFor, (...parts) =>
+  )(pickAgentName, metricOrNull, metrics, noteEvent, detailFor, (...parts) =>
     logged.push(parts.join(" "))
   );
   const spaWindow = {
