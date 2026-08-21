@@ -16,6 +16,7 @@ import ChannelsPage from "#/pages/channels";
 import BootPage from "#/pages/boot";
 import OnboardingPage from "#/pages/onboarding";
 import ThreadWindowPage from "#/pages/thread-window";
+import AgentWindowPage from "#/pages/agent-window";
 
 /**
  * THE ROUTE TABLE — the one place a page is registered.
@@ -87,6 +88,14 @@ export const WORKSPACE_HOME_PATH = "overview";
  */
 export const THREAD_WINDOW_PATH = "thread-window";
 
+/**
+ * THE AGENT WINDOW'S PAGE SEGMENT (2026-08-20, F-212's closure) — one string, so the SPA
+ * and `dopl-desktop-app/main/agent-window.js › AGENT_WINDOW_PAGE` name one route.
+ * `test/agent-window.test.mjs` reads this export and fails on drift, exactly as the
+ * pop-out's pair is held.
+ */
+export const AGENT_WINDOW_PATH = "agent-window";
+
 export const routes: RouteObject[] = [
   {
     // Runs BEFORE a workspace exists — deliberately outside
@@ -113,6 +122,22 @@ export const routes: RouteObject[] = [
     // a row HERE keeps it green by construction.
     path: `/:workspaceSegment/${THREAD_WINDOW_PATH}/:channelId`,
     element: <ThreadWindowPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    // ⚠ THE AGENT WINDOW (2026-08-20, F-212). Same shape and same reasoning as the
+    // thread window directly above: workspace-scoped, OUTSIDE `AppShellLayout` (this
+    // window shows one agent — no sidebar, no channels tree, no info panel, and a layout
+    // route cannot be opted out of from inside), the agent riding `?thread=` as a
+    // SELECTION rather than a second path segment.
+    //
+    // ⚠ IT IS IN NEITHER `WORKSPACE_PAGES` NOR `deep-link-target.js › ROOT_ROUTES`, and
+    // both absences are one decision — the same one the thread window records: a
+    // `dopl://` link must not be able to mint a bare agent window, because these windows
+    // are created by MAIN at a window main built and registered. Such a link is an
+    // unknown page inside a real workspace and opens that workspace's home page.
+    path: `/:workspaceSegment/${AGENT_WINDOW_PATH}/:channelId`,
+    element: <AgentWindowPage />,
     errorElement: <RouteErrorBoundary />,
   },
   {

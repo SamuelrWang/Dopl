@@ -22,6 +22,10 @@
 // Pinned by test/open-session-no-query.test.mjs.
 
 const store = require('./session-store');
+// The operator-turn delimiter (2026-08-20). A free var inside the block below, like
+// `store`, so the source-extraction test injects both and the block stays free of the
+// runtime handles its purity assertion refuses (the header names them).
+const framing = require('./session-seed');
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
@@ -34,6 +38,10 @@ function bind(d) {
     sessions: (d && d.sessions) || null,
     refreshTray: (d && d.refreshTray) || function () {},
     recreateParkedShell: (d && d.recreateParkedShell) || null,
+    // agent-window.js › openAgentWindow — the view onto a WINDOWLESS live session
+    // (2026-08-20). Injected rather than required, like every other window-layer dep here,
+    // so the extracted block stays evaluable with fakes and holds no live window handle.
+    openAgentWindow: (d && d.openAgentWindow) || null,
     // C-8: the engine's own dispatch, so the quit teardown ENDS sessions through the reducer
     // rather than growing a second teardown beside `settle`.
     dispatch: (d && d.dispatch) || null,
@@ -100,10 +108,6 @@ function reopenWindow(sessionId) {
 //   { ok: true }                    a window is open for this thread. Live, recreated from a
 //                                   record, or built from the channel — all three are "opened",
 //                                   and the web card must show NO note for any of them.
-//   { ok: false, reason: 'windowless' } this session RUNS WITH NO WINDOW (the 2026-08-20 shape
-//                                   for every responder and every Agents-tab launch), so there
-//                                   is nothing to reveal. NOT an error — the honest answer to
-//                                   "show me this agent" until the agent window exists (F-212).
 //   { ok: false, reason: 'no-thread' }  this operator cannot open this channel at all (not a
 //                                   member, gone, or signed out). THE one note case.
 //   { ok: false, reason: 'busy' }   the window budget is spent and nothing could be freed; a
@@ -123,19 +127,27 @@ function reopenByTask(a) {
   if (!deps.sessions) return { ok: false };
   const s = deps.sessions.get(store.sessionKey(channelId, taskId));
   if (s && !s.settled && s.win && !s.win.isDestroyed()) { showLive(s); return { ok: true }; }
-  // ⚠ A WINDOWLESS SESSION HAS NOTHING TO REVEAL, AND SAYING SO IS THE FIX (2026-08-20).
-  // Before this branch the call fell through to `recreateParkedShell`, whose FIRST line is
-  // `if (existing && !existing.settled) return { ok: true }` — correct for the case it was
-  // written for (a live session whose window is being rebuilt) and a LIE for this one, which
-  // is now the ordinary shape: since the session-window retirement (INVARIANTS §11) every
-  // responder and every Agents-tab launch runs windowless, so the agent view's "Open window"
-  // button answered `ok:true` having opened nothing at all. A swallowed refusal and a
-  // success are indistinguishable on screen — the same argument `agent-panel.tsx`'s
-  // AGENT_CONTROL_REFUSED makes about the stop verbs.
-  // ⚠ THIS IS THE HONESTY HALF OF F-212 ONLY. The agent WINDOW that should answer this click
-  // is the entry's own remaining work; a `reason` the renderer can word is what makes the
-  // gap visible instead of silent in the meantime.
-  if (s && !s.settled && s.windowless === true) return { ok: false, reason: 'windowless' };
+  // ⚠ A LIVE WINDOWLESS SESSION OPENS THE AGENT WINDOW (2026-08-20, F-212's closure).
+  //
+  // THE SHORT HISTORY, because the two wrong answers are both instructive. Until this
+  // branch existed the call fell through to `recreateParkedShell`, whose FIRST line is
+  // `if (existing && !existing.settled) return { ok: true }` — right for the case it was
+  // written for (a live session whose window is being rebuilt) and a LIE here, so the
+  // button reported success having opened nothing. The fix shipped in between was an honest
+  // REFUSAL carrying `reason: 'windowless'`, which the panel worded as "this agent runs
+  // without a window" — and Samuel called that meaningless, correctly: **a window is a
+  // VIEW, not a runtime property.** Whether main minted a BrowserWindow for this spawn is
+  // an implementation detail of the spawn shape and is no answer to "show me my agent".
+  //
+  // So there is no refusal here any more. `agent-window.js` opens a real view onto the
+  // live session — its narration, what it sent, and a composer that reaches it — and this
+  // stays ONE reopen path, which is the rule this module is built on.
+  // ⚠ `segment` rides in from the caller (`channel-dir-ipc.js`), which is the only layer
+  // that has it: main knows the workspace UUID, and a router path needs the SLUG.
+  if (s && !s.settled && s.windowless === true) {
+    if (!deps.openAgentWindow) return { ok: false }; // mid-wave / harness: fail closed
+    return deps.openAgentWindow({ segment: String((a && a.segment) || ''), channelId, taskId });
+  }
   const kept = deps.keptWindow ? deps.keptWindow(channelId, taskId) : null;
   // No `windowHidden` flag and no tray refresh to do — the entry left the registry when it
   // settled, so this is a plain reveal of a window nothing else is tracking.
@@ -185,6 +197,68 @@ function controlByTask(a) {
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   try {
     deps.dispatch(s, { type: type });
+  } catch (_) {
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
+// ── THE DIRECT 1:1 LANE: THE OPERATOR TALKS TO THEIR OWN AGENT ───────────────────
+//
+// F-212's third lane, closed 2026-08-20. The entry parked it on a security decision and
+// named exactly what that decision had to cover: *"a main-window op that starts a turn
+// needs the `mainOnly` review that `sessions:pause`/`sessions:end` got, plus a ruling on
+// whether an out-of-band steer bypasses the inbound gate."* Both answers, in order:
+//
+// 1. ⚠ IT DISPATCHES THE EXISTING `steer` EVENT, ON THE EXISTING REDUCER BRANCH. No new
+//    branch, no second wake path, no second way to start a turn — `steer` already wakes a
+//    parked session (`resumeQuery`), re-arms the idle TTL and pushes the turn. A SECOND
+//    path to "start a turn" is a second set of lifecycle bugs, which is the same argument
+//    `controlByTask` above makes for the two stop verbs.
+//
+// 2. ⚠ IT BYPASSES THE INBOUND GATE, AND THAT IS CORRECT, BECAUSE IT IS NOT INBOUND.
+//    AXIS B governs COUNTERPARTY turns — words arriving from another member's machine.
+//    This is the operator's own keyboard, in a window MAIN created and registered, on
+//    their own agent. `session:send` was always an ungated steer for exactly this reason;
+//    what changed is only WHICH window may send one, and that is the same widening Samuel
+//    already ruled on for the pop-out (option (a), the app-window registry).
+//
+// 3. ⚠ RESOLVED BY (channel, thread) AGAINST MAIN'S OWN REGISTRY — never `event.sender`.
+//    That is not a preference: the old `session:send` binding re-derived the session from
+//    the sender's webContents, which cannot work here because the agent window is NOT the
+//    session's window (a windowless session has none). Resolving by key against a registry
+//    that holds nothing but this operator's own sessions is what makes it own-agents-only
+//    STRUCTURALLY, exactly as pause/end are.
+//
+// 4. ⚠ THE TEXT IS DELIMITED WITH THE SESSION'S NONCE AND CARRIES OPERATOR AUTHORITY —
+//    `session-seed.js › frameOperatorTurn`, which states why fencing it as DATA would be
+//    the wrong move. The body is bounded by the caller and stripped of forged fence lines;
+//    it is never rewritten.
+//
+// 5. ⚠ THE FAILURE DIRECTION, STATED PLAINLY BECAUSE IT IS WIDER THAN PAUSE/END'S. A
+//    forged call makes the operator's OWN agent do work they did not ask for, inside that
+//    session's existing profile and containment. It grants no tool, widens no posture,
+//    reaches no other machine, and cannot post without the outbound gate. That is more
+//    than "an agent that stops" and materially less than a launch — and it is the reason
+//    the op is bounded in the preload AND in main, and refuses while the version floor is
+//    blocking, like every other window-minting or turn-starting op.
+function messageByTask(a) {
+  const channelId = String((a && a.channelId) || '');
+  const taskId = String((a && a.taskId) || '');
+  const text = String((a && a.text) || '').trim();
+  if (!text || !deps.sessions || !deps.dispatch) return { ok: false };
+  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  // H1: a session HELD on the sign-in action has no query to feed — the push would land on
+  // a closed iterator and the operator's words would vanish. Refuse and say which, so the
+  // composer can tell them to sign in rather than silently eating the message.
+  if (s.state && s.state.authHeld === true) return { ok: false, reason: 'auth-hold' };
+  try {
+    // `priority: 'next'` — an out-of-band note QUEUES behind the turn in flight rather
+    // than interrupting it. 'now' exists (it is the send button's interrupt morph) and is
+    // deliberately not used: the operator asked to say something, not to stop the agent,
+    // and Pause is right there for the other intent.
+    deps.dispatch(s, { type: 'steer', text: framing.frameOperatorTurn(s.nonce, text), priority: 'next' });
   } catch (_) {
     return { ok: false };
   }
@@ -249,4 +323,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask, controlByTask, listOrphanRisk, endLiveSessions };
+module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask, controlByTask, messageByTask, listOrphanRisk, endLiveSessions };

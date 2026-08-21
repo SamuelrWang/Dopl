@@ -214,15 +214,34 @@ test("NOTHING renderer-reachable can register a window", () => {
     assert.ok(!/app-windows|appWindows/.test(code), `renderer/${p.join("/")} reaches the registry`);
   }
 
-  // (c) Every call site is a WINDOW-CREATION path in main. Two, today: the shell factory
-  //     and the pop-out factory. A third must be looked at, not absorbed.
+  // (c) Every call site is a WINDOW-CREATION path in main. THREE, since 2026-08-20. A new
+  //     one must be looked at, not absorbed — and this is the review the third one got:
+  //
+  //     `agent-window.js` (F-212's closure) registers the AGENT WINDOW at creation, in the
+  //     same three lines `popout-window.js` uses and for the same reason: without
+  //     registration every privileged call from that renderer is refused and the surface
+  //     renders nothing while reporting nothing. It inherits Samuel's option-(a) ruling
+  //     rather than re-opening it — the properties that make the widening safe are
+  //     unchanged and were each re-checked here:
+  //       • MAIN creates the window and MAIN registers it; the renderer can only ASK
+  //         (`sessions:openAgentWindow` answers `{ ok }` and hands back no handle);
+  //       • it takes `spa-window.js › spaWebPreferences` and `› policeNavigation` VERBATIM,
+  //         so sandbox, contextIsolation, the `setWindowOpenHandler` deny and the exact-path
+  //         navigation lock cannot drift from the shell's;
+  //       • it is capped (`MAX_AGENT_WINDOWS`) and refuses in the one `{ ok: false }` shape;
+  //       • its route is in NEITHER `WORKSPACE_PAGES` nor `ROOT_ROUTES`, so no `dopl://`
+  //         link can mint one.
+  //     ⚠ What is genuinely NEW is that this window's renderer can reach an op that STARTS
+  //     A TURN (`sessions:message`). That is reviewed where it is registered
+  //     (`channel-dir-ipc.js`) and where it executes (`session-reopen.js › messageByTask`);
+  //     registration is not what authorizes it — being an app window is.
   const callers = readdirSync(MAIN)
     .filter((f) => f.endsWith(".js"))
     .filter((f) => /\bregisterAppWindow\b|appWindows\.register\b/.test(M(f)))
     .sort();
   assert.deepEqual(
     callers,
-    ["index.js", "popout-window.js", "shell-mode.js"],
+    ["agent-window.js", "index.js", "popout-window.js", "shell-mode.js"],
     "a new registration site is a new bound sender — review it rather than updating this list " +
       "reflexively (index.js WIRES shell-mode's `registerAppWindow`; shell-mode CALLS it; " +
       "popout-window registers its own window at creation)"

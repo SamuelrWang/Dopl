@@ -72,11 +72,17 @@ function harness() {
   // fire-and-forget notification with no return value and no say in the decision, so the fake
   // records the pokes and nothing else — but it has to EXIST, or the sliced dispatch throws a
   // TypeError into an already-finished test, which is how this stub earned its comment twice.
+  // ⚠ AND A THIRD TIME ON 2026-08-20: `dispatch` now also feeds the NARRATION RING (the
+  // agent window's work lane, F-212), on the same one-line funnel and with the same
+  // fire-and-forget shape — no return value, no say in the decision. Stubbed for the same
+  // reason and counted into the same tally: what this file is about is the DECISION's truth
+  // value, and a projection poke must never be able to change it.
   const touched = { count: 0 };
   const api = new Function(
     "sessionReducer",
     "record",
     "sessionSummary",
+    "sessionNarration",
     `${cut("function dispatch(s, event) {", "function runEffect(s, eff) {")}
      ${cut("function resolvePerm(s, requestId, decision) {", "function runLifecycle(")}
      function runEffect(s, eff) {
@@ -94,6 +100,8 @@ function harness() {
   )(RED.sessionReducer, (eff) => emitted.push(eff), {
     noteActivity: () => { touched.count += 1; },
     touch: () => { touched.count += 1; },
+  }, {
+    note: () => { touched.count += 1; },
   });
   return { ...api, emitted, touched };
 }

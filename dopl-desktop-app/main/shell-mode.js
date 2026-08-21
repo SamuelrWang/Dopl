@@ -192,6 +192,13 @@ function wireSpaServices(deps) {
   const startSessionSummary = () => {
     if (!deps.sessionSummary) return; // mid-wave / harness
     deps.sessionSummary.start({ getWindows: appWindows });
+    // THE NARRATION RING'S FAN-OUT (2026-08-20, the agent window's work lane). Armed on
+    // the SAME seam and with the SAME window resolver, because it is the same class of
+    // push: in-memory, credential-free, never stopped on sign-out. It is a SECOND channel
+    // rather than a wider summaries frame — that feed is digest-gated and the server
+    // writer subscribes to its gate, so per-event narration on it would either cost a
+    // server write per tool call or be swallowed by the digest (session-narration.js).
+    if (deps.sessionNarration) deps.sessionNarration.start({ getWindows: appWindows });
   };
   // THE SESSION-STATE WRITER (rollback §3.5 / F-147) — the server half of the same
   // projection, so `read_sessions` can answer "what is flint doing?" over MCP. It is armed

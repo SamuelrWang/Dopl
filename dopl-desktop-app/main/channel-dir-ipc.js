@@ -63,6 +63,9 @@
 //   sessions:pause       (Phase 5) interrupts the turn my agent is running on a thread
 //   sessions:end         (Phase 5) ends my agent on a thread — terminal, and never the thread
 //   threads:openWindow   (Phase 10) opens a pop-out window on ONE thread
+//   sessions:openAgentWindow  (F-212) opens the AGENT window on one of my own agents
+//   sessions:message     (F-212) ⚠ THE ONE OP HERE THAT STARTS A TURN — see its own block
+//   sessions:narration   (F-212) reads my own agent's work ring, for that window's first paint
 //
 // Two checks, because one is not enough: the sender must be an APP-OWNED window's
 // webContents, AND it must be that window's TOP frame. A cross-origin iframe
@@ -89,6 +92,11 @@ const UUID_RE =
 function isUuid(v) {
   return typeof v === 'string' && UUID_RE.test(v);
 }
+
+// The 1:1 composer's body bound, enforced at the BOUNDARY (the preload caps too, but a
+// renderer bound is a convenience and this one is the fence). Well above a typed note, well
+// below anything that could stuff a context window.
+const MESSAGE_CAP = 4000;
 
 // ─── BEGIN CHANNEL-IPC-SENDER (pure; unit-tested via source extraction) ──────
 // No electron/require refs below, so test/channel-ipc-sender.test.mjs slices this
@@ -307,15 +315,105 @@ function register(opts = {}) {
   // T2-added export; if it is not wired yet (mid-wave), fail closed with
   // { ok: false } rather than throwing. Lazy-require to avoid any load-time
   // cycle — the engine is only touched when a reopen is actually requested.
+  // ⚠ `segment` JOINED THE PAYLOAD ON 2026-08-20 and is OPTIONAL. A live WINDOWLESS session
+  // now opens the AGENT WINDOW (`main/agent-window.js`), whose landing is a router path, and
+  // main holds the workspace UUID while a route needs the SLUG — so the segment has to come
+  // from the renderer, character-checked here like every other string entering a path. An
+  // absent or unsafe one degrades to the other reopen branches rather than refusing: an
+  // older caller that only knows `(channel, task)` keeps working exactly as it did.
   ipcMain.handle('sessions:reopen', appWindowOnly('sessions:reopen', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
+    const { isSafeSegment } = require('./deep-link-target');
     const engine = require('./session-engine');
     if (typeof engine.reopenByTask !== 'function') return { ok: false };
     return engine.reopenByTask({
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
+      segment: isSafeSegment(p.segment) ? String(p.segment) : '',
     });
+  }));
+
+  // THE AGENT WINDOW (2026-08-20, F-212's closure) — a second window on this same bundle
+  // showing ONE of the operator's OWN agents: its live narration, what it sent, and a 1:1
+  // composer. It is `threads:openWindow`'s twin and takes its guards verbatim.
+  //
+  // ⚠ IT IS A SEPARATE OP FROM `sessions:reopen`, not a rename. `reopen` answers "show me
+  // this thread's session", resolves against the registry FIRST and has three other
+  // branches (a live window, a retained ended one, a recreate from the durable record);
+  // this one always means "open the agent view". Both reach `agent-window.js`, so there is
+  // one window factory and one budget — what differs is what the caller is asking.
+  // ⚠ THREE STRINGS ENTERING A ROUTER PATH, none trusted: `channelId` UUID-gated,
+  // `segment` and `taskId` through `deep-link-target.js › isSafeSegment` — the ONE
+  // character rule (INVARIANTS §11). A second regex here would be a second answer to it.
+  // ⚠ THE VERSION FLOOR APPLIES, like `threads:openWindow`: `createShellWindow` is the
+  // min-version gate's single enforcement point, and a factory that bypassed it would be a
+  // door the block does not cover.
+  ipcMain.handle('sessions:openAgentWindow', appWindowOnly('sessions:openAgentWindow', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const { isSafeSegment } = require('./deep-link-target');
+    if (!isSafeSegment(p.segment) || !isSafeSegment(p.taskId)) return { ok: false };
+    try {
+      if (require('./version-gate').isBlocked()) {
+        diag('channel-dir ipc: refused sessions:openAgentWindow — the version floor is blocking');
+        return { ok: false };
+      }
+    } catch (_err) { /* mid-wave / harness: no gate is not a block */ }
+    return require('./agent-window').openAgentWindow({
+      segment: p.segment,
+      channelId: p.channelId,
+      taskId: p.taskId,
+    });
+  }));
+
+  // ⚠ THE ONE OP ON THIS SURFACE THAT STARTS A TURN (2026-08-20, F-212's direct 1:1 lane).
+  // Every other op here is a read, a stop verb, a stored preference or a window — this one
+  // makes the operator's own agent DO something, which is a materially different security
+  // shape and got its own review. The full argument lives with the code that executes it
+  // (`main/session-reopen.js › messageByTask`), including why an out-of-band steer
+  // correctly bypasses the inbound gate and why it is own-agents-only structurally.
+  //
+  // THE BOUNDS THAT LIVE HERE, because this is the boundary:
+  //   • sender-bound like every op in this file (`appWindowOnly`, literally at the site);
+  //   • `channelId` UUID-gated, `taskId` coerced — resolved against MAIN's OWN registry,
+  //     which holds nothing but this operator's sessions on this machine;
+  //   • the text is CAPPED here as well as in the preload, because a renderer bound is a
+  //     convenience and this one is the boundary. 4000 chars is well above a typed note
+  //     and well below anything that could be used to stuff a context window;
+  //   • an EMPTY body after trimming is refused rather than dispatched — a blank turn
+  //     wakes a parked agent to read nothing.
+  //   • the version floor applies: a blocked build must not be able to start work.
+  ipcMain.handle('sessions:message', appWindowOnly('sessions:message', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const text = String(p.text == null ? '' : p.text).slice(0, MESSAGE_CAP).trim();
+    if (!text) return { ok: false, reason: 'empty' };
+    try {
+      if (require('./version-gate').isBlocked()) return { ok: false, reason: 'blocked' };
+    } catch (_err) { /* mid-wave / harness: no gate is not a block */ }
+    const engine = require('./session-engine');
+    if (typeof engine.messageByTask !== 'function') return { ok: false };
+    return engine.messageByTask({
+      channelId: p.channelId,
+      taskId: String(p.taskId || ''),
+      text: text,
+    });
+  }));
+
+  // The agent window's FIRST PAINT. The ring is a push (`session-narration.js`), and a
+  // push-only surface leaves a freshly opened window blank until the next event — which on
+  // an agent between turns never comes. Read once on mount, then listen; the same rule
+  // `sessions.summaries` follows and for the same reason.
+  // ⚠ READ-ONLY AND DERIVED FROM IN-MEMORY STATE: no path, no token, no window handle, and
+  // no `inputFull` (session-narration.js's header states what may enter a ring entry).
+  ipcMain.handle('sessions:narration', appWindowOnly('sessions:narration', { entries: [] }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { entries: [] };
+    const engine = require('./session-engine');
+    if (typeof engine.narrationFor !== 'function') return { entries: [] };
+    const key = `${p.channelId}:${String(p.taskId || '')}`;
+    return { entries: engine.narrationFor(key) };
   }));
 
   // PAUSE / END MY OWN AGENT, from the Agents tab in the main window (wiring plan Phase 5,

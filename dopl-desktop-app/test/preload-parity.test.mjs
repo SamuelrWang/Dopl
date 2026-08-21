@@ -166,7 +166,38 @@ const APP_OPS = [
   // with no peer involved. Posture is main's (auto_inbound / channel auto-send);
   // the renderer hands over ids and display strings only.
   "sessions.launch",
+  // ⚠ FOUR JOINED HERE ON 2026-08-20 (F-212's closure — the AGENT WINDOW). The pin failed
+  // on the ADD, which is the review this comment records. They are NOT equivalent to each
+  // other and are reviewed separately:
+  //
+  //   `sessions.message` — ⚠ THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and the only
+  //     reason this namespace's failure direction is no longer simply "an agent that
+  //     stops". Handler: `main/channel-dir-ipc.js › sessions:message`, appWindowOnly,
+  //     UUID-gated channel, body capped in BOTH layers (the preload's is a convenience,
+  //     main's `MESSAGE_CAP` is the fence), empty-after-trim refused, and the version floor
+  //     applies. It dispatches the EXISTING `steer` reducer event through
+  //     `session-reopen.js › messageByTask` — no new branch and no second wake path — on a
+  //     session resolved by (channel, thread) against MAIN'S OWN registry, which is what
+  //     makes it own-agents-only structurally rather than by a check. The text is delimited
+  //     with that session's nonce and carries OPERATOR authority (`session-seed.js ›
+  //     frameOperatorTurn`); it is deliberately NOT fenced as data, and that file states
+  //     why. ⚠ It BYPASSES the inbound gate, correctly: AXIS B governs counterparty turns,
+  //     and this is the operator's own keyboard in a window main created. Worst case of a
+  //     forged call: the operator's own agent does work they did not ask for, inside its
+  //     existing profile and containment — it grants no tool, widens no posture, reaches no
+  //     other machine, and cannot post without the outbound gate.
+  //   `sessions.openAgentWindow` — `threads.openWindow`'s twin, verbatim guards: it ASKS
+  //     for a window and gets none back, three strings character-checked (UUID + two
+  //     `isSafeSegment`), one `{ ok: false }` refusal shape, version floor honoured.
+  //   `sessions.narration` / `sessions.onNarration` — READ-ONLY, derived from in-memory
+  //     state: no path, no token, no window handle, and explicitly no `inputFull` (which is
+  //     unbounded by construction — `main/session-narration.js` states what may enter a
+  //     ring entry). Read once on mount, then listen, like `summaries`/`onSummaries`.
+  "sessions.message",
+  "sessions.narration",
+  "sessions.onNarration",
   "sessions.onSummaries",
+  "sessions.openAgentWindow",
   "sessions.pause",
   "sessions.reopen",
   "sessions.summaries",

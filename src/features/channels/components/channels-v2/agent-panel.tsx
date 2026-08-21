@@ -16,23 +16,31 @@
  * transcript (INVARIANTS §5's Agents-tab bullet; the ruling arrived in the
  * port's intent doc, deleted at the Phase 12 cutover).
  *
- * ⚠ THE MOCK DREW THREE LANES. ONE OF THEM HAS A BACKING TODAY, AND THIS PANEL
- * SHOWS ONLY THAT ONE:
+ * ⚠ THE MOCK DREW THREE LANES, AND ALL THREE ARE BUILT — BUT TWO OF THEM LIVE IN
+ * THE AGENT WINDOW, NOT HERE (2026-08-20, F-212's closure).
  *
- *  1. **Sent** — ✅ WIRED. What this agent posted into its thread, captioned with
+ *  1. **Sent** — ✅ HERE. What this agent posted into its thread, captioned with
  *     where it went. The SAME strings the thread transcript carries, matched on
  *     `metadata.taskId` + an agent-authored row under the viewer's own account.
- *  2. **Work narration** ("scanning 14 components…") — ❌ NOT BUILT, and NOT
- *     FAKED. Tool use is emitted on the SESSION WINDOW's own IPC event stream
- *     (`session:event`), which this renderer is not on; the summaries feed
- *     carries a coarse state and no history. Fabricating a line here would be a
- *     claim about work a real machine did or did not do — worse than an absent
- *     lane, and exactly what "dropped rather than faked" rules out (INVARIANTS §5).
- *  3. **The direct 1:1 lane** (me ↔ this agent, out of band) — ❌ NOT BUILT.
- *     There is no transport for it: a channel post is not out-of-band, and the
- *     desktop's own steer is bound to the session window's sender. Filed as
- *     **F-212**. The composer is NOT rendered rather than rendered inert — an
- *     input that looks like every input that does send is the worse failure.
+ *     `agentSentMessages` below is the derivation, and the window IMPORTS it
+ *     rather than writing a second one.
+ *  2. **Work narration** ("scanning 14 components…") — ✅ BUILT, in
+ *     `components/channels-v2/agent-window.tsx` over the ring
+ *     `dopl-desktop-app/main/session-narration.js` keeps.
+ *  3. **The direct 1:1 lane** (me ↔ this agent, out of band) — ✅ BUILT, in that
+ *     same window, over `sessions.message`.
+ *
+ * ⚠ THE SPLIT IS DELIBERATE AND IS NOT A MIGRATION-IN-PROGRESS. This panel is the
+ * GLANCE: it slides in beside the thread you are reading and answers "what is
+ * this agent up to" without taking you anywhere. The window is the INSIDE, for
+ * when the answer is "let me watch it, and say something to it" — a surface you
+ * put beside your editor. Cramming a live stream and a composer into a 380px
+ * overlay on top of a transcript would make both worse.
+ *
+ * ⚠ AND THE COMPOSER STILL DOES NOT BELONG HERE. The old rule — an inert input
+ * looks exactly like every input that does send, so render none — is why this
+ * panel shipped without one. It has an "Open agent" button instead, which is an
+ * affordance that keeps its promise.
  *
  * ⚠ PAUSE / END ARE OWN-AGENTS-ONLY. See `agents-model.ts › useAgentControls`.
  * `end` ends the AGENT and touches no thread — a thread has no finished state
@@ -98,6 +106,7 @@ export function ChannelsV2AgentPanel({
   sessions,
   messages,
   currentUserId,
+  workspaceSlug = "",
   onClose,
   onRefreshSessions,
 }: {
@@ -107,6 +116,12 @@ export function ChannelsV2AgentPanel({
   /** The open channel's transcript — the source of the Sent lane. */
   messages: readonly ChannelMessage[];
   currentUserId: string;
+  /** The workspace SEGMENT, for the agent window's router path (2026-08-20).
+   *  ⚠ Main holds the workspace UUID and a route needs the slug, so it can only
+   *  come from here. Defaulted so a caller that has not threaded it yet renders
+   *  the panel unchanged; main degrades an unusable segment rather than
+   *  refusing. */
+  workspaceSlug?: string;
   onClose: () => void;
   /** Re-read the desktop's session feed. Called ONLY when main refuses a stop
    *  verb, which is the one state change no push announces. */
@@ -139,7 +154,11 @@ export function ChannelsV2AgentPanel({
         <>
           <AgentPanelHeader agent={agent} onClose={onClose} />
           <AgentStats agent={agent} />
-          <AgentControls agent={agent} onRefreshSessions={onRefreshSessions} />
+          <AgentControls
+            agent={agent}
+            workspaceSlug={workspaceSlug}
+            onRefreshSessions={onRefreshSessions}
+          />
           <SentFeed
             messages={agentSentMessages(messages, agent.taskId, currentUserId)}
             threadTitle={agent.threadTitle}
@@ -231,21 +250,20 @@ export const AGENT_CONTROL_REFUSED =
   "This agent already ended — nothing was changed.";
 
 /**
- * What "Open window" says when there is no window to open (2026-08-20).
+ * ⚠ `AGENT_WINDOW_UNAVAILABLE` STOOD HERE AND IS DELETED (2026-08-20, F-212's
+ * closure). It read "This agent runs without a window", which Samuel called
+ * meaningless — correctly. **A window is a VIEW, not a runtime property.**
+ * Whether main happened to mint a BrowserWindow for a spawn is an
+ * implementation detail of the spawn shape; it is not a fact about the agent
+ * and it is no answer to "show me what this thing is doing". The button opens
+ * `components/channels-v2/agent-window.tsx` now, on every agent, so there is no
+ * refusal left for it to word.
  *
- * ⚠ IT IS NOT AN ERROR MESSAGE, and the wording carries that. Since the
- * session-window retirement (INVARIANTS §11) every responder and every
- * Agents-tab launch runs WINDOWLESS, so this is the ORDINARY answer, not a
- * failure — main is telling the truth about a surface that does not exist yet
- * (F-212's agent window). Until then the honest thing is to say where the work
- * IS visible, which is this panel.
- *
- * ⚠ Exported for the test for the same reason `AGENT_CONTROL_REFUSED` is: a
- * swallowed refusal and a success are indistinguishable on screen, and this
- * button was swallowing one on nearly every agent.
+ * The lesson worth keeping: an honest refusal is still only worth shipping when
+ * the operator can DO something with it. "Main did nothing, and here is the
+ * internal reason" is an improvement on silence and not a substitute for the
+ * feature.
  */
-export const AGENT_WINDOW_UNAVAILABLE =
-  "This agent runs without a window. What it sent is below.";
 
 /** How long a refusal notice stands before clearing itself. */
 const REFUSAL_NOTICE_MS = 6000;
@@ -257,9 +275,10 @@ const REFUSAL_NOTICE_MS = 6000;
  *
  * ⚠ TWO GATES, NOT ONE, BECAUSE THEY ARE TWO CAPABILITIES. `pause`/`end`
  * arrived with the SPA; `reopen` is the older op shared by both preloads. A
- * single `canControlAgents()` gate over the whole strip hid "Open window" on
- * every main that has `reopen` and neither stop verb — a real build shape, and
- * the affordance it hid is the one that still worked.
+ * single `canControlAgents()` gate over the whole strip hid the open affordance
+ * on every main that has `reopen` and neither stop verb — a real build shape,
+ * and the affordance it hid is the one that still worked. `canOpenAgentWindow()`
+ * now accepts EITHER open op for the same reason.
  *
  * ⚠ AN ENDED AGENT OFFERS NEITHER STOP VERB. Its registry entry is gone (the
  * pill outlives it by the retention rule), so main would answer `{ok:false}` —
@@ -274,9 +293,12 @@ const REFUSAL_NOTICE_MS = 6000;
  */
 function AgentControls({
   agent,
+  workspaceSlug,
   onRefreshSessions,
 }: {
   agent: DesktopSessionSummary;
+  /** The workspace segment the agent window's route is built from. */
+  workspaceSlug: string;
   /** Re-read the desktop's feed after a refusal — see `agents-model.ts ›
    *  DesktopSessionsFeed`. Absent in a tree that has no feed to refresh. */
   onRefreshSessions?: () => void;
@@ -326,22 +348,21 @@ function AgentControls({
   };
 
   /**
-   * "Open window", which on a windowless agent opens nothing — and now says so.
+   * "Open agent" — the window showing this agent from the inside
+   * (`agent-window.tsx`). It ALWAYS opens now; the only refusals left are the
+   * ones every window-minting op has (a full budget, a blocking version floor,
+   * an unusable id), and they share one shape by design so a caller cannot tell
+   * them apart.
    *
-   * ⚠ NO `onRefreshSessions` HERE, unlike the stop verbs. A refused reopen
-   * changed nothing on main AND tells us nothing new about the session's state,
-   * so re-reading the feed would be a request that answers a question nobody
-   * asked. The stop verbs re-read because their refusal means "this agent is
-   * already gone", which the panel IS showing wrongly.
+   * ⚠ NO `onRefreshSessions` HERE, unlike the stop verbs. A refused open changed
+   * nothing on main AND says nothing new about the session's state, so
+   * re-reading the feed would answer a question nobody asked. The stop verbs
+   * re-read because their refusal means "this agent is already gone", which is
+   * something the panel IS showing wrongly.
    */
   const reveal = () => {
-    void openAgentWindow(agent).then((res) => {
-      if (res.ok) return;
-      say(
-        res.reason === "windowless"
-          ? AGENT_WINDOW_UNAVAILABLE
-          : AGENT_CONTROL_REFUSED
-      );
+    void openAgentWindow(agent, workspaceSlug).then((res) => {
+      if (!res.ok) say(AGENT_CONTROL_REFUSED);
     });
   };
 
@@ -369,8 +390,8 @@ function AgentControls({
         {canOpen && (
           <ControlButton
             icon={PanelTop}
-            label="Open window"
-            title="Reveal this agent's own window. Starts nothing."
+            label="Open agent"
+            title="Watch what this agent is doing, and message it directly."
             onClick={reveal}
           />
         )}
@@ -446,13 +467,13 @@ function SentFeed({
           ))}
         </div>
       )}
-      {/* ⚠ THE ABSENCE IS STATED, NOT DRAWN. Two of the mock's three lanes have
-          no backing (file header): saying so is what stops the next reader
-          concluding this agent did nothing but post. */}
+      {/* ⚠ THIS LINE USED TO STATE TWO ABSENCES ("not built yet (F-212)"). Both
+          lanes exist now, in the agent window, so it points at them instead —
+          the panel still shows only what was SENT, and a reader who does not
+          know where the rest lives concludes this agent did nothing but post. */}
       <p className="mt-5 border-t border-border-subtle pt-3 text-micro text-text-muted">
-        What it read, ran and decided stays in its own window — this view shows
-        only what it sent. Messaging it directly from here is not built yet
-        (F-212).
+        This view shows only what it sent. Open the agent to watch what it is
+        doing and to message it directly.
       </p>
     </div>
   );

@@ -263,6 +263,7 @@ if (!gotLock) {
       wireSpaServices({
         uiBridge, authTokens, uiSync, diag,
         sessionSummary: require('./session-summary'), // §3.3: the session-pill push
+        sessionNarration: require('./session-narration'), // the agent window's work lane (F-212)
         sessionStatePush: require('./session-state-push'), // §3.5 / F-147: the server half
         // Phase 10: the bridge is bound to the REGISTRY, and every main→renderer push fans
         // out over it — a pop-out that never hears the doorbell, the summaries or a

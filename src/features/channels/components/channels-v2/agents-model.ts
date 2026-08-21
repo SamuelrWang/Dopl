@@ -328,14 +328,62 @@ export function canControlAgents(): boolean {
  * Whether this agent's own window can be revealed — a SEPARATE question from
  * {@link canControlAgents}, and the older capability of the two.
  *
- * ⚠ `reopen` is declared NON-OPTIONAL on `SpaBridgeSurface["sessions"]`, which
- * is a claim about the type and not about the preload on the machine actually
- * running: a main predating the op ships a `sessions` object without it, and
- * the type cannot know. Detected at the call site like every other bridge
- * member (INVARIANTS §11).
+ * ⚠ EITHER OP COUNTS (2026-08-20). `openAgentWindow` is the one that answers the
+ * click properly; `reopen` is the OLDER op, which now hands a live windowless
+ * session to the very same window in main. A build with only `reopen` still
+ * opens the agent view, so gating the button on the new op alone would hide a
+ * working affordance — the exact mistake this function's docblock already
+ * records having made once with `pause`/`end`.
+ *
+ * ⚠ Both are detected at the CALL SITE rather than trusted from the type: a main
+ * predating either ships a `sessions` object without it, and the type cannot
+ * know (INVARIANTS §11).
  */
 export function canOpenAgentWindow(): boolean {
-  return typeof getSpaBridge()?.sessions?.reopen === "function";
+  const sessions = getSpaBridge()?.sessions;
+  return (
+    typeof sessions?.openAgentWindow === "function" ||
+    typeof sessions?.reopen === "function"
+  );
+}
+
+/**
+ * Whether this build can reach an agent directly at all.
+ *
+ * ⚠ IT DETECTS THE BRIDGE OP, NOT {@link messageAgent}. The wrapper is always a
+ * function — it is an export of this module — so `typeof messageAgent` answers
+ * `true` in a plain browser and renders a composer that can only ever refuse.
+ * That is the exact failure the panel's no-inert-input rule exists to prevent,
+ * and it shipped in the first draft of the agent window before its own test
+ * caught it. Detect the capability you are about to USE (INVARIANTS §11).
+ */
+export function canMessageAgent(): boolean {
+  return typeof getSpaBridge()?.sessions?.message === "function";
+}
+
+/**
+ * TALK TO MY OWN AGENT, out of band — F-212's direct 1:1 lane.
+ *
+ * ⚠ THE ONE BRIDGE CALL IN THIS MODULE THAT STARTS A TURN. Everything else here
+ * reads, stops, or opens a window. Main owns the whole security shape
+ * (`main/session-reopen.js › messageByTask` states it in full): the session is
+ * resolved by (channel, thread) against main's OWN registry, so this is
+ * own-agents-only structurally; the text is delimited with that session's nonce
+ * and carries operator authority rather than being fenced as counterparty data;
+ * and it dispatches the SAME `steer` the session window's composer always did.
+ *
+ * ⚠ THE VERDICT IS RETURNED, NEVER SWALLOWED. A message the operator believes
+ * they sent and the agent never received is the worst outcome this lane has.
+ */
+export async function messageAgent(payload: {
+  channelId: string;
+  taskId: string;
+  text: string;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const sessions = getSpaBridge()?.sessions;
+  if (typeof sessions?.message !== "function") return { ok: false, reason: "no-bridge" };
+  const res = await sessions.message(payload.channelId, payload.taskId, payload.text);
+  return { ok: res?.ok === true, reason: res?.reason };
 }
 
 /** Whether this build can LAUNCH an agent onto a thread (2026-08-20). */
@@ -395,28 +443,45 @@ export function useAgentControls() {
 }
 
 /**
- * Reveal this agent's own window. The SAME op every other "open" calls — main
- * has ONE reopen path and a second would be a second set of bugs. It opens a
- * window and starts nothing: no query, no gated tool, no wake.
+ * OPEN THE AGENT VIEW — a real window showing what this agent is doing, what it
+ * has sent, and a composer that reaches it (`components/channels-v2/agent-window.tsx`).
  *
- * ⚠ IT RETURNS MAIN'S VERDICT NOW (2026-08-20), and the caller must render it.
- * This used to answer `void`, so every refusal was swallowed — which was
- * harmless while `reopen` always opened something, and stopped being harmless
- * the moment `{ ok: false, reason: "windowless" }` became the ORDINARY answer
- * (the session-window retirement made every responder and every Agents-tab
- * launch windowless). A button that visibly does nothing and says nothing is
- * the failure `AGENT_CONTROL_REFUSED` already names for the stop verbs.
+ * ⚠ IT ALWAYS OPENS SOMETHING NOW (2026-08-20, F-212's closure), and the short
+ * history of this function is why that sentence is worth writing down. It began
+ * as `reopen`, which revealed the session's own BrowserWindow. The
+ * session-window retirement made every responder and every Agents-tab launch
+ * WINDOWLESS, so there stopped being a window to reveal — and for a while this
+ * returned `{ ok: false, reason: "windowless" }`, which the panel worded as
+ * "this agent runs without a window". Samuel called that meaningless, and he was
+ * right: **a window is a VIEW, not a runtime property.** Whether main minted a
+ * BrowserWindow for a spawn is an implementation detail of the spawn shape, and
+ * no answer at all to "show me my agent". So the view exists, and the click
+ * opens it.
+ *
+ * ⚠ TWO OPS, ONE MEANING, NEWEST FIRST. `openAgentWindow` says exactly what the
+ * caller wants; `reopen` is the older op and now hands a live windowless session
+ * to the SAME window in main, so a build with only `reopen` behaves identically.
+ * The fallback is not compatibility theatre — it is the reason the button works
+ * on a main that predates the new op.
+ *
+ * ⚠ `segment` is needed because the window lands on a ROUTER PATH and main holds
+ * the workspace UUID, not the slug. Main re-checks it (`isSafeSegment`) and
+ * degrades rather than refusing when it is absent.
  */
-export async function openAgentWindow(session: {
-  channelId: string;
-  taskId: string;
-}): Promise<{ ok: boolean; reason?: string }> {
+export async function openAgentWindow(
+  session: { channelId: string; taskId: string },
+  segment: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const sessions = getSpaBridge()?.sessions;
+  if (typeof sessions?.openAgentWindow === "function") {
+    const res = await sessions.openAgentWindow(segment, session.channelId, session.taskId);
+    return { ok: res?.ok === true, reason: res?.reason };
+  }
   // ⚠ The optional chain covered `sessions` and not `reopen`, so on a main
-  // without the op this threw "reopen is not a function" out of a click
+  // without either op this threw "reopen is not a function" out of a click
   // handler. Same detection as the gate that hides the button, so the two
   // cannot disagree.
-  const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.reopen !== "function") return { ok: false, reason: "no-bridge" };
-  const res = await sessions.reopen(session.channelId, session.taskId);
+  const res = await sessions.reopen(session.channelId, session.taskId, segment);
   return { ok: res?.ok === true, reason: res?.reason };
 }

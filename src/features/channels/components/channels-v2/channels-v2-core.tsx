@@ -386,9 +386,8 @@ export function ChannelsV2Core({
                 />
               ) : null
             }
-            // "Anthony's agent is working…", from the peer projection the
-            // Agents tab already polls. Thread view only — the row is about ONE
-            // exchange, and the channel view has no thread to be about.
+            // "Anthony's agent is working…", off the peer projection the Agents tab
+            // already polls. Thread view only — the row is about ONE exchange.
             peerActivity={
               openThread ? (
                 <PeerActivityRow
@@ -477,6 +476,7 @@ export function ChannelsV2Core({
         sessions={agentSessions}
         messages={messages}
         currentUserId={currentUserId}
+        workspaceSlug={workspaceSlug}
         onClose={() => sel.setOpenAgent(null)}
         onRefreshSessions={refreshAgents}
       />

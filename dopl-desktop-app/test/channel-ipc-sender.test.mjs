@@ -270,6 +270,27 @@ const OPS = [
   // binding — and why its own guards (UUID channel, isSafeSegment on the other two, the
   // version floor, the window budget) all answer in this same `{ ok: false }` shape.
   ["threads:openWindow", POPOUT_PAYLOAD, { ok: false }],
+  // ⚠ THREE JOINED 2026-08-20 (F-212's closure — the AGENT WINDOW). Reviewed
+  // SEPARATELY, because they are not the same shape as each other:
+  //   `sessions:openAgentWindow` — `threads:openWindow`'s twin: the second op here
+  //     that can MINT a window, under the same binding, the same UUID + two
+  //     `isSafeSegment` checks, the same version floor and the same budget, all
+  //     answering in this one `{ ok: false }` shape.
+  //   `sessions:message` — ⚠ THE ONLY OP IN THIS FILE THAT STARTS A TURN on an
+  //     existing session. Everything else here reads, stops, stores a preference,
+  //     or opens a window; `sessions:launch` starts one but MAKES the session it
+  //     starts. Its bounds live at this boundary (UUID gate, `MESSAGE_CAP`,
+  //     empty-after-trim refused, version floor) and its argument lives with the
+  //     code that executes it (`main/session-reopen.js › messageByTask`).
+  //   `sessions:narration` — read-only, and the one op here whose refusal shape is
+  //     NOT `{ ok: false }`: it answers `{ entries: [] }`, because its caller
+  //     renders a list and a refusal must look like "nothing to show", not throw.
+  //     ⚠ That makes it the ONE row whose refusal value differs, which is the
+  //     reason this table pairs every op with its own expected refusal rather
+  //     than assuming one.
+  ["sessions:openAgentWindow", { segment: "acme-a1b2", channelId: CH, taskId: "t1" }, { ok: false }],
+  ["sessions:message", { channelId: CH, taskId: "t1", text: "hello" }, { ok: false }],
+  ["sessions:narration", { channelId: CH, taskId: "t1" }, { entries: [] }],
 ];
 
 test("every privileged op in the file is registered", () => {

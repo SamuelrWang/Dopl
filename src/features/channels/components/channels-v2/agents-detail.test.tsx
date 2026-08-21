@@ -21,12 +21,12 @@
  *    coarse (INVARIANTS §11), and a peer row has no `detail` to render.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import { AgentsTab } from "./agents-tab";
-import { AGENT_WINDOW_UNAVAILABLE, ChannelsV2AgentPanel } from "./agent-panel";
+import { ChannelsV2AgentPanel } from "./agent-panel";
 import { AgentLiveness } from "./bits";
 import { agentDetailLabel, agentKey } from "./agents-model";
 import { CHANNEL_ID, ME, PEER } from "./test-fixtures";
@@ -165,62 +165,78 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
 });
 
 /**
- * "OPEN WINDOW" ON A WINDOWLESS AGENT (2026-08-20) — the F-212 honesty half.
+ * "OPEN AGENT" (2026-08-20, F-212's closure) — the button that now always opens
+ * the agent window.
  *
- * ⚠ WHY THIS IS WORTH A TEST AT ALL. Before the fix, main answered `{ok:true}`
- * having opened nothing (the recreate fallback's existing-session branch), and
- * the renderer discarded the verdict anyway — two independent swallows over one
- * click, on nearly every agent, since the session-window retirement made
- * windowless the ordinary shape. The button visibly did nothing and said
- * nothing, which is the exact failure `AGENT_CONTROL_REFUSED` already names for
- * the stop verbs.
+ * ⚠ THE HISTORY THIS PINS AGAINST, because both wrong answers were shipped. It
+ * began reporting `{ok:true}` having opened nothing (main's recreate fallback),
+ * and the renderer discarded the verdict anyway. The fix in between was an
+ * honest refusal reading "this agent runs without a window" — which Samuel
+ * called meaningless, correctly: a window is a VIEW, not a runtime property.
+ * There is no refusal path left to word; there is a window.
  */
-describe("the Open window button reports what main actually did", () => {
+describe("Open agent always opens the agent view", () => {
   const AGENT = { channelId: CHANNEL_ID, taskId: "t-1" };
+  const SEGMENT = "acme-a1b2";
 
-  function bridgeWith(reopen: () => Promise<unknown>) {
-    (window as unknown as { dopl?: unknown }).dopl = {
-      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: { reopen },
-    };
-  }
   afterEach(() => {
     delete (window as { dopl?: unknown }).dopl;
   });
 
-  it("passes main's refusal and its reason back to the caller", async () => {
-    bridgeWith(() => Promise.resolve({ ok: false, reason: "windowless" }));
-    const { openAgentWindow } = await import("./agents-model");
-    expect(await openAgentWindow(AGENT)).toEqual({ ok: false, reason: "windowless" });
-  });
-
-  it("passes a success through unchanged", async () => {
-    bridgeWith(() => Promise.resolve({ ok: true }));
-    const { openAgentWindow } = await import("./agents-model");
-    expect(await openAgentWindow(AGENT)).toEqual({ ok: true, reason: undefined });
-  });
-
-  // An older main has no `reopen` at all; the caller must get a verdict rather
-  // than a thrown "reopen is not a function" out of a click handler.
-  it("answers a verdict, not a throw, on a main without the op", async () => {
+  function bridgeWith(sessions: Record<string, unknown>) {
     (window as unknown as { dopl?: unknown }).dopl = {
       apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: {},
+      sessions,
     };
+  }
+
+  it("prefers the dedicated op and hands it the segment the route needs", async () => {
+    const openWin = vi.fn().mockResolvedValue({ ok: true });
+    bridgeWith({ reopen: vi.fn(), openAgentWindow: openWin });
     const { openAgentWindow } = await import("./agents-model");
-    expect(await openAgentWindow(AGENT)).toEqual({ ok: false, reason: "no-bridge" });
+    expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: true, reason: undefined });
+    expect(openWin).toHaveBeenCalledWith(SEGMENT, CHANNEL_ID, "t-1");
+  });
+
+  // ⚠ NOT COMPATIBILITY THEATRE: on a main with only `reopen`, that op now hands a
+  // live windowless session to the SAME window, so the button works there too.
+  // Gating on the new op alone would hide a working affordance — the mistake
+  // `canOpenAgentWindow`'s docblock already records having made once.
+  it("falls back to reopen, WITH the segment, on a main without the new op", async () => {
+    const reopen = vi.fn().mockResolvedValue({ ok: true });
+    bridgeWith({ reopen });
+    const { openAgentWindow } = await import("./agents-model");
+    expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: true, reason: undefined });
+    expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, "t-1", SEGMENT);
+  });
+
+  it("offers the button when EITHER op is present, and not when neither is", async () => {
+    const { canOpenAgentWindow } = await import("./agents-model");
+    bridgeWith({ openAgentWindow: vi.fn() });
+    expect(canOpenAgentWindow()).toBe(true);
+    bridgeWith({ reopen: vi.fn() });
+    expect(canOpenAgentWindow()).toBe(true);
+    bridgeWith({});
+    expect(canOpenAgentWindow()).toBe(false);
+  });
+
+  it("answers a verdict, not a throw, on a main without either op", async () => {
+    bridgeWith({});
+    const { openAgentWindow } = await import("./agents-model");
+    expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: false, reason: "no-bridge" });
   });
 });
 
-describe("…and the panel puts that verdict on screen", () => {
+describe("the panel's button reaches it", () => {
   afterEach(() => {
     delete (window as { dopl?: unknown }).dopl;
   });
 
-  function mountPanel(reopen: () => Promise<unknown>) {
+  it("routes the click at the agent window, carrying the workspace segment", () => {
+    const openWin = vi.fn().mockResolvedValue({ ok: true });
     (window as { dopl?: unknown }).dopl = {
       apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: { reopen },
+      sessions: { reopen: vi.fn(), openAgentWindow: openWin },
     };
     const agent = summary();
     render(
@@ -229,23 +245,34 @@ describe("…and the panel puts that verdict on screen", () => {
         sessions={[agent]}
         messages={[]}
         currentUserId={ME}
+        workspaceSlug="acme-a1b2"
         onClose={() => {}}
       />
     );
-  }
-
-  // ⚠ THE NOTICE IS NOT AN ERROR, and the copy carries that: windowless is the
-  // ordinary shape now, so this reads as "here is where the work IS visible".
-  it("says the agent has no window rather than doing nothing visible", async () => {
-    mountPanel(() => Promise.resolve({ ok: false, reason: "windowless" }));
-    screen.getByRole("button", { name: "Open window" }).click();
-    expect(await screen.findByText(AGENT_WINDOW_UNAVAILABLE)).toBeTruthy();
+    screen.getByRole("button", { name: "Open agent" }).click();
+    expect(openWin).toHaveBeenCalledWith("acme-a1b2", CHANNEL_ID, "t-1");
   });
 
-  it("says nothing at all when main really did open a window", async () => {
-    mountPanel(() => Promise.resolve({ ok: true }));
-    screen.getByRole("button", { name: "Open window" }).click();
-    await Promise.resolve();
-    expect(screen.queryByText(AGENT_WINDOW_UNAVAILABLE)).toBeNull();
+  // ⚠ THE DELETED NOTICE. "This agent runs without a window" described an
+  // implementation detail as if it were a fact about the agent. Nothing on this
+  // surface may say it again.
+  it("never tells the operator their agent has no window", () => {
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { openAgentWindow: vi.fn().mockResolvedValue({ ok: true }) },
+    };
+    const agent = summary();
+    render(
+      <ChannelsV2AgentPanel
+        openAgent={agentKey(agent)}
+        sessions={[agent]}
+        messages={[]}
+        currentUserId={ME}
+        workspaceSlug="acme-a1b2"
+        onClose={() => {}}
+      />
+    );
+    expect(screen.queryByText(/without a window/i)).toBeNull();
+    expect(screen.queryByText(/not built yet/i)).toBeNull();
   });
 });

@@ -23,8 +23,8 @@ const framing = require('./prompt-framing');
 const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-in
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const { getSdk } = require('./sdk-loader');
-const sessionQuery = require('./session-query'); // §3 split: SDK options + the query lifecycle (H1)
-const { buildSdkOptions, startQuery, consume } = sessionQuery;
+const sessionQuery = require('./session-query'); const { buildSdkOptions, startQuery, consume } = sessionQuery; // §3 split: SDK options + the query lifecycle (H1)
+const sessionNarration = require('./session-narration'); // 2026-08-20: the agent window's work lane (F-212)
 const sessionModel = require('./session-model'); // the frozen model enum (argv), coerced here too
 const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
@@ -76,9 +76,9 @@ sessionHistory.bind({ emit });
 // folder label). It gets `emit` rather than owning it — the RESHOW rule is session policy.
 sessionShell.bind({ dispatch, refreshTray, emit });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
-sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell, keptWindow: sessionSummary.keptWindow, dispatch }); // C-8: quit ends live sessions through the reducer
+sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell, keptWindow: sessionSummary.keptWindow, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) }); // C-8: quit ends live sessions through the reducer; 2026-08-20: a windowless session's VIEW
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
-sessionSummary.bind({ sessions });
+sessionSummary.bind({ sessions }); sessionNarration.bind({ sessions }); // ...and the narration ring reads the same registry
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
@@ -87,7 +87,7 @@ const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 // turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);
-  s.state = state; sessionSummary.noteActivity(s, event); // §3.3: a pill's state moves here, and so do its activity stamp + detail (session-detail.js)
+  s.state = state; sessionSummary.noteActivity(s, event); sessionNarration.note(s, event); // §3.3: the pill's state + detail, and the agent window's work lane, all off the ONE funnel
   let resolvedLive = false;
   for (const eff of effects) resolvedLive = runEffect(s, eff) === true || resolvedLive;
   return resolvedLive;
@@ -496,5 +496,5 @@ module.exports = {
   getConsentBySender: sessionConsent.getBySender,
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
   reopenWindow: sessionReopen.reopenWindow,
-  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, // item 2 + Phase 5 pause/end — the MAIN-window bridge (channel-dir-ipc)
+  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, messageByTask: sessionReopen.messageByTask, narrationFor: (k) => sessionNarration.ringFor(sessions.get(k)), // item 2 + Phase 5 pause/end + F-212's 1:1 lane and work lane — the MAIN-window bridge (channel-dir-ipc)
 };

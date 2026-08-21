@@ -91,6 +91,28 @@ export interface DesktopSessionSummary {
   lastActivityAt?: number | null;
 }
 
+/**
+ * ONE LINE OF AN AGENT'S WORK — the wire shape
+ * `dopl-desktop-app/main/session-narration.js › entryFor` emits.
+ *
+ * ⚠ EVERY FIELD IS ALREADY-SUMMARIZED DISPLAY TEXT, bounded on the main side.
+ * `inputFull` deliberately never enters a ring entry: it is unbounded by
+ * construction (it can carry an entire file), and this feed crosses to a
+ * renderer.
+ */
+export interface DesktopNarrationEntry {
+  /** Epoch ms. */
+  at: number;
+  kind: "assistant" | "tool" | "result" | "post" | "status";
+  /** On `tool` and `result` — what joins a result to the call it answers. */
+  toolUseId?: string;
+  /** The RAW tool name on a `tool` entry; the renderer shortens it. */
+  tool?: string;
+  /** `false` only on a `result` that failed. */
+  ok?: boolean;
+  text?: string;
+}
+
 export interface SpaBridgeSurface {
   apiRequest(
     path: string,
@@ -125,7 +147,52 @@ export interface SpaBridgeSurface {
    *  Nobody pauses another member's agent, and a peer's paused agent reads as
    *  inactive PRESENCE on their side, never as a stalled thread. */
   sessions?: {
-    reopen(channelId: string, taskId: string): Promise<{ ok: boolean; reason?: string }>;
+    /** ⚠ `segment` is OPTIONAL and joined 2026-08-20: a live WINDOWLESS session
+     *  reopens as the AGENT WINDOW, whose landing is a router path. */
+    reopen(
+      channelId: string,
+      taskId: string,
+      segment?: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+    /**
+     * THE AGENT WINDOW (F-212's closure) — a second window on this bundle
+     * showing one of MY agents: its live work, what it sent, and a composer.
+     * ⚠ ASKS FOR A WINDOW; DOES NOT GET ONE. No handle comes back — main creates
+     * and registers it (`main/app-windows.js`), which is what makes the widened
+     * sender binding safe.
+     */
+    openAgentWindow?(
+      segment: string,
+      channelId: string,
+      taskId: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+    /**
+     * ⚠ THE ONE OP ON THIS BRIDGE THAT STARTS A TURN. The operator speaking to
+     * their OWN agent, out of band — never a channel post, and the agent is told
+     * so. Main resolves (channel, thread) against its own registry (own-agents-
+     * only, structurally), delimits the text with that session's nonce carrying
+     * OPERATOR authority, and dispatches the same `steer` the session window's
+     * composer always did. It grants no tool, widens no posture, reaches no
+     * other machine, and cannot post without the outbound gate.
+     */
+    message?(
+      channelId: string,
+      taskId: string,
+      text: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+    /** The agent's WORK RING — its own text, its tool calls with names, their
+     *  results, what it posted. Read once on mount, then listen; a push-only
+     *  surface leaves a freshly opened window blank until the next event. */
+    narration?(
+      channelId: string,
+      taskId: string
+    ): Promise<{ entries: DesktopNarrationEntry[] }>;
+    /** ⚠ Frames are keyed by `sessionKey` and fan out to EVERY app window — the
+     *  reader filters. Main tracks no subscriptions, so the two sides cannot go
+     *  out of step. */
+    onNarration?(
+      cb: (e: { sessionKey: string; entries: DesktopNarrationEntry[] }) => void
+    ): () => void;
     summaries?(): Promise<{ sessions: DesktopSessionSummary[] }>;
     onSummaries?(cb: (e: { sessions: DesktopSessionSummary[] }) => void): () => void;
     /** Interrupt the turn in flight — the session window's send-button pause

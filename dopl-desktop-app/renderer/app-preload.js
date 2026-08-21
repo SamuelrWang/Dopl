@@ -25,6 +25,7 @@ const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
 // ⚠ A constant, like every other channel name: test/preload-parity pins that no ipc channel
 // name is computed.
 const SESSIONS_EVENT = 'dopl:sessions';
+const NARRATION_EVENT = 'dopl:session-narration';
 
 const METHODS = { GET: 1, POST: 1, PATCH: 1, PUT: 1, DELETE: 1 };
 
@@ -209,10 +210,15 @@ contextBridge.exposeInMainWorld('dopl', {
   // registry, which contains nothing but this operator's sessions on this machine.
   // ⚠ NEVER keyed on `sessionId` — that id is ephemeral across a park+recreate.
   sessions: {
-    reopen: (channelId, taskId) =>
+    // ⚠ `segment` is OPTIONAL and joined 2026-08-20: a live WINDOWLESS session reopens as
+    // the AGENT WINDOW, whose landing is a router path, and main holds the workspace UUID
+    // while a route needs the slug. Main re-checks it through `isSafeSegment` and degrades
+    // to the other reopen branches when it is absent or unusable.
+    reopen: (channelId, taskId, segment) =>
       ipcRenderer.invoke('sessions:reopen', {
         channelId: asId(channelId),
         taskId: asId(taskId),
+        segment: asId(segment),
       }),
     summaries: () => ipcRenderer.invoke('sessions:summaries'),
     onSummaries: (callback) => {
@@ -237,6 +243,60 @@ contextBridge.exposeInMainWorld('dopl', {
         channelId: asId(channelId),
         taskId: asId(taskId),
       }),
+
+    // ── THE AGENT WINDOW (2026-08-20, F-212's closure) ─────────────────────────────
+    // `openAgentWindow` ASKS MAIN for a second window on this same bundle, showing ONE of
+    // the operator's own agents. Like `threads.openWindow` it gets NO handle back — main
+    // creates the window and main registers it in `main/app-windows.js`; the answer is
+    // `{ ok }`. That is the whole reason the widened sender binding is safe: a renderer
+    // cannot enlarge the set of bound senders, only ask main to.
+    openAgentWindow: (segment, channelId, taskId) =>
+      ipcRenderer.invoke('sessions:openAgentWindow', {
+        segment: asId(segment),
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+      }),
+
+    // ⚠ `message` IS THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and it is the only
+    // reason this namespace's failure direction is not simply "an agent that stops".
+    // The operator types to their OWN agent out of band; main resolves (channel, thread)
+    // against its own registry, delimits the text with that session's nonce
+    // (`session-seed.js › frameOperatorTurn`, which carries operator authority rather than
+    // fencing the words as data), and dispatches the SAME `steer` the session window's
+    // composer always dispatched. It cannot grant a tool, widen a posture, reach another
+    // machine, or post anything without the outbound gate. Capped here AND in main —
+    // this bound is a convenience, main's is the fence.
+    message: (channelId, taskId, text) =>
+      ipcRenderer.invoke('sessions:message', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+        text: String(text == null ? '' : text).slice(0, 4000),
+      }),
+
+    // The work lane: what this agent has been doing (its own text, its tool calls WITH
+    // NAMES, their results, what it posted). `narration` is the read for a window's first
+    // paint, `onNarration` the live push — read once, then listen, exactly as the
+    // summaries feed does, because a push-only surface leaves a freshly opened window
+    // blank until the next event.
+    // ⚠ Frames are keyed by `sessionKey`; a window filters to the agent it shows. Main
+    // tracks no subscriptions, which is what stops the two sides going out of step.
+    narration: (channelId, taskId) =>
+      ipcRenderer.invoke('sessions:narration', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+      }),
+    onNarration: (callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        callback({
+          sessionKey: String(p.sessionKey || ''),
+          entries: Array.isArray(p.entries) ? p.entries : [],
+        });
+      };
+      ipcRenderer.on(NARRATION_EVENT, listener);
+      return () => ipcRenderer.removeListener(NARRATION_EVENT, listener);
+    },
   },
 
   // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). `openWindow` asks MAIN to

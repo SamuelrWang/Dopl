@@ -14,7 +14,10 @@
 // Wire shape declared ONCE in `@/shared/lib/spa-bridge` — the component that
 // renders it lives there and the SPA bundles it. A copy here = a third thing
 // to keep in step.
-import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type {
+  DesktopNarrationEntry,
+  DesktopSessionSummary,
+} from "@/shared/lib/spa-bridge";
 
 /** Wire response for `dopl:api-request`. Main parses the body; `./api.ts` owns
  *  `{ error: { code, message } }` envelope decoding, so BOTH transports feed
@@ -126,8 +129,37 @@ export interface DoplBridge {
   sessions?: {
     reopen(
       channelId: string,
+      taskId: string,
+      /** ⚠ Optional, 2026-08-20: a live WINDOWLESS session reopens as the AGENT
+       *  WINDOW, whose landing is a router path and needs the slug. */
+      segment?: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+    /** THE AGENT WINDOW (F-212). Asks main for a second window on this bundle
+     *  showing one of MY agents; no handle comes back. */
+    openAgentWindow?(
+      segment: string,
+      channelId: string,
       taskId: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    /** ⚠ THE ONE OP HERE THAT STARTS A TURN — the operator's own words to their
+     *  own agent, out of band. Never a channel post. See `@/shared/lib/spa-bridge`
+     *  for the full security shape; main owns it. */
+    message?(
+      channelId: string,
+      taskId: string,
+      text: string
+    ): Promise<{ ok: boolean; reason?: string }>;
+    /** The agent's work ring: read once on mount, then listen. */
+    narration?(
+      channelId: string,
+      taskId: string
+    ): Promise<{ entries: DesktopNarrationEntry[] }>;
+    onNarration?(
+      callback: (event: {
+        sessionKey: string;
+        entries: DesktopNarrationEntry[];
+      }) => void
+    ): () => void;
     summaries?(): Promise<{ sessions: DesktopSessionSummary[] }>;
     onSummaries?(
       callback: (event: { sessions: DesktopSessionSummary[] }) => void

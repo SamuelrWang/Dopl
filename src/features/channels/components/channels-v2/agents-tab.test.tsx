@@ -380,13 +380,15 @@ describe("the agent view's control strip — one gate per capability", () => {
       />
     );
 
-  it("offers OPEN WINDOW on a main that has reopen and neither stop verb", () => {
+  // ⚠ "Open window" became "Open agent" on 2026-08-20 (F-212): a window is a VIEW,
+  // not a runtime property, so the noun is what the operator is asking for.
+  it("offers OPEN AGENT on a main that has reopen and neither stop verb", () => {
     (window as { dopl?: unknown }).dopl = {
       apiRequest: vi.fn(),
       sessions: { reopen: vi.fn() },
     };
     mountPanel();
-    expect(screen.getByRole("button", { name: "Open window" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open agent" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
     expect(screen.queryByRole("button", { name: "End" })).toBeNull();
   });
@@ -403,13 +405,11 @@ describe("the agent view's control strip — one gate per capability", () => {
     expect(screen.queryByRole("button", { name: "Open window" })).toBeNull();
   });
 
-  it("calls reopen with (channel, thread) when it IS there", () => {
-    const reopen = vi.fn().mockResolvedValue({ ok: true });
-    (window as { dopl?: unknown }).dopl = { apiRequest: vi.fn(), sessions: { reopen } };
-    mountPanel();
-    screen.getByRole("button", { name: "Open window" }).click();
-    expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, "t-1");
-  });
+  // ⚠ WHAT THE BUTTON CALLS moved to `agents-detail.test.tsx` on 2026-08-20, whole:
+  // that file owns the open-agent behaviour (prefer the new op, fall back to `reopen`,
+  // carry the workspace segment), and asserting the same click in two files is how two
+  // suites come to disagree about one button. This block keeps what it is ABOUT — which
+  // capability shows which control.
 });
 
 /**
