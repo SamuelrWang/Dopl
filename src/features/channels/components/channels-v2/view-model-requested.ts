@@ -55,19 +55,51 @@ export function requestedThreadIds(
   messages: ChannelMessage[],
   consentRequests: ChannelConsentRequest[]
 ): ReadonlySet<string> {
-  const pending = consentRequests.filter(
-    (r) => isPendingInbound(r) && isSeq(r.messageSeq)
-  );
-  if (pending.length === 0) return EMPTY_REQUESTED;
-  const keys = new Set(pending.map((r) => `${r.channelId}:${r.messageSeq}`));
-  const ids = new Set<string>();
+  const joined = joinRequestsToThreads(messages, consentRequests, isPendingInbound);
+  return joined.size === 0 ? EMPTY_REQUESTED : new Set(joined.keys());
+}
+
+/**
+ * THE SEQ-KEYED JOIN ITSELF — thread → the pending consent row that triggered it.
+ *
+ * ⚠ ONE IMPLEMENTATION SINCE 2026-08-20, AND THE EXTRACTION FOUND A REAL
+ * DISAGREEMENT. Three functions here wrote this loop out longhand, and the copies
+ * had drifted on the tie-break: `pendingRequestIdByThread` did a bare `map.set`
+ * (LAST row wins) while `pendingOutboundByThread` guarded with `!map.has` (FIRST
+ * wins). Same join, same shape, opposite answers as soon as one thread carried two
+ * pending rows.
+ *
+ * ⚠ FIRST WINS, EVERYWHERE. `messages` arrives in ascending `seq`, so first is the
+ * OLDEST unanswered ask — the one that has been waiting, and the one
+ * `transcript.tsx` already describes itself as deciding ("the first owed thread is
+ * the one being decided"). Last-wins would silently move the decision to whichever
+ * ask arrived most recently, so answering a card would settle a different request
+ * than the one whose text is on it.
+ *
+ * ⚠ THE HONESTY RULE IS SHARED TOO: both sides must be finite numbers before
+ * either goes in a key. A wire row that omits `message_seq` arrives as `undefined`,
+ * which sails through a `!== null` guard and stringifies to `"ch-1:undefined"` —
+ * and a message whose own `seq` went missing produces the SAME key and self-matches,
+ * marking a thread requested because two absences agreed with each other.
+ */
+function joinRequestsToThreads(
+  messages: ChannelMessage[],
+  consentRequests: ChannelConsentRequest[],
+  accept: (r: ChannelConsentRequest) => boolean
+): ReadonlyMap<string, ChannelConsentRequest> {
+  const map = new Map<string, ChannelConsentRequest>();
+  const pending = consentRequests.filter((r) => accept(r) && isSeq(r.messageSeq));
+  if (pending.length === 0) return map;
+  const byKey = new Map(pending.map((r) => [`${r.channelId}:${r.messageSeq}`, r]));
   for (const message of messages) {
     const threadId = threadIdOf(message);
     if (!threadId) continue;
     if (!isSeq(message.seq)) continue;
-    if (keys.has(`${message.channelId}:${message.seq}`)) ids.add(threadId);
+    const request = byKey.get(`${message.channelId}:${message.seq}`);
+    // FIRST wins — see the tie-break note above.
+    if (request && !map.has(threadId)) map.set(threadId, request);
   }
-  return ids;
+  return map;
 }
 
 /**
@@ -81,21 +113,10 @@ export function pendingRequestIdByThread(
   messages: ChannelMessage[],
   consentRequests: ChannelConsentRequest[]
 ): ReadonlyMap<string, string> {
+  const joined = joinRequestsToThreads(messages, consentRequests, isPendingInbound);
+  if (joined.size === 0) return EMPTY_REQUEST_IDS;
   const map = new Map<string, string>();
-  const pending = consentRequests.filter(
-    (r) => isPendingInbound(r) && isSeq(r.messageSeq)
-  );
-  if (pending.length === 0) return map;
-  const byKey = new Map(
-    pending.map((r) => [`${r.channelId}:${r.messageSeq}`, r.id])
-  );
-  for (const message of messages) {
-    const threadId = threadIdOf(message);
-    if (!threadId) continue;
-    if (!isSeq(message.seq)) continue;
-    const id = byKey.get(`${message.channelId}:${message.seq}`);
-    if (id) map.set(threadId, id);
-  }
+  for (const [threadId, request] of joined) map.set(threadId, request.id);
   return map;
 }
 
@@ -111,22 +132,8 @@ export function pendingOutboundByThread(
   messages: ChannelMessage[],
   consentRequests: ChannelConsentRequest[]
 ): ReadonlyMap<string, ChannelConsentRequest> {
-  const map = new Map<string, ChannelConsentRequest>();
-  const pending = consentRequests.filter(
-    (r) => r.kind === "outbound" && r.status === "pending" && isSeq(r.messageSeq)
-  );
-  if (pending.length === 0) return map;
-  const byKey = new Map(
-    pending.map((r) => [`${r.channelId}:${r.messageSeq}`, r])
-  );
-  for (const message of messages) {
-    const threadId = threadIdOf(message);
-    if (!threadId) continue;
-    if (!isSeq(message.seq)) continue;
-    const request = byKey.get(`${message.channelId}:${message.seq}`);
-    if (request && !map.has(threadId)) map.set(threadId, request);
-  }
-  return map;
+  const joined = joinRequestsToThreads(messages, consentRequests, isPendingOutbound);
+  return joined.size === 0 ? EMPTY_OUTBOUND : joined;
 }
 
 /**
@@ -175,6 +182,14 @@ export function pendingAsksByChannel(
  *  reply, and a decided row is answered. */
 function isPendingInbound(r: ChannelConsentRequest): boolean {
   return r.kind === "inbound" && r.status === "pending";
+}
+
+/** A pending OUTBOUND review — this operator's own agent has drafted a reply and
+ *  is waiting on their Send. ⚠ A NAMED TWIN of {@link isPendingInbound} rather
+ *  than an inline compare: the inbound side had a helper and this side did not,
+ *  which is how one of them comes to be edited without the other. */
+function isPendingOutbound(r: ChannelConsentRequest): boolean {
+  return r.kind === "outbound" && r.status === "pending";
 }
 
 /** A usable `seq`. ⚠ Never `!= null`: `undefined` passes that and then
@@ -236,8 +251,21 @@ export function consentExemptThreadIds(
   return ids;
 }
 
-/** Stable identity for the common empty case — these feed `useMemo` chains. */
+/**
+ * Stable identities for the common empty case — these feed `useMemo` chains.
+ *
+ * ⚠ THE MAPS GOT ONE TOO, 2026-08-20. Only the Set had a shared empty, so
+ * `pendingRequestIdByThread` and `pendingOutboundByThread` minted a fresh `Map` on
+ * every call — a new reference each render, which is exactly what a downstream
+ * `useMemo` dependency compares. The derivations are cheap; the churn they caused
+ * downstream was not.
+ */
 const EMPTY_REQUESTED: ReadonlySet<string> = new Set<string>();
+const EMPTY_REQUEST_IDS: ReadonlyMap<string, string> = new Map<string, string>();
+const EMPTY_OUTBOUND: ReadonlyMap<string, ChannelConsentRequest> = new Map<
+  string,
+  ChannelConsentRequest
+>();
 
 /**
  * The threads the SIDEBAR TREE shows: active inside

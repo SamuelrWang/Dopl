@@ -14,6 +14,8 @@ import { describe, expect, it } from "vitest";
 import {
   consentExemptThreadIds,
   pendingAsksByChannel,
+  pendingOutboundByThread,
+  pendingRequestIdByThread,
   requestedThreadIds,
   sidebarThreads,
 } from "./view-model-requested";
@@ -285,5 +287,72 @@ describe("pendingAsksByChannel", () => {
     ];
     const total = [...pendingAsksByChannel(rows).values()].reduce((a, b) => a + b, 0);
     expect(total).toBe(rows.filter((r) => r.kind === "inbound").length);
+  });
+});
+
+/**
+ * THE THREE SEQ-KEYED JOINS SHARE ONE IMPLEMENTATION (2026-08-20), and these are
+ * the properties that made extracting it worth doing rather than cosmetic.
+ *
+ * ⚠ THE COPIES HAD DRIFTED ON THE TIE-BREAK. `pendingRequestIdByThread` did a bare
+ * `map.set` (LAST row wins); `pendingOutboundByThread` guarded with `!map.has`
+ * (FIRST wins). One thread carrying two pending rows therefore got two different
+ * answers depending on which surface asked — and answering the card would settle a
+ * different request than the one whose text was on it.
+ */
+describe("the seq-keyed join — one rule for all three", () => {
+  // Two opening messages on ONE thread, each with its own pending ask.
+  const FIRST = message({ id: "m-first", seq: 2, metadata: { taskId: "t-1" } });
+  const SECOND = message({ id: "m-second", seq: 5, metadata: { taskId: "t-1" } });
+
+  it("takes the OLDEST pending ask when a thread carries two — first wins", () => {
+    const map = pendingRequestIdByThread(
+      [FIRST, SECOND],
+      [
+        consent({ id: "c-old", messageSeq: 2 }),
+        consent({ id: "c-new", messageSeq: 5 }),
+      ]
+    );
+    // Ascending seq, so the first match is the ask that has been waiting longest —
+    // the one `transcript.tsx` says it is deciding.
+    expect(map.get("t-1")).toBe("c-old");
+  });
+
+  it("applies the SAME tie-break on the outbound side", () => {
+    const map = pendingOutboundByThread(
+      [FIRST, SECOND],
+      [
+        consent({ id: "o-old", kind: "outbound", messageSeq: 2 }),
+        consent({ id: "o-new", kind: "outbound", messageSeq: 5 }),
+      ]
+    );
+    expect(map.get("t-1")?.id).toBe("o-old");
+  });
+
+  it("never crosses the kinds — an outbound row is not an unanswered ask", () => {
+    const outbound = [consent({ id: "o-1", kind: "outbound" })];
+    expect(requestedThreadIds([OPENER], outbound).size).toBe(0);
+    expect(pendingRequestIdByThread([OPENER], outbound).size).toBe(0);
+    expect(pendingOutboundByThread([OPENER], outbound).get("t-1")?.id).toBe("o-1");
+  });
+
+  // ⚠ THE HONESTY RULE, shared by all three: two missing values must not agree
+  // with each other. A seq-less row and a seq-less message both stringify into
+  // `"ch-1:undefined"` under a `!= null` guard and self-match.
+  it("drops a seq-less row rather than letting two absences match", () => {
+    const seqless = [consent({ id: "c-null", messageSeq: null })];
+    const noSeq = message({ id: "m-null", metadata: { taskId: "t-1" } });
+    delete (noSeq as { seq?: number }).seq;
+    expect(requestedThreadIds([noSeq], seqless).size).toBe(0);
+    expect(pendingRequestIdByThread([noSeq], seqless).size).toBe(0);
+    expect(pendingOutboundByThread([noSeq], seqless).size).toBe(0);
+  });
+
+  // ⚠ Stable empty identity: these feed `useMemo` chains, and a fresh `Map` per
+  // call is a new reference every render for a result that never changed.
+  it("returns the SAME empty map twice — no reference churn downstream", () => {
+    expect(pendingRequestIdByThread([], [])).toBe(pendingRequestIdByThread([], []));
+    expect(pendingOutboundByThread([], [])).toBe(pendingOutboundByThread([], []));
+    expect(requestedThreadIds([], [])).toBe(requestedThreadIds([], []));
   });
 });
