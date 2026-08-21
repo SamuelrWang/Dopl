@@ -376,6 +376,41 @@ test("the mode tables agree across main and the reducer's own state module", () 
   assert.deepEqual(red("MESSAGE_MODES"), MESSAGE_MODES);
 });
 
+test("the THIRD copy — channel-prefs' WRITE validator — agrees with the canonical tables", () => {
+  // ⚠ FOUND UNPINNED 2026-08-20 (F-236's audit). `main/channel-prefs.js` carries its own frozen
+  // enums and its own suite asserted them against LITERALS, never against session-profiles — so
+  // the two were only ever kept in step by a reviewer's memory. It is not a harmless copy:
+  // `normalizePreset` REJECTS a pair outside its lists (`{ok:false}`, nothing written), so a
+  // fifth mode added to the canonical axis would make the durable launch posture silently
+  // unwritable for that value, with every suite green.
+  //
+  // Read as SOURCE because channel-prefs.js requires electron-store, and the enums sit inside
+  // its own extraction block.
+  const PREFS = readFileSync(M("channel-prefs.js"), "utf8");
+  const prefsList = (name) => {
+    const at = PREFS.indexOf("const " + name + " = [");
+    assert.notEqual(at, -1, name + " missing from channel-prefs.js");
+    return PREFS.slice(PREFS.indexOf("[", at) + 1, PREFS.indexOf("]", at))
+      .split(",").map((x) => x.trim().replace(/['"]/g, ""));
+  };
+  assert.deepEqual(prefsList("TOOL_MODES"), TOOL_MODES);
+  assert.deepEqual(prefsList("MESSAGE_MODES"), MESSAGE_MODES);
+});
+
+test("the SPA holds a FOURTH copy, and it is out of this tree's reach — stated, not asserted", () => {
+  // ⚠ `src/features/channels/lib/permission-modes.ts` declares both axes again, for the
+  // renderer that offers them. This suite cannot read it (different package, different lint
+  // and test tiers), so this case exists to make the fourth copy VISIBLE from the desktop side
+  // rather than to check it — a count nobody states is a count nobody re-measures.
+  //
+  // ⚠ THE DESKTOP IS THE FENCE EITHER WAY, and that is why the gap is tolerable: every mode
+  // crossing the bridge is re-validated here (`normalizeToolMode` / `normalizeMessageMode`,
+  // fail-closed) and the reducer coerces AGAIN. A drifted SPA copy can offer a value main
+  // refuses; it can never make main accept one.
+  assert.deepEqual(MESSAGE_MODES.length, 4, "a fifth mode is a change in FOUR places — see above");
+  assert.deepEqual(TOOL_MODES.length, 4);
+});
+
 test("the two inbound-auto predicates (gate + reducer) agree on all four message modes", () => {
   // session-gate.autoInbound and the reducer's inboundAutoAccepted answer the same question
   // on two paths; if they ever disagreed, a message would be held by one and fed by the other.

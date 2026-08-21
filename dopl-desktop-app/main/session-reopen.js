@@ -21,6 +21,9 @@
 // Pinned by test/open-session-no-query.test.mjs.
 
 const store = require('./session-store');
+// ⚠ AXIS B's WINDOWLESS FLOOR (F-236). One statement of the rule, shared with the launch lane
+// (`channel-prefs.js › windowlessMessageMode`); see its docblock for why the floor exists.
+const { floorWindowlessMessage } = require('./session-profiles');
 // The operator-turn delimiter (2026-08-20). A free var inside the block below, like
 // `store`, so the source-extraction test injects both and the block stays free of the
 // runtime handles its purity assertion refuses (the header names them).
@@ -181,6 +184,18 @@ function controlByTask(a) {
 // half's `drainInbound` went with the v1 purge for the same reason (`session-gate.js`: a
 // windowless session's message axis is floored at `auto_inbound`, so the queue never holds).
 //
+// ⚠ AND THAT FLOOR USED TO BE A LAUNCH-ONLY FACT, WHICH MADE THE SENTENCE ABOVE FALSE FROM
+// THIS VERY FUNCTION (2026-08-20, F-236). `channel-prefs.js › windowlessMessageMode` floors
+// both LAUNCH lanes, but nothing floored a mode set on a session ALREADY RUNNING — so the
+// agent view's Messages select, which offers all four values, could put a windowless session
+// on `ask`. `session-gate.js › enqueue` then HOLDS the peer's reply with no accept surface
+// and no drain left to release it (F-228 deleted `decideInbound` / `drainQueue` /
+// `drainInbound` together): the session parks at `awaiting_inbound` forever, `noteGatedBody`
+// records the body, and seed/history both filter it out — the message is invisible to the
+// agent permanently. One gesture from the UI. THE CLAMP BELOW IS THE FIX, and it lives here
+// rather than at the IPC boundary because only this layer has resolved the SESSION and can
+// see whether it is windowless.
+//
 // ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT — the security shape, and the reason this is a
 // safe op to expose. The two axes decide whether the OPERATOR is asked; the PROFILE decides
 // what is reachable at all, is checked FIRST, and no posture can widen it
@@ -197,10 +212,20 @@ function setModeByTask(a) {
   if (axis !== 'tools' && axis !== 'messages') return { ok: false, reason: 'bad-axis' };
   const s = deps.sessions.get(store.sessionKey(channelId, taskId));
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  // ⚠ THE WINDOWLESS FLOOR, APPLIED HERE BECAUSE ONLY HERE IS THE SESSION RESOLVED (F-236).
+  // A windowless session has no Accept surface and nothing left that can release a held
+  // inbound turn, so the IN half may not drop below auto. It CLAMPS rather than refusing: the
+  // operator asked for less supervision on the OUT half in the `auto_outbound` case and gets
+  // exactly that, and a refusal would leave the select showing a value main is not enforcing
+  // — the lie the note below is about. What comes back is main's post-dispatch truth either
+  // way, so the UI renders the floored value rather than the requested one.
+  const mode = axis === 'messages' && s.windowless === true
+    ? floorWindowlessMessage(a && a.mode)
+    : (a && a.mode);
   try {
     deps.dispatch(s, {
       type: axis === 'tools' ? 'set_tool_mode' : 'set_message_mode',
-      mode: a && a.mode,
+      mode: mode,
     });
   } catch (_) {
     return { ok: false };

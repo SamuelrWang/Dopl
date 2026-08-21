@@ -253,6 +253,39 @@ function autoOutboundMode(mode) {
   return m === 'auto_outbound' || m === 'auto_both';
 }
 
+// ⚠ THE WINDOWLESS FLOOR — THE ONE STATEMENT OF IT (2026-08-20, F-236).
+//
+// A WINDOWLESS session has NO ACCEPT SURFACE. `session-gate.js › enqueue` holds an inbound
+// reply whenever `autoInbound(s)` is false, and the whole accept family that used to release
+// one — `decideInbound`, `drainQueue`, `drainInbound` — went with the session window (F-228).
+// So on a windowless session a HELD reply is held FOREVER: the session parks at
+// `awaiting_inbound`, `io.noteGatedBody` records the body (which session-seed and
+// session-history both filter out), and the peer's message becomes invisible to the agent
+// permanently. That is the AUDIT D2 failure `session-gate.js` was written to prevent,
+// reachable from the other end.
+//
+// So the IN half is FLOORED at auto. This raises the inbound half and NEVER touches the
+// outbound one:
+//     ask            -> auto_inbound     (in: floored; out: still asks)
+//     auto_outbound  -> auto_both        (in: floored; out: unchanged, still auto)
+//     auto_inbound   -> auto_inbound
+//     auto_both      -> auto_both
+//
+// ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT. Axis B decides whether a MESSAGE crosses, never
+// what a tool may do; the profile is checked first and no message posture can widen it
+// (`grantDecision` returns off Axis B before Axis A is consulted). Floored or not, an agent
+// cannot post out without the outbound gate.
+//
+// ⚠ AND IT IS A FLOOR, NOT A DEFAULT. `channel-prefs.js › windowlessMessageMode` applies the
+// same rule at LAUNCH; this is the same rule for a mode set on a session ALREADY RUNNING. The
+// two are pinned against each other by `test/session-mode-floor.test.mjs` — two spellings of
+// one floor is how one lane starts holding messages the other lane releases.
+function floorWindowlessMessage(mode) {
+  const m = normalizeMessageMode(mode);
+  if (m === 'auto_inbound' || m === 'auto_both') return m;
+  return m === 'auto_outbound' ? 'auto_both' : 'auto_inbound';
+}
+
 // Per-call decision the engine's canUseTool bridge makes:
 //   'preapproved' — auto-allow, NO button (profile pre-approved AND shadowed via allowedTools).
 //                   NEVER the channel tool.
@@ -337,4 +370,5 @@ module.exports = {
   TOOL_MODES, MESSAGE_MODES, EDIT_TOOLS, ESCALATION_TOOLS,
   AUTO_TOOLS, BYPASS_TOOLS, DOPL_READ_TOOLS, DOPL_WRITE_TOOLS,
   normalizeToolMode, normalizeMessageMode, toolModeAllows, autoInboundMode, autoOutboundMode,
+  floorWindowlessMessage, // AXIS B's windowless floor — one statement, two lanes (F-236)
 };

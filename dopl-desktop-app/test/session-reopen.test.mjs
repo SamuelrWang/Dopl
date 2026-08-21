@@ -29,6 +29,13 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-reopen.js"), "utf8");
 // The REAL operator-turn delimiter, injected like `store` — the 1:1 lane's cases are about
 // the delimiting a turn actually gets, and a stub would let the two drift apart.
 const framing = createRequire(import.meta.url)(join(HERE, "..", "main", "session-seed.js"));
+// ⚠ THE REAL AXIS-B FLOOR, injected for the same reason (2026-08-20, F-236). `setModeByTask`
+// clamps a windowless session's message axis, and a stub would let this suite pass over a
+// clamp that does not match the one lane the launch path uses. Its own rules live in
+// `test/session-mode-floor.test.mjs`; here it is a real dependency, not a subject.
+const { floorWindowlessMessage } = createRequire(import.meta.url)(
+  join(HERE, "..", "main", "session-profiles.js")
+);
 
 const BEGIN = "// ─── BEGIN SESSION-REOPEN-PURE";
 const END = "// ─── END SESSION-REOPEN-PURE";
@@ -80,9 +87,10 @@ function harness(over = {}) {
   const api = new Function(
     "store",
     "framing",
+    "floorWindowlessMessage",
     `${BLOCK}\n return { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
        listOrphanRisk, endLiveSessions };`
-  )(store, framing);
+  )(store, framing, floorWindowlessMessage);
   const sessions = new Map();
   // ⚠ The REAL `frameOperatorTurn` is injected, not a stub: the MESSAGE cases are about the
   // delimiting the operator's turn actually gets, and a stub would let the two drift.
@@ -347,6 +355,9 @@ test("MESSAGE: an AUTH-HELD session refuses and SAYS SO rather than eating the w
 // post to a server-decided consent row. "Re-evaluate held gates" has no held gates.
 
 test("MODE: it dispatches the REDUCER's own event, one axis at a time", () => {
+  // ⚠ `auto_both` is at the floor, so what is dispatched is what was asked for. The CLAMP's own
+  // cases (a value BELOW the floor) live in `test/session-mode-floor.test.mjs` — this one is
+  // about there being exactly one dispatch per axis and no second writer.
   const h = harness({});
   h.sessions.set(KEY, fakeSession({ win: null, windowless: true }));
   h.setModeByTask({ ...task, axis: "tools", mode: "bypass" });
