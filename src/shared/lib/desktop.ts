@@ -36,7 +36,10 @@ export interface DoplChannelsBridge {
 /**
  * THE POP-OUT THREAD WINDOW (`window.dopl.threads`), desktop shell only — wiring plan
  * Phase 10, 2026-08-18. Asks MAIN to open a second window on the same bundle, landing on
- * the channels route with one thread selected.
+ * its OWN top-level route — `/{segment}/thread-window/{channelId}?thread={threadId}`
+ * (`apps/desktop-ui/src/routes.tsx › THREAD_WINDOW_PATH`), outside the app shell.
+ * ⚠ It landed on the channels route until 2026-08-19, and this comment said so until
+ * 2026-08-20 — a window opened to read ONE exchange arrived carrying the whole app.
  *
  * ⚠ ASKS FOR A WINDOW; IT DOES NOT GET ONE. No handle and no window reference crosses back
  * — `{ ok: false }` covers a rejected id, a blocking version floor and a full window budget

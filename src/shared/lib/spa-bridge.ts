@@ -147,13 +147,17 @@ export interface SpaBridgeSurface {
   appOrigin?: string;
   syncWatch?(workspaceId: string | null): Promise<unknown>;
   onSyncEvent?(cb: (e: { workspaceId: string; table: string }) => void): () => void;
-  /** THE OPERATOR'S OWN AGENTS. `reopen` is SHARED by both preloads (one reopen
-   *  path in main); `summaries` / `onSummaries` / `pause` / `end` are SPA-ONLY.
+  /** THE OPERATOR'S OWN AGENTS.
+   *  ⚠ "SHARED BY BOTH PRELOADS" / "SPA-ONLY" IS RETIRED (2026-08-20): the remote
+   *  preload is deleted and orphaned, so there is only one preload left and
+   *  nothing for these to be narrower than. **The inventory is
+   *  `test/preload-parity.test.mjs › APP_OPS`**, executed against a fake
+   *  `electron` rather than grepped, and it fails on ADD as well as REMOVE.
    *  ⚠ ALL feature-detected at the call site — an older main has none and the
    *  Agents tab says the surface is desktop-only, same as a plain browser.
    *  ⚠ THREE PLACES MUST STAY IN SYNC: this type, the runtime contract
    *  `renderer/app-preload.js`, and `apps/desktop-ui/src/lib/dopl-bridge.ts` —
-   *  plus `test/preload-parity.test.mjs`, which fails on ADD (INVARIANTS §11).
+   *  plus that pin (INVARIANTS §11).
    *
    *  ⚠ `pause` / `end` ARE OWN-AGENTS-ONLY, and that is structural rather than
    *  checked: main resolves the (channel, thread) pair against ITS OWN session

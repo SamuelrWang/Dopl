@@ -96,30 +96,66 @@ export interface DoplBridge {
   /** Public https origin for user-facing URLs (document origin is file://
    *  here). Injected by main as a preload constant. */
   appOrigin?: string;
-  /** Per-channel controls (consent card + channel header): label-only folder
-   *  ops + the two permission-preset axes. Channels UI feature-detects this. */
+  /**
+   * Per-channel durable settings, all of them read by the SETTINGS TAB
+   * (`channels-v2/settings-agent.tsx`): the label-only folder ops, the launch
+   * posture, and auto-send.
+   *
+   * ⚠ THIS BLOCK DRIFTED IN BOTH DIRECTIONS AND WAS CORRECTED 2026-08-20. It
+   * declared `getPermissionPreset` / `setPermissionPreset` — the single-use ARM's
+   * two ops, DELETED from `renderer/app-preload.js` with the arm itself — while
+   * OMITTING the four ops the web tree actually calls. A mirror that names ops
+   * main does not have and hides ops it does is worse than an absent mirror: the
+   * shared tree feature-detects every capability and renders NOTHING when one is
+   * missing, so a gap here does not fail, **it deletes a feature silently**
+   * (INVARIANTS §11).
+   *
+   * ⚠ GROUND TRUTH IS `renderer/app-preload.js`, PINNED BY
+   * `test/preload-parity.test.mjs › APP_OPS`. Read those, not this, when the two
+   * disagree — and adding an op is still a FOUR-file change plus the pin.
+   */
   channels?: {
+    /** Abbreviated display label ("~/Downloads/repo") or null. ⚠ The raw absolute
+     *  path never crosses into the renderer. */
     getFolderLabel(channelId: string): Promise<string | null>;
     chooseFolder(channelId: string): Promise<string | null>;
     clearFolder(channelId: string): Promise<string | null>;
-    getPermissionPreset(
+    /**
+     * THE DURABLE LAUNCH POSTURE — the two axes the operator's OWN agent starts on
+     * when they press Launch. ⚠ NOT THE ARM: no TTL, spent by nothing, read at
+     * exactly one call site (`main/session-ipc-ops.js`'s `sessions:launch`). The
+     * arm it replaced is deleted; do not reintroduce a second permission record.
+     */
+    getLaunchPosture?(
       channelId: string
     ): Promise<{ tools: string; messages: string } | null>;
-    setPermissionPreset(
+    setLaunchPosture?(
       channelId: string,
       preset: { tools: string; messages: string }
     ): Promise<{ ok: boolean }>;
+    /** AUTO-SEND — the durable per-channel out-half. Default OFF (ask first); ON
+     *  maps the windowless session's message axis to `auto_both` and the agent's
+     *  reply posts itself. */
+    getAutoSend?(channelId: string): Promise<boolean>;
+    setAutoSend?(
+      channelId: string,
+      on: boolean
+    ): Promise<{ ok: boolean; on?: boolean }>;
   };
   /** `reopen`: open the AGENT WINDOW for this thread's session — the agent
    *  view's way in. Opens a window only, starts no query. Web tree
    *  feature-detects it, so an absent one silently hides the control.
    *
-   *  ⚠ `summaries` / `onSummaries` / `pause` / `end` are SPA-ONLY —
-   *  deliberately absent from the remote preload, whose window hosts the
-   *  retired website. They carry the AGENTS TAB: the feed (read once on mount,
-   *  then listen) and the two controls. All optional: an older main has none
-   *  and the tab says the surface is desktop-only rather than showing an empty
-   *  list. Same declaration in `@/shared/lib/spa-bridge` for shared modules.
+   *  ⚠ THE "SPA-ONLY" CONTRAST IS RETIRED (2026-08-20). `summaries` /
+   *  `onSummaries` / `pause` / `end` used to be described as deliberately absent
+   *  from the REMOTE preload; that preload is deleted and orphaned with the remote
+   *  shell, so there is no second surface to be narrower than. **The inventory is
+   *  `test/preload-parity.test.mjs › APP_OPS`** — it is executed against a fake
+   *  `electron` rather than grepped, and it fails on ADD as well as REMOVE.
+   *  These carry the AGENTS TAB: the feed (read once on mount, then listen) and
+   *  the two controls. All optional: an older main has none and the tab says the
+   *  surface is desktop-only rather than showing an empty list. Same declaration
+   *  in `@/shared/lib/spa-bridge` for shared modules.
    *
    *  ⚠ `pause` / `end` are OWN-AGENTS-ONLY. Main resolves the pair against its
    *  own session registry, which holds only this operator's sessions on this
@@ -197,10 +233,16 @@ export interface DoplBridge {
     ): Promise<{ ok: boolean; reason?: string }>;
   };
   /** THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). Asks main to open a
-   *  second window on this same bundle, landing on `/{segment}/channels/{channelId}` with
-   *  `{threadId}` selected. Optional: an older main has none and the thread header simply
-   *  renders no button. Same declaration in `@/shared/lib/desktop` for shared modules —
-   *  the thread view lives in the shared tree and feature-detects it there.
+   *  second window on this same bundle, landing on
+   *  `/{segment}/thread-window/{channelId}?thread={threadId}` — a TOP-LEVEL route of its
+   *  own, outside the app shell (`routes.tsx › THREAD_WINDOW_PATH`).
+   *  ⚠ IT LANDED ON THE FULL CHANNELS PAGE UNTIL 2026-08-19, and this comment still said
+   *  so until 2026-08-20: a window opened to read one exchange arrived carrying the app
+   *  sidebar, the channels tree and the info panel. `?thread=` is a SELECTION on the
+   *  channels page and was never this window's landing.
+   *  Optional: an older main has none and the thread header simply renders no button.
+   *  Same declaration in `@/shared/lib/desktop` for shared modules — the thread view lives
+   *  in the shared tree and feature-detects it there.
    *
    *  ⚠ NO WINDOW HANDLE COMES BACK. Main creates the window AND registers it as a bound
    *  IPC sender (`main/app-windows.js`); the renderer can only ask. */
