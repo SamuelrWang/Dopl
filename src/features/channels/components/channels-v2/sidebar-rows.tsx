@@ -30,12 +30,16 @@ function SidebarRow({
   label,
   active,
   indent = 0,
+  trailingPad = false,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
   indent?: 0 | 1;
+  /** Reserve the right edge for a SIBLING control laid over it — see
+   *  `ChannelRow`'s `reserveTrailing`. */
+  trailingPad?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
 }) {
@@ -46,7 +50,8 @@ function SidebarRow({
       aria-current={active ? "true" : undefined}
       onClick={onClick}
       className={cn(
-        "flex h-[36px] w-full items-center gap-2 rounded-[8px] pr-2 text-left text-small text-text-secondary transition-colors",
+        "flex h-[36px] w-full items-center gap-2 rounded-[8px] text-left text-small text-text-secondary transition-colors",
+        trailingPad ? "pr-8" : "pr-2",
         DEPTH_PAD[indent],
         active
           ? "raised-tab font-medium text-text-primary"
@@ -72,6 +77,7 @@ export function ChannelRow({
   person,
   selected,
   unread,
+  reserveTrailing = false,
   onSelect,
 }: {
   label: string;
@@ -79,10 +85,26 @@ export function ChannelRow({
   person: AvatarPerson | null;
   selected: boolean;
   unread: boolean;
+  /**
+   * Leave room at the row's right edge for a control that is NOT part of this
+   * button (2026-08-20: the thread disclosure, `sidebar.tsx › ChannelBranch`).
+   *
+   * ⚠ IT RESERVES SPACE AND RENDERS NOTHING, deliberately. A control nested
+   * INSIDE this row would be a button inside a button — invalid HTML, and a
+   * click target a screen reader cannot describe separately. The disclosure is
+   * a SIBLING positioned over the reserved space; all this row owes it is the
+   * padding, so the label truncates before it collides.
+   */
+  reserveTrailing?: boolean;
   onSelect: () => void;
 }) {
   return (
-    <SidebarRow label={label} active={selected} onClick={onSelect}>
+    <SidebarRow
+      label={label}
+      active={selected}
+      trailingPad={reserveTrailing}
+      onClick={onSelect}
+    >
       {person ? (
         <Avatar
           person={person}

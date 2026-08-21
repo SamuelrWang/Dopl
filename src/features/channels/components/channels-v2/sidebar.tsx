@@ -64,8 +64,9 @@
  */
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import { SearchField } from "@/shared/ui/search-field";
+import { cn } from "@/shared/lib/utils";
 import { IconButton, NewPill, SectionHeader } from "./bits";
 import { ChannelRow, NavRow, ThreadRow } from "./sidebar-rows";
 import { HARDCODED_NAV_ROWS, INBOX_NAV_ROW } from "./fixtures";
@@ -131,6 +132,13 @@ export function ChannelsV2Sidebar({
   const [collapsed, setCollapsed] = useState<ReadonlySet<SectionKey>>(
     () => new Set()
   );
+  // ⚠ PER CHANNEL, ABSENT = OPEN — the same idiom as the section headers above,
+  // and for the same reason: a channel this session has never seen needs no
+  // entry, so "default expanded" costs nothing to represent. Session-local
+  // (Samuel, 2026-08-20): a collapse is glance management, not a preference.
+  const [threadsCollapsed, setThreadsCollapsed] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -139,6 +147,14 @@ export function ChannelsV2Sidebar({
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      return next;
+    });
+
+  const toggleThreads = (channelId: string) =>
+    setThreadsCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(channelId)) next.delete(channelId);
+      else next.add(channelId);
       return next;
     });
 
@@ -188,6 +204,8 @@ export function ChannelsV2Sidebar({
       threads={channel.id === selectedChannelId ? threads : []}
       requestedThreads={requestedThreads}
       openThreadId={inboxOpen ? null : openThreadId}
+      collapsed={threadsCollapsed.has(channel.id)}
+      onToggleThreads={toggleThreads}
       onSelectChannel={onSelectChannel}
       onOpenThread={onOpenThread}
     />
@@ -351,7 +369,35 @@ export function ChannelsV2Sidebar({
   );
 }
 
-/** One tree row plus the active threads nested under it. */
+/**
+ * One tree row plus the active threads nested under it — with a DISCLOSURE the
+ * operator can retract (Samuel, 2026-08-20).
+ *
+ * ⚠ WHY IT EARNED ONE. The nested rows are the OPEN channel's threads, windowed
+ * to "active in the last 24h OR requested" — a window that is bounded but not
+ * SMALL: a busy DM puts eight rows under one channel and pushes every other
+ * channel below the fold, in the one column that has to stay scannable. The
+ * window is the right rule and the crowding is real; a disclosure resolves both
+ * without narrowing what the sidebar considers active.
+ *
+ * ⚠ DEFAULT EXPANDED, AND SESSION-LOCAL. Expanded is what makes the nesting
+ * discoverable at all, and a collapse is a glance-management gesture rather than
+ * a preference — persisting it would mean an operator who tidied once comes back
+ * to a channel whose threads are hidden and no longer remembers why. Same
+ * `Set`-of-collapsed-keys idiom as the section headers above, for the same
+ * reason: absent = open, so a channel this session has never seen needs no entry.
+ *
+ * ⚠ THE TOGGLE IS A SIBLING OF THE ROW, NOT A CHILD OF IT. `ChannelRow` is a
+ * `<button>`; nesting a second one inside it is invalid HTML and gives a screen
+ * reader one target where there are two actions. It is absolutely positioned
+ * over space the row reserves (`reserveTrailing`), which is also what stops a
+ * long channel name colliding with it.
+ *
+ * ⚠ IT REPLACES THE UNREAD DOT'S CORNER, and that is the one real cost. A
+ * channel with threads open shows the chevron where the dot would sit — but the
+ * dot only ever appears on a channel that is NOT selected, and threads only nest
+ * under the one that IS, so the two cannot want that corner at the same time.
+ */
 function ChannelBranch({
   channel,
   label,
@@ -360,6 +406,8 @@ function ChannelBranch({
   threads,
   requestedThreads,
   openThreadId,
+  collapsed,
+  onToggleThreads,
   onSelectChannel,
   onOpenThread,
 }: {
@@ -370,27 +418,61 @@ function ChannelBranch({
   threads: ChannelThread[];
   requestedThreads: ReadonlySet<string>;
   openThreadId: string | null;
+  /** This channel's threads are retracted. */
+  collapsed: boolean;
+  onToggleThreads: (channelId: string) => void;
   onSelectChannel: (id: string) => void;
   onOpenThread: (id: string) => void;
 }) {
+  // No threads, no disclosure: a control that toggles nothing is furniture, and
+  // this column is the one that has to stay scannable.
+  const canCollapse = threads.length > 0;
+  const hidden = canCollapse && collapsed;
+
   return (
     <>
-      <ChannelRow
-        label={label}
-        person={person}
-        selected={selected}
-        unread={channel.unread}
-        onSelect={() => onSelectChannel(channel.id)}
-      />
-      {threads.map((thread) => (
-        <ThreadRow
-          key={thread.id}
-          thread={thread}
-          selected={thread.id === openThreadId}
-          requested={requestedThreads.has(thread.id)}
-          onOpen={() => onOpenThread(thread.id)}
+      <div className="relative">
+        <ChannelRow
+          label={label}
+          person={person}
+          selected={selected}
+          unread={channel.unread}
+          reserveTrailing={canCollapse}
+          onSelect={() => onSelectChannel(channel.id)}
         />
-      ))}
+        {canCollapse && (
+          <button
+            type="button"
+            aria-expanded={!hidden}
+            aria-label={
+              hidden
+                ? `Show ${threads.length} threads in ${label}`
+                : `Hide threads in ${label}`
+            }
+            onClick={() => onToggleThreads(channel.id)}
+            className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] text-text-muted transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+          >
+            <ChevronDown
+              size={13}
+              aria-hidden
+              className={cn(
+                "transition-transform duration-150 motion-reduce:transition-none",
+                hidden && "-rotate-90"
+              )}
+            />
+          </button>
+        )}
+      </div>
+      {!hidden &&
+        threads.map((thread) => (
+          <ThreadRow
+            key={thread.id}
+            thread={thread}
+            selected={thread.id === openThreadId}
+            requested={requestedThreads.has(thread.id)}
+            onOpen={() => onOpenThread(thread.id)}
+          />
+        ))}
     </>
   );
 }

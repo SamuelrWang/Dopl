@@ -84,8 +84,19 @@ describe("channels-v2 sidebar", () => {
     const list = screen.getByRole("complementary", { name: "Channels" });
     expect(within(list).getByRole("button", { name: "UI-kit design" })).not.toBeNull();
     // …and it hangs under Front-end now, not Website.
+    // ⚠ ASSERTED AS "after its own channel, before any other", not as an exact
+    // offset (2026-08-20): the thread disclosure put a sibling button between
+    // the channel row and its first thread, and an index+1 pin was measuring
+    // adjacency in the DOM rather than the nesting it is about.
+    // The NEAREST PRECEDING channel row is the one it hangs under — which is
+    // what "nests under" means, and what an index+1 pin was standing in for.
     const rows = within(list).getAllByRole("button").map((b) => b.getAttribute("aria-label"));
-    expect(rows.indexOf("UI-kit design")).toBe(rows.indexOf("Front-end") + 1);
+    const thread = rows.indexOf("UI-kit design");
+    const parent = rows
+      .slice(0, thread)
+      .filter((label) => label === "Website" || label === "Front-end")
+      .pop();
+    expect(parent).toBe("Front-end");
   });
 
   it("shows an unread DOT, never a count — `Channel.unread` is a boolean", () => {
@@ -336,11 +347,15 @@ describe("the sidebar's real Favorites section", () => {
     // only row now, so a Favorites row that stayed a bare `ChannelRow` would
     // have dropped the open channel's threads out of the column entirely.
     renderSidebar({ rooms: FAV_ROOMS }); // `selectedChannelId` defaults to ch-web
-    expect(sectionRows("Favorites", "Direct messages")).toEqual([
-      "API",
-      "Website",
-      "UI-kit design",
-    ]);
+    // ⚠ The disclosure button is a row-level sibling since 2026-08-20, so it
+    // appears in this list too — filtered out here rather than folded into the
+    // expectation, because what this case is about is which CHANNEL the thread
+    // hangs under.
+    expect(
+      sectionRows("Favorites", "Direct messages").filter(
+        (label) => !/threads in /.test(label ?? "")
+      )
+    ).toEqual(["API", "Website", "UI-kit design"]);
   });
 
   it("favourites a DM by its resolved peer, with the DM row face", () => {
