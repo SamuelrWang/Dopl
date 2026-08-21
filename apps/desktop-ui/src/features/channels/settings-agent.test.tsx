@@ -24,7 +24,7 @@ import { installBridge } from "#/test-utils/bridge";
  * tab wrote the single-use consent ARM; they write the DURABLE LAUNCH POSTURE now
  * (`window.dopl.channels.get/setLaunchPosture`, stored under
  * `channelLaunchPosture` in `main/channel-prefs.js`), consumed by exactly one
- * caller — `channel-dir-ipc.js › sessions:launch`, the Agents tab's own button.
+ * caller — `session-ipc-ops.js › sessions:launch`, the Agents tab's own button.
  *
  * The defect that forced it: the tab rendered a FUSE among durable settings (tool
  * profile, folder, auto-send). The operator picked Bypass, the first

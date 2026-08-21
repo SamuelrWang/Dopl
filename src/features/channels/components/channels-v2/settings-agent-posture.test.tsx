@@ -8,16 +8,19 @@
  * reasoning that one sentence must not drift into two. The heading was carrying the
  * entire single-use disclosure — and it could not: the rows sat among durable
  * settings (tool profile, folder, auto-send), so the operator read them as settings,
- * picked Bypass, and got manual/ask on every session after the first. The arm is spent
- * by the launch that consumes it and expires 30 minutes later, while the control went
+ * picked Bypass, and got manual/ask on every session after the first. The arm was spent
+ * by the launch that consumed it and expired 30 minutes later, while the control went
  * on displaying the value they chose, because it re-reads only on mount.
  *
- * ⚠ THE ARM DID NOT MOVE OR CHANGE — it went back to being consent-only, on the
- * request card (`launch-panel.tsx › RequestPermissionRow`). H2 is intact because the
- * SPLIT IS BY CONSUMER, not by lifetime: the arm answers a peer's request a human is
- * approving right now; this pair answers the Launch button that same human is
- * pressing on their own thread. `dopl-desktop-app/main/channel-prefs.js` is the
- * statement of record; `test/session-preset-start.test.mjs` pins the consumer counts.
+ * ⚠ AND THEN THE ARM WAS DELETED OUTRIGHT, SAME DAY (Samuel's ruling). It was first
+ * said to have "gone back to the request card" — but that card's inbound branch had
+ * not rendered since the 2026-08-18 consent rewrite, so it went nowhere and nothing
+ * could arm it (F-233); `RequestPermissionRow` and `channelPermissionPresets` went
+ * with it. THIS PAIR IS NOW THE ONLY PERMISSION POSTURE IN THE PRODUCT. H2 still
+ * holds and still holds BY CONSUMER: an inbound request a peer triggered carries no
+ * tool posture at all and starts at manual/ask, while this pair answers the Launch
+ * button the operator is pressing on their own thread.
+ * `dopl-desktop-app/main/channel-prefs.js` is the statement of record.
  *
  * The render harness is shared with `settings-tab.test.tsx` — see
  * `settings-agent-harness.tsx` for why it is a file rather than a copy.

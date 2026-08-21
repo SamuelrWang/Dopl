@@ -45,10 +45,13 @@ const STICK_SLACK_PX = 64;
  * state would also re-render the whole transcript on every scroll event, to
  * decide something nothing renders.
  *
- * ⚠ THE PIN IS MEASURED ON THE USER'S OWN SCROLL AND NOWHERE ELSE — the same
- * rule the desktop's session stream keeps (`renderer/session/session.js`,
- * `bottomGap`). A row that GROWS after paint must not silently un-pin a reader
- * sitting at the bottom; only a scroll says "I moved away".
+ * ⚠ THE PIN IS MEASURED ON THE USER'S OWN SCROLL AND NOWHERE ELSE. A row that
+ * GROWS after paint must not silently un-pin a reader sitting at the bottom;
+ * only a scroll says "I moved away". This rule was INHERITED from the desktop's
+ * v1 session stream, whose renderer (`renderer/session/**`) is deleted — the
+ * behaviour is the thing that survived, not the file, so do not go looking for
+ * its `bottomGap` to compare against. The near-bottom guard below IS the
+ * statement of record now.
  *
  * Returns `release`, which the mention jump calls: a deliberate landing in
  * history is a reading position, and the next arriving message must not undo

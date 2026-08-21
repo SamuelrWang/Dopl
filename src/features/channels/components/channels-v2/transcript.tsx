@@ -382,13 +382,20 @@ function ThreadCardMessage({
           <span className="min-w-0 flex-1 truncate text-caption text-text-muted" />
           {/* INLINE DECISION (Samuel, 2026-08-20; closes F-214's one-click
               gap): when THIS viewer owes an answer on one of the card's
-              threads, the decision lives here — the card and the thread
-              strip are the ONLY inbound decision surfaces (the arrival
-              pop-up is deleted; the Inbox is a passive list). Same consent
-              mutation, same CAS, same gate. "Launch agent" = the consent
-              ALLOW, one click, saved/default launch settings; a fan-out
-              addresses one thread at this viewer, so the first owed thread
-              is the one being decided. */}
+              threads, the decision lives here rather than in something that
+              floats over the page — the arrival pop-up is deleted. Same
+              consent mutation, same CAS, same gate. "Launch agent" = the
+              consent ALLOW, one click, saved/default launch settings; a
+              fan-out addresses one thread at this viewer, so the first owed
+              thread is the one being decided.
+
+              ⚠ THIS IS ONE OF THREE DECISION SURFACES, NOT ONE OF TWO. The
+              card and `thread-consent.tsx › ThreadAwaitingStrip` decide rows
+              the seq→thread join could PLACE; `inbox-pane.tsx › InboxRow`
+              decides the ones it could not (untagged triggers, aged-out
+              pages, seq-less outbound drafts) and is the durable home of last
+              resort. It is not a passive list — do not restate it as one, and
+              do not remove its buttons on the strength of this comment. */}
           {ownedPending && (
             <>
               <button

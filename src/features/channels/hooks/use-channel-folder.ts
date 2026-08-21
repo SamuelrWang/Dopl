@@ -25,13 +25,22 @@ export interface ChannelFolderState {
 }
 
 /**
- * Shared per-channel working-folder state over the desktop bridge
- * (`window.dopl.channels`) — used by BOTH the Settings tab's Agent-folder row
- * (`channels-v2/settings-agent.tsx`) and the launch panel's folder pill
- * (`request-folder-row.tsx`), so neither duplicates the detect / load-label /
- * pick dance. ⚠ It fed a header POPOVER (`channel-folder-control.tsx`) until
- * 2026-08-19, when that file was deleted for the tab's inline row; the hook is
- * unchanged, and `clear()` still has a caller.
+ * Per-channel working-folder state over the desktop bridge
+ * (`window.dopl.channels`) — the detect / load-label / pick dance, in one place.
+ *
+ * ⚠ IT HAS EXACTLY ONE CONSUMER TODAY: the Settings tab's Agent-folder row
+ * (`channels-v2/settings-agent.tsx › ChannelAgentSettings`). Verify before
+ * assuming otherwise — `grep -rn 'useChannelFolder' src apps`. It was shared
+ * twice and is no longer: a header POPOVER (`channel-folder-control.tsx`) went
+ * on 2026-08-19 for the tab's inline row, and the launch panel's folder pill
+ * (`components/request-folder-row.tsx`) went on 2026-08-20 with the single-use
+ * permission arm, whose disclosure was the only thing that mounted it. The hook
+ * is unchanged across both deletions, and `clear()` still has a caller.
+ *
+ * ⚠ IT STAYS A HOOK RATHER THAN BEING INLINED into its one caller because the
+ * bridge dance is the part that has to stay hydration-safe, and folding it into
+ * a view component is how the after-mount detect below gets "simplified" into a
+ * render-time read.
  *
  * Presence is feature-detected AFTER mount (window-only) so SSR and the first
  * client render agree (hydration-safe): `bridge` is null on that first paint and

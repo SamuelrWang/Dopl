@@ -15,7 +15,16 @@ import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
  */
 
 // ⚠ PostgREST truncates an un-limited select SILENTLY. Far above the desktop's
-// window budget (MAX_SESSION_WINDOWS); exists only to make truncation loud.
+// live ceiling (`dopl-desktop-app/main/session-windowless.js ›
+// MAX_CONCURRENT_SESSIONS`, 6, plus `main/session-summary.js › MAX_ENDED`, 12);
+// exists only to make truncation loud.
+//
+// ⚠ IT USED TO NAME `MAX_SESSION_WINDOWS`, THE WINDOW BUDGET, WHICH IS DELETED
+// with the v1 session window. Same number, different thing: what is left counts
+// RUNNING sessions rather than open windows, so it is the ceiling this limit has
+// to stay far above. ⚠ The channel read below is NOT user-scoped — it spans every
+// member's rows, so its headroom is that ceiling times the channel roster, which
+// is the case that will reach 500 first if one ever does.
 const SESSION_ROWS_LIMIT = 500;
 
 // ─── Session states (rollback §3.5, read-session-state) ─────────────
@@ -98,6 +107,32 @@ function sessionRowMatches(
 }
 
 /**
+ * EVERY member's session rows for ONE channel (the Agents tab's peer cards,
+ * 2026-08-20), newest change first. ⚠ The caller (session-state-service) has
+ * already proved the reader may read this channel — this read is
+ * channel-fenced, not user-fenced, and that is the point: it is the projection
+ * peers may see (name / state / thread), nothing more.
+ */
+export async function listChannelSessionStates(
+  workspaceId: string,
+  channelId: string
+): Promise<SessionStateRow[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_sessions")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("channel_id", channelId)
+    .order("updated_at", { ascending: false })
+    .limit(SESSION_ROWS_LIMIT);
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as SessionStateRow[];
+}
+
+/**
  * REPLACE the caller's whole live set for one workspace — the write half of
  * read-session-state.
  *
@@ -124,33 +159,12 @@ function sessionRowMatches(
  * not happen. Until the migration is applied this throws, the route answers 500,
  * and the desktop logs it once per workspace per run — which is the true state
  * of the world, said once.
+ *
+ * ⚠ KEEP THIS BLOCK ATTACHED. It was orphaned once already, when
+ * {@link listChannelSessionStates} was inserted between it and this function —
+ * the docblock then read as that read's contract, which is a different fence
+ * (channel-scoped, not user-scoped) and the opposite degrade rule.
  */
-/**
- * EVERY member's session rows for ONE channel (the Agents tab's peer cards,
- * 2026-08-20), newest change first. ⚠ The caller (session-state-service) has
- * already proved the reader may read this channel — this read is
- * channel-fenced, not user-fenced, and that is the point: it is the projection
- * peers may see (name / state / thread), nothing more.
- */
-export async function listChannelSessionStates(
-  workspaceId: string,
-  channelId: string
-): Promise<SessionStateRow[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_sessions")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .order("updated_at", { ascending: false })
-    .limit(SESSION_ROWS_LIMIT);
-  if (error) {
-    if (isMissingRelation(error)) return [];
-    throw error;
-  }
-  return (data ?? []) as SessionStateRow[];
-}
-
 export async function replaceSessionStates(
   userId: string,
   workspaceId: string,

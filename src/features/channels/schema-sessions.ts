@@ -73,9 +73,16 @@ const SessionStateEntrySchema = z.object({
 export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 
 /**
- * The desktop's own ceiling with room: a machine holds `MAX_SESSION_WINDOWS` (6)
- * live plus `MAX_ENDED` (12) retained. ⚠ Low enough that a caller cannot use this
- * endpoint to write a table.
+ * The desktop's own ceiling with room: a machine holds
+ * `dopl-desktop-app/main/session-windowless.js › MAX_CONCURRENT_SESSIONS` (6)
+ * live plus `main/session-summary.js › MAX_ENDED` (12) retained. ⚠ Low enough
+ * that a caller cannot use this endpoint to write a table.
+ *
+ * ⚠ IT USED TO CITE `MAX_SESSION_WINDOWS`, WHICH IS DELETED. That was the WINDOW
+ * budget, and the v1 session window is gone — the ceiling that survives counts
+ * RUNNING sessions, not open windows. The NUMBER did not change on the move
+ * (both 6), so this bound is unaffected; the reference had to, because a bound
+ * justified against a constant nobody can find is a bound nobody can re-derive.
  */
 const SESSION_REPORT_MAX = 32;
 

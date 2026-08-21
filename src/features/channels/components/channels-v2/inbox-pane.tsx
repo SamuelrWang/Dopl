@@ -1,17 +1,28 @@
 "use client";
 
 /**
- * Channels v2 — THE INBOX, in the center column: a PASSIVE LIST (Samuel,
- * 2026-08-20 — this DEMOTES the Phase 8 launch-panel inbox). Every request
- * still waiting on THIS viewer renders as a ROW, and a row does exactly one
- * thing when clicked: navigate to its channel. ⚠ IT ALSO CARRIES THE DECISION
- * (restored 2026-08-20, same-day review): the seq→thread join cannot place
- * every row (untagged triggers, aged-out pages, deliberately seq-less outbound
- * drafts), and a row no surface can decide is a hung agent — so the Inbox is
- * the DURABLE decision home of last resort, same CAS'd mutation as the inline
- * surfaces. No launch settings.
- * The launch ARM stays reachable on the channel's Settings tab
- * (`settings-agent.tsx`), which is the same arm the panel used to expand into.
+ * Channels v2 — THE INBOX, in the center column. Every request still waiting on
+ * THIS viewer renders as a ROW: the row BODY navigates to its channel, and the
+ * row also DECIDES.
+ *
+ * ⚠ IT IS A DECISION SURFACE, AND SAYING OTHERWISE IS THE BUG THIS LINE EXISTS
+ * TO PREVENT. It shipped on 2026-08-20 as a passive list (Samuel — that ruling
+ * DEMOTED the Phase 8 launch-panel inbox), and the Decline / Launch agent pair
+ * was RESTORED the same day at review. The reason is the join: the seq→thread
+ * lookup cannot place every row (untagged triggers, aged-out pages, deliberately
+ * seq-less outbound drafts), and a row no surface can decide is a hung agent —
+ * so the Inbox is the DURABLE decision home of LAST RESORT. The transcript card
+ * (`transcript.tsx › ThreadCardMessage`) and the thread strip
+ * (`thread-consent.tsx › ThreadAwaitingStrip`) are the placed-row surfaces; this
+ * one catches what they cannot reach. Same CAS'd `PATCH /consent/[id]`, all
+ * three.
+ *
+ * ⚠ NO LAUNCH SETTINGS ON THIS SURFACE, and none anywhere else either: the
+ * single-use ARM the launch panel used to expand into is DELETED (2026-08-20).
+ * What survives is the DURABLE launch posture on the channel's Settings tab
+ * (`settings-agent.tsx`), which governs the launches the OPERATOR starts — not
+ * the one this row is allowing. A decision made here starts at the peer-request
+ * default, manual/ask.
  *
  * ⚠ THIS IS THE ADDRESSEE'S SIDE, and it is the only side that exists. A
  * consent read is scoped to `(operator, workspace)` with the operator always
@@ -83,9 +94,18 @@ export function ChannelsV2InboxPane({
 }
 
 /**
- * One waiting item. The whole row is the navigation control — decisions live
- * on the channel's own surfaces, so this renders no verb stronger than "go
- * look".
+ * One waiting item: the row BODY navigates, and the two buttons at its foot
+ * DECIDE.
+ *
+ * ⚠ THE BUTTONS `stopPropagation`, AND THAT IS LOAD-BEARING. They sit inside the
+ * `role="button"` row, so without it a Decline would also navigate away from the
+ * pane that was about to re-render one row shorter — the operator would land in
+ * a channel they never asked for and could not tell whether the decision took.
+ *
+ * ⚠ THE VERBS ARE THE OUTBOUND/INBOUND PAIR, not two labels for one act: an
+ * outbound row is the viewer's OWN agent asking to send (Cancel / Send), an
+ * inbound row is a teammate's agent asking to run here (Decline / Launch agent).
+ * Both resolve to the same `"deny"` / `"allow"` consent decision.
  */
 function InboxRow({
   request,

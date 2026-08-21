@@ -94,7 +94,7 @@ function bridge(answer: { ok: boolean; reason?: string }) {
 describe("launchRefusalText", () => {
   it("words every reason main can actually answer with", () => {
     // ⚠ THE VALUE, NOT THE SYMBOL (INVARIANTS §14). These six strings are the
-    // reasons `channel-dir-ipc.js › sessions:launch` and `session-engine.js ›
+    // reasons `session-ipc-ops.js › sessions:launch` and `session-engine.js ›
     // launch` really produce; a reason that loses its copy must fail here, not
     // render a raw enum at the operator.
     for (const reason of [

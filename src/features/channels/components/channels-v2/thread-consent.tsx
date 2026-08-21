@@ -7,13 +7,20 @@
  *
  * - **The awaiting strip** (under the header): the viewer was ASKED on this
  *   thread and has not answered — Launch agent / Decline, the same CAS'd
- *   consent mutation the transcript card uses. These inline surfaces are the
- *   ONLY inbound decision surfaces (the arrival pop-up is deleted, the Inbox
- *   is a passive list).
+ *   consent mutation the transcript card uses. Nothing FLOATS: the arrival
+ *   pop-up is deleted, so a decision is made where the thread already is.
  * - **The send box** (above the composer): this operator's OWN agent drafted
  *   a reply on this thread and auto-send is off — the draft + Send/Cancel,
  *   the Inbox's old `LaunchPanel` in its outbound mode, deciding on the
  *   first click.
+ *
+ * ⚠ THESE TWO ARE NOT THE ONLY DECISION SURFACES. `inbox-pane.tsx › InboxRow`
+ * decides as well, on the same CAS'd `PATCH /consent/[id]`, and it has to: both
+ * surfaces here need a row the seq→thread join could PLACE onto this open
+ * thread, and the Inbox is the durable home of last resort for the ones it could
+ * not (untagged triggers, aged-out pages, seq-less outbound drafts). It is not a
+ * passive list. A row no surface can decide is a hung agent, which is the whole
+ * reason the third one exists.
  */
 
 import { LaunchPanel } from "../launch-panel";

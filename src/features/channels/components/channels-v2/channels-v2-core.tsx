@@ -269,7 +269,6 @@ export function ChannelsV2Core({
   const channelName = channel
     ? channelDisplayName(channel, members, currentUserId)
     : "";
-  // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
 
   // The Tags inbox's click: mark read, land the center pane on the right
   // transcript, then signal the scroll. The scroll effect runs POST-render, so

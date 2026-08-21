@@ -6,9 +6,11 @@
  * asset, nothing built from a string.
  *
  * ⚠ Raised/hover/active/disabled recipe is `.auth-btn-3d` from globals.css,
- * never re-derived here; glyph colour is the `text-on-cta` token. The desktop
- * session window (renderer/session/*) ships a CSS twin of this face because it
- * is a plain-<script> sandbox that cannot import React — keep them in sync.
+ * never re-derived here; glyph colour is the `text-on-cta` token.
+ * ⚠ THE CSS TWIN IS GONE (2026-08-20). The desktop session window shipped one
+ * because it was a plain-`<script>` sandbox that could not import React; that
+ * whole tree was deleted with the window, so **this is the only face** and there
+ * is nothing left to keep it in sync with.
  */
 
 import { cn } from "@/shared/lib/utils";

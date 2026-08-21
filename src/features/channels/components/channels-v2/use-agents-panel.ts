@@ -29,7 +29,7 @@ export const PEER_SESSIONS_POLL_MS = 30_000;
 /**
  * WHY A REFUSED LAUNCH NEEDS COPY (2026-08-20). `sessions:launch` answers
  * `{ ok: false, reason }` for SEVEN real conditions — main's own
- * `channel-dir-ipc.js › sessions:launch` and `session-engine.js › launch`
+ * `session-ipc-ops.js › sessions:launch` and `session-engine.js › launch`
  * between them produce `no-counterparty`, `busy`, `cap`, `no-sdk`, `auth-hold`
  * and `disabled`, plus the bridge's own `no-bridge`. The result was DISCARDED, so
  * a launch main refused looked exactly like a launch that succeeded and had not

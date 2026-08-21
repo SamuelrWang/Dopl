@@ -233,7 +233,7 @@ export interface SpaBridgeSurface {
     onSummaries?(cb: (e: { sessions: DesktopSessionSummary[] }) => void): () => void;
     /** Attach MY OWN agent to a thread, windowless (2026-08-20). The click IS the
      *  consent — own agent, own thread, no consent row — and MAIN owns the
-     *  posture (`channel-dir-ipc.js › sessions:launch`, the ONE consumer of the
+     *  posture (`session-ipc-ops.js › sessions:launch`, the ONE consumer of the
      *  channel's durable launch posture). */
     launch?(payload: {
       channelId: string;

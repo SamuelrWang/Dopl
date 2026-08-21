@@ -164,7 +164,14 @@ export class ChannelChatAddressedError extends ChannelError {
  * ⚠ The lane is closed by IDENTITY, not kind alone. `ctx.source === "agent"`
  * means a bearer AGENT TOKEN — every MCP `op="post"` and nothing else. Desktop
  * listener and web post on the operator's cookies (`source === "user"`) and are
- * unaffected; the close echo is exempted at its call site.
+ * unaffected, and they need no exemption to be. ⚠ THERE IS NO EXEMPTION LEFT AT
+ * ALL: `internalLifecycle` — the declared "this post is the server speaking"
+ * seam — was deleted on 2026-08-20 with no caller and none in prospect, and the
+ * close echo it was written for went with thread closing in Phase 4
+ * (2026-08-18). The CREDENTIAL is now the whole question. A future
+ * server-internal lifecycle post earns its pass the way the reopen echo did —
+ * post a kind the guard already permits — rather than ask for one. See
+ * `service-writes-lifecycle.ts › PostMessageOptions`.
  *
  * ⚠ `task_progress` is deliberately NOT here — it is the milestone lane, the one
  * `task_*` kind whose body IS rendered, and claims nothing about lifecycle.
@@ -172,7 +179,7 @@ export class ChannelChatAddressedError extends ChannelError {
 export class ChannelLifecycleKindForbiddenError extends ChannelError {
   constructor(public readonly kind: string) {
     super(
-      `"${kind}" is a lifecycle marker posted by the runtime and by a thread close, not by an agent. ` +
+      `"${kind}" is a lifecycle marker posted by the runtime, not by an agent. ` +
         `Post your message with no kind (the default) — a body written into a lifecycle event is not rendered on the thread card at all. ` +
         `To mark a step that landed, post kind "task_progress".`
     );

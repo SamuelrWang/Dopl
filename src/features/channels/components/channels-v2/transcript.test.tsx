@@ -238,8 +238,8 @@ describe("channels-v2 transcript — lifecycle receipts", () => {
   });
 
   it("renders the headless lane's flagless task_finished as a receipt", () => {
-    // `main/trigger-headless.js › openOutboundReview` posts this with no calm
-    // flag and `channel-post.js`'s default body.
+    // ⚠ PRODUCER GONE, ROW NOT: `main/trigger-headless.js › openOutboundReview`
+    // posted this flagless; that lane is deleted, installed builds still post it.
     renderRows(
       channelRows(
         [
@@ -271,7 +271,7 @@ describe("channels-v2 transcript — lifecycle receipts", () => {
             kind: "task_started",
             body: "Started working on this request.",
           }),
-          // A pre-Phase-5 session-window echo, body and all.
+          // A v1 session-window echo — producer deleted, installed builds still post it.
           message({ id: "s2", seq: 2, kind: "task_started", body: "STARTED" }),
           // A flagless terminal row with nothing human in it is machine noise.
           message({ id: "n", seq: 3, kind: "task_failed", body: "   " }),

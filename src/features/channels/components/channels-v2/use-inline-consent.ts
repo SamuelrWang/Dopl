@@ -8,8 +8,17 @@
  * standing" concern, whole.
  *
  * ⚠ THE ARRIVAL POP-UP IS GONE (Samuel, 2026-08-20, second ruling of the day
- * — it shipped that morning). The transcript card and the thread strip are
- * the ONLY inbound decision surfaces; nothing floats over the page.
+ * — it shipped that morning). NOTHING FLOATS OVER THE PAGE: a decision is made
+ * where the row already is. The transcript card and the thread strip are the two
+ * surfaces THIS hook feeds, and they are the ones a placed row reaches.
+ *
+ * ⚠ THEY ARE NOT THE ONLY DECISION SURFACES — `inbox-pane.tsx › InboxRow`
+ * decides too, on the same CAS'd mutation, and it is not wired through here. Its
+ * job is the rows the seq→thread join below CANNOT place (untagged triggers,
+ * aged-out pages, seq-less outbound drafts), which is exactly the set this hook
+ * returns nothing for. Do not "consolidate" the Inbox into this join: the rows it
+ * exists for are the ones the join has already failed on, and a hung agent is
+ * what a row nobody can decide becomes.
  *
  * ⚠ NO NEW WRITE PATH. `consent` is the caller's `useChannelPreferenceWrites`
  * mutation — the same CAS'd `PATCH /consent/[id]` every consent surface uses.

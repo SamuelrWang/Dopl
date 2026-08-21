@@ -5,11 +5,13 @@
    One palette, defined once in :root: light neutral surfaces, dark ink,
    #1c2127 CTAs, one blue (--link #2f6fed). No dark/light split.
 
-   ⚠ DRIFT (F-074) — THIRD hand-copy of the same palette. Source of truth is
-   `src/app/globals.css`; `dopl-desktop-app/renderer/session/tokens.css` is the
-   other copy. Until all three import ONE file at build time, any edit to
-   globals.css's token layers MUST be mirrored in both, same change. Kit
-   recipes live in the sibling `kit.css`.
+   ⚠ DRIFT (F-074) — SECOND hand-copy of the same palette. Source of truth is
+   `src/app/globals.css`; THIS FILE is the only other copy. It was one of three
+   until 2026-08-20, when the v1 desktop session window went and took
+   `renderer/session/tokens.css` with it — the deletion removed a copy, it did not
+   fix the drift. Until both import ONE file at build time, any edit to
+   globals.css's token layers MUST be mirrored here, same change. Kit recipes
+   live in the sibling `kit.css`.
    NOT copied on purpose: landing/login-only rules (.design-grid, login orbs,
    logo-scroll). */
 

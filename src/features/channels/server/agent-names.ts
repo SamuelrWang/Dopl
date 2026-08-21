@@ -30,6 +30,15 @@
  * sees becomes unpinned. `agent-names.test.ts` pins the contract the port must satisfy
  * (charset, no repeats, suffixing past the end of the pool).
  *
+ * ⚠ DO NOT DELETE THIS AS UNUSED. Measured 2026-08-20 — re-run rather than trust
+ * the sentence: `grep -rn 'agent-names' src apps packages`. In `src/` this module
+ * has ZERO production importers; the only two are `agent-names.test.ts` and
+ * `agent-names-desktop-parity.test.ts`. That is not residue, it is the module's
+ * job now: **its role in `src/` is the PARITY REFERENCE for
+ * `dopl-desktop-app/main/agent-names.js`**, which is the copy that actually names
+ * the pills a user sees. An unused-export sweep that removes this leaves the
+ * shipped generator with nothing pinning it.
+ *
  * CHANGE ONE, CHANGE BOTH — and this is the one to change first.
  */
 

@@ -12,10 +12,14 @@ import type { MessageMode, ToolMode } from "../lib/permission-modes";
  * tell what a permission switch actually permitted — a single control governed
  * both the shell and outbound messages, and its label never named the blast
  * radius. The fix was two independent axes, each stating in plain words what it
- * does. That copy is carried here VERBATIM from the desktop session window
- * (renderer/session/session-labels.js TOOL_POSTURE / MESSAGE_POSTURE), and it
- * lives INSIDE the options — the operator reads what a mode does while choosing
- * it, not in a summary line afterwards.
+ * does, and the copy lives INSIDE the options — the operator reads what a mode
+ * does while choosing it, not in a summary line afterwards.
+ *
+ * ⚠ THAT COPY WAS CARRIED VERBATIM FROM `renderer/session/session-labels.js`
+ * (`TOOL_POSTURE` / `MESSAGE_POSTURE`), WHICH IS DELETED with the v1 session
+ * window. Recorded as PROVENANCE, not as a sync obligation: **these tables are
+ * the only statement of this copy now**, and the security review that bought the
+ * wording is the reason to keep it rather than the file it came from.
  *
  * Desktop-only, exactly like the folder pill: no bridge means no control at all,
  * and the bridge is feature-detected after mount so the first paint is

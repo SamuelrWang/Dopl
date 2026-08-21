@@ -42,7 +42,9 @@
  * panel shipped without one. It has an "Open agent" button instead, which is an
  * affordance that keeps its promise.
  *
- * ⚠ PAUSE / END ARE OWN-AGENTS-ONLY. See `agents-model.ts › useAgentControls`.
+ * ⚠ PAUSE / END ARE OWN-AGENTS-ONLY. See `agents-controls.ts › useAgentControls`
+ * — the CONTROLS module, split out of `agents-model.ts` on 2026-08-20; the model
+ * is the pure projection and owns no verb.
  * `end` ends the AGENT and touches no thread — a thread has no finished state
  * (INVARIANTS §5, wiring plan Phase 4).
  *

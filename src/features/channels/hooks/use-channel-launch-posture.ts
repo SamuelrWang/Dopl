@@ -12,15 +12,25 @@ import {
  * (`window.dopl.channels.get/setLaunchPosture`). The two axes the operator's OWN
  * agent starts on when they press Launch on the Agents tab.
  *
- * ⚠ THIS IS NOT THE ARM, AND THE DIFFERENCE IS A SECURITY RULE, NOT A STYLE.
- * `use-channel-permission-preset.ts` is the single-use, 30-minute, consent-only
- * arm: it exists so a posture chosen on a card in front of a human applies to the
- * launch that card approves and to nothing else. THIS record is durable, has no
- * TTL, and is spent by nothing — because its one consumer
- * (`main/channel-dir-ipc.js › sessions:launch`) is a button the operator is
- * pressing, on their own thread, with no peer and no consent row involved.
- * `main/channel-prefs.js` states the split in full; read it before wiring either
- * hook to the other's surface.
+ * ⚠ THE VOCABULARY CAME OUT OF THE SINGLE-USE ARM, AND THE ARM IS DELETED
+ * (2026-08-20, Samuel's ruling). The file this was split out of —
+ * `hooks/use-channel-permission-preset.ts`, the 30-minute, consent-only fuse that
+ * existed so a posture chosen on a card in front of a human applied to the launch
+ * that card approved and to nothing else — **is gone, along with its whole
+ * desktop family** (`channelPermissionPresets`, `ARM_TTL_MS`, the four
+ * `*PermissionPreset` bridge ops). Its one surface was `launch-panel.tsx`'s
+ * inbound disclosure, which had not rendered since the 2026-08-18 consent
+ * rewrite, so nothing could arm it (F-233). Do not go looking for that file, and
+ * do not reintroduce a TTL here to "match" it.
+ *
+ * ⚠ SO THIS IS THE ONLY PERMISSION POSTURE LEFT IN THE PRODUCT, and it is
+ * DURABLE: no TTL, and spent by nothing — because its one consumer
+ * (`main/session-ipc-ops.js › sessions:launch`) is a button the operator is
+ * pressing, on their own thread, with no peer and no consent row involved. An
+ * inbound request a peer triggered carries no tool posture at all and starts at
+ * manual/ask, which is why H2 still holds BY CONSUMER.
+ * `main/channel-prefs.js` is the statement of record; read it before wiring this
+ * hook to any other surface.
  *
  * ⚠ WHY IT EXISTS AT ALL. The Settings tab rendered the ARM beside the tool
  * profile, the working folder and auto-send — all durable — and it was
@@ -40,10 +50,11 @@ import {
  */
 
 /**
- * Every mounted reader of one channel's posture. Same reason as the arm's
- * `armReaders`: the Settings tab can be open in the main window and a pop-out at
- * once, and a private mount snapshot would let the second writer revert the axis
- * the first just changed.
+ * Every mounted reader of one channel's posture. ⚠ ONE SHARED SET, NEVER A
+ * PER-MOUNT SNAPSHOT: the Settings tab can be open in the main window and a
+ * pop-out at once, and a private snapshot would let the second writer revert the
+ * axis the first just changed. The deleted arm carried the same reader set for
+ * exactly this reason — the idiom outlived it, the record it guarded did not.
  */
 const postureReaders = new Map<string, Set<(next: PermissionPreset) => void>>();
 
@@ -108,10 +119,10 @@ export function useChannelLaunchPosture(
     setBridge(getDesktopLaunchPosture());
   }, []);
 
-  // ⚠ NO EXPIRY BRANCH HERE, DELIBERATELY. The arm's reader treats an expired
-  // record as nothing stored and the control snapping back to manual/ask is the
-  // truth there. This record does not expire, so a value that changes on its own
-  // would be a bug, not a refresh.
+  // ⚠ NO EXPIRY BRANCH HERE, DELIBERATELY. The deleted arm's reader treated an
+  // expired record as nothing stored, and the control snapping back to manual/ask
+  // was the truth THERE. This record does not expire, so a value that changed on
+  // its own would be a bug, not a refresh — do not port that branch back in.
   useEffect(() => {
     if (!bridge) return;
     let alive = true;

@@ -5,15 +5,15 @@
  * durable per-channel tool profile, the desktop-only working folder, and the
  * standing per-teammate trust roster. All of it INLINE, and all of it DURABLE.
  *
- * ⚠ THE PERMISSION ARM IS NO LONGER ON THIS TAB (2026-08-20). It used to be, and
- * being here is what broke it: a single-use, 30-minute fuse rendered among four
- * durable settings reads as a fifth one. The operator picked Bypass, the first
- * consent-approved launch consumed it, every later session started manual/ask,
- * and this control went on displaying "Bypass". The arm went back to the request
- * card (`launch-panel.tsx › RequestPermissionRow`) unchanged; the two selects
- * below now write the DURABLE posture (`use-channel-launch-posture.ts`), whose
- * one consumer is the Agents tab's Launch button. `main/channel-prefs.js` is the
- * statement of record for the split, and H2 holds because it is by CONSUMER.
+ * ⚠ THE PERMISSION ARM IS DELETED, NOT REHOMED (2026-08-20, Samuel's ruling). It
+ * lived here, and being here is what broke it: a single-use, 30-minute fuse among
+ * four durable settings reads as a fifth one, so the operator picked Bypass, the
+ * first approved launch spent it, and this control went on displaying "Bypass".
+ * It was first said to have "gone back to the request card" — that card's inbound
+ * branch had not rendered since 2026-08-18 (F-233), so `RequestPermissionRow`,
+ * `request-folder-row.tsx` and `channelPermissionPresets` all went the same day.
+ * The two selects below write the DURABLE posture, now the ONLY permission
+ * posture in the product; the view's comment below is the full account.
  *
  * ⚠ THIS FILE IS THE 2026-08-19 RULING (Samuel, live review) AND IT REPLACED TWO
  * POPOVERS. `components/channel-settings-popover.tsx` (a 7×7 icon button opening
@@ -37,9 +37,9 @@
  * nothing.
  *
  * ⚠ NO `role="menu"` IDIOMS. The old panel used checked menu items for
- * everything because a menu may only own menu items; inline, the arm is two
- * `SelectMenu`s, Tools is a real radiogroup and trust is a real `Switch` per
- * row.
+ * everything because a menu may only own menu items; inline, the launch posture
+ * is two `SelectMenu`s, Tools is a real radiogroup and trust is a real `Switch`
+ * per row.
  *
  * ⚠ MINIMAL COPY — SAMUEL, 2026-08-19 (third ruling of the day, and it
  * SUPERSEDES the explain-it-in-the-UI half of the two above). The first inline
@@ -162,10 +162,10 @@ export interface ChannelAgentSettingsProps {
 }
 
 /**
- * The bridge-bound half. Split from the view below on the same rule
- * `permission-preset-row.tsx` and `request-folder-row.tsx` follow: the view
- * renders (and is asserted on) with no window and no bridge, and this wrapper is
- * the only thing that needs one.
+ * The bridge-bound half. Split from the view on the rule the deleted
+ * `RequestPermissionRow` / `request-folder-row.tsx` pair also followed — they went
+ * with the arm (2026-08-20), the rule did not: the view renders (and is asserted
+ * on) with no window and no bridge, and this wrapper is the only thing needing one.
  */
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const launchPosture = useChannelLaunchPosture(props.channelId);
@@ -280,7 +280,7 @@ export function ChannelAgentSettingsView({
             at the 2026-08-18 consent rewrite, so it went nowhere and nothing
             could arm it (F-233). THIS PAIR IS NOW THE ONLY PERMISSION POSTURE IN
             THE PRODUCT, it is durable, and it is read at exactly ONE call site:
-            `channel-dir-ipc.js › sessions:launch`, the Launch button the
+            `session-ipc-ops.js › sessions:launch`, the Launch button the
             operator is pressing on their own thread. H2 still holds and still
             holds BY CONSUMER COUNT — an inbound request a peer triggered carries
             no tool posture at all and starts at manual/ask.
@@ -310,8 +310,8 @@ export function ChannelAgentSettingsView({
         )}
 
         {/* THE DURABLE GROUP. Tools is the containment control, so its options
-            keep a few-word line where the arm's rows carry none — no hover, no
-            drill-in, and no paragraph either (Samuel, 2026-08-19). */}
+            keep a few-word line where the posture rows above carry none — no
+            hover, no drill-in, and no paragraph either (Samuel, 2026-08-19). */}
         <GroupLabel>For every session on this channel</GroupLabel>
         <SettingName>Tools</SettingName>
         <div
@@ -436,18 +436,18 @@ function TrustRow({
 
 /**
  * The heading over the launch posture. ⚠ IT NAMES THE ACT, NOT A TIME WINDOW.
- * The arm's heading ("For the next request you allow") was doing the entire job
- * of saying "this is single-use" and could not carry it; this pair really is
+ * The deleted arm's heading ("For the next request you allow") was doing the whole
+ * job of saying "this is single-use" and could not carry it; this pair really is
  * durable, so the honest sentence is the one that says WHICH launches it governs
- * — the ones the operator starts. It must never read "for every session": a
- * peer's request is answered on the ARM, and this pair has nothing to do with it.
+ * — the ones the operator starts. It must never read "for every session": an
+ * inbound request a peer triggered carries no tool posture and starts at manual/ask.
  */
 const LAUNCH_POSTURE_HEADING = "When you launch an agent";
 
-/** The sub-heading that separates each group. ⚠ Every group on this tab is now
- *  DURABLE, and the headings say what each one governs rather than how long it
- *  lasts — the single-use arm went back to the request card, which is the only
- *  surface that can honestly show it (`use-channel-launch-posture.ts`). */
+/** The sub-heading that separates each group. ⚠ Every group on this tab is
+ *  DURABLE — nothing single-use is left anywhere in the product — so the headings
+ *  say what each one GOVERNS rather than how long it lasts. A heading naming a
+ *  time window is the regression (`use-channel-launch-posture.ts`). */
 function GroupLabel({ children }: { children: ReactNode }) {
   return (
     <p className="pt-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">

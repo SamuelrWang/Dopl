@@ -2,8 +2,14 @@
 
 /**
  * Composer auto-grow: grows to exactly `maxLines` line-heights, then scrolls.
- * ⚠ Keep in sync with renderer/session/session-chrome.js `growHeight` +
- * session.js `autoGrow`. Math is pure so it is testable without a DOM.
+ * Math is pure so it is testable without a DOM.
+ *
+ * ⚠ THE "KEEP IN SYNC WITH `renderer/session/session-chrome.js › growHeight`"
+ * INSTRUCTION IS RETIRED (2026-08-20). That tree was deleted with the v1 session
+ * window, so the instruction pointed at nothing while still reading as an active
+ * obligation — the worst shape a comment can take, because a reader either hunts
+ * for a file that is gone or assumes a twin exists and edits only one side.
+ * **THIS IS THE ONLY IMPLEMENTATION NOW.**
  */
 
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";

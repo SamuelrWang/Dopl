@@ -52,9 +52,10 @@ const SUPABASE_STORAGE_ORIGIN = "https://mrefkedvdehahjejreae.supabase.co";
 /**
  * The production Content-Security-Policy for the packaged renderer.
  *
- * Modelled on the session window's page CSP
- * (`dopl-desktop-app/renderer/session/session.html:8`), which is the precedent
- * for a LOCAL Electron page in this repo. `default-src 'none'` and no
+ * Modelled on the v1 session window's page CSP — ⚠ that page is DELETED
+ * (2026-08-20) and this comment cited it by a bare LINE NUMBER, which CLAUDE.md
+ * doc rule #2 forbids for exactly this reason. Kept as provenance: **this is now
+ * the precedent for a LOCAL Electron page in this repo**, not a copy of one. `default-src 'none'` and no
  * `connect-src` are a consequence of the target architecture, not a constraint
  * on it: the renderer never touches the network — every request goes through
  * `window.dopl.apiRequest` → IPC → the main process (see

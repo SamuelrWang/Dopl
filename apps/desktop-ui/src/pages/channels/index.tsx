@@ -17,8 +17,9 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  * `message-composer.tsx` were deleted in the same change. **`ChannelsV2Core`
  * keeps its name deliberately** — it is a component family under
  * `components/channels-v2/`, not a route string, and renaming the whole
- * directory buys a word (wiring plan Phase 12, § the string sweep). **35 files
- * measured 2026-08-18** — re-run rather than quote:
+ * directory buys a word (wiring plan Phase 12, § the string sweep). ⚠ THE FILE
+ * COUNT IS A MEASUREMENT, NOT A FACT ABOUT THIS PAGE — run it, never quote it
+ * (this docblock carried a stale "35 files" for two days):
  * `ls src/features/channels/components/channels-v2 | wc -l`.
  *
  * ⚠ THE `:channelId` ROW IS THE DESKTOP NOTIFICATION'S LANDING SPOT (wiring
