@@ -11,6 +11,16 @@
 // is the quadratic always-on term plan §5 is shedding; if this gate is wrong in the cheap
 // direction, the replacement is the thing it replaced.
 //
+// ⚠ NOTHING HERE WAS REMOVED BY THE SESSION-WINDOW WAVE (2026-08-20, F-228) AND NOTHING HERE IS
+// ABOUT A WINDOW. Every case in this file failed at LOAD, not on an assertion: the shared
+// harness's `EXPORTED` list still named `main/session-summary.js › keptWindow`, and that list
+// feeds a `new Function` return, so one deleted symbol is a ReferenceError for all fourteen. The
+// harness lost the name; the report shape and the change gate are untouched.
+// ⚠ ONE CASE STILL DRIVES A WINDOW HANDLE — "ending a session is a change, and so is its pill
+// leaving" flips `s.win.destroyed` to make a retained pill lapse. That is the RETENTION
+// predicate, which is live source that the engine can no longer satisfy; the argument is written
+// out over §4 of `session-summary.test.mjs` and is not restated here.
+//
 // Run: `node --test dopl-desktop-app/test/session-summary-report.test.mjs`
 
 import { test } from "node:test";

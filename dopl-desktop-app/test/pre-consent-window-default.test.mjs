@@ -24,7 +24,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const SETTINGS = M("settings.js");
 const TRIGGER = M("trigger.js");
-const CONSENT = M("session-consent.js");
 
 // settings.js requires electron-store, so the getters are sliced and evaluated
 // against a fake store instead — a regex over `return false` could pass on a
@@ -78,50 +77,37 @@ test("the retired setter answers false and never writes the store", () => {
   assert.equal(gettersOver({}).setWindowMode(true), false);
 });
 
-// ── the call sites: the gates SURVIVE so the machinery stays disarmed at its own guards ──
+// ── THE MACHINERY IS GONE; THE SWITCHES OUTLIVE IT BY ONE WAVE ──────────────
+//
+// ⚠ THREE CALL-SITE TESTS STOOD HERE AND WENT WITH WHAT THEY GATED (2026-08-20, F-228):
+// `handleTrigger`'s two-switch conjunct over `sessionEngine.openConsentWindow`, and the
+// `session-consent.js holds no gate of its own` rule. There is no pre-consent window, no
+// `openConsentWindow`, and no `session-consent.js`.
+//
+// ⚠ WHAT SURVIVES IS THE READING ABOVE, AND IT IS THE POINT OF KEEPING THIS FILE. Both getters
+// still answer OFF for every stored value, so a machine carrying `sessionWindowMode: true` or
+// `preConsentWindowMode: true` from an older install cannot re-arm anything, and the setter
+// still refuses to write. That is the DISARMED-GUARD record F-228 asks for: the switches are
+// deleted in the wave after this one, deliberately after a full green, so nothing can quietly
+// come back in between.
 
-test("handleTrigger still gates the pre-consent window on BOTH switches", () => {
-  const fn = fnOf(TRIGGER, "handleTrigger");
-  assert.match(
-    fn,
-    /if \(settings\.getWindowMode\(\) && settings\.getPreConsentWindow\(\)\) \{/,
-    "the pre-consent window is a session window, so it can never outlive the master switch"
-  );
-  // One gate, one call — a second openConsentWindow would be a second default.
-  assert.equal((TRIGGER.match(/sessionEngine\.openConsentWindow\(/g) || []).length, 1);
-});
-
-test("inboundApproved launches WINDOWLESS, and only the engine's own skips reach headless", () => {
-  // 2026-08-20 (retirement, second half): an approved request runs a windowless SDK
-  // session — no master-switch conjunct any more, because launch() itself refuses a
-  // WINDOWED shape when the switch is off and a windowless one never asks it. The
-  // headless lane survives strictly as the engine-skip fallback (cap / no-sdk).
+test("the responder launch is WINDOWLESS, and it is the only shape left", () => {
+  // 2026-08-20 (retirement): an approved request runs a windowless SDK session. No
+  // master-switch read anywhere in the approval path — `launch()` refuses every non-windowless
+  // shape outright now, so there is no switch left for this path to consult.
   const fn = fnOf(TRIGGER, "inboundApproved");
   assert.match(fn, /if \(await launchResponderSession\(/);
   assert.ok(!/getWindowMode/.test(fn), "no master-switch read here — the engine owns its own gate");
-  assert.match(fn, /runHeadlessApproved\(/, "the headless fallback survives");
   assert.ok(
     !/getPreConsentWindow/.test(fn),
     "the pre-consent default must not decide how an APPROVED request runs"
   );
-  // ...and the responder launch itself is the windowless shape, with the ask's seq.
   const launch = fnOf(TRIGGER, "launchResponderSession");
   assert.match(launch, /windowless: true/);
   assert.match(launch, /triggerSeq: m\.seq/);
 });
 
-/** Comments stripped, so a docblock POINTING at the gate is not read as one. */
-const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
-
-test("session-consent.js holds no gate of its own", () => {
-  // ONE answer to "should this window exist", at the call site that is holding the
-  // reason. A module that also refuses on its own behalf is the divided answer the
-  // C-9 window-budget leak was made of. Its docblock must still SAY where the gate
-  // is — that is why this reads the code and not the file.
-  assert.ok(!/settings/.test(code(CONSENT)), "session-consent must not reach for settings at all");
-  assert.match(CONSENT, /getPreConsentWindow/, "…but its docblock must name the one gate");
-  // …and nothing was narrowed for the flip: the whole lifecycle is still here.
-  for (const name of ["open", "decide", "close", "release", "takeForAdopt"]) {
-    assert.ok(new RegExp(`\\b${name},`).test(CONSENT), `session-consent no longer exports ${name}`);
-  }
+test("nothing in main opens a pre-consent window any more", () => {
+  // The census, not a memory of it: the op, the module and the gate are all absent.
+  assert.equal((TRIGGER.match(/openConsentWindow/g) || []).length, 0);
 });

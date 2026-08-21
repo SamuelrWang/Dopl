@@ -14,9 +14,17 @@
 // F1-F9 are pinned in session-permission-hardening.test.mjs, except F1 (park clears the standing
 // grants), which lives with the other park resets below because that is the test that missed it.
 //
-// Layers: source extraction with injection for the electron-free-but-constant-fed session-
-// profiles block (the established idiom), a direct require for the reducer + the renderer's pure
-// modules, and regex pins for the preload / IPC / HTML surfaces.
+// ⚠ 2026-08-20 (F-228) — THIS FILE USED TO PIN FOUR COPIES OF THE MODE TABLES AND THE HEADER UI.
+// The v1 session window is deleted: renderer/session/session-preload.js, session.html,
+// session.js, session-modes-ui.js, session-labels.js and session-viewmodel.js are gone, and so is
+// main/session-ipc.js. The §E four-way agreement is therefore a TWO-way one (main + the reducer),
+// §F (the IPC surface) and the two §G UI tests are gone, and §H moved out with the view-model.
+// Each is replaced in place by a ⚠ block. Nothing about the POLICY changed: §A, §B, §C, §D, THE
+// INVARIANT and the SDK-options pin are the guards they always were, and the AXES THEMSELVES are
+// still the only thing standing between `bypass` and an outbound message.
+//
+// Layers now: source extraction with injection for the electron-free-but-constant-fed session-
+// profiles block (the established idiom), and a direct require for the reducer and session-io.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,29 +33,23 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
-const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.url));
 
 const profiles = require(M("session-profiles.js"));
 const reducer = require(M("session-reducer.js"));
 const io = require(M("session-io.js"));
-const labels = require(R("session-labels.js"));
-const vm = require(R("session-viewmodel.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
-const PRELOAD = readFileSync(R("session-preload.js"), "utf8");
-const HTML = readFileSync(R("session.html"), "utf8");
-const IPC = readFileSync(M("session-ipc.js"), "utf8");
 const GATE = readFileSync(M("session-gate.js"), "utf8");
 const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
 // §2 SPLIT (2026-07-31): the reducer's STATE SHAPE — its defaults, initialSessionState and the
 // two mode tables it defends itself with — moved to session-state.js when session-reducer.js
 // (a zero-headroom §2 file) had to grow the self-authored inbound conjunct.
 const STATE_SRC = readFileSync(M("session-state.js"), "utf8");
-const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: buildSdkOptions lives here
 
 const { grantDecision, grantKeyFor, TOOL_MODES, MESSAGE_MODES } = profiles;
@@ -268,7 +270,14 @@ test("MEDIUM-2: `to` and `kind` are folded into the post key", () => {
   assert.notEqual(keyOf({ op: "post", channel: "other", kind: "task_failed" }), keyOf({ op: "post", channel: "other" }));
 });
 
-test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the session peer", () => {
+// ⚠ REWRITTEN 2026-08-20 (F-228), not deleted. This test used to end with four assertions on the
+// RENDERER end of the same rule — labels.postDestinationText's three copy cases and the two
+// view-model items that carried `addressed` / `postKind` to it. renderer/session/session-labels.js
+// and session-viewmodel.js are deleted, so those lines are gone. What they were downstream OF is
+// the security half and it is untouched: MAIN must stamp the decision payload with the CALL's own
+// recipient and lifecycle kind, never the session's assumed counterparty — an agent that posts
+// `to: evil@x.com` must not be able to have the operator approve a card that says "David".
+test("MEDIUM-2: the gate payload carries the call's REAL to/kind, not the session peer", () => {
   const s = { profile: "full", channelId: CH, counterpartyName: "David", state: { allowForTask: [], messageMode: "ask" },
     pendingPermissions: new Map(), pendingNames: new Map() };
   const evs = [];
@@ -280,6 +289,11 @@ test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the sessio
     // 2026-08-02: plus the reason code that explains the gate — AXIS B is at `ask` here.
     gateReason: "message-approval-required",
   });
+  // N-PARTY: `to` alone is main's bound-counterparty FILL, so the payload does NOT claim the call
+  // addressed anyone — the absence of `addressed` above is that claim, and where the fill (and the
+  // `directChannel` flag that qualifies it) comes from is pinned in
+  // test/session-dm-addressee-truth.test.mjs.
+  assert.equal(evs[0].payload.addressed, undefined);
   // Addressed + lifecycle-kinded: the REAL recipient and the claimed kind ride the payload.
   canUse(DOPL_CHANNEL_TOOL, { op: "post", body: "done", to: "evil@x.com", kind: "task_finished" },
     { requestId: "r2", toolUseID: "t2" });
@@ -287,17 +301,6 @@ test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the sessio
   assert.equal(evs[1].payload.addressed, true);
   assert.equal(evs[1].payload.postKind, "task_finished");
   for (const id of ["r1", "r2"]) s.pendingPermissions.get(id)({ behavior: "deny" });
-  // ...and the renderer says both out loud on the decision surface.
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "David" }), "To: this channel, no recipient named", "N-PARTY: an unaddressed `to` is main's bound-counterparty FILL, not an addressee (session-addressee-truth.test.mjs)");
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "evil@x.com", addressed: true, postKind: "task_finished" }), "To: evil@x.com, marked task_finished");
-  assert.equal(labels.postDestinationText({ ownChannel: false, postKind: "task_finished" }), "To: another channel, marked task_finished");
-  // The item carries them through the view-model to that surface.
-  const item = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t2", to: "evil@x.com", text: "done", addressed: true, postKind: "task_finished" }).items[0];
-  assert.equal(item.addressed, true);
-  assert.equal(item.postKind, "task_finished");
-  // An ordinary post's item is untouched (no stray fields on the common path).
-  const plain = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t1", to: "David", text: "hi" }).items[0];
-  assert.deepEqual(plain, { kind: "outbound", toolUseId: "t1", to: "David", text: "hi", avatarKey: "self" });
 });
 
 test("B3: grants are in-memory only — nothing about a key is ever persisted", () => {
@@ -348,12 +351,18 @@ test("M2: a park preserves both axes, inboundForTask AND every standing grant", 
   }
 });
 
-// ── E. THE FOUR COPIES OF THE MODE TABLES AGREE ───────────────────────────────────
-// session-profiles is canonical, but the reducer defends its own state, the preload coerces
-// at the bridge and session.html offers the options. A sandboxed renderer cannot require
-// main, so the lists are duplicated by necessity — this is what stops them drifting.
+// ── E. THE COPIES OF THE MODE TABLES AGREE ────────────────────────────────────────
+// session-profiles is canonical and the reducer defends its own state against it.
+//
+// ⚠ SHRUNK 2026-08-20 (F-228) — this was "the FOUR copies", and the other two were the sandboxed
+// renderer's: session-preload.js coerced at the bridge (unknown tool mode -> manual, unknown
+// message mode -> ask) and session.html offered exactly these values, in this order, on the two
+// selects. Both files are deleted, so there is no third or fourth copy left to drift. The last
+// paragraph of the old test — the VIEW-MODEL's own fail-closed copy, `vm.reduceEvent({type:
+// "modes"})` — went with session-viewmodel.js. The duplication that remains (main vs the state
+// machine) is the one that was always structural, and it is still checked.
 
-test("the mode tables agree across main, the reducer, the preload and the HTML", () => {
+test("the mode tables agree across main and the reducer's own state module", () => {
   assert.deepEqual(TOOL_MODES, ["manual", "accept_edits", "auto", "bypass"]);
   assert.deepEqual(MESSAGE_MODES, ["ask", "auto_inbound", "auto_outbound", "auto_both"]);
   // The state machine's own copy (source-extracted, since the block is evaluated standalone).
@@ -365,34 +374,18 @@ test("the mode tables agree across main, the reducer, the preload and the HTML",
   };
   assert.deepEqual(red("TOOL_MODES"), TOOL_MODES);
   assert.deepEqual(red("MESSAGE_MODES"), MESSAGE_MODES);
-  // The preload coerces to exactly these members, and to the FIRST one otherwise.
-  for (const mode of TOOL_MODES.slice(1)) assert.ok(PRELOAD.includes(`'${mode}'`), `preload knows ${mode}`);
-  for (const mode of MESSAGE_MODES.slice(1)) assert.ok(PRELOAD.includes(`'${mode}'`), `preload knows ${mode}`);
-  assert.match(PRELOAD, /: 'manual';/, "unknown tool mode -> manual");
-  assert.match(PRELOAD, /: 'ask';/, "unknown message mode -> ask");
-  // The HTML offers exactly these values, in this order, on the two selects.
-  const optionValues = (id) => {
-    const sel = HTML.slice(HTML.indexOf(`id="${id}"`), HTML.indexOf("</select>", HTML.indexOf(`id="${id}"`)));
-    return [...sel.matchAll(/value="([^"]+)"/g)].map((m) => m[1]);
-  };
-  assert.deepEqual(optionValues("toolMode"), TOOL_MODES);
-  assert.deepEqual(optionValues("messageMode"), MESSAGE_MODES);
-  // The view-model's fail-closed copy answers the same way.
-  for (const junk of ["bypassPermissions", "auto ", ""]) {
-    const st = vm.reduceEvent(vm.initialState(), { type: "modes", tool: junk, message: junk });
-    assert.equal(st.toolMode, "manual");
-    assert.equal(st.messageMode, "ask");
-  }
 });
 
 test("the two inbound-auto predicates (gate + reducer) agree on all four message modes", () => {
   // session-gate.autoInbound and the reducer's inboundAutoAccepted answer the same question
   // on two paths; if they ever disagreed, a message would be held by one and fed by the other.
-  const gateSrc = GATE.slice(GATE.indexOf("function autoInbound(s)"), GATE.indexOf("function windowHasFocus"));
-  const redSrc = REDUCER_SRC.slice(REDUCER_SRC.indexOf("function inboundAutoAccepted(state)"),
-    REDUCER_SRC.indexOf("function feedInboundEffects"));
-  const gateFn = new Function("s", gateSrc + "\n return autoInbound(s);");
-  const redFn = new Function("state", redSrc + "\n return inboundAutoAccepted(state);");
+  // ⚠ 2026-08-20 (F-228): both halves used to be `src.slice(indexOf(A), indexOf(B))`, and the
+  // gate's END MARKER was `function windowHasFocus` — which F-228 deleted along with the rest of
+  // the surfacing half. That slice would now throw (or, with a marker that merely MOVED, silently
+  // yield "" and pass vacuously — the audit R3(a) shape). fnOf() brace-matches each function's
+  // REAL body, so there is no neighbouring symbol left for this extraction to depend on at all.
+  const gateFn = new Function("s", fnOf(GATE, "autoInbound") + "\n return autoInbound(s);");
+  const redFn = new Function("state", fnOf(REDUCER_SRC, "inboundAutoAccepted") + "\n return inboundAutoAccepted(state);");
   for (const messageMode of MESSAGE_MODES) {
     for (const inboundForTask of [false, true]) {
       const state = { messageMode, inboundForTask };
@@ -407,25 +400,19 @@ test("the two inbound-auto predicates (gate + reducer) agree on all four message
 });
 
 // ── F. THE IPC SURFACE ────────────────────────────────────────────────────────────
-
-test("IPC: the fused channel is REPLACED by two, and the inbound drain moved to AXIS B", () => {
-  assert.match(IPC, /ipcMain\.handle\('session:set-tool-mode'/);
-  assert.match(IPC, /ipcMain\.handle\('session:set-message-mode'/);
-  assert.ok(!/set-auto-approve|set_auto_approve/.test(stripComments(IPC)), "the old channel is removed, not aliased");
-  // Main re-coerces against the canonical tables (the preload is the first gate, not the only).
-  // FIX 1 (2026-08-02) moved the shared resolution into `modeChange`, so the coercion is an
-  // ARGUMENT to it rather than a property in the dispatch literal; it is still main's own.
-  assert.match(IPC, /normalizeToolMode\(p && p\.mode\)/);
-  assert.match(IPC, /normalizeMessageMode\(p && p\.mode\)/);
-  // v2.5 D4's drain lives on the MESSAGE handler only — the tool handler touches no messages.
-  const code = stripComments(IPC);
-  const toolHandler = code.slice(code.indexOf("'session:set-tool-mode'"), code.indexOf("'session:set-message-mode'"));
-  assert.ok(!/drainInbound/.test(toolHandler), "AXIS A must not touch the inbound queue");
-  const msgHandler = code.slice(code.indexOf("'session:set-message-mode'"), code.indexOf("'session:consent-decision'"));
-  assert.match(msgHandler, /gate\.drainInbound\(s\)/, "AXIS B keeps it");
-  // Both are bound from event.sender like every other handler (no sessionId in the payload).
-  assert.ok(!/p && p\.sessionId/.test(IPC));
-});
+//
+// ⚠ DELETED 2026-08-20 (F-228) — "IPC: the fused channel is REPLACED by two, and the inbound
+// drain moved to AXIS B" read main/session-ipc.js, which is deleted with the session window it
+// served. It pinned: two handlers (`session:set-tool-mode` / `session:set-message-mode`) where
+// the fused `set-auto-approve` used to be, with no alias left behind; main RE-coercing through
+// normalizeToolMode / normalizeMessageMode rather than trusting the preload; v2.5 D4's
+// `gate.drainInbound(s)` living on the MESSAGE handler ONLY, so AXIS A never touched the inbound
+// queue; and both handlers binding from `event.sender`, never a sessionId in the payload.
+// `grep -rn "set-tool-mode\|set-message-mode\|drainInbound" main/ renderer/` finds no handler and
+// no drain anywhere in the tree (2026-08-20) — gate.drainInbound is itself one of the functions
+// F-228 removed from session-gate.js. There is no live surface left for this test to describe;
+// the POLICY it protected (a tool posture cannot move messages) is proved directly by
+// INVARIANT (1) and (2) above, which do not need an IPC channel to hold.
 
 test("A: the SDK is still driven at permissionMode 'default' with settingSources []", () => {
   // The load-bearing pin: `bypassPermissions` would stop the SDK calling canUseTool at all,
@@ -439,61 +426,28 @@ test("A: the SDK is still driven at permissionMode 'default' with settingSources
 });
 
 // ── G. THE HEADER (contract D) ────────────────────────────────────────────────────
+//
+// ⚠ DELETED 2026-08-20 (F-228) — two UI tests, both over deleted renderer files:
+//   - "UI: two labeled selects, token classes only, no copy in CSS `content`" read session.html
+//     and session.css. It pinned the eight option labels as STATIC markup (no copy smuggled in
+//     through CSS `content:`), token colours only in the .mode-select block, and the --danger
+//     token on `.mode-select__input.is-bypass` so `bypass` never looked routine.
+//   - "UI: the controller paints both axes from MAIN's echo, never from the click" read
+//     session.js and session-modes-ui.js. It pinned the ONE writer of `.value` reading the
+//     view-model (which moves only on main's echo), the two change listeners carrying the
+//     select's own value, no trace of the fused `setAutoApprove`, and textContent-only.
+// session.html, session.css, session.js and session-modes-ui.js are all deleted, and so is
+// test/session-modes-dom.test.mjs, which drove the same pair end to end.
+//
+// ⚠ There is NO surviving posture control. Nothing in the tree writes toolMode or messageMode
+// from an operator gesture any more — the axes are set by the channel-prefs derivation and read
+// by the gate, which is why §A-§D above are now the whole of this contract's coverage.
 
-test("UI: two labeled selects, token classes only, no copy in CSS `content`", () => {
-  assert.match(HTML, /<span class="mode-select__lbl text-label">Tools<\/span>/);
-  assert.match(HTML, /<span class="mode-select__lbl text-label">Messages<\/span>/);
-  const OPTIONS = ["Manual", "Accept edits", "Auto", "Bypass",
-    "Ask every time", "Auto accept incoming", "Auto send outgoing", "Both automatic"];
-  for (const label of OPTIONS) {
-    assert.ok(HTML.includes(">" + label + "<"), `the option "${label}" is static markup`);
-    assert.ok(!label.includes("—"), "no em dash in the option labels");
-  }
-  const CSS = readFileSync(R("session.css"), "utf8");
-  const block = CSS.slice(CSS.indexOf(".mode-select {"), CSS.indexOf(".folder-pill {"));
-  assert.ok(!/content:/.test(block), "no copy is smuggled in through CSS content");
-  assert.ok(!/#[0-9a-fA-F]{3,6}\b/.test(block), "token colours only, no raw hex");
-  // Bypass gets the danger token, on the control itself.
-  assert.match(CSS, /\.mode-select__input\.is-bypass \{[\s\S]*?color: var\(--danger\)/);
-  assert.match(CSS, /\.perm-warn \{ color: var\(--danger\)/);
-});
-
-test("UI: the controller paints both axes from MAIN's echo, never from the click", () => {
-  const JS = readFileSync(R("session.js"), "utf8");
-  const MODES_UI = readFileSync(R("session-modes-ui.js"), "utf8");
-  // 2026-08-02: the unconditional `.value` repaint moved from renderStatus into the same module
-  // that owns the change listeners (session.js hit the §2 cap when the model picker landed). The
-  // RULE is unchanged and is what this pins: the only writer of `.value` reads the view-model,
-  // which moves only on main's echo. Driven end to end in test/session-modes-dom.test.mjs.
-  assert.match(MODES_UI, /e\.toolMode\.value = s\.toolMode;/);
-  assert.match(MODES_UI, /e\.messageMode\.value = s\.messageMode;/);
-  assert.match(JS, /modesUi\.sync\(els, state\)/, "and renderStatus is what calls it, every render");
-  assert.ok(!/\.value = /.test(JS.slice(JS.indexOf("function renderStatus("), JS.indexOf("function renderFolder("))),
-    "renderStatus itself writes no control value");
-  assert.match(JS, /vm\.permissionPostureText\(state\.toolMode, state\.messageMode,/);
-  // FIX 2 (2026-08-02): the two `change` listeners live in session-modes-ui.js, because the
-  // control has to revert itself when main refuses. The bridge calls still carry the select's
-  // own value, and still nothing paints from the click.
-  assert.match(JS, /modesUi\.mount\(\{ els, bridge,/, "the controller hands the module the real bridge");
-  assert.match(MODES_UI, /send: bridge\.setToolMode/);
-  assert.match(MODES_UI, /send: bridge\.setMessageMode/);
-  assert.match(MODES_UI, /entry\.send\.call\(bridge, entry\.node\.value\)/, "the select's OWN value crosses");
-  assert.ok(!/setAutoApprove|autoApprove/.test(JS + MODES_UI), "no trace of the fused switch");
-  // textContent only, everywhere (the §A.4 rule this window is built on).
-  assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML/.test(JS + MODES_UI));
-});
-
-// ── H. C8 (MEDIUM-6): the counterparty name is bounded at BOTH decision surfaces ───
-
-test("C8: reduceEvent caps the counterparty name at 60 on both decision surfaces", () => {
-  const long = "D".repeat(400);
-  const multi = "David\n\n<script>\tOps";
-  for (const [type, key] of [["counterparty", "from"], ["inbound_pending", "from"]]) {
-    const s = vm.reduceEvent(vm.initialState(), { type, pendingId: "p1", from: long, text: "hi" });
-    const item = s.items[0];
-    assert.ok(item[key].length <= 60, `${type}: capped (${item[key].length})`);
-    // ...and one-lined, so a multi-line name cannot push the body and the buttons off screen.
-    const wrapped = vm.reduceEvent(vm.initialState(), { type, pendingId: "p1", from: multi, text: "hi" });
-    assert.ok(!/[\n\r\t]/.test(wrapped.items[0][key]), `${type}: single line`);
-  }
-});
+// ── H. C8 (MEDIUM-6): the counterparty name was bounded at both decision surfaces ──
+//
+// ⚠ DELETED 2026-08-20 (F-228) — "C8: reduceEvent caps the counterparty name at 60 on both
+// decision surfaces" was entirely a renderer/session/session-viewmodel.js property: a 400-char or
+// multi-line `from` on a `counterparty` / `inbound_pending` item was capped at 60 and one-lined,
+// so a hostile display name could not push the body and the buttons off screen. There is no
+// screen and no view-model. main/session-gate.js keeps its OWN `oneLine(value, cap)` for the
+// notice copy it still hands trigger.js, and that half is pinned in test/inbound-gate-notify.test.mjs.

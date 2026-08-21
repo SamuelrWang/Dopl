@@ -1,33 +1,37 @@
-// Q6b — "Open session" ALWAYS opens a window, even for a thread this machine has no record of.
+// Q6b — the CHANNEL CONTEXT a thread this machine holds no record of can still contribute.
 //
-// THE BUG: clicking Open session on a thread card answered "This thread has no session on this
-// machine" whenever session-store held no durable record for (channel, thread) — which is every
-// thread this Mac never worked, including the ones the operator most wants to READ.
+// WHAT THIS FILE WAS. Three layers of "Open session ALWAYS opens a window, even for a thread
+// this machine has no record of": (1) PURE — `channel-context.contextFromChannel`, the DTO
+// reader; (2) SHELL — session-park's record-less branch, which opened a parked window seeded
+// from the channel; (3) VERDICT — the `{ok,reason}` shape session-reopen returned for the web
+// card to word.
 //
-// Three layers:
-//   1. PURE — channel-context.contextFromChannel: what a Channel DTO may contribute, and the
-//      counterparty rule (a DIRECT channel's server-resolved peer, or nothing).
-//   2. SHELL — session-park's record-less branch, sliced and driven with fakes: it opens a
-//      parked shell, loads task-scoped history, respects the window budget, starts NO query, and
-//      is reachable ONLY from an operator click.
-//   3. VERDICT — the shape session-reopen returns, which the web card reads.
+// ⚠ LAYERS 2 AND 3 ARE DELETED — 2026-08-20, F-228. Both drove `openFromChannel` /
+// `recreateParkedShell`, whose single job was to MINT A SESSION WINDOW; `main/session-window.js`
+// and the whole `renderer/session/**` tree are gone, so there is no window to open, no replay
+// ring to seed from history (`session-history.js` went too), and no `resolveChannelContext`
+// handle on session-park's bind(). `reopenByTask` now has exactly two answers — a LIVE session
+// opens `main/agent-window.js`, anything else is `{ok:false, reason:'no-session'}` — and that
+// contract is pinned by test/session-reopen.test.mjs, not from here.
+//
+// ⚠ LAYER 1 IS UNTOUCHED AND IS WHY THIS FILE STILL EXISTS. `contextFromChannel` is live, it is
+// the ONLY thing that tests it anywhere in the tree, and its rules are security rules rather
+// than window rules: a channel the caller is not a member of yields NOTHING, a group channel
+// yields NO counterparty, and `direct` is set only by the server's own `true`. Deleting the file
+// with the lane it happened to be documented under would have taken all three with it
+// (INVARIANTS §14).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const M = (p) => join(HERE, "..", "main", p);
-const channelContext = require(M("channel-context.js"));
-const PARK_SRC = readFileSync(M("session-park.js"), "utf8");
-const REOPEN_SRC = readFileSync(M("session-reopen.js"), "utf8");
-const GATE_SRC = readFileSync(M("session-gate.js"), "utf8");
+const channelContext = require(join(HERE, "..", "main", "channel-context.js"));
 
-// ── 1. PURE: the channel context ─────────────────────────────────────────────
+// ── PURE: the channel context ────────────────────────────────────────────────
 
 const direct = {
   id: "chan-1", name: "David", isDirect: true, isMember: true,
@@ -41,17 +45,19 @@ test("a DIRECT channel yields the workspace, the name and the server-resolved pe
     channelName: "David", counterpartyId: "user-peer", counterpartyName: "David",
     // H2: the server's own 1:1 flag, carried SEPARATELY from the peer it resolved. A session
     // needs it to know that its unaddressed posts are addressed for it (resolveDirectPeer),
-    // which is what the outbound approval card names a recipient from.
+    // which is what the outbound approval card names a recipient from — the card is a consent
+    // ROW on the channels surface now (session-windowless.js › bridgeOutbound), and it reads
+    // the same flag off the same context.
     direct: true,
   });
 });
 
-test("a GROUP channel yields NO counterparty — the shell never guesses one", () => {
+test("a GROUP channel yields NO counterparty — nothing downstream ever guesses one", () => {
   const group = { id: "chan-1", name: "Ops", isDirect: false, isMember: true, directPeer: null, memberCount: 5 };
   const ctx = channelContext.contextFromChannel(group, "ws-1", null);
   // FIX N1: the null is still a null (no peer is ever inferred). What it costs downstream is
-  // no longer the whole window: session-history opens on the operator's own rows and labels
-  // them as one-sided. Nothing about THIS rule changes for that.
+  // no longer a window with nothing in it — it is the FIX L1 binding staying unset, which is
+  // the fail-restrictive direction.
   assert.equal(ctx.counterpartyId, null, "no member of a group channel is promoted to 'them'");
   assert.equal(ctx.counterpartyName, null);
   // A direct flag with no resolved peer is equally not a counterparty.
@@ -72,135 +78,28 @@ test("a channel the caller is not a member of, or with no workspace, yields NOTH
   assert.equal(channelContext.contextFromChannel({}, "ws-1"), null);
 });
 
-// ── 2. SHELL: the record-less open ───────────────────────────────────────────
+// ⚠ THE §2 SHELL BLOCK STOOD HERE — eight tests plus their `harness()`, all driving
+// `recreateParkedShell({..., fromChannel: true})`. What they pinned:
+//   · no durable record + an operator CLICK opened a shell seeded from the channel, FAIL
+//     RESTRICTIVE at `read_only` and `side: 'requester'`;
+//   · the history it loaded was TASK-SCOPED, on the same shell;
+//   · opening started NO agent work (no query, no consumer, no lifecycle, zero counters);
+//   · a channel the operator cannot open answered `{ok:false, reason:'no-thread'}`;
+//   · the shared WINDOW budget refused a reopen storm, checked BEFORE the network read;
+//   · one shell per (channel, thread);
+//   · a mid-wave engine with no resolver failed CLOSED;
+//   · ⚠ THE INBOUND GATE COULD NEVER OPEN A RECORD-LESS SHELL — only a click, via `fromChannel`.
+//
+// The last one was the security rule of the set, and it is now structural rather than tested:
+// `session-gate.js` no longer HAS a recreate call site (`feedInboundForTask`, `decideInbound`,
+// `drainQueue` and `drainInbound` were deleted with the hold surface), and a windowless
+// session's message axis is floored at `auto_inbound`, so an inbound never holds and never asks
+// for a surface. There is no `fromChannel` flag left to forget.
 
-const BEGIN = "// ─── BEGIN SESSION-PARK-PURE";
-const END = "// ─── END SESSION-PARK-PURE";
-const BLOCK = PARK_SRC.slice(PARK_SRC.indexOf(BEGIN), PARK_SRC.indexOf(END));
-
-function harness(over = {}) {
-  const cfg = { record: null, sdkId: null, ctx: { channelId: "c1", workspaceId: "ws-1", channelName: "David",
-    counterpartyId: "user-peer", counterpartyName: "David" }, atCap: false, resolver: true, ...over };
-  const calls = { startSession: [], history: [], query: [], consume: [], resolve: [], emit: [] };
-  const io = { makePushIterator: () => ({ push() {}, close() {} }), noteGatedBody: () => {} };
-  const store = {
-    sessionKey: (c, t) => `${c}:${t}`, getRecord: () => cfg.record, getSdkSessionId: () => cfg.sdkId,
-    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
-    // thread for every other), so the fake mirrors the real store's slotKey too.
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
-  };
-  const sessions = new Map();
-  const deps = {
-    sessions,
-    getSdk: async () => ({ query: (a) => { calls.query.push(a); return {}; } }),
-    buildSdkOptions: () => ({}),
-    consume: (s, q) => calls.consume.push({ s, q }),
-    dispatch: () => {},
-    startSession: async (spec) => {
-      calls.startSession.push(spec);
-      const s = { key: spec.key, settled: false, ...spec };
-      sessions.set(spec.key, s);
-      return s;
-    },
-    hasLiveSession: (a) => { const s = sessions.get(`${a.channelId}:${a.taskId}`); return !!(s && !s.settled); },
-    emit: (s, p) => calls.emit.push(p),
-    windowFactoryReady: () => true,
-    atWindowCap: () => cfg.atCap === true,
-    settleSession: () => {},
-    loadHistory: async (s) => { calls.history.push({ channelId: s.channelId, taskId: s.taskId, counterpartyId: s.counterpartyId, workspaceId: s.workspaceId }); },
-  };
-  if (cfg.resolver) {
-    deps.resolveChannelContext = async (id) => { calls.resolve.push(id); return cfg.ctx; };
-  }
-  const api = new Function(
-    "io", "store", "crypto", "Notification", "diag",
-    `${BLOCK}\n return { bind, recreateParkedShell, openFromChannel };`
-  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, null, () => {});
-  api.bind(deps);
-  return { ...api, calls, sessions, deps };
-}
-
-const click = { channelId: "c1", taskId: "t1", fromChannel: true };
-
-test("NO durable record + an operator CLICK opens a shell seeded from the channel", async () => {
-  const h = harness();
-  assert.deepEqual(await h.recreateParkedShell(click), { ok: true });
-  assert.deepEqual(h.calls.resolve, ["c1"], "the workspace + peer come from the channel, not a record");
-  assert.equal(h.calls.startSession.length, 1, "one window");
-  const spec = h.calls.startSession[0];
-  assert.equal(spec.parkedShell, true, "a SHELL: the window opens, nothing runs");
-  assert.equal(spec.resumeSdkId, null, "there is no prior sdk session to continue");
-  assert.equal(spec.workspaceId, "ws-1");
-  assert.equal(spec.counterpartyId, "user-peer", "FIX L1 binding restored from the roster");
-  assert.equal(spec.profile, "read_only", "FAIL RESTRICTIVE: no record means no stored profile");
-  assert.equal(spec.side, "requester", "the operator opened it, so anything they type is their own goal");
-  assert.equal(spec.context.channelName, "David");
-  assert.equal(spec.context.channelId, "c1", "the ids ride the context (dopl_channel needs them)");
-});
-
-test("the history it loads is TASK-SCOPED (the Q1 window rule), on the SAME shell", async () => {
-  const h = harness();
-  await h.recreateParkedShell(click);
-  assert.deepEqual(h.calls.history, [{ channelId: "c1", taskId: "t1", counterpartyId: "user-peer", workspaceId: "ws-1" }],
-    "session-history reads s.taskId + s.channelId, so the thread window applies as-is");
-});
-
-test("opening starts NO agent work: no query, no consumer, no lifecycle", async () => {
-  const h = harness();
-  await h.recreateParkedShell(click);
-  assert.deepEqual(h.calls.query, [], "no sdk.query");
-  assert.deepEqual(h.calls.consume, [], "no consumer loop");
-  const spec = h.calls.startSession[0];
-  assert.equal(spec.turns, 0);
-  assert.equal(spec.costUsd, 0);
-  // parkedShell is what makes session-engine return BEFORE startQuery (open-session-no-query).
-  assert.match(PARK_SRC, /parkedShell: true, \/\/ the window opens/);
-});
-
-test("a channel this operator cannot open returns the ONE note-worthy verdict", async () => {
-  for (const ctx of [null, {}, { workspaceId: "" }]) {
-    const h = harness({ ctx });
-    assert.deepEqual(await h.recreateParkedShell(click), { ok: false, reason: "no-thread" }, JSON.stringify(ctx));
-    assert.equal(h.calls.startSession.length, 0, "no empty window is opened");
-  }
-});
-
-test("the shared window budget still holds — a reopen storm cannot spawn shells", async () => {
-  const h = harness({ atCap: true });
-  assert.deepEqual(await h.recreateParkedShell(click), { ok: false, reason: "busy" });
-  assert.equal(h.calls.startSession.length, 0);
-  assert.equal(h.calls.resolve.length, 0, "the cap is checked before the network read");
-});
-
-test("one shell per (channel, thread): a second click never opens a second window", async () => {
-  const h = harness();
-  await h.recreateParkedShell(click);
-  assert.deepEqual(await h.recreateParkedShell(click), { ok: true });
-  assert.equal(h.calls.startSession.length, 1, "the live entry short-circuits");
-});
-
-test("a mid-wave engine with no resolver fails CLOSED (generic verdict)", async () => {
-  const h = harness({ resolver: false });
-  assert.deepEqual(await h.recreateParkedShell(click), { ok: false });
-  assert.equal(h.calls.startSession.length, 0);
-});
-
-test("the INBOUND GATE never opens a record-less shell (only a click may)", async () => {
-  const h = harness();
-  // The gate calls the same builder WITHOUT `fromChannel` — a peer whose thread this machine has
-  // no record of must not be able to pop a window here.
-  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false });
-  assert.equal(h.calls.startSession.length, 0);
-  assert.equal(h.calls.resolve.length, 0, "not even a lookup");
-  assert.match(GATE_SRC, /sessionPark\.recreateParkedShell\(\{ channelId: a\.channelId, taskId: a\.taskId, holdBody: a\.message \}\)/,
-    "the gate's call site carries no fromChannel flag");
-});
-
-// ── 3. VERDICT: what the web card reads ──────────────────────────────────────
-
-test("reopenByTask marks the operator click, and documents the verdict the card reads", () => {
-  assert.match(REOPEN_SRC, /deps\.recreateParkedShell\(\{ channelId, taskId, fromChannel: true \}\)/);
-  for (const line of ["{ ok: true }", "reason: 'no-thread'", "reason: 'busy'"]) {
-    assert.ok(REOPEN_SRC.includes(line), `the verdict contract names ${line}`);
-  }
-});
+// ⚠ THE §3 VERDICT TEST STOOD HERE. It grepped session-reopen.js for the
+// `recreateParkedShell({ channelId, taskId, fromChannel: true })` call site and for the three
+// verdict strings the web card words (`{ ok: true }`, `reason: 'no-thread'`, `reason: 'busy'`).
+// Two of those three verdicts no longer exist: there is no thread-less open to refuse and no
+// window budget to be busy against. `reopenByTask`'s live contract — live session -> agent
+// window, everything else -> `{ok:false, reason:'no-session'}` — belongs to session-reopen's own
+// suite, which drives the function instead of grepping its call site.

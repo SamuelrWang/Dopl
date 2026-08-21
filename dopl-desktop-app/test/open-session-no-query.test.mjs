@@ -1,30 +1,28 @@
-// A5 (contract v3.0) — "OPEN SESSION" OPENS THE WINDOW AND STARTS NOTHING.
+// A5 (contract v3.0) — NOTHING BUT A WAKE TRIGGER STARTS A PARKED SESSION'S QUERY.
 //
-// The web session card's button is now called "Open session": it opens THIS member's own
-// window on a shared THREAD. It has never started the agent, and this round renames copy
-// only, so the v2.3 / v2.5 LAZY-RESUME semantics must not drift a single step. That
-// behaviour is spread across four files with no single test naming it, which is exactly
-// how a rename round loses it:
+// WHAT THIS FILE WAS. "Open session" opens this member's own view on a shared THREAD and starts
+// NOTHING, pinned end to end: the reopen bridge (a live window shown, never driven), the
+// parked-shell recreate it fell back to, the engine's early return in front of `startQuery`, and
+// then the REDUCER's wake rules — the only things that may actually start work.
 //
-//   renderer/preload.js  sessions.reopen ->  main/channel-dir-ipc.js 'sessions:reopen'
-//     -> session-engine.reopenByTask -> session-reopen.reopenByTask
-//        · a LIVE session  -> win.show() + win.focus(), nothing else
-//        · no live session -> session-park.recreateParkedShell -> startSession({parkedShell:true})
-//          -> session-engine returns BEFORE startQuery; session-park.emitParkedShell paints
-//             a header + a calm note + the Paused pill
-//   and the shell then sits there until the REDUCER sees a wake trigger:
-//        · steer (the operator typed)                 -> resumeQuery
-//        · inbound_accept / _for_task / _released     -> resumeQuery
-//        · everything else, inbound_arrived + decline included, leaves it parked
+// ⚠ THE FIRST THREE LAYERS ARE DELETED — 2026-08-20, F-228, and they were all one mechanism.
+// `session-reopen.reopenByTask` no longer shows a window (no session has one) and no longer
+// falls back to `session-park.recreateParkedShell` (deleted, with `emitParkedShell` and the
+// `renderer/session/**` tree it painted into); `session-engine.startSession` no longer carries
+// `if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }`, because nothing
+// produces a parked shell to return early for. A live session's VIEW is `main/agent-window.js`,
+// which reads the narration ring and mints no session.
 //
-// Same source-extraction idiom as session-reopen / session-park / session-reducer: the
-// three PURE blocks are sliced from the shipping files and driven with fakes, so this
-// pins the real code, and a structural read of session-engine.js pins the one branch that
-// is not extractable (the parkedShell early return).
+// ⚠ THE FOURTH LAYER IS THE WHOLE POINT AND IT IS UNCHANGED. The wake rules are what make an
+// opened view SAFE — a surface that started a query would silently spend tokens and run gated
+// tools for a thread the operator only wanted to LOOK at, on a machine they may have walked away
+// from. That argument did not depend on the window; it depends on the REDUCER refusing to
+// produce `resumeQuery` for anything but a steer or an ACCEPTED inbound, and on `resumeQuery`
+// being the one effect that reaches `session-park.resumeParked`. Both are live, so all five
+// rules below still run (INVARIANTS §14).
 //
-// WHY IT MATTERS: an "Open session" that started a query would silently spend tokens (and
-// run gated tools) on every click from the web card, for a thread the operator only wanted
-// to LOOK at, on a machine they may have walked away from.
+// Same source-extraction idiom as session-reducer's own suite: the three PURE blocks are sliced
+// from the shipping files and evaluated together, so this pins the real code.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -43,134 +41,38 @@ function slice(src, name) {
   return src.slice(from, to);
 }
 
-const REOPEN = slice(read("session-reopen.js"), "SESSION-REOPEN-PURE");
-const PARK = slice(read("session-park.js"), "SESSION-PARK-PURE");
 // §2 SPLITS: the effect builders moved to session-effects.js and the state shape to
 // session-state.js; the reducer block calls both as free vars, so the three slices must be
 // evaluated together (effects and state FIRST).
+// ⚠ THE `SESSION-REOPEN-PURE` AND `SESSION-PARK-PURE` SLICES WENT WITH THE THREE DELETED LAYERS
+// above — this file no longer reads either file, nor session-engine.js.
 const REDUCER = [
   slice(read("session-effects.js"), "SESSION-EFFECTS"),
   slice(read("session-state.js"), "SESSION-STATE"),
   slice(read("session-reducer.js"), "SESSION-REDUCER"),
 ].join("\n");
-const ENGINE = read("session-engine.js");
 
-// ── the reopen bridge: a LIVE window is SHOWN, never driven ───────────────────────
+// ⚠ THE REOPEN-BRIDGE PAIR STOOD HERE. "Open session on a LIVE session ONLY shows the window
+// (no query, no turn, no dispatch)" built a session object whose `query` / `pushIterator` /
+// `firstTurn` getters THREW, so touching the SDK was a test failure rather than a review
+// question; and "with no live session recreates a PARKED shell, never a running one" pinned that
+// the only fallback was the shell builder, marked `fromChannel: true` so the inbound gate could
+// never reach it. Neither branch exists: `reopenByTask` answers a live session with
+// `deps.openAgentWindow(...)` and everything else with `{ok:false, reason:'no-session'}`.
+// The throwing-getter idiom is worth keeping in mind for whatever pins the agent window.
 
-function reopenHarness(recreate) {
-  const calls = { show: 0, focus: 0, recreate: [], refreshTray: 0 };
-  const store = { sessionKey: (c, t) => `${c}:${t}` };
-  const api = new Function("store", `${REOPEN}\n return { bind, reopenByTask };`)(store);
-  const sessions = new Map();
-  api.bind({
-    sessions,
-    refreshTray: () => { calls.refreshTray++; },
-    recreateParkedShell: recreate ? (a) => { calls.recreate.push(a); return recreate(a); } : null,
-  });
-  return { ...api, sessions, calls };
-}
+// ⚠ THE RECREATE PAIR STOOD HERE. "recreateParkedShell asks for parkedShell:true with NO first
+// turn of any kind" (no rawFirstTurn, no firstMessage, no query, no consumer, no dispatch) and
+// "the shell paints init + a calm note + the Paused pill, and emits nothing else". Both are
+// properties of a window that does not exist; `emitParkedShell` synthesized the `init` a dormant
+// window needed precisely because no SDK `system/init` was ever coming.
 
-test("A5: Open session on a LIVE session ONLY shows the window (no query, no turn, no dispatch)", () => {
-  const h = reopenHarness(() => ({ ok: true }));
-  // A session object with every field a query would need. If the button drove the agent it
-  // would have to reach one of these; the fake explodes if it does.
-  const s = {
-    settled: false, windowHidden: true, context: {}, sessionId: "s-1",
-    win: { isDestroyed: () => false, show() { h.calls.show++; }, focus() { h.calls.focus++; } },
-    get query() { throw new Error("Open session must not touch the SDK query"); },
-    get pushIterator() { throw new Error("Open session must not push a turn"); },
-    get firstTurn() { throw new Error("Open session must not build a first turn"); },
-  };
-  h.sessions.set("c1:t1", s);
-  assert.deepEqual(h.reopenByTask({ channelId: "c1", taskId: "t1" }), { ok: true });
-  assert.equal(h.calls.show, 1, "the window is revealed");
-  assert.equal(h.calls.focus, 1, "and fronted");
-  assert.equal(s.windowHidden, false);
-  assert.equal(h.calls.recreate.length, 0, "a live session never recreates a shell either");
-});
-
-test("A5: Open session with no live session recreates a PARKED shell, never a running one", async () => {
-  const h = reopenHarness(() => ({ ok: true }));
-  assert.deepEqual(await h.reopenByTask({ channelId: "c1", taskId: "t1" }), { ok: true });
-  // Q6b: `fromChannel` marks this as an operator CLICK, which is the ONLY caller allowed to open
-  // a shell for a thread with no durable record here. The inbound gate never sets it.
-  assert.deepEqual(h.calls.recreate, [{ channelId: "c1", taskId: "t1", fromChannel: true }],
-    "the ONLY fallback is the parked-shell builder — there is no 'reopen and resume' path");
-});
-
-// ── the recreate itself: a shell, an empty header, and NOTHING running ────────────
-
-function parkHarness(record) {
-  const calls = { startSession: [], query: [], consume: [], dispatch: [], emit: [] };
-  const sessions = new Map();
-  const io = {
-    makePushIterator: () => ({ pushed: [], push(m) { this.pushed.push(m); }, close() {} }),
-    frameContinuation: () => { throw new Error("a recreate must not frame a turn"); },
-    noteGatedBody: (s, b) => { (s.gatedBodies = s.gatedBodies || []).push(b); },
-  };
-  const store = {
-    sessionKey: (c, t) => `${c}:${t}`, getRecord: () => record, getSdkSessionId: () => "sdk-1",
-    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
-    // thread for every other), so the fake mirrors the real store's slotKey too.
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
-  };
-  const api = new Function(
-    "io", "store", "crypto", "Notification", "diag",
-    `${PARK}\n return { bind, recreateParkedShell, emitParkedShell };`
-  )(io, store, { randomBytes: () => ({ toString: () => "dead" }) }, null, () => {});
-  api.bind({
-    sessions,
-    getSdk: async () => ({ query: (a) => { calls.query.push(a); return {}; } }),
-    buildSdkOptions: () => { throw new Error("a parked shell assembles no SDK options"); },
-    consume: (...a) => calls.consume.push(a),
-    dispatch: (...a) => calls.dispatch.push(a),
-    startSession: async (spec) => { calls.startSession.push(spec); const s = { key: spec.key, settled: false, ...spec }; sessions.set(spec.key, s); return s; },
-    hasLiveSession: () => false,
-    emit: (s, p) => calls.emit.push(p),
-    windowFactoryReady: () => true,
-    atWindowCap: () => false,
-    settleSession: () => {},
-  });
-  return { ...api, sessions, calls };
-}
-
-const REC = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder", profile: "full", mode: "interactive" };
-
-test("A5: recreateParkedShell asks for parkedShell:true with NO first turn of any kind", async () => {
-  const h = parkHarness(REC);
-  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
-  const spec = h.calls.startSession[0];
-  assert.equal(spec.parkedShell, true, "the shell flag is what suppresses startQuery");
-  assert.equal(spec.rawFirstTurn, undefined, "no resume nudge is smuggled in");
-  assert.equal(spec.firstMessage, undefined, "and no request body either");
-  // Nothing downstream of the window was touched: no SDK, no consumer loop, no dispatch.
-  assert.deepEqual(h.calls.query, [], "no sdk.query");
-  assert.deepEqual(h.calls.consume, [], "no consumer loop");
-  assert.deepEqual(h.calls.dispatch, [], "and no event dispatched into the reducer");
-});
-
-test("A5: the shell paints init + a calm note + the Paused pill, and emits nothing else", () => {
-  const h = parkHarness(REC);
-  h.emitParkedShell({ sessionId: "s1", side: "responder", profile: "full", mode: "interactive", context: {} });
-  assert.deepEqual(h.calls.emit.map((p) => p.type), ["init", "notice", "status"]);
-  assert.equal(h.calls.emit[0].model, null, "no model: nothing is running");
-  assert.equal(h.calls.emit[2].phase, "parked");
-  // The note is the operator-facing statement of exactly this behaviour.
-  assert.match(h.calls.emit[1].text, /Nothing is running yet/);
-});
-
-// ── the engine's one non-extractable branch: return BEFORE startQuery ─────────────
-
-test("A5: startSession returns on a parkedShell BEFORE it can reach startQuery", () => {
-  assert.match(ENGINE, /if \(spec\.parkedShell\) \{ sessionPark\.emitParkedShell\(s\); return s; \}/,
-    "the early return is the guard; deleting it turns every Open session into a launch");
-  const guard = ENGINE.indexOf("if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }");
-  const start = ENGINE.indexOf("await startQuery(s, sdk);", guard);
-  assert.ok(start > guard, "startQuery is only reachable AFTER the parked-shell branch returns");
-  // And the turn it would have pushed is empty for a shell, so even a regression here has
-  // nothing to say. (session-engine builds `firstTurn` before the branch.)
-  assert.match(ENGINE, /const firstTurn = spec\.parkedShell \? ''/);
-});
+// ⚠ THE ENGINE'S EARLY-RETURN TEST STOOD HERE — a source read of
+// `if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }` proving `startQuery` was
+// only reachable after it. The line is gone with `emitParkedShell`. What survives of the flag —
+// a `parkedShell` spec still boots DORMANT and still rehydrates its cap budget — is pinned
+// behaviourally against the shipping preamble in test/main-audit-resume-budget.test.mjs, which
+// is the stronger form of the same guard.
 
 // ── the wake triggers: ONLY a steer or an ACCEPTED inbound resumes ────────────────
 
@@ -178,8 +80,8 @@ const { initialSessionState, sessionReducer } = new Function(
   `${REDUCER}\n return { initialSessionState, sessionReducer };`
 )();
 
-// The state an opened shell is in: parked, nothing running (session-engine stamps exactly
-// these three fields on a parkedShell spec).
+// The state a parked session is in: parked, nothing running (session-engine stamps exactly
+// these three fields on a parkedShell spec, and `endEffects`' park path lands on the same set).
 const parked = () => ({ ...initialSessionState(), phase: "parked", parked: true, activity: "parked" });
 const effTypes = (r) => r.effects.map((e) => e.type);
 
@@ -216,7 +118,7 @@ test("A5: a DECLINE is not a wake trigger either", () => {
 
 test("A5: the SDK tail of the torn-down query cannot wake an opened shell", () => {
   // FIX #5: a late assistant/tool/result from the query that was aborted at park must be
-  // inert. Otherwise "Open session" plus one straggler message would look like a resume.
+  // inert. Otherwise opening a view plus one straggler message would look like a resume.
   for (const type of ["assistant", "tool_use", "tool_result", "result", "permission_request", "outbound_post"]) {
     const r = sessionReducer(parked(), { type, text: "x", requestId: "r1" });
     assert.deepEqual(r.effects, [], `${type} must produce no effects on a parked shell`);

@@ -146,11 +146,12 @@ test("re-seeing the same message is idempotent, and a re-address wins", () => {
 });
 
 // ── the OTHER half: the reply has to carry the tag in the first place ────────────
-// Recognizing a tagged reply is worth nothing if nothing tags one. A session window posts
+// Recognizing a tagged reply is worth nothing if nothing tags one. A spawned session posts
 // through the pre-approved dopl_channel tool, so its thread id has to reach the framing
 // (prompt-framing.deliverySection reads ONLY the spawn context); the headless path posts
 // through channel-post and has to read the record's CONCRETE id, not the first-class-only
-// rec.taskId. These pin both spawn sites and every outbound tag on the headless path.
+// rec.taskId. These pin the surviving spawn site and every outbound tag on the headless path.
+// ⚠ THERE USED TO BE TWO SPAWN SITES — see the excision block below.
 
 test("trigger.js: the responder spawn context carries the thread id (legacy ids included)", () => {
   const src = M("trigger.js");
@@ -160,11 +161,23 @@ test("trigger.js: the responder spawn context carries the thread id (legacy ids 
   assert.match(src, /return rec\.taskId \|\| `task-\$\{rec\.channelId\}-\$\{rec\.seq\}`;/);
 });
 
-test("session-dispatch.js: the requester spawn context carries the thread id too", () => {
-  const src = M("session-dispatch.js");
-  const call = src.slice(src.indexOf("sessionEngine.launchRequesterSession({"), src.indexOf("toolProfile: targeting.resolveToolProfile"));
-  assert.match(call, /\n {6}taskId,\n/, "the context names the thread this session drives");
-});
+// ⚠ THE SECOND SPAWN SITE IS GONE (2026-08-20, F-228). A test stood here —
+// "session-dispatch.js: the requester spawn context carries the thread id too" — and pinned
+// that `sessionEngine.launchRequesterSession({ … taskId … })` named the thread its context
+// drove, for the same reason the responder pin above does: prompt-framing.deliverySection
+// reads ONLY the spawn context, so a requester spawned without the thread id posted its reply
+// to the peer as a brand-new request.
+//
+// It is excised rather than repointed because BOTH ends of it were deleted:
+// `maybeOpenRequesterSession` (route 2 of five — the one that minted a REQUESTER WINDOW on the
+// operator's OWN thread opener, which is the self-trigger bug the retirement was ruled from)
+// and with it the only `launchRequesterSession` call site in session-dispatch.js. There is no
+// requester spawn left on this machine to carry a thread id.
+//
+// ⚠ WHAT IT PROTECTED IS NOT ORPHANED. The invariant is "every outbound tag names the thread",
+// and the RESPONDER half — the surviving spawn site, plus `taskIdFor(rec)` on every headless
+// tag — is pinned by the two tests either side of this block. Those are the paths a legacy id
+// can still travel.
 
 test("trigger.js: every headless outbound tag reads taskIdFor(rec), never the raw rec.taskId", () => {
   const src = M("trigger.js");

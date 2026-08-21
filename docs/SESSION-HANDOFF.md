@@ -189,7 +189,7 @@ would have shipped broken.**
 - **Streaming** (`includePartialMessages` is off) → unlocks the `thinking` pill state.
   NOTE: the claim "thinking can only come from a stream" is **overstated** — the session
   window already ships a Thinking indicator derived without streaming
-  (`session-chrome.js:117-122`).
+  (the session window's chrome — DELETED 2026-08-20, F-228).
 - **`agent_presence` retirement** — now unblocked to *measure*. It heartbeats every 30 s per
   listener per workspace and is the **quadratic always-on term** (break points ≈26 concurrent
   at burst, ≈82 sustained). The new `channel_sessions` store writes only on state change.

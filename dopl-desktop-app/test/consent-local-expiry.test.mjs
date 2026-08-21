@@ -13,6 +13,10 @@
 // live inside it:
 //   1. `closeConsentWindow` — so a pre-consent window left open for 24h stayed open FOREVER,
 //      with a live Accept button over a row the server had already expired.
+//      ⚠ DELETED, NOT FIXED-AND-KEPT (2026-08-20, F-228): there is no pre-consent window and
+//      no `closeConsentWindow` to call. Half of C-7's visible damage is unreachable by
+//      construction now; the ROUTING this file is about is unchanged, and half 2 below is
+//      what still makes an unrouted expiry a grant bug rather than a cosmetic one.
 //   2. `clearPermissionPreset` — so the posture the operator armed for a request they then
 //      ignored stayed armed for the NEXT launch in that channel.
 //
@@ -131,15 +135,27 @@ test("C-7: a locally-expired INBOUND record runs the inboundExpired resolver", (
   });
 });
 
-test("C-7: that resolver is where closeConsentWindow and clearPermissionPreset live", () => {
-  // The window and the preset are the two things the old `settleRequest`-and-return skipped.
-  // Pinned against trigger-outcomes.js so a future edit that moves either one out of the
-  // resolver has to come back here and say why.
+test("C-7: that resolver is where clearPermissionPreset lives", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, F-228; INVARIANTS §14). This case named TWO things
+  // the old `settleRequest`-and-return skipped, and the FIRST of them is deleted:
+  // `sessionEngine.closeConsentWindow(rec.key, 'expired')` closed the PRE-CONSENT WINDOW, the
+  // surface that showed a live Accept button over a row the server had already expired. There
+  // is no pre-consent window — `openConsentWindow` / `decideConsent` / `closeConsentWindow` /
+  // `releaseConsentWindow` all went with `renderer/session/**` — so the visible half of C-7 is
+  // not fixed-and-pinned, it is UNREACHABLE. Its absence is asserted below rather than left
+  // implicit, because a resolver that quietly regrew a window call is exactly the drift this
+  // case was written to catch.
+  //
+  // THE INVISIBLE HALF IS UNTOUCHED AND IS WHY THE FILE STILL EXISTS: an armed posture
+  // surviving an ignored request into the NEXT launch in that channel is a grant nobody gave
+  // (H2), and it is entirely independent of any surface. Pinned against trigger-outcomes.js so
+  // a future edit that moves it out of the resolver has to come back here and say why.
   const body = OUTCOMES.slice(OUTCOMES.indexOf("async function inboundExpired("));
-  assert.match(body, /sessionEngine\.closeConsentWindow\(rec\.key, 'expired'\)/,
-    "a 24h-old window with a live Accept over an expired row is the visible half of C-7");
+  assert.ok(body.length > 0, "the resolver still exists — a missing slice would pass everything below");
   assert.match(body, /channelPrefs\.clearPermissionPreset\(rec\.channelId\)/,
-    "and an armed posture surviving into the NEXT launch is the invisible half");
+    "an armed posture surviving into the NEXT launch is what a local expiry must still clear");
+  assert.ok(!/closeConsentWindow|releaseConsentWindow|openConsentWindow/.test(OUTCOMES),
+    "the consent-window family is deleted, not merely unused — a call here would not resolve");
 });
 
 test("C-7: a locally-expired OUTBOUND review is cancelled, not silently dropped", () => {

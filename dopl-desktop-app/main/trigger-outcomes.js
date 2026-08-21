@@ -33,7 +33,6 @@
 const { Notification } = require('electron');
 const targeting = require('./targeting');
 const watcher = require('./consent-watcher');
-const sessionEngine = require('./session-engine');
 const channelPrefs = require('./channel-prefs');
 const { postTaskEvent } = require('./channel-post');
 const { diag } = require('./diag');
@@ -85,9 +84,6 @@ async function inboundDenied(rec) {
   // Decision echo: the web renders task_failed + { declined: true } as a calm
   // "Declined", distinct from an error (which carries no declined flag).
   await postTaskEvent(entry, m, 'task_failed', deps.taskIdFor(rec), { declined: true }, 'Request declined');
-  // Item 8 step 5/6: close the pre-consent window (no-op if it was never opened,
-  // adopted, or parked). NO SDK ever ran for a denied request.
-  try { sessionEngine.closeConsentWindow(rec.key, 'denied'); } catch (_) { /* best effort */ }
   // H2: drop the permission arm this request may have carried. It is single-use and
   // expiring anyway, so this is not what makes the invariant hold — but a posture the
   // operator chose for a request they then REFUSED should not sit around waiting for
@@ -99,8 +95,6 @@ async function inboundDenied(rec) {
 // ── Resolver: inbound EXPIRED → silent drop ──────────────────────────────────
 async function inboundExpired(rec) {
   diag('inbound expired (no decision) — dropping', rec.key);
-  // Item 8: close the pre-consent window if it is still open (no-op otherwise).
-  try { sessionEngine.closeConsentWindow(rec.key, 'expired'); } catch (_) { /* best effort */ }
   // H2: same reasoning as the deny above — an unanswered request leaves no posture behind.
   try { channelPrefs.clearPermissionPreset(rec.channelId); } catch (_) { /* best effort */ }
   watcher.settle(rec.key, 'expired');

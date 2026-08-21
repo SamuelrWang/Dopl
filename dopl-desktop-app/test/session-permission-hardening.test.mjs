@@ -15,8 +15,17 @@
 //   F8 U+0085 survived sanitizeName; the fence-token strip was single-pass
 //   F9 a kind outside the four-value enum keyed but did not render; non-string to/kind
 //
-// Layers: direct requires for main's pure modules + the renderer's label module, and one
-// source pin each for F1 and F4 where the bug was the absence of a line.
+// Layers: direct requires for main's pure modules, and one source pin each for F1 and F4 where
+// the bug was the absence of a line.
+//
+// ⚠ THE RENDERER LAYER IS GONE (2026-08-20, F-228). This file used to also require
+// `renderer/session/session-labels.js` and assert, for three of the nine findings, that the
+// operator's CARD said what the grant key SCOPED — the tightest half of the whole file, because
+// a key that scopes what the copy does not name is an approval given for something else. The v1
+// session window was deleted whole, `session-labels.js` with it. What remains here is the
+// DECISION layer: `session-profiles` (grantDecision / grantKeyFor / the mode tables),
+// `session-io` (the gate payload main actually emits) and `prompt-framing`. Each ⚠ block below
+// names the copy assertion it lost and where, if anywhere, that claim still lives.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,12 +37,10 @@ import { createRequire } from "node:module";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
-const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.url));
 
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
 const framing = require(M("prompt-framing.js"));
-const labels = require(R("session-labels.js"));
 const tp = require(M("tool-profiles.js"));
 
 const { grantDecision, grantKeyFor, isChannelTool, TOOL_MODES, MESSAGE_MODES } = profiles;
@@ -129,13 +136,30 @@ test("F2: `dopl_only` no longer SHADOWS the write tools — they reach canUseToo
   for (const tool of DOPL_WRITE) assert.ok(cfg.doplToolsPolicy.includes(profiles.shortDoplName(tool)), tool);
 });
 
-test("F2: the `auto` posture copy names the workspace writes it gates", () => {
-  const line = labels.toolPostureText("auto");
-  assert.equal(line, "Auto approving local edits and lookups, asking for shell, web and workspace writes");
-  assert.ok(!line.includes("—"), "no em dash in our copy (§H-13)");
-  // The old wording promised only shell and web, which is what made the hole invisible.
-  assert.ok(!/^Auto approving commands, asking for shell and web$/.test(line));
-});
+// ── ⚠ F2's FOURTH TEST — REMOVED 2026-08-20, but the guard MOVED, it did not die ──
+//
+// WHAT STOOD HERE: "F2: the `auto` posture copy names the workspace writes it gates", over
+// `renderer/session/session-labels.js › toolPostureText("auto")`. It pinned the exact string
+//   "Auto approving local edits and lookups, asking for shell, web and workspace writes"
+// and, negatively, that the OLD wording ("Auto approving commands, asking for shell and web")
+// could never come back. That negative was the point: the three tests above prove `auto` GATES
+// the dopl write tools, and this one proved the operator is TOLD SO. A posture whose copy
+// promises less than it gates is a hole the operator cannot see, which is how the original F2
+// survived review.
+//
+// WHY IT IS NOT REWRITTEN HERE: `session-labels.js` was deleted with `renderer/session/**`
+// (F-228). The desktop no longer owns this copy at all.
+//
+// ⚠ WHERE THE CLAIM LIVES NOW — check before assuming it lapsed. The posture descriptions moved
+// to the SPA: `src/features/channels/components/permission-preset-row.tsx` carries both strings
+// verbatim (`auto` -> "…asking for shell, web and workspace writes", `auto_outbound` -> "Auto
+// sending outgoing messages") and `permission-preset-row.test.tsx` asserts the `auto` one — a
+// ROOT-tree vitest file, a different suite from this one. Do NOT re-pin it from here by reading
+// the .tsx as text (INVARIANTS §14: a regex over source is not a behavioural assertion).
+//   ⚠ AND NOTE THE JOIN THAT IS NOW UNPINNED. `session-profiles.js` decides what `auto` gates;
+//   the .tsx states what `auto` promises; no shared module makes them agree. Each half is
+//   pinned, the CORRESPONDENCE is not — so widening what `auto` auto-approves leaves both
+//   suites green and the operator mis-told, which is the F2 defect itself, one refactor away.
 
 // ── F3: unknown names, and the channel tool matched by shape not by literal ────────
 // EXPLOIT (a): toolModeAllows returned true for `bypass` unconditionally and for `auto`
@@ -332,11 +356,21 @@ test("F7: the body scope rides the CROSS-channel post key as well", () => {
   assert.notEqual(keyOf(post({ channel: "other", body: "hi" })), keyOf(post({ channel: "other", body: "secrets" })));
 });
 
-test("F7: AXIS B is still the way to send hands-off, and it is stated in the header", () => {
+test("F7: AXIS B is still the way to send hands-off, and it is a DURABLE posture", () => {
   // The point of scoping the grant: the honest control for "send my replies for me" is the
-  // Messages axis, which the posture line always states and the park always resets.
+  // Messages axis, which is a stated posture rather than an invisible second path to the same
+  // power. A body-scoped grant is per-message; `auto_outbound` covers any body, by design.
   assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "anything at all" }), messageMode: "auto_outbound" }), "allow");
-  assert.equal(labels.messagePostureText("auto_outbound"), "Auto sending outgoing messages");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "something else entirely" }), messageMode: "auto_outbound" }), "allow");
+  // ⚠ REWRITTEN 2026-08-20 (F-228). The second assertion used to be
+  // `labels.messagePostureText("auto_outbound") === "Auto sending outgoing messages"` — the
+  // "and it is stated in the header" half of the title, which is why the title changed too.
+  // That copy moved to `src/features/channels/components/permission-preset-row.tsx`; see the ⚠
+  // block at F2 for why it is not re-pinned from here. What is asserted instead is the property
+  // the copy was EVIDENCE for: that Axis B is genuinely body-independent, so "use the axis
+  // instead of a broad grant" is real advice and not a nicer-sounding version of the same hole.
+  // The other half of the original claim — that the park resets it — is pinned by M2 above and
+  // by session-posture-sticks.test.mjs, not here.
 });
 
 // ── F8: nothing that can start a line survives into the TRUSTED preamble ──────────
@@ -400,24 +434,43 @@ function gateOnce(input) {
   return payload;
 }
 
-test("F9: ANY non-default kind is named on the card, not just the four known ones", () => {
+// ⚠ CUT DOWN 2026-08-20 (F-228), NOT REMOVED — and the title changed with it, because it now
+// claims less than it did. WHAT WENT: two `labels.postDestinationText` assertions per kind,
+// pinning that the card read "To: David, marked <kind>" when addressed and "To: this channel, no
+// recipient named, marked <kind>" when not. That was the half that closed F9: `postScope` keyed
+// ANY non-'message' kind while `postKindOf` only NAMED the four-value enum, so `Task_Finished`
+// earned its own grant key and rendered as nothing.
+//
+// ⚠ WHAT SURVIVES IS MAIN'S HALF, AND IT IS THE HALF THAT DECIDES. `postKind` is stamped on the
+// payload that crosses the process boundary (INVARIANTS §11), so "the operator was told which
+// kind this is" is now enforced as far as main can enforce it: the fact is EMITTED. The last
+// step — that a consumer paints it — is pinned nowhere, and a new surface that drops `postKind`
+// on the floor would reopen F9 with this file still green. That is the gap; it is stated here
+// rather than papered over.
+test("F9: ANY non-default kind is stamped on the gate payload, not just the four known ones", () => {
   for (const kind of ["Task_Finished", "task_finished", "urgent", "system", "TASK_FAILED"]) {
     assert.equal(gateOnce(post({ kind })).postKind, kind, kind);
-    assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", addressed: true, postKind: kind }),
-      "To: David, marked " + kind);
-    // N-PARTY: the kind is named on an UNADDRESSED post too — it is the louder half of the line.
-    assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", postKind: kind }),
-      "To: this channel, no recipient named, marked " + kind);
   }
-  // The plain-chat default still adds nothing, so an ordinary reply's card is unchanged.
+  // The plain-chat default still stamps nothing, so an ordinary reply is unchanged.
   for (const kind of [undefined, "", "message"]) {
     assert.equal(gateOnce(post({ kind })).postKind, undefined, String(kind));
   }
-  // And each one really does key separately (the half that was already true).
+  // And each one really does key separately (the half that was already true, and the half the
+  // brief asked to keep explicitly: the KEY is what scopes the grant).
   assert.notEqual(keyOf(post({ kind: "Task_Finished" })), keyOf(post({ kind: "task_finished" })));
+  assert.notEqual(keyOf(post({ kind: "urgent" })), keyOf(post({ kind: "system" })));
+  assert.notEqual(keyOf(post({ kind: "task_finished" })), keyOf(post({})));
 });
 
-test("F9: a non-string `to` / `kind` is REJECTED, and says so on the card", () => {
+// ⚠ KEPT WHOLE (2026-08-20). The title says "card", but not one assertion in it touches a
+// renderer: `gateOnce` drives `session-io.makeCanUseTool` and reads main's own payload, and the
+// "an invalid recipient" / "an invalid kind" strings are produced by `main/session-post-surface.js`,
+// which ships. Removing it with the label tests is exactly the mistake INVARIANTS §14 names —
+// deleting one whole taking an unrelated live guard with it. The rule it holds is main-side and
+// load-bearing: a non-string `to` is REPLACED with a refusal string rather than coerced, because
+// `String({a:1})` is "[object Object]" for every object and `String(["alice"])` is "alice", so
+// coercion would let two different recipients share one identity.
+test("F9: a non-string `to` / `kind` is REJECTED by main, and says so on the payload", () => {
   assert.equal(gateOnce(post({ to: { a: 1 } })).to, "an invalid recipient");
   assert.equal(gateOnce(post({ to: ["alice"] })).to, "an invalid recipient");
   assert.equal(gateOnce(post({ kind: { a: 1 } })).postKind, "an invalid kind");

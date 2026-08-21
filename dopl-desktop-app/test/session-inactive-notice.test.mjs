@@ -11,6 +11,11 @@
 //      no query ever run, no `task_started`, and nothing at all on the wire.
 //   3. THE WINDOW-BUDGET EVICTION. `evictIdleShell` called the engine's `settle()` directly,
 //      which is teardown only: no reducer, therefore no lifecycle effect.
+//      ⚠ THAT CALLER IS GONE AND THE RULE IS NOT (2026-08-20, F-228). The eviction existed to
+//      reclaim a WINDOW budget and was deleted with the windows, so §3 below is rewritten off
+//      its surviving producers rather than off `evictIdleShell`. `inactive` itself is not
+//      window machinery: `session-reopen.endLiveSessions` (the quit sweep) and the launch
+//      watchdog both still reach it, and both still go through the reducer.
 //
 // SAMUEL'S DECISION: the waiting person gets a message in the thread saying the session went
 // inactive, worded as a STATUS NOTE and not an error — it is nobody's fault.
@@ -39,7 +44,8 @@ import { dirname, join } from "node:path";
 import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
+const MAIN = join(HERE, "..", "main");
+const M = (p) => readFileSync(join(MAIN, p), "utf8");
 const ECHO_SRC = M("trigger-outcomes.js"); // the lifecycle echo (moved off session-window.js, 2026-08-20)
 const PARK = M("session-park.js");
 
@@ -172,9 +178,16 @@ test("AUTH HOLD: the IDLE park still posts NOTHING — it is a pause, not an end
   assert.ok(lifecycleOf(parkEffects(running(), { lifecycle: true })), "only the flagged park posts");
 });
 
-// ── 3. THE WINDOW-BUDGET EVICTION ────────────────────────────────────────────────────
+// ── 3. THE `inactive` TERMINAL ───────────────────────────────────────────────────────
+// ⚠ RENAMED FROM "THE WINDOW-BUDGET EVICTION" (2026-08-20, F-228). The eviction was a
+// WINDOW-budget mechanism — `evictIdleShell` reclaimed the least-recently-used parked SHELL
+// when the open-window count hit its cap — and it went with the windows. The reducer event it
+// used is NOT window machinery and did not go: `inactive` is still C-5's calm terminal, and it
+// still has live dispatchers. What is pinned below is therefore the same rule with its
+// surviving producer: whatever reaches this terminal goes through the reducer, so the note is
+// posted from ONE place.
 
-test("EVICTION: it goes through the reducer, so the post is the same one, from the same place", () => {
+test("`inactive`: it goes through the reducer, so the post is the same one, from the same place", () => {
   const r = sessionReducer(parked(), { type: "inactive" });
   const lc = lifecycleOf(r.effects);
   assert.ok(lc);
@@ -182,11 +195,42 @@ test("EVICTION: it goes through the reducer, so the post is the same one, from t
   assert.ok(r.effects.some((e) => e.type === "settle"), "and the slot is still freed");
 });
 
-test("EVICTION: the bare settle() call is GONE from session-park — one path, not two", () => {
-  const evict = PARK.slice(PARK.indexOf("function evictIdleShell()"));
-  assert.match(evict, /deps\.dispatch\(victim, \{ type: 'inactive' \}\)/);
-  assert.ok(!/deps\.settleSession\(/.test(evict),
-    "a direct settle here is exactly what bypassed the lifecycle post");
+test("`inactive`: every producer DISPATCHES it — no module still settles a session by hand", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (INVARIANTS §14). This case used to slice `evictIdleShell` out of
+  // session-park.js and assert that IT dispatched rather than calling `deps.settleSession`
+  // directly — the exact line that bypassed the lifecycle post before C-5. `evictIdleShell` is
+  // deleted (F-228), so slicing it now yields the empty string and the assertion fails on
+  // absence rather than on the rule. The RULE survives its subject, and is worth more than the
+  // one call site was: a bare settle anywhere is teardown with no reducer, therefore no
+  // lifecycle effect, therefore a peer left pulsing "Working…" forever.
+  //
+  // Two halves, because the engine's injection is what made the old bypass possible at all:
+  //   (a) session-park cannot settle even if a future evict-shaped path comes back — the
+  //       handle is neither used nor supplied. The engine's own bind comment records that
+  //       `settleSession` left with the shell-recreate family; this asserts it.
+  const ENGINE = M("session-engine.js");
+  assert.ok(!/deps\.settleSession\(/.test(PARK), "session-park settles nothing by hand");
+  const bind = ENGINE.slice(ENGINE.indexOf("sessionPark.bind({"), ENGINE.indexOf("});", ENGINE.indexOf("sessionPark.bind({")));
+  assert.ok(bind.includes("dispatch"), "precondition: the bind object is the one we think it is");
+  assert.ok(!/settleSession/.test(bind), "and the engine no longer hands the park lane a settle at all");
+
+  //   (b) the producers that DO reach this terminal go through `deps.dispatch`. Discovered by
+  //       grep so a new one cannot be added silently — and asserted non-empty, because a
+  //       terminal with no producer left would make the reducer case above vacuous.
+  const producers = readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js"))
+    .filter((f) => /type: 'inactive'/.test(M(f)))
+    .sort();
+  assert.ok(producers.length > 0, "the calm terminal must still have a producer");
+  for (const f of producers) {
+    for (const line of M(f).split("\n").filter((l) => l.includes("type: 'inactive'"))) {
+      assert.ok(
+        /deps\.dispatch\(|dispatch\(s,|return \{ ms:/.test(line),
+        `main/${f} reaches the calm terminal without the reducer: ${line.trim()}`
+      );
+    }
+  }
+  assert.ok(producers.includes("session-reopen.js"), "the quit sweep is the one that must never bypass it");
 });
 
 // ── THE DOUBLE-POST GUARD ────────────────────────────────────────────────────────────

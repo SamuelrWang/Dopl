@@ -20,6 +20,16 @@
 //
 // session-engine.js is electron-bound, so `settle` is source-extracted and driven with
 // fakes (the idiom the rest of this directory uses).
+//
+// ⚠ EVERY C3 RULE IN THIS FILE IS LIVE AND EVERY ONE OF THEM STILL RUNS. The 2026-08-20
+// session-window retirement (F-228) broke this suite WITHOUT touching a single thing it pins:
+// the extraction slices `settle` by naming its NEXT NEIGHBOUR as the end marker, that neighbour
+// was `getSessionBySender` — deleted with the window model, since it resolved a session from a
+// window's webContents — and a slice whose end marker is absent takes `indexOf() === -1` and
+// asserts out. The marker is now `setLifecycleHandlers`, which really does follow `settle`.
+// ⚠ THE LESSON IS ABOUT THE IDIOM, NOT ABOUT THIS FILE: a source slice keyed on a NEIGHBOUR is
+// coupled to code it makes no claim about, and it fails LOUDLY but points at the wrong module.
+// Nothing here was rewritten, weakened or removed — the harness was wrong, not the contract.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -56,7 +66,7 @@ function harness(over = {}) {
   const api = new Function(
     "store", "sessions", "refreshTray", "baseRecord", "sessionSummary",
     `${cut("function denyPendingPermissions(s, message) {", "// A hidden window RESHOWS")}
-     ${cut("function settle(s, outcome, keepWindow) {", "function getSessionBySender(")}
+     ${cut("function settle(s, outcome, keepWindow) {", "function setLifecycleHandlers(")}
      return { settle, denyPendingPermissions };`
   )(store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }), sessionSummary);
   calls.ended = sessionSummary.ended;
@@ -101,7 +111,13 @@ test("C3: the rest of the terminal contract is unchanged", () => {
   h.settle(h.s, "interrupted");
   assert.equal(h.s.settled, true);
   assert.equal(h.sessions.size, 0, "the registry slot is freed");
-  assert.equal(h.calls.destroyed, 1, "the window is destroyed");
+  // ⚠ KEPT DELIBERATELY THOUGH NO LIVE SESSION CAN REACH IT (2026-08-20, F-228). `settle`'s
+  // `if (!keepWindow && s.win && !s.win.isDestroyed()) s.win.destroy()` is unchanged LIVE source,
+  // but a windowless session's `win` is null, so the guard short-circuits and nothing is ever
+  // destroyed in production. Deleting the assertion would delete the only rule over that line
+  // while the line is still there to go wrong — §14's exact failure mode. It goes when the line
+  // goes, in the same change.
+  assert.equal(h.calls.destroyed, 1, "a session that DOES carry a window has it destroyed");
   assert.deepEqual(h.calls.clearedSdk, [], "an interrupted end KEEPS the sdkSessionId (FIX #7)");
   assert.equal(h.calls.saved.length, 1, "the full record still persists");
   // A completed/failed end still drops the resume entry.
@@ -124,7 +140,7 @@ test("C3: a session with no live handles settles without throwing (parked shell 
 });
 
 test("C3: the shipped settle really runs the teardown BEFORE it drops the handles", () => {
-  const body = cut("function settle(s, outcome, keepWindow) {", "function getSessionBySender(");
+  const body = cut("function settle(s, outcome, keepWindow) {", "function setLifecycleHandlers(");
   const order = ["denyPendingPermissions(s, 'Session ended')", "s.pushIterator.close()", "s.abortController.abort()", "sessions.delete(s.key)"];
   let at = -1;
   for (const needle of order) {

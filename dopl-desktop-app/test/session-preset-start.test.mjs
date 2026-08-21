@@ -17,19 +17,39 @@
 // paths that actually re-applied the preset — so it could not have failed. Every test below
 // DRIVES a real spawn path against the real startSession and asserts the resulting AXES.
 //
-// THE INVARIANT: the posture travels ONLY as an explicit `spec.startModes`, supplied by
-// exactly one caller (trigger.js, on a human `allowed` consent, consuming a single-use arm).
-// Every other shape passes nothing and inherits the reducer's own manual/ask.
+// THE INVARIANT: the posture travels ONLY as an explicit `spec.startModes`, supplied by a caller
+// executing a decision a human is making right now. Every other shape passes nothing and
+// inherits the reducer's own manual/ask.
+//
+// ⚠ WHAT MOVED ON 2026-08-20 (F-228), AND WHAT DID NOT. The invariant is untouched; three of the
+// things this file measured it against are deleted, so it is rewritten down to what survives
+// (INVARIANTS §14) rather than removed:
+//   · the SECOND posture source — the pre-consent CARD's own pair, consumed by registry entry
+//     (`sessionConsent.takeStartModes`, `spec.adoptsConsent`) — went with the session window.
+//     The construction-site harness is re-sliced from `const armedModes = spec.startModes;`,
+//     and the absence of a second source is now itself asserted there.
+//   · `recreateParkedShell` / `openFromChannel` — the two paths that actually re-applied the
+//     stored preset in the v3.1 bug — are deleted. The case that named them is replaced by a
+//     CENSUS of every caller in main/ that hands a posture in, which is what it was sampling.
+//   · the in-window controls (`session-ipc.js`, `session:set-tool-mode`) are deleted with no
+//     successor: there is no per-session mode control, the posture is decided once at launch.
+//     The write-side case is replaced by an enumeration of every writer of an arm.
+// ⚠ AND ONE CASE HAD ALREADY GONE VACUOUS AND WAS READING AS GREEN — see §5.
+//
+// TWO CALLERS supply a posture today, and the census below is the authority on that: trigger.js
+// (the consent-approved responder lane, consuming a single-use arm) and channel-dir-ipc.js
+// (`sessions:launch`, the operator's own click on the Agents tab, reading the durable record).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const M = (p) => join(HERE, "..", "main", p);
+const MAIN = join(HERE, "..", "main");
+const M = (p) => join(MAIN, p);
 const read = (p) => readFileSync(M(p), "utf8");
 const ENGINE = read("session-engine.js");
 const PARK = read("session-park.js");
@@ -48,17 +68,23 @@ const WIDE = { tools: "bypass", messages: "auto_both" };
 // sliced from the shipped engine and evaluated against the real initialSessionState.
 // This is what the old file should have exercised.
 
-// FIX 1 (2026-08-02) added a SECOND, tighter source: the posture the operator picks on the
-// pre-consent card itself, consumed by entry rather than by channel. `consentArm` stands in
-// for that registry — null (the default) is "the card was never touched", which is every
-// pre-existing case below, so all of them still drive the identical expression.
-function startModesFor(spec, consentArm) {
-  const src = ENGINE.slice(ENGINE.indexOf("const consentModes = sessionConsent.takeStartModes"),
+// ⚠ RE-SLICED, AND THE SECOND SOURCE IS GONE (2026-08-20, F-228). FIX 1 (2026-08-02) had added
+// a SECOND, tighter posture source — the pair the operator picked on the PRE-CONSENT CARD
+// itself, consumed by registry entry rather than by channel — and this harness injected a
+// `sessionConsent` fake for it, defaulting to null ("the card was never touched"). Both the
+// card and `sessionConsent.takeStartModes` went with `renderer/session/**`, taking the
+// `const consentModes = ...` line this slice STARTED at, so every case here failed on an
+// unresolvable slice rather than on anything about postures. The head begins at `armedModes`
+// now and there is ONE source: `spec.startModes`, handed in per launch. Fewer free variables,
+// and the shape H2 always wanted — the card was the exception to it.
+function startModesFor(spec) {
+  const src = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
     ENGINE.indexOf("const context = { ...(spec.context || {})"));
   assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
-  const sessionConsent = { takeStartModes: () => consentArm || null };
-  const state = new Function("spec", "initialSessionState", "readCaps", "sessionConsent",
-    `${src}\n return state;`)(spec, initialSessionState, () => ({}), sessionConsent);
+  assert.ok(!/sessionConsent|consentModes|adoptsConsent/.test(src),
+    "a second posture source is back at the construction site — that is H2, re-opened");
+  const state = new Function("spec", "initialSessionState", "readCaps",
+    `${src}\n return state;`)(spec, initialSessionState, () => ({}));
   return { toolMode: state.toolMode, messageMode: state.messageMode };
 }
 
@@ -81,11 +107,36 @@ test("H2: EVERY spawn shape that hands in NOTHING starts at manual/ask", () => {
   }
 });
 
-test("H2: a PARKED SHELL refuses a posture even if a caller hands one in", () => {
-  // Defence in depth. A shell starts dormant and is woken later by something that is NOT
-  // the approving human, so it must never carry a posture forward into that wake.
-  assert.deepEqual(startModesFor({ mode: "interactive", side: "requester", parkedShell: true, startModes: WIDE }),
-    { toolMode: "manual", messageMode: "ask" });
+test("H2: a PARKED SHELL refuses a posture unless a human armed it JUST NOW", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, F-228; INVARIANTS §14). The guard is the same
+  // `spec.parkedShell` read and it is still LIVE — a dormant shape must never carry a posture
+  // into a wake nobody is attending — but the shipped rule grew a carve-out and this case
+  // asserted the pre-carve-out absolute. FIX 4's `operatorArmed` is now the whole rule: a shell
+  // takes a handed-in posture ONLY when the caller says a human chose it at that moment. A bare
+  // recreate, reopen, resume or wake sets neither flag and still lands on manual/ask.
+  //
+  // Both sides are driven, because a one-sided version of this is how the carve-out becomes the
+  // default: the refusal is the security property, and the exception is the thing that must
+  // stay expensive to spell.
+  const shell = { mode: "interactive", side: "requester", parkedShell: true, startModes: WIDE };
+  assert.deepEqual(startModesFor(shell), { toolMode: "manual", messageMode: "ask" },
+    "defence in depth: a posture handed to a dormant shell is refused");
+  assert.deepEqual(startModesFor({ ...shell, operatorArmed: true }),
+    { toolMode: "bypass", messageMode: "auto_both" },
+    "…and only an EXPLICIT operatorArmed lets one through");
+  // `=== true` only. A truthy value a store or a payload could carry by accident must not open
+  // it, which is what makes the carve-out an assertion rather than a hint.
+  for (const junk of ["true", 1, {}, [], "yes", "operator"]) {
+    assert.deepEqual(startModesFor({ ...shell, operatorArmed: junk }),
+      { toolMode: "manual", messageMode: "ask" }, JSON.stringify(junk));
+  }
+  // ⚠ `spec.parkedShell` HAS NO PRODUCER LEFT (the shell-recreate lane is deleted), and the flag
+  // is deliberately still READ rather than scrubbed — a future non-window dormant shape sets it
+  // and inherits the safe behaviour. A guard with no live producer is exactly the kind that gets
+  // deleted as dead, so its presence at the construction site is asserted here.
+  const head = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
+    ENGINE.indexOf("const context = { ...(spec.context || {})"));
+  assert.match(head, /!spec\.parkedShell \|\| operatorArmed/, "the guard itself, not just its effect");
 });
 
 test("H2: a corrupt or hostile handed-in posture still lands on the MOST RESTRICTIVE member", () => {
@@ -107,13 +158,35 @@ test("H2: the preset is not, and cannot become, part of any GRANT", () => {
 
 // ── 2. THE RE-APPLYING PATHS: they hand in nothing, structurally ─────────────
 
-test("H2: recreateParkedShell and openFromChannel pass NO startModes to startSession", () => {
-  for (const fn of ["recreateParkedShell", "openFromChannel"]) {
-    const body = PARK.slice(PARK.indexOf(`async function ${fn}(`), PARK.indexOf("\n}", PARK.indexOf(`async function ${fn}(`)));
-    assert.ok(body.includes("deps.startSession("), `${fn} really spawns`);
-    assert.ok(!/startModes/.test(body), `${fn} must never hand in a posture`);
-    assert.ok(/parkedShell: true/.test(body), `${fn} spawns a dormant shell`);
-  }
+// ⚠ "H2: recreateParkedShell and openFromChannel pass NO startModes to startSession" STOOD HERE
+// AND IS DELETED (2026-08-20, F-228). It sliced those two functions out of session-park.js and
+// asserted each really spawned (`deps.startSession(`), spawned a DORMANT shell
+// (`parkedShell: true`), and handed in no posture. Both are deleted: `recreateParkedShell`
+// rebuilt a parked WINDOW for a thread with no live session (a peer reply on an old thread) and
+// `openFromChannel` was the operator's "Open session" from the channel view. They were the two
+// paths that actually re-applied the stored preset in the v3.1 bug, so they were the file's
+// original subjects — but the invariant never lived in them, and a slice of a deleted function
+// yields the empty string, against which `!/startModes/` passes for free.
+//
+// WHAT REPLACES IT IS STRONGER: those two were an incomplete list of who spawns, and the case
+// below enumerates EVERY caller that hands a posture in, off the tree.
+
+test("H2: exactly TWO callers in main/ hand a posture in, and neither arms a dormant shell", () => {
+  const files = readdirSync(MAIN).filter((f) => f.endsWith(".js") && f !== "session-engine.js");
+  const handers = files.filter((f) => /startModes:/.test(read(f))).sort();
+  assert.deepEqual(
+    handers,
+    ["channel-dir-ipc.js", "trigger.js"],
+    "a new caller that hands in a posture is a new way for one to reach a launch no human is " +
+      "attending — review it here rather than updating this list reflexively " +
+      "(trigger.js = the consent-approved responder lane, consuming the single-use arm; " +
+      "channel-dir-ipc.js = sessions:launch, the operator's own click on the Agents tab)"
+  );
+  // ...and NOBODY sets the parked-shell carve-out. `operatorArmed` exists so a future attended
+  // dormant shape can opt in explicitly; a producer appearing without a case here means a
+  // posture can now reach a shell, which is the exact failure H2 names.
+  const armers = files.filter((f) => /operatorArmed/.test(read(f))).sort();
+  assert.deepEqual(armers, [], "the parked-shell carve-out has no producer, and gaining one is a review");
 });
 
 test("H2: startResume (the crash/interrupted resume) passes NO startModes either", () => {
@@ -238,22 +311,58 @@ test("H2: a denied or expired request CLEARS the arm rather than leaving it to a
 });
 
 test("H2: nothing in the session path ever WRITES a posture back", () => {
-  assert.ok(!/armPermissionPreset|setPermissionPreset/.test(ENGINE), "the engine never writes an arm");
-  assert.ok(!/armPermissionPreset|setPermissionPreset/.test(read("session-ipc.js")),
-    "and changing the axes in-window persists nothing");
-  assert.match(read("session-ipc.js"), /session:set-tool-mode/, "the per-session control still exists");
+  // ⚠ THE SECOND HALF LOST ITS FILE (2026-08-20, F-228; INVARIANTS §14). This used to make two
+  // more assertions against `main/session-ipc.js` — that changing the axes IN-WINDOW persisted
+  // nothing, and that `session:set-tool-mode` (the per-session control) still existed. That
+  // module is deleted with the renderer it served, so both would have thrown on a missing file;
+  // and the second has no successor at all — there is NO per-session mode control any more, the
+  // posture is decided once at launch and never touched again. Asserting the absence of an
+  // in-window write is meaningless when there is no window, so what stands in its place is the
+  // stronger claim the original was only sampling: the WRITE side is enumerated whole.
+  assert.ok(!/armPermissionPreset|setPermissionPreset/.test(stripComments(ENGINE)),
+    "the engine never writes an arm");
+  const writers = readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js") && f !== "channel-prefs.js")
+    .filter((f) => /channelPrefs\.armPermissionPreset\(|\.setPermissionPreset\(/.test(stripComments(read(f))))
+    .sort();
+  assert.deepEqual(
+    writers,
+    ["channel-dir-ipc.js"],
+    "exactly ONE writer, and it is the pre-launch consent surface (`channels:setPermissionPreset`) " +
+      "— an arm written from anywhere on the SESSION path is a session re-arming its own future"
+  );
+  // The one writer is behind the app-window sender gate, not reachable from a session at all.
+  const handler = read("channel-dir-ipc.js");
+  assert.match(handler, /ipcMain\.handle\('channels:setPermissionPreset', appWindowOnly\(/,
+    "and it is bound-sender gated like every other privileged op");
 });
 
-// ── 5. THE HEADER MUST NOT LIE ABOUT THE POSTURE ─────────────────────────────
+// ── 5. THE STARTING POSTURE IS ANNOUNCED, NOT INFERRED ───────────────────────
 
-test("the window is TOLD the starting posture, before anything can run", () => {
-  // The renderer's selects + posture line move only on a `modes` event from main (they
-  // start at manual/ask). Without this echo a session seeded with a posture would ENFORCE
-  // it while the header claimed "Manual / Ask" — the v2.9 failure mode.
+test("the starting posture is emitted BEFORE anything can run", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, F-228; INVARIANTS §14). This read "the WINDOW is told
+  // the starting posture" and pinned the `modes` emit between `bindWindow(s);` and
+  // `await startQuery(s, sdk);` — the v2.9 failure mode being a session that ENFORCED a seeded
+  // posture while the header still claimed "Manual / Ask". There is no header and no
+  // `bindWindow`, and that is the sharp part: `ENGINE.indexOf("bindWindow(s);")` answers -1 for
+  // a deleted symbol, so `at > -1` was passing for FREE — the case had already gone vacuous and
+  // was reporting as green. Re-anchored on the surface attach that replaced it.
+  //
+  // The emit itself is live and worth keeping: it is the ONE announcement of the posture a
+  // session starts at, it rides the replay ring, and it must precede the query or the first
+  // thing to read it reads a stale pair.
   assert.match(ENGINE, /emit\(s, \{ type: 'modes', tool: state\.toolMode, message: state\.messageMode \}\)/);
+  const attach = ENGINE.indexOf("sessionWindowless.attachSurface(s, spec)");
   const at = ENGINE.indexOf("emit(s, { type: 'modes'");
-  assert.ok(at > ENGINE.indexOf("bindWindow(s);"), "after the window is bound, so the replay ring carries it");
-  assert.ok(at < ENGINE.indexOf("await startQuery(s, sdk);"), "and before anything can run");
+  const start = ENGINE.indexOf("await startQuery(s, sdk);");
+  assert.ok(attach !== -1 && at !== -1 && start !== -1, "all three anchors exist — a -1 makes this vacuous");
+  assert.ok(at > attach, "after the surface is attached, so the replay ring carries it");
+  assert.ok(at < start, "and before anything can run");
+  // ⚠ AND IT MUST STATE THE STATE, NOT THE SPEC. Reading `spec.startModes` here would report a
+  // posture that the parked-shell guard may have refused — the header lying in the OTHER
+  // direction, which is the same class of bug the original was written for.
+  const line = ENGINE.slice(at, ENGINE.indexOf("\n", at));
+  assert.ok(!/startModes|armedModes/.test(line), line);
 });
 
 test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {

@@ -1,4 +1,4 @@
-// Q6 — session-window credential preflight + in-window sign-in recovery.
+// Q6 — the Claude Code credential PREFLIGHT and the auth HOLD it raises.
 //
 // THE BUG THIS EXISTS FOR: a session window on a Mac with no Claude Code sign-in rendered an
 // agent bubble reading "Not logged in · Please run /login" and then died (task_failed
@@ -24,7 +24,6 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { ipcMain } = require('electron');
 const claudeAuth = require('./claude-auth');
 const spawner = require('./session-spawner');
 const { getStoredOAuthToken } = require('./claude-token');
@@ -39,14 +38,12 @@ const PROBE_TTL_MS = 5000; // a click-rate cache; forget() clears it the moment 
 
 let deps = null;
 let probe = null; // { at, state } — the cached credentialState()
-let bound = false;
 
-// The engine binds its internals here at load: the live registry lookup for IPC, the SDK
-// loader, its OWN startQuery (the deferred launch — never a second query assembly), dispatch,
-// the replay-aware emit, and denyPending (fail-closed teardown of awaited canUseTool promises).
+// The engine binds its internals here at load: the SDK loader, its OWN startQuery (the deferred
+// launch — never a second query assembly), dispatch, the replay-aware emit, and denyPending
+// (fail-closed teardown of awaited canUseTool promises).
 function bind(d) {
   deps = d || null;
-  registerIpc();
 }
 
 // ── The credential probe ─────────────────────────────────────────────────────
@@ -142,29 +139,16 @@ function dispatchHold(s) {
   try { store.setRecordPhase(s.key, 'parked'); } catch (err) { diag('session-auth: persist failed', err && err.message); }
 }
 
-// The synthesized init a held PREFLIGHT window needs: no SDK system/init will land, and the
-// renderer stays on the pre-consent card until an `init` arrives (session-park.emitParkedShell
-// solves the same problem for a reopened shell; its copy is about reopening, so not reused).
-function emitHeldInit(s) {
-  deps.emit(s, {
-    type: 'init', sessionId: s.sessionId, side: s.side, profile: s.profile, mode: s.mode,
-    profileLabel: s.profileLabel || null, model: null,
-    channelName: (s.context && s.context.channelName) || null,
-    taskTitle: (s.context && s.context.taskTitle) || null,
-    from: s.counterpartyName || null, selfAvatar: s.selfAvatar || null,
-    fromAvatar: s.peerAvatar || null, cwdLabel: null,
-  });
-}
-
-function showWindow(s) {
-  if (!s.win || s.win.isDestroyed() || !s.windowHidden) return;
-  try { s.win.show(); } catch (_) { /* best effort */ }
-  s.windowHidden = false;
-}
-
-function paintNotice(s, extra) {
-  deps.emit(s, detect.authNotice(s.authHold && s.authHold.kind, extra));
-}
+// ⚠ THREE WINDOW PAINTERS STOOD HERE AND ARE DELETED (2026-08-20, F-228): `emitHeldInit`
+// synthesized the `init` a held PREFLIGHT window needed because no SDK system/init would land;
+// `showWindow` un-hid it; `paintNotice` wrote the banner. All three emitted into a renderer
+// that no longer exists — and every one of those emits already no-ops on a windowless
+// session's null `win`, so removing them changes no behaviour, only the pretence.
+//
+// ⚠ `detect.authNotice` SURVIVES with no caller in this file, and that is deliberate rather
+// than an oversight: `session-auth-detect.js` owns the auth COPY as well as the shape-matching,
+// and its wording is what a replacement surface would render. Deleting the copy would make the
+// next surface invent its own.
 
 // PREFLIGHT (Q6.1). Called by startSession immediately before startQuery. Returns true when the
 // launch was HELD, in which case the caller returns the session as-is: the window is open, the
@@ -175,10 +159,7 @@ function holdIfNoCredential(s) {
   diag('session-auth: preflight HOLD — no Claude Code credential on this machine');
   s.authHold = { kind: 'preflight' };
   dispatchHold(s);
-  emitHeldInit(s);
   deps.emit(s, { type: 'status', phase: 'parked' });
-  paintNotice(s, {});
-  showWindow(s);
   return true;
 }
 
@@ -197,7 +178,7 @@ function holdIfAuthFailure(s, text) {
   // in the reducer (no second banner, no second denyPending sweep) but GUARANTEES the session
   // ends up parked and held no matter which path got it here. Cheap, and it cannot regress.
   const already = !!s.authHold;
-  if (!already) diag('session-auth: auth-shaped SDK failure -> in-window sign-in');
+  if (!already) diag('session-auth: auth-shaped SDK failure -> hold');
   s.authHold = s.authHold || { kind: 'error' };
   // Fail closed FIRST (P1 discipline): every awaited canUseTool promise is denied before the
   // teardown, so no resolver dangles on a session that is about to stop consuming. (parkEffects
@@ -207,10 +188,8 @@ function holdIfAuthFailure(s, text) {
   try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   dispatchHold(s);
-  if (already) return true; // converged; do NOT repaint the banner the operator is already looking at
+  if (already) return true; // converged
   deps.emit(s, { type: 'status', phase: 'parked' });
-  paintNotice(s, {});
-  showWindow(s);
   return true;
 }
 
@@ -264,61 +243,21 @@ async function resumeAfterSignIn(s) {
   }
 }
 
-async function runSignIn(s) {
-  if (!s || !s.authHold) return { ok: false };
-  // H1: the sign-in FLOW is single-flight too. Without this, a double click starts two
-  // `claude setup-token` ptys (and two Terminal fallbacks) against the same session before
-  // either finishes; the second would then race resumeAfterSignIn's latch from a different
-  // async turn. Cheap, and it also stops the banner flickering between two "Working…" paints.
-  if (s.authSigningIn) return { ok: false };
-  s.authSigningIn = true;
-  try {
-    paintNotice(s, { busy: true, note: detect.AUTH_WORKING });
-    try {
-      await claudeAuth.startSignInFlow({ getClaudeBin: () => spawner.getClaudeBinPath(), channelName: (s.context && s.context.channelName) || null });
-    } catch (err) {
-      diag('session-auth: sign-in flow error', err && err.message);
-    }
-    forget();
-    if (!credentialState().usable) {
-      paintNotice(s, { busy: false, note: detect.AUTH_FAILED });
-      return { ok: false };
-    }
-    paintNotice(s, { busy: true, note: detect.AUTH_DONE });
-    deps.emit(s, { type: 'auth_cleared' });
-    try {
-      await resumeAfterSignIn(s);
-    } catch (err) {
-      diag('session-auth: resume after sign-in failed', err && err.message);
-      return { ok: false };
-    }
-    return { ok: true };
-  } finally {
-    s.authSigningIn = false;
-  }
-}
+// ⚠ `runSignIn(s)` STOOD HERE AND IS DELETED (2026-08-20, F-228). It drove the IN-WINDOW
+// sign-in recovery: the held session's window painted a banner with a button, the click ran
+// `claude setup-token` through a pty, and a usable credential then called `resumeAfterSignIn`
+// above. Every part of that except the resume was a WINDOW: `paintNotice` wrote to a surface
+// that no longer exists, and the two `session:auth-signin` / `session:auth-state` handlers
+// resolved their session from `event.sender` against a window's webContents.
+//
+// ⚠ THE HOLD ITSELF IS UNTOUCHED AND IS NOT A WINDOW THING. `holdIfNoCredential`,
+// `holdIfAuthFailure` and `holdIfAuthMessage` still fail the launch CLOSED on a missing or
+// broken Claude Code sign-in, and `trigger.js` still answers the peer honestly on the
+// `auth-hold` skip (`AUTH_HELD_REPLY`). What is gone is the in-place REMEDY, not the guard —
+// the operator signs in the way every other surface asks them to, and the held session resumes
+// through `resumeAfterSignIn` when a credential appears.
 
 // ─── END SESSION-AUTH-HOLD ───────────────────────────────────────────────────
-
-// ONE narrow IPC channel, bound from the WINDOW exactly like every other session handler
-// (session-ipc's §B.3 contract): the payload carries nothing, the session is re-derived from
-// event.sender, and a window with no held session is refused.
-function registerIpc() {
-  if (bound || !ipcMain || typeof ipcMain.handle !== 'function') return;
-  bound = true;
-  ipcMain.handle('session:auth-signin', (e) => {
-    const s = deps && deps.getSessionBySender && deps.getSessionBySender(e && e.sender);
-    if (!s || !s.authHold) return { ok: false };
-    return runSignIn(s);
-  });
-  // Reload / late-registration read: the banner is state, not an event, so a reloaded window
-  // asks for it back (the folder-pill idiom) instead of relying on the replay ring.
-  ipcMain.handle('session:auth-state', (e) => {
-    const s = deps && deps.getSessionBySender && deps.getSessionBySender(e && e.sender);
-    if (!s || !s.authHold) return null;
-    return detect.authNotice(s.authHold.kind, {});
-  });
-}
 
 module.exports = {
   bind,
@@ -328,6 +267,5 @@ module.exports = {
   holdIfNoCredential,
   holdIfAuthFailure,
   holdIfAuthMessage,
-  runSignIn, // exported for the recovery test; the IPC is the only production caller
-  resumeAfterSignIn, // H1: exported for the idempotency test; runSignIn is the only production caller
+  resumeAfterSignIn, // H1: exported for the idempotency test
 };

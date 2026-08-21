@@ -1,7 +1,7 @@
 // C6 (F2) — main must RESOLVE a decision card it painted.
 //
 // THE BUG. `io.postWillGate` predicts, while the tool_use streams, whether an own-channel
-// post will stop on an operator button, and the renderer paints the inline decision card from
+// post will stop on an operator button, and the renderer paints an inline decision card from
 // that prediction. `canUseTool` decides for real a moment later. Three of its four verdicts
 // dispatch NOTHING — 'preapproved', a standing "allow for this session" grant, and the
 // per-session auto-approve / mode bypass all return {allow} immediately — so when the
@@ -9,15 +9,21 @@
 // toggle, a replay lost the artifact) the card stayed `pending` with NO requestId: a message
 // that had already been DELIVERED to the peer sat in the transcript reading "awaiting your
 // approval", and the operator could not answer it because a card with no requestId hides its
-// own buttons (session-render makeOutbound: `answerable = pending && !!cur.requestId`).
+// own buttons.
 //
 // THE FIX. On an ALLOW verdict for an own-channel post, main emits the SAME two events an
 // operator Send produces, keyed on `opts.toolUseID`: `outbound_gate` (hands the card its
 // requestId, or CREATES it from the authorized bytes when no artifact landed — the F5 path)
-// then `permission_resolved{allow-once}` (marks it sent). No view-model change is needed.
+// then `permission_resolved{allow-once}` (marks it sent).
 //
-// main/session-outbound.js is electron-free, so the REAL wrapper is required and driven
-// directly, and its events are folded through the REAL view-model.
+// ⚠ 2026-08-20 (F-228) — main/session-outbound.js IS STILL LIVE. session-query.js wraps every
+// SDK spawn's canUseTool with it (`wrapCanUseTool(s, io.makeCanUseTool(...), deps.emitQuiet)`),
+// and the last test here is the pin on that wiring. What died is the CONSUMER end: the v1
+// session window and renderer/session/session-viewmodel.js, so the three tests that folded these
+// events through the real view-model to watch a card go pending -> sent are gone, replaced by
+// the ⚠ block below. Everything main EMITS is still proved, event for event.
+//
+// main/session-outbound.js is electron-free, so the REAL wrapper is required and driven directly.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,7 +34,6 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const outbound = require(join(HERE, "..", "main", "session-outbound.js"));
-const vm = require(fileURLToPath(new URL("../renderer/session/session-viewmodel.js", import.meta.url)));
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
 const CH = "ch1";
@@ -43,8 +48,6 @@ function harness(verdict, s = session()) {
   const gated = outbound.wrapCanUseTool(s, inner, (_s, payload) => emitted.push(payload));
   return { gated, emitted };
 }
-const fold = (events, seed) => events.reduce((st, ev) => vm.reduceEvent(st, ev), seed);
-const lastOutbound = (st) => st.items.filter((i) => i.kind === "outbound").pop();
 
 test("C6: an auto-allowed own-channel post emits gate + resolved, keyed on the tool_use id", async () => {
   const h = harness({ behavior: "allow" });
@@ -60,63 +63,27 @@ test("C6: an auto-allowed own-channel post emits gate + resolved, keyed on the t
   assert.equal(resolved.decision, "allow-once");
 });
 
-test("C6: the view-model resolves a stuck pending card to SENT on that pair", () => {
-  const h = harness({ behavior: "allow" });
-  // The stream-time artifact main painted from the (now stale) gate prediction.
-  let st = fold([
-    { type: "init", from: "David" },
-    { type: "outbound_post", toolUseId: "t1", to: "David", text: POST.body, pending: true, ownChannel: true },
-  ], vm.initialState());
-  assert.equal(lastOutbound(st).status, "pending", "before the fix this is where it stayed");
-  assert.equal(lastOutbound(st).requestId, null, "with no requestId, so its buttons are hidden");
-  return h.gated(CHANNEL_TOOL, POST, { toolUseID: "t1" }).then(() => {
-    st = fold(h.emitted, st);
-    assert.equal(lastOutbound(st).status, "sent", "the delivered message now reads as delivered");
-    assert.equal(st.items.filter((i) => i.kind === "outbound").length, 1, "and it is still ONE artifact");
-  });
-});
-
-test("C6: a post whose artifact never landed (replay loss) gets a card created, then sent", async () => {
-  const h = harness({ behavior: "allow" });
-  await h.gated(CHANNEL_TOOL, POST, { toolUseID: "t9" });
-  const st = fold(h.emitted, vm.initialState());
-  const card = lastOutbound(st);
-  assert.equal(card.status, "sent");
-  assert.equal(card.text, POST.body, "created from the authorized bytes (the F5 path)");
-});
+// ⚠ DELETED 2026-08-20 (F-228) — three VIEW-MODEL tests, and the `fold()` / `lastOutbound()`
+// helpers and the `vm` require they existed for. They folded the emitted pair through
+// renderer/session/session-viewmodel.js and asserted on the resulting card:
+//   - "the view-model resolves a stuck pending card to SENT on that pair" — the bug's own
+//     repro: a `pending` artifact with requestId null ended up `sent`, still ONE artifact.
+//   - "a post whose artifact never landed (replay loss) gets a card created, then sent" — the
+//     F5 path, i.e. `outbound_gate` CREATING the card out of the authorized bytes.
+//   - "it is IDEMPOTENT — a card the operator already resolved is never reopened" — that
+//     markOutboundGated needs an open artifact and markOutboundDecided a `pending` one, so a
+//     late pair could neither duplicate a sent card nor flip a DENIED one to sent.
+// All three were assertions about a reducer that no longer exists. Idempotency was NEVER a
+// property of main here — wrapCanUseTool emits the same pair on every allow, by design, and the
+// module docblock says so — so there is nothing on this side left to assert about it. The F5
+// path's MAIN half survives in the test above (`gate.text` carries the authorized bytes) and in
+// the bodiless-post test below.
 
 test("C6: a DENIED post emits nothing — the operator's own decision owns that card", async () => {
   const h = harness({ behavior: "deny", message: "Denied by operator" });
   const verdict = await h.gated(CHANNEL_TOOL, POST, { toolUseID: "t1" });
   assert.deepEqual(verdict, { behavior: "deny", message: "Denied by operator" });
   assert.deepEqual(h.emitted, [], "no synthetic resolution may contradict a deny");
-});
-
-test("C6: it is IDEMPOTENT — a card the operator already resolved is never reopened", async () => {
-  const h = harness({ behavior: "allow" });
-  // The GATED path: the operator answered, so the card is already sent under ITS requestId.
-  let st = fold([
-    { type: "outbound_post", toolUseId: "t1", to: "David", text: POST.body, pending: true, ownChannel: true },
-    { type: "outbound_gate", requestId: "r1", toolUseId: "t1", ownChannel: true, text: POST.body, to: "David" },
-    { type: "permission_resolved", requestId: "r1", decision: "allow-once" },
-  ], vm.initialState());
-  assert.equal(lastOutbound(st).status, "sent");
-  await h.gated(CHANNEL_TOOL, POST, { toolUseID: "t1" });
-  const after = fold(h.emitted, st);
-  assert.equal(lastOutbound(after).status, "sent", "still sent, still one card");
-  assert.equal(after.items.filter((i) => i.kind === "outbound").length, 1);
-  // A DENIED card is likewise never flipped to sent by a late pair for the SAME tool_use.
-  const h2 = harness({ behavior: "allow" });
-  await h2.gated(CHANNEL_TOOL, POST, { toolUseID: "t2" });
-  let denied = fold([
-    { type: "outbound_post", toolUseId: "t2", to: "David", text: POST.body, pending: true, ownChannel: true },
-    { type: "outbound_gate", requestId: "r2", toolUseId: "t2", ownChannel: true, text: POST.body, to: "David" },
-    { type: "permission_resolved", requestId: "r2", decision: "deny" },
-  ], vm.initialState());
-  assert.equal(lastOutbound(denied).status, "not_sent");
-  denied = fold(h2.emitted, denied);
-  assert.equal(lastOutbound(denied).status, "not_sent", "a deny is final");
-  assert.equal(denied.items.filter((i) => i.kind === "outbound").length, 1, "and no duplicate card appears");
 });
 
 test("C6: every NON-post call is passed through untouched (same promise, no events)", async () => {

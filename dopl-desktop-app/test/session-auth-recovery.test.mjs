@@ -1,14 +1,21 @@
-// Q6 — session-window credential preflight + in-window sign-in recovery (main side).
+// Q6 — the Claude Code credential preflight and the auth HOLD it raises (main side).
 //
-// THE BUG: a session window on a Mac with no Claude Code sign-in rendered "Not logged in ·
-// Please run /login" as an agent bubble and then died. Three layers are pinned here:
+// THE BUG: a session on a Mac with no Claude Code sign-in rendered "Not logged in · Please run
+// /login" as an agent bubble and then died. Three layers are pinned here:
 //   1. PURE — session-auth-detect.js (source-extracted): which failures are auth-shaped, and the
 //      copy rules (names the credential, never prints a terminal command).
 //   2. HOLD — the SESSION-AUTH-HOLD block of session-auth.js, sliced and driven with fakes: the
 //      preflight blocks the spawn, a healthy credential leaves the launch byte-identical, an
-//      auth-shaped failure parks on the button, a NON-auth failure keeps today's crash path.
+//      auth-shaped failure parks and holds instead of crashing, a NON-auth failure keeps the crash.
 //   3. WIRING — structural reads of session-engine.js: where the preflight sits, and that the
 //      auth branch precedes (and can skip) the `crash` dispatch.
+// ⚠ THE REMEDY WENT; THE GUARD DID NOT (2026-08-20, F-228). The title said "in-window sign-in
+// recovery", and a third of this file drove `session-auth.runSignIn`: a banner with a button in the
+// session WINDOW whose click ran `claude setup-token` under a pty. It, its handlers
+// (`session:auth-signin` / `session:auth-state`) and the painters (`emitHeldInit` / `showWindow` /
+// `paintNotice`) are deleted; `resumeAfterSignIn` SURVIVES (the same tail, minus pty and paint) and
+// is what the recovery cases are re-pointed at. THE HOLD IS UNTOUCHED, which is why this is rewritten
+// down, not removed (INVARIANTS §14): where a case asserted both hold and banner, only the banner half went.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -26,14 +33,12 @@ const AUTH_SRC = readFileSync(M("session-auth.js"), "utf8");
 const DETECT_SRC = readFileSync(M("session-auth-detect.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 const CLAUDE_AUTH = readFileSync(M("claude-auth.js"), "utf8");
-// §3 SPLIT: the query lifecycle (startQuery / consume / buildSdkOptions) lives here now.
-const QUERY = readFileSync(M("session-query.js"), "utf8");
+const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: startQuery / consume / buildSdkOptions
 
 // ── 1. PURE: the detector + the copy ─────────────────────────────────────────
 
 const D_BEGIN = "// ─── BEGIN SESSION-AUTH-DETECT";
-const D_END = "// ─── END SESSION-AUTH-DETECT";
-const DETECT_BLOCK = DETECT_SRC.slice(DETECT_SRC.indexOf(D_BEGIN), DETECT_SRC.indexOf(D_END));
+const DETECT_BLOCK = DETECT_SRC.slice(DETECT_SRC.indexOf(D_BEGIN), DETECT_SRC.indexOf("// ─── END SESSION-AUTH-DETECT"));
 
 test("the detect block is standalone-evaluable (no electron / fs / require)", () => {
   assert.ok(DETECT_BLOCK.length > 200, "the sentinels bracket a real block");
@@ -130,14 +135,19 @@ test("the hold block holds no electron require of its own", () => {
 
 // H1: the fake dispatch runs the REAL reducer and applies its state, so these tests prove the
 // hold actually reaches the state the rest of the engine reads (`authHeld`, `parked`) rather
-// than just that a function was called. `effects` records the effect types the hold produced,
-// which is how the fail-closed teardown (denyPending -> abortQuery) is pinned end to end.
+// than just that a function was called. `effects` records the effect types the hold produced, which
+// is how the fail-closed teardown (denyPending -> abortQuery) is pinned end to end.
+// ⚠ THE INJECTION SET SHRANK TO WHAT THE BLOCK STILL NAMES (F-228): `claudeAuth`, `spawner` and
+// `forget` are free variables it no longer references, and `runSignIn` in the return statement threw
+// a ReferenceError before a single case ran — which is why SIXTEEN went red at once rather than the
+// four really about deleted behaviour. `gate` replaces `cfg.signIn`: `deps.getSdk()` is the only
+// await left in the resume, so that is where a re-entrancy race is made now.
 function harness(over = {}) {
-  const cfg = { usable: false, usableAfterSignIn: true, signIn: null, ...over };
-  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], signIn: [] };
+  const cfg = { usable: false, gate: null, ...over };
+  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0 };
   const state = { usable: cfg.usable };
   const deps = {
-    getSdk: async () => ({ __sdk: true }),
+    getSdk: async () => { calls.sdk += 1; if (cfg.gate) await cfg.gate; return { __sdk: true }; },
     startQuery: async (s, sdk) => calls.startQuery.push({ s, sdk }),
     dispatch: (s, ev) => {
       calls.dispatch.push(ev);
@@ -148,55 +158,43 @@ function harness(over = {}) {
     emit: (s, payload) => calls.emit.push(payload),
     denyPending: (s, message) => calls.denyPending.push(message),
   };
-  const store = { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) };
-  const claudeAuth = {
-    startSignInFlow: async (a) => {
-      calls.signIn.push(a);
-      if (cfg.signIn) await cfg.signIn();
-      state.usable = cfg.usableAfterSignIn;
-    },
-  };
-  const spawner = { getClaudeBinPath: () => "/bundled/claude" };
   const api = new Function(
-    "deps", "detect", "store", "claudeAuth", "spawner", "diag", "credentialState", "forget",
-    `${HOLD_BLOCK}\n return { holdIfNoCredential, holdIfAuthFailure, holdIfAuthMessage, runSignIn };`
-  )(deps, detect, store, claudeAuth, spawner, () => {}, () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }), () => {});
+    "deps", "detect", "store", "diag", "credentialState",
+    `${HOLD_BLOCK}\n return { holdIfNoCredential, holdIfAuthFailure, holdIfAuthMessage, resumeAfterSignIn };`
+  )(deps, detect, { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) }, () => {},
+    () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }));
   return { ...api, calls, state };
 }
 
-// A REAL initial state (not a three-field stub), because the hold now flows through the reducer
-// and the fields it sets have to be the fields wakeEffects / inboundAutoAccepted actually read.
+// A REAL initial state (not a three-field stub): the hold flows through the reducer, so the fields it
+// sets have to be the ones wakeEffects / inboundAutoAccepted actually read. ⚠ `win: null` and no
+// `windowHidden` — agents run WINDOWLESS (F-228). The fake carried a `show()` counter (the preflight
+// surfaced a hidden window); one that still answered it would hide a re-added paint.
 const session = (over = {}) => ({
   key: "c1:t1", sessionId: "s1", side: "responder", profile: "read_only", mode: "interactive",
   channelId: "c1", taskId: "t1", context: { channelName: "Ops" }, counterpartyName: "David",
   state: initialSessionState({ mode: "interactive", side: "responder" }),
-  win: { destroyed: false, isDestroyed() { return this.destroyed; }, shown: 0, show() { this.shown++; } },
-  windowHidden: true, settled: false, firstTurn: "FRAMED FIRST TURN",
-  ...over,
+  win: null, settled: false, firstTurn: "FRAMED FIRST TURN", ...over,
 });
 
-test("PREFLIGHT: no credential HOLDS the launch — no query, and the window says why", () => {
+test("PREFLIGHT: no credential HOLDS the launch — no query, and the session is parked and held", () => {
+  // ⚠ THE BANNER HALF IS EXCISED (F-228; INVARIANTS §14). The title said "and the window says why",
+  // and four assertions drove it: `emitHeldInit`'s synthesized `init` (a held preflight got no SDK
+  // system/init, so the consent card never cleared), `paintNotice`'s `auth_required` and its
+  // title/kind, and `showWindow`. THE HOLD IS NOT — every assertion about it is kept verbatim.
   const h = harness({ usable: false });
   const s = session();
   assert.equal(h.holdIfNoCredential(s), true, "the caller must return before startQuery");
   assert.deepEqual(h.calls.startQuery, [], "NOTHING is spawned");
-  // H1: the hold goes THROUGH the reducer now, so it is visible to every other module.
-  assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold"], "one hold event, and no crash/lifecycle");
-  // The window is a PARKED shell: dormant on restart, evictable, honest pill.
-  assert.equal(s.state.phase, "parked");
-  assert.equal(s.state.parked, true);
-  assert.equal(s.state.activity, "parked");
-  assert.equal(s.state.authHeld, true, "and HELD, which is what stops a wake resuming it");
-  // The park teardown really ran: awaited tool promises fail closed BEFORE the abort.
-  assert.deepEqual(h.calls.effects.slice(0, 4), ["denyPending", "abortQuery", "clearIdle", "persist"]);
+  assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold"],
+    "H1: one hold event through the REDUCER (so every module sees it), and no crash/lifecycle");
+  assert.deepEqual([s.state.phase, s.state.parked, s.state.activity, s.state.authHeld],
+    ["parked", true, "parked", true], "PARKED (dormant on restart) and HELD, which stops a wake resuming it");
+  assert.deepEqual(h.calls.effects.slice(0, 4), ["denyPending", "abortQuery", "clearIdle", "persist"],
+    "the park teardown really ran: awaited tool promises fail closed BEFORE the abort");
   assert.deepEqual(h.calls.phase, [{ key: "c1:t1", phase: "parked" }], "the durable record is parked, not 'launching'");
-  const types = h.calls.emit.map((p) => p.type);
-  assert.deepEqual(types, ["init", "status", "auth_required"], "an init (so the consent card clears), then the banner");
-  assert.equal(h.calls.emit[0].model, null, "no model: nothing is running");
-  assert.equal(h.calls.emit[1].phase, "parked");
-  assert.match(h.calls.emit[2].title, /Claude Code sign-in/);
-  assert.equal(h.calls.emit[2].kind, "preflight");
-  assert.equal(s.win.shown, 1, "a hidden window is surfaced — this needs the operator");
+  // ONE emit survives and it is not a paint: the status the pill and the durable record agree on.
+  assert.deepEqual(h.calls.emit, [{ type: "status", phase: "parked" }], "asserted WHOLE — a re-added notice comes back here");
 });
 
 test("PREFLIGHT: a healthy credential changes NOTHING (the launch continues untouched)", () => {
@@ -209,48 +207,43 @@ test("PREFLIGHT: a healthy credential changes NOTHING (the launch continues unto
   assert.equal(s.state.parked, false);
   assert.equal(s.state.authHeld, false, "never held");
   assert.deepEqual(h.calls.dispatch, [], "no reducer event at all");
-  assert.equal(s.win.shown, 0);
 });
 
-test("PREFLIGHT: sign-in runs the ORIGINAL first turn through the engine's own startQuery", async () => {
+test("PREFLIGHT: the resume runs the ORIGINAL first turn through the engine's own startQuery", async () => {
+  // ⚠ RE-POINTED FROM `runSignIn` (F-228). Gone is the TRIGGER — the in-window button and its pty —
+  // and with it two assertions: that the EXISTING claude-auth flow drove it, against the bundled
+  // binary. What survives can still lose a request: when a credential appears the held launch
+  // re-runs the turn it never pushed, through the engine's OWN startQuery.
   const h = harness({ usable: false });
   const s = session();
   h.holdIfNoCredential(s);
-  const res = await h.runSignIn(s);
-  assert.deepEqual(res, { ok: true });
-  assert.equal(h.calls.signIn.length, 1, "the EXISTING claude-auth flow drives it");
-  assert.equal(typeof h.calls.signIn[0].getClaudeBin, "function", "against the bundled binary");
+  await h.resumeAfterSignIn(s);
   assert.equal(h.calls.startQuery.length, 1, "the deferred launch runs");
   assert.equal(h.calls.startQuery[0].s.firstTurn, "FRAMED FIRST TURN", "the same framed turn, byte for byte");
-  // The parked stamp is lifted, so the reducer stops swallowing the SDK's messages...
-  assert.equal(s.state.phase, "launching");
-  assert.equal(s.state.parked, false);
-  assert.equal(s.state.activity, "working");
-  // ...and the reducer-visible hold is RELEASED before the relaunch, or wakeEffects would go
-  // on refusing to resume this session for the rest of its life.
-  assert.equal(s.state.authHeld, false);
+  assert.equal(h.calls.startQuery[0].sdk.__sdk, true, "and through the engine's SDK handle, not a second loader");
+  // The parked stamp is lifted (the reducer stops swallowing SDK messages) and the reducer-visible
+  // hold RELEASED before the relaunch — or wakeEffects refuses to resume this session forever.
+  assert.deepEqual([s.state.phase, s.state.parked, s.state.activity, s.state.authHeld],
+    ["launching", false, "working", false]);
   assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold", "auth_release"]);
   assert.equal(s.authHold, null);
-  assert.ok(h.calls.emit.some((p) => p.type === "auth_cleared"), "the banner is dismissed");
 });
 
-test("PREFLIGHT: a sign-in that does NOT finish leaves the hold answerable", async () => {
-  const h = harness({ usable: false, usableAfterSignIn: false });
-  const s = session();
-  h.holdIfNoCredential(s);
-  const res = await h.runSignIn(s);
-  assert.deepEqual(res, { ok: false });
-  assert.deepEqual(h.calls.startQuery, [], "nothing is spawned into a still-broken credential");
-  const last = h.calls.emit.at(-1);
-  assert.equal(last.type, "auth_required");
-  assert.equal(last.busy, false, "the button comes back");
-  assert.equal(last.note, detect.AUTH_FAILED);
-  assert.ok(s.authHold, "the session stays held, so the request is still answerable");
-});
+// ⚠ "PREFLIGHT: a sign-in that does NOT finish leaves the hold answerable" STOOD HERE AND IS DELETED
+// (F-228). It ran `runSignIn` where the credential was STILL unusable and pinned the recovery loop's
+// failure arm: nothing spawned, the banner repainted `busy: false` with `note: detect.AUTH_FAILED`,
+// and `s.authHold` survived so the request stayed answerable. ⚠ NO SUCCESSOR — A REAL NARROWING, NOT
+// A RENAME: `resumeAfterSignIn` does not re-probe (it is called BECAUSE a credential appeared) and
+// releases + relaunches unconditionally, so a still-broken credential just fails the launch again
+// and `holdIfAuthFailure` re-holds it (H1(b) below). Recorded rather than dropped: what it protected
+// — a failed recovery must never leave a session UNHELD — is what a future recovery UI must re-establish.
 
-test("MID-SESSION: an auth-shaped failure parks on the button (never `crash`)", () => {
+test("MID-SESSION: an auth-shaped failure parks and HOLDS (never `crash`)", () => {
+  // ⚠ THE BANNER HALF IS EXCISED (F-228): the title said "parks on the button", and the last two
+  // assertions read `auth_required`'s type and `kind: 'error'` off the paint. The rest is the
+  // fail-closed teardown, untouched.
   const h = harness({ usable: true }); // the credential broke DURING the run
-  const s = session({ state: { phase: "running", parked: false, activity: "working" }, windowHidden: false });
+  const s = session({ state: { phase: "running", parked: false, activity: "working" } });
   s.abortController = { aborted: false, abort() { this.aborted = true; } };
   s.pushIterator = { closed: false, close() { this.closed = true; } };
   assert.equal(h.holdIfAuthFailure(s, "API Error: 401 unauthorized"), true);
@@ -259,13 +252,10 @@ test("MID-SESSION: an auth-shaped failure parks on the button (never `crash`)", 
   assert.equal(s.abortController.aborted, true, "and the query torn down");
   assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold"],
     "NO crash: no settle, no task_failed{interrupted}, no destroyed window — just the hold");
-  assert.equal(s.state.parked, true, "it is parked");
-  assert.equal(s.state.authHeld, true, "and HELD, so a peer wake canNOT resume it");
-  assert.equal(s.state.toolMode, "manual", "a hold disarms the tool axis, like a park");
-  assert.equal(s.state.messageMode, "ask", "and the message axis");
-  const last = h.calls.emit.at(-1);
-  assert.equal(last.type, "auth_required");
-  assert.equal(last.kind, "error");
+  assert.deepEqual([s.state.parked, s.state.authHeld, s.state.toolMode, s.state.messageMode],
+    [true, true, "manual", "ask"], "parked, HELD (no peer wake can resume it), both axes disarmed like a park");
+  assert.deepEqual(h.calls.emit, [{ type: "status", phase: "parked" }],
+    "the ONE surviving emit, asserted whole so a re-added notice comes back through here");
 });
 
 test("MID-SESSION: a NON-auth failure is refused, so today's crash path still runs", () => {
@@ -283,30 +273,35 @@ test("MID-SESSION: the CLI's own login bubble is CONSUMED, never rendered", () =
   const s = session();
   const bubble = { type: "assistant", message: { content: [{ type: "text", text: "Not logged in · Please run /login" }] } };
   assert.equal(h.holdIfAuthMessage(s, bubble), true, "the dead-end bubble is replaced by the action");
-  // A normal assistant message is never consumed.
-  const s2 = session();
+  const s2 = session(); // a normal assistant message is never consumed
   assert.equal(h.holdIfAuthMessage(s2, { type: "assistant", message: { content: [{ type: "text", text: "on it" }] } }), false);
   assert.equal(h.holdIfAuthMessage(s2, { type: "result", is_error: false, result: "ok" }), false);
 });
 
-test("MID-SESSION: a second failure never stacks a second hold (or a second banner)", () => {
+test("MID-SESSION: a second failure never stacks a second hold", () => {
+  // ⚠ "(or a second banner)" left the title with the banner (F-228). The emit count is still the
+  // assertion: the ONE surviving emit is a status the pill and the durable record read.
   const h = harness({ usable: true });
   const s = session();
   assert.equal(h.holdIfAuthFailure(s, "401"), true);
-  const painted = h.calls.emit.length;
+  const emitted = h.calls.emit.length;
   assert.equal(h.holdIfAuthFailure(s, "401 again"), true, "still handled");
-  assert.equal(h.calls.emit.length, painted, "but nothing is re-emitted");
+  assert.equal(h.calls.emit.length, emitted, "but nothing is re-emitted");
   assert.equal(h.holdIfAuthFailure({ ...session(), settled: true }, "401"), false, "a settled session is never held");
 });
 
-test("MID-SESSION: sign-in RESUMES through the ordinary lazy wake (a steer), not a new query", async () => {
+test("MID-SESSION: the resume takes the ordinary lazy wake (a steer), not a new query", async () => {
+  // ⚠ RE-POINTED FROM `runSignIn` (F-228). The ROUTING is the point and lives entirely inside the
+  // surviving `resumeAfterSignIn`: a PREFLIGHT hold re-runs the deferred launch (above), an ERROR
+  // hold steers instead — re-launching would abandon the SDK session id and replay the exchange.
   const h = harness({ usable: true });
   const s = session({ state: { phase: "running", parked: false, activity: "working" } });
   h.holdIfAuthFailure(s, "401");
-  await h.runSignIn(s);
+  await h.resumeAfterSignIn(s);
   assert.deepEqual(h.calls.startQuery, [], "an error hold never re-launches from scratch");
-  // H1: hold -> release -> steer. The RELEASE must precede the steer, because the steer wakes
-  // through wakeEffects, which refuses to resume while authHeld is still true.
+  assert.equal(h.calls.sdk, 0, "and never even loads the SDK — that is the preflight branch's");
+  // H1: hold -> release -> steer. RELEASE must precede the steer: the steer wakes through
+  // wakeEffects, which refuses to resume while authHeld is still true.
   assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold", "auth_release", "steer"]);
   assert.equal(s.state.authHeld, false, "the hold is cleared before anything can spawn");
   assert.match(h.calls.dispatch[2].text, /Continue where you left off/);
@@ -315,11 +310,24 @@ test("MID-SESSION: sign-in RESUMES through the ordinary lazy wake (a steer), not
 // ── 3. WIRING: where the engine calls it ─────────────────────────────────────
 
 test("the engine preflights AFTER the parked-shell branch and BEFORE startQuery", () => {
-  const guard = ENGINE.indexOf("if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }");
+  // ⚠ THE PARKED-SHELL ANCHOR MOVED (F-228). It was the shell-recreate lane's early return —
+  // `if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }` — which opened a window and
+  // started no query, so a shell provably never reached the preflight. That return is deleted;
+  // `spec.parkedShell` survives as the flag seeding the dormant phase, so this re-anchors on it and
+  // narrows the claim. ⚠ EVERY INDEX IS CHECKED NON-NEGATIVE FIRST: `indexOf` answers -1 for a
+  // deleted symbol, and `hold > -1` is how a case goes green while measuring nothing.
+  const guard = ENGINE.indexOf("if (spec.parkedShell) { state.phase = 'parked';");
   const hold = ENGINE.indexOf("if (sessionAuth.holdIfNoCredential(s)) return s;");
-  const start = ENGINE.indexOf("await startQuery(s, sdk);", guard);
-  assert.ok(guard !== -1 && hold > guard, "a parked shell never reaches the preflight (it starts no query)");
+  const start = ENGINE.indexOf("await startQuery(s, sdk);");
+  const windowless = ENGINE.indexOf("if (spec.windowless && sessionAuth.holdIfNoCredential(s))");
+  assert.ok(Math.min(guard, hold, start, windowless) !== -1, "an anchor is gone — reslice rather than pass on -1");
+  assert.ok(hold > guard, "the dormant-phase decision is made before the credential is probed");
   assert.ok(start > hold, "and a held launch returns BEFORE the query is started");
+  // The WINDOWLESS launch holds too and rolls the registration back, so `launch()` answers honestly
+  // instead of handing out a sessionId for a session that will never run.
+  assert.ok(windowless < hold, "the windowless preflight precedes the generic one");
+  assert.match(ENGINE.slice(windowless, hold), /sessions\.delete\(s\.key\).*return \{ authHold: true \}/s,
+    "a held windowless launch un-registers itself and reports the hold");
 });
 
 test("the consume loop routes an auth failure to the hold before it can dispatch `crash`", () => {
@@ -338,36 +346,39 @@ test("what counts as a usable credential — and what the SPAWN env does about i
   assert.match(probe, /if \(envKey\) state = \{ usable: true, source: 'env' \};/);
   assert.match(probe, /else if \(cliStoreSignedIn\(\)\) state = \{ usable: true, source: 'cli-store' \};/);
   assert.match(probe, /else if \(getStoredOAuthToken\(\)\) state = \{ usable: true, source: 'stored-token' \};/);
-  // The keychain item itself is NEVER read: a cross-app read pops an OS prompt, which would be a
-  // worse interruption than the bug. Only markers.
+  // The keychain item is NEVER read: a cross-app read pops an OS prompt, a worse interruption than
+  // the bug. Only markers.
   assert.ok(!/security find-generic-password|execFile|spawn\(/.test(AUTH_SRC), "no keychain shell-out");
   const marker = AUTH_SRC.slice(AUTH_SRC.indexOf("function cliStoreSignedIn("), AUTH_SRC.indexOf("function credentialState("));
   assert.match(marker, /\.credentials\.json/, "the file-backed store, when there is one");
   assert.match(marker, /account\.accountUuid/, "else the CLI's own signed-in marker (one bit, no field copied)");
   assert.match(marker, /err\.code !== 'ENOENT'/, "an unreadable file FAILS OPEN; only a MISSING one blocks");
-  // The healthy path must stay byte-identical: no stored-token source -> the same env object back.
+  // The healthy path stays byte-identical: no stored-token source -> the same env object back.
   const envFn = AUTH_SRC.slice(AUTH_SRC.indexOf("function withStoredCredential("), AUTH_SRC.indexOf("// ─── BEGIN SESSION-AUTH-HOLD"));
   assert.match(envFn, /if \(state\.source !== 'stored-token'\) return env;/, "untouched on every other machine");
 });
 
 test("the engine injects its OWN startQuery + denyPending (no second query assembly)", () => {
-  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions, getSessionBySender \}\)/);
+  // ⚠ THE BIND OBJECT LOST ITS LAST MEMBER (F-228): `getSessionBySender` resolved a session from an
+  // IPC `event.sender` (a window's webContents) for the two deleted auth handlers. The rest is the
+  // point and is unchanged — the hold reuses the engine's OWN startQuery, so a resumed launch
+  // inherits H1's supersede-before-relaunch instead of assembling a second query.
+  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions \}\)/);
+  assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");
   assert.match(QUERY, /env: sessionAuth\.withStoredCredential\(buildScrubbedEnv\(\)\)/,
     "and the stored setup-token reaches the SDK env through the SAME scrubbed base");
 });
 
 // ── 4. H1 (2026-07-31): THE HOLD IS A STATE THE REST OF THE ENGINE UNDERSTANDS ──
 //
-// Two failure modes shipped together, and they COMPOSE — which is why they are driven
-// end to end here rather than asserted one function at a time:
-//   (a) the hold lived only as `s.authHold`, so session-reducer.wakeEffects saw nothing but
-//       `parked` and RESUMED held sessions. A peer follow-up on a channel whose preset seeded
-//       auto_both was enough: inbound -> auto-accepted -> wake -> a query spawned on a Mac
-//       with no credential. A later sign-in then started a SECOND query beside it.
-//   (b) holdIfAuthFailure's "already held" branch returned "handled" having done nothing, so
-//       the session (a) had dragged back to phase 'running' stayed there forever: no query, no
-//       idle timer, nothing that could ever park or settle it, and a peer awaiting a reply
-//       that would never come.
+// Two failure modes shipped together and they COMPOSE, which is why they are driven end to end:
+//   (a) the hold lived only as `s.authHold`, so session-reducer.wakeEffects saw nothing but `parked`
+//       and RESUMED held sessions. A peer follow-up on a channel whose preset seeded auto_both was
+//       enough: inbound -> auto-accepted -> wake -> a query spawned on a Mac with no credential, and
+//       a later sign-in then started a SECOND query beside it.
+//   (b) holdIfAuthFailure's "already held" branch returned "handled" having done nothing, so the
+//       session (a) had dragged back to 'running' stayed there forever: no query, no idle timer,
+//       nothing to park or settle it, and a peer awaiting a reply that never came.
 
 test("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION, even under an auto_both posture", () => {
   const h = harness({ usable: false });
@@ -375,11 +386,8 @@ test("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION, even under an auto_both po
   // The exact pre-condition the H2 preset used to create: both axes wide open at launch.
   s.state = { ...s.state, messageMode: "auto_both", toolMode: "bypass" };
   assert.equal(h.holdIfNoCredential(s), true);
-  assert.equal(s.state.authHeld, true);
-  // A hold disarms both axes on the way in, exactly as a park does.
-  assert.equal(s.state.messageMode, "ask");
-  assert.equal(s.state.toolMode, "manual");
-
+  assert.deepEqual([s.state.authHeld, s.state.messageMode, s.state.toolMode], [true, "ask", "manual"],
+    "a hold disarms both axes on the way in, exactly as a park does");
   // Now the peer's follow-up arrives. It must NOT be auto-accepted and must NOT wake anything.
   const arrived = sessionReducer(s.state, {
     type: "inbound_arrived", pendingId: "p1", message: "any update?", authorName: "David",
@@ -389,7 +397,6 @@ test("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION, even under an auto_both po
   assert.ok(!effects.includes("pushInbound"), "and the turn never reaches an agent that cannot run");
   assert.equal(arrived.state.hasPendingInbound, true, "it is HELD for the operator instead");
   assert.equal(arrived.state.authHeld, true, "and the session is still held");
-
   // Even a forced auto-accept posture cannot re-open the wake path while held.
   const forced = { ...arrived.state, messageMode: "auto_both", inboundForTask: true };
   const again = sessionReducer(forced, {
@@ -398,37 +405,40 @@ test("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION, even under an auto_both po
   assert.ok(!again.effects.map((e) => e.type).includes("resumeQuery"), "belt: still no spawn");
 });
 
-test("H1(a) SIGN-IN AFTER A WAKE ALREADY RESUMED IT: one query, never two", async () => {
+test("H1(a) A RESUME AFTER A WAKE ALREADY RESUMED IT: one query, never two", async () => {
   const h = harness({ usable: false });
   const s = session();
   h.holdIfNoCredential(s);
   // Simulate the pre-fix world reaching this point anyway: something resumed the session, so a
   // query IS live under the hold. The relaunch must SUPERSEDE it, not layer a second one.
-  const first = { aborted: false, abort() { this.aborted = true; } };
-  const iter = { closed: false, close() { this.closed = true; } };
-  s.abortController = first;
-  s.pushIterator = iter;
-  await h.runSignIn(s);
+  s.abortController = { aborted: false, abort() { this.aborted = true; } };
+  s.pushIterator = { closed: false, close() { this.closed = true; } };
+  await h.resumeAfterSignIn(s);
   assert.equal(h.calls.startQuery.length, 1, "exactly ONE relaunch, never one per caller");
   assert.equal(s.state.authHeld, false, "released before the relaunch");
 });
 
-test("H1(a) DOUBLE SIGN-IN CLICK: the flow and the resume are both single-flight", async () => {
+test("H1(a) TWO CONCURRENT RESUMES: the resume is single-flight", async () => {
+  // ⚠ RE-POINTED FROM "DOUBLE SIGN-IN CLICK" (F-228). The clicks were on the in-window button and the
+  // race was between two `runSignIn` calls, each spawning its own pty — hence the old "one sign-in
+  // flow, not two ptys" assertion. The RACE did not go with the button: whatever notices a credential
+  // calls `resumeAfterSignIn`, and defences 1 and 2 (the `authResuming` latch taken before the first
+  // await, and the CLAIM of `s.authHold` as the ticket) are what stop two callers producing two
+  // claude children. The gate moved to `getSdk`, the only await left in the preflight branch.
   let release;
   const gate = new Promise((r) => { release = r; });
-  const h = harness({ usable: false, signIn: () => gate });
+  const h = harness({ usable: false, gate });
   const s = session();
   h.holdIfNoCredential(s);
-  // Two clicks land before the first flow finishes — the real race behind the two-children bug.
-  const a = h.runSignIn(s);
-  const b = h.runSignIn(s);
+  const a = h.resumeAfterSignIn(s);
+  const b = h.resumeAfterSignIn(s);
   release();
-  const [ra, rb] = await Promise.all([a, b]);
-  assert.equal(h.calls.signIn.length, 1, "one sign-in flow, not two ptys against one session");
+  await Promise.all([a, b]);
+  assert.equal(h.calls.sdk, 1, "the loser returns before it can even ask for the SDK");
   assert.equal(h.calls.startQuery.length, 1, "and ONE query — this is the two-children bug");
-  assert.deepEqual([ra.ok, rb.ok].sort(), [false, true], "one caller wins, the other is refused");
-  // The hold is released exactly once.
-  assert.equal(h.calls.dispatch.filter((e) => e.type === "auth_release").length, 1);
+  assert.equal(h.calls.dispatch.filter((e) => e.type === "auth_release").length, 1, "released exactly once");
+  assert.equal(s.authHold, null, "the ticket is claimed, so a third caller finds nothing to resume");
+  assert.equal(s.authResuming, false, "and the latch is released in a finally, not leaked");
 });
 
 test("H1(b) A SECOND AUTH FAILURE CONVERGES TO PARKED — it never leaves a session 'running'", () => {
@@ -439,19 +449,17 @@ test("H1(b) A SECOND AUTH FAILURE CONVERGES TO PARKED — it never leaves a sess
   s.pushIterator = { closed: false, close() { this.closed = true; } };
   assert.equal(h.holdIfAuthFailure(s, "401"), true);
   assert.equal(s.state.authHeld, true);
-
   // Now force the exact pre-fix state: something dragged the held session back to 'running'
   // with no query behind it (what H1(a)'s wake used to do). The next auth failure MUST park it.
   s.state = { ...s.state, phase: "running", parked: false, activity: "working", authHeld: false };
-  const painted = h.calls.emit.length;
+  const emitted = h.calls.emit.length;
   assert.equal(h.holdIfAuthFailure(s, "401 again"), true, "still reports handled");
-  assert.equal(s.state.phase, "parked", "and it really is parked now, not 'running' forever");
-  assert.equal(s.state.parked, true);
-  assert.equal(s.state.authHeld, true);
+  assert.deepEqual([s.state.phase, s.state.parked, s.state.authHeld], ["parked", true, true],
+    "and it really is parked now, not 'running' forever");
   assert.equal(s.pushIterator.closed, true, "the prompt stream is closed");
   assert.equal(s.abortController.aborted, true, "the query is torn down");
   assert.ok(h.calls.denyPending.length >= 1, "awaited tool promises fail closed");
-  assert.equal(h.calls.emit.length, painted, "but the operator's banner is NOT repainted");
+  assert.equal(h.calls.emit.length, emitted, "but the status is NOT re-emitted");
 });
 
 test("H1(b) the hold is idempotent in the reducer: two holds, one park", () => {
@@ -467,8 +475,7 @@ test("H1(b) the hold is idempotent in the reducer: two holds, one park", () => {
 });
 
 test("H1 startQuery SUPERSEDES before it assembles — the real backstop for two children", () => {
-  // The layered guards above are in session-auth; this is the one that holds whatever the
-  // caller does, so it is pinned against the shipped source.
+  // The layered guards above are in session-auth; this one holds whatever the caller does.
   const fn = QUERY.slice(QUERY.indexOf("async function startQuery("), QUERY.indexOf("async function consume("));
   const abortFirst = fn.indexOf("abortInFlight(s);");
   const newController = fn.indexOf("s.abortController = new AbortController();");
@@ -480,12 +487,14 @@ test("H1 startQuery SUPERSEDES before it assembles — the real backstop for two
   assert.match(teardown, /s\.query = null;/, "and its consume loop is superseded (s.query !== q)");
 });
 
-test("H1 an auth-held session refuses an inbound ACCEPT at the gate, keeping the card live", () => {
-  const GATE = readFileSync(M("session-gate.js"), "utf8");
-  const fn = GATE.slice(GATE.indexOf("function decideInbound("), GATE.indexOf("function drainQueue("));
-  const guard = fn.indexOf("s.state.authHeld === true");
-  const shift = fn.indexOf("io.shiftInbound(s);");
-  assert.ok(guard !== -1, "the gate knows about the hold");
-  assert.ok(guard < shift, "and refuses BEFORE the head is shifted, so the message is not lost");
-  assert.match(fn.slice(guard, shift + 40), /d !== 'decline'/, "a DECLINE still works — dropping needs no agent");
-});
+// ⚠ "H1 an auth-held session refuses an inbound ACCEPT at the gate, keeping the card live" STOOD HERE
+// AND IS DELETED (F-228). It sliced `session-gate.decideInbound` and pinned its hold guard's ORDER:
+// an ACCEPT on a held session was refused BEFORE `io.shiftInbound(s)`, so the message stayed on the
+// queue rather than being consumed into a session with no credential to answer it — while a DECLINE
+// still worked, because dropping needs no agent. ⚠ NOT A LOST GUARD: `decideInbound` answered a gate
+// CARD in the session window and is deleted with the hold it answered (a windowless session's
+// message axis is floored at `auto_inbound`, INVARIANTS §11, so nothing is ever held for a human).
+// What it protected — a held session must not have an inbound turn fed into it — did NOT move to the
+// gate's remaining code; it lives one layer down in the reducer, and "H1(a) A PEER WAKE CANNOT
+// RESUME A HELD SESSION" above drives it end to end against the REAL reducer rather than by reading
+// source order — so the property is better covered after this deletion than before it.

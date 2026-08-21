@@ -1,8 +1,14 @@
-// THE CONTEXT METER (2026-08-02) — "how full is this session's window".
+// THE CONTEXT METER (2026-08-02, cut down 2026-08-20) — "how full is this session's window".
+//
+// WHAT THIS FILE COVERS NOW: the MEASUREMENT, end to end, and nothing about painting it. The
+// denominator table (`main/session-model.js › contextWindowFor`), the token math
+// (`promptTokens`), the observer that turns a real SDK stream into ONE `context` event per turn
+// (`observe`), and the reducer block that stores it and emits it across the process boundary.
+// Every one of those is main-process code and every one of them still ships.
 //
 // The operator's stated use is a decision, not a statistic: WHEN do I end this session and open
-// a fresh one. That makes every failure mode here asymmetric, and the tests are organised around
-// the three that matter:
+// a fresh one. That makes the failure modes asymmetric, and the surviving sections are organised
+// around the two that are still ours to get wrong:
 //
 //   OVERSTATING is a bug.  The obvious source for this number is `result.usage`, which sits on
 //     the same event session-io already reads total_cost_usd from. It is WRONG: the bundled CLI
@@ -11,35 +17,26 @@
 //     100%, and never correct after an auto-compaction. The occupancy is the prompt the model
 //     LAST saw, which is the last main-lane assistant message's own usage.
 //   INVENTING A DENOMINATOR is worse.  An unknown model gets no percentage at all.
-//   GOING BLANK is a failure too.  A window reload must repaint the meter, so it is pinned in
-//     the replay ring like `init` and `modes`.
 //
-// METHOD: drive the shipped code. The real observer against a real SDK-shaped stream, the real
-// reducer block, the real label formatter, the real replay ring, the real view-model fold, and
-// the real paint function against DOM stubs.
+// ⚠ THE THIRD FAILURE MODE — "GOING BLANK: a window reload must repaint the meter, so it is
+// pinned in the replay ring like `init` and `modes`" — IS NO LONGER A FAILURE MODE HERE. It was
+// a statement about the v1 session WINDOW: a BrowserWindow that could be reloaded out from under
+// a live query, which is why the replay ring existed at all. There is no session window to
+// reload, `main/session-replay.js` is deleted, and a rule about repainting a surface that does
+// not exist cannot be kept honest by anything. See the ⚠ blocks at §5/§6 below.
+//
+// METHOD, unchanged for what remains: drive the shipped code. The real observer against a real
+// SDK-shaped stream, and the real reducer block sliced out of main/session-reducer.js.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { loadReducer } from "./_reducer-block.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const R = (p) => join(HERE, "..", "renderer", "session", p);
 
 const model = require("../main/session-model.js");
-const labels = require(R("session-labels.js"));
-const vm = require(R("session-viewmodel.js"));
-const modesUi = require(R("session-modes-ui.js"));
 const { initialSessionState, sessionReducer } = loadReducer();
-
-const REPLAY_SRC = readFileSync(join(HERE, "..", "main", "session-replay.js"), "utf8");
-const ring = new Function(`${REPLAY_SRC.slice(REPLAY_SRC.indexOf("// ─── BEGIN SESSION-REPLAY-RING"),
-  REPLAY_SRC.indexOf("// ─── END SESSION-REPLAY-RING"))}
-  return { createRing, ringRecord, ringDrain, ringOnLoad, ringOnReload, isPinned };`)();
 
 // ── 1. the denominator table, read off the bundled CLI ───────────────────────
 
@@ -234,136 +231,62 @@ test("a PARKED session is inert to a late measurement from its drained tail", ()
   assert.deepEqual(r.effects, [], "and nothing repaints a gauge for a query that is gone");
 });
 
-// ── 5. the copy ──────────────────────────────────────────────────────────────
+// ── ⚠ 5. THE COPY — REMOVED 2026-08-20, the formatter it drove is deleted ─────
+//
+// WHAT STOOD HERE: four tests over `renderer/session/session-labels.js` —
+// `contextMeterText`, `contextMeterLevel`, `contextPercent`.
+//   - "the meter reads '412k / 1M (41%)'"                     the k/M rounding and the percentage
+//   - "NO window means NO percentage"                          §1's null denominator, carried into copy
+//   - "nothing measured yet renders NOTHING, not a confident zero"
+//   - "the thresholds: amber past 75%, red past 90%"           the two level classes
+//   - "a measurement larger than the window clamps at 100"     never "240%"
+//
+// WHY THEY ARE GONE: the whole `renderer/session/**` tree was deleted with the v1 session window
+// (F-228), `session-labels.js` included. These were pure-function tests over a formatter, so they
+// were cheap and they were good — but a formatter with no caller is not a rule about the system,
+// it is a rule about a file. Rewriting them to assert the same strings against a reimplementation
+// would be the worst outcome available: green forever, pinned to nothing.
+//
+// ⚠ WHAT IS *NOT* LOST, and where to look before re-deriving it. The three claims those tests
+// really defended are all still enforced, one section up, at the layer that crosses the process
+// boundary rather than the one that renders it:
+//   - "an unknown model gets NO denominator" is §1's last test (`contextWindowFor` -> null).
+//   - "junk never reaches a percentage" is §4's `sessionReducer` coercion test — a bad number is
+//     flattened to `contextTokens: 0` / `contextWindow: null` BEFORE anything downstream sees it,
+//     which is the guard that actually matters and the only one a new UI cannot skip.
+//   - the CLAMP had no main-side twin and is the one thing that genuinely left with the copy.
+// A replacement meter re-earns the rounding, the thresholds and the clamp with its own tests.
+// Do not resurrect these against a new module by find-and-replace: the thresholds (75 / 90) were
+// a product decision, not a derivation, and re-asserting them from this file would launder a
+// choice nobody made again into a pin.
 
-test("the meter reads '412k / 1M (41%)'", () => {
-  assert.equal(labels.contextMeterText({ tokens: 412200, window: 1000000 }), "412k / 1M (41%)");
-  assert.equal(labels.contextMeterText({ tokens: 150000, window: 200000 }), "150k / 200k (75%)");
-  assert.equal(labels.contextMeterText({ tokens: 940000, window: 1000000 }), "940k / 1M (94%)");
-});
-
-test("NO window means NO percentage — tokens only, and no colour either", () => {
-  assert.equal(labels.contextMeterText({ tokens: 48000, window: null }), "48k context");
-  assert.equal(labels.contextMeterLevel({ tokens: 48000, window: null }), "");
-  assert.equal(labels.contextPercent({ tokens: 48000, window: null }), null);
-});
-
-test("nothing measured yet renders NOTHING, not a confident zero", () => {
-  for (const ctx of [null, undefined, {}, { tokens: 0, window: 1000000 }, { tokens: "x" }]) {
-    assert.equal(labels.contextMeterText(ctx), "", JSON.stringify(ctx));
-    assert.equal(labels.contextMeterLevel(ctx), "");
-  }
-});
-
-test("the thresholds: amber past 75%, red past 90%", () => {
-  const at = (pct) => labels.contextMeterLevel({ tokens: pct * 10000, window: 1000000 });
-  assert.equal(at(10), "");
-  assert.equal(at(74), "");
-  assert.equal(at(75), "is-high");
-  assert.equal(at(89), "is-high");
-  assert.equal(at(90), "is-full");
-  assert.equal(at(100), "is-full");
-});
-
-test("a measurement larger than the window we believe in clamps at 100, it does not read 240%", () => {
-  assert.equal(labels.contextPercent({ tokens: 2400000, window: 1000000 }), 100);
-  assert.match(labels.contextMeterText({ tokens: 2400000, window: 1000000 }), /\(100%\)$/);
-});
-
-// ── 6. the window paints it, and a RELOAD repaints it ────────────────────────
-
-test("the view-model folds a context event into the state the strip paints from", () => {
-  let s = vm.reduceEvent(vm.initialState(), { type: "init", sessionId: "s1", model: "claude-opus-5" });
-  assert.equal(s.context, null, "nothing before the first turn ends");
-  s = vm.reduceEvent(s, { type: "context", tokens: 412200, window: 1000000, model: "claude-opus-5" });
-  assert.deepEqual(s.context, { tokens: 412200, window: 1000000 });
-  assert.equal(s.liveModel, "claude-opus-5");
-  assert.equal(labels.contextMeterText(s.context), "412k / 1M (41%)");
-});
-
-test("a mid-session switch moves the HEADER's live model, and the pick is a separate fact", () => {
-  let s = vm.reduceEvent(vm.initialState(), { type: "init", sessionId: "s1", model: "claude-opus-5" });
-  s = vm.reduceEvent(s, { type: "model", choice: "haiku" }); // main took the pick
-  assert.equal(s.modelChoice, "haiku", "the select shows what was REQUESTED");
-  assert.equal(s.liveModel, null, "and nothing yet claims it is running");
-  s = vm.reduceEvent(s, { type: "context", tokens: 20000, window: 200000, model: "claude-haiku-4-5" });
-  assert.equal(s.liveModel, "claude-haiku-4-5", "the header states what IS running");
-  assert.equal(s.modelChoice, "haiku", "which is a different fact from the pick");
-});
-
-function strip() {
-  const node = () => ({ value: "", disabled: false, classList: { toggle() {} } });
-  return { toolMode: node(), messageMode: node(), modelMode: node(), ctxMeter: { textContent: "", className: "" } };
-}
-
-test("the real paint puts the number and the level class on the meter, via textContent", () => {
-  const els = strip();
-  let s = vm.reduceEvent(vm.initialState(), { type: "context", tokens: 940000, window: 1000000 });
-  modesUi.sync(els, s);
-  assert.equal(els.ctxMeter.textContent, "940k / 1M (94%)");
-  assert.equal(els.ctxMeter.className, "ctx-meter text-caption is-full");
-  s = vm.reduceEvent(s, { type: "context", tokens: 90000, window: 1000000 }); // after a compaction
-  modesUi.sync(els, s);
-  assert.equal(els.ctxMeter.textContent, "90k / 1M (9%)");
-  assert.equal(els.ctxMeter.className, "ctx-meter text-caption", "and the danger colour clears");
-});
-
-test("the same paint puts the MODEL PICK on the third select, and nothing else on it", () => {
-  const els = strip();
-  const s = vm.reduceEvent(vm.initialState(), { type: "model", choice: "sonnet" });
-  modesUi.sync(els, s);
-  assert.equal(els.modelMode.value, "sonnet");
-  assert.equal(els.toolMode.value, "manual", "the axes are painted from their own fields");
-  assert.equal(els.messageMode.value, "ask");
-});
-
-test("the model select goes dead across the SAME adoption gap the two axes do", () => {
-  const els = strip();
-  modesUi.sync(els, { phase: "consent", consentResolved: { decision: "accepted" } });
-  assert.deepEqual([els.toolMode.disabled, els.messageMode.disabled, els.modelMode.disabled], [true, true, true]);
-  modesUi.sync(els, { phase: "running" });
-  assert.deepEqual([els.toolMode.disabled, els.messageMode.disabled, els.modelMode.disabled], [false, false, false]);
-});
-
-test("a strip with no meter and no third select does not throw (a harness, or version skew)", () => {
-  modesUi.sync({}, { phase: "running", context: { tokens: 1, window: 2 } });
-  modesUi.sync({ toolMode: { value: "" } }, { phase: "running" });
-});
-
-test("REPLAY: the meter and the pick are pinned, so a window reload repaints both", () => {
-  const r = ring.createRing(4, 1024 * 1024);
-  ring.ringRecord(r, { type: "init", sessionId: "s1" });
-  ring.ringRecord(r, { type: "modes", tool: "manual", message: "ask" });
-  ring.ringRecord(r, { type: "model", choice: "opus" });
-  ring.ringRecord(r, { type: "context", tokens: 412200, window: 1000000 });
-  for (let i = 0; i < 40; i++) ring.ringRecord(r, { type: "turn", text: "t" + i });
-  const types = r.entries.map((e) => e.type);
-  assert.ok(types.includes("model"), "the pick survived the eviction pressure");
-  assert.ok(types.includes("context"), "and so did the measurement");
-  // ...and a reload replays them into a fold that lands on the same state.
-  ring.ringOnLoad(r);
-  ring.ringOnReload(r);
-  let s = vm.initialState();
-  for (const p of ring.ringOnLoad(r)) s = vm.reduceEvent(s, p);
-  assert.equal(s.modelChoice, "opus");
-  assert.deepEqual(s.context, { tokens: 412200, window: 1000000 });
-});
-
-test("REPLAY: last-wins, so a long session cannot pack the ring with old measurements", () => {
-  const r = ring.createRing(50, 1024 * 1024);
-  for (let i = 1; i <= 30; i++) ring.ringRecord(r, { type: "context", tokens: i * 1000, window: 1000000 });
-  const kept = r.entries.filter((e) => e.type === "context");
-  assert.equal(kept.length, 1, "pinned must not mean unbounded");
-  assert.equal(kept[0].tokens, 30000, "and the survivor is the CURRENT one");
-});
-
-test("the hint the operator actually needs is on the meter, in house voice", () => {
-  const HTML = readFileSync(R("session.html"), "utf8");
-  const at = HTML.indexOf('id="ctxMeter"');
-  assert.notEqual(at, -1, "the meter is in the strip");
-  const title = /title="([^"]+)"/.exec(HTML.slice(at, at + 400));
-  assert.ok(title, "and it carries a hover hint");
-  assert.match(title[1], /end this session and open a fresh one/i,
-    "which names the thing to DO about a full window");
-  assert.doesNotMatch(title[1], /[—–]/, "house voice: no em dashes");
-});
+// ── ⚠ 6. THE WINDOW PAINTS IT, AND A RELOAD REPAINTS IT — REMOVED 2026-08-20 ──
+//
+// WHAT STOOD HERE: six tests over the v1 session window's renderer and its main-side replay ring.
+//   - "the view-model folds a context event into the state the strip paints from"  (session-viewmodel)
+//   - "a mid-session switch moves the HEADER's live model, and the pick is a separate fact"
+//   - "the real paint puts the number and the level class on the meter, via textContent" (session-modes-ui)
+//   - "the same paint puts the MODEL PICK on the third select, and nothing else on it"
+//   - "the model select goes dead across the SAME adoption gap the two axes do"
+//   - "a strip with no meter and no third select does not throw"
+//   - "REPLAY: the meter and the pick are pinned, so a window reload repaints both"  (session-replay)
+//   - "REPLAY: last-wins, so a long session cannot pack the ring with old measurements"
+//   - "the hint the operator actually needs is on the meter, in house voice"  (session.html)
+//
+// WHY THEY ARE GONE: every surface they asserted was deleted. `session-viewmodel.js`,
+// `session-modes-ui.js` and `session.html` went with `renderer/session/**`; `main/session-replay.js`
+// went with the window it replayed into.
+//
+// ⚠ THE REPLAY TESTS ARE THE ONES TO UNDERSTAND BEFORE REBUILDING ANYTHING. They were not UI
+// tests wearing a main-process costume — they pinned a real, non-obvious pair of properties of a
+// bounded ring: that `context` is PINNED (survives eviction pressure from 40 later turns, so a
+// reload is not blank) and that pinning is LAST-WINS (30 measurements leave exactly 1, so pinned
+// does not mean unbounded). Those two pull in opposite directions and the second is the one a
+// reimplementation forgets. They are recorded here rather than in a commit message because the
+// ring is the kind of thing that gets rewritten from its name.
+//
+// ⚠ AND NOTE WHAT THE PAINT TESTS QUIETLY COVERED: "the model select goes dead across the SAME
+// adoption gap the two axes do" was not about the meter at all. It was the one assertion that the
+// model picker could not be driven while a consent decision was mid-flight. If a future surface
+// offers a mid-session model switch, that gap is a live requirement and it is currently pinned
+// NOWHERE — this comment is its only remaining trace.

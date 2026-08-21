@@ -1711,7 +1711,7 @@ Two rounds ship as **1.4.0**. Round B replaces the blocking consent dialog with 
 - **Async watcher (`consent-watcher.js`).** The channel long-poll loop no longer blocks up to 30 min waiting for a decision. On a trigger the desktop **creates the server consent row, notifies, and RETURNS**; a separate watcher polls the operator's own pending rows and **spawns when one flips to `allowed`/`auto_allowed`**; `denied`/`expired` simply drop. A **per-record in-flight lock** makes each row single-resolve, so it can never spawn twice even if two poll ticks observe the same flip.
 - **Terminal decisions are persisted** in electron-store (`channelWatched` + `channelSettled` maps, key = `channelId:seq`), so a **restart never re-spawns or re-prompts a settled request**. This killed a replay bug: the permanently-`allowed` server consent row (which by design never reverts) re-spawned the agent on every relaunch, because the desktop had no memory it had already acted on that seq. The maps grow monotonically with seq, no eviction → F-069.
 - **Park semantics.** A never-answered request stays a `pending` server row, listed on the web and answerable up to the 24h TTL (§8, `CONSENT_TTL_MS`). **Dismissing a notification never denies** — deny is an explicit action, parking is the safe default (mirroring the v1.1 rule that banner auto-dismiss must not settle consent).
-- **`consent.submitDecision()` IS THE DECISION CALL — the one entry point every surface uses (2026-08-10, F-067).** All four sites go through it: `trigger.js` (notification Allow), `trigger-headless.js` (headless Allow), and `session-consent.js` in-window Accept **and** Deny. It never rejects, so a notification-action callback can fire it without an `await` or a `.catch`. **`consent.patchDecision()` is the private HTTP helper underneath it and is NOT the call to reach for** — reaching past `submitDecision` is exactly what made a failed decision silent. *(Two stale code comments still name `patchDecision` as the decision call — `main/session-consent.js:6` and `main/session-ipc.js:183`. Both are comments only; the call sites are correct.)*
+- **`consent.submitDecision()` IS THE DECISION CALL — the one entry point every surface uses (2026-08-10, F-067).** All four sites go through it: `trigger.js` (notification Allow), `trigger-headless.js` (headless Allow), and the pre-consent window's in-window Accept **and** Deny. ⚠ That fourth surface is DELETED (2026-08-20, F-228, `session-consent.js` with it) and the census moved to `session-windowless.js`'s two — the Send and the cancel path of the outbound bridge; the RULE below is unchanged. It never rejects, so a notification-action callback can fire it without an `await` or a `.catch`. **`consent.patchDecision()` is the private HTTP helper underneath it and is NOT the call to reach for** — reaching past `submitDecision` is exactly what made a failed decision silent. *(Two stale code comments still name `patchDecision` as the decision call — the pre-consent window's own header and its `session:consent-decision` handler. Both are comments only; the call sites are correct.)*
 - **THE DECISION OUTCOME IS THREE-VALUED, and a boolean cannot carry it.** `DECISION_OK` / `DECISION_SETTLED` / `DECISION_FAILED`. Collapsing to a boolean is what the original bug was: the benign case and the broken case are BOTH "not ok", so an Allow that died on the network looked identical to one that landed — the notification had already dismissed and nothing told the operator. **Only `DECISION_FAILED` notifies.** A **409 is silent**, because `CONSENT_ALREADY_DECIDED` is the ONLY 409 this route emits (`http-mapping.ts:80`) and it means the other surface won the race — re-notifying would report a break when the operator's own web click is what answered. A **404 is deliberately `failed`, not `settled`**: the row is gone, the request will never run, and silence is the bug. ⚠ **The notification is BEST-EFFORT** — unsupported, throwing, or OS-suppressed (Do Not Disturb / Focus) all fall through with only a diag line, **so the web Pending Requests list remains the only GUARANTEED recovery path**. Do not retire it on the strength of this signal.
 - **Decision echo.** Accept/decline/cancel/interrupt each emit a lifecycle `channel_message` the requester sees live (§8 v1.4 "Decision echo"); the web renders declined/dropped/interrupted CALM via strict `metadata.<flag> === true` checks — a bare `task_failed` is still a real error.
 
@@ -3008,3 +3008,51 @@ exactly as `:channelId` already was. `routes.tsx`, `deep-link-target.js` and the
 test were untouched. **The question to ask before adding a route is whether the thing
 is a DESTINATION or a STATE of one** — and the tree had already answered it once, in
 the same file, for the same surface.
+
+---
+
+## §18.x — THE SESSION WINDOW IS DELETED (2026-08-20)
+
+⛔ **SUPERSEDED, NOT DELETED: every §18 stratum describing the v1.9–v2.x SESSION WINDOW is now
+archaeology.** The window model — an Electron `BrowserWindow` per session, its own preload and
+renderer, per-window Accept gates, the pre-consent window, requester live sessions, the attended
+handoff, the tray "Sessions" submenu — was retired on Samuel's live-test ruling and **deleted**
+the same day (F-228). Those strata are kept because they are the only record of what the
+decisions were and what they cost; **read them as history, and read INVARIANTS §11 for what is
+true now.**
+
+**WHAT REPLACED IT, in one paragraph.** Agents run WINDOWLESS on the SDK engine and register in
+the same session Map, so the Agents tab, pause/end, the metrics and the `channel_sessions` push
+all work unchanged. Consent decides on inline channel surfaces — the transcript thread card, the
+thread view's awaiting strip, and the send box for an outbound draft — over the same server
+consent row, with the same CAS and the same TTL. The operator's view onto a running agent is
+`main/agent-window.js`, built on the pop-out's shape rather than restored from the session
+window's.
+
+**THREE THINGS WORTH CARRYING FORWARD, because each cost something to learn:**
+
+1. **A DELETION WAVE'S FIRST COMMIT SHOULD CONTAIN NO DELETIONS.** Four things sat inside
+   condemned files and were about something else: the lifecycle echo that tells a waiting peer
+   the machine stopped (in the window FACTORY, because that is what `index.js` already handed to
+   `setLifecycleHandlers`), the two courtesy replies the surviving windowless path sends (in the
+   headless lane's file), the permission-axis vocabulary the DURABLE posture speaks (exported by
+   the single-use ARM's hook), and the concurrency ceiling (owned by the headless pool while the
+   live lane capped under a window budget's name). Moving them first, and proving green, is what
+   separated "delete the lane" from "delete the lane and one silent feature".
+
+2. **THE MIXED-FILE RULE (§14) PAID FOR ITSELF REPEATEDLY, AND ALWAYS THE SAME WAY: the TITLE
+   lied and the ASSERTIONS did not.** `session-open-thread.test.mjs` reads as a window-shell
+   suite and turned out to be the only cover anywhere for `channel-context`'s access rules.
+   `session-outbound-card.test.mjs` is mostly renderer DOM and held the only pin on
+   `RESHOW_TYPES`. A `session-permission-hardening` case names "the card" in its title and drives
+   live `session-post-surface.js` in its body. **Classify by what a test DRIVES, never by what it
+   is called.**
+
+3. **TWO DEFECTS THE WAVE CREATED WERE BOTH SILENT, AND BOTH WORE THE FACE OF CORRECT
+   BEHAVIOUR.** `session-reopen.js › bind` rebuilds its `deps` from a literal, so dropping
+   `openAgentWindow` from that list discarded the handle and every "Open window" click hit the
+   module's own fail-closed guard — indistinguishable from a session that genuinely cannot be
+   opened. And `launch()` kept a reference to a `const` whose declaration was removed, a
+   `ReferenceError` sitting on a branch an earlier early-return had made unreachable. **A
+   fail-closed guard is a good default and a terrible diagnostic: when a wiring bug and a correct
+   refusal produce the same value, only a test that drives the WIRING can tell them apart.**

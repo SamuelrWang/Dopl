@@ -38,6 +38,17 @@
 // here is softened — a `thinking` PILL still needs the migration, and still would break
 // every peer surface and the MCP renderer's membership set on the way.
 
+// ⚠ THE SESSION-WINDOW WAVE (2026-08-20, F-228) COST THIS FILE NOTHING BUT A LOAD. Two of the
+// four cases call the shared harness, whose `EXPORTED` list still named the deleted
+// `main/session-summary.js › keptWindow`; that list feeds a `new Function` return, so the two
+// that touch it were ReferenceErrors and the two pure source probes stayed green. The DB
+// contract itself is as far from a window as this tree gets — a CHECK constraint in
+// `supabase/migrations` against a three-value enum — and not one assertion moved.
+// ⚠ The renderer path named in the parenthetical below (`renderer/session/session-chrome.js`
+// #thinkingVisible) is DELETED with the session window. The claim it supported is unharmed and
+// now reads better without it: a `thinking` PILL needs a MIGRATION, and always did — what a
+// surface can render locally was never the constraint.
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";

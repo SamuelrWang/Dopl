@@ -45,25 +45,18 @@ const POLL_MS = 10_000;
 // the number lives and nothing about what it is.
 const MAX_CONCURRENT_SESSIONS = 6;
 
-// ── The spawn surface: a window, an adopted card, or nothing at all ──────────
-// Returns true when the session has its surface; false = the caller rolls back.
-function attachSurface(s, spec, deps) {
-  if (spec.windowless) {
-    s.windowless = true; // every emit no-ops on the null win; the Agents tab is the surface
-    return true;
-  }
-  const adopted = deps.sessionConsent.takeForAdopt(s.key);
-  try {
-    s.win = (adopted && adopted.win && !adopted.win.isDestroyed())
-      ? adopted.win
-      : deps.windowFactory(s.sessionId);
-    if (!s.win) throw new Error('window factory returned nothing');
-  } catch (err) {
-    diag('session-engine: window factory failed', err && err.message);
-    return false;
-  }
-  deps.sessionShell.bindWindow(s);
-  deps.sessionShell.emitFolder(s);
+// ── The spawn surface ────────────────────────────────────────────────────────
+// ⚠ THERE IS ONE SHAPE LEFT AND IT MINTS NOTHING (2026-08-20, F-228). This function used
+// to branch: a WINDOW (freshly built by the injected factory, or the open pre-consent card
+// adopted through `session-consent.takeForAdopt`), or — under `spec.windowless` — none. The
+// window branch went with `session-window.js` and the renderer it painted into.
+//
+// It stays a function rather than being inlined at the call site because the ENGINE'S
+// ROLLBACK is the contract: `startSession` un-registers the session when a surface cannot
+// be attached, and keeping the seam keeps that failure expressible. Returns true when the
+// session has its surface; false = the caller rolls back.
+function attachSurface(s, _spec) {
+  s.windowless = true; // every emit no-ops on the null win; the Agents tab is the surface
   return true;
 }
 

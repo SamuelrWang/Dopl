@@ -1,8 +1,9 @@
-// H2 — WHO does a DM's approval card say this message will reach? (2026-07-31, restored F-145)
+// H2 — is a DM post STAMPED with the fact that the server addresses it? (2026-07-31, restored
+// F-145; cut down to main's half 2026-08-20 with the session-window retirement, F-228)
 //
 // THE BEHAVIOUR. main stamps `to` on EVERY own-channel post: the call's own `to:` when it set
 // one, and the session's BOUND COUNTERPARTY otherwise (main/session-io.js `withPostSurface`).
-// That fallback is a 1:1 INFERENCE, so N-PARTY made the renderer refuse to name a person on an
+// That fallback is a 1:1 INFERENCE, so N-PARTY made the consumer refuse to name a person on an
 // unaddressed post — and that overcorrected the one case that is all of today's live traffic.
 // In a DIRECT channel the SERVER addresses the post (`resolveDirectPeer` stamps `to_user_id`
 // with the other member, which is exactly why the tool tells an agent it needs no `to` there),
@@ -11,20 +12,22 @@
 // it, and this is the boolean that separates them: main stamps `directChannel` from the
 // server's own `isDirect` flag, FAIL-QUIET — only an explicit `true` names anyone.
 //
-// WHY THIS FILE EXISTS AGAIN (F-145). These assertions lived in
+// WHAT THIS FILE COVERS NOW: the PRODUCER side only. Where `directChannel` comes from, that it
+// can only ever be the server's own flag, that it rides BOTH the gated and the auto-allowed post
+// paths identically, that it survives every surviving session-start path, and that the `to` it
+// travels with is a display NAME rather than the raw user id an agent typed. All of it is
+// `main/session-io.js` / `session-outbound.js` / `session-post-surface.js`, and all of it still
+// ships. See the ⚠ block below for the consumer half and why it is gone.
+//
+// WHY THIS FILE EXISTS AT ALL (F-145). These assertions lived in
 // `test/session-addressee-truth.test.mjs`, a MIXED file: the N-PARTY half (an unaddressed post
 // names the channel) and the H2 half (a DM names the peer) plus a composer-popup section for
 // the `@`-mention syntax. The channels rollback deleted the mention syntax, and the whole file
-// went with it. The N-PARTY half survives in session-gate-dom / session-permission-axes /
-// session-permission-hardening; the H2 half survived NOWHERE — not one test in this tree so
-// much as mentioned `directChannel`, and every line that implements it could be deleted with
-// 2293 tests still green. The rule that saved `service-writes-members.test.ts` applies here:
-// a mixed file whose feature is deleted is REWRITTEN down to the behaviour that survives, not
-// removed. This is that rewrite, minus the mention section, which is genuinely gone.
-//
-// The N-PARTY cases are kept ONLY where they are the contrast that gives an H2 case meaning
-// (a near-miss flag must fall back to the channel wording), not as a second copy of a suite
-// that already exists.
+// went with it. The H2 half survived NOWHERE — not one test in this tree so much as mentioned
+// `directChannel`, and every line that implements it could be deleted with 2293 tests still
+// green. INVARIANTS §14: a mixed file whose feature is deleted is REWRITTEN down to the
+// behaviour that survives, not removed. This file is that rewrite, and it has now been through
+// the same operation a second time, for the same reason, on the other half.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -36,69 +39,40 @@ import { createRequire } from "node:module";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
-const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.url));
-const labels = require(R("session-labels.js"));
-const render = require(R("session-render.js"));
 const io = require(M("session-io.js"));
 const outbound = require(M("session-outbound.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
-const UNADDRESSED = "To: this channel, no recipient named";
-
-// ── the approval card's destination line ──────────────────────────────────────
-
-test("H2: in a DIRECT channel the SERVER names the recipient, so the card does too", () => {
-  // `resolveDirectPeer` stamps `to_user_id` on a DM post that carries no `to`, so this message
-  // really does reach David and wake David's agent. Saying "no recipient named" understates
-  // what is being approved.
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", directChannel: true }), "To: David");
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", directChannel: true, addressed: false }), "To: David");
-  // Still a label, not prose: collapsed and capped, and the kind suffix rides it like any other.
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: " David   Kim\n", directChannel: true }), "To: David Kim");
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", directChannel: true, postKind: "task_finished" }),
-    "To: David, marked task_finished");
-});
-
-test("H2: the DM flag is FAIL-QUIET — a near-miss names nobody, and never invents one", () => {
-  for (const flag of ["true", 1, false, null, undefined]) {
-    assert.equal(labels.postDestinationText({ ownChannel: true, to: "David", directChannel: flag }),
-      UNADDRESSED, JSON.stringify(flag));
-    assert.equal(render.outboundLabel({ to: "David", directChannel: flag }), "Posted to channel", JSON.stringify(flag));
-  }
-  // A direct channel with nothing to name is still a channel, not an empty "To: ".
-  assert.equal(labels.postDestinationText({ ownChannel: true, directChannel: true }), UNADDRESSED);
-  assert.equal(render.outboundLabel({ directChannel: true }), "Posted to channel");
-});
-
-test("H2: the banner names the DM recipient on the same rule as the destination line", () => {
-  assert.equal(render.outboundLabel({ to: "David", directChannel: true }), "Sent to David");
-  assert.equal(render.outboundLabel({ status: "pending", to: "David", directChannel: true }), "Sending to David");
-  assert.equal(render.outboundLabel({ status: "not_sent", to: "David", directChannel: true }), "Not sent");
-});
-
-test("H2 does NOT weaken the cross-channel verdict (fail suspicious still outranks it)", () => {
-  // A DM peer's name on a post leaving the session's own channel is the exfil shape, and the
-  // destination line must keep saying so rather than reassuring with a familiar name.
-  for (const perm of [
-    { ownChannel: false, to: "David", directChannel: true },
-    { ownChannel: "true", to: "David", directChannel: true },
-    { to: "David", directChannel: true },
-  ]) {
-    assert.equal(labels.postDestinationText(perm), "To: another channel", JSON.stringify(perm));
-    assert.equal(labels.isCrossChannelPost(perm), true);
-  }
-});
-
-test("H2: the destination line and the banner never disagree about naming", () => {
-  for (const addressed of [true, false, undefined]) {
-    for (const directChannel of [true, false, undefined]) {
-      const item = { ownChannel: true, to: "David", addressed, directChannel, status: "pending" };
-      const named = render.outboundLabel(item).includes("David");
-      assert.equal(named, labels.postDestinationText(item).includes("David"),
-        "one surface naming a person while the other does not is the disagreement this exists to stop");
-    }
-  }
-});
+// ── ⚠ THE APPROVAL CARD'S COPY — REMOVED 2026-08-20, both surfaces are deleted ─
+//
+// WHAT STOOD HERE: five tests over `renderer/session/session-labels.js › postDestinationText`
+// (the card's destination LINE) and `renderer/session/session-render.js › outboundLabel` (the
+// record BANNER) — the two places the flag below was consumed.
+//   - "H2: in a DIRECT channel the SERVER names the recipient, so the card does too"
+//   - "H2: the DM flag is FAIL-QUIET — a near-miss names nobody, and never invents one"
+//   - "H2: the banner names the DM recipient on the same rule as the destination line"
+//   - "H2 does NOT weaken the cross-channel verdict (fail suspicious still outranks it)"
+//   - "H2: the destination line and the banner never disagree about naming"
+//   - "H2: the copy is plain and carries no em dash"
+//
+// WHY THEY ARE GONE: `renderer/session/**` was deleted whole with the v1 session window (F-228).
+// There is no destination line and no banner. A test that re-implements `postDestinationText`
+// to keep asserting "To: David" would be asserting against itself.
+//
+// ⚠ THE ONE THAT WAS DOING REAL WORK, and that a replacement UI must re-earn: "the destination
+// line and the banner never disagree about naming". It was a CROSS-SURFACE consistency proof —
+// it swept every (addressed × directChannel) combination and asserted the two independently
+// written formatters either both named the person or neither did. That class of bug (one surface
+// says "Sent to David", the other says "Posted to channel", for the same payload) is invisible to
+// per-formatter tests, which is exactly why it was written as a sweep. Any future surface that
+// paints this payload in two places inherits that obligation. Nothing in this tree holds it now.
+//
+// ⚠ AND NOTE WHAT THE FAIL-QUIET TEST PROVED THAT THE PRODUCER TESTS BELOW DO NOT. The consumer
+// treated `"true"`, `1`, `false`, `null` and `undefined` identically — a near-miss flag fell back
+// to the channel wording rather than naming a person. Below, main's half of that rule survives in
+// full ("H2: main stamps `directChannel` ... and only then"): a non-`true` value means the field
+// is ABSENT from the payload, so a consumer cannot mis-read a truthy string it never receives.
+// The fail-quiet property is therefore still enforced, one layer earlier, by construction.
 
 // ── main's half: WHERE that flag comes from, and that it can only ever be the server's ────
 
@@ -115,16 +89,22 @@ test("H2: main stamps `directChannel` on a DM session's post surface, and only t
     for (const id of s.pendingPermissions.keys()) s.pendingPermissions.get(id)({ behavior: "deny" });
     return evs[0].payload;
   };
-  // A DM: the flag rides, and the renderer turns it into the peer's name.
+  // A DM: the flag rides, alongside the name the consumer would have painted.
   const dm = gated(mk(true));
   assert.equal(dm.directChannel, true);
   assert.equal(dm.to, "David", "main's bound-counterparty fill is what gets named");
-  assert.equal(labels.postDestinationText(dm), "To: David");
-  // Anything else: the payload is byte-identical to the pre-H2 one — no stray field.
+  // ⚠ REWRITTEN 2026-08-20: this line used to read the payload back through
+  // `labels.postDestinationText(dm)` and assert "To: David". That formatter is deleted, so the
+  // claim is now made where it is actually decided — on the payload that crosses the boundary.
+  // INVARIANTS §11: assert the object that CROSSES, not the function that renders it.
+  //
+  // Anything else: the payload is byte-identical to the pre-H2 one — no stray field. This is the
+  // FAIL-QUIET rule, and stamping it as an ABSENCE is what makes it un-mis-readable downstream:
+  // a truthy-looking `"true"` never reaches a consumer to be believed.
   for (const direct of [false, undefined, "true", 1]) {
     const other = gated(mk(direct));
     assert.equal("directChannel" in other, false, JSON.stringify(direct));
-    assert.equal(labels.postDestinationText(other), UNADDRESSED);
+    assert.equal(other.to, "David", "the bound-counterparty fill still happens; only the FLAG is withheld");
   }
 });
 
@@ -135,13 +115,15 @@ test("H2: main stamps `directChannel` on a DM session's post surface, and only t
 // while the SERVER's echo of the same post said "addressed to Samuel Wang". Both call sites in
 // session-io already documented the contract ("`to` is a display NAME"); `withPostSurface` was
 // the one place that broke it, because `postAddress` returns the caller's argument verbatim.
-test("the card resolves the counterparty's id to their name", () => {
+// ⚠ This is a MAIN-side rule and it outlived the card it was named for: `to` is the display name
+// on the payload, whoever paints it next.
+test("the counterparty's id is resolved to their name before it leaves main", () => {
   const ID = "2dac1943-da3b-4fd9-aee6-1716ddfc25f9";
   const post = (input) =>
     io.withPostSurface({ type: "outbound_gate" }, input, "Samuel Wang", ID);
 
-  // Addressed by ID -> the NAME is painted, and `addressed` still reports that the CALL named
-  // someone (it drives the renderer's "Sent to X" vs "Posted to channel" branch).
+  // Addressed by ID -> the NAME rides the payload, and `addressed` still reports that the CALL
+  // named someone (it is what a consumer branches "Sent to X" vs "Posted to channel" on).
   const byId = post({ op: "post", body: "hi", to: ID });
   assert.equal(byId.to, "Samuel Wang", "the raw user id reached the card");
   assert.equal(byId.addressed, true, "resolving the label must not un-address the post");
@@ -173,17 +155,23 @@ test("the card resolves the counterparty's id to their name", () => {
   );
 });
 
-test("H2: an AUTO-ALLOWED post paints the same destination as a gated one", () => {
-  // Axis B auto_outbound resolves the card itself (session-outbound). If the flag rode only
-  // the gated path, turning auto-send on would silently downgrade the record's copy.
+test("H2: an AUTO-ALLOWED post carries the same destination fields as a gated one", () => {
+  // Axis B auto_outbound resolves the record itself (session-outbound). If the flag rode only
+  // the gated path, turning auto-send on would silently downgrade the record — the operator who
+  // opted INTO hands-off sending would be the one who stopped being told where things went.
   const emitted = [];
   const s = { channelId: "ch1", counterpartyName: "David", direct: true };
   outbound.wrapCanUseTool(s, () => Promise.resolve({ behavior: "allow" }), (_s, ev) => emitted.push(ev))(
     DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, { toolUseID: "t1" });
   return new Promise((resolve) => setImmediate(() => {
     assert.equal(emitted[0].directChannel, true);
-    assert.equal(labels.postDestinationText({ ...emitted[0], ownChannel: true }), "To: David");
-    assert.equal(render.outboundLabel(emitted[0]), "Sent to David");
+    // ⚠ REWRITTEN 2026-08-20: the two assertions here used to be
+    // `labels.postDestinationText({...emitted[0], ownChannel: true}) === "To: David"` and
+    // `render.outboundLabel(emitted[0]) === "Sent to David"`. Both formatters are deleted. The
+    // property they were proving is that the auto path and the gated path emit the SAME fields,
+    // so it is now asserted on the fields — which is also the stronger form, since it fails on a
+    // divergence the two formatters happened to render identically.
+    assert.equal(emitted[0].to, "David");
     resolve();
   }));
 });
@@ -195,20 +183,21 @@ test("H2: the flag is read off the channel DTO and survives every session-start 
   const src = readFileSync(M("trigger.js"), "utf8");
   assert.match(src, /direct: entry\.channel\.isDirect === true/,
     "the responder session must carry the server's own 1:1 flag, strictly compared");
-  // And it survives a park / recreate: the reopened shell posts too, and its card must not
+  // And it survives a crash + resume: the resumed session posts too, and its record must not
   // quietly downgrade to "no recipient named" for the same DM.
+  //
+  // ⚠ REWRITTEN 2026-08-20 (F-228): this count was 3, for the three `startSession` specs
+  // session-park.js used to hold. Two of them — `recreateParkedShell` and `openFromChannel` —
+  // were shell factories and were deleted with the session window. `startResume` is the ONE
+  // start path left in this file, so the count is 1. Keeping the literal 3 would have failed;
+  // deleting the assertion would have lost the guard on the path that DID survive, which is the
+  // one that actually posts after an interruption. The count stays asserted rather than softened
+  // to /.test()/ because "at least one" is what let two of these drift apart in the first place.
   const park = readFileSync(M("session-park.js"), "utf8");
-  assert.equal((park.match(/direct: (rec|ctx)\.direct === true/g) || []).length, 3,
-    "all three startSession specs in session-park restore the flag");
+  assert.equal((park.match(/direct: (rec|ctx)\.direct === true/g) || []).length, 1,
+    "the surviving startSession spec in session-park restores the flag");
   const engine = readFileSync(M("session-engine.js"), "utf8");
   assert.match(engine, /direct: spec\.direct === true/, "startSession binds it onto the session");
   assert.match(readFileSync(M("session-io.js"), "utf8"), /direct: s\.direct === true/,
     "and baseRecord persists it beside the counterparty binding");
-});
-
-test("H2: the copy is plain and carries no em dash", () => {
-  for (const s of [UNADDRESSED, "To: another channel", "To: David", "Sent to David",
-    "Sending to the channel", "Posted to channel"]) {
-    assert.ok(!s.includes("—"), `no em dash in ${s}`);
-  }
 });

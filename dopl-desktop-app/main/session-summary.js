@@ -374,19 +374,12 @@ function noteEnded(s, keepWindow) {
   return kept;
 }
 
-/**
- * Window of a RETAINED ENDED session for (channel, thread), or null.
- * `session-reopen.reopenByTask` consults this between its live-session branch and its recreate
- * fallback, so an abandoned session opens the transcript it left behind rather than a fresh
- * parked shell wearing its name.
- */
-function keptWindow(channelId, taskId) {
-  const key = String(channelId || '') + ':' + String(taskId || '');
-  for (const e of sweepEnded()) {
-    if (e.key === key) return e.win;
-  }
-  return null;
-}
+// ⚠ `keptWindow(channelId, taskId)` STOOD HERE AND IS DELETED (2026-08-20, F-228). It returned
+// the surviving BrowserWindow of a RETAINED ENDED session so `reopenByTask` could reveal the
+// transcript an abandoned run left behind rather than build a fresh shell over it. No session
+// has a window, so nothing is retained and nothing can be revealed. The RETENTION ITSELF is
+// untouched — an ended agent still holds its PILL in the Agents tab, which is what `noteEnded`
+// and `sweepEnded` are for; only the window handle went.
 
 // ⚠ The ONE place a summaries frame crosses into the renderer (modelled on ui-sync's
 // sendToWindows): windows resolved at send time, a dead one fails closed.
@@ -494,7 +487,6 @@ module.exports = {
   subscribe,
   nameForSession,
   noteEnded,
-  keptWindow,
   noteActivity,
   touch,
 };

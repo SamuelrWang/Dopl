@@ -1,14 +1,22 @@
-// Tests for the v2.2 Session Window dispatch routing (main/session-dispatch.js, Track
-// T2, item 3) — the listener's three pre-classify routes.
+// THE LISTENER'S ONE PRE-CLASSIFY ROUTE — main/session-dispatch.js, route (1)
+// `feedLiveSession`, plus the `authorLabel` resolver it feeds through.
+//
+// ⚠ THIS FILE HELD FIVE ROUTES' WORTH OF TABLE AND NOW HOLDS ONE (2026-08-20, F-228). The
+// excision block at the foot names what stood here. F-228 says these truth tables must SURVIVE
+// as "the record that the guards still hold", so the file is rewritten down to the guards that
+// are still there rather than removed — INVARIANTS §14.
 //
 // SOURCE EXTRACTION with INJECTION: the BEGIN/END SESSION-DISPATCH-PURE block holds
-// feedLiveSession / maybeOpenRequesterSession / maybeSurfaceRequesterReply. Every
-// dependency (settings, targeting, sessionEngine, io, store, notifyLocal, diag) is a
-// module-scope binding, so we slice the block, prove it is electron/fs/require-free
-// (§H-8), and inject fakes to pin the routing TRUTH TABLE without an electron require:
-//   live peer reply -> feed; my create_task -> openRequester; a settled requester
-//   reply with a retained sdkId -> surface (else false); a THIRD party never feeds
-//   (FIX L1); window-mode OFF short-circuits every route.
+// `authorLabel` + `feedLiveSession`. Every dependency (targeting, sessionEngine, io) is a
+// module-scope binding, so we slice the block, prove it is electron/fs/require-free (§H-8),
+// and inject fakes to pin the routing TRUTH TABLE without an electron require:
+//   a live COUNTERPARTY reply -> feed; a THIRD party never feeds (FIX L1); no live session ->
+//   false; my own message, a non-'message' kind and a null identity all fail CLOSED; an
+//   unbound session feeds nobody; and the wrapper names the AUTHOR, not the account.
+//
+// ⚠ AND THAT THE ROUTE IS UNGATED. Route (1) never had the window-mode guard the other four
+// opened with, and now that the switch itself is gone the absence is asserted against the
+// SOURCE rather than by driving a setting that no longer exists.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -32,79 +40,64 @@ for (const banned of ["require(", "electron", "fs.", "path.", "child_process", "
   assert.ok(!BLOCK.includes(banned), `SESSION-DISPATCH-PURE block must not reference ${banned}`);
 }
 
+// ⚠ THE CODE, WITHOUT THE PROSE. The two source-level pins at the foot of this file ask
+// whether a deleted name still EXISTS in this module, and this module's header docblock names
+// all four deleted routes and their window-mode gate on purpose — that record is the point of
+// the docblock. Scanning raw SRC for them would therefore be permanently red against a
+// correct file, which is the failure mode where somebody deletes the pin instead of the code.
+const CODE = SRC.split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n");
+
 const ME = "me-user";
 const PEER = "peer-user";
 const TASK = "11111111-2222-3333-4444-555555555555";
 
 // A fresh harness per test: configurable fakes + recorded calls.
+//
+// ⚠ THREE INJECTIONS, NOT SEVEN. This used to plumb `settings`, `store` and `notifyLocal` in
+// beside them, for routes (2), (3) and (5). The block binds none of the three any more, and a
+// fake for a dependency the source has dropped is how a harness quietly keeps testing a
+// product that is gone.
 function harness(over = {}) {
-  const calls = { feedInbound: [], launch: [], resume: [], notify: [], gate: [], arm: [], storeReads: 0 };
+  const calls = { feedInbound: [] };
   const cfg = {
-    windowMode: true,
     live: false,
     counterparty: PEER,
     feedInboundReturn: true,
-    requesterOpen: false,
-    launchReturn: { sessionId: "sess-1" },
-    gateReturn: true,
-    sdkId: null,
-    rec: null,
+    displayName: (id) => `name:${id}`,
     ...over,
   };
-  const settings = { getWindowMode: () => cfg.windowMode };
   const targeting = {
     firstClassTaskId: (m) => m.taskId || "",
-    requesterTaskOpen: () => cfg.requesterOpen,
-    // 2026-08-05: which of the two desktop runtimes posted it. Only `desktop-ui` (the
-    // operator typing in the app's own UI) arms the request strip; a spawned session's
-    // create takes the identical launch with no strip.
-    requesterTypedByOperator: (m) => (m.meta && m.meta.runtime) === "desktop-ui",
-    DESKTOP_RUNTIMES: ["desktop-session", "desktop-ui"],
-    metaStr: (m, k) => (m.meta && m.meta[k]) || "",
-    resolveToolProfile: () => "full",
   };
   const sessionEngine = {
     hasLiveSession: () => cfg.live,
     counterpartyFor: () => cfg.counterparty,
     feedInbound: (a) => { calls.feedInbound.push(a); return cfg.feedInboundReturn; },
-    launchRequesterSession: async (a) => { calls.launch.push(a); return cfg.launchReturn; },
-    armRequestStatus: (a) => { calls.arm.push(a); return true; },
-    resumeRequesterForReply: async (rec, sdkId, reply) => { calls.resume.push({ rec, sdkId, reply }); return true; },
-    // v2.5 D1: the gate entry the route uses now (recreate the shell + hold the reply).
-    feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },
   };
-  const io = { displayNameFor: (id) => `name:${id}` };
   // 2026-08-01: the label a fed message is titled with is the AUTHOR's — a peer's AGENT posts
   // from the peer's account, so the account's display name is the wrong answer for it. The
   // resolver is `authorLabel`, INSIDE the sliced block, so it is the real one here rather
-  // than a fake. It used to be `channel-roster.authorLabel` and to name a HANDLE off the
-  // channel's agent roster; that went with named agents (channels rollback §1).
-  // Kept injectable to prove the routing layer no longer READS the resume map itself.
-  const store = {
-    sessionKey: (c, t) => { calls.storeReads++; return `${c}:${t}`; },
-    getSdkSessionId: () => { calls.storeReads++; return cfg.sdkId; },
-    getRecord: () => { calls.storeReads++; return cfg.rec; },
-  };
-  const notifyLocal = (title, body) => calls.notify.push({ title, body });
-  const diag = () => {};
+  // than a fake; only the account-name lookup under it is injected.
+  const io = { displayNameFor: (id) => cfg.displayName(id) };
   const api = new Function(
-    "settings", "targeting", "sessionEngine", "io", "store", "notifyLocal", "diag",
-    `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };`
-  )(settings, targeting, sessionEngine, io, store, notifyLocal, diag);
+    "targeting", "sessionEngine", "io",
+    `${BLOCK}\n return { feedLiveSession, authorLabel };`
+  )(targeting, sessionEngine, io);
   return { ...api, calls, cfg };
 }
 
 const entry = { channel: { id: "c1", name: "General" }, workspaceId: "w1" };
-const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, body: "reply body", taskId: TASK, meta: {}, ...over });
+const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, body: "reply body", taskId: TASK, seq: 7, meta: {}, ...over });
 
-// ── (1) feedLiveSession ──────────────────────────────────────────────────────
+// ── (1) feedLiveSession — the whole of the shipped table ─────────────────────
 
 test("feed: a live peer reply from the task's counterparty feeds the session", () => {
   const h = harness({ live: true, counterparty: PEER });
   assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
   assert.equal(h.calls.feedInbound.length, 1);
   assert.deepEqual(h.calls.feedInbound[0], {
-    channelId: "c1", taskId: TASK, message: "reply body", seq: h.calls.feedInbound[0].seq,
+    channelId: "c1", taskId: TASK, message: "reply body",
+    seq: 7, // the turn's seq — the windowless outbound bridge's thread join
     authorName: `name:${PEER}`,
   });
 });
@@ -116,144 +109,112 @@ test("feed: a THIRD party in the same channel never injects a turn (FIX L1)", ()
   assert.equal(h.calls.feedInbound.length, 0, "no feed for a non-counterparty author");
 });
 
+test("feed: a session with NO stored counterparty feeds nobody", () => {
+  // The binding is the gate, so an UNBOUND session is not a session everybody may talk into.
+  // Fails closed in the one direction that matters: a missing binding costs a turn, a truthy
+  // default puts a stranger's words into somebody else's session.
+  for (const counterparty of [null, undefined, ""]) {
+    const h = harness({ live: true, counterparty });
+    assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false, JSON.stringify(counterparty));
+    assert.equal(h.calls.feedInbound.length, 0);
+  }
+});
+
 test("feed: no live session -> false (falls through to classify)", () => {
   const h = harness({ live: false });
   assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false);
   assert.equal(h.calls.feedInbound.length, 0);
 });
 
-test("feed: my OWN message never feeds; a non-message kind never feeds", () => {
+test("feed: my OWN message, a non-message kind and a NULL identity all fail closed", () => {
   const h = harness({ live: true });
-  assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: ME }), ME), false);
-  assert.equal(h.feedLiveSession(entry, peerMsg({ kind: "task_started" }), ME), false);
+  assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: ME }), ME), false, "my own message");
+  // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
+  // session at all, so the lifecycle markers and `task_progress` milestones on the wire cannot
+  // spend a peer turn each. classify states the same rule for the same reason.
+  for (const kind of ["task_started", "task_failed", "task_finished", "task_progress"]) {
+    assert.equal(h.feedLiveSession(entry, peerMsg({ kind }), ME), false, kind);
+  }
+  // The listener owns identity resolution and passes it in; before it resolves, nothing feeds.
+  for (const me of [null, undefined, ""]) {
+    assert.equal(h.feedLiveSession(entry, peerMsg(), me), false, `myUserId ${JSON.stringify(me)}`);
+  }
+  assert.equal(h.feedLiveSession(entry, null, ME), false, "and no message at all");
+  assert.equal(h.calls.feedInbound.length, 0);
 });
 
-test("feed: window-mode OFF feeds anyway — windowless sessions ARE the live sessions (2026-08-20)", () => {
-  // Route (1) claims nothing into existence; a live session's own existence is the
-  // gate. Routes (2)/(3)/(5) keep their windowMode guards and stay disarmed.
-  const h = harness({ windowMode: false, live: true, counterparty: PEER });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
-  assert.equal(h.calls.feedInbound.length, 1);
+// ── authorLabel — the wrapper a fed turn is titled with ──────────────────────
+// Sliced with the route on purpose (see the source comment): it is the one helper route (1)
+// calls, so a table that drove the route without it would be driving a different function.
+
+test("feed: the wrapper names the AUTHOR, not the account that posted", () => {
+  // A peer's AGENT posts from the peer's account, so `displayNameFor` alone credits a person
+  // for a machine's words. `author_kind` is derived server-side from the caller's credential
+  // and is never claimed on the wire.
+  const agent = harness({ live: true, counterparty: PEER });
+  agent.feedLiveSession(entry, peerMsg({ authorKind: "agent" }), ME);
+  assert.equal(agent.calls.feedInbound[0].authorName, `name:${PEER}'s agent`);
+
+  const person = harness({ live: true, counterparty: PEER });
+  person.feedLiveSession(entry, peerMsg({ authorKind: "user" }), ME);
+  assert.equal(person.calls.feedInbound[0].authorName, `name:${PEER}`);
+
+  // …and an account this machine cannot name still says WHAT wrote it rather than nothing.
+  const anon = harness({ displayName: () => "" });
+  assert.equal(anon.authorLabel({ authorUserId: PEER, authorKind: "agent" }), "an agent");
+  assert.equal(anon.authorLabel({ authorUserId: PEER, authorKind: "user" }), "");
+  assert.equal(anon.authorLabel(null), "", "and a missing message resolves nothing");
 });
 
-// ── (2) maybeOpenRequesterSession ──────────────────────────────────────────────
+// ── the route is UNGATED, and that is a decision ─────────────────────────────
 
-test("openRequester: my own create_task launches a requester window", async () => {
-  const h = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
-  assert.equal(await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME), true);
-  assert.equal(h.calls.launch.length, 1);
-  assert.equal(h.calls.launch[0].taskId, TASK);
+test("route (1) is gated on nothing but a live session's own existence", () => {
+  // ⚠ REPOINTED (2026-08-20). This used to be driven — `harness({ windowMode: false })` still
+  // fed — which measured the absence of the guard through a setting the module read. The
+  // setting is deleted along with the four routes that opened on it, so the absence is
+  // asserted where it now lives: in the source. Route (1) claims nothing into existence, so a
+  // master switch over it would only ever strand a running session mid-turn.
+  assert.ok(!CODE.includes("getWindowMode"), "no window-mode gate survives in session-dispatch");
+  assert.ok(!CODE.includes("require('./settings')"), "…and the module does not reach the setting");
+  assert.ok(!CODE.includes("settings."), "…nor read one inside the routing block");
 });
 
-test("openRequester: v2.x — the launch context carries the channel + workspace ids", async () => {
-  // prompt-framing's delivery section reads ONLY the context, so a requester spawned with
-  // the channel's display name alone could not fill dopl_channel's required `channel=`
-  // (nor the workspace a multi-workspace token demands) and hunted with op "list".
-  const h = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
-  await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME);
-  const ctx = h.calls.launch[0].context;
-  assert.equal(ctx.channelId, "c1", "the concrete channel id");
-  assert.equal(ctx.workspaceId, "w1", "and the workspace it lives in");
-  assert.equal(ctx.channelName, "General", "the display identity still rides");
-  // 2026-07-31: and the THREAD id, so the delivery call names the thread every post
-  // belongs to. Without it a reply reaches the peer as a brand-new request.
-  assert.equal(ctx.taskId, TASK, "the thread this requester session drives");
-  // The spec-level ids the engine also needs are unchanged.
-  assert.equal(h.calls.launch[0].workspaceId, "w1");
-  assert.equal(h.calls.launch[0].channelId, "c1");
-});
-
-test("openRequester: H2 — the server's is_direct flag rides the launch, strictly", async () => {
-  // The session's outbound approval card names a recipient for an unaddressed post ONLY in a
-  // DIRECT channel, where the server addresses it (`resolveDirectPeer`). That flag has one
-  // source — the channel DTO — and it has to reach the session to be sayable. FAIL-QUIET:
-  // anything other than the server's own `true` leaves the card's channel-level wording.
-  const dm = { channel: { id: "c1", name: "David", isDirect: true }, workspaceId: "w1" };
-  const h = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
-  await h.maybeOpenRequesterSession(dm, peerMsg({ authorUserId: ME }), ME);
-  assert.equal(h.calls.launch[0].direct, true);
-  for (const isDirect of [false, undefined, "true", 1]) {
-    const g = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
-    await g.maybeOpenRequesterSession({ ...dm, channel: { ...dm.channel, isDirect } },
-      peerMsg({ authorUserId: ME }), ME);
-    assert.equal(g.calls.launch[0].direct, false, JSON.stringify(isDirect));
+test("the module exports ONE route, and nothing that was deleted comes back", () => {
+  // The dead-tissue pin. Deleting a route while leaving its export is how a caller keeps
+  // finding it, and this module's export list IS the listener's menu.
+  assert.match(CODE, /module\.exports = \{ feedLiveSession \};/);
+  for (const gone of [
+    "maybeOpenRequesterSession", "maybeSurfaceRequesterReply", "noteRequestLifecycle",
+    "maybeReopenAddressedThread", "diagRuntimeGateSkip", "REQUEST_MILESTONES",
+    "exchangeTag", "reopenableRecord",
+  ]) {
+    assert.ok(!CODE.includes(gone), `${gone} is deleted — no trace of it in the code`);
   }
 });
 
-test("openRequester: an already-live task is deduped (true, no relaunch)", async () => {
-  const h = harness({ requesterOpen: true, live: true });
-  assert.equal(await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME), true);
-  assert.equal(h.calls.launch.length, 0, "one window per (channel,task)");
-});
-
-test("openRequester: a window-cap skip returns false AND posts a passive notice", async () => {
-  const h = harness({ requesterOpen: true, live: false, launchReturn: { skipped: "cap" } });
-  assert.equal(await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME), false);
-  assert.equal(h.calls.notify.length, 1, "cap -> one passive local notice");
-});
-
-test("openRequester: not my create_task -> false", async () => {
-  const h = harness({ requesterOpen: false });
-  assert.equal(await h.maybeOpenRequesterSession(entry, peerMsg(), ME), false);
-  assert.equal(h.calls.launch.length, 0);
-});
-
-// ── (3) maybeSurfaceRequesterReply — v2.5 D1: the inbound GATE, not a continuation ──
-// This route used to call resumeRequesterForReply, which reopened the window AND fed
-// the peer's reply as its first turn (the v2.2 bounded auto-continuation) and required a
-// retained sdkSessionId. The contract replaces that: same trigger, same window, but the
-// reply is HELD for the operator's Accept and the engine owns the record/budget checks.
-
-const settledReply = (over = {}) =>
-  peerMsg({ meta: { taskCreatedBy: ME, taskTarget: PEER }, ...over });
-
-test("surface: a settled requester reply is routed to the inbound GATE (no auto-resume)", async () => {
-  const h = harness({ live: false, gateReturn: true });
-  assert.equal(await h.maybeSurfaceRequesterReply(entry, settledReply(), ME), true);
-  assert.equal(h.calls.resume.length, 0, "the v2.2 auto-continuation is gone");
-  assert.equal(h.calls.gate.length, 1);
-  assert.deepEqual(h.calls.gate[0], {
-    channelId: "c1", taskId: TASK, message: "reply body", authorName: `name:${PEER}`,
-  });
-});
-
-test("surface: the gate refusing (no record on this machine) -> false, passive notify path", async () => {
-  const h = harness({ live: false, gateReturn: false });
-  assert.equal(await h.maybeSurfaceRequesterReply(entry, settledReply(), ME), false);
-  assert.equal(h.calls.gate.length, 1, "the engine was asked; it found nothing to reopen");
-});
-
-test("surface: the route no longer reads the resume map itself (the engine decides)", async () => {
-  const h = harness({ live: false, gateReturn: true });
-  await h.maybeSurfaceRequesterReply(entry, settledReply(), ME);
-  assert.equal(h.calls.storeReads, 0, "no sdkSessionId / record lookup in the routing layer");
-});
-
-test("surface: a still-LIVE session is left to the live path -> false", async () => {
-  const h = harness({ live: true, sdkId: "sdk-1", rec: {} });
-  assert.equal(await h.maybeSurfaceRequesterReply(entry, settledReply(), ME), false);
-  assert.equal(h.calls.resume.length, 0);
-});
-
-test("surface: a reply where I am NOT the requester never reopens", async () => {
-  const h = harness({ live: false, sdkId: "sdk-1", rec: {} });
-  // taskCreatedBy is someone else -> I am the responder, not the requester.
-  assert.equal(
-    await h.maybeSurfaceRequesterReply(entry, settledReply({ meta: { taskCreatedBy: "other", taskTarget: PEER } }), ME),
-    false
-  );
-  // The author is not the task's target -> a third member -> never reopen.
-  assert.equal(
-    await h.maybeSurfaceRequesterReply(entry, settledReply({ meta: { taskCreatedBy: ME, taskTarget: "someone-else" } }), ME),
-    false
-  );
-  assert.equal(h.calls.resume.length, 0);
-});
-
-test("surface: window-mode OFF and my-own-message short-circuit", async () => {
-  const off = harness({ windowMode: false, sdkId: "sdk-1", rec: {} });
-  assert.equal(await off.maybeSurfaceRequesterReply(entry, settledReply(), ME), false);
-  const mine = harness({ live: false, sdkId: "sdk-1", rec: {} });
-  assert.equal(await mine.maybeSurfaceRequesterReply(entry, settledReply({ authorUserId: ME }), ME), false);
-  assert.equal(off.calls.resume.length + mine.calls.resume.length, 0);
-});
+// ⚠ TWELVE TESTS STOOD BELOW AND ARE GONE (2026-08-20, F-228). Four of this module's five
+// routes were deleted, and all four opened on `if (!settings.getWindowMode()) return false;` —
+// the master switch Samuel's live-test ruling turned permanently off. What each block pinned:
+//
+//   (2) maybeOpenRequesterSession — seven tests: "my own create_task launches a requester
+//       window", "the launch context carries the channel + workspace ids" (prompt-framing's
+//       delivery section reads ONLY the context), "H2 — the server's is_direct flag rides the
+//       launch, strictly", "an already-live task is deduped (one window per (channel,task))",
+//       "a window-cap skip returns false AND posts a passive notice", "not my create_task ->
+//       false". The route minted a REQUESTER WINDOW on the operator's OWN thread opener and
+//       launched their agent against their own message — the self-trigger bug the retirement
+//       was ruled from. There is no requester window to open.
+//   (3) maybeSurfaceRequesterReply — five tests: "a settled requester reply is routed to the
+//       inbound GATE (no auto-resume)", "the gate refusing -> false", "the route no longer
+//       reads the resume map itself", "a still-LIVE session is left to the live path", "a
+//       reply where I am NOT the requester never reopens", "window-mode OFF and
+//       my-own-message short-circuit". It held a peer's reply at a settled requester window's
+//       inbound gate; `session-engine.feedInboundForTask` and `session-park.recreateParkedShell`
+//       are deleted under it, so there is no gate and no shell to hold it at.
+//
+// ⚠ WHAT DID NOT GO WITH THEM. Route (3)'s "a reply where I am NOT the requester never
+// reopens" was a REQUESTER/RESPONDER pairing check — `taskCreatedBy === me` AND
+// `taskTarget === author` — and that pair is not this module's rule at all: it is
+// `targeting.classify`'s task-reply branch, which is untouched and is pinned in
+// test/classify.test.mjs and test/legacy-thread-reply.test.mjs. Nothing here was the only
+// reader of it.

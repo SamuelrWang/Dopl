@@ -201,38 +201,11 @@ async function handleTrigger(entry, m) {
   // notification; the poke below makes the watcher resolve it at once. A pending
   // row gets the Allow/Dismiss notification — Dismiss PARKS (stays pending).
   if (!created.status || created.status === 'pending') {
-    // PHASE 9 — THE PRE-CONSENT WINDOW IS NO LONGER THE DEFAULT (wiring plan §9;
-    // the "windowing inverts" ruling, INVARIANTS §11). Item 8 opened this window IMMEDIATELY on every
-    // inbound request: a new window per thread, minted before anyone had looked at the
-    // request. The default is now the inversion — nothing is minted here, the native
-    // notification fires, and CLICKING it focuses the main app on the channel, where
-    // the Inbox's launch panel is the decision surface.
-    //
-    // ⚠ NOTHING BELOW CHANGED AND NOTHING WAS DELETED. When the operator opts back in
-    // the window opens exactly as it did — shows the request + Accept/Deny, runs NO
-    // agent work until Accept, `launchResponderSession` ADOPTS it — and all three
-    // surfaces still route through the SAME consent row (first-answer-wins).
-    //
-    // ⚠ TWO SWITCHES, AND THE OUTER ONE IS NOT THIS PHASE'S. `getWindowMode()` governs
-    // the operator's own SESSION windows and is still ON by default; a pre-consent
-    // window is a session window, so it can never outlive that master switch.
-    // `getPreConsentWindow()` is the one Phase 9 flipped, and it defaults OFF.
-    if (settings.getWindowMode() && settings.getPreConsentWindow()) {
-      sessionEngine.openConsentWindow({
-        channelId: entry.channel.id,
-        taskId: futureTaskId,
-        workspaceId: entry.workspaceId,
-        rowId: created.rowId,
-        watcherKey: key,
-        requesterName,
-        summary,
-        bodyPreview,
-        taskTitle: targeting.metaStr(m, 'taskTitle') || null,
-        toolProfileLabel: profileLabel(toolProfile),
-        cwdLabel: channelDirs.liveChannelDirLabel(entry.channel.id),
-        channelName: entry.channel.name,
-      });
-    }
+    // ⚠ THE PRE-CONSENT WINDOW STOOD HERE AND IS DELETED (2026-08-20, F-228). Item 8 opened
+    // a window on EVERY inbound request — one per thread, minted before anyone had looked at
+    // it — which Phase 9 made opt-in and this wave removes outright. The native notification
+    // fires and CLICKING it focuses the main app on the channel, where the transcript card and
+    // the thread strip are the decision surface (INVARIANTS §6).
     consent.notifyInbound({
       channelName: entry.channel.name,
       requesterName,
@@ -296,25 +269,15 @@ async function refetchMessage(rec) {
 // `allowed`) or whether the server's standing trust decided it with no card in front of
 // anyone (`auto_allowed`). This is THE seam where a stored permission arm may be
 // consumed, and only the human branch may consume it — see below.
-// C-9 — THE ONE PLACE THIS FILE GIVES THE WINDOW BUDGET BACK.
-//
-// An accepted pre-consent entry stays in the registry ON PURPOSE, so `startSession`'s
-// `takeForAdopt` can reuse its window. Adoption happens on exactly ONE branch below; every
-// other exit used to leave the entry there forever, and `atWindowCap` counts it. Six of those
-// and the desktop can open no session at all — and `evictIdleShell` walks only the SESSION
-// registry, so nothing could reclaim them. Named rather than inlined so the reason a release
-// belongs at a call site is the same sentence every time: nothing is going to adopt this card.
-//
-// `fetched.retry` deliberately does NOT release: that request is still await-inbound and the
-// next poll may yet spawn into this very window.
-function releaseConsentWindow(rec, reason) {
-  try { sessionEngine.releaseConsentWindow(rec.key, reason); } catch (_) { /* best effort */ }
-}
+// ⚠ `releaseConsentWindow` STOOD HERE AND IS DELETED (2026-08-20, F-228). C-9 existed because
+// an ACCEPTED pre-consent entry stayed in the registry so `startSession` could reuse its window,
+// and every exit that did NOT adopt it had to hand the window budget back or six of them
+// deadlocked the app. No card, no window, no budget, nothing to release.
 
 async function inboundApproved(rec, meta) {
   const fetched = await refetchMessage(rec);
   if (fetched.retry) return; // transient — stays await-inbound, retried next poll
-  if (fetched.gone) { releaseConsentWindow(rec, 'gone'); watcher.settle(rec.key, 'gone'); return; }
+  if (fetched.gone) { watcher.settle(rec.key, 'gone'); return; }
   const m = fetched.m;
   const entry = entryFromRecord(rec);
   // Persist the transient spawn phase BEFORE any side effect: a crash here leaves a
@@ -345,9 +308,6 @@ async function inboundApproved(rec, meta) {
   if (await launchResponderSession(entry, m, rec, { taskId, startModes })) {
     return; // a live session (or a busy→resend) now owns this request
   }
-  // C-9: the fallback answers this request headlessly, so no window session will ever adopt
-  // the card the operator accepted. (A no-op when window mode is off — no card was opened.)
-  releaseConsentWindow(rec, 'headless-fallback');
   await runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName: rec.requesterName });
 }
 
@@ -420,14 +380,12 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     // H1: a held session owns this slot and is running nothing. Headless would fail on the
     // same missing credential, so answer honestly and settle rather than falling through.
     diag('responder session: skipped=auth-hold — the slot is held on the sign-in action');
-    releaseConsentWindow(rec, 'auth-hold'); // C-9: settled here, so nothing will adopt the card
     await postCourtesy(entry, m, AUTH_HELD_REPLY); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'auth-hold');
     return true; // handled — do NOT also run headless
   }
   if (res && res.skipped === 'busy') {
     diag('responder session: skipped=busy');
-    releaseConsentWindow(rec, 'busy'); // C-9: the peer is asked to resend; this card is over
     // RESEND is an untagged bubble by design, so the requester watching THIS thread sees
     // nothing there. One milestone inside the thread says queued rather than ignored.
     await queued.announce(entry, m, rec.taskId || taskId, 'session');

@@ -5,7 +5,7 @@
 // running NO agent work until Accept, then ADOPTED by launchResponderSession) and REOPEN (item 10:
 // live windows hide-on-close + tray reopen; render-process-gone is the crash signal). Renderer->main
 // IPC lives in session-ipc.js (§O-8). SEAM: this file imports NO electron at all — an injected
-// factory creates windows and session-shell.js owns the rest of the window plumbing. SECURITY: settingSources:[] always, so the
+// factory created windows; both are DELETED (F-228). SECURITY: settingSources:[] always, so the
 // global allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
 // object (never logged, never on argv, never on disk since C1).
 
@@ -26,26 +26,19 @@ const { getSdk } = require('./sdk-loader');
 const sessionQuery = require('./session-query'); const { buildSdkOptions, startQuery, consume } = sessionQuery; // §3 split: SDK options + the query lifecycle (H1)
 const sessionNarration = require('./session-narration'); // 2026-08-20: the agent window's work lane (F-212)
 const sessionModel = require('./session-model'); // the frozen model enum (argv), coerced here too
-const sessionConsent = require('./session-consent');
-const sessionIpc = require('./session-ipc');
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
-const sessionHistory = require('./session-history'); // v2.5 D3: reopened-shell history
-const sessionShell = require('./session-shell');
-const sessionWindowless = require('./session-windowless'); // §2 split: the electron window plumbing
+const sessionWindowless = require('./session-windowless'); // §2 split: the windowless spawn shape
 
 // settings.js owns the window-mode switch + caps; required defensively so the engine still
 // loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
 let settings = null;
 try { settings = require('./settings'); } catch (_) { /* absent -> defaults (window-mode ON) */ }
-const MAX_WINDOWS = (settings && settings.MAX_SESSION_WINDOWS) || 6;
 
 const sessions = new Map(); // sessionKey -> live session object (in-memory only)
-let windowFactory = null; // fn(sessionId) -> BrowserWindow (injected by index.js)
 let lifecycle = { onLaunched: null, onEnded: null };
 let selfUserId = null; // operator's own user id (item 1: the self avatar); set by channel-listener
 function setSelfIdentity(id) { selfUserId = id || null; }
 
-function windowModeEnabled() { return settings ? settings.getWindowMode() : true; }
 function readCaps() {
   return settings ? { turnCap: settings.getTurnCap(), idleMs: settings.getIdleTtlMs(), costCapUsd: settings.getCostCapUsd() } : {};
 }
@@ -53,14 +46,13 @@ function readCaps() {
 // Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).
 function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tray optional */ } }
 
-// Park + resume machinery (session-park.js) is fed the engine handles it can't require: the registry, SDK loader, buildSdkOptions (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession/settle. Hoisted, so bind order does not matter.
+// Resume machinery (session-park.js) is fed the engine handles it can't require: the registry, SDK loader, buildSdkOptions (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession. Hoisted, so bind order does not matter.
+// ⚠ FOUR HANDLES LEFT WITH THE SHELL-RECREATE FAMILY (2026-08-20, F-228): `windowFactoryReady`,
+// `atWindowCap`, `loadHistory` and `settleSession` all existed for a lane that opened a window,
+// and `resolveChannelContext` fed the record-less shell alone.
 sessionPark.bind({
   sessions, getSdk, buildSdkOptions, consume, dispatch, startSession, hasLiveSession,
-  emit, windowFactoryReady: () => !!windowFactory,
-  atWindowCap: () => sessions.size + sessionConsent.count() >= MAX_WINDOWS, // FIX #4: shared window budget for recreateParkedShell
-  loadHistory: sessionHistory.load, // D3: a recreated shell paints the channel history
-  settleSession: settle, // FIX #7: LRU eviction of an untouched parked shell at the cap
-  resolveChannelContext: require('./channel-context').resolve, // Q6b: a shell for a thread with NO local record
+  emit,
 });
 // §3 split: session-query owns the option assembly + the consume loop, but needs the engine's
 // dispatch and the replay-aware quiet emit (neither module requires back into the engine).
@@ -68,15 +60,11 @@ sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arm
 // Q6: same injection for the preflight + in-window sign-in. `startQuery` is the SHARED deferred
 // launch (session-query), so an auth hold never assembles a second query and inherits H1's
 // supersede-before-relaunch; `denyPending` fail-closes before it parks.
-sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions, getSessionBySender });
+sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions });
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
-sessionHistory.bind({ emit });
-// §2 split: the electron window plumbing (replay wiring, hide-on-close, the crash signal, the
-// folder label). It gets `emit` rather than owning it — the RESHOW rule is session policy.
-sessionShell.bind({ dispatch, refreshTray, emit });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
-sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell, keptWindow: sessionSummary.keptWindow, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) }); // C-8: quit ends live sessions through the reducer; 2026-08-20: a windowless session's VIEW
+sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) }); // C-8: quit ends live sessions through the reducer; 2026-08-20: a live session's VIEW is the agent window
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
 sessionSummary.bind({ sessions }); sessionNarration.bind({ sessions }); // ...and the narration ring reads the same registry
 
@@ -217,16 +205,6 @@ function settle(s, outcome, keepWindow) {
   refreshTray();
 }
 
-function getSessionBySender(sender) { // renderer->main resolution for session-ipc
-  if (!sender) return null;
-  for (const s of sessions.values()) { if (s.win && !s.win.isDestroyed() && s.win.webContents.id === sender.id) return s; }
-  return null;
-}
-
-function setWindowFactory(fn) { // consent windows use the same factory
-  windowFactory = typeof fn === 'function' ? fn : null;
-  sessionConsent.setWindowFactory(windowFactory);
-}
 function setLifecycleHandlers(h) { lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded }; }
 
 // Build the session object, open (or ADOPT) its window, start the query (launch + resume). The per-session nonce is
@@ -243,28 +221,19 @@ async function startSession(spec, sdk) {
   // for the whole channel. It is HANDED IN now, per launch, by a caller executing a decision a
   // human is making right now; anything that passes nothing inherits the reducer's manual/ask.
   //
-  // FIX 1 (2026-08-02) — THE PRE-CONSENT CARD IS ITSELF A POSTURE SOURCE, and the preferred one.
-  // Its two selects are live before Accept; session-ipc stores the pick on that card's OWN
-  // registry entry and it is consumed here, once, keyed by the entry rather than by the channel,
-  // so it applies to the spawn that exact card approves and no sibling launch can race it.
-  // `spec.startModes` (channel-prefs, from the web card) is now the COMPATIBILITY path.
+  // ⚠ THE PRE-CONSENT CARD WAS A SECOND POSTURE SOURCE AND IT IS GONE (2026-08-20, F-228).
+  // Its two selects lived in the session window; `session-ipc` stored the pick on that card's
+  // own registry entry and this line consumed it, keyed by the entry. With no card there is
+  // ONE source left — `spec.startModes`, handed in per launch by a caller executing a decision
+  // a human is making right now — which is the shape H2 always wanted and the card was the
+  // exception to. `spec.adoptsConsent` went with it.
   //
-  // FIX 1b (BLOCKER, 2026-08-02) — ...AND ONLY THE SPAWN THAT ADOPTS THAT CARD MAY SPEND IT. The
-  // entry is keyed sessionKey(channelId, taskId), the SAME key recreateParkedShell,
-  // openFromChannel and startResume all spawn under, and this read ran on
-  // every one of them: a pending card armed a PEER-DRIVEN shell wake at bypass/auto_both (see
-  // `operatorArmed` below), and the operator's own later Accept then started at manual/ask
-  // because the arm was already spent. launch() alone sets `adoptsConsent`, off the same
-  // sessionConsent.has(key) it computes to decide whether this spawn ADOPTS the card's window.
-  // The gate rides the KEY, because the arm is entry-keyed: a null key takes nothing.
-  //
-  // FIX 4 — OPERATOR-ARMED, the one thing that reaches a PARKED SHELL. A shell is normally
-  // woken by something that is NOT the approving human, so it refuses a handed-in posture
-  // unless the consent arm (or an explicit `operatorArmed`) says a human chose it just now;
-  // a bare recreate, reopen, resume or wake sets neither (F-119 residual (d), moot).
-  const consentModes = sessionConsent.takeStartModes(spec.adoptsConsent === true ? spec.key : null);
-  const armedModes = consentModes || spec.startModes;
-  const operatorArmed = !!consentModes || spec.operatorArmed === true;
+  // FIX 4 SURVIVES AND IS NOW THE WHOLE RULE — OPERATOR-ARMED IS THE ONE THING THAT REACHES A
+  // PARKED SHELL. A shell is normally woken by something that is NOT the approving human, so it
+  // refuses a handed-in posture unless an explicit `operatorArmed` says a human chose it just
+  // now; a bare recreate, reopen, resume or wake sets neither.
+  const armedModes = spec.startModes;
+  const operatorArmed = spec.operatorArmed === true;
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
     ? { toolMode: armedModes.tools, messageMode: armedModes.messages }
     : {};
@@ -312,7 +281,7 @@ async function startSession(spec, sdk) {
     // looking at WINS (single use, entry-scoped), and a durable record's stored pick is the
     // fallback every other shape carries. Coerced against the frozen enum HERE, so a hand-edited
     // store can only land on 'default'. NOT reducer state: buildSdkOptions is its one reader.
-    model: sessionModel.normalizeModel(sessionConsent.takeStartModel(spec.adoptsConsent === true ? spec.key : null) || spec.model),
+    model: sessionModel.normalizeModel(spec.model),
     state,
     context, // display identity + the channel/workspace ids the framing addresses
     nonce,
@@ -325,7 +294,7 @@ async function startSession(spec, sdk) {
     pendingInbound: [], // bounded FIFO of held interactive inbound replies
     // FIX F2/F3: a parked shell with NOTHING to resume starts a BRAND-NEW sdk session and buildSdkOptions sets no
     // system prompt, so its first turn must carry the full v1.9 framing (role, SECURITY RULES, delivery instruction)
-    // or the agent answers in the window and the peer gets nothing. `freshFraming` is the ONE-SHOT marker io.withSeed consumes, `freshRun` the stable twin session-history reads.
+    // or the agent answers nowhere and the peer gets nothing. `freshFraming` is the ONE-SHOT marker io.withSeed consumes, `freshRun` its stable twin.
     freshRun: spec.parkedShell === true && !spec.resumeSdkId,
     freshFraming: spec.parkedShell === true && !spec.resumeSdkId,
     idleTimer: null,
@@ -335,8 +304,11 @@ async function startSession(spec, sdk) {
   };
   sessions.set(s.key, s); sessionSummary.touch(); // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for the SDK's first dispatch (§11)
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
-  // The spawn SURFACE: a window (adopting an open pre-consent card), or — `spec.windowless` — none; session-windowless.js owns the branch.
-  if (!sessionWindowless.attachSurface(s, spec, { windowFactory, sessionConsent, sessionShell })) {
+  // The spawn SURFACE. ⚠ THERE IS ONLY ONE LEFT AND IT IS NONE (2026-08-20, F-228): the window
+  // branch went with the renderer it painted into. Kept as a call rather than inlined because
+  // the ROLLBACK below is the contract — a surface that cannot be attached un-registers the
+  // session, and that is a property worth keeping a seam for.
+  if (!sessionWindowless.attachSurface(s, spec)) {
     sessions.delete(s.key); sessionSummary.touch(); // ...and a ROLLBACK is one too: the registration above already scheduled a flush
     return null;
   }
@@ -350,8 +322,11 @@ async function startSession(spec, sdk) {
   // parked/resumed shell). Emitted, NEVER pushed to the iterator; rides the replay ring.
   const reqItem = io.initialRequestPayload(s.side, spec.firstMessage, s.counterpartyName);
   if (reqItem) emit(s, reqItem);
-  // P2: a parked shell starts NO query (session-park paints the header/note; it waits for a lazy wake). Everything else launches now.
-  if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }
+  // ⚠ `spec.parkedShell` NO LONGER HAS A PRODUCER (2026-08-20, F-228). It marked the
+  // shell-recreate lane, which opened a window and started no query; that lane is deleted. The
+  // FLAG is still read by `startModes` above, where it is the guard that stops a woken shell
+  // inheriting a posture no human armed — so it stays a recognized spec field rather than being
+  // scrubbed, and a future non-window dormant shape can set it and get the safe behaviour.
   // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window):
   // roll back so launch() reports auth-hold and the caller answers honestly.
   if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
@@ -364,7 +339,7 @@ async function startSession(spec, sdk) {
 }
 
 async function launch(a) {
-  if (!a.windowless && (!windowModeEnabled() || !windowFactory)) return { skipped: 'disabled' };
+  if (!a.windowless) return { skipped: 'disabled' }; // ⚠ THE ONLY SPAWN SHAPE LEFT IS WINDOWLESS (F-228)
   const key = store.slotKey(a);
   // FIX N1: the busy checks must ask about the SAME slot `key` names. They were rebuilding
   // `{ channelId, taskId }` by hand, stripping `agentId` — the latent bug D2 fixed in
@@ -375,13 +350,13 @@ async function launch(a) {
   // H1 (LOW): a HELD slot (sign-in wait) answers auth-hold, never busy — post the truth.
   if (isAuthHeldSession(slot)) return { skipped: 'auth-hold' };
   if (hasLiveSession(slot)) return { skipped: 'busy' };
-  // Adopting a pre-consent window is net-zero on the budget; only a FRESH window counts against the shared cap.
-  // AUDIT D4: at the cap, free an untouched parked shell first (sessionPark.atCapAfterEvict) instead of
-  // degrading a REAL inbound trigger to headless. Fail-restrictive: still a cap skip if nothing frees.
-  const adoptable = sessionConsent.has(key);
-  if (a.windowless) { // no window to budget — bound on live sessions instead
-    if (sessionWindowless.liveCount(sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
-  } else if (!adoptable && sessionPark.atCapAfterEvict()) return { skipped: 'cap' };
+  // THE CONCURRENCY CEILING. ⚠ ONE BRANCH, because there is one spawn shape (the early return
+  // above). It used to be two: a WINDOW budget that an adoptable pre-consent card was net-zero
+  // against and that freed an untouched parked shell before refusing (AUDIT D4), and this one.
+  // Both the adopt and the eviction went with the window (F-228), so a refusal here is plain —
+  // there is nothing to reclaim, and `MAX_CONCURRENT_SESSIONS` is a COST ceiling as much as a
+  // concurrency one (INVARIANTS §11: every per-session bound multiplies against it).
+  if (sessionWindowless.liveCount(sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
   let sdk;
   try { sdk = await getSdk(); } catch (err) {
     diag('session-engine: SDK unavailable', err && err.message);
@@ -400,11 +375,13 @@ async function launch(a) {
     counterpartyId: a.counterpartyId, // FIX L1: bind the feed to the task's other party
     direct: a.direct, // H2: the server's is_direct flag, for the outbound card's recipient line
     firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence
-    // H2: present ONLY on a consent-approved responder launch, where trigger.js consumed
-    // the operator's single-use arm. launchRequesterSession never sets it (no card was
-    // shown for the operator's own goal), so a requester window starts at manual/ask.
+    // H2: the posture a HUMAN chose for THIS launch, and the only way one reaches a spawn.
+    // `trigger.js` passes the arm it consumed on a consent-approved responder launch;
+    // `channel-dir-ipc.js › sessions:launch` passes the channel's durable posture. Anything
+    // that passes nothing inherits the reducer's manual/ask.
+    // ⚠ `adoptsConsent` RODE HERE and is gone (F-228): it named the ONE spawn allowed to spend
+    // the pre-consent card's entry-keyed arm, and there is no card.
     startModes: a.startModes,
-    adoptsConsent: adoptable, // FIX 1b: the ONLY spawn allowed to spend that card's single-use arm
     windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
     triggerSeq: a.triggerSeq, // the ask's seq — the outbound bridge's seq-join floor
   }, sdk);
@@ -441,20 +418,21 @@ function counterpartyFor(a) {
   return s && !s.settled ? (s.counterpartyId || null) : null;
 }
 
-// The inbound gate lives in session-gate.js (v2.5 D1): feedInbound (live or parked) and feedInboundForTask (recreate
-// the shell first) both HOLD the turn for an operator Accept unless auto-approve / the standing task grant is on.
-// ── Consent reflow (item 8) — thin wrappers over session-consent.js. This one opens a pre-consent window that runs
-// NO agent work until Accept; the cap is gated HERE (session-consent cannot see the live sessions). decideConsent / closeConsentWindow / getConsentBySender are pass-throughs.
-function openConsentWindow(spec) {
-  if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
-  if (sessionPark.atCapAfterEvict()) return { skipped: 'cap' }; // AUDIT D4: free an idle shell first
-  return sessionConsent.open({ ...spec, sessionId: crypto.randomUUID() });
-}
+// The inbound gate lives in session-gate.js (v2.5 D1): `feedInbound` enqueues a counterparty
+// turn on a live or parked session. Its HOLD half went with the surface that answered a hold
+// (F-228) — a windowless session's message axis is floored at auto_inbound, so nothing holds.
+// ⚠ THE CONSENT REFLOW (item 8) IS DELETED — 2026-08-20, F-228. `openConsentWindow` minted a
+// PRE-CONSENT WINDOW on every inbound request: a window per thread, before anyone had looked at
+// it, running no agent work until Accept and then ADOPTED by launchResponderSession. The
+// decision surfaces are inline on the channels page now (INVARIANTS §6), so there is no card to
+// open, adopt, close or release, and `session-consent.js` went with the renderer it painted into.
 // Resume machinery (offerResume/startResume/resume) lives in session-park. init(): register the
 // renderer->main IPC once, then settle any session live/awaiting when the app died — post the
 // interrupted echo and, when the SDK session id survives, offer an opt-in resume (never auto).
 async function init() {
-  sessionIpc.register({ getSessionBySender, getConsentBySender: sessionConsent.getBySender, dispatch, decideConsent: sessionConsent.decide, emitToSession: emit });
+  // ⚠ NO IPC TO REGISTER (2026-08-20, F-228). `session-ipc.js` bound 15 handlers resolved from
+  // `event.sender` against a session's own window; no session has a webContents any more, so the
+  // whole `session:*` sender-binding regime is deleted. INVARIANTS §11 now describes ONE regime.
   const records = store.loadRecords();
   for (const key of Object.keys(records)) {
     const rec = records[key];
@@ -473,7 +451,6 @@ async function init() {
 
 module.exports = {
   init,
-  setWindowFactory,
   setLifecycleHandlers,
   setSelfIdentity, // item 1: the operator's user id for the self avatar (channel-listener)
   launchResponderSession,
@@ -487,14 +464,6 @@ module.exports = {
   // `ReferenceError: sessionTeam is not defined` — no engine, no windows, no sessions.
   // test/main-exports-defined.test.mjs now pins every main export against what its file binds.
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
-  feedInboundForTask: sessionGate.feedInboundForTask, // v2.5 D1 — gate + recreate the shell
-  armRequestStatus: sessionPark.armRequestStatus, // 2026-08-05 — the request strip on the operator's OWN typed request
-  noteRequestStatus: sessionPark.noteRequestStatus, // ...and its lifecycle strip advances from wire events only
-  openConsentWindow, // consent reflow (item 8) — called by trigger.js
-  decideConsent: sessionConsent.decide,
-  closeConsentWindow: sessionConsent.close, releaseConsentWindow: sessionConsent.release, // C-9: hand the window budget back when no spawn adopts the card
-  getConsentBySender: sessionConsent.getBySender,
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
-  reopenWindow: sessionReopen.reopenWindow,
   reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, messageByTask: sessionReopen.messageByTask, narrationFor: (k) => sessionNarration.ringFor(sessions.get(k)), // item 2 + Phase 5 pause/end + F-212's 1:1 lane and work lane — the MAIN-window bridge (channel-dir-ipc)
 };

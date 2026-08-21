@@ -47,10 +47,15 @@ for (const banned of ["require(", "electron", "child_process", "@anthropic", "fe
   assert.ok(!BLOCK.includes(banned), `the extracted block must not reference ${banned}`);
 }
 
+// ⚠ `keptWindow` STOOD IN THIS LIST AND IS GONE (2026-08-20, F-228). It is a NAME LIST for a
+// `new Function` return, so a name the block no longer declares is a ReferenceError at LOAD —
+// not one failing case but every case in all four suites that share this loader, which is
+// exactly what happened. ⚠ Anything added here must be a real declaration inside the block;
+// there is no such thing as a "mostly right" entry.
 const EXPORTED = [
   "PILL_STATES", "ACTIVITY_PILL", "pillState", "displayText", "liveSummary", "endedSummary",
   "nameFor", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS", "MAX_ENDED",
-  "bind", "start", "list", "nameForSession", "noteEnded", "keptWindow", "noteActivity", "touch", "sweepEnded",
+  "bind", "start", "list", "nameForSession", "noteEnded", "noteActivity", "touch", "sweepEnded",
   // F-147: the report view and the change subscription the server writer rides.
   "reportEntry", "wireSummary", "reportList", "subscribe",
 ];
@@ -82,7 +87,18 @@ export function load() {
   return { ...api, sent, logged, spaWindow };
 }
 
-/** A window handle shaped like a BrowserWindow, as the engine hands one over. */
+/**
+ * A window handle shaped like a BrowserWindow, as the engine USED to hand one over.
+ *
+ * ⚠ IT IS STILL HERE BECAUSE `noteEnded` / `sweepEnded` STILL READ `s.win` (2026-08-20, F-228).
+ * The session-window model is deleted and a windowless session's `win` is null, so the
+ * retention predicate `keepWindow === true && windowAlive(s.win)` can no longer be satisfied by
+ * anything the ENGINE produces — but the predicate is live source in `main/session-summary.js`
+ * and the cases below still drive it. Keeping a fake window here is what lets the retention,
+ * sweep and MAX_ENDED rules keep running instead of being silently deleted with the feature
+ * that used to reach them (INVARIANTS §14). ⚠ The stale predicate itself is a FINDING, not
+ * something this harness should paper over: see the ⚠ block over §4 of session-summary.test.mjs.
+ */
 export function fakeWindow() {
   return {
     destroyed: false,

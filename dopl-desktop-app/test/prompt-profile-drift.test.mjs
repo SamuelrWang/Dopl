@@ -22,7 +22,7 @@
 // it". It bans the CALL SHAPE — `Name(` — which is what an agent reads as an instruction to
 // invoke, and which is precisely what shipped.
 //
-// SCOPE, deliberately narrow: `prompt-framing.js` only. `attended-prompt.js` carries the SAME
+// SCOPE, deliberately narrow: `prompt-framing.js` only. (`attended-prompt.js` carried the SAME
 // ToolSearch order and MUST keep it — that prompt runs in the operator's own Claude Code,
 // which this containment table does not bound. The last test pins that asymmetry so a later
 // reader does not "fix" the healthy copy by symmetry with this one.
@@ -39,7 +39,6 @@ const load = (rel) => require(fileURLToPath(new URL(rel, import.meta.url)));
 const { buildFencedTurn } = load("../main/prompt-framing.js");
 const { buildSessionToolConfig } = load("../main/session-profiles.js");
 const { DENIED_BUILTINS } = load("../main/tool-profiles.js");
-const attended = load("../main/attended-prompt.js");
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 
@@ -150,20 +149,13 @@ test("what F3 was really protecting survives: never report the channel tool miss
   }
 });
 
-// ── the asymmetry, pinned so nobody "fixes" the healthy copy ───────────────────
-
-test("attended-prompt KEEPS its ToolSearch order — it is not bound by this table", () => {
-  // `buildAttendedPrompt` runs in the OPERATOR'S OWN Claude Code, which the session profiles do
-  // not contain, and there the deferred-schema lookup is both available and necessary. If this
-  // ever fails because the order was removed by symmetry with the fix above, that is a
-  // regression of F3 on the one surface where F3 was right.
-  const args = { channelId: CH, workspaceId: WS, threadId: TASK };
-  for (const [name, build] of [
-    ["buildAttendedPrompt", attended.buildAttendedPrompt],
-    ["buildAttendedPromptCompact", attended.buildAttendedPromptCompact],
-  ]) {
-    const built = build(args);
-    assert.ok(built, `${name} built nothing for a complete id triple`);
-    assert.ok(/ToolSearch\(/.test(built), `${name} lost its ToolSearch order`);
-  }
-});
+// ⚠ THE ASYMMETRY TEST STOOD HERE AND WENT WITH ITS SUBJECT (2026-08-20, F-228).
+// `attended-prompt.js` built the prefill for an ATTENDED HANDOFF — the operator opening the
+// exchange in their OWN Claude Code — and it KEPT its `ToolSearch(` order deliberately, because
+// that session is not bound by the session profiles this table is about. The handoff is
+// deleted: its only entry point was `session-ipc.js`'s `session:attended-handoff` handler,
+// resolved from a pre-consent card's window.
+//
+// ⚠ THE RULE THE TEST GUARDED IS STILL LIVE AND IS STILL ABOVE: F3 says a CONTAINED session's
+// prompt may not order a tool the profile denies. What is gone is the counter-example, not the
+// rule — and with it the risk of "fixing" the healthy copy by symmetry.

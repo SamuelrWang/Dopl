@@ -1,237 +1,123 @@
-// THE REQUEST LIFECYCLE STRIP — session-park.armRequestStatus + noteRequestStatus.
+// THE REQUEST LIFECYCLE STRIP — A DISARMED GUARD. Nothing here drives code any more; this file
+// is now the regrowth guard for a surface that was deleted twice over.
 //
-// WHAT IT IS. One line in the requester window's chrome saying what happened to the request the
-// operator TYPED: Sent -> Accepted / Declined / Replied. It exists because those outcomes are
-// invisible to the running agent — the peer's Accept and Decline arrive as `task_started` /
-// `task_failed` MILESTONES and every listener route gates on `kind === 'message'`, so nothing
-// feeds them to the session. Only the strip can say them.
+// WHAT THE STRIP WAS. One line in the requester window's chrome saying what happened to the
+// request the operator TYPED: Sent -> Accepted / Declined / Replied. It existed because those
+// outcomes are invisible to the running agent — the peer's Accept and Decline arrive as
+// `task_started` / `task_failed` MILESTONES and every listener route gates on
+// `kind === 'message'`, so nothing feeds them to the session. Only the strip could say them.
 //
-// IT OUTLIVED THE SHELL IT SHIPPED ON (2026-08-05, rollback plan §3.4). The strip was armed by
-// `session-park.openRequesterShell`, which opened a DORMANT window for the operator's typed
-// request because that post carried no runtime stamp and could not be told from an external
-// agent's create. `main/ui-bridge.js` stamps `desktop-ui` now, so that request opens a FULL
-// requester session and the shell entry point is DELETED — with it, this file's old coverage of
-// the shell spec, the window budget and the LRU eviction, all of which were properties of the
-// shared parked-shell machinery and are pinned by session-park.test.mjs and
-// main-audit-window-budget.test.mjs on their own terms.
+// ⚠ IT IS DELETED — 2026-08-20, F-228, and this file lost eleven tests with it.
+// `session-park.armRequestStatus` / `noteRequestStatus` maintained WINDOW CHROME, emitted as a
+// `request_status` payload into `renderer/session/**`. That renderer is deleted, no session has
+// a webContents, and both of the strip's callers (session-dispatch routes 2 and 4) went in the
+// same change. What the strip reported is on the channels page now: the thread card carries the
+// peer's decision as a RECEIPT ROW (INVARIANTS §5), which is a shared statement rather than one
+// machine's chrome — and receipts are pinned on the channels surfaces, not from here.
 //
-// SO ARMING IS SLOT-KEYED NOW. Its one caller is the requester route (session-dispatch), which
-// holds the (channel, thread) slot rather than the registry entry, and it must be idempotent:
-// a message read twice must not walk an 'accepted' line back to 'sent'.
+// ⚠ THE STRIP HAD ALREADY OUTLIVED ONE SHELL BEFORE THIS (2026-08-05, rollback §3.4):
+// `session-park.openRequesterShell` opened a DORMANT window for the operator's typed request
+// because that post carried no runtime stamp and could not be told from an external agent's
+// create. `main/ui-bridge.js` stamps `desktop-ui`, so the request opened a FULL requester
+// session and the shell entry point went. THAT is the pattern this file is here to refuse: a
+// deleted spawn surface that grows back a caller because its name is still pronounceable.
 //
-// SOURCE EXTRACTION with INJECTION, the session-park.test idiom: the BEGIN/END SESSION-PARK-PURE
-// block is sliced from the shipping file, proven electron-free, and driven with fakes.
+// ⚠ WHY A REGROWTH GUARD AT ALL, WHEN THE FUNCTIONS ARE SIMPLY ABSENT. Same argument
+// test/removed-vocabulary.test.mjs makes one tier up, at module granularity: `module.exports` is
+// EVALUATED, so a stale reference is not a dead branch, and the desktop has already shipped one
+// `ReferenceError` from exactly this (`session-engine.js`'s export list, F-141). A negative is
+// cheap; the failure it catches takes the whole engine down at load.
+//
+// ⚠ ONE ASSERTION BELOW IS DUPLICATED ON PURPOSE. test/operator-typed-request.test.mjs also
+// refuses `async function openRequesterShell` — it is the suite that owns the §3.4 story. This
+// file keeps it because the two deletions are one lane and a guard split across two files that
+// each assume the other has it is how a guard goes missing.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
-const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-const DISPATCH = readFileSync(join(HERE, "..", "main", "session-dispatch.js"), "utf8");
+const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
+const RENDERER = join(dirname(fileURLToPath(import.meta.url)), "..", "renderer");
+const PARK_SRC = readFileSync(join(MAIN, "session-park.js"), "utf8");
 
-const from = SRC.indexOf("// ─── BEGIN SESSION-PARK-PURE");
-const to = SRC.indexOf("// ─── END SESSION-PARK-PURE");
-assert.ok(from !== -1 && to > from, "SESSION-PARK-PURE sentinels missing or out of order");
-const BLOCK = SRC.slice(from, to);
+const GONE = ["armRequestStatus", "noteRequestStatus", "openRequesterShell"];
 
-for (const banned of ["require(", "electron", "process.", "child_process", "@anthropic"]) {
-  assert.ok(!BLOCK.includes(banned), `SESSION-PARK-PURE block must not reference ${banned}`);
+const mainSources = () =>
+  readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js"))
+    .sort()
+    .map((f) => [`main/${f}`, readFileSync(join(MAIN, f), "utf8")]);
+
+function rendererSources(dir, out = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) rendererSources(full, out);
+    else if (/\.(js|html)$/.test(entry.name)) out.push([full.slice(full.indexOf("renderer/")), readFileSync(full, "utf8")]);
+  }
+  return out;
 }
 
-const CHANNEL = "cccccccc-1111-2222-3333-444444444444";
-const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
-const SLOT = { channelId: CHANNEL, taskId: TASK };
-
-function harness(over = {}) {
-  const cfg = { windowReady: true, atCap: false, historyFails: false, startsNothing: false, ...over };
-  const calls = { startSession: [], query: [], consume: [], dispatch: [], emit: [], history: [], settled: [] };
-  const sessions = new Map();
-  const io = {
-    makePushIterator: () => ({ push() {}, close() {} }),
-    frameContinuation: () => { throw new Error("a shell must not frame a turn"); },
-    noteGatedBody: () => {},
-  };
-  const store = {
-    sessionKey: (c, t) => `${c}:${t}`,
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
-    getRecord: () => null,
-    getSdkSessionId: () => null,
-  };
-  const api = new Function(
-    "io", "store", "crypto", "Notification", "diag",
-    `${BLOCK}\n return { bind, armRequestStatus, noteRequestStatus, recreateParkedShell };`
-  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, null, () => {});
-  api.bind({
-    sessions,
-    getSdk: async () => ({ query: (a) => { calls.query.push(a); return {}; } }),
-    buildSdkOptions: () => { throw new Error("a pinned shell assembles no SDK options"); },
-    consume: (...a) => calls.consume.push(a),
-    dispatch: (...a) => calls.dispatch.push(a),
-    // The real startSession stamps state.parked/activity from the parkedShell flag and sets the
-    // Map entry SYNCHRONOUSLY (before its own first await); the fake mirrors both.
-    startSession: async (spec) => {
-      calls.startSession.push(spec);
-      if (cfg.startsNothing) return null;
-      const s = { key: spec.key, settled: false, startedAt: calls.startSession.length,
-        state: spec.parkedShell ? { parked: true, phase: "parked" } : { parked: false, phase: "running" }, ...spec };
-      sessions.set(spec.key, s);
-      return s;
-    },
-    hasLiveSession: (a) => { const s = sessions.get(store.slotKey(a)); return !!(s && !s.settled); },
-    emit: (s, payload) => calls.emit.push({ key: s.key, payload }),
-    windowFactoryReady: () => cfg.windowReady,
-    atWindowCap: () => cfg.atCap === true || (cfg.capAt != null && sessions.size >= cfg.capAt),
-    loadHistory: async (s) => { calls.history.push(s.key); if (cfg.historyFails) throw new Error("fetch failed"); },
-    settleSession: (s) => { calls.settled.push(s.key); s.settled = true; sessions.delete(s.key); },
-    resolveChannelContext: async () => ({ workspaceId: "w1", channelName: "Ops", counterpartyId: null, direct: false }),
-  });
-  // The requester session the route just launched, as the registry sees it. NOT a parked shell:
-  // this window has a running agent, which is the whole point of §3.4.
-  function live(key = `${CHANNEL}:${TASK}`) {
-    const s = { key, settled: false, state: { parked: false, phase: "running" } };
-    sessions.set(key, s);
-    return s;
+test("the strip and the requester shell are DECLARED nowhere and EXPORTED nowhere", () => {
+  const offenders = [];
+  for (const [name, src] of mainSources()) {
+    for (const gone of GONE) {
+      // A declaration or a re-export — the two shapes a revival takes. A MENTION in prose is
+      // legal and expected (the deletion comments name what they removed); tier 3 below is what
+      // keeps those honest.
+      if (new RegExp(`function\\s+${gone}\\s*\\(`).test(src)) offenders.push(`${name}: declares ${gone}`);
+      if (new RegExp(`(^|[\\s{,])${gone}\\s*[,:]`, "m").test(src)) offenders.push(`${name}: exports/binds ${gone}`);
+    }
   }
-  return { ...api, sessions, calls, cfg, store, live };
-}
-
-const strips = (h) => h.calls.emit.filter((e) => e.payload.type === "request_status").map((e) => e.payload.status);
-
-// ── the shell entry point is gone ───────────────────────────────────────────────
-
-test("session-park no longer opens a requester SHELL, and nothing asks it to", () => {
-  assert.ok(!SRC.includes("async function openRequesterShell"), "the function is deleted");
-  assert.ok(!ENGINE.includes("openRequesterShell:"), "the engine re-export is gone with it");
-  assert.ok(!DISPATCH.includes("openRequesterShell"), "and no route calls it");
-  // ...and the strip's ONE arming path is the requester route's `desktop-ui` arm.
-  assert.match(DISPATCH, /if \(targeting\.requesterTypedByOperator\(m\)\) \{/);
-  assert.match(DISPATCH, /sessionEngine\.armRequestStatus\(\{ channelId: entry\.channel\.id, taskId \}\);/);
+  assert.deepEqual(offenders, [], offenders.join("\n"));
+  // session-park's own export list, stated positively: the RESUME family and nothing else.
+  const exports = (PARK_SRC.match(/module\.exports = \{([\s\S]*?)\};/) || [])[1] || "";
+  assert.deepEqual(
+    exports.split(",").map((s) => s.trim()).filter(Boolean),
+    ["bind", "resumeParked", "offerResume", "startResume", "resume"],
+    "session-park exports the resume family only — every window-minting export is gone"
+  );
 });
 
-test("the engine's parkedShell early return is untouched by the deletion", () => {
-  // The requester shell was one of its dependants; the reopen / team / resume paths are the
-  // others and they are unchanged, so the branch has to still be there.
-  assert.match(ENGINE, /if \(spec\.parkedShell\) \{ sessionPark\.emitParkedShell\(s\); return s; \}/);
-  const guard = ENGINE.indexOf("if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }");
-  assert.ok(ENGINE.indexOf("await startQuery(s, sdk);", guard) > guard);
-});
-
-// ── arming ──────────────────────────────────────────────────────────────────────
-
-test("arming opens the strip at 'sent' on the session in that slot", () => {
-  const h = harness();
-  h.live();
-  assert.equal(h.armRequestStatus(SLOT), true);
-  assert.deepEqual(strips(h), ["sent"]);
-  assert.equal(h.sessions.get(`${CHANNEL}:${TASK}`).requestStatus, "sent");
-  // THE WIRE CARRIES A FACT, NOT COPY: the renderer owns the words, so nothing here can put a
-  // string of somebody else's choosing on the screen.
-  const payload = h.calls.emit.find((e) => e.payload.type === "request_status").payload;
-  assert.deepEqual(Object.keys(payload).sort(), ["status", "type"]);
-});
-
-test("arming is IDEMPOTENT: a message read twice never walks the line backwards", () => {
-  const h = harness();
-  h.live();
-  h.armRequestStatus(SLOT);
-  h.noteRequestStatus(SLOT, "accepted");
-  assert.equal(h.armRequestStatus(SLOT), false, "already armed, and already past 'sent'");
-  assert.deepEqual(strips(h), ["sent", "accepted"]);
-});
-
-test("arming fails closed on a slot with no live session", () => {
-  const h = harness();
-  assert.equal(h.armRequestStatus(SLOT), false, "no window, nothing to put a line on");
-  assert.equal(h.armRequestStatus(null), false);
-  const settled = harness();
-  settled.live().settled = true;
-  assert.equal(settled.armRequestStatus(SLOT), false);
-  assert.deepEqual(strips(h), []);
-});
-
-test("arming starts NOTHING — it is a display payload, not a reducer event", () => {
-  const h = harness();
-  h.live();
-  h.armRequestStatus(SLOT);
-  assert.deepEqual(h.calls.dispatch, [], "no reducer event");
-  assert.deepEqual(h.calls.query, [], "and no query");
-  assert.deepEqual(h.calls.startSession, [], "arming does not open a window of its own");
-});
-
-// ── advancing ───────────────────────────────────────────────────────────────────
-
-test("the strip advances sent -> accepted -> replied, emitting once per move", () => {
-  const h = harness();
-  h.live();
-  h.armRequestStatus(SLOT);
-  assert.equal(h.noteRequestStatus(SLOT, "accepted"), true);
-  assert.equal(h.noteRequestStatus(SLOT, "replied"), true);
-  assert.deepEqual(strips(h), ["sent", "accepted", "replied"]);
-  assert.equal(h.sessions.get(`${CHANNEL}:${TASK}`).requestStatus, "replied");
-});
-
-test("a decline is a terminal outcome too, reachable from sent or accepted", () => {
-  const direct = harness();
-  direct.live();
-  direct.armRequestStatus(SLOT);
-  assert.equal(direct.noteRequestStatus(SLOT, "declined"), true);
-  assert.deepEqual(strips(direct), ["sent", "declined"]);
-
-  const late = harness();
-  late.live();
-  late.armRequestStatus(SLOT);
-  late.noteRequestStatus(SLOT, "accepted");
-  assert.equal(late.noteRequestStatus(SLOT, "declined"), true);
-  assert.deepEqual(strips(late), ["sent", "accepted", "declined"]);
-});
-
-test("MONOTONIC: an out-of-order milestone never walks the strip backwards", () => {
-  // Messages are read a page at a time, so a task_started can be seen after the reply that
-  // followed it. "Reply received" must not become "Request accepted" again.
-  const h = harness();
-  h.live();
-  h.armRequestStatus(SLOT);
-  h.noteRequestStatus(SLOT, "replied");
-  assert.equal(h.noteRequestStatus(SLOT, "accepted"), false);
-  assert.equal(h.noteRequestStatus(SLOT, "sent"), false);
-  assert.equal(h.noteRequestStatus(SLOT, "replied"), false, "and a repeat is not a move");
-  assert.deepEqual(strips(h), ["sent", "replied"]);
-});
-
-test("ARMED, NOT AMBIENT: a session that never sent a request has no strip to move", async () => {
-  // Every responder, every summoned team shell, every plain reopen — and, since §3.4, every
-  // requester session a SPAWNED session's create opened — reads undefined here.
-  const h = harness();
-  await h.recreateParkedShell({ channelId: CHANNEL, taskId: TASK, fromChannel: true });
-  assert.equal(h.sessions.get(`${CHANNEL}:${TASK}`).requestStatus, undefined);
-  assert.equal(h.noteRequestStatus(SLOT, "accepted"), false);
-  assert.deepEqual(strips(h), [], "and nothing is painted into a window that has no line");
-});
-
-test("an unknown status, an unknown thread and a settled session all change nothing", () => {
-  const h = harness();
-  h.live();
-  h.armRequestStatus(SLOT);
-  for (const bad of ["", "SENT", "acknowledged", null, undefined, 3, {}, "constructor", "toString"]) {
-    assert.equal(h.noteRequestStatus(SLOT, bad), false, JSON.stringify(bad));
+test("nothing in main/ CALLS the strip or the shell", () => {
+  const offenders = [];
+  for (const [name, src] of mainSources()) {
+    for (const gone of GONE) {
+      if (new RegExp(`${gone}\\s*\\(`).test(src)) offenders.push(`${name} -> ${gone}(`);
+    }
   }
-  assert.equal(h.noteRequestStatus({ channelId: CHANNEL, taskId: "other" }, "accepted"), false);
-  assert.equal(h.noteRequestStatus(null, "accepted"), false);
-  h.sessions.get(`${CHANNEL}:${TASK}`).settled = true;
-  assert.equal(h.noteRequestStatus(SLOT, "accepted"), false);
-  assert.deepEqual(strips(h), ["sent"]);
+  assert.deepEqual(offenders, [], `a deleted entry point has grown a caller:\n${offenders.join("\n")}`);
 });
 
-test("moving the strip dispatches NOTHING — it can never wake the session it sits on", () => {
-  const h = harness();
-  h.live();
-  h.armRequestStatus(SLOT);
-  h.noteRequestStatus(SLOT, "accepted");
-  h.noteRequestStatus(SLOT, "replied");
-  assert.deepEqual(h.calls.dispatch, [], "no reducer event, so no resumeQuery and no pushTurn");
-  assert.deepEqual(h.calls.query, [], "and no query, however the strip moves");
+test("the `request_status` WIRE PAYLOAD is gone from main and from the renderer", () => {
+  // The strip's other half: a payload type a renderer rendered. Refusing the emit AND the
+  // reader is what stops half of it coming back and looking wired.
+  const offenders = [];
+  for (const [name, src] of [...mainSources(), ...rendererSources(RENDERER)]) {
+    if (/request_status/.test(src)) offenders.push(name);
+  }
+  assert.deepEqual(offenders, [], `the deleted strip payload is referenced in:\n${offenders.join("\n")}`);
+});
+
+test("session-park's surviving mention of the strip is annotated as HISTORY, not stated as live", () => {
+  // The removed-vocabulary tier-3 rule, applied to the two names this file owns. A paragraph
+  // that names `armRequestStatus` without saying it is gone is a confident wrong answer waiting
+  // to be acted on — in this codebase an agent reads the comment instead of the source.
+  const lines = PARK_SRC.split("\n");
+  const hits = lines
+    .map((line, i) => [line, i])
+    .filter(([line]) => /armRequestStatus|noteRequestStatus/.test(line));
+  assert.ok(hits.length > 0, "the deletion is documented in session-park.js, not silently absent");
+  for (const [line, i] of hits) {
+    assert.ok(/^\s*\/\//.test(line), `main/session-park.js:${i + 1} names the strip on a CODE line`);
+    let start = i;
+    while (start > 0 && /^\s*\/\//.test(lines[start - 1])) start -= 1;
+    let end = i;
+    while (end < lines.length - 1 && /^\s*\/\//.test(lines[end + 1])) end += 1;
+    const block = lines.slice(start, end + 1).join("\n");
+    assert.match(block, /\b(deleted|gone|went with|no longer|removed)\b/i,
+      `main/session-park.js:${i + 1} names the strip in a block that never says it is gone`);
+  }
 });

@@ -86,15 +86,19 @@ test("both shared fetch helpers put the version on every request", () => {
 });
 
 test("the desktop's direct post sites inherit the stamp instead of setting it", () => {
-  // channel-post.js (task lifecycle + headless replies) and session-peer-post.js
-  // (the operator's @-tagged message) are the desktop's own writers to
-  // /api/channels/:id/messages. Neither sets a header of its own — they post
-  // through the seams above, which is exactly why neither can forget to.
+  // channel-post.js (task lifecycle + headless replies) is the desktop's own writer to
+  // /api/channels/:id/messages. It sets no header of its own — it posts through the seams
+  // above, which is exactly why it cannot forget to.
+  //
+  // ⚠ THE SECOND ROW WAS `session-peer-post.js` (the operator's @-tagged message out of a
+  // session window) and it is GONE — the file was DELETED with the session window (F-228,
+  // 2026-08-20), so there is no second direct post site left to census. The RULE the row
+  // carried is unchanged and is still asserted on the row below: a direct post site inherits
+  // the stamp from the fetch seam and never sets `X-Dopl-App-Version` itself. If a new
+  // desktop post site ever appears, it belongs in this list.
   const POST = M("channel-post.js");
-  const PEER = M("session-peer-post.js");
   assert.match(POST, /io\.apiFetch\(`\/api\/channels\/\$\{entry\.channel\.id\}\/messages`/);
-  assert.match(PEER, /apiFetch\('\/api\/channels\/' \+ s\.channelId \+ '\/messages'/);
-  for (const [name, src] of [["channel-post.js", POST], ["session-peer-post.js", PEER]]) {
+  for (const [name, src] of [["channel-post.js", POST]]) {
     assert.equal(
       /X-Dopl-App-Version/.test(src),
       false,

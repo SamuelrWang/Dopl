@@ -17,6 +17,12 @@
 //      a sweep on every read — so a window that dies without emitting either still falls
 //      out.
 //
+// ⚠ 2026-08-20 (F-228): the SESSION WINDOW is gone and `renderer/session/**` with it, so the
+// preload half of (1) named a file that no longer exists. It is DISCOVERED over `renderer/`
+// now rather than listed — see the note at the assertion. Nothing about the registry, the
+// registration sites, or the destroyed-window half changed; the call-site list below is
+// still asserted whole, and it still holds four entries.
+//
 // Run: `node --test dopl-desktop-app/test/app-windows.test.mjs`
 
 import { test } from "node:test";
@@ -203,15 +209,27 @@ test("NOTHING renderer-reachable can register a window", () => {
   //     on its own. ⚠ CODE ONLY: comments are blanked first, because app-preload.js's
   //     docblock names the registry deliberately (that is where the widening is explained,
   //     and a check that punished the explanation would get the explanation deleted).
+  //
+  // ⚠ REWRITTEN, NOT NARROWED (2026-08-20, F-228; INVARIANTS §14). This used to name TWO
+  //   preloads by path, and the second — `renderer/session/session-preload.js` — went with
+  //   the whole `renderer/session/**` tree when the session window was deleted, so the case
+  //   died on ENOENT rather than on anything about the registry. A hardcoded list is the
+  //   wrong shape for a "nothing renderer-reachable" claim anyway: it goes red when a
+  //   preload is DELETED (harmless) and stays green when one is ADDED (the case that
+  //   matters). So the preloads are DISCOVERED now, over the real tree, and the discovery
+  //   itself is asserted non-empty — a rename that emptied the glob would otherwise turn
+  //   this whole property vacuous.
   const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
   const RENDERER = join(HERE, "..", "renderer");
-  const preloads = [
-    ["app-preload.js"],
-    ["session", "session-preload.js"],
-  ];
+  const preloads = readdirSync(RENDERER, { recursive: true })
+    .map(String)
+    .filter((p) => /(^|[\\/])[^\\/]*preload[^\\/]*\.js$/.test(p))
+    .sort();
+  assert.ok(preloads.length >= 3, `the preload sweep found ${preloads.length} files: ${preloads.join(", ")}`);
+  assert.ok(preloads.includes("app-preload.js"), "the shell's preload is the one that MUST be covered");
   for (const p of preloads) {
-    const code = stripComments(readFileSync(join(RENDERER, ...p), "utf8"));
-    assert.ok(!/app-windows|appWindows/.test(code), `renderer/${p.join("/")} reaches the registry`);
+    const code = stripComments(readFileSync(join(RENDERER, p), "utf8"));
+    assert.ok(!/app-windows|appWindows/.test(code), `renderer/${p} reaches the registry`);
   }
 
   // (c) Every call site is a WINDOW-CREATION path in main. THREE, since 2026-08-20. A new

@@ -82,7 +82,7 @@ function harness(over = {}) {
 
   const api = new Function(
     "crypto", "Notification", "io", "store", "sessionPark", "diag",
-    `${BLOCK}\n return { bind, inboundNotice, autoInbound, windowHasFocus, enqueue, feedInbound, feedInboundForTask, decideInbound, drainInbound };`
+    `${BLOCK}\n return { bind, inboundNotice, autoInbound, enqueue, feedInbound };`
   )(crypto, FakeNotification, io, store, sessionPark, diag);
   // A faithful mini-dispatch: the engine's dispatch runs the reducer, which is what
   // arms the standing grant mid-decision (the drain below depends on that ordering).
@@ -120,9 +120,10 @@ test("feedInbound HOLDS the reply on the session queue and dispatches inbound_ar
   assert.equal(s.pendingInbound.length, 1, "the message waits on the session object");
   assert.deepEqual(evTypes(h.calls), ["inbound_arrived"]);
   assert.equal(h.calls.dispatch[0].message, "ping");
-  assert.equal(h.calls.notices.length, 1, "one OS notification for the held message");
-  assert.equal(h.calls.notices[0].title, "Message from David");
-  assert.match(h.calls.notices[0].body, /^ping$/);
+  // ⚠ NO OS NOTIFICATION ANY MORE (2026-08-20, F-228). The banner existed to point the
+  // operator at the WINDOW holding the card; `inboundNotice`'s COPY survives — `trigger.js`
+  // still sends it — but the gate no longer raises one itself.
+  assert.equal(h.calls.notices.length, 0);
 });
 
 test("feedInbound gates a PARKED session the same way (the gate is mode/park agnostic)", () => {
@@ -142,7 +143,7 @@ test("only the HEAD is surfaced; a second reply queues silently behind it", () =
   h.feedInbound(reply({ message: "second" }));
   assert.equal(s.pendingInbound.length, 2);
   assert.deepEqual(evTypes(h.calls), ["inbound_arrived"], "no card for the queued one yet");
-  assert.equal(h.calls.notices.length, 1);
+  assert.equal(h.calls.notices.length, 0);
 });
 
 test("an unknown / settled session is not ours to gate (false -> the listener notifies)", () => {
@@ -195,182 +196,34 @@ test("autoInbound reads the LIVE state, and ONLY the message axis opts in", () =
 
 // ── the operator decision ────────────────────────────────────────────────────────
 
-test("decideInbound: accept / accept-task / decline map to their reducer events", () => {
-  const cases = [
-    ["accept", "inbound_accept"],
-    ["accept-task", "inbound_accept_for_task"],
-    ["decline", "inbound_decline"],
-  ];
-  for (const [decision, evType] of cases) {
-    const h = harness();
-    const s = fakeSession();
-    h.sessions.set(KEY, s);
-    h.feedInbound(reply());
-    h.calls.dispatch.length = 0;
-    assert.equal(h.decideInbound(s, "pid-1", decision), true);
-    assert.deepEqual(evTypes(h.calls), [evType], decision);
-    assert.equal(s.pendingInbound.length, 0, "the answered item leaves the queue");
-  }
-});
-
-test("decideInbound FAILS CLOSED: an unknown decision string declines", () => {
-  for (const junk of ["allow", "ACCEPT", "", undefined, null, "accept-all", { accept: true }]) {
-    const h = harness();
-    const s = fakeSession();
-    h.sessions.set(KEY, s);
-    h.feedInbound(reply());
-    h.calls.dispatch.length = 0;
-    h.decideInbound(s, "pid-1", junk);
-    assert.deepEqual(evTypes(h.calls), ["inbound_decline"], `${String(junk)} must decline`);
-  }
-});
-
-test("decideInbound ignores a STALE pendingId (a old card cannot consume a newer reply)", () => {
-  const h = harness();
-  const s = fakeSession();
-  h.sessions.set(KEY, s);
-  h.feedInbound(reply());
-  h.calls.dispatch.length = 0;
-  assert.equal(h.decideInbound(s, "pid-999", "accept"), false);
-  assert.deepEqual(evTypes(h.calls), []);
-  assert.equal(s.pendingInbound.length, 1, "the real head is untouched");
-});
-
-// FIX F9: an EMPTY/absent pendingId used to skip the head check entirely (`if (pendingId
-// && …)`) and consume the head, so a call that named no card at all could spend the
-// message the operator was still looking at.
-test("FIX F9: a MISSING or empty pendingId decides nothing and never consumes the head", () => {
-  for (const id of [undefined, null, "", 0, false]) {
-    const h = harness();
-    const s = fakeSession();
-    h.sessions.set(KEY, s);
-    h.feedInbound(reply());
-    h.calls.dispatch.length = 0;
-    assert.equal(h.decideInbound(s, id, "accept"), false, `${String(id)} must not decide`);
-    assert.deepEqual(evTypes(h.calls), [], `${String(id)} must dispatch nothing`);
-    assert.equal(s.pendingInbound.length, 1, `${String(id)} must leave the head waiting`);
-    // The real id still works afterwards, so the card is not stranded either.
-    assert.equal(h.decideInbound(s, "pid-1", "accept"), true);
-    assert.equal(s.pendingInbound.length, 0);
-  }
-});
-
-test("decideInbound on an empty queue / settled session is a no-op", () => {
-  const h = harness();
-  const s = fakeSession();
-  assert.equal(h.decideInbound(s, "pid-1", "accept"), false);
-  assert.equal(h.decideInbound({ settled: true, pendingInbound: [] }, "pid-1", "accept"), false);
-  assert.deepEqual(evTypes(h.calls), []);
-});
-
-test("after an accept, the NEXT held reply becomes the new card and re-surfaces", () => {
-  const h = harness();
-  const s = fakeSession();
-  h.sessions.set(KEY, s);
-  h.feedInbound(reply({ message: "first" }));
-  h.feedInbound(reply({ message: "second" }));
-  h.calls.dispatch.length = 0;
-  h.calls.notices.length = 0;
-  h.decideInbound(s, "pid-1", "accept");
-  assert.deepEqual(evTypes(h.calls), ["inbound_accept", "inbound_arrived"]);
-  assert.equal(h.calls.dispatch[1].message, "second");
-  assert.equal(h.calls.notices.length, 1, "the next held message gets its own notification");
-});
-
-test("accept-for-task DRAINS every remaining held reply (none is stranded in the queue)", () => {
-  const h = harness();
-  const s = fakeSession();
-  h.sessions.set(KEY, s);
-  for (const message of ["a", "b", "c"]) h.feedInbound(reply({ message }));
-  h.calls.dispatch.length = 0;
-  h.calls.notices.length = 0;
-  h.decideInbound(s, "pid-1", "accept-task");
-  // The grant lands mid-decision (the reducer), so the backlog is FED rather than
-  // re-surfaced one card at a time — and the queue is emptied as it goes.
-  assert.deepEqual(evTypes(h.calls), ["inbound_accept_for_task", "inbound_accept", "inbound_accept"]);
-  assert.deepEqual(h.calls.dispatch.map((e) => e.message), ["a", "b", "c"], "in arrival order");
-  assert.equal(s.pendingInbound.length, 0, "nothing is left behind to be double-consumed");
-  assert.equal(h.calls.notices.length, 0, "no further gate notifications once the grant is armed");
-});
-
-// ── D4: flipping the toggle ON feeds what is already held ────────────────────────
-
-test("drainInbound feeds the whole backlog once an opt-in is armed (the AXIS B case)", () => {
-  const h = harness();
-  const s = fakeSession();
-  h.sessions.set(KEY, s);
-  h.feedInbound(reply({ message: "a" }));
-  h.feedInbound(reply({ message: "b" }));
-  h.calls.dispatch.length = 0;
-  s.state.messageMode = "auto_inbound"; // the reducer's set_message_mode landed
-  assert.equal(h.drainInbound(s), true);
-  assert.deepEqual(evTypes(h.calls), ["inbound_accept", "inbound_accept"]);
-  assert.deepEqual(h.calls.dispatch.map((e) => e.message), ["a", "b"], "arrival order preserved");
-  assert.equal(s.pendingInbound.length, 0, "no card is left behind a switch that says auto");
-});
-
-test("drainInbound is a NO-OP with no opt-in armed (it must never bypass the gate)", () => {
-  const h = harness();
-  const s = fakeSession();
-  h.sessions.set(KEY, s);
-  h.feedInbound(reply());
-  h.calls.dispatch.length = 0;
-  assert.equal(h.drainInbound(s), false, "the toggle going OFF changes nothing");
-  assert.deepEqual(evTypes(h.calls), [], "and it never re-emits a duplicate gate card");
-  assert.equal(s.pendingInbound.length, 1, "the held reply keeps waiting for a decision");
-  assert.equal(h.drainInbound({ settled: true, state: { messageMode: "auto_both" }, pendingInbound: [] }), false);
-  assert.equal(h.drainInbound(null), false);
-});
-
-// ── no live session: recreate the shell, THEN gate ───────────────────────────────
-
-test("feedInboundForTask recreates the parked shell and holds the reply on it", async () => {
-  const shell = fakeSession();
-  const h = harness({ recreate: { ok: true }, recreated: shell });
-  assert.equal(await h.feedInboundForTask(reply()), true);
-  // FIX F4: the body we are about to hold rides along, so the shell records it BEFORE its
-  // (awaited) history read and the message renders ONCE — as the card, not also as history.
-  assert.deepEqual(h.calls.recreate, [{ channelId: "c1", taskId: "t1", holdBody: "ping" }]);
-  assert.equal(shell.pendingInbound.length, 1, "the reply waits on the recreated shell");
-  assert.deepEqual(evTypes(h.calls), ["inbound_arrived"], "held, NOT fed as a continuation");
-  assert.equal(h.calls.notices.length, 1, "the operator is notified about the reopened window");
-});
-
-test("feedInboundForTask: a recreate that reports ok but registers nothing -> false", async () => {
-  const h = harness({ recreate: { ok: true }, recreated: null });
-  assert.equal(await h.feedInboundForTask(reply()), false, "no session object, no gate");
-  assert.deepEqual(evTypes(h.calls), []);
-});
-
-test("feedInboundForTask: a LIVE session skips the recreate and gates directly", async () => {
-  const h = harness();
-  const s = fakeSession();
-  h.sessions.set(KEY, s);
-  assert.equal(await h.feedInboundForTask(reply()), true);
-  assert.equal(h.calls.recreate.length, 0, "no second window for a session already open");
-  assert.equal(s.pendingInbound.length, 1);
-});
-
-test("feedInboundForTask: nothing survives on this machine -> false, no dispatch", async () => {
-  const h = harness({ recreate: { ok: false } });
-  assert.equal(await h.feedInboundForTask(reply()), false);
-  assert.equal(h.calls.recreate.length, 1);
-  assert.deepEqual(evTypes(h.calls), [], "the listener falls through to its passive notice");
-});
+// ⚠ TEN TESTS STOOD HERE AND WENT WITH THE HOLD/ACCEPT FAMILY (2026-08-20, F-228).
+// `decideInbound` (accept / accept-task / decline, FIX F9's missing-pendingId guard, the stale
+// -id guard), `drainQueue`'s re-surface, `drainInbound`'s backlog feed, and the four
+// `feedInboundForTask` recreate cases. All of them answered a HELD reply from the session
+// window's gate card, and there is no card.
+//
+// ⚠ WHY THIS IS NOT A LOST GUARD. A windowless session's message axis is held at the
+// `auto_inbound` floor, so `autoInbound` answers true, `enqueue` takes its dispatch branch and
+// the queue never holds — the hold path and the surface that answered it were ONE mechanism and
+// went together. What did NOT go is the FIX F1 seed-exclusion discipline below, which is about
+// what an agent SEES and applies to every fed message, held or not.
 
 // ── FIX F1: a gated message never rides the channel-history seed as well ──────────
 //
-// The reopened shell loads the channel history in PARALLEL with the hold, and the
-// listener advanced its cursor to this message's seq BEFORE dispatching it, so the
-// fetched window always contains the very message the gate is holding. Baking the seed at
-// fetch time therefore fed a DECLINED message to the fresh session anyway, and fed an
-// ACCEPTED one twice. The seed is now assembled at first-turn time (realIo.withSeed)
-// minus every body the gate handled.
+// The listener advances its cursor to a message's seq BEFORE dispatching it, so any history
+// window fetched around that moment contains the very message the gate just took. Baking the
+// seed at fetch time therefore fed the body twice. The seed is assembled at first-turn time
+// (realIo.withSeed) minus every body the gate recorded.
+//
+// ⚠ THE SHELL THIS DESCRIBES WAS A REOPENED WINDOW and that lane is deleted (F-228), but the
+// RULE is not about windows: `pendingHistory` is whatever a caller stashed for the first turn,
+// and `io.noteGatedBody` runs on EVERY fed message. The fixture keeps its shape so the
+// exclusion is still driven end to end.
 
 function reopenedShell(entries) {
   const s = fakeSession();
   s.nonce = "n0nce";
-  s.pendingHistory = entries; // what session-history stashed after its fetch
+  s.pendingHistory = entries; // what a first-turn history stash looks like
   return s;
 }
 const THREAD = () => [
@@ -378,12 +231,15 @@ const THREAD = () => [
   { from: "David", text: "secret plan", lane: "them" },
 ];
 
-test("FIX F1: a DECLINED message is ABSENT from the seeded first turn", () => {
+test("FIX F1: a GATED message is ABSENT from the seeded first turn", () => {
+  // ⚠ REWRITTEN 2026-08-20: this drove `decideInbound(s, pid, "decline")` before asserting.
+  // The RECORDING is what the rule is about and `enqueue` does it — `io.noteGatedBody` runs on
+  // every fed message, decision or no decision — so the assertion is unchanged and the step
+  // that no longer exists is simply not taken.
   const h = harness();
   const s = reopenedShell(THREAD());
   h.sessions.set(KEY, s);
   h.feedInbound(reply({ message: "secret plan" }));
-  assert.equal(h.decideInbound(s, "pid-1", "decline"), true);
   const turn = realIo.withSeed(s, "what did they say?");
   assert.ok(!turn.includes("secret plan"), "a declined body must never reach the agent");
   assert.ok(turn.includes("kick off"), "the rest of the thread still seeds the turn");
@@ -395,7 +251,6 @@ test("FIX F1: an ACCEPTED message reaches the agent exactly ONCE (continuation, 
   const s = reopenedShell(THREAD());
   h.sessions.set(KEY, s);
   h.feedInbound(reply({ message: "secret plan" }));
-  assert.equal(h.decideInbound(s, "pid-1", "accept"), true);
   // The engine's pushInbound effect: the fenced continuation, seeded once via withSeed.
   const turn = realIo.withSeed(s, realIo.frameContinuation(s.nonce, "secret plan", "David"));
   assert.equal(turn.split("secret plan").length - 1, 1, "fed once, not seed + continuation");
@@ -406,10 +261,9 @@ test("FIX F1: a message still HELD at the gate is excluded when the operator typ
   const h = harness();
   const s = reopenedShell(THREAD());
   h.sessions.set(KEY, s);
-  h.feedInbound(reply({ message: "secret plan" })); // undecided, still on the queue
+  h.feedInbound(reply({ message: "secret plan" })); // recorded, and riding its own continuation
   const turn = realIo.withSeed(s, "hello");
-  assert.ok(!turn.includes("secret plan"), "an unanswered message is not context yet");
-  assert.equal(s.pendingInbound.length, 1, "and it is still waiting for a decision");
+  assert.ok(!turn.includes("secret plan"), "it is not seed context — it is fed as a turn");
 });
 
 test("FIX F1: an AUTO-accepted message is excluded too (it rides its own continuation)", () => {
@@ -428,6 +282,5 @@ test("FIX F1: a CLAMPED history entry still matches the gated body it came from"
   const s = reopenedShell([{ from: "David", text: long.slice(0, 2000) + "…", lane: "them" }]);
   h.sessions.set(KEY, s);
   h.feedInbound(reply({ message: long }));
-  h.decideInbound(s, "pid-1", "decline");
   assert.equal(realIo.withSeed(s, "hi"), "hi", "nothing left to seed, so no fence at all");
 });

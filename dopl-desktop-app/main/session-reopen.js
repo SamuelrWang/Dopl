@@ -1,4 +1,4 @@
-// Session reopen helpers (v2.2 Session Window, item 2 + item 10; v1.7.4 P2 fallback).
+// Session reopen helpers (item 2; rebuilt on the agent window 2026-08-20).
 //
 // Extracted from session-engine.js purely to keep that AT-CAP file under 500 lines
 // (contract §O-7 / F-09c). These read the engine's LIVE-session registry, which the
@@ -7,17 +7,16 @@
 // for the (channel,task) key; it is a free var inside the PURE block so
 // test/session-reopen.test.mjs slices the block and injects a fake store + deps.
 //
-//   listLiveSessions()          — the tray "Sessions" submenu source (item 10).
-//   reopenWindow(sessionId)     — reopen a hidden live window by internal id (tray).
+//   listLiveSessions()          — the updater's restart prompt (what a restart would kill).
 //   reopenByTask({channelId,taskId}) — the MAIN-window bridge target (item 2), behind the
-//     web "Open session" button: the web passes (channelId, taskId), NEVER the internal
-//     sessionId; we resolve the live session by key and show()+focus() its window. P2
-//     (v1.7.4): when NO live session survives, fall back to recreateParkedShell — a durable
-//     record recreates a dormant, resumable window instead of the old dead end.
+//     agent view's "Open window": the web passes (channel, thread), NEVER the internal
+//     sessionId, and a LIVE session opens the agent window.
 //
-// v3.0 VOCABULARY: this opens a SESSION (this member's own window) on a shared THREAD, and
-// it starts NOTHING. Both branches are window-only: show()+focus(), or a PARKED shell with
-// no query. The agent wakes on a steer or an accepted inbound, never on this call. The
+// ⚠ `reopenWindow(sessionId)` WENT WITH THE TRAY'S "Sessions" SUBMENU (2026-08-20, F-228) —
+// its only caller — as did `showLive`, which revealed a hidden session window.
+//
+// v3.0 VOCABULARY: this opens a VIEW onto this member's own agent working a shared THREAD, and
+// it starts NOTHING. The agent wakes on a steer or an accepted inbound, never on this call. The
 // `Task` in the name and the `taskId` argument are the wire spelling of `thread`.
 // Pinned by test/open-session-no-query.test.mjs.
 
@@ -29,39 +28,32 @@ const framing = require('./session-seed');
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
-let deps = { sessions: null, refreshTray: function () {}, recreateParkedShell: null, keptWindow: null, dispatch: null };
+let deps = { sessions: null, refreshTray: function () {}, openAgentWindow: null, dispatch: null };
 
-// The engine binds its in-memory `sessions` Map + tray-refresh + the P2 shell builder
-// here at load, plus (§3.3) the ENDED-session window lookup below.
+// The engine binds its in-memory `sessions` Map + tray-refresh here at load.
+//
+// ⚠ `bind` REBUILDS `deps` FROM A LITERAL, so a handle the engine passes and this list omits
+// is DROPPED SILENTLY — and the drop reads as the fail-closed guard firing, not as a wiring
+// bug. That happened to `openAgentWindow` during the F-228 sweep and `reopenByTask` answered
+// `{ok:false}` on every live session, which is exactly what a legitimately unopenable session
+// looks like. Add the field HERE whenever the engine's `sessionReopen.bind({...})` grows one.
 function bind(d) {
   deps = {
     sessions: (d && d.sessions) || null,
     refreshTray: (d && d.refreshTray) || function () {},
-    recreateParkedShell: (d && d.recreateParkedShell) || null,
-    // agent-window.js › openAgentWindow — the view onto a WINDOWLESS live session
-    // (2026-08-20). Injected rather than required, like every other window-layer dep here,
-    // so the extracted block stays evaluable with fakes and holds no live window handle.
+    // agent-window.js › openAgentWindow — the view onto a live WINDOWLESS session
+    // (2026-08-20, F-212). Injected rather than required so this module keeps holding no
+    // host-bound handle and its source-extraction test keeps working.
     openAgentWindow: (d && d.openAgentWindow) || null,
     // C-8: the engine's own dispatch, so the quit teardown ENDS sessions through the reducer
     // rather than growing a second teardown beside `settle`.
     dispatch: (d && d.dispatch) || null,
-    // session-summary.keptWindow: the surviving window of an ABANDONED session, or null.
-    // Optional — a mid-wave engine that has not wired it simply falls through to the
-    // recreate, which is what this call did before the branch existed.
-    keptWindow: (d && d.keptWindow) || null,
   };
 }
 
-// Show a live window (reveals a hidden one or fronts a visible one), clear the hidden
-// flag, and refresh the tray so its "Sessions" submenu reflects the change.
-function showLive(s) {
-  try { s.win.show(); s.win.focus(); } catch (_) { /* best effort */ }
-  s.windowHidden = false;
-  deps.refreshTray();
-}
-
-// PURE READ — the tray's "Sessions" submenu source (item 10) and, since D1, the accounting
-// surface a chips UI will list from. One row PER KEY, never per channel: with N concurrent
+// PURE READ — the updater's restart prompt (what a live restart would kill) and the accounting
+// surface the Agents tab lists from. ⚠ The tray's "Sessions" submenu was its first reader and
+// is deleted (F-228); the prompt is not, and a restart mid-turn still kills a spawned session. One row PER KEY, never per channel: with N concurrent
 // sessions in one channel the channel name alone no longer identifies a row, so the key and
 // its (channel, thread/agent) parts ride along with the live `status`.
 //   status = the reducer's phase for a live session ('launching' / 'running' / 'awaiting_*' /
@@ -86,91 +78,46 @@ function listLiveSessions() {
   return out;
 }
 
-// Reopen a hidden live window by internal sessionId (its renderer + transcript are
-// intact — no replay). Returns true if found + shown, else false.
-function reopenWindow(sessionId) {
-  if (!deps.sessions) return false;
-  for (const s of deps.sessions.values()) {
-    if (s.sessionId !== sessionId || !s.win || s.win.isDestroyed()) continue;
-    showLive(s);
-    return true;
-  }
-  return false;
-}
-
-// Item 2 + P2: resolve the live session for (channel, task) and show its window (a pure
-// window show() — starts NO query, runs NO gated tool, §H-4). When there is no live session,
-// fall back to recreateParkedShell, which recreates a parked shell from the durable record —
-// and, since Q6b, opens one seeded from the CHANNEL when this machine has no record at all.
-// May return a Promise (the fallback is async); the IPC handler awaits it.
+// THE ONE REOPEN PATH (item 2; rebuilt on the agent window, 2026-08-20, F-212's closure).
 //
-// THE VERDICT (read by the web thread card):
-//   { ok: true }                    a window is open for this thread. Live, recreated from a
-//                                   record, or built from the channel — all three are "opened",
-//                                   and the web card must show NO note for any of them.
-//   { ok: false, reason: 'no-thread' }  this operator cannot open this channel at all (not a
-//                                   member, gone, or signed out). THE one note case.
-//   { ok: false, reason: 'busy' }   the window budget is spent and nothing could be freed; a
-//                                   retry after closing a window will work.
-//   { ok: false }                   the window layer is not wired yet (mid-wave). Generic.
+// ⚠ IT HAS EXACTLY TWO ANSWERS NOW. A LIVE session opens `main/agent-window.js` — a real view
+// onto it: its narration, what it sent, and a composer that reaches it. Anything else refuses.
+// The branches that went are the ones that were about WINDOWS rather than about agents:
+//   • the live-session `show()+focus()` of its OWN window — no session has one;
+//   • the retained ENDED window (`session-summary.keptWindow`) — nothing retains one;
+//   • the `recreateParkedShell` fallback, which minted a v1 session window from a durable
+//     record, or from the channel when no record existed.
 //
-// §3.3 — THE ENDED-BUT-KEPT WINDOW, checked BETWEEN those two branches. An abandoned session
-// settles out of the registry while its window stays open (session-effects' M2b: an end nobody
-// watched happen must not make a transcript vanish), so the live lookup misses it and the
-// recreate below would answer an "Open" on its session pill by building a FRESH parked shell —
-// a different session wearing a dead one's name, over the top of the very transcript the
-// operator was trying to read. The retained window IS the answer, and showing it goes through
-// the same showLive as every other branch: ONE reopen path, one IPC, no second machinery.
+// ⚠ A REFUSAL IS THE HONEST ANSWER AND IT USED NOT TO BE. `recreateParkedShell`'s first line
+// answered `{ ok: true }` for a live session it had not rebuilt, so the button reported success
+// having opened nothing — the swallow F-212 was filed about. `{ ok: false, reason: 'no-session' }`
+// is the same shape `controlByTask` already returns for the same condition, and the panel words
+// it with `AGENT_CONTROL_REFUSED`.
+//
+// ⚠ `segment` rides in from the caller (`channel-dir-ipc.js`), which is the only layer that has
+// it: main knows the workspace UUID, and a router path needs the SLUG.
 function reopenByTask(a) {
   const channelId = String((a && a.channelId) || '');
   const taskId = String((a && a.taskId) || '');
   if (!deps.sessions) return { ok: false };
   const s = deps.sessions.get(store.sessionKey(channelId, taskId));
-  if (s && !s.settled && s.win && !s.win.isDestroyed()) { showLive(s); return { ok: true }; }
-  // ⚠ A LIVE WINDOWLESS SESSION OPENS THE AGENT WINDOW (2026-08-20, F-212's closure).
-  //
-  // THE SHORT HISTORY, because the two wrong answers are both instructive. Until this
-  // branch existed the call fell through to `recreateParkedShell`, whose FIRST line is
-  // `if (existing && !existing.settled) return { ok: true }` — right for the case it was
-  // written for (a live session whose window is being rebuilt) and a LIE here, so the
-  // button reported success having opened nothing. The fix shipped in between was an honest
-  // REFUSAL carrying `reason: 'windowless'`, which the panel worded as "this agent runs
-  // without a window" — and Samuel called that meaningless, correctly: **a window is a
-  // VIEW, not a runtime property.** Whether main minted a BrowserWindow for this spawn is
-  // an implementation detail of the spawn shape and is no answer to "show me my agent".
-  //
-  // So there is no refusal here any more. `agent-window.js` opens a real view onto the
-  // live session — its narration, what it sent, and a composer that reaches it — and this
-  // stays ONE reopen path, which is the rule this module is built on.
-  // ⚠ `segment` rides in from the caller (`channel-dir-ipc.js`), which is the only layer
-  // that has it: main knows the workspace UUID, and a router path needs the SLUG.
-  if (s && !s.settled && s.windowless === true) {
-    if (!deps.openAgentWindow) return { ok: false }; // mid-wave / harness: fail closed
-    return deps.openAgentWindow({ segment: String((a && a.segment) || ''), channelId, taskId });
-  }
-  const kept = deps.keptWindow ? deps.keptWindow(channelId, taskId) : null;
-  // No `windowHidden` flag and no tray refresh to do — the entry left the registry when it
-  // settled, so this is a plain reveal of a window nothing else is tracking.
-  if (kept && !kept.isDestroyed()) { try { kept.show(); kept.focus(); } catch (_) { /* best effort */ } return { ok: true }; }
-  // `fromChannel` is what separates an operator CLICK from the inbound gate's own use of the same
-  // builder: only a click may open a shell for a thread this machine holds no record of.
-  if (deps.recreateParkedShell) return deps.recreateParkedShell({ channelId, taskId, fromChannel: true });
-  return { ok: false };
+  if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  if (!deps.openAgentWindow) return { ok: false }; // mid-wave / harness: fail closed
+  return deps.openAgentWindow({ segment: String((a && a.segment) || ''), channelId, taskId });
 }
 
 // ── THE AGENTS TAB'S TWO CONTROLS: PAUSE and END, on MY OWN agent ────────────────
 //
 // Wiring plan Phase 5 (2026-08-18). The Agents tab and the agent view let the operator pause or
 // end an agent from the MAIN window, where before those two verbs existed only inside that
-// session's own window (`session:interrupt` / `session:end`, session-ipc.js, resolved from
-// event.sender). This is the SAME PAIR reached by the SAME dispatch — nothing about running a
-// session is re-implemented here, and deliberately so: a second stop path is a second set of
-// teardown bugs.
+// session's own window (`session:interrupt` / `session:end`, both deleted with it). This is the
+// SAME PAIR reached by the SAME dispatch — nothing about running a session is re-implemented
+// here, and deliberately so: a second stop path is a second set of teardown bugs.
 //
-//   pause  -> { type: 'interrupt' }  the session window's send-button PAUSE MORPH, verbatim
-//             (renderer/session/session.html: "pausing the agent is the send button's pause
-//             morph"). Stops the turn in flight; the session stays live, resumable and named.
-//   end    -> { type: 'end' }        the window's "End session" button, verbatim. Terminal.
+//   pause  -> { type: 'interrupt' }  stops the turn in flight; the session stays live,
+//             resumable and named. ⚠ It is the same reducer event the session window's send
+//             button dispatched as its PAUSE MORPH — the verb outlived the surface (F-228).
+//   end    -> { type: 'end' }        terminal, and likewise the old "End session" event.
 //             It ends the AGENT and touches no thread — a thread has no finished state
 //             (INVARIANTS §5, wiring plan Phase 4).
 //
@@ -180,7 +127,7 @@ function reopenByTask(a) {
 // a peer's paused agent is rendered from PRESENCE on the reading side (INVARIANTS §11), never
 // driven from here.
 // ⚠ RESOLVED BY (channel, thread) like `reopenByTask`, never by `sessionId` — that id is
-// ephemeral across a park+recreate and is a React key on the wire, not an address.
+// ephemeral across a park+resume and is a React key on the wire, not an address.
 // ⚠ SETTLED AND RETAINED-ENDED SESSIONS ANSWER `{ ok: false }`: an ended session's pill outlives
 // its registry entry (the retention rule), so "the card is on screen" does not mean "there is
 // something left to stop". Fail closed rather than dispatching into a settled object.
@@ -323,4 +270,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenWindow, reopenByTask, controlByTask, messageByTask, listOrphanRisk, endLiveSessions };
+module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, messageByTask, listOrphanRisk, endLiveSessions };

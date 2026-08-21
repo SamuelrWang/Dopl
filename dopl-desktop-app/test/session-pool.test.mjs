@@ -246,6 +246,10 @@ test("an empty pool lists nothing (and is not at the cap)", () => {
 });
 
 // ── sessionKey has exactly ONE definition (source probe) ─────────────────────
+//
+// ⚠ THE ONLY CASE IN THIS FILE THE SESSION-WINDOW WAVE TOUCHED, AND IT TOUCHED THE FLOOR, NOT
+// THE RULE. `session-pool.js` is the HEADLESS lane's concurrency guard and never held a window;
+// every behavioural case above it passed throughout. See the re-base comment inside.
 
 test("sessionKey is defined once, in session-store.js, and everyone else imports it", () => {
   // Source-probed on purpose: "no second definition anywhere in main/" is a property of the
@@ -264,7 +268,17 @@ test("sessionKey is defined once, in session-store.js, and everyone else imports
     if (/(?:^|[^A-Za-z.])(?:store|sessionStore)?\.?sessionKey\(/m.test(src) && f !== "session-store.js") users.push(f);
   }
   assert.deepEqual(definers, ["session-store.js"], "the (channel, thread/agent) key has ONE definition");
-  assert.ok(users.length >= 4, `expected several importers, found ${users.length}`);
+  // ⚠ THE FLOOR IS AN ANTI-VACUITY GUARD, NOT A TARGET, and it was RE-BASED 4 -> 3 on 2026-08-20.
+  // What it defends is the loop below: if the `users` regex ever stops matching, `for (const f of
+  // [])` runs zero assertions and this case goes green having checked nothing. It is NOT a claim
+  // that the key SHOULD have four callers.
+  // ⚠ WHY IT MOVED: the session-window retirement (F-228) deleted `session-ipc.js`,
+  // `session-history.js`, `session-window.js` and `attended-handoff.js`, several of which
+  // resolved a session by key — so the count fell to three (`queued-notice.js`,
+  // `session-reopen.js`, `session-spawner.js`) and this case failed for a reason that had nothing
+  // to do with the property it exists for. Re-measure rather than relax:
+  //   grep -lE '(^|[^A-Za-z.])(store|sessionStore)?\.?sessionKey\(' main/*.js
+  assert.ok(users.length >= 3, `expected several importers, found ${users.length}: ${users}`);
   for (const f of users) {
     const src = readFileSync(join(MAIN, f), "utf8");
     assert.match(src, /require\('\.\/session-store'\)/, `${f} calls sessionKey but does not import it`);

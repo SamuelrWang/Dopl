@@ -1,369 +1,160 @@
-// 2026-08-02 — "THE POSTURE DOESN'T STICK." The defects behind one operator complaint.
+// WHAT A SPAWN STARTS ITS TWO AXES ON — the surviving half of "THE POSTURE DOESN'T STICK"
+// (2026-08-02), rewritten down on 2026-08-20 when the v1 session window went (F-228).
 //
-// The canUseTool gate was never the problem: main/session-io.grantArgs reads s.state.toolMode /
-// s.state.messageMode per call and always did. Everything upstream of it was broken instead:
+// The file was about FOUR defects behind one operator complaint. THREE of them were about the
+// PRE-CONSENT CARD — its two selects, the IPC that stored their picks on that card's registry
+// entry, and the single-use arm startSession consumed at launch — and that whole surface is
+// deleted. What is left is the one rule that never needed the card, and it is now the WHOLE
+// rule:
 //
-//   FIX 1   THE PRE-CONSENT SELECTS WERE WIRED TO NOTHING. Their IPC resolved the sender against
-//           the LIVE-SESSION registry only, which a consent window is not in, so main answered
-//           {ok:false} for every change made before Accept and the spawn then emitted the
-//           hard-coded manual/ask, visibly dragging the select back.
-//   FIX 1b  ...AND THE ARM WAS THEN SPENT BY THE WRONG SPAWN (the blocker). See section 2b.
-//   FIX 2   THE CONTROL LIED. Nothing on either side of the bridge read the answer.
-//   FIX 3   THE IDLE TIMER measured time since the last turn ENDED, not idleness, so a card open
-//           for 15 minutes parked the session underneath the operator and reset both axes.
-//   FIX 4   A PARKED SHELL COULD NEVER BE ARMED. startSession discarded startModes for any
-//           parkedShell; session-team spawns every team session as one.
+//   A SESSION STARTS AT manual/ask UNLESS A CALLER HANDS IN A POSTURE, AND A PARKED SHELL
+//   REFUSES EVEN THAT UNLESS AN EXPLICIT `operatorArmed` SAYS A HUMAN CHOSE IT JUST NOW.
 //
-// METHOD: the directory idiom — slice the REAL functions (helpers/source-probe fnOf/between)
-// and DRIVE them with fakes, plus the real reducer block. No test here asserts on source text
-// where it could assert on behavior; the source pins that remain are about what a spawn shape
-// PASSES, which is not observable any other way without booting electron.
+//   FIX 3   THE IDLE TIMER measured time since the last turn ENDED, not idleness. Moved WHOLE
+//           to test/session-idle-bounds.test.mjs on 2026-08-05 (§4 below); untouched by F-228.
+//   FIX 4   A PARKED SHELL COULD NEVER BE ARMED — startSession discarded startModes for any
+//           parkedShell. The fix is the `operatorArmed === true` branch, and §3 below is the
+//           ONLY place in the suite that drives it. See the ⚠ note there before deleting it.
+//
+// METHOD is unchanged and is the directory idiom: slice the REAL construction site out of the
+// shipped engine and DRIVE it against the REAL initialSessionState. Nothing here asserts on
+// source text — what a spawn PASSES is pinned in test/session-preset-start.test.mjs, which
+// owns the other side of this join (every re-applying lane hands in nothing, structurally).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
-import { fnOf, between } from "./helpers/source-probe.mjs";
 import { loadReducer } from "./_reducer-block.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
-const IPC = M("session-ipc.js");
-const CONSENT = M("session-consent.js");
 const ENGINE = M("session-engine.js");
-const PARK = M("session-park.js");
 
-const { normalizeToolMode, normalizeMessageMode } = require("../main/session-profiles.js");
-const { initialSessionState, sessionReducer, POSTURE_RESET_NOTE, idleTimeout,
-        AWAITING_PEER_IDLE_MS, ABANDONED_MS } = loadReducer();
+const { initialSessionState } = loadReducer();
 
 const WIDE = { tools: "bypass", messages: "auto_both" };
 
-// ── harness: the REAL consent-registry writes ────────────────────────────────
-// armModes + takeStartModes sliced out of main/session-consent.js and given the two free
-// vars they close over there (`registry`, `sendToEntry`). Nothing is stubbed inside them.
-function consentRegistry() {
-  const registry = new Map();
-  const echoed = [];
-  const src = `${fnOf(CONSENT, "armModes")}\n${fnOf(CONSENT, "takeStartModes")}
-               return { armModes, takeStartModes };`;
-  const api = new Function("registry", "sendToEntry", src)(
-    registry, (e, payload) => echoed.push({ key: e.key, payload })
-  );
-  return { registry, echoed, ...api };
-}
+// ── 1. ⚠ THE THREE SENDER SHAPES ENDED HERE — 2026-08-20, F-228 ──────────────
+//
+// Six tests stood here, plus the two harnesses they shared (`consentRegistry`, slicing the REAL
+// `armModes`/`takeStartModes` out of main/session-consent.js, and `ipcHarness`, slicing the REAL
+// `session:set-tool-mode` / `session:set-message-mode` registrations out of main/session-ipc.js).
+// They drove the mode handlers from all three sender shapes — (a) a live-session sender, (b) a
+// CONSENT-ONLY sender, (c) an unknown one — and pinned: the axis lands on the right registry and
+// nowhere else, both axes are echoed so a select can only show what main recorded, both coerce
+// fail-closed, a DECIDED card answers {ok:false} with nothing written, and a live session WINS
+// over a consent entry sharing the window.
+//
+// ⚠ THE SURFACE IS GONE, NOT THE RULE'S SUBJECT — BOTH ENDPOINTS OF IT ARE. `main/session-ipc.js`
+// and `main/session-consent.js` are deleted with the window whose selects called them; there is
+// no per-session mode IPC and no consent registry left to be the second sender shape. Nothing
+// renderer-reachable can move a running session's axes at all now. What DOES survive is the
+// reducer underneath (`set_tool_mode` / `set_message_mode`), and it is pinned whole — coercion,
+// single-axis isolation, the one `modes` echo, no drain, terminal idempotency — in
+// test/session-reducer.test.mjs § "the two axes". These six cases were about the TRANSPORT.
+//
+// FIX L1 — the twin defect on the ANSWER those handlers returned — went the same way; see the
+// matching ⚠ block in test/session-decision-truth.test.mjs, which holds its own half.
 
-function consentEntry(reg, key, sender) {
-  const e = { key, win: { webContents: { id: sender } }, modes: null, decided: false };
-  reg.registry.set(key, e);
-  return e;
-}
-
-// ── harness: the REAL IPC mode handlers ──────────────────────────────────────
-// Both `ipcMain.handle` registrations are sliced whole, so the arrow bodies under test are the
-// shipped ones (including the dispatch payloads and gate.drainInbound), and `modeChange` +
-// `touch` come out of the same file. The only fakes are the injected engine bundle, the
-// consent module and the gate — exactly what register() is handed in production.
-function ipcHarness({ session, consent }) {
-  const handlers = new Map();
-  const drained = [];
-  const dispatched = [];
-  const engine = {
-    getSessionBySender: (sender) => (session && session.senderId === sender ? session : null),
-    getConsentBySender: (sender) => {
-      if (!consent) return null;
-      for (const e of consent.registry.values()) if (e.win.webContents.id === sender) return e;
-      return null;
-    },
-    dispatch: (s, evt) => {
-      dispatched.push(evt);
-      s.state = sessionReducer(s.state, evt).state; // the REAL reducer stores the axis
-      return true;
-    },
-  };
-  const src = [
-    fnOf(IPC, "touch"),
-    fnOf(IPC, "modeChange"),
-    between(IPC, "ipcMain.handle('session:set-tool-mode'", "// ── Item 8: the pre-consent Accept", "session-ipc"),
-  ].join("\n");
-  new Function("ipcMain", "engine", "sessionConsent", "gate", "normalizeToolMode", "normalizeMessageMode", "diag", src)(
-    { handle: (channel, fn) => handlers.set(channel, fn) },
-    engine, consent, { drainInbound: (s) => drained.push(s.key) },
-    normalizeToolMode, normalizeMessageMode, () => {}
-  );
-  return {
-    engine, drained, dispatched,
-    tool: (sender, mode) => handlers.get("session:set-tool-mode")({ sender }, { mode }),
-    message: (sender, mode) => handlers.get("session:set-message-mode")({ sender }, { mode }),
-  };
-}
-
-const liveSession = (senderId) => ({ key: "ch:th", senderId, state: initialSessionState({}) });
-
-// ── 1. THE THREE SENDER SHAPES ───────────────────────────────────────────────
-
-test("(a) a LIVE-session sender: the axis is stored on the session, {ok:true} states it", () => {
-  const session = liveSession(7);
-  const h = ipcHarness({ session });
-  assert.deepEqual(h.tool(7, "bypass"), { ok: true, tool: "bypass", message: "ask" });
-  assert.equal(session.state.toolMode, "bypass", "grantDecision reads exactly this field");
-  assert.deepEqual(h.message(7, "auto_both"), { ok: true, tool: "bypass", message: "auto_both" });
-  assert.equal(session.state.messageMode, "auto_both");
-  assert.equal(session.operatorTouched, true, "a mode click is the operator using this window");
-  assert.deepEqual(h.drained, ["ch:th"], "AXIS B still drains the held inbound queue; AXIS A never did");
-});
-
-test("(a) a live session coerces FAIL-CLOSED on junk, and the {ok} reports the coerced value", () => {
-  const session = liveSession(7);
-  const h = ipcHarness({ session });
-  for (const junk of ["BYPASS", "bypass ", "yolo", "", null, 1, {}]) {
-    assert.deepEqual(h.tool(7, junk), { ok: true, tool: "manual", message: "ask" }, String(junk));
-    assert.equal(session.state.toolMode, "manual");
-  }
-});
-
-test("(b) a CONSENT-ONLY sender: the pick lands on that card's entry and {ok:true} comes back", () => {
-  // THE DEFECT, driven: before FIX 1 this sender resolved to no live session and the handler
-  // returned {ok:false} with nothing stored anywhere.
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  const h = ipcHarness({ session: null, consent });
-
-  assert.deepEqual(h.tool(42, "bypass"), { ok: true, tool: "bypass", message: "ask" });
-  assert.deepEqual(entry.modes, { tools: "bypass", messages: "ask" },
-    "the untouched axis is stored at its most restrictive member, never left absent");
-  assert.deepEqual(h.message(42, "auto_both"), { ok: true, tool: "bypass", message: "auto_both" });
-  assert.deepEqual(entry.modes, { tools: "bypass", messages: "auto_both" });
-  assert.deepEqual(h.dispatched, [], "no reducer dispatch: there is no session yet, by design");
-  assert.deepEqual(h.drained, [], "and nothing to drain");
-});
-
-test("(b) the card is ECHOED both axes, so the selects can only show what main recorded", () => {
-  const consent = consentRegistry();
-  consentEntry(consent, "ch:th", 42);
-  const h = ipcHarness({ session: null, consent });
-  h.tool(42, "auto");
-  h.message(42, "auto_inbound");
-  assert.deepEqual(consent.echoed.map((x) => x.payload), [
-    { type: "modes", tool: "auto", message: "ask" },
-    { type: "modes", tool: "auto", message: "auto_inbound" },
-  ]);
-});
-
-test("(b) a consent sender coerces fail-closed too — the card cannot arm an unknown mode", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  const h = ipcHarness({ session: null, consent });
-  assert.deepEqual(h.tool(42, "sudo"), { ok: true, tool: "manual", message: "ask" });
-  assert.deepEqual(entry.modes, { tools: "manual", messages: "ask" });
-});
-
-test("(b) a DECIDED card refuses: {ok:false}, nothing stored, nothing echoed", () => {
-  // The adoption gap, from main's side. Accept has landed and the spawn is about to consume
-  // the pair, so a late change would silently not apply — say so instead.
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  entry.decided = true;
-  const h = ipcHarness({ session: null, consent });
-  assert.deepEqual(h.tool(42, "bypass"), { ok: false });
-  assert.equal(entry.modes, null);
-  assert.deepEqual(consent.echoed, []);
-});
-
-test("(c) an UNKNOWN sender: {ok:false}, and neither registry is written", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  const session = liveSession(7);
-  const h = ipcHarness({ session, consent });
-  assert.deepEqual(h.tool(99, "bypass"), { ok: false });
-  assert.deepEqual(h.message(99, "auto_both"), { ok: false });
-  assert.equal(session.state.toolMode, "manual", "a stranger cannot move a session it does not own");
-  assert.equal(entry.modes, null, "nor a card it does not own");
-});
-
-test("a live session WINS over a consent entry sharing the window (the resolution order)", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 7);
-  const session = liveSession(7);
-  const h = ipcHarness({ session, consent });
-  h.tool(7, "bypass");
-  assert.equal(session.state.toolMode, "bypass");
-  assert.equal(entry.modes, null, "the adopted session is authoritative, not the stale card");
-});
-
-// FIX L1 — the twin defect on the ANSWER these handlers return ({ok:false} for a change main had
-// already applied) lives with the rest of the "a surface may only claim what main did" wave, in
-// test/session-decision-truth.test.mjs.
-
-// ── 2. WHAT THE ADOPTED SESSION ACTUALLY STARTS WITH ─────────────────────────
+// ── 2. WHAT A SPAWN ACTUALLY STARTS WITH ─────────────────────────────────────
 // The real construction site from session-engine.startSession, sliced and evaluated against the
-// real initialSessionState and the real takeStartModes. `adoptsConsent` (FIX 1b) is part of the
-// spec, so every case below states which spawn shape it is driving.
+// real initialSessionState.
+//
+// ⚠ THE SLICE MOVED ON 2026-08-20. It used to start at `const consentModes =
+// sessionConsent.takeStartModes` — the pre-consent card read — and took `sessionConsent` as a
+// free var. That read is deleted; the block now opens at `const armedModes = spec.startModes`
+// and closes on the same `const context =` line, so the harness lost a parameter and nothing
+// else. A renamed head must fail LOUDLY (the assert below), never slice to "".
 
-function startedState(spec, consent) {
-  const src = ENGINE.slice(ENGINE.indexOf("const consentModes = sessionConsent.takeStartModes"),
+function startedState(spec) {
+  const src = ENGINE.slice(ENGINE.indexOf("const armedModes = spec.startModes;"),
     ENGINE.indexOf("const context = { ...(spec.context || {})"));
   assert.ok(src.includes("initialSessionState("), "the construction site moved — reslice it");
-  return new Function("spec", "initialSessionState", "readCaps", "sessionConsent", `${src}\n return state;`)(
-    spec, initialSessionState, () => ({}), consent);
+  return new Function("spec", "initialSessionState", "readCaps", `${src}\n return state;`)(
+    spec, initialSessionState, () => ({}));
 }
 
-// A card armed on BOTH axes and NOT yet accepted, through the real IPC handlers and the real
-// registry writes. Every FIX 1b case starts from one: an empty registry could not fail.
-function armedCard(key, sender) {
-  const consent = consentRegistry();
-  consentEntry(consent, key, sender);
-  const h = ipcHarness({ session: null, consent });
-  h.tool(sender, "bypass");
-  h.message(sender, "auto_both");
-  return consent;
-}
-
-test("Accept -> the adopted session STARTS on the pair the operator picked on the card", () => {
-  // End to end over the two real halves: the IPC handler stores it, startSession consumes it.
-  // s.state.toolMode is what session-io.grantArgs hands grantDecision on the first tool call.
-  const consent = armedCard("ch:th", 42);
-  const state = startedState({ key: "ch:th", side: "responder", mode: "interactive", adoptsConsent: true }, consent);
-  assert.equal(state.toolMode, "bypass");
-  assert.equal(state.messageMode, "auto_both");
+test("a spawn handed NO posture seeds nothing: it starts at manual/ask", () => {
+  // Formerly "an UNTOUCHED card seeds nothing". There is no card; the shape it was really
+  // asserting is the one that outlived it — an absent `startModes` inherits the reducer's
+  // most-restrictive pair rather than anything ambient. s.state.toolMode is what
+  // session-io.grantArgs hands grantDecision on the very first tool call.
+  const state = startedState({ key: "ch:th", side: "responder" });
+  assert.equal(state.toolMode, "manual");
+  assert.equal(state.messageMode, "ask");
   assert.equal(state.allowForTask.length, 0, "a posture is still not a grant");
   assert.equal(state.inboundForTask, false);
 });
 
-test("an UNTOUCHED card seeds nothing: the spawn starts at manual/ask", () => {
-  const consent = consentRegistry();
-  consentEntry(consent, "ch:th", 42);
-  const state = startedState({ key: "ch:th", side: "responder", adoptsConsent: true }, consent);
-  assert.equal(state.toolMode, "manual");
-  assert.equal(state.messageMode, "ask");
-});
+// ── 2b. ⚠ FIX 1b ENDED HERE — 2026-08-20, F-228 ──────────────────────────────
+//
+// Five tests, the blocker of the 2026-08-02 wave. The consent registry was keyed
+// sessionKey(channelId, taskId) — the SAME key recreateParkedShell, openFromChannel,
+// openRequesterShell and startResume all spawned under — and startSession read it
+// UNCONDITIONALLY, so a card armed but not yet accepted was spent by whichever spawn reached
+// that key first. `spec.adoptsConsent === true` was the fix: exactly one spawn shape, launch()'s
+// own adopt test, could spend the single-use arm. The five pinned the arm invisible to every
+// peer-driven shape, taken exactly once by the adopting one, STRICT on `=== true`, the full
+// reproduction (peer wake then Accept on one key), and that only ONE site in the engine set the
+// flag.
+//
+// ⚠ THE DEFECT IS NOT FIXED, IT IS UNREACHABLE: there is no registry to spend, because there is
+// no card. `sessionConsent.takeStartModes` and its `adoptsConsent` gate are both deleted from
+// startSession, leaving `spec.startModes` — handed in per launch by a caller executing a
+// decision a human is making right now — as the ONE source, which is the shape H2 always wanted
+// and the card was the exception to. Re-introducing ANY ambient, key-scoped posture source
+// re-opens all five cases; that is what this block is here to say.
+//
+// ⚠ AND THE FLAG'S LAST WRITER IS STILL IN THE TREE. `session-engine.js › launch` still passes
+// `adoptsConsent: adoptable` on a name that no longer exists anywhere in the file. Nothing reads
+// the field, so no test here can go red on it — it is a REFERENCE, filed rather than fixed
+// (CLAUDE.md: the code looks wrong -> a finding, not a test edit).
 
-test("the consent arm is SINGLE USE and scoped to the entry — a second spawn finds nothing", () => {
-  const consent = armedCard("ch:th", 42);
-  assert.equal(startedState({ key: "ch:th", adoptsConsent: true }, consent).toolMode, "bypass");
-  assert.equal(startedState({ key: "ch:th", adoptsConsent: true }, consent).toolMode, "manual", "consumed, not stored");
-  // ...and it was never visible to any other slot in the first place.
-  consentEntry(consent, "ch:th", 42).modes = { tools: "bypass", messages: "auto_both" };
-  assert.equal(startedState({ key: "ch:other", adoptsConsent: true }, consent).toolMode, "manual", "another key sees nothing");
-});
+// ── 3. FIX 4: the operator-armed parked shell ────────────────────────────────
+// `spec.parkedShell` has no producer today — the shell-recreate lane opened a window and is
+// deleted — but the BRANCH is live in startSession and is deliberately kept there (see the
+// engine's own note) so a future non-window dormant shape gets the safe behaviour by default.
+//
+// ⚠ DO NOT DELETE THE POSITIVE CASE. It is the only test in the suite that drives
+// `spec.operatorArmed === true`, and without it the negative case below cannot tell "the guard
+// works" from "handed-in postures are ignored entirely" — it would stay green against a
+// startSession that dropped `startModes` on the floor. test/session-preset-start.test.mjs covers
+// the handed-in-posture path and the parked-shell refusal, and covers `operatorArmed` NOWHERE.
 
-test("the consent card BEATS the channel-keyed web-card arm when both are present", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  entry.modes = { tools: "accept_edits", messages: "ask" };
-  const state = startedState({ key: "ch:th", startModes: WIDE, adoptsConsent: true }, consent);
-  assert.equal(state.toolMode, "accept_edits", "the card the human was looking at wins");
-  assert.equal(state.messageMode, "ask");
-});
-
-// ── 2b. FIX 1b (BLOCKER): the arm belongs to the ADOPTING spawn and to nothing else ──
-// The registry is keyed sessionKey(channelId, taskId) — the SAME key recreateParkedShell,
-// openFromChannel, openRequesterShell and startResume all spawn under — and startSession read it
-// UNCONDITIONALLY, so a card armed but not yet accepted was spent by whichever spawn reached that
-// key first: `operatorArmed` is `!!consentModes`, so the parked-shell refusal opened for a
-// peer-driven wake, and the operator's own later Accept then started at manual/ask. Both halves
-// are asserted below against a NON-EMPTY registry; the stub these cases used could not have failed.
-
-const PEER_DRIVEN = {
-  "recreated parked shell (a peer reply on an old thread)": { parkedShell: true, side: "responder", resumeSdkId: "sdk-1" },
-  "openFromChannel shell (the operator opened the thread to read it)": { parkedShell: true, side: "requester", resumeSdkId: null },
-  "requester shell (the operator's own typed request)": { parkedShell: true, side: "requester" },
-  "crash resume (session-park.startResume)": { side: "responder", resumeSdkId: "sdk-1" },
-};
-
-test("FIX 1b: a pending armed card is INVISIBLE to every spawn shape but the one adopting it", () => {
-  for (const [label, spec] of Object.entries(PEER_DRIVEN)) {
-    const consent = armedCard("ch:th", 42);
-    const state = startedState({ key: "ch:th", mode: "interactive", ...spec }, consent);
-    assert.deepEqual({ t: state.toolMode, m: state.messageMode }, { t: "manual", m: "ask" }, label);
-    assert.deepEqual(consent.takeStartModes("ch:th"), WIDE,
-      `${label}: and the arm is still there for the Accept it was picked for`);
-  }
-});
-
-test("FIX 1b: the ADOPTING launch takes it, exactly once", () => {
-  const consent = armedCard("ch:th", 42);
-  const first = startedState({ key: "ch:th", adoptsConsent: true }, consent);
-  assert.deepEqual({ t: first.toolMode, m: first.messageMode }, { t: "bypass", m: "auto_both" });
-  const second = startedState({ key: "ch:th", adoptsConsent: true }, consent);
-  assert.deepEqual({ t: second.toolMode, m: second.messageMode }, { t: "manual", m: "ask" },
-    "consumed, not stored: a second adopt on the same key finds nothing");
-});
-
-test("FIX 1b: `adoptsConsent` is STRICT — a truthy non-true value reads no arm and spends none", () => {
-  for (const flag of [1, "true", "yes", {}, []]) {
-    const consent = armedCard("ch:th", 42);
-    const state = startedState({ key: "ch:th", adoptsConsent: flag }, consent);
-    assert.deepEqual({ t: state.toolMode, m: state.messageMode }, { t: "manual", m: "ask" }, String(flag));
-    assert.deepEqual(consent.takeStartModes("ch:th"), WIDE, String(flag));
-  }
-});
-
-test("FIX 1b: THE REPRODUCTION — a peer wake, then the operator's Accept, on the same key", () => {
-  const consent = armedCard("ch:th", 42);
-  // 1. the peer replies on that thread and the inbound gate recreates the dormant shell.
-  const shell = startedState({ key: "ch:th", parkedShell: true, side: "responder", resumeSdkId: "sdk-1" }, consent);
-  assert.deepEqual({ t: shell.toolMode, m: shell.messageMode }, { t: "manual", m: "ask" },
-    "a wake nobody approved must never start at bypass/auto_both");
-  assert.equal(shell.parked, true, "and it is still a dormant shell");
-  // 2. the operator now clicks Accept on the card they armed.
-  const adopted = startedState({ key: "ch:th", adoptsConsent: true }, consent);
-  assert.deepEqual({ t: adopted.toolMode, m: adopted.messageMode }, { t: "bypass", m: "auto_both" },
-    "and the spawn they DID approve still starts on the pair they picked");
-});
-
-test("FIX 1b: exactly ONE site sets the flag, and it is launch()'s own adopt test", () => {
-  // What a spawn shape PASSES is not observable without booting electron, and a second setter is
-  // exactly how this regresses: any other shape spawning under the same key would spend the card.
-  const setters = ENGINE.split("\n").filter((l) => /adoptsConsent:/.test(l));
-  assert.equal(setters.length, 1, "one setter only");
-  const body = fnOf(ENGINE, "launch");
-  assert.match(body, /const adoptable = sessionConsent\.has\(key\)/, "off the value the cap branch uses");
-  assert.match(body, /adoptsConsent: adoptable/, "and handed to startSession");
-  assert.ok(!/adoptsConsent/.test(PARK), "session-park must never hand the flag in");
-});
-
-// ── 3. FIX 4: the team-session arm ───────────────────────────────────────────
-// The REAL registry, empty: a shape that hands in no arm must reach no arm, and driving that
-// against `takeStartModes: () => null` proved nothing about the code that does the reading.
-
-const noConsent = consentRegistry();
-
-test("FIX 4: a PARKED SHELL that is explicitly OPERATOR-ARMED now keeps the posture", () => {
-  const state = startedState({ key: "ch:a1", parkedShell: true, startModes: WIDE, operatorArmed: true }, noConsent);
+test("FIX 4: a PARKED SHELL that is explicitly OPERATOR-ARMED keeps the posture", () => {
+  const state = startedState({ key: "ch:a1", parkedShell: true, startModes: WIDE, operatorArmed: true });
   assert.deepEqual({ t: state.toolMode, m: state.messageMode }, { t: "bypass", m: "auto_both" });
   assert.equal(state.parked, true, "the shell is still DORMANT — the flag widens the posture, not the lifecycle");
   assert.equal(state.phase, "parked");
 });
 
 test("FIX 4: a bare recreate / reopen / wake still starts at manual/ask", () => {
-  // The three shapes that reach startSession with parkedShell today and no human decision.
-  // `startModes` present but unarmed is the important one: passing a posture is not authority.
+  // The shapes that reach startSession with parkedShell and no human decision. `startModes`
+  // present but unarmed is the important one: passing a posture is not authority.
   for (const [label, spec] of Object.entries({
     "bare recreated shell": { key: "k", parkedShell: true },
     "recreate that somehow carries modes but no arm": { key: "k", parkedShell: true, startModes: WIDE },
     "arm flag with no modes at all": { key: "k", parkedShell: true, operatorArmed: true },
     "operatorArmed as a truthy non-true value": { key: "k", parkedShell: true, startModes: WIDE, operatorArmed: 1 },
   })) {
-    const state = startedState(spec, noConsent);
+    const state = startedState(spec);
     assert.deepEqual({ t: state.toolMode, m: state.messageMode }, { t: "manual", m: "ask" }, label);
   }
 });
 
-// TWO CASES ENDED HERE, and both were about `session-team.js`: that it handed
-// `startModes` / `operatorArmed` through to startSession instead of dropping
-// them, and that `channel-deliver.agentSpec` — the PEER-DRIVEN wake — carried
-// neither, so a room message armed nothing. Both modules are gone with the
-// summoned room-bound TEAM session (channels rollback §1). The rule they
-// guarded survives above and is now stated once: a parked shell starts at
+// TWO MORE CASES ENDED HERE EARLIER, and both were about `session-team.js`: that it handed
+// `startModes` / `operatorArmed` through to startSession instead of dropping them, and that
+// `channel-deliver.agentSpec` — the PEER-DRIVEN wake — carried neither, so a room message armed
+// nothing. Both modules are gone with the summoned room-bound TEAM session (channels rollback
+// §1). The rule they guarded survives above and is now stated once: a parked shell starts at
 // manual/ask unless something explicitly arms it.
 
 // ── 4. FIX 3 / M1 / M2: THE IDLE TIMER ────────────────────────────────────────
 // §2 SPLIT (2026-08-05): the virtual-clock section moved WHOLE to
 // test/session-idle-bounds.test.mjs when M1 (an `awaiting_peer` turn is not idle) and M2 (a park
 // keeps the posture; an abandoned session ends) took this file past the 500-line cap. FIX 3's
-// cases went with it unchanged — one subject, one file.
+// cases went with it unchanged — one subject, one file. F-228 touched none of it: the idle timer
+// never knew a window existed.

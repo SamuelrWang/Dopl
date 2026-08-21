@@ -40,35 +40,18 @@ async function dispatchMessage(entry, m, myUserId) {
   // prompt on the peer's eventual reply. A NO-OP for anything that is not a self-authored,
   // addressed, thread-opening message, and re-seeing one only refreshes its eviction age.
   targeting.noteMyLegacyThread(m, entry, myUserId);
-  // ⚠ The REQUEST LIFECYCLE STRIP is OBSERVED here for the same reason: the events saying what
-  // happened to a request are either about to be claimed by a route (a peer's reply) or read by
-  // no route at all (milestones — every route gates on kind === 'message'). Claims nothing,
-  // short-circuits nothing, changes no verdict.
-  sessionDispatch.noteRequestLifecycle(entry, m, myUserId);
-  // The pre-classify routes, checked BEFORE classify -> consent (§A.2):
-  //   1. feed a LIVE session's next turn
-  //   2. auto-open a REQUESTER window on my own thread opener (this claims BOTH desktop
-  //      runtimes — a session this app spawned AND the operator typing in its own UI)
-  //   3. reopen a SETTLED-yet-resumable requester on a peer reply
-  // ⚠ An UNSTAMPED create still reaches no route at all.
+  // THE ONE PRE-CLASSIFY ROUTE, checked BEFORE classify -> consent (§A.2): feed a LIVE
+  // session's next turn.
+  // ⚠ FOUR ROUTES STOOD BESIDE IT AND ARE DELETED (2026-08-20, F-228) — the requester-window
+  // opener, the settled-requester reopen, the lifecycle-strip observer and the post-classify
+  // reopen. All four were window-mode-gated and the switch is permanently off.
+  // ⚠ THE CHAT BRAKE WENT WITH THEM, and that is a deletion rather than a relaxation. It
+  // existed because routes 2 and 3 could claim a peer's chat line and bring a session INTO
+  // existence before classify's own chat brake ran. Route 1 was DELIBERATELY above that guard
+  // and stays unguarded for the same reason it always was: it feeds a session that is ALREADY
+  // RUNNING, which is "seen", not "started". Chat still reaches classify, where an @-tag makes
+  // it 'fyi' and an untagged line 'ignore'.
   if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
-  // ⚠ CHAT MAY BE SEEN BY A LIVE SESSION; IT MAY NEVER START ONE. The chat brake inside
-  // classify runs LAST, so without this guard routes 2 and 3 claim a peer's chat line first and
-  // open a requester window or REOPEN A SETTLED SESSION.
-  // ⚠ ROUTE 1 IS DELIBERATELY ABOVE THIS LINE and stays unguarded: it feeds a session that is
-  // ALREADY RUNNING, which is "seen", not "started". Routes 2 and 3 bring a session INTO
-  // existence, so they are the two this refuses.
-  // ⚠ IT DOES NOT RETURN. Falling through to classify is the point: chat from a member that
-  // @-TAGS ME classifies 'fyi', which drives `trigger.sendFyi` — the notification the human
-  // actually sees. An early return silences chat entirely, tag or no tag. (Since 2026-08-18,
-  // wiring plan Phase 7, UNTAGGED chat classifies 'ignore' and raises nothing; that is the
-  // mention gate answering inside classify, not this guard, and the difference matters —
-  // this guard must keep letting chat REACH classify so a tagged line can still be heard.)
-  const chat = targeting.isChatIntent(m);
-  if (!chat) {
-    if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;
-    if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;
-  }
   const verdict = targeting.classify(m, entry, myUserId);
   diag(
     'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,
@@ -82,15 +65,12 @@ async function dispatchMessage(entry, m, myUserId) {
     'to', targeting.metaStr(m, 'to_user_id') ? String(targeting.metaStr(m, 'to_user_id')).slice(0, 8) : '-',
     'verdict', verdict
   );
-  // ROUTE (5) — REOPEN IN PLACE, the ONE route that runs AFTER classify. 'trigger' is the
-  // RIGHT verdict for a peer's follow-up; only WHERE the decision is asked is wrong, and a
-  // follow-up tagged with an exchange this machine already answered belongs in THAT window's
-  // inbound gate rather than a second consent card beside it.
-  // ⚠ Sitting AFTER classify buys "must not disturb the other verdicts" by CONSTRUCTION:
-  // 'task-reply', 'fyi' and 'ignore' are decided and dispatched before this line is reached.
-  if (verdict === 'trigger') {
-    if (!(await sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId))) return trigger.handleTrigger(entry, m);
-  } else if (verdict === 'fyi') trigger.sendFyi(entry, m);
+  // ⚠ ROUTE (5) RAN HERE — the one route that ran AFTER classify, diverting a peer's follow-up
+  // into the window that had answered it rather than raising a second consent card beside it.
+  // Deleted with the window (F-228): every 'trigger' now reaches `handleTrigger`, which is what
+  // the route fell through to on every miss anyway.
+  if (verdict === 'trigger') return trigger.handleTrigger(entry, m);
+  if (verdict === 'fyi') trigger.sendFyi(entry, m);
   // A reply in one of MY interactive tasks: passive notify only — no consent row, no watcher
   // record, no spawn. ⚠ AND SINCE 2026-08-18 (wiring plan Phase 7) ONLY WHEN IT @-TAGS ME.
   // The verdict itself is unchanged and must stay so: it is a ROUTING statement — "this reply

@@ -1,31 +1,41 @@
 // CHAT MAY BE SEEN BY A LIVE SESSION; IT MAY NEVER START ONE.
 //
-// THE BUG THIS PINS (found live 2026-08-06, by a two-agent probe in a real DM). The chat
+// ⚠ HALF OF THIS FILE IS AN EXCISION (2026-08-20, F-228), AND THE HALF THAT WENT IS THE HALF
+// THE TITLE NAMES. See the block below: the two session-STARTING routes were deleted, and the
+// CHAT BRAKE that guarded them was deleted with them. What is left is the asymmetry's LIVE
+// side — chat may be SEEN by a session that is already running — plus the fall-through that
+// was always the subtler half of the contract.
+//
+// THE BUG THIS ONCE PINNED (found live 2026-08-06, by a two-agent probe in a real DM). The chat
 // brake lived ONLY inside `targeting.classify`, which is the LAST thing `dispatchMessage`
-// runs. Three session routes short-circuit ahead of it and none of them had ever heard of
+// runs. Three session routes short-circuited ahead of it and none of them had ever heard of
 // `intent` — `grep -c intent` was 0 in both `listener-messages.js` and `session-dispatch.js`.
 // So `intent="chat"` was true of the spawn path and false of the routes, and a peer's chat
 // line could open a requester window (route 2) or REOPEN A SETTLED SESSION (route 3).
 //
-// THE OPERATOR'S RULE, and the reason this file asserts an asymmetry rather than a blanket
+// THE OPERATOR'S RULE, and the reason this file asserted an asymmetry rather than a blanket
 // refusal: chat may be SEEN by a session that is already running (route 1 feeds it), and may
-// never bring one INTO existence (routes 2 and 3). A test that refused all three would pass
-// against a stricter product than the one that was asked for, so route 1 is asserted
-// POSITIVELY here — if somebody later "fixes" chat by silencing route 1 too, this fails.
+// never bring one INTO existence. A test that refused both would pass against a stricter
+// product than the one that was asked for, so route 1 is asserted POSITIVELY here — if
+// somebody later "fixes" chat by silencing route 1 too, this fails. ⚠ THAT IS NOW THE WHOLE
+// LOAD THIS FILE CARRIES ON THE ROUTING SIDE, and it is why the file is rewritten rather than
+// removed: route 1 is unguarded on purpose, and a positive pin is the only thing standing
+// between "deliberately ungated" and "somebody assumed it was an oversight".
 //
 // AND THE FALL-THROUGH IS PART OF THE CONTRACT. Chat from a member THAT @-TAGS ME classifies
 // as 'fyi', which drives `trigger.sendFyi` — the notification the human actually sees. The
-// first draft of the fix was `if (chatIntent(m)) return`, which would have silenced chat
-// entirely: a worse bug than the one being fixed, and invisible to any test that only checked
-// the routes.
+// first draft of the 2026-08-06 fix was `if (chatIntent(m)) return`, which would have silenced
+// chat entirely: a worse bug than the one being fixed, and invisible to any test that only
+// checked the routes. ⚠ THAT RISK OUTLIVED THE ROUTES. Chat still reaches classify, and an
+// early return on chat is still the wrong fix — so this half is asserted unchanged.
 // ⚠ THE TAG QUALIFIER ARRIVED 2026-08-18 (wiring plan Phase 7) and it does NOT retire the
 // contract — it moves which fixture demonstrates it. Untagged chat classifies 'ignore' now, so
 // a test that only used untagged chat would go green against the very `return` this file
 // exists to forbid. The tagged line is the one that can still tell the difference.
 //
-// WHY STUB ROUTES: the three real routes need live session state to fire at all, which would
-// make this a test about `session-engine` rather than about dispatch ORDER. The stubs record
-// whether they were REACHED, which is exactly the thing that regressed.
+// WHY A STUB ROUTE: the real route needs live session state to fire at all, which would make
+// this a test about `session-engine` rather than about dispatch ORDER. The stub records
+// whether it was REACHED, which is exactly the thing that regressed.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -57,15 +67,16 @@ const ME = "11111111-1111-1111-1111-111111111111";
 const PEER = "22222222-2222-2222-2222-222222222222";
 const CHAN = "dba90694-1111-4222-8333-444444444444";
 
-/** The real `dispatchMessage`, with every route replaced by a recorder. */
+/** The real `dispatchMessage`, with the one surviving route replaced by a recorder. */
 function harness({ feedTakes = false } = {}) {
-  const seen = { feed: 0, open: 0, surface: 0, reopen: 0, trigger: [], fyi: [], taskNotify: [] };
+  const seen = { feed: 0, trigger: [], fyi: [], taskNotify: [] };
+  // ⚠ ONE KEY, NOT FIVE. This object used to carry `maybeOpenRequesterSession`,
+  // `maybeSurfaceRequesterReply`, `maybeReopenAddressedThread` and `noteRequestLifecycle`
+  // beside it. session-dispatch.js exports `{ feedLiveSession }` and nothing else now, so a
+  // stub for any of the others would be a fake the product cannot call — which is exactly how
+  // a mirror drifts into asserting a dispatcher that no longer exists.
   const sessionDispatch = {
     feedLiveSession: () => { seen.feed += 1; return feedTakes; },
-    maybeOpenRequesterSession: async () => { seen.open += 1; return false; },
-    maybeSurfaceRequesterReply: async () => { seen.surface += 1; return false; },
-    maybeReopenAddressedThread: async () => { seen.reopen += 1; return false; },
-    noteRequestLifecycle: () => false,
   };
   const { dispatchMessage } = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
@@ -103,13 +114,6 @@ const msg = (over = {}) => ({
 
 const chat = (over = {}) => msg({ metadata: { intent: "chat" }, ...over });
 
-test("chat does NOT reach either session-STARTING route", async () => {
-  const { dispatchMessage, seen } = harness();
-  await dispatchMessage(entry(), chat(), ME);
-  assert.equal(seen.open, 0, "maybeOpenRequesterSession was reached by a chat post");
-  assert.equal(seen.surface, 0, "maybeSurfaceRequesterReply was reached by a chat post — it REOPENS a settled session");
-});
-
 test("chat IS still offered to an already-live session (the operator's rule)", async () => {
   const { dispatchMessage, seen } = harness();
   await dispatchMessage(entry(), chat(), ME);
@@ -120,8 +124,12 @@ test("a live session consuming chat short-circuits, exactly as for a request", a
   const { dispatchMessage, seen } = harness({ feedTakes: true });
   await dispatchMessage(entry(), chat(), ME);
   assert.equal(seen.feed, 1);
-  assert.equal(seen.open, 0);
-  assert.equal(seen.fyi.length, 0, "a message a live session took must not also notify");
+  // ⚠ REPOINTED, NOT WEAKENED. This used to read `seen.open === 0` — route 2 never reached —
+  // which measured the short-circuit through a route that no longer exists. The short-circuit
+  // itself is unchanged and is now measured where it still shows: a message route 1 claimed
+  // never reaches classify, so no verdict is dispatched for it.
+  assert.deepEqual([seen.fyi, seen.trigger, seen.taskNotify], [[], [], []],
+    "a message a live session took must not also notify, trigger or banner");
 });
 
 test("chat still reaches classify, and a chat line that @-tags me still notifies the human", async () => {
@@ -146,43 +154,49 @@ test("chat still reaches classify, and a chat line that @-tags me still notifies
   assert.deepEqual(quiet.seen.trigger, []);
 });
 
-test("THE CONTROL: an otherwise identical REQUEST does reach both starting routes", async () => {
-  // Without this, "chat reached no route" is free — it would also hold for a dispatcher that
-  // reached no route for anything.
-  //
-  // ⚠ THE CONTROL IS NOW ADDRESSED, and it has to be. It used to rely on the implicit
-  // 1:1 trigger — an unaddressed human post in a 2-member channel — which retired
-  // 2026-08-18 with the server's DM auto-address. Left unaddressed, this control would
-  // classify 'fyi', reach no starting route, and quietly make every assertion above
-  // vacuous: the exact failure this test exists to prevent, aimed at itself.
-  const { dispatchMessage, seen } = harness();
-  await dispatchMessage(entry(), msg({ metadata: { to_user_id: ME } }), ME);
-  assert.equal(seen.open, 1, "the control request did not reach maybeOpenRequesterSession");
-  assert.equal(seen.surface, 1, "the control request did not reach maybeSurfaceRequesterReply");
-  assert.deepEqual(seen.trigger, [100], "an ADDRESSED peer request should trigger");
-});
-
 test("only the exact string is chat — a padded or cased variant is a REQUEST", async () => {
   // Matches the server's enum rather than being lenient: `isChatIntent` reads raw, so ' chat'
   // and 'Chat' are not the marker. Fails toward today's behaviour.
+  //
+  // ⚠ REPOINTED (2026-08-20). The reading used to be `seen.open === 1` — a near-miss intent
+  // reached the session-STARTING route — and that route is deleted. The PREDICATE is untouched
+  // (`targeting.isChatIntent`, still read by classify), so the same truth table is driven
+  // through the surviving reader: an ADDRESSED post whose intent is not the exact string is a
+  // request and TRIGGERS; the exact string does not. The fixture had to gain `to_user_id`,
+  // because an unaddressed post classifies 'ignore' either way and would make this vacuous.
   for (const intent of [" chat", "Chat", "CHAT", "request", undefined]) {
     const { dispatchMessage, seen } = harness();
-    await dispatchMessage(entry(), msg({ metadata: intent === undefined ? {} : { intent } }), ME);
-    assert.equal(seen.open, 1, `intent=${JSON.stringify(intent)} was treated as chat`);
+    const metadata = intent === undefined ? { to_user_id: ME } : { intent, to_user_id: ME };
+    await dispatchMessage(entry(), msg({ metadata }), ME);
+    assert.deepEqual(seen.trigger, [100], `intent=${JSON.stringify(intent)} was treated as chat`);
   }
+  // THE CONTROL, and it is load bearing: without it "every near miss triggers" would also hold
+  // for a build that had lost the chat brake entirely.
+  const { dispatchMessage, seen } = harness();
+  await dispatchMessage(entry(), msg({ metadata: { intent: "chat", to_user_id: ME } }), ME);
+  assert.deepEqual(seen.trigger, [], "the exact marker still triggers nobody, addressed or not");
 });
 
-test("the guard sits between route 1 and route 2 in the shipped source", async () => {
-  // The whole bug was an ORDERING one, and the assertions above would still pass if the guard
-  // were moved above feedLiveSession (route 1 would just stop being reached — which the
-  // second test catches) or below route 3 (which nothing above catches, because the stubs all
-  // return false). Pin the order in the source itself.
-  const feed = LISTENER.indexOf("feedLiveSession(entry, m, myUserId)");
-  const guard = LISTENER.indexOf("targeting.isChatIntent(m)");
-  const open = LISTENER.indexOf("maybeOpenRequesterSession(entry, m, myUserId)");
-  const surface = LISTENER.indexOf("maybeSurfaceRequesterReply(entry, m, myUserId)");
-  assert.ok(feed !== -1 && guard !== -1 && open !== -1 && surface !== -1, "a dispatch route was renamed");
-  assert.ok(feed < guard, "the chat guard must sit AFTER feedLiveSession — chat may be seen by a live session");
-  assert.ok(guard < open, "the chat guard must sit BEFORE maybeOpenRequesterSession");
-  assert.ok(guard < surface, "the chat guard must sit BEFORE maybeSurfaceRequesterReply");
-});
+// ⚠ THREE TESTS STOOD BELOW AND ARE GONE (2026-08-20, F-228). All three measured the CHAT
+// BRAKE — `const chat = targeting.isChatIntent(m); if (!chat) { …routes 2, 3… }` — and the
+// brake is deleted because everything it guarded is:
+//
+//   "chat does NOT reach either session-STARTING route"
+//       Pinned that `maybeOpenRequesterSession` (route 2, which minted a REQUESTER WINDOW) and
+//       `maybeSurfaceRequesterReply` (route 3, which REOPENED A SETTLED SESSION at its inbound
+//       gate) were both skipped for a chat post. Both routes are deleted.
+//   "THE CONTROL: an otherwise identical REQUEST does reach both starting routes"
+//       The anti-vacuity control for the above. It measured the same two deleted routes; its
+//       surviving half — an ADDRESSED peer request triggers — is now the control inside "only
+//       the exact string is chat" above, where it does the same job.
+//   "the guard sits between route 1 and route 2 in the shipped source"
+//       An indexOf ordering pin over `feedLiveSession` < `isChatIntent` < the two routes.
+//       There is no guard and no route 2 to order it against.
+//
+// ⚠ THIS IS A DELETION, NOT A RELAXATION, and the difference matters if anyone reads the brake
+// as a safety net that was removed. The brake existed because routes 2 and 3 could claim a
+// peer's chat line and bring a session INTO existence BEFORE classify's own chat brake ran.
+// Route 1 was DELIBERATELY above the brake and is unguarded for the same reason it always was:
+// it feeds a session that is ALREADY RUNNING, which is "seen", not "started". classify's chat
+// brake — the original one, `targeting.classify`'s `isChatIntent` branch — is untouched and is
+// now the only one, which is where this file's remaining assertions read it.

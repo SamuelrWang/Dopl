@@ -16,6 +16,11 @@
 //   2. submitDecision is the entry point every decision surface calls; on 'failed' ONLY it
 //      raises a second notification naming the recovery path. Quiet on 'ok'. Quiet on 409.
 //
+// ⚠ THE SITE CENSUS AT THE FOOT MOVED WITH THE SURFACES (2026-08-20, F-228). `session-consent.js`
+// — the pre-consent WINDOW's Accept / Deny — is deleted, and the windowless outbound gate
+// (`session-windowless.js`) now holds the two calls it used to. The census is DISCOVERED over
+// main/ rather than listed, so the next surface cannot appear without being reviewed here.
+//
 // WHY SOURCE EXTRACTION: main/consent.js requires electron, so it cannot be imported under
 // `node --test`. The four functions are sliced verbatim and driven with fakes — apiFetch,
 // Notification, diag are all free variables — so what is tested is what ships.
@@ -251,19 +256,48 @@ test("a failure is diagnosed as well as notified — the log is the second-day e
 
 // ── 4. wiring: every decision surface goes through submitDecision ───────────
 
-test("all four decision sites call submitDecision, and none still calls patchDecision", () => {
+test("EVERY decision site calls submitDecision, and none still calls patchDecision", () => {
+  // ⚠ THE CENSUS SHRANK BY TWO AND GREW BY TWO (2026-08-20, F-228; INVARIANTS §14). It used to
+  // name FOUR sites, of which the last two were `main/session-consent.js` — the PRE-CONSENT
+  // WINDOW's Accept / Deny buttons. That module is deleted with `renderer/session/**`, so those
+  // two assertions could only ever fail on a missing file. They are NOT simply dropped: the
+  // windowless outbound gate (`session-windowless.js`) is what answers a consent row now, and
+  // it holds the two calls this census would otherwise stop covering. A census that names 3 of
+  // 5 live sites while calling itself "all" is worse than no census, because it reads as
+  // coverage.
+  //
+  // ⚠ AND IT IS DISCOVERED, NOT REMEMBERED. The whole point of this case is that a NEW decision
+  // surface must not appear without the F-067 failure signal, and a hand-listed set of files
+  // cannot notice one. The set is read off the tree and asserted whole; the shape pins below
+  // then say what each site passes, which is the part a grep cannot see.
+  const callers = readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js") && f !== "consent.js")
+    .filter((f) => /consent\.submitDecision\(/.test(M(f)))
+    .sort();
+  assert.deepEqual(
+    callers,
+    ["session-windowless.js", "trigger-headless.js", "trigger.js"],
+    "a new decision surface is a new way for a decision to vanish silently — review it here " +
+      "rather than updating this list reflexively"
+  );
+
   const T = M("trigger.js");
   const TH = M("trigger-headless.js");
-  const SC = M("session-consent.js");
+  const WL = M("session-windowless.js");
   // The notification Allow (inbound) and Send (outbound headless) carry the channel name
   // so the copy can say WHICH request was lost.
   assert.match(T, /consent\.submitDecision\(entry\.workspaceId, created\.rowId, 'allow', \{/);
   assert.match(T, /channelName: entry\.channel\.name/);
   assert.match(TH, /consent\.submitDecision\(rec\.workspaceId, created\.rowId, 'allow', \{/);
-  // The pre-consent window's Accept / Deny. No channelName by design (F-118 / B-1: the
-  // registry entry holds no peer-typed display strings).
-  assert.match(SC, /consent\.submitDecision\(e\.workspaceId, e\.rowId, 'allow'\)/);
-  assert.match(SC, /consent\.submitDecision\(e\.workspaceId, e\.rowId, 'deny'\)/);
+  // ...and headless AUTO-SEND decides the row with no notification at all. It still goes
+  // through submitDecision: an auto-send whose PATCH dies is a reply the operator believes
+  // was sent, which is the F-067 failure with nobody watching for it.
+  assert.match(TH, /void consent\.submitDecision\(rec\.workspaceId, created\.rowId, 'allow', \{\}\)/);
+  // The WINDOWLESS outbound gate — the surface that replaced the pre-consent window's
+  // Accept / Deny. Its Send carries the channel name; its cancel path (the tool call this row
+  // was gating is gone) passes none, deliberately: nobody is waiting on that copy.
+  assert.match(WL, /void consent\.submitDecision\(s\.workspaceId, rowId, 'allow', \{ channelName \}\)/);
+  assert.match(WL, /void consent\.submitDecision\(s\.workspaceId, rowId, 'deny', \{\}\)/);
 
   for (const f of readdirSync(MAIN).filter((f) => f.endsWith(".js"))) {
     assert.doesNotMatch(

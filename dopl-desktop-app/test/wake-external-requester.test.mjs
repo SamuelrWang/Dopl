@@ -1,35 +1,31 @@
 // WAKE-V1 — the EXTERNAL-requester fallback. A thread opened by the operator's own
-// external Claude Code session must open NO desktop requester window, and the peer's
-// reply must still surface as the passive OS notification.
+// external Claude Code session must open NO desktop session, and the peer's reply must
+// still surface as the passive OS notification.
 //
 // WHY THIS FILE EXISTS. WAKE-V1 makes an external session await its own reply (a
 // long-held MCP call that wakes it when the peer answers), so targeting.requesterTaskOpen
-// now demands metadata.runtime === 'desktop-session' before auto-opening a requester
-// window — otherwise a desktop window races the waiting session for the same reply.
-// Removing that window removes the ONE route that used to claim these messages, which
-// puts the whole burden on the listener's remaining dispatch order. The risk this file
-// closes: a reply that is no longer claimed by a window and is ALSO swallowed by one of
-// the other two pre-classify routes would reach neither agent nor operator — silently
-// lost, with the listener's cursor already advanced past it. So both halves are pinned:
-// the ORDER (statically, against listener-messages.js) and the OUTCOME (behaviorally,
-// through the real routing + the real classify).
+// demanded a `desktop-*` runtime stamp before auto-opening a requester window — otherwise a
+// desktop window raced the waiting session for the same reply. Removing that window removed
+// the ONE route that used to claim these messages, which put the whole burden on the
+// listener's remaining dispatch order. The risk this file closes: a reply that is no longer
+// claimed by a window and is ALSO swallowed by another pre-classify route would reach neither
+// agent nor operator — silently lost, with the listener's cursor already advanced past it. So
+// both halves are pinned: the ORDER (statically, against listener-messages.js) and the OUTCOME
+// (behaviorally, through the real routing + the real classify).
 //
-// SPLIT NOTE (Q10): the dispatch body moved out of channel-listener.js into
-// listener-messages.js when that file hit the 500-line cap, and the `continue`s became
-// `return`s. Same order, same short-circuits; the pins below were repointed with it.
+// ⚠ THE FALLBACK IS NOW THE ONLY PATH (2026-08-20, F-228). Four of the five pre-classify
+// routes are deleted, so what this file used to prove about ONE thread shape — that nothing on
+// this machine claims it, and the passive banner is what the operator gets — is simply how
+// every requester-side thread behaves. F-228 names these truth tables as "the record that the
+// guards still hold", so the file is rewritten down to the guards that are still there rather
+// than removed (INVARIANTS §14). The excision blocks below name what went and why.
 //
 // THE TRACE this file locks in, for a thread an EXTERNAL session created:
-//   listener-messages.js feedLiveSession           -> false (no window was ever spawned,
+//   listener-messages.js versionSkew.observe        — diagnostic, before any route can claim it
+//   listener-messages.js noteMyLegacyThread         — the registry, also ahead of every route
+//   listener-messages.js feedLiveSession            -> false (no session was ever spawned,
 //                                                     so no live session for this task)
-//   listener-messages.js maybeOpenRequesterSession -> false (requesterTaskOpen refuses
-//                                                     the unstamped create, and the reply
-//                                                     is not my own message anyway)
-//   listener-messages.js maybeSurfaceRequesterReply -> false (the engine finds NO
-//                                                     durable record on this machine:
-//                                                     session-park recreateParkedShell
-//                                                     returns {ok:false}, session-gate
-//                                                     feedInboundForTask returns false)
-//   listener-messages.js classify                  -> 'task-reply'
+//   listener-messages.js classify                   -> 'task-reply'
 //   listener-messages.js taskNotify.notifyTaskReply — the passive silent banner.
 //
 // METHOD: the repo's source-extraction idiom. targeting.js is dependency-free so it is
@@ -54,52 +50,65 @@ const TARGETING = M("targeting.js");
 // §2 SPLIT (2026-07-31): the LEGACY-THREADS registry moved out of targeting.js when that
 // file went past the 500-line cap; classify still calls into it as free variables.
 const LEGACY_SRC = M("legacy-threads.js");
-const GATE = M("session-gate.js");
-const PARK = M("session-park.js");
 
 const require = createRequire(import.meta.url);
 const targeting = require("../main/targeting.js"); // dependency-free; the REAL gate
 
 // ── STATIC PIN 1: the listener's dispatch ORDER ──────────────────────────────────
-// The mirror below is only meaningful if it matches the real loop. These pin the four
-// call sites in sequence, that each pre-classify route SHORT-CIRCUITS the rest, and that
-// the 'task-reply' verdict is wired to the passive notifier.
+// The mirror below is only meaningful if it matches the real loop. These pin the surviving
+// call site, that it SHORT-CIRCUITS classify, and that the verdicts are wired as the mirror
+// wires them.
 
-test("the listener runs the three routes, in order, BEFORE classify", () => {
+test("the listener runs THE route, and classify still runs LAST", () => {
   const at = (needle) => {
     const i = LISTENER.indexOf(needle);
     assert.notEqual(i, -1, `dispatch site missing from listener-messages.js: ${needle}`);
     return i;
   };
   const feed = at("if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;");
-  const open = at("if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) return;");
-  const surface = at("if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) return;");
   const classify = at("const verdict = targeting.classify(m, entry, myUserId);");
-  assert.ok(feed < open, "feedLiveSession runs first");
-  assert.ok(open < surface, "then maybeOpenRequesterSession");
-  assert.ok(surface < classify, "then maybeSurfaceRequesterReply, and classify LAST");
-  // …AND THE CHAT GUARD SITS BETWEEN ROUTE 1 AND ROUTE 2 (2026-08-07). This pin used to
-  // compare only the three routes, so the mirror below could diverge from prod on the guard
-  // with every assertion in this file still green. Chat may be SEEN by a live session
-  // (route 1 is deliberately above it) and may never START one (routes 2 and 3 are below).
-  const guard = at("const chat = targeting.isChatIntent(m);");
-  assert.ok(feed < guard, "the guard must sit AFTER feedLiveSession");
-  assert.ok(guard < open, "…and BEFORE the two routes that start a session");
+  assert.ok(feed < classify, "feedLiveSession runs first, and classify LAST");
+  // ⚠ THIS PIN USED TO COMPARE FIVE POSITIONS — three routes plus the chat guard between
+  // routes 1 and 2. Two of the five sites are all that is left, so what it can still measure
+  // is exactly the property it was built for: nothing may be inserted between a message
+  // arriving and classify seeing it that could claim the message first.
+  //
+  // Q10's skew read and the legacy-thread registry both happen BEFORE the route can claim the
+  // message. The skew read because a reply consumed by a live session is exactly the one whose
+  // sender's version explains a gap; the registry because an untagged line of mine taken by an
+  // engaged session short-circuits above classify, and the opener it would have recorded is
+  // lost — costing a spurious consent prompt on the peer's eventual reply.
+  assert.ok(at("versionSkew.observe(entry, m, myUserId);") < feed, "skew is observed first");
+  assert.ok(at("targeting.noteMyLegacyThread(m, entry, myUserId);") < feed,
+    "and the legacy-thread registry is recorded ahead of the route too");
   // …and the page drain still AWAITS that dispatch, so a trigger's consent + spawn keeps
   // serializing ahead of the next message in the page (it used to be inline; C-3 moved the
   // per-page loop out of channel-listener.js and into drainPage, beside the dispatch it
   // gates the cursor on — the transport loop now only asks "was the page finished?").
   assert.match(LISTENER, /deferred = await dispatchMessage\(entry, m, myUserId\);/);
   assert.match(LOOP, /await messages\.drainPage\(entry, msgs, myUserId\)/);
-  // Q10's skew read happens BEFORE any route can claim the message — a reply consumed
-  // by a live window is exactly the one whose sender's version explains a gap.
-  assert.ok(at("versionSkew.observe(entry, m, myUserId);") < feed, "skew is observed first");
+});
+
+test("the post-classify branch is plain: trigger, fyi, task-reply, and no route among them", () => {
+  // ⚠ NEW PIN, AND IT REPLACES A DELETED ONE (2026-08-20, F-228). Route (5),
+  // `maybeReopenAddressedThread`, ran HERE — inside the 'trigger' branch, diverting a peer's
+  // follow-up into the window that had answered it rather than raising a second consent card
+  // beside it. It is deleted with the window, so every 'trigger' reaches `handleTrigger`,
+  // which is what the route fell through to on every miss anyway. What the old pin protected
+  // is the thing worth keeping: NOTHING may sit between the verdict and the action, because a
+  // route there can divert a message classify already decided.
+  assert.match(LISTENER, /if \(verdict === 'trigger'\) return trigger\.handleTrigger\(entry, m\);/);
+  assert.match(LISTENER, /if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m\);/);
+  assert.ok(!/maybeReopenAddressedThread/.test(LISTENER), "no post-classify route survives");
 });
 
 test("a 'task-reply' verdict reaches the passive notifier, with no consent or spawn", () => {
-  // ⚠ AND ONLY WHEN IT @-TAGS ME (2026-08-18, wiring plan Phase 7). The conjunct is asserted
-  // IN this pin rather than beside it, because the wiring and its gate are one statement: a
-  // future edit that drops the gate would otherwise satisfy a pin written before it existed.
+  // ⚠ AND ONLY WHEN IT @-TAGS ME (2026-08-18, wiring plan Phase 7) — OR A HUMAN TYPED IT
+  // (2026-08-20 review: the widened suppression removed its consent card, and a person's
+  // addressed words must not become invisible; agent replies stay mention-gated). The
+  // conjunct is asserted IN this pin rather than beside it, because the wiring and its gate
+  // are one statement: a future edit that drops the gate would otherwise satisfy a pin
+  // written before it existed.
   assert.match(
     LISTENER,
     /else if \(verdict === 'task-reply' && \(m\.authorKind === 'user' \|\| targeting\.mentionsMe\(m, myUserId\)\)\) taskNotify\.notifyTaskReply\(entry, m\);/
@@ -118,22 +127,22 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
   assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
 });
 
-// ── STATIC PIN 2: "no durable record" really is a FALSE, not a swallow ────────────
-// maybeSurfaceRequesterReply returns whatever the engine's gate returns, so the claim
-// "it returns false when nothing about this task survives here" bottoms out in these two
-// lines. If either flips to a truthy default, the reply gets claimed by a route that
-// cannot show it anywhere and the passive notice never fires.
-
-test("with no durable record the gate refuses: recreateParkedShell -> {ok:false} -> false", () => {
-  assert.match(PARK, /const rec = store\.getRecord\(key\);/);
-  assert.match(PARK, /if \(!rec\) return \{ ok: false \};/, "no record -> no shell");
-  assert.match(GATE, /const res = await sessionPark\.recreateParkedShell\(/);
-  assert.match(GATE, /if \(!res \|\| !res\.ok\) return false;/, "no shell -> the gate declines");
-  // ...and the route hands that refusal straight back to the listener, which then
-  // classifies. (No swallow: nothing between the gate's `false` and the `return`.)
-  assert.match(DISPATCH, /const ok = await sessionEngine\.feedInboundForTask\(\{/);
-  assert.match(DISPATCH, /return ok;\n\}/, "maybeSurfaceRequesterReply returns the gate's verdict verbatim");
-});
+// ⚠ STATIC PIN 2 STOOD HERE AND IS GONE (2026-08-20, F-228) —
+// "with no durable record the gate refuses: recreateParkedShell -> {ok:false} -> false".
+//
+// It bottomed the claim "a reply about a task nothing on this machine remembers is DECLINED,
+// not swallowed" out in three source lines: `session-park.recreateParkedShell` answering
+// `{ ok: false }` for an absent record, `session-gate.feedInboundForTask` turning that into
+// `false`, and `session-dispatch.maybeSurfaceRequesterReply` returning the gate's verdict
+// verbatim with nothing in between. All three are deleted: route (3) with the window it
+// gated, and both engine entry points with it.
+//
+// ⚠ WHAT IT PROTECTED IS NOW TRUE BY CONSTRUCTION, which is the only reason it is safe to
+// drop rather than repoint. The pin existed because a route stood between the reply and
+// classify and could have claimed it while being unable to show it anywhere. There is no such
+// route: `feedLiveSession` is the only one left, it claims a message ONLY when a live session
+// for that exact (channel, task) exists AND the author is its bound counterparty, and the
+// behavioral tests below drive that miss end-to-end to the banner.
 
 // ── The behavioral mirror ────────────────────────────────────────────────────────
 
@@ -164,65 +173,60 @@ const LEGACY = LEGACY_SRC.slice(
   LEGACY_SRC.indexOf("// ─── END LEGACY-THREADS")
 );
 assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinels missing");
-// `isChatIntent` (2026-08-06) is a free variable inside classify — hoisted out of its body so
-// listener-messages can refuse a chat post ahead of the two session-STARTING routes.
+// ⚠ classify's TWO free variables come along with it. `isChatIntent` (2026-08-06) and
+// `mentionsMe` (2026-08-18) are hoisted out of its body so listener-messages.js could ask the
+// same questions; omitting either builds a classify that throws a ReferenceError the moment a
+// fixture reaches that line — a red this file would only ever see by accident. ⚠ `mentionsMe`
+// was MISSING here until 2026-08-20 and no fixture had reached it; the fixtures below do.
 const { classify } = new Function(
-  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "isChatIntent")}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
+  `${extractFn(TARGETING, "metaStr")}\n${LEGACY}\n${extractFn(TARGETING, "isChatIntent")}\n` +
+    `${extractFn(TARGETING, "mentionsMe")}\n${extractFn(TARGETING, "classify")}\nreturn { classify };`
 )();
 
 const ME = "11111111-1111-1111-1111-111111111111";
 const PEER = "22222222-2222-2222-2222-222222222222";
 const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
-// The listener's loop body (channel-listener.js:152-168), mirrored. Returns everything
-// that happened to one message so a test can assert on the WHOLE outcome, not just the
-// route that fired.
+// The listener's loop body, mirrored. Returns everything that happened to one message so a
+// test can assert on the WHOLE outcome, not just the route that fired.
 function harness(over = {}) {
-  const cfg = { windowMode: true, live: false, gateReturn: false, ...over };
-  const calls = { feed: [], launch: [], gate: [], notifyLocal: [], taskNotify: [], trigger: [], fyi: [], diag: [] };
-  const settings = { getWindowMode: () => cfg.windowMode };
+  const cfg = { live: false, ...over };
+  const calls = { feed: [], notifyLocal: [], taskNotify: [], trigger: [], fyi: [], diag: [] };
   const sessionEngine = {
     hasLiveSession: () => cfg.live,
     counterpartyFor: () => PEER,
     feedInbound: (a) => { calls.feed.push(a); return true; },
-    launchRequesterSession: async (a) => { calls.launch.push(a); return { sessionId: "sess-1" }; },
-    feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
   // 2026-08-01: a fed message is titled with its AUTHOR, which is not the same string as the
   // account's display name when an AGENT wrote the post. The resolver (`authorLabel`) lives
   // inside the sliced block, so it needs no injection.
-  const notifyLocal = (title, body) => calls.notifyLocal.push({ title, body });
   const routes = new Function(
-    "settings", "targeting", "sessionEngine", "io", "notifyLocal", "diag",
-    `${BLOCK}\n return { feedLiveSession, maybeOpenRequesterSession, maybeSurfaceRequesterReply };`
-  )(settings, targeting, sessionEngine, io, notifyLocal, (...a) => calls.diag.push(a.join(" ")));
+    "targeting", "sessionEngine", "io",
+    `${BLOCK}\n return { feedLiveSession };`
+  )(targeting, sessionEngine, io);
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //
-  // THE CHAT GUARD IS PART OF THAT SHAPE (2026-08-07, found by audit). This mirror had no
-  // guard, so it was strictly MORE PERMISSIVE than prod — and the static pin above only
-  // compares the three routes' indexOf positions, which means deleting the guard from
-  // listener-messages.js left every assertion in this file green. Only
-  // chat-never-starts-a-session.test.mjs (which evaluates the REAL dispatchMessage source)
-  // caught it. A divergent copy of a dispatcher is the exact failure this repo already has
-  // history with, so the mirror carries the guard too: chat may be SEEN by a live session
-  // (route 1) and may never START one (routes 2 and 3).
+  // ⚠ THE CHAT GUARD IS NO LONGER PART OF THAT SHAPE. This mirror carried one — `const chat =
+  // targeting.isChatIntent(m); if (!chat) { …routes 2, 3… }` — because a mirror MORE PERMISSIVE
+  // than prod is how a dispatcher divergence stays green here (found by audit 2026-08-07). The
+  // guard is deleted from prod with the two session-STARTING routes it guarded, so carrying it
+  // now would make the mirror STRICTER than prod instead — the same failure, mirrored.
+  // test/chat-never-starts-a-session.test.mjs owns that contract and evaluates the REAL
+  // dispatchMessage source for it.
   async function dispatch(entry, m) {
     if (routes.feedLiveSession(entry, m, ME)) return "feedLiveSession";
-    const chat = targeting.isChatIntent(m);
-    if (!chat) {
-      if (await routes.maybeOpenRequesterSession(entry, m, ME)) return "maybeOpenRequesterSession";
-      if (await routes.maybeSurfaceRequesterReply(entry, m, ME)) return "maybeSurfaceRequesterReply";
-    }
     const verdict = classify(m, entry, ME);
     if (verdict === "trigger") calls.trigger.push(m);
     else if (verdict === "fyi") calls.fyi.push(m);
-    // ⚠ THE MENTION GATE IS PART OF THE SHAPE TOO (2026-08-18, wiring plan Phase 7), for the
-    // same reason the chat guard above is: without it this mirror would be MORE PERMISSIVE
-    // than prod and every "the operator gets the banner" assertion below would stay green
-    // against a listener that had stopped sending it.
-    else if (verdict === "task-reply" && targeting.mentionsMe(m, ME)) calls.taskNotify.push(m);
+    // ⚠ THE NOTICE GATE IS PART OF THE SHAPE TOO (2026-08-18 Phase 7, widened 2026-08-20), for
+    // the same reason: without it this mirror would be MORE PERMISSIVE than prod and every
+    // "the operator gets the banner" assertion below would stay green against a listener that
+    // had stopped sending it. ⚠ The `authorKind === 'user'` half was MISSING from this mirror
+    // until 2026-08-20, making it stricter than prod for a HUMAN-typed reply — restated here
+    // byte-for-byte off the pin above.
+    else if (verdict === "task-reply" && (m.authorKind === "user" || targeting.mentionsMe(m, ME))) calls.taskNotify.push(m);
     return `classify:${verdict}`;
   }
   return { dispatch, calls, cfg };
@@ -243,7 +247,7 @@ const createMsg = (runtime) => ({
 // The peer's agent replying in that thread — the message that must not get lost.
 //
 // ⚠ IT CARRIES THE SERVER'S MENTION STAMP (2026-08-18, wiring plan Phase 7), because the
-// BANNER is what most of this file asserts and the banner is mention-gated now. The verdict is
+// BANNER is what most of this file asserts and an AGENT's reply is mention-gated. The verdict is
 // not: `classify` still answers 'task-reply' either way, which is what stops the reply
 // spawning a counter-session, and `replyUntagged` below is the fixture that proves the two
 // halves came apart cleanly rather than the gate having eaten the routing.
@@ -262,33 +266,38 @@ const replyUntagged = () => {
   return { ...m, metadata };
 };
 
-test("EXTERNAL create: no requester window is launched, and nothing else fires either", async () => {
+test("EXTERNAL create: nothing is started, and nothing else fires either", async () => {
   const h = harness();
   assert.equal(await h.dispatch(entry, createMsg(null)), "classify:ignore");
-  assert.equal(h.calls.launch.length, 0, "no desktop window may race the awaiting external session");
   assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.taskNotify.length], [0, 0, 0]);
+  assert.equal(h.calls.feed.length, 0, "no session on this machine to feed my own create to");
   assert.equal(h.calls.notifyLocal.length, 0, "and no local notice for my own message");
 });
 
-test("DESKTOP-spawned create still launches its requester window (the gate is not a mute)", async () => {
-  const h = harness();
-  assert.equal(await h.dispatch(entry, createMsg("desktop-session")), "maybeOpenRequesterSession");
-  assert.equal(h.calls.launch.length, 1);
-  assert.equal(h.calls.launch[0].taskId, TASK);
-  assert.equal(h.calls.launch[0].counterpartyId, PEER);
+test("a DESKTOP-STAMPED create now starts nothing either — that IS the retirement", async () => {
+  // ⚠ THE INVERSION, RECORDED (2026-08-20, F-228). A test stood in this position asserting the
+  // OPPOSITE — "DESKTOP-spawned create still launches its requester window (the gate is not a
+  // mute)" — and it was the control that proved the runtime gate was a discriminator rather
+  // than a blanket refusal. Route (2) is deleted, so the discrimination is gone and both
+  // stamps land in the same place. The stamp itself is untouched and `requesterTaskOpen`
+  // still reads it (test/operator-typed-request.test.mjs owns that table); what changed is
+  // that nothing on this machine acts on the answer.
+  for (const runtime of ["desktop-session", "desktop-ui", null]) {
+    const h = harness();
+    assert.equal(await h.dispatch(entry, createMsg(runtime)), "classify:ignore", String(runtime));
+    assert.deepEqual([h.calls.feed.length, h.calls.trigger.length, h.calls.fyi.length], [0, 0, 0]);
+  }
 });
 
-test("EXTERNAL reply: no window, no record -> the PASSIVE notification, not a swallow", async () => {
-  const h = harness({ live: false, gateReturn: false });
+test("EXTERNAL reply: no session, no record -> the PASSIVE notification, not a swallow", async () => {
+  const h = harness({ live: false });
   await h.dispatch(entry, createMsg(null)); // the external create, ignored as above
   assert.equal(await h.dispatch(entry, replyMsg()), "classify:task-reply");
   assert.equal(h.calls.taskNotify.length, 1, "the operator gets the silent banner");
   assert.equal(h.calls.taskNotify[0].seq, 42);
   // The reply reaches the EXTERNAL agent through its own armed await; this machine must
   // not have spawned or gated anything on its behalf.
-  assert.equal(h.calls.launch.length, 0, "no session is launched for a peer reply");
   assert.equal(h.calls.feed.length, 0, "no live session to feed");
-  assert.equal(h.calls.gate.length, 1, "the engine was ASKED and found nothing to reopen");
   assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length], [0, 0], "no consent prompt either");
 });
 
@@ -298,78 +307,63 @@ test("EXTERNAL reply that tags NOBODY: still routed as a task-reply, but silent"
   // policy is aimed at: an agent answering in a thread, turn after turn, with nothing in it
   // the operator has to act on. The reply still reaches the EXTERNAL agent through its own
   // armed await, and the Tags inbox still records the thread on the web.
-  const h = harness({ live: false, gateReturn: false });
+  const h = harness({ live: false });
   assert.equal(await h.dispatch(entry, replyUntagged()), "classify:task-reply");
   assert.equal(h.calls.taskNotify.length, 0, "no per-message banner for untagged thread traffic");
-  assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.launch.length], [0, 0, 0]);
+  assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.feed.length], [0, 0, 0]);
+
+  // …and the 2026-08-20 counter-rule, in the same breath: a HUMAN's untagged reply DOES
+  // banner. Same verdict, same absent tag, different author kind.
+  const human = harness({ live: false });
+  const typed = { ...replyUntagged(), authorKind: "user" };
+  assert.equal(await human.dispatch(entry, typed), "classify:task-reply");
+  assert.equal(human.calls.taskNotify.length, 1, "a person's addressed words are never invisible");
 });
 
-test("EXTERNAL reply with window-mode OFF: the same passive notification", async () => {
-  // All three routes short-circuit on the setting, so the legacy classify path is the
-  // only one running — it must reach the same place.
-  const h = harness({ windowMode: false });
-  assert.equal(await h.dispatch(entry, replyMsg()), "classify:task-reply");
-  assert.equal(h.calls.taskNotify.length, 1);
-  assert.equal(h.calls.gate.length, 0, "window-mode OFF never calls the engine at all");
-});
-
-test("a DESKTOP-owned thread is unaffected: a live window still eats the reply", async () => {
+test("a DESKTOP-owned thread is unaffected: a live session still eats the reply", async () => {
   // The counter-case that proves the passive path is a FALLBACK, not the new default:
   // when this machine does own the session, the reply is still fed to it.
+  // ⚠ THE SECOND HALF OF THIS TEST IS GONE — "a settled-but-recorded desktop thread still
+  // reopens and gates it", route (3), which reopened the settled window at its inbound gate.
+  // A settled thread now takes the passive path above, exactly like the external one.
   const live = harness({ live: true });
   assert.equal(await live.dispatch(entry, replyMsg()), "feedLiveSession");
+  assert.equal(live.calls.feed.length, 1);
   assert.equal(live.calls.taskNotify.length, 0, "a fed reply must not ALSO banner");
-  // ...and a settled-but-recorded desktop thread still reopens and gates it.
-  const settled = harness({ live: false, gateReturn: true });
-  assert.equal(await settled.dispatch(entry, replyMsg()), "maybeSurfaceRequesterReply");
-  assert.equal(settled.calls.taskNotify.length, 0);
+
+  const settled = harness({ live: false });
+  assert.equal(await settled.dispatch(entry, replyMsg()), "classify:task-reply");
+  assert.equal(settled.calls.taskNotify.length, 1, "settled now means the banner, like external");
 });
 
-// ── FIX L3: the runtime refusal is the one gate rejection with no other symptom ──
-
-test("a create refused ONLY by the runtime stamp says so in the diag", async () => {
-  // Every other conjunct that refuses describes a message that was never mine to
-  // drive. This one refuses MY create of MY thread and looks exactly like the
-  // expected external case — so a server that stops stamping (version skew) would
-  // silently stop opening desktop requester windows with nothing in the logs.
-  const h = harness();
-  await h.dispatch(entry, createMsg(null));
-  const line = h.calls.diag.find((d) => d.includes("metadata.runtime"));
-  assert.ok(line, "the runtime refusal must name itself");
-  assert.match(line, /\(absent\)/, "and report the stamp it actually saw");
-
-  // A WRONG value is named verbatim, which is what distinguishes skew from external.
-  const wrong = harness();
-  await wrong.dispatch(entry, createMsg("desktop"));
-  assert.match(wrong.calls.diag.find((d) => d.includes("metadata.runtime")), /'desktop'/);
-});
-
-test("the L3 diag fires ONLY for the runtime conjunct, never for the others", async () => {
-  // A peer's create, someone else's task and the stamped happy path must all stay
-  // silent — otherwise the line means nothing when it does appear.
-  const cases = [
-    { ...createMsg(null), authorUserId: PEER },
-    { ...createMsg(null), metadata: { ...createMsg(null).metadata, taskCreatedBy: PEER } },
-    { ...createMsg(null), metadata: { ...createMsg(null).metadata, taskTarget: ME } },
-    createMsg("desktop-session"),
-  ];
-  for (const m of cases) {
-    const h = harness();
-    await h.dispatch(entry, m);
-    assert.equal(
-      h.calls.diag.filter((d) => d.includes("metadata.runtime")).length,
-      0,
-      `no runtime diag for ${JSON.stringify(m.metadata)}`
-    );
-  }
-});
-
-test("the runtime stamp cannot be forged by the peer into a window on my machine", async () => {
-  // A counterparty stamping runtime on THEIR message changes nothing: requesterTaskOpen
-  // still requires the message to be MINE and the task to be mine. (The stamp is
-  // server-written anyway; this pins that the gate is an AND, not a shortcut.)
+test("the runtime stamp cannot be forged by the peer into anything on my machine", async () => {
+  // A counterparty stamping runtime on THEIR message changes nothing: `requesterTaskOpen`
+  // still requires the message to be MINE and the task to be mine, and the peer's reply
+  // classifies 'task-reply' either way. (The stamp is server-written anyway; this pins that
+  // the gate is an AND, not a shortcut.)
+  // ⚠ REPOINTED (2026-08-20): the old reading was "and no window was launched". There is no
+  // launch to count, so the predicate is asked DIRECTLY — it is untouched and still exported —
+  // alongside the verdict the message actually gets.
   const h = harness();
   const forged = { ...replyMsg(), metadata: { ...replyMsg().metadata, runtime: "desktop-session" } };
+  assert.equal(targeting.requesterTaskOpen(forged, ME), false, "a peer's create, stamp or not");
   assert.equal(await h.dispatch(entry, forged), "classify:task-reply");
-  assert.equal(h.calls.launch.length, 0);
+  assert.equal(h.calls.feed.length, 0, "and no live session claims it");
 });
+
+// ⚠ THE FIX-L3 DIAG BLOCK STOOD HERE AND IS GONE (2026-08-20, F-228). Two tests —
+// "a create refused ONLY by the runtime stamp says so in the diag" and "the L3 diag fires ONLY
+// for the runtime conjunct, never for the others".
+//
+// They pinned `diagRuntimeGateSkip`, a helper of route (2): the runtime refusal was the one
+// gate rejection with NO other symptom (every other conjunct describes a message that was
+// never mine to drive), so a server that stopped stamping — version skew — would silently
+// stop opening desktop requester windows with nothing in the logs. The diag named the stamp it
+// actually saw, `(absent)` or the wrong value verbatim, which is what distinguished skew from
+// a genuine external create.
+//
+// ⚠ THE SYMPTOM IT WATCHED FOR NO LONGER EXISTS, which is why this is an excision and not a
+// loss. Nothing opens a requester window on any stamp, so there is no behaviour for a missing
+// stamp to silently switch off. `desktopRuntime` / `requesterTaskOpen` survive untouched and
+// their truth table is test/operator-typed-request.test.mjs; what is gone is the ROUTE that
+// read the answer, and with it the only thing skew could have broken quietly.

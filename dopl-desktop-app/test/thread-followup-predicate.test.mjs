@@ -1,181 +1,216 @@
-// Route (6) — the RESPONDER-SIDE predicate, the two readers behind it, and the seam it sits in.
+// THE RESPONDER-SIDE BOUNDARY CONDITIONS — who may have a message claimed on their behalf,
+// and where in listener-messages.js the claim is allowed to live.
 //
-// The sibling file (test/thread-followup-reopen.test.mjs) drives the whole trace: a peer's
-// follow-up to an exchange this machine already answered reopens THAT window and holds the
-// message at its in-window gate. This one owns the boundary conditions — who may take that
-// path, what counts as an exchange tag, which durable records qualify, and where in
-// listener-messages.js the check is allowed to live.
+// ⚠ THIS FILE'S SUBJECT WAS DELETED (2026-08-20, F-228). It owned route (5),
+// `maybeReopenAddressedThread`: a peer's follow-up to an exchange this machine had already
+// answered reopened THAT window and held the message at its in-window gate, instead of raising
+// a second consent card beside it. The route, its two readers (`exchangeTag`,
+// `reopenableRecord`) and its sibling file (test/thread-followup-reopen.test.mjs, which drove
+// the whole trace) are all gone with the session window.
 //
-// THE BOUNDARY THAT MATTERS MOST is Q3b, and it is a boundary in the other direction. The
-// requester-side routes (2) and (4) turn on MY OWN authorship; this route turns on the peer's.
-// No message can satisfy both predicates, and the three Q3b directions are re-driven here
-// through the composed harness to prove the new route did not perturb them.
+// ⚠ THE PREDICATES ARE NOT. Route (5) stated the responder-side predicate rather than
+// inheriting it — my OWN message never answers a thread, a message addressed to somebody ELSE
+// is not mine to answer, and a non-message kind / null identity / author-less post fails
+// CLOSED — precisely because it had to agree with readers it did not control. Those readers
+// are `session-dispatch.feedLiveSession` (the one surviving route) and `targeting.classify`,
+// both untouched, and each of the three propositions is still a live rule in both. So the
+// three PREDICATE tests are REWRITTEN onto the readers that survive rather than deleted:
+// INVARIANTS §14, "a mixed test file whose feature is deleted is rewritten down to what
+// survives". Each carries a note saying what it used to drive.
+//
+// THE SEAM at the foot is unmoved: it runs the REAL `dispatchMessage` against the REAL
+// `classify` and measures whether the passive banner fires. That was always a listener-side
+// assertion; route (5) merely happened to sit next to it.
+//
+// METHOD. The shared source-extraction harness this file used to import
+// (test/helpers/thread-followup.mjs) is DELETED with the suite it served: it wired four real
+// blocks together — the listener body, SESSION-DISPATCH-PURE, SESSION-GATE-PURE's
+// `feedInboundForTask` and SESSION-PARK-PURE's `recreateParkedShell` — and the last two no
+// longer exist. What is left needs two of the four, so they are sliced here, in the one file
+// that reads them.
 
 import { test } from "node:test";
-import {
-  assert, harness, withRecord, record, followUp, dm,
-  targeting, LISTENER, DISPATCH, PARK,
-  ME, PEER, THIRD, CHAN, OTHER_CHAN, UUID_THREAD, AGENT_ROW, LEGACY,
-} from "./helpers/thread-followup.mjs";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 
-// ── 1. THE RESPONDER-SIDE PREDICATE ──────────────────────────────────────────────
+const HERE = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
+
+const LISTENER = M("listener-messages.js");
+const DISPATCH = M("session-dispatch.js");
+
+// targeting.js is dependency-free, so `classify` and the tag readers are the REAL ones here —
+// a legacy id this file and the shipped minter disagreed about is exactly the class of bug the
+// deleted route existed to fix, and the minter is still the one classify reads.
+const targeting = require("../main/targeting.js");
+
+function slice(src, name) {
+  const from = src.indexOf(`// ─── BEGIN ${name}`);
+  const to = src.indexOf(`// ─── END ${name}`);
+  assert.notEqual(from, -1, `BEGIN ${name} sentinel missing`);
+  assert.ok(to > from, `${name} sentinels missing or out of order`);
+  return src.slice(from, to);
+}
+
+// `dispatchMessage` is an `async function`, so the keyword comes along with the body.
+function extractAsyncFn(src, name) {
+  const at = src.indexOf(`async function ${name}(`);
+  assert.notEqual(at, -1, `async function ${name} not found`);
+  let depth = 0;
+  let i = src.indexOf("{", at);
+  for (; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) { i++; break; }
+  }
+  return src.slice(at, i);
+}
+
+const DISPATCH_BLOCK = slice(DISPATCH, "SESSION-DISPATCH-PURE");
+
+const ME = "11111111-1111-1111-1111-111111111111";
+const PEER = "22222222-2222-2222-2222-222222222222";
+const THIRD = "33333333-3333-3333-3333-333333333333";
+const CHAN = "dba90694-1111-4222-8333-444444444444";
+const UUID_THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const LEGACY = targeting.legacyThreadId(CHAN, 440); // the tag this machine minted for #440
+const BODY = "one more thing — can you also check the staging config?";
+
+// The REAL routing block plus the REAL listener body, wired to each other as the app wires
+// them, so a test can assert on the WHOLE trace of one inbound message. FAKES ONLY AT THE
+// LEAVES: the session registry, the display-name lookup, the consent/notify sinks. Nothing
+// here can open a window, start a query or touch disk.
+//
+// ⚠ The one piece of shared state is the REAL targeting module's legacy-thread registry. Every
+// fixture below carries a thread tag, which `noteMyLegacyThread` refuses to record ("openers
+// only"), so no test can write to it.
+function harness(over = {}) {
+  const cfg = { live: false, counterparty: PEER, ...over };
+  const calls = { feed: [], trigger: [], fyi: [], taskNotify: [], diag: [] };
+  const sessionEngine = {
+    hasLiveSession: () => cfg.live,
+    counterpartyFor: () => cfg.counterparty,
+    feedInbound: (a) => { calls.feed.push(a); return true; },
+  };
+  const routes = new Function(
+    "targeting", "sessionEngine", "io",
+    `${DISPATCH_BLOCK}\n return { feedLiveSession };`
+  )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` });
+
+  const api = new Function(
+    "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
+    `${extractAsyncFn(LISTENER, "dispatchMessage")}\n return { dispatchMessage };`
+  )(
+    { observe: () => {} },
+    routes, targeting,
+    { handleTrigger: async (e, m) => calls.trigger.push(m.seq), sendFyi: (e, m) => calls.fyi.push(m.seq) },
+    { notifyTaskReply: (e, m) => calls.taskNotify.push(m.seq) },
+    (...a) => calls.diag.push(a.join(" "))
+  );
+
+  return { dispatch: (entry, m) => api.dispatchMessage(entry, m, ME), routes, calls, cfg };
+}
+
+/** The DM the incident happened in. */
+const dm = (over = {}) => ({
+  channel: { id: CHAN, name: "David", memberCount: 2, isMember: true, isDirect: true, ...over },
+  workspaceId: "w1", rosterKnown: true, teamAgents: 0,
+});
+
+/** The peer's follow-up: their agent, addressed back to me, carrying the exchange's tag. */
+const followUp = (tag, over = {}) => {
+  const { metadata, ...rest } = over;
+  return {
+    kind: "message", seq: 443, authorUserId: PEER, authorKind: "agent", body: BODY,
+    metadata: { to_user_id: ME, taskId: tag, ...(metadata || {}) },
+    ...rest,
+  };
+};
+
+// ── 1. THE RESPONDER-SIDE PREDICATE, ON THE READERS THAT SURVIVE ─────────────────
 
 test("PREDICATE: my OWN message never takes this path, whatever it carries", async () => {
-  const h = withRecord(record());
+  // ⚠ REPOINTED (2026-08-20). It read `maybeReopenAddressedThread(dm(), mine, ME) === false`,
+  // and asserted that authorship was checked BEFORE any durable-record lookup — the route's
+  // first conjunct, `m.authorUserId === myUserId`. The route is deleted; the proposition is
+  // stated identically by both surviving readers, so it is asked of both.
   const mine = followUp(LEGACY, { authorUserId: ME, authorKind: "user" });
-  assert.equal(await h.routes.maybeReopenAddressedThread(dm(), mine, ME), false);
-  assert.deepEqual(h.calls.recordReads, [], "authorship is checked before any lookup");
+
+  // Route (1): my own message never feeds a live session, even one bound to me.
+  const h = harness({ live: true, counterparty: ME });
+  assert.equal(h.routes.feedLiveSession(dm(), mine, ME), false);
+  assert.equal(h.calls.feed.length, 0, "authorship is checked before the registry is consulted");
+
+  // classify: my own message is 'ignore', full stop — the fail-closed rule at the top of the
+  // table. My messages OPEN threads; they never answer them.
+  assert.equal(targeting.classify(mine, dm(), ME), "ignore");
+
+  // …and end to end, nothing at all happens to it.
+  await h.dispatch(dm(), mine);
+  assert.deepEqual([h.calls.feed, h.calls.trigger, h.calls.fyi, h.calls.taskNotify], [[], [], [], []]);
 });
 
 test("PREDICATE: a message addressed to somebody ELSE never takes this path", async () => {
-  const h = withRecord(record());
+  // ⚠ REPOINTED (2026-08-20). The route read `to_user_id` itself — an explicit addressee that
+  // is not me is a message I watch, not one I owe an answer to — and refused before any
+  // lookup. classify states the same rule and is now its only reader: an explicitly
+  // third-party-addressed post can be 'fyi' (it tagged me) or 'ignore', and NEVER 'trigger'.
   const forThird = followUp(LEGACY, { metadata: { to_user_id: THIRD } });
-  assert.equal(await h.routes.maybeReopenAddressedThread(dm(), forThird, ME), false);
-  assert.deepEqual(h.calls.recordReads, []);
-  // An ABSENT addressee is still ALLOWED by the predicate, though the reason it used to
-  // be reachable is gone: DM auto-address and the implicit 1:1 trigger both retired
-  // 2026-08-18, so an unaddressed post no longer earns the 'trigger' this route runs
-  // under. The tolerance is kept for STORED pre-retirement messages and installed
-  // desktops' addressee-less lifecycle posts — narrowing it is a floor-raise, not a
-  // cleanup (INVARIANTS §13).
-  const g = withRecord(record());
+  assert.equal(targeting.classify(forThird, dm(), ME), "ignore");
+  const h = harness();
+  await h.dispatch(dm(), forThird);
+  assert.deepEqual([h.calls.trigger, h.calls.taskNotify], [[], []], "nothing is owed and nothing fires");
+
+  // Tagging me inside somebody else's request is still a tag — an escalation, never a
+  // decision. This is the boundary the route could not see and classify always could.
+  const tagged = harness();
+  await tagged.dispatch(dm(), followUp(LEGACY, { metadata: { to_user_id: THIRD, mentionedUserIds: [ME] } }));
+  assert.deepEqual([tagged.calls.fyi, tagged.calls.trigger], [[443], []]);
+
+  // ⚠ AN ABSENT ADDRESSEE. The route TOLERATED one, and the note beside it said the tolerance
+  // was for STORED pre-retirement messages and addressee-less lifecycle posts — narrowing it
+  // would be a floor-raise, not a cleanup (INVARIANTS §13). With the route gone the tolerance
+  // has no reader at all, and classify's own answer is the strict one: DM auto-address and the
+  // implicit 1:1 trigger both retired 2026-08-18, so an unaddressed post reaches nobody.
   const unaddressed = followUp(LEGACY, { metadata: { to_user_id: undefined } });
-  assert.equal(await g.routes.maybeReopenAddressedThread(dm(), unaddressed, ME), true);
+  assert.equal(targeting.classify(unaddressed, dm(), ME), "ignore",
+    "an ask that names nobody reaches nobody, in a DM exactly as in a group channel");
 });
 
 test("PREDICATE: a non-message kind, a null identity and an author-less post fail closed", async () => {
-  const h = withRecord(record());
-  assert.equal(await h.routes.maybeReopenAddressedThread(dm(), followUp(LEGACY, { kind: "task_started" }), ME), false);
-  assert.equal(await h.routes.maybeReopenAddressedThread(dm(), followUp(LEGACY), null), false);
-  assert.equal(await h.routes.maybeReopenAddressedThread(dm(), followUp(LEGACY, { authorUserId: null }), ME), false);
-  assert.equal(await h.routes.maybeReopenAddressedThread(dm(), null, ME), false);
-  assert.deepEqual(h.calls.recordReads, []);
+  // ⚠ REPOINTED (2026-08-20) onto both surviving readers. These were the route's guard clause
+  // and they are, word for word, `feedLiveSession`'s and `classify`'s: the `kind !== 'message'`
+  // filter (a lifecycle marker or a milestone is a statement ABOUT a session, not a person
+  // speaking), the unresolved identity the listener has not supplied yet, and a post with no
+  // author. Every one fails toward doing nothing.
+  const h = harness({ live: true, counterparty: PEER });
+  const feeds = (m, me) => h.routes.feedLiveSession(dm(), m, me);
+  assert.equal(feeds(followUp(LEGACY, { kind: "task_started" }), ME), false, "a lifecycle kind");
+  assert.equal(feeds(followUp(LEGACY), null), false, "identity not resolved yet");
+  assert.equal(feeds(followUp(LEGACY, { authorUserId: null }), ME), false, "an author-less post");
+  assert.equal(feeds(null, ME), false, "and no message at all");
+  assert.equal(h.calls.feed.length, 0);
+
+  assert.equal(targeting.classify(followUp(LEGACY, { kind: "task_started" }), dm(), ME), "ignore");
+  assert.equal(targeting.classify(followUp(LEGACY), dm(), null), "ignore");
+  assert.equal(targeting.classify(followUp(LEGACY, { authorUserId: null }), dm(), ME), "ignore");
+  assert.equal(targeting.classify(null, dm(), ME), "ignore");
 });
 
-// ── 2. Q3b — THE REQUESTER SIDE, UNPERTURBED ─────────────────────────────────────
+// ── 2. THE SEAM ──────────────────────────────────────────────────────────────────
 
-const myCreate = (over = {}) => ({
-  kind: "message", seq: 41, authorUserId: ME, body: "please look at X",
-  authorKind: over.authorKind || "agent",
-  metadata: {
-    taskId: UUID_THREAD, taskCreatedBy: ME, taskTarget: PEER, to_user_id: PEER,
-    ...(over.runtime ? { runtime: over.runtime } : {}),
-  },
-});
-
-test("Q3b DIRECTION 1 — an EXTERNAL, UNSTAMPED create still opens NOTHING", async () => {
-  // Whatever author kind it declares: since 2026-08-05 (rollback §3.4) the runtime STAMP is
-  // the whole of what routes a self-authored create, and an external session has none.
-  for (const authorKind of ["agent", "user"]) {
-    const h = withRecord(record());
-    await h.dispatch(dm(), myCreate({ authorKind }));
-    assert.deepEqual([h.calls.launch, h.calls.arm, h.calls.startSession], [[], [], []], authorKind);
-    assert.deepEqual([h.calls.trigger, h.calls.fyi, h.calls.taskNotify], [[], [], []], authorKind);
-  }
-});
-
-test("Q3b DIRECTION 2 — a DESKTOP-STAMPED create still launches its requester session", async () => {
-  const h = withRecord(record());
-  await h.dispatch(dm(), myCreate({ runtime: "desktop-session" }));
-  assert.equal(h.calls.launch.length, 1, "route (2) still claims it");
-  assert.deepEqual([h.calls.arm, h.calls.startSession, h.calls.trigger], [[], [], []],
-    "and a spawned session's create arms no request strip");
-});
-
-test("Q3b DIRECTION 3 — the operator's TYPED create takes that same route, plus the strip", async () => {
-  // Rollback §3.4: one initiating behaviour. The dormant shell is gone; `desktop-ui` is a
-  // server-written stamp, so this is a full requester session like any other.
-  const h = withRecord(record());
-  await h.dispatch(dm(), myCreate({ authorKind: "user", runtime: "desktop-ui" }));
-  assert.equal(h.calls.launch.length, 1, "route (2) claims it too");
-  assert.equal(h.calls.arm.length, 1, "and the request strip opens at 'sent'");
-  assert.deepEqual([h.calls.startSession, h.calls.trigger], [[], []]);
-});
-
-test("Q3b DIRECTION 4 — an EXTERNAL create that DECLARES handoff opens the session HERE", async () => {
-  // Rollback §3.5 inverts DIRECTION 1: the SAME unstamped external create, but with the
-  // server-stamped handoff flag, is the operator handing the thread to a window on this
-  // machine. Route (2) claims it and launches — and, like a spawned create, arms no strip.
-  const h = withRecord(record());
-  const m = myCreate();
-  m.metadata.handoff = true;
-  await h.dispatch(dm(), m);
-  assert.equal(h.calls.launch.length, 1, "the requester session opens on this machine");
-  assert.deepEqual([h.calls.arm, h.calls.startSession, h.calls.trigger], [[], [], []],
-    "a handoff is not the operator typing — no strip, and it is not a fresh consent either");
-});
-
-// ── 3. THE TAG READER + THE RECORD TEST, as truth tables ─────────────────────────
-
-test("exchangeTag: the two spellings, and nothing else", () => {
-  const { exchangeTag } = harness().routes;
-  const tagged = (taskId) => ({ metadata: { taskId } });
-  assert.equal(exchangeTag(tagged(UUID_THREAD), CHAN), UUID_THREAD, "a first-class id");
-  assert.equal(exchangeTag(tagged(LEGACY), CHAN), LEGACY, "and this channel's legacy id");
-  for (const junk of [
-    "", "   ", "task-", `task-${CHAN}-`, `task-${CHAN}-0`, `task-${CHAN}-x`, `task-${CHAN}-1.5`,
-    `task-${CHAN}-01`, `task-${OTHER_CHAN}-440`, `${CHAN}-440`, "3f2504e0-4f89-41d3-9a0c",
-  ]) {
-    assert.equal(exchangeTag(tagged(junk), CHAN), "", `tag ${JSON.stringify(junk)}`);
-  }
-  assert.equal(exchangeTag(tagged(LEGACY), ""), "", "a channel-less entry resolves nothing");
-  assert.equal(exchangeTag({}, CHAN), "", "and so does a message with no metadata bag");
-});
-
-test("exchangeTag agrees with the shipped minter, byte for byte", () => {
-  // Matching is a plain string lookup against a key some earlier run wrote, so this reader and
-  // trigger.js's taskIdFor / futureTaskId have to spell the id identically. legacyThreadId is
-  // the canonical one (test/legacy-thread-reply pins IT against trigger.js), so agreeing with
-  // it is agreeing with all three.
-  const { exchangeTag } = harness().routes;
-  for (const seq of [1, 7, 440, 99999]) {
-    const id = targeting.legacyThreadId(CHAN, seq);
-    assert.equal(exchangeTag({ metadata: { taskId: id } }, CHAN), id, `seq ${seq}`);
-  }
-});
-
-test("reopenableRecord: every conjunct fails CLOSED", () => {
-  const { reopenableRecord } = harness().routes;
-  const ok = (over) => reopenableRecord({ ...record(), ...over }, CHAN, LEGACY, PEER);
-  assert.equal(ok({}), true, "the canonical record");
-  assert.equal(ok({ channelId: OTHER_CHAN }), false, "a record claiming another channel");
-  assert.equal(ok({ taskId: targeting.legacyThreadId(CHAN, 7) }), false, "or another thread");
-  assert.equal(ok({ agentId: AGENT_ROW }), false, "a TEAM record is not a thread's shell");
-  assert.equal(ok({ counterpartyId: THIRD }), false, "the author must be the stored counterparty");
-  assert.equal(ok({ counterpartyId: null }), false, "and an unbound record qualifies nobody");
-  for (const junk of [null, undefined, "rec", 7, []]) {
-    assert.equal(reopenableRecord(junk, CHAN, LEGACY, PEER), false, `record ${JSON.stringify(junk)}`);
-  }
-});
-
-// ── 4. THE SEAM ──────────────────────────────────────────────────────────────────
-
-test("SEAM: route (6) runs AFTER classify, inside the 'trigger' branch, and guards handleTrigger", () => {
-  const at = (needle) => {
-    const i = LISTENER.indexOf(needle);
-    assert.notEqual(i, -1, `missing from listener-messages.js: ${needle}`);
-    return i;
-  };
-  const classify = at("const verdict = targeting.classify(m, entry, myUserId);");
-  const reopen = at("sessionDispatch.maybeReopenAddressedThread(entry, m, myUserId)");
-  assert.ok(classify < reopen, "it is the ONE post-classify route — classify still runs first");
-  // And the other verdicts are dispatched exactly as before — the route cannot reach them.
-  // There was a fourth, 'agent-escalation', and it is gone with the named agents whose
-  // `author_agent_id` stamp was its whole trigger (channels rollback §1).
-  assert.match(LISTENER, /else if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m\);/);
-  // ⚠ The task-reply arm carries the MENTION GATE since 2026-08-18 (wiring plan Phase 7) —
-  // the verdict still routes, the NOTICE is what the tag decides. 'fyi' needs no conjunct
-  // here: its own gate lives inside classify, where the verdict is produced.
-  assert.match(
-    LISTENER,
-    /else if \(verdict === 'task-reply' && \(m\.authorKind === 'user' \|\| targeting\.mentionsMe\(m, myUserId\)\)\) taskNotify\.notifyTaskReply\(entry, m\);/
-  );
-  assert.ok(!/notifyAgentEscalation/.test(LISTENER), "the escalation dispatch is gone");
-});
-
-// THE SAME GATE, ASSERTED BEHAVIOURALLY — because the two matches above are source regexes and
-// a regex pins a SHAPE, not an outcome. This harness runs the REAL `dispatchMessage` against
-// the REAL `classify`, so what it measures is whether the banner fires.
+// THE GATE, ASSERTED BEHAVIOURALLY — because a source regex pins a SHAPE, not an outcome. This
+// harness runs the REAL `dispatchMessage` against the REAL `classify`, so what it measures is
+// whether the banner fires.
+//
+// ⚠ F-108 IS WHY IT IS SHAPED THIS WAY. The sibling assertion here used to be a regex over the
+// shipped source text and it broke on a refactor that changed nothing it was protecting: C-3
+// made `handleTrigger` ANSWER whether the listener's cursor may advance, so the call site
+// became `return trigger.handleTrigger(entry, m)` and the assertion went red over a passing
+// product. F-108 is the standing finding about this class of desktop test.
 test("SEAM: the passive task-reply notice is MENTION-GATED, and the verdict behind it is not", async () => {
   // The requester-side shape classify answers 'task-reply' for: the peer's AGENT replying in
   // an interactive thread I created, addressed back to me.
@@ -193,50 +228,57 @@ test("SEAM: the passive task-reply notice is MENTION-GATED, and the verdict behi
   // ⚠ AND NOTHING ELSE CLAIMED IT INSTEAD. Without this, "no banner" would also be true of a
   // dispatcher that had started spawning against its own reply — the failure the 'task-reply'
   // verdict exists to prevent, wearing the same green.
-  assert.deepEqual([quiet.calls.trigger, quiet.calls.fyi, quiet.calls.launch], [[], [], []]);
+  assert.deepEqual([quiet.calls.trigger, quiet.calls.fyi, quiet.calls.feed], [[], [], []]);
 
   const tagged = harness();
   await tagged.dispatch(dm(), reply({ mentionedUserIds: [ME] }));
   assert.deepEqual(tagged.calls.taskNotify, [77], "a reply that @-tags me still escalates");
   assert.deepEqual([tagged.calls.trigger, tagged.calls.fyi], [[], []], "and still never triggers");
+
+  // ⚠ THE 2026-08-20 COUNTER-RULE, in the same test because it is the same gate: a HUMAN-typed
+  // reply notifies UNTAGGED. The widened suppression removed its consent card, and a person's
+  // addressed words must not become invisible; agent replies stay mention-gated.
+  const human = harness();
+  await human.dispatch(dm(), { ...reply(), authorKind: "user" });
+  assert.deepEqual(human.calls.taskNotify, [77], "a person's untagged reply still banners");
+  assert.deepEqual([human.calls.trigger, human.calls.fyi], [[], []]);
 });
 
-// THE EXACT SEAM — "the fresh consent runs ONLY when the reopen declined the message" —
-// ASSERTED BEHAVIOURALLY (2026-08-08, F-108).
+// ⚠ SEVEN TESTS STOOD IN THIS FILE AND ARE GONE (2026-08-20, F-228). Every one of them drove
+// route (5) or a helper only route (5) had.
 //
-// It used to be a regex over the shipped source text:
-//   /if \(!\(await sessionDispatch\.maybeReopenAddressedThread\(…\)\)\) await trigger\.handleTrigger\(…\);/
-// That pinned today's SHAPE rather than the behaviour, and it broke on a refactor that
-// changed nothing it was protecting: C-3 made `handleTrigger` ANSWER whether the listener's
-// cursor may advance past this message, so the call site became `return trigger.handleTrigger(
-// entry, m)` and the assertion went red over a passing product. F-108 is the standing finding
-// about this class of desktop test; this is one instance paid off.
+// §2 Q3b — THE REQUESTER SIDE, UNPERTURBED — four tests. The boundary that mattered most, and
+//   it ran in the other direction: the requester-side routes (2) and (4) turned on MY OWN
+//   authorship, route (5) on the PEER's, and no message could satisfy both. DIRECTION 1 an
+//   EXTERNAL unstamped create opened nothing; DIRECTION 2 a `desktop-session` create launched
+//   its requester session; DIRECTION 3 the operator's `desktop-ui` create took that same route
+//   PLUS the request strip; DIRECTION 4 an external create DECLARING handoff opened the session
+//   here. ⚠ The PREDICATE half of all four survives untouched in
+//   test/operator-typed-request.test.mjs, which is `targeting.requesterTaskOpen`'s own table;
+//   what is deleted is only the dispatch each direction ended in.
 //
-// The harness already runs the REAL dispatchMessage over the REAL routes and the REAL
-// classify, so the invariant can simply be exercised in both directions — which is a stronger
-// pin than the regex was, because it would also catch a route that returned true and raised
-// consent anyway (a shape the regex could not see).
-test("SEAM: a CLAIMED follow-up raises no consent; a DECLINED one raises exactly one", async () => {
-  // Claimed: this machine has the settled pair session's durable record, so route (6) reopens
-  // that window and holds the message at its in-window gate.
-  const claimed = withRecord(record());
-  await claimed.dispatch(dm(), followUp(LEGACY));
-  assert.equal(claimed.calls.startSession.length, 1, "the exchange's own window is reopened");
-  assert.deepEqual(claimed.calls.trigger, [], "a claimed message must not ALSO raise consent");
-
-  // Declined: no record for the tag, so the route answers false and the ordinary consent path
-  // runs byte-for-byte as before.
-  const declined = harness();
-  await declined.dispatch(dm(), followUp(LEGACY));
-  assert.deepEqual(declined.calls.startSession, [], "nothing to reopen");
-  assert.deepEqual(declined.calls.trigger, [443], "…so the follow-up gets a fresh consent card");
-});
-
-test("SEAM: the reopen spends no consent-entry arm — it is a recreate, not an adoption", () => {
-  // FIX 1b's single-setter rule: launch()'s own adopt test is the ONLY site that may hand
-  // `adoptsConsent` in, and this path reaches startSession through session-park, which the pin
-  // in session-posture-sticks already forbids from setting it. Neither file on this route may.
-  assert.ok(!/adoptsConsent/.test(DISPATCH), "session-dispatch must never hand the flag in");
-  assert.ok(!/adoptsConsent/.test(LISTENER), "and neither may the listener");
-  assert.ok(!/adoptsConsent/.test(PARK), "the recreate machinery it uses does not set it either");
-});
+// §3 THE TAG READER + THE RECORD TEST — three tests. "exchangeTag: the two spellings, and
+//   nothing else" and "exchangeTag agrees with the shipped minter, byte for byte" pinned the
+//   reader that resolved a message's (channel, thread) STORAGE TAG — a first-class UUID, or
+//   this channel's legacy id re-derived through the canonical minter and compared for EQUALITY
+//   so the reader could never disagree with the writer, with the channel as a cross-channel
+//   fence. "reopenableRecord: every conjunct fails CLOSED" pinned the durable-record test: the
+//   record must claim this channel and this thread, must not be a TEAM record (keyed
+//   (channel, AGENT) in the same key space, and an agent id is a UUID like a thread id), and
+//   its stored counterparty must be the author. Both helpers are deleted with the route.
+//   ⚠ NOT ORPHANED: `legacyThreadId` — the minter both readers agreed with — is pinned against
+//   trigger.js in test/legacy-thread-reply.test.mjs, which is the file that owns the agreement.
+//
+// §4 THE OTHER TWO SEAM CASES. "SEAM: route (6) runs AFTER classify, inside the 'trigger'
+//   branch, and guards handleTrigger" — the position pin; the branch is plain now and
+//   test/wake-external-requester.test.mjs pins that it is. "SEAM: a CLAIMED follow-up raises no
+//   consent; a DECLINED one raises exactly one" — the F-108 payoff, exercising the invariant in
+//   both directions instead of regexing the call site; there is no claimant left to exercise.
+//   "SEAM: the reopen spends no consent-entry arm" — FIX 1b's single-setter rule, that neither
+//   session-dispatch nor listener-messages nor session-park may hand `adoptsConsent` in. ⚠ THE
+//   RULE ITSELF WENT IN THE SAME WAVE, and this file is not where to read about it: FIX 1b's
+//   own five tests are excised in test/session-posture-sticks.test.mjs §2b, which records that
+//   the defect is UNREACHABLE rather than fixed (no consent registry, so no arm to spend) and
+//   that `session-engine.js › launch` still passes `adoptsConsent` on a name nothing reads —
+//   filed as a finding there, not patched. This file only ever asserted the rule for one more
+//   path, and that path is gone.

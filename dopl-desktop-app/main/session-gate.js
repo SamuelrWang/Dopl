@@ -11,8 +11,8 @@
 //
 // Extracted from session-engine.js because that file sits AT the 500-line §2 cap. The
 // engine injects its internals via bind() (the live registry + dispatch), exactly like
-// session-park.js / session-reopen.js; the leaf deps (crypto / Notification / io /
-// store / sessionPark / diag) are required at the top and referenced as free vars
+// session-park.js / session-reopen.js; the leaf deps (crypto / io / store / diag) are
+// required at the top and referenced as free vars
 // INSIDE the BEGIN/END PURE block, so test/session-gate.test.mjs slices that block,
 // proves it holds no electron require, and drives it with fakes.
 //
@@ -23,10 +23,8 @@
 // FAILS CLOSED to a decline, and nothing here is ever written to disk.
 
 const crypto = require('crypto');
-const { Notification } = require('electron');
 const io = require('./session-io');
 const store = require('./session-store');
-const sessionPark = require('./session-park');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-GATE-PURE (injectable; unit-tested via source extraction) ───
@@ -72,51 +70,20 @@ function autoInbound(s) {
   return m === 'auto_inbound' || m === 'auto_both' || st.inboundForTask === true;
 }
 
-// PURE-ish: did the operator already have this window in front of them? Read BEFORE the
-// dispatch (FIX #8) — a hidden window is never "focused" for our purposes even if the OS
-// still reports focus on it, so windowHidden is checked too. Best effort: a torn-down or
-// absent window answers no.
-function windowHasFocus(s) {
-  try {
-    if (!s || !s.win || s.win.isDestroyed()) return false;
-    if (s.windowHidden === true) return false;
-    return !!(s.win.isFocused && s.win.isFocused());
-  } catch (_) {
-    return false;
-  }
-}
-
-// Fire the gate notification. SUPPRESSED when the operator ALREADY had the window in
-// front of them — they are looking at the card, so an OS banner would be noise.
+// ⚠ THE SURFACING HALF IS DELETED — 2026-08-20, F-228. `windowHasFocus`, `notifyInbound` and
+// `surface` decided whether to raise an OS banner for a HELD reply, and suppressed it when the
+// operator already had that session's window in front of them. There is no window to have in
+// front of you and, more to the point, no HELD reply: a windowless session's message axis is
+// held at the `auto_inbound` floor by the channel-prefs derivation, so `autoInbound`
+// answers true and `enqueue` dispatches straight through. Every FIX F1 seed-exclusion rule
+// below survives untouched — those are about what an agent SEES, not about a surface.
 //
-// FIX #8: `hadFocus` is captured by the caller BEFORE it dispatches. Emitting
-// `inbound_pending` RESHOWS and focuses a hidden window (session-engine's RESHOW_TYPES),
-// so asking isFocused() here suppressed the banner in exactly the case that needs it:
-// the window popped from hidden because the operator was somewhere else entirely.
-// Best effort: a missing Notification API is fine. Never logs the body.
-function notifyInbound(s, item, hadFocus) {
-  try {
-    if (hadFocus === true) return false;
-    if (!Notification || (Notification.isSupported && !Notification.isSupported())) return false;
-    const notice = inboundNotice(item);
-    const n = new Notification({ title: notice.title, body: notice.body });
-    n.on('click', () => {
-      try { if (s.win && !s.win.isDestroyed()) { s.win.show(); s.win.focus(); s.windowHidden = false; } } catch (_) { /* window gone */ }
-    });
-    n.show();
-    return true;
-  } catch (err) {
-    diag('session-gate: notify failed', err && err.message);
-    return false;
-  }
-}
-
-// Surface a newly-held reply: the window reshow rides the engine's own emit() (a
-// hidden window pops on `inbound_pending`), so this adds the OS notification only.
-// `hadFocus` is the PRE-dispatch visibility (FIX #8).
-function surface(s, item, hadFocus) {
-  notifyInbound(s, item, hadFocus);
-}
+// ⚠ `inboundNotice` SURVIVES WITH NO CALLER, AND ITS COPY IS NOW WRONG — filed as F-235. It
+// built the banner `notifyInbound` raised, its fallback body says "Open the session window to
+// accept or decline it.", and there is neither a window nor a control. It is kept rather than
+// deleted because a windowless session that DOES need to tell the operator something about an
+// inbound turn is a real gap, and this is the only statement of what that copy should say —
+// but nobody may wire it as it stands.
 
 // Enqueue one inbound reply on a session that exists (live OR parked). Returns false
 // only when the bounded queue is FULL, so the caller (the listener) can fall through
@@ -153,13 +120,9 @@ function enqueue(s, a) {
   // above only appends to the in-memory FIFO, and the dispatch that feeds it is below.
   io.noteGatedBody(s, a.message);
   if (disp === 'dispatch') {
-    // FIX #8: read the window's visibility BEFORE the dispatch, which reshows + focuses a
-    // hidden window on `inbound_pending`.
-    const hadFocus = windowHasFocus(s);
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
     });
-    if (!auto) surface(s, item, hadFocus);
   }
   return true;
 }
@@ -173,106 +136,22 @@ function feedInbound(a) {
   return enqueue(s, a);
 }
 
-// v2.5 D1 — the gate for a task with NO live session: recreate the parked shell (the
-// v2.3 P2 machinery, window budget + fail-restrictive profile included) and hold the
-// reply on it. This REPLACES the v2.2 requester auto-continuation: the same trigger
-// and the same window surfacing, but the turn waits for Accept. {ok:false} means
-// nothing about this task survives on this machine — the caller notifies passively.
+// ⚠ FOUR MORE WENT IN THE SAME SWEEP — 2026-08-20, F-228.
 //
-// FOLLOW-UP F11: a shell recreated for a CAPPED task rehydrates the spent turn/cost budget
-// (session-park FIX #9), so the Accept this gate offers can only re-hit the cap: the reducer
-// ends the session on the first `result`, and the operator's click buys one dead turn. The
-// card wants to know the budget is spent — either it says so and offers no Accept, or the
-// reopen offers a budget top-up. Needs a product call on what "reopen a capped thread" means.
+//   feedInboundForTask  recreated a parked SHELL for a thread with no live session and held the
+//                       reply on it. Its two callers were `session-ipc` and `session-dispatch`
+//                       routes 3/5; the shell-recreate lane it depended on is deleted.
+//   decideInbound       the operator's Accept/Decline on the HEAD of the queue, dispatched from
+//                       the session window's gate card via `session-ipc`. There is no card.
+//   drainQueue          re-surfaced the NEXT held reply after a decision — an OS banner plus a
+//                       window reshow.
+//   drainInbound        fed everything still held once an opt-in armed. Called after an AXIS B
+//                       change from `session-ipc`, and nothing can be held any more.
 //
-// FOLLOW-UP F13: the held queue lives ONLY on the in-memory session object, so a shell
-// recreate (or an app restart) loses every card the operator had not answered. They are not
-// re-fetched, and the listener's cursor has already moved past them, so those messages are
-// silently gone from this machine. Wants either a durable pending-inbound spool or a
-// re-read of the unanswered tail on recreate.
-//
-// FOLLOW-UP F16: while a message sits at this gate, the requester's WEB card still reads
-// "Working…" — nothing tells the server that the turn is parked on a local human decision.
-// Fixing it needs a new lifecycle event (a calm "waiting on the operator" state) plus web
-// rendering for it, which is out of scope for a desktop-only contract.
-async function feedInboundForTask(a) {
-  if (!deps || !deps.sessions) return false;
-  const key = store.sessionKey(a.channelId, a.taskId);
-  let s = deps.sessions.get(key);
-  if (!s || s.settled) {
-    // FIX F4: hand the recreate the body we are about to hold, so the shell records it
-    // BEFORE its (now awaited) history read — otherwise the very message that popped this
-    // gate renders twice, as the card AND as a muted history bubble above it.
-    const res = await sessionPark.recreateParkedShell({ channelId: a.channelId, taskId: a.taskId, holdBody: a.message });
-    if (!res || !res.ok) return false;
-    s = deps.sessions.get(key);
-  }
-  if (!s || s.settled) return false;
-  return enqueue(s, a);
-}
-
-// The operator's decision on the HEAD of the queue (renderer -> session-ipc). FAIL
-// CLOSED: anything that is not an explicit accept is a decline. The pendingId MUST name
-// the head (FIX F9: a missing / empty id used to skip the check entirely and consume the
-// head, so a card the operator never answered could be spent by a junk call).
-function decideInbound(s, pendingId, decision) {
-  if (!deps || !s || s.settled) return false;
-  const head = s.pendingInbound && s.pendingInbound[0];
-  if (!head) return false;
-  const id = pendingId == null ? '' : String(pendingId);
-  if (!id || id !== String(head.pendingId)) return false;
-  const d = decision === 'accept' || decision === 'accept-task' ? decision : 'decline';
-  // H1: while the session is HELD on the sign-in action there is no query to feed — the push
-  // would land on a null / closed iterator and the peer's message would simply vanish. Refuse
-  // the ACCEPT here, BEFORE the head is shifted, so the message stays queued and the card stays
-  // answerable; session-ipc turns the false into {ok:false} and the renderer leaves it live
-  // (the FIX F1 discipline: never stamp a card for something that did not happen). A DECLINE is
-  // still honoured — dropping a message needs no agent. Accept works the moment sign-in lands.
-  if (s.state && s.state.authHeld === true && d !== 'decline') return false;
-  io.shiftInbound(s);
-  if (d === 'decline') {
-    // FIX F1 belt: a declined body must be absent from the fresh session's history seed
-    // as well, not only from the turn stream. (Idempotent: enqueue recorded it already.)
-    io.noteGatedBody(s, head.message);
-    deps.dispatch(s, { type: 'inbound_decline', pendingId: head.pendingId });
-  } else {
-    deps.dispatch(s, {
-      type: d === 'accept-task' ? 'inbound_accept_for_task' : 'inbound_accept',
-      pendingId: head.pendingId, message: head.message, authorName: head.authorName,
-    });
-  }
-  drainQueue(s);
-  return true;
-}
-
-// After a decision: an armed grant feeds everything still held (below); otherwise the
-// NEXT held reply becomes the new gate card and re-surfaces.
-function drainQueue(s) {
-  if (drainInbound(s)) return;
-  const next = s.pendingInbound[0];
-  if (!next) return;
-  const hadFocus = windowHasFocus(s); // FIX #8: before the reshow the dispatch can trigger
-  deps.dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
-  surface(s, next, hadFocus);
-}
-
-// Feed every reply still held, in arrival order, once an opt-in is armed — an
-// "Accept for this session" grant, or AXIS B moving to auto_inbound / auto_both while a
-// card was already waiting (D4: nothing is left stranded behind a control that says it flows).
-// Items LEAVE the queue as they are fed, so none can be double-consumed later.
-// Returns false when no opt-in is armed, so the caller can surface a card instead.
-//
-// FOLLOW-UP F6: one "Accept for this session" click can drain up to MAX_PENDING_INBOUND - 1
-// messages the operator never read; the gate card wants to state the backlog depth first.
-function drainInbound(s) {
-  if (!deps || !s || s.settled || !autoInbound(s)) return false;
-  let next = io.shiftInbound(s);
-  while (next) {
-    deps.dispatch(s, { type: 'inbound_accept', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
-    next = io.shiftInbound(s);
-  }
-  return true;
-}
+// ⚠ WHAT MAKES THIS SAFE RATHER THAN A LOST FEATURE: a windowless session's message axis is
+// FLOORED at `auto_inbound` (INVARIANTS §11), so `autoInbound(s)` is true, `enqueue` takes the
+// `dispatch` branch, and the queue never holds. The hold path and its accept surface were one
+// mechanism, and they are removed together rather than leaving a hold nothing can answer.
 
 // ─── END SESSION-GATE-PURE ────────────────────────────────────────────────────
 
@@ -281,7 +160,4 @@ module.exports = {
   inboundNotice,
   autoInbound,
   feedInbound,
-  feedInboundForTask,
-  decideInbound,
-  drainInbound, // v2.9: called after AXIS B changes (session-ipc)
 };

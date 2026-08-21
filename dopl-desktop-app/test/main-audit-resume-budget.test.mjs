@@ -2,13 +2,18 @@
 //
 // Two halves, both pinned here:
 //   (a) main/session-park.js startResume (the shared resume the startup interrupted-notice
-//       drives) built its startSession spec with NO turns / costUsd, unlike its sibling
-//       recreateParkedShell (FIX #9). A session that burned 23 of 24 turns, crashed, and was
-//       resumed from the notification started again at zero.
-//   (b) main/session-engine.js startSession gated the rehydrate on `if (spec.parkedShell)`,
-//       so even a spec that DID carry the counters was ignored on any non-shell resume.
+//       drives) built its startSession spec with NO turns / costUsd. A session that burned 23 of
+//       24 turns, crashed, and was resumed from the notification started again at zero.
+//   (b) main/session-engine.js startSession gated the rehydrate on `if (spec.parkedShell)`, so
+//       even a spec that DID carry the counters was ignored on any non-shell resume.
 // Both had to move for the budget to hold; each is checked on its own below so a future
 // regression names which half broke.
+//
+// ⚠ THE THIRD PATH IS DELETED — 2026-08-20, F-228. `recreateParkedShell` was the sibling that
+// already carried the counters (FIX #9) and the reason (b) had a `parkedShell` gate in the first
+// place; it minted a dormant v1 SESSION WINDOW from a durable record, and no session has a
+// window. The rule it enforced did not go anywhere — startResume is now the ONLY record-driven
+// spawn and (a) below is its whole coverage.
 //
 // (a) is the session-park PURE-block harness (the session-park.test.mjs idiom). (b) evaluates
 // the real startSession preamble — the statements between initialSessionState and the context
@@ -31,30 +36,26 @@ const BLOCK = PARK_SRC.slice(from, to);
 
 // ── (a) startResume carries the record's counters ────────────────────────────────
 
-function harness(over = {}) {
-  const cfg = { record: null, windowReady: true, ...over };
+function harness() {
   const calls = { startSession: [] };
-  const io = { makePushIterator: () => ({ push() {}, close() {} }), noteGatedBody: () => {} };
+  const io = { makePushIterator: () => ({ push() {}, close() {} }) };
   const sessions = new Map();
   const store = {
-    sessionKey: (c, t) => `${c}:${t}`, getRecord: () => cfg.record, getSdkSessionId: () => null,
-    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record,
-    // thread for every other), so the fake mirrors the real store's slotKey too.
+    // D2: the record's OWN slot (agent for a TEAM record, thread for every other).
     slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
   };
   const api = new Function(
     "io", "store", "crypto", "Notification", "diag",
-    `${BLOCK}\n return { bind, startResume, recreateParkedShell };`
+    `${BLOCK}\n return { bind, startResume };`
   )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, null, () => {});
   api.bind({
     sessions,
     getSdk: async () => ({ query: () => ({}) }),
+    buildSdkOptions: () => ({}),
+    consume: () => {},
+    dispatch: () => {},
     startSession: async (spec) => { calls.startSession.push(spec); const s = { key: spec.key, settled: false }; sessions.set(spec.key, s); return s; },
-    hasLiveSession: (a) => { const s = sessions.get(`${a.channelId}:${a.taskId}`); return !!(s && !s.settled); },
-    windowFactoryReady: () => cfg.windowReady,
-    atWindowCap: () => false,
-    settleSession: () => {},
-    loadHistory: async () => {},
+    hasLiveSession: (a) => { const s = sessions.get(store.slotKey(a)); return !!(s && !s.settled); },
     emit: () => {},
   });
   return { ...api, calls, sessions };
@@ -87,13 +88,11 @@ test("D3(a): a legacy record with no counters resumes at zero, never NaN", async
   assert.equal(Number(spec.costUsd) || 0, 0);
 });
 
-test("D3(a): recreateParkedShell (FIX #9) still carries them too, so both resume paths agree", async () => {
-  const h = harness({ record: spentRecord });
-  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
-  const spec = h.calls.startSession[0];
-  assert.equal(spec.turns, 23);
-  assert.equal(spec.costUsd, 4.75);
-});
+// ⚠ "D3(a): recreateParkedShell (FIX #9) still carries them too, so both resume paths agree"
+// STOOD HERE. It was an AGREEMENT test between two record-driven spawns, and there is one left.
+// The rule it asserted for the shell — persisted turns/costUsd ride into the new session — is
+// exactly what the two tests above assert for startResume, so nothing about the budget is
+// unpinned; only the second caller is.
 
 // ── (b) startSession applies them on EVERY shape, not just a parked shell ─────────
 
@@ -118,13 +117,25 @@ test("D3(b): a NON-shell resume rehydrates the cap budget (the parkedShell gate 
   assert.equal(state.parked, false);
 });
 
-test("D3(b): a PARKED SHELL still rehydrates AND still boots dormant (FIX #9 unchanged)", () => {
+// ⚠ KEPT AND REWRITTEN RATHER THAN DELETED WITH ITS OLD PRODUCER (INVARIANTS §14).
+//
+// This used to read "a PARKED SHELL still rehydrates AND still boots dormant", and the shell that
+// set the flag is deleted. THE BRANCH IT PINS IS NOT: `if (spec.parkedShell) { … }` is still in
+// the shipping preamble, evaluated verbatim above, and session-engine.js says in as many words
+// why it stayed — the flag is also the guard that stops a woken shell inheriting a posture no
+// human armed, "so it stays a recognized spec field rather than being scrubbed, and a future
+// non-window dormant shape can set it and get the safe behaviour". A producerless branch that
+// nothing tests is a branch that rots into the wrong behaviour before its first caller arrives.
+test("D3(b): the producerless parkedShell flag STILL boots dormant and still rehydrates", () => {
   const state = applyPreamble(freshState(), { turns: 24, costUsd: 1.5, parkedShell: true });
   assert.equal(state.turns, 24);
   assert.equal(state.costUsd, 1.5);
   assert.equal(state.phase, "parked");
   assert.equal(state.parked, true);
   assert.equal(state.activity, "parked");
+  // ...and the retirement really did remove every producer, so this is the contract for a shape
+  // that does not exist yet rather than coverage of one that does.
+  assert.ok(!/parkedShell: true/.test(PARK_SRC), "session-park no longer sets the flag");
 });
 
 test("D3(b): a fresh launch passes no counters and starts at zero, never NaN", () => {

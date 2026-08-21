@@ -14,7 +14,7 @@
 // `remote ⊆ SPA`. That worked because both shells served one web tree, so the retired shell
 // doubled as a reference implementation. **The remote shell is deleted and its preload was
 // orphaned** (no window loaded it: spa-window takes app-preload, update-required-window
-// takes its own, session-window takes session-preload, claude-auth takes code-prompt-preload),
+// takes its own, claude-auth takes code-prompt-preload),
 // so the reference is gone and comparing two preloads is no longer a thing that can be done.
 //
 // WHAT REPLACES IT IS A PINNED INVENTORY, and the choice is deliberate. The obvious
@@ -246,60 +246,19 @@ test("the three ops whose absence has ALREADY shipped a silent bug", () => {
   }
 });
 
-// ── 2. The session window — the gap the handoff named ───────────────────────
-// 17 `session:*` channels carrying consent and handoff, and NOT ONE of them was pinned by
-// any test in this tree. The session window is where an agent turn is approved or denied, so
-// a dropped op here is a consent card that cannot answer, on the surface where that matters
-// most.
-
-const SESSION = loadPreload("session", "session-preload.js");
-
-const SESSION_OPS = [
-  "agentName",
-  "attendedHandoff",
-  "auth.get",
-  "auth.onNotice",
-  "auth.signIn",
-  // ⚠ `closeTask` was here and is REMOVED (wiring plan Phase 4, 2026-08-18) with the whole
-  // close lane — the panel, the `session:close-task` IPC handler and the reducer branch.
-  // This pin fails on ADD as well as on REMOVE, which is why the removal is stated.
-  "consentDecision",
-  "end",
-  "folder.choose",
-  "folder.clear",
-  "folder.get",
-  "inboundDecision",
-  "interrupt",
-  "onEvent",
-  "permission",
-  "request.onStatus",
-  "send",
-  "sendToPeer",
-  "setMessageMode",
-  "setModel",
-  "setToolMode",
-];
-
-test("the session preload exposes exactly its pinned surface, on `doplSession`", () => {
-  assert.equal(SESSION.exposedAs, "doplSession", "a DIFFERENT global from the app shell");
-  assert.deepEqual(
-    opPaths(SESSION.api),
-    SESSION_OPS,
-    "renderer/session/session-preload.js changed shape. This is the window where an agent " +
-      "turn is approved or denied — a dropped op is a consent card that cannot answer."
-  );
-});
-
-test("the decision ops the consent card cannot work without", () => {
-  for (const [op, why] of [
-    ["permission", "the tool-permission verdict"],
-    ["consentDecision", "accept/decline on a peer's request"],
-    ["inboundDecision", "releasing a held inbound reply"],
-    ["attendedHandoff", "the attended-handoff answer"],
-  ]) {
-    assert.equal(typeof SESSION.api[op], "function", `${op} is gone — that breaks ${why}`);
-  }
-});
+// ── 2. THE SESSION PRELOAD IS DELETED ───────────────────────────────────────
+//
+// ⚠ SECTION 2 PINNED `renderer/session/session-preload.js` — 20 `doplSession` ops carrying the
+// tool-permission verdict, accept/decline on a peer's request, the held-inbound release and the
+// attended-handoff answer. It is deleted with the window it bridged (2026-08-20, F-228), and so
+// is every handler behind it (`main/session-ipc.js`).
+//
+// ⚠ WHAT REPLACED IT IS NOT A SECOND PRELOAD — IT IS SECTION 1. Every decision those ops
+// carried now happens on the channels surfaces over the APP preload: a tool gate on a
+// windowless session bridges to a consent row and is answered in the thread view, and the
+// operator's own agent is paused, ended, opened and messaged through `sessions.*` in APP_OPS
+// above. That is why this file did not shrink to a single section quietly — the ops moved
+// lists, and APP_OPS is where they are now reviewed.
 
 // ── 3. The remote preload stays deleted ─────────────────────────────────────
 
@@ -308,6 +267,6 @@ test("Stage D: the remote shell's preload is gone and nothing loads it", () => {
     !existsSync(join(HERE, "..", "renderer", "preload.js")),
     "renderer/preload.js is back. It was the REMOTE wrapper's bridge; every window now takes " +
       "its own (spa-window -> app-preload, update-required-window -> update-required-preload, " +
-      "session-window -> session-preload, claude-auth -> code-prompt-preload)."
+      "claude-auth -> code-prompt-preload)."
   );
 });

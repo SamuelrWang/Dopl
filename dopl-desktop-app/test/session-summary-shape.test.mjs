@@ -17,11 +17,20 @@
 // SOURCE EXTRACTION with INJECTION is the shared `_session-summary-harness.mjs`, as in both
 // siblings — one loader, one program under test.
 //
+// ⚠ THE WIRE SHAPE DID NOT MOVE IN THE SESSION-WINDOW WAVE (2026-08-20, F-228), AND THAT IS THE
+// USEFUL FACT: `liveSummary` / `endedSummary` never carried a window handle, so retiring the
+// window model changes no key, no type and no absence rule. All six cases here failed at LOAD —
+// the shared harness's `EXPORTED` list named the deleted `keptWindow`, and that list feeds a
+// `new Function` return, so one missing symbol is a ReferenceError for the whole file. No case
+// was rewritten and none was removed.
+// ⚠ The unused `fakeWindow` import went with it: `session()` builds its own, and an import kept
+// alive by nothing is how the next reader concludes this file is about windows.
+//
 // Run: `node --test dopl-desktop-app/test/session-summary-shape.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, session, fakeWindow } from "./_session-summary-harness.mjs";
+import { load, session } from "./_session-summary-harness.mjs";
 
 
 test("SHAPE: a live summary carries exactly what the Agents tab and the agent view need", () => {

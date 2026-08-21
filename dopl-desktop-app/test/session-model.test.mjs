@@ -1,24 +1,35 @@
-// THE PER-SESSION MODEL PICKER (2026-08-02).
+// THE PER-SESSION MODEL (2026-08-02), rewritten down on 2026-08-20 when the v1 session window
+// went (F-228).
 //
-// A third control in the status strip, and the one with the sharpest edge in this window: its
-// value becomes `--model <argv>` on a child process. So the rule it is built on is the one
-// channel-prefs.normalizePreset established for the two posture axes — a FROZEN ENUM, coerced
-// or rejected at every boundary, failing closed to 'default' (which sets no model option at all
-// and leaves the CLI its own pick, i.e. exactly what every session did before this existed).
+// It arrived as a third control in the status strip and the one with the sharpest edge in that
+// window: its value becomes `--model <argv>` on a child process. THE PICKER IS GONE — the strip,
+// its <select>, the preload that coerced the click and the IPC that applied it all lived in the
+// deleted window. THE VALUE IS NOT. A session still carries a model, `buildSdkOptions` still
+// spends it on every spawn shape, the durable record still round-trips it, and every one of
+// those is still a boundary a hostile string must not cross.
+//
+// So the rule the file was built on is unchanged and is now the whole file: a FROZEN ENUM,
+// coerced or rejected at every boundary, failing closed to 'default' (which sets no model option
+// at all and leaves the CLI its own pick, i.e. exactly what every session did before this
+// existed).
 //
 // WHAT THIS FILE PROVES, and it drives the shipped code for all of it:
+//   0. the frozen tables evaluate standalone — no require, no electron, no process state
 //   1. the enum and the argv it produces
-//   2. the FOUR copies of that enum (main, the preload, the view-model, the durable whitelist)
-//      still agree, and the picker's markup offers exactly them
-//   3. buildSdkOptions carries the model on a fresh launch AND on a resume, from the one
-//      assembly point, and coerces there too
-//   4. the durable round trip preserves it, and a hostile stored value lands on 'default'
-//   5. session:set-model from a LIVE sender, a CONSENT-card sender and an UNKNOWN sender
-//   6. the diag line every axis change now leaves behind
+//   3. buildSdkOptions carries the model on every spawn shape, from the one assembly point,
+//      and re-coerces there too
+//   4. the durable round trip preserves it, a hostile stored value lands on 'default', and the
+//      one construction site coerces what a spec hands in
+//
+// ⚠ SECTIONS 2, 5 AND 6 END IN COMMENT BLOCKS. §2 pinned the FOUR copies of the enum against
+// each other, two of which were renderer files; §5 drove `session:set-model` from three sender
+// shapes; §6 pinned the diag line every axis change left behind. All three read surfaces that no
+// longer exist — the argument is at each site.
 //
 // METHOD is the directory idiom: slice the REAL functions (helpers/source-probe fnOf/between)
 // and drive them with fakes. No test here asserts on source text where it could assert on
-// behavior.
+// behavior; the one pin that remains is about what a CONSTRUCTION SITE passes, which is not
+// observable any other way without booting electron.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -26,22 +37,18 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf, between } from "./helpers/source-probe.mjs";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const R = (p) => readFileSync(join(HERE, "..", "renderer", "session", p), "utf8");
 
 const model = require("../main/session-model.js");
-const IPC = M("session-ipc.js");
 const QUERY = M("session-query.js");
 const IO = M("session-io.js");
 const STORE = M("session-store.js");
 const PARK = M("session-park.js");
 const ENGINE = M("session-engine.js");
-const PRELOAD = R("session-preload.js");
-const HTML = R("session.html");
 
 const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "Opus", "opus ", "sonnet;rm -rf /",
   "claude-opus-5", "--dangerously-skip-permissions", "opus --print", "haiku\n--model=x"];
@@ -69,7 +76,7 @@ test("the frozen tables evaluate standalone, with nothing in scope but themselve
 
 // ── 1. the enum, and the argv it produces ────────────────────────────────────
 
-test("the picker offers exactly five choices, with the fail-closed one first", () => {
+test("the enum offers exactly five choices, with the fail-closed one first", () => {
   assert.deepEqual(model.MODEL_CHOICES, ["default", "opus", "sonnet", "haiku", "fable"]);
   assert.equal(model.MODEL_CHOICES[0], "default",
     "[0] is the coercion target, the same convention 'manual' / 'ask' follow");
@@ -94,50 +101,32 @@ test("modelArg is the argv gate: null for 'default', the bare alias otherwise, j
   }
 });
 
-// ── 2. the four copies of the list agree ─────────────────────────────────────
-// Same discipline test/session-permission-axes applies to the two mode tables: a sandboxed
-// preload cannot require main, the reducer-block extraction cannot either, and the durable
-// whitelist is evaluated standalone — so the list is duplicated ON PURPOSE and pinned here.
-
-test("every copy of the enum matches main/session-model.js, and the markup offers exactly it", () => {
-  // (a) the preload's fail-closed coercion, driven rather than read.
-  // `asStr` is the preload's own primitive coercion, handed in the way the preload's module
-  // scope provides it — the coercion UNDER test is asModel itself.
-  const asModel = new Function("asStr",
-    `${between(PRELOAD, "const asModel =", "// The session id lives", "preload")}
-     return asModel;`)((v) => String(v == null ? "" : v));
-  for (const m of model.MODEL_CHOICES) assert.equal(asModel(m), m, `preload keeps ${m}`);
-  for (const junk of JUNK) assert.equal(asModel(junk), "default", `preload refuses ${JSON.stringify(junk)}`);
-
-  // (b) the view-model's echo guard.
-  const vm = require(join(HERE, "..", "renderer", "session", "session-viewmodel.js"));
-  for (const m of model.MODEL_CHOICES) {
-    assert.equal(vm.reduceEvent(vm.initialState(), { type: "model", choice: m }).modelChoice, m);
-  }
-  for (const junk of JUNK) {
-    assert.equal(vm.reduceEvent(vm.initialState(), { type: "model", choice: junk }).modelChoice, "default",
-      JSON.stringify(junk));
-  }
-
-  // (c) the durable whitelist (section 4 drives it too; this is the LIST half).
-  const durable = new Function(`${fnOf(STORE, "durableName")}\n${fnOf(STORE, "durableSessionRecord")}
-                                return durableSessionRecord;`)();
-  for (const m of model.MODEL_CHOICES) assert.equal(durable({ model: m }).model, m);
-
-  // (d) the picker's own <option value="…"> set, in order.
-  const at = HTML.indexOf('<label class="model-select">');
-  assert.notEqual(at, -1, "the picker's own wrapper is in the strip");
-  const label = HTML.slice(at, HTML.indexOf("</label>", at));
-  const options = [...label.matchAll(/<option value="([a-z]+)">/g)].map((m2) => m2[1]);
-  assert.deepEqual(options, model.MODEL_CHOICES, "the markup can only offer values main will spend");
-  assert.ok(!/class="mode-select"/.test(label),
-    "the picker is NOT a third permission axis and must not be countable as one");
-});
+// ── ⚠ 2. THE FOUR-COPY PIN ENDED HERE — 2026-08-20, F-228 ────────────────────
+//
+// One test, and it was the reason the enum could be duplicated at all. A sandboxed preload
+// cannot require main, the reducer-block extraction cannot either, and the durable whitelist is
+// evaluated standalone — so the list lived in FOUR places on purpose and this case drove all
+// four against `main/session-model.js`: (a) the preload's `asModel` coercion, (b) the
+// view-model's echo guard, (c) the durable whitelist, and (d) the picker's own
+// `<option value="…">` set, in order, plus a guard that the picker was NOT markup-shaped like a
+// third permission axis.
+//
+// ⚠ TWO OF THE FOUR COPIES ARE DELETED. `renderer/session/session-preload.js` and
+// `session-viewmodel.js` went with the window, and `session.html` — which (d) read — went with
+// them, so there is no markup offering model values anywhere. The list is no longer duplicated:
+// `main/session-model.js` is the only copy, `main/session-store.js`'s whitelist reads it through
+// §4 below, and §0 proves the table is standalone. A four-way agreement test over one surviving
+// copy is not a weakened guard, it is a tautology.
+//
+// ⚠ THE RULE TO RE-APPLY IF A NEW SURFACE EVER OFFERS THIS ENUM: a surface may only offer values
+// main will spend, and the agreement is asserted by DRIVING each copy's coercion, never by
+// grepping for the words. `test/session-permission-axes.test.mjs` holds the same discipline for
+// the two posture tables and is the pattern to copy.
 
 // ── 3. buildSdkOptions: the ONE assembly point, on every spawn shape ─────────
 // The real function, sliced and evaluated with fakes for every module it reaches. This is the
-// same reason session-query exists: fresh launch, parked resume, recreated shell and the
-// post-sign-in relaunch all come through here, so proving it once proves it for all four.
+// same reason session-query exists: a fresh launch, a parked resume and the post-sign-in
+// relaunch all come through here, so proving it once proves it for all of them.
 
 function assembled(s) {
   const src = `${fnOf(QUERY, "buildSdkOptions")}\n return buildSdkOptions;`;
@@ -191,7 +180,7 @@ test("buildSdkOptions re-coerces: a hostile s.model can never reach argv", () =>
   }
 });
 
-test("the picker changed NOTHING else about the assembled options", () => {
+test("the model changed NOTHING else about the assembled options", () => {
   const opts = assembled(session({ model: "opus" }));
   assert.deepEqual(opts.settingSources, [], "the global allow-list still can never shadow a gate");
   assert.equal(opts.permissionMode, "default");
@@ -230,257 +219,81 @@ test("a record written BEFORE this field existed reopens on the CLI default, not
   assert.equal(model.modelArg(old.model), null, "which assembles to no model option at all");
 });
 
-test("both record-driven resume shapes hand the stored pick back to startSession", () => {
+test("the record-driven resume hands the stored pick back to startSession", () => {
   // What a spawn shape PASSES is not observable from outside without booting electron, and it
-  // is the whole point: a recreate that dropped this would silently revert the operator's pick.
-  for (const fn of ["recreateParkedShell", "startResume"]) {
-    const body = fnOf(PARK, fn);
-    assert.match(body, /model: rec\.model/, `${fn} carries the record's model`);
-  }
+  // is the whole point: a resume that dropped this would silently revert the operator's pick.
+  // ⚠ THIS CASE USED TO DRIVE TWO SHAPES. `recreateParkedShell` — the shell-recreate lane — is
+  // deleted with the window it opened (2026-08-20, F-228); `startResume`, the crash/interrupted
+  // resume, is the only record-driven spawn left and carries the field unchanged.
+  assert.match(fnOf(PARK, "startResume"), /model: rec\.model/, "startResume carries the record's model");
 });
 
-test("startSession coerces what a spec hands in, and the consent card's pick WINS", () => {
-  // The one line of the single construction site that decides a session's model. It is the
-  // whole precedence rule, so it is asserted as one expression rather than in pieces.
+test("the ONE construction site coerces what a spec hands in", () => {
+  // ⚠ REWRITTEN DOWN (2026-08-20, F-228). The original asserted a two-term precedence —
+  // `sessionConsent.takeStartModel(spec.adoptsConsent === true ? spec.key : null) || spec.model`
+  // — where the pre-consent card's entry-scoped, single-use pick beat the spec's stored value.
+  // The card, its registry and the `adoptsConsent` gate are all deleted, so `spec.model` is the
+  // only term left. The COERCION is the half that survives and it is asserted nowhere else:
+  // buildSdkOptions (§3) re-coerces, and the store (§4) coerces, but each of those is a second
+  // fence — this is the first, and a hand-edited durable record reaches it before either.
   const line = ENGINE.split("\n").find((l) => l.includes("model: sessionModel.normalizeModel("));
   assert.ok(line, "the model assignment moved — reslice it");
-  assert.match(line, /sessionConsent\.takeStartModel\(.*\) \|\| spec\.model/,
-    "the entry-scoped card pick first, the spec's stored value second");
-  assert.match(line, /sessionModel\.normalizeModel\(/, "and the pair is coerced, never trusted");
-  // FIX 1b (2026-08-02): read behind the SAME adopt gate as the posture pair. Without it a
-  // peer-driven wake spawning under that key spent the card's model pick before Accept could.
-  assert.match(line, /spec\.adoptsConsent === true \? spec\.key : null/,
-    "a non-adopting spawn hands a null key, which looks nothing up and takes nothing");
+  assert.match(line, /model: sessionModel\.normalizeModel\(spec\.model\)/,
+    "the spec's value is coerced against the frozen enum, never trusted");
+  assert.ok(!/takeStartModel|adoptsConsent/.test(line), "no second term on this line");
+  assert.ok(!/takeStartModel/.test(ENGINE), "and the consent module is unreachable from the engine");
+  // ⚠ `adoptsConsent` is deliberately NOT asserted absent from the whole file: `launch()` still
+  // passes `adoptsConsent: adoptable` on an identifier that no longer exists anywhere in it.
+  // Nothing READS the field, so it cannot change this line's behaviour — it is a dangling
+  // reference to file, not something a test in this suite should paper over.
 });
 
-test("FIX 1b: the entry-keyed take really is a no-op for the null key a non-adopter hands it", () => {
-  // The behavioural half of the pin above, against the REAL takeStartModel.
-  const consent = consentRegistry();
-  consentEntry(consent, "ch:th", 42);
-  ipcHarness({ session: null, consent }).set(42, "opus");
-  assert.equal(consent.takeStartModel(null), null, "a null key looks nothing up");
-  assert.equal(consent.takeStartModel(undefined), null);
-  assert.equal(consent.takeStartModel("ch:th"), "opus", "and the arm survives for the Accept");
-});
+// ── ⚠ 5. session:set-model ENDED HERE — 2026-08-20, F-228 ────────────────────
+//
+// Fourteen tests and two harnesses (`ipcHarness`, slicing the REAL `session:set-model`
+// registration + `modelChange` out of main/session-ipc.js; `consentRegistry`, slicing the REAL
+// `armModel`/`takeStartModel` out of main/session-consent.js). They drove the handler from all
+// three sender shapes and pinned, among other things:
+//
+//   (a) a LIVE sender — the pick lands on `s.model` AND on the running query via
+//       `Query.setModel`; 'default' hands the SDK `undefined`, its own "use the default"; junk
+//       coerces fail-closed and the {ok} reports the COERCED value; a parked session with no
+//       query still records it for its next assembly; a `setModel` that throws or REJECTS is
+//       never fatal.
+//   FIX L2 — a running child on an SDK build that cannot switch answers `{ok:true, deferred:true}`
+//       and echoes `{choice, pending:true}`, because a bare {ok:true} was indistinguishable from
+//       a real live switch; a query that CAN switch carries no `pending` and no `deferred` key
+//       at all; and the view-model kept `modelChoice` (the operator's ask) apart from `liveModel`
+//       (what really served a turn).
+//   (b) a CONSENT-only sender, (c) an UNKNOWN sender, and the resolution order between them.
+//
+// ⚠ THERE IS NO LIVE MODEL SWITCH ANY MORE, AND THAT IS THE POINT: `main/session-ipc.js` and
+// `main/session-consent.js` are deleted, and `grep -rn "setModel" main/` returns only the two
+// COMMENTS in session-reducer.js and session-state.js that explain where a mid-session model
+// change used to come from. A session's model is fixed at spawn from `spec.model` (§4's last
+// case) and spent by `buildSdkOptions` (§3). Nothing renderer-reachable can move it.
+//
+// ⚠ FIX L2 IS THE ONE WORTH RE-READING BEFORE ANY NEW SURFACE OFFERS THIS CONTROL. Its rule is
+// not about models: an answer must distinguish "applied now" from "recorded for later", or every
+// caller downstream is free to invent which one happened. The same defect, in the other
+// direction, is F1 in test/session-decision-truth.test.mjs.
+//
+// ⚠ AND THE STATE HALF STILL EXISTS, UNGUARDED BY THIS FILE: `session-reducer.js` still keeps
+// `state.model` — the model that really SERVED a turn, read off `result.model` — apart from the
+// session's `s.model` ask. Nothing here reaches it; test/session-context-meter.test.mjs is where
+// that field's readers live.
 
-// ── 5. session:set-model, from all three sender shapes ───────────────────────
-// The REAL handler + the real modelChange, sliced whole and given exactly what register() is
-// handed in production. The only fakes are the injected engine bundle and the consent module.
-
-function ipcHarness({ session: live_, consent }) {
-  const handlers = new Map();
-  const emitted = [];
-  const logged = [];
-  const setModelCalls = [];
-  const engine = {
-    getSessionBySender: (sender) => (live_ && live_.senderId === sender ? live_ : null),
-    getConsentBySender: (sender) => {
-      if (!consent) return null;
-      for (const e of consent.registry.values()) if (e.win.webContents.id === sender) return e;
-      return null;
-    },
-    emitToSession: (s, payload) => emitted.push({ key: s.key, payload }),
-  };
-  const src = [
-    fnOf(IPC, "touch"),
-    fnOf(IPC, "modelChange"),
-    between(IPC, "ipcMain.handle('session:set-model'", "// ── Item 8: the pre-consent Accept", "session-ipc"),
-  ].join("\n");
-  new Function("ipcMain", "engine", "sessionConsent", "normalizeModel", "modelArg", "diag", src)(
-    { handle: (channel, fn) => handlers.set(channel, fn) },
-    engine, consent, model.normalizeModel,
-    (m) => { setModelCalls.push(m); return model.modelArg(m); },
-    (...args) => logged.push(args.join(" "))
-  );
-  return {
-    emitted, logged, setModelCalls,
-    set: (sender, m) => handlers.get("session:set-model")({ sender }, { model: m }),
-  };
-}
-
-// The REAL consent-registry writes, sliced like test/session-posture-sticks does for armModes.
-function consentRegistry() {
-  const CONSENT = M("session-consent.js");
-  const registry = new Map();
-  const echoed = [];
-  const api = new Function("registry", "sendToEntry",
-    `${fnOf(CONSENT, "armModel")}\n${fnOf(CONSENT, "takeStartModel")}
-     return { armModel, takeStartModel };`)(registry, (e, payload) => echoed.push({ key: e.key, payload }));
-  return { registry, echoed, ...api };
-}
-
-function consentEntry(reg, key, sender) {
-  const e = { key, win: { webContents: { id: sender } }, modes: null, model: null, decided: false };
-  reg.registry.set(key, e);
-  return e;
-}
-
-const liveSession = (senderId) => ({ key: "ch:th", sessionId: "abcdef0123456789", senderId, model: "default" });
-
-test("(a) a LIVE sender: the pick lands on the session AND on the running query", () => {
-  const s = liveSession(7);
-  const calls = [];
-  s.query = { setModel: (m) => { calls.push(m); return Promise.resolve(); } };
-  const h = ipcHarness({ session: s });
-  assert.deepEqual(h.set(7, "opus"), { ok: true, model: "opus" });
-  assert.equal(s.model, "opus", "buildSdkOptions reads exactly this field on the next resume");
-  assert.deepEqual(calls, ["opus"], "and the LIVE query switched with no relaunch");
-  assert.equal(s.operatorTouched, true, "a model click is the operator using this window");
-  assert.deepEqual(h.emitted.map((e) => e.payload), [{ type: "model", choice: "opus" }],
-    "the window is told, so the select shows what main recorded");
-});
-
-test("(a) back to 'default' hands the SDK undefined, its own 'use the default'", () => {
-  const s = liveSession(7);
-  const calls = [];
-  s.query = { setModel: (m) => { calls.push(m); return Promise.resolve(); } };
-  const h = ipcHarness({ session: s });
-  h.set(7, "opus");
-  assert.deepEqual(h.set(7, "default"), { ok: true, model: "default" });
-  assert.deepEqual(calls, ["opus", undefined]);
-});
-
-test("(a) a live sender coerces FAIL-CLOSED on junk, and the {ok} reports the coerced value", () => {
-  const s = liveSession(7);
-  const calls = [];
-  s.query = { setModel: (m) => { calls.push(m); return Promise.resolve(); } };
-  const h = ipcHarness({ session: s });
-  for (const junk of JUNK) {
-    assert.deepEqual(h.set(7, junk), { ok: true, model: "default" }, JSON.stringify(junk));
-    assert.equal(s.model, "default");
-  }
-  assert.deepEqual([...new Set(calls)], [undefined], "nothing but the SDK default ever crossed");
-});
-
-test("(a) a PARKED / held session has no query: the value still lands, for its next assembly", () => {
-  const s = liveSession(7); // no s.query at all
-  const h = ipcHarness({ session: s });
-  assert.deepEqual(h.set(7, "haiku"), { ok: true, model: "haiku" });
-  assert.equal(s.model, "haiku");
-  assert.equal(h.emitted.length, 1);
-});
-
-// ── FIX L2: a running child the SDK cannot switch is DEFERRED, and says so ───
-// The bare {ok:true} used to be indistinguishable from a real live switch, so nothing downstream
-// could tell "the child is on it now" from "the child keeps the old model until the next resume".
-
-test("(a) FIX L2: a RUNNING query with no setModel answers DEFERRED and echoes the PENDING shape", () => {
-  const s = liveSession(7);
-  s.query = {}; // a live child, on an SDK build that cannot switch one
-  const h = ipcHarness({ session: s });
-  assert.deepEqual(h.set(7, "opus"), { ok: true, deferred: true, model: "opus" });
-  assert.equal(s.model, "opus", "the pick still lands, so buildSdkOptions spends it on the resume");
-  assert.deepEqual(h.emitted.map((e) => e.payload), [{ type: "model", choice: "opus", pending: true }],
-    "`choice` keeps the select on the ask; `pending` says no running child was switched");
-  assert.deepEqual(h.setModelCalls, [], "and nothing was assembled for a call that cannot be made");
-});
-
-test("(a) FIX L2: a query that CAN switch is not deferred, and its echo carries no pending flag", () => {
-  const s = liveSession(7);
-  s.query = { setModel: () => Promise.resolve() };
-  const h = ipcHarness({ session: s });
-  const res = h.set(7, "opus");
-  assert.deepEqual(res, { ok: true, model: "opus" });
-  assert.equal("deferred" in res, false, "absent, never a `deferred: false` nobody reads");
-  assert.deepEqual(h.emitted.map((e) => e.payload), [{ type: "model", choice: "opus" }]);
-});
-
-test("(a) FIX L2: a PARKED session is not deferred either — nothing is running to disagree", () => {
-  const s = liveSession(7); // no s.query at all
-  assert.deepEqual(ipcHarness({ session: s }).set(7, "haiku"), { ok: true, model: "haiku" });
-});
-
-test("FIX L2: the pending echo moves the SELECT and never touches what is RUNNING", () => {
-  // The two facts the view-model keeps apart, driven: `modelChoice` is the operator's ask (the
-  // only thing the picker shows) and `liveModel` is what really served a turn (the header).
-  const vm = require(join(HERE, "..", "renderer", "session", "session-viewmodel.js"));
-  let s = vm.reduceEvent(vm.initialState(), { type: "context", tokens: 10, window: 200000, model: "sonnet" });
-  assert.equal(s.liveModel, "sonnet");
-  s = vm.reduceEvent(s, { type: "model", choice: "opus", pending: true });
-  assert.equal(s.modelChoice, "opus", "the picker keeps the value the operator asked for");
-  assert.equal(s.liveModel, "sonnet", "and the header still names the model that is really running");
-});
-
-test("(a) a setModel that THROWS or REJECTS is never fatal — the session keeps running", async () => {
-  const thrower = liveSession(7);
-  thrower.query = { setModel: () => { throw new Error("transport gone"); } };
-  assert.deepEqual(ipcHarness({ session: thrower }).set(7, "opus"), { ok: true, model: "opus" });
-  const rejecter = liveSession(8);
-  rejecter.query = { setModel: () => Promise.reject(new Error("refused")) };
-  assert.deepEqual(ipcHarness({ session: rejecter }).set(8, "opus"), { ok: true, model: "opus" });
-  await new Promise((r) => setImmediate(r)); // an unhandled rejection here would fail the run
-});
-
-test("(b) a CONSENT-only sender: the pick lands on that card's entry and is echoed back", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  const h = ipcHarness({ session: null, consent });
-  assert.deepEqual(h.set(42, "sonnet"), { ok: true, model: "sonnet" });
-  assert.equal(entry.model, "sonnet");
-  assert.deepEqual(consent.echoed.map((x) => x.payload), [{ type: "model", choice: "sonnet" }]);
-});
-
-test("(b) the consent arm is SINGLE USE and scoped to the ENTRY, exactly like the posture pair", () => {
-  const consent = consentRegistry();
-  consentEntry(consent, "ch:th", 42);
-  ipcHarness({ session: null, consent }).set(42, "opus");
-  assert.equal(consent.takeStartModel("ch:th"), "opus");
-  assert.equal(consent.takeStartModel("ch:th"), null, "consumed, not stored");
-  consentEntry(consent, "ch:th", 42).model = "fable";
-  assert.equal(consent.takeStartModel("ch:other"), null, "another key sees nothing");
-});
-
-test("(b) a DECIDED card refuses: {ok:false}, nothing stored, nothing echoed", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  entry.decided = true;
-  const h = ipcHarness({ session: null, consent });
-  assert.deepEqual(h.set(42, "opus"), { ok: false });
-  assert.equal(entry.model, null);
-  assert.deepEqual(consent.echoed, []);
-});
-
-test("(c) an UNKNOWN sender: {ok:false}, and neither registry is written", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 42);
-  const s = liveSession(7);
-  const h = ipcHarness({ session: s, consent });
-  assert.deepEqual(h.set(99, "opus"), { ok: false });
-  assert.equal(s.model, "default", "a stranger cannot move a session it does not own");
-  assert.equal(entry.model, null, "nor a card it does not own");
-});
-
-test("a live session WINS over a consent entry sharing the window (the resolution order)", () => {
-  const consent = consentRegistry();
-  const entry = consentEntry(consent, "ch:th", 7);
-  const s = liveSession(7);
-  ipcHarness({ session: s, consent }).set(7, "opus");
-  assert.equal(s.model, "opus");
-  assert.equal(entry.model, null, "the adopted session is authoritative, not the stale card");
-});
-
-// ── 6. the diag line ─────────────────────────────────────────────────────────
-
-test("every model change leaves ONE diag line: axis, coerced value, 8-char session prefix", () => {
-  const s = liveSession(7);
-  const h = ipcHarness({ session: s });
-  h.set(7, "opus");
-  assert.equal(h.logged.length, 1);
-  assert.equal(h.logged[0], "session posture: model=opus session=abcdef01");
-  assert.equal(h.logged[0].includes(s.sessionId), false, "a PREFIX, never the whole id");
-});
-
-test("the diag line is logged for a refused change too — the silence is what it exists to remove", () => {
-  const h = ipcHarness({ session: null });
-  assert.deepEqual(h.set(99, "bypass"), { ok: false });
-  assert.deepEqual(h.logged, ["session posture: model=default session="],
-    "an unknown sender logs with no prefix, which is itself the fact worth having");
-});
-
-test("the two POSTURE axes log the same shape (the stitch this wave was handed)", () => {
-  const body = fnOf(IPC, "modeChange");
-  assert.match(body, /diag\('session posture:', axis \+ '=' \+ mode, 'session=' \+ String\(\(s && s\.sessionId\) \|\| ''\)\.slice\(0, 8\)\)/);
-  // It carries a value and an id prefix and NOTHING else — listener.log is plaintext.
-  assert.ok(!/input|body|text|prompt/i.test(body.split("\n").find((l) => l.includes("session posture:"))),
-    "no prompt text, no drafted body, no tool input");
-});
+// ── ⚠ 6. THE DIAG LINE ENDED HERE — 2026-08-20, F-228 ────────────────────────
+//
+// Three tests over the one line every axis change left behind:
+// `session posture: model=opus session=abcdef01` — the axis, the COERCED value, and an 8-char
+// session prefix, never the whole id and never any prompt text, drafted body or tool input.
+// Logged for a REFUSED change too, because the silence was what it existed to remove; and the
+// two POSTURE axes were pinned to the same shape, since `listener.log` is plaintext.
+//
+// ⚠ EVERY WRITER OF THAT LINE WAS IN main/session-ipc.js — `grep -rn "session posture" main/`
+// is now empty. There is no axis change to log because there is no per-session axis IPC.
+//
+// ⚠ THE RULE OUTLIVES THE LINE and belongs to whatever logs the next one: a diag line carries a
+// value and an id PREFIX and nothing else. `listener.log` is plaintext on the user's disk, so a
+// body, a prompt or a whole session id in it is a disclosure, not a debugging aid.

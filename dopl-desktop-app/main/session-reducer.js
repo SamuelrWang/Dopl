@@ -214,7 +214,7 @@ function sessionReducer(state, event) {
     // direct:true`, and a blanket drain would let the TOOL axis answer a MESSAGE operation — the
     // very invariant this contract establishes. A mode change governs the NEXT call; anything
     // already waiting keeps its buttons (fail-closed). The INBOUND half of Axis B still drains,
-    // because that queue holds messages and nothing else (session-ipc -> gate.drainInbound).
+    // because that queue holds messages and nothing else (the deleted session-ipc -> gate.drainInbound lane, F-228).
     const patch = type === 'set_tool_mode'
       ? { toolMode: coerceMode(TOOL_MODES, event.mode) }
       : { messageMode: coerceMode(MESSAGE_MODES, event.mode) };
