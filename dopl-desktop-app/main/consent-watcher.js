@@ -46,8 +46,8 @@ const { diag } = require('./diag');
 // SCAN CADENCE (Q12 — request-volume diet, 2026-07-31). This used to be a flat
 // `setInterval(tick, 2000)`: 1,800 wakeups/hour forever, each one decrypting the
 // auth blob via `auth.isSignedIn()`, even with zero records to poll. The watcher
-// is a FALLBACK — realtime wakes and the explicit `poke()`s from trigger.js /
-// session-consent.js are the primary signal — so the steady state should be slow
+// is a FALLBACK — realtime wakes and the explicit `poke()`s from trigger.js are the
+// primary signal (session-consent.js was the other poker and is deleted) — so the steady state should be slow
 // and the fast cadence should be earned by recent activity.
 //
 // The scan is now self-scheduling and adaptive (see nextScanDelay): 3s for a short

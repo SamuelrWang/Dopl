@@ -11,8 +11,8 @@
 // three requests waiting or, as is almost always the case, none at all.
 //
 // The watcher is a FALLBACK. Realtime wakes and the explicit `poke()` calls from
-// trigger.js / session-consent.js are the primary reaction path, and every in-app
-// decision goes through one of them. So the design here is: earn the fast cadence
+// trigger.js are the primary reaction path, and every in-app decision goes through
+// one of them. (session-consent.js was the second poker and is deleted, F-228.) So the design here is: earn the fast cadence
 // with recent activity, and otherwise sleep until something is actually due.
 
 // Fast cadence, armed for ACTIVE_WINDOW_MS after a wake / registration / decision.

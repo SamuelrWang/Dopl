@@ -1,11 +1,15 @@
-// Session engine — the imperative shell (v2.0 Session Window, Track T3).
+// Session engine — the imperative shell.
 //
 // Owns ONE Claude Agent SDK query() per live session and executes the pure session-reducer's
-// side-effect-free effect descriptors. v2.0 added the CONSENT REFLOW (item 8: a pre-consent window
-// running NO agent work until Accept, then ADOPTED by launchResponderSession) and REOPEN (item 10:
-// live windows hide-on-close + tray reopen; render-process-gone is the crash signal). Renderer->main
-// IPC lives in session-ipc.js (§O-8). SEAM: this file imports NO electron at all — an injected
-// factory created windows; both are DELETED (F-228). SECURITY: settingSources:[] always, so the
+// side-effect-free effect descriptors.
+//
+// ⚠ THREE THINGS THIS HEADER USED TO DESCRIBE ARE DELETED (2026-08-20, F-228): the CONSENT
+// REFLOW (a pre-consent window running no agent work until Accept, then ADOPTED by
+// launchResponderSession), REOPEN (live windows hide-on-close + tray reopen, with
+// render-process-gone as the crash signal), and the renderer->main IPC that lived in
+// session-ipc.js. Every session is WINDOWLESS; `s.win` is null and every emit no-ops on it.
+// SEAM: this file imports NO electron at all — that was true when an injected factory created
+// windows and is trivially true now. SECURITY: settingSources:[] always, so the
 // global allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
 // object (never logged, never on argv, never on disk since C1).
 
