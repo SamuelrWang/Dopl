@@ -16,10 +16,13 @@
 //   2. submitDecision is the entry point every decision surface calls; on 'failed' ONLY it
 //      raises a second notification naming the recovery path. Quiet on 'ok'. Quiet on 409.
 //
-// ⚠ THE SITE CENSUS AT THE FOOT MOVED WITH THE SURFACES (2026-08-20, F-228). `session-consent.js`
-// — the pre-consent WINDOW's Accept / Deny — is deleted, and the windowless outbound gate
-// (`session-windowless.js`) now holds the two calls it used to. The census is DISCOVERED over
-// main/ rather than listed, so the next surface cannot appear without being reviewed here.
+// ⚠ THE SITE CENSUS AT THE FOOT MOVED WITH THE SURFACES, TWICE IN ONE DAY (2026-08-20).
+// F-228 deleted `session-consent.js` — the pre-consent WINDOW's Accept / Deny — and the
+// windowless outbound gate (`session-windowless.js`) took over the two calls it used to hold.
+// Then Samuel's headless ruling deleted `main/trigger-headless.js`, which held two more. Four
+// sites became five became three, and the count is not the point: the census is DISCOVERED over
+// main/ rather than listed, so the next surface cannot appear without being reviewed here, and
+// a surface that LEAVES cannot be quietly left in the list either.
 //
 // WHY SOURCE EXTRACTION: main/consent.js requires electron, so it cannot be imported under
 // `node --test`. The four functions are sliced verbatim and driven with fakes — apiFetch,
@@ -270,32 +273,41 @@ test("EVERY decision site calls submitDecision, and none still calls patchDecisi
   // surface must not appear without the F-067 failure signal, and a hand-listed set of files
   // cannot notice one. The set is read off the tree and asserted whole; the shape pins below
   // then say what each site passes, which is the part a grep cannot see.
+  // ⚠ AND IT SHRANK BY ONE MORE ON 2026-08-20 (Samuel's ruling; INVARIANTS §14).
+  // `main/trigger-headless.js` is deleted with the `claude -p` lane, so the census is TWO. Its
+  // two shape pins went with it and are recorded rather than dropped, because one of them was
+  // the strongest argument in this file:
+  //   · `consent.submitDecision(rec.workspaceId, created.rowId, 'allow', { … })` — the Send on
+  //     the OUTBOUND REVIEW row, the notification a human answered over a reply the headless
+  //     lane had drafted as a string.
+  //   · `void consent.submitDecision(rec.workspaceId, created.rowId, 'allow', {})` — headless
+  //     AUTO-SEND, which decided the row with NO notification at all and still went through
+  //     `submitDecision`, because an auto-send whose PATCH dies is a reply the operator
+  //     believes was sent: the F-067 failure with nobody watching for it.
+  // ⚠ THAT ARGUMENT IS NOT ORPHANED — it moved into the session. The windowless outbound gate's
+  // two calls below are the same shape (one notified, one silent), for the same reason, and are
+  // pinned immediately after this census.
   const callers = readdirSync(MAIN)
     .filter((f) => f.endsWith(".js") && f !== "consent.js")
     .filter((f) => /consent\.submitDecision\(/.test(M(f)))
     .sort();
   assert.deepEqual(
     callers,
-    ["session-windowless.js", "trigger-headless.js", "trigger.js"],
+    ["session-windowless.js", "trigger.js"],
     "a new decision surface is a new way for a decision to vanish silently — review it here " +
       "rather than updating this list reflexively"
   );
 
   const T = M("trigger.js");
-  const TH = M("trigger-headless.js");
   const WL = M("session-windowless.js");
-  // The notification Allow (inbound) and Send (outbound headless) carry the channel name
-  // so the copy can say WHICH request was lost.
+  // The notification Allow (inbound) carries the channel name so the copy can say WHICH
+  // request was lost.
   assert.match(T, /consent\.submitDecision\(entry\.workspaceId, created\.rowId, 'allow', \{/);
   assert.match(T, /channelName: entry\.channel\.name/);
-  assert.match(TH, /consent\.submitDecision\(rec\.workspaceId, created\.rowId, 'allow', \{/);
-  // ...and headless AUTO-SEND decides the row with no notification at all. It still goes
-  // through submitDecision: an auto-send whose PATCH dies is a reply the operator believes
-  // was sent, which is the F-067 failure with nobody watching for it.
-  assert.match(TH, /void consent\.submitDecision\(rec\.workspaceId, created\.rowId, 'allow', \{\}\)/);
   // The WINDOWLESS outbound gate — the surface that replaced the pre-consent window's
-  // Accept / Deny. Its Send carries the channel name; its cancel path (the tool call this row
-  // was gating is gone) passes none, deliberately: nobody is waiting on that copy.
+  // Accept / Deny, and now also the outbound REVIEW the headless lane used to raise. Its Send
+  // carries the channel name; its cancel path (the tool call this row was gating is gone)
+  // passes none, deliberately: nobody is waiting on that copy.
   assert.match(WL, /void consent\.submitDecision\(s\.workspaceId, rowId, 'allow', \{ channelName \}\)/);
   assert.match(WL, /void consent\.submitDecision\(s\.workspaceId, rowId, 'deny', \{\}\)/);
 

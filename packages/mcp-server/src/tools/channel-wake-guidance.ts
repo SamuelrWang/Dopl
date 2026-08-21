@@ -66,7 +66,7 @@ const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s pa
  * (older build), the one case where arming is simply wrong — so the escape
  * hatch stays where the server cannot tell, and is replaced where it can.
  */
-const SKIP_CLAUSE = `Skip the await if this session already receives the counterparty's replies as new turns (a desktop-run session window feeds them in) — then just keep responding.`;
+const SKIP_CLAUSE = `Skip the await if this session already receives the counterparty's replies as new turns (a desktop-run agent session feeds them in) — then just keep responding.`;
 
 /** After a successful `post`: how to be there when the answer lands. */
 export function postReplyLines(

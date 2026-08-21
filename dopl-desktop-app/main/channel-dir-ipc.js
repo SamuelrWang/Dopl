@@ -53,7 +53,6 @@
 // a HIGH:
 //
 //   setPermissionPreset  arms EXECUTION permission for a channel (the H3 report)
-//   getPermissionPreset  discloses the posture a channel is armed with
 //   setLaunchPosture     sets the DURABLE execution posture for MY OWN launches
 //   getLaunchPosture     discloses that posture
 //   chooseFolder         pops a native OS dialog on demand (UI-jacking / nagging)
@@ -204,19 +203,11 @@ function register(opts = {}) {
   // → { tools, messages } for the channel, or null when nothing is armed (the
   //   card then shows the defaults without claiming they were chosen). Reading
   //   NEVER extends the arm's life.
-  ipcMain.handle('channels:getPermissionPreset', appWindowOnly('getPermissionPreset', null, (_event, channelId) => {
-    if (!isUuid(channelId)) return null;
-    return channelPrefs.getPermissionPreset(channelId);
-  }));
-
-  // → { ok: true } when BOTH axes validated and the pair was armed; { ok: false }
-  //   for a bad channel id or an unknown mode. Fail-closed: nothing is written on
-  //   a partial or unknown pair.
-  ipcMain.handle('channels:setPermissionPreset', appWindowOnly('setPermissionPreset', { ok: false }, (_event, payload) => {
-    const p = payload || {};
-    if (!isUuid(p.channelId)) return { ok: false };
-    return channelPrefs.armPermissionPreset(p.channelId, p.preset);
-  }));
+  // ⚠ `channels:getPermissionPreset` / `setPermissionPreset` STOOD HERE AND ARE DELETED
+  // (2026-08-20, Samuel's ruling). They armed the SINGLE-USE consent-card posture, whose web
+  // controls stopped rendering at the 2026-08-18 consent rewrite and were never noticed
+  // (F-233). The DURABLE posture below is a different record with a different consumer, and
+  // `main/channel-prefs.js` states why the two must never merge.
 
   // THE DURABLE LAUNCH POSTURE (2026-08-20). Same two axes as the arm above and
   // the same validation, but a DIFFERENT record with a different consumer —

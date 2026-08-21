@@ -33,7 +33,6 @@ import {
   postureSends,
   postureTools,
 } from "./settings-agent-harness";
-import { PERMISSION_ARM_TTL_MS } from "../../hooks/use-channel-permission-preset";
 
 afterEach(cleanup);
 
@@ -71,23 +70,36 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     const text = copy();
     expect(text).toContain("When you launch an agent");
     expect(text).toContain("For every session on this channel");
-    // ⚠ The arm's heading must NOT appear here any more — it belongs to the
-    // request card, the only surface that can honestly show a fuse.
+    // ⚠ The arm's heading must NOT appear here — and since 2026-08-20 there is no
+    // surface it could belong to instead: the arm is DELETED (F-233, Samuel's
+    // ruling). This assertion outlived its subject on purpose, because the
+    // heading is what a reader would reach for if they re-added a fuse here.
     expect(text).not.toContain("For the next request you allow");
     expect(text).not.toMatch(/Permissions[^.]*\balways\b/i);
   });
 
-  it("leaves the ARM exactly as it was — single-use, 30 minutes, consent-only", () => {
-    // The split is by CONSUMER, not by lifetime (H2). This tab no longer shows
-    // the arm, and nothing about the arm changed; if either half of that stops
-    // being true, this is the assertion that says so.
-    expect(CHANNEL_PREFS).toContain("const ARM_TTL_MS = 30 * 60 * 1000");
-    expect(PERMISSION_ARM_TTL_MS).toBe(30 * 60 * 1000);
-    expect(CHANNEL_PREFS).toContain("SINGLE USE");
-    // ...and the durable record is a SEPARATE store key, or every arm would
-    // become a permanent channel setting — which is H2, exactly.
+  it("is the ONLY permission posture the desktop stores — the arm is gone", () => {
+    // ⚠ THIS TEST INVERTED ON 2026-08-20 (Samuel's ruling). It asserted the ARM
+    // was untouched — `ARM_TTL_MS`, "SINGLE USE", and a SEPARATE store key from
+    // this posture, because one key would have made every arm a permanent
+    // channel setting (H2, exactly). The arm is DELETED: its web controls had
+    // stopped rendering at the 2026-08-18 consent rewrite and nothing could set
+    // it (F-233).
+    //
+    // ⚠ H2 DID NOT GO WITH IT, AND THIS IS NOW WHERE THAT IS PINNED. The rule was
+    // never the TTL — it is that a stored posture may only reach a launch a human
+    // is approving in that moment, enforced by the CONSUMER COUNT. So: one key,
+    // and the arm's key must not come back under any name.
+    // ⚠ Asserted as ABSENT DECLARATIONS, not absent strings: `channel-prefs.js`
+    // still NAMES the arm in the ⚠ block recording why it went, and that record is
+    // the point — a reader who finds the key in an old store needs to land on it.
     expect(CHANNEL_PREFS).toContain("const POSTURE_KEY = 'channelLaunchPosture'");
-    expect(CHANNEL_PREFS).toContain("const PRESETS_KEY = 'channelPermissionPresets'");
+    expect(CHANNEL_PREFS).not.toMatch(/const PRESETS_KEY\s*=/);
+    expect(CHANNEL_PREFS).not.toMatch(/const ARM_TTL_MS\s*=/);
+    expect(CHANNEL_PREFS).not.toMatch(/^function (arm|consume|clear)PermissionPreset/m);
+    // The one consumer, named. A second reader of this record is the failure H2
+    // exists to prevent, and it would not look like one from here.
+    expect(desktopSource("channel-dir-ipc.js")).toContain("channelPrefs.launchStartModes(p.channelId)");
   });
 
   it("drops the whole posture subsection, heading included, with no bridge", () => {

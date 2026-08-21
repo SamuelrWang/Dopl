@@ -1,71 +1,59 @@
-// Per-channel PERMISSION ARM — LOCAL ONLY, SINGLE USE, EXPIRING.
+// Per-channel LAUNCH PREFERENCES — LOCAL ONLY, never sent to Dopl.
 //
-// The operator used to be able to set the session's two permission axes only
-// AFTER the session window opened, which is after the agent already spawned. The
-// pair stored here is chosen on the inbound consent card BEFORE Allow, so the
-// launched session starts on exactly the posture the operator approved.
+// TWO DURABLE RECORDS, both keyed by channel id, both read only by a path where a HUMAN is
+// pressing the button they apply to:
+//   THE LAUNCH POSTURE  the two permission axes the operator's OWN agent starts on when they
+//                       press Launch on the Agents tab (`channelLaunchPosture`).
+//   AUTO-SEND           whether that agent's drafted reply posts without a Send click
+//                       (`channelAutoSend`, default OFF).
 //
 // THE TWO AXES (session-profiles.js is the authority on what each mode allows):
 //   AXIS A  tools    = manual | accept_edits | auto | bypass
 //   AXIS B  messages = ask | auto_inbound | auto_outbound | auto_both
-// The default for a channel with nothing armed is the MOST RESTRICTIVE pair,
-// { tools: 'manual', messages: 'ask' } — an absent, expired, or corrupt record
-// can never read as more permissive than it is.
+// The default for a channel with nothing stored is the MOST RESTRICTIVE pair,
+// { tools: 'manual', messages: 'ask' } — an absent or corrupt record can never read as more
+// permissive than it is.
 //
-// ── H2 (2026-07-31): WHY THIS IS AN ARM AND NOT A SETTING ───────────────────
-// It used to be a durable, channel-wide, permanent preference with no TTL, no
-// delete and no expiry, and session-engine.startSession — the single
-// construction site for EVERY spawn shape — folded it into the initial state
-// unconditionally. So a posture the operator picked ONCE, on ONE consent card,
-// silently re-armed every later session on that channel: a peer replying to any
-// thread days later recreated a parked shell, which started at the stored
-// bypass/auto_both, which made the inbound auto-accepted, which woke the agent —
-// running with Bash/WebFetch pre-approved and auto-outbound posting, with NO
-// consent card and NO click. Before that change every recreated shell started
-// manual/ask.
+// ── ⚠ THE SINGLE-USE PERMISSION ARM LIVED HERE AND IS DELETED (2026-08-20, Samuel's ruling) ──
 //
-// THE INVARIANT NOW, and it is not negotiable: a stored pair may only ever apply
-// to a launch a human is ACTIVELY approving in that moment. Three mechanisms
-// enforce it together, and each is sufficient to keep the failure above from
-// recurring:
-//   1. SINGLE USE — `consumePermissionPreset` returns the pair and DELETES it in
-//      the same call. A second spawn on the same channel finds nothing.
-//   2. EXPIRING — an arm older than ARM_TTL_MS is not consumable and is swept.
-//      A Deny, a closed tab, or an ignored card leaves nothing behind that a
-//      later launch could pick up.
-//   3. ONE CONSUMER — only the consent-APPROVED launch path consumes it (see
-//      trigger.js). A recreated parked shell, a crash resume, a wake, an
-//      operator "Open session", and a requester launch all pass NOTHING, so
-//      session-reducer's own hard-coded manual/ask defaults stand.
+// `channelPermissionPresets` held a THIRD record: a pair the operator picked on an inbound
+// consent card before clicking Allow, made SINGLE USE (`consumePermissionPreset` returned and
+// deleted in one call), EXPIRING (30 minutes) and consumable by exactly ONE caller (the
+// consent-approved responder launch). All three mechanisms existed to enforce H2 — that a
+// stored pair may only ever apply to a launch a human is ACTIVELY approving in that moment —
+// after a durable version of the same idea silently re-armed every later session on a channel.
 //
-// CONSIDERED AND REJECTED: binding the arm to the specific consent ROW id would
-// be tighter still, but the id would have to travel through the web card's IPC
-// signature, and the web half already shipped — so that is a follow-up, not a
-// blocker. The three mechanisms above already bound a hostile write to "pre-arm
-// a posture a human must still explicitly Allow, on a card that shows it".
+// ⚠ IT WAS DELETED BECAUSE ITS SURFACE HAD ALREADY GONE, AND NOBODY HAD NOTICED. The arm's web
+// controls lived inside `launch-panel.tsx`'s INBOUND branch, and that branch stopped rendering
+// at the 2026-08-18 consent-surface rewrite: the panel's one consumer is the outbound send box,
+// so `kind === "inbound"` was never true in production (measured, F-233). An arm nothing can arm
+// is not a safety mechanism, it is a store key — and keeping it would have left the H2 argument
+// attached to a record no human could ever set.
 //
-// SECURITY — the main window hosts REMOTE content (usedopl.com), so the renderer
-// is NOT trusted with these values. Every write is re-validated HERE against the
-// frozen enums above and rejected outright when either value is unknown; nothing
-// but the two enum members and a timestamp is ever written. There is no
-// free-text field, no path, and no id other than the channel's (the caller's
-// channelId is UUID-gated AND sender-bound by channel-dir-ipc.js before it
-// reaches this module).
+// ⚠ WHAT DID **NOT** CHANGE, AND MUST NOT: H2 ITSELF. A stored posture still only ever reaches a
+// spawn by being HANDED IN per launch (`spec.startModes`), by a caller executing a decision a
+// human is making right now. The posture below is read at exactly ONE call site —
+// `channel-dir-ipc.js › sessions:launch`, the operator's own Launch button on their own thread —
+// and every other spawn shape (a peer wake, a resume, a recreate) passes nothing and inherits
+// the reducer's manual/ask. **Wiring this record to a second consumer re-opens the failure H2
+// exists to prevent.** `test/session-preset-start.test.mjs` pins the consumer count, and that
+// count — not the TTL the arm used to carry — is what actually kept H2 closed.
 //
-// PRIVACY — the arm lives ONLY in the local electron-store. It is never POSTed to
-// Dopl, never put in a channel message, and never leaves this machine. The local
-// diag line carries the channel id PREFIX plus the two enum values, so a support
-// log can explain a posture; there is no free text in it to leak.
+// SECURITY — every write is re-validated HERE against the frozen enums above and rejected
+// outright when either value is unknown; nothing but the two enum members is ever written. There
+// is no free-text field, no path, and no id other than the channel's (UUID-gated AND sender-bound
+// by channel-dir-ipc.js before it reaches this module).
 //
-// This module OWNS the storage + validation. The IPC surface that exposes it
-// lives in channel-dir-ipc.js (the existing narrow bridge) so the privileged
-// renderer-reachable handlers stay enumerable in one file.
+// PRIVACY — these live ONLY in the local electron-store. Never POSTed to Dopl, never put in a
+// channel message, never off this machine. The diag line carries the channel id PREFIX plus the
+// two enum values, so a support log can explain a posture; there is no free text in it to leak.
+//
+// This module OWNS the storage + validation. The IPC surface lives in channel-dir-ipc.js.
 
 const Store = require('electron-store');
 const { diag } = require('./diag');
 
 const store = new Store();
-const PRESETS_KEY = 'channelPermissionPresets'; // { [channelId]: { tools, messages, at } }
 
 // ─── BEGIN CHANNEL-PREFS-VALIDATE (pure; unit-tested via source extraction) ──
 // No electron/fs/store/require refs below, so test/channel-prefs.test.mjs can
@@ -80,13 +68,6 @@ const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
 // The most restrictive pair — what an unset channel resolves to.
 const DEFAULT_PRESET = { tools: 'manual', messages: 'ask' };
-
-// How long an arm stays consumable. Long enough for a real human flow (read the
-// request, pick the posture, click Allow, let the consent watcher poll and the
-// spawn start), short enough that a posture chosen and then abandoned cannot be
-// picked up by something the operator has stopped thinking about. Expiry always
-// fails RESTRICTIVE: the launch falls back to manual/ask.
-const ARM_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // Validate an arbitrary value into a preset, or null when it is not one. BOTH
 // axes must be present and known: a half-valid pair is rejected whole, because a
@@ -103,60 +84,10 @@ function normalizePreset(raw) {
   return { tools: tools, messages: messages };
 }
 
-// Is a stored record still consumable? Requires a valid pair AND a finite,
-// non-future stamp within the TTL. A record with no `at` is a PRE-H2 durable
-// preset written by an older build: it is deliberately treated as EXPIRED, so
-// upgrading can only ever narrow a posture, never silently re-arm one the
-// operator set under the old always-on semantics. A stamp in the FUTURE (clock
-// skew, a tampered store) is refused too, rather than granted an unbounded life.
-function armIsLive(stored, now) {
-  if (!normalizePreset(stored)) return false;
-  const at = stored.at;
-  if (!Number.isFinite(at) || at > now) return false;
-  return now - at < ARM_TTL_MS;
-}
-
-// The pair to actually launch with, from a stored record — or null when there is
-// nothing live. Read path only; it never rewrites a corrupt record.
-function resolveArm(stored, now) {
-  return armIsLive(stored, now) ? normalizePreset(stored) : null;
-}
-
 // The restrictive pair every non-consenting launch shape gets. A helper rather
 // than a bare literal so there is ONE spelling of "no posture was approved".
 function defaultPreset() {
   return { tools: DEFAULT_PRESET.tools, messages: DEFAULT_PRESET.messages };
-}
-
-// ── Map-level ops (the store is just a plain object of these) ────────────────
-// Kept inside the pure block so PER-CHANNEL ISOLATION is unit-tested: a write to
-// one channel touches that key and nothing else, and a read for a channel with no
-// record is null rather than a neighbour's posture.
-
-// The channel's live arm, or null when nothing consumable is stored for it.
-function readArmFrom(map, channelId, now) {
-  if (!map || !channelId) return null;
-  return resolveArm(map[channelId], now);
-}
-
-// Write the pair into the map IN PLACE, stamped `now`. { ok: false } (and NO
-// mutation at all) when the id is missing or either axis is unknown — fail-closed,
-// so a rejected write can never leave a half-applied posture behind.
-function armInto(map, channelId, raw, now) {
-  const preset = normalizePreset(raw);
-  if (!map || !channelId || !preset) return { ok: false };
-  map[channelId] = { tools: preset.tools, messages: preset.messages, at: now };
-  return { ok: true, preset: preset };
-}
-
-// SINGLE USE: take the live arm and REMOVE it, in one step. Returns the pair or
-// null. The delete happens even when the record was expired/corrupt, so a read is
-// also the sweep for the key it touched.
-function takeArmFrom(map, channelId, now) {
-  if (!map || !channelId) return null;
-  const found = resolveArm(map[channelId], now);
-  if (Object.prototype.hasOwnProperty.call(map, channelId)) delete map[channelId];
-  return found;
 }
 
 // ── THE DURABLE LAUNCH POSTURE (2026-08-20) ─────────────────────────────────
@@ -212,7 +143,8 @@ function readPostureFrom(map, channelId) {
 }
 
 // Write the pair in place. { ok: false } and NO mutation when the id is missing
-// or either axis is unknown — same fail-closed rule as `armInto`.
+// or either axis is unknown — fail-closed, so a rejected write can never leave a
+// half-applied posture behind.
 function postureInto(map, channelId, raw) {
   const preset = normalizePreset(raw);
   if (!map || !channelId || !preset) return { ok: false };
@@ -220,85 +152,12 @@ function postureInto(map, channelId, raw) {
   return { ok: true, preset: preset };
 }
 
-// Drop every expired/invalid record. Returns true when the map changed, so the
-// caller only writes the store when there is something to write (F-072 spirit:
-// no pointless writes on a read path).
-function sweepExpired(map, now) {
-  let changed = false;
-  for (const id of Object.keys(map || {})) {
-    if (!armIsLive(map[id], now)) {
-      delete map[id];
-      changed = true;
-    }
-  }
-  return changed;
-}
 // ─── END CHANNEL-PREFS-VALIDATE ─────
 
-// ── Storage (electron-store; never leaves the machine) ───────────────────────
-function getAllPresets() {
-  const map = store.get(PRESETS_KEY);
-  return map && typeof map === 'object' ? map : {};
-}
-
-function writeAll(map) {
-  store.set(PRESETS_KEY, map);
-}
-
-// The channel's live arm, or null when nothing consumable is stored. null is the
-// signal the web card uses to show the defaults without claiming they were
-// chosen. Reading NEVER extends the arm and never writes.
-function getPermissionPreset(channelId) {
-  return readArmFrom(getAllPresets(), channelId, Date.now());
-}
-
-// ARM a pair for the NEXT consent-approved launch on this channel. Returns
-// { ok: true } only when BOTH axes validated; an unknown value on either axis
-// writes NOTHING (the store is not touched) and reports { ok: false }.
-function armPermissionPreset(channelId, raw) {
-  const now = Date.now();
-  const map = getAllPresets();
-  const res = armInto(map, channelId, raw, now);
-  if (!res.ok) return { ok: false };
-  // Opportunistic sweep — this is already a write path, and the entry armInto
-  // just stamped is live, so it survives its own sweep.
-  sweepExpired(map, now);
-  writeAll(map);
-  diag('channel-prefs armed', String(channelId).slice(0, 8), res.preset.tools, res.preset.messages);
-  return { ok: true };
-}
-
-// THE ONLY WAY A STORED POSTURE EVER REACHES A SPAWN. Returns the live pair and
-// deletes it, or null. Call this ONLY from a path where a human is approving
-// this specific launch right now (trigger.js's consent-approved responder
-// launch); every other spawn shape must pass nothing and inherit manual/ask.
-function consumePermissionPreset(channelId) {
-  const now = Date.now();
-  const map = getAllPresets();
-  const found = takeArmFrom(map, channelId, now);
-  sweepExpired(map, now);
-  writeAll(map);
-  if (found) diag('channel-prefs consumed', String(channelId).slice(0, 8), found.tools, found.messages);
-  return found;
-}
-
-// Explicit teardown: a Deny (or any decision that is not an approval) drops the
-// arm rather than leaving it to age out, so a refused request never leaves a
-// widened posture waiting for the next one.
-function clearPermissionPreset(channelId) {
-  const now = Date.now();
-  const map = getAllPresets();
-  const had = Object.prototype.hasOwnProperty.call(map, channelId || '');
-  if (channelId) delete map[channelId];
-  const swept = sweepExpired(map, now);
-  if (had || swept) writeAll(map);
-  if (had) diag('channel-prefs cleared', String(channelId).slice(0, 8));
-}
-
 // ── AUTO-SEND (2026-08-20, the session-window retirement) — a DURABLE per-channel
-// setting, deliberately unlike the arm above: it narrows nothing (it governs whether the
-// operator's OWN agent's reply posts without a Send click), it is chosen on the channel's
-// Settings tab, and it must survive restarts or the operator would re-opt-in per session.
+// setting: it narrows nothing (it governs whether the operator's OWN agent's reply posts
+// without a Send click), it is chosen on the channel's Settings tab, and it must survive
+// restarts or the operator would re-opt-in per session.
 // Default OFF — ask-first: an absent, corrupt, or non-boolean record reads false.
 const AUTO_SEND_KEY = 'channelAutoSend'; // { [channelId]: true }
 
@@ -401,18 +260,6 @@ module.exports = {
   TOOL_MODES,
   MESSAGE_MODES,
   DEFAULT_PRESET,
-  ARM_TTL_MS,
   normalizePreset,
-  armIsLive,
-  resolveArm,
   defaultPreset,
-  readArmFrom,
-  armInto,
-  takeArmFrom,
-  sweepExpired,
-  getAllPresets,
-  getPermissionPreset,
-  armPermissionPreset,
-  consumePermissionPreset,
-  clearPermissionPreset,
 };

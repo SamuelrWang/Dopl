@@ -2,7 +2,8 @@
 //
 // ⚠ MUST stay free of electron/fs/path — test/tool-profiles.test.mjs evaluates the sentinel
 // block below verbatim in a plain Node context and breaks on those imports.
-// (scopedSettingsPath / writeScopedSettings live in session-spawner.js.)
+// (⚠ `scopedSettingsPath` / `writeScopedSettings` lived in session-spawner.js and went with the
+// headless lane, 2026-08-20 — the SDK lane passes its bounds as options, never as a settings file.)
 //
 // ⚠ --allowedTools ALONE IS NOT CONTAINMENT. It is ADDITIVE — it pre-approves so tools do not
 // prompt; it bounds nothing. The operator's own ~/.claude/settings.local.json `permissions.allow`

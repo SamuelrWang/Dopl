@@ -140,17 +140,10 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
     clearFolder: (channelId) =>
       ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
-    getPermissionPreset: (channelId) =>
-      ipcRenderer.invoke('channels:getPermissionPreset', asId(channelId)),
-    setPermissionPreset: (channelId, preset) =>
-      ipcRenderer.invoke('channels:setPermissionPreset', {
-        channelId: asId(channelId),
-        preset: {
-          tools: asMode(preset && preset.tools),
-          messages: asMode(preset && preset.messages),
-        },
-      }),
-    // THE DURABLE LAUNCH POSTURE (2026-08-20): the same two axes as the arm above, on a
+    // ⚠ `getPermissionPreset` / `setPermissionPreset` STOOD HERE AND ARE DELETED
+    // (2026-08-20). They were the single-use consent ARM; its web controls had already
+    // stopped rendering (F-233), so the ops armed a record nothing could set.
+
     // SEPARATE record with a separate consumer — `channel-dir-ipc.js › sessions:launch`,
     // the operator's own Launch button. `main/channel-prefs.js` states the split; the arm
     // stays single-use and consent-only. Same `asMode` coercion, same fail-closed write.

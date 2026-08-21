@@ -4,6 +4,17 @@
 // two guards that make the REPLAY-RESPAWN bug impossible — a settled request key is
 // never re-acted on, and a record reloaded mid-spawn is never re-run.
 //
+// ⚠ ONE PHASE LEFT THE VOCABULARY ON 2026-08-20 (Samuel's ruling): `await-outbound`, the
+// record waiting on Send/Cancel over a reply the `claude -p` HEADLESS lane had drafted. That
+// lane is deleted, and with it `toOutbound` — the phase's only writer — so `isAwaiting` is
+// `phase === 'await-inbound'` alone. The cases that named it are REWRITTEN rather than dropped
+// (INVARIANTS §14): a phase with no writer is still a phase that arrives out of a persisted
+// store written by an older build, and the predicates have to keep answering about it. See the
+// two blocks below for which direction each must answer in.
+//
+// ⚠ `mapStatus` IS UNTOUCHED. It maps a SERVER STATUS, and the server still has the same five;
+// nothing about the outbound consent KIND changed, only which component polls its row.
+//
 // Run: `node --test dopl-desktop-app/test/consent-watcher.test.mjs`
 //
 // WHY SOURCE EXTRACTION: consent-watcher.js is CommonJS and pulls in electron-store
@@ -99,28 +110,52 @@ test("isSettledIn is safe on empty / missing maps", () => {
 test("a record reloaded in the 'spawning' phase is treated as interrupted", () => {
   assert.equal(isInterruptedSpawn("spawning"), true);
   assert.equal(isInterruptedSpawn("await-inbound"), false);
+  // ⚠ KEPT ON PURPOSE THROUGH THE 2026-08-20 DELETION. `await-outbound` no longer has a
+  // writer, but this predicate runs over records loaded FROM DISK at `resume()`, so it is
+  // exactly where a stale phase from an older build arrives. It must keep answering false —
+  // a legacy record read as an interrupted spawn would post the `{ interrupted: true }`
+  // terminal echo for a request that was never spawned.
   assert.equal(isInterruptedSpawn("await-outbound"), false);
 });
 
 // ── isAwaiting: what counts toward the tray "Pending: N" ─────────────────────
-test("only await-inbound / await-outbound count as pending", () => {
+test("ONLY await-inbound counts as pending — it is the one awaiting phase left", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This asserted
+  // `isAwaiting('await-outbound') === true` — the record waiting on Send/Cancel over a reply
+  // the HEADLESS lane had drafted. That lane is deleted, `toOutbound` went with it, and the
+  // phase has no writer, so the predicate is now `phase === 'await-inbound'` alone.
+  //
+  // ⚠ THE ASSERTION IS INVERTED RATHER THAN DROPPED, AND THAT IS THE POINT. A deleted phase
+  // reading as awaiting would be a tray badge counting a decision nobody can make, and
+  // `await-outbound` is still spelled in persisted records on installed machines — a store
+  // written by 1.12.x can hand `resume()` one tomorrow. It must read as NOT pending.
   assert.equal(isAwaiting("await-inbound"), true); // waiting on Allow/Deny
-  assert.equal(isAwaiting("await-outbound"), true); // waiting on Send/Cancel
+  assert.equal(isAwaiting("await-outbound"), false, "a phase with no writer is not a pending ask");
   assert.equal(isAwaiting("spawning"), false); // active work, not a pending ask
   assert.equal(isAwaiting("done"), false);
 });
+
+// ⚠ APPROVE-OUT IS NOT GONE, AND NOTHING ABOVE SAYS IT IS. A windowless session's own-channel
+// post still bridges to an `outbound` consent row (`session-windowless.js › bridgeOutbound`) and
+// is still answered in the thread view's send box — but that row is polled BY THE SESSION
+// (`watchRow`), never by this watcher, and the agent posts its own bytes when its held tool call
+// is released. What died is the watcher PHASE, not the consent KIND.
 
 // ── countAwaiting + sign-out reset (FIX 1) ───────────────────────────────────
 // emitCount() derives the tray "Pending: N" from countAwaiting(record phases).
 // reset() (sign-out) clears the record set, so the count it emits is 0 — that is
 // what makes a stale "Pending: N" impossible after sign-out.
-test("countAwaiting counts only the await-* phases", () => {
+test("countAwaiting counts only await-inbound, over a mixed set", () => {
+  // The mix deliberately keeps a legacy `await-outbound` in it: the count is derived from
+  // isAwaiting, so a phase that stopped awaiting must stop being counted, and a suite that
+  // only ever passed live phases could not tell the difference.
   assert.equal(
     countAwaiting(["await-inbound", "await-outbound", "spawning", "done"]),
-    2
+    1
   );
+  assert.equal(countAwaiting(["await-inbound", "await-inbound"]), 2, "and it really counts");
   // Non-awaiting phases (active work / settled) never inflate the tray count.
-  assert.equal(countAwaiting(["spawning", "done", "gone"]), 0);
+  assert.equal(countAwaiting(["spawning", "done", "gone", "await-outbound"]), 0);
 });
 
 test("countAwaiting([]) is 0 — the sign-out reset postcondition", () => {
@@ -135,5 +170,7 @@ test("countAwaiting([]) is 0 — the sign-out reset postcondition", () => {
 test("only a reloaded 'spawning' record routes to the interrupted echo", () => {
   assert.equal(isInterruptedSpawn("spawning"), true); // → post interrupted echo
   assert.equal(isInterruptedSpawn("await-inbound"), false); // re-watched, no echo
-  assert.equal(isInterruptedSpawn("await-outbound"), false); // re-watched, no echo
+  // A legacy phase from a pre-2026-08-20 store: re-watched (and then dropped as not pending
+  // by isAwaiting), never echoed for.
+  assert.equal(isInterruptedSpawn("await-outbound"), false);
 });

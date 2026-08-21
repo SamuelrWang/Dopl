@@ -123,7 +123,7 @@ function isSessionPhase(phase) {
 // decision (inbound consent or outbound review). Active work ('spawning') and
 // settled requests do not.
 function isAwaiting(phase) {
-  return phase === 'await-inbound' || phase === 'await-outbound';
+  return phase === 'await-inbound'; // ⚠ 'await-outbound' went with the headless lane (2026-08-20)
 }
 
 // The tray "Pending: N" is the count of records awaiting a human decision. A
@@ -229,23 +229,19 @@ function toSession(key, { sessionId } = {}) {
   emitCount(); // no longer awaiting -> drops out of the tray "Pending: N" count
 }
 
-// Inbound was approved and the spawn produced a reply: move the same request to
-// its outbound-review phase, pointing at the new outbound row and carrying the
-// drafted reply so a restart can still post it on Send.
-function toOutbound(key, { rowId, taskId, startedAt, proposedReply }) {
-  const rec = records.get(key);
-  if (!rec) return;
-  rec.kind = 'outbound';
-  rec.rowId = rowId;
-  rec.phase = 'await-outbound';
-  rec.taskId = taskId;
-  rec.startedAt = startedAt;
-  rec.proposedReply = proposedReply;
-  rec.lastPolledAt = 0; // poll the new row promptly
-  persistRecords();
-  emitCount();
-  markActivity(); // a review is now waiting on the operator: fast cadence
-}
+// ⚠ `toOutbound(key, {...})` STOOD HERE AND IS DELETED (2026-08-20, Samuel's ruling).
+// It moved an approved request into an OUTBOUND-REVIEW phase, pointing at a second consent row
+// and carrying the drafted reply so a restart could still post it on Send. Its sole writer was
+// the `claude -p` headless lane (`trigger-headless.js › openOutboundReview`), which is deleted:
+// that lane produced a reply as a STRING for the desktop to post on the agent's behalf, and the
+// review was how a human got to see it first.
+//
+// ⚠ APPROVE-OUT ITSELF IS UNTOUCHED AND IS NOT THIS. A windowless session's own-channel post
+// still bridges to an `outbound` consent row (`session-windowless.js › bridgeOutbound`) and is
+// still answered in the thread view's send box. The difference is WHO POSTS THE BYTES: there the
+// AGENT does, when its held tool call is released, and the row's whole lifecycle lives in the
+// session rather than in this watcher. So `await-outbound` — a PHASE OF A WATCHED RECORD — has
+// no writer left, while the `outbound` KIND is busier than ever.
 
 // Terminal: record the outcome durably (so the request is never re-handled) and
 // drop the record. THIS is the terminal-decision persistence that fixes replay.
@@ -311,11 +307,15 @@ async function processRecord(key) {
   // nothing else. That looked like a rare fallback and is in fact the ONLY expiry path that
   // ever runs: MAX_WATCH_MS equals the server's own CONSENT_TTL_MS, and `rec.createdAt` is
   // stamped AFTER the insert returns, so the local clock is always the earlier of the two and
-  // this branch wins every race. `inboundExpired` therefore never ran — and two things live
-  // inside it. `closeConsentWindow` never ran, so a pre-consent window left open for 24h
-  // stayed open FOREVER with a live Accept over a row the server had already expired; and
-  // `clearPermissionPreset` never ran, so the posture the operator armed for a request they
-  // then ignored stayed armed for the NEXT launch in that channel.
+  // this branch wins every race. `inboundExpired` therefore never ran — and two things lived
+  // inside it: `closeConsentWindow`, so a pre-consent window left open for 24h stayed open
+  // FOREVER with a live Accept over a row the server had already expired, and
+  // `clearPermissionPreset`, so the posture the operator armed for a request they then ignored
+  // stayed armed for the NEXT launch in that channel.
+  // ⚠ BOTH OF THOSE CONSEQUENCES ARE GONE WITH THEIR MECHANISMS (2026-08-20): the pre-consent
+  // window with F-228, the arm with Samuel's ruling. They are recorded because the ROUTING is
+  // what survived them and this is why it exists — a resolver that never runs is a resolver
+  // whose contents nobody checks.
   //
   // Routing rather than re-implementing is the point: one definition of what an expiry does,
   // whichever clock notices it first. The resolvers settle the record themselves, so the belt
@@ -324,8 +324,7 @@ async function processRecord(key) {
     diag('watcher: LOCAL expiry (24h, no decision) —', key, 'phase', rec.phase);
     inFlight.add(key);
     try {
-      if (rec.phase === 'await-outbound') await safeResolve('outboundCancelled', rec);
-      else await safeResolve('inboundExpired', rec);
+      await safeResolve('inboundExpired', rec);
     } catch (err) {
       diag('watcher: local-expiry resolver error', err && err.message);
     } finally {
@@ -354,18 +353,20 @@ async function processRecord(key) {
     const decision = mapStatus(status);
     if (decision === 'pending' || decision === 'unknown') return; // keep waiting
 
+    // ⚠ ONE AWAITING PHASE LEFT (2026-08-20). The `await-outbound` arm went with the headless
+    // lane that was its only writer; a windowless session's outbound row is polled by the
+    // session itself (`session-windowless.js › watchRow`), never by this watcher.
     if (rec.phase === 'await-inbound') {
-      // H2: the resolver is told WHO allowed this — a live human, or the server's
-      // standing trust — because only the former may consume a permission arm. Passed
-      // as a call argument, never stamped on `rec`: the record is persisted, and an
-      // authority verdict must not be able to survive a restart and re-authorize a
-      // later launch from disk.
-      if (decision === 'allow') await safeResolve('inboundApproved', rec, { humanAllowed: isHumanAllow(status) });
+      // H2: the resolver used to be told WHO allowed this — a live human (`allowed`) or the
+      // server's standing trust (`auto_allowed`) — because only the former could consume the
+      // single-use permission ARM. ⚠ THE ARM IS DELETED (2026-08-20) and nothing reads the
+      // distinction any more, so it is no longer passed. `isHumanAllow` survives BELOW, unused
+      // by this file: the server still makes the distinction, it is the only statement of how
+      // to read it, and the next thing that needs "was a human looking at this" should not
+      // re-derive it from the status string.
+      if (decision === 'allow') await safeResolve('inboundApproved', rec);
       else if (decision === 'deny') await safeResolve('inboundDenied', rec);
       else if (decision === 'expire') await safeResolve('inboundExpired', rec);
-    } else if (rec.phase === 'await-outbound') {
-      if (decision === 'allow') await safeResolve('outboundApproved', rec);
-      else await safeResolve('outboundCancelled', rec); // deny/expire = cancel
     }
   } catch (err) {
     diag('watcher: process error', err && err.message);
@@ -481,12 +482,11 @@ module.exports = {
   register,
   setPhase,
   toSession,
-  toOutbound,
   settle: settleRequest,
   poke,
   has,
   isSettled,
   get,
-  isHumanAllow, // H2: exported for the test; processRecord is the only production caller
+  isHumanAllow, // ⚠ NO production caller since the arm was deleted (2026-08-20) — kept as the one reading of `allowed` vs `auto_allowed`
   requestKey,
 };

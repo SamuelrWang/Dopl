@@ -4,7 +4,10 @@
 //   1. `trigger.js` answers a busy channel with a courtesy no-op ("I'm still
 //      finishing a previous request — please resend in a moment") and an auth
 //      hold with another. Both go out through `postResult` with NO metadata and
-//      NO addressee.
+//      NO addressee. (⚠ A THIRD JOINED THEM 2026-08-20 — `CANNOT_RUN`, the terminal for a
+//      launch the engine refuses outright, which used to fall through to the `claude -p` lane
+//      instead of answering. Same shape, same brake, and the census below is what forced it to
+//      be given one.)
 //   2. `targeting.js`'s LOOP BRAKE comment says exactly that is safe: "the
 //      responder posts its reply UNADDRESSED … so it lands here as FYI and cannot
 //      re-trigger the asker."
@@ -30,7 +33,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
@@ -107,28 +110,70 @@ test("a REAL addressed request in the same DM still triggers", () => {
 
 // ── 2. the call sites ──────────────────────────────────────────────────────────
 
-test("every courtesy no-op goes out through postCourtesy, and the real reply does not", () => {
+test("every courtesy no-op goes out through postCourtesy, and nothing else does", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). Two of this case's
+  // anchors were deleted on the same day, in opposite directions, and both are worth stating:
+  //
+  //   · `main/trigger-headless.js` is gone with the `claude -p` lane, so the THIRD courtesy site
+  //     — that lane's own busy defer — is gone. The rule was never "there are three": it was
+  //     "every no-op is marked, in every lane there is". There is one lane now.
+  //   · `trigger.js › outboundApproved` is gone with it, and it was the CONTROL half of this
+  //     case — the approved reply that must NOT be marked, because a fix that muted the answer
+  //     too would be the same outage from the other direction. It posted the reply the operator
+  //     had reviewed, on the agent's behalf, because a headless run hands back a string.
+  //
+  // ⚠ THE CONTROL IS REPLACED, NOT DROPPED, BECAUSE WITHOUT ONE THIS CASE DEGENERATES INTO
+  // "everything is chat", which passes trivially and is the exact failure it was written
+  // against. What stands in its place is stronger than the original: an ENUMERATION of every
+  // `postCourtesy` call in main/, discovered off the tree rather than counted, plus the absence
+  // of the marker from the posting helper the AGENT's own reply goes through. Approve-out did
+  // not die — it moved INTO the session, where the agent posts its own bytes once its held tool
+  // call is released, so the real reply never passes through this file's helpers at all.
+
   const post = read("channel-post.js");
   const trigger = read("trigger.js");
-  const headless = read("trigger-headless.js");
 
   // The helper stamps the marker, in one place.
   assert.match(post, /async function postCourtesy\(entry, m, text\) \{\s*return postResult\(entry, m, text, null, \{ intent: 'chat' \}\);/);
 
-  // All three no-ops use it: the busy defer in each lane, and the auth hold.
-  assert.match(trigger, /postCourtesy\(entry, m, AUTH_HELD_REPLY\)/);
-  assert.match(trigger, /postCourtesy\(entry, m, RESEND\)/);
-  assert.match(headless, /postCourtesy\(entry, m, RESEND\)/);
-  const sites = [trigger, headless].flatMap((s) => s.match(/postCourtesy\(/g) || []);
-  assert.equal(sites.length, 3, "exactly the three courtesy no-ops");
+  // ALL THREE no-ops use it. The lane changed; the count did not, because the terminal that
+  // replaced the headless fall-through needs a courtesy of its own.
+  assert.match(trigger, /postCourtesy\(entry, m, AUTH_HELD_REPLY\)/, "the auth hold");
+  assert.match(trigger, /postCourtesy\(entry, m, RESEND\)/, "the busy defer");
+  // ⚠ THE NEW ONE (2026-08-20): the terminal that used to BE the headless lane. `cap` /
+  // `no-sdk` / `disabled` no longer fall through to a second executor, so they answer the peer
+  // here — and `CANNOT_RUN` is a no-op reply exactly like the other two, which means it needs
+  // the same brake. A terminal added without it would raise a consent card on the peer in every
+  // DM, which is P1-5 reopened by the very change that made the terminal necessary.
+  assert.match(trigger, /postCourtesy\(entry, m, CANNOT_RUN\)/, "the cannot-run terminal");
 
-  // …and the APPROVED REPLY is still a plain request. This is the assertion that
-  // keeps the fix from becoming a mute: `outboundApproved` posts the answer the
-  // operator reviewed, and that one must reach the peer's machine.
-  assert.match(trigger, /postResult\(entry, m, reply, \{ taskId: taskIdFor\(rec\) \}\)/);
-  const approved = trigger.slice(trigger.indexOf("async function outboundApproved"));
-  assert.ok(!approved.slice(0, 400).includes("postCourtesy"), "the real reply is not chat");
+  // THE ENUMERATION, off the tree: every courtesy in main/ is in trigger.js, and there are
+  // exactly three of them. A fourth appearing anywhere is a no-op nobody has checked the
+  // classifier against.
+  const files = readdirSync(join(HERE, "..", "main")).filter((f) => f.endsWith(".js"));
+  const senders = files.filter((f) => /postCourtesy\(/.test(stripComments(read(f)))).sort();
+  assert.deepEqual(senders, ["channel-post.js", "trigger.js"],
+    "the helper's own file, and the one lane that sends no-ops");
+  assert.equal((stripComments(trigger).match(/postCourtesy\(/g) || []).length, 3,
+    "exactly the three courtesy no-ops: busy, auth-hold, cannot-run");
+
+  // …AND THE CONTROL. `postResult` is the unmarked poster — the one a REAL answer would use —
+  // and the marker must never be stamped there by default, or the fix becomes a mute. This is
+  // asserted at the helper rather than at a call site because trigger.js no longer HAS a
+  // real-reply call site: the agent posts its own bytes from inside the session now.
+  assert.match(post, /\.\.\.\(opts && opts\.intent \? \{ intent: opts\.intent \} : \{\}\)/,
+    "an absent intent stamps no key at all");
+  const bridge = read("session-windowless.js");
+  assert.ok(!/intent: 'chat'/.test(stripComments(bridge)),
+    "the windowless outbound bridge — where the real reply leaves now — must never mark it chat");
 });
+
+/** Comments legitimately NAME the deleted call sites (they explain why they are gone), so the
+ *  census assertions above scan CODE only. */
+const stripComments = (src) => src.split("\n")
+  .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+  .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
+  .join("\n");
 
 test("postResult only stamps an intent when one is given", () => {
   // Every other caller — the approved reply, and anything added later — must send

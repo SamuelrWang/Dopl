@@ -4,8 +4,8 @@
 // is already working: the engine refuses a second session for the SAME (channel, thread)
 // (session-engine.launch -> skipped 'busy'), and the headless fallback refuses a second
 // spawn for the same session key or one past the machine's concurrency cap
-// (session-spawner.runForChannel -> skipped 'busy'; D1 2026-07-31 replaced the old
-// one-active-spawn-per-CHANNEL guard with the session-pool). Both defers answered with the RESEND bubble ALONE,
+// (⚠ ONE defer left since 2026-08-20: the engine's `busy` skip. The headless lane's own
+// `at-cap` defer went with `session-spawner.runForChannel` and `session-pool.js`.) Both defers answered with the RESEND bubble ALONE,
 // and that bubble is posted through postResult with NO metadata — which by design lands
 // OUTSIDE every thread (see channel-post.js). So the person watching the THREAD saw
 // nothing at all while the resend loop ran (measured live: 2m13s to pickup against 15s for

@@ -19,6 +19,16 @@
 //      what still makes an unrouted expiry a grant bug rather than a cosmetic one.
 //   2. `clearPermissionPreset` — so the posture the operator armed for a request they then
 //      ignored stayed armed for the NEXT launch in that channel.
+//      ⚠ ALSO DELETED, NOT FIXED-AND-KEPT (2026-08-20, Samuel's ruling): the single-use
+//      permission arm is gone, so there is no `clearPermissionPreset` either. BOTH of C-7's
+//      named consequences have now outlived by deletion, within thirteen days of each other.
+//
+// ⚠ SO WHY THE FILE STILL EXISTS, STATED PLAINLY, BECAUSE THE OBVIOUS READ IS THAT IT SHOULD
+// NOT. C-7 was never a finding about windows or about arms. It was a finding about ROUTING: two
+// expiry paths, one of which ran a resolver and one of which did not, where the one that did not
+// ALWAYS won. The two consequences were how the defect was DETECTED, not what it was. A resolver
+// that never runs is a resolver whose contents nobody checks — and the next thing put inside
+// `inboundExpired` inherits that, silently, unless the routing is pinned. It is pinned here.
 //
 // THE FIX IS ROUTING, NOT RE-IMPLEMENTING: whichever clock notices first, an expiry does the
 // same thing, because there is one definition of what an expiry does.
@@ -79,7 +89,14 @@ function harness(over = {}) {
   const api = new Function(
     "inFlight", "records", "isSessionPhase", "clock", "isDue", "MAX_WATCH_MS", "diag",
     "safeResolve", "settleRequest", "pollAllowed", "recentPolls", "pollTimes", "cappedAt",
-    "POLL_WINDOW_MS", "MAX_POLLS_PER_WINDOW", "consent", "mapStatus", "isHumanAllow",
+    // ⚠ `isHumanAllow` WAS INJECTED HERE AND IS NOT ANY MORE (2026-08-20). `processRecord` used
+    // it to stamp `{ humanAllowed }` on the resolver call for the permission arm; the arm is
+    // deleted and the body no longer names it. Left injected it would have been a free variable
+    // nothing reads — and if a future edit puts the read back, the ReferenceError from this
+    // harness is a LOUDER failure than a silently-satisfied stub, which is the direction to fail
+    // in. See "H2's authority reading SURVIVES the arm" below for where the function itself is
+    // pinned.
+    "POLL_WINDOW_MS", "MAX_POLLS_PER_WINDOW", "consent", "mapStatus",
     `${extractAsyncFn(SRC, "processRecord")}\n return { processRecord };`
   )(
     inFlight, records,
@@ -92,8 +109,7 @@ function harness(over = {}) {
     () => true, // never rate-capped here
     (t) => t, [], 0, 60_000, 30,
     consent,
-    (s) => (s === "allowed" || s === "auto_allowed" ? "allow" : s === "denied" ? "deny" : s === "expired" ? "expire" : s === "pending" ? "pending" : "unknown"),
-    (s) => s === "allowed"
+    (s) => (s === "allowed" || s === "auto_allowed" ? "allow" : s === "denied" ? "deny" : s === "expired" ? "expire" : s === "pending" ? "pending" : "unknown")
   );
 
   return {
@@ -135,40 +151,60 @@ test("C-7: a locally-expired INBOUND record runs the inboundExpired resolver", (
   });
 });
 
-test("C-7: that resolver is where clearPermissionPreset lives", () => {
-  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, F-228; INVARIANTS §14). This case named TWO things
-  // the old `settleRequest`-and-return skipped, and the FIRST of them is deleted:
-  // `sessionEngine.closeConsentWindow(rec.key, 'expired')` closed the PRE-CONSENT WINDOW, the
-  // surface that showed a live Accept button over a row the server had already expired. There
-  // is no pre-consent window — `openConsentWindow` / `decideConsent` / `closeConsentWindow` /
-  // `releaseConsentWindow` all went with `renderer/session/**` — so the visible half of C-7 is
-  // not fixed-and-pinned, it is UNREACHABLE. Its absence is asserted below rather than left
-  // implicit, because a resolver that quietly regrew a window call is exactly the drift this
-  // case was written to catch.
+test("C-7: the resolver is REACHED, and both things it used to hold are gone from the tree", () => {
+  // ⚠ REWRITTEN TWICE IN ONE DAY, AND BOTH TIMES BY A DELETION (INVARIANTS §14). This case named
+  // the TWO things the old `settleRequest`-and-return skipped, and neither exists now:
+  //   · `sessionEngine.closeConsentWindow(rec.key, 'expired')` closed the PRE-CONSENT WINDOW, the
+  //     surface that showed a live Accept over a row the server had already expired. Deleted with
+  //     `renderer/session/**` (F-228) — `openConsentWindow` / `decideConsent` / `closeConsentWindow`
+  //     / `releaseConsentWindow` all went together.
+  //   · `channelPrefs.clearPermissionPreset(rec.channelId)` dropped the posture the operator armed
+  //     for a request they then ignored, so it could not survive into the NEXT launch in that
+  //     channel — a grant nobody gave (H2). Deleted with the arm (Samuel's ruling): there is no
+  //     stored pair a peer-driven launch can inherit at all, because an inbound request now
+  //     carries NO tool posture and lands on the reducer's `manual`.
   //
-  // THE INVISIBLE HALF IS UNTOUCHED AND IS WHY THE FILE STILL EXISTS: an armed posture
-  // surviving an ignored request into the NEXT launch in that channel is a grant nobody gave
-  // (H2), and it is entirely independent of any surface. Pinned against trigger-outcomes.js so
-  // a future edit that moves it out of the resolver has to come back here and say why.
-  const body = OUTCOMES.slice(OUTCOMES.indexOf("async function inboundExpired("));
-  assert.ok(body.length > 0, "the resolver still exists — a missing slice would pass everything below");
-  assert.match(body, /channelPrefs\.clearPermissionPreset\(rec\.channelId\)/,
-    "an armed posture surviving into the NEXT launch is what a local expiry must still clear");
+  // ⚠ THE CASE IS KEPT BECAUSE C-7 IS THE ROUTING, NOT ITS TWO SYMPTOMS. What must stay true is
+  // that `inboundExpired` is a REAL, REACHED resolver rather than a name the local branch skips —
+  // whatever ends up inside it next. So this now asserts the resolver exists and is the one the
+  // expiry branch dispatches to (driven in the case above), and asserts the ABSENCE of both
+  // deleted families, because a resolver that quietly regrew either call is exactly the drift
+  // this case was written to catch. An empty slice would pass every negative below, so the
+  // slice's non-emptiness is checked first.
+  const at = OUTCOMES.indexOf("async function inboundExpired(");
+  assert.notEqual(at, -1, "the resolver still exists — a missing slice would pass everything below");
+  const body = OUTCOMES.slice(at, OUTCOMES.indexOf("\n}", at));
+  assert.ok(body.length > 0);
+  assert.match(body, /watcher\.settle\(rec\.key, 'expired'\)/,
+    "it is terminal in its own right, not a hook that only did work through what it called");
   assert.ok(!/closeConsentWindow|releaseConsentWindow|openConsentWindow/.test(OUTCOMES),
     "the consent-window family is deleted, not merely unused — a call here would not resolve");
+  assert.ok(!/clearPermissionPreset|consumePermissionPreset|armPermissionPreset/.test(OUTCOMES),
+    "the permission arm is deleted, not merely unused — a call here would not resolve");
+  assert.ok(!/require\('\.\/channel-prefs'\)/.test(OUTCOMES),
+    "…and the module is not even required any more, so a regrowth cannot be a one-line edit");
 });
 
-test("C-7: a locally-expired OUTBOUND review is cancelled, not silently dropped", () => {
-  // An await-outbound record holds a DRAFTED REPLY the operator never sent. Expiring it
-  // through `outboundCancelled` posts the "Reply was not sent" echo; settling it in place
-  // left the requester's card claiming the request was still being worked.
-  const h = harness();
-  const rec = h.add({ phase: "await-outbound" });
-  h.setNow(rec.createdAt + DAY_MS + 1);
-  return h.processRecord(rec.key).then(() => {
-    assert.deepEqual(h.calls.resolved.map((r) => r.name), ["outboundCancelled"]);
-  });
-});
+// ⚠ "C-7: a locally-expired OUTBOUND review is cancelled, not silently dropped" STOOD HERE AND IS
+// DELETED (2026-08-20, Samuel's ruling). It added a record in the `await-outbound` phase, pushed
+// the clock past MAX_WATCH_MS, and asserted the expiry routed to `outboundCancelled` — because an
+// await-outbound record held a DRAFTED REPLY the operator never sent, and settling it in place
+// left the requester's card claiming the request was still being worked.
+//
+// Both ends of it are gone. The phase's only writer was `consent-watcher.toOutbound`, called only
+// by `trigger-headless.js › openOutboundReview`, and the `claude -p` lane that drafted a reply as
+// a STRING for the desktop to post is deleted. `processRecord`'s expiry branch no longer has an
+// `await-outbound` arm to route into, so the case would drive a phase the shipped body cannot
+// reach and assert a resolver call it cannot make.
+//
+// ⚠ `trigger-outcomes.js › outboundCancelled` STILL EXISTS AND NOW HAS NO CALLER — recorded here
+// because this file was its last test, and a resolver nobody dispatches is precisely the shape
+// C-7 was filed about.
+//
+// ⚠ AND APPROVE-OUT IS NOT WHAT DIED. A windowless session's own-channel post still bridges to an
+// `outbound` consent row and is answered in the thread view's send box; that row is polled by the
+// SESSION (`session-windowless.js › watchRow`) and the AGENT posts its own bytes when its held
+// tool call is released. There is no drafted string sitting in a watcher record to expire.
 
 test("C-7: the record is ALWAYS retired — a missing or throwing resolver cannot strand it", () => {
   // The belt. Routing must not be able to turn "settled, but silently" into "never settled",
@@ -242,13 +278,48 @@ test("an engine-owned session record is never polled and never locally expired",
   });
 });
 
-test("the ALLOW path still tells the resolver whether a HUMAN decided it (H2)", () => {
-  for (const [status, humanAllowed] of [["allowed", true], ["auto_allowed", false]]) {
+test("BOTH allows reach the same resolver, and neither carries an authority verdict now", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This read "the ALLOW
+  // path still tells the resolver whether a HUMAN decided it (H2)" and asserted
+  // `meta === { humanAllowed: true }` for `allowed` and `{ humanAllowed: false }` for
+  // `auto_allowed`. The distinction existed for ONE reason: only a live human decision could
+  // consume the single-use permission arm. The arm is deleted, so `processRecord` no longer
+  // passes the flag and there is nothing downstream that would read it.
+  //
+  // ⚠ WHAT IS ASSERTED INSTEAD IS THE PROPERTY THAT OUTLIVED IT, and it is the sharper half:
+  // `auto_allowed` — the server's STANDING trust, decided by rules with no card in front of
+  // anyone — must still reach the SAME resolver and spawn identically. `mapStatus` collapses the
+  // two deliberately, and if that ever stops being true, a trusted channel silently stops
+  // answering its peers. The old case proved the two were TOLD APART; this proves they are
+  // TREATED ALIKE, which is what the code now does and what the product depends on.
+  const runs = [["allowed"], ["auto_allowed"]].map(([status]) => {
     const h = harness({ status });
     const rec = h.add({});
     h.setNow(rec.createdAt + 60_000);
     return h.processRecord(rec.key).then(() => {
-      assert.deepEqual(h.calls.resolved[0].meta, { humanAllowed }, status);
+      assert.deepEqual(h.calls.resolved.map((r) => r.name), ["inboundApproved"], status);
+      return h.calls.resolved[0].meta;
     });
-  }
+  });
+  return Promise.all(runs).then(([human, standing]) => {
+    assert.deepEqual(human, standing, "a person clicking and standing trust are handed the same thing");
+    assert.ok(!human || !("humanAllowed" in human),
+      "no authority verdict rides along — nothing reads one, and a stale flag would be read as truth");
+  });
+});
+
+test("H2's authority reading SURVIVES the arm, unused and exported, and is not re-derived", () => {
+  // ⚠ THE DELIBERATE LOOSE END, PINNED SO IT IS NOT TIDIED AWAY AS DEAD CODE. `isHumanAllow` has
+  // no production caller since the arm went. It is kept because the server still makes the
+  // distinction — `allowed` is a person clicking Allow on a card; `auto_allowed` is standing
+  // trust decided earlier by rules — and this is the ONE statement of how to read it. The next
+  // thing that needs "was a human looking at this" must import it rather than re-deriving it
+  // from a status string, which is how two answers to one question get written.
+  assert.match(SRC, /function isHumanAllow\(status\) \{\s*return String\(status \|\| ''\) === 'allowed';/);
+  assert.match(SRC, /isHumanAllow,/, "and it is exported, or the next caller cannot reach it");
+  // …and it must NOT have quietly re-acquired a caller inside the watcher, which would mean the
+  // distinction came back without the review that removing it got.
+  const body = SRC.slice(SRC.indexOf("async function processRecord("));
+  assert.ok(!/isHumanAllow\(/.test(body.slice(0, body.indexOf("async function safeResolve"))),
+    "processRecord passes no authority verdict — see the case above for why");
 });

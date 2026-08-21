@@ -125,14 +125,29 @@ const APP_OPS = [
   //     button. It is SUPERVISION, not containment — a forged `set` to `bypass` cannot
   //     escape the channel's tool profile or `session-profiles.js › SESSION_HARD_DENY`, and
   //     Axis B still refuses to let any tool posture send a message.
-  //   • ⚠ IT IS NOT THE ARM. `channels.get/setPermissionPreset` stays single-use, 30-minute,
-  //     consent-only (H2). Wiring either pair to the other's consumer re-opens the failure
-  //     H2 exists to prevent — `main/channel-prefs.js` states the split in full.
+  //   • ⚠ AND SINCE LATER THE SAME DAY THEY ARE THE ONLY POSTURE OPS ON THIS BRIDGE. The
+  //     entry above used to end "IT IS NOT THE ARM — `channels.get/setPermissionPreset` stays
+  //     single-use, 30-minute, consent-only (H2), and wiring either pair to the other's
+  //     consumer re-opens the failure H2 exists to prevent". Both arm ops are DELETED
+  //     (Samuel's ruling), together with their main-process handlers and the whole
+  //     `channelPermissionPresets` record. The warning still applies to THIS pair and is
+  //     what the one-consumer census in `test/session-preset-start.test.mjs` enforces:
+  //     `channels.setLaunchPosture` writes a record read by `sessions:launch` and by nothing
+  //     else, and a second reader is H2 re-opened whether or not an arm exists to contrast it
+  //     with.
   "channels.getLaunchPosture",
-  "channels.getPermissionPreset",
+  // ⚠ TWO OPS WERE REMOVED FROM THIS LIST ON 2026-08-20, and a REMOVAL is exactly what this
+  // file exists to catch — so it is stated rather than absorbed. `channels.getPermissionPreset`
+  // and `channels.setPermissionPreset` sat between the two entries above and below. The pin's
+  // premise is "a removed op is a silently missing feature", and the check that premise
+  // demands was made: the feature was ALREADY missing. The arm's web controls lived in
+  // `launch-panel.tsx`'s INBOUND branch, which stopped rendering at the 2026-08-18 consent
+  // rewrite (the panel's one consumer is the outbound send box, so `kind === "inbound"` was
+  // never true in production — measured, F-233). Nothing feature-detected these two, because
+  // nothing could reach them. The main-process handlers are gone with them, so leaving them
+  // pinned would assert a bridge to nowhere.
   "channels.setAutoSend",
   "channels.setLaunchPosture",
-  "channels.setPermissionPreset",
   "getAuthState",
   "onAuthState",
   "onNavigate",

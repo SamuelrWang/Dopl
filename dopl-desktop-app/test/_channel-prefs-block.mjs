@@ -5,8 +5,16 @@
 // of the slicer in a second file — is how two suites drift into testing two different
 // programs. Same seam and same precedent as `_session-summary-harness.mjs` and
 // `_reducer-block.mjs`: the extraction machinery is shared, the cases are split by what
-// they are ABOUT. `channel-prefs.test.mjs` keeps the ARM; `channel-launch-posture.test.mjs`
-// takes the DURABLE posture.
+// they are ABOUT. `channel-prefs.test.mjs` keeps the SHARED VALIDATOR and the IPC surface;
+// `channel-launch-posture.test.mjs` takes the DURABLE posture's own map ops.
+//
+// ⚠ THE ARM'S HALF OF THIS EXPORT LIST IS DELETED (2026-08-20, Samuel's ruling). It read
+// `ARM_TTL_MS, armIsLive, resolveArm, readArmFrom, armInto, takeArmFrom, sweepExpired` —
+// the single-use, 30-minute, consent-only permission preset. `channel-prefs.js` no longer
+// defines any of them, so the `new Function` below threw a `ReferenceError` at MODULE LOAD
+// and took BOTH suites down with it, before a single case ran. That is the sharp part of
+// sharing a slicer: one dead symbol in the export list is not a failing assertion, it is
+// two suites that cannot start. The list is now exactly what the block defines.
 //
 // WHY SOURCE EXTRACTION AT ALL: channel-prefs.js pulls in electron-store, so it does not
 // import under `node --test`. The validation + map ops are fenced as a PURE block (no
@@ -45,11 +53,14 @@ for (const banned of ["require(", "electron", "store.", "fs.", "os.", "process."
 }
 
 const EXPORTED = [
-  "TOOL_MODES", "MESSAGE_MODES", "DEFAULT_PRESET", "ARM_TTL_MS", "normalizePreset",
-  "armIsLive", "resolveArm", "defaultPreset", "readArmFrom", "armInto", "takeArmFrom",
-  "sweepExpired",
-  // The DURABLE half (2026-08-20). ⚠ Deliberately NOT symmetrical with the arm's
-  // readers: there is no TTL argument and no `at`, which is the whole difference.
+  // THE SHARED VALIDATOR — the frozen enums and the whole-pair-or-nothing rule. It
+  // outlived the arm because it was never the arm's: both records were always
+  // re-validated through `normalizePreset`, and it is still the only thing standing
+  // between a hostile renderer payload and a stored `bypass`.
+  "TOOL_MODES", "MESSAGE_MODES", "DEFAULT_PRESET", "normalizePreset", "defaultPreset",
+  // THE DURABLE LAUNCH POSTURE's map ops — and since the arm's deletion, the only
+  // per-channel record in this block. ⚠ There is no TTL argument and no `at`, which
+  // used to be the difference from the arm's readers and is now simply the shape.
   "readPostureFrom", "postureInto",
 ];
 

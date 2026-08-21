@@ -1,11 +1,22 @@
 // The in-thread "queued, not ignored" milestone (main/queued-notice.js, 2026-07-31).
 //
-// The desktop defers an ACCEPTED trigger when the slot it needs is busy (engine: the same
-// (channel, thread) is already running; headless: the one-active-spawn-per-CHANNEL guard),
-// and until now the only answer was the RESEND bubble, which carries no thread tag and so
-// never appears in the thread the requester is watching. This suite pins the milestone that
-// closes that hole, and — just as load-bearing — pins that it can never post twice, never
-// posts for a legacy thread id, and can never throw back into the defer path.
+// The desktop defers an ACCEPTED trigger when the slot it needs is busy, and until now the only
+// answer was the RESEND bubble, which carries no thread tag and so never appears in the thread
+// the requester is watching. This suite pins the milestone that closes that hole, and — just as
+// load-bearing — pins that it can never post twice, never posts for a legacy thread id, and can
+// never throw back into the defer path.
+//
+// ⚠ THERE WAS ONE DEFER PER LANE AND THERE IS NOW ONE DEFER (2026-08-20, Samuel's ruling). The
+// second was the headless spawner's — the same-key / at-cap refusal of `session-pool.js`,
+// answered from `main/trigger-headless.js`. Both files are deleted with the `claude -p` lane, so
+// the ENGINE's `busy` skip (the same (channel, thread) is already running) is the only defer
+// left. The static call-site case at the foot is rewritten to a DISCOVERED census rather than a
+// count of two, so a second defer cannot reappear unannounced the way the headless one did.
+//
+// ⚠ AND A TERMINAL IS NOT A DEFER. `cap` / `no-sdk` / `disabled` used to fall through to the
+// headless lane; they now answer the peer with `CANNOT_RUN` and settle. They must NOT announce,
+// because this module's copy promises "I'll pick it up when that frees" and a spent cap or a
+// missing runtime does not free itself. That is asserted at the foot too.
 //
 // Run: `node --test dopl-desktop-app/test/queued-notice.test.mjs`
 //
@@ -20,7 +31,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -193,36 +204,59 @@ test("every path logs exactly one diag line, and never a token-shaped value", as
 
 // ── the call sites (static): both defers announce, and nothing else does ──────
 
-test("both busy defers announce, ahead of the RESEND bubble", () => {
-  // §2 SPLIT (2026-08-04): the HEADLESS FALLBACK lane moved to trigger-headless.js, so
-  // the two defer sites now live in two files — the SESSION lane's in trigger.js, the
-  // headless one next door. Read both: the invariant is about the pair of defers, not
-  // about which file they happen to sit in, and scanning only trigger.js after the
-  // split would have quietly stopped covering half of it.
-  const trigger = readFileSync(join(HERE, "..", "main", "trigger.js"), "utf8");
-  const headless = readFileSync(join(HERE, "..", "main", "trigger-headless.js"), "utf8");
-  const both = [trigger, headless];
-  const sites = both.flatMap((src) => src.match(/queued\.announce\([^)]*\)/g) || []);
-  assert.equal(sites.length, 2, "one per busy defer (engine session + headless spawner)");
+test("THE busy defer announces, ahead of the RESEND bubble, and nothing else does", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This case read
+  // "BOTH busy defers announce" and drove TWO files: §2 SPLIT (2026-08-04) had moved the
+  // HEADLESS FALLBACK lane into `main/trigger-headless.js`, so the two defer sites lived next
+  // door to each other and scanning only trigger.js would have quietly stopped covering half.
+  // That file is deleted with the `claude -p` lane, and with it the second site
+  // (`queued.announce(entry, m, taskId, 'headless')`) and the second defer it answered — the
+  // spawn pool's same-key / at-cap refusal, `session-pool.js`, deleted the same day.
+  //
+  // ⚠ THE INVARIANT IS UNCHANGED AND IS WHY THE CASE IS KEPT: it was never "there are two". It
+  // is that EVERY defer answers with the in-thread milestone before the untagged bubble,
+  // because the bubble is posted with no metadata and so lands OUTSIDE every thread — the
+  // person watching the thread would otherwise see nothing at all and could not tell "queued
+  // behind something" from "ignored". One lane defers now, so the census is one, and it is
+  // DISCOVERED over main/ rather than counted in a list, so a second defer cannot reappear
+  // unannounced the way the headless one originally did.
+  const MAIN = join(HERE, "..", "main");
+  const trigger = readFileSync(join(MAIN, "trigger.js"), "utf8");
+
+  const callers = readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js") && f !== "queued-notice.js")
+    .filter((f) => /queued\.announce\(/.test(readFileSync(join(MAIN, f), "utf8")))
+    .sort();
+  assert.deepEqual(callers, ["trigger.js"],
+    "a new defer site is a new way for a requester to watch a silent thread — review it here");
+
+  const sites = trigger.match(/queued\.announce\([^)]*\)/g) || [];
+  assert.equal(sites.length, 1, "one per busy defer, and the engine's `busy` skip is the only one left");
 
   // The engine defer threads under the FIRST-CLASS id when the record carries one.
   assert.ok(trigger.includes("queued.announce(entry, m, rec.taskId || taskId, 'session')"));
-  assert.ok(headless.includes("queued.announce(entry, m, taskId, 'headless')"));
 
   // Ordered: the milestone lands in the thread BEFORE the untagged resend bubble, so a
   // requester reading top-down sees the reason before the ask.
-  for (const src of both) {
-    for (const site of src.match(/queued\.announce\([^)]*\)/g) || []) {
-      const at = src.indexOf(site);
-      // P1-5: the bubble goes out through `postCourtesy` now (intent "chat", so a
-      // no-op cannot trigger the peer). Same post, same position, named for what
-      // it is.
-      const resend = src.indexOf("postCourtesy(entry, m, RESEND)", at);
-      assert.ok(resend > at && resend - at < 200, `${site} must precede its RESEND post`);
-    }
+  for (const site of sites) {
+    const at = trigger.indexOf(site);
+    // P1-5: the bubble goes out through `postCourtesy` now (intent "chat", so a
+    // no-op cannot trigger the peer). Same post, same position, named for what
+    // it is.
+    const resend = trigger.indexOf("postCourtesy(entry, m, RESEND)", at);
+    assert.ok(resend > at && resend - at < 200, `${site} must precede its RESEND post`);
   }
 
   // NOT on the declined / auth-held / fyi paths — those are answers, not defers.
-  const denied = trigger.slice(trigger.indexOf("AUTH_HELD_REPLY)"));
-  assert.ok(!denied.slice(0, 200).includes("queued.announce"));
+  const held = trigger.slice(trigger.indexOf("AUTH_HELD_REPLY)"));
+  assert.ok(!held.slice(0, 200).includes("queued.announce"));
+  // ⚠ NOR ON THE CANNOT-RUN TERMINAL (new 2026-08-20). `cap` / `no-sdk` / `disabled` used to
+  // fall through to the headless lane and are now terminals — and a terminal must NOT announce,
+  // because "queued, I'll pick it up when that frees" would be a promise nothing intends to
+  // keep. `busy` frees itself; a spent cap and a missing runtime do not. That distinction is
+  // the whole reason `CANNOT_RUN` exists beside `RESEND`.
+  const cannot = trigger.slice(trigger.indexOf("CANNOT_RUN)"));
+  assert.ok(!cannot.slice(0, 200).includes("queued.announce"));
+  const terminal = trigger.slice(trigger.indexOf("const skipped = (res && res.skipped)"));
+  assert.ok(!/queued\.announce/.test(terminal), "the whole terminal block queues nothing");
 });

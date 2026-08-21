@@ -193,7 +193,7 @@ export async function opReadSessions(
 
   if (sessions.length === 0) {
     return ok(
-      `No live sessions of yours are being reported${channelLabel} right now. This lists the sessions running on YOUR OWN machine (the agent windows your Dopl app opened), not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`,
+      `No live sessions of yours are being reported${channelLabel} right now. This lists the agent sessions running on YOUR OWN machine, not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`,
     );
   }
 
@@ -205,7 +205,7 @@ export async function opReadSessions(
   ];
   for (const s of sessions) lines.push(formatSessionLine(s));
   lines.push(
-    `\nEach line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished — its window is still open). To act on what a session is doing, open its window in the Dopl app; to reach the PEER a thread is with, post into that thread.`,
+    `\nEach line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished). To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`,
   );
   return ok(lines.join("\n"));
 }

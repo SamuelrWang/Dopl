@@ -90,13 +90,32 @@ test("the retired setter answers false and never writes the store", () => {
 // still refuses to write. That is the DISARMED-GUARD record F-228 asks for: the switches are
 // deleted in the wave after this one, deliberately after a full green, so nothing can quietly
 // come back in between.
+//
+// ⚠ AND THE APPROVAL-PATH CASE BELOW MOVED WITH SAMUEL'S HEADLESS RULING (2026-08-20). It pinned
+// `if (await launchResponderSession(` — the conditional whose FALSE branch was the `claude -p`
+// fallback. That lane is deleted, the call is unconditional, and the assertion is inverted to
+// say so: a conditional here would mean something is waiting to catch a false branch, and
+// nothing may.
 
-test("the responder launch is WINDOWLESS, and it is the only shape left", () => {
+test("the responder launch is WINDOWLESS, and it is the ONLY thing the approval path does", () => {
   // 2026-08-20 (retirement): an approved request runs a windowless SDK session. No
   // master-switch read anywhere in the approval path — `launch()` refuses every non-windowless
   // shape outright now, so there is no switch left for this path to consult.
+  //
+  // ⚠ ONE ASSERTION CHANGED SHAPE THE SAME DAY (Samuel's headless ruling; INVARIANTS §14). It
+  // matched `if (await launchResponderSession(` — the CONDITIONAL, whose false branch fell
+  // through to the `claude -p` lane. That lane is deleted and the call is now unconditional:
+  // `launchResponderSession` always returns true, because every engine skip became a terminal
+  // that answers the peer and settles the record rather than selecting a second executor.
+  //
+  // The match is inverted rather than loosened: asserting the call is NOT in a condition is a
+  // stronger claim than asserting it is, and it is the one that would fail if a fallback ever
+  // grew back. A regex for `await launchResponderSession(` alone would pass either way.
   const fn = fnOf(TRIGGER, "inboundApproved");
-  assert.match(fn, /if \(await launchResponderSession\(/);
+  assert.match(fn, /\n\s*await launchResponderSession\(entry, m, rec, \{ taskId, startModes \}\);/,
+    "an unconditional statement — a bare `await`, not the head of an `if`");
+  assert.ok(!/if \(await launchResponderSession\(/.test(fn),
+    "a conditional here means something is waiting to catch the false branch, and nothing may");
   assert.ok(!/getWindowMode/.test(fn), "no master-switch read here — the engine owns its own gate");
   assert.ok(
     !/getPreConsentWindow/.test(fn),
@@ -105,6 +124,19 @@ test("the responder launch is WINDOWLESS, and it is the only shape left", () => 
   const launch = fnOf(TRIGGER, "launchResponderSession");
   assert.match(launch, /windowless: true/);
   assert.match(launch, /triggerSeq: m\.seq/);
+  // ⚠ AND THE APPROVED REQUEST CARRIES NO TOOL POSTURE AT ALL. The single-use arm that used to
+  // be consumed here is deleted, so `startModes` is pinned null and the launch lands on the
+  // reducer's `manual` — the most restrictive value, and the safe direction for a lane a PEER
+  // triggers. The operator's durable pick applies to `sessions:launch` and to nothing else.
+  assert.match(fn, /const startModes = null;/);
+  // CODE only: the function carries a ⚠ block NAMING `consumePermissionPreset` to explain what
+  // stood there, which is the documentation §14 asks for and would fail a whole-body scan.
+  const code = fn.split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
+    .join("\n");
+  assert.ok(!/consumePermissionPreset|channelPrefs\./.test(code),
+    "no arm is consumed on a peer-driven launch — this function reaches the prefs store at all");
 });
 
 test("nothing in main opens a pre-consent window any more", () => {

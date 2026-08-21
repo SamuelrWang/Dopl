@@ -39,15 +39,18 @@ const settings = require('./settings');
 const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 const claudeAuth = require('./claude-auth');
-const { postTaskEvent, postResult, postCourtesy, notifyLocal } = require('./channel-post');
+// ⚠ `postTaskEvent` / `postResult` left this list on 2026-08-20: their only reader here was
+// `outboundApproved`, which posted the HEADLESS lane's drafted reply on the agent's behalf.
+const { postCourtesy, notifyLocal } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
-// §2 SPLIT (2026-08-04): the HEADLESS FALLBACK lane — spawn, then open an outbound
-// review — plus the two peer-facing replies both lanes send. Its own module because
-// it is its own reason to change: the session lane below is the default executor and
-// this is what answers when window mode is off or the engine skips.
-const headless = require('./trigger-headless');
-const { runHeadlessApproved } = headless;
-const { AUTH_HELD_REPLY, RESEND } = outcomes; // the two courtesy replies (moved off trigger-headless, 2026-08-20)
+// ⚠ THE HEADLESS FALLBACK LANE IS DELETED (2026-08-20, Samuel's ruling). `trigger-headless.js`
+// spawned `claude -p` through `session-spawner.runForChannel` and opened an OUTBOUND REVIEW row
+// for the reply it produced — a second executor with its own concurrency pool, its own consent
+// phase (`await-outbound`) and its own settle vocabulary, kept as the fallback for when the
+// engine skipped. One executor is the point: two lanes meant two answers to every question about
+// containment, posture and what the peer is told, and the SDK lane is the one with the Agents
+// tab, pause/end and the metrics behind it.
+const { AUTH_HELD_REPLY, RESEND, CANNOT_RUN } = outcomes; // the peer-facing courtesy replies
 const { diag } = require('./diag');
 
 // Rebuild the minimal `entry` / `m` the post + spawn helpers need from a persisted
@@ -217,8 +220,7 @@ async function handleTrigger(entry, m) {
       // to the server — so this line exists only on the native notification.
       runsIn: channelDirs.liveChannelDirLabel(entry.channel.id),
       toolLabel: profileLabel(toolProfile),
-      // Per-profile capability hint: the REAL headless reach (safe read scope for
-      // read_only/dopl_only; "limited headless, use Run-in-Terminal" for full).
+      // Per-profile capability hint: what this profile really reaches.
       capabilityHint: profileHint(toolProfile),
       onAllow: () => {
         // F-067: submitDecision, not patchDecision — a PATCH that does not land
@@ -264,7 +266,7 @@ async function refetchMessage(rec) {
   return m ? { m } : { gone: true };
 }
 
-// ── Resolver: inbound ALLOWED → session (default) or headless (fallback) ──────
+// ── Resolver: inbound ALLOWED → the windowless session, or a terminal ────────
 // H2: `meta.humanAllowed` says whether a PERSON just clicked Allow (server status
 // `allowed`) or whether the server's standing trust decided it with no card in front of
 // anyone (`auto_allowed`). This is THE seam where a stored permission arm may be
@@ -286,29 +288,26 @@ async function inboundApproved(rec, meta) {
   const taskId = taskIdFor(rec);
   const startedAt = Date.now();
 
-  // H2 — CONSUME the channel's single-use permission arm, here and nowhere else.
-  // `consumePermissionPreset` returns the pair AND deletes it, so this exact approval
-  // is the only launch it can ever apply to; a peer reply days later finds nothing and
-  // the spawn inherits manual/ask. Standing trust (auto_allowed) consumes NOTHING and
-  // is not even offered the arm: the whole point of the arm is that a human chose that
-  // posture for a request they were looking at, which is not what standing trust is.
+  // ⚠ THE SINGLE-USE ARM WAS CONSUMED HERE AND IS DELETED (2026-08-20, Samuel's ruling).
+  // `channelPrefs.consumePermissionPreset(...)` returned the pair the operator picked on the
+  // consent card and deleted it in the same call, so exactly this approval could spend it.
+  // The card's controls had already stopped rendering (F-233), so nothing could arm it.
   //
-  // Consumed BEFORE the launch shape is decided, deliberately: whether we end up in a
-  // session window or the headless fallback, the arm is spent either way, so a launch
-  // that skips to headless cannot leave a widened posture behind for the next one.
-  const startModes = meta && meta.humanAllowed === true
-    ? channelPrefs.consumePermissionPreset(entry.channel.id)
-    : null;
-  if (startModes) diag('inbound approved with an operator-chosen posture:', startModes.tools, '/', startModes.messages);
+  // ⚠ H2 IS UNCHANGED AND THIS PATH STILL OBEYS IT: a spawn only gets a posture a human chose
+  // for THIS launch. What is different is that an inbound request now carries NO tool posture at
+  // all — `startModes.tools` below is the reducer's `manual`, which is the most restrictive
+  // value and the safe direction. The operator's durable pick applies to the launch shape they
+  // press themselves (`sessions:launch`), and to nothing a peer can trigger.
+  const startModes = null;
 
-  // 2026-08-20 DEFAULT EXECUTOR: a WINDOWLESS SDK session (registers in the engine, so
-  // the Agents tab / pause / end / metrics all work; inbound auto-consumed; outbound per
-  // the channel's auto-send posture via the consent bridge). An engine skip (session cap /
-  // no SDK) falls back to the headless + approve-out path, byte-for-byte.
-  if (await launchResponderSession(entry, m, rec, { taskId, startModes })) {
-    return; // a live session (or a busy→resend) now owns this request
-  }
-  await runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName: rec.requesterName });
+  // 2026-08-20 THE EXECUTOR, AND NOW THE ONLY ONE: a WINDOWLESS SDK session. It registers in
+  // the engine, so the Agents tab / pause / end / metrics all work; inbound is auto-consumed;
+  // outbound goes through the consent bridge under the channel's auto-send posture.
+  // ⚠ `launchResponderSession` ALWAYS ANSWERS THE REQUEST NOW and always returns true — a
+  // launch, or a terminal that tells the peer and settles the record. The `claude -p` HEADLESS
+  // FALLBACK that used to catch its skips is deleted (Samuel's ruling); see that function's
+  // tail for why every skip became a terminal rather than a second executor.
+  await launchResponderSession(entry, m, rec, { taskId, startModes });
 }
 
 // Responder SESSION launch (§A.2): hand the framed inbound to the engine, which
@@ -318,20 +317,20 @@ async function inboundApproved(rec, meta) {
 // session as turns — no per-hop consent modal. task_started is echoed by the
 // engine's onLaunched (index.js), NOT here. Returns true when the request is handled
 // (a session launched, or a busy channel got the resend notice); false when the
-// caller should fall back to headless (window cap / no SDK / disabled).
+// ALWAYS true: it either launches, or it answers the peer and settles the record.
 async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
   // Loop-continuation knob: mirror the requester task's mode when the inbound
   // carries one (server-stamped), else autonomous — either way the session runs
   // under the turn / idle / cost caps, so it cannot self-sustain unbounded.
   const mode = targeting.metaStr(m, 'taskMode') || 'autonomous';
   // 2026-08-20 — THE WINDOWLESS POSTURE. There is no Accept UI, so the message axis is
-  // floored at auto_inbound; the OUT half is the channel's durable auto-send setting,
-  // widened — never narrowed — by an operator-armed auto posture.
+  // floored at auto_inbound; the OUT half is the channel's durable auto-send setting.
   // ⚠ THE RULE LIVES IN channel-prefs (`windowlessMessageMode`) AND IS SHARED WITH THE
   // REQUESTER LANE (`channel-dir-ipc.js › sessions:launch`). It was inlined here while
   // that lane pinned its own answer, which is exactly the drift the shared function
-  // removes: the INPUTS differ (this lane's arm vs. that lane's durable posture) and
-  // the derivation must not.
+  // removes. ⚠ Its second argument was the ARM's message axis and is now always null
+  // (the arm is deleted) — the parameter STAYS because the requester lane still passes a
+  // real value, and one derivation with two inputs is the point.
   const messages = channelPrefs.windowlessMessageMode(
     entry.channel.id,
     startModes && startModes.messages
@@ -382,7 +381,7 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     diag('responder session: skipped=auth-hold — the slot is held on the sign-in action');
     await postCourtesy(entry, m, AUTH_HELD_REPLY); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'auth-hold');
-    return true; // handled — do NOT also run headless
+    return true; // handled — the request is answered and settled
   }
   if (res && res.skipped === 'busy') {
     diag('responder session: skipped=busy');
@@ -391,40 +390,43 @@ async function launchResponderSession(entry, m, rec, { taskId, startModes }) {
     await queued.announce(entry, m, rec.taskId || taskId, 'session');
     await postCourtesy(entry, m, RESEND); // P1-5: a no-op must not trigger the peer
     watcher.settle(rec.key, 'busy');
-    return true; // handled — do NOT also run headless
+    return true; // handled — the request is answered and settled
   }
-  // cap / no-sdk / disabled → today's headless fallback answers the request.
-  diag('responder session skipped:', (res && res.skipped) || 'unknown', '— headless fallback');
-  if (res && res.skipped === 'cap') {
-    notifyLocal(
-      'Dopl: session limit reached',
-      `Answering "${entry.channel.name}" headlessly instead.`
-    );
-  }
-  return false;
+  // ⚠ cap / no-sdk / disabled USED TO FALL THROUGH TO THE HEADLESS LANE, AND THAT LANE IS
+  // DELETED (2026-08-20, Samuel's ruling). Every engine skip is now a TERMINAL, and it takes the
+  // same shape as `busy` and `auth-hold` above, for the same reason: the caller is holding the
+  // skip reason, so it is the only layer that can say what happened. A request that reaches this
+  // line is ANSWERED — the peer is told and the record is settled — never left pending against a
+  // machine that is not going to run it.
+  const skipped = (res && res.skipped) || 'unknown';
+  diag('responder session skipped:', skipped, '— answering the peer and settling');
+  notifyLocal(
+    skipped === 'cap' ? 'Dopl: session limit reached' : 'Dopl: cannot run this request',
+    `"${entry.channel.name}" was not answered. ${skippedHint(skipped)}`
+  );
+  await postCourtesy(entry, m, CANNOT_RUN); // P1-5: a no-op must not trigger the peer
+  watcher.settle(rec.key, skipped);
+  return true; // handled — there is nothing else to fall through to
 }
 
-// ── Resolver: outbound SENT → post the reply ─────────────────────────────────
-async function outboundApproved(rec) {
-  const entry = entryFromRecord(rec);
-  const m = msgFromRecord(rec, '');
-  const reply = consent.clampBody(rec.proposedReply || '');
-  const posted = await postResult(entry, m, reply, { taskId: taskIdFor(rec) });
-  diag('post reply:', posted ? 'ok' : 'FAILED');
-  if (posted) {
-    await postTaskEvent(entry, m, 'task_finished', taskIdFor(rec), { durationMs: Date.now() - rec.startedAt });
-    outcomes.notifyReplied(entry, reply);
-    watcher.settle(rec.key, 'sent');
-  } else {
-    // An approved reply that never landed: say so, never claim the request finished.
-    await postTaskEvent(entry, m, 'task_failed', taskIdFor(rec), { durationMs: Date.now() - rec.startedAt });
-    notifyLocal(
-      `Dopl: reply not delivered in "${entry.channel.name}"`,
-      'You approved the reply but it could not be posted. Open Dopl and try again.'
-    );
-    watcher.settle(rec.key, 'post-failed');
-  }
+// The LOCAL half of the notice above: what the operator can do about it. Local-only, so it may
+// name this machine's state; the peer's copy (`CANNOT_RUN`) may not.
+function skippedHint(skipped) {
+  if (skipped === 'cap') return 'Too many agents are already running here — end one and ask them to resend.';
+  if (skipped === 'no-sdk') return 'Claude Code is not available on this machine.';
+  return 'The agent could not be started.';
 }
+
+// ⚠ `outboundApproved(rec)` STOOD HERE AND IS DELETED (2026-08-20, Samuel's ruling). It posted
+// the reply the HEADLESS lane had drafted, once a human clicked Send on its review row — the
+// desktop posting on the agent's behalf, because a `claude -p` run hands back a string and then
+// exits. With that lane deleted the `await-outbound` phase has no writer (see
+// `consent-watcher.js`), so this resolver has no caller.
+//
+// ⚠ APPROVE-OUT IS NOT GONE — it moved INTO the session. A windowless agent's own-channel post
+// is held at its tool gate, bridged to an `outbound` consent row, and RELEASED when the human
+// decides; the agent then posts its own bytes. Nothing writes on its behalf any more, which is
+// the stronger shape: what the operator approved is exactly what leaves the machine.
 
 // The terminal echoes for a request that produced NO reply (deny / expiry / cancel /
 // interrupt) live in trigger-outcomes.js (§2 split). They share the three record→shape
@@ -437,8 +439,6 @@ const resolvers = {
   inboundApproved,
   inboundDenied: outcomes.inboundDenied,
   inboundExpired: outcomes.inboundExpired,
-  outboundApproved,
-  outboundCancelled: outcomes.outboundCancelled,
   onInterrupted: outcomes.onInterrupted, // FIX 2: dispatched from resume() for a mid-spawn interrupt
 };
 

@@ -210,9 +210,13 @@ describe("create_thread handoff (rollback §3.5)", () => {
     expect(text).toMatch(/operator's/i);
     // ⚠ HEDGED — a request whose outcome this server cannot see.
     expect(text).toContain("REQUESTED, not confirmed");
-    expect(text).toContain("never learns whether a window opened");
+    // ⚠ REWORDED 2026-08-20 with the session window's deletion (F-228): the copy said
+    // "whether a WINDOW opened", which named a surface that no longer exists and told the
+    // agent a window model it would then reason from. The HEDGE is what the assertion is
+    // about and it is unchanged — this server cannot see the outcome either way.
+    expect(text).toContain("never learns whether a session started");
     expect(text).toContain('do NOT arm op="await" yet');
-    // ⚠ Nothing may tell the agent the window definitely has it.
+    // ⚠ Nothing may tell the agent the desktop definitely has it.
     expect(text).not.toContain("A full session is opening");
     expect(text).not.toContain("You are done with this thread");
   });

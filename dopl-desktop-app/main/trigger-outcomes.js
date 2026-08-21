@@ -33,15 +33,15 @@
 const { Notification } = require('electron');
 const targeting = require('./targeting');
 const watcher = require('./consent-watcher');
-const channelPrefs = require('./channel-prefs');
 const { postTaskEvent } = require('./channel-post');
 const { diag } = require('./diag');
 
 // ── THE TWO PEER-FACING COURTESY REPLIES ─────────────────────────────────────
-// ⚠ MOVED HERE FROM `main/trigger-headless.js` ON 2026-08-20, ahead of that file's
-// deletion. They were never the headless lane's alone: `trigger.js` reaches both on the
-// WINDOWLESS path (the busy terminal and the auth-hold terminal), so deleting their old
-// home would have deleted two strings a live path still sends.
+// ⚠ TWO OF THE THREE MOVED HERE FROM `main/trigger-headless.js` ON 2026-08-20, ahead of that
+// file's deletion. They were never the headless lane's alone: `trigger.js` reaches both on the
+// WINDOWLESS path (the busy terminal and the auth-hold terminal), so deleting their old home
+// would have deleted two strings a live path still sends. `CANNOT_RUN` is new in the same wave,
+// for the terminal that used to BE the headless lane.
 //
 // Both are POSTED AS A COURTESY, never as a reply: `channel-post.postCourtesy` sends them
 // unaddressed, so a no-op can never trigger the peer back (P1-5).
@@ -55,6 +55,16 @@ const RESEND =
 // state, not the machine, the account, or the error.
 const AUTH_HELD_REPLY =
   "I can't run this right now — my Claude Code sign-in on this machine needs attention. I'll pick it up once that's sorted.";
+
+// 2026-08-20: the engine refused the launch outright (the concurrency ceiling, or no runnable
+// Claude Code on this machine). ⚠ It says the request was NOT answered and it does NOT invite a
+// resend, which is what separates it from RESEND above: `busy` frees itself as soon as a session
+// ends, and these do not — a resend into a spent cap or a missing runtime fails identically.
+// ⚠ NO LOCAL DETAIL. Which of the two it was, and what the operator should do about it, is the
+// LOCAL notification's job (`trigger.js › skippedHint`); the peer is told the outcome and
+// nothing about this machine.
+const CANNOT_RUN =
+  "I couldn't pick this up — my agent isn't able to run it right now. Try me again later, or reach me another way.";
 
 let deps = null; // { entryFromRecord, msgFromRecord, taskIdFor }
 
@@ -84,19 +94,12 @@ async function inboundDenied(rec) {
   // Decision echo: the web renders task_failed + { declined: true } as a calm
   // "Declined", distinct from an error (which carries no declined flag).
   await postTaskEvent(entry, m, 'task_failed', deps.taskIdFor(rec), { declined: true }, 'Request declined');
-  // H2: drop the permission arm this request may have carried. It is single-use and
-  // expiring anyway, so this is not what makes the invariant hold — but a posture the
-  // operator chose for a request they then REFUSED should not sit around waiting for
-  // the next one, and clearing it here means the card they open next shows the truth.
-  try { channelPrefs.clearPermissionPreset(rec.channelId); } catch (_) { /* best effort */ }
   watcher.settle(rec.key, 'denied');
 }
 
 // ── Resolver: inbound EXPIRED → silent drop ──────────────────────────────────
 async function inboundExpired(rec) {
   diag('inbound expired (no decision) — dropping', rec.key);
-  // H2: same reasoning as the deny above — an unanswered request leaves no posture behind.
-  try { channelPrefs.clearPermissionPreset(rec.channelId); } catch (_) { /* best effort */ }
   watcher.settle(rec.key, 'expired');
 }
 
@@ -249,7 +252,8 @@ module.exports = {
   notifyReplied,
   // (2) the engine's lifecycle seam — index.js hands this to setLifecycleHandlers.
   lifecycleHandlers,
-  // the two courtesy replies, read by trigger.js (windowless) and trigger-headless.js
+  // the peer-facing courtesy replies, all read by trigger.js's terminals
   RESEND,
   AUTH_HELD_REPLY,
+  CANNOT_RUN,
 };

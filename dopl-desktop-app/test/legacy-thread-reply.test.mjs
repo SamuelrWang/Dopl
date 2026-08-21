@@ -148,10 +148,13 @@ test("re-seeing the same message is idempotent, and a re-address wins", () => {
 // ── the OTHER half: the reply has to carry the tag in the first place ────────────
 // Recognizing a tagged reply is worth nothing if nothing tags one. A spawned session posts
 // through the pre-approved dopl_channel tool, so its thread id has to reach the framing
-// (prompt-framing.deliverySection reads ONLY the spawn context); the headless path posts
-// through channel-post and has to read the record's CONCRETE id, not the first-class-only
-// rec.taskId. These pin the surviving spawn site and every outbound tag on the headless path.
-// ⚠ THERE USED TO BE TWO SPAWN SITES — see the excision block below.
+// (prompt-framing.deliverySection reads ONLY the spawn context). These pin the surviving spawn
+// site and every terminal echo that still carries a tag.
+// ⚠ THERE USED TO BE TWO SPAWN SITES — see the first excision block below.
+// ⚠ AND A SECOND POSTING PATH: the HEADLESS lane posted through channel-post and had to read the
+// record's CONCRETE id rather than the first-class-only `rec.taskId`. `main/trigger-headless.js`
+// is deleted (2026-08-20, Samuel's ruling), and with it the desktop posting on the agent's
+// behalf at all — see the second excision block, at the case below.
 
 test("trigger.js: the responder spawn context carries the thread id (legacy ids included)", () => {
   const src = M("trigger.js");
@@ -179,23 +182,49 @@ test("trigger.js: the responder spawn context carries the thread id (legacy ids 
 // tag — is pinned by the two tests either side of this block. Those are the paths a legacy id
 // can still travel.
 
-test("trigger.js: every headless outbound tag reads taskIdFor(rec), never the raw rec.taskId", () => {
+test("every terminal echo tags through taskIdFor(rec), never the raw rec.taskId", () => {
+  // ⚠ REWRITTEN DOWN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This case had
+  // two halves and the FIRST is deleted: it sliced `trigger.js › outboundApproved` and pinned
+  // THREE tags inside it — the reply itself (`postResult(entry, m, reply, { taskId: taskIdFor(rec) })`),
+  // its `task_finished`, and the post-failed `task_failed` — plus that none of the three read
+  // `rec.taskId` raw. That resolver posted the reply the `claude -p` lane had drafted, once a
+  // human clicked Send on its review row: the DESKTOP posting on the agent's behalf, because a
+  // headless run hands back a string and exits. Deleted with the lane.
+  //
+  // ⚠ THE INVARIANT IS UNCHANGED AND THE SECOND HALF STILL CARRIES IT. `rec.taskId` is unset for
+  // a LEGACY inbound — it was `toOutbound` that used to backfill it, and that is deleted too —
+  // so reading it directly is exactly how an echo ends up untagged, groups into nothing the
+  // requester is watching, and reaches A's machine as a brand-new request. Every surviving
+  // terminal echo lives in `trigger-outcomes.js` and goes through the injected `taskIdFor`.
+  //
+  // ⚠ AND THE REPLY ITSELF IS NOT ORPHANED BY THE EXCISION — it moved INTO the session. A
+  // windowless agent posts its OWN bytes through the pre-approved `dopl_channel` tool when its
+  // held call is released, and the thread id reaches it through the SPAWN CONTEXT, which is what
+  // the case above this block pins. Nothing writes on the agent's behalf any more, so there is
+  // no desktop-side reply tag left in trigger.js to assert.
   const src = M("trigger.js");
-  // rec.taskId is unset for a LEGACY inbound until toOutbound backfills it, so reading it
-  // directly is how a reply or a lifecycle event ends up untagged.
-  // §2 SPLIT: the no-reply terminal echoes (inboundDenied / inboundExpired /
-  // outboundCancelled / onInterrupted) moved to trigger-outcomes.js, so the slice ends at the
-  // resolver table instead, and the fourth tag — outboundCancelled's dropped task_failed — is
-  // asserted in that file. The invariant is unchanged: NO tag anywhere reads rec.taskId raw.
-  const outbound = src.slice(src.indexOf("async function outboundApproved"), src.indexOf("const resolvers = {"));
-  assert.match(outbound, /postResult\(entry, m, reply, \{ taskId: taskIdFor\(rec\) \}\)/);
-  assert.equal(outbound.match(/rec\.taskId/g), null, `rec.taskId still read directly: ${outbound}`);
-  // Three tags here: the reply itself, task_finished, and the post-failed task_failed.
-  assert.equal((outbound.match(/taskIdFor\(rec\)/g) || []).length, 3);
-  // The moved resolvers keep the same discipline through their injected helper.
   const moved = M("trigger-outcomes.js");
-  assert.equal(moved.match(/rec\.taskId/g), null, "trigger-outcomes.js must not read rec.taskId either");
+  assert.equal(moved.match(/rec\.taskId/g), null, "trigger-outcomes.js must not read rec.taskId");
   assert.equal((moved.match(/taskIdFor\(rec\)/g) || []).length, 3, "cancelled + denied + interrupted");
+  // ⚠ THE COUNT IS THE PIN. `outboundCancelled` is one of those three and NOW HAS NO CALLER —
+  // its only dispatcher was the watcher's `await-outbound` expiry arm, deleted with the phase.
+  // It is deliberately kept (approve-out itself is alive; only the watcher phase died), so the
+  // count must stay 3 rather than quietly becoming 2 when somebody prunes it as dead.
+  assert.match(moved, /async function outboundCancelled\(rec\)/);
+
+  // trigger.js's own remaining reads of `rec.taskId` are ALL the same derivation: `taskIdFor`
+  // itself, plus three inline `rec.taskId || taskId` spellings where `taskId` is already
+  // `taskIdFor(rec)`. None can produce an untagged post. Pinned by exclusion so a BARE
+  // `rec.taskId` cannot slip in beside them — CODE only, since the comments name the anti-pattern
+  // in order to warn about it.
+  const code = src.split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
+    .join("\n");
+  const raws = code.match(/rec\.taskId(?! \|\| (?:taskId|`task-))/g) || [];
+  assert.deepEqual(raws, [], `trigger.js reads rec.taskId without the fallback: ${raws}`);
+  assert.match(src, /return rec\.taskId \|\| `task-\$\{rec\.channelId\}-\$\{rec\.seq\}`;/,
+    "…and taskIdFor is still the one place that resolves it");
 });
 
 // ── the bound, and the direction it fails in ─────────────────────────────────────

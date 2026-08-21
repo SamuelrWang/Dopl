@@ -265,23 +265,25 @@ export function ChannelAgentSettingsView({
             THIS TAB. Absent entirely in a plain browser — no bridge, no dead rows.
 
             ⚠ WHAT CHANGED AND WHY. These two selects used to write the SINGLE-USE
-            ARM (`use-channel-permission-preset.ts`), under the launch panel's own
-            heading, on the reasoning that one sentence must not drift into two.
-            The heading was carrying the entire distinction — and it could not.
-            The rows sat among the durable group below (tool profile, folder,
-            auto-send), so the operator read them as settings, picked Bypass, and
-            got manual/ask on every session after the first: the arm is spent by
-            the launch that consumes it and expires 30 minutes later, while this
-            control went on displaying the value they chose. A fuse drawn as a
-            switch is worse than either one.
+            ARM, under the launch panel's own heading, on the reasoning that one
+            sentence must not drift into two. The heading was carrying the entire
+            distinction — and it could not. The rows sat among the durable group
+            below (tool profile, folder, auto-send), so the operator read them as
+            settings, picked Bypass, and got manual/ask on every session after
+            the first: the arm was spent by the launch that consumed it and
+            expired 30 minutes later, while this control went on displaying the
+            value they chose. A fuse drawn as a switch is worse than either one.
 
-            ⚠ THE ARM DID NOT MOVE OR CHANGE — it went back to being consent-only.
-            It still renders on the request card (`launch-panel.tsx ›
-            RequestPermissionRow`), still single-use, still 30 minutes, still
-            consumed by `trigger.js › inboundApproved` alone. H2 is intact
-            because the SPLIT IS BY CONSUMER: the arm answers a peer's request a
-            human is approving right now; this pair answers the Launch button
-            that same human is pressing on their own thread.
+            ⚠ AND THEN THE ARM WAS DELETED OUTRIGHT (2026-08-20, Samuel's ruling).
+            When it left this tab it was said to have "gone back to the request
+            card" — and that card's inbound branch had already stopped rendering
+            at the 2026-08-18 consent rewrite, so it went nowhere and nothing
+            could arm it (F-233). THIS PAIR IS NOW THE ONLY PERMISSION POSTURE IN
+            THE PRODUCT, it is durable, and it is read at exactly ONE call site:
+            `channel-dir-ipc.js › sessions:launch`, the Launch button the
+            operator is pressing on their own thread. H2 still holds and still
+            holds BY CONSUMER COUNT — an inbound request a peer triggered carries
+            no tool posture at all and starts at manual/ask.
             `main/channel-prefs.js` is the statement of record. */}
         {posture && (
           <>

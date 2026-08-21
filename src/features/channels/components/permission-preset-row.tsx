@@ -2,7 +2,6 @@
 
 import { MessageSquare, Wrench } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import { useChannelPermissionPreset } from "../hooks/use-channel-permission-preset";
 import {
   type MessageMode,
   type PermissionPreset,
@@ -10,9 +9,8 @@ import {
 } from "../lib/permission-modes";
 
 /**
- * The inbound consent card's PERMISSION PRESET row: the two axes the operator
- * picks BEFORE clicking Allow, so the session spawns on the posture they chose
- * instead of one they can only correct after the agent is already running.
+ * THE TWO PERMISSION AXES, as an operator reads them: what an agent may DO, and
+ * which messages cross without asking.
  *
  * WHY EACH OPTION SPELLS ITSELF OUT: a security review found operators could not
  * tell what a permission switch actually permitted — a single control governed
@@ -77,18 +75,21 @@ export const MESSAGE_OPTIONS: ReadonlyArray<SelectMenuOption<MessageMode>> = [
   },
 ];
 
-/** Bridge-gated wrapper — renders NOTHING outside the desktop shell. */
-export function RequestPermissionRow({ channelId }: { channelId: string }) {
-  const { bridge, preset, busy, update } = useChannelPermissionPreset(channelId);
-  if (!bridge) return null;
-  return (
-    <RequestPermissionRowView
-      preset={preset}
-      busy={busy}
-      onChange={(patch) => void update(patch)}
-    />
-  );
-}
+/**
+ * ⚠ `RequestPermissionRow` STOOD HERE AND IS DELETED (2026-08-20, Samuel's ruling).
+ *
+ * It was the bridge-gated wrapper over the single-use consent ARM
+ * (`window.dopl.channels.get/setPermissionPreset`), mounted inside
+ * `launch-panel.tsx`'s inbound disclosure. That disclosure had not rendered since
+ * the 2026-08-18 consent rewrite (F-233), so the control was reachable by nobody,
+ * and the arm it wrote is gone from the desktop with it.
+ *
+ * ⚠ THE FILE STAYS BECAUSE THE OPTION TABLES ABOVE ARE LIVE. `TOOL_OPTIONS` and
+ * `MESSAGE_OPTIONS` are what `channels-v2/settings-agent.tsx` renders for the
+ * DURABLE launch posture, and `RequestPermissionRowView` below is still the
+ * presentation both surfaces share. The copy inside those options is the reason
+ * this file exists at all — see the header.
+ */
 
 /**
  * The control's presentation, split from the bridge-gated wrapper so it renders

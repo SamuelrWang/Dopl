@@ -1,38 +1,67 @@
-// Tests for the per-channel PERMISSION ARM (main/channel-prefs.js) and the two IPC
-// handlers that expose it (main/channel-dir-ipc.js). The SENDER BINDING on those
-// handlers (H3) is pinned separately in test/channel-ipc-sender.test.mjs.
+// THE SHARED PRESET VALIDATOR (main/channel-prefs.js) and the IPC handlers that expose
+// the record it guards (main/channel-dir-ipc.js). The SENDER BINDING on those handlers
+// (H3) is pinned separately in test/channel-ipc-sender.test.mjs.
 //
 // WHAT IT COSTS WHEN THIS IS WRONG. The pair stored here decides what a spawned agent
-// may do on THIS machine. The main window hosts REMOTE content, so the renderer is a
+// may do on THIS machine. The app window hosts REMOTE content, so the renderer is a
 // hostile input: if an unknown value were stored and some later reader coerced it in a
 // permissive direction, a page could hand itself `bypass` without the operator ever
 // seeing the word. So the rules pinned here are all fail-closed:
 //
 //   - only the eight frozen enum members are storable, on either axis;
 //   - a rejected write mutates NOTHING (no half-applied posture);
-//   - an absent, expired or corrupt record resolves to the MOST RESTRICTIVE pair;
+//   - an absent or corrupt record resolves to the MOST RESTRICTIVE pair;
 //   - a write to one channel is invisible to every other channel;
 //   - the IPC gate rejects a non-UUID channelId before any of that runs.
 //
-// H2 (2026-07-31) — AND THE THREE THAT MAKE IT AN ARM RATHER THAN A SETTING. It used to
-// be a durable, channel-wide, permanent preference that session-engine.startSession read
-// on EVERY spawn shape, so one consent card's bypass/auto_both silently re-armed the
-// channel forever: a peer replying to any thread days later recreated a parked shell that
-// started wide open, auto-accepted the inbound, and woke the agent with no card and no
-// click. The invariant now is that a stored pair may only ever apply to a launch a human
-// is actively approving in that moment, enforced three ways:
-//   1. SINGLE USE   — consume returns the pair and deletes it in the same call;
-//   2. EXPIRING     — an arm older than ARM_TTL_MS is not consumable, and is swept;
-//   3. ONE CONSUMER — only the consent-approved launch consumes it (pinned in
-//                     test/session-preset-start.test.mjs).
+// ── ⚠ THE ARM IS DELETED, AND THIS FILE WAS ITS SUITE (2026-08-20, Samuel's ruling) ──
+//
+// H2 (2026-07-31) made the permission pair an ARM rather than a setting, enforced three
+// ways, and this file held two of the three:
+//   1. SINGLE USE   — `takeArmFrom` returned the pair and deleted it in the same call;
+//   2. EXPIRING     — an arm older than `ARM_TTL_MS` (30 min) was not consumable, a
+//                     FUTURE stamp was refused, a caller-supplied `at` was dropped so
+//                     nobody could mint an immortal one, a PRE-H2 record with no stamp
+//                     read as already expired (an upgrade may only ever narrow), and
+//                     `sweepExpired` dropped the dead ones without a pointless write;
+//   3. ONE CONSUMER — pinned next door in `test/session-preset-start.test.mjs`.
+// Roughly a dozen cases, plus the IPC round trip over `channels:get/setPermissionPreset`.
+// ALL of that mechanism is gone: `PRESETS_KEY`, `ARM_TTL_MS`, `armIsLive`, `resolveArm`,
+// `readArmFrom`, `armInto`, `takeArmFrom`, `sweepExpired`, `getPermissionPreset`,
+// `armPermissionPreset`, `consumePermissionPreset`, `clearPermissionPreset`, and both IPC
+// ops.
+//
+// ⚠ IT WENT BECAUSE ITS SURFACE HAD ALREADY GONE AND NOBODY NOTICED (F-233). The arm's web
+// controls lived in `launch-panel.tsx`'s INBOUND branch, which stopped rendering at the
+// 2026-08-18 consent-surface rewrite — the panel's one consumer is the outbound send box, so
+// `kind === "inbound"` was never true in production. Every TTL case above was measuring the
+// lifetime of a record no human could set. That is the argument for deleting them rather than
+// repointing them: a TTL is a claim about how long a HUMAN DECISION stays good, and there was
+// no decision.
+//
+// ⚠ WHAT SURVIVED, AND WHY IT IS KEPT HERE RATHER THAN FOLLOWING THE ARM OUT (INVARIANTS §14):
+//   · THE VALIDATOR. `normalizePreset` / `defaultPreset` / the frozen enums were never the
+//     arm's — the DURABLE launch posture is re-validated through exactly the same function,
+//     and it is the whole fail-closed story for a hostile payload. Deleting this file would
+//     have taken the only enumeration of the eight members with it.
+//   · THE IPC SURFACE. The section below is REPOINTED, not removed: it asserted the UUID gate,
+//     the rejected-write-stores-nothing rule and per-channel isolation THROUGH a handler, and
+//     `channels:get/setLaunchPosture` are the surviving handlers with byte-identical gates. The
+//     property outlived the op that carried it.
+//
+// ⚠ H2 ITSELF IS UNTOUCHED. A stored pair still only ever reaches a spawn by being HANDED IN
+// per launch (`spec.startModes`) by a caller executing a decision a human is making now. What
+// kept that closed was never the TTL — it was the CONSUMER COUNT, and
+// `test/session-preset-start.test.mjs` is where that is pinned.
 //
 // Run: `node --test dopl-desktop-app/test/channel-prefs.test.mjs`
 //
 // WHY SOURCE EXTRACTION: channel-prefs.js pulls in electron-store, and channel-dir-ipc.js
 // pulls in electron, so neither imports under `node --test`. The validation + map ops are
-// fenced as a PURE block (no electron/fs/store refs) and sliced verbatim here; the IPC
-// file is evaluated with a stub `require` that swaps ONLY electron and the store-backed
-// module, so the real UUID gate and the real validator are the ones under test.
+// fenced as a PURE block (no electron/fs/store refs) and sliced verbatim (see
+// `_channel-prefs-block.mjs`); the IPC file is evaluated with a stub `require` that swaps ONLY
+// electron and the store-backed module, so the real UUID gate and the real validator are the
+// ones under test.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -44,27 +73,12 @@ import { prefs, CH_A, CH_B } from "./_channel-prefs-block.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
-// ⚠ THE SLICER MOVED TO `_channel-prefs-block.mjs` (2026-08-20) when the durable
-// posture's cases pushed this file past the cap. Same block, one copy, two suites —
-// see that file's header. This one keeps the ARM; `channel-launch-posture.test.mjs`
-// takes the durable half.
-const {
-  TOOL_MODES,
-  MESSAGE_MODES,
-  DEFAULT_PRESET,
-  ARM_TTL_MS,
-  normalizePreset,
-  armIsLive,
-  resolveArm,
-  defaultPreset,
-  readArmFrom,
-  armInto,
-  takeArmFrom,
-  sweepExpired,
-} = prefs;
+// ⚠ THE SLICER LIVES IN `_channel-prefs-block.mjs` (2026-08-20) — same block, one copy, two
+// suites. This one keeps the shared VALIDATOR and the IPC surface;
+// `channel-launch-posture.test.mjs` takes the durable posture's own map ops.
+const { TOOL_MODES, MESSAGE_MODES, DEFAULT_PRESET, normalizePreset, defaultPreset } = prefs;
 
 const OK = { tools: "accept_edits", messages: "auto_inbound" };
-const NOW = 1_700_000_000_000;
 
 // ── The frozen enums ─────────────────────────────────────────────────────────
 
@@ -128,13 +142,18 @@ test("a valid pair carrying extra properties stores ONLY the two axes", () => {
   assert.deepEqual(Object.keys(out).sort(), ["messages", "tools"]);
 });
 
-test("H2: a caller-supplied `at` is DROPPED, so nobody can mint an immortal arm", () => {
-  // normalizePreset keeps only the two axes, and armInto stamps `at` itself. A renderer
-  // that sent at: Infinity (or a far-future value) must not get an arm that never expires.
+test("an `at` is DROPPED — the validator stores two axes and nothing else", () => {
+  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20; INVARIANTS §14). This read "H2: a caller-supplied
+  // `at` is DROPPED, so nobody can mint an immortal arm", and its second half drove `armInto`
+  // to prove the stamp was OURS rather than the caller's. There is no stamp and no arm.
+  //
+  // The FIRST half is kept because it is a validator property, not an arm property: the
+  // whitelist is positive (two axes, both known) rather than a blacklist of keys to strip, so
+  // an unexpected field cannot ride into the store on a valid pair. That is what stops the
+  // next record with a bookkeeping field from being forgeable by a renderer, which is exactly
+  // the shape `at` had.
   assert.deepEqual(normalizePreset({ ...OK, at: Number.MAX_SAFE_INTEGER }), OK);
-  const map = {};
-  armInto(map, CH_A, { ...OK, at: Number.MAX_SAFE_INTEGER }, NOW);
-  assert.equal(map[CH_A].at, NOW, "the stamp is ours, never the caller's");
+  assert.deepEqual(normalizePreset({ ...OK, ttl: 0, __proto__: { at: 1 } }), OK);
 });
 
 test("a non-string mode (number / object) never passes as a member", () => {
@@ -142,151 +161,58 @@ test("a non-string mode (number / object) never passes as a member", () => {
   assert.equal(normalizePreset({ tools: "manual", messages: { toString: () => "ask" } }), null);
 });
 
-// ── H2: the arm's LIFETIME ───────────────────────────────────────────────────
-
-test("H2: an arm is live inside the TTL and dead outside it", () => {
-  const armed = { ...OK, at: NOW };
-  assert.equal(armIsLive(armed, NOW), true, "the moment it is written");
-  assert.equal(armIsLive(armed, NOW + ARM_TTL_MS - 1), true, "one tick before expiry");
-  assert.equal(armIsLive(armed, NOW + ARM_TTL_MS), false, "exactly at the TTL it is gone");
-  assert.equal(armIsLive(armed, NOW + ARM_TTL_MS * 10), false, "and long after");
-});
-
-test("H2: a PRE-H2 record (a durable preset with no stamp) is treated as EXPIRED", () => {
-  // The old build stored { tools, messages } with no `at` and applied it forever. On
-  // upgrade those records must go COLD, or the very posture this fix exists to stop would
-  // survive the fix. An upgrade may only ever narrow.
-  assert.equal(armIsLive({ ...OK }, NOW), false);
-  assert.equal(resolveArm({ ...OK }, NOW), null);
-  assert.equal(readArmFrom({ [CH_A]: { ...OK } }, CH_A, NOW), null);
-});
-
-test("H2: a FUTURE stamp is refused, not granted an unbounded life", () => {
-  // Clock skew or a tampered store must not buy an arm extra time.
-  assert.equal(armIsLive({ ...OK, at: NOW + 1 }, NOW), false);
-  for (const at of [Infinity, NaN, "later", null, {}]) {
-    assert.equal(armIsLive({ ...OK, at }, NOW), false, `at=${String(at)}`);
-  }
-});
-
-test("resolveArm falls back to null for anything unstorable", () => {
-  for (const raw of [null, undefined, {}, { tools: "bypass" }, { tools: "x", messages: "y" }]) {
-    assert.equal(resolveArm(raw, NOW), null);
-  }
-});
-
-test("resolveArm returns a LIVE stored pair verbatim, with no bookkeeping attached", () => {
-  assert.deepEqual(resolveArm({ ...OK, at: NOW }, NOW), OK, "the two axes only, never `at`");
-});
-
-// ── Map ops: per-channel isolation + fail-closed writes ─────────────────────
-
-test("a read for a channel with no record is null, not a neighbour's posture", () => {
-  const map = {};
-  armInto(map, CH_A, OK, NOW);
-  assert.deepEqual(readArmFrom(map, CH_A, NOW), OK);
-  assert.equal(readArmFrom(map, CH_B, NOW), null, "channel B must not see channel A's arm");
-});
-
-test("two channels hold independent arms", () => {
-  const map = {};
-  armInto(map, CH_A, { tools: "bypass", messages: "auto_both" }, NOW);
-  armInto(map, CH_B, { tools: "manual", messages: "ask" }, NOW);
-  assert.deepEqual(readArmFrom(map, CH_A, NOW), { tools: "bypass", messages: "auto_both" });
-  assert.deepEqual(readArmFrom(map, CH_B, NOW), { tools: "manual", messages: "ask" });
-});
-
-test("a rejected write mutates NOTHING", () => {
-  const map = {};
-  armInto(map, CH_A, OK, NOW);
-  const before = JSON.stringify(map);
-  for (const raw of [{ tools: "root", messages: "ask" }, null, { tools: "auto" }]) {
-    assert.deepEqual(armInto(map, CH_A, raw, NOW), { ok: false });
-  }
-  assert.equal(JSON.stringify(map), before, "a rejected write must leave the map byte-identical");
-});
-
-test("a write with no channel id is rejected and stores nothing", () => {
-  const map = {};
-  assert.deepEqual(armInto(map, "", OK, NOW), { ok: false });
-  assert.deepEqual(map, {});
-});
-
-test("a corrupt stored record reads as null (the caller then defaults)", () => {
-  const map = { [CH_A]: { tools: "bypass", at: NOW }, [CH_B]: "auto_both" };
-  assert.equal(readArmFrom(map, CH_A, NOW), null);
-  assert.equal(readArmFrom(map, CH_B, NOW), null);
-});
-
-// ── H2: SINGLE USE ───────────────────────────────────────────────────────────
-
-test("H2 SINGLE USE: taking an arm returns it AND removes it", () => {
-  const map = {};
-  armInto(map, CH_A, OK, NOW);
-  assert.deepEqual(takeArmFrom(map, CH_A, NOW), OK, "the approving launch gets the posture");
-  assert.equal(Object.prototype.hasOwnProperty.call(map, CH_A), false, "and it is gone");
-  assert.equal(takeArmFrom(map, CH_A, NOW), null, "a SECOND launch finds nothing");
-});
-
-test("H2 SINGLE USE: this is the whole fix — a later peer reply gets manual/ask", () => {
-  // The exact failure: one consent card sets bypass/auto_both, and days later a peer reply
-  // recreates a shell on the same channel. That second launch must find NOTHING.
-  const map = {};
-  armInto(map, CH_A, { tools: "bypass", messages: "auto_both" }, NOW);
-  takeArmFrom(map, CH_A, NOW); // the approved launch
-  const laterReply = takeArmFrom(map, CH_A, NOW + 5 * 24 * 60 * 60 * 1000);
-  assert.equal(laterReply, null, "no stored posture survives to a launch nobody approved");
-});
-
-test("H2 SINGLE USE: an EXPIRED arm yields null and is still removed", () => {
-  const map = {};
-  armInto(map, CH_A, OK, NOW);
-  assert.equal(takeArmFrom(map, CH_A, NOW + ARM_TTL_MS), null, "too late to be consumed");
-  assert.equal(Object.prototype.hasOwnProperty.call(map, CH_A), false, "and swept on the way past");
-});
-
-test("H2 SINGLE USE: taking one channel's arm leaves every other channel alone", () => {
-  const map = {};
-  armInto(map, CH_A, OK, NOW);
-  armInto(map, CH_B, { tools: "bypass", messages: "auto_both" }, NOW);
-  takeArmFrom(map, CH_A, NOW);
-  assert.deepEqual(readArmFrom(map, CH_B, NOW), { tools: "bypass", messages: "auto_both" });
-});
-
-test("H2: the sweep drops expired records and reports whether anything changed", () => {
-  const map = {
-    [CH_A]: { ...OK, at: NOW },
-    [CH_B]: { ...OK, at: NOW - ARM_TTL_MS - 1 },
-    stale: { ...OK }, // a pre-H2 record with no stamp
-    junk: "nope",
-  };
-  assert.equal(sweepExpired(map, NOW), true, "it changed something");
-  assert.deepEqual(Object.keys(map), [CH_A], "only the live arm survives");
-  assert.equal(sweepExpired(map, NOW), false, "a clean map reports no change, so nothing is written");
-});
+// ── ⚠ THE ARM'S LIFETIME CASES STOOD HERE AND ARE DELETED ────────────────────
+//
+// Eight cases, in two groups, and both groups died with their mechanism:
+//   · LIFETIME — `armIsLive` inside/outside `ARM_TTL_MS` to the tick; a PRE-H2 record with no
+//     stamp reading as EXPIRED so an upgrade could only narrow; a FUTURE stamp refused so clock
+//     skew or a tampered store bought no extra time; `resolveArm` returning the two axes verbatim
+//     with no bookkeeping attached.
+//   · SINGLE USE + SWEEP — `takeArmFrom` returning AND removing in one call; a second launch
+//     finding nothing; a later peer reply days on getting manual/ask (the whole H2 failure, in
+//     one case); an EXPIRED arm yielding null and still being swept on the way past; taking one
+//     channel's arm leaving every other alone; `sweepExpired` reporting whether it changed
+//     anything so a read path never writes for nothing.
+//
+// There is no `at`, no TTL, no consume and no sweep in `channel-prefs.js`. The per-channel
+// ISOLATION half of those cases is not orphaned — it is asserted against the surviving record in
+// `channel-launch-posture.test.mjs` and through the IPC surface below.
 
 // ── The IPC surface: the real gate + the real validator, store swapped out ──
+//
+// ⚠ REPOINTED FROM THE ARM'S OPS TO THE DURABLE POSTURE'S (2026-08-20; INVARIANTS §14). This
+// section used to drive `channels:getPermissionPreset` / `channels:setPermissionPreset`, which
+// are deleted. It is NOT deleted with them: what it asserts is the UUID gate, the
+// rejected-write-stores-nothing rule and per-channel isolation AS SEEN THROUGH A HANDLER, and
+// `channels:get/setLaunchPosture` carry byte-identical gates over the same validator. Dropping
+// the section would have removed the only end-to-end proof that a non-UUID id is refused BEFORE
+// the store is touched — a property of the handler, which no amount of pure-block testing reaches.
 
 // channel-dir-ipc.js evaluated with a stub `require`. ONLY electron and the store-backed
 // channel-prefs module are swapped; the UUID gate and the validation under test are the
-// ones that ship. H3: the handlers are sender-bound now, so the harness supplies the
-// window it binds to and an event whose sender IS that window's top frame.
+// ones that ship. H3: the handlers are sender-bound, so the harness supplies the window it
+// binds to and an event whose sender IS that window's top frame.
 function bootIpc() {
   const handlers = {};
   const map = {};
-  const prefs = {
-    getPermissionPreset: (channelId) => readArmFrom(map, channelId, NOW),
-    armPermissionPreset: (channelId, raw) => {
-      const res = armInto(map, channelId, raw, NOW);
+  const prefsStub = {
+    // The two ops this section drives, backed by the REAL sliced map ops.
+    getLaunchPosture: (channelId) => prefs.readPostureFrom(map, channelId) || prefs.defaultPreset(),
+    setLaunchPosture: (channelId, raw) => {
+      const res = prefs.postureInto(map, channelId, raw);
       return res.ok ? { ok: true } : { ok: false };
     },
-    clearPermissionPreset: () => {},
+    // Required by registration paths this section does not drive; stubbed so a typo in one
+    // surfaces here rather than as a mystery throw.
+    launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
+    getAutoSend: () => false,
+    setAutoSend: () => ({ ok: false }),
   };
   const stubRequire = (id) => {
     if (id === "electron") {
       return { ipcMain: { handle: (name, fn) => { handlers[name] = fn; } } };
     }
-    if (id === "./channel-prefs") return prefs;
+    if (id === "./channel-prefs") return prefsStub;
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => null,
@@ -296,6 +222,7 @@ function bootIpc() {
     }
     // Lazily required by ops this file does not drive, but stubbed so a typo in a
     // registration path surfaces here rather than as a mystery throw.
+    if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
@@ -317,28 +244,37 @@ function bootIpc() {
   return { handlers, map, event };
 }
 
-test("the IPC surface registers exactly the two preset ops", () => {
+test("the IPC surface registers exactly the two posture ops", () => {
   const { handlers } = bootIpc();
-  assert.equal(typeof handlers["channels:getPermissionPreset"], "function");
-  assert.equal(typeof handlers["channels:setPermissionPreset"], "function");
+  assert.equal(typeof handlers["channels:getLaunchPosture"], "function");
+  assert.equal(typeof handlers["channels:setLaunchPosture"], "function");
+  // ⚠ AND THE ARM'S TWO ARE GONE FROM THE WIRE, not merely unused. A surviving registration
+  // would be a privileged op with no storage behind it — worse than either half alone.
+  assert.equal(handlers["channels:getPermissionPreset"], undefined);
+  assert.equal(handlers["channels:setPermissionPreset"], undefined);
 });
 
-test("round trip: arm then get returns the stored pair", async () => {
+test("round trip: set then get returns the stored pair", async () => {
   const { handlers, event } = bootIpc();
-  const set = await handlers["channels:setPermissionPreset"](event, { channelId: CH_A, preset: OK });
+  const set = await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset: OK });
   assert.deepEqual(set, { ok: true });
-  assert.deepEqual(await handlers["channels:getPermissionPreset"](event, CH_A), OK);
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), OK);
 });
 
-test("get before any arm is null (the card shows the defaults itself)", async () => {
+test("get before any set is the restrictive default, never a neighbour's pair", async () => {
+  // ⚠ THE ONE ASSERTION THAT CHANGED VALUE IN THE REPOINT, and it is deliberate. The arm's
+  // getter answered `null` — an arm that is absent was NOT chosen, and the card must not claim
+  // it was. A DURABLE setting that is absent IS manual/ask, and saying so is the truth (the
+  // Settings tab would render nothing for a null). Same fail-closed direction, stated as the
+  // pair rather than as an absence.
   const { handlers, event } = bootIpc();
-  assert.equal(await handlers["channels:getPermissionPreset"](event, CH_A), null);
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), DEFAULT_PRESET);
 });
 
-test("the round trip is per channel: arming A leaves B unset", async () => {
+test("the round trip is per channel: setting A leaves B at the default", async () => {
   const { handlers, event } = bootIpc();
-  await handlers["channels:setPermissionPreset"](event, { channelId: CH_A, preset: OK });
-  assert.equal(await handlers["channels:getPermissionPreset"](event, CH_B), null);
+  await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset: OK });
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_B), DEFAULT_PRESET);
 });
 
 test("an unknown mode over IPC is rejected and stores nothing", async () => {
@@ -352,7 +288,7 @@ test("an unknown mode over IPC is rejected and stores nothing", async () => {
   ];
   for (const preset of bad) {
     assert.deepEqual(
-      await handlers["channels:setPermissionPreset"](event, { channelId: CH_A, preset }),
+      await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset }),
       { ok: false },
       `must reject ${JSON.stringify(preset)}`
     );
@@ -365,12 +301,12 @@ test("a non-UUID channelId is rejected before the store is touched", async () =>
   const ids = ["", "../../etc", "channelDirs", CH_A + "x", 42, null, undefined, {}];
   for (const id of ids) {
     assert.deepEqual(
-      await handlers["channels:setPermissionPreset"](event, { channelId: id, preset: OK }),
+      await handlers["channels:setLaunchPosture"](event, { channelId: id, preset: OK }),
       { ok: false },
       `set must reject id ${JSON.stringify(id)}`
     );
     assert.equal(
-      await handlers["channels:getPermissionPreset"](event, id),
+      await handlers["channels:getLaunchPosture"](event, id),
       null,
       `get must reject id ${JSON.stringify(id)}`
     );
@@ -380,6 +316,5 @@ test("a non-UUID channelId is rejected before the store is touched", async () =>
 
 test("a missing payload never throws (the page controls the argument)", async () => {
   const { handlers, event } = bootIpc();
-  assert.deepEqual(await handlers["channels:setPermissionPreset"](event, undefined), { ok: false });
+  assert.deepEqual(await handlers["channels:setLaunchPosture"](event, undefined), { ok: false });
 });
-

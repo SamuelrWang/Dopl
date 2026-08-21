@@ -5,9 +5,21 @@
 // UUID, both permission modes against frozen enums) and never validated its CALLER, while
 // the preload exposed all of them on a window that loaded REMOTE usedopl.com content. So
 // any XSS, any compromised script, any injected third-party bundle on that origin could
-// call them directly — and the worst is `channels:setPermissionPreset`, which arms the
-// permission posture a spawned agent runs with. Chained with H2 (before it was fixed) that
+// call them directly — and the worst was `channels:setPermissionPreset`, which armed the
+// permission posture a spawned agent ran with. Chained with H2 (before it was fixed) that
 // was zero-click local code execution.
+//
+// ⚠ THAT OP IS DELETED AND THE ARGUMENT IS NOT (2026-08-20, Samuel's ruling; INVARIANTS §14).
+// The single-use permission arm went with its two handlers (`channels:getPermissionPreset` /
+// `channels:setPermissionPreset`), so the OPS table below is two rows shorter. The
+// worst-case op is now `channels:setLaunchPosture` — the DURABLE half of the same two axes,
+// same validator, same UUID gate, and a longer-lived write than the arm ever had. Nothing
+// about the binding weakened; the enumeration re-measured.
+//
+// ⚠ AND THE COUNT IS PART OF THE PIN. `no handler in the file skips the wrapper` asserts
+// `ipcMain.handle` occurrences EQUAL `OPS.length`, so this table cannot drift from the file in
+// either direction: a new op added without a row fails, and a row left behind for a deleted op
+// fails too. Shrinking it is therefore a deliberate edit, made here, and not a silent one.
 //
 // WHAT PHASE 10 CHANGED, AND WHAT IT DID NOT. The binding's subject was "THE MAIN WINDOW"
 // and is now "any window main itself registered at creation" — `main/app-windows.js`'s
@@ -179,17 +191,17 @@ function bootIpc({ blocked = false } = {}) {
   const stubRequire = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./channel-prefs") {
+      // ⚠ THE ARM'S THREE ENTRIES ARE GONE (2026-08-20): `getPermissionPreset`,
+      // `armPermissionPreset`, `clearPermissionPreset`. What remains is the DURABLE posture
+      // plus auto-send. EVERY WRITER RECORDS INTO ONE `writes` LEDGER on purpose — the refusal
+      // cases below assert `writes` is empty, so a second ledger would let one op's forged
+      // write pass unseen while the other's was checked.
       return {
-        getPermissionPreset: () => ({ tools: "bypass", messages: "auto_both" }),
-        armPermissionPreset: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
-        clearPermissionPreset: () => {},
-        // The DURABLE half of the 2026-08-20 split. A REFUSED `set` must reach
-        // neither writer, so both record into the same `writes` ledger.
         getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
         setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getAutoSend: () => false,
-        setAutoSend: () => false,
+        setAutoSend: (channelId, on) => { writes.push({ channelId, on }); return true; },
       };
     }
     if (id === "./channel-dirs") {
@@ -241,16 +253,24 @@ const OPS = [
   ["channels:getFolderLabel", CH, null],
   ["channels:chooseFolder", CH, null],
   ["channels:clearFolder", CH, null],
-  ["channels:getPermissionPreset", CH, null],
-  ["channels:setPermissionPreset", { channelId: CH, preset: PRESET }, { ok: false }],
+  // ⚠ TWO ROWS STOOD HERE AND ARE DELETED WITH THE ARM (2026-08-20, Samuel's ruling):
+  //   ["channels:getPermissionPreset", CH, null]
+  //   ["channels:setPermissionPreset", { channelId: CH, preset: PRESET }, { ok: false }]
+  // They were the SINGLE-USE permission arm — the pair an operator picked on an inbound
+  // consent card before clicking Allow. The op that H3's header calls the worst in this file
+  // is therefore no longer here; `channels:setLaunchPosture` below inherits that title, and
+  // it is driven from every surface in exactly the same five ways. Deleted rather than
+  // repointed because the handlers are gone from `channel-dir-ipc.js` outright: a row for an
+  // unregistered op fails `every privileged op in the file is registered` on the first case.
   // ⚠ TWO JOINED HERE 2026-08-20 (the auto-send posture): the durable per-channel
   // send setting, boolean-only, same sender binding + UUID gate as every op above.
   ["channels:getAutoSend", CH, false],
   ["channels:setAutoSend", { channelId: CH, on: true }, { ok: false }],
-  // ⚠ TWO MORE JOINED 2026-08-20 (the arm-vs-durable-posture split): the DURABLE
-  // launch posture, same two axes as the arm, same sender binding + UUID gate.
-  // A refused `get` must not disclose the posture and a refused `set` must not
-  // write one — both are asserted by the shared loop below.
+  // ⚠ TWO MORE JOINED 2026-08-20 (then the arm's half of that split was deleted the same
+  // day): the DURABLE launch posture, the same two axes the arm carried, same sender
+  // binding + UUID gate — and now the most privileged write in the file. A refused `get`
+  // must not disclose the posture and a refused `set` must not write one; both are
+  // asserted by the shared loops below, from all five surfaces.
   ["channels:getLaunchPosture", CH, null],
   ["channels:setLaunchPosture", { channelId: CH, preset: PRESET }, { ok: false }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
@@ -325,7 +345,7 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
   const handlers = {};
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
-    if (id === "./channel-prefs") return { getPermissionPreset: () => PRESET, armPermissionPreset: () => ({ ok: true }), clearPermissionPreset: () => {}, getLaunchPosture: () => PRESET, setLaunchPosture: () => ({ ok: true }), launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }), getAutoSend: () => false, setAutoSend: () => false };
+    if (id === "./channel-prefs") return { getLaunchPosture: () => PRESET, setLaunchPosture: () => ({ ok: true }), launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }), getAutoSend: () => false, setAutoSend: () => true };
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
@@ -351,8 +371,14 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     const ipc = bootIpc();
     const sender = ipc[which];
     assert.equal(await ipc.handlers["channels:getFolderLabel"](sender, CH), "~/Downloads/secret-repo", which);
-    assert.deepEqual(await ipc.handlers["channels:getPermissionPreset"](sender, CH), PRESET, which);
-    assert.deepEqual(await ipc.handlers["channels:setPermissionPreset"](sender, { channelId: CH, preset: PRESET }), { ok: true }, which);
+    // ⚠ REPOINTED FROM THE ARM'S OPS TO THE POSTURE'S (2026-08-20). This drove
+    // `channels:get/setPermissionPreset` — the two most privileged ops in the file at the
+    // time — precisely BECAUSE they were the worst case: a widening that admitted a window
+    // but broke the write would be a Settings tab that renders and silently does nothing,
+    // which is the failure Phase 10 exists to prevent. `setLaunchPosture` is the worst case
+    // now, so it is the one driven positively here.
+    assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH), PRESET, which);
+    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }), { ok: true }, which);
     assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
     await ipc.handlers["channels:chooseFolder"](sender, CH);
     assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);

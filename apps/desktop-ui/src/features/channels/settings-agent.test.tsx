@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChannelAgentSettings } from "@/features/channels/components/channels-v2/settings-agent";
-import { RequestPermissionRow } from "@/features/channels/components/permission-preset-row";
 import type { ChannelMember } from "@/features/channels/types";
 import { installBridge } from "#/test-utils/bridge";
 
@@ -21,25 +20,23 @@ import { installBridge } from "#/test-utils/bridge";
  *     `{...staleSnapshot, ...patch}`, walking the other's axis back while still
  *     displaying the value it no longer has.
  *
- * ⚠ WHAT THESE ROWS WRITE CHANGED ON 2026-08-20, AND RULE 2's SUBJECT CHANGED
- * WITH IT. Permissions and Sends on THIS tab wrote the single-use consent ARM;
- * they write the DURABLE LAUNCH POSTURE now
+ * ⚠ WHAT THESE ROWS WRITE CHANGED ON 2026-08-20. Permissions and Sends on THIS
+ * tab wrote the single-use consent ARM; they write the DURABLE LAUNCH POSTURE now
  * (`window.dopl.channels.get/setLaunchPosture`, stored under
  * `channelLaunchPosture` in `main/channel-prefs.js`), consumed by exactly one
  * caller — `channel-dir-ipc.js › sessions:launch`, the Agents tab's own button.
- * The ARM is untouched and went back to being consent-only, on the request card
- * (`RequestPermissionRow`): still single-use, still 30 minutes, still consumed by
- * `trigger.js › inboundApproved` alone. H2 holds because the split is by
- * CONSUMER, not by lifetime.
  *
  * The defect that forced it: the tab rendered a FUSE among durable settings (tool
  * profile, folder, auto-send). The operator picked Bypass, the first
  * consent-approved launch spent it, every later session started manual/ask — and
  * the control went on displaying "Bypass", because it re-reads only on mount.
  *
- * So the two surfaces no longer share a record, and the last suite pins BOTH
- * halves: they must not cross-write, and two readers of the SAME record (the tab
- * in the main window and in a pop-out) must still merge rather than clobber.
+ * ⚠ AND THEN THE ARM WAS DELETED OUTRIGHT, LATER THE SAME DAY (Samuel's ruling,
+ * F-233): when it "went back to the request card" it went nowhere, because that
+ * card's inbound branch had already stopped rendering. So the two-records suite
+ * below is now ONE record with TWO READERS — the tab in the main window and in a
+ * pop-out — which is where rule 2 always mattered most and is the only place it
+ * can still be driven.
  *
  * The folder is `window.dopl.channels.chooseFolder/clearFolder`; Tools is a CLOUD
  * write and belongs to the caller. Copy and the bridge-free rendering are pinned
@@ -154,8 +151,9 @@ const permissions = () => screen.getByLabelText("Permissions for agents you laun
 const sends = () => screen.getByLabelText("Sends for agents you launch");
 const queryPermissions = () =>
   screen.queryByLabelText("Permissions for agents you launch");
-/** The request card's ARM select — a DIFFERENT record, deliberately. */
-const armTools = () => screen.getByLabelText("What this thread's agent may do");
+// ⚠ `armTools()` STOOD HERE — the request card's ARM select, reached by the label
+// "What this thread's agent may do". The arm is deleted (2026-08-20, F-233) and the
+// label belongs to nothing; the two selects this file drives are both above.
 const item = (name: RegExp | string) => screen.getByRole("menuitem", { name });
 
 describe("the posture section exists only where the bridge does", () => {
@@ -286,59 +284,19 @@ describe("the Agent folder row", () => {
   });
 });
 
-describe("two records, two surfaces — the split, end to end", () => {
-  /** The tab and the request card, side by side on one channel: the ordinary case. */
-  function bothSurfaces() {
-    return render(
-      <>
-        <RequestPermissionRow channelId={CHANNEL} />
-        <ChannelAgentSettings
-          channelId={CHANNEL}
-          profile="full"
-          otherMembers={[member()]}
-          trustedIds={new Set()}
-          trustBusyIds={new Set()}
-          toolProfileBusy={false}
-          onSetToolProfile={vi.fn()}
-          onToggleTrust={vi.fn()}
-        />
-      </>
-    );
-  }
-
-  it("keeps the Settings tab and the request card on SEPARATE records", async () => {
-    // ⚠ THIS SUITE INVERTED ON 2026-08-20, AND THE INVERSION IS THE FIX.
-    // It used to assert these two surfaces shared ONE arm and had to merge
-    // rather than clobber each other. They no longer share anything: the card
-    // arms a single-use pair for the next request a human ALLOWS, and the tab
-    // sets a durable posture for launches that human STARTS. Cross-writing was
-    // the whole defect — a Settings pick that a consent launch silently spent,
-    // leaving the tab displaying a posture nothing would ever use again.
-    const b = bridge();
-    bothSurfaces();
-    await waitFor(() => expect(queryPermissions()).not.toBeNull());
-
-    // The CARD arms bypass.
-    fireEvent.click(armTools());
-    fireEvent.click(item(/^Bypass/));
-    await waitFor(() => expect(b.setPermissionPreset).toHaveBeenCalledTimes(1));
-    expect(b.setLaunchPosture).not.toHaveBeenCalled();
-
-    // The TAB sets its own messages axis. It must not have inherited the card's
-    // tools pick, and must not write it back.
-    fireEvent.click(sends());
-    fireEvent.click(item(/^Automatic/));
-    await waitFor(() =>
-      expect(b.setLaunchPosture).toHaveBeenLastCalledWith(CHANNEL, {
-        tools: "manual",
-        messages: "auto_both",
-      })
-    );
-    expect(b.setPermissionPreset).toHaveBeenCalledTimes(1);
-    // Each store holds exactly what its own surface put there.
-    expect(b.stored.value).toEqual({ tools: "bypass", messages: "ask" });
-    expect(b.posture.value).toEqual({ tools: "manual", messages: "auto_both" });
-  });
+describe("ONE record, two readers — the merge rule, end to end", () => {
+  // ⚠ THIS DESCRIBE LOST ITS FIRST CASE ON 2026-08-20 (Samuel's ruling, F-233).
+  // "keeps the Settings tab and the request card on SEPARATE records" rendered
+  // `RequestPermissionRow` beside the tab and asserted the two never cross-wrote:
+  // the card armed a single-use pair for the next request a human ALLOWED, the tab
+  // set a durable posture for launches that human STARTED, and each store held only
+  // what its own surface put there.
+  //
+  // ⚠ THE RULE IT PINNED IS NOT LOST — IT MOVED DOWN. Cross-writing was only ever a
+  // hazard because two surfaces might share a record; with the arm deleted there is
+  // ONE record, and the question becomes the one the case below asks: two readers of
+  // that record must MERGE rather than clobber. `bothSurfaces()` went with the case,
+  // since the card is not a surface any more.
 
   it("does not let one surface revert another reader of the SAME record", async () => {
     // The merge rule did not go away — it moved to where two readers really do

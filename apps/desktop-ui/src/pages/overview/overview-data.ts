@@ -49,7 +49,7 @@ export const PERIOD_STATS: PeriodStat[] = [
     label: "Sessions",
     value: "735",
     delta: "-2%",
-    note: "Agent sessions completed",
+    note: "Agent runs completed",
     icon: "sessions",
   },
   {
