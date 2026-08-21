@@ -17,7 +17,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { listSessionStates, replaceSessionStates } from "./repository-sessions";
+import {
+  listChannelSessionStates,
+  listSessionStates,
+  replaceSessionStates,
+} from "./repository-sessions";
 import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
 
 const USER = "11111111-e29b-41d4-a716-446655440000";
@@ -109,6 +113,32 @@ describe("the table is not there yet (the UNAPPLIED migration)", () => {
   it("…on the channel-narrowed read too", async () => {
     makeAdmin({ data: null, error: MISSING_RELATION });
     await expect(listSessionStates(USER, WS, CHAN)).resolves.toEqual([]);
+  });
+
+  // ⚠ THE PEER READ GETS THE SAME DEGRADE, and since 2026-08-20 it gets it from
+  // the SAME helper (`sessionRowsWhere`) rather than a second copy of the branch.
+  // Asserted because the sharing is the point: a future un-sharing would leave the
+  // Agents tab's peer cards 500ing against an unapplied migration while the own
+  // feed answered honestly, and nothing else would notice.
+  it("…and on the CHANNEL-scoped peer read, from the same shared branch", async () => {
+    makeAdmin({ data: null, error: MISSING_RELATION });
+    await expect(listChannelSessionStates(WS, CHAN)).resolves.toEqual([]);
+  });
+});
+
+describe("the peer read is CHANNEL-fenced, never user-fenced", () => {
+  // ⚠ The fence is the one thing the shared helper deliberately does NOT own:
+  // this read is authorized by the caller having proved channel visibility, and
+  // narrowing it by `user_id` would silently empty every peer card.
+  it("filters on workspace + channel and NOT on user_id", async () => {
+    const calls = makeAdmin({ data: [], error: null });
+    await listChannelSessionStates(WS, CHAN);
+    const eqs = Object.fromEntries(
+      calls.filter((c) => c.op === "eq").map((c) => [c.args[0], c.args[1]])
+    );
+    expect(eqs.workspace_id).toBe(WS);
+    expect(eqs.channel_id).toBe(CHAN);
+    expect(eqs.user_id).toBeUndefined();
   });
 });
 

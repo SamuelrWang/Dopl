@@ -65,14 +65,49 @@ export async function listSessionStates(
   workspaceId: string,
   channelId?: string
 ): Promise<SessionStateRow[]> {
+  return sessionRowsWhere((q) => {
+    const scoped = q.eq("user_id", userId).eq("workspace_id", workspaceId);
+    return channelId ? scoped.eq("channel_id", channelId) : scoped;
+  });
+}
+
+/**
+ * The half-built select both fences narrow. ⚠ `supabaseAdmin()` is UNTYPED here —
+ * the generated `Database` type does not carry the channels tables (this file's
+ * header says so) — so this names the builder rather than inferring a row type,
+ * and the cast to `SessionStateRow[]` stays at the single point below.
+ */
+type SessionQuery = ReturnType<
+  ReturnType<typeof supabaseAdmin>["from"]
+>["select"] extends (...args: never[]) => infer Q
+  ? Q
+  : never;
+
+/**
+ * THE SHAPE BOTH SESSION READS SHARE — the projection, the ordering, the BOUND
+ * and the missing-relation DEGRADE. Only the FENCE is the caller's.
+ *
+ * ⚠ EXTRACTED 2026-08-20 BECAUSE THE DEGRADE IS THE PART THAT MUST NOT DIVERGE.
+ * The two reads were near-verbatim copies differing in one `.eq()` chain, and the
+ * duplicated half was the subtle half: `isMissingRelation` → `[]` is a deliberate,
+ * DELIBERATELY NARROW rule (one PostgREST code; a permission error, a column
+ * mismatch, a dead connection and a timeout all still throw, because each means
+ * UNKNOWN rather than EMPTY, and an empty list is a claim). Two copies of that is
+ * two places to widen it by accident — and widening it turns "I could not ask"
+ * into "there are none", which the callers cannot tell apart.
+ * ⚠ It also keeps ONE `SESSION_ROWS_LIMIT` on both, which is what makes the bound
+ * above a bound rather than a suggestion.
+ *
+ * ⚠ THE FENCE IS DELIBERATELY NOT SHARED. One read is USER-scoped and one is
+ * CHANNEL-scoped; collapsing them into a single "filter" parameter would put the
+ * two authorization stories behind one signature, and they are not the same story
+ * (see each caller's docblock). This shares the plumbing, never the fence.
+ */
+async function sessionRowsWhere(
+  fence: (query: SessionQuery) => SessionQuery
+): Promise<SessionStateRow[]> {
   const db = supabaseAdmin();
-  let query = db
-    .from("channel_sessions")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("workspace_id", workspaceId);
-  if (channelId) query = query.eq("channel_id", channelId);
-  const { data, error } = await query
+  const { data, error } = await fence(db.from("channel_sessions").select("*"))
     .order("updated_at", { ascending: false })
     .limit(SESSION_ROWS_LIMIT);
   if (error) {
@@ -117,19 +152,9 @@ export async function listChannelSessionStates(
   workspaceId: string,
   channelId: string
 ): Promise<SessionStateRow[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_sessions")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .order("updated_at", { ascending: false })
-    .limit(SESSION_ROWS_LIMIT);
-  if (error) {
-    if (isMissingRelation(error)) return [];
-    throw error;
-  }
-  return (data ?? []) as SessionStateRow[];
+  return sessionRowsWhere((q) =>
+    q.eq("workspace_id", workspaceId).eq("channel_id", channelId)
+  );
 }
 
 /**
