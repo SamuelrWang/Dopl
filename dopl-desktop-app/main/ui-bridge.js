@@ -30,6 +30,12 @@ const authActions = require('./auth-actions');
 const authPassword = require('./auth-password');
 const auth = require('./auth');
 const avatarPolicy = require('./avatar-policy');
+// ⚠ THE SENDER GUARD IS NO LONGER A COPY (2026-08-20). `isAppWindowSender` stood verbatim in
+// the pure block below AND in `main/channel-dir-ipc.js`; the two had already disagreed once
+// (F-221) with the more privileged surface on the lenient side. It now lives in
+// `main/ipc-guards.js`, which carries its own BEGIN/END sentinels so both suites slice ONE
+// source. It is re-exported below because callers already import it through this module.
+const { isAppWindowSender } = require('./ipc-guards');
 const { diag } = require('./diag');
 
 const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
@@ -56,33 +62,11 @@ const DESKTOP_UI_RUNTIME = 'desktop-ui';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// TRUE only for an APP-OWNED window's own TOP frame. `senderIds` is the LIVE set of bound
-// `webContents.id`s (main/app-windows.js › senderIds), resolved at CALL time — so a window
-// built after register() ran is admitted, and a destroyed one has already left the set. An
-// absent or empty set is a DEAD surface, never an open one.
-//
-// ⚠ TWO CHECKS, BECAUSE ONE IS NOT ENOUGH:
-//   1. the sender's webContents id is one main itself registered at window creation; AND
-//   2. the calling frame is that webContents' TOP frame — a cross-origin iframe SHARES its
-//      host's webContents and would otherwise pass check 1 unchallenged.
-// ⚠ `senderFrame` is a getter that THROWS once the frame is detached — read defensively; a
-// frame we cannot read is refused.
-function isAppWindowSender(event, senderIds) {
-  if (!senderIds || typeof senderIds.has !== 'function') return false;
-  const sender = event && event.sender;
-  if (!sender) return false;
-  if (typeof sender.isDestroyed === 'function' && sender.isDestroyed()) return false;
-  if (typeof sender.id !== 'number' || !senderIds.has(sender.id)) return false;
-  let frame;
-  try {
-    frame = event.senderFrame;
-  } catch (_err) {
-    return false;
-  }
-  // ⚠ FAIL CLOSED: an unreadable frame, or a webContents whose mainFrame is gone, is refused.
-  if (!frame || !sender.mainFrame || frame !== sender.mainFrame) return false;
-  return true;
-}
+// ⚠ `isAppWindowSender` STOOD HERE AND IS NOW SHARED (2026-08-20). It moved WHOLE and
+// unchanged to `main/ipc-guards.js`, which carries its own BEGIN/END sentinels so this suite
+// and `test/channel-ipc-sender.test.mjs` slice one source instead of two copies. It is
+// required at the top of this file and re-exported, so every caller reads the same name. The
+// rest of this block stays pure: nothing below refers to it.
 
 // The renderer may reach the API and NOTHING else.
 // ⚠ PARSE FIRST, GATE THE RESULT. A character blacklist runs before WHATWG normalization,

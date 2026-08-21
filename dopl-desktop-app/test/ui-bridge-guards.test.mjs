@@ -36,10 +36,19 @@ function slice(src, name) {
 
 const BRIDGE = M("ui-bridge.js");
 const bridgePure = slice(BRIDGE, "UI-BRIDGE-PURE");
-const { isAppWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId } =
+const { resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId } =
   new Function(
-    `${bridgePure}; return { isAppWindowSender, resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId };`
+    `${bridgePure}; return { resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId };`
   )();
+
+// ⚠ THE SENDER GUARD IS SLICED FROM ITS OWN MODULE NOW (2026-08-20). It used to live verbatim
+// in BOTH `ui-bridge.js` and `channel-dir-ipc.js`, and this suite drove ui-bridge's copy while
+// `channel-ipc-sender.test.mjs` drove the other — two suites, two sources, and the drift F-221
+// was filed about. `main/ipc-guards.js` is the ONE source both slice; the cases below are
+// unchanged, so a regression in the shared predicate still reddens BOTH suites.
+const { isAppWindowSender } = new Function(
+  `${slice(M("ipc-guards.js"), "IPC-GUARDS")}; return { isAppWindowSender };`
+)();
 
 const API_BASE = "https://www.usedopl.com";
 

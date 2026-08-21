@@ -75,7 +75,12 @@ const TRIGGER = read("trigger.js");
 const CONTEXT = read("channel-context.js");
 const PREFS = read("channel-prefs.js");
 const WATCHER = read("consent-watcher.js");
-const DIRIPC = read("channel-dir-ipc.js");
+// ⚠ REPOINTED 2026-08-20 (F-226): `sessions:launch` moved to `session-ipc-ops.js` when
+// `channel-dir-ipc.js` was split off the 500-line cap. The record's ONE consumer did not
+// change — only the file it lives in. `channel-dir-ipc.js` is still read below, because the
+// "and by nothing else" half must keep covering the half that stayed.
+const DIRIPC = read("session-ipc-ops.js");
+const CHANIPC = read("channel-dir-ipc.js");
 
 const { initialSessionState } = loadReducer();
 
@@ -194,11 +199,13 @@ test("H2: exactly TWO callers in main/ hand a posture in, and neither arms a dor
   const handers = files.filter((f) => /startModes:/.test(read(f))).sort();
   assert.deepEqual(
     handers,
-    ["channel-dir-ipc.js", "trigger.js"],
+    ["session-ipc-ops.js", "trigger.js"],
     "a new caller that hands in a posture is a new way for one to reach a launch no human is " +
       "attending — review it here rather than updating this list reflexively " +
-      "(channel-dir-ipc.js = sessions:launch, the operator's own click on the Agents tab, " +
-      "handing in the DURABLE record; trigger.js = the consent-approved responder lane, which " +
+      "(session-ipc-ops.js = sessions:launch, the operator's own click on the Agents tab, " +
+      "handing in the DURABLE record — it lived in channel-dir-ipc.js until the 2026-08-20 " +
+      "split off the 500-line cap (F-226), which moved the FILE and not the consumer; " +
+      "trigger.js = the consent-approved responder lane, which " +
       "since 2026-08-20 hands in a pinned NULL — it still names the key, so it still shows up " +
       "here, and that is right: the seam is what must stay reviewed, not the value on this pass)"
   );
@@ -300,6 +307,12 @@ test("H2/split: the DURABLE posture is read by sessions:launch and by nothing el
     assert.ok(!/getLaunchPosture|launchStartModes/.test(code),
       `${name} must not read the durable posture — an ambient read here IS H2`);
   }
+  // ⚠ AND THE HALF THE SPLIT LEFT BEHIND (2026-08-20, F-226). `channel-dir-ipc.js` keeps the
+  // `channels:getLaunchPosture` DISCLOSURE — the Settings tab reading back what it wrote — and
+  // that is not a consumer: nothing spawns from it. What it must never regain is the SPAWN
+  // read, `launchStartModes`, which is the call that turns a stored record into a session.
+  assert.ok(!/launchStartModes/.test(stripComments(CHANIPC)),
+    "channel-dir-ipc.js discloses the posture but must never spawn from it");
 });
 
 test("H2/split: the RESPONDER lane reads NO stored record, and its tool axis floors at manual", () => {

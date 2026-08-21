@@ -227,8 +227,27 @@ function bootIpc() {
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
+    // ⚠ THE REAL GUARDS (2026-08-20). `isUuid` is the anti-probe gate the cases below drive
+    // directly, and `isAppWindowSender` is the binding this harness supplies a window for —
+    // faking either would make this section green over a surface that admits anybody.
+    if (id === "./ipc-guards") return guards;
+    // ⚠ THE SPLIT HALF (2026-08-20, F-226). `channel-dir-ipc.js` registers it, so it must
+    // resolve; this section drives none of its ops, and it is built with the SAME stub so a
+    // typo in one of its registration paths still surfaces here.
+    if (id === "./session-ipc-ops") return ops;
     throw new Error("unexpected require: " + id);
   };
+  // The REAL guard block, sliced (the module is electron-free, so this is a plain evaluate).
+  const guards = (() => {
+    const g = M("ipc-guards.js");
+    const block = g.slice(g.indexOf("// ─── BEGIN IPC-GUARDS"), g.indexOf("// ─── END IPC-GUARDS"));
+    return new Function(`${block}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  })();
+  const ops = (() => {
+    const m = { exports: {} };
+    new Function("require", "module", "exports", M("session-ipc-ops.js"))(stubRequire, m, m.exports);
+    return m.exports;
+  })();
   const mod = { exports: {} };
   new Function("require", "module", "exports", M("channel-dir-ipc.js"))(
     stubRequire,

@@ -86,13 +86,20 @@ const REMOVED = [
 // is a plain alternation, so `session-window` also matches inside `session-windowless` — a LIVE
 // module named in live comments. Bounded on the right by a non-identifier character so the two
 // cannot be confused; without it every honest sentence about the windowless lane fails tier 3.
-const PREFIX_TRAP = /session-window(?![a-z])/;
+// ⚠ AND IT HAPPENED AGAIN, TO A DIFFERENT NAME, ON 2026-08-20: the F-226 split created a LIVE
+// `main/session-ipc-ops.js`, which the bare alternation matched as the deleted `session-ipc`.
+// A one-off trap for one name was the wrong shape — the RULE is that every removed name must be
+// bounded on the right, so the general form below replaces the special case. `(?![a-z-])` stops
+// a match running on into another hyphenated segment (`session-ipc` vs `session-ipc-ops`) or
+// into more letters (`session-window` vs `session-windowless`), while still allowing `.js`,
+// a backtick, a space or a full stop to follow.
+const RIGHT_BOUND = "(?![a-z-])";
 
 // A mention is `<module>.<something>` (a call), `<module>.js` (a file reference) or the bare
 // module name. Bare is included on purpose: `channel-deliver` and `realtime-agents` are named
 // without a suffix in real comments.
 const MENTION = new RegExp(
-  REMOVED.map((m) => (m === "session-window" ? PREFIX_TRAP.source : m.replace(/-/g, "\\-"))).join("|")
+  REMOVED.map((m) => `${m.replace(/-/g, "\\-")}${RIGHT_BOUND}`).join("|")
 );
 
 // Words that make a paragraph HISTORY rather than a claim. Kept broad — the failure this test is

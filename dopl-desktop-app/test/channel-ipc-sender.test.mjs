@@ -49,35 +49,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import {
+  M, SRC, OPS_SRC, BOTH, BLOCK, isAppWindowSender, evalModule,
+  mkWin, evt, idsOf, bootIpc, CH, PRESET, POPOUT_PAYLOAD,
+} from "./_ipc-harness.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const SRC = M("channel-dir-ipc.js");
+// ⚠ THE BOOT MACHINERY MOVED TO `_ipc-harness.mjs` ON 2026-08-20 (F-226). This suite crossed
+// the cap when the split made it read two sources; the harness is shared rather than copied,
+// so the two IPC suites cannot drift into booting different programs.
 
-// ── The pure guard, sliced and driven directly ───────────────────────────────
-
-const BEGIN = "// ─── BEGIN CHANNEL-IPC-SENDER";
-const END = "// ─── END CHANNEL-IPC-SENDER";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN CHANNEL-IPC-SENDER sentinel missing");
-assert.ok(to > from, "CHANNEL-IPC-SENDER sentinels out of order");
-const BLOCK = SRC.slice(from, to);
-
-const { isAppWindowSender } = new Function(`${BLOCK}\n return { isAppWindowSender };`)();
-
-let nextWcId = 1;
-const mkWin = () => {
-  const mainFrame = { name: "top" };
-  const webContents = { id: nextWcId++, mainFrame, isDestroyed: () => false };
-  return { win: { isDestroyed: () => false, webContents }, webContents, mainFrame };
-};
-const evt = (sender, senderFrame) => ({ sender, senderFrame });
-/** The registry's answer: the live set of bound webContents ids. */
-const idsOf = (...wcs) => new Set(wcs.map((wc) => wc.id));
 
 test("the guard ACCEPTS a registered window's own top frame", () => {
   const { webContents, mainFrame } = mkWin();
@@ -178,75 +158,6 @@ test("the guard FAILS CLOSED on a missing sender, a missing event, or a non-nume
     "a string id must not be admitted by a set that happens to hold the same string");
 });
 
-// ── The wiring: every handler is wrapped, and refuses an unbound sender ──────
-
-// The real file, evaluated with a stub `require` so the real guard + the real UUID gate
-// are the ones under test; only electron and the store/window-backed modules are swapped.
-function bootIpc({ blocked = false } = {}) {
-  const handlers = {};
-  const writes = [];
-  const dialogs = [];
-  const reopens = [];
-  const popouts = [];
-  const stubRequire = (id) => {
-    if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
-    if (id === "./channel-prefs") {
-      // ⚠ THE ARM'S THREE ENTRIES ARE GONE (2026-08-20): `getPermissionPreset`,
-      // `armPermissionPreset`, `clearPermissionPreset`. What remains is the DURABLE posture
-      // plus auto-send. EVERY WRITER RECORDS INTO ONE `writes` LEDGER on purpose — the refusal
-      // cases below assert `writes` is empty, so a second ledger would let one op's forged
-      // write pass unseen while the other's was checked.
-      return {
-        getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
-        setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
-        launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        getAutoSend: () => false,
-        setAutoSend: (channelId, on) => { writes.push({ channelId, on }); return true; },
-      };
-    }
-    if (id === "./channel-dirs") {
-      return {
-        liveChannelDirLabel: () => "~/Downloads/secret-repo",
-        promptAndSetChannelDir: async () => { dialogs.push(1); },
-        clearChannelDir: () => { writes.push({ cleared: true }); },
-      };
-    }
-    if (id === "./session-engine") {
-      return { reopenByTask: (a) => { reopens.push(a); return { ok: true }; } };
-    }
-    // The REAL character rule — a second regex in channel-dir-ipc.js would be a second
-    // answer to it, so the test drives the real one rather than a permissive fake.
-    if (id === "./deep-link-target") {
-      return { isSafeSegment: (v) => typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(v) };
-    }
-    if (id === "./version-gate") return { isBlocked: () => blocked };
-    if (id === "./popout-window") {
-      return { openThreadWindow: (t) => { popouts.push(t); return { ok: true }; } };
-    }
-    if (id === "./diag") return { diag: () => {} };
-    throw new Error("unexpected require: " + id);
-  };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);
-
-  // TWO bound windows — the shell and a pop-out thread window. This is the enumeration:
-  // both must work, and nothing else may.
-  const shell = mkWin();
-  const popout = mkWin();
-  const stranger = mkWin();
-  mod.exports.register({ getSenderIds: () => idsOf(shell.webContents, popout.webContents) });
-  return {
-    handlers, writes, dialogs, reopens, popouts,
-    shell: evt(shell.webContents, shell.mainFrame),
-    popout: evt(popout.webContents, popout.mainFrame),
-    iframe: evt(shell.webContents, { name: "embedded" }),
-    foreign: evt(stranger.webContents, stranger.mainFrame),
-  };
-}
-
-const CH = "44444444-4444-4444-8444-444444444444";
-const PRESET = { tools: "bypass", messages: "auto_both" };
-const POPOUT_PAYLOAD = { segment: "acme-a1b2", channelId: CH, threadId: "task-1" };
 
 // name -> [payload, the value a REFUSED call must return]
 const OPS = [
@@ -359,11 +270,15 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
+    if (id === "./ipc-guards") return guards;
+    if (id === "./session-ipc-ops") return ops;
     throw new Error("unexpected require: " + id);
   };
+  const guards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  const ops = evalModule(OPS_SRC, stub);
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
-  mod.exports.register({}); // no getSenderIds
+  mod.exports.register({}); // no getSenderIds — and the split half inherits the same absence
   const { webContents, mainFrame } = mkWin();
   for (const [name, payload, refusal] of OPS) {
     assert.deepEqual(await handlers[name](evt(webContents, mainFrame), payload), refusal, name);
@@ -412,9 +327,9 @@ test("threads:openWindow character-checks the segment and the thread id, not jus
   // Both are interpolated into a router path. The channel is UUID-gated like every op
   // here; the other two go through the ONE character rule (deep-link-target ›
   // isSafeSegment), and a local regex in channel-dir-ipc.js would be a second answer to it.
-  assert.match(SRC, /require\('\.\/deep-link-target'\)/, "the shared rule, required lazily");
-  assert.match(SRC, /isSafeSegment\(p\.segment\)/);
-  assert.match(SRC, /isSafeSegment\(p\.threadId\)/);
+  assert.match(OPS_SRC, /require\('\.\/deep-link-target'\)/, "the shared rule, required lazily");
+  assert.match(OPS_SRC, /isSafeSegment\(p\.segment\)/);
+  assert.match(OPS_SRC, /isSafeSegment\(p\.threadId\)/);
 });
 
 test("threads:openWindow refuses every unusable target in the SAME shape", async () => {
@@ -452,16 +367,33 @@ test("index.js passes the LIVE registry, lazily (windows come and go)", () => {
       "rebuilt on reopen, and a pop-out can appear or close at any moment");
 });
 
-test("no handler in the file skips the wrapper", () => {
-  // Structural belt: every ipcMain.handle in this file must go through appWindowOnly, so a
-  // new op cannot be added unbound by simply forgetting to wrap it. ⚠ The wrap is written
+test("no handler in EITHER half skips the wrapper", () => {
+  // Structural belt: every ipcMain.handle across BOTH files must go through appWindowOnly, so
+  // a new op cannot be added unbound by simply forgetting to wrap it. ⚠ The wrap is written
   // literally at each registration site for exactly this reason — hiding it inside a
   // factory would pass review and silently disarm this check.
-  const calls = SRC.match(/ipcMain\.handle\(/g) || [];
-  const wrapped = SRC.match(/ipcMain\.handle\('[^']+', appWindowOnly\(/g) || [];
+  // ⚠ READS THE CONCATENATION SINCE THE 2026-08-20 SPLIT (F-226). Counting one file would
+  // have let the other half drift, which is precisely the cost a split must not have.
+  const calls = BOTH.match(/ipcMain\.handle\(/g) || [];
+  const wrapped = BOTH.match(/ipcMain\.handle\('[^']+', appWindowOnly\(/g) || [];
   assert.equal(calls.length, OPS.length, "the op count changed — update OPS above");
   assert.equal(wrapped.length, calls.length, "every registered handler is sender-bound");
-  assert.equal(SRC.match(/mainOnly\(/g), null,
+  assert.equal(BOTH.match(/mainOnly\(/g), null,
     "`mainOnly(` is gone: the binding's subject is the app-window registry now, and a " +
       "surviving call site would be an op still bound to the main window alone");
+});
+
+test("the split did not fork the sender guard — both halves use the ONE shared predicate", () => {
+  // ⚠ THE WHOLE POINT OF `main/ipc-guards.js`. Each half defines its own six-line
+  // `appWindowOnly` wrapper (the structural belt above requires the wrap to be visible at
+  // each site), but neither may define the PREDICATE — that is where the security content
+  // lives and where the F-221 drift happened. A local `function isAppWindowSender` in either
+  // file is a second answer to "who may call", which is the defect this extraction removed.
+  for (const [name, src] of [["channel-dir-ipc.js", SRC], ["session-ipc-ops.js", OPS_SRC]]) {
+    assert.match(src, /require\('\.\/ipc-guards'\)/, `${name} takes the shared guards`);
+    assert.equal(/function isAppWindowSender\s*\(/.test(src), false,
+      `${name} must not re-declare the predicate`);
+    assert.equal(/UUID_RE\s*=\s*\//.test(src), false,
+      `${name} must not re-declare the UUID rule`);
+  }
 });

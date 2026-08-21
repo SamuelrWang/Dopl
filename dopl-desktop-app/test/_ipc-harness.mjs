@@ -1,0 +1,134 @@
+// SHARED HARNESS for the two IPC-boundary suites (`channel-dir-ipc.js` + `session-ipc-ops.js`).
+//
+// WHY IT IS ITS OWN FILE. `channel-ipc-sender.test.mjs` crossed the 500-line cap when the
+// 2026-08-20 split (F-226) made it read TWO sources instead of one, and the alternative — a
+// second copy of the boot machinery in a second file — is how two suites drift into testing
+// two different programs. Same seam and same precedent as `_classify-harness.mjs` /
+// `_session-summary-harness.mjs`: the extraction machinery is shared, the cases are split by
+// what they are about.
+//
+// ⚠ THE REAL GUARDS ARE THE ONES UNDER TEST. `main/ipc-guards.js` is sliced and evaluated,
+// never faked: `isAppWindowSender` IS the subject of the binding suite, and `isUuid` is the
+// anti-probe gate every op leans on. Only electron and the store/window-backed modules are
+// swapped. Both halves are built with the SAME stub, so they register into ONE `handlers`
+// map and every case drives both.
+
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+export const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
+export const SRC = M("channel-dir-ipc.js");
+export const OPS_SRC = M("session-ipc-ops.js");
+// ⚠ BOTH SOURCES, BECAUSE THE FILE SPLIT AND THE BINDING DID NOT (2026-08-20, F-226). Every
+// structural assertion reads the CONCATENATION: an op that dodges the wrapper fails the belt
+// whichever half it was added to, which is the property the split must not cost.
+export const BOTH = `${SRC}\n${OPS_SRC}`;
+
+// ⚠ SLICED FROM `main/ipc-guards.js` SINCE 2026-08-20 — it used to be one of TWO
+// byte-identical copies (the other in `ui-bridge.js`, driven by its own suite), which is the
+// F-221 drift. One source now; both suites still drive it.
+const GUARDS = M("ipc-guards.js");
+const from = GUARDS.indexOf("// ─── BEGIN IPC-GUARDS");
+const to = GUARDS.indexOf("// ─── END IPC-GUARDS");
+assert.notEqual(from, -1, "BEGIN IPC-GUARDS sentinel missing");
+assert.ok(to > from, "IPC-GUARDS sentinels out of order");
+export const BLOCK = GUARDS.slice(from, to);
+
+export const { isAppWindowSender } = new Function(`${BLOCK}\n return { isAppWindowSender };`)();
+
+/** Evaluate a main-process module against a stub `require`, and hand back its exports. */
+export function evalModule(src, stubRequire) {
+  const m = { exports: {} };
+  new Function("require", "module", "exports", src)(stubRequire, m, m.exports);
+  return m.exports;
+}
+
+let nextWcId = 1;
+export const mkWin = () => {
+  const mainFrame = { name: "top" };
+  const webContents = { id: nextWcId++, mainFrame, isDestroyed: () => false };
+  return { win: { isDestroyed: () => false, webContents }, webContents, mainFrame };
+};
+export const evt = (sender, senderFrame) => ({ sender, senderFrame });
+/** The registry's answer: the live set of bound webContents ids. */
+export const idsOf = (...wcs) => new Set(wcs.map((wc) => wc.id));
+
+// ── The wiring: every handler is wrapped, and refuses an unbound sender ──────
+
+// The real file, evaluated with a stub `require` so the real guard + the real UUID gate
+// are the ones under test; only electron and the store/window-backed modules are swapped.
+export function bootIpc({ blocked = false } = {}) {
+  const handlers = {};
+  const writes = [];
+  const dialogs = [];
+  const reopens = [];
+  const popouts = [];
+  const stubRequire = (id) => {
+    if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
+    if (id === "./channel-prefs") {
+      // ⚠ THE ARM'S THREE ENTRIES ARE GONE (2026-08-20): `getPermissionPreset`,
+      // `armPermissionPreset`, `clearPermissionPreset`. What remains is the DURABLE posture
+      // plus auto-send. EVERY WRITER RECORDS INTO ONE `writes` LEDGER on purpose — the refusal
+      // cases below assert `writes` is empty, so a second ledger would let one op's forged
+      // write pass unseen while the other's was checked.
+      return {
+        getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
+        setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
+        launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
+        getAutoSend: () => false,
+        setAutoSend: (channelId, on) => { writes.push({ channelId, on }); return true; },
+      };
+    }
+    if (id === "./channel-dirs") {
+      return {
+        liveChannelDirLabel: () => "~/Downloads/secret-repo",
+        promptAndSetChannelDir: async () => { dialogs.push(1); },
+        clearChannelDir: () => { writes.push({ cleared: true }); },
+      };
+    }
+    if (id === "./session-engine") {
+      return { reopenByTask: (a) => { reopens.push(a); return { ok: true }; } };
+    }
+    // The REAL character rule — a second regex in channel-dir-ipc.js would be a second
+    // answer to it, so the test drives the real one rather than a permissive fake.
+    if (id === "./deep-link-target") {
+      return { isSafeSegment: (v) => typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(v) };
+    }
+    if (id === "./version-gate") return { isBlocked: () => blocked };
+    if (id === "./popout-window") {
+      return { openThreadWindow: (t) => { popouts.push(t); return { ok: true }; } };
+    }
+    if (id === "./diag") return { diag: () => {} };
+    // ⚠ THE REAL GUARDS, NOT A FAKE — `isAppWindowSender` IS what is under test, and `isUuid`
+    // is the anti-probe gate every op leans on. The split half is built with this SAME stub,
+    // so both register into one `handlers` map and both are driven by every case below.
+    if (id === "./ipc-guards") return realGuards;
+    if (id === "./session-ipc-ops") return opsModule;
+    throw new Error("unexpected require: " + id);
+  };
+  const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  const opsModule = evalModule(OPS_SRC, stubRequire);
+  const mod = { exports: {} };
+  new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);
+
+  // TWO bound windows — the shell and a pop-out thread window. This is the enumeration:
+  // both must work, and nothing else may.
+  const shell = mkWin();
+  const popout = mkWin();
+  const stranger = mkWin();
+  mod.exports.register({ getSenderIds: () => idsOf(shell.webContents, popout.webContents) });
+  return {
+    handlers, writes, dialogs, reopens, popouts,
+    shell: evt(shell.webContents, shell.mainFrame),
+    popout: evt(popout.webContents, popout.mainFrame),
+    iframe: evt(shell.webContents, { name: "embedded" }),
+    foreign: evt(stranger.webContents, stranger.mainFrame),
+  };
+}
+
+export const CH = "44444444-4444-4444-8444-444444444444";
+export const PRESET = { tools: "bypass", messages: "auto_both" };
+export const POPOUT_PAYLOAD = { segment: "acme-a1b2", channelId: CH, threadId: "task-1" };
