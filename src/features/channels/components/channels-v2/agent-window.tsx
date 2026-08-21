@@ -39,6 +39,7 @@ import { FIELD_WELL } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
+import { useChannelsV2Live } from "./live";
 import { agentSentMessages } from "./agent-panel";
 import { AgentLiveness } from "./bits";
 import {
@@ -100,7 +101,32 @@ export function ChannelsV2AgentWindow({
   );
   const { entries, supported } = useAgentNarration(channelId, taskId);
   // The Sent lane reads the channel transcript, exactly as the panel's does.
-  const { messages } = useChannelMessages(channelId, workspaceId);
+  const { messages, refetch: refetchMessages } = useChannelMessages(
+    channelId,
+    workspaceId
+  );
+
+  // ⚠ THIS WINDOW REGISTERS FOR THE DOORBELL (2026-08-20). It did not until then,
+  // and the failure had no error shape: the narration and posture lanes are
+  // bridge-PUSHED and stayed live, so the window looked healthy while the SENT
+  // lane — its only server read — silently stopped updating after mount. A third
+  // BrowserWindow inherits nothing; `main/ui-sync.js › sendToWindows` fans the
+  // bell out over the app-window registry, but only a surface that SUBSCRIBED
+  // hears it (INVARIANTS §7). This is the third registered live surface in
+  // channels, after the page core and the pop-out thread window.
+  //
+  // ⚠ MESSAGES ONLY, and that is the whole diet. There is no roster, no thread
+  // list and no consent read here — nothing to refetch and no presence dot to
+  // keep fresh — so `refetchMembers` is deliberately a no-op rather than a
+  // read this surface would then have to justify owning.
+  // ⚠ The `gate` is not taken: this window has no server WRITE. Its composer
+  // reaches `sessions.message` over the bridge, which posts nothing.
+  useChannelsV2Live({
+    workspaceId,
+    refetchAll: () => void refetchMessages(),
+    refetchMembers: () => {},
+  });
+
   const sent = useMemo(
     () => agentSentMessages(messages, taskId, currentUserId),
     [messages, taskId, currentUserId]

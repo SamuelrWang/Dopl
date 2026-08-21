@@ -17,6 +17,12 @@
  *  - **NOTHING TYPED HERE IS POSTED TO THE THREAD**, and the surface says so — an input
  *    under a transcript normally posts to it, which makes this the one genuinely
  *    surprising property of the window.
+ *  - **THIS WINDOW IS A LIVE SURFACE.** Its narration and posture lanes are bridge-PUSHED
+ *    and stay live on their own, which is exactly what made the gap invisible: the window
+ *    looked healthy while the SENT lane — its only server read — quietly stopped updating
+ *    after mount. A third `BrowserWindow` inherits nothing, so it must register the
+ *    doorbell through the same `useChannelsV2Live` the core and the pop-out take
+ *    (INVARIANTS §7).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,10 +41,29 @@ import { CHANNEL_ID, ME } from "./test-fixtures";
 const TASK = "t-1";
 const WS = "ws-1";
 
+const { live, refetchMessages } = vi.hoisted(() => ({
+  live: vi.fn<
+    (opts: {
+      workspaceId: string;
+      refetchAll: () => void;
+      refetchMembers: () => void;
+    }) => { gate: object }
+  >(() => ({ gate: {} })),
+  refetchMessages: vi.fn(),
+}));
+
 // The transcript read is a real hook; this suite is about the window's own lanes.
 vi.mock("../../hooks/use-channel-messages", () => ({
-  useChannelMessages: () => ({ messages: [], loading: false, refetch: () => {} }),
+  useChannelMessages: () => ({
+    messages: [],
+    loading: false,
+    refetch: refetchMessages,
+  }),
 }));
+
+// The realtime registration is asserted, not exercised — `live.ts` owns the
+// subscription and has its own coverage.
+vi.mock("./live", () => ({ useChannelsV2Live: live }));
 
 function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
@@ -103,6 +128,11 @@ async function mount() {
 
 beforeEach(() => {
   document.title = "Dopl";
+  // ⚠ Both are module-level `vi.hoisted` fakes, so a call count is cumulative
+  // across the file unless it is reset here — "called once" would otherwise mean
+  // "once since the suite started".
+  live.mockClear();
+  refetchMessages.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -268,5 +298,45 @@ describe("an agent that is not running", () => {
     };
     await mount();
     expect(screen.queryByText("That agent isn't running")).toBeNull();
+  });
+});
+
+/**
+ * ⚠ THE INVISIBLE REQUIREMENT (2026-08-20). Two of this window's three lanes are
+ * bridge-PUSHED and stay live with no subscription at all, so a missing doorbell
+ * registration does not look like a broken window — it looks like a working one
+ * whose Sent lane happens to be quiet. Asserted as a REGISTRATION rather than by
+ * rendering a message, for the same reason `thread-window.test.tsx` does: what
+ * fails silently is the window not subscribing, not the row not painting.
+ */
+describe("the window is a LIVE surface", () => {
+  // ⚠ Asserted as CALLED, never as called-once: this is a hook, so it runs on
+  // every render, and the feed settling after mount is a second one. A count here
+  // would pin React's render schedule, not the registration.
+  it("registers the realtime doorbell for its workspace", async () => {
+    installBridge({ sessions: [summary()] });
+    await mount();
+    expect(live).toHaveBeenCalled();
+    expect(live.mock.calls.at(-1)?.[0]).toMatchObject({ workspaceId: WS });
+  });
+
+  it("refetches the SENT lane's transcript when the bell rings", async () => {
+    installBridge({ sessions: [summary()] });
+    await mount();
+    refetchMessages.mockClear();
+    act(() => {
+      live.mock.calls.at(-1)?.[0].refetchAll();
+    });
+    expect(refetchMessages).toHaveBeenCalledTimes(1);
+  });
+
+  // ⚠ Deliberately a no-op, not an oversight: this window holds no roster and no
+  // presence dot, so there is nothing for the presence debounce to refresh. It is
+  // asserted so a reader does not "complete" it with a read this surface would
+  // then own for no one.
+  it("asks for no roster refetch — it has no roster and no presence to keep fresh", async () => {
+    installBridge({ sessions: [summary()] });
+    await mount();
+    expect(() => live.mock.calls.at(-1)?.[0].refetchMembers()).not.toThrow();
   });
 });
