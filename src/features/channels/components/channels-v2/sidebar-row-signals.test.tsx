@@ -1,21 +1,23 @@
 // @vitest-environment jsdom
 /**
- * THE SIDEBAR'S THREAD DISCLOSURE (Samuel, 2026-08-20).
+ * WHAT A SIDEBAR CHANNEL ROW CARRIES AND DOES — the thread disclosure and the
+ * ask signal, both Samuel's, both 2026-08-20.
  *
  * ⚠ ITS OWN FILE because `sidebar.test.tsx` sits within a few lines of the
  * 500-line cap — the same seam `session-summary-shape.test.mjs` was taken on,
  * and the same reason: letting a line cap decide what a suite may assert is
  * backwards. That file keeps the column's STRUCTURE (sections, selection,
- * favourites, filtering); this one keeps the one interaction that hides rows.
+ * favourites, filtering); this one keeps what an individual ROW does, which is
+ * where both of these live and where they interact.
  *
- * THE PROBLEM IT SOLVES, stated so a future reader does not "simplify" it away:
- * the rows nested under a channel are the OPEN channel's threads, windowed to
- * "active in the last 24h OR requested". That window is bounded but not SMALL —
- * a busy DM puts eight rows under one channel and pushes every other channel
+ * THE DISCLOSURE'S PROBLEM, stated so a future reader does not "simplify" it
+ * away: the rows nested under a channel are the OPEN channel's threads, windowed
+ * to "active in the last 24h OR requested". That window is bounded but not SMALL
+ * — a busy DM puts eight rows under one channel and pushes every other channel
  * below the fold, in the one column that has to stay scannable. ⚠ The window is
  * the RIGHT rule and is untouched; the fix is a disclosure, not a narrower
  * window, because narrowing it would hide threads the operator is being ASKED
- * about.
+ * about — which is exactly what the ask signal below is for.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -132,5 +134,72 @@ describe("the sidebar's thread disclosure", () => {
     fireEvent.click(toggle(/^Hide threads in Website$/));
     expect(screen.queryByRole("button", { name: /threads in Front-end/ })).toBeNull();
     expect(row("Front-end")).toBeTruthy();
+  });
+});
+
+/**
+ * THE ASK SIGNAL (Samuel's ruling, 2026-08-20: option (a), a per-channel count).
+ *
+ * ⚠ THE WHOLE POINT IS THE CHANNEL YOU ARE NOT LOOKING AT. Every other
+ * consent-derived signal in this column is scoped to the OPEN channel (the Clock
+ * glyph needs the loaded transcript to know which thread an ask is about); this
+ * one rides a workspace-wide read so a DM three rows down can say somebody is
+ * waiting on you.
+ */
+describe("the sidebar's ask signal", () => {
+  const asks = (m: Record<string, number>) =>
+    new Map(Object.entries(m)) as ReadonlyMap<string, number>;
+
+  it("badges a channel with pending asks, with the count", () => {
+    renderSidebar({ pendingAsks: asks({ "ch-web": 3 }) });
+    expect(screen.getByLabelText("3 awaiting your answer in Website")).toBeTruthy();
+  });
+
+  // ⚠ THE FEATURE, stated as a test: it must work for a channel that is NOT open.
+  it("badges a channel the operator is not looking at", () => {
+    renderSidebar({ selectedChannelId: "ch-web", pendingAsks: asks({ "ch-fe": 1 }) });
+    expect(screen.getByLabelText("1 awaiting your answer in Front-end")).toBeTruthy();
+  });
+
+  it("badges a DM the same way — the signal is per row, not per section", () => {
+    renderSidebar({ pendingAsks: asks({ "ch-dm": 2 }) });
+    expect(
+      screen.getByLabelText("2 awaiting your answer in Diana Taylor")
+    ).toBeTruthy();
+  });
+
+  it("shows NO badge on a channel with nothing waiting", () => {
+    renderSidebar({ pendingAsks: asks({ "ch-web": 1 }) });
+    expect(screen.queryByLabelText(/awaiting your answer in Front-end/)).toBeNull();
+  });
+
+  it("shows no badge at all when nothing is pending anywhere", () => {
+    renderSidebar({ pendingAsks: asks({}) });
+    expect(screen.queryByLabelText(/awaiting your answer/)).toBeNull();
+  });
+
+  // ⚠ THE INTERACTION WITH THE DISCLOSURE, and the case it matters most in: a
+  // retracted branch hides the THREADS, and the ask badge is on the CHANNEL row.
+  it("survives collapsing the branch — the badge is not one of the hidden rows", () => {
+    renderSidebar({
+      threads: [thread({ id: "t-1", title: "UI-kit design" })],
+      pendingAsks: asks({ "ch-web": 2 }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Hide threads in Website$/ }));
+    expect(screen.queryByRole("button", { name: "UI-kit design" })).toBeNull();
+    expect(screen.getByLabelText("2 awaiting your answer in Website")).toBeTruthy();
+  });
+
+  // The two are different facts and a channel can legitimately have both: the
+  // dot is "something newer than your lastReadAt", the badge is "answer me".
+  it("coexists with the unread dot rather than replacing it", () => {
+    renderSidebar({ pendingAsks: asks({ "ch-fe": 1 }) });
+    expect(screen.getByLabelText("1 awaiting your answer in Front-end")).toBeTruthy();
+    expect(screen.getAllByLabelText("Unread messages").length).toBeGreaterThan(0);
+  });
+
+  it("renders nothing when the prop is absent — the sidebar has no second read", () => {
+    renderSidebar();
+    expect(screen.queryByLabelText(/awaiting your answer/)).toBeNull();
   });
 });

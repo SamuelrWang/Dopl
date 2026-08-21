@@ -77,6 +77,7 @@ export function ChannelRow({
   person,
   selected,
   unread,
+  askCount = 0,
   reserveTrailing = false,
   onSelect,
 }: {
@@ -85,6 +86,16 @@ export function ChannelRow({
   person: AvatarPerson | null;
   selected: boolean;
   unread: boolean;
+  /**
+   * Threads in this channel awaiting THIS viewer's answer — the ASK SIGNAL
+   * (Samuel, 2026-08-20). `0` renders nothing.
+   *
+   * ⚠ A REAL COUNT, which is why this row may carry a number at all: the
+   * docblock above refuses an unread BADGE because `Channel.unread` is a
+   * boolean and a badge is a claim about HOW MUCH. This is that claim, and it is
+   * true — `view-model-requested.ts › pendingAsksByChannel` counts rows.
+   */
+  askCount?: number;
   /**
    * Leave room at the row's right edge for a control that is NOT part of this
    * button (2026-08-20: the thread disclosure, `sidebar.tsx › ChannelBranch`).
@@ -119,13 +130,54 @@ export function ChannelRow({
       <span className={cn("truncate", unread && !selected && "font-semibold text-text-primary")}>
         {label}
       </span>
-      {unread && (
-        <span
-          aria-label="Unread messages"
-          className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-link"
-        />
+      {/* ⚠ ONE TRAILING GROUP, so the ask badge and the unread dot can both be
+          present without fighting over `ml-auto` (2026-08-20). They mean
+          different things and a channel can legitimately have both: the dot is
+          "there is something newer than your `lastReadAt`", the badge is
+          "somebody is waiting on your answer". */}
+      {(askCount > 0 || unread) && (
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {askCount > 0 && <AskBadge count={askCount} label={label} />}
+          {unread && (
+            <span
+              aria-label="Unread messages"
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-link"
+            />
+          )}
+        </span>
       )}
     </SidebarRow>
+  );
+}
+
+/**
+ * THE ASK SIGNAL — threads in this channel awaiting THIS viewer's answer
+ * (Samuel's ruling, 2026-08-20: option (a), a per-channel count).
+ *
+ * ⚠ SAME GEOMETRY AS `CountBadge` AND THE SEGMENTED CONTROL'S COUNT PILL — 16px
+ * stadium, micro semibold — and a FILLED tone rather than that badge's muted
+ * one. The geometry is shared because a count is a count; the fill is not,
+ * because this is the only number in the column that is a REQUEST rather than a
+ * total. The Inbox row's badge stays muted deliberately: it answers "how many
+ * are waiting" for a destination the operator chooses to visit, while this one
+ * appears unasked-for beside a channel they were not looking at.
+ * ⚠ It is distinct from the unread dot by SHAPE as well as tone — a count, not a
+ * dot — which is the distinction Samuel's ruling asked for. The two can appear
+ * together and mean different things.
+ *
+ * ⚠ IT CARRIES ITS OWN ACCESSIBLE NAME. The count alone reads as a bare number
+ * beside a channel name, which is exactly as informative as the dot it must not
+ * be confused with.
+ */
+function AskBadge({ count, label }: { count: number; label: string }) {
+  return (
+    <span
+      role="status"
+      aria-label={`${count} awaiting your answer in ${label}`}
+      className="inline-flex h-[16px] min-w-[16px] shrink-0 items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta"
+    >
+      {count}
+    </span>
   );
 }
 

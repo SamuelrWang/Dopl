@@ -23,6 +23,7 @@ import { indexMembers } from "./view-model";
 import { channelRows, threadRows } from "./view-model-rows";
 import {
   consentExemptThreadIds,
+  pendingAsksByChannel,
   requestedThreadIds,
   sidebarThreads,
 } from "./view-model-requested";
@@ -43,6 +44,9 @@ export interface ChannelsV2Derivations {
   requested: ReadonlySet<string>;
   /** Threads a pending consent request keeps reachable past the 24h window. */
   consentExempt: ReadonlySet<string>;
+  /** channelId → threads there awaiting this viewer's answer — the sidebar's
+   *  ASK SIGNAL. ⚠ WORKSPACE-WIDE, unlike `requested` above. */
+  pendingAsks: ReadonlyMap<string, number>;
   /** The threads the sidebar may nest under the open channel. */
   treeThreads: ChannelThread[];
   /** The center pane's rows — the thread's own transcript, or the channel's. */
@@ -98,6 +102,16 @@ export function useChannelsV2Derivations({
     [threads, requested, consentExempt]
   );
 
+  // ⚠ THE ASK SIGNAL, AND IT IS A THIRD ARM RATHER THAN A SLICE OF `requested`
+  // (Samuel, 2026-08-20). `requested` answers "which THREAD is this about",
+  // which needs the seq join and can therefore only ever speak about the OPEN
+  // channel — the only one whose transcript is loaded. This answers "does this
+  // CHANNEL have something waiting for you", which the consent row states on its
+  // own, so it is workspace-wide and needs no transcript at all. Deriving it
+  // from `requested` would silently zero every channel the operator is not
+  // looking at, which is the entire set the signal exists for.
+  const pendingAsks = useMemo(() => pendingAsksByChannel(requests), [requests]);
+
   const rows = useMemo(
     () =>
       openThread
@@ -106,5 +120,5 @@ export function useChannelsV2Derivations({
     [messages, threads, openThread, index]
   );
 
-  return { index, openThread, requested, consentExempt, treeThreads, rows };
+  return { index, openThread, requested, consentExempt, pendingAsks, treeThreads, rows };
 }

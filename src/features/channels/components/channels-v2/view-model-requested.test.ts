@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import {
   consentExemptThreadIds,
+  pendingAsksByChannel,
   requestedThreadIds,
   sidebarThreads,
 } from "./view-model-requested";
@@ -215,5 +216,74 @@ describe("the sidebar's exemption arm", () => {
 
   it("still drops it with no pending ask at all", () => {
     expect(sidebarThreads([stale], new Set(), now, new Set())).toEqual([]);
+  });
+});
+
+/**
+ * THE ASK SIGNAL — how many threads in each channel await THIS viewer's answer
+ * (Samuel's ruling, 2026-08-20: option (a), a per-channel count).
+ *
+ * ⚠ THE CASE THAT DEFINES IT is the seq-less row. `requestedThreadIds` above
+ * must drop such a row — it cannot say which THREAD the ask is about without the
+ * join — but this must keep it, because a channel with an ask nobody can locate
+ * still has an ask. Requiring the join here would zero every channel whose
+ * transcript is not loaded, which is every channel the operator is NOT looking
+ * at: the entire set the signal exists for.
+ */
+describe("pendingAsksByChannel", () => {
+  it("counts pending inbound rows per channel", () => {
+    const asks = pendingAsksByChannel([
+      consent({ id: "c-1", channelId: "ch-a", messageSeq: 1 }),
+      consent({ id: "c-2", channelId: "ch-a", messageSeq: 2 }),
+      consent({ id: "c-3", channelId: "ch-b", messageSeq: 3 }),
+    ]);
+    expect(asks.get("ch-a")).toBe(2);
+    expect(asks.get("ch-b")).toBe(1);
+  });
+
+  it("counts a row with NO messageSeq — a locatable thread is not the question", () => {
+    const asks = pendingAsksByChannel([
+      consent({ id: "c-1", channelId: "ch-a", messageSeq: null }),
+    ]);
+    expect(asks.get("ch-a")).toBe(1);
+    // …and the thread-level derivation still refuses it, which is the asymmetry
+    // this pair exists to hold: two questions, two answers, one set of rows.
+    expect(
+      requestedThreadIds([], [consent({ channelId: "ch-a", messageSeq: null })]).size
+    ).toBe(0);
+  });
+
+  it("ignores OUTBOUND rows — those are the operator's own reply, not an ask", () => {
+    const asks = pendingAsksByChannel([
+      consent({ id: "c-1", channelId: "ch-a", kind: "outbound" }),
+    ]);
+    expect(asks.size).toBe(0);
+  });
+
+  it("ignores rows that are no longer pending", () => {
+    const asks = pendingAsksByChannel([
+      consent({ id: "c-1", channelId: "ch-a", status: "allowed" }),
+      consent({ id: "c-2", channelId: "ch-a", status: "denied" }),
+    ]);
+    expect(asks.size).toBe(0);
+  });
+
+  it("answers an empty map for no rows, and names no channel it did not see", () => {
+    expect(pendingAsksByChannel([]).size).toBe(0);
+    expect(pendingAsksByChannel([consent({ channelId: "ch-a" })]).get("ch-b")).toBeUndefined();
+  });
+
+  // ⚠ SAME ROWS AS THE INBOX BADGE, SLICED. The Inbox nav row counts
+  // `requests.length`; this groups the inbound half by channel. If the two ever
+  // derive from different filters they will disagree in the same column.
+  it("totals to the inbound rows the Inbox badge is counting", () => {
+    const rows = [
+      consent({ id: "c-1", channelId: "ch-a" }),
+      consent({ id: "c-2", channelId: "ch-b" }),
+      consent({ id: "c-3", channelId: "ch-b" }),
+      consent({ id: "c-4", channelId: "ch-c", kind: "outbound" }),
+    ];
+    const total = [...pendingAsksByChannel(rows).values()].reduce((a, b) => a + b, 0);
+    expect(total).toBe(rows.filter((r) => r.kind === "inbound").length);
   });
 });

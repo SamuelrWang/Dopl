@@ -129,6 +129,47 @@ export function pendingOutboundByThread(
   return map;
 }
 
+/**
+ * HOW MANY THREADS IN EACH CHANNEL ARE AWAITING THIS VIEWER'S ANSWER — the
+ * sidebar's ASK SIGNAL (Samuel's ruling, 2026-08-20: option (a), a per-channel
+ * count).
+ *
+ * ⚠ IT IS THE SAME ROWS THE INBOX ROW COUNTS, SLICED BY CHANNEL. The Inbox nav
+ * badge is `requests.length` over the whole workspace; this is that set grouped
+ * by `channelId`. One read, two scopes — a second read for the sidebar would be
+ * the two-readers-one-fact defect, and the two badges would drift apart the
+ * moment either was filtered differently.
+ *
+ * ⚠ NO `seq` JOIN, DELIBERATELY, and that is the one place this differs from
+ * {@link requestedThreadIds} directly above. That function answers "which THREAD
+ * is this about", which it can only do by matching the triggering message's
+ * `seq` against the loaded transcript — so it necessarily drops a row whose seq
+ * is absent, and it can only ever speak about the OPEN channel, whose transcript
+ * is the only one loaded. This answers "does this CHANNEL have something waiting
+ * for you", which the consent row states on its own. Requiring the join here
+ * would silently under-count every channel the viewer is not looking at, which
+ * is precisely the set the signal exists for.
+ *
+ * ⚠ THE READ IS ALREADY WORKSPACE-WIDE at the page level (`useConsentInbox` with
+ * no `channelId`), which is what makes "visible without opening the channel"
+ * true rather than aspirational.
+ *
+ * `pending` is the server's own filter (INVARIANTS §6 — the list read returns
+ * pending rows only); `isPendingInbound` re-states it rather than trusting it,
+ * for the same reason the seq check does not trust `!= null`.
+ */
+export function pendingAsksByChannel(
+  consentRequests: ChannelConsentRequest[]
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const r of consentRequests) {
+    if (!isPendingInbound(r)) continue;
+    if (!r.channelId) continue;
+    counts.set(r.channelId, (counts.get(r.channelId) ?? 0) + 1);
+  }
+  return counts;
+}
+
 /** A pending INBOUND consent row — the only kind that says "you have been asked
  *  and have not answered". An outbound review is about this operator's own
  *  reply, and a decided row is answered. */

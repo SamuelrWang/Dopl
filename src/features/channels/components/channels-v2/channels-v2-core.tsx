@@ -17,15 +17,12 @@ import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsOnboardingCore } from "../channels-onboarding-core";
-import {
-  ChannelsV2CreateDialogs,
-  ChannelsV2ManageActions,
-} from "./channel-manage";
+import { ChannelsV2ManageActions } from "./channel-manage";
+import { ChannelsV2Overlays } from "./overlays";
 import { ChannelsV2Sidebar } from "./sidebar";
 import { ChannelsV2MessagePane } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
-import { ChannelsV2AgentPanel } from "./agent-panel";
 import { PopOutThreadButton } from "./pop-out";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import { useChannelsV2Live } from "./live";
@@ -255,7 +252,7 @@ export function ChannelsV2Core({
     gate,
   });
 
-  const { index, openThread, requested, treeThreads, rows } =
+  const { index, openThread, requested, pendingAsks, treeThreads, rows } =
     useChannelsV2Derivations({
       members,
       currentUserId,
@@ -330,6 +327,7 @@ export function ChannelsV2Core({
         onSelectChannel={sel.selectChannel}
         onOpenThread={sel.openThread}
         requestedThreads={requested}
+        pendingAsks={pendingAsks}
         consentCount={requests.length}
         inboxOpen={sel.inboxOpen}
         onOpenInbox={sel.openInbox}
@@ -468,33 +466,21 @@ export function ChannelsV2Core({
         />
       )}
 
-      {/* ⚠ The Sent lane reads the OPEN CHANNEL's transcript, so the panel takes
-          `messages` rather than fetching: one read, and the panel cannot show a
-          message the transcript beside it does not have. */}
-      <ChannelsV2AgentPanel
+      <ChannelsV2Overlays
         openAgent={sel.openAgent}
-        sessions={agentSessions}
+        agentSessions={agentSessions}
         messages={messages}
         currentUserId={currentUserId}
-        workspaceSlug={workspaceSlug}
-        onClose={() => sel.setOpenAgent(null)}
-        onRefreshSessions={refreshAgents}
-      />
-
-      {/* Workspace-scoped, so they mount OUTSIDE the channel branch above — a
-          workspace with no channel at all is exactly when "create one" has to
-          work. */}
-      <ChannelsV2CreateDialogs
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
-        currentUserId={currentUserId}
         createOpen={sel.createOpen}
         directOpen={sel.directOpen}
+        onCloseAgent={() => sel.setOpenAgent(null)}
+        onRefreshSessions={refreshAgents}
         onCreateOpenChange={sel.setCreateOpen}
         onDirectOpenChange={sel.setDirectOpen}
         onCreated={onCreated}
       />
-
     </div>
   );
 }

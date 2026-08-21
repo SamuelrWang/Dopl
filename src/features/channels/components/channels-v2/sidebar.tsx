@@ -64,11 +64,11 @@
  */
 
 import { useMemo, useState } from "react";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { SearchField } from "@/shared/ui/search-field";
-import { cn } from "@/shared/lib/utils";
 import { IconButton, NewPill, SectionHeader } from "./bits";
-import { ChannelRow, NavRow, ThreadRow } from "./sidebar-rows";
+import { NavRow } from "./sidebar-rows";
+import { ChannelBranch } from "./sidebar-branch";
 import { HARDCODED_NAV_ROWS, INBOX_NAV_ROW } from "./fixtures";
 import {
   channelDisplayName,
@@ -84,6 +84,17 @@ export interface ChannelsV2SidebarProps {
   threads: ChannelThread[];
   /** Thread ids the viewer has been asked about and has not answered. */
   requestedThreads: ReadonlySet<string>;
+  /**
+   * THE ASK SIGNAL — channelId → how many threads there are awaiting THIS
+   * viewer's answer (Samuel's ruling, 2026-08-20: option (a), a per-channel
+   * count). `view-model-requested.ts › pendingAsksByChannel`.
+   *
+   * ⚠ WORKSPACE-WIDE BY CONSTRUCTION, which is the whole feature: the page's
+   * consent read takes no `channelId`, so a channel the operator is NOT looking
+   * at can still say somebody is waiting on them. A channel-scoped read here
+   * would signal only the channel already on screen.
+   */
+  pendingAsks?: ReadonlyMap<string, number>;
   members: ChannelMember[];
   currentUserId: string;
   selectedChannelId: string | null;
@@ -116,6 +127,7 @@ export function ChannelsV2Sidebar({
   direct,
   threads,
   requestedThreads,
+  pendingAsks,
   members,
   currentUserId,
   selectedChannelId,
@@ -203,6 +215,7 @@ export function ChannelsV2Sidebar({
       selected={channel.id === selectedChannelId && !threadSelected && !inboxOpen}
       threads={channel.id === selectedChannelId ? threads : []}
       requestedThreads={requestedThreads}
+      askCount={pendingAsks?.get(channel.id) ?? 0}
       openThreadId={inboxOpen ? null : openThreadId}
       collapsed={threadsCollapsed.has(channel.id)}
       onToggleThreads={toggleThreads}
@@ -366,114 +379,6 @@ export function ChannelsV2Sidebar({
         )}
       </div>
     </aside>
-  );
-}
-
-/**
- * One tree row plus the active threads nested under it — with a DISCLOSURE the
- * operator can retract (Samuel, 2026-08-20).
- *
- * ⚠ WHY IT EARNED ONE. The nested rows are the OPEN channel's threads, windowed
- * to "active in the last 24h OR requested" — a window that is bounded but not
- * SMALL: a busy DM puts eight rows under one channel and pushes every other
- * channel below the fold, in the one column that has to stay scannable. The
- * window is the right rule and the crowding is real; a disclosure resolves both
- * without narrowing what the sidebar considers active.
- *
- * ⚠ DEFAULT EXPANDED, AND SESSION-LOCAL. Expanded is what makes the nesting
- * discoverable at all, and a collapse is a glance-management gesture rather than
- * a preference — persisting it would mean an operator who tidied once comes back
- * to a channel whose threads are hidden and no longer remembers why. Same
- * `Set`-of-collapsed-keys idiom as the section headers above, for the same
- * reason: absent = open, so a channel this session has never seen needs no entry.
- *
- * ⚠ THE TOGGLE IS A SIBLING OF THE ROW, NOT A CHILD OF IT. `ChannelRow` is a
- * `<button>`; nesting a second one inside it is invalid HTML and gives a screen
- * reader one target where there are two actions. It is absolutely positioned
- * over space the row reserves (`reserveTrailing`), which is also what stops a
- * long channel name colliding with it.
- *
- * ⚠ IT REPLACES THE UNREAD DOT'S CORNER, and that is the one real cost. A
- * channel with threads open shows the chevron where the dot would sit — but the
- * dot only ever appears on a channel that is NOT selected, and threads only nest
- * under the one that IS, so the two cannot want that corner at the same time.
- */
-function ChannelBranch({
-  channel,
-  label,
-  person,
-  selected,
-  threads,
-  requestedThreads,
-  openThreadId,
-  collapsed,
-  onToggleThreads,
-  onSelectChannel,
-  onOpenThread,
-}: {
-  channel: Channel;
-  label: string;
-  person: ReturnType<typeof channelDisplayPeerPerson>;
-  selected: boolean;
-  threads: ChannelThread[];
-  requestedThreads: ReadonlySet<string>;
-  openThreadId: string | null;
-  /** This channel's threads are retracted. */
-  collapsed: boolean;
-  onToggleThreads: (channelId: string) => void;
-  onSelectChannel: (id: string) => void;
-  onOpenThread: (id: string) => void;
-}) {
-  // No threads, no disclosure: a control that toggles nothing is furniture, and
-  // this column is the one that has to stay scannable.
-  const canCollapse = threads.length > 0;
-  const hidden = canCollapse && collapsed;
-
-  return (
-    <>
-      <div className="relative">
-        <ChannelRow
-          label={label}
-          person={person}
-          selected={selected}
-          unread={channel.unread}
-          reserveTrailing={canCollapse}
-          onSelect={() => onSelectChannel(channel.id)}
-        />
-        {canCollapse && (
-          <button
-            type="button"
-            aria-expanded={!hidden}
-            aria-label={
-              hidden
-                ? `Show ${threads.length} threads in ${label}`
-                : `Hide threads in ${label}`
-            }
-            onClick={() => onToggleThreads(channel.id)}
-            className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] text-text-muted transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-          >
-            <ChevronDown
-              size={13}
-              aria-hidden
-              className={cn(
-                "transition-transform duration-150 motion-reduce:transition-none",
-                hidden && "-rotate-90"
-              )}
-            />
-          </button>
-        )}
-      </div>
-      {!hidden &&
-        threads.map((thread) => (
-          <ThreadRow
-            key={thread.id}
-            thread={thread}
-            selected={thread.id === openThreadId}
-            requested={requestedThreads.has(thread.id)}
-            onOpen={() => onOpenThread(thread.id)}
-          />
-        ))}
-    </>
   );
 }
 
