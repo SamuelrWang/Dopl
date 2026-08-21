@@ -158,11 +158,40 @@ export async function findMessageByClientId(
 }
 
 /**
+ * Author of the message at (channel, seq) — the consent path's inbound-requester
+ * derivation. ⚠ ONE COLUMN, on purpose: see {@link findMessageBySeq} above.
+ * ⚠ Moved here from `repository-collab.ts` on 2026-08-20 — it reads
+ * `channel_messages`, and this file owns that table.
+ */
+export async function findMessageAuthorBySeq(
+  channelId: string,
+  seq: number
+): Promise<string | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("author_user_id")
+    .eq("channel_id", channelId)
+    .eq("seq", seq)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { author_user_id: string | null } | null)?.author_user_id ?? null;
+}
+
+/**
  * One message by per-channel `seq`. Backs the LEGACY thread pair check: a
  * `task-<channelId>-<seq>` id names the opening request at that seq, and its
  * author + `metadata.to_user_id` are the exchange's two participants — ⚠ the
  * ONLY server-side record of who a legacy thread belongs to, since a legacy
  * exchange has no `channel_tasks` row to authorize against.
+ */
+/**
+ * ⚠ TWO READS OF (channel, seq), AND THE PROJECTION IS THE WHOLE DIFFERENCE.
+ * This one returns the ROW; {@link findMessageAuthorBySeq} below returns only
+ * `author_user_id`. They are deliberately NOT merged — the consent path derives
+ * a requester from a message whose body can be 16 KB, and paying for that body
+ * to read one column is the cost the narrow select exists to avoid.
+ * ⚠ They live in ONE file so a third copy has somewhere obvious to not be added.
  */
 export async function findMessageBySeq(
   channelId: string,

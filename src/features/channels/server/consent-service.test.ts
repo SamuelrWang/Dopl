@@ -18,9 +18,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-collab");
+// ⚠ `findMessageAuthorBySeq` MOVED here from `repository-collab` (2026-08-20):
+// it reads `channel_messages`, which this module owns.
+vi.mock("./repository-messages");
 
 import * as repo from "./repository";
 import * as collab from "./repository-collab";
+import * as messagesRepo from "./repository-messages";
 import {
   createConsentRequest,
   decideConsentRequest,
@@ -120,7 +124,7 @@ beforeEach(() => {
   vi.mocked(collab.listConsentRequests).mockResolvedValue([]);
   vi.mocked(collab.findConsentByTrigger).mockResolvedValue(null);
   vi.mocked(collab.findTrustRule).mockResolvedValue(null);
-  vi.mocked(collab.findMessageAuthorBySeq).mockResolvedValue(REQUESTER);
+  vi.mocked(messagesRepo.findMessageAuthorBySeq).mockResolvedValue(REQUESTER);
   vi.mocked(collab.insertConsentRequest).mockImplementation(
     async (row) => ({ ...consentRow(), ...row, id: "new-1" }) as ConsentRequestRow
   );
@@ -153,7 +157,7 @@ describe("createConsentRequest", () => {
     // ⚠ Outbound is the operator's OWN agent — no requester to derive, and
     // trust must never short-circuit the approve-out gate.
     expect(inserted.requester_user_id).toBeNull();
-    expect(collab.findMessageAuthorBySeq).not.toHaveBeenCalled();
+    expect(messagesRepo.findMessageAuthorBySeq).not.toHaveBeenCalled();
     expect(out.kind).toBe("outbound");
   });
 

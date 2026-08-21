@@ -23,7 +23,7 @@ import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
-import type { DerivedPresence } from "./repository-collab";
+import type { MemberPresence } from "./dto";
 import {
   loadVisibleChannel,
   profilesById,
@@ -102,7 +102,7 @@ async function buildDirectPeers(
 /** Per-channel online-member counts from the workspace presence map. */
 function onlineCounts(
   memberIds: Map<string, string[]>,
-  presence: Map<string, DerivedPresence>
+  presence: Map<string, MemberPresence>
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const [channelId, userIds] of memberIds) {

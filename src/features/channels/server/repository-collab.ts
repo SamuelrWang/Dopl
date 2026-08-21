@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import type { AgentPresenceStatus } from "../types";
+import type { MemberPresence } from "./dto";
 import type {
   ConsentRequestRow,
   PresenceRow,
@@ -214,21 +215,11 @@ export async function expireRevokedAutoAllow(
   return (data as ConsentRequestRow | null) ?? null;
 }
 
-/** Author of the message at (channel, seq) — inbound requester derivation. */
-export async function findMessageAuthorBySeq(
-  channelId: string,
-  seq: number
-): Promise<string | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("author_user_id")
-    .eq("channel_id", channelId)
-    .eq("seq", seq)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as { author_user_id: string | null } | null)?.author_user_id ?? null;
-}
+// ⚠ `findMessageAuthorBySeq` STOOD HERE AND MOVED to `repository-messages.ts`
+// (2026-08-20). It reads `channel_messages`, which that file owns, and it was a
+// second (channel, seq) → `maybeSingle()` lookup sitting one file away from its
+// twin — the shape a third copy gets added to. It is still the consent path's,
+// only its address changed.
 
 // ─── Trust rules ────────────────────────────────────────────────────
 
@@ -319,10 +310,14 @@ export async function upsertPresence(
   return data as PresenceRow;
 }
 
-export interface DerivedPresence {
-  online: boolean;
-  lastSeenAt: string | null;
-}
+/**
+ * ⚠ `DerivedPresence` STOOD HERE AND IS GONE (2026-08-20) — it was
+ * `dto.ts › MemberPresence` declared a second time, field for field, under a
+ * different name. Two names for one shape is two things to change and one of
+ * them gets missed; that they met in a single call path and compiled anyway is
+ * structural typing being kind, not a design.
+ */
+export type { MemberPresence } from "./dto";
 
 /**
  * Presence for every workspace member, keyed by user id, `online` derived
@@ -330,7 +325,7 @@ export interface DerivedPresence {
  */
 export async function presenceForWorkspace(
   workspaceId: string
-): Promise<Map<string, DerivedPresence>> {
+): Promise<Map<string, MemberPresence>> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("agent_presence")
@@ -339,7 +334,7 @@ export async function presenceForWorkspace(
     .limit(PRESENCE_ROWS_LIMIT);
   if (error) throw error;
   const cutoff = Date.now() - PRESENCE_ONLINE_WINDOW_MS;
-  const out = new Map<string, DerivedPresence>();
+  const out = new Map<string, MemberPresence>();
   for (const row of (data ?? []) as Array<{
     user_id: string;
     last_seen_at: string;

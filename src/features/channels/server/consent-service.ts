@@ -10,6 +10,7 @@ import {
 import { mapConsentRow, type ConsentRequestRow } from "./collab-dto";
 import * as repo from "./repository";
 import * as collab from "./repository-collab";
+import * as messagesRepo from "./repository-messages";
 import { isTrustedRequester } from "./trust-service";
 import {
   loadVisibleChannel,
@@ -145,7 +146,7 @@ export async function createConsentRequest(
 
   const requesterUserId =
     input.kind === "inbound" && messageSeq !== null
-      ? await collab.findMessageAuthorBySeq(channel.id, messageSeq)
+      ? await messagesRepo.findMessageAuthorBySeq(channel.id, messageSeq)
       : null;
 
   // ⚠ Re-checked against live workspace membership, never the rule alone. Birth
