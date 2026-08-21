@@ -25,6 +25,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import { PeerActivityRow, peerActivityText, peerWorkingOn } from "./peer-activity";
+import { peerCardsFor } from "./agents-model";
 import { indexMembers } from "./view-model";
 import { CHANNEL_ID, ME, PEER, member } from "./test-fixtures";
 
@@ -160,5 +161,51 @@ describe("PeerActivityRow — what actually paints", () => {
     );
     expect(screen.queryByText(/thinking/i)).toBeNull();
     expect(screen.getByText(/is working…$/)).toBeTruthy();
+  });
+});
+
+/**
+ * THE TWO PEER PREDICATES, HELD AGAINST EACH OTHER (Samuel, 2026-08-20).
+ *
+ * ⚠ THEY DISAGREED, AND IT WAS VISIBLE ON ONE SCREEN. `peerWorkingOn` applied the
+ * liveness window; `peerCardsFor` — which draws the Agents tab's peer cards AND
+ * feeds its badge — applied none, and there is no server-side sweep either
+ * (`session-state-service.ts › listChannelSessions` returns every row). So one
+ * crashed teammate's desktop produced a silent peer-activity row and a pulsing
+ * "working" card at the same time, about the same row.
+ *
+ * They are NOT the same function and must not become one — the row is
+ * `working`-only and thread-scoped, the cards keep `idle` and can be
+ * channel-scoped. What must never differ again is the answer to "is this machine
+ * alive", so that is what these cases pin.
+ */
+describe("peerCardsFor and peerWorkingOn agree about LIVENESS", () => {
+  const STALE = new Date(NOW - PRESENCE_ONLINE_WINDOW_MS - 1).toISOString();
+
+  it("both drop a row older than the window", () => {
+    const rows = [peer({ updatedAt: STALE })];
+    expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(0);
+    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(0);
+  });
+
+  it("both drop an unparseable stamp — absent reads as stale, never as fresh", () => {
+    const rows = [peer({ updatedAt: "not-a-date" })];
+    expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(0);
+    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(0);
+  });
+
+  it("both keep a fresh working row", () => {
+    const rows = [peer()];
+    expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(1);
+    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(1);
+  });
+
+  // ⚠ WHERE THEY LEGITIMATELY DIFFER, stated so the agreement above is not read
+  // as "these are the same function". An `idle` peer is alive and gets a card; it
+  // is not doing anything a reader should wait for, so it gets no activity row.
+  it("differ on IDLE, deliberately — alive is not the same as working", () => {
+    const rows = [peer({ state: "idle" })];
+    expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(0);
+    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(1);
   });
 });

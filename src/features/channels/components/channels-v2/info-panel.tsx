@@ -26,7 +26,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
-import { ownAgentsFor, peerCardsFor } from "./agents-model";
+import { activeAgentCount } from "./agents-model";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import type { AuthorIndex } from "./view-model";
 import type {
@@ -151,16 +151,23 @@ export function ChannelsV2InfoPanel({
 }) {
   const [tab, setTab] = useState<TabKey>("info");
 
-  // ⚠ THE BADGE RUNS THE TAB'S OWN PREDICATES (`agents-model.ts › ownAgentsFor`
-  // / `› peerCardsFor`), which is why they are exported rather than inline in
-  // `agents-tab.tsx`: two derivations of one list is F-142's defect, and here it
-  // would show as a number that disagrees with the rows under it.
+  // ⚠ THE BADGE RUNS ONE EXPORTED DERIVATION (`agents-model.ts ›
+  // activeAgentCount`), never a sum written here: two derivations of one list is
+  // F-142's defect, and here it would show as a number that disagrees with the
+  // rows under it. It counts ACTIVE agents under the shared `isAgentActive`
+  // rule — an ended agent of MINE still renders as a stopped card in the list,
+  // and is deliberately not in this number.
   // ⚠ `null` sessions => `undefined`, never `0` — see `tabCount`.
   const agentCount =
     agentSessions === null
       ? undefined
-      : ownAgentsFor(agentSessions, channel.id, openThreadId).length +
-        peerCardsFor(peerSessions, index.currentUserId, openThreadId).length;
+      : activeAgentCount(
+          agentSessions,
+          peerSessions,
+          channel.id,
+          index.currentUserId,
+          openThreadId
+        );
 
   return (
     <aside

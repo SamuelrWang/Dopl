@@ -146,7 +146,8 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
       state: "working",
       channelName: "Website",
       threadTitle: "UI-kit design",
-      updatedAt: "2026-08-20T12:00:00.000Z",
+      // ⚠ Fresh by construction — `peerCardsFor` drops a stale row (2026-08-20).
+      updatedAt: new Date().toISOString(),
     };
     render(
       <AgentsTab

@@ -31,7 +31,27 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSpaBridge, type DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
+
+/**
+ * IS THIS AGENT STILL RUNNING — the ONE ended-state rule, shared by the own list
+ * and the peer list (Samuel, 2026-08-20).
+ *
+ * ⚠ IT EXISTS BECAUSE THE TWO LISTS USED TO DISAGREE. `peerCardsFor` dropped
+ * `ended` and `ownAgentsFor` did not, so the Agents tab's badge — which sums both
+ * — counted MY stopped agents and not my teammates'. One number over two rules is
+ * the F-142 defect in miniature, and a badge is exactly where it goes unnoticed.
+ *
+ * ⚠ THE LIST AND THE BADGE ANSWER DIFFERENT QUESTIONS, DELIBERATELY. The badge
+ * counts what is ACTIVE; the own LIST still renders an ended agent as a stopped
+ * card, because "my agent just finished" is something the operator opened the tab
+ * to see. A peer's ended row is not shown either way — the server row outlives the
+ * run it describes, so it is not evidence of anything.
+ */
+export function isAgentActive(state: DesktopSessionSummary["state"]): boolean {
+  return state !== "ended";
+}
 
 /**
  * THE STABLE IDENTITY OF ONE AGENT, and the id the open-agent state holds.
@@ -205,23 +225,66 @@ export function ownAgentsFor(
  * OTHER members' agents on the same surface — the peer cards, and the peer half
  * of the tab's badge. Same one-derivation argument as {@link ownAgentsFor}.
  *
- * ⚠ THREE PREDICATES, ALL LOAD-BEARING. Own rows are excluded because the LOCAL
+ * ⚠ FOUR PREDICATES, ALL LOAD-BEARING. Own rows are excluded because the LOCAL
  * feed is the richer truth for mine (a peer row carries no metrics); `ended` is
- * excluded because the server row outlives the run it describes; and the thread
- * narrowing matches the tab's own scope. Dropping any one of them makes the
- * badge count rows the list does not draw.
+ * excluded through the shared {@link isAgentActive} because the server row
+ * outlives the run it describes; the thread narrowing matches the tab's own
+ * scope; and the row must be FRESH. Dropping any one of them makes the badge
+ * count rows the list does not draw.
+ *
+ * ⚠ THE FRESHNESS GUARD JOINED 2026-08-20 (Samuel), AND IT IS THE SAME ONE
+ * `peer-activity.tsx › peerWorkingOn` ALREADY APPLIED. `channel_sessions` rows
+ * outlive the process that wrote them (`main/session-state-push.js` says so in
+ * its own header and names sign-out as the uncovered case), and there is no
+ * server-side sweep — `session-state-service.ts › listChannelSessions` returns
+ * every row for the channel. So a crashed desktop left a card reading `working`
+ * forever, next to a peer-activity row that had correctly gone silent for the
+ * SAME row: two surfaces, one fact, opposite answers. An indicator that believes
+ * a dead machine is strictly worse than no indicator, because the reader waits
+ * for a reply that is not coming.
+ *
+ * ⚠ IT FAILS TOWARD SILENCE, like every other read of this stamp. An absent or
+ * unparseable `updatedAt` reads as STALE, never as fresh.
+ * ⚠ THE WINDOW IS `PRESENCE_ONLINE_WINDOW_MS`, DELIBERATELY REUSED — a second
+ * staleness number would let the roster call a member offline while their agent
+ * card still says working (INVARIANTS §11).
  */
 export function peerCardsFor(
   peers: readonly ChannelPeerSession[],
   currentUserId: string | null,
-  openThreadId: string | null = null
+  openThreadId: string | null = null,
+  now: number = Date.now(),
+  windowMs: number = PRESENCE_ONLINE_WINDOW_MS
 ): ChannelPeerSession[] {
-  return peers.filter(
-    (p) =>
-      p.userId !== currentUserId &&
-      p.state !== "ended" &&
-      (!openThreadId || p.threadId === openThreadId)
+  return peers.filter((p) => {
+    if (p.userId === currentUserId) return false;
+    if (!isAgentActive(p.state)) return false;
+    if (openThreadId && p.threadId !== openThreadId) return false;
+    const ts = p.updatedAt ? new Date(p.updatedAt).getTime() : NaN;
+    if (Number.isNaN(ts)) return false;
+    return now - ts < windowMs;
+  });
+}
+
+/**
+ * THE TAB BADGE'S NUMBER — active agents on the surface as it is scoped, own and
+ * peer under the ONE rule (Samuel, 2026-08-20).
+ *
+ * ⚠ IT IS EXPORTED SO THE BADGE AND THE LISTS CANNOT DRIFT, which is the same
+ * argument {@link ownAgentsFor} was extracted on. `info-panel.tsx` had summed the
+ * two list lengths inline, which is what let the ended-state asymmetry through.
+ */
+export function activeAgentCount(
+  sessions: readonly DesktopSessionSummary[],
+  peers: readonly ChannelPeerSession[],
+  channelId: string,
+  currentUserId: string | null,
+  openThreadId: string | null = null
+): number {
+  const mine = ownAgentsFor(sessions, channelId, openThreadId).filter((a) =>
+    isAgentActive(a.state)
   );
+  return mine.length + peerCardsFor(peers, currentUserId, openThreadId).length;
 }
 
 /**

@@ -58,7 +58,12 @@ function peer(over: Partial<ChannelPeerSession> = {}): ChannelPeerSession {
     state: "working",
     channelName: "Website",
     threadTitle: "Alpha audit",
-    updatedAt: "2026-08-20T12:00:00.000Z",
+    // ⚠ FRESH BY CONSTRUCTION, never a literal. `peerCardsFor` drops a row older
+    // than `PRESENCE_ONLINE_WINDOW_MS` (2026-08-20), so a hardcoded stamp makes
+    // this fixture pass on the day it is written and silently stop counting
+    // afterwards — the badge tests would then assert the staleness path while
+    // reading like they assert the happy one.
+    updatedAt: new Date().toISOString(),
     ...over,
   };
 }
@@ -136,6 +141,46 @@ describe("the tab row's count badges", () => {
 
   it("excludes ENDED peers — the server row outlives the run it describes", () => {
     renderPanel({ agentSessions: [], peerSessions: [peer({ state: "ended" })] });
+    expect(badgeOf("Agents")).toBe("0");
+  });
+
+  // ⚠ THE ASYMMETRY THIS PAIR EXISTS TO FORBID (Samuel, 2026-08-20). The badge
+  // summed `ownAgentsFor` (which keeps `ended`) and `peerCardsFor` (which drops
+  // it), so it counted MY stopped agents and not my teammates'. One rule now —
+  // `agents-model.ts › isAgentActive` — over both halves.
+  it("excludes MY OWN ended agents too — the badge counts what is ACTIVE", () => {
+    renderPanel({
+      agentSessions: [summary(), summary({ sessionId: "s-2", state: "ended" })],
+      peerSessions: [],
+    });
+    expect(badgeOf("Agents")).toBe("1");
+  });
+
+  it("counts an ended own agent and an ended peer THE SAME WAY — zero", () => {
+    renderPanel({
+      agentSessions: [summary({ state: "ended" })],
+      peerSessions: [peer({ state: "ended" })],
+    });
+    expect(badgeOf("Agents")).toBe("0");
+  });
+
+  // ⚠ A STALE PEER ROW IS NOT A LIVE AGENT. `channel_sessions` rows outlive the
+  // process that wrote them and nothing sweeps them, so a crashed desktop leaves
+  // `working` on disk forever. The row must age out of the badge exactly as it
+  // ages out of `peer-activity.tsx › peerWorkingOn`.
+  it("drops a STALE peer row — a crashed desktop is not a working agent", () => {
+    renderPanel({
+      agentSessions: [],
+      peerSessions: [peer({ updatedAt: "2026-08-20T12:00:00.000Z" })],
+    });
+    expect(badgeOf("Agents")).toBe("0");
+  });
+
+  it("drops a peer row whose updatedAt cannot be parsed — absent reads as stale", () => {
+    renderPanel({
+      agentSessions: [],
+      peerSessions: [peer({ updatedAt: "not-a-date" })],
+    });
     expect(badgeOf("Agents")).toBe("0");
   });
 
