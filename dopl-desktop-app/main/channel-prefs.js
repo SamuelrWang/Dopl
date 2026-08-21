@@ -154,7 +154,7 @@ function postureInto(map, channelId, raw) {
 
 // ─── END CHANNEL-PREFS-VALIDATE ─────
 
-// ── AUTO-SEND (2026-08-20, the session-window retirement) — a DURABLE per-channel
+// ── AUTO-SEND (2026-08-20, when the session window was deleted) — a DURABLE per-channel
 // setting: it narrows nothing (it governs whether the operator's OWN agent's reply posts
 // without a Send click), it is chosen on the channel's Settings tab, and it must survive
 // restarts or the operator would re-opt-in per session.

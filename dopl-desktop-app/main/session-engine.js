@@ -71,7 +71,7 @@ sessionSummary.bind({ sessions }); sessionNarration.bind({ sessions }); // ...an
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
 // FIX F1 (v2.7): dispatch REPORTS whether an effect resolved a LIVE canUseTool promise (only
-// resolvePerm knows; a park's denyPending may have fail-closed the requestId already). session-ipc
+// resolvePerm knows; a park's denyPending may have fail-closed the requestId already). ⚠ session-ipc is deleted; it
 // turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);

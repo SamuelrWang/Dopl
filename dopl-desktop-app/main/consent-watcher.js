@@ -156,7 +156,7 @@ let clock = {
 };
 
 // Every path that makes a decision imminent calls this: a new record, a poke from
-// trigger.js / session-consent.js, or a phase move. It arms the fast cadence AND
+// trigger.js (and, until it was deleted, session-consent.js), or a phase move. It arms the fast cadence AND
 // re-arms an already-running scheduler so the change takes effect now, not after
 // the currently-armed idle timer expires.
 function markActivity() {

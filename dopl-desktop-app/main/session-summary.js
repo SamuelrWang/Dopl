@@ -54,7 +54,7 @@
 // pill stays. NO TIMED TOMBSTONE: a pill is a HANDLE ("click to open this"), and a pill with no
 // window answers that click by recreating a fresh shell wearing a dead session's name. The
 // channel transcript already carries the record. Needs no TTL, ring or persistence — the
-// retained set is bounded by MAX_SESSION_WINDOWS and swept on the next projection.
+// retained set is bounded by MAX_ENDED and swept on the next projection.
 
 // ⚠ The module's only four dependencies, all ABOVE the sentinel: everything from there to
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
@@ -256,7 +256,7 @@ const SESSIONS_EVENT = 'dopl:sessions';
 const PUSH_COALESCE_MS = 200;
 
 // Belt for the retention rule, which is already self-bounding (an entry lives only while its
-// window does, capped by MAX_SESSION_WINDOWS). Drops the OLDEST — least likely still on screen.
+// pill does, capped by MAX_ENDED). Drops the OLDEST — least likely still on screen.
 const MAX_ENDED = 12;
 
 const ledger = new Map(); // sessionKey -> { channelId, name }

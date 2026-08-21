@@ -31,7 +31,8 @@ const POLL_MS = 10_000;
 // ── THE CONCURRENCY CEILING FOR THIS LANE ────────────────────────────────────
 // ⚠ THE NAME MOVED HERE ON 2026-08-20, AND THE NUMBER DID NOT CHANGE. `MAX_CONCURRENT_SESSIONS`
 // used to name the HEADLESS pool's guard (`session-pool.js`, 4) while the windowless engine
-// enforced a SEPARATE number under a window's name (`settings.MAX_SESSION_WINDOWS`, 6). Two
+// enforced a SEPARATE number under a window's name (`settings.MAX_SESSION_WINDOWS`, 6, since
+// deleted). Two
 // ceilings, one of them called a window budget, and the lane that is actually left was the one
 // with the misleading name. The headless pool goes with its lane; this is the ceiling that
 // survives, so it takes the name INVARIANTS §11 already uses for it.

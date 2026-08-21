@@ -11,7 +11,8 @@
 // ⚠ CONTAINMENT: every turn this module builds runs inside a CONTAINED session window, so
 // nothing it says may ORDER a tool session-profiles.js denies. The deny lists are the
 // authority; prompt-profile-drift.test.mjs pins the two together by reading the real table.
-// attended-prompt.js is NOT bound by this — it runs in the operator's unconstrained Claude Code.
+// (attended-prompt.js was NOT bound by this — it ran in the operator's unconstrained Claude
+// Code. It is deleted with the attended handoff, 2026-08-20.)
 //
 // ⚠ THE TOOL NAME IS THE FULLY QUALIFIED ONE, EVERYWHERE. The dopl MCP server registers
 // `dopl_channel`, but the CLI namespaces every MCP tool as `mcp__<server>__<tool>`, so the
@@ -126,7 +127,9 @@ function deliveryCall(ctx) {
 // deny list cannot scope ToolSearch to one argument, so permitting it permits loading ANY
 // deferred schema. The lookup is unnecessary anyway — the dopl MCP entry carries
 // `alwaysLoad: true` (sdk-loader.js), which exempts it from deferral even under `full`.
-// ⚠ attended-prompt.js KEEPS its ToolSearch order and must: it runs in the operator's own
+// ⚠ attended-prompt.js KEPT its ToolSearch order, and had to — it ran in the operator's own
+// unconstrained Claude Code. That module is deleted (2026-08-20); the asymmetry is recorded
+// because it is the one case where an ordered ToolSearch was right, not because it is live.
 // unconstrained Claude Code. prompt-profile-drift.test.mjs pins the two apart against the REAL
 // deny lists.
 // ⚠ What IS load-bearing: never report the tool missing. Otherwise an agent posts "CONFIRMED:

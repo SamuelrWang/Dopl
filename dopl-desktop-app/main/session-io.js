@@ -159,7 +159,8 @@ function postWillGate(s, input, toolName) {
 // why it stopped: "the mode never landed" and "the mode landed but does not cover this tool"
 // looked identical in the field. One line per verdict fixes that, and it is deliberately THIN:
 // the tool NAME (server prefix stripped, capped), M3's channel OP, the verdict, the reason code,
-// both postures, and an 8-char session prefix to join on — attended-handoff's diag discipline.
+// both postures, and an 8-char session prefix to join on — the diag discipline the deleted
+// attended-handoff set.
 // NEVER the tool input, the drafted body, prompt text, or a full id: listener.log is plaintext.
 // F-139: the strip is `mcpShortName`, the gate's OWN normalizer, never a third copy of the rule.
 const DIAG_NAME_CAP = 40; const DIAG_OP_CAP = 24;
@@ -464,7 +465,9 @@ module.exports = {
   // (initialRequestPayload is re-exported below, beside the other display-only helpers)
   historyTranscript: seed.historyTranscript, // v2.5 D3 (the lazy seed — FIX F1)
   noteGatedBody: seed.noteGatedBody, // FIX F1: a gated message never rides the seed as well
-  isGatedEntry: seed.isGatedEntry, // FIX F4: session-history drops those rows from the ENTRIES too
+  // FIX F4: the history renderer dropped those rows from the ENTRIES too. That renderer
+  // (session-history) is deleted; the SEED still filters them, which is the half that mattered.
+  isGatedEntry: seed.isGatedEntry,
   withSeed: seed.withSeed,
   frameOperatorTurn: seed.frameOperatorTurn, // 2026-08-20: the direct 1:1 lane (F-212)
   postWillGate, // v2.7 L3: does an own-channel post stop on an operator decision?

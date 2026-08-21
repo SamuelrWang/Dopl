@@ -133,7 +133,8 @@ function classify(m, entry, myId) {
   // SERVER-SIDE so they cannot be spoofed. taskCreatedBy === me separates REQUESTER from
   // RESPONDER; taskTarget === author binds the suppression to the responder, so a THIRD
   // member posting into my task still triggers. Sits BEFORE the addressed rules.
-  // ⚠ EVERY MODE AND EVERY AUTHOR KIND (widened 2026-08-20, Samuel's session-window
+  // ⚠ EVERY MODE AND EVERY AUTHOR KIND (widened 2026-08-20, Samuel's ruling retiring the
+  // session window —
   // retirement). This carried `taskMode === 'interactive'` and `authorKind === 'agent'`
   // conjuncts when the requester ran a live session window that consumed replies first: an
   // autonomous-mode or human-authored reply was left to the addressed rule so the window

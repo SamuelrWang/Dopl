@@ -35,7 +35,8 @@ function sessionKey(channelId, taskId) {
 }
 
 // D2 — THE SLOT a session occupies in the engine's registry, from a call's own argument
-// object. Two shapes share one key space, and that is deliberate (see session-pool.js:
+// object. Two shapes share one key space, and that is deliberate (session-pool.js is gone, but
+// its argument is not:
 // "the pool never parses the key, it only compares it"):
 //   PAIR  (channel, thread)  — every shape that exists today. An ASSIST session is one
 //                              member's run on one thread, so the thread identifies it.

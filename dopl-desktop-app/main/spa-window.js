@@ -7,7 +7,7 @@
 // bridge; this one hosts our own bundle and gets the typed data bridge
 // (`renderer/app-preload.js` + `main/ui-bridge.js`).
 //
-// The security shape is `main/session-window.js`'s, verbatim, because that is
+// The security shape is the DELETED `main/session-window.js`'s, verbatim, because that is
 // the repo's proven pattern for a local Electron page:
 //   • contextIsolation + sandbox + nodeIntegration:false, one dedicated preload
 //     as the ENTIRE privileged surface;

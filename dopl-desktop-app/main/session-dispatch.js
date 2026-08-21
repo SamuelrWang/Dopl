@@ -1,8 +1,8 @@
 // Session dispatch — the listener's pre-classify routing.
 //
-// ⚠ ONE ROUTE SURVIVES (2026-08-20, F-228). This file held FIVE, and four of them opened on
-// `if (!settings.getWindowMode()) return false;` — the master switch Samuel's live-test ruling
-// turned permanently off. They are deleted with the machinery they drove:
+// ⚠ ONE ROUTE SURVIVES (2026-08-20, F-228). This file held FIVE, and four of them opened on a
+// master-switch read that Samuel's live-test ruling turned permanently false. They are deleted
+// with the machinery they drove — and the switch itself is gone too, a wave later:
 //
 //   (2) maybeOpenRequesterSession   MY OWN thread opener minted a REQUESTER WINDOW on MY OWN
 //                                   machine and launched my agent against my own message. This

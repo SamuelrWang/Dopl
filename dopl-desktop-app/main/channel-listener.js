@@ -12,7 +12,8 @@
 //
 // SPLIT NOTE (§2 refactor): this file was 914 lines. The I/O layer moved to
 // listener-io.js, targeting/handoff to targeting.js, and the consent→spawn→reply
-// pipeline to trigger.js; per-message dispatch (the session-window routes,
+// pipeline to trigger.js; per-message dispatch (the ONE surviving route — the other
+// session-window routes are deleted,
 // classify, and the verdict outcomes) moved to listener-messages.js when Q10
 // needed one more line and this file was sitting exactly on the cap. What is
 // left is the long-poll loop, channel-set reconciliation, and the public
@@ -26,7 +27,7 @@ const presence = require('./presence');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const trigger = require('./trigger');
-// Per-message dispatch (the three session-window routes, classify, and the three
+// Per-message dispatch (⚠ the three session-window routes are GONE, classify, and the three
 // verdict outcomes) lives in listener-messages.js — extracted at the 500-line cap.
 const messages = require('./listener-messages');
 const watcher = require('./consent-watcher');

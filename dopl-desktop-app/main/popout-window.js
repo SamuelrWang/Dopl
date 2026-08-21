@@ -98,7 +98,8 @@ function sweep() {
 // The window itself. Same bundle, same preload, same navigation lock as the shell —
 // smaller, and freely movable/resizable, because it exists to sit beside something else.
 //
-// ⚠ 520x600 IS THE OLD SESSION WINDOW'S FOOTPRINT, taken deliberately (`session-window.js`,
+// ⚠ 520x600 IS THE OLD SESSION WINDOW'S FOOTPRINT, taken deliberately (from the since-deleted
+// `session-window.js`,
 // item 7 of v2.2: default size = the MIN size, so the window opens at its most compact and
 // the operator grows it only when they want to). This window holds ONE single-column
 // transcript now, and that is the shape it was already proven at. ⚠ `title` is the

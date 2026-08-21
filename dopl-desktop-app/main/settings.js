@@ -1,82 +1,40 @@
-// Session settings. ONE home for the loop-safety caps (turn / idle-TTL / cost), so
-// the launch paths (channel-listener.js / trigger.js) and the session engine
-// (session-engine.js, T1) all read the SAME source of truth.
+// Session settings — the loop-safety caps, and nothing else any more.
 //
-// ⚠ WINDOW MODE IS RETIRED — HARD OFF (2026-08-20, Samuel's live-test ruling; it
-// defaulted ON from v1.9 until then). Every session runs HEADLESS: consent decides
-// on the channels surfaces (the transcript card and the thread strip — the arrival
-// pop-up and the Inbox's decision role both retired later the same day), replies
-// render in the thread view, and the operator watches runs in the Agents tab. getWindowMode() answers false UNCONDITIONALLY —
-// it is not a default that a stored key can override, because the session window
-// is not a product surface any more. That one answer disarms, at their own guards:
-// session-dispatch's requester routes (the sender-side session pop-up that
-// launched the operator's own agent against their own thread), trigger.js's
-// windowed-responder upgrade, and the pre-consent window's outer switch.
+// ONE home for the turn / idle-TTL / cost caps, so the launch paths
+// (channel-listener.js / trigger.js) and the session engine all read the SAME source of truth.
 //
-// Kept electron-store-only (no electron UI, no fs beyond the store) so it stays a
-// thin, dependency-light module the engine can require without pulling BrowserWindow.
+// ⚠ THE TWO WINDOW SWITCHES LIVED HERE AND ARE DELETED (2026-08-20). `getWindowMode()` was the
+// master switch over the operator's own session windows and `getPreConsentWindow()` gated the
+// pre-consent window; both were made to answer hard-OFF on Samuel's live-test ruling, and both
+// were kept ONE WAVE LONGER THAN THE MACHINERY THEY GUARDED — deliberately, so that if the
+// deletion had missed something it would stay disarmed rather than come back reachable. It did
+// not, so they go: there is no window factory, no pre-consent registry, no requester route and
+// no renderer left for either of them to refuse.
+//
+// ⚠ `sessionWindowMode` AND `preConsentWindowMode` ARE RETIRED STORE KEYS — never read, never
+// written. A machine that ran an older build may still carry `sessionWindowMode: true` on disk;
+// nothing reads it, and re-introducing a reader would resurrect the sender-side session pop-up
+// for exactly the installs that used to have it. **Do not add one.** (F-228 is the record.)
+//
+// Kept electron-store-only (no electron UI, no fs beyond the store) so it stays a thin,
+// dependency-light module the engine can require without pulling BrowserWindow.
 
 const Store = require('electron-store');
 
 const store = new Store();
 
 // electron-store keys (namespaced so they never collide with v1.x keys like
-// `runInTerminal` — retired in v1.9 — or `claudeSessions`).
-// ⚠ `sessionWindowMode` is a RETIRED key: never read, never written (see header).
-const PRE_CONSENT_WINDOW_KEY = 'preConsentWindowMode'; // boolean; unset -> OFF
+// `runInTerminal` — retired in v1.9 — or the two retired window keys named in the header).
 const TURN_CAP_KEY = 'sessionTurnCap'; // number; unset -> DEFAULT_TURN_CAP
 const IDLE_TTL_KEY = 'sessionIdleTtlMs'; // number ms; unset -> DEFAULT_IDLE_TTL_MS
 const COST_CAP_KEY = 'sessionCostCapUsd'; // number USD; unset / <=0 -> no cap
 
-// Loop-safety defaults (§A.2): 24 turns per session, 15-minute idle TTL, no cost
-// cap unless the operator sets one. MAX_SESSION_WINDOWS is the global soft cap
-// (§A.7) beyond which a responder launch falls back to headless and a requester
-// launch defers to a passive notify — enforced by the engine, homed here.
+// Loop-safety defaults (§A.2): 24 turns per session, 15-minute idle TTL, no cost cap unless
+// the operator sets one. ⚠ `MAX_SESSION_WINDOWS` sat here and is deleted with the switches: it
+// was the WINDOW budget, and the ceiling that survives is `session-windowless.js ›
+// MAX_CONCURRENT_SESSIONS`, which is about running sessions rather than open windows.
 const DEFAULT_TURN_CAP = 24;
 const DEFAULT_IDLE_TTL_MS = 15 * 60 * 1000;
-const MAX_SESSION_WINDOWS = 6;
-
-// ── Window mode — RETIRED, hard OFF (see header) ─────────────────────────────
-function getWindowMode() {
-  return false; // no stored key can turn the session window back on
-}
-function setWindowMode() {
-  // ⚠ Deliberately does NOT write the store: a persisted `true` would lie in wait
-  // for any future reader of the raw key. The tray toggle that called this is gone.
-  return false;
-}
-
-// ── The PRE-CONSENT window (wiring plan Phase 9: windowing inverts) ───────────
-//
-// DEFAULTS **OFF**, and that is the inversion. Until 2026-08-18 an inbound
-// request opened a window per thread the instant it arrived — before anyone had
-// looked at it — and the notification click opened another. The new default is
-// the opposite: the notification FOCUSES the main app and navigates to the
-// channel, where the Inbox's launch panel is the decision surface. The ruling
-// ("windowing inverts") arrived in the port's intent doc, which was migrated
-// into INVARIANTS/ENGINEERING and deleted at the Phase 12 cutover — the live
-// statement is INVARIANTS §11.
-//
-// ⚠ THIS IS A DIFFERENT SWITCH FROM `getWindowMode()` AND MUST STAY ONE. That
-// one governs the OPERATOR'S OWN RUNS — the live session window, the tray's
-// "Run sessions in a window", `session-dispatch`'s five requester-side routes —
-// and it is untouched, still ON by default. What flipped is only "does a request
-// mint a window before it is answered". Collapsing the two would either
-// resurrect the pre-consent window or take the session window down with it.
-//
-// ⚠ THE CAPABILITY IS INTACT, only the default moved. `session-consent.js`, the
-// window factory, the adopt handoff and the C-9 release are all unchanged, and
-// flipping this key back restores the old path byte-for-byte. It deliberately
-// has NO tray item: the pre-consent window is not a product surface any more, it
-// is machinery Phase 10 (the opt-in pop-out) still needs.
-function getPreConsentWindow() {
-  return store.get(PRE_CONSENT_WINDOW_KEY) === true; // DEFAULT OFF
-}
-function setPreConsentWindow(v) {
-  const val = !!v;
-  store.set(PRE_CONSENT_WINDOW_KEY, val);
-  return val;
-}
 
 // ── Loop-safety caps (read by the session engine) ────────────────────────────
 // Each getter fails safe to its documented default on an absent / malformed value,
@@ -114,17 +72,12 @@ function setCostCapUsd(n) {
 }
 
 module.exports = {
-  getWindowMode,
-  setWindowMode,
-  getPreConsentWindow,
-  setPreConsentWindow,
   getTurnCap,
   setTurnCap,
   getIdleTtlMs,
   setIdleTtlMs,
   getCostCapUsd,
   setCostCapUsd,
-  MAX_SESSION_WINDOWS,
   DEFAULT_TURN_CAP,
   DEFAULT_IDLE_TTL_MS,
 };

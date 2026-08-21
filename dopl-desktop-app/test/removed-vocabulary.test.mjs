@@ -49,6 +49,15 @@ const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
 // the renderer panel, the `session:close-task` IPC handler, the reducer's `close_task` branch —
 // went in the same change. It earns its place here for the tier-2 reason above all: the engine
 // still `require`d it, and a `module.exports` read at load time is not a dead branch.
+//
+// ⚠ TWELVE MORE JOINED THEM ON 2026-08-20 — THE SESSION-WINDOW DELETION (F-228) AND SAMUEL'S TWO
+// RULINGS. This is now the enforcement mechanism for the largest deletion this tree has taken,
+// and tier 2 is why it matters more than ever: `session-engine.js` alone lost eight requires,
+// and one survivor would be a load-time `ReferenceError` rather than a dead branch.
+//   the window lane   session-window · session-shell · session-ipc · session-consent ·
+//                     session-replay · session-peer-post · session-history · session-history-copy
+//   attended handoff  attended-handoff · attended-prompt (reachable only from a pre-consent card)
+//   the headless lane trigger-headless · session-pool (Samuel: one executor, not two)
 const REMOVED = [
   "channel-agents",
   "channel-roster",
@@ -59,12 +68,32 @@ const REMOVED = [
   "session-greeting",
   "realtime-agents",
   "session-close-task",
+  "session-window",
+  "session-shell",
+  "session-ipc",
+  "session-consent",
+  "session-replay",
+  "session-peer-post",
+  "session-history",
+  "session-history-copy",
+  "attended-handoff",
+  "attended-prompt",
+  "trigger-headless",
+  "session-pool",
 ];
+
+// ⚠ `session-history` IS A PREFIX OF NOTHING, BUT `session-window` IS. The MENTION regex below
+// is a plain alternation, so `session-window` also matches inside `session-windowless` — a LIVE
+// module named in live comments. Bounded on the right by a non-identifier character so the two
+// cannot be confused; without it every honest sentence about the windowless lane fails tier 3.
+const PREFIX_TRAP = /session-window(?![a-z])/;
 
 // A mention is `<module>.<something>` (a call), `<module>.js` (a file reference) or the bare
 // module name. Bare is included on purpose: `channel-deliver` and `realtime-agents` are named
 // without a suffix in real comments.
-const MENTION = new RegExp(REMOVED.map((m) => m.replace(/-/g, "\\-")).join("|"));
+const MENTION = new RegExp(
+  REMOVED.map((m) => (m === "session-window" ? PREFIX_TRAP.source : m.replace(/-/g, "\\-"))).join("|")
+);
 
 // Words that make a paragraph HISTORY rather than a claim. Kept broad — the failure this test is
 // for is a paragraph with no acknowledgement at all, not one that phrases it unusually.
@@ -140,4 +169,41 @@ test("every surviving mention of a deleted module is annotated as history, not s
       "is gone — an agent reading them will act on a surface that does not exist:\n" +
       bare.join("\n")
   );
+});
+
+// ── THE RETIRED STORE KEYS (2026-08-20) ─────────────────────────────────────────────────
+//
+// ⚠ THIS SECTION REPLACES `test/pre-consent-window-default.test.mjs`, deleted with its subject.
+// That file evaluated `settings.getWindowMode()` / `getPreConsentWindow()` against a fake store
+// and asserted they answered OFF for EVERY stored value — the disarmed-guard record F-228 asked
+// for, kept one wave longer than the machinery so nothing could re-arm in the gap.
+//
+// The switches are gone now, and the rule that outlives them is sharper and cheaper: a machine
+// that ran an older build may STILL CARRY `sessionWindowMode: true` on disk. Nothing reads it.
+// A reader added back would resurrect the sender-side session pop-up for precisely the installs
+// that used to have it — the self-trigger bug the whole retirement was ruled from.
+const RETIRED_STORE_KEYS = ["sessionWindowMode", "preConsentWindowMode"];
+
+test("no retired window store key has a reader anywhere in main/", () => {
+  for (const key of RETIRED_STORE_KEYS) {
+    for (const file of mainFiles()) {
+      const src = readFileSync(join(MAIN, file), "utf8");
+      const lines = src.split(/\r?\n/);
+      lines.forEach((line, i) => {
+        if (!line.includes(key)) return;
+        // A mention is fine — it is how the next reader finds this decision. A READ is not.
+        assert.ok(
+          /^\s*\/\//.test(line),
+          `main/${file}:${i + 1} touches the retired key \`${key}\` in CODE. ` +
+            `It is never read and never written (F-228): a reader resurrects the session window ` +
+            `for every install that still has the value on disk.`
+        );
+        const block = commentBlock(lines, i);
+        assert.ok(
+          block && ANNOTATED.test(block),
+          `main/${file}:${i + 1} names \`${key}\` in a comment that does not say it is retired.`
+        );
+      });
+    }
+  }
 });

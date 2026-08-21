@@ -89,7 +89,7 @@ function sweep() {
 // ⚠ 460x640 — TALLER AND NARROWER THAN THE POP-OUT'S 520x600, and the difference is the
 // content, not a preference. A thread window holds a conversation (wide enough for two
 // speakers' bubbles); this holds a NARRATION STREAM, which is one column of short lines
-// and wants vertical room. Default size IS the floor, the rule `session-window.js`
+// and wants vertical room. Default size IS the floor, the rule the DELETED `session-window.js`
 // established: the window opens at its most compact and the operator grows it.
 // ⚠ `title` is the PRE-PAINT name only — the renderer sets `document.title` to
 // "Dopl — <agent>" once the feed lands, and Electron copies it onto the window. Nothing

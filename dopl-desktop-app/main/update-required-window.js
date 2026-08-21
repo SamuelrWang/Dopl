@@ -14,7 +14,8 @@
 // Quit, Cmd+Q and the button below are three independent ways out; none of them
 // goes through the gate. A forced upgrade is a nudge, not a hostage situation.
 //
-// SECURITY. The window's shape is session-window.js / spa-window.js verbatim:
+// SECURITY. The window's shape is spa-window.js verbatim (and session-window.js's, before that
+// module was deleted):
 // contextIsolation + sandbox + nodeIntegration:false, one dedicated preload as
 // the entire privileged surface, `loadFile` only, every window.open denied and
 // every navigation off the loaded document refused. The three IPC handlers are

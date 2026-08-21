@@ -10,7 +10,7 @@
 // COERCES to a member of a frozen list, exactly like channel-prefs.normalizePreset does for
 // the two posture axes, and anything unknown lands on 'default' — which sets NO `model` option
 // at all, i.e. the CLI's own pick, which is what every session did before this existed. Fail
-// closed at EVERY boundary: the preload coerces, session-ipc coerces, the durable record
+// closed at EVERY boundary: the preload coerced, session-ipc coerced (both deleted), the durable record
 // coerces on write, session-engine coerces what a spec hands in, and buildSdkOptions coerces
 // once more at the last step before a child process can see it.
 //

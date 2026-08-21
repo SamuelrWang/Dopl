@@ -11,7 +11,7 @@
 // session-chrome / session-labels renderer splits. session-io.js re-exports every function
 // below verbatim, so `io.withSeed(...)`, `io.frameContinuation(...)`, `io.noteGatedBody(...)`,
 // `io.isGatedEntry(...)`, `io.frameHistorySeed(...)` and `io.historyTranscript(...)` are
-// unchanged for the engine, for session-history / session-gate, and for every test.
+// unchanged for the engine, for session-gate (and for the deleted session-history), and for every test.
 //
 // PARAMETERIZED like session-io: each helper takes the session object as an argument and
 // holds NO module-level mutable state and NO electron / SDK handle. The only dependency is
@@ -141,7 +141,8 @@ function historyTranscript(entries) {
   return body.length > SEED_CAP ? body.slice(body.length - SEED_CAP) : body;
 }
 
-// The one-shot channel-history transcript stashed on the session by session-history,
+// The one-shot channel-history transcript a caller stashes on the session (session-history was
+// the writer and is deleted; the FIELD survives because any first-turn stash uses it),
 // minus every body the inbound gate handled (FIX F1). Consumed exactly once; '' when
 // there is nothing (or nothing left) to seed.
 function pendingTranscript(s) {
