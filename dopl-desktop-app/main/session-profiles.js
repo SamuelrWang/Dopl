@@ -364,9 +364,14 @@ module.exports = {
   grantKeyFor, // scoped allowForTask key for EVERY tool class
   POST_GRANT, // own-channel post BASE; a real key extends it (to/kind/body segments)
   isChannelTool, // session-io uses it too
-  // ⚠ The two axes: renderer/preload hold their own COPIES of these lists (a sandboxed
-  // renderer cannot require main) — test/session-permission-axes pins all four surfaces
-  // against each other. Change here => change there.
+  // ⚠ THE TWO AXES ARE COPIED, AND THE COUNT IS RE-MEASURED (2026-08-20). This said "renderer/
+  // preload hold their own COPIES … pins all FOUR surfaces": that preload is deleted and this
+  // tree's copies are `session-state.js` (the reducer's own fail-closed coercion) and
+  // `channel-prefs.js` (the durable posture's WRITE validator). `test/session-permission-axes`
+  // pins all three against each other — the third was unpinned until 2026-08-20 and REJECTS a
+  // value outside its lists, so a fifth mode would have made the posture silently unwritable.
+  // A FOURTH copy lives in the SPA (`src/features/channels/lib/permission-modes.ts`), out of
+  // this tree's reach and re-validated here on arrival. Change here => change in three places.
   TOOL_MODES, MESSAGE_MODES, EDIT_TOOLS, ESCALATION_TOOLS,
   AUTO_TOOLS, BYPASS_TOOLS, DOPL_READ_TOOLS, DOPL_WRITE_TOOLS,
   normalizeToolMode, normalizeMessageMode, toolModeAllows, autoInboundMode,

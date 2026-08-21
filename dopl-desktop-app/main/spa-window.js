@@ -2,10 +2,14 @@
 //
 // This is the window that replaces `loadURL('https://www.usedopl.com/canvas')`.
 // It renders `renderer/app/` — the Vite build of `apps/desktop-ui` — as a LOCAL
-// page, which flips the whole trust model: today's main window hosts REMOTE
-// content and therefore gets the deliberately-minimal `renderer/preload.js`
-// bridge; this one hosts our own bundle and gets the typed data bridge
-// (`renderer/app-preload.js` + `main/ui-bridge.js`).
+// page, and gets the typed data bridge (`renderer/app-preload.js` +
+// `main/ui-bridge.js`).
+// ⚠ THE SENTENCE THIS REPLACES DESCRIBED A TREE THAT NO LONGER EXISTS (corrected 2026-08-20):
+// it said "today's main window hosts REMOTE content and therefore gets the deliberately-minimal
+// `renderer/preload.js` bridge", contrasting this window with the remote shell. That shell and
+// its preload are DELETED — `test/preload-parity.test.mjs` asserts `renderer/preload.js` is
+// absent — so there is no second window and no second bridge to contrast with. This IS the
+// window.
 //
 // The security shape is the DELETED `main/session-window.js`'s, verbatim, because that is
 // the repo's proven pattern for a local Electron page:

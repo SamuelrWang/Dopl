@@ -168,8 +168,11 @@ if (!gotLock) {
 
     buildMenu();
 
-    // Menu-bar tray for the background role. Terminal mode is RETIRED (§G Q2); the
-    // "Sessions" submenu carries the "Run sessions in a window" toggle (default ON).
+    // Menu-bar tray for the background role. Terminal mode is RETIRED (§G Q2).
+    // ⚠ THIS COMMENT CLAIMED THE "Sessions" SUBMENU CARRIED A "Run sessions in a window"
+    // TOGGLE, DEFAULT ON — contradicted by the note 20 lines below, in this same call, which
+    // says both are GONE with window mode (F-228). Corrected 2026-08-20; the note below is the
+    // accurate one.
     tray.create({
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
@@ -208,8 +211,9 @@ if (!gotLock) {
       },
     });
 
-    // In-app "Change folder" control. The channel UI (which runs in the remote
-    // webview) reaches the native folder picker through these three narrow,
+    // In-app "Change folder" control. The channel UI (the bundled SPA — this said "the remote
+    // webview" until 2026-08-20, and that webview is deleted) reaches the native folder picker
+    // through these three narrow,
     // label-only IPC handlers. onChanged refreshes the tray so its "Channel
     // folders" submenu stays in sync with a change made from the web control.
     // H3: the sender binding — every handler in that file answers only an APP-OWNED

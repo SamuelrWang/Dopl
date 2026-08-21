@@ -42,23 +42,32 @@ function endedEmit(state, outcome, reason, summary) {
 // ⚠ THE CAPS STAY TERMINAL: a turn/cost cap is this machine refusing to continue, not a window
 // being tidied away, and the peer is owed that as an outcome.
 //
-// ⚠ THE THREE SILENT TERMINALS MUST POST. `abandoned` (the COMMON path: request ->
-// task_started -> 15min idle -> silent park -> 12h -> end), the auth-preflight hold (`launch()`
-// answers with a sessionId, so trigger.js takes the success branch and no query ever runs) and
-// the window-budget EVICTION (`settle()` bypasses the reducer) each used to post NOTHING, so
-// the requester's card pulsed "Working…" indefinitely on exactly the endings nobody chose.
-// ⚠ ONE WORDING FOR ALL THREE: which of the three it was is a fact about the OTHER machine
-// (nobody came back; no Claude Code credential; a window budget reclaimed), and two of those
-// would report the operator's circumstances to a counterparty. No blame, no cause, no em dash.
-// A real terminal arriving later cannot double-post: `session-window.onEnded` drops a repeat of
-// the same (thread, cycle) marker, and the deterministic clientMsgId dedupes it server-side.
+// ⚠ THE SILENT TERMINALS MUST POST. `abandoned` (the COMMON path: request -> task_started ->
+// 15min idle -> silent park -> 12h -> end) and the auth-preflight hold (`launch()` answers with
+// a sessionId, so trigger.js takes the success branch and no query ever runs) each used to post
+// NOTHING, so the requester's card pulsed "Working…" indefinitely on exactly the endings nobody
+// chose.
+// ⚠ IT WAS THREE, AND THE THIRD IS GONE (corrected 2026-08-20): "the window-budget EVICTION
+// (`settle()` bypasses the reducer)". That LRU went with the window (`session-park.js`), and
+// the surviving ceiling REFUSES a launch rather than reclaiming a live session — so no session
+// is ever ended to make room, and "a window budget reclaimed" is not one of the things this
+// note has to avoid saying.
+// ⚠ ONE WORDING FOR BOTH: which of the two it was is a fact about the OTHER machine (nobody
+// came back; no Claude Code credential), and the second would report the operator's
+// circumstances to a counterparty. No blame, no cause, no em dash.
+// A real terminal arriving later cannot double-post: `trigger-outcomes.js › onEnded` drops a
+// repeat of the same (thread, cycle) marker, and the deterministic clientMsgId dedupes it
+// server-side. ⚠ That reader said `session-window.onEnded` until 2026-08-20 — the module is
+// deleted and the handler MOVED (its own header records the move), so the dedupe is live and
+// the citation was not.
 const INACTIVE_NOTE = 'This session went inactive.';
 
 function endLifecycle(reason) {
   if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
   if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
   if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
-  // C-5: the 12h abandonment, the launch watchdog (C-4) and the LRU eviction.
+  // C-5: the 12h abandonment and the launch watchdog (C-4). ⚠ "and the LRU eviction" stood
+  // here until 2026-08-20; there is no eviction (see the header).
   if (reason === 'abandoned' || reason === 'inactive') {
     return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: INACTIVE_NOTE };
   }

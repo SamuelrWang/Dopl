@@ -75,7 +75,13 @@ function listLiveSessions() {
       channelName: (s.context && s.context.channelName) || null,
       taskTitle: (s.context && s.context.taskTitle) || null,
       status: (s.state && s.state.phase) || null,
-      hidden: !!s.windowHidden,
+      // ⚠ ALWAYS FALSE, AND KEPT AS A WIRE FIELD ON PURPOSE (2026-08-20). `windowHidden` is
+      // initialised false and never set: the reshow branch that wrote it went with the session
+      // window (F-228). Its one consumer is the updater's restart prompt, which does not read
+      // it. It stays because this shape crosses to a caller that may be an OLDER build during
+      // an update, and dropping a field from a wire shape is the change that needs a reason —
+      // but nothing may start reasoning from it.
+      hidden: false,
     });
   }
   return out;

@@ -416,7 +416,8 @@ function sessionReducer(state, event) {
     // H1 — THE HOLD, AS REDUCER STATE. session-auth.js owns the DECISION (no Claude Code
     // credential here, or an auth-shaped SDK failure) and the window painting; this records the
     // one bit the rest of the machine must agree on. A hold IS a park — same effects, same
-    // durable phase — so it is dormant on restart, reopenable and LRU-evictable, and parkEffects
+    // durable phase — so it is dormant on restart and reopenable (it said "and LRU-evictable"
+    // until 2026-08-20; that eviction went with the window — session-park.js), and parkEffects
     // fail-closes every awaited canUseTool promise before the abort. It resets both axes and
     // every standing grant, and it is now the ONLY park that does (M2 above): a hold is a session
     // whose CREDENTIAL is gone, which relaunches through startQuery on sign-in rather than
@@ -444,7 +445,10 @@ function sessionReducer(state, event) {
     return { state: clone(state, { authHeld: false }), effects: [] };
   }
 
-  if (type === 'inactive') { // C-4 launch watchdog + C-5 eviction — session-effects.INACTIVE_NOTE
+  // ⚠ TWO PRODUCERS, NOT THREE (corrected 2026-08-20): the C-4 launch watchdog and the C-5
+  // abandonment. This named "C-5 eviction" as well; the window-budget LRU is deleted and the
+  // surviving ceiling refuses rather than evicts. Copy: session-effects.INACTIVE_NOTE.
+  if (type === 'inactive') {
     return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'inactive') };
   }
 

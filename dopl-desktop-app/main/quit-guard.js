@@ -29,7 +29,11 @@
 // THE PEER IS TOLD. Each killed session is ended through the reducer's `inactive` event —
 // C-5's calm terminal — so the requester's card stops pulsing "Working…" instead of claiming
 // work in progress on a machine that has quit. One terminal path, shared with the launch
-// watchdog and the window-budget eviction.
+// watchdog. ⚠ IT NAMED "the window-budget eviction" AS A THIRD SHARER UNTIL 2026-08-20, and
+// there is no eviction: `session-park.js` records that `evictIdleShell` / `atCapAfterEvict`
+// went with the window, and the surviving ceiling
+// (`session-windowless.js › MAX_CONCURRENT_SESSIONS`) is a plain REFUSAL at launch — nothing
+// is ever reclaimed out from under a live session.
 //
 // ── THE TWO THINGS THAT MUST NOT GO WRONG ───────────────────────────────────────────────
 //

@@ -118,8 +118,11 @@ function withStoredCredential(env) {
 
 // ── The hold ─────────────────────────────────────────────────────────────────
 // A held session is a PARKED session: the same durable phase, so it is dormant on restart
-// (no spurious task_failed{interrupted} echo), reopenable, and evictable by the window-budget
-// LRU. Nothing is posted into the channel: no task_started ever fired, because no query ran.
+// (no spurious task_failed{interrupted} echo) and reopenable. ⚠ IT ALSO SAID "evictable by the
+// window-budget LRU" until 2026-08-20; that LRU is deleted with the window
+// (`session-park.js`), and the surviving ceiling REFUSES a new launch rather than reclaiming an
+// existing session — so a held session is never taken away to make room.
+// Nothing is posted into the channel: no task_started ever fired, because no query ran.
 //
 // H1 — THE HOLD IS NOW REDUCER STATE, not three fields poked onto the session object. The old
 // version set s.state.phase/parked/activity directly and recorded the hold ONLY as

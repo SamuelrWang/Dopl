@@ -67,8 +67,10 @@ const APP_ORIGIN_ARG = process.argv
   .find((a) => a.startsWith('--dopl-app-origin='));
 const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
 
-// ⚠ Channel-scoped input coercion, mirrored from renderer/preload.js — the bridge never
-// forwards raw renderer values.
+// ⚠ Channel-scoped input coercion — the bridge never forwards raw renderer values. (This said
+// "mirrored from renderer/preload.js" until 2026-08-20; that preload is deleted, and
+// `test/preload-parity.test.mjs` asserts it stays deleted. Nothing is mirrored from anywhere:
+// this is the only preload with a `channels` namespace.)
 const asId = (channelId) => String(channelId == null ? '' : channelId);
 const asMode = (mode) => String(mode == null ? '' : mode);
 
@@ -130,8 +132,11 @@ contextBridge.exposeInMainWorld('dopl', {
     return () => authListeners.delete(callback);
   },
 
-  // Per-channel controls for the consent card + channel header — the SAME five label-only ops
-  // renderer/preload.js exposes, on the SAME sender-bound handlers (main/channel-dir-ipc.js).
+  // Per-channel settings for the Settings tab: the working folder, the durable launch posture
+  // and auto-send — SEVEN ops on the sender-bound handlers in `main/channel-dir-ipc.js`.
+  // ⚠ RE-COUNTED AND RE-POINTED 2026-08-20. This said "the SAME five label-only ops
+  // renderer/preload.js exposes": that preload is deleted, "five" predates the auto-send pair,
+  // and only the three FOLDER ops are label-only.
   // ⚠ Absolute paths never cross this bridge; folder ops return LABELS only.
   channels: {
     getFolderLabel: (channelId) =>
@@ -144,9 +149,12 @@ contextBridge.exposeInMainWorld('dopl', {
     // (2026-08-20). They were the single-use consent ARM; its web controls had already
     // stopped rendering (F-233), so the ops armed a record nothing could set.
 
-    // SEPARATE record with a separate consumer — `channel-dir-ipc.js › sessions:launch`,
-    // the operator's own Launch button. `main/channel-prefs.js` states the split; the arm
-    // stays single-use and consent-only. Same `asMode` coercion, same fail-closed write.
+    // THE DURABLE LAUNCH POSTURE. One consumer — `session-ipc-ops.js › sessions:launch`, the
+    // operator's own Launch button — and that consumer COUNT is what keeps H2 closed
+    // (`main/channel-prefs.js` states it). ⚠ This said "SEPARATE record with a separate
+    // consumer … the arm stays single-use and consent-only": there is no arm to be separate
+    // from, and the handler moved out of `channel-dir-ipc.js` at the F-226 split. Corrected
+    // 2026-08-20. Same `asMode` coercion, same fail-closed write.
     getLaunchPosture: (channelId) =>
       ipcRenderer.invoke('channels:getLaunchPosture', asId(channelId)),
     setLaunchPosture: (channelId, preset) =>
@@ -165,9 +173,10 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
   },
 
-  // `reopen` — the session card's "Open thread" button, the SAME op renderer/preload.js
-  // exposes on the SAME sender-bound handler (main/channel-dir-ipc.js `sessions:reopen`, which
-  // requires the live main window's TOP frame). Ids coerced here, re-validated in main
+  // `reopen` — the session card's "Open thread" button, on the sender-bound handler in
+  // `main/session-ipc-ops.js` (`sessions:reopen`, which requires an app-owned window's TOP
+  // frame). ⚠ It said "the SAME op renderer/preload.js exposes" until 2026-08-20: that preload
+  // is deleted, and the handler moved at the F-226 split. Ids coerced here, re-validated in main
   // (channelId must be a UUID). Wire name `task` == domain name `thread`.
   // ⚠ OPENS THE WINDOW ONLY: starts no query, wakes no agent, runs no gated tool, so it widens
   // neither invariant above. A parked shell stays parked until a steer or accepted inbound.
@@ -187,9 +196,11 @@ contextBridge.exposeInMainWorld('dopl', {
   // They refine the coarse state for the operator's OWN cards and are LOCAL-ONLY — the pill
   // vocabulary stays three-valued because it is the SERVER's, and session-state-push.js picks
   // the row's columns by name so neither field can reach `channel_sessions`.
-  // ⚠ SPA-ONLY, deliberately: absent from renderer/preload.js, which belongs to the window
-  // hosting the RETIRED website and does not grow new capabilities. The parity invariant runs
-  // remote ⊆ SPA, so this widens nothing; test/preload-parity records the divergence.
+  // ⚠ THIS WAS "SPA-ONLY, absent from renderer/preload.js, … the parity invariant runs
+  // remote ⊆ SPA" — and there is no second preload to be absent from since the remote shell
+  // was deleted (corrected 2026-08-20). `test/preload-parity.test.mjs` is a PINNED INVENTORY
+  // now, not a comparison: adding an op fails it deliberately, so a new capability is looked
+  // at rather than absorbed.
   // ⚠ NOTHING PRIVILEGED CROSSES: derived from in-memory state — no path, no token, no window
   // handle, no absolute anything. The metrics are counts, and they stop at this renderer:
   // session-state-push.js picks the server row's columns by name and takes none of them.

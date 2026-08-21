@@ -8,9 +8,15 @@
 //
 // ⚠ SENDER BINDING (§B.3): every handler re-derives its subject from `event.sender` and refuses
 // anything that is not an APP-OWNED window's own TOP FRAME — an iframe SHARES its host's
-// webContents, so identity alone is not enough. main/channel-dir-ipc.js keeps its OWN copy of
-// this predicate because its pure block is sliced by test/channel-ipc-sender.test.mjs; do NOT
-// "de-duplicate" it out from under that test.
+// webContents, so identity alone is not enough.
+// ⚠ THE PREDICATE IS SHARED, AND THIS PARAGRAPH USED TO FORBID THAT (corrected 2026-08-20). It
+// read: "main/channel-dir-ipc.js keeps its OWN copy of this predicate because its pure block is
+// sliced by test/channel-ipc-sender.test.mjs; do NOT de-duplicate it out from under that test."
+// The instinct was right and the conclusion was wrong: the two copies had ALREADY drifted once
+// (F-221), with the more privileged surface on the LENIENT side of an absent `senderFrame`. The
+// extraction idiom is satisfiable with ONE source — `main/ipc-guards.js` carries its own
+// BEGIN/END sentinels and BOTH suites slice it. De-duplicating out from under a test is the
+// hazard; de-duplicating INTO the thing the tests slice is the fix.
 //
 // ⚠ WIDENED 2026-08-18 (wiring plan Phase 10, Samuel's ruling — option (a)): the subject was
 // "the MAIN window" and is now "any window in main/app-windows.js's registry" — the shell plus
@@ -362,10 +368,13 @@ function register(opts = {}) {
   // (`dopl:sessions`, armed by session-summary.start), and a push-only surface leaves a freshly
   // opened channel blank until the next state change, which on a quiet machine is never. Read
   // once on mount, then listen.
-  // ⚠ HERE, not in channel-dir-ipc.js beside `sessions:reopen`: that file is the surface
-  // exposed to the window hosting a REMOTE page. This is the bundled SPA's alone
-  // (renderer/preload.js does not expose it) and belongs on the SPA's own bound transport,
-  // where `bound` REJECTS a foreign sender instead of answering a refusal shape.
+  // ⚠ HERE, not beside `sessions:reopen` in `session-ipc-ops.js`, and the ORIGINAL reason is
+  // retired: it was "that file is the surface exposed to the window hosting a REMOTE page,
+  // which renderer/preload.js does not expose". The remote shell and its preload are deleted
+  // (corrected 2026-08-20). What survives is the REAL distinction: this transport's `bound`
+  // wrapper REJECTS a foreign sender outright, while the ops surface answers a refusal SHAPE
+  // indistinguishable from a bad payload — a difference that matters for a read like this one,
+  // where a refusal and an empty answer must not be confusable.
   // DERIVED, NEVER STORED: a projection over the in-memory registry. Starts no query, opens no
   // window, writes no row, touches no network.
   ipcMain.handle(

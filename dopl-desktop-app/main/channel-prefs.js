@@ -73,8 +73,11 @@ const DEFAULT_PRESET = { tools: 'manual', messages: 'ask' };
 // axes must be present and known: a half-valid pair is rejected whole, because a
 // partially applied posture is exactly the "one switch, two meanings" confusion
 // the two axes exist to remove. Extra properties are dropped (nothing else is
-// ever stored) — including any `at` the caller tried to supply, so a renderer
-// cannot mint itself an arm that never expires.
+// ever stored). ⚠ It added "including any `at` the caller tried to supply, so a renderer cannot
+// mint itself an arm that never expires" until 2026-08-20: there is no arm and no `at` — the
+// single-use record is deleted (F-233) and what this validates is the DURABLE posture, which
+// has no timestamp to forge. Dropping extra properties is still the rule; the reason is simply
+// that nothing else is ever stored.
 function normalizePreset(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const tools = typeof raw.tools === 'string' ? raw.tools : '';
@@ -221,11 +224,16 @@ function setLaunchPosture(channelId, raw) {
  * OUT half is the channel's durable auto-send switch, WIDENED — never narrowed —
  * by a picked posture that already says "send out".
  *
- * ⚠ ONE FUNCTION BECAUSE THE TWO LANES MUST NOT DRIFT. `trigger.js ›
- * launchResponderSession` derives it from the consumed ARM; `channel-dir-ipc.js
- * › sessions:launch` from the DURABLE posture. The inputs differ and the rule
- * does not; two copies of "does this pick mean auto-out" is how one lane starts
- * posting without the other.
+ * ⚠ ONE FUNCTION BECAUSE THE LANES MUST NOT DRIFT. `trigger.js ›
+ * launchResponderSession` passes NULL (it said "derives it from the consumed ARM" until
+ * 2026-08-20; the arm is deleted — F-233 — and that lane now supplies no posture at all), and
+ * `session-ipc-ops.js › sessions:launch` passes the DURABLE posture. The inputs differ and the
+ * rule does not; two copies of "does this pick mean auto-out" is how one lane starts posting
+ * without the other.
+ * ⚠ AND THERE IS A THIRD LANE SINCE 2026-08-20 (F-236): a mode set on a session ALREADY
+ * RUNNING. It does not call this function — it has no channel and no auto-send to read — but it
+ * must land on the same floor, so both defer to `session-profiles.js › floorWindowlessMessage`
+ * and `test/session-mode-floor.test.mjs` pins the two against each other mode for mode.
  * ⚠ WIDEN-ONLY: there is no return value below `auto_inbound`. A posture of
  * `ask` cannot switch the floor off, because there is nothing to ask on.
  */

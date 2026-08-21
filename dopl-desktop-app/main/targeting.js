@@ -156,8 +156,10 @@ function classify(m, entry, myId) {
   // ⚠ Provenance cannot come off the wire — a legacy id is caller-settable, so any member
   // could claim one. It comes from the LOCAL registry of threads *I* opened. Every author
   // kind, same as the first-class branch above (widened 2026-08-20). Fails safe toward
-  // 'trigger' (unknown id, cap eviction, restart, unclassified first-watch backlog all fall
-  // to the addressed path where consent is the net).
+  // 'trigger' (unknown id, restart, unclassified first-watch backlog all fall to the addressed
+  // path where consent is the net). ⚠ "cap eviction" was in that list until 2026-08-20 and is
+  // not a thing that happens: the concurrency ceiling REFUSES a launch, it never reclaims a
+  // live session, so no thread is ever silently un-tracked by it.
   if (
     toUserId === myId &&
     knownLegacyReply(m, myId)
@@ -295,7 +297,11 @@ module.exports = {
   truncate,
   metaStr,
   classify,
-  isChatIntent, // read by classify AND by listener-messages' dispatch guard
+  // ⚠ ONE reader, not two (corrected 2026-08-20): `classify`'s chat branch. This line said
+  // "AND by listener-messages' dispatch guard", which is `mentionsMe`'s fact, copied onto its
+  // neighbour — listener-messages names `isChatIntent` in PROSE only. Exported for the
+  // extraction harnesses, which slice it by name.
+  isChatIntent,
   mentionsMe, // read by classify's fyi verdict AND by listener-messages' task-reply notice gate
   firstClassTaskId,
   LEGACY_THREAD_CAP,
