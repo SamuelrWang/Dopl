@@ -22,7 +22,7 @@ export interface DoplAutoSendBridge {
 }
 
 /** The bridge inside the desktop shell with the auto-send API, else null. */
-export function getDesktopAutoSend(): DoplAutoSendBridge | null {
+function getDesktopAutoSend(): DoplAutoSendBridge | null {
   if (typeof window === "undefined") return null;
   // ⚠ Local cast, not a `Window` augmentation — see `@/shared/lib/desktop`.
   const channels = (window as unknown as { dopl?: { channels?: unknown } }).dopl

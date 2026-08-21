@@ -28,7 +28,7 @@ import {
  * it doesn't own so the shared tail (`toHttpErrorResponse`) can fall
  * through to the generic 500.
  */
-export function mapChannelError(err: unknown): HttpError | null {
+function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelNotFoundError) {
     return new HttpError(404, "CHANNEL_NOT_FOUND", err.message);
   }

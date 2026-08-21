@@ -172,7 +172,7 @@ export interface ThreadCardRow {
  * working — they can read it, which is what the fallback promises and all it
  * promises.
  */
-export function ownThreadOf(
+function ownThreadOf(
   threads: ChannelThread[],
   currentUserId: string
 ): ChannelThread {

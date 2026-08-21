@@ -23,11 +23,9 @@ import { Bot, Check, ChevronDown, ChevronRight, Clock, X, type LucideIcon } from
 import { CHIP } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 
-/**
- * The face of a CARD hanging under a message body — today the posted agent-thread
- * card is its one caller. One `.bento` recipe.
- */
-export const MESSAGE_CARD = "bento mt-1 w-full max-w-[460px] px-3 py-2.5";
+// ⚠ `MESSAGE_CARD` STOOD HERE AND IS DELETED (2026-08-20). Its one caller was the
+// posted agent-thread card, which moved to a dark-shell face on 2026-08-19 and
+// said so in its own docblock — leaving a "one caller" constant with none.
 
 /** The compact raised action on a message card ("Open thread"). */
 export const CARD_BUTTON =

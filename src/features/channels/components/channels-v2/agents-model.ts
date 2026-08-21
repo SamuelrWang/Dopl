@@ -49,7 +49,7 @@ import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions"
  * to see. A peer's ended row is not shown either way — the server row outlives the
  * run it describes, so it is not evidence of anything.
  */
-export function isAgentActive(state: DesktopSessionSummary["state"]): boolean {
+function isAgentActive(state: DesktopSessionSummary["state"]): boolean {
   return state !== "ended";
 }
 

@@ -84,11 +84,9 @@ export interface OpenThreadDraft {
 // ⚠ Re-exported, not re-declared: `use-thread-writes-shared.ts` is where these
 // live now, and every existing importer keeps its import path.
 export type { ThreadWritesParams, ThreadWriteDeps };
-export {
-  fanOutThreadsConfig,
-  type FanOutThreadsDraft,
-  type FanOutThreadsResponse,
-};
+// ⚠ `fanOutThreadsConfig` was re-exported here and is NOT (2026-08-20) — it had no
+// importer; this file's own use takes it from `./use-thread-writes-fanout` above.
+export type { FanOutThreadsDraft, FanOutThreadsResponse };
 
 /**
  * ⚠ Exported APART from the hook so `use-thread-writes.test.ts` can drive them

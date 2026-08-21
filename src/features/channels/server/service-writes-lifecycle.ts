@@ -18,7 +18,7 @@ import type { ChannelContext } from "./service-shared";
  * to say so, `splitSessionEntries`, was deleted with the session card in wiring
  * plan Phase 5, 2026-08-18; the body is still rendered — INVARIANTS §5.)
  */
-export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
+const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
   "task_started",
   "task_finished",
   "task_failed",
@@ -32,23 +32,16 @@ export const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
  */
 export interface PostMessageOptions {
   /**
-   * Post a LIFECYCLE kind on behalf of the server itself.
+   * ⚠ THREE OPTIONS ENDED HERE. `internalLifecycle` was the declared seam for
+   * "this post is the server speaking"; it was deleted 2026-08-20 with no caller
+   * and none in prospect. It had been documentary even before thread closing went
+   * (its only caller, `closeTask`, refused an agent ctx ahead of every lookup, so
+   * the flag was never what let a post through), and an exemption nothing spends
+   * is a hole kept open for a visitor who never came. A future server-internal
+   * lifecycle post should earn its pass the way the reopen echo did — post a kind
+   * the guard already permits — rather than ask for one.
    *
-   * ⚠ NO CALLER TODAY. Its one caller was the close route's echo
-   * (`service-tasks-lifecycle.ts › closeTask`), DELETED with thread closing
-   * (wiring plan Phase 4, 2026-08-18). It was already documentary before that:
-   * `closeTask` refused an agent ctx ahead of every lookup, so the flag could
-   * never be the thing that let a post through.
-   *
-   * KEPT ANYWAY, AND NOT AS A LEFTOVER. It is the declared SEAM for "this post
-   * is the server speaking", stated at the call site rather than re-derived from
-   * identity — the shape any future server-internal lifecycle post must use.
-   * `service-writes-lifecycle-guard.test.ts` pins that it exempts the call
-   * OPTION and never a caller's `metadata` key of the same name.
-   */
-  internalLifecycle?: boolean;
-  /**
-   * ⚠ TWO OPTIONS ENDED HERE with thread closing (Phase 4, 2026-08-18):
+   * The other two went with thread closing (Phase 4, 2026-08-18):
    * `closeProposal` (stamped the close-proposal prompt keys for the deleted
    * `service-tasks-propose.ts`) and `reopened` (stamped `threadReopened` for the
    * deleted `reopenTask`). Both were reserved because the marker they wrote
@@ -101,9 +94,8 @@ export interface PostMessageOptions {
  *   - The web app posts on cookies too, same answer.
  *   - The CLOSE ECHO was named as the one real overlap. It never was one (the
  *     close refused an agent ctx outright), and it is GONE — thread closing was
- *     removed in the wiring plan's Phase 4 (2026-08-18), so
- *     `internalLifecycle` now has no caller at all. See
- *     {@link PostMessageOptions}.
+ *     removed in the wiring plan's Phase 4 (2026-08-18). The `internalLifecycle`
+ *     exemption it would have used is deleted too. See {@link PostMessageOptions}.
  *   - The reopen echo that went with it deliberately did NOT use the exemption:
  *     it posted `task_progress`, not a lifecycle kind, so it passed the guard on
  *     its own merits. That is still the shape to copy — earn the pass, do not
@@ -115,10 +107,8 @@ export interface PostMessageOptions {
  */
 export function assertLifecycleKindIsServerOwned(
   ctx: ChannelContext,
-  input: ChannelMessageCreateInput,
-  opts: PostMessageOptions
+  input: ChannelMessageCreateInput
 ): void {
-  if (opts.internalLifecycle) return;
   if (ctx.source !== "agent") return;
   const kind = input.kind;
   if (kind && LIFECYCLE_KINDS.has(kind)) {

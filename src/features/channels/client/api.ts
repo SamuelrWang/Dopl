@@ -42,8 +42,9 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 export const channelRequest: ApiMutationRequestFn = request;
 
 // ⚠ Paths live in `./query-keys.ts` beside the cache keys built from them, so a
-// write and the read it patches cannot disagree about the URL.
-export { channelPath };
+// write and the read it patches cannot disagree about the URL. The re-export that
+// stood here had no importer — callers take `channelPath` from `./query-keys`
+// directly, which is the shorter path to the same rule.
 
 /**
  * Create-channel body: normal (`name`, …) OR direct (`direct: true` +
@@ -71,41 +72,18 @@ export async function createChannel(
   return data.channel;
 }
 
-export interface ChannelPatch {
-  name?: string;
-  topic?: string;
-  visibility?: ChannelVisibility;
-  archived?: boolean;
-}
-
-export async function updateChannel(
-  channelId: string,
-  patch: ChannelPatch,
-  workspaceId: string
-): Promise<Channel> {
-  const data = await request<{ channel: Channel }>(channelPath(channelId), {
-    method: "PATCH",
-    body: patch,
-    workspaceId,
-  });
-  return data.channel;
-}
-
-export async function deleteChannel(
-  channelId: string,
-  workspaceId: string
-): Promise<void> {
-  await request<void>(channelPath(channelId), {
-    method: "DELETE",
-    workspaceId,
-  });
-}
-
 // ⚠ NO `postMessage` wrapper and no `PostMessageBody`. `POST /messages` is driven
 // by the SEND MUTATION (`hooks/use-thread-writes.ts`), which owns the request
 // shape because it owns the cache patch the same draft produces. A wrapper is a
 // second place to build the body and a second thing to keep in step with
 // `clientMsgId`. Whoever owns the cache owns the call.
+//
+// ⚠ AND NO `updateChannel` / `deleteChannel` EITHER, for exactly that reason —
+// both stood here until 2026-08-20 with no importer. `PATCH` and `DELETE` on a
+// channel are driven by `hooks/use-channel-lifecycle-writes.ts`, which builds them
+// from `channelRequest` + `channelPath` because it owns the cache patches they
+// produce. They were a second route to two endpoints this file's own rule says
+// belong to the mutation, and `ChannelPatch` went with them.
 
 export async function addChannelMember(
   channelId: string,

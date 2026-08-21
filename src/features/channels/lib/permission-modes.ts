@@ -22,11 +22,11 @@
  */
 
 /** AXIS A — what this machine's agent may DO. */
-export const TOOL_MODES = ["manual", "accept_edits", "auto", "bypass"] as const;
+const TOOL_MODES = ["manual", "accept_edits", "auto", "bypass"] as const;
 export type ToolMode = (typeof TOOL_MODES)[number];
 
 /** AXIS B — what CROSSES between the two machines. */
-export const MESSAGE_MODES = [
+const MESSAGE_MODES = [
   "ask",
   "auto_inbound",
   "auto_outbound",

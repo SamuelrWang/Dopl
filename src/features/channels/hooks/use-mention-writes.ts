@@ -56,7 +56,7 @@ export interface MentionWriteDeps {
 
 /** Flip `read` on the named rows, leaving every other field and the ORDER
  *  alone. ⚠ Rows STAY listed — the inbox is a record, not a to-do pile. */
-export function markMentionsInCache(
+function markMentionsInCache(
   cache: MentionsCache | undefined,
   messageIds: readonly string[]
 ): MentionsCache | undefined {
@@ -75,7 +75,7 @@ export function markMentionsInCache(
  * own `MutationObserver` in a DOM-free test — the order onMutate → mutationFn →
  * onSuccess/onError → onSettled IS the contract (INVARIANTS §14).
  */
-export function markMentionsReadConfig(
+function markMentionsReadConfig(
   deps: MentionWriteDeps
 ): UseApiMutationConfig<MarkMentionsReadDraft, { marked: number }> {
   return {

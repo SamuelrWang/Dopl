@@ -19,7 +19,7 @@ import type {
  */
 
 /** Marks a row that exists only in this client's cache. */
-export const PENDING_ID_PREFIX = "pending:";
+const PENDING_ID_PREFIX = "pending:";
 
 export function pendingMessageId(clientMsgId: string): string {
   return `${PENDING_ID_PREFIX}${clientMsgId}`;
@@ -224,13 +224,9 @@ export function upsertThread(
   return { ...cache, tasks };
 }
 
-export function dropThread(
-  cache: ThreadsCache | undefined,
-  threadId: string
-): ThreadsCache | undefined {
-  if (!cache) return cache;
-  return { ...cache, tasks: cache.tasks.filter((t) => t.id !== threadId) };
-}
+// ⚠ `dropThread` STOOD HERE AND IS DELETED (2026-08-20) — no caller, and none
+// possible: a thread has no delete route and no finished state (INVARIANTS §5),
+// so there is nothing for a cache eviction of one to be the optimistic half of.
 
 /** Patch one channel row in the list cache (both archived variants). */
 export function patchChannel(

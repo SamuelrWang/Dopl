@@ -235,19 +235,8 @@ describe("postMessage — the lanes the guard must NOT touch", () => {
     }
   );
 
-  // ⚠ THE POSITIVE HALF OF THIS PAIR IS GONE. `internalLifecycle`'s one caller
-  // was the close echo (`service-tasks-lifecycle.ts › closeTask`), deleted with
-  // thread closing (wiring plan Phase 4, 2026-08-18), so there is no server-
-  // internal lifecycle post left to drive it through. What survives is the half
-  // that matters more: the OPTION is the exemption, a caller's METADATA key of
-  // the same name is not.
-  it("`internalLifecycle` in a caller's METADATA is not an exemption", async () => {
-    await expect(
-      postMessage(agentCtx, "general", {
-        body: "done",
-        kind: "task_finished",
-        metadata: { internalLifecycle: true },
-      })
-    ).rejects.toBeInstanceOf(ChannelLifecycleKindForbiddenError);
-  });
+  // ⚠ `internalLifecycle` WAS AN OPTION HERE AND IS DELETED (2026-08-20), so the
+  // pair that tested it went with it. The property it guarded is now structural:
+  // there is no exemption to forge, and an agent ctx posting a lifecycle kind is
+  // refused with nothing to check first. The rows above are the whole rule.
 });

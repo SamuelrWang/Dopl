@@ -28,7 +28,10 @@ import "server-only";
  */
 
 export { buildChannelContext } from "./service-shared";
-export type { ChannelContext, AuthLike } from "./service-shared";
+// ⚠ `ChannelContext` / `AuthLike` were re-exported here and are NOT (2026-08-20):
+// no caller outside this directory ever took them through the barrel, and the ones
+// inside import from `./service-shared` directly. A barrel row with no importer is
+// a second name for a type, which is how two of them drift.
 
 export {
   listChannels,
@@ -51,7 +54,9 @@ export {
 export { listMyChannelMentions, markMentionsRead } from "./service-mentions";
 
 export { awaitNewMessages } from "./service-await";
-export type { AwaitHoldCounters, AwaitHoldResult } from "./service-await";
+// ⚠ `AwaitHoldCounters` STAYS — `api/channels/[channelId]/await/route.ts` really
+// takes it through this barrel. `AwaitHoldResult` did not and is dropped.
+export type { AwaitHoldCounters } from "./service-await";
 
 export {
   createChannel,
@@ -74,17 +79,14 @@ export {
 // from every room in the workspace" primitive. The module docblock carries the
 // DM decision (close the pair, don't strand the survivor) and why.
 export { removeWorkspaceDepartedMember } from "./service-workspace-departure";
-export type { DepartedMemberSweep } from "./service-workspace-departure";
 
 export { createTask, setTaskMode } from "./service-tasks";
-export type { TaskCreateOptions, TaskCreateResult } from "./service-tasks";
 
 // THE REQUEST FAN-OUT (wiring plan Phase 3): N addressees, N threads, one card.
 // Its own module because it is a CALLER of `createTask` and nothing else — the
 // per-addressee idempotency key and the derived group id are the whole content,
 // and both are the kind of rule that gets "simplified" out of a create.
 export { createTaskFanOut } from "./service-tasks-fanout";
-export type { TaskFanOutResult } from "./service-tasks-fanout";
 
 // THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). `service-tasks-
 // lifecycle.ts` (closeTask / reopenTask) and `service-tasks-propose.ts`

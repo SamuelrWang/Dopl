@@ -1,5 +1,5 @@
 import "server-only";
-import type { AgentToolProfile, ChannelMember, NotifyScope } from "../types";
+import type { AgentToolProfile, ChannelMember } from "../types";
 import {
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
@@ -151,8 +151,12 @@ export async function removeMember(
 export async function updateMyMemberSettings(
   ctx: ChannelContext,
   ref: string,
+  // ⚠ `notifyScope` STOOD HERE AND IS DELETED (2026-08-20). The per-message mute
+  // went with F-170 and `ChannelMemberSelfUpdateSchema` admits only the two below,
+  // so no route could reach it — a live write arm for a retired preference, behind
+  // a door that was already shut. `types.ts › NotifyScope` keeps its ⛔ tombstone
+  // so a reader who finds the column knows what it was.
   patch: {
-    notifyScope?: NotifyScope;
     agentToolProfile?: AgentToolProfile;
     favorite?: boolean;
   }
@@ -162,11 +166,9 @@ export async function updateMyMemberSettings(
     throw new ChannelForbiddenError("update settings for this channel");
   }
   const dbPatch: {
-    notify_scope?: string;
     agent_tool_profile?: string;
     favorited_at?: string | null;
   } = {};
-  if (patch.notifyScope !== undefined) dbPatch.notify_scope = patch.notifyScope;
   if (patch.agentToolProfile !== undefined) {
     dbPatch.agent_tool_profile = patch.agentToolProfile;
   }

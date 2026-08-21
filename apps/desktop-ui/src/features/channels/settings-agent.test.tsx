@@ -73,25 +73,30 @@ function member(over: Partial<ChannelMember> = {}): ChannelMember {
 }
 
 /**
- * `window.dopl` carrying BOTH permission halves of the channels bridge over two
- * real, SEPARATE in-memory stores, so a write is observable the way main stores
- * it and a later read sees it — the point of the last suite below.
- * `folder: true` adds the folder half, feature-detected on `chooseFolder`.
+ * `window.dopl` carrying the channels bridge over a real in-memory store, so a
+ * write is observable the way main stores it and a later read sees it — the point
+ * of the last suite below. `folder: true` adds the folder half, feature-detected
+ * on `chooseFolder`.
  *
- * ⚠ TWO STORES, NOT ONE, AND THAT IS THE 2026-08-20 SPLIT (see the file header).
- * `channelPermissionPresets` is the single-use ARM the request card writes;
- * `channelLaunchPosture` is the DURABLE posture the Settings tab writes. One
- * fake store behind both ops would make this suite green over exactly the bug
- * the split fixes — a Settings-tab pick that a consent launch silently spends.
+ * ⚠ ONE STORE NOW, AND THAT IS NOT A RELAXATION. This carried TWO — the single-use
+ * ARM (`channelPermissionPresets`) beside the DURABLE posture
+ * (`channelLaunchPosture`) — because the 2026-08-20 split existed to stop a
+ * Settings-tab pick being spent by a consent launch. The arm was then DELETED
+ * outright (F-233: its web controls had not rendered since the 2026-08-18 consent
+ * rewrite, so nothing could set it), and its two bridge ops went from the preload
+ * with it. There is one permission record left, so a second fake store would be
+ * mocking a surface that does not exist.
+ *
+ * ⚠ THE FAKE MUST NOT BE WIDER THAN THE REAL BRIDGE. It was, for a day: it kept
+ * offering `get/setPermissionPreset` after the preload dropped them, which cannot
+ * catch a regression — it can only assert about a world that is gone.
  */
 function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}) {
-  const stored: { value: unknown } = { value: null };
-  const getPermissionPreset = vi.fn(() => Promise.resolve(stored.value));
-  const setPermissionPreset = vi.fn((_id: string, preset: unknown) => {
-    if (opts.ok === false) return Promise.resolve({ ok: false });
-    stored.value = preset;
-    return Promise.resolve({ ok: true });
-  });
+  // ⚠ THE ARM'S TWO OPS STOOD HERE AND ARE GONE (2026-08-20). This fake exposed
+  // `get/setPermissionPreset` on `window.dopl.channels` — ops the real preload
+  // DELETED with the arm — and two cases asserted the Settings tab did not call
+  // them. A test double WIDER than the surface it stands in cannot catch a
+  // regression; it can only assert about a world that no longer exists.
   const posture: { value: unknown } = { value: null };
   const getLaunchPosture = vi.fn(() => Promise.resolve(posture.value));
   const setLaunchPosture = vi.fn((_id: string, next: unknown) => {
@@ -104,8 +109,6 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
   const clearFolder = vi.fn(() => Promise.resolve());
   const channels: Record<string, unknown> = {};
   if (opts.present !== false) {
-    channels.getPermissionPreset = getPermissionPreset;
-    channels.setPermissionPreset = setPermissionPreset;
     channels.getLaunchPosture = getLaunchPosture;
     channels.setLaunchPosture = setLaunchPosture;
   }
@@ -116,7 +119,6 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
   }
   installBridge({ apiRequest: vi.fn(), channels });
   return {
-    getPermissionPreset, setPermissionPreset, stored,
     getLaunchPosture, setLaunchPosture, posture,
     chooseFolder, clearFolder,
   };
@@ -207,11 +209,9 @@ describe("choosing, inline", () => {
         messages: "ask",
       })
     );
-    // ⚠ AND IT DOES NOT TOUCH THE ARM. The Settings tab writing the consent arm
-    // is the bug the split fixes; a launch the operator configures here must not
-    // consume, extend, or overwrite the pair a consent card would show.
-    expect(b.setPermissionPreset).not.toHaveBeenCalled();
-    expect(b.stored.value).toBeNull();
+    // ⚠ The "does not touch the ARM" pair that stood here is gone with the arm's
+    // bridge ops (2026-08-20). There is no second permission record left to
+    // overwrite, so the property is structural rather than asserted.
     // ⚠ No drill-back: the value is on the row the whole time.
     await waitFor(() => expect(permissions().textContent).toContain("Bypass"));
   });
@@ -221,7 +221,6 @@ describe("choosing, inline", () => {
     const { onSetToolProfile } = mountAgent();
     fireEvent.click(screen.getByRole("radio", { name: /Read only/ }));
     expect(onSetToolProfile).toHaveBeenCalledWith("read_only");
-    expect(b.setPermissionPreset).not.toHaveBeenCalled();
     expect(b.setLaunchPosture).not.toHaveBeenCalled();
   });
 

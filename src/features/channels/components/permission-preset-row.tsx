@@ -1,12 +1,8 @@
-"use client";
-
-import { MessageSquare, Wrench } from "lucide-react";
-import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import {
-  type MessageMode,
-  type PermissionPreset,
-  type ToolMode,
-} from "../lib/permission-modes";
+// ⚠ NO "use client" AND NO COMPONENT — this file is two data tables now (the
+// `RequestPermissionRowView` that made it a component was deleted below). It is
+// imported by client components and renders nothing itself.
+import type { SelectMenuOption } from "@/shared/ui/select-menu";
+import type { MessageMode, ToolMode } from "../lib/permission-modes";
 
 /**
  * THE TWO PERMISSION AXES, as an operator reads them: what an agent may DO, and
@@ -76,57 +72,25 @@ export const MESSAGE_OPTIONS: ReadonlyArray<SelectMenuOption<MessageMode>> = [
 ];
 
 /**
- * ⚠ `RequestPermissionRow` STOOD HERE AND IS DELETED (2026-08-20, Samuel's ruling).
+ * ⚠ `RequestPermissionRow` AND `RequestPermissionRowView` BOTH STOOD HERE AND ARE
+ * DELETED (the wrapper 2026-08-20 with the arm; the view later the same day).
  *
- * It was the bridge-gated wrapper over the single-use consent ARM
+ * The wrapper was bridge-gated over the single-use consent ARM
  * (`window.dopl.channels.get/setPermissionPreset`), mounted inside
  * `launch-panel.tsx`'s inbound disclosure. That disclosure had not rendered since
  * the 2026-08-18 consent rewrite (F-233), so the control was reachable by nobody,
  * and the arm it wrote is gone from the desktop with it.
  *
- * ⚠ THE FILE STAYS BECAUSE THE OPTION TABLES ABOVE ARE LIVE. `TOOL_OPTIONS` and
- * `MESSAGE_OPTIONS` are what `channels-v2/settings-agent.tsx` renders for the
- * DURABLE launch posture, and `RequestPermissionRowView` below is still the
- * presentation both surfaces share. The copy inside those options is the reason
- * this file exists at all — see the header.
+ * ⚠ THE VIEW WENT BECAUSE THE CLAIM ABOVE IT WAS FALSE. Its docblock said it was
+ * "still the presentation both surfaces share"; neither surface used it.
+ * `channels-v2/settings-agent.tsx` and `channels-v2/agent-posture.tsx` each render
+ * their own two `SelectMenu`s — the axes are the same, but the chrome around them
+ * is not (one sits in a settings group, the other in a live control strip), and a
+ * shared component that neither caller reached was a claim about reuse rather than
+ * reuse.
+ *
+ * ⚠ THE FILE STAYS BECAUSE THE OPTION TABLES ABOVE ARE LIVE, and they are the
+ * reason it exists at all: `TOOL_OPTIONS` and `MESSAGE_OPTIONS` carry the per-mode
+ * copy a security review bought (see the header), and BOTH surfaces import them.
+ * That is the sharing that survived — the vocabulary, not the markup.
  */
-
-/**
- * The control's presentation, split from the bridge-gated wrapper so it renders
- * (and is tested) on its own. Two pills matching the folder pill's recipe
- * (rounded-full + border-border-strong + bg-bg-inset), each one a kit dropdown —
- * never a bare native `<select>`, which cannot show the per-option copy above.
- */
-export function RequestPermissionRowView({
-  preset,
-  busy,
-  onChange,
-}: {
-  preset: PermissionPreset;
-  /** True while a write is in flight — both pills disable. */
-  busy: boolean;
-  onChange: (patch: Partial<PermissionPreset>) => void;
-}) {
-  return (
-    <div className="mb-2.5 flex flex-wrap items-center gap-2">
-      <SelectMenu<ToolMode>
-        value={preset.tools}
-        options={TOOL_OPTIONS}
-        onChange={(tools) => onChange({ tools })}
-        prefix="Tools"
-        icon={<Wrench size={12} className="shrink-0" />}
-        ariaLabel="What this thread's agent may do"
-        disabled={busy}
-      />
-      <SelectMenu<MessageMode>
-        value={preset.messages}
-        options={MESSAGE_OPTIONS}
-        onChange={(messages) => onChange({ messages })}
-        prefix="Messages"
-        icon={<MessageSquare size={12} className="shrink-0" />}
-        ariaLabel="Which messages cross without asking"
-        disabled={busy}
-      />
-    </div>
-  );
-}

@@ -18,7 +18,7 @@ import { MENTIONS_METADATA_KEY } from "../lib/mentions";
  * decided by the gate. `body` IS selected and IS the heavy field — it is also
  * the answer, since the row's whole point is a snippet; the SERVICE clips it.
  */
-export const CHANNEL_MENTION_MESSAGE_COLS =
+const CHANNEL_MENTION_MESSAGE_COLS =
   "id,seq,channel_id,author_user_id,author_kind,body,metadata,created_at";
 
 export type MentionMessageRow = {

@@ -34,7 +34,7 @@ import "server-only";
  * an outcome for the shared thread. `closeProposed` / `closeOutcome` /
  * `threadReopened` described a thread SETTLEMENT, which no longer exists.
  */
-export const CALM_FLAG_KEYS = [
+const CALM_FLAG_KEYS = [
   "declined",
   "dropped",
   "interrupted",

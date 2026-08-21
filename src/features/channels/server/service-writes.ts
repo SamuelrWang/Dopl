@@ -322,8 +322,10 @@ export async function postMessage(
   // ⚠ Beside the membership check because both must precede the idempotency
   // short-circuit — a contradictory post has to fail on the retry too.
   assertChatIsUnaddressed(input);
-  // ⚠ Same placement rule, same reason.
-  assertLifecycleKindIsServerOwned(ctx, input, opts);
+  // ⚠ Same placement rule, same reason. Takes no `opts` since 2026-08-20 — the
+  // `internalLifecycle` exemption it used to read is deleted, so the credential
+  // is the whole question.
+  assertLifecycleKindIsServerOwned(ctx, input);
 
   // A `toUserId` must name an actual channel member, or the message targets a
   // listener that will never see it.
