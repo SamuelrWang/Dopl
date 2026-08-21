@@ -16,7 +16,10 @@ import type {
  */
 const CONSENT_LIST_LIMIT = 200;
 const PRESENCE_ROWS_LIMIT = 5_000;
-const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
+/** ⚠ EXPORTED (2026-08-20) because `repository.ts › memberCounts` reads the same
+ *  table for the same fan-in and had no bound at all. It is one ceiling on
+ *  purpose: two would be two different answers to "how many members". */
+export const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
 
 /**
  * Pure data access for the collaboration tables (consent requests, trust rules,

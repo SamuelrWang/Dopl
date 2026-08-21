@@ -33,6 +33,48 @@ export async function parseJson<T>(
 }
 
 /**
+ * Parse and validate QUERY PARAMS against a schema — the `?a=b` twin of
+ * {@link parseJson}, and the same `HttpError(400, "VALIDATION_FAILED", …, issues)`.
+ *
+ * ⚠ IT EXISTS BECAUSE FOUR HAND-WRITTEN COPIES DISAGREED (2026-08-20). Every route
+ * that read a query param wrote its own `searchParams` → `safeParse` → `throw`
+ * block, and the copies drifted on the one line that matters:
+ * `/channels/sessions` used `|| undefined` while `/channels/consent` used
+ * `?? undefined`. Against the SAME `?channelId=` shape those answer differently —
+ * `||` turns an empty string into "no filter" and returns EVERY session in the
+ * workspace, `??` lets `""` reach the schema and 400s. A filter that silently
+ * becomes "no filter" is the direction that leaks rows.
+ *
+ * ⚠ **THE RULE IS `??`: AN EMPTY STRING IS A VALUE THE CALLER SENT, AND IT GOES TO
+ * THE SCHEMA.** `?channelId=` is not the same request as omitting `channelId`, and
+ * only the schema gets to decide whether it is acceptable. Never widen this to
+ * `||` to "be forgiving" — forgiving here means answering a different question
+ * than the one asked.
+ *
+ * An ABSENT param is `undefined`, which is what `.optional()` is for.
+ */
+export function parseQuery<T>(
+  params: URLSearchParams,
+  schema: z.ZodType<T>,
+  keys: readonly string[]
+): T {
+  const raw: Record<string, string | undefined> = {};
+  for (const key of keys) raw[key] = params.get(key) ?? undefined;
+
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    throw new HttpError(
+      400,
+      "VALIDATION_FAILED",
+      "Invalid query",
+      result.error.issues
+    );
+  }
+
+  return result.data;
+}
+
+/**
  * ENGINEERING §9 envelope for a caught `HttpError`, with the FIRST zod issue's
  * own message promoted into `error.message`.
  *

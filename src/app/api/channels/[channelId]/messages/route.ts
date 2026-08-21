@@ -3,8 +3,7 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { HttpError } from "@/shared/lib/http-error";
-import { parseJson } from "@/shared/api/parse-json";
+import { parseJson, parseQuery } from "@/shared/api/parse-json";
 import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
@@ -18,19 +17,15 @@ import {
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const params = request.nextUrl.searchParams;
     // `thread` is a FILTER on metadata.taskId, not a lookup: an id nothing carries returns [].
     // The await path deliberately has no counterpart.
-    const parsed = MessageReadQuerySchema.safeParse({
-      since: params.get("since") ?? undefined,
-      limit: params.get("limit") ?? undefined,
-      thread: params.get("thread") ?? undefined,
-    });
-    if (!parsed.success) {
-      throw new HttpError(400, "VALIDATION_FAILED", "Invalid query", parsed.error.issues);
-    }
+    const query = parseQuery(request.nextUrl.searchParams, MessageReadQuerySchema, [
+      "since",
+      "limit",
+      "thread",
+    ]);
     const ctx = buildChannelContext(auth);
-    const messages = await readMessages(ctx, requireChannelId(auth.params), parsed.data);
+    const messages = await readMessages(ctx, requireChannelId(auth.params), query);
     return NextResponse.json({ messages });
   } catch (err) {
     return toChannelErrorResponse(err);

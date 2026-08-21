@@ -3,8 +3,7 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { HttpError } from "@/shared/lib/http-error";
-import { parseJson } from "@/shared/api/parse-json";
+import { parseJson, parseQuery } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
@@ -23,17 +22,14 @@ import {
 // a prompt — it decides nothing, and the desktop calls it on every trigger.
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const parsed = ConsentListQuerySchema.safeParse({
-      channelId: request.nextUrl.searchParams.get("channelId") ?? undefined,
-      status: request.nextUrl.searchParams.get("status") ?? undefined,
-    });
-    if (!parsed.success) {
-      throw new HttpError(400, "VALIDATION_FAILED", "Invalid query", parsed.error.issues);
-    }
+    const query = parseQuery(request.nextUrl.searchParams, ConsentListQuerySchema, [
+      "channelId",
+      "status",
+    ]);
     const ctx = buildChannelContext(auth);
     const requests = await listConsentRequests(ctx, {
-      channelId: parsed.data.channelId,
-      status: parsed.data.status,
+      channelId: query.channelId,
+      status: query.status,
     });
     return NextResponse.json({ requests });
   } catch (err) {

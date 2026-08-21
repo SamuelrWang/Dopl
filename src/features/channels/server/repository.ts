@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
+import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
 
 /**
  * Pure data access for channels, members, workspace membership + profiles.
@@ -345,7 +346,13 @@ export async function hasMembership(
   return data !== null;
 }
 
-/** Member counts for a set of channels, grouped in JS. */
+/**
+ * Member counts for a set of channels, grouped in JS.
+ *
+ * ⚠ BOUND STATED, NOT INHERITED (2026-08-20). PostgREST truncates an un-limited
+ * select SILENTLY, and this feeds `Channel.memberCount` — a clipped page is a
+ * wrong number on every channel row, not a crash anyone would see.
+ */
 export async function memberCounts(
   channelIds: string[]
 ): Promise<Map<string, number>> {
@@ -355,7 +362,8 @@ export async function memberCounts(
   const { data, error } = await db
     .from("channel_members")
     .select("channel_id")
-    .in("channel_id", channelIds);
+    .in("channel_id", channelIds)
+    .limit(CHANNEL_MEMBER_ROWS_LIMIT);
   if (error) throw error;
   for (const row of (data ?? []) as Array<{ channel_id: string }>) {
     counts.set(row.channel_id, (counts.get(row.channel_id) ?? 0) + 1);

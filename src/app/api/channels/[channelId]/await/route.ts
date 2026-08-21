@@ -3,7 +3,7 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { HttpError } from "@/shared/lib/http-error";
+import { parseQuery } from "@/shared/api/parse-json";
 import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
 import {
   awaitNewMessages,
@@ -54,16 +54,11 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   let channelId = "";
   let outcome: "hit" | "timeout" | "error" = "error";
   try {
-    const search = request.nextUrl.searchParams;
-    const parsed = AwaitQuerySchema.safeParse({
-      since: search.get("since") ?? undefined,
-      timeoutMs: search.get("timeoutMs") ?? undefined,
-      excludeAuthor: search.get("excludeAuthor") ?? undefined,
-    });
-    if (!parsed.success) {
-      throw new HttpError(400, "VALIDATION_FAILED", "Invalid query", parsed.error.issues);
-    }
-    const { since, timeoutMs, excludeAuthor } = parsed.data;
+    const { since, timeoutMs, excludeAuthor } = parseQuery(
+      request.nextUrl.searchParams,
+      AwaitQuerySchema,
+      ["since", "timeoutMs", "excludeAuthor"]
+    );
     // ⚠ Deadline struck BEFORE the ref resolves: the hold must stay bounded under `maxDuration`
     // including that lookup.
     const deadline = Date.now() + (timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS);

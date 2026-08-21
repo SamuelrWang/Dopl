@@ -3,8 +3,7 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { HttpError } from "@/shared/lib/http-error";
-import { parseJson } from "@/shared/api/parse-json";
+import { parseJson, parseQuery } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
 import {
   SessionStateQuerySchema,
@@ -27,19 +26,15 @@ import {
 // caller as a failure.
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const parsed = SessionStateQuerySchema.safeParse({
-      channelId: request.nextUrl.searchParams.get("channelId") || undefined,
-    });
-    if (!parsed.success) {
-      throw new HttpError(
-        400,
-        "VALIDATION_FAILED",
-        "Invalid query",
-        parsed.error.issues
-      );
-    }
+    // ⚠ `parseQuery` uses `??`, and this route is WHY it is stated as a rule. It
+    // read `|| undefined`, so `?channelId=` collapsed to "no filter" and answered
+    // with every session in the workspace instead of 400ing like its twin on
+    // `/channels/consent`. An empty string is a value the caller sent.
+    const query = parseQuery(request.nextUrl.searchParams, SessionStateQuerySchema, [
+      "channelId",
+    ]);
     const ctx = buildChannelContext(auth);
-    const sessions = await listSessionStates(ctx, parsed.data.channelId);
+    const sessions = await listSessionStates(ctx, query.channelId);
     return NextResponse.json({ sessions });
   } catch (err) {
     return toChannelErrorResponse(err);
