@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { closedEnum } from "@/shared/lib/closed-enum";
+import type { AgentPresenceStatus, ConsentDecisionSurface } from "./types";
 
 /**
  * COLLAB request schemas — consent, trust and presence.
@@ -32,6 +34,10 @@ const ConsentMessageSeqSchema = z.number().int().positive();
 /** Fields every consent create carries, whatever the kind. */
 const consentCreateBase = {
   channelId: z.string().uuid(),
+  // ⚠ NO `.min(1)`, unlike `schema.ts`'s same-named post field — deliberate, and
+  // that file's comment carries the full reasoning. In short: a consent ROW must
+  // exist whether or not there was anything to summarize, so empty is a real
+  // stored value here and a refused one there.
   summary: z.string().trim().max(200).optional().default(""),
   bodyPreview: z.string().max(16000).optional().default(""),
 };
@@ -67,7 +73,12 @@ export type ConsentCreateInput = z.infer<typeof ConsentCreateSchema>;
  * `decided_by` for audit. ⚠ `trust` is server-generated only (standing rule,
  * not a human click) and deliberately NOT accepted from a caller.
  */
-const ConsentDecidedBySchema = z.enum(["web", "desktop"]);
+/** ⚠ Annotated so TS-side drift breaks the build — see
+ *  `schema.ts › VisibilitySchema` for the full reasoning. */
+const ConsentDecidedBySchema = closedEnum<ConsentDecisionSurface>()([
+  "web",
+  "desktop",
+]);
 
 /** PATCH /consent/[id] body: the operator's decision + which surface made it. */
 export const ConsentDecisionSchema = z.object({
@@ -107,6 +118,13 @@ export type TrustMutateInput = z.infer<typeof TrustMutateSchema>;
  * and the value is surfaced in the UI as listener state.
  */
 export const PresenceHeartbeatSchema = z.object({
-  status: z.enum(["listening", "busy", "paused", "offline"]).optional(),
+  /** ⚠ Annotated so TS-side drift breaks the build — see
+   *  `schema.ts › VisibilitySchema`. */
+  status: closedEnum<AgentPresenceStatus>()([
+    "listening",
+    "busy",
+    "paused",
+    "offline",
+  ]).optional(),
 });
 export type PresenceHeartbeatInput = z.infer<typeof PresenceHeartbeatSchema>;

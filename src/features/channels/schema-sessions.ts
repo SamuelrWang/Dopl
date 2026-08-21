@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
+import { closedEnum } from "@/shared/lib/closed-enum";
+import type { SessionPillState } from "./types";
 
 /**
  * READ-SESSION-STATE's two schemas — the `?channelId=` of the READ and the body
@@ -58,7 +60,13 @@ const SessionStateEntrySchema = z.object({
   threadId: z.string().uuid().nullable().optional(),
   name: z.string().regex(SESSION_NAME_RE, "Invalid session handle"),
   // ⚠ The closed set the `state` CHECK carries — deliberately no `thinking`.
-  state: z.enum(["working", "idle", "ended"]),
+  /** ⚠ Annotated so TS-side drift breaks the build — see
+   *  `schema.ts › VisibilitySchema`. ⚠ AND THE COST OF DRIFT IS UNUSUAL HERE: zod
+   *  validates the ARRAY, so one row carrying a fourth value 400s the WHOLE push,
+   *  `retryable(400)` is false, and every later push for that workspace fails
+   *  identically (INVARIANTS §11). The SQL `CHECK` is a third statement of this
+   *  same set and no TypeScript reaches it. */
+  state: closedEnum<SessionPillState>()(["working", "idle", "ended"]),
   channelName: safeLabel("Channel name", 120).nullable().optional(),
   threadTitle: safeLabel("Thread title", 200).nullable().optional(),
 });

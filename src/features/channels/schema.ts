@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
+import { closedEnum } from "@/shared/lib/closed-enum";
 import {
   CHANNEL_FANOUT_MAX_ADDRESSEES,
   DEFAULT_MESSAGE_LIMIT,
@@ -7,7 +8,12 @@ import {
   MAX_MESSAGE_LIMIT,
   MAX_METADATA_SERIALIZED_BYTES,
 } from "./constants";
-import type { MessageIntent } from "./types";
+import type {
+  AgentToolProfile,
+  ChannelVisibility,
+  MessageIntent,
+  ThreadMode,
+} from "./types";
 
 /**
  * Removed multiplayer params (`docs/CHANNELS-ROLLBACK-PLAN.md` §1).
@@ -49,7 +55,13 @@ function removedOp(op: string, message: string) {
   return z.object({ op: z.literal(op) }).refine(() => false, { error: message });
 }
 
-const VisibilitySchema = z.enum(["private", "public"]);
+/** ⚠ ANNOTATED `z.ZodType<ChannelVisibility>` (2026-08-20) so TS-side drift BREAKS THE
+ * BUILD. This set is declared twice — the union in `types.ts` and this enum —
+ * and nothing tied them, so adding a member to one silently left the other
+ * behind. `schema.ts › MessageIntentSchema` was the only one carrying the
+ * annotation; the rest were on trust. (Several also have a third statement as a
+ * SQL `CHECK`, which no TypeScript can reach — that one is still on trust.) */
+const VisibilitySchema = closedEnum<ChannelVisibility>()(["private", "public"]);
 
 /**
  * CHARSET GATE on the channel header. `name` / `topic` are peer-authored and
@@ -145,10 +157,7 @@ export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
  * `CHANNEL_CHAT_ADDRESSED` (`server/errors.ts`), never silently resolved:
  * addressing a person starts their agent on a subject they saw no title for.
  */
-const MessageIntentSchema: z.ZodType<MessageIntent> = z.enum([
-  "chat",
-  "request",
-]);
+const MessageIntentSchema = closedEnum<MessageIntent>()(["chat", "request"]);
 
 /**
  * Post a message or activity event. `body` carries the human-readable render
@@ -175,6 +184,17 @@ export const ChannelMessageCreateSchema = z.object({
     .optional(),
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
+  // ⚠ `.min(1)` HERE AND NO MINIMUM ON THE CONSENT ONE — DELIBERATE, not drift
+  // (stated 2026-08-20 after an audit flagged the pair). Two concepts sharing a
+  // name and a `max(200)`:
+  //   • THIS is the POST's own summary — an optional author-supplied line that is
+  //     re-stamped into `metadata.summary`. Absent is meaningful; PRESENT AND
+  //     EMPTY is not, so it is refused rather than stored as a blank claim.
+  //   • `schema-collab.ts › consentCreateBase.summary` is the CONSENT ROW's, which
+  //     `.default("")`s because the row must exist whether or not the desktop had
+  //     anything to say about it — a request with no summary is normal, and an
+  //     empty string is how "nothing to show" is stored.
+  // Changing either to match the other would break the surface that relies on it.
   summary: z.string().trim().min(1).max(200).optional(),
   intent: MessageIntentSchema.optional(),
   toAgent: removedParam(REMOVED_TO_AGENT),
@@ -188,7 +208,10 @@ export type ChannelMessageCreateInput = z.infer<
 // ─── Tasks (first-class channel tasks, v15) ─────────────────────────────────
 
 /** Task execution mode. `set_task_mode` governs the creator's own machine. */
-const TaskModeSchema = z.enum(["interactive", "autonomous"]);
+/** ⚠ Annotated so TS-side drift breaks the build — see `VisibilitySchema`.
+ *  ⚠ The DOMAIN name is `ThreadMode`; `task` is the storage spelling (INVARIANTS
+ *  §5), which is why the schema and the type do not share a name. */
+const TaskModeSchema = closedEnum<ThreadMode>()(["interactive", "autonomous"]);
 
 /**
  * Create a task. `title` = queryable header; `body` = initial request (posted
@@ -320,7 +343,14 @@ export const TaskUpdateSchema =
   TaskUpdateUnion as unknown as z.ZodType<TaskUpdateInput>;
 
 /** Per-member responding-agent tool scope (self-service preference). */
-const AgentToolProfileSchema = z.enum(["full", "dopl_only", "read_only"]);
+/** ⚠ Annotated so TS-side drift breaks the build — see `VisibilitySchema`. This
+ *  is a CONTAINMENT vocabulary: a value the web offers that main does not know
+ *  resolves to `read_only` through `normalizeProfile` (INVARIANTS §11). */
+const AgentToolProfileSchema = closedEnum<AgentToolProfile>()([
+  "full",
+  "dopl_only",
+  "read_only",
+]);
 
 /**
  * PATCH /members: member updates their OWN per-channel settings — the agent
