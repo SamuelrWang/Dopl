@@ -222,17 +222,21 @@ test("CHANGE: ending a session is a change, and so is its pill leaving", async (
   m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
-  // The abandonment: the window survives, so the pill (and the row) stay as `ended`.
+  // The abandonment: the pill (and the row) stay as `ended`.
   m.bind({ sessions: new Map() });
   m.noteEnded(s, true);
   await settle(m);
   assert.equal(seen.length, 2);
   assert.equal(seen[1][0].state, "ended");
-  // The operator closes that window: the pill leaves, and the writer is told the set is
-  // now empty — which is what deletes the row.
-  s.win.destroyed = true;
+  // ⚠ THE THIRD BEAT IS DELETED, AND ITS SUBJECT WITH IT (2026-08-20, F-234). It read: "the
+  // operator closes that window: the pill leaves, and the writer is told the set is now empty
+  // — which is what deletes the row", driven by `s.win.destroyed = true`. Retention no longer
+  // consults a window (it could not: every session is windowless, which is why NOTHING was
+  // being retained at all), so there is no event that makes a retained pill leave except the
+  // `MAX_ENDED` bound. Rewritten to the rule that survives: a retained pill is STABLE across
+  // projections, and the writer is not told to delete a row that is still on the tab.
   m.touch();
   await settle(m);
-  assert.equal(seen.length, 3);
-  assert.deepEqual(seen[2], []);
+  assert.equal(seen.length, 2, "a projection with nothing new is not a change");
+  assert.equal(m.list().length, 1, "and the retained pill is still there");
 });

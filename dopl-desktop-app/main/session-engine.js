@@ -188,9 +188,14 @@ function runLifecycle(s, kind, extra, body) {
 }
 
 // The lifecycle echo lives here; its sibling, session-close-task.js's status flip, is deleted
-// with thread closing (Phase 4, 2026-08-18). Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it), free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
+// with thread closing (Phase 4, 2026-08-18). Terminal: drop the live handles, mark the record ended, free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
 // `keepWindow` — the abandonment case alone; the argument is at session-effects.endEffects.
-// Everything below still runs (terminal either way); only the painted transcript survives.
+// ⚠ IT NO LONGER NAMES A WINDOW, AND THE DESTROY IS GONE (2026-08-20, F-234). This function
+// ended with `if (!keepWindow && s.win && !s.win.isDestroyed()) s.win.destroy()`, which has
+// been dead since every session went windowless — `s.win` is null on all of them. What the
+// flag means now is "retain the ENDED PILL", which `session-summary.noteEnded` honours
+// unconditionally; the name is the engine's and is left alone rather than renamed for cosmetics.
+// Everything below still runs, terminal either way.
 function settle(s, outcome, keepWindow) {
   if (s.settled) return;
   s.settled = true;
@@ -204,8 +209,7 @@ function settle(s, outcome, keepWindow) {
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   store.saveRecord(baseRecord(s)); // FIX #9: full record (phase 'ended') persists cap counters for a P2 rehydrate
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
-  sessions.delete(s.key); sessionSummary.noteEnded(s, keepWindow === true); // §3.3: an ended pill survives only where its window does
-  if (!keepWindow && s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
+  sessions.delete(s.key); sessionSummary.noteEnded(s, keepWindow === true); // F-234: retained on the flag alone, bounded by MAX_ENDED
   refreshTray();
 }
 

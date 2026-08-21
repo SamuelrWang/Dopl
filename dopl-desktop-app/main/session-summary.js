@@ -47,14 +47,27 @@
 // unretryably, forever. The finer signal rides BESIDE it as `detail` + `toolLabel`, local-only.
 //
 // ── ENDED SESSIONS: THE RETENTION RULE ───────────────────────────────────────────────
-// ⚠ An ended session's pill survives exactly as long as its WINDOW does, and no longer.
-// session-engine.settle destroys the window on every end but ABANDONMENT (which fires hours
-// later with nobody present, where a vanishing transcript is indistinguishable from a crash).
-// So the abandoned session is the only one with something left to open, and the only one whose
-// pill stays. NO TIMED TOMBSTONE: a pill is a HANDLE ("click to open this"), and a pill with no
-// window answers that click by recreating a fresh shell wearing a dead session's name. The
-// channel transcript already carries the record. Needs no TTL, ring or persistence — the
-// retained set is bounded by MAX_ENDED and swept on the next projection.
+// ⚠ THE RETENTION RULE, REWRITTEN 2026-08-20 (F-234, Samuel's ruling). It USED to read: a
+// pill survives exactly as long as its WINDOW does, and no longer — `settle` destroyed the
+// window on every end but ABANDONMENT, so the abandoned session was the only one with
+// something left to open and the only one whose pill stayed.
+//
+// EVERY SESSION IS WINDOWLESS since the F-228 retirement, so `s.win` is null on all of them
+// and that predicate answered FALSE for every end: nothing was ever retained, and an agent
+// that finished left the Agents tab instantly with no record it had run. The rule was
+// written for exactly the case it had stopped covering — "an end nobody watched happen must
+// not make a run vanish".
+//
+// SO RETENTION IS UNCONDITIONAL NOW, on the caller's flag alone, BOUNDED BY MAX_ENDED. The
+// engine still asks only for the abandonment (`session-effects.js › endEffects`); what changed
+// is that the ask is honoured. A TIME bound was refused — the question the window check
+// answered ("did anything ever have this on screen") has no answer without a window, and a TTL
+// would have invented one.
+//
+// ⚠ A RETAINED PILL IS A TOMBSTONE, NOT A HANDLE, AND THAT IS THE ACCEPTED COST.
+// `session-reopen.js › reopenByTask` refuses a settled key, so clicking one opens nothing
+// rather than minting a fresh shell wearing a dead session's name. The channel transcript is
+// still the record. Rules and cases: `test/session-summary-retention.test.mjs`.
 
 // ⚠ The module's only four dependencies, all ABOVE the sentinel: everything from there to
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
@@ -224,12 +237,13 @@ const SESSIONS_EVENT = 'dopl:sessions';
 // state flip reads as laggy and above one turn's event storm. Mirrors ui-sync's COALESCE_MS.
 const PUSH_COALESCE_MS = 200;
 
-// Belt for the retention rule, which is already self-bounding (an entry lives only while its
-// pill does, capped by MAX_ENDED). Drops the OLDEST — least likely still on screen.
+// ⚠ THE ONLY BOUND ON THE RETAINED SET SINCE 2026-08-20 (F-234). It was a BELT over a rule
+// that swept itself (an entry lived only while its window did); that rule is deleted, so this
+// is now the whole of it. Drops the OLDEST — least likely to still matter to the operator.
 const MAX_ENDED = 12;
 
 const ledger = new Map(); // sessionKey -> { channelId, name }
-let endedKept = []; // oldest first: { key, sessionId, channelId, taskId, channelName, threadTitle, win }
+let endedKept = []; // oldest first: { key, sessionId, channelId, taskId, channelName, threadTitle }
 let deps = { sessions: null };
 let getWindowsFn = null;
 let pushTimer = null;
@@ -256,10 +270,15 @@ function windowAlive(win) {
   return !!(win && typeof win.isDestroyed === 'function' && !win.isDestroyed());
 }
 
-/** The retained ended entries whose windows are still open, sweeping the rest. */
+/**
+ * The retained ended entries, bounded by MAX_ENDED (oldest dropped first).
+ *
+ * ⚠ THIS USED TO SWEEP ON `windowAlive(e.win)`, AND THAT FILTER IS DELETED (2026-08-20, F-234).
+ * Every session is WINDOWLESS, so `e.win` was null on every entry and the set could never hold
+ * a row. `MAX_ENDED` is the only bound now, and it is a real one: the set is in-memory, bounded
+ * by count, and does not outlive a restart. See the header for why not a TTL.
+ */
 function sweepEnded() {
-  const alive = endedKept.filter((e) => windowAlive(e.win));
-  if (alive.length !== endedKept.length) endedKept = alive;
   if (endedKept.length > MAX_ENDED) endedKept = endedKept.slice(endedKept.length - MAX_ENDED);
   return endedKept;
 }
@@ -315,12 +334,23 @@ function nameForSession(s) {
 }
 
 /**
- * A session ENDED. Retain only when its window survived (retention rule, header). Returns
- * whether a pill was kept — worth asserting the engine's `keepWindow` (abandonment only)
- * against.
+ * A session ENDED. Retain when the caller asks to (`keepWindow`), bounded by MAX_ENDED.
+ * Returns whether a pill was kept — worth asserting the engine's argument against.
+ *
+ * ⚠ THE SECOND CONJUNCT IS GONE (2026-08-20, F-234, Samuel's ruling). This read
+ * `keepWindow === true && windowAlive(s && s.win)`, and since every session went WINDOWLESS
+ * `s.win` has been null on every one of them — so this returned false unconditionally and
+ * `endedKept` never gained a row. The retention rule exists precisely for "an end nobody
+ * watched happen must not make a run vanish", and it had stopped doing that.
+ *
+ * ⚠ THE ARGUMENT'S NAME IS NOW WRONG AND IS KEPT ANYWAY, deliberately: `keepWindow` is the
+ * ENGINE'S word (`session-effects.js › endEffects` sets it for the abandonment case alone),
+ * and renaming it here would leave the two sides of one flag spelled differently for a
+ * cosmetic gain. What it means is "retain the pill", and it has meant that since the window
+ * died. Rename it at the producer or not at all.
  */
 function noteEnded(s, keepWindow) {
-  const kept = keepWindow === true && windowAlive(s && s.win);
+  const kept = keepWindow === true;
   if (kept) {
     const ctx = (s && s.context) || {};
     endedKept.push({
@@ -336,7 +366,9 @@ function noteEnded(s, keepWindow) {
       // The final measurement, frozen with the identity and for the same reason — see
       // `endedSummary`. The session object is about to leave the registry.
       ...metrics(s),
-      win: s.win,
+      // ⚠ `win: s.win` STOOD HERE AND IS DELETED WITH THE SWEEP'S PREDICATE (2026-08-20,
+      // F-234). It was the retention's clock and it was always null; carrying a dead handle
+      // on a retained entry invites the next reader to reason from it.
     });
   }
   touch();

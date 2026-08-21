@@ -111,13 +111,15 @@ test("C3: the rest of the terminal contract is unchanged", () => {
   h.settle(h.s, "interrupted");
   assert.equal(h.s.settled, true);
   assert.equal(h.sessions.size, 0, "the registry slot is freed");
-  // ⚠ KEPT DELIBERATELY THOUGH NO LIVE SESSION CAN REACH IT (2026-08-20, F-228). `settle`'s
-  // `if (!keepWindow && s.win && !s.win.isDestroyed()) s.win.destroy()` is unchanged LIVE source,
-  // but a windowless session's `win` is null, so the guard short-circuits and nothing is ever
-  // destroyed in production. Deleting the assertion would delete the only rule over that line
-  // while the line is still there to go wrong — §14's exact failure mode. It goes when the line
-  // goes, in the same change.
-  assert.equal(h.calls.destroyed, 1, "a session that DOES carry a window has it destroyed");
+  // ⚠ AND THE LINE WENT, SO THIS WENT WITH IT (2026-08-20, F-234). This asserted
+  // `h.calls.destroyed === 1` over `settle`'s `if (!keepWindow && s.win && …) s.win.destroy()`.
+  // The previous pass KEPT it on the §14 grounds that a live line needs a rule even when
+  // production cannot reach it, and said outright: "it goes when the line goes, in the same
+  // change." F-234 is that change — the destroy is deleted, because `s.win` is null on every
+  // session and the flag now means one thing only (retain the ENDED PILL). The replacement
+  // rule is an ABSENCE and lives with the rest of F-234:
+  // `session-summary-retention.test.mjs › the dead window DESTROY is gone from settle`.
+  assert.equal(h.calls.destroyed, 0, "settle no longer destroys anything — there is no window");
   assert.deepEqual(h.calls.clearedSdk, [], "an interrupted end KEEPS the sdkSessionId (FIX #7)");
   assert.equal(h.calls.saved.length, 1, "the full record still persists");
   // A completed/failed end still drops the resume entry.

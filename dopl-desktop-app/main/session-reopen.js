@@ -84,7 +84,10 @@ function listLiveSessions() {
 // onto it: its narration, what it sent, and a composer that reaches it. Anything else refuses.
 // The branches that went are the ones that were about WINDOWS rather than about agents:
 //   • the live-session `show()+focus()` of its OWN window — no session has one;
-//   • the retained ENDED window (`session-summary.keptWindow`) — nothing retains one;
+//   • the retained ENDED window (`session-summary.keptWindow`) — a retained end has no window
+//     to reveal. ⚠ Retention itself is LIVE again since 2026-08-20 (F-234): the pill is kept
+//     unconditionally, bounded by MAX_ENDED. What it cannot be is OPENED, which is the
+//     tombstone-not-handle cost that ruling accepted;
 //   • the `recreateParkedShell` fallback, which minted a v1 session window from a durable
 //     record, or from the channel when no record existed.
 //
@@ -131,6 +134,10 @@ function reopenByTask(a) {
 // ⚠ SETTLED AND RETAINED-ENDED SESSIONS ANSWER `{ ok: false }`: an ended session's pill outlives
 // its registry entry (the retention rule), so "the card is on screen" does not mean "there is
 // something left to stop". Fail closed rather than dispatching into a settled object.
+// ⚠ THAT CASE IS REACHABLE AGAIN SINCE 2026-08-20 (F-234). Retention gated on a live WINDOW,
+// which no session has had since the F-228 retirement, so nothing was retained and this
+// sentence described a state that could not occur. It occurs now — an abandoned agent holds
+// its pill — so this refusal is the one an operator actually meets.
 const CONTROL_EVENTS = { pause: 'interrupt', end: 'end' };
 
 function controlByTask(a) {

@@ -10,17 +10,24 @@
 // added there and quietly fall through this table's default.
 //
 // SOURCE EXTRACTION with INJECTION lives in `_session-summary-harness.mjs` — shared with
-// `session-summary-report.test.mjs` (F-147: the report view and the change subscription) and
-// with `session-summary-shape.test.mjs` (2026-08-20: the wire shape, moved out whole when
-// this file hit 499 of the cap and the `detail` widening's review comment did not fit).
-// This file keeps the mapping, the naming, the ended retention rule and the renderer frame.
+// `session-summary-report.test.mjs` (F-147: the report view and the change subscription),
+// `session-summary-shape.test.mjs` (2026-08-20: the wire shape, moved out whole when this file
+// hit 499 of the cap and the `detail` widening's review comment did not fit) and
+// `session-summary-retention.test.mjs` (2026-08-20: §4, below).
+// This file keeps the mapping, the naming and the renderer frame.
+//
+// ⚠ §4 — THE ENDED RETENTION RULE — MOVED OUT WHOLE ON 2026-08-20 (F-226 + F-234). This file
+// was at EXACTLY 500 lines, so the rule could not gain a case, and F-234's rewrite needed
+// several: retention had been gating on a live WINDOW, which no session has had since the
+// F-228 retirement, so nothing was ever retained. Samuel ruled retain-unconditionally bounded
+// by MAX_ENDED. The seam was already visible — two suites had come off this harness for the
+// same reason — so it was taken deliberately rather than at the moment a lint failed.
 //
 // ⚠ THE SESSION-WINDOW WAVE (2026-08-20, F-228) TOOK ONE SYMBOL OUT OF THIS FILE AND NO RULES.
-// Agents run WINDOWLESS, `main/session-summary.js › keptWindow` is deleted, and the three §4
-// assertions calling it are excised. Nothing else here ever saw a session window: the mapping is
-// arithmetic over `{phase, activity, parked}`, the ledger is keyed on the SESSION KEY, and §5's
-// push fans out over `main/app-windows.js`'s APP-window registry — a different registry from the
-// retired per-session one, and untouched. What §4 cost is written out over §4 itself.
+// Nothing that remains here ever saw a session window: the mapping is arithmetic over
+// `{phase, activity, parked}`, the ledger is keyed on the SESSION KEY, and §5's push fans out
+// over `main/app-windows.js`'s APP-window registry — a different registry from the retired
+// per-session one, and untouched.
 //
 // Run: `node --test dopl-desktop-app/test/session-summary.test.mjs`
 
@@ -230,93 +237,6 @@ test("NAMES: a window's own handle is the SAME one its pill shows, either way ro
   // on the next projection, which releases every key `list()` did not see.
   assert.equal(m.nameForSession(null), null);
   assert.equal(m.nameForSession({}), null);
-});
-
-// ── 4. THE ENDED RETENTION RULE ──────────────────────────────────────────────────────
-//
-// ⚠ THIS SECTION WAS CLASSIFIED "GOES" AND IT STAYS. Every case here was read as being about a
-// session WINDOW; on the evidence they are about `noteEnded` / `sweepEnded` / `MAX_ENDED`, which
-// are LIVE, unchanged source in `main/session-summary.js`. Only ONE thing in the section was
-// about deleted code — the `keptWindow(channelId, taskId)` assertions, excised below — so under
-// INVARIANTS §14 the section is rewritten down to what survives rather than removed.
-//
-// ⚠ WHAT THE EXCISION COST, STATED PLAINLY. `keptWindow` returned the surviving BrowserWindow of
-// a retained ENDED session, and it was the reason a retained pill was worth retaining: the pill
-// was a HANDLE ("click to open this") and `session-reopen.reopenByTask` cashed it in. With it
-// gone a retained `ended` pill is a TOMBSTONE — it says a run happened and answers a click with
-// nothing. A product question, not settled here; below pins only the retention's own behaviour.
-//
-// ⚠ AND THE PREDICATE IS NOW UNREACHABLE FROM THE ENGINE — FLAGGED, NOT PAPERED OVER. `noteEnded`
-// retains on `keepWindow === true && windowAlive(s.win)`, and a windowless session's `win` is
-// null, so the second conjunct is false on every session the engine settles: in production
-// NOTHING is retained and no `ended` pill can appear, whatever `session-effects.endEffects`
-// passes for the abandonment. The cases below drive the predicate with a fake window
-// (`_session-summary-harness.mjs › fakeWindow`) because the SOURCE is live and a deleted test is
-// a deleted rule — but "this function works" and "anything can call it so that it works" are
-// different claims, and the second one is now false. ⚠ Do NOT close that by weakening these
-// cases; close it in `main/`, or delete the retention outright.
-
-test("ENDED: a retained end keeps its PILL, as `ended`, under the same key", () => {
-  // ⚠ REWRITTEN, NOT DROPPED: the `keptWindow(...) === s.win` line went with the deleted lookup;
-  // the rule that a retained end still PROJECTS — one row, state `ended`, the thread's own id —
-  // is `noteEnded` + `endedSummary` + `reportList`, all live.
-  const m = load();
-  const s = session();
-  assert.equal(m.noteEnded(s, true), true, "the return value is the engine's receipt for the retention");
-  const rows = m.list();
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].state, "ended");
-  assert.equal(rows[0].taskId, "task-1");
-});
-
-test("ENDED: an end that keeps nothing retains no pill", () => {
-  const m = load();
-  // settle(keepWindow=false) — operator End, turn/cost cap, completed, crash.
-  assert.equal(m.noteEnded(session(), false), false);
-  assert.deepEqual(m.list(), [], "a pill is a handle, not a tombstone — and the channel transcript is the record");
-});
-
-test("ENDED: the sweep removes a retained pill once its retention lapses", () => {
-  // ⚠ THE SWEEP IS THE ONLY WAY A RETAINED PILL EVER LEAVES, so deleting this case would leave
-  // `sweepEnded` — live source — with no rule at all. It is driven through the one input the
-  // predicate reads. That the ENGINE can no longer produce that input is the ⚠ above.
-  const m = load();
-  const s = session();
-  m.noteEnded(s, true);
-  assert.equal(m.list().length, 1);
-  s.win.destroyed = true;
-  assert.deepEqual(m.list(), [], "the lapse IS the removal — no TTL, no ring to prune");
-});
-
-test("ENDED: keepWindow over an already-lapsed retention retains nothing", () => {
-  const m = load();
-  const s = session();
-  s.win.destroyed = true;
-  assert.equal(m.noteEnded(s, true), false);
-  assert.deepEqual(m.list(), []);
-});
-
-test("ENDED: reopening the thread replaces the ended pill rather than doubling it", () => {
-  const m = load();
-  const ended = session();
-  m.noteEnded(ended, true);
-  // The operator reopens that thread: a live session takes the same (channel, thread) slot.
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ sessionId: "sess-live" })]]) });
-  const rows = m.list();
-  assert.equal(rows.length, 1, "one slot, one pill");
-  assert.equal(rows[0].sessionId, "sess-live");
-  assert.equal(rows[0].state, "working", "the LIVE session is the one the pill should open");
-});
-
-test("ENDED: the retained set is bounded even if the outer budget stops holding", () => {
-  const m = load();
-  for (let i = 0; i < m.MAX_ENDED + 5; i += 1) {
-    m.noteEnded(session({ taskId: `t-${i}`, sessionId: `s-${i}` }), true);
-  }
-  const rows = m.list();
-  assert.equal(rows.length, m.MAX_ENDED);
-  // The OLDEST go: they are the least likely to still be on screen.
-  assert.equal(rows[0].taskId, "t-5");
 });
 
 // ── 5. THE FRAME THAT CROSSES TO THE RENDERER ────────────────────────────────────────
