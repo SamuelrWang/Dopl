@@ -88,6 +88,14 @@ export { createTask, setTaskMode } from "./service-tasks";
 // and both are the kind of rule that gets "simplified" out of a create.
 export { createTaskFanOut } from "./service-tasks-fanout";
 
+// THREAD DELETION (Samuel, 2026-08-21) — HARD, cascading, creator-or-manager,
+// and NOT a finished state: a thread that exists is still live, this is how one
+// stops existing. Its own module because it is a five-table cascade with an
+// ordering argument, where `service-tasks.ts` is create + set-mode. ⚠ Reachable
+// ONLY from `DELETE /api/channels/[channelId]/tasks/[taskId]`, which is
+// `sessionOnly` — there is no MCP op and there must not be one.
+export { deleteTask } from "./service-tasks-delete";
+
 // THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). `service-tasks-
 // lifecycle.ts` (closeTask / reopenTask) and `service-tasks-propose.ts`
 // (proposeTaskClose) are DELETED, and with them the only writes that ever moved

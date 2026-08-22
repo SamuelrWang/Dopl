@@ -14,6 +14,8 @@ import OntologyDetailPage from "#/pages/ontology/detail";
 import SettingsPage from "#/pages/settings";
 import ChannelsPage from "#/pages/channels";
 import BootPage from "#/pages/boot";
+import HomePage from "#/pages/home";
+import { HOME_PATH } from "#/components/app-shell/account-rail";
 import OnboardingPage from "#/pages/onboarding";
 import ThreadWindowPage from "#/pages/thread-window";
 import AgentWindowPage from "#/pages/agent-window";
@@ -102,6 +104,16 @@ export const routes: RouteObject[] = [
     // /:workspaceSegment. Static segment outranks the param route.
     path: "/onboarding",
     element: <OnboardingPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    // The ACCOUNT surface (Samuel, 2026-08-21) — personal cross-org channels,
+    // reached from the account rail's pinned Home tile. Outside
+    // `/:workspaceSegment` like /onboarding: there is no workspace here, so it
+    // mounts its own frame (rail + surface) instead of `AppShellLayout`. Hand
+    // copy in `dopl-desktop-app/main/deep-link-target.js › ROOT_ROUTES`.
+    path: HOME_PATH,
+    element: <HomePage />,
     errorElement: <RouteErrorBoundary />,
   },
   {

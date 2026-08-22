@@ -119,14 +119,25 @@ test("the header the desktop writes is the header the server reads", () => {
 // ── withSessionStamp: what it does to the entry ────────────────────────────────
 
 test("the slot key rides the dopl entry beside the bearer, pin and runtime stamp", () => {
+  // ⚠ THE KEY GAINED AN AGENT SEGMENT ON 2026-08-21 and the stamp follows it, deliberately: the
+  // header names the REGISTRY SLOT this run occupies, and with several of the operator's agents
+  // on one thread the (channel, thread) pair no longer names one. The server's own
+  // `SESSION_ID_RE` (`^[A-Za-z0-9:._-]{1,128}$`, pinned identical above) already admits more
+  // than one colon and the agent charset, so no schema moved for this.
+  const AGENT = "a1b2c3d4";
   const servers = buildServers(null, "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee");
-  withSessionStamp(servers, slotKey({ channelId: CH, taskId: THREAD }));
+  withSessionStamp(servers, slotKey({ channelId: CH, taskId: THREAD, agentId: AGENT }));
   assert.deepEqual(servers.dopl.headers, {
     Authorization: "Bearer device-token",
     "X-Dopl-Runtime": "desktop-session",
     "X-Workspace-Id": "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee",
-    "X-Dopl-Session-Id": `${CH}:${THREAD}`,
+    "X-Dopl-Session-Id": `${CH}:${THREAD}:${AGENT}`,
   }, "every header the builder set survives, and the stamp joins them");
+  // TWO agents on ONE thread stamp two DIFFERENT values, which is the whole point of the
+  // widening: nothing on the wire could otherwise tell their calls apart.
+  const other = buildServers(null, "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee");
+  withSessionStamp(other, slotKey({ channelId: CH, taskId: THREAD, agentId: "z9y8x7w6" }));
+  assert.notEqual(other.dopl.headers["X-Dopl-Session-Id"], servers.dopl.headers["X-Dopl-Session-Id"]);
 });
 
 test("an entry that arrives WITHOUT a headers object gets one, and never throws", () => {

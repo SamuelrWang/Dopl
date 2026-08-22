@@ -22,24 +22,50 @@ export const SessionStateQuerySchema = z.object({
 export type SessionStateQuery = z.infer<typeof SessionStateQuerySchema>;
 
 /**
- * THE DESKTOP'S SESSION KEY — `<channelId>:<taskId>`, and `<channelId>:` for a
- * responder with no first-class thread (`main/session-store.js#sessionKey`).
+ * THE DESKTOP'S SESSION KEY — `<channelId>:<taskId>:<agentId>`, with an empty
+ * middle segment for a responder with no first-class thread
+ * (`main/session-store.js#sessionKey`).
+ *
+ * ⚠ THE THIRD SEGMENT JOINED ON 2026-08-21 (Samuel's multiplayer ruling) and it
+ * is the reason this regex changed at all. One operator may now run SEVERAL
+ * agents on one thread, so `<channel>:<thread>` stopped identifying a session
+ * and the desktop appended the AGENT INSTANCE id
+ * (`dopl-desktop-app/main/agent-id.js`, `^[a-z][a-z0-9]{7}$` — no colon, so the
+ * key stays unambiguous). Without this widening every push from a current
+ * desktop 400s on `Invalid session key`, `retryable(400)` is false, and
+ * `read_sessions` answers `[]` for that machine forever.
  *
  * ⚠ CARRIED, never re-derived: composing it from `channelId` + `threadId` here
  * is a SECOND derivation of a key format owned by another process in another
  * language. The desktop owns what a session key IS; this only bounds what it may
- * LOOK like.
+ * LOOK like — which is also why the third segment is `{0,64}` rather than an
+ * exact 8: bounding it tighter would make this file an authority on the id
+ * format, and it is not.
  *
  * ⚠ Charset deliberately tighter than "any text" — the reconcile DELETES BY KEY,
  * so a key carrying a quote or comma is a filter-injection question every time
- * someone touches the repository. Hex, dashes, one colon.
+ * someone touches the repository. Hex, dashes, two colons.
+ *
+ * ⚠ THE TWO-SEGMENT FORM IS STILL ACCEPTED, deliberately: an older desktop is a
+ * supported peer during a rollout (INVARIANTS §13), and refusing its keys would
+ * blank its whole workspace's session rows rather than degrade.
  */
-const SESSION_KEY_RE = /^[0-9a-fA-F-]{1,64}:[0-9a-fA-F-]{0,64}$/;
+// ⚠ ONE LINE, DELIBERATELY. `dopl-desktop-app/test/session-state-push.test.mjs` lifts this
+// literal out of this file by regex and drives the desktop's real keys through it, so the two
+// trees cannot drift about what a key may look like. A wrapped declaration is invisible to it,
+// and the case fails LOUDLY rather than silently passing — keep it on one line.
+const SESSION_KEY_RE = /^[0-9a-fA-F-]{1,64}:[0-9a-fA-F-]{0,64}(?::[0-9a-zA-Z-]{0,64})?$/;
 
 /**
  * Friendly handle. ⚠ Matches `channel_sessions.name`'s CHECK character for
  * character (`^[a-z][a-z0-9-]{1,30}$`) so a bad value is a 400 that NAMES the
  * field rather than a constraint violation surfacing as an opaque 500.
+ *
+ * ⚠ WHAT FILLS IT CHANGED ON 2026-08-21 AND THE BOUND DID NOT HAVE TO. It was a
+ * handle from a curated pool ("flint", "onyx"); it is now the agent instance id,
+ * whose charset (`^[a-z][a-z0-9]{7}$`) was chosen as a strict SUBSET of this one
+ * precisely so no migration and no schema change were needed to ship the
+ * multiplayer wave.
  */
 const SESSION_NAME_RE = /^[a-z][a-z0-9-]{1,30}$/;
 
@@ -73,16 +99,35 @@ const SessionStateEntrySchema = z.object({
 export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 
 /**
- * The desktop's own ceiling with room: a machine holds
- * `dopl-desktop-app/main/session-windowless.js › MAX_CONCURRENT_SESSIONS` (6)
- * live plus `main/session-summary.js › MAX_ENDED` (12) retained. ⚠ Low enough
+ * The desktop's own ceiling with a lot of room: **the wire set is LIVE ONLY**, so
+ * a machine can offer at most
+ * `dopl-desktop-app/main/session-windowless.js › MAX_CONCURRENT_SESSIONS` rows
+ * (6, measured 2026-08-22) and this bound is over five times that. ⚠ Low enough
  * that a caller cannot use this endpoint to write a table.
  *
- * ⚠ IT USED TO CITE `MAX_SESSION_WINDOWS`, WHICH IS DELETED. That was the WINDOW
- * budget, and the v1 session window is gone — the ceiling that survives counts
- * RUNNING sessions, not open windows. The NUMBER did not change on the move
- * (both 6), so this bound is unaffected; the reference had to, because a bound
- * justified against a constant nobody can find is a bound nobody can re-derive.
+ * ⚠ THE OLD DERIVATION ADDED A RETAINED-ENDED TERM, AND THAT TERM IS GONE
+ * (2026-08-22, F-255). It read "6 live plus `session-summary.js › MAX_ENDED`
+ * (12) retained", and `MAX_ENDED` is DELETED: ended-agent retention moved to a
+ * DURABLE seven-day history (`main/agent-history.js`), which no in-memory 12
+ * bounds. **The push does not send ended rows at all** —
+ * `main/session-state-push.js › liveForWire` drops them before
+ * `SessionStateReportSchema` ever sees them — and that filter exists to protect
+ * exactly THIS number: a machine holding hundreds of durable ended cards would
+ * overflow the array bound, and because zod validates the ARRAY, one oversized
+ * payload 400s the WHOLE push, `retryable(400)` is false, and every later push
+ * for that workspace fails identically — leaving `read_sessions` answering `[]`
+ * for LIVE sessions too, with stale rows never cleared.
+ *
+ * ⚠ SO THE HEADROOM IS NOT SLACK TO SPEND. Re-deriving this bound from "how many
+ * ended agents might a machine hold" is the mistake to refuse; the only term is
+ * the live cap, and the answer to a bigger set is to keep it off the wire.
+ *
+ * ⚠ IT USED TO CITE `MAX_SESSION_WINDOWS`, WHICH IS ALSO DELETED. That was the
+ * WINDOW budget, and the v1 session window is gone — the ceiling that survives
+ * counts RUNNING sessions, not open windows. The NUMBER did not change on that
+ * move (both 6), so this bound was unaffected; the reference had to, because a
+ * bound justified against a constant nobody can find is a bound nobody can
+ * re-derive.
  */
 const SESSION_REPORT_MAX = 32;
 

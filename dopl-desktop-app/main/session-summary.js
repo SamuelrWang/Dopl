@@ -14,37 +14,6 @@
 // dispatches into one comparison and fires only when the projection moved, so a server write
 // costs a state CHANGE and never a turn. No second timer, no heartbeat.
 //
-// ── THE STATE MAPPING ────────────────────────────────────────────────────────────────
-// Engine vocabulary is two fields (session-state.js / session-reducer.js): PHASE (launching /
-// running / awaiting_permission / awaiting_inbound / interrupted / parked / ended) and ACTIVITY
-// (working / idle / awaiting_peer / awaiting_permission / awaiting_inbound / parked). A pill
-// has THREE states:
-//
-//   ENGINE                                  PILL      WHY
-//   phase 'ended'                           ended     terminal; nothing wakes it
-//   parked === true (or phase 'parked')     idle      query torn down; resumable, not gone
-//   activity 'working'                      working   mid-turn, running tools
-//   activity 'awaiting_permission'          working   ALSO mid-turn — the SDK is blocked on a
-//                                                     canUseTool promise, one click from
-//                                                     continuing. "idle" would be a lie.
-//   activity 'idle'                         idle      between turns
-//   activity 'awaiting_peer'                idle      posted; the other machine has it
-//   activity 'awaiting_inbound'             idle      reply HELD for an Accept; running nothing
-//   activity 'parked'                       idle      (the parked branch above wins)
-//   anything else / absent                  idle      fallback
-//
-// ⚠ PRECEDENCE IS PHASE-FIRST for the two terminal-ish answers, ACTIVITY-SECOND for the rest:
-// `phase` and `activity` deliberately disagree in normal operation (a still-pending gate card
-// keeps its phase while activity moves; a park lands with phase 'awaiting_inbound' when a
-// message is held). Reading one field is how the predecessor got it wrong.
-// ⚠ FALLBACK IS 'idle' BY CHOICE. "working" over a dead session makes the operator wait with no
-// natural end and no feedback; "idle" over a working one only makes them re-ask.
-//
-// ⚠ STILL NO 'thinking' PILL, AND THE REASON MOVED (2026-08-20). The obstacle this header used
-// to name — that `pillState`'s input says nothing about what has been RENDERED this turn — is
-// SOLVED by session-detail.js. What keeps the PILL at three values is now a harder fact: `state`
-// is the SERVER's vocabulary, and one row carrying a fourth value 400s the whole push,
-// unretryably, forever. The finer signal rides BESIDE it as `detail` + `toolLabel`, local-only.
 //
 // ── ENDED SESSIONS: THE RETENTION RULE ───────────────────────────────────────────────
 // ⚠ THE RETENTION RULE, REWRITTEN 2026-08-20 (F-234, Samuel's ruling). It USED to read: a
@@ -58,56 +27,48 @@
 // written for exactly the case it had stopped covering — "an end nobody watched happen must
 // not make a run vanish".
 //
-// SO RETENTION IS UNCONDITIONAL NOW, on the caller's flag alone, BOUNDED BY MAX_ENDED. The
-// engine still asks only for the abandonment (`session-effects.js › endEffects`); what changed
-// is that the ask is honoured. A TIME bound was refused — the question the window check
-// answered ("did anything ever have this on screen") has no answer without a window, and a TTL
-// would have invented one.
+// SO RETENTION WAS MADE UNCONDITIONAL, on the caller's flag alone, BOUNDED BY `MAX_ENDED` (12).
+// A TIME bound was refused at the time — the question the window check answered ("did anything
+// ever have this on screen") has no answer without a window, and a TTL would have invented one.
 //
-// ⚠ A RETAINED PILL IS A TOMBSTONE, NOT A HANDLE, AND THAT IS THE ACCEPTED COST.
-// `session-reopen.js › reopenByTask` refuses a settled key, so clicking one opens nothing
-// rather than minting a fresh shell wearing a dead session's name. The channel transcript is
-// still the record. Rules and cases: `test/session-summary-retention.test.mjs`.
+// ⚠ AND ON 2026-08-22 SAMUEL RULED THE TIME BOUND IN, WHICH SUPERSEDES BOTH HALVES ABOVE.
+// EVERY end is retained (not only the abandonment), the record is DURABLE (`agent-history.js`
+// — it survives a restart, which the in-memory set never did), and the bound is SEVEN DAYS
+// from `endedAt` rather than a count of 12. The count bound was the honest answer while the
+// set lived in memory; once the history is on disk it can be swept on the clock, which is what
+// "the window stays viewable for a week" actually asks for. `MAX_ENDED` and `endedKept` are
+// DELETED — see `retainedEnded` below.
+//
+// ⚠ A RETAINED PILL IS A TOMBSTONE, NOT A HANDLE, AND THAT IS UNCHANGED AND NOW LOAD-BEARING.
+// An ended agent is gone from the engine's registry, so every wake path (`feedLiveSession`'s
+// fan-out, the @agent-id parse, `messageByTask`, `reopenByTask`, a spawn-idle wake) resolves
+// nothing and refuses. What the card opens is a READ-ONLY history, never a session. The channel
+// transcript is still the shared record, and nothing here ever touches it.
 
-// ⚠ The module's only four dependencies, all ABOVE the sentinel: everything from there to
+// ⚠ The module's only three dependencies, all ABOVE the sentinel: everything from there to
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
 // verbatim with these injected.
-const { pickAgentName } = require('./agent-names');
+// ⚠ `pickAgentName` LEFT THIS LIST ON 2026-08-21. The stone-name pool is deleted in both trees;
+// a pill's name is the session's own `agentId`, minted at spawn by `main/agent-id.js`, so there
+// is nothing left to pick and no ledger to pick it out of. See `nameOf` below.
 const { metricOrNull, metrics } = require('./session-metrics');
+// ⚠ THE STATE MAPPING MOVED OUT ON 2026-08-22 (`session-pill.js`) — one file, one reason to
+// change: that module answers "what WORD does a person see for this state", this one answers
+// "which sessions exist and what rides with each".
+// ⚠ THE COMPATIBILITY RE-EXPORT WENT WITH THE SECOND HALF OF THAT MOVE (2026-08-22). This file
+// re-exported `PILL_STATES`, `ACTIVITY_PILL`, `pillState`, `queryTornDown` and `listeningState`
+// "so every existing reader of `summary.pillState` is unchanged" — and there were NO production
+// readers of the re-export, in either tree: the only consumers outside this file were the test
+// harnesses, which already require `session-pill.js` themselves. A second import path for one
+// derivation is exactly the drift the split was made to prevent, so what this file takes is now
+// only what it CALLS. Read the mapping from `main/session-pill.js`.
+const { PILL_ENDED, pillState, listeningState } = require('./session-pill');
 const { noteEvent, detailFor } = require('./session-detail');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
-// The five names above are free vars from here down.
+// The names above are free vars from here down.
 
-const PILL_WORKING = 'working';
-const PILL_IDLE = 'idle';
-const PILL_ENDED = 'ended';
-const PILL_STATES = [PILL_WORKING, PILL_IDLE, PILL_ENDED];
-
-// Activity half of the table above, written out in full (including rows agreeing with the
-// fallback) so it reads as the engine's real activity list, not special cases over a default.
-const ACTIVITY_PILL = {
-  working: PILL_WORKING,
-  awaiting_permission: PILL_WORKING,
-  idle: PILL_IDLE,
-  awaiting_peer: PILL_IDLE,
-  awaiting_inbound: PILL_IDLE,
-  parked: PILL_IDLE,
-};
-
-/**
- * Engine state -> pill state. The whole mapping, and the only place it is made.
- * ⚠ OWN-PROPERTY check, never a bare index: a plain object literal answers a FUNCTION for
- * 'constructor' / 'toString', and a function is truthy, so both would pass as pill states.
- */
-function pillState(state) {
-  const st = state || {};
-  if (st.phase === 'ended') return PILL_ENDED;
-  if (st.parked === true || st.phase === 'parked') return PILL_IDLE;
-  const known = Object.prototype.hasOwnProperty.call(ACTIVITY_PILL, st.activity);
-  return known ? ACTIVITY_PILL[st.activity] : PILL_IDLE;
-}
 
 // Display string for the wire: one line, whitespace collapsed, bounded, or null. ⚠ Same
 // discipline as session-store's `durableName`: channel name and thread title are
@@ -119,27 +80,27 @@ function displayText(value) {
 }
 
 /**
- * THE NAME LEDGER. `sessionKey -> { channelId, name }`.
- * PER CHANNEL, not global: `taken` is the names held in THIS channel, so two channels may each
- * run a `flint`.
- * ⚠ KEYED BY SESSION KEY (channel, thread), never `sessionId` — a park+lazy resume, a recreate
- * from the durable record and a crash resume all mint a fresh sessionId while the operator's
- * mental model does not change. The key is what makes the name survive them.
+ * A SESSION'S NAME IS ITS AGENT ID — the whole derivation, since 2026-08-21.
+ *
+ * ⚠ THIS REPLACED A LEDGER, and the deletion is the point. `nameFor(ledger, key, channelId)`
+ * picked the first free handle from the stone-name pool and RELEASED it the moment its key left
+ * both the registry and the ended set. Under multiplayer that release is a correctness BUG:
+ * agents share a thread, end at different times, and a released handle was re-issued within one
+ * projection pass — so `@flint` in a transcript could name a different agent than the one it was
+ * typed at. A per-INSTANCE id is stable by construction: no ledger, no `taken` set, no sweep.
+ *
+ * ⚠ IT IS ALSO WHAT THE SERVER STORES (`channel_sessions.name`, CHECK `^[a-z][a-z0-9-]{1,30}$`
+ * — `agent-id.js`'s charset is a deliberate subset, so a real id can never be refused). '' is
+ * the honest answer for a session carrying no id; the push refuses it rather than this
+ * inventing a name.
  */
-function nameFor(ledger, key, channelId) {
-  const held = ledger.get(key);
-  if (held) return held.name;
-  const taken = new Set();
-  for (const entry of ledger.values()) {
-    if (entry.channelId === channelId) taken.add(entry.name);
-  }
-  const name = pickAgentName(taken);
-  ledger.set(key, { channelId: channelId, name: name });
-  return name;
+function nameOf(s) {
+  return String((s && s.agentId) || '');
 }
 
 
-/** One LIVE session object -> its summary. `name` is handed in (the ledger is the caller's). */
+/** One LIVE session object -> its summary. `name` is handed in (it is `nameOf(s)`; the argument
+ *  survives so the ENDED branch, whose session object is gone, can pass the frozen id). */
 function liveSummary(s, name) {
   const ctx = (s && s.context) || {};
   const pill = pillState(s && s.state);
@@ -149,8 +110,18 @@ function liveSummary(s, name) {
     // Wire name `task` == domain name `thread`. '' is a real value: a responder with no
     // first-class thread collapses it.
     taskId: String((s && s.taskId) || ''),
+    // ⚠ THE ADDRESS OF ONE AGENT AMONG SEVERAL (2026-08-21). `(channelId, taskId)` stopped
+    // identifying a session, so every op the Agents tab invokes — pause, end, setMode, message,
+    // narration, openAgentWindow — takes this as its third coordinate. It rides BESIDE `name`
+    // because `name` is the SERVER's column and this is the local address; they hold the same
+    // string today and a reader that needs to address something must not have to know that.
+    agentId: name,
     name: name,
     state: pill,
+    // ⚠ BESIDE THE PILL, NEVER INSTEAD OF IT (the rule `detail` follows): it refines `idle` into
+    // "Waiting" (feeds) vs "Idle" (relaunches), and adds nothing under `working` / `ended`.
+    listening: listeningState(s && s.state),
+    endedAt: null, // a LIVE session has not ended; the field is uniform so a reader never branches on absence
     // ⚠ BESIDE THE PILL, NEVER INSTEAD OF IT (header; session-detail.js). `detail` is null
     // over any pill but `working`; `toolLabel` means something only under `detail: 'tool'`.
     detail: detailFor(s && s.state, s && s.lastEventKind, pill),
@@ -178,8 +149,14 @@ function endedSummary(e, name) {
     sessionId: String((e && e.sessionId) || ''),
     channelId: String((e && e.channelId) || ''),
     taskId: String((e && e.taskId) || ''),
+    agentId: name, // frozen with the rest of the identity — see `noteEnded`
     name: name,
     state: PILL_ENDED,
+    listening: false, // terminal; stated rather than omitted so every row carries the field
+    // ⚠ WHEN IT ENDED, so the card can say so and the operator can tell a run that finished a
+    // minute ago from one about to age out of the 7-day window. It is the SWEEP'S CLOCK too
+    // (`agent-history.js › expired`), which is why it is frozen at settle rather than derived.
+    endedAt: metricOrNull(e && e.endedAt),
     // Nothing finer to say about a session that is doing nothing, and a retained detail
     // would outlive the run it described.
     detail: null,
@@ -237,14 +214,13 @@ const SESSIONS_EVENT = 'dopl:sessions';
 // state flip reads as laggy and above one turn's event storm. Mirrors ui-sync's COALESCE_MS.
 const PUSH_COALESCE_MS = 200;
 
-// ⚠ THE ONLY BOUND ON THE RETAINED SET SINCE 2026-08-20 (F-234). It was a BELT over a rule
-// that swept itself (an entry lived only while its window did); that rule is deleted, so this
-// is now the whole of it. Drops the OLDEST — least likely to still matter to the operator.
-const MAX_ENDED = 12;
-
-const ledger = new Map(); // sessionKey -> { channelId, name }
-let endedKept = []; // oldest first: { key, sessionId, channelId, taskId, channelName, threadTitle }
-let deps = { sessions: null };
+// ⚠ `MAX_ENDED` (12) AND `endedKept` STOOD HERE AND ARE DELETED (2026-08-22, Samuel's ruling).
+// They were an in-memory list bounded by COUNT and lost on quit. Ended cards are projected from
+// the DURABLE history now (`agent-history.js`, injected as `deps.endedRecords`), bounded by
+// SEVEN DAYS from `endedAt` and swept by `agent-retention.js`. A count bound in front of a
+// durable set would be a second, shorter retention rule nobody asked for.
+// ⚠ THE NAME LEDGER STOOD HERE TOO AND IS DELETED (2026-08-21) — see `nameOf`.
+let deps = { sessions: null, endedRecords: null };
 let getWindowsFn = null;
 let pushTimer = null;
 let lastDigest = null;
@@ -252,9 +228,19 @@ let lastDigest = null;
 const changeSubscribers = new Set();
 let lastChangeDigest = null;
 
-/** The engine binds its in-memory registry here at load. */
+/**
+ * The engine binds its in-memory registry here at load, plus the reader for retained ENDED
+ * records (`agent-history.js › listEnded`).
+ * ⚠ INJECTED, NOT REQUIRED: this module is import-free below the sentinel so its suites can
+ * evaluate it as source. An absent `endedRecords` degrades to "no ended cards" rather than
+ * throwing — the live half is what an operator is mid-way through, and it must not go dark
+ * because a history file could not be read.
+ */
 function bind(d) {
-  deps = { sessions: (d && d.sessions) || null };
+  deps = {
+    sessions: (d && d.sessions) || null,
+    endedRecords: (d && d.endedRecords) || null,
+  };
 }
 
 /** Arm the push. ⚠ `getWindows()` is called at SEND time, never captured — the window is
@@ -271,26 +257,35 @@ function windowAlive(win) {
 }
 
 /**
- * The retained ended entries, bounded by MAX_ENDED (oldest dropped first).
+ * The retained ENDED records — read from the durable history, never from a local list.
  *
- * ⚠ THIS USED TO SWEEP ON `windowAlive(e.win)`, AND THAT FILTER IS DELETED (2026-08-20, F-234).
- * Every session is WINDOWLESS, so `e.win` was null on every entry and the set could never hold
- * a row. `MAX_ENDED` is the only bound now, and it is a real one: the set is in-memory, bounded
- * by count, and does not outlive a restart. See the header for why not a TTL.
+ * ⚠ THIS IS WHY A RESTART KEEPS THE CARDS. The predecessor (`sweepEnded` over `endedKept`) was
+ * in-memory, so quitting the app erased every ended agent even though its work had happened;
+ * the durable file is read fresh on every projection instead. The BOUND is not here either —
+ * `agent-history.js` owns `RETENTION_MS` and `agent-retention.js` runs the sweep, so this reads
+ * whatever survives and applies no second rule of its own.
+ * ⚠ NEVER THROWS. A history file that cannot be read costs the ended cards, not the live ones.
  */
-function sweepEnded() {
-  if (endedKept.length > MAX_ENDED) endedKept = endedKept.slice(endedKept.length - MAX_ENDED);
-  return endedKept;
+function retainedEnded() {
+  if (typeof deps.endedRecords !== 'function') return [];
+  try {
+    const out = deps.endedRecords();
+    return Array.isArray(out) ? out : [];
+  } catch (err) {
+    diag('session-summary: ended history unreadable —', (err && err.message) || String(err));
+    return [];
+  }
 }
 
 /**
  * EVERY pill this machine can show, live first, then retained ended ones. Consumers filter by
- * channel themselves — the list is bounded by the window budget, so nothing to page.
- * Names are assigned HERE, lazily; a key that has left both the registry and the ended set is
- * released below and its handle returns to the pool.
+ * channel themselves — the list is bounded by MAX_CONCURRENT_SESSIONS live plus the retained
+ * ended set (`agent-history.js › MAX_HISTORY`), so nothing to page.
+ * ⚠ SEVERAL ROWS PER (channel, thread) IS NORMAL SINCE 2026-08-21: the registry is keyed by
+ * (channel, thread, AGENT). Nothing here de-duplicates on the pair, and nothing downstream may
+ * start to. Names are the sessions' own agent ids — no ledger, no assignment, no release.
  * ONE PASS BEHIND BOTH CONSUMERS: builds REPORT entries, `list()` narrows for the renderer, the
- * server writer takes them whole.
- */
+ * server writer takes them whole. */
 function reportList() {
   const out = [];
   const seen = new Set();
@@ -298,19 +293,16 @@ function reportList() {
     for (const s of deps.sessions.values()) {
       if (s.settled) continue;
       seen.add(s.key);
-      const name = nameFor(ledger, s.key, String(s.channelId || ''));
-      out.push(reportEntry(liveSummary(s, name), s.key, s.workspaceId));
+      out.push(reportEntry(liveSummary(s, nameOf(s)), s.key, s.workspaceId));
     }
   }
-  for (const e of sweepEnded()) {
-    // Both live and retained-ended => the thread was reopened after an abandonment. The live
-    // session wins; it is the one the pill should open.
+  for (const e of retainedEnded()) {
+    // Both live and retained-ended => the SAME agent instance was somehow re-registered after
+    // an abandonment. The live session wins; it is the one the pill should open. ⚠ A sibling
+    // agent on the same thread has a DIFFERENT key and is never suppressed by this.
     if (seen.has(e.key)) continue;
     seen.add(e.key);
-    out.push(reportEntry(endedSummary(e, nameFor(ledger, e.key, e.channelId)), e.key, e.workspaceId));
-  }
-  for (const key of [...ledger.keys()]) {
-    if (!seen.has(key)) ledger.delete(key);
+    out.push(reportEntry(endedSummary(e, String(e.agentId || '')), e.key, e.workspaceId));
   }
   return out;
 }
@@ -320,59 +312,40 @@ function list() {
   return reportList().map(wireSummary);
 }
 
-/**
- * The handle one session is wearing, for a caller holding the session. The session window's
- * composer ("Message <name>") must show the SAME name as the channel pane's pill, so the
- * window asks main and main answers out of the ledger `list()` already writes.
- * ⚠ ASSIGNS ON DEMAND — only safe for a LIVE session, whose key is in the registry and survives
- * the next `list()`. A key in neither the registry nor the ended set is released on the next
- * projection, so naming anything else mints a handle and loses it.
- */
+/** The handle one session is wearing, for a caller holding the session. ⚠ IT ASSIGNS NOTHING
+ *  NOW (2026-08-21): it reads the id the session was minted with, so it is safe for any session
+ *  object at any point in its life. The "assigns on demand" caveat went with the ledger. */
 function nameForSession(s) {
   if (!s || !s.key) return null;
-  return nameFor(ledger, s.key, String(s.channelId || ''));
+  return nameOf(s);
 }
 
 /**
- * A session ENDED. Retain when the caller asks to (`keepWindow`), bounded by MAX_ENDED.
- * Returns whether a pill was kept — worth asserting the engine's argument against.
+ * A session ENDED — the projection's half of it: mark the digest dirty so the card flips.
  *
- * ⚠ THE SECOND CONJUNCT IS GONE (2026-08-20, F-234, Samuel's ruling). This read
- * `keepWindow === true && windowAlive(s && s.win)`, and since every session went WINDOWLESS
- * `s.win` has been null on every one of them — so this returned false unconditionally and
- * `endedKept` never gained a row. The retention rule exists precisely for "an end nobody
- * watched happen must not make a run vanish", and it had stopped doing that.
- *
- * ⚠ THE ARGUMENT'S NAME IS NOW WRONG AND IS KEPT ANYWAY, deliberately: `keepWindow` is the
- * ENGINE'S word (`session-effects.js › endEffects` sets it for the abandonment case alone),
- * and renaming it here would leave the two sides of one flag spelled differently for a
- * cosmetic gain. What it means is "retain the pill", and it has meant that since the window
- * died. Rename it at the producer or not at all.
+ * ⚠ IT NO LONGER STORES ANYTHING, AND THE `keepWindow` ARGUMENT NO LONGER DECIDES ANYTHING
+ * (2026-08-22, Samuel's ruling). Retention used to be this function's job and was conditional
+ * on that flag, which the engine set for the ABANDONMENT alone. Now EVERY end is retained, for
+ * seven days, and the record is written where the data actually is: `session-engine.js › settle`
+ * calls `agent-history.record(...)` with the narration ring, which lives on the session object
+ * and is not visible from here.
+ * ⚠ THE ARGUMENT SURVIVES AND IS IGNORED, deliberately. `session-effects.js › endEffects` still
+ * sets it, `settle` still passes it, and deleting the parameter would be a change to the engine's
+ * effect vocabulary for a cosmetic gain. It returns whether a record is expected to exist, which
+ * is now simply "an end happened".
  */
-function noteEnded(s, keepWindow) {
-  const kept = keepWindow === true;
-  if (kept) {
-    const ctx = (s && s.context) || {};
-    endedKept.push({
-      key: s.key,
-      sessionId: s.sessionId,
-      channelId: String(s.channelId || ''),
-      // ⚠ Frozen with the rest of the identity: a retained ended entry has left the registry
-      // and there is nowhere else to read this from.
-      workspaceId: String(s.workspaceId || ''),
-      taskId: String(s.taskId || ''),
-      channelName: ctx.channelName || null,
-      threadTitle: ctx.taskTitle || null,
-      // The final measurement, frozen with the identity and for the same reason — see
-      // `endedSummary`. The session object is about to leave the registry.
-      ...metrics(s),
-      // ⚠ `win: s.win` STOOD HERE AND IS DELETED WITH THE SWEEP'S PREDICATE (2026-08-20,
-      // F-234). It was the retention's clock and it was always null; carrying a dead handle
-      // on a retained entry invites the next reader to reason from it.
-    });
-  }
+function noteEnded(s, _keepWindow) {
   touch();
-  return kept;
+  return true;
+}
+
+/**
+ * The 7-day sweep dropped these keys: forget any cached projection of them
+ * (`main/agent-retention.js`). The durable read is fresh every time, so this only has to make
+ * the next digest move — otherwise the card would linger until some unrelated state change.
+ */
+function releaseEnded(_keys) {
+  touch();
 }
 
 // ⚠ `keptWindow(channelId, taskId)` STOOD HERE AND IS DELETED (2026-08-20, F-228). It returned
@@ -380,7 +353,7 @@ function noteEnded(s, keepWindow) {
 // transcript an abandoned run left behind rather than build a fresh shell over it. No session
 // has a window, so nothing is retained and nothing can be revealed. The RETENTION ITSELF is
 // untouched — an ended agent still holds its PILL in the Agents tab, which is what `noteEnded`
-// and `sweepEnded` are for; only the window handle went.
+// and its retention are for; only the window handle went.
 
 // ⚠ The ONE place a summaries frame crosses into the renderer (modelled on ui-sync's
 // sendToWindows): windows resolved at send time, a dead one fails closed.
@@ -471,12 +444,13 @@ function touch() {
 
 module.exports = {
   // pure core (re-exported for the shell + the tests)
-  PILL_STATES,
-  ACTIVITY_PILL,
-  pillState,
+  // ⚠ FIVE `session-pill.js` NAMES STOOD AT THE TOP OF THIS LIST AND ARE DELETED (2026-08-22):
+  // `PILL_STATES`, `ACTIVITY_PILL`, `pillState`, `queryTornDown`, `listeningState`. They were a
+  // compatibility re-export with no production reader — one derivation behind two import paths,
+  // which is the drift the `session-pill.js` split exists to prevent. Require that module.
   liveSummary,
   endedSummary,
-  nameFor,
+  nameOf, // 2026-08-21: the whole naming derivation (the pool + its ledger are deleted)
   summariesDigest,
   // the live half
   SESSIONS_EVENT,
@@ -488,6 +462,7 @@ module.exports = {
   subscribe,
   nameForSession,
   noteEnded,
+  releaseEnded, // 2026-08-22: the 7-day sweep's cleaner for this projection
   noteActivity,
   touch,
 };

@@ -29,8 +29,7 @@
  * shell name or a truthy `window.dopl`.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getSpaBridge, type DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 
@@ -54,127 +53,63 @@ function isAgentActive(state: DesktopSessionSummary["state"]): boolean {
 }
 
 /**
+ * THE AGENT'S OWN ID — what every surface in this family SHOWS where a stone
+ * handle used to be (Samuel, 2026-08-21, multiplayer agents).
+ *
+ * ⚠ THE STONE-NAME POOL IS BEING DELETED, and the reason is not taste. `quartz`
+ * / `flint` / `onyx` named ONE agent per channel, which is a promise multiplayer
+ * cannot keep: every launch now mints a NEW instance and several of them sit on
+ * one thread at once. Main mints a random 8-char id per instance instead, and
+ * that id is the only thing an operator can say out loud to tell two of their
+ * own agents apart.
+ *
+ * ⚠ READ OPTIONALLY, AND IT FALLS BACK TO `name`. A main older than the id emits
+ * a handle and nothing else, and the card must then read exactly as it did
+ * before this existed — a blank header is strictly worse than a legacy name
+ * (INVARIANTS §11: render what IS known, never a blank standing in for it).
+ * The field is read off the summary rather than declared on
+ * `spa-bridge.ts › DesktopSessionSummary` because the bridge type is the
+ * DESKTOP's to widen; this side must survive either shape.
+ */
+export function agentDisplayId(session: {
+  agentId?: string | null;
+  name?: string | null;
+}): string {
+  const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
+  return id || session.name || "Agent";
+}
+
+/**
  * THE STABLE IDENTITY OF ONE AGENT, and the id the open-agent state holds.
  *
  * ⚠ NOT `sessionId`. That id is a React key and is re-minted by a park+resume or
  * a recreate, so keying the open panel on it would close the view under the
- * operator the moment their agent parked. `(channel, thread)` is the pair main
- * itself resolves on (`store.sessionKey`), which is exactly why the pause / end
- * ops take it too.
+ * operator the moment their agent parked.
+ *
+ * ⚠ `(channel, thread)` STOPPED BEING UNIQUE ON 2026-08-21 (multiplayer agents).
+ * Main used to keep one session per pair, so the pair WAS the agent; a launch
+ * now spawns a new instance every click and N of them share a thread. The pair
+ * therefore keys a THREAD, not an agent — leaving it here made every card on a
+ * shared thread render under one React key, marked every one of them "Viewing"
+ * at once, and pointed the agent view at whichever happened to be first.
+ *
+ * ⚠ THE PAIR IS STILL THE ADDRESS THE BRIDGE OPS TAKE, and that is deliberate:
+ * `pause` / `end` / `openAgentWindow` resolve `(channelId, taskId)` against
+ * main's own registry (`agents-controls.ts`), and they read it off the SESSION
+ * OBJECT, never by parsing this string. Nothing anywhere splits this value —
+ * it is compared and used as a React key and nothing else — which is what makes
+ * changing its shape safe.
+ *
+ * ⚠ FALLS BACK TO THE OLD PAIR when the summary carries no id, so a main that
+ * predates the id keys exactly as it always did.
  */
 export function agentKey(session: {
   channelId: string;
   taskId: string;
+  agentId?: string | null;
 }): string {
-  return `${session.channelId}:${session.taskId}`;
-}
-
-/**
- * The desktop's session feed, plus the one imperative way to re-read it.
- *
- * ⚠ `refresh` EXISTS FOR THE REFUSAL PATH AND NOTHING ELSE. The feed is a PUSH
- * and stays one: main dispatches, the projection moves, the push re-renders.
- * The single case a push cannot cover is a control main REFUSED — the operator
- * pressed Pause on an agent whose registry entry was already gone, so nothing
- * changed on that side and nothing will be pushed. Re-reading is how the panel
- * stops showing a live-looking agent that is not there. It is NOT a poll and
- * must not become one.
- */
-export interface DesktopSessionsFeed {
-  /** `null` = could not ask; `[]` = asked, nothing is running. Never collapse
-   *  one into the other (INVARIANTS §11 — UNKNOWN is not EMPTY). */
-  sessions: DesktopSessionSummary[] | null;
-  refresh: () => void;
-}
-
-/**
- * Subscribe to the desktop's own session feed.
- *
- * `null` = no bridge, or a main without the feed. `[]` = a bridge with nothing
- * running. AFTER MOUNT, NEVER DURING RENDER: the bridge is a window global, so
- * reading it while rendering makes the server and the first client render
- * disagree — the subscription effect is the only place it is read.
- */
-/** Re-probes for the preload global before settling on "could not ask". Five
- *  tries at 200ms is one second — long enough for a slow first paint, short
- *  enough that a plain browser reaches its honest `null` inside a blink. */
-const BRIDGE_PROBE_LIMIT = 5;
-const BRIDGE_PROBE_MS = 200;
-
-export function useDesktopSessions(): DesktopSessionsFeed {
-  const [summaries, setSummaries] = useState<DesktopSessionSummary[] | null>(null);
-  const [probe, setProbe] = useState(0);
-  // ONE mounted flag for the imperative re-read. The subscription below keeps
-  // its own `live` local because it is scoped to a single effect run; a
-  // refresh fired from a click has no effect to be scoped to, and an answer
-  // that lands after unmount must not set state.
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  const refresh = useCallback(() => {
-    const sessions = getSpaBridge()?.sessions;
-    if (typeof sessions?.summaries !== "function") return;
-    void sessions
-      .summaries()
-      .then((r) => {
-        if (mounted.current) setSummaries(r.sessions);
-      })
-      // A failed re-read leaves the last pushed frame standing. It is strictly
-      // less wrong than replacing a real feed with "could not ask".
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const sessions = getSpaBridge()?.sessions;
-    // Both members are optional on the interface: an older main has `reopen` and
-    // neither of these, and must degrade to "could not ask" rather than to a
-    // broken call.
-    const canRead = typeof sessions?.summaries === "function";
-    const canListen = typeof sessions?.onSummaries === "function";
-    // ⚠ A BOUNDED RE-PROBE, ADDED 2026-08-20 — the effect used to run ONCE on
-    // `[]` deps, so a first mount that raced the preload's global left the feed
-    // permanently `null` and the Agents tab permanently said "could not ask".
-    // BOUNDED on purpose: `null` is the CORRECT terminal answer for a plain
-    // browser and for a main without the feed (INVARIANTS §11 — UNKNOWN is not
-    // EMPTY), so this must converge on it rather than poll for a bridge that is
-    // never coming. It is not a data poll — it re-probes a window global and
-    // stops.
-    if (!canRead || !canListen) {
-      if (probe >= BRIDGE_PROBE_LIMIT) return;
-      const timer = setTimeout(() => setProbe((n) => n + 1), BRIDGE_PROBE_MS);
-      return () => clearTimeout(timer);
-    }
-
-    let live = true;
-    // READ ONCE, THEN LISTEN. The feed is a push, and a push-only surface leaves
-    // a freshly opened channel blank until the next state change — which on a
-    // quiet machine never comes.
-    void sessions
-      .summaries?.()
-      .then((r) => {
-        // The subscription below may already have delivered a NEWER frame while
-        // this read was in flight; it must not be overwritten by the older one.
-        if (live) setSummaries((prev) => prev ?? r.sessions);
-      })
-      .catch(() => {
-        if (live) setSummaries((prev) => prev ?? []);
-      });
-
-    const off = sessions?.onSummaries?.((e) => {
-      if (live) setSummaries(e.sessions);
-    });
-    return () => {
-      live = false;
-      off?.();
-    };
-  }, [probe]);
-
-  return { sessions: summaries, refresh };
+  const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
+  return id || `${session.channelId}:${session.taskId}`;
 }
 
 /**
@@ -346,6 +281,94 @@ export function agentDetailLabel(session: {
     default:
       return null;
   }
+}
+
+/**
+ * WHEN THIS AGENT ENDED, or `null`.
+ *
+ * ⚠ ADDITIVE AND OPTIONAL, read off a widened local type rather than declared on
+ * `spa-bridge.ts › DesktopSessionSummary` — the same rule {@link agentDisplayId}
+ * follows, and for the same reason: the bridge type is the DESKTOP's to widen and
+ * this side must survive either version of it.
+ *
+ * ⚠ ABSENT IS "CANNOT SAY", NOT "STILL RUNNING". An older main omits it, and so
+ * does any agent that ended before the field shipped. The thing that states an
+ * agent is over is `state === "ended"`, never this — a surface that gated the
+ * Ended marker on a timestamp would show every legacy ended agent as live.
+ */
+export function agentEndedAt(
+  session: DesktopSessionSummary & { endedAt?: number | null }
+): number | null {
+  return metric(session.endedAt);
+}
+
+export type AgentLivenessTone = "working" | "waiting" | "idle" | "ended";
+
+export interface AgentLivenessState {
+  tone: AgentLivenessTone;
+  label: string;
+}
+
+/**
+ * WHAT AN AGENT IS DOING, AS THE ONE WORD EVERY SURFACE SHOWS — the liveness
+ * mapping (Samuel, 2026-08-22).
+ *
+ * ⚠ THIS BLOCK SAT ABOVE `agentEndedAt` UNTIL 2026-08-22 (F-256), stranded there
+ * by a concurrent edit and describing a function two declarations away, while the
+ * function it belongs to had no doc at all. Pure relocation — not one word of it
+ * changed.
+ *
+ * ⚠ FOUR STATES, AND THE SPLIT THAT MATTERS IS INSIDE `idle`. The wire has three
+ * values (`working` / `idle` / `ended`), which lumped two very different
+ * situations under one word: an agent that is ALIVE between turns and will answer
+ * the moment something arrives, and one that is parked and has to be woken. Both
+ * read "Idle", so an operator watching a live agent wait for a counterparty saw
+ * the same label as one that was not running at all. The desktop now reports
+ * which (`listening`), and this is where that becomes copy.
+ *
+ * | state     | listening    | label               | tone    |
+ * |-----------|--------------|---------------------|---------|
+ * | `working` | —            | `detail` ?? Running | working |
+ * | `idle`    | `true`       | Waiting             | waiting |
+ * | `idle`    | false/absent | Idle                | idle    |
+ * | `ended`   | —            | Ended               | ended   |
+ *
+ * ⚠ `listening` IS READ OPTIONALLY AND ITS ABSENCE CHANGES NOTHING. An older main
+ * omits it, and every one of its idle agents then reads "Idle" — exactly the
+ * labels that build already produced. Absent is NOT "not listening" as a claim;
+ * it is "this machine cannot say", and the quieter of the two words is the honest
+ * rendering of that (INVARIANTS §11). It is read off a widened local type rather
+ * than declared on `spa-bridge.ts › DesktopSessionSummary`, which is the DESKTOP's
+ * to widen — the same rule `agentDisplayId` follows.
+ *
+ * ⚠ `working` KEEPS THE WORD "Running" rather than becoming "Working". The pill's
+ * vocabulary is what the operator has been reading since this surface shipped, the
+ * state's MEANING did not change, and `detail` refines it in most live cases
+ * anyway. Renaming it would be churn bought with nothing.
+ *
+ * ⚠ THE DETAIL ONLY EVER REFINES `working`, enforced here rather than trusted from
+ * a caller: a card reading "Idle" and "Thinking…" at once is the
+ * two-readers-one-fact defect in miniature.
+ *
+ * ⚠ IT IS THE ONE MAPPING. Every surface that shows liveness runs this — the
+ * Agents tab's cards, the panel and window headers, the thread Info tab's rows —
+ * so a fifth state or a re-word lands everywhere at once instead of in four files
+ * that drift.
+ */
+export function agentLiveness(session: {
+  state: "working" | "idle" | "ended";
+  /** ⚠ ADDITIVE AND OPTIONAL — an older main omits it. */
+  listening?: boolean | null;
+  detail?: DesktopSessionSummary["detail"];
+  toolLabel?: string | null;
+}): AgentLivenessState {
+  if (session.state === "ended") return { tone: "ended", label: "Ended" };
+  if (session.state === "working") {
+    return { tone: "working", label: agentDetailLabel(session) ?? "Running" };
+  }
+  return session.listening === true
+    ? { tone: "waiting", label: "Waiting" }
+    : { tone: "idle", label: "Idle" };
 }
 
 /** `84_000` → `"84k"`. Tokens are only ever glanced at here; the exact integer is

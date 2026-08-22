@@ -231,6 +231,8 @@ function bootIpc() {
     // directly, and `isAppWindowSender` is the binding this harness supplies a window for —
     // faking either would make this section green over a surface that admits anybody.
     if (id === "./ipc-guards") return guards;
+    // The REAL charset predicate for the third coordinate (2026-08-21) — `ipc-guards`' terms.
+    if (id === "./agent-id") return { isAgentId: (v) => typeof v === "string" && /^[a-z][a-z0-9]{7}$/.test(v) };
     // ⚠ THE SPLIT HALF (2026-08-20, F-226). `channel-dir-ipc.js` registers it, so it must
     // resolve; this section drives none of its ops, and it is built with the SAME stub so a
     // typo in one of its registration paths still surfaces here.

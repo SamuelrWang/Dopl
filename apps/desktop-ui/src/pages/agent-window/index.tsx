@@ -36,6 +36,12 @@ export default function AgentWindowPage() {
   const { channelId } = useParams<{ channelId: string }>();
   const [search] = useSearchParams();
   const taskId = search.get("thread");
+  // ⚠ WHICH INSTANCE (2026-08-22). `(channel, thread)` names a GROUP of this
+  // operator's agents since multiplayer, so the pair alone lands on whichever the
+  // feed lists first. Read here NOW, ahead of main emitting it, so the window
+  // becomes exact with no second change on this side; absent, it degrades to the
+  // pair exactly as it did before.
+  const agentId = search.get("agent");
 
   if (isUnauthorized(error)) return <Frame><SignedOutScreen /></Frame>;
   if (error) {
@@ -59,6 +65,7 @@ export default function AgentWindowPage() {
         workspaceId={access.workspaceId}
         channelId={channelId}
         taskId={taskId ?? ""}
+        agentId={agentId}
         currentUserId={access.currentUserId}
       />
     </Frame>

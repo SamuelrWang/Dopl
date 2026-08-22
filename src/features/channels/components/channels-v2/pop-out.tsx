@@ -13,7 +13,7 @@
  *
  * ⚠ THE READ IS `useSyncExternalStore`, NOT A RENDER-TIME READ AND NOT AN EFFECT. The bridge
  * is a WINDOW GLOBAL: reading it while rendering makes the server and the first client
- * render disagree (the standing rule `agents-model.ts › useDesktopSessions` states), and
+ * render disagree (the standing rule `use-desktop-sessions.ts › useDesktopSessions` states), and
  * setting state synchronously inside an effect is a `react-hooks/set-state-in-effect` ERROR
  * in this tree, not a preference. `useSyncExternalStore` is the shape React provides for
  * exactly this: a server snapshot of `false` (no bridge exists there), a client snapshot

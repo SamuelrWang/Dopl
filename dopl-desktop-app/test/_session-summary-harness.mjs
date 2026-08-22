@@ -7,13 +7,15 @@
 // `_classify-harness.mjs` / `_reducer-block.mjs`: the extraction machinery is shared, the
 // cases are split by what they are about.
 //
-// THE IDIOM. `main/session-summary.js`'s three requires (`./agent-names`, `./session-model`,
-// `./diag`) sit ABOVE its BEGIN sentinel, so everything from there to `module.exports` is
-// import-free and can be evaluated verbatim with fakes — no window layer, no file log, no
-// Electron of any kind (the session-reopen idiom). The REAL `pickAgentName` and the REAL
-// `contextWindowFor` are injected from their REAL modules: the naming cases are about this
-// module's ledger and the context cases about ITS projection, not about re-testing the pool or
-// re-testing the frozen model/window table.
+// THE IDIOM. `main/session-summary.js`'s requires sit ABOVE its BEGIN sentinel, so everything
+// from there to `module.exports` is import-free and can be evaluated verbatim with fakes — no
+// window layer, no file log, no Electron of any kind (the session-reopen idiom). Every
+// dependency is injected REAL from its REAL module: these cases are about THIS module's
+// projection, not about re-testing the tables it reads.
+//
+// ⚠ `pickAgentName` LEFT THIS HARNESS ON 2026-08-21. The stone-name pool and its ledger are
+// DELETED (Samuel's multiplayer ruling): a pill's name is the session object's own `agentId`,
+// minted per instance at spawn, so there is nothing to inject and nothing to pick.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,7 +27,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const MAIN = join(HERE, "..", "main");
 export const SRC = readFileSync(join(MAIN, "session-summary.js"), "utf8");
 const req = createRequire(import.meta.url);
-const { pickAgentName } = req(join(MAIN, "agent-names.js"));
 // ⚠ THE METRICS MOVED OUT ON 2026-08-20 (session-metrics.js) — one file, one reason to
 // change: this projection answers "what STATE is this session in", the metrics answer "what
 // has it COST". Injected REAL, like every other dependency here, so these cases still drive
@@ -36,6 +37,13 @@ const { metricOrNull, metrics } = req(join(MAIN, "session-metrics.js"));
 // projection carrying the detail, not about re-testing the table that derives it —
 // `session-detail.test.mjs` owns that. Injecting a stub here would let the two drift.
 const { noteEvent, detailFor } = req(join(MAIN, "session-detail.js"));
+// ⚠ THE STATE MAPPING MOVED OUT ON 2026-08-22 (`main/session-pill.js`) — see that file's header
+// for the seam. Injected REAL, like every dependency here: these cases are about the PROJECTION
+// carrying the pill, not about re-testing the table that derives one. The names are MERGED into
+// the returned api below, so `m.pillState` / `m.PILL_STATES` / `m.listeningState` still resolve
+// exactly as they did when the mapping lived in the sliced block.
+const pill = req(join(MAIN, "session-pill.js"));
+const { PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState } = pill;
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
 const from = SRC.indexOf(BEGIN);
@@ -57,9 +65,16 @@ for (const banned of ["require(", "electron", "child_process", "@anthropic", "fe
 // exactly what happened. ⚠ Anything added here must be a real declaration inside the block;
 // there is no such thing as a "mostly right" entry.
 const EXPORTED = [
-  "PILL_STATES", "ACTIVITY_PILL", "pillState", "displayText", "liveSummary", "endedSummary",
-  "nameFor", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS", "MAX_ENDED",
-  "bind", "start", "list", "nameForSession", "noteEnded", "noteActivity", "touch", "sweepEnded",
+  "displayText", "liveSummary", "endedSummary",
+  "nameOf", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS",
+  // ⚠ `MAX_ENDED` and `sweepEnded` LEFT THIS LIST ON 2026-08-22 (Samuel's ended-agent ruling):
+  // retained ended cards are read from the DURABLE history (`agent-history.js`), bounded by
+  // SEVEN DAYS from `endedAt` rather than by a count of 12, and they survive a restart — which
+  // the in-memory set never did. `retainedEnded` is the reader; `releaseEnded` is the sweep's
+  // cleaner. ⚠ This is a NAME LIST for a `new Function` return, so a name the block no longer
+  // declares is a ReferenceError at LOAD — every case in all four suites, not one.
+  "retainedEnded", "releaseEnded",
+  "bind", "start", "list", "nameForSession", "noteEnded", "noteActivity", "touch",
   // F-147: the report view and the change subscription the server writer rides.
   "reportEntry", "wireSummary", "reportList", "subscribe",
 ];
@@ -70,15 +85,22 @@ export function load() {
   const sent = [];
   const logged = [];
   const api = new Function(
-    "pickAgentName",
     "metricOrNull",
     "metrics",
     "noteEvent",
     "detailFor",
+    "PILL_STATES",
+    "ACTIVITY_PILL",
+    "PILL_ENDED",
+    "pillState",
+    "queryTornDown",
+    "listeningState",
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-  )(pickAgentName, metricOrNull, metrics, noteEvent, detailFor, (...parts) =>
-    logged.push(parts.join(" "))
+  )(
+    metricOrNull, metrics, noteEvent, detailFor,
+    PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
+    (...parts) => logged.push(parts.join(" "))
   );
   const spaWindow = {
     destroyed: false,
@@ -89,7 +111,9 @@ export function load() {
       send(channel, payload) { sent.push({ channel, payload }); },
     },
   };
-  return { ...api, sent, logged, spaWindow };
+  // ⚠ The mapping's names are merged in, not re-declared: `m.pillState` and friends resolve to
+  // the REAL `session-pill.js`, which is what keeps the split invisible to every case here.
+  return { ...pill, ...api, sent, logged, spaWindow };
 }
 
 /**
@@ -116,11 +140,48 @@ export function fakeWindow() {
 }
 
 /** A live session object shaped like the engine's registry entries. */
+/**
+ * ONE RETAINED ENDED RECORD, as `agent-history.js › listEnded` hands them over (2026-08-22).
+ * ⚠ It is a RECORD, not a session: it carries no state, no query and nothing resumable, which
+ * is the point — an ended agent is dead and only its history survives.
+ */
+export function endedRecord(over = {}) {
+  const channelId = over.channelId || "chan-1";
+  const taskId = over.taskId === undefined ? "task-1" : over.taskId;
+  const agentId = over.agentId === undefined ? "a1b2c3d4" : over.agentId;
+  return {
+    key: `${channelId}:${taskId}:${agentId}`,
+    agentId,
+    sessionId: "sess-1",
+    channelId,
+    taskId,
+    workspaceId: "ws-1",
+    channelName: "General",
+    threadTitle: "Ship the thing",
+    startedAt: 1700000000000,
+    lastActivityAt: 1700000600000,
+    endedAt: 1700000600000,
+    // Frozen at settle — the session object is gone, so a live read would blank the numbers at
+    // exactly the moment the operator wants to read what the run cost.
+    contextUsed: 84000,
+    contextWindow: 200000,
+    tokensSpent: 1200000,
+    entries: [],
+    ...over,
+  };
+}
+
 export function session(over = {}) {
   const channelId = over.channelId || "chan-1";
   const taskId = over.taskId === undefined ? "task-1" : over.taskId;
+  // ⚠ THE AGENT ID IS PART OF THE KEY SINCE 2026-08-21 (`main/session-store.js#sessionKey`),
+  // and it is also the NAME the pill wears — the stone-name pool that used to supply one is
+  // deleted. A default keeps every existing case working; a case about several agents on one
+  // thread overrides it, and the key follows automatically.
+  const agentId = over.agentId === undefined ? "a1b2c3d4" : over.agentId;
   return {
-    key: `${channelId}:${taskId}`,
+    key: `${channelId}:${taskId}:${agentId}`,
+    agentId,
     sessionId: over.sessionId || "sess-1",
     channelId,
     taskId,

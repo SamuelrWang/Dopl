@@ -90,15 +90,18 @@ const BODY = "one more thing — can you also check the staging config?";
 function harness(over = {}) {
   const cfg = { live: false, counterparty: PEER, ...over };
   const calls = { feed: [], trigger: [], fyi: [], taskNotify: [], diag: [] };
+  // ⚠ THE FEED IS A FAN-OUT SINCE 2026-08-21 (Samuel's multiplayer ruling): the route asks the
+  // engine for EVERY live agent on the thread and feeds each of them, rather than resolving one
+  // session and checking its counterparty. `cfg.live` now means "is one of my agents on this
+  // thread"; `counterpartyFor` is not consulted by this route at all any more.
   const sessionEngine = {
-    hasLiveSession: () => cfg.live,
-    counterpartyFor: () => cfg.counterparty,
+    liveOnThread: () => (cfg.live ? [{ agentId: "a1b2c3d4", ownPostIds: new Set() }] : []),
     feedInbound: (a) => { calls.feed.push(a); return true; },
   };
   const routes = new Function(
-    "targeting", "sessionEngine", "io",
+    "targeting", "sessionEngine", "io", "diag",
     `${DISPATCH_BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` });
+  )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` }, () => {});
 
   const api = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
@@ -132,25 +135,32 @@ const followUp = (tag, over = {}) => {
 
 // ── 1. THE RESPONDER-SIDE PREDICATE, ON THE READERS THAT SURVIVE ─────────────────
 
-test("PREDICATE: my OWN message never takes this path, whatever it carries", async () => {
-  // ⚠ REPOINTED (2026-08-20). It read `maybeReopenAddressedThread(dm(), mine, ME) === false`,
-  // and asserted that authorship was checked BEFORE any durable-record lookup — the route's
-  // first conjunct, `m.authorUserId === myUserId`. The route is deleted; the proposition is
-  // stated identically by both surviving readers, so it is asked of both.
+test("PREDICATE: my OWN message TRIGGERS nothing, but it does reach my own agents", async () => {
+  // ⚠ REPOINTED TWICE. It first read `maybeReopenAddressedThread(...) === false` (route 5,
+  // deleted 2026-08-20). It then asserted that route (1) refused my own message too — and THAT
+  // half is reversed by Samuel's fan-out ruling (2026-08-21): the operator posting into their
+  // own thread is how they steer their agents in the open, so the words are fed.
+  //
+  // ⚠ THE PROPOSITION THIS FILE IS ABOUT SURVIVES INTACT, and it is the one that matters: my own
+  // message never has a claim made ON MY BEHALF. It raises no consent, starts no session and
+  // notifies nobody, because `classify` still answers 'ignore' for it. FEEDING a session that
+  // already exists is not a claim — nothing is brought into being — which is the same
+  // distinction route (1) has always rested on.
   const mine = followUp(LEGACY, { authorUserId: ME, authorKind: "user" });
 
-  // Route (1): my own message never feeds a live session, even one bound to me.
   const h = harness({ live: true, counterparty: ME });
-  assert.equal(h.routes.feedLiveSession(dm(), mine, ME), false);
-  assert.equal(h.calls.feed.length, 0, "authorship is checked before the registry is consulted");
+  assert.equal(h.routes.feedLiveSession(dm(), mine, ME), true, "my agents hear me");
+  assert.equal(h.calls.feed.length, 1);
 
   // classify: my own message is 'ignore', full stop — the fail-closed rule at the top of the
   // table. My messages OPEN threads; they never answer them.
   assert.equal(targeting.classify(mine, dm(), ME), "ignore");
 
-  // …and end to end, nothing at all happens to it.
-  await h.dispatch(dm(), mine);
-  assert.deepEqual([h.calls.feed, h.calls.trigger, h.calls.fyi, h.calls.taskNotify], [[], [], [], []]);
+  // …and end to end, the ONLY thing that happens is the feed: no trigger, no banner, no notice.
+  const fresh = harness({ live: true, counterparty: ME });
+  await fresh.dispatch(dm(), mine);
+  assert.equal(fresh.calls.feed.length, 1);
+  assert.deepEqual([fresh.calls.trigger, fresh.calls.fyi, fresh.calls.taskNotify], [[], [], []]);
 });
 
 test("PREDICATE: a message addressed to somebody ELSE never takes this path", async () => {

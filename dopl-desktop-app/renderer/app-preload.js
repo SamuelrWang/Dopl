@@ -214,15 +214,24 @@ contextBridge.exposeInMainWorld('dopl', {
   // registry, which contains nothing but this operator's sessions on this machine.
   // ⚠ NEVER keyed on `sessionId` — that id is ephemeral across a park+recreate.
   sessions: {
+    // ⚠ EVERY OP BELOW GAINED A TRAILING OPTIONAL `agentId` ON 2026-08-21 (Samuel's
+    // multiplayer ruling). `(channelId, taskId)` stopped identifying a session when an operator
+    // could put several agents on one thread; the id is which of them this call is for. It is
+    // TRAILING and OPTIONAL so every existing call site keeps compiling and keeps its old
+    // behaviour — main resolves an omitted id to the oldest live agent on the thread, which is
+    // exactly what a thread that could hold only one always gave back. `asId` is the same
+    // character clamp every other id on this surface gets; agent ids are `[a-z][a-z0-9]{7}`, a
+    // strict subset of it, and main re-checks the real charset.
     // ⚠ `segment` is OPTIONAL and joined 2026-08-20: a live WINDOWLESS session reopens as
     // the AGENT WINDOW, whose landing is a router path, and main holds the workspace UUID
     // while a route needs the slug. Main re-checks it through `isSafeSegment` and degrades
     // to the other reopen branches when it is absent or unusable.
-    reopen: (channelId, taskId, segment) =>
+    reopen: (channelId, taskId, segment, agentId) =>
       ipcRenderer.invoke('sessions:reopen', {
         channelId: asId(channelId),
         taskId: asId(taskId),
         segment: asId(segment),
+        agentId: asId(agentId),
       }),
     summaries: () => ipcRenderer.invoke('sessions:summaries'),
     onSummaries: (callback) => {
@@ -237,15 +246,27 @@ contextBridge.exposeInMainWorld('dopl', {
     // LAUNCH (2026-08-20): attach MY OWN agent to a thread, windowless. The
     // payload is display strings + ids; main validates and owns the posture.
     launch: (payload) => ipcRenderer.invoke('sessions:launch', payload || {}),
-    pause: (channelId, taskId) =>
-      ipcRenderer.invoke('sessions:pause', {
+
+    // ⚠ CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot see the server's
+    // cascade, so without it an ended agent's frozen history outlives its thread by up to
+    // seven days and renders a card with a stale title. It deletes LOCAL history only —
+    // `channel_messages` are the server's and are never touched.
+    forgetThread: (channelId, taskId) =>
+      ipcRenderer.invoke('agents:forgetThread', {
         channelId: asId(channelId),
         taskId: asId(taskId),
       }),
-    end: (channelId, taskId) =>
+    pause: (channelId, taskId, agentId) =>
+      ipcRenderer.invoke('sessions:pause', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+        agentId: asId(agentId),
+      }),
+    end: (channelId, taskId, agentId) =>
       ipcRenderer.invoke('sessions:end', {
         channelId: asId(channelId),
         taskId: asId(taskId),
+        agentId: asId(agentId),
       }),
 
     // ── THE AGENT WINDOW (2026-08-20, F-212's closure) ─────────────────────────────
@@ -254,11 +275,12 @@ contextBridge.exposeInMainWorld('dopl', {
     // creates the window and main registers it in `main/app-windows.js`; the answer is
     // `{ ok }`. That is the whole reason the widened sender binding is safe: a renderer
     // cannot enlarge the set of bound senders, only ask main to.
-    openAgentWindow: (segment, channelId, taskId) =>
+    openAgentWindow: (segment, channelId, taskId, agentId) =>
       ipcRenderer.invoke('sessions:openAgentWindow', {
         segment: asId(segment),
         channelId: asId(channelId),
         taskId: asId(taskId),
+        agentId: asId(agentId),
       }),
 
     // THE LIVE PERMISSION POSTURE (2026-08-20) — both axes, on a session already running,
@@ -269,12 +291,13 @@ contextBridge.exposeInMainWorld('dopl', {
     // ASKED, the profile decides what is reachable at all and is checked first. Main
     // re-validates both strings against the frozen enums, and the reducer coerces again
     // fail-closed, so an unknown value lands on the most restrictive member of its axis.
-    setMode: (channelId, taskId, axis, mode) =>
+    setMode: (channelId, taskId, axis, mode, agentId) =>
       ipcRenderer.invoke('sessions:setMode', {
         channelId: asId(channelId),
         taskId: asId(taskId),
         axis: asMode(axis),
         mode: asMode(mode),
+        agentId: asId(agentId),
       }),
 
     // ⚠ `message` IS THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and it is the only
@@ -286,11 +309,12 @@ contextBridge.exposeInMainWorld('dopl', {
     // composer always dispatched. It cannot grant a tool, widen a posture, reach another
     // machine, or post anything without the outbound gate. Capped here AND in main —
     // this bound is a convenience, main's is the fence.
-    message: (channelId, taskId, text) =>
+    message: (channelId, taskId, text, agentId) =>
       ipcRenderer.invoke('sessions:message', {
         channelId: asId(channelId),
         taskId: asId(taskId),
         text: String(text == null ? '' : text).slice(0, 4000),
+        agentId: asId(agentId),
       }),
 
     // The work lane: what this agent has been doing (its own text, its tool calls WITH
@@ -300,10 +324,11 @@ contextBridge.exposeInMainWorld('dopl', {
     // blank until the next event.
     // ⚠ Frames are keyed by `sessionKey`; a window filters to the agent it shows. Main
     // tracks no subscriptions, which is what stops the two sides going out of step.
-    narration: (channelId, taskId) =>
+    narration: (channelId, taskId, agentId) =>
       ipcRenderer.invoke('sessions:narration', {
         channelId: asId(channelId),
         taskId: asId(taskId),
+        agentId: asId(agentId),
       }),
     onNarration: (callback) => {
       if (typeof callback !== 'function') return () => {};

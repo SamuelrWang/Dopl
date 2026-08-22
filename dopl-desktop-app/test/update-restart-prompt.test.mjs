@@ -14,127 +14,19 @@
 // quitAndInstall is reached. The pure copy/threshold decisions live in
 // update-policy.test.mjs.
 //
+// ⚠ WHEN the app looks — the interval and the 2026-08-22 focus signals — moved to
+// `update-focus-check.test.mjs` at the 500-line cap. The HARNESS is shared
+// (`_updater-harness.mjs`), so both suites drive one program.
+//
 // Run: `node --test dopl-desktop-app/test/update-restart-prompt.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { harness, flush, prime, reset, MAIN } from "./_updater-harness.mjs";
 
 const require = createRequire(import.meta.url);
-const HERE = dirname(fileURLToPath(import.meta.url));
-const MAIN = (f) => join(HERE, "..", "main", f);
 
-// Modules that hold state (or read process.env) at require time, reloaded per case.
-const RELOAD = ["updater.js", "config.js", "diag.js", "app-version.js", "update-policy.js", "tray.js"];
-
-function prime(id, exports) {
-  const filename = require.resolve(id);
-  require.cache[filename] = { id: filename, filename, loaded: true, exports, children: [], paths: [] };
-}
-
-function reset() {
-  for (const f of RELOAD) {
-    const filename = require.resolve(MAIN(f));
-    delete require.cache[filename];
-  }
-}
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
-// A fake main process: enough electron for updater.js/tray.js, plus the
-// electron-updater EventEmitter whose events are the whole story.
-function harness(opts = {}) {
-  const { packaged = true, interval, responses = [], sessions = [] } = opts;
-  const seen = {
-    notes: [], // [text, {busy}] pairs pushed at tray.setUpdateNote
-    states: [], // onState fan-out — what the min-version gate decides on
-    ready: [], // onReady echoes
-    notifications: [],
-    dialogs: [],
-    installs: 0,
-    checks: 0,
-    intervalMs: null,
-  };
-
-  const autoUpdater = new EventEmitter();
-  autoUpdater.checkForUpdates = () => {
-    seen.checks++;
-    return Promise.resolve(null);
-  };
-  autoUpdater.quitAndInstall = () => { seen.installs++; };
-
-  class FakeNotification {
-    constructor(o) {
-      this.opts = o;
-      this.handlers = {};
-      seen.notifications.push(this);
-    }
-    static isSupported() { return true; }
-    on(ev, fn) { this.handlers[ev] = fn; return this; }
-    show() { this.shown = true; }
-  }
-
-  let replies = [...responses];
-  const electron = {
-    app: {
-      isPackaged: packaged,
-      getVersion: () => "1.7.18",
-      // diag() writes to userData/listener.log; make that path unavailable so the
-      // suite never touches the filesystem (diag swallows the throw by design).
-      getPath: () => { throw new Error("no userData in tests"); },
-    },
-    Notification: FakeNotification,
-    dialog: {
-      showMessageBox: (o) => {
-        seen.dialogs.push(o);
-        const response = replies.length ? replies.shift() : 0; // default: Later
-        return Promise.resolve({ response });
-      },
-    },
-  };
-
-  prime("electron", electron);
-  prime("electron-updater", { autoUpdater });
-  reset();
-
-  const prevEnv = process.env.DOPL_UPDATE_CHECK_MS;
-  if (interval === undefined) delete process.env.DOPL_UPDATE_CHECK_MS;
-  else process.env.DOPL_UPDATE_CHECK_MS = String(interval);
-
-  const realSetInterval = globalThis.setInterval;
-  globalThis.setInterval = (fn, ms) => {
-    seen.intervalMs = ms;
-    return { unref() {} };
-  };
-
-  let updater;
-  try {
-    updater = require(MAIN("updater.js"));
-    updater.init({
-      onReady: (v) => seen.ready.push(v),
-      onNote: (text, o) => seen.notes.push([text, o]),
-      onState: (s) => seen.states.push(s),
-      getLiveSessions: () => sessions,
-    });
-  } finally {
-    globalThis.setInterval = realSetInterval;
-    if (prevEnv === undefined) delete process.env.DOPL_UPDATE_CHECK_MS;
-    else process.env.DOPL_UPDATE_CHECK_MS = prevEnv;
-  }
-
-  return {
-    updater,
-    autoUpdater,
-    seen,
-    electron,
-    lastNote: () => seen.notes[seen.notes.length - 1] || [null, null],
-    noteTexts: () => seen.notes.map(([t]) => t),
-    state: () => updater.updateState(),
-  };
-}
 
 // ── The state the minimum-version gate decides on ───────────────────────────
 // updateState() is the same story the tray note tells, as booleans, because one
@@ -228,20 +120,6 @@ test("every transition fans out, including download progress", () => {
 });
 
 // ── The interval (item 4) ───────────────────────────────────────────────────
-
-test("with no override the production interval is still 4h", () => {
-  const h = harness();
-  assert.equal(h.seen.intervalMs, 4 * 60 * 60 * 1000);
-});
-
-test("DOPL_UPDATE_CHECK_MS is READ, so a publish loop can look every couple of minutes", () => {
-  assert.equal(harness({ interval: 120_000 }).seen.intervalMs, 120_000);
-});
-
-test("…and CLAMPED, so `=5` is 60s rather than a hot loop against the feed", () => {
-  assert.equal(harness({ interval: 5 }).seen.intervalMs, 60_000);
-  assert.equal(harness({ interval: "soon" }).seen.intervalMs, 4 * 60 * 60 * 1000);
-});
 
 test("a check runs at startup, not only on the interval", () => {
   assert.equal(harness().seen.checks, 1);

@@ -142,6 +142,12 @@ describe("H-3 write-gate coverage", () => {
         // did NOT turn this into a field gate. GET and member add/remove on that
         // file stay ungated.
         "channels/[channelId]/members/route.ts",
+        // DELETE hard-deletes a thread and cascades its whole transcript
+        // (2026-08-21). Permanent, SHARED with the other party, and an agent
+        // token has no confirm dialog to gate it — the same argument the team
+        // DELETE below carries. ⚠ Per-METHOD: GET and the set-mode PATCH on that
+        // file stay ungated.
+        "channels/[channelId]/tasks/[taskId]/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
         "oauth/grants/[id]/route.ts",

@@ -126,10 +126,36 @@ const PROSE_RULE = [
 // Why the tag must survive EVERY turn, not just the first post. Appended to the delivery
 // section only when the call really carries a `thread` argument, so a session with no thread
 // id keeps the wording it had before, byte for byte.
+// THE CONCISION RULING (Samuel, 2026-08-21). STANDING framing, not a per-message reminder.
+//
+// ⚠ IT IS HERE RATHER THAN IN A PER-TURN LINE ON PURPOSE, and the reason is the ruling's own:
+// a style instruction repeated on every fed turn competes with the turn's actual content and
+// reads as a fresh demand each time. Said ONCE, in the first turn, beside the vocabulary and
+// the delivery rule, it is a property of how this agent writes rather than a note about this
+// message. Every spawn shape gets it — both sides of `buildFencedTurn`.
+//
+// ⚠ IT IS A DEFAULT, NOT A CAP, AND IT SAYS SO. An explicit ask for depth beats it; otherwise
+// the agent would refuse the one case where length is the answer, which is worse than the
+// verbosity this exists to stop. Written as what to DO ("short paragraphs") with the specific
+// failures named, because "be concise" alone measurably does not move a model that believes
+// exhaustiveness is helpfulness.
+//
+// House voice (§H-13): no em dash, like every other block in this file.
+const CONCISION = [
+  'HOW TO WRITE (default, unless you are asked for something else):',
+  '- Be concise and plain. Short paragraphs. Lead with the answer.',
+  '- Do not enumerate exhaustively, do not list every option you considered, and do not',
+  '  restate the question before answering it.',
+  '- No preamble ("Great question", "Let me look into that") and no summary of what you just',
+  '  said. If one sentence is the whole answer, send one sentence.',
+  '- If the person explicitly asks for more depth, a longer write up, a full list or another',
+  '  style, give them exactly that. Their ask beats this default every time.',
+];
+
 const THREAD_TAG = [
   `Keep that thread argument on every post you make here. It is what tells the other`,
   `member's machine that your message continues THIS thread; a post without it arrives`,
   `there as a brand new request and starts a second agent run against your own reply.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE };
+module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION };

@@ -85,7 +85,12 @@ export function PostureControls({
   const apply = (axis: "tools" | "messages", mode: string) => {
     setBusy(true);
     setNotice(null);
-    void setAgentMode({ channelId, taskId, axis, mode })
+    // ⚠ `agent.agentId` NAMES THE INSTANCE (2026-08-22). Without it main moves
+    // the posture of the OLDEST live agent on this thread, which under
+    // multiplayer is a different agent than the one whose selects these are —
+    // and the feed would then show this card's posture unchanged, reading as a
+    // refusal that never happened. `agents-controls.ts`'s header carries the rule.
+    void setAgentMode({ channelId, taskId, agentId: agent.agentId, axis, mode })
       .then((res) => {
         if (!res.ok) setNotice(POSTURE_REFUSED);
       })

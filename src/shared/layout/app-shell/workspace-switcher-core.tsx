@@ -186,8 +186,9 @@ export function WorkspaceSwitcherCore({
   );
 }
 
-/** Icon image when present, neutral initial otherwise. */
-function WorkspaceGlyph({
+/** Icon image when present, neutral initial otherwise. Exported for the
+ *  desktop account rail's workspace tiles — one glyph recipe, both surfaces. */
+export function WorkspaceGlyph({
   name,
   iconUrl,
   size,

@@ -25,11 +25,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
+// ⚠ INJECTED REAL (2026-08-22). `startResume` is the ONE spawn that does not go through
+// `session-launch.js › launch`, so it mints its own instance id — and a FAKE mint would let the
+// charset drift away from what `channel_sessions.name`'s CHECK accepts, which is the exact
+// failure this wave fixed. Same discipline the summary harness follows for `session-pill.js`.
+const agentId = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-id.js"));
+// ⚠ AND THE FAKE `slotKey` IS THE REAL THREE-PART SHAPE. It mirrored the deleted D2 CHOICE
+// (`agentId` OR `taskId`), which stopped being what `main/session-store.js › slotKey` does when
+// multiplayer blended all three — so a case could pass here against a key production never builds.
+const fakeSlotKey = (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`;
 
 const BEGIN = "// ─── BEGIN SESSION-PARK-PURE";
 const END = "// ─── END SESSION-PARK-PURE";
@@ -58,11 +68,11 @@ function harness(over = {}) {
   };
   const sessions = new Map();
   const store = {
-    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record, thread for
-    // every other), so the fake mirrors the real store's slotKey. It is the ONE store call the
-    // surviving block makes — `getRecord` / `getSdkSessionId` went with the shell-recreate lane,
-    // which read a durable record to rebuild a window from.
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+    // session-park resumes on the record's OWN slot — all three parts, exactly as
+    // `main/session-store.js › slotKey` composes them. It is the ONE store call the surviving
+    // block makes — `getRecord` / `getSdkSessionId` went with the shell-recreate lane, which read
+    // a durable record to rebuild a window from.
+    slotKey: fakeSlotKey,
   };
   const crypto = { randomBytes: () => ({ toString: () => "deadbeef" }) };
   const Notification = null; // offerResume is exercised elsewhere; not under test here
@@ -84,9 +94,9 @@ function harness(over = {}) {
   };
 
   const api = new Function(
-    "io", "store", "crypto", "Notification", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "diag",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
-  )(io, store, crypto, Notification, diag);
+  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification, diag);
   api.bind(deps);
   return { ...api, deps, sessions, calls, cfg, store };
 }
@@ -201,14 +211,14 @@ test("resumeParked is a no-op for a settled session or a resume already in fligh
 test("a session created during a resume's getSdk await is NOT overwritten (post-await re-check)", async () => {
   let release;
   const gate = new Promise((r) => { release = r; });
-  const rec = { channelId: "c1", taskId: "t1", profile: "full", side: "responder", mode: "autonomous" };
+  const rec = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", profile: "full", side: "responder", mode: "autonomous" };
   const h = harness({ gateSdk: gate });
 
   const resuming = h.startResume(rec, "sdk-1", "nudge"); // claims nothing; suspends at getSdk
   // While startResume is parked on getSdk, another creator claims the slot — a racing
   // `launch()` is the one that can still do this. The registry entry is set synchronously,
   // exactly as the real startSession sets it.
-  h.sessions.set("c1:t1", { key: "c1:t1", settled: false });
+  h.sessions.set("c1:t1:a1b2c3d4", { key: "c1:t1:a1b2c3d4", settled: false });
 
   release();
   assert.equal(await resuming, false, "startResume bails on the post-await re-check");
@@ -218,7 +228,65 @@ test("a session created during a resume's getSdk await is NOT overwritten (post-
 test("startResume refuses BEFORE the await too, when the slot is already live", async () => {
   // The cheap half of the same guard: nothing is asked of the SDK for a slot that is occupied.
   const h = harness();
-  h.sessions.set("c1:t1", { key: "c1:t1", settled: false });
-  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1" }, "sdk-1", "nudge"), false);
+  h.sessions.set("c1:t1:a1b2c3d4", { key: "c1:t1:a1b2c3d4", settled: false });
+  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "nudge"), false);
   assert.deepEqual(h.calls.startSession, []);
+});
+
+// ── THE INSTANCE ID A RESUME COMES BACK WEARING (2026-08-22) ──────────────────────
+//
+// ⚠ THE FAILURE THIS PINS IS NOT LOCAL TO THE DESKTOP. `startResume` is the ONE spawn that does
+// not go through `session-launch.js › launch`, and it passed `rec.agentId || null` — but EVERY
+// durable record written before the multiplayer wave (2026-08-21) has no `agentId`, and those
+// records are on shipped operators' disks. `agentId: null` makes `session-summary.js › nameOf`
+// answer `''`, `session-state-push.js` files `name: ""`, and the server's `SESSION_NAME_RE` 400s
+// the WHOLE array; `retryable(400)` is false, so the digest is never recorded and every later
+// push for that workspace fails identically for the life of the run.
+
+test("a PRE-MULTIPLAYER record (no agentId) resumes with a freshly MINTED id, never null", async () => {
+  const h = harness();
+  const legacy = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder", profile: "full" };
+  assert.equal(await h.startResume(legacy, "sdk-1", "continue"), true);
+  const spec = h.calls.startSession[0];
+  assert.ok(agentId.isAgentId(spec.agentId), `a real instance id, got ${JSON.stringify(spec.agentId)}`);
+  // The name the push files is this id, so it must satisfy `channel_sessions.name`'s CHECK.
+  assert.match(spec.agentId, /^[a-z][a-z0-9-]{1,30}$/);
+  assert.equal(spec.key, `c1:t1:${spec.agentId}`, "the slot key carries the SAME id, not a second mint");
+});
+
+test("a record that HAS an agent id keeps it — a resume must not come back a stranger", async () => {
+  const h = harness();
+  await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "continue");
+  assert.equal(h.calls.startSession[0].agentId, "a1b2c3d4");
+  assert.equal(h.calls.startSession[0].key, "c1:t1:a1b2c3d4");
+});
+
+test("a MALFORMED stored agent id is refused and re-minted, not carried through", async () => {
+  for (const bad of ["", "  ", "A1B2C3D4", "toolongforanid", "a1b2c3", "agent-1", 42, {}, null]) {
+    const h = harness();
+    await h.startResume({ channelId: "c1", taskId: "t1", agentId: bad }, "sdk-1", "continue");
+    const spec = h.calls.startSession[0];
+    assert.ok(agentId.isAgentId(spec.agentId), `stored id ${JSON.stringify(bad)} must be re-minted`);
+  }
+});
+
+test("the mint is written back, so a SECOND resume of the same record finds the live slot", async () => {
+  // `offerResume` holds ONE record object in its notification click handler. Without the
+  // write-back a second click mints a second id, matches no live slot, and starts a second
+  // session resuming the SAME sdkSessionId — a regression the mint would otherwise introduce,
+  // because the guard above was exact for a legacy record while the id was `null`.
+  const h = harness();
+  const legacy = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder" };
+  assert.equal(await h.startResume(legacy, "sdk-1", "continue"), true);
+  assert.equal(await h.startResume(legacy, "sdk-1", "continue"), false, "the second click is refused");
+  assert.equal(h.calls.startSession.length, 1, "one session, not two on one sdk conversation");
+});
+
+test("the record's OWN post counter rides the resume (client_msg_id collision guard)", async () => {
+  // `session-outbound-tag.js › nextOwnPostId` stamps `agent-<agentId>-<n>` and the agent id is
+  // re-used above, so a counter that restarted at 0 would re-mint ids the server already holds
+  // and its idempotency short-circuit would silently discard the resumed agent's replies.
+  const h = harness();
+  await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", ownPostSeq: 7 }, "sdk-1", "go");
+  assert.equal(h.calls.startSession[0].ownPostSeq, 7, "handed over RAW; startSession adds the slack");
 });

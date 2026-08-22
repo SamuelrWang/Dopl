@@ -36,6 +36,7 @@ vi.mock("../../hooks/use-thread-writes", () => ({
 }));
 
 import { ChannelsV2Composer } from "./composer";
+import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
 const THIRD = "u-third";
@@ -51,7 +52,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function mount() {
+function mount(over: Partial<React.ComponentProps<typeof ChannelsV2Composer>> = {}) {
   render(
     <ChannelsV2Composer
       channelId={CHANNEL_ID}
@@ -59,12 +60,17 @@ function mount() {
       members={MEMBERS}
       currentUserId={ME}
       gate={{ begin: vi.fn(), end: vi.fn() }}
+      {...over}
     />
   );
   return {
     body: screen.getByLabelText("Message") as HTMLTextAreaElement,
     openPanel: () =>
-      fireEvent.click(screen.getByRole("button", { name: "New agent thread" })),
+      // ⚠ THE PANEL MOVED OFF THE BOT ICON ON 2026-08-21 (Samuel). `Bot` is New
+      // Agent now — a bridge spawn that posts nothing — and this panel, which
+      // raises a REQUEST at another member over the write layer, opens from its
+      // own "New thread" control. Two acts, two glyphs.
+      fireEvent.click(screen.getByRole("button", { name: "New thread" })),
     sendButton: () =>
       screen.getByRole("button", { name: /^Send/ }) as HTMLButtonElement,
   };
@@ -176,5 +182,112 @@ describe("the agent panel sends a REQUEST FAN-OUT", () => {
     expect(c.sendButton().disabled).toBe(true);
     fireEvent.click(c.sendButton());
     expect(fanOutThreads).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE BOT ICON AND THE THREAD PANEL ARE TWO CONTROLS (Samuel, 2026-08-21).
+ *
+ * ⚠ THE SPLIT IS NOT COSMETIC AND THAT IS WHY IT IS PINNED. One glyph used to
+ * mean both acts, and they do not even reach the same layer: the panel raises a
+ * REQUEST at another member over the write layer; the Bot icon spawns MY OWN
+ * agent on THIS machine over the bridge and posts nothing. A regression that
+ * quietly re-merges them would make one of the two silently unreachable.
+ *
+ * ⚠ AND THE BOT ICON IS NOT RENDERED WHERE IT CANNOT WORK. `canLaunch` is the
+ * bridge op's own detection — the web tree and the pop-out thread window get no
+ * affordance rather than one that can only refuse (INVARIANTS §11).
+ */
+describe("the composer's two agent controls", () => {
+  function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls {
+    return {
+      canLaunch: true,
+      launchBusy: false,
+      launchError: null,
+      launchAgent: vi.fn().mockResolvedValue(undefined),
+      ...over,
+    };
+  }
+
+  /** Whether the request panel is OPEN. ⚠ Not "is the title field in the DOM" —
+   *  the panel is always mounted inside the collapsing grid and merely `inert`
+   *  when shut, so its fields are queryable either way. The toggle's own
+   *  `aria-pressed` is the state, and it is what a screen reader reads too. */
+  const panelOpen = () =>
+    screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed");
+
+  it("opens the thread panel from NEW THREAD, and not from the Bot icon", () => {
+    mount({ newAgent: launcher() });
+    expect(panelOpen()).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
+    // The Bot icon launches; it must not have opened the request panel.
+    expect(panelOpen()).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "New thread" }));
+    expect(panelOpen()).toBe("true");
+    expect(screen.getByLabelText("Thread title")).toBeTruthy();
+  });
+
+  it("posts NOTHING when the Bot icon is clicked", () => {
+    mount({ newAgent: launcher() });
+    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
+    expect(send).not.toHaveBeenCalled();
+    expect(fanOutThreads).not.toHaveBeenCalled();
+  });
+
+  it("launches onto the OPEN THREAD in thread view", () => {
+    const controls = launcher();
+    mount({ newAgent: controls, openThreadId: "t-1" });
+    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
+    expect(controls.launchAgent).toHaveBeenCalledWith("t-1");
+  });
+
+  it("launches a CHANNEL-LEVEL agent in channel view — null, not empty string", () => {
+    // ⚠ `""` is already a real wire value ("a responder whose thread never
+    // became first-class"), so the two must not collapse into one.
+    const controls = launcher();
+    mount({ newAgent: controls });
+    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
+    expect(controls.launchAgent).toHaveBeenCalledWith(null);
+  });
+
+  it("renders NO Bot icon when the bridge cannot launch", () => {
+    mount({ newAgent: launcher({ canLaunch: false }) });
+    expect(screen.queryByRole("button", { name: "New Agent" })).toBeNull();
+    // ⚠ And the thread panel is untouched by that absence — it is a write, not
+    // a bridge op, and it works in a plain browser.
+    expect(screen.getByRole("button", { name: "New thread" })).toBeTruthy();
+  });
+
+  it("renders no Bot icon at all with no launch controls handed down", () => {
+    mount();
+    expect(screen.queryByRole("button", { name: "New Agent" })).toBeNull();
+  });
+
+  it("disables the Bot icon ONLY while a launch is in flight", () => {
+    mount({ newAgent: launcher({ launchBusy: true }) });
+    expect(
+      (screen.getByRole("button", { name: "New Agent" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+  });
+
+  it("stays enabled once a launch has settled — every click is a NEW agent", () => {
+    mount({ newAgent: launcher() });
+    expect(
+      (screen.getByRole("button", { name: "New Agent" }) as HTMLButtonElement).disabled
+    ).toBe(false);
+  });
+
+  it("says a refusal out loud rather than swallowing it", () => {
+    // ⚠ Main answering `{ok:false}` changes nothing on its side, so no push
+    // follows to explain a button that visibly did nothing.
+    mount({ newAgent: launcher({ launchError: "Session limit reached" }) });
+    expect(screen.getByRole("alert").textContent).toBe("Session limit reached");
+  });
+
+  it("shows no alert when there is nothing to report", () => {
+    mount({ newAgent: launcher() });
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

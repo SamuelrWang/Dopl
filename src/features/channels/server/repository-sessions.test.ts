@@ -358,3 +358,125 @@ describe("replaceSessionStates — failures are LOUD", () => {
     await expect(replaceSessionStates(USER, WS, [])).rejects.toBeTruthy();
   });
 });
+
+/**
+ * F-241 — ONE DEAD `task_id` MUST NOT POISON THE WHOLE REPLACE.
+ *
+ * A thread can be deleted while a PEER's machine is still running an agent on
+ * it: that agent is not reachable from any server (it stops on its own
+ * idle/abandon timer), so its next push re-inserts a `task_id` whose
+ * `channel_tasks` row is gone. The upsert is ONE statement over the changed
+ * set, so a single `23503` used to fail `reportSessionStates` entirely — that
+ * operator's every OTHER session stopped being reported and their peer cards
+ * went stale workspace-wide, for a thread somebody deleted on purpose.
+ *
+ * The degrade re-reads which reported thread ids still exist, NULLs only the
+ * dead ones and retries once. It is not a swallow: the row's other half — a
+ * live agent, in this channel, in this state — is still true, and a null
+ * `task_id` is exactly what the column's own `ON DELETE SET NULL` leaves.
+ */
+describe("replaceSessionStates — a thread deleted under a live peer agent (F-241)", () => {
+  const DEAD = "44444444-e29b-41d4-a716-446655440000";
+  const LIVE = "55555555-e29b-41d4-a716-446655440000";
+  const FK = { code: "23503", message: "insert or update on table \"channel_sessions\" violates foreign key constraint" };
+
+  /** Answers each awaited step from a queue, in order (no repeat of the tail). */
+  function makeScriptedAdmin(results: Array<{ data: unknown; error: unknown }>) {
+    const steps: Step[] = [];
+    const queue = [...results];
+    const builder: Record<string, unknown> = {};
+    const rec = (op: string, args: unknown[]) => {
+      steps.push({ op, args });
+      return builder;
+    };
+    Object.assign(builder, {
+      from: (t: string) => rec("from", [t]),
+      select: (c: string) => rec("select", [c]),
+      upsert: (rows: unknown, opts: unknown) => rec("upsert", [rows, opts]),
+      delete: () => rec("delete", []),
+      eq: (c: string, v: unknown) => rec("eq", [c, v]),
+      in: (c: string, v: unknown) => rec("in", [c, v]),
+      order: (c: string, o: unknown) => rec("order", [c, o]),
+      limit: (n: number) => rec("limit", [n]),
+      then: (resolve: (r: unknown) => void) =>
+        resolve(queue.length > 0 ? queue.shift() : { data: null, error: null }),
+    });
+    vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+    return steps;
+  }
+
+  it("REPLACE SUCCEEDS when one row's task_id is dead, and only that row is nulled", async () => {
+    const deadRow = reported({ session_key: `${CHAN}:${DEAD}:a1b2c3d4`, task_id: DEAD });
+    const liveRow = reported({ session_key: `${CHAN}:${LIVE}:z9y8x7w6`, task_id: LIVE, name: "z9y8x7w6" });
+    const steps = makeScriptedAdmin([
+      { data: [], error: null }, // the reconcile read: nothing stored yet
+      { data: null, error: FK }, // the upsert: the deleted thread violates the FK
+      { data: [{ id: LIVE }], error: null }, // which thread ids still exist
+      { data: null, error: null }, // the retry
+    ]);
+    const out = await replaceSessionStates(USER, WS, [deadRow, liveRow]);
+    expect(out).toEqual({ stored: 2, changed: 2, removed: 0 });
+
+    // ⚠ The existence check asks `channel_tasks`, and only for the ids reported.
+    const probe = steps.find((s) => s.op === "in");
+    expect(probe?.args).toEqual(["id", [DEAD, LIVE]]);
+
+    const upserts = steps.filter((s) => s.op === "upsert");
+    expect(upserts).toHaveLength(2);
+    const retried = upserts[1].args[0] as Array<Record<string, unknown>>;
+    expect(retried[0].task_id).toBeNull();
+    expect(retried[1].task_id).toBe(LIVE);
+    // ⚠ NOTHING ELSE IS TOUCHED: the live row keeps its thread, both rows are
+    // still written, and the session keys are unchanged.
+    expect(retried.map((r) => r.session_key)).toEqual([deadRow.session_key, liveRow.session_key]);
+  });
+
+  it("a 23503 that names NO dead thread RETHROWS — it never guesses the constraint", async () => {
+    // `channel_sessions` has four foreign keys. A violation on `channel_id`
+    // means the CHANNEL is gone, which nulling a thread id cannot fix and must
+    // not be made to look fixed.
+    makeScriptedAdmin([
+      { data: [], error: null },
+      { data: null, error: FK },
+      { data: [{ id: LIVE }], error: null }, // every reported thread still exists
+    ]);
+    await expect(
+      replaceSessionStates(USER, WS, [reported({ session_key: `${CHAN}:${LIVE}:a1b2c3d4`, task_id: LIVE })])
+    ).rejects.toMatchObject({ code: "23503" });
+  });
+
+  it("a report carrying NO thread ids rethrows without probing at all", async () => {
+    const steps = makeScriptedAdmin([
+      { data: [], error: null },
+      { data: null, error: FK },
+    ]);
+    await expect(replaceSessionStates(USER, WS, [reported()])).rejects.toMatchObject({ code: "23503" });
+    expect(steps.some((s) => s.op === "from" && s.args[0] === "channel_tasks")).toBe(false);
+  });
+
+  it("EVERY OTHER write error still surfaces — the degrade is one code wide", async () => {
+    for (const error of [
+      { code: "42501", message: "permission denied for table channel_sessions" },
+      { code: "23505", message: "duplicate key value violates unique constraint" },
+      { code: "PGRST205", message: "Could not find the table 'public.channel_sessions'" },
+      { message: "upstream timeout" },
+    ]) {
+      makeScriptedAdmin([{ data: [], error: null }, { data: null, error }]);
+      await expect(
+        replaceSessionStates(USER, WS, [reported({ task_id: DEAD })])
+      ).rejects.toBeTruthy();
+    }
+  });
+
+  it("the RETRY is the last word — a second failure throws rather than looping", async () => {
+    makeScriptedAdmin([
+      { data: [], error: null },
+      { data: null, error: FK },
+      { data: [], error: null }, // the thread really is gone
+      { data: null, error: { code: "23503", message: "still violating" } },
+    ]);
+    await expect(
+      replaceSessionStates(USER, WS, [reported({ task_id: DEAD })])
+    ).rejects.toMatchObject({ message: "still violating" });
+  });
+});

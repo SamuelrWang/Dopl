@@ -1,161 +1,167 @@
-// THE ENDED RETENTION RULE (main/session-summary.js › noteEnded / sweepEnded / MAX_ENDED).
+// THE ENDED RETENTION RULE — and it is the THIRD one this file has pinned.
 //
-// ⚠ ITS OWN FILE SINCE 2026-08-20 (F-226 + F-234, in the same change). It was §4 of
-// `session-summary.test.mjs`, which stood at EXACTLY 500 lines — so the rule could not gain a
-// case, and the F-234 rewrite needed several. That is the cap doing test-suite architecture by
-// accident, which F-226 says to stop doing under time pressure: the seam was already visible
-// (`session-summary-shape.test.mjs` and `session-summary-report.test.mjs` came off the same
-// harness for the same reason), so it is taken deliberately here.
+// ⚠ THE HISTORY MATTERS HERE BECAUSE THE RULE HAS BEEN WRONG TWICE, EACH TIME SILENTLY.
+//   v1  a pill survived exactly as long as its WINDOW. `settle` destroyed the window on every
+//       end but the abandonment, so the abandoned run was the only one with a pill.
+//   v2  (2026-08-20, F-234) every session went WINDOWLESS, `s.win` was null on all of them, and
+//       the predicate `keepWindow === true && windowAlive(s.win)` answered FALSE for every end:
+//       NOTHING was retained, and an agent that finished vanished with no record it had run.
+//       The fix made retention unconditional on the caller's flag, bounded by `MAX_ENDED` (12),
+//       and REFUSED a time bound — because "did anything ever have this on screen" has no
+//       answer without a window, and a TTL would have invented one.
+//   v3  (2026-08-22, Samuel's ruling) THE TIME BOUND IS RULED IN, and the reason v2 refused it
+//       is gone: the question is no longer about a window. An ended agent keeps a READ-ONLY
+//       card and history for SEVEN DAYS from `endedAt`. So retention is:
+//         UNIVERSAL  every end, not only the abandonment;
+//         DURABLE    `main/agent-history.js` on disk, so a RESTART keeps it — which the
+//                    in-memory set never did, and which is what made a count bound honest;
+//         SWEPT      `main/agent-retention.js` drops it at `endedAt + RETENTION_MS`.
+//       `MAX_ENDED` and `endedKept` are DELETED. This file's subject moved with them: what
+//       `session-summary.js` owns now is the PROJECTION of whatever the history file holds.
 //
-// ── WHAT THE RULE IS NOW, AND WHAT IT WAS ────────────────────────────────────────────
-// A session that ENDS may leave its pill behind on the Agents tab, so an operator who was not
-// watching still has a record that the run happened.
-//
-// It USED to retain on `keepWindow === true && windowAlive(s.win)` — the window was the clock,
-// and a pill survived exactly as long as a transcript somebody could still be looking at.
-// ⚠ EVERY SESSION HAS BEEN WINDOWLESS SINCE THE F-228 RETIREMENT, so `s.win` was null on all of
-// them, the second conjunct was false on every end, and `endedKept` COULD NOT GAIN A ROW. The
-// retention rule had silently become a no-op — an agent that finished vanished from the tab
-// instantly — and the rule exists precisely for the case it had stopped covering.
-//
-// ⚠ SAMUEL'S RULING (2026-08-20, F-234): RETAIN UNCONDITIONALLY, BOUNDED BY `MAX_ENDED`. A time
-// bound was the obvious alternative and was refused — the question the window check answered
-// ("did anything ever have this on screen") has no answer without a window, and a TTL would
-// have invented one. A count bound is honest about being a count.
-//
-// ⚠ THE COST THE RULING ACCEPTED, PINNED BELOW SO IT CANNOT BE FORGOTTEN: a retained pill is a
-// TOMBSTONE, not a HANDLE. `session-reopen.js › reopenByTask` refuses a settled key, so
-// clicking one opens nothing. That is deliberate; a click that minted a fresh shell wearing a
-// dead session's name is the failure the old rule was avoiding, and refusing is the honest
-// version of it.
-//
-// ⚠ NO FAKE WINDOW ANYWHERE IN THIS FILE, AND THAT IS THE POINT. The old §4 drove the predicate
-// through `fakeWindow()` because the source was live while the engine could no longer reach it
-// — the tests passed over a rule production could not run. Retention now takes ONE input, the
-// caller's flag, and every case below drives it the way the engine does.
-//
-// Run: `node --test dopl-desktop-app/test/session-summary-retention.test.mjs`
+// ⚠ THE COUNT BOUND'S CASES ARE NOT RESTATED, and that is deliberate rather than lazy. They
+// pinned "the 13th end drops the oldest" over a list this module no longer keeps; the bound
+// that replaced it (`agent-history.js › MAX_HISTORY`, a belt under the clock) belongs to that
+// file and is driven there. Asserting a count here would be this module claiming a rule it
+// does not implement — which is exactly how v1 and v2 came to be believed.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { MAIN, load, session } from "./_session-summary-harness.mjs";
+import { load, session, endedRecord, SRC } from "./_session-summary-harness.mjs";
 
-const SUMMARY = readFileSync(join(MAIN, "session-summary.js"), "utf8");
-const ENGINE = readFileSync(join(MAIN, "session-engine.js"), "utf8");
+// ── 1. WHAT THE PROJECTION DOES WITH A RETAINED RECORD ───────────────────────
 
-// ── The rule ─────────────────────────────────────────────────────────────────────────
-
-test("ENDED: a retained end keeps its PILL, as `ended`, under the same key", () => {
+test("ENDED: a retained record renders as an `ended` card under its own key", () => {
   const m = load();
-  assert.equal(m.noteEnded(session(), true), true,
-    "the return value is the engine's receipt for the retention");
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
+  const [row] = m.list();
+  assert.equal(row.state, "ended");
+  assert.equal(row.agentId, "a1b2c3d4");
+  assert.equal(row.name, "a1b2c3d4");
+  assert.equal(row.taskId, "task-1");
+  // ⚠ NOTHING FINER OVER A DEAD SESSION. `detail` describes a turn in flight and would outlive
+  // the run it described; the posture controls would offer a control over nothing.
+  assert.equal(row.detail, null);
+  assert.equal(row.toolLabel, null);
+  assert.equal(row.toolMode, null);
+  assert.equal(row.messageMode, null);
+});
+
+test("ENDED: it carries the 7-day clock, and it is NOT listening", () => {
+  const m = load();
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ endedAt: 1700000600000 })] });
+  const [row] = m.list();
+  assert.equal(row.endedAt, 1700000600000, "the card's clock and the sweep's are one number");
+  // Samuel's Waiting/Idle ruling: `listening` splits the IDLE pill. A terminal row is neither —
+  // there is no query to feed and none to relaunch.
+  assert.equal(row.listening, false);
+});
+
+test("ENDED: the measurement survives the session object", () => {
+  // A live read would blank every number at exactly the moment the operator wants to know what
+  // the run cost, because the registry entry is gone. `settle` freezes them into the record.
+  const m = load();
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
+  const [row] = m.list();
+  assert.equal(row.contextUsed, 84000);
+  assert.equal(row.contextWindow, 200000);
+  assert.equal(row.tokensSpent, 1200000);
+  assert.equal(row.startedAt, 1700000000000);
+});
+
+test("ENDED: several agents of ONE thread each keep their own card", () => {
+  // Multiplayer: `(channel, thread)` is a GROUP, so two ended agents are two rows told apart by
+  // `agentId`. A projection that de-duplicated on the pair would erase one run's record.
+  const m = load();
+  m.bind({
+    sessions: new Map(),
+    endedRecords: () => [endedRecord(), endedRecord({ agentId: "z9y8x7w6", sessionId: "s-2" })],
+  });
+  const rows = m.list();
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => r.agentId).sort(), ["a1b2c3d4", "z9y8x7w6"]);
+});
+
+// ── 2. LIVE WINS, AND THE SWEEP IS WHAT REMOVES A CARD ───────────────────────
+
+test("ENDED: a LIVE session for the same key wins over its retained record", () => {
+  // The same agent id back in the registry means the record is stale, not that there are two of
+  // it. The live row is the one that can be opened, paused and messaged.
+  const m = load();
+  const live = session();
+  m.bind({ sessions: new Map([[live.key, live]]), endedRecords: () => [endedRecord()] });
   const rows = m.list();
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].state, "ended");
-  assert.equal(rows[0].taskId, "task-1");
+  assert.equal(rows[0].state, "working");
 });
 
-test("ENDED: a WINDOWLESS session retains — the case the old predicate could not reach", () => {
-  // ⚠ THE F-234 REGRESSION CASE, AND THE ONLY ONE THAT WOULD HAVE CAUGHT IT. Every session the
-  // engine settles has `win: null` (session-engine.js › startSession). Under the old rule
-  // `windowAlive(null)` was false, so this returned false and the tab lost the run. Driving a
-  // session with NO window is what makes this suite about production rather than about a fake.
+test("ENDED: the card disappears when the SWEEP drops the record, not before", () => {
+  // ⚠ THE PROJECTION APPLIES NO AGE RULE OF ITS OWN — it reads whatever survives. That is the
+  // whole seam: `agent-history.js` owns `RETENTION_MS`, `agent-retention.js` runs the clock, and
+  // a second opinion here would be a second retention window.
   const m = load();
-  const s = session();
-  s.win = null;
-  assert.equal(m.noteEnded(s, true), true, "no window is not a reason to drop the record");
-  assert.equal(m.list().length, 1, "the pill is there for an operator who was not watching");
-  assert.equal(m.list()[0].state, "ended");
-});
-
-test("ENDED: an end that asks for no retention keeps no pill", () => {
-  const m = load();
-  // The engine asks only for the ABANDONMENT; operator End, turn/cost cap, completed and crash
-  // all pass false, and those are ends somebody chose or watched.
-  assert.equal(m.noteEnded(session(), false), false);
-  assert.deepEqual(m.list(), [], "an end the operator drove needs no tombstone");
-});
-
-test("ENDED: the flag is the WHOLE predicate — a dead window no longer suppresses it", () => {
-  // ⚠ THE DELETED CONJUNCT, PINNED AS AN ABSENCE. `noteEnded` must not consult a window at all;
-  // a session object still carrying a destroyed one (a harness, an older record) retains
-  // exactly like every other. Asserting the behaviour rather than the source, so a
-  // reintroduced check fails here whichever way it is spelled.
-  const m = load();
-  const s = session();
-  s.win = { isDestroyed: () => true };
-  assert.equal(m.noteEnded(s, true), true);
+  let records = [endedRecord()];
+  m.bind({ sessions: new Map(), endedRecords: () => records });
   assert.equal(m.list().length, 1);
+  records = []; // the sweep ran
+  assert.equal(m.list().length, 0, "swept from the history, gone from the projection");
 });
 
-test("ENDED: reopening the thread replaces the ended pill rather than doubling it", () => {
+test("ENDED: `releaseEnded` only nudges the digest — it stores nothing to forget", () => {
+  // The sweep tells the projection so the card leaves promptly rather than at the next
+  // unrelated state change. There is no cache here to invalidate, which is the point.
   const m = load();
-  m.noteEnded(session(), true);
-  // The operator reopens that thread: a live session takes the same (channel, thread) slot.
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ sessionId: "sess-live" })]]) });
+  m.bind({ sessions: new Map(), endedRecords: () => [] });
+  assert.doesNotThrow(() => m.releaseEnded(["chan-1:task-1:a1b2c3d4"]));
+  assert.deepEqual(m.list(), []);
+});
+
+// ── 3. FAILING CLOSED, AND THE DELETED RULE STAYING DELETED ──────────────────
+
+test("ENDED: an unreadable history costs the ENDED cards, never the LIVE ones", () => {
+  // A history file that cannot be read is a degraded card list. It must not be able to blank
+  // what the operator is mid-way through — the live half is the one with work in it.
+  const m = load();
+  const live = session();
+  m.bind({
+    sessions: new Map([[live.key, live]]),
+    endedRecords: () => { throw new Error("disk gone"); },
+  });
   const rows = m.list();
-  assert.equal(rows.length, 1, "one slot, one pill");
-  assert.equal(rows[0].sessionId, "sess-live");
-  assert.equal(rows[0].state, "working", "the LIVE session is the one the pill should open");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].state, "working");
+  assert.ok(m.logged.some((l) => /ended history unreadable/.test(l)), "and it says so once");
 });
 
-test("ENDED: MAX_ENDED is the only bound, and it drops the OLDEST", () => {
-  // ⚠ THIS IS NOW THE WHOLE OF THE BOUND. It used to be a belt over a rule that swept itself
-  // (an entry lived only while its window did); with that gone, an unbounded set would grow
-  // for the life of the process, and every per-session bound is multiplicative against it.
+test("ENDED: a main with NO history reader degrades to no ended cards, not a crash", () => {
   const m = load();
-  for (let i = 0; i < m.MAX_ENDED + 5; i += 1) {
-    m.noteEnded(session({ taskId: `t-${i}`, sessionId: `s-${i}` }), true);
-  }
-  const rows = m.list();
-  assert.equal(rows.length, m.MAX_ENDED);
-  assert.equal(rows[0].taskId, "t-5", "the oldest go — least likely to still matter");
+  const live = session();
+  m.bind({ sessions: new Map([[live.key, live]]) }); // mid-wave / harness: nothing injected
+  assert.equal(m.list().length, 1);
+  assert.deepEqual(m.list().filter((r) => r.state === "ended"), []);
 });
 
-test("ENDED: retention survives repeated projections (no sweep can empty it)", () => {
-  // The old `sweepEnded` filtered on `windowAlive` at EVERY projection, so a retained row
-  // could disappear between two reads with nothing having ended. Nothing prunes now except
-  // the count bound, and a projection must be idempotent.
+test("ENDED: `noteEnded` no longer decides retention, and the count bound is really gone", () => {
+  // ⚠ THE FLAG SURVIVES AND IS IGNORED. `session-effects.js › endEffects` still sets it for the
+  // abandonment and `settle` still passes it; deleting the parameter would change the engine's
+  // effect vocabulary for a cosmetic gain. What must NOT come back is a branch on it — under
+  // v3 every end is retained, so a `false` here retaining nothing would silently restore v1.
   const m = load();
-  m.noteEnded(session(), true);
-  assert.equal(m.list().length, 1);
-  assert.equal(m.list().length, 1, "a second read must not sweep the first read's row");
-  assert.equal(m.list().length, 1);
-});
-
-// ── The two things the ruling deliberately did NOT buy ───────────────────────────────
-
-test("a retained pill is a TOMBSTONE: nothing in main/ tries to reveal a window for it", () => {
-  // ⚠ THE ACCEPTED COST, ASSERTED. `keptWindow` was the lookup `reopenByTask` cashed a pill in
-  // with; it is deleted (F-228) and must not come back on the strength of retention working
-  // again. A retained key is SETTLED, so `reopenByTask` answers `{ok:false, reason:'no-session'}`
-  // — the Agents tab words that refusal.
-  assert.equal(/function keptWindow\s*\(/.test(SUMMARY), false,
-    "retention is a record, not a handle — reviving the lookup is a product decision");
-  const REOPEN = readFileSync(join(MAIN, "session-reopen.js"), "utf8");
-  assert.equal(/keptWindow\s*\(/.test(REOPEN.replace(/\/\/[^\n]*/g, "")), false,
-    "no live call site for a lookup that does not exist");
-});
-
-test("the ENGINE still asks for retention on the abandonment alone", () => {
-  // The rule changed at the CONSUMER, not the producer: `settle`'s argument is unchanged, and
-  // `session-effects.endEffects` still sets it only for `abandoned`. If that ever widens, this
-  // is where the review happens — every end retaining a pill is a different product.
-  const EFFECTS = readFileSync(join(MAIN, "session-effects.js"), "utf8");
-  assert.match(EFFECTS, /keepWindow: reason === 'abandoned'/,
-    "one producer, one condition");
-  assert.match(ENGINE, /sessionSummary\.noteEnded\(s, keepWindow === true\)/,
-    "the engine hands the flag straight through");
-});
-
-test("the dead window DESTROY is gone from settle, and nothing re-reads `win` there", () => {
-  // ⚠ F-234's other half. `settle` ended with `if (!keepWindow && s.win && …) s.win.destroy()`,
-  // dead since every session went windowless. Removing it is what makes the flag mean one
-  // thing — retain the pill — instead of two.
-  const settle = ENGINE.slice(ENGINE.indexOf("function settle("), ENGINE.indexOf("function setLifecycleHandlers("));
-  const code = settle.replace(/\/\/[^\n]*/g, "");
-  assert.equal(/s\.win/.test(code), false, "settle no longer touches a window handle");
-  assert.equal(/destroy\(\)/.test(code), false, "and destroys nothing");
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
+  assert.equal(m.noteEnded(session(), false), true, "an end is an end, flag or no flag");
+  assert.equal(m.list().length, 1, "...and the record is what decides the card");
+  // Source-level: the deleted rule must not reappear as a second bound in this module.
+  // ⚠ COMMENTS STRIPPED, INCLUDING JSDOC CONTINUATIONS (` * `). This module documents its own
+  // history heavily and deliberately NAMES both deleted symbols — a raw grep would be
+  // permanently red against a correct file, which is the failure mode where somebody deletes
+  // the pin instead of the code.
+  const CODE = SRC.split("\n")
+    .filter((l) => {
+      const t = l.trimStart();
+      return !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+    })
+    .join("\n");
+  assert.ok(!/MAX_ENDED/.test(CODE), "the count bound is deleted, not re-declared");
+  assert.ok(!/endedKept/.test(CODE), "...and so is the in-memory list");
+  assert.ok(!/windowAlive\(\s*(e|s)\./.test(CODE), "no retention predicate consults a window");
 });

@@ -23,10 +23,34 @@
  * The server derives one key per addressee from it plus the group id the card
  * is drawn from, so a retry converges thread-by-thread instead of raising the
  * request twice (INVARIANTS §8).
+ *
+ * ⚠ THE BOT ICON AND THE THREAD PANEL ARE TWO CONTROLS SINCE 2026-08-21
+ * (Samuel). One glyph used to mean both "start an agent" and "open the
+ * thread-creation panel", which are not the same act and do not even hit the
+ * same layer — the panel raises a REQUEST at another member over the write
+ * layer; the Bot icon spawns MY OWN agent on THIS machine over the bridge, and
+ * nothing is posted. **`MessageSquarePlus` ("New thread") now toggles the panel,
+ * unchanged in every other respect, and `Bot` is New Agent.**
+ *
+ * ⚠ THE BOT ICON IS CONTEXT-SENSITIVE and takes its target from the OPEN THREAD:
+ * in thread view the agent lands on that exchange; in channel view it is a
+ * CHANNEL-LEVEL agent (`taskId: null`). Same op, same hook, same refusal copy as
+ * the Agents tab's button — this surface is a second BUTTON, never a second
+ * launch path.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, Bot, Expand, Mic, Paperclip, Smile, X, Zap } from "lucide-react";
+import {
+  AtSign,
+  Bot,
+  Expand,
+  MessageSquarePlus,
+  Mic,
+  Paperclip,
+  Smile,
+  X,
+  Zap,
+} from "lucide-react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { FIELD_WELL } from "@/shared/ui/wells";
@@ -40,6 +64,7 @@ import {
   MentionPopover,
   type MentionSuggestion,
 } from "./composer-mentions";
+import type { AgentLaunchControls } from "./use-agents-panel";
 import { useThreadWrites } from "../../hooks/use-thread-writes";
 import { newClientMsgId } from "../../lib/optimistic-cache";
 import type { ChannelMember } from "../../types";
@@ -63,6 +88,8 @@ export function ChannelsV2Composer({
   currentUserName,
   currentUserAvatarUrl,
   gate,
+  newAgent,
+  openThreadId = null,
 }: {
   /** ⚠ CAPTURED AT SUBMIT into every draft — never re-read from the selection
    *  while a write is in flight (INVARIANTS §8, rule 4). */
@@ -74,6 +101,16 @@ export function ChannelsV2Composer({
   currentUserAvatarUrl?: string | null;
   /** The page's refetch coordinator — the SAME gate the reads register. */
   gate: MutationGate;
+  /**
+   * THE BOT ICON'S WIRING — the page's own `use-agents-panel.ts` instance,
+   * handed down. ⚠ ABSENT MEANS NO BUTTON, not a dead one: a surface with no
+   * launch controls to offer (the pop-out thread window) renders none, which is
+   * the same feature-detected rule every bridge affordance in this family
+   * follows (INVARIANTS §11).
+   */
+  newAgent?: AgentLaunchControls;
+  /** Which exchange a new agent lands on; `null` is a CHANNEL-LEVEL agent. */
+  openThreadId?: string | null;
 }) {
   const [draft, setDraft] = useState("");
   const draftRef = useRef<HTMLTextAreaElement>(null);
@@ -296,9 +333,32 @@ export function ChannelsV2Composer({
           </div>
 
           <div className="flex items-center gap-0.5">
+            {/* NEW AGENT — my own agent, on this machine, over the bridge. It
+                posts nothing and sends no first message: the engine spawns it
+                IDLE and the operator talks to it from there.
+                ⚠ RENDERED ONLY WHERE IT CAN WORK. `canLaunch` is the bridge
+                op's own detection (`agents-controls.ts › canLaunchAgents`), so
+                the web tree and the pop-out get no affordance for a thing they
+                cannot do — never a button that can only refuse (F-212's rule,
+                earned by the agent window's inert composer).
+                ⚠ DISABLED ONLY WHILE ONE IS IN FLIGHT. Every click mints a NEW
+                instance (2026-08-21), so agents already standing here are not a
+                reason to take the control away. */}
+            {newAgent?.canLaunch && (
+              <IconButton
+                icon={Bot}
+                label="New Agent"
+                size={15}
+                className="h-6 w-6"
+                disabled={newAgent.launchBusy}
+                onClick={() => void newAgent.launchAgent(openThreadId)}
+              />
+            )}
+            {/* NEW THREAD — the panel this glyph's predecessor opened, moved off
+                the Bot icon and otherwise untouched. */}
             <IconButton
-              icon={Bot}
-              label="New agent thread"
+              icon={MessageSquarePlus}
+              label="New thread"
               size={15}
               className="h-6 w-6"
               active={agentPanelOpen}
@@ -333,6 +393,17 @@ export function ChannelsV2Composer({
               {agentPanelOpen ? "Send request" : "Send"}
             </button>
           </div>
+
+          {/* ⚠ A REFUSED LAUNCH IS SAID OUT LOUD, HERE, because nothing else
+              will: main answering `{ok:false}` changes nothing on its side, so
+              no push follows to explain the button that visibly did nothing
+              (`use-agents-panel.ts › LAUNCH_REFUSALS`). `role="alert"` because
+              it appears only AFTER the operator acted. */}
+          {newAgent?.launchError && (
+            <p role="alert" className="px-0.5 text-caption text-danger">
+              {newAgent.launchError}
+            </p>
+          )}
         </div>
       </div>
     </div>

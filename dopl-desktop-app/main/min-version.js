@@ -172,7 +172,8 @@ function gateScreen(input) {
   }
   // ⚠ `available` STAYS TRUE when a download errors (updater.js explains why the verdict
   // needs that), so without this branch the screen sits on a spinner with the button hidden by
-  // `busy` for a download that stopped, and the next automatic attempt is up to 4h away.
+  // `busy` for a download that stopped, and the next automatic attempt is up to 30 MINUTES away
+  // (2026-08-22: it was 4h until the cadence change, which is why this branch was urgent).
   if (u.failed && u.supported) {
     return screen(
       u.available
@@ -222,10 +223,20 @@ function floorNotice(v) {
 
 // ── Cadence ──────────────────────────────────────────────────────────────────
 // ⚠ The steady-state check RIDES the updater's own interval (config.UPDATER.CHECK_INTERVAL_MS,
-// 4h) rather than adding a second timer: both questions go to the same server on the same trip,
-// and a changed floor matters exactly when a build that satisfies it exists.
+// 30 MINUTES since 2026-08-22 — it was 4h) rather than adding a second timer: both questions go
+// to the same server on the same trip, and a changed floor matters exactly when a build that
+// satisfies it exists.
+// ⚠ THE 2026-08-22 CADENCE CHANGE CHANGED NOTHING HERE EXCEPT THE FRESHNESS, verified rather
+// than assumed. Riding the interval is the only coupling; the floor gate has no opinion about
+// its value, and a SHORTER one strictly improves it — a raised floor is noticed in half an hour
+// rather than half a day. ⚠ The updater's new FOCUS check does NOT drag the floor read with it:
+// `updater.js › checkOnFocus` calls the updater's own `check()`, and the gate keeps its own
+// timer (`version-gate.js`). That is deliberate and is the same argument as above inverted —
+// the floor read is cheap but it is a SECOND server, so tying it to window focus would put a
+// request on `/api/version` every time the operator cmd-tabbed. If the two are ever coupled,
+// couple them at the interval, where the gap already bounds them.
 // ⚠ The short retry applies ONLY when the fetch got NO answer at all (throw, timeout, 5xx,
-// unparseable JSON). A server that answered "no floor" HAS answered and stays on the 4h
+// unparseable JSON). A server that answered "no floor" HAS answered and stays on the steady
 // cadence.
 const FLOOR_FETCH_TIMEOUT_MS = 8000;
 const FLOOR_RETRY_MS = 10 * 60 * 1000;

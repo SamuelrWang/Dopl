@@ -15,10 +15,15 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const req = createRequire(import.meta.url);
+// `main/agent-id.js` is pure (crypto only), so the boundary suites drive the REAL charset
+// predicate rather than a fake that would accept ids main refuses.
+const realAgentId = req(join(HERE, "..", "main", "agent-id.js"));
 export const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 export const SRC = M("channel-dir-ipc.js");
 export const OPS_SRC = M("session-ipc-ops.js");
@@ -106,6 +111,10 @@ export function bootIpc({ blocked = false } = {}) {
     // is the anti-probe gate every op leans on. The split half is built with this SAME stub,
     // so both register into one `handlers` map and both are driven by every case below.
     if (id === "./ipc-guards") return realGuards;
+    // ⚠ THE REAL ID PREDICATE, on `ipc-guards`' terms. `asAgentId` is the third coordinate's
+    // boundary clamp (2026-08-21) and a permissive fake would let every op below accept an
+    // agent id shape main really refuses.
+    if (id === "./agent-id") return realAgentId;
     if (id === "./session-ipc-ops") return opsModule;
     throw new Error("unexpected require: " + id);
   };

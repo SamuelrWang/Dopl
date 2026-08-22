@@ -7,8 +7,11 @@
 //
 //   targeting.classify         sliced from main/targeting.js (+ the LEGACY-THREADS block it
 //                              calls into) with the shared `fnOf` / `between` probes.
-//   session-summary.pillState  the REAL SESSION-SUMMARY-PURE block — the ONE projection
-//                              from engine state to a working/idle/ended pill (F-142).
+//   session-pill.pillState     the REAL SESSION-PILL-PURE block — the ONE projection from
+//                              engine state to a working/idle/ended pill (F-142), plus
+//                              `listeningState`, which splits `idle` into Waiting (query alive)
+//                              and Idle (torn down). It lived in `session-summary.js` until the
+//                              2026-08-22 split off the 500-line cap.
 //
 // ── WHAT CHANGED WITH THE ROLLBACK (F-141) ────────────────────────────────────────
 // The old harness wired four modules together — channel-engagement, channel-roster,
@@ -66,24 +69,32 @@ async function load() {
   }
 
   // The pill projection. Sliced as a whole block rather than function-by-function because
-  // `pillState` reads `ACTIVITY_PILL`, and a lookup table extracted separately from the
-  // function that reads it is the exact shape of a test that passes against a stale copy.
+  // `pillState` reads `ACTIVITY_PILL` and `queryTornDown`, and a lookup table extracted
+  // separately from the function that reads it is the exact shape of a test that passes against
+  // a stale copy.
+  // ⚠ IT MOVED FILES ON 2026-08-22: the mapping split out of `session-summary.js` into
+  // `session-pill.js` at the §2 cap. Same block idiom, same sentinels, one fewer free var — the
+  // mapping reaches no injected dependency at all now, which is why the `new Function` below
+  // takes none.
   let pillState = null;
+  let listeningState = null;
   try {
-    const summary = readFileSync(path.join(MAIN, 'session-summary.js'), 'utf8');
+    const pill = readFileSync(path.join(MAIN, 'session-pill.js'), 'utf8');
     const block = probe.between(
-      summary,
-      '// ─── BEGIN SESSION-SUMMARY-PURE',
-      '// ─── END SESSION-SUMMARY-PURE',
-      'session-summary.js'
+      pill,
+      '// ─── BEGIN SESSION-PILL-PURE',
+      '// ─── END SESSION-PILL-PURE',
+      'session-pill.js'
     );
-    // The block's free vars, per its own header. Neither is reached by `pillState`.
     const built = new Function(
-      'pickAgentName',
-      'diag',
-      `${block}\nreturn { pillState, PILL_STATES };`
-    )(() => '', () => {});
+      `${block}\nreturn { pillState, listeningState, PILL_STATES };`
+    )();
     pillState = built.pillState;
+    // 2026-08-22, Samuel: the `idle` pill covers a session that is still LISTENING (its query is
+    // alive; a message feeds it) and one that is not (torn down; a message relaunches it). The
+    // live harness carries it because a run reporting "idle" for both is the ambiguity the
+    // ruling is about.
+    listeningState = built.listeningState;
     if (!Array.isArray(built.PILL_STATES) || built.PILL_STATES.length !== 3) {
       notes.push(`PILL_STATES is not the expected 3-state set: ${JSON.stringify(built.PILL_STATES)}`);
     }
@@ -91,7 +102,7 @@ async function load() {
     notes.push(`pillState unsliceable: ${err && err.message}`);
   }
 
-  return { classify, pillState, notes };
+  return { classify, pillState, listeningState, notes };
 }
 
 function pathToUrl(p) {

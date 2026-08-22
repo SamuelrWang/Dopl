@@ -224,9 +224,49 @@ export function upsertThread(
   return { ...cache, tasks };
 }
 
-// ⚠ `dropThread` STOOD HERE AND IS DELETED (2026-08-20) — no caller, and none
-// possible: a thread has no delete route and no finished state (INVARIANTS §5),
-// so there is nothing for a cache eviction of one to be the optimistic half of.
+/**
+ * DROP one thread row from the thread list — the optimistic half of the thread
+ * DELETE (Samuel, 2026-08-21).
+ *
+ * ⚠ IT STOOD HERE, WAS DELETED ON 2026-08-20 FOR HAVING NO CALLER, AND THE
+ * DELETION NOTE SAID "none possible: a thread has no delete route". That was true
+ * of the tree and false a day later — the route exists now
+ * (`DELETE /api/channels/[channelId]/tasks/[taskId]`). ⚠ Still NOT a finished
+ * state: a thread has no `closed`, and this removes the row rather than marking
+ * it (INVARIANTS §5).
+ */
+export function dropThread(
+  cache: ThreadsCache | undefined,
+  threadId: string
+): ThreadsCache | undefined {
+  if (!cache) return cache;
+  return { ...cache, tasks: cache.tasks.filter((t) => t.id !== threadId) };
+}
+
+/**
+ * DROP every transcript row tagged for one thread — the other half of the same
+ * optimistic patch.
+ *
+ * ⚠ BOTH HALVES OR NEITHER. The thread list and the transcript are separate cache
+ * entries, and dropping only the thread leaves its messages rendering in the
+ * channel view under a thread card that no longer exists. The server deletes them
+ * in the same call (`service-tasks-delete.ts › deleteTask`), so this is the cache
+ * saying the same thing.
+ *
+ * ⚠ THE TAG IS READ FROM THE WIRE KEY `metadata.taskId`, exactly as the server
+ * matches it and as `buildPendingMessage` writes it — never from a domain field,
+ * because there is not one.
+ */
+export function dropThreadMessages(
+  cache: MessagesCache | undefined,
+  threadId: string
+): MessagesCache | undefined {
+  if (!cache) return cache;
+  return {
+    ...cache,
+    messages: cache.messages.filter((m) => m.metadata?.taskId !== threadId),
+  };
+}
 
 /** Patch one channel row in the list cache (both archived variants). */
 export function patchChannel(

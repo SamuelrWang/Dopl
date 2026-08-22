@@ -137,7 +137,13 @@ describe("app shell", () => {
       "/acme-ab12cd/channels"
     );
     // Brand pill names the open workspace; switching lives in its popover.
-    expect(screen.getByRole("button", { name: /Acme/ })).toBeInTheDocument();
+    // `expanded` pins the query to the popup trigger — the account rail's
+    // workspace tile carries the same accessible name but no aria-expanded.
+    expect(
+      screen.getByRole("button", { name: /Acme/, expanded: false })
+    ).toBeInTheDocument();
+    // The account rail: Home pinned above this account's workspace tiles.
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 

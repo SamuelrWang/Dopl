@@ -28,30 +28,53 @@ const SDK_IDS_KEY = 'sessionIds'; // { [sessionKey]: sdkSessionId } — resume m
 // spelling and is deliberately unchanged; a SESSION is this machine's run on that thread,
 // keyed below. Renaming the storage is a migration, not a copy change.
 //
-// Stable identity of a session = (channel, task). One session per pair (the
-// registry de-dupe). A responder with no first-class thread collapses taskId to ''.
-function sessionKey(channelId, taskId) {
-  return String(channelId || '') + ':' + String(taskId || '');
+// Stable identity of a session = (channel, thread, AGENT INSTANCE).
+//
+// ⚠ THE AGENT SEGMENT JOINED ON 2026-08-21 (Samuel's multiplayer ruling) AND IT IS WHAT MAKES
+// N SESSIONS PER THREAD EXPRESSIBLE. The key was `<channel>:<thread>`, and that pair WAS the
+// de-dupe: one session per thread, `hasLiveSession` answered `{skipped:'busy'}` for the second,
+// and every lookup in the tree was a single `sessions.get(...)`. Multiplayer means one operator
+// may run several agents on one thread at once, so the pair can no longer identify a session —
+// only (channel, thread, agent) can. Every spawn mints an agent id (`main/agent-id.js`), so the
+// third segment is populated on every real session; it is left possible to be empty only so a
+// mid-wave caller or a record written before this wave still produces a well-formed key.
+//
+// FORMAT: `<channelId>:<taskId>:<agentId>`. A responder with no first-class thread still
+// collapses `taskId` to '', which is why the middle segment may be empty. The agent id charset
+// (`^[a-z][a-z0-9]{7}$`) carries no colon, so the key is unambiguously splittable.
+//
+// ⚠ IT CROSSES TO THE SERVER as `channel_sessions.session_key`, whose zod bound
+// (`src/features/channels/schema-sessions.ts › SESSION_KEY_RE`) was widened in the same change
+// to admit the third segment. The DESKTOP owns what a session key IS; the server only bounds
+// what it may look like. Change one, change both.
+function sessionKey(channelId, taskId, agentId) {
+  return String(channelId || '') + ':' + String(taskId || '') + ':' + String(agentId || '');
 }
 
-// D2 — THE SLOT a session occupies in the engine's registry, from a call's own argument
-// object. Two shapes share one key space, and that is deliberate (session-pool.js is gone, but
-// its argument is not:
-// "the pool never parses the key, it only compares it"):
-//   PAIR  (channel, thread)  — every shape that exists today. An ASSIST session is one
-//                              member's run on one thread, so the thread identifies it.
-//   ROOM  (channel, agent)   — a summoned TEAM agent. An agent runs ONE session per
-//                              channel whatever thread it is working in, so the AGENT
-//                              identifies it; a team session usually has no thread at all
-//                              (`taskId` ''), which would collapse every agent of a
-//                              channel onto one slot if the thread still keyed it.
-// `agentId` WINS when present and is never blended with the thread id: a caller either
-// names an agent or it does not. Every existing call site passes no agentId and therefore
-// gets byte-for-byte `sessionKey(channelId, taskId)`.
+// THE SLOT a session occupies in the engine's registry, from a call's own argument object.
+//
+// ⚠ IT BLENDS ALL THREE NOW; `agentId` NO LONGER *REPLACES* `taskId`. The D2 rule this
+// function used to carry was a CHOICE between two key spaces — (channel, thread) for a pair
+// session, (channel, agent) for a summoned room-bound TEAM agent, "never blended, a caller
+// either names an agent or it does not". Summoning is gone (channels rollback §1) and the
+// room-bound shape has had no producer for months, while multiplayer needs exactly the thing
+// that rule forbade: two agents distinguished on the SAME thread. So the choice is deleted and
+// the three parts compose. A team-shaped call (thread '', agent set) still gets a unique slot,
+// which is all the old branch was buying.
 function slotKey(a) {
   const x = a || {};
-  const agentId = String(x.agentId || '');
-  return sessionKey(String(x.channelId || ''), agentId || String(x.taskId || ''));
+  return sessionKey(String(x.channelId || ''), String(x.taskId || ''), String(x.agentId || ''));
+}
+
+// The (channel, thread) PREFIX every session on one thread shares — `<channelId>:<taskId>:`.
+// ⚠ THE TRAILING COLON IS LOAD-BEARING: without it `<channel>:<thread>` would also prefix
+// `<channel>:<threadWithALongerId>`, so a scan would claim sessions from a neighbouring thread.
+// Callers that need "every agent on this thread" scan the registry with this rather than
+// parsing keys apart — the key is COMPARED, never split, so nothing comes to depend on its
+// internal shape. (`session-pool.js`, deleted 2026-08-20 with the headless lane, is where that
+// discipline was first written down; the rule outlived the file.)
+function threadKeyPrefix(channelId, taskId) {
+  return String(channelId || '') + ':' + String(taskId || '') + ':';
 }
 
 // A phase that means the session is finished and must never be resumed or
@@ -116,9 +139,12 @@ function durableSessionRecord(rec) {
     // record written before this field existed, or a mid-wave caller can only ever land
     // on the NARROWER binding — a widened fence must be something a launch asked for.
     bind: r.bind === 'room' ? 'room' : 'pair',
-    // The channel_agents row this session runs AS, or null for a pair session. It is half
-    // of the slot key (slotKey above) and the identity a team session posts under, so a
-    // recreated shell has to carry it or it would re-key onto the thread slot.
+    // THE AGENT INSTANCE ID (2026-08-21). It used to name a `channel_agents` ROW a summoned
+    // team session ran as; named agents are gone and this is now the random per-INSTANCE id
+    // `main/agent-id.js` mints at every spawn. It is the third segment of the slot key
+    // (slotKey above), the handle the operator @-mentions to address ONE of several agents on
+    // a thread, and the `name` the state push files — so a record that lost it would re-key
+    // onto a different slot and answer to a different mention.
     agentId: r.agentId || null,
     // v1.7.5 D1: the header identity (peer display name, channel name, task title).
     // Whitelisted as PLAIN STRINGS so a recreated/resumed shell can rebuild the header
@@ -133,6 +159,16 @@ function durableSessionRecord(rec) {
     // finite number so a hand-edited store can never inject NaN into the reducer.
     turns: Number(r.turns) || 0,
     costUsd: Number(r.costUsd) || 0,
+    // 2026-08-22 — THE OUTBOUND POST COUNTER, and it is whitelisted for an IDEMPOTENCY reason
+    // rather than a budget one. `session-outbound-tag.js › nextOwnPostId` stamps every post this
+    // instance makes `agent-<agentId>-<n>`; the AGENT ID is persisted just above and re-used by
+    // `session-park.js › startResume`, so a counter that restarted at 0 on resume re-minted
+    // `client_msg_id`s the server had already stored — and the server's idempotency
+    // short-circuit answers the OLD row and silently discards the resumed agent's reply.
+    // ⚠ COERCED HARDER THAN `turns` / `costUsd` ABOVE, and deliberately: `Number(x) || 0` lets
+    // `Infinity` through (it is truthy), and this number is CONCATENATED into a client_msg_id
+    // rather than compared against a cap. A non-finite or negative one lands on 0.
+    ownPostSeq: Number.isFinite(Number(r.ownPostSeq)) ? Math.max(0, Math.floor(Number(r.ownPostSeq))) : 0,
     // 2026-08-02 — THE MODEL THIS SESSION RUNS ON, whitelisted so a P2 recreate or a crash
     // resume comes back on the operator's pick instead of silently reverting to the CLI
     // default. Coerced against the frozen enum INLINE, the same shape `bind` above uses and
@@ -143,6 +179,30 @@ function durableSessionRecord(rec) {
     // option at all. Frozen enum, spelled out, no normalization of near misses.
     model: ['default', 'opus', 'sonnet', 'haiku', 'fable'].indexOf(r.model) === -1 ? 'default' : r.model,
   };
+}
+
+// THE POST COUNTER A RESUMED SESSION STARTS FROM, and why it is not simply the stored number.
+//
+// ⚠ THE RECORD ALWAYS LAGS. `nextOwnPostId` bumps `s.ownPostSeq` in memory on every post, but a
+// record is only written at the moments `session-io.js › baseRecord` is projected (spawn,
+// system/init, park, settle). A CRASH between a post and the next persist therefore leaves a
+// stored counter BELOW the ids the server already holds — and re-minting one of those is exactly
+// the collision this counter is persisted to avoid, because the server answers the old row and
+// the resumed agent's reply is silently discarded. So a rehydrate jumps the counter clear of the
+// window a crash can hide, rather than resuming from a number that is only a lower bound.
+//
+// SLACK IS FREE HERE. The stamp is `agent-<agentId>-<n>`; `n` is scoped to ONE random instance
+// id, nothing reads it as a count, and `MAX_OWN_POST_IDS` bounds the lookback set regardless. 50
+// is far more posts than the seconds between a persist and a crash can hold.
+const RESUME_POST_SEQ_SLACK = 50;
+
+// PURE: a stored counter -> the counter a resumed session starts from. 0 (a fresh spawn, an
+// absent field, a hand-edited store) stays 0 — slack over nothing would only make the first
+// stamp look strange.
+function resumedPostSeq(stored) {
+  const n = Number(stored);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n) + RESUME_POST_SEQ_SLACK;
 }
 
 // ── Record pruning (AUDIT D5, closes FOLLOW-UP F8) ───────────────────────────
@@ -282,20 +342,52 @@ function clearSdkSessionId(key) {
   }
 }
 
+/**
+ * DROP a key from BOTH durable structures — the record and the resume map — in one call.
+ * The 7-day sweep's cleaner (`main/agent-retention.js`); nothing else has a reason to.
+ *
+ * ⚠ THE RESUME MAP IS THE HALF THAT MATTERS. `sessionIds[key]` is the `sdkSessionId` a resume
+ * re-attaches to, and it is kept INDEPENDENTLY of the record precisely so a conversation
+ * survives a settled one. An ended agent past its window must not be resumable, so the two are
+ * dropped together here — the one place where "forget this agent" is a single statement.
+ * ⚠ `pruneRecords`'s LRU sweep is a DIFFERENT rule (bound the durable set) and is untouched:
+ * this is keyed, deliberate and driven by the clock on `endedAt`.
+ */
+function forgetKeys(keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  const all = loadRecords();
+  const ids = store.get(SDK_IDS_KEY) || {};
+  let records = 0;
+  let resumes = 0;
+  for (const key of list) {
+    const k = String(key || '');
+    if (!k) continue;
+    if (k in all) { delete all[k]; records += 1; }
+    if (k in ids) { delete ids[k]; resumes += 1; }
+  }
+  if (records) store.set(RECORDS_KEY, all);
+  if (resumes) store.set(SDK_IDS_KEY, ids);
+  return records + resumes;
+}
+
 module.exports = {
   // pure core (also re-exported for the shell + tests)
   sessionKey,
-  slotKey, // D2: (channel, agent) for a TEAM session, (channel, thread) for every other
+  slotKey, // (channel, thread, agent instance) — the multiplayer slot
+  threadKeyPrefix, // every agent on one thread shares it (registry scans)
   isTerminalPhase,
   reloadDisposition,
   durableName,
   durableSessionRecord,
+  RESUME_POST_SEQ_SLACK, // 2026-08-22: the crash window a rehydrated post counter jumps
+  resumedPostSeq,
   prunableKeys, // AUDIT D5: the pure record-retention policy
   // records
   loadRecords,
   saveRecord,
   setRecordPhase,
   pruneRecords, // AUDIT D5: bound the durable set (called from session-engine.init)
+  forgetKeys, // 2026-08-22: the 7-day sweep's one-call "forget this agent" (record + resume)
   // resume map
   getSdkSessionId,
   setSdkSessionId,

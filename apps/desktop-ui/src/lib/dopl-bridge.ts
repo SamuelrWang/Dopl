@@ -167,14 +167,20 @@ export interface DoplBridge {
       taskId: string,
       /** ⚠ Optional, 2026-08-20: a live WINDOWLESS session reopens as the AGENT
        *  WINDOW, whose landing is a router path and needs the slug. */
-      segment?: string
+      segment?: string,
+      /** ⚠ WHICH of my agents on that thread (2026-08-21). Omitted = the oldest
+       *  live one, which is what a one-agent thread always gave back. */
+      agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
     /** THE AGENT WINDOW (F-212). Asks main for a second window on this bundle
      *  showing one of MY agents; no handle comes back. */
     openAgentWindow?(
       segment: string,
       channelId: string,
-      taskId: string
+      taskId: string,
+      /** One window per AGENT since 2026-08-21 — without it, asking for the
+       *  second agent on a thread fronts the first one's window. */
+      agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
     /** ⚠ THE ONE OP HERE THAT STARTS A TURN — the operator's own words to their
      *  own agent, out of band. Never a channel post. See `@/shared/lib/spa-bridge`
@@ -182,7 +188,9 @@ export interface DoplBridge {
     message?(
       channelId: string,
       taskId: string,
-      text: string
+      text: string,
+      /** The 1:1 lane reaches exactly this agent (2026-08-21). */
+      agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
     /** Move a LIVE session's permission posture — supervision, not containment.
      *  See `@/shared/lib/spa-bridge` for the full shape; main owns it. */
@@ -190,12 +198,14 @@ export interface DoplBridge {
       channelId: string,
       taskId: string,
       axis: "tools" | "messages",
-      mode: string
+      mode: string,
+      agentId?: string
     ): Promise<{ ok: boolean; reason?: string; tools?: string; messages?: string }>;
     /** The agent's work ring: read once on mount, then listen. */
     narration?(
       channelId: string,
-      taskId: string
+      taskId: string,
+      agentId?: string
     ): Promise<{ entries: DesktopNarrationEntry[] }>;
     onNarration?(
       callback: (event: {
@@ -212,25 +222,46 @@ export interface DoplBridge {
      *  docblock says must stay in sync carried it and this one did not. Attach MY
      *  OWN agent to a thread, windowless: the click IS the consent (own agent, own
      *  thread, no consent row) and main owns the posture. */
+    /** ⚠ 2026-08-21: returns the AGENT ID it minted, and starts nothing — the
+     *  agent is registered idle and its query launches on the first message for
+     *  it. Call it twice for two agents on one thread; there is no `busy`. */
     launch?(payload: {
       channelId: string;
-      taskId: string;
-      workspaceId: string;
-      channelName: string;
-      threadTitle: string | null;
-      counterpartyId: string | null;
-      direct: boolean;
-    }): Promise<{ ok: boolean; sessionId?: string; reason?: string }>;
+      /** ⚠ `null` = a CHANNEL-LEVEL agent (2026-08-21): main-room feed, main-room replies.
+       *  Pass `null`, never `""` — that is the legacy "thread never became first-class"
+       *  value, which main accepts and scopes identically but which means something else. */
+      taskId: string | null;
+      workspaceId?: string;
+      channelName?: string;
+      threadTitle?: string | null;
+      counterpartyId?: string | null;
+      direct?: boolean;
+    }): Promise<{
+      ok: boolean;
+      agentId?: string;
+      sessionId?: string | null;
+      reason?: string;
+    }>;
     /** Interrupt the turn in flight. The session stays live and named. */
     pause?(
       channelId: string,
-      taskId: string
+      taskId: string,
+      agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
-    /** End the AGENT. Never a thread — a thread has no finished state. */
+    /** End the AGENT. Never a thread — a thread has no finished state.
+     *  ⚠ ENDED IS DEAD (2026-08-22): every later op naming it refuses, and a thread message
+     *  @-mentioning its id is neither fed nor queued. The CARD survives 7 days, read-only. */
     end?(
       channelId: string,
-      taskId: string
+      taskId: string,
+      agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    /** ⚠ Call after a thread DELETE succeeds (2026-08-22): drops every local trace of that
+     *  thread's ended agents. Local history only — never a `channel_message`. */
+    forgetThread?(
+      channelId: string,
+      taskId: string
+    ): Promise<{ ok: boolean; forgotten?: number }>;
   };
   /** THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). Asks main to open a
    *  second window on this same bundle, landing on

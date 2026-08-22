@@ -1,6 +1,6 @@
 /** Channels feature constants. */
 
-import type { AgentToolProfile } from "./types";
+import type { AgentToolProfile, ThreadMode } from "./types";
 
 /** Realtime tables watched by the web client (module-level, stable ref). */
 export const CHANNEL_TABLES = [
@@ -93,9 +93,34 @@ export const SIDEBAR_THREAD_ACTIVE_WINDOW_MS = 24 * 60 * 60_000;
 export const PRESENCE_REFETCH_DEBOUNCE_MS = 10_000;
 
 /**
- * Human labels for the per-channel agent tool scope. Shared by the settings
- * popover (where it is chosen) and the consent card (where the operator needs
- * to know what "Allow" will run with).
+ * How a thread is worked, as a word rather than an enum. Two values, both real
+ * (`types.ts › ThreadMode`) — there is no third and no unknown to degrade to.
+ *
+ * ⚠ ONE MAP, TWO SURFACES (2026-08-21). It began as a local const in
+ * `components/channels-v2/thread-info-tab.tsx`, which DISPLAYS the mode; the
+ * thread Settings tab CHOOSES it, and a second copy of the labels is how the
+ * read-out and the control come to word the same value differently.
+ * ⚠ NO DESCRIPTIONS BESIDE THEM, deliberately — the Settings tab is a name plus a
+ * control (INVARIANTS §5, the minimal-copy ruling), and a per-option sentence
+ * here would be an explainer under a control.
+ */
+export const THREAD_MODE_LABELS: Record<ThreadMode, string> = {
+  interactive: "Interactive",
+  autonomous: "Autonomous",
+};
+
+/**
+ * Human labels for the per-channel agent tool scope.
+ *
+ * ⚠ ONE CONSUMER TODAY, and this docblock claimed two until 2026-08-21:
+ * `channels-v2/settings-agent.tsx`, where the scope is CHOSEN (re-measured:
+ * `grep -rn AGENT_TOOL_PROFILE_LABELS src`). The second was "the consent card,
+ * where the operator needs to know what **Allow** will run with" — and BOTH
+ * halves of that sentence had expired. `components/consent-card.tsx` is DELETED
+ * (INVARIANTS §6; the decision moved inline), and no consent surface has said
+ * "Allow" since the affirmative became **Launch agent** on all three of them
+ * (`thread-consent.tsx › ThreadAwaitingStrip`, `channels-v2/transcript.tsx ›
+ * ThreadCardMessage`, `channels-v2/inbox-pane.tsx › InboxRow`).
  */
 export const AGENT_TOOL_PROFILE_LABELS: Record<AgentToolProfile, string> = {
   full: "Full access",

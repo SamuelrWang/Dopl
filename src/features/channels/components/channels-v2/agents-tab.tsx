@@ -40,9 +40,12 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import type { ChannelMember } from "../../types";
 import { memberPerson } from "./view-model";
-import { AgentLiveness, CARD_BUTTON, PANEL_CARD } from "./bits";
+import { CARD_BUTTON, PANEL_CARD } from "./bits";
+import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
-  agentDetailLabel,
+  agentDisplayId,
+  agentEndedAt,
+  agentLiveness,
   agentKey,
   agentsPerThread,
   formatTokens,
@@ -85,7 +88,7 @@ export function AgentsTab({
   /** EVERY member's session STATE for this channel (the server projection) —
    *  peers render as state-only cards, never openable. */
   peers?: readonly ChannelPeerSession[];
-  /** The launch button (thread view only; desktop only). */
+  /** The New Agent button (thread view only; desktop only). */
   canLaunch?: boolean;
   launchBusy?: boolean;
   /** Copy for the last launch main REFUSED, or null. ⚠ A refusal is not a
@@ -106,6 +109,12 @@ export function AgentsTab({
   // second copy of the rule is how a badge comes to say 3 over a list of 2.
   const peerCards = peerCardsFor(peers, currentUserId, openThreadId);
 
+  // \u26a0 NEW AGENT, AND IT IS A REPEATABLE ACTION (Samuel, 2026-08-21). Every click
+  // mints a NEW instance on this thread \u2014 the bridge no longer keeps one session
+  // per (channel, thread) \u2014 so the button does NOT disarm once an agent exists.
+  // The only two things that take it away are the capability being absent
+  // (`canLaunch`) and a launch already in flight, which is a double-submit guard
+  // and not a cap.
   const launchRow = canLaunch && openThreadId && onLaunchAgent && (
     <div className="mb-3">
       <button
@@ -115,7 +124,7 @@ export function AgentsTab({
         className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
       >
         <Plus size={13} aria-hidden />
-        {launchBusy ? "Launching\u2026" : "Launch agent"}
+        {launchBusy ? "Starting\u2026" : "New Agent"}
       </button>
       {launchError && (
         <p role="alert" className="mt-1.5 px-0.5 text-caption text-danger">
@@ -204,7 +213,10 @@ function PeerCards({
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
                 {peer.name}
               </span>
-              <AgentLiveness running={peer.state === "working"} />
+              {/* ⚠ A PEER ROW HAS NO `detail` AND NO `listening` — the
+                  cross-machine wire carries the coarse state alone (INVARIANTS
+                  §11) — so the SAME mapping degrades it to Running / Idle. */}
+              <AgentLiveness {...agentLiveness(peer)} />
             </div>
             <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
               <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
@@ -255,9 +267,19 @@ function AgentCard({
   const tokensSpent = metric(agent.tokensSpent);
   const started = relative(metric(agent.startedAt));
   const lastActivity = relative(metric(agent.lastActivityAt));
+  const ended = agent.state === "ended";
+  // ⚠ WHEN IT ENDED, IN THE LINE THAT ALREADY EXISTS (2026-08-22) — no new
+  // element, and it is the one thing about an ended agent an operator actually
+  // sorts by ("which of these finished last"). ⚠ ABSENT ON AN OLDER MAIN and on
+  // an agent that ended before the field shipped, which renders as the clause
+  // simply not being there; the PILL is what states the fact, never this.
+  // ⚠ NO RETENTION COUNTDOWN. The history is swept on main's own schedule and
+  // there is nothing the operator can do about it, so a clock here would be
+  // anxiety with no action attached.
+  const endedAt = relative(agentEndedAt(agent));
   const timing = [
     started && `Started ${started}`,
-    lastActivity && `Last activity ${lastActivity}`,
+    ended ? endedAt && `Ended ${endedAt}` : lastActivity && `Last activity ${lastActivity}`,
   ].filter(Boolean);
 
   return (
@@ -269,14 +291,14 @@ function AgentCard({
           <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
         )}
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-          {agent.name}
+          {agentDisplayId(agent)}
         </span>
-        {/* ⚠ MY OWN cards get the finer sentence; the peer cards above do not,
-            because the cross-machine wire carries the coarse state alone. */}
-        <AgentLiveness
-          running={agent.state === "working"}
-          detail={agentDetailLabel(agent)}
-        />
+        {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22), it
+            does not join it: "Ended" beside a dot reading "Ended" is one fact
+            said twice. ⚠ MY OWN cards get the finer sentence; the peer cards
+            above do not, because the cross-machine wire carries the coarse
+            state alone. */}
+        {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
       </div>
 
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">

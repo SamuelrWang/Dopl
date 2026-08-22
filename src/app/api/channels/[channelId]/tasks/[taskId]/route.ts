@@ -11,6 +11,7 @@ import {
 } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
+  deleteTask,
   getChannelTask,
   setTaskMode,
 } from "@/features/channels/server/service";
@@ -53,5 +54,36 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
+// DELETE: hard-delete the thread and everything hanging off it — creator, or
+// someone who can manage the channel. 204, no body: there is nothing left to
+// return. The service (`service-tasks-delete.ts › deleteTask`) owns the
+// authorization and the cascade's ordering.
+//
+// ⚠ THIS IS NOT A CLOSE. Threads still have no finished state (INVARIANTS §5);
+// this is how one stops existing. Nothing here writes `status`.
+async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
+  try {
+    const ctx = buildChannelContext(auth);
+    await deleteTask(
+      ctx,
+      requireChannelId(auth.params),
+      requireTaskId(auth.params)
+    );
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    return toChannelErrorResponse(err);
+  }
+}
+
 export const GET = withWorkspaceAuth(handleGet);
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+// ⚠ `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`, and
+// PER-METHOD, so the GET and the PATCH above are untouched. An agent token
+// (`dopl_at_*`) is refused: this deletes a SHARED transcript permanently, with no
+// dialog on the agent's side to gate it, and "no destructive ops over MCP" is the
+// standing rule the MCP surface is built on. There is no `dopl_channel` op that
+// reaches this and there must not be one.
+export const DELETE = withWorkspaceAuth(handleDelete, {
+  minRole: "member",
+  sessionOnly: true,
+});

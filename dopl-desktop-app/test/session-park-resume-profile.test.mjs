@@ -25,11 +25,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
+// 2026-08-22: `startResume` mints its own instance id (it is the one spawn `launch` does not
+// funnel), so the block's two new free vars are injected REAL — see test/session-park.test.mjs.
+const ids = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-id.js"));
 
 const from = SRC.indexOf("// ─── BEGIN SESSION-PARK-PURE");
 const to = SRC.indexOf("// ─── END SESSION-PARK-PURE");
@@ -41,15 +45,15 @@ function harness() {
   const sessions = new Map();
   const io = { makePushIterator: () => ({ push() {}, close() {} }) };
   const store = {
-    // D2: session-park resumes on the record's OWN slot (agent for a TEAM record, thread for
-    // every other), so the fake mirrors the real store's slotKey. `getRecord` / `getSdkSessionId`
-    // left with the shell-recreate lane — nothing in the surviving block reads a record.
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+    // session-park resumes on the record's OWN slot — all three parts, exactly as the real
+    // `main/session-store.js › slotKey` composes them. `getRecord` / `getSdkSessionId` left with
+    // the shell-recreate lane — nothing in the surviving block reads a record.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
   };
   const api = new Function(
-    "io", "store", "crypto", "Notification", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "diag",
     `${BLOCK}\n return { bind, startResume, knownProfile };`
-  )(io, store, { randomBytes: () => ({ toString: () => "dead" }) }, null, () => {});
+  )(io, store, { randomBytes: () => ({ toString: () => "dead" }) }, ids.newAgentId, ids.isAgentId, null, () => {});
   api.bind({
     sessions,
     getSdk: async () => ({ query: () => ({}) }),
@@ -63,7 +67,10 @@ function harness() {
   return { ...api, started };
 }
 
-const REC = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder", mode: "interactive" };
+// ⚠ IT CARRIES AN `agentId` SINCE 2026-08-22 so the slot key is deterministic here. A record
+// WITHOUT one now gets a freshly minted id (that is the fix, and test/session-park.test.mjs owns
+// it); these cases are about the PROFILE, so they pin the id rather than re-testing the mint.
+const REC = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", workspaceId: "w1", side: "responder", mode: "interactive" };
 
 test("C7: a corrupt / unknown stored profile resumes as read_only, never full", async () => {
   for (const bad of [undefined, null, "", "FULL", "full_access", "administrator", 42, {}, "read_only "]) {
@@ -86,7 +93,7 @@ test("C7: the rest of the resume spec is unchanged (ids, counterparty, resume id
   const h = harness();
   await h.startResume({ ...REC, profile: "full", counterpartyId: "peer-1", counterpartyName: "David" }, "sdk-9", "pick it up");
   const spec = h.started[0];
-  assert.equal(spec.key, "c1:t1");
+  assert.equal(spec.key, "c1:t1:a1b2c3d4");
   assert.equal(spec.channelId, "c1");
   assert.equal(spec.workspaceId, "w1");
   assert.equal(spec.counterpartyId, "peer-1", "FIX L1: the feed stays counterparty-bound");

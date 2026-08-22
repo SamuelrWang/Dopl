@@ -140,7 +140,9 @@ function grantArgs(s, toolName, input) {
     channelId: s.channelId,
     allowForTask: st.allowForTask || [],
     toolMode: st.toolMode, // AXIS A — never consulted for a dopl_channel call
-    messageMode: st.messageMode, // AXIS B — never consulted for anything else
+    // AXIS B. ⚠ Through `session-private.js` (2026-08-22): a PRIVATE 1:1 turn withdraws the OUT
+    // half, so a post gates and bridges to a consent row instead of auto-sending.
+    messageMode: sessionPrivate.effectiveMessageMode(s)
   };
 }
 
@@ -195,7 +197,7 @@ function logGateVerdict(log, s, toolName, verdict, op) {
 // it was a module in everything but filename.
 //
 // RE-EXPORTED BELOW, so `io.withPostSurface(...)` keeps working for every existing caller.
-const postSurface = require('./session-post-surface');
+const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface'); // the 1:1 gate; the post surface
 const { withPostSurface, postKindOf } = postSurface;
 
 // Map ONE SDK message to the reducer events the renderer needs. Only assistant (text turns +
@@ -211,6 +213,8 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost, peerId) 
     for (const b of blocks) {
       if (b && b.type === 'text' && b.text) {
         out.push({ type: 'assistant', payload: { type: 'turn', role: 'assistant', text: b.text } });
+      } else if (b && b.type === 'thinking' && b.thinking) {
+        out.push({ type: 'thinking', payload: { type: 'thinking', text: b.thinking } }); // work lane, bounded downstream
       } else if (b && b.type === 'tool_use') {
         if (isOutboundPost(b.name, b.input, sessionChannelId)) {
           // The agent wants to SEND a message to the peer. Emit ONE `outbound_post` and
@@ -293,6 +297,11 @@ function baseRecord(s) {
     // turn/cost-capped (or parked) session instead of resetting it to a fresh one.
     turns: s.state.turns,
     costUsd: s.state.costUsd,
+    // 2026-08-22: the OUTBOUND POST COUNTER, so a crash resume does not re-mint client_msg_ids
+    // the server already stored under this instance's (persisted, re-used) agent id — see
+    // `session-store.js › resumedPostSeq`. NOT reducer state: it lives on the session object,
+    // bumped by `session-outbound-tag.js › nextOwnPostId`.
+    ownPostSeq: s.ownPostSeq,
     // 2026-08-02: the operator's MODEL pick, whitelisted so a P2 recreate or a crash resume
     // comes back on the model they chose. Without it a recreate silently reverts to the CLI
     // default while the third select still claims the pick — the exact defect class the
@@ -325,7 +334,11 @@ function makeCanUseTool(s, dispatch, log) {
     // THE FORCED THREAD TAG (session-outbound-tag.js — the prompt alone demonstrably does
     // not hold it). Computed here but read only on an ALLOW: it rides a verdict, it never
     // makes one, and both axes resolved above without ever seeing it.
-    const tag = isOutboundPost(name, input, s.channelId) ? outboundTag.threadTagFor(input, s.taskId) : null;
+    // ⚠ THE STAMP IS MINTED ONLY FOR A REAL OWN-CHANNEL POST (2026-08-21). Minting on every
+    // tool call would spend ids the session never posts under and blunt the bounded lookback
+    // that makes the fan-out self-filter cheap.
+    const outbound = isOutboundPost(name, input, s.channelId);
+    const tag = outbound ? outboundTag.threadTagFor(input, s.taskId, outboundTag.nextOwnPostId(s)) : null;
     if (tag && tag.action === 'conflict' && typeof log === 'function') {
       log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
         'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');

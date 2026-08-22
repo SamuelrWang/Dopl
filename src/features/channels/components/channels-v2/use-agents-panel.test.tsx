@@ -8,7 +8,7 @@
  *    DISCARDED, so `no-counterparty` / `busy` / `cap` / `no-sdk` / `auth-hold` all
  *    rendered as a button that stopped saying "Launching…" and a tab that stayed
  *    empty. Nothing else on this surface can report it: a refusal is not a push
- *    (`agents-model.ts › DesktopSessionsFeed`).
+ *    (`use-desktop-sessions.ts › DesktopSessionsFeed`).
  *  - **THE POST-LAUNCH RE-READ WAS AIMED AT THE WRONG FEED.** `refetch` re-reads the
  *    PEER projection, which excludes this operator's own sessions by construction
  *    (`agents-model.ts › peerCardsFor`), so it could never show the agent the
@@ -126,7 +126,7 @@ describe("useAgentsPanel › launch", () => {
       await holder.value!.launchAgent("t-1");
     });
     expect(launch).toHaveBeenCalledTimes(1);
-    expect(holder.value!.launchError).toBe("An agent is already on this thread");
+    expect(holder.value!.launchError).toBe("Busy right now — try again");
     expect(holder.value!.launchBusy).toBe(false);
   });
 
@@ -142,6 +142,58 @@ describe("useAgentsPanel › launch", () => {
     });
     expect(launch).not.toHaveBeenCalled();
     expect(holder.value!.launchError).toBe("This thread has no other party");
+  });
+
+  /**
+   * A CHANNEL-LEVEL AGENT (2026-08-21, the composer's Bot icon in channel view).
+   *
+   * ⚠ NO COUNTERPARTY IS NOT A REFUSAL HERE, and the two cases must not merge.
+   * An agent on the ROOM has nobody on the other side because there is no
+   * exchange yet; a THREAD whose other party cannot be resolved is a real
+   * refusal and still has to be said. Collapsing them makes the Bot icon in
+   * channel view a button that always fails with a sentence about threads.
+   */
+  it("starts a CHANNEL-LEVEL agent for a null thread, with no counterparty", async () => {
+    const launch = bridge({ ok: true });
+    const holder = mount([thread]);
+    await act(async () => {
+      await holder.value!.launchAgent(null);
+    });
+    expect(holder.value!.launchError).toBeNull();
+    expect(launch).toHaveBeenCalledTimes(1);
+    const payload = launch.mock.calls[0][0];
+    // ⚠ `null`, never `""` — the empty string is already a real wire value
+    // meaning "a responder whose thread never became first-class".
+    expect(payload.taskId).toBeNull();
+    expect(payload.counterpartyId).toBeNull();
+    expect(payload.threadTitle).toBeNull();
+    expect(payload.channelId).toBe("c-1");
+  });
+
+  it("still refuses a THREAD whose other party cannot be resolved", async () => {
+    const launch = bridge({ ok: true });
+    const orphan = { ...thread, createdBy: ME, targetUserId: null };
+    const holder = mount([orphan as unknown as ChannelThread]);
+    await act(async () => {
+      await holder.value!.launchAgent("t-1");
+    });
+    expect(launch).not.toHaveBeenCalled();
+    expect(holder.value!.launchError).toBe("This thread has no other party");
+  });
+
+  it("reads main's NEW answer shape — an agentId is a success", async () => {
+    // ⚠ Main and this tree ship separately, so `{ok, reason}` and `{agentId}`
+    // are both live. A reader that knows only one turns a real launch into a
+    // false refusal.
+    const launch = vi.fn().mockResolvedValue({ agentId: "a1b2c3d4" });
+    (window as { dopl?: unknown }).dopl = { apiRequest: vi.fn(), sessions: { launch } };
+    const refreshDesktopSessions = vi.fn();
+    const holder = mount([thread], refreshDesktopSessions);
+    await act(async () => {
+      await holder.value!.launchAgent("t-1");
+    });
+    expect(holder.value!.launchError).toBeNull();
+    expect(refreshDesktopSessions).toHaveBeenCalledTimes(1);
   });
 
   it("re-reads the OWN feed on success — not only the peer projection", async () => {
@@ -203,7 +255,62 @@ describe("useAgentsPanel › launch", () => {
     // `role="alert"` because it appears AFTER the operator acted and nothing
     // else on the surface reports it.
     expect(screen.getByRole("alert").textContent).toBe("Session limit reached");
-    expect(screen.getByRole("button", { name: /Launch agent/ })).toBeTruthy();
+    // ⚠ AND THE BUTTON IS STILL LIVE. A refusal is not a cap: the operator's next
+    // click is a legitimate retry, and every click mints a NEW agent (2026-08-21).
+    const button = screen.getByRole("button", { name: /New Agent/ });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  /**
+   * ⚠ NO ONE-AGENT-PER-THREAD GATE ANYWHERE IN THE UI (Samuel, 2026-08-21).
+   * `sessions.launch` spawns a NEW instance per call, so the button may not
+   * disarm because agents already stand on the thread — only `launchBusy` (a
+   * double-submit guard over one click) and an absent capability take it away.
+   */
+  it("stays enabled with agents ALREADY on this thread", () => {
+    render(
+      <AgentsTab
+        sessions={[
+          {
+            sessionId: "s-1",
+            channelId: "c-1",
+            taskId: "t-1",
+            name: "flint",
+            state: "working",
+            channelName: "Website",
+            threadTitle: "UI-kit design",
+          },
+        ]}
+        channelId="c-1"
+        openThreadId="t-1"
+        currentUserId={ME}
+        canLaunch
+        onLaunchAgent={() => {}}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+    const button = screen.getByRole("button", { name: /New Agent/ });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("disables the button ONLY while a launch is in flight", () => {
+    render(
+      <AgentsTab
+        sessions={[]}
+        channelId="c-1"
+        openThreadId="t-1"
+        currentUserId={ME}
+        canLaunch
+        launchBusy
+        onLaunchAgent={() => {}}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+    expect(
+      (screen.getByRole("button", { name: /Starting/ }) as HTMLButtonElement).disabled
+    ).toBe(true);
   });
 
   it("renders no alert when there is nothing to report", () => {

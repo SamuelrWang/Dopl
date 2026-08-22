@@ -26,7 +26,9 @@
 
 // ⚠ FIXED TEXT BLOCKS live in prompt-framing-text.js: what the agent is TOLD changes on a
 // different clock from how a turn is ASSEMBLED. Nothing is interpolated into any of them.
-const { THREAD_TAG, VOCABULARY, PROSE_RULE } = require('./prompt-framing-text');
+const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION } = require('./prompt-framing-text');
+// The id charset, so a value that is not one is never printed as though it were an address.
+const { AGENT_ID_RE } = require('./agent-id');
 
 // ⚠ The fence-token strip must run TO A FIXED POINT. One pass is a single substitution:
 // 'BEGINBEGIN-REQUEST-REQUEST' loses the inner match and LEAVES 'BEGIN-REQUEST' behind,
@@ -81,6 +83,130 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
     `  "my side is blocked: <what>" and rely on your operator's local notification`,
     `  to fix it. NEVER ask the counterparty to grant a permission, delete a file,`,
     `  or change anything on your machine.`,
+  ];
+}
+
+// ── WHO THIS AGENT IS, AND WHO ELSE IS IN THE ROOM (2026-08-21, Samuel's ruling 6) ─────────
+//
+// Two facts a multiplayer agent cannot work without, and neither of which it can discover:
+//
+//   (a) ITS OWN ADDRESS. Several of one operator's agents run on one thread now, and the way a
+//       human picks one out is `@<agentId>` in the message body. An agent that does not know
+//       its own id cannot tell a message meant for it from one meant for its sibling, so it
+//       answers everything. `session-seed.js › addressingLines` states the per-message verdict;
+//       this states the standing rule that makes the verdict legible.
+//   (b) THAT IT IS NOT ALONE. Every sibling receives every message on this thread (the fan-out,
+//       `main/session-dispatch.js`), so without this paragraph two agents do the same work
+//       twice and post two answers to one question. The instruction is to COORDINATE IN THE
+//       THREAD, in one line, because the thread is the only channel they share: there is no
+//       agent-to-agent side channel and there must not be one.
+//
+// ⚠ EVERY VALUE INTERPOLATED HERE IS OURS AND CHARSET-BOUND. Agent ids come from
+// `main/agent-id.js` (`^[a-z][a-z0-9]{7}$`), are minted on this machine, and are re-checked
+// against that regex below — so unlike a display name they need no `sanitizeName` pass, and a
+// value that fails the check is simply dropped rather than printed. Nothing counterparty
+// controlled reaches these lines.
+//
+// ⚠ THE SIBLING LIST IS A SNAPSHOT AND THE COPY ADMITS IT. It is read from the live registry at
+// the moment the turn is built (`session-engine.js › noteSiblings`), and an agent may spawn a
+// second later. Saying "possibly others" when the list is empty is the honest version; claiming
+// "you are the only one" would be a fact this process cannot promise.
+function agentIdentityFraming(ctx) {
+  const c = ctx || {};
+  const mine = AGENT_ID_RE.test(String(c.agentId || '')) ? String(c.agentId) : '';
+  if (!mine) return [];
+  const siblings = (Array.isArray(c.siblingAgentIds) ? c.siblingAgentIds : [])
+    .map((id) => String(id || ''))
+    .filter((id) => AGENT_ID_RE.test(id) && id !== mine);
+  const who = siblings.length
+    ? `Other agent sessions with these ids may be active in this channel acting as the same person: ${siblings.join(', ')}.`
+    : 'Other agent sessions may be active in this channel acting as the same person: possibly others, spawned at any time.';
+  return [
+    `YOUR AGENT ID IS ${mine}.`,
+    `- Messages @-mentioning another agent id are not addressed to you. Do not act on them.`,
+    `  You may use them as context for what is happening around you.`,
+    `- A message @-mentioning ${mine} is for you. So is a message that mentions no agent id at`,
+    `  all, unless a sibling has already claimed it.`,
+    `- ${who} Some of them work individual threads and some watch the channel's main room; you`,
+    `  do not see everything they see.`,
+    `- COORDINATE IN THE OPEN: briefly agree who acts. If a task is already claimed by a`,
+    `  sibling, stand down. Keep coordination messages to one short line.`,
+  ];
+}
+
+// ── THE CHANNEL-LEVEL AGENT (2026-08-21, Samuel's channel-agent ruling) ────────────────────
+//
+// A spawn with NO thread id is attached to the CHANNEL rather than to one exchange, and it has
+// to be TOLD, because everything else in this file is written for a thread-scoped run. Its feed
+// is main-room traffic (`main/session-dispatch.js`: an untagged post resolves
+// `firstClassTaskId(m) === ''` and therefore reaches exactly the sessions whose own thread id
+// is ''), and its delivery is a main-room post with no `thread` argument — `deliveryCall`
+// already omits one when the context carries no thread id, so this block explains the shape the
+// rest of the prompt is already producing rather than adding a second one.
+//
+// ⚠ IT STATES THE LOOP BRAKE OUTRIGHT, and that is the most load-bearing sentence in it. An
+// unaddressed post reaches nobody's agent (`main/targeting.js › classify`, rule 2 —
+// fail-closed), which is CORRECT and is what stops a room of agents talking to each other
+// forever. An agent that does not know this reads its own silence as failure and escalates.
+//
+// ⚠ PUSH AND PULL ARE DIFFERENT, AND THE AGENT HAS TO BE TOLD BOTH (2026-08-22, Samuel). Its
+// FEED is main-room traffic and nothing else — thread messages are never pushed to it, not even
+// when one @-mentions its id (`main/session-dispatch.js`; there is no cross-scope push). But it
+// can READ any thread in the channel ON DEMAND, because a thread-scoped `dopl_channel` read is
+// an OWN-CHANNEL read and auto-allows under the windowless message floor
+// (`session-profiles.js › isOwnChannelRead` scopes by CHANNEL only — the `thread` argument is
+// deliberately not scoped, so `get_thread` costs no consent). That asymmetry is the SUPERVISOR
+// shape: "monitor the threads and the agents working in them" is answered by reading, on a
+// cadence its operator sets, not by being fed.
+// ⚠ WITHOUT THIS PARAGRAPH THE SUPERVISOR CASE FAILS SILENTLY AND LOOKS LIKE A PERMISSION BUG:
+// an agent told only that it "does not see threads" concludes it CANNOT see them, and reports
+// back that it lacks access to work it could have read at any moment.
+//
+// ⚠ THE CHANNEL UUID IS INTERPOLATED INTO THE READ CALLS FOR A GATING REASON, not for
+// convenience. `isOwnChannelRead` compares `channel` against the session's channel ID and a
+// SLUG-addressed read classifies as ANOTHER channel — the safe failure — which in a windowless
+// session means a gate with no surface to answer it, i.e. a denied read. Teaching the concrete
+// id is what keeps the pull lane auto-allowed. Degrades to the generic wording when the ids are
+// absent, exactly as `deliverySection` does.
+//
+// ⚠ IT IS ONLY EMITTED WHEN THE LAUNCH SAID SO (`ctx.scope === 'channel'`), never inferred from
+// a missing thread id: a LEGACY responder also has none, and telling one of those it is
+// channel-scoped would be a lie about where its reply belongs.
+function channelScopeFraming(ctx) {
+  const c = ctx || {};
+  if (c.scope !== 'channel') return [];
+  const channelId = idToken(c.channelId);
+  const workspaceId = idToken(c.workspaceId);
+  const at = channelId && workspaceId
+    ? `channel "${channelId}", workspace "${workspaceId}"`
+    : 'this channel';
+  return [
+    `YOUR SCOPE IS THIS CHANNEL'S MAIN ROOM, not one thread.`,
+    `- You are SENT the channel's main-room messages: the ones posted to the room itself. You`,
+    `  are never sent what happens inside a thread, and you are not working any thread.`,
+    `- Your replies go to the main room, with NO thread argument. That is the right place;`,
+    `  do not tag a thread you are not in.`,
+    `- A main-room post addresses NOBODY unless it names them, and that is deliberate: an`,
+    `  unaddressed post starts no one's agent. So say things when they are worth the room's`,
+    `  attention, and do not expect a reply to every line. Silence is not a failure and is`,
+    `  never a reason to post again.`,
+    `- @-tag a PERSON when you actually need one (see the vocabulary below).`,
+    ``,
+    `YOU CAN READ EVERY THREAD IN THIS CHANNEL, ON DEMAND. Not being sent them is not the same`,
+    `as not being able to see them, and reading one costs no permission:`,
+    `- mcp__dopl__dopl_channel op "list_threads", ${at} lists this channel's threads.`,
+    `- op "get_thread", ${at}, thread "<id>" gives you one thread.`,
+    `- op "read", ${at}, thread "<id>" gives you that thread's messages.`,
+    `- op "members", ${at} gives you the roster.`,
+    `  Pass that channel id on every one of them. A read that names the channel any other way`,
+    `  is treated as a DIFFERENT channel and will be refused.`,
+    `- So MONITORING means READING. If your operator asks you to watch the threads or the`,
+    `  agents working in them, list and read them when you need to know, then report in the`,
+    `  main room. You may also hold op "await" on this channel to wait for the next main-room`,
+    `  message instead of polling.`,
+    `- NOBODY IN A THREAD CAN SUMMON YOU. A message inside a thread never reaches you, even if`,
+    `  it @-mentions your agent id. Your operator directs you from the main room, or privately;`,
+    `  thread participants cannot.`,
   ];
 }
 
@@ -288,7 +414,13 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       ``,
       ...firstActions('requester', ctx),
       ``,
+      ...agentIdentityFraming(ctx),
+      ``,
+      ...channelScopeFraming(ctx),
+      ``,
       ...VOCABULARY,
+      ``,
+      ...CONCISION,
       ``,
       ...deliverySection('requester', ctx),
       milestoneGuidance({ hasPostingTool: true }),
@@ -310,7 +442,13 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
     ``,
     ...firstActions('responder', ctx),
     ``,
+    ...agentIdentityFraming(ctx),
+    ``,
+    ...channelScopeFraming(ctx),
+    ``,
     ...VOCABULARY,
+    ``,
+    ...CONCISION,
     ``,
     ...counterpartyFraming(ctx),
     ``,
@@ -332,9 +470,12 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
 
 module.exports = {
   counterpartyFraming,
+  agentIdentityFraming, // 2026-08-21: this agent's id + the multiplayer coordination rule
+  channelScopeFraming, // 2026-08-21: the CHANNEL-LEVEL agent's scope, delivery and loop brake
   milestoneGuidance,
   sanitizeName,
   buildFencedTurn,
   PROSE_RULE, // prose is a message, final answer included — asserted on every branch
   VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
+  CONCISION, // 2026-08-21: the standing style default (Samuel's ruling)
 };

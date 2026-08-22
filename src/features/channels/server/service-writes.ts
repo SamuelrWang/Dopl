@@ -347,8 +347,23 @@ export async function postMessage(
   }
 
   // Re-sent client_msg_id returns the stored message and writes nothing.
+  //
+  // ⚠ AUTHOR-SCOPED, AND THAT IS A SECURITY BOUNDARY (2026-08-22). This probe was
+  // `findMessageByClientId(channel.id, …)` — scoped to the CHANNEL — which made
+  // idempotency a contract with the whole room rather than with the retrying
+  // author. `client_msg_id`s are neither secret nor random on the one caller that
+  // sets them at scale: the desktop stamps `agent-<agentId>-<n>`, `agentId` is
+  // publicly readable off `channel_sessions.name`, and `n` counts from 1. So any
+  // channel member could pre-claim another operator's agent's NEXT few keys and
+  // have this line hand that agent back the attacker's row — `{ok}`, somebody
+  // else's message id, nothing written, and the peer waiting on the thread never
+  // told. See `repository-messages.ts › findOwnMessageByClientId`.
   if (input.clientMsgId) {
-    const existing = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
+    const existing = await repoMessages.findOwnMessageByClientId(
+      channel.id,
+      ctx.userId,
+      input.clientMsgId
+    );
     if (existing) return hydrateOne(existing);
   }
 
@@ -379,9 +394,16 @@ export async function postMessage(
     });
   } catch (err) {
     // ⚠ Lost an idempotency race — the short-circuit reached a second way, so
-    // it must answer identically.
+    // it must answer identically, and therefore on the SAME scope. The unique
+    // index is `(channel_id, client_msg_id, author_user_id)`, so a `23505` here
+    // can only be this author's own concurrent retry; another member's row on
+    // the same key no longer collides at all.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
-      const raced = await repoMessages.findMessageByClientId(channel.id, input.clientMsgId);
+      const raced = await repoMessages.findOwnMessageByClientId(
+        channel.id,
+        ctx.userId,
+        input.clientMsgId
+      );
       if (raced) return hydrateOne(raced);
     }
     throw err;

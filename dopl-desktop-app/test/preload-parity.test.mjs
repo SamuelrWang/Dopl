@@ -172,6 +172,12 @@ const APP_OPS = [
   //   • Own agents only, structurally: the registry holds nothing but this operator's sessions
   //     on this machine, so there is no cross-member control surface to abuse.
   "sessions.end",
+  // ⚠ JOINED 2026-08-22 with Samuel's ended-agent ruling: `sessions.forgetThread` drops every
+  // LOCAL trace of a deleted thread's ended agents (frozen history, durable record, resume map,
+  // ended card, notice guard). Main cannot see the server's delete cascade, so without a call
+  // from the SPA an ended agent's history outlives its thread by up to seven days. It deletes
+  // no `channel_messages` and cannot touch a LIVE session — the SPA ends those first.
+  "sessions.forgetThread",
   // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.launch`, the Agents tab's "Launch
   // agent" button — attach MY OWN agent to a thread, windowless. Handler exists
   // (`main/channel-dir-ipc.js › sessions:launch`, appWindowOnly, UUID-gated channel

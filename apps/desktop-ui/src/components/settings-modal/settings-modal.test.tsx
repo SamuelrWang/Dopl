@@ -165,7 +165,11 @@ describe("settings modal", () => {
     renderShell();
     await screen.findByText("page body");
 
-    fireEvent.click(await screen.findByRole("button", { name: /Acme/ }));
+    // `expanded` pins the query to the switcher pill — the account rail's
+    // workspace tile carries the same accessible name but no aria-expanded.
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Acme/, expanded: false })
+    );
     fireEvent.click(await screen.findByText("Workspace settings"));
 
     expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();

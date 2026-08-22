@@ -38,6 +38,11 @@ const EXPORTED = [
   "start", "kick", "stop",
   // C-2: the client-side refusal to put an ad-hoc (thread-less) session on the wire.
   "serverReportable", "reportable",
+  // 2026-08-22: the refusal to put an ENDED session on it. Retention is 7 days and DURABLE now,
+  // and `SESSION_REPORT_MAX` bounds the array at 32 — an unfiltered set 400s the whole push.
+  "liveForWire",
+  // 2026-08-22: …and the belt against a NAMELESS row, which 400s the array the same way.
+  "nameReportable",
 ];
 
 /** A fresh copy of the module, with a fake transport, a fake log and a fake store. */
@@ -90,13 +95,19 @@ export const ADHOC_TASK_ID = `task-${CHAN_A}-42`;
 export function entry(over = {}) {
   const channelId = over.channelId || CHAN_A;
   const taskId = over.taskId === undefined ? TASK_A : over.taskId;
+  // ⚠ THE KEY IS THREE PARTS SINCE 2026-08-21 (`main/session-store.js#sessionKey`) and the NAME
+  // is the agent instance id — the stone-name pool that supplied "flint" is deleted in both
+  // trees. `agent-id.js`'s charset was chosen as a strict subset of `channel_sessions.name`'s
+  // CHECK, so the server schema did not have to move for it.
+  const agentId = over.agentId === undefined ? "a1b2c3d4" : over.agentId;
   return {
     sessionId: "sess-1",
-    key: `${channelId}:${taskId}`,
+    key: `${channelId}:${taskId}:${agentId}`,
     channelId,
     taskId,
+    agentId,
     workspaceId: "ws-1",
-    name: "flint",
+    name: agentId,
     state: "working",
     channelName: "General",
     threadTitle: "Ship the thing",
@@ -106,7 +117,7 @@ export function entry(over = {}) {
 
 /** The unthreaded inbound — the ordinary DM — as the engine really keys it. */
 export function adHocEntry(over = {}) {
-  return entry({ taskId: ADHOC_TASK_ID, name: "onyx", ...over });
+  return entry({ taskId: ADHOC_TASK_ID, agentId: "z9y8x7w6", ...over });
 }
 
 /** A summary module stand-in: the writer only ever uses `subscribe` + `reportList`. */

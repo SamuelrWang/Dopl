@@ -14,6 +14,7 @@
 // object (never logged, never on argv, never on disk since C1).
 
 const crypto = require('crypto');
+const { newAgentId, isAgentId } = require('./agent-id'); // 2026-08-21: one random id per INSTANCE
 const { diag } = require('./diag');
 const io = require('./session-io');
 const store = require('./session-store');
@@ -32,6 +33,18 @@ const sessionNarration = require('./session-narration'); // 2026-08-20: the agen
 const sessionModel = require('./session-model'); // the frozen model enum (argv), coerced here too
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
 const sessionWindowless = require('./session-windowless'); // §2 split: the windowless spawn shape
+// 2026-08-21: the multiplayer ADDRESSING reads — (channel, thread) names a GROUP of this
+// operator's agents, and an empty thread id names the CHANNEL-LEVEL ones. Pure reads over the
+// registry this file owns; bound below like every other injected helper.
+const agentHistory = require('./agent-history'); // 2026-08-22: what an ended agent leaves, for 7 days
+const sessionMetrics = require('./session-metrics'); // ...and what it cost, frozen with it
+const sessionPrivate = require('./session-private'); // 2026-08-22: the 1:1 turn's window
+const sessionRegistry = require('./session-registry');
+const { liveOnThread, agentIdsOnThread, agentIdsInChannel, sessionOn, noteSiblings } = sessionRegistry;
+// ...and the SPAWN FUNNEL: what happens before a session exists (mint an id, ask the three
+// refusal questions, hand to startSession). Split off this file at the §2 cap on 2026-08-21.
+const sessionLaunch = require('./session-launch');
+const { launch, launchResponderSession, launchRequesterSession, hasLiveSession, counterpartyFor } = sessionLaunch;
 
 // settings.js owns the window-mode switch + caps; required defensively so the engine still
 // loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
@@ -70,7 +83,8 @@ sessionGate.bind({ sessions, dispatch });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
 sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) }); // C-8: quit ends live sessions through the reducer; 2026-08-20: a live session's VIEW is the agent window
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
-sessionSummary.bind({ sessions }); sessionNarration.bind({ sessions }); // ...and the narration ring reads the same registry
+sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions }); sessionRegistry.bind({ sessions });
+sessionLaunch.bind({ sessions, getSdk, startSession, liveOnThread, sessionOn }); // the funnel cannot require the engine back // ...and the narration ring + the addressing reads take the same registry
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
@@ -78,6 +92,10 @@ const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 // resolvePerm knows; a park's denyPending may have fail-closed the requestId already). ⚠ session-ipc is deleted; it
 // turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
 function dispatch(s, event) {
+  // ⚠ A TURN ENDED: spend one of the PRIVATE WINDOW (2026-08-22). HERE, at the one dispatch
+  // funnel, rather than as a reducer effect: the window is a fact about the SESSION OBJECT, not
+  // reducer state, so it survives a park/resume like the nonce and no SDK event can forge it.
+  if (event && event.type === 'result') sessionPrivate.closePrivateTurn(s);
   const { state, effects } = sessionReducer(s.state, event);
   s.state = state; sessionSummary.noteActivity(s, event); sessionNarration.note(s, event); // §3.3: the pill's state + detail, and the agent window's work lane, all off the ONE funnel
   let resolvedLive = false;
@@ -100,11 +118,21 @@ function runEffect(s, eff) {
     case 'resolvePermission':
       return resolvePerm(s, eff.requestId, eff.decision);
     // io.withSeed gives the FIRST turn of a fresh (nothing-to-resume) shell its full framing plus the D3 history seed, once; a normal turn passes through.
+    // ⚠ BOTH PUSHES REFRESH THE SIBLING ROSTER FIRST (2026-08-21). `io.withSeed` may build this
+    // session's FIRST TURN right here — a SPAWN-IDLE agent has none until its first message
+    // arrives — and that turn's multiplayer paragraph names the operator's other agents in this
+    // channel. Reading the registry at push time is what makes the list true rather than a
+    // snapshot of who was running when New Agent was clicked.
+    // ⚠ `eff.addressing` is the @agent-id verdict for THIS message and THIS agent, parsed
+    // desktop-side by `session-dispatch.js` (agent ids are not channel members, so the server's
+    // mention resolver correctly fails closed on them and must keep doing so).
     case 'pushTurn':
+      noteSiblings(s);
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, eff.text), eff.priority === 'now' ? 'now' : undefined));
       break;
     case 'pushInbound':
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName))));
+      noteSiblings(s);
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing))));
       break;
     case 'interruptQuery':
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
@@ -209,11 +237,41 @@ function settle(s, outcome, keepWindow) {
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   store.saveRecord(baseRecord(s)); // FIX #9: full record (phase 'ended') persists cap counters for a P2 rehydrate
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
-  sessions.delete(s.key); sessionSummary.noteEnded(s, keepWindow === true); // F-234: retained on the flag alone, bounded by MAX_ENDED
+  // ⚠ FREEZE THE HISTORY BEFORE THE REGISTRY ENTRY GOES (2026-08-22, Samuel's ruling). The
+  // narration ring lives on `s` and nowhere else, so this is the last moment it exists. Best
+  // effort by construction: `settle` is the ONE teardown every terminal reaches, and a disk
+  // failure here must not leave a `claude` child un-aborted.
+  try {
+    agentHistory.record({
+      key: s.key, agentId: s.agentId, sessionId: s.sessionId,
+      channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId,
+      channelName: (s.context && s.context.channelName) || null,
+      threadTitle: (s.context && s.context.taskTitle) || null,
+      endedAt: Date.now(),
+      // The final measurement, frozen here for the same reason the identity is: the registry
+      // entry is about to go and `metrics(s)` is the only reader of it.
+      ...sessionMetrics.metrics(s),
+      entries: sessionNarration.ringFor(s),
+    });
+  } catch (err) { diag('session-engine: could not freeze agent history —', err && err.message); }
+  sessions.delete(s.key); sessionSummary.noteEnded(s, keepWindow === true); // 2026-08-22: retention is the history file's, for 7 days
   refreshTray();
 }
 
 function setLifecycleHandlers(h) { lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded }; }
+
+// THE WORK LANE FOR ONE ADDRESS — live if it is live, FROZEN if the agent has ended.
+// ⚠ THE FALLBACK IS THE WHOLE POINT (2026-08-22). This was `ringFor(sessionOn(a))`, and
+// `sessionOn` resolves against the LIVE registry `settle` has already deleted from — so an ENDED
+// agent's window answered `[]`, while `agent-history.js › historyFor` (the 7-day ring `settle`
+// freezes for exactly this read) had ZERO callers. Same key `settle` wrote, `store.slotKey`, so
+// an address naming no agent gets the live answer alone: `<channel>:<thread>:` matches no record.
+function narrationFor(a) {
+  const live = sessionOn(a);
+  if (live) return sessionNarration.ringFor(live);
+  const rec = agentHistory.historyFor(store.slotKey(a));
+  return rec && Array.isArray(rec.entries) ? rec.entries.slice() : [];
+}
 
 // Build the session object, open (or ADOPT) its window, start the query (launch + resume). The per-session nonce is
 // minted HERE so the first turn's fence + every fed-inbound continuation share the SAME token (else injected content
@@ -253,6 +311,12 @@ async function startSession(spec, sdk) {
   // would have reset a spent turn/cost budget to zero even once the counters were passed.
   state.turns = Number(spec.turns) || 0;
   state.costUsd = Number(spec.costUsd) || 0;
+  // ⚠ `parkedShell` HAS A PRODUCER AGAIN, AND IT IS THE SPAWN-IDLE LANE (2026-08-21, ruling 3).
+  // "New Agent" registers an agent with prepared context and sends NO first SDK turn. The PARKED
+  // shape already had every piece: `parked: true` makes `wakeEffects` fire `resumeQuery` on the
+  // first fed turn, `freshRun`/`freshFraming` below make that turn carry the FULL framing, and
+  // the `parkedShell` guard in `startModes` above is unchanged (a woken shell still refuses a
+  // posture no human armed; this lane sets `operatorArmed` because the click IS the human).
   if (spec.parkedShell) { state.phase = 'parked'; state.parked = true; state.activity = 'parked'; }
   const context = { ...(spec.context || {}), channelId: spec.channelId, workspaceId: spec.workspaceId };
   const firstTurn = spec.parkedShell ? ''
@@ -276,6 +340,9 @@ async function startSession(spec, sdk) {
     // and the window history past one counterparty. `agentId` is the channel_agents row a
     // TEAM session runs as; it is half of the slot key and rides into the framing.
     bind: spec.bind === 'room' ? 'room' : 'pair',
+    // THE AGENT INSTANCE ID (2026-08-21). Never null on a real session — `launch()` mints one.
+    // Third segment of `s.key`, the name the pill wears, the handle an operator @-mentions, and
+    // the token stamped into every post this session makes.
     agentId: spec.agentId || null,
     // H2: is this session's channel a DIRECT (1:1) one? The server addresses an
     // unaddressed post there (`resolveDirectPeer`), so the outbound card names the
@@ -308,8 +375,20 @@ async function startSession(spec, sdk) {
     idleTimer: null,
     settled: false, windowHidden: false,
     lastInboundSeq: Number.isFinite(Number(spec.triggerSeq)) ? Number(spec.triggerSeq) : null,
+    // ⚠ THE SELF-FILTER FOR FAN-OUT (2026-08-21). Every `dopl_channel op=post` this session makes
+    // is stamped with a client_msg_id naming this instance (`session-outbound-tag.js`) and
+    // recorded here, which is how `session-dispatch.feedLiveSession` fans a message out to every
+    // live agent on a thread EXCEPT its author. Bounded there (MAX_OWN_POST_IDS): it is one of
+    // the per-session structures that multiply against MAX_CONCURRENT_SESSIONS.
+    ownPostIds: new Set(),
+    // ⚠ REHYDRATED, NOT ZEROED (2026-08-22). It WAS `0` on every session object while `agentId`
+    // is persisted and re-used by a resume, so a crash+resume re-minted `agent-<id>-1, 2, …` —
+    // client_msg_ids the server already holds, whose idempotency short-circuit then discards the
+    // resumed agent's replies. `resumedPostSeq` adds slack for the posts a crash hid.
+    ownPostSeq: store.resumedPostSeq(spec.ownPostSeq),
     win: null, query: null, abortController: null, pushIterator: null,
   };
+  noteSiblings(s); // the framing's multiplayer paragraph, current as of registration
   sessions.set(s.key, s); sessionSummary.touch(); // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for the SDK's first dispatch (§11)
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
   // The spawn SURFACE. ⚠ THERE IS ONLY ONE LEFT AND IT IS NONE (2026-08-20, F-228): the window
@@ -330,100 +409,34 @@ async function startSession(spec, sdk) {
   // parked/resumed shell). Emitted, NEVER pushed to the iterator; rides the replay ring.
   const reqItem = io.initialRequestPayload(s.side, spec.firstMessage, s.counterpartyName);
   if (reqItem) emit(s, reqItem);
-  // ⚠ `spec.parkedShell` NO LONGER HAS A PRODUCER (2026-08-20, F-228). It marked the
-  // shell-recreate lane, which opened a window and started no query; that lane is deleted. The
-  // FLAG is still read by `startModes` above, where it is the guard that stops a woken shell
-  // inheriting a posture no human armed — so it stays a recognized spec field rather than being
-  // scrubbed, and a future non-window dormant shape can set it and get the safe behaviour.
   // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window):
   // roll back so launch() reports auth-hold and the caller answers honestly.
+  // ⚠ IT RUNS BEFORE THE SPAWN-IDLE RETURN BELOW, AND THAT ORDER IS THE FIX (2026-08-22). The
+  // `parkedShell` branch returned FIRST, so New Agent on a signed-out machine answered
+  // `{sessionId, agentId}` — a SUCCESS — and `launch`'s `{skipped:'auth-hold'}` was unreachable
+  // on the one lane an operator reaches by clicking. Spawn-idle starts no query, but it is still
+  // a spawn, and the credential question is about the MACHINE, not about the first turn.
   if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
   // Q6 PREFLIGHT: a machine with no Claude Code sign-in can only produce a dead session, so HOLD the
   // launch on the sign-in action instead. Nothing is settled, echoed, or thrown away; the request runs
   // the moment sign-in succeeds.
   if (sessionAuth.holdIfNoCredential(s)) return s;
+  // ⚠ SPAWN IDLE — THE ONE SHAPE THAT REGISTERS AND STARTS NOTHING (2026-08-21, ruling 3). Not
+  // "build the query and hold the prompt": a held query is a live `claude` child holding this
+  // session's pre-approved `dopl_channel` access with nobody watching it, the orphan shape
+  // C3/C-8 exist to prevent. There is no child at all. The session IS registered, so it has a
+  // pill, a slot against MAX_CONCURRENT_SESSIONS, an id to be @-mentioned at, pause/end and a
+  // durable record; `wakeEffects` starts the query on the first fed turn.
+  // ⚠ THE TIMER IS ARMED DELIBERATELY: `idleTimeout` reads `parked === true` and answers the
+  // ABANDONMENT bound, so an agent nobody messages ends on its own. Nothing else would arm one
+  // here — every other arming site is a reducer effect, and no reducer event has run yet.
+  if (spec.parkedShell) {
+    scheduleIdle(s);
+    diag('session spawned IDLE (no query until the first message)', 'agent', String(s.agentId || ''), 'thread', String(s.taskId || '').slice(0, 8));
+    return s;
+  }
   await startQuery(s, sdk);
   return s;
-}
-
-async function launch(a) {
-  if (!a.windowless) return { skipped: 'disabled' }; // ⚠ THE ONLY SPAWN SHAPE LEFT IS WINDOWLESS (F-228)
-  const key = store.slotKey(a);
-  // FIX N1: the busy checks must ask about the SAME slot `key` names. They were rebuilding
-  // `{ channelId, taskId }` by hand, stripping `agentId` — the latent bug D2 fixed in
-  // session-park.startResume: for a team-shaped call (agentId set, taskId '') the key says
-  // (channel, agent) while the checks ask about (channel, ''), so launch could report a free
-  // slot for an agent that is running and then have startSession overwrite it.
-  const slot = { channelId: a.channelId, taskId: a.taskId, agentId: a.agentId || null };
-  // H1 (LOW): a HELD slot (sign-in wait) answers auth-hold, never busy — post the truth.
-  if (isAuthHeldSession(slot)) return { skipped: 'auth-hold' };
-  if (hasLiveSession(slot)) return { skipped: 'busy' };
-  // THE CONCURRENCY CEILING. ⚠ ONE BRANCH, because there is one spawn shape (the early return
-  // above). It used to be two: a WINDOW budget that an adoptable pre-consent card was net-zero
-  // against and that freed an untouched parked shell before refusing (AUDIT D4), and this one.
-  // Both the adopt and the eviction went with the window (F-228), so a refusal here is plain —
-  // there is nothing to reclaim, and `MAX_CONCURRENT_SESSIONS` is a COST ceiling as much as a
-  // concurrency one (INVARIANTS §11: every per-session bound multiplies against it).
-  if (sessionWindowless.liveCount(sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
-  let sdk;
-  try { sdk = await getSdk(); } catch (err) {
-    diag('session-engine: SDK unavailable', err && err.message);
-    return { skipped: 'no-sdk' };
-  }
-  if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — do not overwrite a racing creator's session
-  const s = await startSession({
-    key,
-    channelId: a.channelId,
-    taskId: a.taskId,
-    workspaceId: a.workspaceId,
-    side: a.side,
-    profile: a.toolProfile,
-    mode: a.mode,
-    context: a.context,
-    counterpartyId: a.counterpartyId, // FIX L1: bind the feed to the task's other party
-    direct: a.direct, // H2: the server's is_direct flag, for the outbound card's recipient line
-    firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence
-    // H2: the posture a HUMAN chose for THIS launch, and the only way one reaches a spawn.
-    // `trigger.js` passes the arm it consumed on a consent-approved responder launch;
-    // `channel-dir-ipc.js › sessions:launch` passes the channel's durable posture. Anything
-    // that passes nothing inherits the reducer's manual/ask.
-    // ⚠ `adoptsConsent` RODE HERE and is gone (F-228): it named the ONE spawn allowed to spend
-    // the pre-consent card's entry-keyed arm, and there is no card.
-    startModes: a.startModes,
-    windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
-    triggerSeq: a.triggerSeq, // the ask's seq — the outbound bridge's seq-join floor
-  }, sdk);
-  if (!s) return { skipped: 'disabled' };
-  if (s.authHold === true) return { skipped: 'auth-hold' };
-  return { sessionId: s.sessionId };
-}
-
-function launchResponderSession(a) {
-  return launch({ ...a, side: 'responder', firstMessage: a.message });
-}
-function launchRequesterSession(a) {
-  return launch({ ...a, side: 'requester', firstMessage: a.goal });
-}
-
-function hasLiveSession(a) {
-  const s = sessions.get(store.slotKey(a));
-  return !!(s && !s.settled);
-}
-
-// H1 (LOW) — is the session occupying this (channel, task) slot HELD on the sign-in action
-// rather than actually working? The registry cannot tell the difference on its own, and the
-// caller's "busy" copy ("I'm still finishing a previous request") is a lie when the truth is
-// "nothing is running and nobody can start it until someone signs in on that Mac".
-function isAuthHeldSession(a) {
-  const s = sessions.get(store.slotKey(a));
-  return !!(s && !s.settled && s.state && s.state.authHeld === true);
-}
-
-// FIX L1: the counterparty whose replies this session may consume; the listener checks it
-// before feeding, so a third party can never inject a turn.
-function counterpartyFor(a) {
-  const s = sessions.get(store.slotKey(a));
-  return s && !s.settled ? (s.counterpartyId || null) : null;
 }
 
 // The inbound gate lives in session-gate.js (v2.5 D1): `feedInbound` enqueues a counterparty
@@ -465,6 +478,11 @@ module.exports = {
   launchRequesterSession,
   hasLiveSession,
   counterpartyFor,
+  // 2026-08-21 multiplayer: (channel, thread) names a GROUP of sessions, not one.
+  liveOnThread,
+  agentIdsOnThread,
+  agentIdsInChannel,
+  sessionOn,
   // The three session-team.js exports (`summonTeamSession`, `wakeTeamSession`,
   // `acceptsInboundFrom`) went with summoning — docs/ENGINEERING.md §18 F-141 carries that
   // story, including why the inert room-vs-pair slot shape stayed. The LAST of them left its
@@ -473,5 +491,10 @@ module.exports = {
   // test/main-exports-defined.test.mjs now pins every main export against what its file binds.
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
-  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, setModeByTask: sessionReopen.setModeByTask, messageByTask: sessionReopen.messageByTask, narrationFor: (k) => sessionNarration.ringFor(sessions.get(k)), // item 2 + Phase 5 pause/end + F-212's 1:1 lane and work lane — the MAIN-window bridge (channel-dir-ipc)
+  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, setModeByTask: sessionReopen.setModeByTask, messageByTask: sessionReopen.messageByTask,
+  // ⚠ IT TAKES AN ADDRESS, NOT A KEY (2026-08-21). It used to be `(k) => ringFor(sessions.get(k))`
+  // and its ONE caller built `${channelId}:${taskId}` by hand — a second, now-wrong statement of
+  // the key format sitting in the IPC layer. It takes `{channelId, taskId, agentId?}` and goes
+  // through `sessionOn`, so the ambiguity rule is stated once and the key format stays private.
+  narrationFor, // item 2 + Phase 5 pause/end + F-212's 1:1 lane and work lane — the MAIN-window bridge (channel-dir-ipc)
 };

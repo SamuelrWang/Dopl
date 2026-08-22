@@ -192,9 +192,11 @@ const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 function harness(over = {}) {
   const cfg = { live: false, ...over };
   const calls = { feed: [], notifyLocal: [], taskNotify: [], trigger: [], fyi: [], diag: [] };
+  // ⚠ FAN-OUT SHAPE (2026-08-21): the route asks for every live agent on the thread. `cfg.live`
+  // means "one of my agents is on this thread"; the counterparty fence this used to model was
+  // replaced by the thread itself.
   const sessionEngine = {
-    hasLiveSession: () => cfg.live,
-    counterpartyFor: () => PEER,
+    liveOnThread: () => (cfg.live ? [{ agentId: "a1b2c3d4", ownPostIds: new Set() }] : []),
     feedInbound: (a) => { calls.feed.push(a); return true; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
@@ -202,9 +204,9 @@ function harness(over = {}) {
   // account's display name when an AGENT wrote the post. The resolver (`authorLabel`) lives
   // inside the sliced block, so it needs no injection.
   const routes = new Function(
-    "targeting", "sessionEngine", "io",
+    "targeting", "sessionEngine", "io", "diag",
     `${BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, io);
+  )(targeting, sessionEngine, io, () => {});
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //

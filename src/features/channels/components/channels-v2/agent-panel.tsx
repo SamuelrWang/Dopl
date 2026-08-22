@@ -58,27 +58,42 @@
  * elevation but cannot keep a 14px radius against the page edge.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { Bot, CornerDownRight, PanelTop, Pause, Square, X } from "lucide-react";
+import { useState } from "react";
+import { Bot, CornerDownRight, X } from "lucide-react";
 import { UsageMeter } from "@/shared/ui/usage-meter";
-import { formatChannelTimestamp, formatRelativeTime } from "@/shared/lib/format-time";
+import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelMessage } from "../../types";
-import { AgentLiveness, IconButton } from "./bits";
+import { IconButton } from "./bits";
+import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
-  agentDetailLabel,
+  agentDisplayId,
+  agentLiveness,
   agentKey,
   formatTokens,
   metric,
 } from "./agents-model";
-import {
-  canControlAgents,
-  canOpenAgentWindow,
-  openAgentWindow,
-  type AgentControl,
-  useAgentControls,
-} from "./agents-controls";
+import { AgentComposer } from "./agent-composer";
+import { AgentStream } from "./agent-stream";
+import { useAgentNarration } from "./use-agent-narration";
+// ⚠ THE CONTROL STRIP IS ITS OWN FILE since 2026-08-22 (`agent-panel-controls.tsx`),
+// split at the 500-line cap when the composer landed — and on the COMMANDS seam,
+// not an arbitrary cut: it changes when the bridge does, this file when the layout
+// does. `AGENT_CONTROL_REFUSED` moved with it, being that strip's copy.
+import { AgentControls } from "./agent-panel-controls";
+
+/**
+ * THE PER-INSTANCE POST STAMP, as `dopl-desktop-app/main/session-outbound-tag.js
+ * › nextOwnPostId` mints it: `agent-<agentId>-<n>`. Anchored at BOTH ends and
+ * carrying the agent-id charset (`main/agent-id.js › AGENT_ID_RE`) on purpose —
+ * "starts with something id-shaped" is not good enough here, because the OTHER
+ * `agent-…` producer on that machine is `main/channel-post.js › postResult`,
+ * whose id is `agent-<channelId>-<seq>` and whose channel UUID can begin with
+ * eight id-shaped characters. That form carries four more `-` groups, so an
+ * exact match rules it out and a `startsWith` would not.
+ */
+const AGENT_POST_STAMP_RE = /^agent-([a-z][a-z0-9]{7})-\d+$/;
 
 /**
  * WHAT THIS AGENT POSTED. Pure and exported for the test.
@@ -89,20 +104,48 @@ import {
  * agent from a peer's — and `authorKind` alone would put a teammate's agent in
  * my panel. `authorKind` stays a DISPLAY claim here as everywhere: this panel
  * tags and filters, it does not authenticate.
+ *
+ * ⚠ AND SINCE 2026-08-22 (F-251) IT IS ALSO THE INSTANCE, because those three
+ * predicates stop at the THREAD. Multiplayer puts N of one operator's agents on
+ * one thread, all posting under that one account with `authorKind: "agent"`, so
+ * every sibling's words showed up in every sibling's panel and window — the
+ * surface whose entire promise is "this ONE agent, from the inside". The
+ * discriminator is the writer's own `client_msg_id`, the same token
+ * `main/session-dispatch.js › wroteIt` uses to keep an agent out of its own
+ * fan-out; nothing else on the wire can tell two of my agents apart.
+ *
+ * ⚠ IT EXCLUDES ONLY WHAT IS POSITIVELY ATTRIBUTED TO SOMEBODY ELSE, and that
+ * asymmetry is the whole design. An UNSTAMPED row (a main older than the stamp,
+ * an agent that supplied its own idempotency key, and every courtesy no-op
+ * `channel-post.js › postCourtesy` sends about the MACHINE rather than about one
+ * agent) still shows, exactly as it did before this argument existed. Requiring
+ * the stamp would have hidden all three classes, which trades one wrong lane for
+ * a silently short one — and a lane that omits an agent's words is the harder
+ * failure to notice.
+ * ⚠ NO `agentId` AT ALL falls back to today's behaviour byte for byte: such a
+ * main runs one agent per thread, so the thread IS the instance.
  */
 export function agentSentMessages(
   messages: readonly ChannelMessage[],
   taskId: string,
-  currentUserId: string
+  currentUserId: string,
+  agentId?: string | null
 ): ChannelMessage[] {
   if (!taskId) return [];
-  return messages.filter(
-    (m) =>
-      m.kind === "message" &&
-      m.authorKind === "agent" &&
-      m.authorUserId === currentUserId &&
-      m.metadata.taskId === taskId
-  );
+  const mine = typeof agentId === "string" ? agentId.trim() : "";
+  return messages.filter((m) => {
+    if (
+      m.kind !== "message" ||
+      m.authorKind !== "agent" ||
+      m.authorUserId !== currentUserId ||
+      m.metadata.taskId !== taskId
+    ) {
+      return false;
+    }
+    if (!mine) return true;
+    const stamped = AGENT_POST_STAMP_RE.exec(m.clientMsgId ?? "");
+    return !stamped || stamped[1] === mine;
+  });
 }
 
 export function ChannelsV2AgentPanel({
@@ -143,6 +186,17 @@ export function ChannelsV2AgentPanel({
   if (live && live !== lastShown) setLastShown(live);
   const agent = live ?? lastShown;
   const open = live !== null;
+  // ⚠ THE WORK LANE, ON THE SAME AGENT THE HEADER NAMES. Read here rather than
+  // inside the stream so the hook's identity is the PANEL's open agent — a
+  // subscription mounted below would key on whatever it was handed and go stale
+  // one render later than the header it sits under.
+  // ⚠ `agent?.agentId` IS THE THIRD KEY SEGMENT (F-250): main rings on
+  // `<channel>:<thread>:<agent>`, and a two-segment filter matches nothing at all.
+  const narration = useAgentNarration(
+    agent?.channelId ?? "",
+    agent?.taskId ?? "",
+    agent?.agentId
+  );
 
   return (
     <aside
@@ -163,9 +217,42 @@ export function ChannelsV2AgentPanel({
             workspaceSlug={workspaceSlug}
             onRefreshSessions={onRefreshSessions}
           />
-          <SentFeed
-            messages={agentSentMessages(messages, agent.taskId, currentUserId)}
+          {/* ⚠ THE FULL STREAM, NOT A SENT-LANE (Samuel, 2026-08-22). The panel
+              showed only what the agent had POSTED, which is the one lane that
+              says least about what it is doing — an agent mid-tool-run read as an
+              agent doing nothing. It now shares the window's stream whole
+              (`agent-stream.tsx`); the panel is the same content at another
+              width, not a different question.
+              ⚠ `agent.agentId` IS THE FOURTH ARGUMENT (F-251): the panel is
+              opened FROM one card, so a lane carrying its siblings' posts answers
+              a click about a different agent. Narration is keyed on the same id
+              (F-250), so both halves of the stream are this agent's. */}
+          <AgentStream
+            entries={narration.entries}
+            supported={narration.supported}
+            sent={agentSentMessages(
+              messages,
+              agent.taskId,
+              currentUserId,
+              agent.agentId
+            )}
             threadTitle={agent.threadTitle}
+            className="px-3.5"
+          />
+          {/* ⚠ THE 1:1 LANE IS HERE NOW (Samuel, 2026-08-22), not only in the
+              window. The footer note used to send the operator away to say one
+              sentence to their own agent — the glance is exactly where a short
+              steer belongs. ⚠ SHARED COMPONENT, never a second send path
+              (`agent-composer.tsx`), and `agent.agentId` names WHICH instance:
+              this panel is opened FROM one card, so reaching the thread's oldest
+              agent instead would answer a click about a different agent. */}
+          <AgentComposer
+            channelId={agent.channelId}
+            taskId={agent.taskId}
+            agentId={agent.agentId}
+            name={agentDisplayId(agent)}
+            ended={agent.state === "ended"}
+            className="px-3.5"
           />
         </>
       )}
@@ -185,7 +272,7 @@ function AgentPanelHeader({
       <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-semibold text-text-primary">
-          {agent.name}
+          {agentDisplayId(agent)}
         </span>
         <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
           <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
@@ -194,10 +281,13 @@ function AgentPanelHeader({
           </span>
         </span>
       </span>
-      <AgentLiveness
-        running={agent.state === "working"}
-        detail={agentDetailLabel(agent)}
-      />
+      {/* ⚠ The pill REPLACES the liveness on an ended agent — one fact, one
+          element. `bits.tsx › AgentEndedPill` carries why. */}
+      {agent.state === "ended" ? (
+        <AgentEndedPill />
+      ) : (
+        <AgentLiveness {...agentLiveness(agent)} />
+      )}
       <IconButton icon={X} label="Close agent view" size={15} onClick={onClose} />
     </header>
   );
@@ -240,245 +330,6 @@ function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
       {line.length > 0 && (
         <p className="mt-1.5 text-caption text-text-muted">{line.join(" · ")}</p>
       )}
-    </div>
-  );
-}
-
-/**
- * What a refused stop verb says. ⚠ Exported for the test: a swallowed refusal
- * and a successful stop are indistinguishable on screen, which is the whole
- * failure — the operator presses Pause, nothing visible happens, and they are
- * left to guess whether it worked.
- */
-export const AGENT_CONTROL_REFUSED =
-  "This agent already ended — nothing was changed.";
-
-/**
- * ⚠ `AGENT_WINDOW_UNAVAILABLE` STOOD HERE AND IS DELETED (2026-08-20, F-212's
- * closure). It read "This agent runs without a window", which Samuel called
- * meaningless — correctly. **A window is a VIEW, not a runtime property.**
- * Whether main happened to mint a BrowserWindow for a spawn is an
- * implementation detail of the spawn shape; it is not a fact about the agent
- * and it is no answer to "show me what this thing is doing". The button opens
- * `components/channels-v2/agent-window.tsx` now, on every agent, so there is no
- * refusal left for it to word.
- *
- * The lesson worth keeping: an honest refusal is still only worth shipping when
- * the operator can DO something with it. "Main did nothing, and here is the
- * internal reason" is an improvement on silence and not a substitute for the
- * feature.
- */
-
-/** How long a refusal notice stands before clearing itself. */
-const REFUSAL_NOTICE_MS = 6000;
-
-/**
- * PAUSE · END · OPEN WINDOW. All feature-detected: an older main has the feed
- * and not the controls, and must show no buttons rather than buttons that
- * silently do nothing.
- *
- * ⚠ TWO GATES, NOT ONE, BECAUSE THEY ARE TWO CAPABILITIES. `pause`/`end`
- * arrived with the SPA; `reopen` is the older op shared by both preloads. A
- * single `canControlAgents()` gate over the whole strip hid the open affordance
- * on every main that has `reopen` and neither stop verb — a real build shape,
- * and the affordance it hid is the one that still worked. `canOpenAgentWindow()`
- * now accepts EITHER open op for the same reason.
- *
- * ⚠ AN ENDED AGENT OFFERS NEITHER STOP VERB. Its registry entry is gone (the
- * pill outlives it by the retention rule), so main would answer `{ok:false}` —
- * disabled here is the honest face of that, not a guess.
- *
- * ⚠ AND THE RACE IS SAID OUT LOUD. `state === "ended"` is a frame old at best:
- * an agent that ends between the paint and the click leaves both buttons
- * enabled, main answers `{ok:false}`, and the boolean used to be DISCARDED —
- * the operator saw a pressed button and no consequence. The refusal now
- * renders, and the feed is re-read so the panel stops showing a live agent
- * that is not there.
- */
-function AgentControls({
-  agent,
-  workspaceSlug,
-  onRefreshSessions,
-}: {
-  agent: DesktopSessionSummary;
-  /** The workspace segment the agent window's route is built from. */
-  workspaceSlug: string;
-  /** Re-read the desktop's feed after a refusal — see `agents-model.ts ›
-   *  DesktopSessionsFeed`. Absent in a tree that has no feed to refresh. */
-  onRefreshSessions?: () => void;
-}) {
-  const control = useAgentControls();
-  const [pending, setPending] = useState<AgentControl | null>(null);
-  // ⚠ ONE notice slot for both refusal kinds, not two: they occupy the same
-  // line under the same buttons, and two independent timers there race to blank
-  // each other's message.
-  const [notice, setNotice] = useState<string | null>(null);
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    },
-    []
-  );
-
-  const canControl = canControlAgents();
-  const canOpen = canOpenAgentWindow();
-  if (!canControl && !canOpen) return null;
-  const stopped = agent.state === "ended";
-
-  /** Show one refusal line, replacing any that is already standing. */
-  const say = (message: string) => {
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    setNotice(message);
-    noticeTimer.current = setTimeout(() => setNotice(null), REFUSAL_NOTICE_MS);
-  };
-
-  const run = (which: AgentControl) => {
-    setPending(which);
-    setNotice(null);
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    // The feed is the source of truth for what happened: main dispatches, the
-    // projection moves, the push re-renders this panel. Nothing is stamped
-    // optimistically — an agent that did not stop must not look stopped.
-    void control(which, agent)
-      .then((ok) => {
-        if (ok) return;
-        // ⚠ A REFUSAL IS NOT A PUSH. Main changed nothing, so nothing will
-        // arrive to correct the panel; the re-read is what closes that gap.
-        say(AGENT_CONTROL_REFUSED);
-        onRefreshSessions?.();
-      })
-      .finally(() => setPending(null));
-  };
-
-  /**
-   * "Open agent" — the window showing this agent from the inside
-   * (`agent-window.tsx`). It ALWAYS opens now; the only refusals left are the
-   * ones every window-minting op has (a full budget, a blocking version floor,
-   * an unusable id), and they share one shape by design so a caller cannot tell
-   * them apart.
-   *
-   * ⚠ NO `onRefreshSessions` HERE, unlike the stop verbs. A refused open changed
-   * nothing on main AND says nothing new about the session's state, so
-   * re-reading the feed would answer a question nobody asked. The stop verbs
-   * re-read because their refusal means "this agent is already gone", which is
-   * something the panel IS showing wrongly.
-   */
-  const reveal = () => {
-    void openAgentWindow(agent, workspaceSlug).then((res) => {
-      if (!res.ok) say(AGENT_CONTROL_REFUSED);
-    });
-  };
-
-  return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-b border-border-default px-3.5 py-2">
-      <div className="flex items-center gap-2">
-        {canControl && (
-          <>
-            <ControlButton
-              icon={Pause}
-              label="Pause"
-              title="Stop the turn it is running. It stays yours and keeps its context."
-              disabled={stopped || pending !== null}
-              onClick={() => run("pause")}
-            />
-            <ControlButton
-              icon={Square}
-              label="End"
-              title="End this agent. The thread is untouched."
-              disabled={stopped || pending !== null}
-              onClick={() => run("end")}
-            />
-          </>
-        )}
-        {canOpen && (
-          <ControlButton
-            icon={PanelTop}
-            label="Open agent"
-            title="Watch what this agent is doing, and message it directly."
-            onClick={reveal}
-          />
-        )}
-      </div>
-      {notice && (
-        <p role="status" className="text-caption text-text-muted">
-          {notice}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ControlButton({
-  icon: Icon,
-  label,
-  title,
-  disabled,
-  onClick,
-}: {
-  icon: typeof Pause;
-  label: string;
-  title: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="btn-light flex items-center gap-1.5 rounded-[8px] px-2 py-1 text-caption font-medium text-text-primary disabled:cursor-not-allowed disabled:text-text-disabled"
-    >
-      <Icon size={13} aria-hidden />
-      {label}
-    </button>
-  );
-}
-
-/**
- * THE ONE LANE WITH A BACKING. Each entry is a flat inset, not a `.bento`: this
- * is a RECORD of something that lives in the thread, not a card the panel owns.
- * The caption is what makes it a different object from a transcript bubble.
- */
-function SentFeed({
-  messages,
-  threadTitle,
-}: {
-  messages: ChannelMessage[];
-  threadTitle: string | null;
-}) {
-  const where = threadTitle ?? "its thread";
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3.5">
-      {messages.length === 0 ? (
-        <p className="py-4 text-center text-caption text-text-muted">
-          Nothing posted yet.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-3.5">
-          {messages.map((message) => (
-            <div key={message.id} className="flex flex-col gap-1">
-              <div className="rounded-[10px] border border-border-default bg-bg-inset px-2.5 py-2">
-                <p className="whitespace-pre-wrap break-words text-caption text-text-primary">
-                  {message.body}
-                </p>
-              </div>
-              <span className="text-micro text-text-muted">
-                → sent to {where} · {formatChannelTimestamp(message.createdAt)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-      {/* ⚠ THIS LINE USED TO STATE TWO ABSENCES ("not built yet (F-212)"). Both
-          lanes exist now, in the agent window, so it points at them instead —
-          the panel still shows only what was SENT, and a reader who does not
-          know where the rest lives concludes this agent did nothing but post. */}
-      <p className="mt-5 border-t border-border-subtle pt-3 text-micro text-text-muted">
-        This view shows only what it sent. Open the agent to watch what it is
-        doing and to message it directly.
-      </p>
     </div>
   );
 }

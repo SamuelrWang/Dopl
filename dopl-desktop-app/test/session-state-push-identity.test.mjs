@@ -151,8 +151,12 @@ test("FAILURE: the digest is NOT recorded, so the next state change retries", as
 
 test("FAILURE: it is logged ONCE per shape, not once per state change", async () => {
   const { m, summary } = armed({ answers: [{ ok: false, status: 500 }] });
-  for (const state of ["working", "idle", "ended"]) {
-    summary.emit([entry({ state })]);
+  // ⚠ `"ended"` WAS THE THIRD STATE HERE UNTIL 2026-08-22 and is now a live one: an ended row is
+  // LOCAL-ONLY and no longer reaches the wire, so it would have contributed no post and the
+  // "kept trying on each change" floor below would have measured two changes, not three. The
+  // property is unchanged — three state changes, one failure line.
+  for (const state of ["working", "idle", "working"]) {
+    summary.emit([entry({ state, channelName: `General ${state}` })]);
     await drained();
   }
   assert.ok(m.posts.length >= 6, "it really did keep trying on each change");

@@ -87,7 +87,10 @@ function enqueue(s, a) {
   // The latest inbound turn's seq — the windowless outbound bridge keys its consent
   // row on it so the send box lands on the right thread (a non-finite seq keeps the last).
   if (Number.isFinite(Number(a.seq))) s.lastInboundSeq = Number(a.seq);
-  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName };
+  // `addressing` rides with the message from `session-dispatch` (the @agent-id verdict for THIS
+  // reader) all the way to `session-seed.frameContinuation`. It is FRAMING, never a gate: a
+  // message addressed to a sibling is still delivered here, in full, and the turn says so.
+  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, addressing: a.addressing || null };
   const disp = io.queueInbound(s, item, !auto);
   // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this
   // early return, so a reply that overflowed the queue (MAX_PENDING_INBOUND) fell through to
@@ -106,16 +109,21 @@ function enqueue(s, a) {
   if (disp === 'dispatch') {
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
+      addressing: item.addressing,
     });
   }
   return true;
 }
 
-// The listener's live-session feed (unchanged entry point). A settled or unknown
-// session is not ours to gate — the caller falls through to classify.
+// The listener's live-session feed. A settled or unknown session is not ours to gate — the
+// caller falls through to classify.
+// ⚠ `a.agentId` IS REQUIRED IN PRACTICE SINCE 2026-08-21: the slot is (channel, thread, AGENT),
+// so a call that names no agent resolves nothing on a real thread rather than picking one at
+// random. `session-dispatch.feedLiveSession` is the one production caller and it iterates the
+// thread's live sessions, naming each — the fan-out. Fail-closed by construction.
 function feedInbound(a) {
   if (!deps || !deps.sessions) return false;
-  const s = deps.sessions.get(store.slotKey(a)); // D2: (channel, agent) for a TEAM session
+  const s = deps.sessions.get(store.slotKey(a));
   if (!s || s.settled) return false;
   return enqueue(s, a);
 }

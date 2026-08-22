@@ -145,7 +145,16 @@ test("isOutboundPost is the gate: a cross-channel post or a non-post op is never
 
 test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only reads it on ALLOW", () => {
   const fn = fnOf(IO, "makeCanUseTool");
-  assert.match(fn, /const tag = isOutboundPost\(name, input, s\.channelId\) \? outboundTag\.threadTagFor\(input, s\.taskId\) : null;/);
+  // ⚠ A THIRD ARGUMENT JOINED THE TAG ON 2026-08-21: the PER-INSTANCE post stamp
+  // (`agent-<agentId>-<n>`), which is what lets `session-dispatch.js`'s fan-out recognise a
+  // session's own words coming back off the wire. It rides the SAME seam as the thread tag, for
+  // the same reason — a prompt is a request, an injected argument is an invariant — and under
+  // the SAME rules: own-channel posts only, never an overwrite, never on a deny.
+  assert.match(fn, /const outbound = isOutboundPost\(name, input, s\.channelId\);/);
+  assert.match(fn, /const tag = outbound \? outboundTag\.threadTagFor\(input, s\.taskId, outboundTag\.nextOwnPostId\(s\)\) : null;/);
+  // ⚠ THE STAMP IS MINTED ONLY FOR A REAL OWN-CHANNEL POST. Minting on every tool call would
+  // spend ids the session never posts under and blunt the bounded lookback.
+  assert.ok(!/nextOwnPostId\(s\)[^)]*\n[\s\S]*nextOwnPostId/.test(fn), "exactly one mint site");
   assert.match(fn, /if \(decision === 'preapproved' \|\| decision === 'allow'\) return Promise\.resolve\(outboundTag\.allowResult\(tag\)\);/,
     "the auto-allowed path");
   assert.match(fn, /s\.pendingPermissions\.set\(requestId, outboundTag\.wrapAllow\(resolve, tag\)\);/,
@@ -154,12 +163,68 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   assert.match(fn, /if \(decision === 'deny'\) return Promise\.resolve\(\{ behavior: 'deny', message: 'Blocked for this session' \}\);/);
 });
 
+// ── THE COUNTER SURVIVES A CRASH RESUME (2026-08-22) ─────────────────────────────
+//
+// ⚠ THE STAMP IS ONLY IDEMPOTENCY-SAFE IF IT IS UNIQUE, AND FOR ONE WAVE IT WAS NOT. The id is
+// `agent-<agentId>-<n>`. The AGENT ID is persisted on the durable record and deliberately re-used
+// by `session-park.js › startResume` ("a resumed session keeps its AGENT INSTANCE ID, else it
+// comes back as a stranger") while `n` came from `s.ownPostSeq`, which `startSession` initialised
+// to 0 on EVERY session object. So a crash+resume re-minted `agent-<id>-1, 2, 3…` — client_msg_ids
+// the server already had rows for — and the server's idempotency short-circuit answered the OLD
+// row and wrote nothing. The resumed agent's replies were silently discarded, with no error on
+// either side. This is the fix's pin: the counter is persisted (`session-io.js › baseRecord`,
+// `session-store.js › durableSessionRecord`) and rehydrated WITH SLACK, because the record always
+// lags the posts a crash hid.
+
+const store = require(join(HERE, "..", "main", "session-store.js"));
+
+// The REAL rehydrate line out of the shipping `startSession`, so this cannot pass against a
+// number the test made up.
+const REHYDRATE = (M("session-engine.js").match(/ownPostSeq: store\.resumedPostSeq\(spec\.ownPostSeq\),/) || [])[0];
+
+test("resumedPostSeq jumps the crash window, and a fresh spawn still starts at zero", () => {
+  assert.ok(REHYDRATE, "startSession no longer rehydrates ownPostSeq — the collision is back");
+  const slack = store.RESUME_POST_SEQ_SLACK;
+  assert.ok(Number.isInteger(slack) && slack > 0, "the slack is a real, stated number");
+  assert.equal(store.resumedPostSeq(7), 7 + slack, "clear of the posts the record could not see");
+  // A fresh spawn passes nothing; slack over nothing would only make the first stamp odd.
+  for (const nothing of [undefined, null, 0, "", NaN, -3, Infinity, {}]) {
+    assert.equal(store.resumedPostSeq(nothing), 0, JSON.stringify(String(nothing)));
+  }
+});
+
+test("a RESUMED session never re-mints a client_msg_id the crashed one already used", () => {
+  // Before the crash: the agent posts three times, and the record is persisted after the FIRST
+  // (the lag that makes the slack necessary).
+  const before = { agentId: "a1b2c3d4", ownPostSeq: 0, ownPostIds: new Set() };
+  const used = new Set();
+  used.add(tag.nextOwnPostId(before));
+  const persisted = store.durableSessionRecord({ key: "k", ownPostSeq: before.ownPostSeq }).ownPostSeq;
+  used.add(tag.nextOwnPostId(before));
+  used.add(tag.nextOwnPostId(before));
+  assert.deepEqual([...used], ["agent-a1b2c3d4-1", "agent-a1b2c3d4-2", "agent-a1b2c3d4-3"]);
+  assert.equal(persisted, 1, "the record saw only the first — this is the gap");
+
+  // …the machine dies, and the resume re-uses the SAME agent id.
+  const after = { agentId: "a1b2c3d4", ownPostSeq: store.resumedPostSeq(persisted), ownPostIds: new Set() };
+  for (let i = 0; i < 20; i += 1) {
+    const id = tag.nextOwnPostId(after);
+    assert.ok(!used.has(id), `${id} collides with a pre-crash post the server already stored`);
+  }
+});
+
+test("…and a session with NO id still mints nothing, resume or not", () => {
+  // Unchanged: the stamp names an instance, so a session without one has nothing to stamp with.
+  assert.equal(tag.nextOwnPostId({ ownPostSeq: store.resumedPostSeq(9) }), "");
+  assert.equal(tag.nextOwnPostId(null), "");
+});
+
 test("the decision is made BEFORE the tag can influence anything", () => {
   const fn = fnOf(IO, "makeCanUseTool");
   // 2026-08-02: the verdict comes back as { decision, reason }; the ORDER pinned here is what
   // matters, and it is unchanged — the decision (and now its explanation) is settled first.
   const decide = fn.indexOf("const verdict = grantDecisionDetail(grantArgs(");
-  const tagAt = fn.indexOf("const tag = isOutboundPost");
+  const tagAt = fn.indexOf("const outbound = isOutboundPost");
   assert.ok(decide !== -1 && tagAt > decide, "the decision runs first and never sees the tag");
   assert.ok(!/grantArgs\([^)]*tag/.test(fn), "the tag is not an input to either axis");
 });

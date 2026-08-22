@@ -1,0 +1,120 @@
+-- Give `channel_messages` a DELETE doorbell — `workspace_id` in its replica
+-- identity, at 32 bytes per row instead of the whole row.
+--
+-- Same mechanism, same instrument and the same argument as
+-- `20260807150000_replica_identity_for_hard_deletes.sql`; read that file first,
+-- it carries the verified account of how the deployed `realtime.apply_rls`
+-- evaluates a subscription filter against `old_columns`. What is new here is the
+-- TABLE, and why the exemption it was granted on 2026-08-07 stopped being true.
+--
+-- ── WHY THIS TABLE WAS DELIBERATELY LEFT OUT, AND WHAT CHANGED ─────────────────
+-- 20260807150000 listed `channel_messages` among the six tables kept at DEFAULT,
+-- with the reason stated in one line: "cascade from `channels` / `workspaces`
+-- only". That was TRUE on the day it was written — nothing else deleted a message
+-- row, and a channel delete announces itself through `channel_members`, which DOES
+-- carry `workspace_id` in its identity.
+--
+-- On 2026-08-21 a thread became DELETABLE (Samuel's ruling; INVARIANTS §5,
+-- `src/features/channels/server/service-tasks-delete.ts › deleteTask`). Step 1 of
+-- that hand-written cascade is a real `DELETE FROM channel_messages` over every
+-- row tagged `metadata->>'taskId'` — a user-visible delete, on a published table,
+-- with NO accompanying event on any other table:
+--   • `channel_tasks` is deliberately out of the publication (§7) and stays out;
+--   • `channel_sessions` is unpublished too (§7);
+--   • `channel_consent_requests` rows are UPDATEd to `expired`, not deleted — and
+--     only when a pending one is anchored on a removed seq, so most deletes ring
+--     nothing there either;
+--   • `channels` and `channel_members` are untouched by a THREAD delete.
+-- So under DEFAULT every one of those DELETE frames is dropped server-side by the
+-- subscribers' `workspace_id=eq.<id>` filter and the counterparty's UI never
+-- learns the thread died: the transcript stays on screen, the thread stays in the
+-- list, and the first click 404s. Only the deleting client's own invalidate
+-- corrects it, and only on that one machine.
+--
+-- ⚠ `deleteTask`'s docblock CLAIMED THIS WAS ALREADY HANDLED, in terms — that
+-- `channel_messages` "carries `workspace_id` under `REPLICA IDENTITY FULL`
+-- (20260807150000)". It never did: that migration set USING INDEX, not FULL, on
+-- eleven OTHER tables and named this one on its exemption list. The docblock and
+-- INVARIANTS §5 are corrected in the same change as this file.
+--
+-- ── THE UPDATE COST, WHICH IS THE USUAL OBJECTION AND IS ZERO HERE ─────────────
+-- Replica identity is paid on UPDATE and DELETE, never on INSERT. The reason
+-- 20260807150000 refused `REPLICA IDENTITY FULL` for the wide tables is that FULL
+-- logs the entire old row on every UPDATE, and `knowledge_entries` / `skills` are
+-- autosave-driven. `channel_messages` is at the opposite extreme, and this is
+-- measurable in the tree rather than asserted:
+--   • It is INSERT-heavy by construction — one row per message, forever.
+--   • It has NO UPDATE PATH AT ALL. Grep the repository that owns the table
+--     (`src/features/channels/server/repository-messages.ts`): every statement is
+--     a `select`, the one `insert` (through the `channel_message_insert` RPC), or
+--     the thread cascade's `delete`. No migration issues an
+--     `UPDATE ... channel_messages` either.
+-- So the marginal cost of this file is +16 bytes of WAL on rows that are being
+-- DELETED anyway, plus one extra column in `apply_rls`'s per-column privilege
+-- loop for those same frames. USING INDEX rather than FULL keeps it at that; FULL
+-- would put a body that can be 16 KB into the WAL for every deleted row.
+--
+-- ── THE COST THAT IS NOT ZERO, STATED RATHER THAN DISCOVERED ───────────────────
+-- A CHANNEL delete cascades onto every message in it, and those frames are now
+-- DELIVERED where they used to be dropped — so deleting a busy channel emits one
+-- frame per message instead of none. Accepted, and bounded by the thing that
+-- already bounds it: both subscribers treat an event as a pure DOORBELL and
+-- coalesce (`main/ui-sync.js`, `src/shared/realtime/shared-channel-registry.ts`),
+-- so a burst collapses into one refetch per coalescing window rather than one per
+-- row. The alternative — leaving thread deletes silent to keep channel deletes
+-- quiet — is trading a correctness bug the user experiences for a cost profile
+-- nobody observes.
+--
+-- ── THE INDEX ─────────────────────────────────────────────────────────────────
+-- `(workspace_id, id)`, two uuids, both NOT NULL, unique because `id` is the
+-- primary key. HOT updates are unaffected (there are no updates, and neither
+-- column would ever be modified). Built non-CONCURRENTLY because Supabase runs
+-- migrations in a transaction and CONCURRENTLY cannot — ⚠ and unlike
+-- 20260807150000's tables (largest: 396 rows) this one GROWS WITHOUT BOUND, so
+-- the brief ACCESS EXCLUSIVE lock is proportional to the transcript. Check the
+-- row count before applying to a long-lived project:
+--   SELECT count(*) FROM public.channel_messages;
+--
+-- ⚠ LOUD FAILURE, unchanged from 20260807150000: `REPLICA IDENTITY USING INDEX`
+-- REQUIRES the index to keep existing. Dropping it leaves the table at replica
+-- identity NOTHING, and every UPDATE and DELETE on a published table then FAILS
+-- outright — which, on this table, means the thread cascade stops working. The
+-- name `*_replica_identity_idx` is the warning. A future migration that must
+-- replace it: set the table back to DEFAULT first, drop, recreate, re-point.
+--
+-- `dopl-desktop-app/test/ui-sync-replica-identity.test.mjs` pins the INVARIANT
+-- rather than the mechanism, and `channel_messages` moves from its
+-- `NO_DELETE_DOORBELL` map to `DELETE_DOORBELL_TABLES` in this same change — that
+-- file's own instruction ("if the reason has changed, move it and say so").
+--
+-- No client change ships with this. Both subscribers already forward a DELETE
+-- whose payload names no workspace (`old_record` stays PK-only under RLS), and
+-- both already bind this table.
+--
+-- Verify after applying:
+--   -- reads 'i', and the identity really is the pair.
+--   SELECT c.relreplident, i.relname,
+--          (SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+--             FROM unnest(ix.indkey) WITH ORDINALITY k(attnum, ord)
+--             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum)
+--   FROM pg_index ix
+--   JOIN pg_class c ON c.oid = ix.indrelid
+--   JOIN pg_class i ON i.oid = ix.indexrelid
+--   WHERE c.relname = 'channel_messages' AND ix.indisreplident;
+--
+--   -- THE ACTUAL BEHAVIOUR, which the catalog cannot confirm: two members open
+--   -- the same channel, one deletes a thread, and the other's transcript and
+--   -- thread list drop it without a reload.
+--
+-- ROLLBACK is one line — `ALTER TABLE public.channel_messages REPLICA IDENTITY
+-- DEFAULT;` — in a NEW migration, and it must come BEFORE any drop of the index.
+-- It is described rather than written out because
+-- `dopl-desktop-app/test/ui-sync-replica-identity.test.mjs` regexes this directory
+-- WITHOUT stripping comments, and a commented-out `ALTER TABLE ... REPLICA
+-- IDENTITY DEFAULT` reads to that parser as a real revert and would silently
+-- defeat the invariant it pins.
+
+CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_replica_identity_idx
+  ON public.channel_messages (workspace_id, id);
+ALTER TABLE public.channel_messages
+  REPLICA IDENTITY USING INDEX channel_messages_replica_identity_idx;

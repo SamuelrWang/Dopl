@@ -19,19 +19,83 @@
 // Copy rule for this repo: no em dashes in user-facing strings.
 
 // ── The check interval ───────────────────────────────────────────────────────
-// Production looks every 4h. That is fine for a machine that is already current
-// and useless the moment you publish a build and want it NOW: an app that was
-// already running will not look again for up to four hours. DOPL_UPDATE_CHECK_MS
-// overrides it for that loop.
+// ⚠ 4h → 30 MINUTES (2026-08-22, Samuel's ruling). The old cadence was fine for a
+// machine that is already current and useless the moment you publish a build and
+// want it NOW: an app that was already running would not look again for up to
+// four hours, and the operator's actual workaround was to QUIT AND REOPEN the app
+// to force the boot check. A user restarting the app to make the updater work is
+// the feature failing at its one job.
+//
+// ⚠ THE INTERVAL IS ONLY HALF THE FIX, AND THE SMALLER HALF. Polling is the
+// backstop for an app nobody is looking at; the near-immediate path is the FOCUS
+// CHECK below, because the moment that matters is when the operator opens the
+// app and wants the new build. Do not "tune" this number in place of that.
+//
+// RATE-LIMIT SANITY, measured 2026-08-22: electron-updater fetches
+// `latest-mac.yml` from GitHub Releases (a public asset, unauthenticated). 30-min
+// polling is 48 requests/day; focus checks add at most one per 10-minute gap, so
+// the ceiling is ~144/day for an operator who opens the app constantly. GitHub's
+// unauthenticated limit is 60/hour per IP for the API and far higher for release
+// asset downloads. Both are comfortably clear.
 //
 // THE CLAMP IS LOAD-BEARING: the override is read from the environment, so a typo
 // (`DOPL_UPDATE_CHECK_MS=5`, meaning "5 minutes") would otherwise become a 5ms
 // hot loop against GitHub Releases. Anything below the floor becomes the floor,
 // anything above the ceiling becomes the ceiling, and anything unparseable (or
-// absent, or <= 0) falls back to the 4h default rather than to zero.
-const DEFAULT_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4h
+// absent, or <= 0) falls back to the default rather than to zero.
+const DEFAULT_CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30m
 const MIN_CHECK_INTERVAL_MS = 60 * 1000; // 60s floor
 const MAX_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h ceiling
+
+// ── The focus check ──────────────────────────────────────────────────────────
+// ⚠ THE POINT OF THE WHOLE CHANGE (2026-08-22, Samuel's ruling): a running app
+// learns about a release when the operator LOOKS AT IT, with no restart. The
+// signals are app-level (`activate` + `browser-window-focus`, see updater.js for
+// why that pair), and this is the gap that keeps them from becoming a request per
+// window switch.
+//
+// ⚠ 10 MINUTES IS A RATE LIMIT, NOT A FRESHNESS TARGET. Cmd-tabbing between Dopl
+// and an editor fires focus events constantly; without a gap, "check when the
+// operator looks" is "check tens of times a minute". Ten minutes is short enough
+// that any real "I just published, let me go look" is answered on the first
+// glance and long enough that ordinary window churn costs nothing.
+//
+// ⚠ IT IS SHARED WITH THE INTERVAL, deliberately — `updater.js` stamps one
+// `lastCheckAt` from BOTH paths. A focus a second after a scheduled check must
+// not ask again, and a scheduled check does not reset the operator's gap.
+const FOCUS_CHECK_MIN_GAP_MS = 10 * 60 * 1000; // 10m
+
+/**
+ * MAY A FOCUS EVENT ASK THE SERVER? Pure, so the whole table is a test rather
+ * than a click.
+ *
+ * ⚠ `lastCheckAt` IS STAMPED WHEN A REQUEST IS ISSUED, NOT WHEN ONE SUCCEEDS —
+ * `updater.js` explains why at the stamp. This function only compares clocks.
+ *
+ * THE THREE EDGE ANSWERS, each chosen for its failure direction:
+ *   NEVER CHECKED (0 / absent / junk) -> YES. A run that has not asked yet has
+ *     nothing to be rate-limited against, and refusing would mean an app opened
+ *     and immediately focused learns nothing until the first interval fires.
+ *   CLOCK MOVED BACKWARD (elapsed < 0) -> YES, once. The stamp is rewritten by
+ *     the check it admits, so a jumped clock costs one extra request rather than
+ *     locking discovery out until the clock catches up.
+ *   UNUSABLE `now` (NaN) -> NO. That is the only branch that fails CLOSED: an
+ *     unreadable clock cannot bound anything, and the safe direction there is
+ *     not asking rather than asking without a limiter.
+ */
+function shouldCheckOnFocus(lastCheckAt, now, gapMs) {
+  const gap = Number.isFinite(gapMs) && gapMs > 0 ? gapMs : FOCUS_CHECK_MIN_GAP_MS;
+  const last = Number(lastCheckAt);
+  if (!Number.isFinite(last) || last <= 0) return true;
+  // ⚠ STRICTLY A NUMBER, not coerced. `Number(null)` is 0 and `Number("")` is 0, either of which
+  // would read as a clock in 1970 and take the "moved backward" branch below — admitting a check
+  // on an argument that is not a clock at all. `Date.now()` is the only real caller.
+  const at = typeof now === 'number' && Number.isFinite(now) ? now : null;
+  if (at === null) return false;
+  const elapsed = at - last;
+  if (elapsed < 0) return true;
+  return elapsed >= gap;
+}
 
 function resolveCheckIntervalMs(raw, fallback) {
   const base = Number.isFinite(fallback) && fallback > 0 ? fallback : DEFAULT_CHECK_INTERVAL_MS;
@@ -189,8 +253,10 @@ module.exports = {
   DEFAULT_CHECK_INTERVAL_MS,
   MIN_CHECK_INTERVAL_MS,
   MAX_CHECK_INTERVAL_MS,
+  FOCUS_CHECK_MIN_GAP_MS,
   RESTART_BUTTON_INDEX,
   resolveCheckIntervalMs,
+  shouldCheckOnFocus,
   progressPercent,
   progressLabel,
   checkNote,

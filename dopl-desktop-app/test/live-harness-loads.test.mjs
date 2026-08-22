@@ -67,6 +67,14 @@ test("the desktop decision modules still slice out of main/", async () => {
   assert.equal(dsk.pillState({ parked: true }), "idle");
   // The prototype-pollution guard pillState was written for.
   assert.equal(dsk.pillState({ activity: "constructor" }), "idle");
+  // 2026-08-22 — the `idle` pill covers two states, and a live run must be able to tell them
+  // apart: a session between turns is LISTENING (its query is alive, a message feeds it), a
+  // parked or spawn-idle one is not (a message relaunches it).
+  assert.equal(typeof dsk.listeningState, "function");
+  assert.equal(dsk.listeningState({ activity: "idle" }), true, "between turns: still listening");
+  assert.equal(dsk.listeningState({ activity: "awaiting_peer" }), true, "posted, waiting on a peer");
+  assert.equal(dsk.listeningState({ parked: true, activity: "parked" }), false, "parked: relaunches");
+  assert.equal(dsk.listeningState({ phase: "ended" }), false, "terminal, whatever else it says");
 });
 
 test("the forged-key list covers every reserved key the service strips", () => {

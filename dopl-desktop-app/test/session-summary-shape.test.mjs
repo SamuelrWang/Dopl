@@ -30,7 +30,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, session } from "./_session-summary-harness.mjs";
+import { load, session, endedRecord } from "./_session-summary-harness.mjs";
 
 
 test("SHAPE: a live summary carries exactly what the Agents tab and the agent view need", () => {
@@ -60,7 +60,10 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       sessionId: "sess-1",
       channelId: "chan-1",
       taskId: "task-1",
-      name: "quartz",
+      agentId: "a1b2c3d4",
+      name: "a1b2c3d4",
+      listening: true,
+      endedAt: null,
       state: "working",
       // A session mid-turn that has rendered nothing yet — the ported `thinkingVisible`
       // rule's own answer, and the fixture's state (no `lastEventKind` stamped).
@@ -114,7 +117,7 @@ test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
   assert.equal(row.startedAt, null);
   assert.equal(row.lastActivityAt, null);
   // …and the identity half is untouched by any of it.
-  assert.equal(row.name, "quartz");
+  assert.equal(row.name, "a1b2c3d4");
   assert.equal(row.state, "working");
 });
 
@@ -122,10 +125,10 @@ test("SHAPE: a RETAINED ENDED pill keeps the measurement it settled with", () =>
   // The session object is gone by then, so a live read would blank every number at
   // exactly the moment the operator wants to read what the run cost. `noteEnded` freezes
   // them with the identity.
+  // ⚠ FROZEN INTO THE DURABLE RECORD SINCE 2026-08-22, not into an in-memory list: an ended
+  // card survives a restart now, so the numbers have to survive with it.
   const m = load();
-  const s = session();
-  m.bind({ sessions: new Map() });
-  assert.equal(m.noteEnded(s, true), true);
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
   const [row] = m.list();
   assert.equal(row.state, "ended");
   assert.equal(row.contextUsed, 84000);

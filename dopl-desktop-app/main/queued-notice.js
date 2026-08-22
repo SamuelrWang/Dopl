@@ -47,6 +47,13 @@ const MAX_ANNOUNCED = 256;
 // no second spelling of the (channel, thread) identity anywhere in main/.
 const announced = new Set(); // sessionKey already claimed
 
+// The 7-day sweep's cleaner (`main/agent-retention.js`). ⚠ Without it this Set is the one
+// per-agent structure with NO bound at all: it only ever grows, one entry per thread this
+// process has announced on, for the life of the run.
+function forgetKeys(keys) {
+  for (const key of Array.isArray(keys) ? keys : [keys]) announced.delete(String(key || ''));
+}
+
 function remember(key) {
   announced.add(key);
   // Insertion-ordered, so the first value out is the oldest key.
@@ -86,4 +93,4 @@ async function announce(entry, m, taskId, where) {
 }
 // ─── END QUEUED-NOTICE-PURE ───────────────────────────────────────────────────
 
-module.exports = { announce, QUEUED_BODY, QUEUED_SUMMARY };
+module.exports = { announce, forgetKeys, QUEUED_BODY, QUEUED_SUMMARY };

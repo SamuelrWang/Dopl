@@ -18,7 +18,9 @@
 //   token          (2d) refresh a stale access token NOW, not at the late alarm
 //   ui-sync        (2e) rejoin the SPA's sync feed on fresh sockets
 //   version-gate   re-ask for the minimum version: the machine may have been
-//                  asleep across a release, and the next scheduled ask is 4h out
+//                  asleep across a release, and the next scheduled ask is up to
+//                  one updater interval out (30m since 2026-08-22; it was 4h,
+//                  which is what made waking a load-bearing signal here)
 //   guard          (2a) renderer pool + (2c) retry a hung load
 //
 // COALESCED. `resume` and `unlock-screen` fire together, and reconcile is

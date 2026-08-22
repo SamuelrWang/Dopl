@@ -1,0 +1,71 @@
+/* Account rail — the ACCOUNT-level strip left of the workspace chrome.
+   Home (personal, cross-org surface) pinned top; workspace tiles under it;
+   create at the end. Shell chrome like app-shell.module.css: paints the same
+   --shell-surface so the workspace sidebar reads as a sibling panel, not a
+   framed inset. */
+
+.rail {
+  width: var(--shell-rail-w);
+  flex: 0 0 var(--shell-rail-w);
+  /* The app's dark frame ink (--surface-cta) — same surface as panel headers,
+     so the account level reads as FRAME, not as another gray pane. */
+  background: var(--surface-cta);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  /* 7px top = .sidebar's padding-top, so the Home tile's top edge lands on the
+     brand pill's top edge (which lands on the page card's top edge). */
+  padding: 7px 0 20px;
+  overflow: hidden;
+}
+
+/* One square tile face for every row: Home, workspaces, create. Resting face
+   is transparent on the shell surface; hover = the nav-chip fill; the ACTIVE
+   tile composes the kit's `.raised-tab` in the TSX (same selected face as the
+   sidebar's active chip). */
+.tile {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s ease;
+}
+.tile:hover { background: rgba(255, 255, 255, 0.1); }
+.tile:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+
+.homeMark {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+/* Home is not a sibling of the workspace tiles — the rule under it draws the
+   account/container boundary. */
+.divider {
+  width: 22px;
+  height: 1px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.workspaces {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.workspaces::-webkit-scrollbar { width: 0; }

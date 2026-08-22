@@ -25,7 +25,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, session } from "./_session-summary-harness.mjs";
+import { load, session, endedRecord } from "./_session-summary-harness.mjs";
 
 const settle = (m) => new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
 
@@ -35,13 +35,16 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   const [entry] = m.reportList();
-  // The upsert key is the STABLE (channel, thread) key, never `sessionId` — a park, a lazy
-  // resume and a crash recreate all mint a fresh sessionId for the same session.
-  assert.equal(entry.key, "chan-1:task-1");
+  // The upsert key is the STABLE (channel, thread, AGENT) key, never `sessionId` — a park, a
+  // lazy resume and a crash recreate all mint a fresh sessionId for the same session.
+  // ⚠ The AGENT segment joined 2026-08-21: without it two of the operator's agents on one
+  // thread would upsert onto ONE row and each overwrite the other's state.
+  assert.equal(entry.key, "chan-1:task-1:a1b2c3d4");
   assert.equal(entry.workspaceId, "ws-1");
   // …and everything the pill shows is still there, unchanged.
   assert.equal(entry.sessionId, "sess-1");
-  assert.equal(entry.name, "quartz");
+  assert.equal(entry.name, "a1b2c3d4");
+  assert.equal(entry.agentId, "a1b2c3d4");
   assert.equal(entry.state, "working");
   assert.equal(entry.channelName, "general");
   assert.equal(entry.threadTitle, "Ship the thing");
@@ -63,9 +66,20 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // are LOCAL-only for the same reason `detail` is — asserted where it bites, in
     // `session-state-push.test.mjs`'s row shape. Here the claim is the narrower one and is
     // unchanged: whatever the wire carries, the two REPORT fields are not on it.
-    "channelId", "channelName", "contextUsed", "contextWindow", "detail", "lastActivityAt",
-    "messageMode", "name", "sessionId", "startedAt", "state", "taskId", "threadTitle",
-    "tokensSpent", "toolLabel", "toolMode",
+    // ⚠ `agentId` joined 2026-08-21 and IS on the wire: the Agents tab addresses pause / end /
+    // setMode / message / narration at ONE agent among several, and (channelId, taskId) can no
+    // longer say which. It is LOCAL-only in the other direction — `reportRow` picks the server
+    // columns by name and files the same string as `name`.
+    // ⚠ `listening` joined 2026-08-22 and is LOCAL-only in the same sense `detail` is: it
+    // refines the `idle` pill into Waiting (query alive, a message feeds it) vs Idle (torn down,
+    // a message relaunches it), and `reportRow` picks the server columns by name so it never
+    // reaches `channel_sessions`.
+    // ⚠ `endedAt` joined 2026-08-22 and is LOCAL-only for the same reason: it is the 7-day
+    // retention clock the OPERATOR's own cards render from, and `reportRow` picks the server
+    // columns by name so it never reaches `channel_sessions`.
+    "agentId", "channelId", "channelName", "contextUsed", "contextWindow", "detail", "endedAt",
+    "lastActivityAt", "listening", "messageMode", "name", "sessionId", "startedAt", "state",
+    "taskId", "threadTitle", "tokensSpent", "toolLabel", "toolMode",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
   assert.equal("key" in m.list()[0], false);
@@ -88,19 +102,24 @@ test("REPORT: a thread-less responder reports a real key and a NULL thread", () 
   const s = session({ taskId: "", context: {} });
   m.bind({ sessions: new Map([[s.key, s]]) });
   const [entry] = m.reportList();
-  assert.equal(entry.key, "chan-1:");
+  assert.equal(entry.key, "chan-1::a1b2c3d4");
   assert.equal(entry.taskId, "", "the wire keeps '' — the writer is what turns it into NULL");
   assert.equal(entry.workspaceId, "ws-1");
 });
 
 test("REPORT: an ENDED retained entry carries the workspace frozen at settle time", () => {
+  // ⚠ IT COMES FROM THE DURABLE HISTORY NOW (2026-08-22, Samuel's ended-agent ruling), not
+  // from an in-memory list `noteEnded` appended to. The projection READS `agent-history.js ›
+  // listEnded`, which is why an ended card survives a restart — and why the workspace has to
+  // be frozen into the record: the session object is long gone.
   const m = load();
-  // It is no longer in the registry, so there is nowhere else left to read it from.
-  m.noteEnded(session({ workspaceId: "ws-7" }), true);
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ workspaceId: "ws-7" })] });
   const [entry] = m.reportList();
   assert.equal(entry.state, "ended");
-  assert.equal(entry.key, "chan-1:task-1");
+  assert.equal(entry.key, "chan-1:task-1:a1b2c3d4");
   assert.equal(entry.workspaceId, "ws-7");
+  assert.equal(entry.endedAt, 1700000600000, "the 7-day clock rides the row");
+  assert.equal(entry.listening, false, "nothing terminal is listening");
 });
 
 test("REPORT: a session with no workspace reports '' rather than undefined", () => {
@@ -119,7 +138,7 @@ test("CHANGE: a subscriber gets the report entries when the projection first mov
   m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
-  assert.equal(seen[0][0].key, "chan-1:task-1");
+  assert.equal(seen[0][0].key, "chan-1:task-1:a1b2c3d4");
   assert.equal(seen[0][0].workspaceId, "ws-1");
 });
 
@@ -222,8 +241,8 @@ test("CHANGE: ending a session is a change, and so is its pill leaving", async (
   m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(seen.length, 1);
-  // The abandonment: the pill (and the row) stay as `ended`.
-  m.bind({ sessions: new Map() });
+  // The end: the pill (and the row) stay as `ended`, now read from the durable history.
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
   m.noteEnded(s, true);
   await settle(m);
   assert.equal(seen.length, 2);

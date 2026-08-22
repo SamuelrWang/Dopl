@@ -366,9 +366,11 @@ html {
 /* AppShell geometry — SINGLE SOURCE OF TRUTH for the chrome. Consumed by
    shared/layout/app-shell/app-shell.module.css. Change values here only. */
 :root {
-  /* Titlebar + rail both gone; kept at 0 so derived panel insets stay valid. */
+  /* Titlebar gone; kept at 0 so derived panel insets stay valid. */
   --shell-titlebar-h: 0px;
-  --shell-rail-w: 0px;
+  /* The ACCOUNT rail (2026-08-21) — Home + workspace tiles. 7px top pad +
+     38px tile + centered in 54px keeps 8px side gutters. */
+  --shell-rail-w: 54px;
   --shell-sidebar-w: 232px;
   /* Sidebar surface + resting nav-chip fill. */
   --shell-surface: #ececec;

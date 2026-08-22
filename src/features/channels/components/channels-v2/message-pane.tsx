@@ -54,6 +54,7 @@ import { useStickToBottom } from "./use-stick-to-bottom";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
 import { ThreadAwaitingStrip, ThreadSendBox } from "./thread-consent";
+import type { AgentLaunchControls } from "./use-agents-panel";
 import type { AuthorIndex } from "./view-model";
 import type { TranscriptRow } from "./view-model-rows";
 import type {
@@ -122,6 +123,7 @@ export function ChannelsV2MessagePane({
   infoOpen = false,
   favorited = false,
   gate,
+  newAgent,
   popOut,
   peerActivity,
   chrome = "page",
@@ -157,6 +159,14 @@ export function ChannelsV2MessagePane({
   favorited?: boolean;
   /** The page's refetch coordinator, handed straight to the composer's writes. */
   gate: MutationGate;
+  /**
+   * The page's launch controls (`use-agents-panel.ts › AgentLaunchControls`),
+   * for the composer's New Agent icon. ⚠ PASSED DOWN, never mounted here: a
+   * second `useAgentsPanel` would be a second peer poll of `channel_sessions` on
+   * its own interval. ⚠ OPTIONAL — the pop-out thread window has no panel to
+   * hand over, and the composer renders no button rather than a dead one.
+   */
+  newAgent?: AgentLaunchControls;
   /**
    * "Open as new window" (`pop-out.tsx › PopOutThreadButton`), injected as a
    * SLOT rather than imported: it needs the workspace segment, which this file
@@ -315,6 +325,10 @@ export function ChannelsV2MessagePane({
         members={members}
         currentUserId={index.currentUserId}
         gate={gate}
+        newAgent={newAgent}
+        // ⚠ THE OPEN THREAD IS THE TARGET, and `null` is a real answer rather
+        // than a missing one: channel view starts a CHANNEL-LEVEL agent.
+        openThreadId={thread?.id ?? null}
       />
     </section>
   );

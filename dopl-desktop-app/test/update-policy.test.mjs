@@ -9,6 +9,11 @@
 // which is the "several tries" verbatim. On top of that the check interval is 4h,
 // so an app that was already running when you published does not even look.
 //
+// ⚠ THE INTERVAL IS 30 MINUTES SINCE 2026-08-22, and the real fix beside it is the
+// FOCUS CHECK: the app looks whenever the operator does, gapped so window churn
+// costs nothing. The gap's whole truth table is here; the wiring is pinned in
+// update-restart-prompt.test.mjs.
+//
 // main/update-policy.js is deliberately pure (no electron, no timers, no I/O), so
 // every one of those decisions is a truth table here rather than a click test.
 // The wiring that consumes them is pinned in update-restart-prompt.test.mjs.
@@ -29,8 +34,10 @@ const {
   DEFAULT_CHECK_INTERVAL_MS,
   MIN_CHECK_INTERVAL_MS,
   MAX_CHECK_INTERVAL_MS,
+  FOCUS_CHECK_MIN_GAP_MS,
   RESTART_BUTTON_INDEX,
   resolveCheckIntervalMs,
+  shouldCheckOnFocus,
   progressPercent,
   progressLabel,
   checkNote,
@@ -42,10 +49,80 @@ const {
 
 // ── The interval, and its clamp ─────────────────────────────────────────────
 
-test("production keeps the 4h default when nothing overrides it", () => {
-  assert.equal(DEFAULT_CHECK_INTERVAL_MS, 4 * 60 * 60 * 1000);
+test("production keeps the 30m default when nothing overrides it", () => {
+  // ⚠ 4h → 30 MINUTES on 2026-08-22 (Samuel's ruling). At 4h an app that was
+  // already running would not look again for most of a day after a release, and
+  // the operator's workaround was to QUIT AND REOPEN to force the boot check —
+  // the feature failing at its one job. ⚠ THE INTERVAL IS THE BACKSTOP, NOT THE
+  // FIX: the near-immediate path is the FOCUS check below. Do not "tune" this
+  // number in place of that.
+  assert.equal(DEFAULT_CHECK_INTERVAL_MS, 30 * 60 * 1000);
   for (const nothing of [undefined, null, "", "   "]) {
     assert.equal(resolveCheckIntervalMs(nothing), DEFAULT_CHECK_INTERVAL_MS, String(nothing));
+  }
+  // The clamp's two ends did NOT move with it, deliberately: the floor is what
+  // keeps a typo'd override off the rate limiter and the ceiling is what keeps a
+  // huge one from disabling updates outright.
+  assert.equal(MIN_CHECK_INTERVAL_MS, 60 * 1000);
+  assert.equal(MAX_CHECK_INTERVAL_MS, 24 * 60 * 60 * 1000);
+  assert.ok(DEFAULT_CHECK_INTERVAL_MS > MIN_CHECK_INTERVAL_MS, "the default is still clampable");
+});
+
+// ── The focus check's gap ───────────────────────────────────────────────────
+//
+// ⚠ IT IS A RATE LIMIT, NOT A FRESHNESS TARGET. Cmd-tabbing between Dopl and an
+// editor fires focus events constantly; without a gap, "check when the operator
+// looks" becomes "check tens of times a minute". The gap is what makes the focus
+// signal safe to hang off an event that noisy.
+
+test("the focus gap is 10 minutes, and it is shared with the interval", () => {
+  assert.equal(FOCUS_CHECK_MIN_GAP_MS, 10 * 60 * 1000);
+  // ⚠ SHORTER THAN THE INTERVAL, and that is the whole point: a focus check is
+  // what makes discovery near-immediate, so it must be able to fire between two
+  // scheduled sweeps. A gap >= the interval would make the focus path decorative.
+  assert.ok(FOCUS_CHECK_MIN_GAP_MS < DEFAULT_CHECK_INTERVAL_MS);
+});
+
+test("GAP: a run that has never checked always may — there is nothing to limit", () => {
+  // Refusing here would mean an app opened and immediately focused learns nothing
+  // until the first interval fires, which is the latency this change is about.
+  for (const never of [0, undefined, null, "", NaN, -1, "junk"]) {
+    assert.equal(shouldCheckOnFocus(never, 5_000_000), true, String(never));
+  }
+});
+
+test("GAP: inside the gap is NO, at the gap and beyond is YES", () => {
+  const last = 1_000_000;
+  assert.equal(shouldCheckOnFocus(last, last), false, "the same instant");
+  assert.equal(shouldCheckOnFocus(last, last + 1), false);
+  assert.equal(shouldCheckOnFocus(last, last + FOCUS_CHECK_MIN_GAP_MS - 1), false, "one ms short");
+  assert.equal(shouldCheckOnFocus(last, last + FOCUS_CHECK_MIN_GAP_MS), true, "exactly the gap");
+  assert.equal(shouldCheckOnFocus(last, last + FOCUS_CHECK_MIN_GAP_MS + 1), true);
+  assert.equal(shouldCheckOnFocus(last, last + 86_400_000), true, "a day later, obviously");
+});
+
+test("GAP: an explicit gap argument wins, and junk falls back to the constant", () => {
+  const last = 1_000_000;
+  assert.equal(shouldCheckOnFocus(last, last + 5_000, 1_000), true, "a shorter gap admits it");
+  assert.equal(shouldCheckOnFocus(last, last + 5_000, 60_000), false, "a longer one does not");
+  for (const junk of [undefined, null, 0, -1, NaN, "soon"]) {
+    assert.equal(shouldCheckOnFocus(last, last + 1, junk), false, String(junk));
+    assert.equal(shouldCheckOnFocus(last, last + FOCUS_CHECK_MIN_GAP_MS, junk), true, String(junk));
+  }
+});
+
+test("GAP: a CLOCK THAT MOVED BACKWARD admits one check rather than locking out", () => {
+  // ⚠ THE FAILURE DIRECTION IS THE CHOICE. The stamp is rewritten by the check
+  // this admits, so a jumped clock costs ONE extra request; the alternative is a
+  // machine that stops discovering updates until real time catches up.
+  assert.equal(shouldCheckOnFocus(9_000_000, 1_000_000), true);
+});
+
+test("GAP: an UNUSABLE clock fails CLOSED — the one branch that refuses", () => {
+  // A `now` that cannot be read cannot bound anything, and asking without a
+  // limiter is worse than not asking: the interval is still running underneath.
+  for (const bad of [NaN, undefined, null, "later", {}]) {
+    assert.equal(shouldCheckOnFocus(1_000_000, bad), false, String(bad));
   }
 });
 

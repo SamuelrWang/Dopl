@@ -51,10 +51,10 @@ test("TRANSPORT: the writer rides api.js, and does not grow a third fetch copy",
 test("ROW: the payload is the schema's shape, field for field", () => {
   const m = load();
   assert.deepEqual(m.reportRow(entry()), {
-    sessionKey: `${CHAN_A}:${TASK_A}`,
+    sessionKey: `${CHAN_A}:${TASK_A}:a1b2c3d4`,
     channelId: CHAN_A,
     threadId: TASK_A,
-    name: "flint",
+    name: "a1b2c3d4",
     state: "working",
     channelName: "General",
     threadTitle: "Ship the thing",
@@ -114,7 +114,10 @@ test("ROW: the fixture satisfies the server's own two rules for a session row", 
 test("ROW: a thread-less responder's '' becomes the NULL the column stores", () => {
   const m = load();
   const row = m.reportRow(entry({ taskId: "" }));
-  assert.equal(row.sessionKey, `${CHAN_A}:`, "the KEY still carries the empty half");
+  // ⚠ THE KEY STILL CARRIES THE EMPTY MIDDLE SEGMENT — and since 2026-08-21 that shape means
+  // something on its own: `<channel>::<agent>` is a CHANNEL-LEVEL agent, whose scope is the
+  // main room. `threadId` is null either way; the key is what tells the two apart.
+  assert.equal(row.sessionKey, `${CHAN_A}::a1b2c3d4`, "the KEY still carries the empty half");
   assert.equal(row.threadId, null);
 });
 
@@ -199,20 +202,33 @@ test("PUSH: a change arriving mid-post is coalesced, never run in parallel", asy
   const { m, summary } = armed();
   summary.emit([entry()]);
   summary.emit([entry({ state: "idle" })]);
-  summary.emit([entry({ state: "ended" })]);
+  // ⚠ THE THIRD BEAT WAS `state: "ended"` UNTIL 2026-08-22 and is now a second live state: an
+  // ended row no longer goes on the wire at all, so it would have made this case about the
+  // ENDED filter rather than about COALESCING. The property under test is unchanged — whatever
+  // the microtask interleaving, the LAST state is what the server holds.
+  summary.emit([entry({ state: "working", channelName: "Renamed" })]);
   await drained();
-  // Whatever the microtask interleaving, the LAST state is what the server holds.
   const last = bodies(m)[m.posts.length - 1];
-  assert.equal(last[0].state, "ended");
+  assert.equal(last[0].state, "working");
+  assert.equal(last[0].channelName, "Renamed");
 });
 
 // ── 3. THE ROW LIFETIME ──────────────────────────────────────────────────────────────
 
-test("LIFECYCLE: an ENDED session is reported as ended while its window lives", async () => {
+// ⚠ REVERSED ON 2026-08-22 (Samuel's ended-agent ruling), and the reversal is the point rather
+// than a relaxation. This asserted `bodies(m)[0][0].state === "ended"` — an ended session WAS
+// reported, because the retained set was in memory, bounded by 12 and cleared by a restart, so
+// the row disappeared almost at once. Retention is now SEVEN DAYS and DURABLE, and the server
+// bounds the ARRAY at `SESSION_REPORT_MAX = 32`: reporting them would 400 the whole push,
+// unretryably, taking every LIVE session's row down with it. Ended cards are LOCAL now.
+test("LIFECYCLE: an ENDED session is NOT reported — its retention is local, not a server row", async () => {
   const { m, summary } = armed();
   summary.emit([entry({ state: "ended" })]);
   await drained();
-  assert.equal(bodies(m)[0][0].state, "ended");
+  // The set it reports is EMPTY, which is the replace protocol's DELETE: a peer's card for a
+  // just-ended agent goes on the next state change rather than lingering for a week.
+  assert.deepEqual(m.posts.length === 0 ? [] : bodies(m)[0], [],
+    "nothing is reported, or an empty set is — either way no ended row reaches the server");
 });
 
 test("LIFECYCLE: the pill leaving posts an EMPTY set — that is the DELETE", async () => {
@@ -352,4 +368,99 @@ test("LIFECYCLE: `kick()` runs a cycle off the current projection", async () => 
   assert.equal(m.kick(), undefined);
   await drained();
   assert.equal(m.posts.length, 0, "and a kick while signed out is still nothing");
+});
+
+/**
+ * AN ENDED ROW IS LOCAL-ONLY (2026-08-22, Samuel's ended-agent ruling).
+ *
+ * ⚠ WITHOUT THIS FILTER THE RULING BREAKS THE PUSH ENTIRELY, which is why it is pinned rather
+ * than left to the reader. Ended cards are retained for SEVEN DAYS and DURABLY now
+ * (`main/agent-history.js`), where they used to be an in-memory set of 12 cleared by a restart.
+ * The server bounds the ARRAY at `SESSION_REPORT_MAX = 32`; one oversized payload is a 400,
+ * `retryable(400)` is false, the digest is never recorded, and every later push for that
+ * workspace fails identically — `read_sessions` answers [] for the machine, LIVE sessions
+ * included. Same failure the ad-hoc filter exists for, reached by a different road.
+ *
+ * ⚠ NOTHING WANTED THEM ON THE WIRE. The OPERATOR's own ended cards come from the LOCAL
+ * summaries bridge; PEER cards already filter on row freshness; and `read_sessions` answers
+ * "what is this agent DOING", which a dead one is not.
+ */
+test("ROW/ENDED: ended entries are dropped, and the live ones in the same set still go", () => {
+  const m = load();
+  const rows = m.reportable([
+    entry({ state: "working" }),
+    entry({ taskId: TASK_B, agentId: "z9y8x7w6", state: "ended" }),
+  ]);
+  assert.deepEqual(rows.map((r) => r.state), ["working"]);
+});
+
+test("ROW/ENDED: a set of ONLY ended sessions reports the EMPTY set — which is the delete", () => {
+  // ⚠ THE ROW STILL LEAVES PROMPTLY. The replace protocol deletes by omission, so a peer's
+  // card for a just-ended agent disappears on the next state change rather than lingering a
+  // week. Retention keeps the LOCAL card, never the server row.
+  const m = load();
+  assert.deepEqual(m.reportable([entry({ state: "ended" })]), []);
+});
+
+/**
+ * A NAMELESS ROW IS REFUSED TOO — THE BELT, NOT THE FIX (2026-08-22).
+ *
+ * ⚠ THIRD ROAD TO THE SAME WEDGE. `channel_sessions.name` carries CHECK `^[a-z][a-z0-9-]{1,30}$`
+ * and `src/features/channels/schema-sessions.ts › SESSION_NAME_RE` restates it; zod validates the
+ * ARRAY, so ONE bad name 400s the whole payload, `retryable(400)` is false, the digest is never
+ * recorded, and every later push for that workspace fails identically for the life of the run.
+ *
+ * ⚠ `''` WAS REACHABLE. `session-summary.js › nameOf` answers the empty string for a session with
+ * no `agentId` — deliberately, because inventing a name there would be worse — and
+ * `session-park.js › startResume` produced exactly that when it resumed a PRE-MULTIPLAYER durable
+ * record. That producer is fixed in the same change (it mints an id). This stays because the cost
+ * of the NEXT producer getting it wrong is a workspace silently blanked, and the check is a regex.
+ */
+test("NAME: a row whose handle the server would refuse never reaches the wire", () => {
+  const m = load();
+  assert.deepEqual(
+    m.reportable([entry(), entry({ taskId: TASK_B, agentId: "", name: "" })]).map((r) => r.name),
+    ["a1b2c3d4"],
+    "the nameless one is dropped; the rest of the set is reported normally"
+  );
+});
+
+test("NAME: the predicate is `channel_sessions.name`'s CHECK, restated", () => {
+  const m = load();
+  for (const good of ["a1b2c3d4", "flint", "a-b", "z9", "a".repeat(31)]) {
+    assert.equal(m.nameReportable({ name: good }), true, JSON.stringify(good));
+  }
+  for (const bad of ["", " ", "a", "A1B2C3D4", "1abc", "-abc", "has space", "a_b", "a".repeat(32), null, 7, {}]) {
+    assert.equal(m.nameReportable({ name: bad }), false, JSON.stringify(String(bad)));
+  }
+  assert.equal(m.nameReportable(null), false, "and nothing at all fails closed");
+});
+
+test("NAME: the drop is VISIBLE, once per session, and says what it would have cost", async () => {
+  const { m, summary } = armed();
+  const nameless = entry({ taskId: TASK_B, agentId: "", name: "" });
+  summary.emit([entry(), nameless]);
+  await drained();
+  summary.emit([entry({ state: "idle" }), nameless]); // the same bad row, a later state change
+  await drained();
+  const said = m.logged.filter((l) => l.includes("SKIPPING nameless session"));
+  assert.equal(said.length, 1, "one line per dropped session, not one per push");
+  assert.match(said[0], /400s the whole payload/, "it says what the filter is buying");
+  assert.equal(
+    m.logged.filter((l) => l.includes("SKIPPING ad-hoc session")).length,
+    0,
+    "…and it is NOT reported as the ad-hoc refusal — different cause, different line"
+  );
+});
+
+test("ROW/ENDED: the predicate reads the STATE and nothing else", () => {
+  const m0 = load();
+  assert.equal(m0.liveForWire({ state: "working" }), true);
+  assert.equal(m0.liveForWire({ state: "idle" }), true);
+  assert.equal(m0.liveForWire({ state: "ended" }), false);
+  // Absent / malformed is NOT ended: a row this module cannot classify still goes, and the
+  // server's own closed enum is what refuses it. Failing toward "report it" keeps an
+  // unrecognised LIVE state visible rather than silently unreported.
+  assert.equal(m0.liveForWire({}), true);
+  assert.equal(m0.liveForWire(null), true);
 });

@@ -22,10 +22,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// 2026-08-22: `startResume` mints its own instance id (it is the one spawn `launch` does not
+// funnel), so the block's two new free vars are injected REAL — see test/session-park.test.mjs.
+const ids = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-id.js"));
 const PARK_SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
 const ENGINE_SRC = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
 
@@ -41,13 +45,13 @@ function harness() {
   const io = { makePushIterator: () => ({ push() {}, close() {} }) };
   const sessions = new Map();
   const store = {
-    // D2: the record's OWN slot (agent for a TEAM record, thread for every other).
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}`,
+    // The record's OWN slot, all three parts — as `main/session-store.js › slotKey` composes it.
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
   };
   const api = new Function(
-    "io", "store", "crypto", "Notification", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "diag",
     `${BLOCK}\n return { bind, startResume };`
-  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, null, () => {});
+  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, ids.newAgentId, ids.isAgentId, null, () => {});
   api.bind({
     sessions,
     getSdk: async () => ({ query: () => ({}) }),

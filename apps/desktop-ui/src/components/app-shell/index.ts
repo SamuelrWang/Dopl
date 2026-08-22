@@ -1,4 +1,5 @@
 export { AppShellLayout, canonicalPath } from "./app-shell";
+export { AccountRail, HOME_PATH } from "./account-rail";
 export { RouterLink } from "./router-link";
 export {
   useWorkspaceRoute,

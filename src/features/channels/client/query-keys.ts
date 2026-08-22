@@ -36,6 +36,25 @@ export function channelThreadsPath(channelId: string): string {
   return channelPath(channelId, "/tasks");
 }
 
+/**
+ * ONE thread. ⚠ NOT a cache key and there is deliberately no `channelKeys.thread`
+ * beside it: nothing READS a single thread through this client (the page derives
+ * the open thread from the bounded list), so the only callers are the two writes
+ * that address one — set-mode's PATCH and the DELETE. Adding a key for a query
+ * that does not exist would invite a second source of thread truth.
+ *
+ * BOUNDARY: wire/storage name `task` == domain name `thread`.
+ */
+export function channelThreadPath(
+  channelId: string,
+  threadId: string
+): string {
+  return channelPath(
+    channelId,
+    `/tasks/${encodeURIComponent(threadId)}`
+  );
+}
+
 export function channelMembersPath(channelId: string): string {
   return channelPath(channelId, "/members");
 }

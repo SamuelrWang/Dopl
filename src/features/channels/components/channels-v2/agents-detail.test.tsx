@@ -14,7 +14,7 @@
  *  - **AN UNKNOWN KEY RENDERS NOTHING, NEVER THE RAW KEY.** A newer main can
  *    emit a seventh value, and `awaiting_handoff` appearing verbatim on a card
  *    is worse than the pill's own word, which is always true.
- *  - **A DETAIL NEVER SPEAKS OVER AN IDLE DOT.** `AgentLiveness` enforces it
+ *  - **A DETAIL NEVER SPEAKS OVER A NON-WORKING STATE.** `agentLiveness` enforces it
  *    rather than trusting callers, because a card reading "Idle · Thinking…" is
  *    the two-readers-one-fact defect inside one component.
  *  - **PEER CARDS GET NO DETAIL AT ALL.** The cross-machine wire is deliberately
@@ -27,8 +27,8 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import { AgentsTab } from "./agents-tab";
 import { ChannelsV2AgentPanel } from "./agent-panel";
-import { AgentLiveness } from "./bits";
-import { agentDetailLabel, agentKey } from "./agents-model";
+
+import { agentDetailLabel, agentKey, agentLiveness } from "./agents-model";
 import { CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
 afterEach(cleanup);
@@ -87,24 +87,63 @@ describe("agentDetailLabel — the key becomes a sentence exactly once", () => {
   });
 });
 
-describe("AgentLiveness — the detail refines the dot, never contradicts it", () => {
+/**
+ * ⚠ THE COMPONENT STOPPED DECIDING ANYTHING ON 2026-08-22. It took a `running`
+ * boolean, which is precisely why "alive between turns" and "parked" both had to
+ * render as "Idle" — a boolean has no room for the distinction. `agents-model.ts ›
+ * agentLiveness` is the ONE mapping now, and `bits.tsx › AgentLiveness` renders
+ * the verdict it is handed. These cases therefore run the MAPPING, which is where
+ * the rules they are about actually live.
+ */
+describe("agentLiveness — the detail refines the state, never contradicts it", () => {
   it("shows the detail in place of Running, not beside it", () => {
-    render(<AgentLiveness running detail="Thinking…" />);
-    expect(screen.getByText("Thinking…")).toBeTruthy();
+    const { tone, label } = agentLiveness({ state: "working", detail: "thinking" });
     // "Running · Thinking…" would say one thing twice; the dot carries liveness.
-    expect(screen.queryByText("Running")).toBeNull();
+    expect(label).toBe("Thinking…");
+    expect(tone).toBe("working");
   });
 
   it("falls back to Running when this build has no finer sentence", () => {
-    render(<AgentLiveness running detail={null} />);
-    expect(screen.getByText("Running")).toBeTruthy();
+    expect(agentLiveness({ state: "working" }).label).toBe("Running");
   });
 
-  // ⚠ THE CASE THE GUARD INSIDE THE COMPONENT EXISTS FOR.
-  it("refuses to speak over an IDLE dot even when handed a detail", () => {
-    render(<AgentLiveness running={false} detail="Thinking…" />);
-    expect(screen.getByText("Idle")).toBeTruthy();
-    expect(screen.queryByText("Thinking…")).toBeNull();
+  // ⚠ THE CASE THE GUARD INSIDE THE MAPPING EXISTS FOR.
+  it("refuses to speak over a non-working state even when handed a detail", () => {
+    expect(agentLiveness({ state: "idle", detail: "thinking" }).label).toBe("Idle");
+  });
+
+  /**
+   * THE SPLIT INSIDE `idle` (Samuel, 2026-08-22). The wire has three values and
+   * lumped two very different situations under one: an agent ALIVE between turns
+   * that will answer the moment something arrives, and one that is parked and has
+   * to be woken. Both read "Idle", so watching a live agent wait for a
+   * counterparty looked exactly like watching a stopped one.
+   */
+  it("says WAITING for an idle agent that is still listening", () => {
+    const { tone, label } = agentLiveness({ state: "idle", listening: true });
+    expect(label).toBe("Waiting");
+    expect(tone).toBe("waiting");
+  });
+
+  it("says IDLE for a parked agent, and for a main that cannot say", () => {
+    // ⚠ ABSENT IS NOT "not listening" AS A CLAIM — it is "this machine cannot
+    // say", and the quieter word is the honest rendering (INVARIANTS §11). An
+    // older main omits the field and every one of its idle agents reads exactly
+    // as it did before this existed.
+    expect(agentLiveness({ state: "idle", listening: false }).label).toBe("Idle");
+    expect(agentLiveness({ state: "idle" }).label).toBe("Idle");
+  });
+
+  it("says ENDED, and outranks every other signal", () => {
+    // An ended agent is DEAD: no wake path revives it. A stale `listening` or a
+    // retained `detail` riding along must not make it look alive.
+    const { tone, label } = agentLiveness({
+      state: "ended",
+      listening: true,
+      detail: "thinking",
+    });
+    expect(label).toBe("Ended");
+    expect(tone).toBe("ended");
   });
 });
 
@@ -196,7 +235,9 @@ describe("Open agent always opens the agent view", () => {
     bridgeWith({ reopen: vi.fn(), openAgentWindow: openWin });
     const { openAgentWindow } = await import("./agents-controls");
     expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: true, reason: undefined });
-    expect(openWin).toHaveBeenCalledWith(SEGMENT, CHANNEL_ID, "t-1");
+    // ⚠ The trailing coordinate is the AGENT INSTANCE (2026-08-22) — absent on
+    // this fixture, which is the older-main shape and degrades to oldest-live.
+    expect(openWin).toHaveBeenCalledWith(SEGMENT, CHANNEL_ID, "t-1", undefined);
   });
 
   // ⚠ NOT COMPATIBILITY THEATRE: on a main with only `reopen`, that op now hands a
@@ -208,7 +249,7 @@ describe("Open agent always opens the agent view", () => {
     bridgeWith({ reopen });
     const { openAgentWindow } = await import("./agents-controls");
     expect(await openAgentWindow(AGENT, SEGMENT)).toEqual({ ok: true, reason: undefined });
-    expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, "t-1", SEGMENT);
+    expect(reopen).toHaveBeenCalledWith(CHANNEL_ID, "t-1", SEGMENT, undefined);
   });
 
   it("offers the button when EITHER op is present, and not when neither is", async () => {
@@ -251,7 +292,7 @@ describe("the panel's button reaches it", () => {
       />
     );
     screen.getByRole("button", { name: "Open agent" }).click();
-    expect(openWin).toHaveBeenCalledWith("acme-a1b2", CHANNEL_ID, "t-1");
+    expect(openWin).toHaveBeenCalledWith("acme-a1b2", CHANNEL_ID, "t-1", undefined);
   });
 
   // ⚠ THE DELETED NOTICE. "This agent runs without a window" described an

@@ -64,16 +64,18 @@ function inboundAutoAccepted(state) {
   return m === 'auto_inbound' || m === 'auto_both' || state.inboundForTask === true;
 }
 
-// v2.5 D1 — FEED a counterparty turn: the byte-equivalent of the pre-gate autonomous path. Show it
-// as a `counterparty` bubble, push it as the next user turn, clear the activity back to `working`
+// v2.5 D1 — FEED a counterparty turn: the byte-equivalent of the pre-gate autonomous path. Show
+// it as a `counterparty` bubble, push it as the next user turn, clear the activity to `working`
 // (statused only on change). A PARKED session wakes FIRST (resumeQuery) so the push lands on the
-// fresh iterator (P1 lazy resume).
+// fresh iterator — since 2026-08-21 that is also how a SPAWN-IDLE agent starts.
 // The push effect for ONE inbound turn. It used to carry a per-turn `threadId` from
-// channel-deliver, so the first turn of a room-bound shell could be told to read the exchange it
-// was joining; that producer is deleted (channels rollback, 2026-08-05) and the value was `''`
-// end to end, so the effect is the two fields the engine's `pushInbound` case actually reads.
+// channel-deliver (producer deleted, channels rollback 2026-08-05; the value was `''` end to
+// end), so the effect is what the engine's `pushInbound` case actually reads.
+// ⚠ `addressing` JOINED 2026-08-21 and is FRAMING-ONLY: the @agent-id verdict for this reader
+// (`session-dispatch.js` parses it, `session-seed.frameContinuation` renders it). The reducer
+// CARRIES it and reads nothing from it, which keeps "addressed or not, it is delivered" true.
 function pushInboundEffect(event) {
-  return { type: 'pushInbound', message: event.message, authorName: event.authorName };
+  return { type: 'pushInbound', message: event.message, authorName: event.authorName, addressing: event.addressing || null };
 }
 
 function feedInboundEffects(state, event) {
@@ -100,7 +102,7 @@ function sessionReducer(state, event) {
   // `context` joins that list for the same reason `result` is on it: the meter describes a turn
   // this session is running, and a parked shell is not running one — a measurement arriving from
   // the drained tail would repaint a gauge for a query that no longer exists.
-  if (state.parked === true && (type === 'assistant' || type === 'tool_use' || type === 'tool_result'
+  if (state.parked === true && (type === 'assistant' || type === 'thinking' || type === 'tool_use' || type === 'tool_result'
       || type === 'outbound_post' || type === 'result' || type === 'context' || type === 'permission_request')) {
     return { state: state, effects: [] };
   }
@@ -121,8 +123,8 @@ function sessionReducer(state, event) {
     };
   }
 
-  // Pass-through render events (no state change): assistant turns and tool cards.
-  if (type === 'assistant' || type === 'tool_use') {
+  // Pass-through render events (no state change): assistant turns, THINKING (2026-08-22), tools.
+  if (type === 'assistant' || type === 'thinking' || type === 'tool_use') {
     return { state: state, effects: [{ type: 'emit', payload: event.payload }] };
   }
 

@@ -33,9 +33,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MAIN, load, session } from "./_session-summary-harness.mjs";
+import { MAIN, SRC, load, session } from "./_session-summary-harness.mjs";
 
 // The engine's own vocabulary, re-read from source so a NEW activity added to the reducer
 // cannot silently land on this projection's fallback (the MAPPING coverage case below).
@@ -107,6 +107,44 @@ const MAPPING = [
   },
 ];
 
+// ── THE MAPPING HAS EXACTLY ONE IMPORT PATH (2026-08-22) ─────────────────────────
+//
+// ⚠ THE COMPATIBILITY RE-EXPORT IS DELETED, AND THIS IS WHY IT WAS SAFE. When the mapping moved
+// to `main/session-pill.js`, `session-summary.js` re-exported `PILL_STATES`, `ACTIVITY_PILL`,
+// `pillState`, `queryTornDown` and `listeningState` "so every existing reader of
+// `summary.pillState` is unchanged" — and a census found NO production reader of the re-export
+// in either tree. What consumed it was this suite and its harness, which already require
+// `session-pill.js` directly (that is where `m.pillState` below resolves from). One derivation
+// behind two import paths is precisely the drift the split was made to prevent, so the second
+// path went. ⚠ The cases below are UNCHANGED — the harness merges the real module in.
+test("BOUNDARY: session-summary re-exports none of the pill mapping, and nothing reads it there", () => {
+  const exportsBlock = SRC.slice(SRC.indexOf("module.exports = {"));
+  const MOVED = ["PILL_STATES", "ACTIVITY_PILL", "pillState", "queryTornDown", "listeningState"];
+  for (const name of MOVED) {
+    assert.ok(
+      !new RegExp(`^\\s*${name},\\s*$`, "m").test(exportsBlock),
+      `${name} is re-exported again — require main/session-pill.js instead`
+    );
+  }
+  // …and the file takes only what it CALLS. `PILL_ENDED` is the ended row's state literal;
+  // `pillState` / `listeningState` are called in `liveSummary`.
+  const req = SRC.match(/^const \{([^}]*)\} = require\('\.\/session-pill'\);$/m);
+  assert.ok(req, "the session-pill require changed shape");
+  assert.deepEqual(
+    req[1].split(",").map((s) => s.trim()).filter(Boolean).sort(),
+    ["PILL_ENDED", "listeningState", "pillState"]
+  );
+  // The census, re-run rather than restated: no main module may reach the mapping through this
+  // module's name. A hit here means the re-export is being depended on again.
+  const offenders = readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js") && f !== "session-summary.js")
+    .filter((f) => {
+      const src = readFileSync(join(MAIN, f), "utf8");
+      return MOVED.some((n) => new RegExp(`(?:sessionSummary|summary)\\.${n}\\b`).test(src));
+    });
+  assert.deepEqual(offenders, []);
+});
+
 test("MAPPING: every engine state the reducer produces becomes the right pill", () => {
   const m = load();
   for (const row of MAPPING) {
@@ -175,45 +213,63 @@ test("MAPPING: an inherited property is not a pill state", () => {
 
 // ── 2. NAMING ────────────────────────────────────────────────────────────────────────
 
-test("NAMES: a session gets a handle from the pool, and keeps it", () => {
+// ⚠ THE POOL AND ITS LEDGER ARE DELETED (2026-08-21, Samuel's multiplayer ruling), AND THE
+// TWO CASES THAT STOOD HERE WENT WITH THEM RATHER THAN BEING RESTATED. They pinned
+// `nameFor(ledger, key, channelId)`: first-free handle from a curated 60-name pool, per
+// CHANNEL, so two channels could each run a `quartz`. Both properties are meaningless now —
+// there is no pool to be first in and no channel scope to be per — and the RELEASE rule they
+// paired with (a handle returns to the pool when its pill leaves) was an outright multiplayer
+// bug: several agents share a thread, they leave at different times, and a released handle was
+// re-issued within one projection pass, so `@flint` in a transcript could name a different
+// agent than the one it was typed at. A name is now the session's own instance id.
+test("NAMES: a session's handle IS its agent id, and nothing derives a second one", () => {
   const m = load();
-  const ledger = new Map();
-  const first = m.nameFor(ledger, "chan-1:task-1", "chan-1");
-  assert.equal(first, "quartz");
-  assert.equal(m.nameFor(ledger, "chan-1:task-1", "chan-1"), "quartz", "the name must be stable");
-  assert.equal(m.nameFor(ledger, "chan-1:task-2", "chan-1"), "onyx");
+  assert.equal(m.nameOf(session({ agentId: "k9m2p4qz" })), "k9m2p4qz");
+  // No id is answered honestly as no name. The push's own validation refuses such a row;
+  // inventing one here would put an unaddressable pill on screen.
+  assert.equal(m.nameOf(session({ agentId: "" })), "");
+  assert.equal(m.nameOf(null), "");
 });
 
-test("NAMES: the pool is PER CHANNEL, so two channels each get a quartz", () => {
+test("NAMES: two agents on ONE thread are two rows with two different names", () => {
   const m = load();
-  const ledger = new Map();
-  assert.equal(m.nameFor(ledger, "chan-1:task-1", "chan-1"), "quartz");
-  assert.equal(m.nameFor(ledger, "chan-2:task-1", "chan-2"), "quartz");
-  assert.equal(m.nameFor(ledger, "chan-1:task-2", "chan-1"), "onyx");
-  assert.equal(m.nameFor(ledger, "chan-2:task-2", "chan-2"), "onyx");
+  const one = session({ agentId: "a1b2c3d4" });
+  const two = session({ agentId: "z9y8x7w6", sessionId: "sess-2" });
+  m.bind({ sessions: new Map([[one.key, one], [two.key, two]]) });
+  const listed = m.list();
+  assert.equal(listed.length, 2, "(channel, thread) is a GROUP now, never one row");
+  assert.deepEqual(listed.map((r) => r.name).sort(), ["a1b2c3d4", "z9y8x7w6"]);
+  assert.deepEqual(listed.map((r) => r.agentId).sort(), ["a1b2c3d4", "z9y8x7w6"]);
+  assert.deepEqual(new Set(listed.map((r) => r.taskId)), new Set(["task-1"]));
 });
 
-test("NAMES: the handle rides the SESSION KEY, so a park/resume/recreate keeps it", () => {
+test("NAMES: the handle rides the AGENT, so a park/resume/recreate keeps it", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  const live = session();
+  m.bind({ sessions: new Map([[live.key, live]]) });
   const before = m.list()[0].name;
-  // A recreate mints a fresh internal sessionId for the SAME (channel, thread) slot.
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ sessionId: "sess-recreated" })]]) });
+  // A recreate mints a fresh internal sessionId for the SAME agent instance.
+  const again = session({ sessionId: "sess-recreated" });
+  m.bind({ sessions: new Map([[again.key, again]]) });
   const after = m.list()[0];
   assert.equal(after.sessionId, "sess-recreated");
-  assert.equal(after.name, before, "a recreated shell is the same session to the operator");
+  assert.equal(after.name, before, "a recreated shell is the same agent to the operator");
 });
 
-test("NAMES: a handle is released when its pill leaves, and goes back to the pool", () => {
+// ⚠ THE REPLACEMENT FOR "a handle is released and goes back to the pool". That rule existed to
+// stop an ever-growing ledger; there is no ledger, so what is worth pinning is the property it
+// used to VIOLATE — an id is never re-issued, so a name in an old transcript never comes to
+// mean a different agent.
+test("NAMES: a departed agent's name is never handed to the next one", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  assert.equal(m.list()[0].name, "quartz");
+  const first = session({ agentId: "a1b2c3d4" });
+  m.bind({ sessions: new Map([[first.key, first]]) });
+  assert.equal(m.list()[0].name, "a1b2c3d4");
   m.bind({ sessions: new Map() });
   assert.deepEqual(m.list(), []);
-  // Nothing holds `quartz` any more, so the next session in that channel gets it. This is
-  // what stops the ledger (and the suffix rounds) growing with every session ever run.
-  m.bind({ sessions: new Map([["chan-1:task-9", session({ taskId: "task-9" })]]) });
-  assert.equal(m.list()[0].name, "quartz");
+  const next = session({ taskId: "task-9", agentId: "q7w8e9r0" });
+  m.bind({ sessions: new Map([[next.key, next]]) });
+  assert.equal(m.list()[0].name, "q7w8e9r0", "a fresh instance, a fresh address");
 });
 
 /**
@@ -226,15 +282,14 @@ test("NAMES: a handle is released when its pill leaves, and goes back to the poo
 test("NAMES: a window's own handle is the SAME one its pill shows, either way round", () => {
   const m = load();
   const live = session();
-  const other = session({ sessionId: "sess-2", taskId: "task-2" });
-  m.bind({ sessions: new Map([["chan-1:task-1", live], ["chan-1:task-2", other]]) });
+  const other = session({ sessionId: "sess-2", taskId: "task-2", agentId: "z9y8x7w6" });
+  m.bind({ sessions: new Map([[live.key, live], [other.key, other]]) });
   const asked = m.nameForSession(live); // the window asks BEFORE any projection has run
-  assert.equal(asked, "quartz");
+  assert.equal(asked, "a1b2c3d4");
   const listed = m.list();
   assert.equal(listed[0].name, asked, "the projection agrees with the answer already given");
   assert.equal(m.nameForSession(other), listed[1].name, "and the other way round");
-  // No key, no handle: naming something outside the registry would mint one and then lose it
-  // on the next projection, which releases every key `list()` did not see.
+  // No key, no handle — the guard survives the ledger it used to protect.
   assert.equal(m.nameForSession(null), null);
   assert.equal(m.nameForSession({}), null);
 });
@@ -250,7 +305,7 @@ test("PUSH: the event name and payload are the shape the preload forwards", asyn
   assert.equal(m.sent.length, 1);
   assert.equal(m.sent[0].channel, "dopl:sessions");
   assert.deepEqual(Object.keys(m.sent[0].payload), ["sessions"]);
-  assert.equal(m.sent[0].payload.sessions[0].name, "quartz");
+  assert.equal(m.sent[0].payload.sessions[0].name, "a1b2c3d4");
 });
 
 // ── REGISTRATION IS A PROJECTION MOVE (2026-08-20) ───────────────────────────────────

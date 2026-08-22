@@ -1,0 +1,87 @@
+-- IDEMPOTENCY IS A SAME-AUTHOR RETRY CONTRACT, NOT A ROOM-WIDE ONE.
+-- Widen `channel_messages`' `client_msg_id` uniqueness to include the AUTHOR.
+--
+-- ── THE VULNERABILITY, AND WHY IT IS NOT THEORETICAL ────────────────────────────
+-- `20260725120000_channels.sql` created:
+--   CREATE UNIQUE INDEX channel_messages_client_msg_key
+--     ON channel_messages (channel_id, client_msg_id)
+--     WHERE client_msg_id IS NOT NULL;
+-- and `service-writes.ts › postMessage` short-circuits on the matching read. Both
+-- were scoped to the CHANNEL, which makes "I already sent this, give me back what
+-- you stored" a contract with everyone in the room instead of with the author who
+-- is retrying.
+--
+-- THE KEYS ARE GUESSABLE. The desktop stamps every agent post
+-- `agent-<agentId>-<n>` (`dopl-desktop-app/main/session-outbound-tag.js ›
+-- nextOwnPostId`); `agentId` is published to every member of the workspace as
+-- `channel_sessions.name` (`read_sessions`), and `n` counts from 1. So any
+-- channel member can post messages carrying the NEXT several keys of any visible
+-- agent. When that agent then posts, the server finds the pre-claimed row, writes
+-- NOTHING, and answers `{ok}` with the attacker's message id. The agent believes
+-- it replied; the peer waiting on the thread gets silence; no error is raised on
+-- either side and nothing in the transcript says a message was suppressed.
+--
+-- ── WHY THE INDEX HAS TO MOVE AND NOT JUST THE QUERY ───────────────────────────
+-- Author-scoping the READ alone converts the silent swallow into a `23505` the
+-- caller sees as a 500: the probe finds nothing, the INSERT hits the still
+-- channel-scoped index, and `postMessage`'s race repair — now also author-scoped —
+-- finds nothing to answer with and rethrows. Louder, still a denial. The two
+-- halves state one rule and must land together.
+--
+-- ── COLUMN ORDER IS DELIBERATE: (channel_id, client_msg_id, author_user_id) ─────
+-- NOT (channel_id, author_user_id, client_msg_id), which reads more naturally and
+-- would be wrong. `service-tasks.ts › storedOpeningSeq` still asks the
+-- CROSS-AUTHOR question — "what seq is the stored `task-open-<taskId>` message",
+-- for a caller that converged on somebody else's thread and may post nothing into
+-- it — and only a leading `(channel_id, client_msg_id)` prefix answers that from
+-- the index. The author-scoped probe is served by the same prefix plus a filter
+-- over the one or two rows it can return.
+--
+-- ── NULL AUTHORS: STATED, NOT DISCOVERED ───────────────────────────────────────
+-- `author_user_id` is `REFERENCES auth.users(id) ON DELETE SET NULL`, and a unique
+-- index treats NULLs as DISTINCT — so two rows whose authors have both been
+-- deleted could share a (channel, client_msg_id) where today they could not.
+-- Accepted, because nothing can WRITE into that case: `insertMessage` is the only
+-- writer, it always passes `ctx.userId`, and a deleted account has no credential
+-- to retry with. The nulls can only appear on rows that were already stored, long
+-- after any retry window. `NULLS NOT DISTINCT` was considered and rejected: it
+-- would pin this file to a Postgres 15+ server for a case no writer can reach.
+--
+-- ── ORDER OF STATEMENTS ────────────────────────────────────────────────────────
+-- CREATE first, DROP second, so the table is never without an idempotency guard
+-- (Supabase runs migrations in one transaction, so this is belt — but a file that
+-- reads correctly statement-by-statement is the one that survives being split).
+-- Both non-CONCURRENTLY: CONCURRENTLY cannot run inside a transaction.
+--
+-- ⚠ WIDENING CANNOT FAIL ON EXISTING DATA. Every (channel_id, client_msg_id) pair
+-- that is unique today is unique with a third column appended, by construction.
+-- The reverse is not true, which is what the rollback note below is about.
+--
+-- ── WHAT BREAKS IF THIS IS WRONG ───────────────────────────────────────────────
+-- No rows, columns, policies, grants, triggers or publication membership are
+-- touched. The one behavioural change is the one described above. If the pair
+-- index has to come back, the DROP of the triple must come SECOND again and the
+-- re-created pair index can FAIL on data written in the meantime — two members
+-- who each posted under the same key are legal now and are not legal there. That
+-- is a data question, not a DDL question, and it must be answered before reverting.
+--
+-- Verify after applying:
+--   -- One partial unique index on this table, and it names three columns.
+--   SELECT i.relname,
+--          (SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+--             FROM unnest(ix.indkey) WITH ORDINALITY k(attnum, ord)
+--             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum)
+--   FROM pg_index ix
+--   JOIN pg_class c ON c.oid = ix.indrelid
+--   JOIN pg_class i ON i.oid = ix.indexrelid
+--   WHERE c.relname = 'channel_messages' AND ix.indisunique;
+--
+--   -- THE ACTUAL BEHAVIOUR, which the catalog cannot confirm: two members post
+--   -- the same client_msg_id into one channel and get TWO distinct message ids;
+--   -- one member posting it twice gets the SAME id back both times.
+
+CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_client_msg_author_key
+  ON public.channel_messages (channel_id, client_msg_id, author_user_id)
+  WHERE client_msg_id IS NOT NULL;
+
+DROP INDEX IF EXISTS public.channel_messages_client_msg_key;

@@ -24,6 +24,23 @@
  * ⚠ OWN AGENTS ONLY, STRUCTURALLY RATHER THAN BY A CHECK. Main resolves every one of these
  * against ITS OWN session registry, which holds nothing but this operator's sessions on this
  * machine. There is no cross-machine control op here and this is not the seam to add one.
+ *
+ * ⚠ EVERY OP TAKES `agentId` AS ITS THIRD COORDINATE (2026-08-22 — F-239's SPA half; the
+ * bridge grew the parameter the day before). **THE RULE, STATED ONCE HERE so no signature
+ * has to re-argue it:** `(channelId, taskId)` stopped identifying a session on 2026-08-21,
+ * because one operator may run SEVERAL agents on one thread. Main resolves the pair to a
+ * GROUP and — with no id — picks the OLDEST live member of it. Every op below is invoked
+ * from a surface looking at ONE agent's card, so "the oldest one" is not merely imprecise:
+ * it is a DIFFERENT agent than the one on screen. Pause stops a stranger, the 1:1 message
+ * reaches a stranger, and nothing anywhere reports the substitution.
+ *
+ * ⚠ IT IS OPTIONAL, AND ITS ABSENCE IS THE CORRECT DEGRADATION rather than a refusal. An
+ * older main omits `agentId` from its summaries and cannot accept one — but on such a build
+ * there is at most one agent per thread anyway, so oldest-live IS the agent on screen.
+ * Passing `undefined` reaches exactly the behaviour that build already had.
+ *
+ * ⚠ EVERY CALLER ALREADY HOLDS THE SESSION IT CLICKED, so the id is read off that object and
+ * never re-derived from a key or a route.
  */
 
 import { useCallback } from "react";
@@ -110,6 +127,8 @@ export function canSetAgentMode(): boolean {
 export async function setAgentMode(payload: {
   channelId: string;
   taskId: string;
+  /** WHICH instance — see the module header. */
+  agentId?: string;
   axis: "tools" | "messages";
   mode: string;
 }): Promise<{ ok: boolean; reason?: string }> {
@@ -119,7 +138,8 @@ export async function setAgentMode(payload: {
     payload.channelId,
     payload.taskId,
     payload.axis,
-    payload.mode
+    payload.mode,
+    payload.agentId
   );
   return { ok: res?.ok === true, reason: res?.reason };
 }
@@ -141,11 +161,18 @@ export async function setAgentMode(payload: {
 export async function messageAgent(payload: {
   channelId: string;
   taskId: string;
+  /** WHICH instance — see the module header. */
+  agentId?: string;
   text: string;
 }): Promise<{ ok: boolean; reason?: string }> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.message !== "function") return { ok: false, reason: "no-bridge" };
-  const res = await sessions.message(payload.channelId, payload.taskId, payload.text);
+  const res = await sessions.message(
+    payload.channelId,
+    payload.taskId,
+    payload.text,
+    payload.agentId
+  );
   return { ok: res?.ok === true, reason: res?.reason };
 }
 
@@ -155,24 +182,55 @@ export function canLaunchAgents(): boolean {
 }
 
 /**
- * ATTACH MY OWN AGENT TO A THREAD — the Agents tab's launch button (Samuel,
- * 2026-08-20). Windowless requester-side session; the click IS the consent (own
- * agent, own thread — no row is raised) and MAIN owns the posture (inbound
- * auto-consumed; out per the channel's auto-send setting).
+ * START A NEW AGENT ON A THREAD — the Agents tab's "New Agent" button (Samuel,
+ * 2026-08-20; re-scoped 2026-08-21). Windowless requester-side session; the click
+ * IS the consent (own agent, own thread — no row is raised) and MAIN owns the
+ * posture (inbound auto-consumed; out per the channel's auto-send setting).
+ *
+ * ⚠ EVERY CALL SPAWNS A NEW INSTANCE (2026-08-21, multiplayer agents). It used to
+ * resolve to at most one session per `(channel, thread)` and refuse a second with
+ * `busy`; main now mints a fresh agent per call and answers with its `agentId`.
+ * Nothing here caps that, and nothing may start to — the cap belongs to main
+ * (`cap`), which is the only side that knows the machine's budget.
+ *
+ * ⚠ TWO SUCCESS SHAPES, READ TOLERANTLY, AND THE WIDENING IS THE POINT. The op
+ * answered `{ ok, reason }` and now answers `{ agentId }`; main and this tree ship
+ * separately, so BOTH shapes are live at once and a reader that knows only one of
+ * them turns a real launch into a false refusal (or the reverse). An `agentId`
+ * came back ⇒ an agent started, whatever else the object carries. The result is
+ * cast rather than typed off the bridge because `spa-bridge.ts` is the DESKTOP's
+ * declaration to widen, and this side must survive either version of it.
+ *
+ * ⚠ `taskId: null` IS A CHANNEL-LEVEL AGENT (2026-08-21, the composer's Bot
+ * icon) — an agent on the ROOM, not on one exchange, so it has no thread title
+ * and no counterparty. **`null` is not `""`**: the empty string is already a real
+ * wire value meaning "a responder session whose thread never became first-class"
+ * (`spa-bridge.ts › DesktopSessionSummary`), and collapsing the two would make a
+ * deliberate channel agent indistinguishable from a thread that failed to
+ * resolve. The `null` is cast past the bridge's `taskId: string` for the same
+ * reason as the result above: main is widening it, and this side must not go red
+ * in the window between the two ships.
  */
 export async function launchAgentOnThread(payload: {
   channelId: string;
-  taskId: string;
+  /** The thread, or `null` for a CHANNEL-LEVEL agent. */
+  taskId: string | null;
   workspaceId: string;
   channelName: string;
   threadTitle: string | null;
   counterpartyId: string | null;
   direct: boolean;
-}): Promise<{ ok: boolean; reason?: string }> {
+}): Promise<{ ok: boolean; agentId?: string; reason?: string }> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.launch !== "function") return { ok: false, reason: "no-bridge" };
-  const res = await sessions.launch(payload);
-  return { ok: res?.ok === true, reason: res?.reason };
+  const res = (await sessions.launch(
+    payload as typeof payload & { taskId: string }
+  )) as
+    | { ok?: boolean; agentId?: string; sessionId?: string; reason?: string }
+    | null
+    | undefined;
+  const agentId = typeof res?.agentId === "string" && res.agentId ? res.agentId : undefined;
+  return { ok: res?.ok === true || agentId !== undefined, agentId, reason: res?.reason };
 }
 
 export type AgentControl = "pause" | "end";
@@ -193,12 +251,12 @@ export function useAgentControls() {
   return useCallback(
     async (
       control: AgentControl,
-      session: { channelId: string; taskId: string }
+      session: { channelId: string; taskId: string; agentId?: string }
     ): Promise<boolean> => {
       const sessions = getSpaBridge()?.sessions;
       const op = control === "pause" ? sessions?.pause : sessions?.end;
       if (typeof op !== "function") return false;
-      const result = await op(session.channelId, session.taskId);
+      const result = await op(session.channelId, session.taskId, session.agentId);
       return result?.ok === true;
     },
     []
@@ -232,12 +290,17 @@ export function useAgentControls() {
  * degrades rather than refusing when it is absent.
  */
 export async function openAgentWindow(
-  session: { channelId: string; taskId: string },
+  session: { channelId: string; taskId: string; agentId?: string },
   segment: string
 ): Promise<{ ok: boolean; reason?: string }> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.openAgentWindow === "function") {
-    const res = await sessions.openAgentWindow(segment, session.channelId, session.taskId);
+    const res = await sessions.openAgentWindow(
+      segment,
+      session.channelId,
+      session.taskId,
+      session.agentId
+    );
     return { ok: res?.ok === true, reason: res?.reason };
   }
   // ⚠ The optional chain covered `sessions` and not `reopen`, so on a main
@@ -245,6 +308,11 @@ export async function openAgentWindow(
   // handler. Same detection as the gate that hides the button, so the two
   // cannot disagree.
   if (typeof sessions?.reopen !== "function") return { ok: false, reason: "no-bridge" };
-  const res = await sessions.reopen(session.channelId, session.taskId, segment);
+  const res = await sessions.reopen(
+    session.channelId,
+    session.taskId,
+    segment,
+    session.agentId
+  );
   return { ok: res?.ok === true, reason: res?.reason };
 }

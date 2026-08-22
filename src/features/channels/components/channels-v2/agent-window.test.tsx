@@ -28,14 +28,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import {
-  ChannelsV2AgentWindow,
-  NARRATION_EMPTY,
-  NARRATION_UNSUPPORTED,
-  MESSAGE_AUTH_HELD,
-  MESSAGE_REFUSED,
-  agentWindowTitle,
-} from "./agent-window";
+import { ChannelsV2AgentWindow, agentWindowTitle } from "./agent-window";
+// ⚠ THE WORK LANE MOVED OUT OF THE WINDOW ON 2026-08-22 and is now shared with
+// the slide-out panel (`agent-stream.tsx`). Its copy travelled with it; the
+// window's own cases below are unchanged, because the behaviour did not move —
+// only the file did.
+import { NARRATION_EMPTY, NARRATION_UNSUPPORTED } from "./agent-stream";
+// ⚠ THE 1:1 COMPOSER MOVED OUT OF THE WINDOW ON 2026-08-22 and is now shared with
+// the slide-out panel (`agent-composer.tsx`). Its copy travelled with it; the
+// window's own cases below are unchanged, because the behaviour did not move —
+// only the file did.
+import { MESSAGE_AUTH_HELD, MESSAGE_REFUSED } from "./agent-composer";
 import { CHANNEL_ID, ME } from "./test-fixtures";
 
 const TASK = "t-1";
@@ -88,6 +91,9 @@ interface BridgeOver {
   withMessage?: boolean;
 }
 
+/** One live push, as `main/session-narration.js › flush` sends it. */
+type NarrationPush = (e: { sessionKey: string; entries: unknown[] }) => void;
+
 function installBridge(over: BridgeOver = {}) {
   const {
     sessions = [summary()],
@@ -96,21 +102,39 @@ function installBridge(over: BridgeOver = {}) {
     withNarration = true,
     withMessage = true,
   } = over;
+  // ⚠ CAPTURED, NOT STUBBED (2026-08-22, F-250). `onNarration` returning a bare
+  // unsubscriber meant NO TEST EVER DROVE A FRAME — which is precisely how a
+  // filter that could never match shipped: every case here read the mount value
+  // and the live half had no coverage at all.
+  const pushes: NarrationPush[] = [];
+  const narration = vi.fn(() => Promise.resolve({ entries }));
   const api: Record<string, unknown> = {
     summaries: () => Promise.resolve({ sessions }),
     onSummaries: () => () => {},
     reopen: vi.fn(),
   };
   if (withNarration) {
-    api.narration = () => Promise.resolve({ entries });
-    api.onNarration = () => () => {};
+    api.narration = narration;
+    api.onNarration = (cb: NarrationPush) => {
+      pushes.push(cb);
+      return () => {
+        const at = pushes.indexOf(cb);
+        if (at !== -1) pushes.splice(at, 1);
+      };
+    };
   }
   if (withMessage) api.message = message;
   (window as unknown as { dopl?: unknown }).dopl = {
     apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
     sessions: api,
   };
-  return { message };
+  /** Fan one frame out to every subscriber, exactly as main does. */
+  const push = async (sessionKey: string, frame: unknown[]) => {
+    await act(async () => {
+      for (const cb of [...pushes]) cb({ sessionKey, entries: frame });
+    });
+  };
+  return { message, narration, push };
 }
 
 async function mount() {
@@ -193,6 +217,79 @@ describe("the work lane's two absences are worded differently", () => {
     expect(screen.getByText("tests are green")).toBeTruthy();
   });
 
+  /**
+   * ⚠ THE LANE IS LIVE, AND NOTHING PROVED IT UNTIL 2026-08-22 (F-250).
+   * `onNarration` was stubbed as a no-op in this file, so the frozen filter
+   * below shipped green: the hook built the OLD two-segment key
+   * `<channel>:<thread>` while `main/session-narration.js › flush` sends the
+   * session key, which gained a third segment with multiplayer. The compare
+   * could never match, on ANY build — so after the mount read the Work lane
+   * never moved again, and the window still looked healthy because its header
+   * runs off the summaries feed.
+   */
+  describe("the work lane follows the live push", () => {
+    it("takes a frame keyed <channel>:<thread>:<agent> for the agent on screen", async () => {
+      const { push } = installBridge({
+        sessions: [summary({ agentId: "a1b2c3d4" })],
+        entries: [],
+      });
+      await mount();
+      expect(await screen.findByText(NARRATION_EMPTY)).toBeTruthy();
+      await push(`${CHANNEL_ID}:${TASK}:a1b2c3d4`, [
+        { at: 9, kind: "tool", tool: "Bash", text: "npm run lint" },
+      ]);
+      expect(await screen.findByText("npm run lint")).toBeTruthy();
+    });
+
+    it("ignores a SIBLING agent's frame on the same thread", async () => {
+      const { push } = installBridge({
+        sessions: [summary({ agentId: "a1b2c3d4" })],
+        entries: [],
+      });
+      await mount();
+      await push(`${CHANNEL_ID}:${TASK}:e5f6g7h8`, [
+        { at: 9, kind: "assistant", text: "not this agent's work" },
+      ]);
+      expect(screen.queryByText("not this agent's work")).toBeNull();
+      expect(screen.getByText(NARRATION_EMPTY)).toBeTruthy();
+    });
+
+    // ⚠ THE HONEST DEGRADATION, not a refusal: a main that emits no `agentId` on
+    // its summaries runs at most one agent per thread, so the (channel, thread)
+    // prefix names exactly that agent. A dead lane would be strictly worse.
+    it("still follows the prefix when the feed carries no instance id", async () => {
+      const { push } = installBridge({ entries: [] });
+      await mount();
+      await push(`${CHANNEL_ID}:${TASK}:whatever`, [
+        { at: 9, kind: "assistant", text: "legacy main, one agent" },
+      ]);
+      expect(await screen.findByText("legacy main, one agent")).toBeTruthy();
+    });
+
+    it("ignores another THREAD's frame, prefix or not", async () => {
+      const { push } = installBridge({ entries: [] });
+      await mount();
+      // ⚠ The trailing colon is what stops `t-1` also matching `t-12`.
+      await push(`${CHANNEL_ID}:${TASK}2:a1b2c3d4`, [
+        { at: 9, kind: "assistant", text: "a different thread" },
+      ]);
+      expect(screen.queryByText("a different thread")).toBeNull();
+    });
+
+    // ⚠ The mount read resolves against main's blended (channel, thread, agent)
+    // slot, so without the third argument it lands on the thread's OLDEST live
+    // agent rather than the one whose header is above the lane.
+    it("names the instance on the mount read too", async () => {
+      const { narration } = installBridge({
+        sessions: [summary({ agentId: "a1b2c3d4" })],
+      });
+      await mount();
+      await waitFor(() =>
+        expect(narration).toHaveBeenCalledWith(CHANNEL_ID, TASK, "a1b2c3d4")
+      );
+    });
+  });
+
   it("shortens an MCP tool name the way the rest of the app does", async () => {
     // ⚠ Main sends the RAW name so one call is not named two ways on one screen; the
     // shortening rule is `mcpShortName`'s — the segment after the last `__` (F-139).
@@ -212,15 +309,38 @@ describe("the 1:1 composer", () => {
     expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
   });
 
-  it("sends the operator's words to their own agent, by (channel, thread)", async () => {
-    const { message } = installBridge();
+  it("sends the operator's words to their own agent, naming the INSTANCE", async () => {
+    // ⚠ THE FOURTH ARGUMENT IS THE POINT (2026-08-22). `(channel, thread)` names
+    // a GROUP of this operator's agents since multiplayer, and main resolves a
+    // group to its OLDEST live member — so without the id this window's composer
+    // reaches a different agent than the one it is showing, silently.
+    const { message } = installBridge({ sessions: [summary({ agentId: "a1b2c3d4" })] });
     await mount();
-    const box = await screen.findByLabelText("Message flint");
+    const box = await screen.findByLabelText("Message a1b2c3d4");
     fireEvent.change(box, { target: { value: "look at the failing test" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
     });
-    expect(message).toHaveBeenCalledWith(CHANNEL_ID, TASK, "look at the failing test");
+    expect(message).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      TASK,
+      "look at the failing test",
+      "a1b2c3d4"
+    );
+  });
+
+  it("degrades to oldest-live on a main whose summaries carry no id", async () => {
+    // ⚠ NOT A REFUSAL. A main that omits `agentId` also runs at most one agent
+    // per thread, so oldest-live IS the agent on screen — `undefined` reaches
+    // exactly the behaviour that build already had.
+    const { message } = installBridge();
+    await mount();
+    const box = await screen.findByLabelText("Message flint");
+    fireEvent.change(box, { target: { value: "hello" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    });
+    expect(message).toHaveBeenCalledWith(CHANNEL_ID, TASK, "hello", undefined);
   });
 
   it("submits on Enter and keeps Shift+Enter for a newline", async () => {
@@ -235,7 +355,7 @@ describe("the 1:1 composer", () => {
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter" });
     });
-    expect(message).toHaveBeenCalledWith(CHANNEL_ID, TASK, "one");
+    expect(message).toHaveBeenCalledWith(CHANNEL_ID, TASK, "one", undefined);
   });
 
   it("clears on a real send and KEEPS the text on a refusal", async () => {

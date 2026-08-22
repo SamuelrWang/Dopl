@@ -30,6 +30,7 @@
 //   sessions:narration       reads my own agent's work ring, for that window's first paint
 //   sessions:pause           interrupts the turn my agent is running on a thread
 //   sessions:end             ends my agent on a thread — terminal, and never the thread
+//   agents:forgetThread      drops every LOCAL trace of a deleted thread's ended agents
 //   threads:openWindow       (Phase 10) opens a pop-out window on ONE thread
 //
 // ⚠ SENDER BINDING IS THE SAME RULE, WRITTEN THE SAME WAY. Two checks, because one is not
@@ -46,7 +47,21 @@
 
 const { ipcMain } = require('electron');
 const { isAppWindowSender, isUuid } = require('./ipc-guards');
+const { isAgentId } = require('./agent-id');
 const { diag } = require('./diag');
+
+// ⚠ THE THIRD COORDINATE OF EVERY AGENT OP (2026-08-21, Samuel's multiplayer ruling). Ops here
+// address `(channelId, taskId)` and that pair stopped identifying a session the moment an
+// operator could run several agents on one thread — so each one takes an OPTIONAL `agentId`.
+// Optional, never required: an omitted id resolves to the OLDEST live agent on the thread
+// (`main/session-reopen.js › resolveSession`), which is byte-for-byte what a caller got when
+// there was only ever one, so an older renderer keeps working. Anything that is not the closed
+// `agent-id.js` charset is dropped to '' rather than refused, on the same terms as `segment`:
+// a malformed value degrades to the thread-scoped answer instead of teaching a probe which
+// values exist.
+function asAgentId(value) {
+  return isAgentId(value) ? String(value) : '';
+}
 
 // The 1:1 composer's body bound, enforced at the BOUNDARY (the preload caps too, but a
 // renderer bound is a convenience and this one is the fence). Well above a typed note, well
@@ -71,16 +86,57 @@ function register(opts = {}) {
     return fn(event, ...args);
   };
 
-  // LAUNCH MY OWN AGENT ONTO A THREAD (2026-08-20, the Agents tab's button). A
+  // NEW AGENT ON A THREAD (2026-08-20; SPAWN-IDLE and multi-agent since 2026-08-21). A
   // WINDOWLESS requester-side session: the clicking human IS the consent (it is
   // their own agent on their own thread — no row is raised), the message axis is
   // floored at auto_inbound, and the OUT half is the channel's auto-send posture.
   // UUID-gated channel; taskId must be a UUID too (first-class threads only —
   // a legacy exchange has no thread to attach to). Fail shape: { ok: false }.
+  //
+  // ⚠ TWO THINGS CHANGED ON 2026-08-21 (Samuel's rulings 2 and 3) AND BOTH ARE CONTRACT:
+  //
+  //   1. IT MINTS AN AGENT ID AND RETURNS IT — `{ ok: true, agentId }`. The id is the ADDRESS
+  //      of the thing just created: it names the pill, it is what a human @-mentions in the
+  //      thread to talk to THIS agent rather than its siblings, and it is the third argument
+  //      every other op here now takes. `sessionId` still rides along and is still an opaque
+  //      React key, never an address.
+  //   2. IT STARTS NOTHING. The session is registered IDLE with prepared context (channel,
+  //      thread, workspace, operator, posture) and NO first SDK turn: `query()` does not run
+  //      until the first inbound message for this agent arrives, at which point it launches
+  //      with the full framing plus that message. So the button is cheap, pressing it twice
+  //      genuinely gives you two agents, and an agent nobody talks to costs no `claude` child.
+  //      Ordinary idle timers apply from the spawn (`session-engine.js`).
+  //
+  // ⚠ `counterpartyId` IS OPTIONAL NOW and no longer refuses the launch. It used to be
+  // REQUIRED because it FENCED THE FEED — only that member's replies could reach the session.
+  // The fan-out ruling replaced that fence with the thread (`main/session-dispatch.js`), so
+  // demanding it here would refuse a legitimate spawn on a thread whose other party the caller
+  // has not resolved. It still rides through when known: it labels the outbound consent card.
+  //
+  // ⚠ AND `taskId` IS NULLABLE SINCE 2026-08-21 (Samuel's CHANNEL-LEVEL AGENT ruling) — `null`
+  // spawns an agent attached to the CHANNEL rather than to a thread. Its key is
+  // `<channelId>::<agentId>`: the same three-part key with an empty middle segment, so nothing
+  // about the slot, the state push or the resolution rules is special-cased. What differs is
+  // only its FEED SCOPE, and that falls out of the fan-out for free — an untagged main-room post
+  // resolves `firstClassTaskId(m) === ''`, so it reaches exactly the sessions whose own thread
+  // id is '' and no others.
+  //
+  // ⚠ `null` AND `''` ARE DIFFERENT REQUESTS THAT LAND ON THE SAME SCOPE, and both are accepted
+  // rather than one being normalised away at the boundary. `null` is the SPA asking for a
+  // channel-level agent; `''` is the legacy wire value for a responder whose exchange never
+  // became a first-class thread. They coincide because both see exactly the untagged main-room
+  // traffic — there is no third scope for them to disagree about — and refusing `''` here would
+  // refuse an older caller for no behavioural gain.
+  // ⚠ A SUPPLIED `taskId` MUST STILL BE A UUID: first-class threads only.
+  //
+  // ⚠ THERE IS NO `no-counterparty` REFUSAL ANY MORE, on this lane or any other. It was the
+  // consequence of the counterparty FENCING the feed; the fan-out replaced that fence with the
+  // thread, and a channel-level agent has no counterparty to resolve by construction.
   ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, async (_event, payload) => {
     const p = payload || {};
-    if (!isUuid(p.channelId) || !isUuid(p.taskId)) return { ok: false };
-    if (!isUuid(p.counterpartyId)) return { ok: false, reason: 'no-counterparty' };
+    if (!isUuid(p.channelId)) return { ok: false };
+    const channelLevel = p.taskId == null || p.taskId === '';
+    if (!channelLevel && !isUuid(p.taskId)) return { ok: false };
     const engine = require('./session-engine');
     const channelPrefs = require('./channel-prefs');
     const targeting = require('./targeting');
@@ -91,21 +147,33 @@ function register(opts = {}) {
     const watched = (listener.listWatchedChannels() || []).find((c) => c.id === p.channelId);
     const toolProfile = watched ? targeting.resolveToolProfile(watched) : 'read_only';
     const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
+    // ⚠ THE GOAL IS DISPLAY/SEED TEXT ONLY ON THIS LANE and is never sent as a turn — a
+    // SPAWN-IDLE session has no first turn at all. It survives because `startSession` still
+    // builds the initiating-request payload from it, and because a CHANNEL-LEVEL agent has no
+    // thread to be told to read.
+    const goal = channelLevel
+      ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
+      : title
+        ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.`
+        : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.';
     const res = await engine.launchRequesterSession({
       channelId: p.channelId,
-      taskId: p.taskId,
+      // '' is the CHANNEL-LEVEL scope, not a missing value — see the block above.
+      taskId: channelLevel ? '' : p.taskId,
       workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
-      goal: title
-        ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.`
-        : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.',
+      goal,
       counterpartyId: isUuid(p.counterpartyId) ? p.counterpartyId : null,
       direct: p.direct === true,
       context: {
         channelName: typeof p.channelName === 'string' ? p.channelName.slice(0, 120) : '',
-        taskTitle: title || null,
+        taskTitle: channelLevel ? null : (title || null),
         channelId: p.channelId,
         workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
-        taskId: p.taskId,
+        taskId: channelLevel ? '' : p.taskId,
+        // ⚠ THE SCOPE THE FRAMING READS (2026-08-21). `prompt-framing.js` cannot infer
+        // "channel-level" from an absent thread id alone — a legacy responder also has none —
+        // so the launch that KNOWS states it.
+        scope: channelLevel ? 'channel' : 'thread',
         workspaceSegment: typeof p.workspaceSegment === 'string' ? p.workspaceSegment : null,
       },
       toolProfile,
@@ -125,9 +193,48 @@ function register(opts = {}) {
       // the same thing, so either turns the floor into auto_both — and neither
       // can drop below it.
       startModes: channelPrefs.launchStartModes(p.channelId),
+      // ⚠ SPAWN IDLE (ruling 3): register, prepare the context, send NO first turn. The FIRST
+      // inbound message for this agent is what starts its query.
+      idle: true,
+      // ⚠ `operatorArmed` IS WHAT LETS THE DURABLE POSTURE REACH AN IDLE SPAWN. `startSession`'s
+      // FIX-4 guard refuses a handed-in posture on a `parkedShell` unless a human armed it just
+      // now — because a shell is normally woken by something that is NOT the approving human.
+      // Here the click on New Agent IS that human, in the same breath as the posture read, which
+      // is exactly the case the flag exists for. Nothing else on this surface sets it.
+      operatorArmed: true,
     });
-    if (res && res.sessionId) return { ok: true, sessionId: res.sessionId };
+    // THE ANSWER IS THE ADDRESS. `agentId` is present on every successful launch.
+    if (res && res.agentId) return { ok: true, agentId: res.agentId, sessionId: res.sessionId || null };
     return { ok: false, reason: (res && res.skipped) || 'unknown' };
+  }));
+
+  // FORGET EVERY LOCAL TRACE OF THIS THREAD'S ENDED AGENTS (2026-08-22, Samuel's ended-agent
+  // ruling). The thread-delete cascade's desktop half.
+  //
+  // ⚠ MAIN CANNOT SEE A THREAD DELETION ON ITS OWN, and that is why this op exists rather than
+  // a listener. The delete is a SERVER cascade driven from the SPA
+  // (`channels/server/service-tasks-delete.ts`); main learns nothing from it, so an ended
+  // agent's frozen history would sit out its full seven days keyed to a thread that no longer
+  // resolves — a card with a stale title opening a window onto work whose exchange is gone.
+  // The SPA already ends its own agents on that thread before deleting; this is the same
+  // gesture finished.
+  //
+  // ⚠ IT DELETES A LOCAL VIEW, NEVER A CONVERSATION. Everything the agents POSTED is
+  // `channel_messages` on the server and is not reachable from here at all.
+  // ⚠ IT CANNOT TOUCH A LIVE SESSION. The sweep's cleaners are keyed stores only; an agent
+  // still running keeps running (the SPA ends those first, deliberately, over `sessions:end`).
+  // ⚠ Same guards as every op here: sender-bound, `channelId` UUID-gated, `taskId` coerced.
+  // Best-effort by design — a failed cleanup must not fail a delete the server already did.
+  ipcMain.handle('agents:forgetThread', appWindowOnly('agents:forgetThread', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    try {
+      const keys = require('./agent-retention').forgetThread(p.channelId, String(p.taskId || ''));
+      return { ok: true, forgotten: keys.length };
+    } catch (err) {
+      diag('session ipc: agents:forgetThread failed —', (err && err.message) || String(err));
+      return { ok: false };
+    }
   }));
 
   // Reveal a LIVE session for a (channel, task) from a bound window.
@@ -155,6 +262,7 @@ function register(opts = {}) {
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
       segment: isSafeSegment(p.segment) ? String(p.segment) : '',
+      agentId: asAgentId(p.agentId), // 2026-08-21: WHICH of my agents on that thread
     });
   }));
 
@@ -176,7 +284,14 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     const { isSafeSegment } = require('./deep-link-target');
-    if (!isSafeSegment(p.segment) || !isSafeSegment(p.taskId)) return { ok: false };
+    // ⚠ A CHANNEL-LEVEL AGENT HAS NO THREAD (2026-08-21), so an EMPTY `taskId` is legitimate
+    // here — but only when an agent id names the target instead. A payload naming neither is
+    // asking for a window onto nothing and is refused in the same `{ok:false}` shape as
+    // everything else. A NON-empty taskId still passes the ONE character rule.
+    const agentId = asAgentId(p.agentId);
+    const taskId = p.taskId == null ? '' : String(p.taskId);
+    if (!isSafeSegment(p.segment)) return { ok: false };
+    if (taskId ? !isSafeSegment(taskId) : !agentId) return { ok: false };
     try {
       if (require('./version-gate').isBlocked()) {
         diag('session ipc: refused sessions:openAgentWindow — the version floor is blocking');
@@ -186,7 +301,10 @@ function register(opts = {}) {
     return require('./agent-window').openAgentWindow({
       segment: p.segment,
       channelId: p.channelId,
-      taskId: p.taskId,
+      taskId,
+      // ⚠ ONE WINDOW PER AGENT since 2026-08-21: without this, opening the second agent on a
+      // thread silently FRONTED the first one's window.
+      agentId,
     });
   }));
 
@@ -221,6 +339,7 @@ function register(opts = {}) {
     return engine.setModeByTask({
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
+      agentId: asAgentId(p.agentId),
       axis: axis,
       mode: mode,
     });
@@ -255,6 +374,10 @@ function register(opts = {}) {
     return engine.messageByTask({
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
+      // ⚠ THE 1:1 LANE MUST REACH EXACTLY ONE AGENT (2026-08-21, ruling 5). Named, it steers
+      // that agent and no other; unnamed, it steers the oldest live one on the thread, which is
+      // what this op did when a thread could only ever hold one.
+      agentId: asAgentId(p.agentId),
       text: text,
     });
   }));
@@ -270,8 +393,14 @@ function register(opts = {}) {
     if (!isUuid(p.channelId)) return { entries: [] };
     const engine = require('./session-engine');
     if (typeof engine.narrationFor !== 'function') return { entries: [] };
-    const key = `${p.channelId}:${String(p.taskId || '')}`;
-    return { entries: engine.narrationFor(key) };
+    // ⚠ IT HANDS OVER AN ADDRESS, NOT A KEY (2026-08-21). This used to build
+    // `${channelId}:${taskId}` by hand — a second statement of the session-key format, sitting
+    // in the IPC layer, which the third segment silently invalidated. The engine resolves it.
+    return { entries: engine.narrationFor({
+      channelId: p.channelId,
+      taskId: String(p.taskId || ''),
+      agentId: asAgentId(p.agentId),
+    }) };
   }));
 
   // PAUSE / END MY OWN AGENT, from the Agents tab (wiring plan Phase 5, 2026-08-18). Same
@@ -295,6 +424,7 @@ function register(opts = {}) {
     return engine.controlByTask({
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
+      agentId: asAgentId(p.agentId), // pause/end MY agent, not whichever sibling is oldest
       action: action,
     });
   };

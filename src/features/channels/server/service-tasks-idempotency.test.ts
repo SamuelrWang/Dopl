@@ -100,6 +100,7 @@ beforeEach(() => {
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findChannelById).mockResolvedValue(channelRow());
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
+  vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   // Addressing also asserts active workspace membership; default true.
@@ -152,7 +153,10 @@ describe("createTask — idempotency (client_msg_id)", () => {
 
   it("returns the already-created task and does NOT re-insert or re-post", async () => {
     vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(ownTask());
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+    // ⚠ THE CREATOR'S OWN dedup probe (2026-08-22). `postMessage`'s short-circuit is
+    // author-scoped now — `findMessageByClientId` is the CROSS-author read
+    // `storedOpeningSeq` uses, and the two are not interchangeable.
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(
       storedOpening()
     );
 
@@ -171,8 +175,9 @@ describe("createTask — idempotency (client_msg_id)", () => {
     // No second task row, no second initial message → no double spawn.
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-    expect(repoMessages.findMessageByClientId).toHaveBeenCalledWith(
+    expect(repoMessages.findOwnMessageByClientId).toHaveBeenCalledWith(
       "chan-1",
+      USER,
       `task-open-${TASK_ID}`
     );
   });
@@ -211,7 +216,7 @@ describe("createTask — idempotency (client_msg_id)", () => {
       .mockResolvedValueOnce(ownTask()); // post-race winner
     vi.mocked(repoTasks.insertTask).mockRejectedValue({ code: "23505" });
     vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(
       storedOpening()
     );
 
@@ -263,7 +268,7 @@ describe("createTask — idempotency (client_msg_id)", () => {
       .mock.calls.filter((c) => c[0].client_msg_id === `task-open-${TASK_ID}`);
     expect(posts).toHaveLength(2); // one rejected, one stored
     expect(posts[1][0].metadata.taskId).toBe(TASK_ID);
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(
       storedOpening()
     );
     vi.mocked(repoMessages.insertMessage).mockClear();

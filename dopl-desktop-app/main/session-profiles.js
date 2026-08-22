@@ -286,6 +286,29 @@ function floorWindowlessMessage(mode) {
   return m === 'auto_outbound' ? 'auto_both' : 'auto_inbound';
 }
 
+// AXIS B WITH THE OUT-HALF WITHDRAWN — the PRIVATE TURN's gate (2026-08-22, Samuel's ruling).
+//
+// ⚠ IT IS THE EXACT INVERSE OF `floorWindowlessMessage` ABOVE and sits beside it for that
+// reason: that one RAISES the IN half because a windowless session has no accept surface, this
+// one LOWERS the OUT half because a private answer must not be able to leave the machine on its
+// own. Both are one-line transforms over the same frozen enum, and neither may be re-spelled at
+// a call site (`session-private.js › effectiveMessageMode` is this one's only caller).
+//
+// ⚠ THE IN HALF IS PRESERVED EXACTLY, WHICH IS WHY THIS IS NOT SIMPLY `'ask'`. Own-channel READS
+// follow the INBOUND half (`isOwnChannelRead`), and in a windowless session a gated read is a
+// DENIED read — there is no surface to answer it on. An agent asked a private question about a
+// thread must still be able to go and look at it. The ruling is about what LEAVES.
+//   auto_both      -> auto_inbound   (reads still auto; posts and milestones gate)
+//   auto_outbound  -> ask            (its IN half was already ask; only the OUT half moves)
+//   auto_inbound   -> auto_inbound   (nothing to withdraw)
+//   ask            -> ask
+function privateTurnMessageMode(mode) {
+  const m = normalizeMessageMode(mode);
+  if (m === 'auto_both') return 'auto_inbound';
+  if (m === 'auto_outbound') return 'ask';
+  return m;
+}
+
 // Per-call decision the engine's canUseTool bridge makes:
 //   'preapproved' — auto-allow, NO button (profile pre-approved AND shadowed via allowedTools).
 //                   NEVER the channel tool.
@@ -376,4 +399,5 @@ module.exports = {
   AUTO_TOOLS, BYPASS_TOOLS, DOPL_READ_TOOLS, DOPL_WRITE_TOOLS,
   normalizeToolMode, normalizeMessageMode, toolModeAllows, autoInboundMode,
   floorWindowlessMessage, // AXIS B's windowless floor — one statement, two lanes (F-236)
+  privateTurnMessageMode, // ...and its inverse: the PRIVATE TURN withdraws the OUT half
 };

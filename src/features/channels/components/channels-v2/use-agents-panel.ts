@@ -3,9 +3,14 @@
 /**
  * The Agents tab's DATA + LAUNCH wiring (Samuel, 2026-08-20), split out of
  * `channels-v2-core.tsx` at the 500-line cap: the peer-session poll (every
- * member's state projection for the open channel) and the "Launch agent"
- * action — attach MY OWN agent to a thread, windowless, main owning the
- * posture. One launch in flight at a time; the button says so.
+ * member's state projection for the open channel) and the "New Agent"
+ * action — start MY OWN agent on a thread, windowless, main owning the
+ * posture.
+ *
+ * ⚠ ONE LAUNCH IN FLIGHT, NOT ONE AGENT PER THREAD (2026-08-21). `launchBusy` is
+ * a double-submit guard over a single click and nothing more; a thread may carry
+ * as many of this operator's agents as main will spawn, and no state here caps
+ * that or re-arms after the first.
  */
 
 import { useState } from "react";
@@ -46,7 +51,11 @@ export const PEER_SESSIONS_POLL_MS = 30_000;
 const LAUNCH_REFUSALS: Record<string, string> = {
   "no-bridge": "Not available here",
   "no-counterparty": "This thread has no other party",
-  busy: "An agent is already on this thread",
+  // ⚠ IT NO LONGER MEANS "one agent per thread" (2026-08-21). Every click mints a
+  // NEW agent, so the old copy — "An agent is already on this thread" — would
+  // state a rule the product just dropped, beside a button that is still enabled
+  // and about to work. What main can still be is momentarily unable to start one.
+  busy: "Busy right now — try again",
   cap: "Session limit reached",
   "no-sdk": "No Claude runtime on this Mac",
   "auth-hold": "Sign in to Claude to start an agent",
@@ -59,6 +68,28 @@ const LAUNCH_REFUSALS: Record<string, string> = {
 
 export function launchRefusalText(reason: string | undefined): string {
   return (reason && LAUNCH_REFUSALS[reason]) || "Could not start the agent";
+}
+
+/**
+ * THE LAUNCH HALF OF THIS HOOK, as the shape a second surface can take
+ * (2026-08-21). The composer's Bot icon starts an agent exactly as the Agents
+ * tab's New Agent button does, and it takes THIS OBJECT rather than mounting its
+ * own `useAgentsPanel`: a second mount would be a second peer poll of
+ * `channel_sessions` on its own interval — two answers to "how fresh is fresh
+ * enough" — which is the same argument `PEER_SESSIONS_POLL_MS` was exported on.
+ *
+ * ⚠ `useAgentsPanel`'s return satisfies it STRUCTURALLY, so there is nothing to
+ * keep in step: the page hands the panel down and the type checks it.
+ */
+export interface AgentLaunchControls {
+  /** The bridge op exists on this build. Absent ⇒ offer no control at all. */
+  canLaunch: boolean;
+  launchBusy: boolean;
+  /** The last refusal's copy, or null. ⚠ Never swallowed — a refusal is not a
+   *  push, so the button's own surface is the only place it can be said. */
+  launchError: string | null;
+  /** `null` starts a CHANNEL-LEVEL agent; a thread id starts one on it. */
+  launchAgent: (threadId: string | null) => Promise<void>;
 }
 
 export function useAgentsPanel({
@@ -91,9 +122,9 @@ export function useAgentsPanel({
   const [launchBusy, setLaunchBusy] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
-  const launchAgent = async (threadId: string) => {
+  const launchAgent = async (threadId: string | null) => {
     if (!channel || launchBusy) return;
-    const thread = threads.find((t) => t.id === threadId) ?? null;
+    const thread = threadId ? (threads.find((t) => t.id === threadId) ?? null) : null;
     // My agent's counterparty is the thread's OTHER party — the target when I
     // asked, the asker when I was asked. A thread I'm not party to has none.
     const counterpartyId = thread
@@ -101,9 +132,13 @@ export function useAgentsPanel({
         ? thread.targetUserId
         : thread.createdBy
       : null;
-    // ⚠ Still a refusal, and it must SAY so — this used to return silently, which
-    // is the same blank screen the discarded `{ ok: false }` produced.
-    if (!counterpartyId) {
+    // ⚠ A CHANNEL-LEVEL AGENT HAS NO COUNTERPARTY AND THAT IS NOT A REFUSAL
+    // (2026-08-21, the composer's Bot icon in channel view). It is an agent on
+    // the ROOM: nobody is on the other side of it, because there is no exchange
+    // yet. The refusal below is about a THREAD whose other party could not be
+    // resolved, which is a different fact and still has to be said — this used
+    // to return silently, the same blank screen a discarded `{ok:false}` gave.
+    if (threadId !== null && !counterpartyId) {
       setLaunchError(launchRefusalText("no-counterparty"));
       return;
     }

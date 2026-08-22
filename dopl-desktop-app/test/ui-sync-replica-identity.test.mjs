@@ -107,6 +107,15 @@ const DELETE_DOORBELL_TABLES = Object.freeze([
   "ontology_relationships",
   "chats", "chat_folders",
   "channel_members",
+  // ⚠ JOINED 2026-08-22, MOVED OUT OF `NO_DELETE_DOORBELL` BELOW — this list's own
+  // instruction ("if the reason has changed, move it to DELETE_DOORBELL_TABLES and say so"),
+  // followed. The exemption read "cascade from channels / workspaces only", which was true
+  // until a THREAD became deletable (2026-08-21, INVARIANTS §5): `service-tasks-delete.ts ›
+  // deleteTask` fires real DELETEs here, and NOTHING else in that cascade is published —
+  // `channel_tasks` and `channel_sessions` are both deliberately out (§7), and consent rows
+  // are UPDATEd to `expired` rather than deleted. So under DEFAULT the counterparty's UI
+  // never learned the thread died. `20260822130000` is the fix.
+  "channel_messages",
 ]);
 
 // Deliberately left at DEFAULT, with the reason that makes it correct. A DELETE these
@@ -117,7 +126,10 @@ const NO_DELETE_DOORBELL = Object.freeze({
   skill_versions: "cascades from skills; its other delete is the 200-version retention "
     + "trim that runs after EVERY insert — highest-frequency delete of the 17, user-invisible",
   chat_messages: "cascade from chats only (the live merge path is a pure upsert)",
-  channel_messages: "cascade from channels / workspaces only",
+  // ⚠ `channel_messages` STOOD HERE AND HAS MOVED UP (2026-08-22) — see the note on the
+  // list above. It is named in place rather than deleted silently, because "cascade from
+  // channels / workspaces only" is the kind of reason that stops being true when a feature
+  // ships elsewhere, and the next table to leave this map will leave it the same way.
   agent_presence: "never deleted; heartbeat-UPDATEd every 30s per client",
   // Updated 2026-08-08 (C-16 / F-173): a NON-DM delete is now a real DELETE, so
   // "still soft-deletes" stopped being the reason. The exemption survives on a

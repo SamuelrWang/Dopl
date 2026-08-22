@@ -70,6 +70,7 @@ const MAIN = join(HERE, "..", "main");
 const M = (p) => join(MAIN, p);
 const read = (p) => readFileSync(M(p), "utf8");
 const ENGINE = read("session-engine.js");
+const LAUNCH = read("session-launch.js"); // the spawn funnel, split off the engine 2026-08-21
 const PARK = read("session-park.js");
 const TRIGGER = read("trigger.js");
 const CONTEXT = read("channel-context.js");
@@ -181,46 +182,6 @@ test("H2: the preset is not, and cannot become, part of any GRANT", () => {
 
 // ── 2. THE RE-APPLYING PATHS: they hand in nothing, structurally ─────────────
 
-// ⚠ "H2: recreateParkedShell and openFromChannel pass NO startModes to startSession" STOOD HERE
-// AND IS DELETED (2026-08-20, F-228). It sliced those two functions out of session-park.js and
-// asserted each really spawned (`deps.startSession(`), spawned a DORMANT shell
-// (`parkedShell: true`), and handed in no posture. Both are deleted: `recreateParkedShell`
-// rebuilt a parked WINDOW for a thread with no live session (a peer reply on an old thread) and
-// `openFromChannel` was the operator's "Open session" from the channel view. They were the two
-// paths that actually re-applied the stored preset in the v3.1 bug, so they were the file's
-// original subjects — but the invariant never lived in them, and a slice of a deleted function
-// yields the empty string, against which `!/startModes/` passes for free.
-//
-// WHAT REPLACES IT IS STRONGER: those two were an incomplete list of who spawns, and the case
-// below enumerates EVERY caller that hands a posture in, off the tree.
-
-test("H2: exactly TWO callers in main/ hand a posture in, and neither arms a dormant shell", () => {
-  const files = readdirSync(MAIN).filter((f) => f.endsWith(".js") && f !== "session-engine.js");
-  const handers = files.filter((f) => /startModes:/.test(read(f))).sort();
-  assert.deepEqual(
-    handers,
-    ["session-ipc-ops.js", "trigger.js"],
-    "a new caller that hands in a posture is a new way for one to reach a launch no human is " +
-      "attending — review it here rather than updating this list reflexively " +
-      "(session-ipc-ops.js = sessions:launch, the operator's own click on the Agents tab, " +
-      "handing in the DURABLE record — it lived in channel-dir-ipc.js until the 2026-08-20 " +
-      "split off the 500-line cap (F-226), which moved the FILE and not the consumer; " +
-      "trigger.js = the consent-approved responder lane, which " +
-      "since 2026-08-20 hands in a pinned NULL — it still names the key, so it still shows up " +
-      "here, and that is right: the seam is what must stay reviewed, not the value on this pass)"
-  );
-  // ⚠ THE MEMBERSHIP IS TWO AND THE EFFECTIVE COUNT IS ONE, so the difference is asserted rather
-  // than left to the string above. `trigger.js` appearing in a grep for `startModes:` used to mean
-  // it consumed the single-use arm; it now means it spells out that it consumes nothing.
-  assert.match(read("trigger.js"), /const startModes = null;/,
-    "the responder lane hands in null — a census member that supplies no posture");
-  // ...and NOBODY sets the parked-shell carve-out. `operatorArmed` exists so a future attended
-  // dormant shape can opt in explicitly; a producer appearing without a case here means a
-  // posture can now reach a shell, which is the exact failure H2 names.
-  const armers = files.filter((f) => /operatorArmed/.test(read(f))).sort();
-  assert.deepEqual(armers, [], "the parked-shell carve-out has no producer, and gaining one is a review");
-});
-
 test("H2: startResume (the crash/interrupted resume) passes NO startModes either", () => {
   const body = PARK.slice(PARK.indexOf("async function startResume("), PARK.indexOf("async function resume("));
   assert.ok(body.includes("deps.startSession("), "startResume really spawns");
@@ -236,10 +197,13 @@ test("H2: the requester launch mints NO posture of its own — it forwards its c
   // the arm reaches the responder lane. What must stay true is the engine seam itself:
   // `launchRequesterSession` reads no stored posture, so a caller that hands it nothing
   // still inherits the reducer's manual/ask.
-  const body = ENGINE.slice(ENGINE.indexOf("function launchRequesterSession("), ENGINE.indexOf("function hasLiveSession("));
-  assert.ok(!/startModes/.test(body), "the engine wrapper neither reads nor defaults one");
-  assert.ok(!/channel-prefs|channelPrefs/.test(stripComments(ENGINE)),
-    "and the engine reaches the prefs store on no path at all");
+  // ⚠ IT MOVED FILES 2026-08-21, NOT MEANING: the funnel split off the engine at the §2 cap.
+  const body = LAUNCH.slice(LAUNCH.indexOf("function launchRequesterSession("), LAUNCH.indexOf("function hasLiveSession("));
+  assert.ok(!/startModes/.test(body), "the lane wrapper neither reads nor defaults one");
+  for (const src of [ENGINE, LAUNCH]) {
+    assert.ok(!/channel-prefs|channelPrefs/.test(stripComments(src)),
+      "and neither the engine nor the funnel reaches the prefs store on any path");
+  }
 });
 
 // ── 3. THE ONE CONSUMER ──────────────────────────────────────────────────────

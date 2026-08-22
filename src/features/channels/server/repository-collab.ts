@@ -76,6 +76,62 @@ export async function expireStalePending(operatorUserId: string): Promise<void> 
   if (error) throw error;
 }
 
+/**
+ * How many `message_seq` values go into one `IN (…)` — PostgREST puts the whole
+ * list in the query STRING, and an unbounded thread's transcript would build a
+ * URL long enough for a proxy to refuse. Chunked rather than capped: every seq
+ * must be asked about, and a refused request is a silently unswept inbox.
+ */
+const CONSENT_SEQ_CHUNK = 100;
+
+/**
+ * EXPIRE — never delete — every PENDING consent row whose trigger message just
+ * went away. The consent step of the thread cascade
+ * (`service-tasks-delete.ts › deleteTask`).
+ *
+ * ⚠ EXPIRE, NOT DELETE, AND THAT IS THE WHOLE DECISION. A consent row is the
+ * AUDIT of a human decision (`status` / `decided_by` / `decided_at`) — a row that
+ * was allowed or denied is a record of what somebody did, and a thread deletion
+ * is nobody's licence to erase it. A row still `pending` is the opposite case: its
+ * trigger message no longer exists, so the operator can never answer it honestly
+ * and the card would sit in the inbox forever pointing at nothing. `expired` is
+ * the state the model already has for "this prompt outlived its question" and it
+ * is reached here by exactly the statement {@link expireStalePending} uses.
+ *
+ * ⚠ THE KEY IS `message_seq` AND IT IS CLEAN DESPITE HAVING NO FK. `seq` is a
+ * TABLE-wide identity (INVARIANTS §5) so the number is globally unique, and the
+ * caller hands over the seqs the delete ACTUALLY removed rather than a guessed
+ * range. `channel_id` is still named: it costs nothing, it uses
+ * `channel_consent_requests_channel_idx`, and it keeps this statement unable to
+ * touch another room even if a caller ever passed the wrong list.
+ *
+ * ⚠ NOT scoped to one operator, unlike {@link expireStalePending}: every
+ * recipient raises their OWN row against the same seq, and all of them are
+ * equally stranded.
+ *
+ * ⚠ OUTBOUND rows are reached too, and correctly: an outbound review carries the
+ * `message_seq` of the inbound ask it is a reply to when one exists, and carries
+ * `null` otherwise — a `null` never matches an `IN` list, so nothing is swept by
+ * accident.
+ */
+export async function expireConsentForMessageSeqs(
+  channelId: string,
+  seqs: readonly number[]
+): Promise<void> {
+  if (seqs.length === 0) return;
+  const db = supabaseAdmin();
+  for (let i = 0; i < seqs.length; i += CONSENT_SEQ_CHUNK) {
+    const chunk = seqs.slice(i, i + CONSENT_SEQ_CHUNK);
+    const { error } = await db
+      .from("channel_consent_requests")
+      .update({ status: "expired", decided_at: new Date().toISOString() })
+      .eq("channel_id", channelId)
+      .eq("status", "pending")
+      .in("message_seq", chunk as number[]);
+    if (error) throw error;
+  }
+}
+
 interface ConsentListOpts {
   /**
    * ⚠ REQUIRED, not optional. A consent row carries `operator_user_id` and

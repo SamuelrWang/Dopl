@@ -136,7 +136,17 @@ describe("what a change does", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
     });
-    expect(setMode).toHaveBeenCalledWith(CHANNEL_ID, TASK, "tools", "bypass");
+    // ⚠ THE FIFTH ARGUMENT NAMES THE INSTANCE (2026-08-22). `(channel, thread)`
+    // is a GROUP since multiplayer and main moves the OLDEST live member of it —
+    // so without the id these selects would move a different agent's posture and
+    // then show this one's unchanged, reading as a refusal that never happened.
+    expect(setMode).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      TASK,
+      "tools",
+      "bypass",
+      undefined
+    );
   });
 
   it("sends the MESSAGE axis under its own name", async () => {
@@ -147,7 +157,13 @@ describe("what a change does", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Auto accept in/ }));
     });
-    expect(setMode).toHaveBeenCalledWith(CHANNEL_ID, TASK, "messages", "auto_inbound");
+    expect(setMode).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      TASK,
+      "messages",
+      "auto_inbound",
+      undefined
+    );
   });
 
   // ⚠ THE CASE THE WHOLE no-optimistic-stamp RULE EXISTS FOR.

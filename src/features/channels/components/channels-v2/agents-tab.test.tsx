@@ -16,21 +16,23 @@
  *    exactly ONE session, so it never needs a qualifier — "agent session" and
  *    "channel session" must appear nowhere on this surface, and the agent view
  *    is where the temptation lives.
- *  - **THE SENT LANE IS THE VIEWER'S OWN AGENT, ON THIS THREAD.** Matching on
- *    `authorKind` alone would put a teammate's agent in my panel.
+ *  - **THE SENT LANE IS THE VIEWER'S OWN AGENT, ON THIS THREAD** — and, since
+ *    multiplayer, THAT ONE INSTANCE rather than every sibling sharing the thread.
+ *    ⚠ The DERIVATION's own cases moved to `agent-sent-messages.test.ts` on
+ *    2026-08-22 (the 500-line cap, split on the render-vs-pure seam); what stays
+ *    here is the PANEL rendering it.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { AgentsTab } from "./agents-tab";
-import {
-  AGENT_CONTROL_REFUSED,
-  agentSentMessages,
-  ChannelsV2AgentPanel,
-} from "./agent-panel";
+import { ChannelsV2AgentPanel } from "./agent-panel";
+// ⚠ The control strip is its own module since 2026-08-22 (split at the 500-line
+// cap when the 1:1 composer landed in the panel); its copy travelled with it.
+import { AGENT_CONTROL_REFUSED } from "./agent-panel-controls";
 import { agentKey, agentsForChannel, formatTokens } from "./agents-model";
-import { CHANNEL_ID, ME, PEER, message } from "./test-fixtures";
+import { CHANNEL_ID, ME, message } from "./test-fixtures";
 
 afterEach(() => {
   cleanup();
@@ -166,9 +168,9 @@ describe("AgentsTab — the cards", () => {
 
 describe("agentsForChannel / agentKey", () => {
   it("groups agents sharing a thread together, keeping feed order within one", () => {
-    // ⚠ The desktop's registry is keyed on (channel, thread), so TWO live
-    // sessions cannot share a taskId today — the grouping is what keeps the tab
-    // correct if that ever widens, and it must not reorder anything meanwhile.
+    // ⚠ THE SHARED-THREAD CASE IS THE NORMAL ONE SINCE 2026-08-21 (multiplayer
+    // agents): every launch mints a new instance, so N of them sit on one
+    // taskId. The grouping keeps them adjacent and must not reorder anything.
     const rows = [
       summary({ sessionId: "a", taskId: "t-1", name: "one" }),
       summary({ sessionId: "b", taskId: "t-2", name: "two" }),
@@ -181,9 +183,10 @@ describe("agentsForChannel / agentKey", () => {
     ]);
   });
 
-  it("keys an agent on (channel, thread) — NOT the ephemeral sessionId", () => {
+  it("keys an agent on (channel, thread) with no id — NOT the sessionId", () => {
     // A park+recreate mints a new sessionId for the same agent. Keying the open
-    // panel on it would close the view under the operator.
+    // panel on it would close the view under the operator. ⚠ The pair is the
+    // FALLBACK now — `agents-multiplayer.test.tsx` owns the id-keyed half.
     const before = summary({ sessionId: "s-1" });
     const after = summary({ sessionId: "s-99" });
     expect(agentKey(after)).toBe(agentKey(before));
@@ -195,54 +198,6 @@ describe("formatTokens", () => {
     expect(formatTokens(84_000)).toBe("84k");
     expect(formatTokens(1_200_000)).toBe("1.2M");
     expect(formatTokens(48_000_000)).toBe("48M");
-  });
-});
-
-describe("agentSentMessages — what this agent actually posted", () => {
-  const MINE = message({
-    id: "m-mine",
-    authorUserId: ME,
-    authorKind: "agent",
-    body: "posted by my agent",
-    metadata: { taskId: "t-1" },
-  });
-
-  it("takes agent-authored rows on this thread under the viewer's OWN account", () => {
-    expect(agentSentMessages([MINE], "t-1", ME).map((m) => m.id)).toEqual(["m-mine"]);
-  });
-
-  it("excludes a PEER's agent — `authorKind` alone would let it in", () => {
-    const theirs = message({
-      id: "m-theirs",
-      authorUserId: PEER,
-      authorKind: "agent",
-      metadata: { taskId: "t-1" },
-    });
-    expect(agentSentMessages([theirs], "t-1", ME)).toEqual([]);
-  });
-
-  it("excludes my own HUMAN message, another thread, and lifecycle rows", () => {
-    const human = message({ id: "m-h", authorUserId: ME, metadata: { taskId: "t-1" } });
-    const other = message({
-      id: "m-o",
-      authorUserId: ME,
-      authorKind: "agent",
-      metadata: { taskId: "t-2" },
-    });
-    const lifecycle = message({
-      id: "m-l",
-      authorUserId: ME,
-      authorKind: "agent",
-      kind: "task_started",
-      metadata: { taskId: "t-1" },
-    });
-    expect(agentSentMessages([human, other, lifecycle], "t-1", ME)).toEqual([]);
-  });
-
-  it("answers nothing for a session with no first-class thread", () => {
-    // An empty taskId must not match every untagged row in the channel.
-    const untagged = message({ id: "m-u", authorUserId: ME, authorKind: "agent" });
-    expect(agentSentMessages([untagged, MINE], "", ME)).toEqual([]);
   });
 });
 
@@ -267,10 +222,13 @@ describe("ChannelsV2AgentPanel", () => {
       />
     );
     expect(screen.getByText("Renamed btn/secondary to btn/light.")).toBeTruthy();
-    expect(screen.getByText(/sent to UI-kit design/)).toBeTruthy();
-    // ⚠ The absent lanes are STATED, not drawn and not silently dropped: without
-    // this line the panel reads as "this agent did nothing but post".
-    expect(screen.getByText(/only what it sent/i)).toBeTruthy();
+    // ⚠ THE POST WEARS THE v1 SENT BOX (2026-08-22), whose banner says where it
+    // went — the "→ sent to X · date" meta line under each item is DELETED, and
+    // its one useful fact moved into the banner rather than being lost.
+    expect(screen.getByText("Sent to UI-kit design")).toBeTruthy();
+    // ⚠ THE FOOTER EXPLAINER IS GONE (Samuel's minimal-copy ruling, 2026-08-22).
+    // It pointed at another surface for lanes this one now renders itself.
+    expect(screen.queryByText(/only what it sent/i)).toBeNull();
     // ⚠ And the direct lane's input is NOT rendered. An inert field that looks
     // like every field that does send is the worse failure (F-212).
     expect(screen.queryByLabelText(/Message this agent directly/i)).toBeNull();
@@ -314,7 +272,7 @@ describe("ChannelsV2AgentPanel", () => {
     // ⚠ NEVER the sessionId — that id does not survive a park+recreate, and main
     // resolves the pair against its own registry (which is what makes these
     // own-agents-only).
-    expect(pause).toHaveBeenCalledWith(CHANNEL_ID, "t-1");
+    expect(pause).toHaveBeenCalledWith(CHANNEL_ID, "t-1", undefined);
     expect(end).not.toHaveBeenCalled();
   });
 

@@ -285,7 +285,7 @@ test("LAZY RESUME (a): an AUTO-ACCEPTED inbound turn wakes a parked session (res
   assert.equal(effTypes(r.effects)[0], "resumeQuery");
   const pushIdx = effTypes(r.effects).indexOf("pushInbound");
   assert.ok(pushIdx > 0, "pushInbound follows the resume");
-  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "back", authorName: "Bob" });
+  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "back", authorName: "Bob", addressing: null });
 });
 
 test("LAZY RESUME (b): operator steer wakes a parked session (resumeQuery, no interrupt)", () => {

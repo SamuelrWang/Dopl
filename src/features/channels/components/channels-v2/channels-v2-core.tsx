@@ -17,7 +17,7 @@ import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsOnboardingCore } from "../channels-onboarding-core";
-import { ChannelsV2ManageActions } from "./channel-manage";
+import { ChannelsV2SettingsSlot } from "./settings-slot";
 import { ChannelsV2Overlays } from "./overlays";
 import { ChannelsV2Sidebar } from "./sidebar";
 import { ChannelsV2MessagePane } from "./message-pane";
@@ -26,7 +26,7 @@ import { ChannelsV2InboxPane } from "./inbox-pane";
 import { PopOutThreadButton } from "./pop-out";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import { useChannelsV2Live } from "./live";
-import { useDesktopSessions } from "./agents-model";
+import { useDesktopSessions } from "./use-desktop-sessions";
 import type { Channel, ChannelMention } from "../../types";
 // Kept on one line each: this file has repeatedly sat within a handful of lines
 // of the 500-line cap, and CROSSED it on 2026-08-20 (453 after the selection
@@ -371,6 +371,9 @@ export function ChannelsV2Core({
               })
             }
             gate={gate}
+            // The composer's New Agent icon (2026-08-21) — handed down whole,
+            // never re-mounted: a second `useAgentsPanel` is a second peer poll.
+            newAgent={agentsPanel}
             // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
             // hides ITSELF outside the desktop shell (feature detection), so the
             // web tree gets no affordance for a window it cannot open.
@@ -411,7 +414,7 @@ export function ChannelsV2Core({
               threadsTruncated={threadsTruncated}
               threadsLoading={threadsLoading}
               index={index}
-              openThreadId={openThread?.id ?? null}
+              openThread={openThread}
               onOpenThread={sel.openThread}
               agentSessions={agentSessions}
               peerSessions={agentsPanel.peerSessions}
@@ -433,16 +436,21 @@ export function ChannelsV2Core({
               onMarkAllMentionsRead={markAllMentionsRead}
               // THE SETTINGS TAB (Samuel, 2026-08-19). This cluster hung off the
               // pane HEADER until then; the header keeps only the info toggle.
+              // ⚠ THREAD-SCOPED WHILE A THREAD IS OPEN (2026-08-21) — the branch
+              // is `settings-slot.tsx`, which owns why it lives at the MOUNT.
               settings={
-                <ChannelsV2ManageActions
+                <ChannelsV2SettingsSlot
                   channel={channel}
                   workspaceId={workspaceId}
                   workspaceSlug={workspaceSlug}
                   currentUserId={currentUserId}
                   role={role}
                   members={members}
+                  thread={openThread}
+                  agentSessions={agentSessions}
                   gate={gate}
                   onDeselect={() => sel.selectChannel(null)}
+                  onExitThread={() => sel.openThread(null)}
                   onRosterChanged={() => {
                     void refetchChannels();
                     void refetchMembers();

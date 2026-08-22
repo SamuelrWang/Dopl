@@ -63,13 +63,25 @@ function harness(over = {}) {
     ended: [],
     noteEnded(s, keepWindow) { this.ended.push({ key: s.key, keepWindow }); return keepWindow; },
   };
+  // ⚠ TWO MORE FREE VARS JOINED `settle` ON 2026-08-22 (Samuel's ended-agent ruling): it FREEZES
+  // the agent's history before dropping the registry entry, because the narration ring lives on
+  // the session object and that is the last moment it exists. Faked here so these cases stay
+  // about the TEARDOWN contract; `test/agent-retention.test.mjs` owns the retention rule, and
+  // `test/agent-ended-is-dead.test.mjs` pins the ORDER (freeze, then delete).
+  const agentHistory = { frozen: [], record(r) { this.frozen.push(r); return true; } };
+  const sessionMetrics = { metrics: () => ({ contextUsed: null, contextWindow: null, tokensSpent: null, startedAt: null, lastActivityAt: null }) };
   const api = new Function(
     "store", "sessions", "refreshTray", "baseRecord", "sessionSummary",
+    "agentHistory", "sessionMetrics", "sessionNarration", "diag",
     `${cut("function denyPendingPermissions(s, message) {", "// A hidden window RESHOWS")}
      ${cut("function settle(s, outcome, keepWindow) {", "function setLifecycleHandlers(")}
      return { settle, denyPendingPermissions };`
-  )(store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }), sessionSummary);
+  )(
+    store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }), sessionSummary,
+    agentHistory, sessionMetrics, { ringFor: () => [] }, () => {}
+  );
   calls.ended = sessionSummary.ended;
+  calls.frozen = agentHistory.frozen;
 
   const settled = [];
   const s = {

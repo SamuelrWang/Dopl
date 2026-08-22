@@ -190,6 +190,63 @@ export async function updateTask(
 }
 
 /**
+ * DROP a thread's participant rows — the cascade's second child step.
+ *
+ * ⚠ THE FK ALREADY CASCADES (`channel_task_participants.task_id … ON DELETE
+ * CASCADE`, `20260731130000`), so this statement is REDUNDANT with the task-row
+ * delete below and is here anyway, deliberately: the cascade is ordered
+ * children-first so that a failure part-way through can only ever leave a thread
+ * with less hanging off it, never a task row whose children outlived it. Relying
+ * on the FK for one child and an explicit statement for the others would make the
+ * order a half-truth. It costs one indexed delete
+ * (`channel_task_participants_identity_key` leads with `task_id`) on a table that
+ * is usually empty.
+ *
+ * ⚠ THE TABLE ITSELF IS DEAD CODE — nothing has INSERTed into it since breakout
+ * rooms were removed (channels rollback §1) — but rows written before that are
+ * still there, so "nothing writes it" is not "nothing is in it".
+ */
+export async function deleteTaskParticipants(taskId: string): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("channel_task_participants")
+    .delete()
+    .eq("task_id", taskId);
+  if (error) throw error;
+}
+
+/**
+ * REMOVE the thread row itself — the LAST step of the cascade.
+ *
+ * ⚠ CHANNEL-SCOPED, like every other write here: the id alone would let a
+ * mis-resolved thread be deleted out of a channel the caller proved nothing
+ * about. The service has already loaded the row through
+ * {@link findTaskByChannelAndId}; this repeats the scope in the statement so the
+ * authorization and the write cannot drift apart.
+ *
+ * ⚠ IT IS NOT A TOMBSTONE. `channel_tasks` has no `deleted_at` and gains none —
+ * threads hard-delete (INVARIANTS §5). The row is gone and so is its
+ * `channel_tasks_activity` projection.
+ *
+ * ⚠ NO REALTIME DOORBELL RIDES ON THIS. `channel_tasks` is not in the
+ * publication (INVARIANTS §7) and must not be added for it; the MESSAGE deletes
+ * that precede it are what ring `channel_messages`, and every subscriber's
+ * refetch re-reads the thread list off the back of that.
+ */
+export async function deleteTask(
+  channelId: string,
+  taskId: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("channel_tasks")
+    .delete()
+    .eq("channel_id", channelId)
+    .eq("id", taskId);
+  if (error) throw error;
+}
+
+/**
  * ⚠ `updateTaskIfStatus` USED TO LIVE HERE — the conditional
  * `UPDATE … WHERE status = $expected` that made FIRST CLOSE WIN (C-30,
  * 2026-08-08) when both parties to a thread clicked Close with different

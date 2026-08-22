@@ -88,10 +88,17 @@ test("the floor never LOWERS supervision on the out half", () => {
 /** `setModeByTask`, sliced with the engine's internals faked. */
 function harness({ windowless = true, state = {} } = {}) {
   const src = read("session-reopen.js");
-  const body = src.slice(src.indexOf("function setModeByTask("), src.indexOf("// ── THE DIRECT 1:1 LANE"));
+  // ⚠ TWO FUNCTIONS ARE SLICED SINCE 2026-08-21, not one: `setModeByTask` resolves its session
+  // through `resolveSession`, the ONE statement of the multiplayer resolution rule (an
+  // `agentId` matches exactly; none takes the oldest live agent on the thread). Slicing the op
+  // without it would evaluate to a ReferenceError, and stubbing it would test a resolution
+  // this file does not ship.
+  const resolver = src.slice(src.indexOf("function resolveSession("), src.indexOf("// PURE READ —"));
+  const body = resolver + src.slice(src.indexOf("function setModeByTask("), src.indexOf("// ── THE DIRECT 1:1 LANE"));
   const dispatched = [];
   const s = {
-    key: "chan-1:task-1",
+    key: "chan-1:task-1:a1b2c3d4",
+    agentId: "a1b2c3d4",
     settled: false,
     windowless,
     state: { toolMode: "manual", messageMode: "auto_inbound", ...state },
@@ -109,7 +116,11 @@ function harness({ windowless = true, state = {} } = {}) {
         if (ev.type === "set_tool_mode") sess.state.toolMode = ev.mode;
       },
     },
-    { sessionKey: (c, t) => `${c}:${t}` },
+    {
+      sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
+      slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+      threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
+    },
     floorWindowlessMessage
   );
   return { fn, dispatched, s };

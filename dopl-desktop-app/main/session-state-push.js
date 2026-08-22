@@ -156,6 +156,56 @@ function serverReportable(e) {
   return taskId === '' || WIRE_UUID_RE.test(taskId);
 }
 
+// ── A ROW WITH NO USABLE HANDLE DOES NOT GO ON THE WIRE EITHER (2026-08-22) ─────────────
+//
+// ⚠ THE SAME FAILURE AS THE AD-HOC KEY ABOVE, REACHED BY A THIRD ROAD, AND THIS IS THE BELT
+// RATHER THAN THE FIX. `channel_sessions.name` carries CHECK `^[a-z][a-z0-9-]{1,30}$` and
+// `src/features/channels/schema-sessions.ts › SESSION_NAME_RE` restates it character for
+// character. Zod validates the ARRAY, so ONE bad name 400s the WHOLE payload, `retryable(400)`
+// is false, the digest is never recorded, and every later push for that workspace fails
+// identically — `read_sessions` answers [] for the machine for the life of the run.
+//
+// ⚠ AND `''` IS A REACHABLE VALUE, NOT A HYPOTHETICAL. `session-summary.js › nameOf` answers the
+// empty string for a session carrying no `agentId` — deliberately, because inventing a name there
+// would be worse — and the producer that could hand one over was `session-park.js › startResume`
+// resuming a PRE-MULTIPLAYER durable record. That producer is fixed in the same change (it mints
+// an id), so nothing in the tree feeds this today. It stays because the COST of the next producer
+// getting it wrong is a workspace silently blanked, and the check is a regex.
+//
+// ⚠ THE PREDICATE RESTATES THE SERVER'S CONTRACT rather than sniffing for '' — the reason to drop
+// a row is that the endpoint refuses it, which is the same rule `serverReportable` follows.
+const WIRE_NAME_RE = /^[a-z][a-z0-9-]{1,30}$/;
+
+function nameReportable(e) {
+  return WIRE_NAME_RE.test(String((e || {}).name || ''));
+}
+
+// ── THE ENDED ROW DOES NOT GO ON THE WIRE (2026-08-22, Samuel's ended-agent ruling) ─────
+//
+// ⚠ THIS IS A DELIBERATE NARROWING, AND WITHOUT IT THE RULING WOULD HAVE BROKEN THE PUSH
+// ENTIRELY. Ended rows used to be reported and disappeared almost at once — the retained set was
+// in memory, bounded by 12, and cleared by a restart. Retention is now SEVEN DAYS and DURABLE
+// (`agent-history.js`), so a machine can hold hundreds of ended cards. The server's own bound is
+// `SESSION_REPORT_MAX = 32` on the ARRAY (`src/features/channels/schema-sessions.ts`); one
+// oversized payload is a 400, `retryable(400)` is false, the digest is never recorded, and every
+// later push for that workspace fails identically — `read_sessions` answers [] for the machine,
+// LIVE sessions included, and stale rows are never cleared. That is the exact failure the ad-hoc
+// filter above exists for, reached by a different road.
+//
+// ⚠ AND NOTHING WANTED THEM. Samuel's ruling is that the OPERATOR sees their own ended cards —
+// which they do, from the LOCAL summaries bridge, where the 7-day history actually lives. PEERS
+// do not need ended cards: `peerCardsFor` already filters on row freshness, so a day-old ended
+// row renders nothing anyway. And `read_sessions` answers "what is this member's agent DOING",
+// which a dead one is not. So the cross-machine vocabulary keeps its three values and simply
+// stops carrying the third.
+//
+// ⚠ THE ROW STILL LEAVES PROMPTLY, WHICH IS THE POINT. Dropping the entry here means the next
+// push reports a SMALLER set, and the replace protocol deletes by omission — so a peer's card
+// for a just-ended agent disappears on the next state change rather than lingering for a week.
+function liveForWire(e) {
+  return String((e || {}).state || '') !== 'ended';
+}
+
 // ⚠ One line per dropped session, NOT per push: a filtered entry survives every state change
 // of a session that may run for hours. Pruned to the live set every cycle, like `origin`.
 const loggedAdHoc = new Set();
@@ -166,12 +216,24 @@ function reportable(entries) {
   for (const e of entries) {
     const key = String((e && e.key) || '');
     live.add(key);
-    if (serverReportable(e)) { kept.push(e); continue; }
+    // ⚠ ENDED ROWS ARE DROPPED SILENTLY, unlike the ad-hoc ones below. An ad-hoc session is a
+    // shape the server REFUSES and the operator may want to know about; an ended one is simply
+    // not this table's business, it happens constantly, and one diag line per ended agent would
+    // be noise about working-as-designed.
+    if (!liveForWire(e)) continue;
+    if (serverReportable(e) && nameReportable(e)) { kept.push(e); continue; }
     if (loggedAdHoc.has(key)) continue;
     loggedAdHoc.add(key);
-    diag('session-state push: SKIPPING ad-hoc session', key,
-      '— no first-class thread, so read_sessions has nothing to be about;',
-      'the rest of this workspace\'s set is reported normally');
+    if (!serverReportable(e)) {
+      diag('session-state push: SKIPPING ad-hoc session', key,
+        '— no first-class thread, so read_sessions has nothing to be about;',
+        'the rest of this workspace\'s set is reported normally');
+    } else {
+      diag('session-state push: SKIPPING nameless session', key,
+        '— its name', JSON.stringify(String((e || {}).name || '')),
+        'is not a handle channel_sessions.name accepts, and ONE of them 400s the whole payload;',
+        'the rest of this workspace\'s set is reported normally');
+    }
   }
   for (const key of [...loggedAdHoc]) {
     if (!live.has(key)) loggedAdHoc.delete(key);
@@ -395,6 +457,8 @@ module.exports = {
   RETRY_DELAY_MS,
   REPORTED_WORKSPACES_KEY,
   reportRow,
+  liveForWire, // 2026-08-22: an ENDED row is local-only — see its block
+  nameReportable, // 2026-08-22: the belt against a nameless row 400-ing the whole set
   setDigest,
   retryable,
   reportedWorkspaces,

@@ -38,7 +38,14 @@ import {
  * The initiating request's idempotency key, derived from the task id. ⚠ The task
  * row and its opening message are two writes with NO transaction around them, so
  * this key is what makes the PAIR converge — whichever attempt gets there posts,
- * every later one dedups on `channel_messages_client_msg_key`.
+ * every later one dedups on `channel_messages_client_msg_author_key`
+ * (`20260822120000`, which widened that index to include the author).
+ *
+ * ⚠ THE WIDENING IS INVISIBLE TO THIS KEY AND THAT IS NOT LUCK. Only the thread's
+ * CREATOR ever re-drives the opening post — `convergeOnThread` sends everyone else
+ * to `storedOpeningSeq`, a READ — so both writers of `task-open-<taskId>` are the
+ * same user by construction and the dedup still fires. The READ stays
+ * channel-scoped precisely because it is the not-the-creator path.
  */
 function openingMessageClientId(taskId: string): string {
   return `task-open-${taskId}`;

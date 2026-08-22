@@ -56,9 +56,17 @@ const openWindows = new Map();
 // ─── BEGIN AGENT-ROUTE-PURE (unit-tested via source extraction) ──────────────
 // No electron/require refs below.
 
-/** One window per (channel, thread) — the agent's own stable key. */
-function agentWindowKey(channelId, taskId) {
-  return `${channelId}|${taskId}`;
+/**
+ * One window per AGENT INSTANCE.
+ * ⚠ THE THIRD PART JOINED ON 2026-08-21. It was `(channel, thread)`, which was the agent's
+ * stable key until multiplayer made a thread hold several of them — at which point opening the
+ * second agent's window FRONTED the first one's, silently, with no error anywhere. An absent
+ * `agentId` degrades to the old two-part key rather than refusing, so a caller that only knows
+ * the pair keeps its previous behaviour exactly.
+ */
+function agentWindowKey(channelId, taskId, agentId) {
+  const agent = String(agentId || '');
+  return agent ? `${channelId}|${taskId}|${agent}` : `${channelId}|${taskId}`;
 }
 
 /**
@@ -71,10 +79,24 @@ function agentWindowKey(channelId, taskId) {
  *
  * ⚠ THE THREAD RIDES `?thread=` AS A SELECTION, exactly as the pop-out's does: which agent
  * this window is showing is not a different PAGE.
+ * ⚠ `&agent=` JOINED IT ON 2026-08-21 and is OPTIONAL, on the same terms: with several of the
+ * operator's agents on one thread the pair no longer says WHICH one this window shows. Omitted
+ * when the caller does not know it, so the route degrades to the old one rather than breaking.
+ * The value is `agent-id.js` charset (`[a-z0-9]` only), so it needs no escaping.
  */
-function agentRoute(segment, page, channelId, taskId) {
-  if (!segment || !page || !channelId || !taskId) return null;
-  return `/${segment}/${page}/${channelId}?thread=${taskId}`;
+function agentRoute(segment, page, channelId, taskId, agentId) {
+  if (!segment || !page || !channelId) return null;
+  const thread = String(taskId || '');
+  const agent = String(agentId || '');
+  // ⚠ A CHANNEL-LEVEL AGENT HAS NO THREAD (2026-08-21) and must still be openable. It is
+  // identified by its agent id alone, so the thread selection is simply omitted rather than the
+  // route refused. One of the two must be present: a route naming neither addresses the whole
+  // channel, which is not an agent view.
+  if (!thread && !agent) return null;
+  const query = [thread ? `thread=${thread}` : '', agent ? `agent=${agent}` : '']
+    .filter(Boolean)
+    .join('&');
+  return `/${segment}/${page}/${channelId}?${query}`;
 }
 // ─── END AGENT-ROUTE-PURE ────────────────────────────────────────────────────
 
@@ -132,10 +154,10 @@ function createAgentWindow(route) {
  */
 function openAgentWindow(target) {
   const t = target || {};
-  const route = agentRoute(t.segment, AGENT_WINDOW_PAGE, t.channelId, t.taskId);
+  const route = agentRoute(t.segment, AGENT_WINDOW_PAGE, t.channelId, t.taskId, t.agentId);
   if (!route) return { ok: false };
 
-  const key = agentWindowKey(t.channelId, t.taskId);
+  const key = agentWindowKey(t.channelId, t.taskId, t.agentId);
   sweep();
   const existing = openWindows.get(key);
   if (existing) {

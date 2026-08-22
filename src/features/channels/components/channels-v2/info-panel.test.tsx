@@ -73,7 +73,11 @@ const THREADS = [thread({ id: "t-a", title: "Alpha audit" }), thread({ id: "t-b"
 function renderPanel(
   over: Partial<React.ComponentProps<typeof ChannelsV2InfoPanel>> = {}
 ) {
-  render(
+  return render(panel(over));
+}
+
+function panel(over: Partial<React.ComponentProps<typeof ChannelsV2InfoPanel>> = {}) {
+  return (
     <ChannelsV2InfoPanel
       channel={channel()}
       channelName="Website"
@@ -82,7 +86,7 @@ function renderPanel(
       threadsTruncated={false}
       threadsLoading={false}
       index={INDEX}
-      openThreadId={null}
+      openThread={null}
       onOpenThread={vi.fn()}
       agentSessions={[]}
       peerSessions={[]}
@@ -95,6 +99,16 @@ function renderPanel(
       onMarkAllMentionsRead={vi.fn()}
       {...over}
     />
+  );
+}
+
+/** Whether a tab is the lit one. `SegmentedControl` puts the state on
+ *  `aria-selected`, which is also the only thing a screen reader has. */
+function selected(label: string): boolean {
+  return (
+    screen.getByRole("tab", { name: new RegExp(`^${label}`) }).getAttribute(
+      "aria-selected"
+    ) === "true"
   );
 }
 
@@ -122,7 +136,7 @@ describe("the tab row's count badges", () => {
 
   it("narrows BOTH halves to the open thread, exactly as the tab's list does", () => {
     renderPanel({
-      openThreadId: "t-a",
+      openThread: THREADS[0],
       agentSessions: [summary(), summary({ sessionId: "s-2", taskId: "t-b" })],
       peerSessions: [peer(), peer({ name: "slate", threadId: "t-b" })],
     });
@@ -204,6 +218,74 @@ describe("the tab row's count badges", () => {
   it("renders 0 for a channel with no threads — asked, and there are none", () => {
     renderPanel({ threads: [] });
     expect(badgeOf("Threads")).toBe("0");
+  });
+});
+
+/**
+ * THREAD VIEW RE-SCOPES THE WHOLE COLUMN (Samuel, 2026-08-21).
+ *
+ * Two properties, and the second is the one that fails silently:
+ *
+ *  - **THREADS LEAVES THE ROW WITH A THREAD OPEN**, and comes back without one.
+ *    It is the single control in this column that navigates away from what the
+ *    centre pane is showing.
+ *  - **THE SELECTION CANNOT GO DEAD.** Opening a thread from the Threads tab
+ *    removes the very tab that is lit; a `value` matching no option leaves the
+ *    row with nothing selected over an empty body, which looks like a render bug
+ *    and gives the reader nothing to click back to.
+ */
+describe("thread view's tab row", () => {
+  it("drops the Threads tab while a thread is open", () => {
+    renderPanel({ openThread: THREADS[0] });
+    expect(screen.queryByRole("tab", { name: /^Threads/ })).toBeNull();
+    // The other three stay, and Info is still reachable.
+    expect(screen.getByRole("tab", { name: /^Info/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^Agents/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^Settings/ })).toBeTruthy();
+  });
+
+  it("keeps the Threads tab in channel view", () => {
+    renderPanel();
+    expect(screen.getByRole("tab", { name: /^Threads/ })).toBeTruthy();
+  });
+
+  it("falls back to Info when the open thread removes the selected tab", () => {
+    const view = renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: /^Threads/ }));
+    expect(selected("Threads")).toBe(true);
+
+    view.rerender(panel({ openThread: THREADS[0] }));
+
+    expect(screen.queryByRole("tab", { name: /^Threads/ })).toBeNull();
+    expect(selected("Info")).toBe(true);
+    // And the body that landed is the THREAD's info, not the channel's.
+    expect(screen.getByText("Thread info")).toBeTruthy();
+    expect(screen.queryByText("Main info")).toBeNull();
+  });
+
+  it("leaves a NON-threads selection alone when a thread opens", () => {
+    const view = renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: /^Agents/ }));
+    view.rerender(panel({ openThread: THREADS[0] }));
+    expect(selected("Agents")).toBe(true);
+  });
+});
+
+describe("the Info tab's two scopes", () => {
+  it("renders the CHANNEL's info in channel view", () => {
+    renderPanel();
+    expect(screen.getByText("Main info")).toBeTruthy();
+    expect(screen.queryByText("Thread info")).toBeNull();
+  });
+
+  it("renders the THREAD's info in thread view", () => {
+    renderPanel({ openThread: THREADS[0] });
+    expect(screen.getByText("Thread info")).toBeTruthy();
+    expect(screen.getByText("Alpha audit")).toBeTruthy();
+    // ⚠ The channel's own sections must be GONE, not merely pushed down: this
+    // column is about one exchange while a thread is open.
+    expect(screen.queryByText("Main info")).toBeNull();
+    expect(screen.queryByText("Thread activity")).toBeNull();
   });
 });
 

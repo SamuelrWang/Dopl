@@ -90,7 +90,8 @@ const WORKSPACE_PAGES = {
 };
 
 /** SPA routes that live OUTSIDE `/:workspaceSegment` (routes.tsx). */
-const ROOT_ROUTES = new Set(['onboarding']);
+// `home` = the account surface (apps/desktop-ui/src/pages/home, 2026-08-21).
+const ROOT_ROUTES = new Set(['onboarding', 'home']);
 
 /**
  * Web paths whose FIRST segment is not a workspace: the marketing and auth

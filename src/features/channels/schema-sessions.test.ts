@@ -84,11 +84,28 @@ describe("SessionStateReportSchema — the migration's CHECKs", () => {
     }
   });
 
-  it("`sessionKey` is a uuid pair and carries no filter-hostile character", () => {
+  it("`sessionKey` is a uuid pair PLUS an agent segment, and carries no filter-hostile character", () => {
+    // ⚠ THE THIRD SEGMENT JOINED 2026-08-21 (Samuel's multiplayer ruling): the desktop key is
+    // `<channel>:<thread>:<agentInstanceId>`, because one operator may run several agents on one
+    // thread and the pair stopped identifying a session. `${CHAN}:${TASK}:extra` was in the BAD
+    // list until then, and its acceptance is the whole change.
+    expect(parse([entry({ sessionKey: `${CHAN}:${TASK}:a1b2c3d4` })]).success).toBe(true);
+    // `<channel>::<agent>` is a CHANNEL-LEVEL agent — attached to the room, not to a thread.
+    expect(parse([entry({ sessionKey: `${CHAN}::a1b2c3d4` })]).success).toBe(true);
+    // ⚠ THE TWO-SEGMENT FORM STILL PARSES, deliberately: an older desktop is a supported peer
+    // during a rollout (INVARIANTS §13) and refusing its keys blanks its whole workspace's rows.
     expect(parse([entry({ sessionKey: `${CHAN}:` })]).success).toBe(true);
+    expect(parse([entry({ sessionKey: `${CHAN}:${TASK}` })]).success).toBe(true);
     // The reconcile deletes BY KEY, so a quote or a comma in one would be an
     // escaping question every time somebody touches the repository.
-    for (const bad of [`${CHAN}:${TASK}","other`, `${CHAN}:a b`, "nocolon", `${CHAN}:${TASK}:extra`]) {
+    for (const bad of [
+      `${CHAN}:${TASK}","other`,
+      `${CHAN}:a b`,
+      "nocolon",
+      `${CHAN}:${TASK}:a1b2c3d4:more`, // a FOURTH segment is not a shape the desktop mints
+      `${CHAN}:${TASK}:agent id`,
+      `${CHAN}:${TASK}:"x"`,
+    ]) {
       expect(parse([entry({ sessionKey: bad })]).success).toBe(false);
     }
   });

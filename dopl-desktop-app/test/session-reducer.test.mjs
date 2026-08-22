@@ -320,7 +320,7 @@ test("inbound_arrived with AXIS B auto-accepting: feeds the reply (counterparty 
   // FIX 3: ...plus the idle re-arm, because a turn was just pushed.
   assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound", "scheduleIdle"]);
   assert.deepEqual(findEff(r.effects, "emit").payload, { type: "counterparty", from: "Bob", text: "hi" });
-  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob" });
+  assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob", addressing: null });
 });
 
 test("inbound_arrived under the STANDING task grant from awaiting_peer clears back to working", () => {

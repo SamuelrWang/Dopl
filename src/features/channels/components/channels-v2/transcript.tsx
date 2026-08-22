@@ -26,11 +26,7 @@ import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { AddresseePill, CARD_BUTTON, PendingChip } from "./bits";
 import { AgentChip } from "./bits";
-import {
-  MENTION_TOKEN_RE,
-  buildMentionIndex,
-  resolveMentionToken,
-} from "../../lib/mentions";
+import { MessageMarkdown } from "./message-markdown";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, ThreadCardRow, TranscriptRow } from "./view-model-rows";
 
@@ -227,8 +223,26 @@ function AuthoredRow({
  * ⚠ A PERCENTAGE, not a px measure, and BOTH SIDES wear it — a fixed cap stops
  * capping wherever the column is narrower (the pop-out thread window). Peer
  * rows keep hugging left either way.
+ *
+ * ⚠ IT IS NOW SPLIT IN TWO, AND THE SPLIT IS NOT COSMETIC (2026-08-21).
+ * `message-markdown.tsx` renders EVERY block into this same column, so each one
+ * needs the LAYOUT half — a list, a quote and a code fence must be capped and
+ * anchored exactly like a paragraph. The TYPE half is a different question: a
+ * heading and a code fence set their own size and weight, and handing them the
+ * body's would be two `text-*` classes racing on one element.
+ *
+ * ⚠ AND `cn` COULD NOT ARBITRATE THAT RACE — measured 2026-08-21, not assumed.
+ * `tailwind-merge` groups `text-lead` (this tree's SIZE scale) with
+ * `text-text-primary` (a colour) because a custom `text-*` scale is
+ * indistinguishable from a colour by name, so `cn(MESSAGE_BODY, "text-body …")`
+ * silently drops the COLOUR. Passing the two halves separately means no block
+ * ever receives a class it has to win against.
+ *
+ * A paragraph still gets both, in this order, so it is byte-for-byte the `<p>`
+ * `transcript-body.test.tsx`'s layout pins measure.
  */
-const MESSAGE_BODY = "wrap-anywhere max-w-[92%] text-lead text-text-primary";
+const MESSAGE_BLOCK = "wrap-anywhere max-w-[92%]";
+const MESSAGE_TEXT = "text-lead text-text-primary";
 
 function Message({
   row,
@@ -250,13 +264,18 @@ function Message({
       continuation={row.continuation}
       flash={flash}
     >
-      {row.body.split("\n").map((paragraph, i) =>
-        paragraph.trim().length === 0 ? null : (
-          <p key={i} className={MESSAGE_BODY}>
-            <Body text={paragraph} index={index} mentionsMe={row.mentionsMe} />
-          </p>
-        )
-      )}
+      {/* ⚠ THE WHOLE BODY GOES IN AT ONCE, not line by line (2026-08-21). The
+          old split-on-`\n` loop could not see a fenced block or a list: it
+          handed the renderer one line at a time, which is exactly the shape
+          markdown is not. Blank lines still separate blocks — that is the
+          paragraph rule, now the lexer's rather than this loop's. */}
+      <MessageMarkdown
+        text={row.body}
+        index={index}
+        mentionsMe={row.mentionsMe}
+        blockClassName={MESSAGE_BLOCK}
+        textClassName={MESSAGE_TEXT}
+      />
     </AuthoredRow>
   );
 }
@@ -421,63 +440,5 @@ function ThreadCardMessage({
         </div>
       </div>
     </AuthoredRow>
-  );
-}
-
-/**
- * Message body with roster-resolved @-mentions tinted, and a mention OF THE
- * VIEWER additionally tinted — these are the rows the Tags inbox points at, and
- * they should be findable by eye once a scroll lands nearby.
- *
- * ⚠ ONE PARSER, ONE SOURCE OF "AM I TAGGED" (reconciled in Phase 6; there used
- * to be a private copy of the token rule and the handle map right here).
- *   - WHERE a tint goes is `lib/mentions.ts`, the SAME module the server's
- *     resolution runs, so the transcript cannot tint a name the stamp did not
- *     resolve;
- *   - WHETHER the viewer is tagged is `row.mentionsMe`, read off the
- *     SERVER-STAMPED `metadata.mentionedUserIds` (`view-model.ts ›
- *     toMessageRow`). That is the same fact the Tags inbox lists, so the
- *     transcript and the inbox cannot disagree about whether a message tagged
- *     you — which they could while the tint re-derived it from a roster that
- *     may have changed since the message was written.
- *
- * ⚠ PURE DISPLAY. Nothing here is the addressing rule: addressing is
- * `metadata.to_user_id`, stamped server-side and stripped from caller input
- * (INVARIANTS §5). A tinted name is not a claim that anybody was reached.
- */
-function Body({
-  text,
-  index,
-  mentionsMe,
-}: {
-  text: string;
-  index: AuthorIndex;
-  mentionsMe: boolean;
-}) {
-  const handles = buildMentionIndex([...index.byId.values()]);
-  return (
-    <>
-      {text.split(MENTION_TOKEN_RE).map((part, i) => {
-        if (!part.startsWith("@")) return <span key={i}>{part}</span>;
-        const userId = resolveMentionToken(part, handles);
-        if (!userId) return <span key={i}>{part}</span>;
-        return (
-          <span
-            key={i}
-            className={cn(
-              "font-medium text-link",
-              // ⚠ BOTH halves required: the stamp says this message tags me,
-              // the token says THIS is where. The stamp alone cannot place a
-              // highlight and the token alone is a re-derivation.
-              mentionsMe &&
-                userId === index.currentUserId &&
-                "rounded-[4px] bg-link/10 px-0.5"
-            )}
-          >
-            {part}
-          </span>
-        );
-      })}
-    </>
   );
 }

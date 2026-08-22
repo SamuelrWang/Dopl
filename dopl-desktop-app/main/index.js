@@ -34,6 +34,7 @@ const authTokens = require('./auth-tokens');
 const uiSync = require('./ui-sync');
 const settings = require('./settings');
 const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle echo seam (2026-08-20)
+const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -179,7 +180,9 @@ if (!gotLock) {
       // "Update ready — restart to install": restarts straight away when nothing
       // is live, and asks first (naming the session) when an agent is mid turn.
       onUpdate: () => updater.requestRestart(),
-      // "Check for updates now": the publish loop's answer to a 4h interval.
+      // "Check for updates now": the explicit ask. Since 2026-08-22 the interval
+      // is 30m and focus triggers a gapped check, so this is the impatient path
+      // rather than the only one.
       onCheckUpdates: () => updater.checkNow(),
       // Q4 fix 3: the escape hatch. "Sign in…" appears only while the listener
       // reports signed out and runs the same CSRF-gated external OAuth flow the
@@ -286,6 +289,21 @@ if (!gotLock) {
     // fed a null. The LIFECYCLE ECHO below survives and moved with the retirement — it is the
     // calm `session_ended` note a WAITING PEER needs, raised by windowless sessions too.
     sessionEngine.setLifecycleHandlers(triggerOutcomes.lifecycleHandlers);
+    // ⚠ THE 7-DAY SWEEP IS ARMED BEFORE `init()` (2026-08-22, Samuel's ended-agent ruling), and
+    // the order matters in one direction only: `init()` reads the durable records back and
+    // marks interrupted ones ended, so sweeping FIRST means this run's own start does not have
+    // to compete with a record it is about to write. `start()` sweeps once immediately and then
+    // daily; it is idempotent and its interval is `unref`'d, so it never holds a quit open.
+    // ⚠ IT OWNS THE ONE LIST OF PER-AGENT ARTIFACTS — the cleaners are handed in HERE, and a
+    // store missing from this literal LEAKS SILENTLY (agent-retention.js says so at `bind`).
+    try {
+      agentRetention.bind({
+        clearRecord: (keys) => require('./session-store').forgetKeys(keys),
+        releaseEnded: (keys) => require('./session-summary').releaseEnded(keys),
+        forgetNotice: (keys) => require('./queued-notice').forgetKeys(keys),
+      });
+      agentRetention.start();
+    } catch (err) { diag('agentRetention.start error', err && err.message); }
     try { sessionEngine.init(); } catch (err) { diag('sessionEngine.init error', err && err.message); }
 
     // Q11: the legacy-reply registry is durable now. targeting.js stays

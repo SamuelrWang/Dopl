@@ -148,6 +148,7 @@ export function IconButton({
   size = 15,
   active,
   filled,
+  disabled,
   onClick,
   className,
 }: {
@@ -165,6 +166,14 @@ export function IconButton({
    * (`knowledge-v2/home/base-card.tsx`).
    */
   filled?: boolean;
+  /**
+   * ⚠ IN FLIGHT, not "not allowed" (2026-08-21, the composer's New Agent icon).
+   * A control this surface cannot offer at all is not RENDERED — that is the
+   * feature-detection rule the whole bridge family follows, and a permanently
+   * greyed glyph is indistinguishable from a broken one. This is for the moment
+   * between a click and its answer.
+   */
+  disabled?: boolean;
   onClick?: () => void;
   className?: string;
 }) {
@@ -174,12 +183,14 @@ export function IconButton({
       aria-label={label}
       title={label}
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         "flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] transition-colors",
         active
           ? "raised-tab text-text-primary"
           : "text-text-secondary hover:bg-surface-raised-1 hover:text-text-primary",
+        disabled && "cursor-not-allowed opacity-50",
         className
       )}
     >
@@ -396,55 +407,6 @@ export function RolePill({ owner }: { owner: boolean }) {
       )}
     >
       {owner ? "Owner" : "Member"}
-    </span>
-  );
-}
-
-/**
- * LIVENESS of one of my agents — a dot and a word, no pill chrome.
- *
- * Deliberately NOT `StatusPill`: that bordered green pill is the channel's
- * settled "Active" state and it would out-shout the agent label beside it. The
- * word carries the state for anyone the colour does not reach.
- */
-export function AgentLiveness({
-  running,
-  detail = null,
-  className,
-}: {
-  running: boolean;
-  /**
-   * The finer sentence, when this machine can say one
-   * (`agents-model.ts › agentDetailLabel`). It REPLACES "Running" rather than
-   * joining it — "Running · Thinking…" says one thing twice, and the dot already
-   * carries the liveness.
-   *
-   * ⚠ ONLY OVER A RUNNING AGENT, enforced here rather than trusted from the
-   * caller: a detail under an idle dot would be the card contradicting itself,
-   * and this is the one component both the tab and the panel render through.
-   * ⚠ PEER CARDS PASS NOTHING. The cross-machine wire carries the coarse state
-   * only, by design (INVARIANTS §11) — there is no `detail` on a peer row to pass.
-   */
-  detail?: string | null;
-  className?: string;
-}) {
-  const label = running ? (detail ?? "Running") : "Idle";
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 text-caption font-medium",
-        running ? "text-success" : "text-text-muted",
-        className
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          running ? "bg-success" : "bg-text-disabled"
-        )}
-      />
-      {label}
     </span>
   );
 }

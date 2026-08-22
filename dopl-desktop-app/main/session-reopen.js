@@ -28,6 +28,9 @@ const { floorWindowlessMessage } = require('./session-profiles');
 // `store`, so the source-extraction test injects both and the block stays free of the
 // runtime handles its purity assertion refuses (the header names them).
 const framing = require('./session-seed');
+// 2026-08-22: the PRIVATE TURN's window. Required at module scope like `store` and `framing`, so
+// the source-extraction test injects it and the block stays free of runtime handles.
+const privateTurn = require('./session-private');
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
@@ -54,6 +57,40 @@ function bind(d) {
   };
 }
 
+// ── RESOLVING ONE AGENT OUT OF A THREAD (2026-08-21, Samuel's multiplayer ruling) ────────
+//
+// ⚠ EVERY OP IN THIS FILE USED TO DO `deps.sessions.get(store.sessionKey(channelId, taskId))`,
+// AND THAT LOOKUP IS NOW A CATEGORY ERROR: (channel, thread) names a GROUP of this operator's
+// agents, not one session. Four ops (reopen / pause+end / setMode / message) each had their own
+// copy of it, which is four places to get the new rule subtly different — so there is one.
+//
+// THE RULE, and it is chosen to be the COMPATIBLE one:
+//   • an `agentId` resolves EXACTLY. A wrong or dead id answers NOTHING and the caller gets
+//     `{ok:false, reason:'no-session'}` — "pause my agent" must never pause a different one.
+//   • NO `agentId` takes the OLDEST live session on the thread. That is byte-for-byte what
+//     every caller got before multiplayer existed (there was only ever one), so an older
+//     renderer, the tray and the deep-link lanes keep working. It is only ever ambiguous in the
+//     case that could not previously arise, and the fix for that case is to name the agent —
+//     which every op on the bridge now can.
+//
+// ⚠ IT STAYS INSIDE THE PURE BLOCK, on `store`'s terms: the source-extraction test slices this
+// block and injects a fake store, so a helper the ops call has to be sliced with them.
+function resolveSession(a, channelId, taskId) {
+  if (!deps.sessions) return null;
+  const agentId = String((a && a.agentId) || '');
+  if (agentId) {
+    const s = deps.sessions.get(store.slotKey({ channelId: channelId, taskId: taskId, agentId: agentId }));
+    return s && !s.settled ? s : null;
+  }
+  const prefix = store.threadKeyPrefix(channelId, taskId);
+  for (const s of deps.sessions.values()) {
+    if (s.settled) continue;
+    if (String(s.key || '').indexOf(prefix) !== 0) continue;
+    return s; // insertion order == spawn order: the oldest live agent on this thread
+  }
+  return null;
+}
+
 // PURE READ — the updater's restart prompt (what a live restart would kill) and the accounting
 // surface the Agents tab lists from. ⚠ The tray's "Sessions" submenu was its first reader and
 // is deleted (F-228); the prompt is not, and a restart mid-turn still kills a spawned session. One row PER KEY, never per channel: with N concurrent
@@ -72,6 +109,8 @@ function listLiveSessions() {
       key: s.key,
       channelId: s.channelId || null,
       taskId: s.taskId || '',
+      // 2026-08-21: with N agents per thread, (channel, thread) no longer identifies a row.
+      agentId: s.agentId || null,
       channelName: (s.context && s.context.channelName) || null,
       taskTitle: (s.context && s.context.taskTitle) || null,
       status: (s.state && s.state.phase) || null,
@@ -112,10 +151,18 @@ function reopenByTask(a) {
   const channelId = String((a && a.channelId) || '');
   const taskId = String((a && a.taskId) || '');
   if (!deps.sessions) return { ok: false };
-  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   if (!deps.openAgentWindow) return { ok: false }; // mid-wave / harness: fail closed
-  return deps.openAgentWindow({ segment: String((a && a.segment) || ''), channelId, taskId });
+  // ⚠ THE AGENT ID COMES FROM THE RESOLVED SESSION, NOT FROM THE CALLER (2026-08-21). The
+  // window is one-per-agent now, and keying it on what the caller happened to pass would open a
+  // second window on the same agent whenever the caller named nothing.
+  return deps.openAgentWindow({
+    segment: String((a && a.segment) || ''),
+    channelId,
+    taskId,
+    agentId: String(s.agentId || ''),
+  });
 }
 
 // ── THE AGENTS TAB'S TWO CONTROLS: PAUSE and END, on MY OWN agent ────────────────
@@ -156,7 +203,7 @@ function controlByTask(a) {
     ? CONTROL_EVENTS[a.action]
     : null;
   if (!type || !deps.sessions || !deps.dispatch) return { ok: false };
-  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   try {
     deps.dispatch(s, { type: type });
@@ -216,7 +263,7 @@ function setModeByTask(a) {
   const axis = a && a.axis;
   if (!deps.sessions || !deps.dispatch) return { ok: false };
   if (axis !== 'tools' && axis !== 'messages') return { ok: false, reason: 'bad-axis' };
-  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   // ⚠ THE WINDOWLESS FLOOR, APPLIED HERE BECAUSE ONLY HERE IS THE SESSION RESOLVED (F-236).
   // A windowless session has no Accept surface and nothing left that can release a held
@@ -288,18 +335,37 @@ function messageByTask(a) {
   const taskId = String((a && a.taskId) || '');
   const text = String((a && a.text) || '').trim();
   if (!text || !deps.sessions || !deps.dispatch) return { ok: false };
-  const s = deps.sessions.get(store.sessionKey(channelId, taskId));
+  const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   // H1: a session HELD on the sign-in action has no query to feed — the push would land on
   // a closed iterator and the operator's words would vanish. Refuse and say which, so the
   // composer can tell them to sign in rather than silently eating the message.
   if (s.state && s.state.authHeld === true) return { ok: false, reason: 'auth-hold' };
   try {
+    // ⚠ OPEN THE PRIVATE WINDOW BEFORE THE DISPATCH (2026-08-22, Samuel's ruling), and read the
+    // in-flight state while it is still THIS turn's. `openPrivateTurn` looks at `s.state
+    // .activity` to decide whether the pushed message becomes the next turn (+1) or queues
+    // behind one already running (+2); the dispatch below moves that activity to `working`, so
+    // asking afterwards would always read "in flight" and over-cover by a turn every time.
+    // While the window is open, AXIS B's OUTBOUND widening is withdrawn — a post the agent
+    // attempts reaches the outbound consent gate instead of auto-sending
+    // (`session-private.js` carries the whole argument).
+    privateTurn.openPrivateTurn(s);
     // `priority: 'next'` — an out-of-band note QUEUES behind the turn in flight rather
     // than interrupting it. 'now' exists (it is the send button's interrupt morph) and is
     // deliberately not used: the operator asked to say something, not to stop the agent,
     // and Pause is right there for the other intent.
-    deps.dispatch(s, { type: 'steer', text: framing.frameOperatorTurn(s.nonce, text), priority: 'next' });
+    // ⚠ `rawText` RIDES BESIDE THE FRAMED TEXT and is display-only: the work lane shows the
+    // operator what they said (`session-narration.js › entryFor`, kind `private-in`), and the
+    // FRAMED string is a prompt, not a caption. `private: true` is what tells the lane this
+    // steer is the 1:1 lane rather than any other steer.
+    deps.dispatch(s, {
+      type: 'steer',
+      text: framing.frameOperatorTurn(s.nonce, text),
+      rawText: text,
+      private: true,
+      priority: 'next',
+    });
   } catch (_) {
     return { ok: false };
   }
@@ -340,6 +406,7 @@ function liveChildSessions() {
 function listOrphanRisk() {
   return liveChildSessions().map((s) => ({
     key: s.key,
+    agentId: s.agentId || null, // several rows may share a thread — the id is what tells them apart
     channelName: (s.context && s.context.channelName) || null,
     taskTitle: (s.context && s.context.taskTitle) || null,
     counterpartyName: s.counterpartyName || null,

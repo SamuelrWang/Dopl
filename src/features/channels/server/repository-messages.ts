@@ -97,8 +97,9 @@ export async function listMessages(
  *
  * ⚠ Deliberately does NOT sort: `channel_messages_channel_seq_idx` on
  * `(channel_id, seq)` answers it from the index alone. That index is NOT partial
- * (the only partial one here is `channel_messages_client_msg_key`), so this
- * probe sees all rows.
+ * (the only partial one here is the idempotency index —
+ * `channel_messages_client_msg_author_key` since 2026-08-22), so this probe sees
+ * all rows.
  */
 export async function hasMessagesAfter(
   channelId: string,
@@ -142,6 +143,21 @@ export async function hasMessagesAfter(
  * real message — the same trap `excludeAuthorFilter` documents above.
  */
 
+/**
+ * ⚠ TWO READS OF (channel, client_msg_id), AND THE AUTHOR SCOPE IS THE WHOLE
+ * DIFFERENCE — 2026-08-22. They are deliberately NOT merged and neither may be
+ * substituted for the other.
+ *
+ * THIS one is CHANNEL-SCOPED and is a plain READ of a DERIVED key. Its only
+ * caller is `service-tasks.ts › storedOpeningSeq`, where reading ACROSS authors
+ * is the documented behaviour: a create that converged on somebody else's thread
+ * posts nothing and reads the WINNER's opening seq
+ * (`service-tasks.ts › convergeOnThread`). Author-scoping it would answer `null`
+ * for exactly the case it exists to serve.
+ *
+ * ⚠ IT IS NOT AN IDEMPOTENCY PROBE, AND USING IT AS ONE IS THE SECURITY BUG THIS
+ * SPLIT FIXES. See {@link findOwnMessageByClientId}.
+ */
 export async function findMessageByClientId(
   channelId: string,
   clientMsgId: string
@@ -152,6 +168,50 @@ export async function findMessageByClientId(
     .select("*")
     .eq("channel_id", channelId)
     .eq("client_msg_id", clientMsgId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChannelMessageRow | null) ?? null;
+}
+
+/**
+ * THE IDEMPOTENCY PROBE — (channel, AUTHOR, client_msg_id). `postMessage`'s
+ * short-circuit and its lost-race repair, and nothing else.
+ *
+ * ⚠ WHY THE AUTHOR IS PART OF THE KEY, stated as the vulnerability it closes.
+ * Idempotency is a SAME-AUTHOR RETRY contract: "I already sent this, give me
+ * back what you stored". The probe used to be channel-scoped, which made it a
+ * contract with the whole ROOM — so any channel member could pre-claim a
+ * `client_msg_id` another member's agent was ABOUT to use and have the server
+ * hand that agent back the attacker's row instead of writing its post. The keys
+ * are not secret and they are not random: the desktop stamps
+ * `agent-<agentId>-<n>` (`dopl-desktop-app/main/session-outbound-tag.js`), the
+ * agent id is publicly readable off `channel_sessions.name`, and `n` counts from
+ * 1 — so the next several keys of every visible agent are guessable. The victim
+ * agent's reply returned `{ok}` with somebody else's message id and the peer
+ * waiting on the thread got nothing, with no error on either side.
+ *
+ * ⚠ THE DATABASE AGREES WITH THIS FUNCTION, and it has to: the unique index is
+ * `(channel_id, client_msg_id, author_user_id)`
+ * (`supabase/migrations/20260822120000_channel_messages_author_scoped_idempotency.sql`).
+ * Scoping only the READ would turn the swallow into a `23505` the caller sees as
+ * a 500. Change one, change both.
+ *
+ * ⚠ COLUMN ORDER IN THAT INDEX IS `(channel_id, client_msg_id, author_user_id)`,
+ * not the argument order here — the leading pair is what keeps
+ * {@link findMessageByClientId} above index-served.
+ */
+export async function findOwnMessageByClientId(
+  channelId: string,
+  authorUserId: string,
+  clientMsgId: string
+): Promise<ChannelMessageRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .eq("client_msg_id", clientMsgId)
+    .eq("author_user_id", authorUserId)
     .maybeSingle();
   if (error) throw error;
   return (data as ChannelMessageRow | null) ?? null;
@@ -244,6 +304,50 @@ export async function insertMessage(
   // ⚠ A single-composite RETURNS comes back as an object — normalize.
   const out = Array.isArray(data) ? data[0] : data;
   return out as ChannelMessageRow;
+}
+
+/**
+ * HARD-DELETE every message tagged for one thread, and hand back the `seq`s that
+ * actually went — the first step of the thread cascade
+ * (`service-tasks-delete.ts › deleteTask`).
+ *
+ * ⚠ THE TAG IS THE ONLY LINK. `channel_messages` has NO foreign key into
+ * `channel_tasks` (INVARIANTS §5 — the transcript rides on `metadata.taskId`), so
+ * deleting the thread row cascades NOTHING here. This statement IS the cascade,
+ * and it has to run before the task row goes or the messages are orphaned onto an
+ * id that resolves to nothing.
+ *
+ * ⚠ INDEXED, NOT A SCAN: `channel_messages_thread_activity_idx` on
+ * `(channel_id, (metadata ->> 'taskId'))` (migration `20260807160000`) answers
+ * exactly this predicate. Both terms are named, in that order.
+ *
+ * ⚠ `metadata->>taskId` compares as TEXT — same rule {@link listMessages}
+ * follows, so a legacy `task-<channelId>-<seq>` tag is matched verbatim rather
+ * than cast and lost.
+ *
+ * ⚠ THE RETURNED SEQS ARE THE CONSENT CASCADE'S KEY. `channel_consent_requests`
+ * points at its trigger through `message_seq` with no FK, so the only honest way
+ * to find the rows a deletion just stranded is to be told which seqs left. `seq`
+ * is a TABLE-wide identity (§5), so the numbers are globally unique and need no
+ * channel qualifier downstream.
+ *
+ * ⚠ `channel_mention_reads` needs NO statement here: its `message_id` FK is
+ * `ON DELETE CASCADE` (`20260818140000`), so the read-state rows go with these
+ * rows inside the same statement.
+ */
+export async function deleteMessagesByThread(
+  channelId: string,
+  threadId: string
+): Promise<number[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .delete()
+    .eq("channel_id", channelId)
+    .eq("metadata->>taskId", threadId)
+    .select("seq");
+  if (error) throw error;
+  return ((data ?? []) as Array<{ seq: number }>).map((r) => r.seq);
 }
 
 /** Per-channel latest message (seq + created_at) via the bounded RPC. */

@@ -245,3 +245,77 @@ test("M3: a read grant is still OP-SCOPED — one read approved does not approve
   assert.equal(decide({ ...held, input: { op: "post", body: "hi" } }), "gate");
   assert.equal(decide({ ...held, input: { op: "open", direct: true } }), "gate");
 });
+
+// ── THE CHANNEL-LEVEL AGENT'S PULL LANE (2026-08-22, Samuel's refinement) ─────────
+//
+// A CHANNEL-LEVEL agent (`taskId: null`, key `<channelId>::<agentId>`) is FED only untagged
+// main-room posts — thread traffic is never pushed to it, not even when a thread message
+// @-mentions its id. The supervisor use case ("monitor the threads and the agents working in
+// them") is therefore answered by READING ON DEMAND, and that only works if a THREAD-SCOPED
+// read of its own channel auto-allows: a windowless session's message axis is floored at
+// `auto_inbound` and there is no surface to answer a gate on, so a gated read is a DENIED read.
+//
+// ⚠ WHAT MAKES IT WORK IS AN ABSENCE, WHICH IS WHY IT IS PINNED HERE. `isOwnChannelRead` scopes
+// by CHANNEL ONLY — it never looks at `thread` — so `get_thread` / `read` with a thread argument
+// are the same own-channel read as the bare op. Nothing was added for the channel agent; the
+// risk is that somebody later "tightens" the read half by scoping the thread, which would break
+// the supervisor lane and look like a permission bug rather than a rule change.
+const THREAD = "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
+
+test("CHANNEL AGENT: a THREAD-scoped read of its own channel auto-allows under the floor", () => {
+  // The windowless floor is `auto_inbound`; the durable auto-send posture may raise it to
+  // `auto_both`. Both must let the pull lane through.
+  for (const messageMode of ["auto_inbound", "auto_both"]) {
+    for (const op of ["get_thread", "read"]) {
+      assert.deepEqual(
+        detail({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, thread: THREAD }, messageMode }),
+        { decision: "allow", reason: "auto-inbound-read" },
+        `${op} @ ${messageMode}`
+      );
+    }
+    // …and the two unthreaded reads a supervisor opens with.
+    for (const op of ["list_threads", "members"]) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH }, messageMode }), "allow", op);
+    }
+  }
+});
+
+test("CHANNEL AGENT: the thread argument changes NOTHING — the scope is the channel", () => {
+  // ⚠ The pin against a future "tighten the read to the session's own thread". A channel-level
+  // session HAS no thread (`taskId` is ''), so a thread-scoped read rule would deny every one of
+  // these and the supervisor lane would silently stop working.
+  for (const thread of [THREAD, "", null, undefined, "task-legacy-7"]) {
+    assert.equal(
+      decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read", channel: CH, thread }, messageMode: "auto_inbound" }),
+      "allow",
+      `thread ${JSON.stringify(thread)}`
+    );
+  }
+});
+
+test("CHANNEL AGENT: a SLUG-addressed thread read still gates — the safe failure is unchanged", () => {
+  // This is why `prompt-framing.js › channelScopeFraming` interpolates the channel UUID into
+  // every read call it teaches: `isOwnChannelRead` compares against the ID, so a slug is ANOTHER
+  // channel, and in a windowless session a gate is a deny.
+  assert.deepEqual(
+    detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "get_thread", channel: "my-slug", thread: THREAD }, messageMode: "auto_both" }),
+    { decision: "gate", reason: "cross-channel-read" }
+  );
+});
+
+test("CHANNEL AGENT: pull access does NOT widen the write half", () => {
+  // Reading every thread in the channel is the whole grant. A thread-scoped POST is still an
+  // outbound op and still answers to the OUTBOUND half alone.
+  assert.equal(
+    decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "x", channel: CH, thread: THREAD }, messageMode: "auto_inbound" }),
+    "gate",
+    "auto_inbound is the READ half and never sends"
+  );
+  for (const op of ALWAYS_GATED) {
+    assert.equal(
+      decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, thread: THREAD }, messageMode: "auto_both" }),
+      "gate",
+      `${op} stays gated with a thread argument too`
+    );
+  }
+});

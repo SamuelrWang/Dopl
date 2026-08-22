@@ -14,6 +14,7 @@
 const io = require('./session-io');
 const store = require('./session-store');
 const { Notification } = require('electron');
+const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-PARK-PURE (injectable; unit-tested via source extraction) ──────
@@ -158,11 +159,27 @@ function offerResume(rec, sdkSessionId) {
 
 // Shared resume: reopen a settled task resuming its SDK session with a given first turn.
 async function startResume(rec, sdkSessionId, rawFirstTurn) {
-  // ⚠ The record's OWN slot. A team record carries an agentId and an empty taskId, so
-  // re-deriving the key from (channel, task) resumes it onto the THREAD slot — a different
-  // session from the one that crashed. slotKey is byte-for-byte sessionKey(channelId, taskId)
-  // when there is no agentId.
-  const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: rec.agentId || null };
+  // ⚠ THE ONE SPAWN THAT DOES NOT GO THROUGH `session-launch.js › launch`, SO IT MINTS THE
+  // INSTANCE ID ITSELF (2026-08-22). It used to pass `rec.agentId || null` straight through, and
+  // a PRE-MULTIPLAYER record on a shipped operator's disk has no `agentId` at all — every record
+  // written before 2026-08-21. A resumed session with `agentId: null` is not merely unaddressable:
+  // `session-summary.js › nameOf` answers `''` for it, `session-state-push.js` files that as
+  // `name: ""`, and the server's `SESSION_NAME_RE` 400s THE WHOLE ARRAY. `retryable(400)` is
+  // false, so the digest is never recorded and every later push for that workspace fails
+  // identically — `read_sessions` answers `[]` for the machine, live sessions included, for the
+  // life of the run. Same charset rule `launch()` applies, and for the same reason: a caller may
+  // hand an id in, but may not invent a shape.
+  const agentId = isAgentId(rec.agentId) ? rec.agentId : newAgentId();
+  // ⚠ AND THE MINT IS WRITTEN BACK ONTO THE RECORD, which is what keeps the check-then-act guard
+  // below EXACT for a legacy record. `offerResume` holds this same object in its click handler,
+  // so without this a second click mints a SECOND id, finds no live slot, and starts a second
+  // session resuming the SAME `sdkSessionId`. In-memory only — nothing persists `rec`.
+  rec.agentId = agentId;
+  // ⚠ The record's OWN slot, all three parts. Re-deriving the key from (channel, thread) alone
+  // resumes onto a DIFFERENT session from the one that crashed — which under multiplayer
+  // (2026-08-21) is not an edge case but the normal shape: a thread routinely holds several of
+  // this operator's agents, and only `rec.agentId` says which one this record is.
+  const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: agentId };
   if (deps.hasLiveSession(slot)) return false;
   let sdk;
   try { sdk = await deps.getSdk(); } catch (_) { return false; }
@@ -172,9 +189,10 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   const s = await deps.startSession({
     key: store.slotKey(slot),
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
-    // ⚠ A resumed TEAM session keeps its identity and room binding, else it returns as a
-    // pair-bound responder with no agent to post as.
-    agentId: rec.agentId || null, bind: rec.bind === 'room' ? 'room' : 'pair',
+    // ⚠ A resumed session keeps its AGENT INSTANCE ID, else it comes back as a stranger:
+    // a different slot, a different pill, a different @-mention address, and every message
+    // already addressed to the old id would stop reaching it.
+    agentId: agentId, bind: rec.bind === 'room' ? 'room' : 'pair',
     // ⚠ FAIL RESTRICTIVE. A raw stored profile lets a missing /
     // corrupt / future-version value fall through normalizeProfile's global fallback and resume
     // at FULL access — the most permissive profile, from the least trustworthy input.
@@ -185,6 +203,15 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // session that burned 23 of 24 turns, crashed and was resumed starts again at zero, so
     // every crash+resume mints a fresh turn AND cost budget.
     turns: rec.turns, costUsd: rec.costUsd,
+    // ⚠ AND THE OUTBOUND POST COUNTER, for the same class of reason and a different symptom
+    // (2026-08-22). `session-outbound-tag.js › nextOwnPostId` stamps every post
+    // `agent-<agentId>-<n>` and `n` counts from `s.ownPostSeq` — which `startSession` used to
+    // initialise at 0 on EVERY session object while the agent id is persisted and re-used right
+    // above. A crash+resume therefore re-minted `agent-<id>-1, 2, …`: client_msg_ids the server
+    // already stored before the crash, so its idempotency short-circuit SILENTLY DISCARDED the
+    // resumed agent's replies and answered the old rows. `startSession` adds slack on top of
+    // this; see its `ownPostSeq` line.
+    ownPostSeq: rec.ownPostSeq,
     model: rec.model, // the operator's model pick, coerced by startSession
   }, sdk);
   return !!s;

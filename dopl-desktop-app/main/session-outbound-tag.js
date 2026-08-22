@@ -73,25 +73,79 @@ function suppliedThreadId(input) {
   return viaMeta;
 }
 
+// ── THE PER-INSTANCE POST STAMP (2026-08-21, Samuel's fan-out ruling) ─────────
+//
+// ⚠ WHY A SECOND INJECTED ARGUMENT, AND WHY HERE. Under fan-out every message on a thread is
+// fed to every live agent on it EXCEPT its author, and AUTHORSHIP CANNOT ANSWER "which of my
+// agents wrote this": all of them post under the operator's own account with
+// `authorKind: 'agent'`, so three of my agents and I are indistinguishable on the wire. The
+// only thing that can tell them apart is a token the writer chose, and the message row already
+// has a field for exactly that — `client_msg_id`, which the MCP op accepts
+// (`packages/mcp-server/src/tools/channel-schema.ts`) and the read DTO returns
+// (`ChannelMessage.clientMsgId`). So each post is stamped with its author instance's id, the
+// session records the stamp, and `session-dispatch.wroteIt` is a Set lookup.
+//
+// ⚠ IT IS THE SAME SEAM AND THE SAME RULES AS THE THREAD TAG, DELIBERATELY. Same reason the
+// thread tag lives here rather than in the prompt: a prompt is a request, this is an invariant.
+// NEVER OVERWRITE — an agent (or a retry) that supplied its own `client_msg_id` has made an
+// idempotency decision and keeps it, exactly as a supplied `thread` stands. The input object is
+// never mutated. The id also keeps the SERVER's de-dupe honest: uniqueness is per (channel,
+// client_msg_id), and the instance id is random per spawn, so two agents cannot collide.
+const CLIENT_MSG_ID_ARG = 'client_msg_id';
+
+// The stamp for ONE post: `agent-<agentId>-<n>`, n counting this session's posts. Recorded on
+// the session as it is minted, which is what makes the self-filter possible at all.
+// ⚠ BOUNDED. `ownPostIds` is per-session and every per-session structure multiplies against
+// MAX_CONCURRENT_SESSIONS (INVARIANTS §11), so it drops its oldest entry past the cap. 64 posts
+// of lookback is far more than a thread's live window: the fan-out only ever asks about a
+// message the listener is dispatching right now.
+const MAX_OWN_POST_IDS = 64;
+
+function nextOwnPostId(s) {
+  if (!s || !s.agentId) return '';
+  s.ownPostSeq = (Number(s.ownPostSeq) || 0) + 1;
+  const id = `agent-${s.agentId}-${s.ownPostSeq}`;
+  if (!s.ownPostIds) s.ownPostIds = new Set();
+  s.ownPostIds.add(id);
+  if (s.ownPostIds.size > MAX_OWN_POST_IDS) {
+    const oldest = s.ownPostIds.values().next();
+    if (!oldest.done) s.ownPostIds.delete(oldest.value);
+  }
+  return id;
+}
+
 // WHAT to do with this call's arguments. Three outcomes, and only one of them rewrites:
-//   {action:'none'}      — nothing to do (no thread id, no input, or already correctly tagged)
-//   {action:'inject'}    — `.input` is a COPY carrying thread=<the session's id>
+//   {action:'none'}      — nothing to do (no input, or every argument already supplied)
+//   {action:'inject'}    — `.input` is a COPY carrying thread=<the session's id> and/or
+//                          client_msg_id=<this instance's stamp>
 //   {action:'conflict'}  — the agent named a DIFFERENT thread; `.supplied` is it, and the
 //                          caller leaves the call alone and logs
 // The input object is never mutated: the SDK, the render path and the grant key all hold the
 // original, and a decision must not change under them.
-function threadTagFor(input, taskId) {
+// ⚠ `clientMsgId` IS OPTIONAL AND ABSENT MEANS TODAY'S BEHAVIOUR BYTE FOR BYTE — the thread-tag
+// truth table drives this function with two arguments and must keep passing unchanged.
+// ⚠ A CONFLICT STILL WINS OVER THE STAMP. When the agent threaded somewhere else we leave the
+// WHOLE call as written and log: rewriting half of a call the operator will see is worse than
+// rewriting none of it, and a post that is deliberately going to another thread is not a post
+// this session should later filter out of its own feed.
+function threadTagFor(input, taskId, clientMsgId) {
   const want = typeof taskId === 'string' ? taskId.trim() : '';
-  if (!want) return { action: 'none', reason: 'no-thread' };
+  const stamp = typeof clientMsgId === 'string' ? clientMsgId.trim() : '';
+  if (!want && !stamp) return { action: 'none', reason: 'no-thread' };
   if (!input || typeof input !== 'object') return { action: 'none', reason: 'no-input' };
-  const supplied = suppliedThreadId(input);
-  if (!supplied) {
-    const next = Object.assign({}, input);
-    next[THREAD_ARG] = want;
-    return { action: 'inject', input: next };
+  const supplied = want ? suppliedThreadId(input) : '';
+  if (want && supplied && supplied !== want) {
+    return { action: 'conflict', supplied: supplied, wanted: want };
   }
-  if (supplied === want) return { action: 'none', reason: 'already-tagged' };
-  return { action: 'conflict', supplied: supplied, wanted: want };
+  const next = Object.assign({}, input);
+  let changed = false;
+  if (want && !supplied) { next[THREAD_ARG] = want; changed = true; }
+  if (stamp && !(typeof input[CLIENT_MSG_ID_ARG] === 'string' && input[CLIENT_MSG_ID_ARG].trim())) {
+    next[CLIENT_MSG_ID_ARG] = stamp;
+    changed = true;
+  }
+  if (!changed) return { action: 'none', reason: 'already-tagged' };
+  return { action: 'inject', input: next };
 }
 // ─── END OUTBOUND-THREAD-TAG ──────────────────────────────────────────────────
 
@@ -122,6 +176,9 @@ module.exports = {
   isOutboundPost,
   suppliedThreadId,
   threadTagFor,
+  nextOwnPostId, // 2026-08-21: the per-instance stamp the fan-out self-filter reads
+  MAX_OWN_POST_IDS,
+  CLIENT_MSG_ID_ARG,
   allowResult,
   wrapAllow,
 };

@@ -86,6 +86,9 @@ test("KINDS: the five an agent-window row can render, and nothing else", () => {
     [{ type: "tool_result", payload: { toolUseId: "t", ok: true, resultSummary: "done" } }, "result"],
     [{ type: "outbound_post", payload: { text: "sent it" } }, "post"],
     [{ type: "idle_timeout" }, "status"],
+    // 2026-08-22 — the three kinds Samuel's narration ruling added.
+    [{ type: "thinking", payload: { text: "weighing two options" } }, "thinking"],
+    [{ type: "steer", private: true, rawText: "what did they decide?" }, "operator"],
   ];
   for (const [event, kind] of cases) {
     assert.equal(m.entryFor(event, NOW).kind, kind, event.type);
@@ -203,4 +206,64 @@ test("PUSH: frames are keyed by sessionKey so a window can filter", () => {
   // Main deliberately tracks no subscriptions — a subscription protocol's only failure mode
   // is the two sides going out of step, and the filter here is a string compare.
   assert.match(SRC, /sessionKey: key/);
+});
+
+// ── THE 2026-08-22 KINDS: thinking, and the 1:1 lane in both directions ──────────────
+//
+// ⚠ FOUR TEXT KINDS EXIST BECAUSE THEY ARE FOUR AUDIENCES, not four stylings. `post` LEFT THE
+// MACHINE and the counterparty has it. `private-in` / `private-reply` are the operator's 1:1
+// lane and nobody else can ever see them. `assistant` is the agent narrating a public turn, and
+// `thinking` is addressed to nobody. Collapsing any pair makes the view claim something was
+// shared when it was not, or the reverse — which is the whole point of the private turn.
+
+test("THINKING: it rides as its own kind and is bounded like every other caption", () => {
+  const entry = m.entryFor({ type: "thinking", payload: { text: "x".repeat(1000) } }, NOW);
+  assert.equal(entry.kind, "thinking");
+  assert.equal(entry.text.length, 300, "a reasoning block is unbounded by construction");
+  // Nothing to say is nothing to push — the ring is not padded with empty lines.
+  assert.equal(m.entryFor({ type: "thinking", payload: { text: "   " } }, NOW), null);
+  assert.equal(m.entryFor({ type: "thinking", payload: {} }, NOW), null);
+});
+
+test("OPERATOR: it shows what the OPERATOR TYPED, never the framed prompt", () => {
+  // ⚠ `text` on a steer is `frameOperatorTurn`'s output — an instruction to a model, complete
+  // with nonce fences and the private contract. It is not a caption for a human. `rawText`
+  // rides beside it for exactly this.
+  const entry = m.entryFor(
+    { type: "steer", private: true, rawText: "check the thread", text: "BEGIN-OPERATOR-n0nce..." },
+    NOW
+  );
+  assert.equal(entry.kind, "operator");
+  assert.equal(entry.lane, "operator", "the LANE is the fact; a kind rename must not move it");
+  assert.equal(entry.text, "check the thread");
+});
+
+test("OPERATOR: an ORDINARY steer still produces nothing", () => {
+  // Only the 1:1 lane sets `private`. A steer from anywhere else is not an operator message and
+  // must not be drawn as one.
+  assert.equal(m.entryFor({ type: "steer", rawText: "x" }, NOW), null);
+  assert.equal(m.entryFor({ type: "steer", private: false, rawText: "x" }, NOW), null);
+  assert.equal(m.entryFor({ type: "steer", private: true }, NOW), null, "and an empty one is nothing");
+});
+
+test("PRIVATE: an `assistant` line inside a private turn is re-tagged, and only that", () => {
+  const line = { at: NOW, kind: "assistant", text: "they decided to ship" };
+  assert.equal(m.retagPrivate(line, true).kind, "private");
+  assert.equal(m.retagPrivate(line, true).lane, "private", "the LANE outranks the kind");
+  assert.equal(m.retagPrivate(line, true).text, "they decided to ship", "the text is untouched");
+  assert.equal(m.retagPrivate(line, false).kind, "assistant");
+  // ⚠ ONLY `assistant` MOVES. A post inside a private turn is the ONE thing that did not stay
+  // private — mislabelling it would hide exactly that.
+  for (const kind of ["post", "tool", "result", "status", "thinking"]) {
+    assert.equal(m.retagPrivate({ at: NOW, kind }, true).kind, kind, kind);
+  }
+  assert.equal(m.retagPrivate(null, true), null);
+});
+
+test("PRIVATE: the re-tag does not MUTATE the entry it was given", () => {
+  // `entryFor`'s result is pushed into the ring; mutating in place would retro-tag a line that
+  // is already on a renderer's screen if the two ever shared an object.
+  const line = { at: NOW, kind: "assistant", text: "hi" };
+  m.retagPrivate(line, true);
+  assert.equal(line.kind, "assistant");
 });

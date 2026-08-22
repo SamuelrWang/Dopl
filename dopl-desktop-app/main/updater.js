@@ -1,8 +1,10 @@
 // Auto-update via electron-updater against GitHub Releases (SamuelrWang/Dopl),
 // mirroring the study-notes app's proven setup: zip + dmg + latest-mac.yml feed.
 //
-// Behavior: check at startup and on an interval (4h by default, overridable via
-// DOPL_UPDATE_CHECK_MS and clamped to [60s, 24h] — see update-policy.js);
+// Behavior: check at startup, on an interval (30m by default since 2026-08-22,
+// overridable via DOPL_UPDATE_CHECK_MS and clamped to [60s, 24h] — see
+// update-policy.js), and WHENEVER THE OPERATOR LOOKS AT THE APP (see the focus
+// check below);
 // download silently with progress on the tray; when the download completes,
 // offer a one-click restart. Never force-restarts on its own: install happens on
 // normal quit (autoInstallOnAppQuit) or an explicit click. A background listener
@@ -23,6 +25,13 @@
 //   2. `download-progress` on a visible surface, so a long download stops looking
 //      like nothing happening (the reason people quit halfway),
 //   3. a manual "Check for updates now", because 4h after a publish is forever.
+//
+// UPDATE DISCOVERY LATENCY (2026-08-22, Samuel's ruling). Item 3 was a button;
+// the operator's actual habit was to QUIT AND REOPEN the app to force the boot
+// check, which is the feature failing at its one job. Two changes: the interval
+// dropped 4h → 30m, and a FOCUS CHECK now runs whenever the app is activated.
+// The focus path is the one that matters — a release becomes visible the moment
+// somebody goes to look, with no restart and no menu click.
 // The one thing deliberately NOT added is an automatic restart. The operator may
 // be mid-exchange with a live agent; the prompt names any live session and
 // defaults to "Later".
@@ -58,6 +67,14 @@ let available = false; // something newer was found and is coming down
 let checking = false; // a check is in flight right now
 let failed = false; // the LAST attempt errored and nothing has succeeded since
 let lastPercent = null; // newest download-progress percent, or null (unknown)
+// ⚠ WHEN A REQUEST WAS LAST ISSUED — NOT WHEN ONE LAST SUCCEEDED (2026-08-22).
+// It is the rate limiter behind the focus check, and it is stamped at the point
+// the request goes out, for one reason: an errored check still COST a request. A
+// stamp that only moved on success would turn an offline machine into one request
+// per window focus, which is the exact hammering the gap exists to prevent. It is
+// shared with the interval, so a focus a second after a scheduled check asks
+// nothing and a scheduled check does not reset the operator's gap.
+let lastCheckAt = 0;
 
 // WHY `failed` IS ITS OWN FIELD and does not just clear `available`. An error
 // can arrive mid-DOWNLOAD, and the two readers want opposite things from it:
@@ -233,7 +250,58 @@ function init(opts) {
   check();
   const timer = setInterval(check, UPDATER.CHECK_INTERVAL_MS);
   if (timer.unref) timer.unref();
-  diag('updater: armed (interval', UPDATER.CHECK_INTERVAL_MS + 'ms)');
+  armFocusChecks();
+  diag('updater: armed (interval', UPDATER.CHECK_INTERVAL_MS + 'ms, focus gap',
+    UPDATER.FOCUS_CHECK_MIN_GAP_MS + 'ms)');
+}
+
+// ── THE FOCUS CHECK (2026-08-22, Samuel's ruling) ────────────────────────────
+//
+// THE SIGNAL SET, AND WHY THIS PAIR. Both are APP-LEVEL events, so there is no
+// per-window bookkeeping to forget when a new window kind is added:
+//
+//   `browser-window-focus`  fires when ANY of this app's windows gains focus, so
+//     it covers the SPA shell, the pop-out thread window, the agent window and
+//     the update-required screen at once — and it is the signal that fires on the
+//     TRAY path, which for a tray-resident app is how the operator usually
+//     arrives. Per-window `win.on('focus')` would have been the same event with a
+//     registration to keep in sync with `app-windows.js`, and the F-228 sweep is
+//     the record of what happens when one of those is missed.
+//   `activate`  is the macOS "the app was brought forward" event — a dock click,
+//     or a cmd-tab back when no window is focused yet (a hidden-at-login run has
+//     no window to focus at all). `index.js` already listens for its own reason;
+//     a second listener is additive and neither knows about the other.
+//
+// ⚠ WHAT IS DELIBERATELY NOT IN THE SET: `powerMonitor` resume and unlock, which
+// `wake.js` already owns for the listener. A machine waking is not the operator
+// looking, the interval covers it within 30 minutes, and putting a second
+// consumer on that seam is how two modules come to disagree about one event.
+//
+// ⚠ A FOCUS CHECK IS NOT A MANUAL ONE. It passes no `{manual:true}`, so every
+// no-op path in `check()` stays silent: a staged update notes `ready` (which it
+// would anyway), a download in flight says nothing, and a failure is swallowed by
+// the global error handler exactly as a scheduled check's is. The operator did
+// not ask a question, so nothing answers one.
+function armFocusChecks() {
+  for (const signal of ['browser-window-focus', 'activate']) {
+    try { app.on(signal, checkOnFocus); }
+    catch (err) { diag('updater: could not arm', signal, err && err.message); }
+  }
+}
+
+// Returns whether a check was actually issued — for the diag line and the tests;
+// no caller acts on it.
+function checkOnFocus() {
+  if (!autoUpdater) return false;
+  // The state machine's own no-ops, asked here so the gap is not spent on a
+  // check that would have returned immediately. `check()` re-asks the first two.
+  if (readyVersion || downloading || checking) return false;
+  if (!policy.shouldCheckOnFocus(lastCheckAt, Date.now(), UPDATER.FOCUS_CHECK_MIN_GAP_MS)) {
+    return false;
+  }
+  diag('updater: focus check');
+  check();
+  return true;
 }
 
 // The notification carries the announcement when the dialog is suppressed, and
@@ -284,6 +352,10 @@ function check(opts) {
     return;
   }
   if (manual) manualPending = true;
+  // ⚠ STAMPED HERE, WHERE THE REQUEST ACTUALLY GOES OUT — not at the top of the
+  // function, because the two early returns above never touch the network and
+  // must not spend the focus gap.
+  lastCheckAt = Date.now();
   try {
     autoUpdater.checkForUpdates().catch((err) => {
       diag('updater: check failed', err && err.message);
@@ -380,6 +452,7 @@ function isUpdateReady() {
 module.exports = {
   init,
   checkNow,
+  checkOnFocus, // 2026-08-22: the gapped "the operator is looking" check
   promptRestart,
   requestRestart,
   quitAndInstall,

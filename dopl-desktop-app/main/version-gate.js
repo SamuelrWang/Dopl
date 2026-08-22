@@ -10,7 +10,11 @@
 // itself and drives the updater that already exists instead of duplicating it.
 //
 // IT COMPOSES WITH THE UPDATER, IT DOES NOT REPLACE IT. updater.js keeps owning
-// the feed, the download, the 4h timer and the restart prompt. This module adds
+// the feed, the download, the timer (30m since 2026-08-22; it was 4h) and the
+// restart prompt. ⚠ The updater's FOCUS check is deliberately NOT shared: this
+// gate has its own timer and its own server, and hanging a `/api/version` request
+// off every window focus is a cost nobody asked for (min-version.js § Cadence).
+// This module adds
 // one question ("is this build still allowed?") on the same cadence, reads the
 // updater's state to decide whether a block is even survivable, and hands the
 // screen's buttons straight back to updater.checkNow / requestRestart.
@@ -103,9 +107,9 @@ async function fetchFloor() {
 }
 
 // One round trip, then re-decide and re-arm. An answer (even "no floor") goes
-// back on the updater's 4h cadence; NO answer retries in minutes, so a machine
-// that booted offline learns about a floor shortly after the network returns
-// instead of four hours later.
+// back on the updater's steady cadence (30m since 2026-08-22); NO answer retries
+// in minutes, so a machine that booted offline learns about a floor shortly after
+// the network returns rather than at the next sweep.
 async function refresh() {
   if (fetching) return;
   fetching = true;

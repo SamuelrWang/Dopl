@@ -14,6 +14,19 @@
  * retires Links: it renders nothing and reserves the answer. **Nothing was
  * rehomed out of it** — there was nothing in it.
  *
+ * ⚠ THE COLUMN IS THREAD-SCOPED WHILE A THREAD IS OPEN (Samuel, 2026-08-21).
+ * THREE things change and nothing else does: THREADS leaves the row (`tabsFor` —
+ * it is the one control here that navigates away from what the reader is looking
+ * at), INFO renders the THREAD's facts instead of the channel's
+ * (`thread-info-tab.tsx`), and SETTINGS becomes the THREAD's — mode and delete
+ * (`thread-settings-tab.tsx`). Channel view is untouched, `info-tab.tsx` and
+ * `settings-tab.tsx` are untouched, and Agents already narrowed itself to the open
+ * thread on 2026-08-20.
+ *   ⚠ THIS FILE MAKES ONLY THE FIRST TWO OF THOSE CHOICES. The Settings body
+ *   arrives as a SLOT and the branch behind it lives at the page's mount boundary
+ *   (`settings-slot.tsx`), because both manage surfaces open reads on mount and
+ *   the wrong one must not mount at all.
+ *
  * Local state: the active tab, and nothing else. The center pane's open thread,
  * the open AGENT and the mentions read-state are all lifted to
  * `channels-v2-core.tsx`, since this column SETS them and other surfaces read
@@ -24,6 +37,7 @@ import { useState, type ReactNode } from "react";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
+import { ThreadInfoTab } from "./thread-info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
 import { activeAgentCount } from "./agents-model";
@@ -44,6 +58,20 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+/**
+ * THE ROW IS SHORTER IN THREAD VIEW (Samuel, 2026-08-21).
+ *
+ * ⚠ THREADS IS A CHANNEL-VIEW TAB. With a thread open this whole column is about
+ * that ONE exchange — the Info tab becomes thread-scoped and the Agents tab
+ * already narrows to it — so a list of the channel's OTHER threads is the one
+ * control here that navigates away from what the reader is looking at. It comes
+ * back the moment the centre pane returns to the channel; the sidebar's tree
+ * covers thread-to-thread movement meanwhile.
+ */
+function tabsFor(threadView: boolean): ReadonlyArray<(typeof TABS)[number]> {
+  return threadView ? TABS.filter((t) => t.key !== "threads") : TABS;
+}
 
 /**
  * THE TAB-ROW BADGES (2026-08-20). `SegmentedControl` has carried an optional
@@ -87,7 +115,7 @@ export function ChannelsV2InfoPanel({
   threadsTruncated,
   threadsLoading,
   index,
-  openThreadId,
+  openThread,
   onOpenThread,
   agentSessions,
   peerSessions = [],
@@ -113,7 +141,14 @@ export function ChannelsV2InfoPanel({
   threadsTruncated: boolean;
   threadsLoading: boolean;
   index: AuthorIndex;
-  openThreadId: string | null;
+  /**
+   * THE OPEN THREAD ITSELF, not its id (2026-08-21). The whole row is
+   * thread-scoped while one is open — the Info tab renders the THREAD's facts
+   * and the Threads tab leaves — so this column needs the row, and asking the
+   * caller for both the id and the object is how the two come to disagree.
+   * `null` is channel view.
+   */
+  openThread: ChannelThread | null;
   onOpenThread: (id: string) => void;
   /** THIS MACHINE'S live session feed, or `null` for "could not ask" (a plain
    *  browser, or a main without it). ⚠ Passed through, never collapsed to `[]`:
@@ -141,15 +176,38 @@ export function ChannelsV2InfoPanel({
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
   /**
-   * The SETTINGS tab's body — `channel-manage.tsx › ChannelsV2ManageActions`,
-   * injected rather than imported because it is write-bearing and channel-scoped
-   * and this file owns the tab row. ⚠ Mounted only while the tab is open, which
-   * is deliberate: its three write hooks and four dialogs have no business being
-   * live behind the Info tab.
+   * The SETTINGS tab's body — `settings-slot.tsx › ChannelsV2SettingsSlot`, which
+   * is `channel-manage.tsx › ChannelsV2ManageActions` in channel view and
+   * `thread-manage.tsx › ChannelsV2ThreadManageActions` in thread view (Samuel,
+   * 2026-08-21). Injected rather than imported because it is write-bearing and
+   * this file owns the tab row.
+   * ⚠ Mounted only while the tab is open, which is deliberate: the channel host's
+   * three write hooks, its `/api/channels/trust` read and its four dialogs have no
+   * business being live behind the Info tab (INVARIANTS §5 pins it).
+   * ⚠ THE CHANNEL-VS-THREAD CHOICE IS THE SLOT'S, NOT THIS FILE'S, and for the
+   * same reason: whichever host is wrong for the current scope must not mount, and
+   * a branch inside either one would run its hooks regardless.
    */
   settings?: ReactNode;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
+  const openThreadId = openThread?.id ?? null;
+  const threadView = openThread !== null;
+  const options = tabsFor(threadView);
+
+  // ⚠ THE DEAD-SELECTION FALLBACK. Opening a thread while the Threads tab is
+  // showing removes the very tab that is selected, and a `value` matching no
+  // option leaves `SegmentedControl` with nothing lit over an empty body. INFO
+  // is where it lands — the tab that just became thread-scoped, so the reader's
+  // click is answered with the thread they opened rather than with blankness.
+  //
+  // ⚠ SET DURING RENDER, not in an effect: this is React's sanctioned
+  // derive-state-from-props adjustment (the render restarts before committing),
+  // and the same idiom `agent-panel.tsx` uses for its exit frame. An effect would
+  // paint the broken frame first. `activeTab` covers that restart so the body and
+  // the row can never disagree even for one pass.
+  if (threadView && tab === "threads") setTab("info");
+  const activeTab: TabKey = threadView && tab === "threads" ? "info" : tab;
 
   // ⚠ THE BADGE RUNS ONE EXPORTED DERIVATION (`agents-model.ts ›
   // activeAgentCount`), never a sum written here: two derivations of one list is
@@ -176,29 +234,39 @@ export function ChannelsV2InfoPanel({
     >
       <div className="flex h-[56px] shrink-0 items-center border-b border-border-default px-3">
         <SegmentedControl
-          options={TABS.map((t) => ({
+          options={options.map((t) => ({
             ...t,
             count: tabCount(t.key, threads, agentCount),
           }))}
-          value={tab}
+          value={activeTab}
           onChange={setTab}
         />
       </div>
 
-      {tab === "info" ? (
-        <InfoTab
-          channel={channel}
-          channelName={channelName}
-          members={members}
-          threadCount={threads.length}
-          mentions={mentions}
-          mentionsTruncated={mentionsTruncated}
-          mentionsLoading={mentionsLoading}
-          index={index}
-          onOpenMention={onOpenMention}
-          onMarkAllMentionsRead={onMarkAllMentionsRead}
-        />
-      ) : tab === "threads" ? (
+      {activeTab === "info" ? (
+        openThread ? (
+          <ThreadInfoTab
+            thread={openThread}
+            members={members}
+            currentUserId={index.currentUserId}
+            agentSessions={agentSessions}
+            peerSessions={peerSessions}
+          />
+        ) : (
+          <InfoTab
+            channel={channel}
+            channelName={channelName}
+            members={members}
+            threadCount={threads.length}
+            mentions={mentions}
+            mentionsTruncated={mentionsTruncated}
+            mentionsLoading={mentionsLoading}
+            index={index}
+            onOpenMention={onOpenMention}
+            onMarkAllMentionsRead={onMarkAllMentionsRead}
+          />
+        )
+      ) : activeTab === "threads" ? (
         <ThreadsTab
           threads={threads}
           truncated={threadsTruncated}
@@ -207,7 +275,7 @@ export function ChannelsV2InfoPanel({
           openThreadId={openThreadId}
           onOpenThread={onOpenThread}
         />
-      ) : tab === "agents" ? (
+      ) : activeTab === "agents" ? (
         <AgentsTab
           sessions={agentSessions}
           channelId={channel.id}

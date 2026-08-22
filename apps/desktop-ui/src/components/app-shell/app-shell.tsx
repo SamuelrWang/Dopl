@@ -23,6 +23,7 @@ import { SettingsModal, type SettingsSection } from "#/components/settings-modal
 // under `img-src 'self' data: blob:`, so an absolute `/favicons/...` src
 // resolves to the filesystem root and never loads.
 import doplMark from "#/assets/dopl-mark.png?inline";
+import { AccountRail } from "./account-rail";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
 
@@ -107,7 +108,14 @@ export function AppShellLayout() {
   return (
     <div className={styles.root}>
       <div className={styles.body}>
-        {/* No rail: workspace switch + create live in `WorkspaceSwitcherCore`. */}
+        {/* The ACCOUNT rail (2026-08-21): Home + this account's workspaces.
+            Workspace switch + create also live in `WorkspaceSwitcherCore`. */}
+        <AccountRail
+          workspaces={workspaces}
+          activeWorkspacePublicId={workspace.publicId}
+          onNavigate={(path) => navigate(path)}
+          onCreateWorkspace={() => setCreateWsOpen(true)}
+        />
         <div className={styles.surface}>
           <AppSidebarCore
             workspaceSegment={segment}

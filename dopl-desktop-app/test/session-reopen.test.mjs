@@ -29,6 +29,11 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-reopen.js"), "utf8");
 // The REAL operator-turn delimiter, injected like `store` — the 1:1 lane's cases are about
 // the delimiting a turn actually gets, and a stub would let the two drift apart.
 const framing = createRequire(import.meta.url)(join(HERE, "..", "main", "session-seed.js"));
+// ⚠ THE REAL `session-private.js` (2026-08-22), not a stub: `messageByTask` OPENS the
+// private-turn window before dispatching, and the DEPTH it opens with depends on whether a turn
+// is already in flight. A fake would let this suite go green over a window covering the wrong
+// turn — the one bug the depth exists to prevent.
+const privateTurn = createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js"));
 // ⚠ THE REAL AXIS-B FLOOR, injected for the same reason (2026-08-20, F-236). `setModeByTask`
 // clamps a windowless session's message axis, and a stub would let this suite pass over a
 // clamp that does not match the one lane the launch path uses. Its own rules live in
@@ -50,7 +55,13 @@ for (const banned of ["require(", "electron", "process.", "child_process", "@ant
   assert.ok(!BLOCK.includes(banned), `SESSION-REOPEN-PURE block must not reference ${banned}`);
 }
 
-const KEY = "chan-1:task-9";
+// ⚠ THE KEY GAINED AN AGENT SEGMENT ON 2026-08-21 (`main/session-store.js#sessionKey`): a
+// thread holds N of the operator's agents, so (channel, thread) addresses a GROUP. Every case
+// below registers ONE agent and calls the ops without naming it, which exercises the
+// COMPATIBILITY half of the resolution rule — an unnamed op takes the oldest live agent on the
+// thread, exactly what a caller got when a thread could hold only one.
+const AGENT = "a1b2c3d4";
+const KEY = `chan-1:task-9:${AGENT}`;
 
 /**
  * A live session object as the engine's registry really holds one SINCE THE RETIREMENT:
@@ -62,7 +73,7 @@ const KEY = "chan-1:task-9";
  * case that still wants one passes it explicitly, and exactly one below does — deliberately.
  */
 function fakeSession(over = {}) {
-  return { key: KEY, sessionId: "s-1", settled: false, win: null, context: {}, ...over };
+  return { key: KEY, agentId: AGENT, sessionId: "s-1", settled: false, win: null, context: {}, ...over };
 }
 
 /**
@@ -83,14 +94,19 @@ function fakeSession(over = {}) {
 function harness(over = {}) {
   const cfg = { openAgentWindow: null, ...over };
   const calls = { refreshTray: 0, dispatch: [], opened: [] };
-  const store = { sessionKey: (c, t) => `${c}:${t}` };
+  const store = {
+    sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
+    slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+    threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
+  };
   const api = new Function(
     "store",
     "framing",
     "floorWindowlessMessage",
-    `${BLOCK}\n return { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
+    "privateTurn",
+    `${BLOCK}\n return { bind, resolveSession, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
        listOrphanRisk, endLiveSessions };`
-  )(store, framing, floorWindowlessMessage);
+  )(store, framing, floorWindowlessMessage, privateTurn);
   const sessions = new Map();
   // ⚠ The REAL `frameOperatorTurn` is injected, not a stub: the MESSAGE cases are about the
   // delimiting the operator's turn actually gets, and a stub would let the two drift.
@@ -172,7 +188,10 @@ test("OPEN: a live session opens the AGENT WINDOW, and refuses nothing", () => {
   const h = harness({ openAgentWindow: () => ({ ok: true }) });
   h.sessions.set(KEY, fakeSession());
   assert.deepEqual(h.reopenByTask({ ...task, segment: "acme-a1b2" }), { ok: true });
-  assert.deepEqual(h.calls.opened, [{ segment: "acme-a1b2", channelId: "chan-1", taskId: "task-9" }]);
+  // ⚠ THE AGENT ID RIDES TOO SINCE 2026-08-21, and it comes from the RESOLVED SESSION rather
+  // than from the caller: the window is one-per-agent, and keying it on what the caller
+  // happened to pass would front the wrong agent's window whenever the caller named nothing.
+  assert.deepEqual(h.calls.opened, [{ segment: "acme-a1b2", channelId: "chan-1", taskId: "task-9", agentId: AGENT }]);
 });
 
 test("OPEN: it hands the AGENT's own key over, never the session id", () => {

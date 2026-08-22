@@ -39,11 +39,21 @@ const MAIN = join(HERE, "..", "main");
 
 // ── sessionKey has exactly ONE definition (source probe) ─────────────────────
 
-test("sessionKey is defined once, in session-store.js, and everyone else imports it", () => {
+test("the session KEY is defined once, in session-store.js, and everyone else imports it", () => {
   // Source-probed on purpose: "no second definition anywhere in main/" is a property of the
   // TREE, not of any one module's behavior, so nothing you can call proves it.
+  //
+  // ⚠ RE-ANCHORED ON THE WHOLE KEY FAMILY, 2026-08-21 — and this file's own instruction is what
+  // it was re-anchored BY. The note below used to say "at 2 this is close to its own floor; if
+  // the next deletion takes it to 1, do NOT drop the guard to 1 — re-anchor on `slotKey` (the
+  // shape that actually carries an agent) or retire it with a finding." The multiplayer wave
+  // took it to 1: `session-reopen.js` stopped calling `sessionKey` directly and now goes through
+  // `slotKey` / `threadKeyPrefix`, because (channel, thread) addresses a GROUP of agents rather
+  // than one session. So the case asks about the FAMILY — the three functions that between them
+  // are the only statement of what a session key looks like — which is the property that was
+  // always meant: nobody builds one by hand.
   const files = readdirSync(MAIN).filter((f) => f.endsWith(".js"));
-  const DEFINE = /(?:function\s+sessionKey\s*\(|(?:const|let|var)\s+sessionKey\s*=)/g;
+  const DEFINE = /(?:function\s+(?:sessionKey|slotKey|threadKeyPrefix)\s*\(|(?:const|let|var)\s+(?:sessionKey|slotKey|threadKeyPrefix)\s*=)/g;
   // This codebase documents itself heavily, so a `store.sessionKey(...)` inside a comment is
   // prose, not a call site. Strip line comments before asking who CALLS it.
   const code = (src) => src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
@@ -52,28 +62,17 @@ test("sessionKey is defined once, in session-store.js, and everyone else imports
   for (const f of files) {
     const src = code(readFileSync(join(MAIN, f), "utf8"));
     if (src.match(DEFINE)) definers.push(f);
-    if (/(?:^|[^A-Za-z.])(?:store|sessionStore)?\.?sessionKey\(/m.test(src) && f !== "session-store.js") users.push(f);
+    if (/(?:^|[^A-Za-z.])(?:store|sessionStore)?\.?(?:sessionKey|slotKey|threadKeyPrefix)\(/m.test(src) && f !== "session-store.js") users.push(f);
   }
-  assert.deepEqual(definers, ["session-store.js"], "the (channel, thread/agent) key has ONE definition");
+  assert.deepEqual(definers, ["session-store.js"], "the (channel, thread, agent) key has ONE definition");
   // ⚠ THE FLOOR IS AN ANTI-VACUITY GUARD, NOT A TARGET. What it defends is the loop below: if the
   // `users` regex ever stops matching, `for (const f of [])` runs zero assertions and this case
-  // goes green having checked nothing. It is NOT a claim that the key SHOULD have three callers.
-  // ⚠ IT HAS BEEN RE-BASED TWICE, AND BOTH TIMES BY A DELETION RATHER THAN BY A RELAXATION.
-  // 4 -> 3 on 2026-08-20 when the session-window retirement (F-228) deleted `session-ipc.js`,
-  // `session-history.js`, `session-window.js` and `attended-handoff.js`; then 3 -> 2 the SAME day
-  // when Samuel's headless ruling deleted `session-spawner.js`'s executor half, which held the
-  // last of the three. `session-park.js` names the key only in prose (it resolves through
-  // `slotKey`), so the comment-stripping filter above correctly does not count it. Re-measure
-  // rather than relax — this is a floor against a regex that stopped matching, not a target:
-  //   grep -lE '(^|[^A-Za-z.])(store|sessionStore)?\.?sessionKey\(' main/*.js
-  // ⚠ AT 2 THIS IS CLOSE TO ITS OWN FLOOR. If the next deletion takes it to 1, do NOT drop the
-  // guard to 1 — a single caller means the "everyone imports it" half is testing one file, and
-  // the case should be re-anchored on `slotKey` (the shape that actually carries an agent) or
-  // retired with a finding, not quietly weakened.
+  // goes green having checked nothing. It is NOT a claim about how many callers there SHOULD be.
+  //   grep -lE '(^|[^A-Za-z.])(store|sessionStore)?\.?(sessionKey|slotKey|threadKeyPrefix)\(' main/*.js
   assert.ok(users.length >= 2, `expected several importers, found ${users.length}: ${users}`);
   for (const f of users) {
     const src = readFileSync(join(MAIN, f), "utf8");
-    assert.match(src, /require\('\.\/session-store'\)/, `${f} calls sessionKey but does not import it`);
+    assert.match(src, /require\('\.\/session-store'\)/, `${f} builds a session key but does not import it`);
   }
 });
 

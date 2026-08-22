@@ -184,6 +184,13 @@ const OPS = [
   // asserted by the shared loops below, from all five surfaces.
   ["channels:getLaunchPosture", CH, null],
   ["channels:setLaunchPosture", { channelId: CH, preset: PRESET }, { ok: false }],
+  // ⚠ JOINED 2026-08-22 (Samuel's ended-agent ruling): the desktop half of the thread-delete
+  // cascade. Main cannot see the SERVER's cascade, so an ended agent's frozen 7-day history
+  // would outlive the thread it worked. It drops LOCAL stores only — never a `channel_message`,
+  // and never a LIVE session (the SPA ends those first over `sessions:end`). Same sender
+  // binding and UUID gate as every op here, which is what this list asserts by COUNT as well
+  // as by name.
+  ["agents:forgetThread", { channelId: CH, taskId: "t1" }, { ok: false }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
   // ⚠ TWO JOINED HERE 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the
   // operator's OWN agent. They are STOP verbs — `interrupt` (the session window's pause
@@ -271,10 +278,12 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
     if (id === "./ipc-guards") return guards;
+    if (id === "./agent-id") return agentId;
     if (id === "./session-ipc-ops") return ops;
     throw new Error("unexpected require: " + id);
   };
   const guards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  const agentId = { isAgentId: (v) => typeof v === "string" && /^[a-z][a-z0-9]{7}$/.test(v) };
   const ops = evalModule(OPS_SRC, stub);
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
