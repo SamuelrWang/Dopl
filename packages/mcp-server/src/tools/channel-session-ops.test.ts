@@ -35,6 +35,14 @@ function stubClient(overrides: Record<string, unknown>): DoplClient {
   } as unknown as DoplClient;
 }
 
+/**
+ * ⚠ `updatedAt` IS **NOW** BY DEFAULT, AND IT HAD TO BECOME SO ON 2026-08-22.
+ * It was a frozen literal, which was harmless while the render ignored the
+ * stamp; the staleness hedge reads it, so every row built from a fixed date is
+ * permanently stale and every case asserting a live state would fail for a
+ * reason that has nothing to do with what it is testing. A case that WANTS the
+ * stale path passes an old `updatedAt` explicitly — see the staleness suite.
+ */
 const SESSION = (over: Partial<ChannelSessionState> = {}): ChannelSessionState => ({
   channelId: "chan-1",
   threadId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
@@ -42,7 +50,7 @@ const SESSION = (over: Partial<ChannelSessionState> = {}): ChannelSessionState =
   state: "working",
   channelName: "General",
   threadTitle: "Deploy check",
-  updatedAt: "2026-08-05T12:00:00.000Z",
+  updatedAt: new Date().toISOString(),
   ...over,
 });
 
@@ -207,18 +215,27 @@ describe("create_thread handoff (rollback §3.5)", () => {
     );
     const text = res.content[0].text;
     expect(text).toMatch(/HANDOFF/);
-    expect(text).toMatch(/operator's/i);
-    // ⚠ HEDGED — a request whose outcome this server cannot see.
-    expect(text).toContain("REQUESTED, not confirmed");
-    // ⚠ REWORDED 2026-08-20 with the session window's deletion (F-228): the copy said
-    // "whether a WINDOW opened", which named a surface that no longer exists and told the
-    // agent a window model it would then reason from. The HEDGE is what the assertion is
-    // about and it is unchanged — this server cannot see the outcome either way.
-    expect(text).toContain("never learns whether a session started");
-    expect(text).toContain('do NOT arm op="await" yet');
-    // ⚠ Nothing may tell the agent the desktop definitely has it.
+    // ⚠ **REWRITTEN 2026-08-22 (F-274), AND THE OLD ASSERTIONS WERE PINNING THE
+    // DEFECT.** They required a HEDGE — "REQUESTED, not confirmed", "never learns
+    // whether a session started" — which was the right shape for a request whose
+    // outcome the server cannot see. It stopped being the right shape when the
+    // outcome became KNOWABLE and always the same: `main/targeting.js ›
+    // requesterTaskOpen` has had no caller since F-228, so nothing opens, ever.
+    // A hedge over a certainty is a lie with better manners.
+    expect(text).toContain("OPENS NOTHING TODAY");
+    expect(text).toContain("F-274");
+    // ⚠ THE OPERATIVE FIX. The old copy said `do NOT arm op="await" yet`, and an
+    // external session obeyed it: nothing opened, nobody watched the thread, and
+    // the peer's reply was read by no one. The result must now tell the caller
+    // the wait is ITS OWN.
+    expect(text).not.toContain('do NOT arm op="await"');
+    expect(text).toContain("you must arm the wait yourself");
+    expect(text).toContain("since=41");
+    expect(text).toContain("NOBODY is watching this thread");
+    // ⚠ Nothing may tell the agent the desktop has it, in any wording.
     expect(text).not.toContain("A full session is opening");
     expect(text).not.toContain("You are done with this thread");
+    expect(text).not.toContain("REQUESTED, not confirmed");
   });
 
   it("a handoff create keeps a FALLBACK for the case where nothing picks it up", async () => {
@@ -235,18 +252,18 @@ describe("create_thread handoff (rollback §3.5)", () => {
       true,
     );
     const text = res.content[0].text;
-    // How to NOTICE, and what to do.
-    expect(text).toContain('op="get_thread"');
-    expect(text).toContain("IF NOTHING PICKS IT UP");
+    // ⚠ **THE FALLBACK BECAME THE MAIN PATH (F-274).** There is no longer a case
+    // where something else picks the thread up, so "how to notice that nothing
+    // did" is not a branch any more — the await is simply what happens next, and
+    // it is stated first rather than as a contingency.
     expect(text).toContain('op="await"');
-    // ⚠ Fallback carries the REAL cursor, so taking it does not race the peer
-    // by starting past the reply.
+    // ⚠ Still the REAL cursor, so taking it cannot start past the peer's reply.
     expect(text).toContain("since=41");
-    // ⚠ ORDER MATTERS — the await must read as the FALLBACK, so it comes after
-    // the condition that licenses it.
-    expect(text.indexOf("IF NOTHING PICKS IT UP")).toBeLessThan(
-      text.indexOf("since=41"),
-    );
+    expect(text).not.toContain("IF NOTHING PICKS IT UP");
+    // ⚠ AND THE CAPABILITY THE CALLER ACTUALLY WANTED IS NAMED. Without this the
+    // result closes a door and opens none, which is how an agent invents a
+    // workaround.
+    expect(text).toContain('op="launch_agent"');
   });
 
   it("a handoff create with NO opening seq asks for the cursor instead of inventing one", async () => {

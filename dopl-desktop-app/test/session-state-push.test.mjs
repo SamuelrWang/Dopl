@@ -3,20 +3,16 @@
 // THE FOUR PROPERTIES THIS FILE EXISTS FOR — each is the difference between this feature
 // and a defect:
 //
-//   1. IT IS A PUSH, NOT A HEARTBEAT. A write costs a state CHANGE. `agent_presence` beats
-//      120 times an hour per listener and is the quadratic always-on term plan §5 is
-//      shedding; a writer that posted on every projection would be that term under a new
-//      name. The digest gate is checked in both directions.
-//   2. THE ROW SET MIRRORS THE PILL SET. `read_sessions` answering "flint is working" for a
-//      session that ended, or for a machine that is not running, is the fabrication F-144's
-//      "honesty over completeness" refused. So the last session leaving posts an EMPTY set
-//      (the delete), and a run that starts with a previous run's rows clears them.
-//   3. IT CANNOT REPORT ANOTHER OPERATOR'S SESSIONS. Signing out does not end the sessions
-//      in the engine, so A's are still there when B signs in on the same Mac, and a push
-//      under B's credential would file A's handles and thread titles as B's — readable by
-//      B. This project has had two cross-account bugs; this is the guard.
-//   4. FAILURE IS BOUNDED AND SAID ONCE. `ui-sync`'s ~39 000-attempt storm is the tree's
-//      cautionary tale, and a per-state-change log would be its quieter cousin.
+// 1. IT IS A PUSH, NOT A HEARTBEAT. A write costs a state CHANGE. `agent_presence` beats 120 times an hour per
+// listener and is the quadratic always-on term plan §5 is shedding; a writer that posted on every projection would be
+// that term under a new name. The digest gate is checked in both directions. 2. THE ROW SET MIRRORS THE PILL SET.
+// `read_sessions` answering "flint is working" for a session that ended, or for a machine that is not running, is the
+// fabrication F-144's "honesty over completeness" refused. So the last session leaving posts an EMPTY set (the
+// delete), and a run that starts with a previous run's rows clears them. 3. IT CANNOT REPORT ANOTHER OPERATOR'S
+// SESSIONS. Signing out does not end the sessions in the engine, so A's are still there when B signs in on the same
+// Mac, and a push under B's credential would file A's handles and thread titles as B's — readable by B. This project
+// has had two cross-account bugs; this is the guard. 4. FAILURE IS BOUNDED AND SAID ONCE. `ui-sync`'s ~39 000-attempt
+// storm is the tree's cautionary tale, and a per-state-change log would be its quieter cousin.
 //
 // THE EXTRACTION AND THE FAKES live in `_session-state-push-harness.mjs`.
 //
@@ -36,10 +32,9 @@ import {
   CHAN_A, TASK_A, CHAN_B, TASK_B, ADHOC_TASK_ID,
 } from "./_session-state-push-harness.mjs";
 
-// THE ONE TRANSPORT. `api.js` carries the F-132 401 repair that `listener-io.js` shipped
-// without and took the whole Channels subsystem down for; a third copy of a main-process
-// fetch is the class of duplication that caused it. Pinned as a SOURCE fact because the
-// block below never names its own require.
+// THE ONE TRANSPORT. `api.js` carries the F-132 401 repair that `listener-io.js` shipped without and took the whole
+// Channels subsystem down for; a third copy of a main-process fetch is the class of duplication that caused it.
+// Pinned as a SOURCE fact because the block below never names its own require.
 test("TRANSPORT: the writer rides api.js, and does not grow a third fetch copy", () => {
   assert.ok(/require\('\.\/api'\)/.test(SRC), "must use the shared api.js helper");
   assert.equal(/\bfetch\(/.test(SRC), false, "no raw fetch — that is api.js's job");
@@ -50,6 +45,10 @@ test("TRANSPORT: the writer rides api.js, and does not grow a third fetch copy",
 
 test("ROW: the payload is the schema's shape, field for field", () => {
   const m = load();
+  // ⚠ THE EIGHT RICH FIELDS ARRIVE NULL ON THIS FIXTURE AND THEY ARE STILL PRESENT, which is the point of
+  // asserting the whole object rather than a subset: `undefined` is dropped by JSON.stringify and would reach
+  // the server as a MISSING key, while `null` reaches it as the nullable column's real value. UNMEASURED is a
+  // fact the wire has to be able to state.
   assert.deepEqual(m.reportRow(entry()), {
     sessionKey: `${CHAN_A}:${TASK_A}:a1b2c3d4`,
     channelId: CHAN_A,
@@ -58,43 +57,78 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     state: "working",
     channelName: "General",
     threadTitle: "Ship the thing",
+    // ⚠ JOINED 2026-08-22 (agent templates, Phase 4's `channel_sessions.template_name`). NULL HERE AND STILL
+    // PRESENT, for the reason above: a blank agent has no template, and saying so is not saying nothing.
+    templateName: null,
+    detail: null,
+    toolLabel: null,
+    model: null,
+    contextUsed: null,
+    contextWindow: null,
+    tokensSpent: null,
+    startedAt: null,
+    lastActivityAt: null,
   });
 });
 
-// ⚠ THE BELT ON A WIDENED WIRE SHAPE (2026-08-20, the `detail` signal). This is the guard
-// the whole local-only design leans on, so it is asserted rather than assumed.
+// ⚠ THE BELT ON A WIDENED WIRE SHAPE (2026-08-20, the `detail` signal; REWRITTEN 2026-08-22
+// for the orchestrator wave). This is the guard the whole by-name design leans on, so it is
+// asserted rather than assumed.
 //
-// `reportRow` picks the server row's columns BY NAME, which is what let the five runtime
-// metrics ride the summaries wire in Phase 5 without widening `channel_sessions` — and what
-// now lets `detail` / `toolLabel` do the same. THE FAILURE IT PREVENTS IS NOT A COSMETIC
-// ONE: the endpoint's zod schema validates the ARRAY, so ONE row carrying an unknown key or
-// a fourth `state` value rejects the WHOLE payload; `retryable(400)` is false, so the digest
-// is never recorded and EVERY LATER PUSH for that workspace fails identically — for the
-// valid sessions too. `read_sessions` then answers [] for this machine and the stale rows
-// are never cleared. A row shape that grows by accident is that outage.
-test("ROW: a widened summary entry does NOT widen the wire row", () => {
+// `reportRow` picks the server row's columns BY NAME. THE FAILURE IT PREVENTS IS NOT A COSMETIC ONE: the endpoint's
+// zod schema validates the ARRAY, so ONE row carrying an unknown key or a fourth `state` value rejects the WHOLE
+// payload; `retryable(400)` is false, so the digest is never recorded and EVERY LATER PUSH for that workspace fails
+// identically — for the valid sessions too. `read_sessions` then answers [] for this machine and the stale rows are
+// never cleared. A row shape that grows by accident is that outage.
+//
+// ⚠ THE ASSERTION FLIPPED SIDES, AND THE GUARD DID NOT. It used to read "a widened summary entry does NOT widen the
+// wire row" and listed SEVEN keys; the orchestrator wave deliberately added EIGHT more, with the columns to receive
+// them. So the pin is a closed list either way, and it still catches the case it was written for: a field appearing
+// on `session-summary.js` and reaching the table because nobody chose to send it. ⚠ SIXTEEN SINCE 2026-08-22 (agent
+// templates): `templateName` was added DELIBERATELY, with the column to receive it (`channel_sessions.template_name`,
+// OPERATOR-ONLY — the server's mapper is the fence and the GRANT list is the belt, neither of which is this file's).
+test("ROW: the wire row is exactly the sixteen columns, and no summary field rides along free", () => {
   const m = load();
   const wide = entry({
     detail: "tool",
     toolLabel: "Bash",
+    model: "claude-opus-5",
     contextUsed: 84_000,
     contextWindow: 200_000,
     tokensSpent: 1_200_000,
     startedAt: 1_700_000_000_000,
     lastActivityAt: 1_700_000_600_000,
+    // ⚠ THE ACTUAL SUBJECT OF THIS CASE: a field the summary grows that nobody named in
+    // `reportRow`. It must not reach the wire, whatever it is called.
+    listening: true,
+    toolMode: "bypass",
+    messageMode: "auto_both",
+    sessionId: "sess-1",
+    agentId: "a1b2c3d4",
+    templateName: "Code Auditor",
   });
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
-    "channelId", "channelName", "name", "sessionKey", "state", "threadId", "threadTitle",
+    "channelId", "channelName", "contextUsed", "contextWindow", "detail", "lastActivityAt",
+    "model", "name", "sessionKey", "startedAt", "state", "templateName", "threadId",
+    "threadTitle", "tokensSpent", "toolLabel",
   ]);
+  // ⚠ AND IT IS THE NAME, NEVER THE ID, AND IT IS SANITIZED HERE. The server stores the string verbatim and
+  // resolves nothing, so the desktop is the only place the charset and the 120-char bound are applied —
+  // through `session-telemetry.js › labelOrNull`, the helper the three telemetry labels take.
+  assert.equal(m.reportRow(wide).templateName, "Code Auditor");
+  // ⚠ AN UNSAFE CHARACTER BECOMES A SPACE, NOT ELIDED — `labelOrNull`'s rule, and the safe direction:
+  // eliding a zero-width would silently JOIN two words a human sees apart.
+  assert.equal(m.reportRow(entry({ templateName: "  a\u200bb\nc  " })).templateName, "a b c");
+  assert.equal(m.reportRow(entry({ templateName: "x".repeat(300) })).templateName.length, 120);
+  assert.equal(m.reportRow(entry({ templateName: "   " })).templateName, null);
   // And the pill value itself is untouched: `state` is the SERVER's closed vocabulary, and
   // a `detail` of "tool" must not leak into it.
   assert.equal(m.reportRow(wide).state, "working");
 });
 
-// C-2 — THE FIXTURE IS THE TEST. The row above used to read `chan-1:task-1`, which the
-// server's `SESSION_KEY_RE` and `threadId: z.string().uuid()` both reject, so this suite
-// was green about a payload that 400s. Pinned against the shipped regexes so a drift in
-// either direction fails HERE rather than in production.
+// C-2 — THE FIXTURE IS THE TEST. The row above used to read `chan-1:task-1`, which the server's `SESSION_KEY_RE` and
+// `threadId: z.string().uuid()` both reject, so this suite was green about a payload that 400s. Pinned against the
+// shipped regexes so a drift in either direction fails HERE rather than in production.
 test("ROW: the fixture satisfies the server's own two rules for a session row", () => {
   const SCHEMA = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), "..", "..", "src", "features", "channels", "schema-sessions.ts"),
@@ -202,10 +236,9 @@ test("PUSH: a change arriving mid-post is coalesced, never run in parallel", asy
   const { m, summary } = armed();
   summary.emit([entry()]);
   summary.emit([entry({ state: "idle" })]);
-  // ⚠ THE THIRD BEAT WAS `state: "ended"` UNTIL 2026-08-22 and is now a second live state: an
-  // ended row no longer goes on the wire at all, so it would have made this case about the
-  // ENDED filter rather than about COALESCING. The property under test is unchanged — whatever
-  // the microtask interleaving, the LAST state is what the server holds.
+  // ⚠ THE THIRD BEAT WAS `state: "ended"` UNTIL 2026-08-22 and is now a second live state: an ended row no longer
+  // goes on the wire at all, so it would have made this case about the ENDED filter rather than about COALESCING. The
+  // property under test is unchanged — whatever the microtask interleaving, the LAST state is what the server holds.
   summary.emit([entry({ state: "working", channelName: "Renamed" })]);
   await drained();
   const last = bodies(m)[m.posts.length - 1];
@@ -215,11 +248,10 @@ test("PUSH: a change arriving mid-post is coalesced, never run in parallel", asy
 
 // ── 3. THE ROW LIFETIME ──────────────────────────────────────────────────────────────
 
-// ⚠ REVERSED ON 2026-08-22 (Samuel's ended-agent ruling), and the reversal is the point rather
-// than a relaxation. This asserted `bodies(m)[0][0].state === "ended"` — an ended session WAS
-// reported, because the retained set was in memory, bounded by 12 and cleared by a restart, so
-// the row disappeared almost at once. Retention is now SEVEN DAYS and DURABLE, and the server
-// bounds the ARRAY at `SESSION_REPORT_MAX = 32`: reporting them would 400 the whole push,
+// ⚠ REVERSED ON 2026-08-22 (Samuel's ended-agent ruling), and the reversal is the point rather than a relaxation.
+// This asserted `bodies(m)[0][0].state === "ended"` — an ended session WAS reported, because the retained set was in
+// memory, bounded by 12 and cleared by a restart, so the row disappeared almost at once. Retention is now SEVEN DAYS
+// and DURABLE, and the server bounds the ARRAY at `SESSION_REPORT_MAX = 32`: reporting them would 400 the whole push,
 // unretryably, taking every LIVE session's row down with it. Ended cards are LOCAL now.
 test("LIFECYCLE: an ENDED session is NOT reported — its retention is local, not a server row", async () => {
   const { m, summary } = armed();
@@ -271,11 +303,10 @@ test("LIFECYCLE: a run that starts with a PREVIOUS run's rows clears them", asyn
 
 // ── 4. C-2: THE AD-HOC SESSION IS FILTERED, AND THE REST OF THE SET SURVIVES ─────────
 //
-// THE DEFECT: an unthreaded inbound — the ordinary DM — keys as `task-<channel>-<seq>`,
-// which the endpoint refuses. Zod validates the ARRAY, so ONE of those 400s the WHOLE
-// `sessions` payload; `retryable(400)` is false and the digest is not recorded, so every
-// later push fails identically and `read_sessions` answers `[]` for the machine — including
-// its perfectly valid uuid-threaded sessions — while stale rows are never cleared.
+// THE DEFECT: an unthreaded inbound — the ordinary DM — keys as `task-<channel>-<seq>`, which the endpoint refuses.
+// Zod validates the ARRAY, so ONE of those 400s the WHOLE `sessions` payload; `retryable(400)` is false and the
+// digest is not recorded, so every later push fails identically and `read_sessions` answers `[]` for the machine —
+// including its perfectly valid uuid-threaded sessions — while stale rows are never cleared.
 
 test("C-2: the predicate is the server's contract restated, not a name sniff", () => {
   const m = load();
@@ -373,13 +404,12 @@ test("LIFECYCLE: `kick()` runs a cycle off the current projection", async () => 
 /**
  * AN ENDED ROW IS LOCAL-ONLY (2026-08-22, Samuel's ended-agent ruling).
  *
- * ⚠ WITHOUT THIS FILTER THE RULING BREAKS THE PUSH ENTIRELY, which is why it is pinned rather
- * than left to the reader. Ended cards are retained for SEVEN DAYS and DURABLY now
- * (`main/agent-history.js`), where they used to be an in-memory set of 12 cleared by a restart.
- * The server bounds the ARRAY at `SESSION_REPORT_MAX = 32`; one oversized payload is a 400,
- * `retryable(400)` is false, the digest is never recorded, and every later push for that
- * workspace fails identically — `read_sessions` answers [] for the machine, LIVE sessions
- * included. Same failure the ad-hoc filter exists for, reached by a different road.
+ * ⚠ WITHOUT THIS FILTER THE RULING BREAKS THE PUSH ENTIRELY, which is why it is pinned rather than left to the
+ * reader. Ended cards are retained for SEVEN DAYS and DURABLY now (`main/agent-history.js`), where they used to be an
+ * in-memory set of 12 cleared by a restart. The server bounds the ARRAY at `SESSION_REPORT_MAX = 32`; one oversized
+ * payload is a 400, `retryable(400)` is false, the digest is never recorded, and every later push for that workspace
+ * fails identically — `read_sessions` answers [] for the machine, LIVE sessions included. Same failure the ad-hoc
+ * filter exists for, reached by a different road.
  *
  * ⚠ NOTHING WANTED THEM ON THE WIRE. The OPERATOR's own ended cards come from the LOCAL
  * summaries bridge; PEER cards already filter on row freshness; and `read_sessions` answers

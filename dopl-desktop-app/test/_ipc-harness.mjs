@@ -27,6 +27,13 @@ const realAgentId = req(join(HERE, "..", "main", "agent-id.js"));
 export const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 export const SRC = M("channel-dir-ipc.js");
 export const OPS_SRC = M("session-ipc-ops.js");
+// ⚠ THE LAUNCH BODY IS REAL, NOT A STUB (2026-08-22). `sessions:launch` delegates to
+// `main/session-launch-op.js` since the §1 split, and a FAKE there would make the boundary
+// suites assert a refusal shape the shipped code no longer produces — which is exactly the
+// drift a split must not cost. It is evaluated against this file's OWN stub require, so its
+// lazy handles (engine, prefs, targeting, listener, model, template-resolve) are the
+// harness's; a payload that is refused at the boundary never reaches one.
+export const LAUNCH_OP_SRC = M("session-launch-op.js");
 // ⚠ BOTH SOURCES, BECAUSE THE FILE SPLIT AND THE BINDING DID NOT (2026-08-20, F-226). Every
 // structural assertion reads the CONCATENATION: an op that dodges the wrapper fails the belt
 // whichever half it was added to, which is the property the split must not cost.
@@ -71,6 +78,7 @@ export function bootIpc({ blocked = false } = {}) {
   const dialogs = [];
   const reopens = [];
   const popouts = [];
+  const approvals = [];
   const stubRequire = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./channel-prefs") {
@@ -85,6 +93,12 @@ export function bootIpc({ blocked = false } = {}) {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getAutoSend: () => false,
         setAutoSend: (channelId, on) => { writes.push({ channelId, on }); return true; },
+        // ⚠ 2026-08-22, the ORCHESTRATOR LAUNCH TOGGLE. The getter answers TRUE deliberately:
+        // the refusal cases assert a rejected sender reads `{enabled:false}`, and a fake that
+        // answered false would pass those whether the binding worked or not. `set` records into
+        // the SAME `writes` ledger as every other writer here, for the reason stated above.
+        getOrchestratorLaunch: () => true,
+        setOrchestratorLaunch: (on) => { writes.push({ orchestratorLaunch: on }); return on === true; },
       };
     }
     if (id === "./channel-dirs") {
@@ -115,10 +129,22 @@ export function bootIpc({ blocked = false } = {}) {
     // boundary clamp (2026-08-21) and a permissive fake would let every op below accept an
     // agent id shape main really refuses.
     if (id === "./agent-id") return realAgentId;
+    if (id === "./session-launch-op") return launchOpModule;
+    // The MACHINE-LOCAL template approval store. `approveTemplate` records and answers true;
+    // `isTemplateApproved` answers false, which is the default-deny state a fresh Mac is in.
+    if (id === "./channel-prefs") {
+      return {
+        approveTemplate: (id2) => { approvals.push(id2); return true; },
+        isTemplateApproved: () => false,
+        launchStartModes: () => ({}),
+        getLaunchModel: () => '',
+      };
+    }
     if (id === "./session-ipc-ops") return opsModule;
     throw new Error("unexpected require: " + id);
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  const launchOpModule = evalModule(LAUNCH_OP_SRC, stubRequire);
   const opsModule = evalModule(OPS_SRC, stubRequire);
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);
@@ -130,7 +156,7 @@ export function bootIpc({ blocked = false } = {}) {
   const stranger = mkWin();
   mod.exports.register({ getSenderIds: () => idsOf(shell.webContents, popout.webContents) });
   return {
-    handlers, writes, dialogs, reopens, popouts,
+    handlers, writes, dialogs, reopens, popouts, approvals,
     shell: evt(shell.webContents, shell.mainFrame),
     popout: evt(popout.webContents, popout.mainFrame),
     iframe: evt(shell.webContents, { name: "embedded" }),

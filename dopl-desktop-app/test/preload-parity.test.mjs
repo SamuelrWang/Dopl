@@ -153,8 +153,50 @@ const APP_OPS = [
   "onNavigate",
   "onSyncEvent",
   "openExternal",
+  // ⚠ TWO OPS JOINED HERE ON 2026-08-22 (Samuel's launch-over-MCP ruling): `orchestratorLaunch
+  // .get` / `.set`, the MACHINE-WIDE standing consent for the `channel_launch_directives` lane.
+  // The pin failed on the ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
+  //     registers `orchestrator:getLaunchEnabled` / `orchestrator:setLaunchEnabled`, both
+  //     `appWindowOnly`. There is NO id to UUID-gate: the subject is the machine, so the payload
+  //     is a bare boolean and `=== true` is the whole validation. Storage is
+  //     `main/channel-prefs.js › get/setOrchestratorLaunch` — durable, default OFF, boolean-only
+  //     writes, unreadable store reads as false.
+  //   • ⚠ THIS PAIR IS MATERIALLY DIFFERENT FROM EVERY OTHER OP ON THIS LIST, AND THE REVIEW IS
+  //     THE POINT OF IT. Enabled, it lets a DIRECTIVE — a row another agent wrote with this
+  //     operator's own credential — cause this machine to spawn a session with no click. That is
+  //     `sessions.launch`'s authority, exercised by a program. So the toggle IS the consent
+  //     (Samuel's ruling, replacing "the click IS that human" for this lane), and everything
+  //     about where it lives follows from that: **it is deliberately not reachable by any Dopl
+  //     credential.** No route, no MCP op, no `workspace_settings` column — because a spawned
+  //     session has `Bash` and the device token is on disk (§6), so a server-side flag could be
+  //     flipped by the very agents it governs, on every machine the operator owns.
+  //   • ⚠ IT WIDENS WHO MAY PRESS, NEVER WHAT IS ALLOWED. A directive-driven launch is exactly
+  //     as contained as a button launch: the channel's own tool profile, the same durable
+  //     posture, `session-profiles.js › SESSION_HARD_DENY`, the windowless message floor. A
+  //     forged `set` from an app-window top frame buys the same thing the Settings row hands
+  //     the operator and reaches no other machine.
+  //   • Both are feature-probed by the SPA; an older main has no toggle, which reads OFF.
+  "orchestratorLaunch.get",
+  "orchestratorLaunch.set",
   "passwordSignIn",
   "sendMagicLink",
+  // ⚠ ONE JOINED HERE ON 2026-08-22 (OQ-3, the agent-templates launch wave):
+  // `sessions.approveTemplate` records THIS MACHINE's first-use approval of ANOTHER MEMBER's
+  // agent template. The review, because the pin fails on the ADD:
+  //
+  //   • It STARTS NOTHING and GRANTS NOTHING. No query, no shell wake, no tool, no post. It
+  //     decides one thing: whether a foreign template's TEXT may become an agent's role here.
+  //     A launch from an approved template is contained exactly like any other launch — same
+  //     tool profile, same permission axes, same working folder, same hard-deny floor.
+  //   • Handler: `main/session-ipc-ops.js › sessions:approveTemplate`, `appWindowOnly`, with a
+  //     UUID gate on the id, delegating to `main/session-launch-op.js › approveTemplate`.
+  //   • The failure direction of a FORGED call is that a template the operator would have been
+  //     asked about runs without the question. That is why it is sender-bound like everything
+  //     else here, and why the store it writes is machine-local: a SERVER-writable approval
+  //     would let a credential-holding agent pre-approve itself across the whole fleet, which
+  //     is the escalation `orchestratorLaunchEnabled` exists to not have either.
+  "sessions.approveTemplate",
   // ⚠ TWO OPS JOINED HERE ON 2026-08-18 (wiring plan Phase 5): `sessions.pause` and
   // `sessions.end`, the Agents tab's controls on the operator's OWN agent. The pin failed on
   // the ADD, which is the review this comment records:
@@ -180,7 +222,7 @@ const APP_OPS = [
   "sessions.forgetThread",
   // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.launch`, the Agents tab's "Launch
   // agent" button — attach MY OWN agent to a thread, windowless. Handler exists
-  // (`main/channel-dir-ipc.js › sessions:launch`, appWindowOnly, UUID-gated channel
+  // (`main/session-ipc-ops.js › sessions:launch`, appWindowOnly, UUID-gated channel
   // AND task). It DOES start a query — the materially different shape Phase 5's
   // stop verbs called out — and that is the feature: the same authority the
   // consent Allow exercises, here exercised by the operator on their OWN thread

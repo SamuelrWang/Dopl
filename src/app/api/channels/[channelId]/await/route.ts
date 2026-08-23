@@ -8,11 +8,14 @@ import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-r
 import {
   awaitNewMessages,
   buildChannelContext,
+  listSessionStates,
   resolveReadableChannelId,
   type AwaitHoldCounters,
 } from "@/features/channels/server/service";
 import { AwaitQuerySchema } from "@/features/channels/schema";
 import { DEFAULT_AWAIT_TIMEOUT_MS } from "@/features/channels/constants";
+import type { ChannelContext } from "@/features/channels/server/service-shared";
+import type { ChannelSessionStateOwn } from "@/features/channels/types";
 
 /**
  * Long-poll for new messages. Validates access up front, then holds on `seq > since` (~1.5s
@@ -21,6 +24,9 @@ import { DEFAULT_AWAIT_TIMEOUT_MS } from "@/features/channels/constants";
  * cadence live in `service-await.ts › awaitNewMessages`.
  * ⚠ A mid-hold soft-delete or membership revocation ends the hold with a 404 and NEVER returns
  * messages.
+ *
+ * ⚠ THE RESPONSE CARRIES A THIRD KEY SINCE 2026-08-22: `sessions`, the caller's OWN agent
+ * sessions. ADDITIVE — an older client reads `{messages, timedOut}` and ignores it.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +51,44 @@ function logHold(
       ` polls=${counters.polls} revalidations=${counters.revalidations}` +
       ` outcome=${outcome} ms=${Date.now() - started}`
   );
+}
+
+/**
+ * THE CALLER'S OWN SESSIONS, READ **AT RETURN TIME AND NOWHERE ELSE**.
+ *
+ * ⚠ **NEVER MOVE THIS INSIDE `awaitNewMessages`.** That loop is the feature's one structurally
+ * growing egress consumer — the teaching tells every agent with an open exchange to keep an await
+ * armed continuously — and its whole design is that a held tick costs ONE existence probe on ONE
+ * column. A session read per tick would multiply the hottest query path in the tree by the number
+ * of armed listeners, to answer a question nobody asked until the hold ended. One read per
+ * RETURNED hold is one read per ~3.5 minutes per listener at worst, and zero extra reads during
+ * the wait.
+ *
+ * ⚠ WHY IT IS WORTH ONE READ AT ALL: an orchestrator's loop was `await` → `read_sessions` →
+ * decide, two round trips per cycle. This makes it one. That is the entire justification, and it
+ * evaporates if the read moves anywhere it can fire more than once per hold.
+ *
+ * ⚠ FAIL-SOFT, AND `undefined` IS THE HONEST ANSWER. A messages payload has already been earned
+ * by the time this runs; throwing here would turn a successful hold into a 500 and make the
+ * caller re-arm for messages it had. So a failure OMITS the key, which the client contract reads
+ * as "not reported" — distinct from `[]`, which is a claim that the machine reports nothing.
+ * ⚠ NOT swallowed silently: one line, same lane as the hold diagnostic.
+ *
+ * ⚠ WORKSPACE-WIDE, not narrowed to this channel. The caller is orchestrating agents, and an
+ * agent it launched into a sibling channel is exactly what it needs to see without a second call.
+ * The read is own-scoped either way (`ctx.userId`), which is what licenses the telemetry.
+ */
+async function ownSessionsAtReturn(
+  ctx: ChannelContext
+): Promise<ChannelSessionStateOwn[] | undefined> {
+  try {
+    return await listSessionStates(ctx);
+  } catch (err) {
+    console.log(
+      `[await-hold] sessions-read-failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return undefined;
+  }
 }
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -74,9 +118,15 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       counters,
     });
     outcome = result.messages.length > 0 ? "hit" : "timeout";
+    // ⚠ AFTER the hold, never during it — see `ownSessionsAtReturn`.
+    const sessions = await ownSessionsAtReturn(ctx);
     return NextResponse.json({
       messages: result.messages,
       timedOut: result.messages.length === 0,
+      // ⚠ The key is OMITTED rather than sent as `null` when the read failed:
+      // `undefined` serializes away, and "absent" is the shape the client
+      // contract defines as "not reported".
+      ...(sessions === undefined ? {} : { sessions }),
     });
   } catch (err) {
     return toChannelErrorResponse(err);

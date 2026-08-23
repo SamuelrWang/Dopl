@@ -27,6 +27,9 @@ const { makeGateReason, GATE_REASONS } = require('./session-gate-reason');
 const { makeGrantKeyFor, POST_GRANT, postFieldsOk } = require('./session-grant-keys');
 // Client-agnostic tool-name normalizer the whole table matches through.
 const { mcpShortName, canonicalDoplName } = require('./mcp-tool-names');
+// OP-SCOPED KNOWLEDGE READS (2026-08-22, OQ-1). Injected into the extracted table by the two
+// harness tests, like `normalizeProfile`. The whole argument lives in that module's header.
+const { isKnowledgeReadCall } = require('./knowledge-ops');
 const {
   READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, UNIVERSAL_HARD_DENY,
   // Retired tools: denied everywhere, so unregistering cannot loosen a hard-deny.
@@ -69,6 +72,13 @@ const DOPL_WRITE_TOOLS = ['mcp__dopl__dopl_kb', 'mcp__dopl__dopl_skill',
   'mcp__dopl__dopl_ontology', 'mcp__dopl__dopl_chats'];
 const DOPL_READ_TOOLS = DOPL_SAFE_TOOLS
   .filter(function (t) { return DOPL_WRITE_TOOLS.indexOf(t) === -1; });
+
+// ⚠ "WHERE DOES A DOPL READ RESOLVE?", ASKED OF THE TABLE RATHER THAN ANSWERED TWICE. The
+// op-scoped knowledge branch below grants a `dopl_kb` READ exactly where a `DOPL_READ_TOOL` is
+// already granted. Naming those modes there would be a SECOND statement of AUTO_TOOLS'
+// membership, which stops being true the day the floor or the lists move; asking
+// `toolModeAllows` about a real member cannot drift.
+const DOPL_READ_REFERENCE = DOPL_READ_TOOLS[0] || 'mcp__dopl__dopl_search';
 
 // SESSION grant config for a profile. `preApproved` -> SDK allowedTools (shadowed, no button).
 // `builtinTools` -> SDK tools (POSITIVE bound; [] = no bound). `disallowedTools` -> SDK
@@ -327,7 +337,12 @@ function floorWindowlessMessage(mode) {
 // Axis A's start value AND its park reset, so the common case, not an odd one — `toolModeAllows`
 // returns false for every name, so EVERY work tool is silently denied, including the read tools
 // `prompt-framing.js` ORDERS the agent to use. Flooring at `auto` makes AUTO_TOOLS
-// (READ_BUILTINS + EDIT_TOOLS + MultiEdit + DOPL_READ_TOOLS) reachable with no gate to answer.
+// (READ_BUILTINS + EDIT_TOOLS + MultiEdit + DOPL_READ_TOOLS) reachable with no gate to answer —
+// ⚠ ONLY AS FAR AS THE PROFILE ALREADY REACHES (clause missing here until 2026-08-22, F-267).
+// `buildSessionToolConfig` bounds `builtinTools` and fills `disallowedTools` BEFORE Axis A, so a
+// hard-denied name is absent from context and no floor reopens it: DOPL_READ_TOOLS reach only
+// `full`, and `read_only` offers neither them nor EDIT_TOOLS. The floor widens what the PROFILE
+// permits; it never makes the Dopl reads reachable.
 //
 //     manual        -> auto
 //     accept_edits  -> auto
@@ -420,6 +435,15 @@ function grantDecision(args) {
   if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
   // 4. AXIS A. Message flow never consulted here — the other half of the invariant.
   if (toolModeAllows(a.toolMode, name)) return 'allow';
+  // 5. ⚠ THE OP-SCOPED KNOWLEDGE READ (2026-08-22, OQ-1). SAME SHAPE AS THE AXIS-B CHANNEL
+  //    BRANCH ABOVE AND FOR THE SAME REASON: one tool carries a read AND a write surface, so a
+  //    WHOLE-TOOL verdict has to pick the wrong one. `dopl_kb` is a `DOPL_WRITE_TOOL` (correctly
+  //    — seven of its twelve ops write to the shared workspace), so Axis A misses it at `auto`,
+  //    and a miss in a WINDOWLESS session is a DENY, not a question. Only the READ ops land
+  //    here; the writes fall through to `gate` as before. ⚠ LAST, AFTER Axis A, so `bypass`
+  //    (which does cover the whole tool) is still Axis A's answer and this narrows nothing.
+  //    ⚠ AND UNREACHABLE UNDER `read_only`, which hard-denies the tool at step 1.
+  if (isKnowledgeReadCall(name, a.input) && toolModeAllows(a.toolMode, DOPL_READ_REFERENCE)) return 'allow';
   return 'gate';
 }
 
@@ -432,6 +456,9 @@ const gateReason = makeGateReason({
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
   canonicalDoplName, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS,
+  // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
+  // every other predicate here, so the explainer cannot grow its own copy of the rule.
+  toolModeAllows, isKnowledgeReadCall,
 });
 // { decision, reason } — reason is a GATE_REASONS code, or null for a verdict nothing can
 // honestly explain.
@@ -444,6 +471,8 @@ module.exports = {
   buildSessionToolConfig, grantDecision, shortDoplName, isOwnChannelPost,
   isOwnChannelRead, OWN_CHANNEL_READ_OPS, // own-channel READ set, Axis B inbound half
   isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, // own-channel MARKER set, Axis B outbound half
+  isKnowledgeReadCall, // 2026-08-22 (OQ-1): re-exported from knowledge-ops, the op-scoped kb read
+  DOPL_READ_REFERENCE, // the member the knowledge branch asks "where does a Dopl read resolve?"
   mcpShortName, canonicalDoplName, // re-exported from mcp-tool-names
   grantDecisionDetail, GATE_REASONS,
   BYPASS_READS, // NAMED read-only tools `bypass` covers on top of the classified work set

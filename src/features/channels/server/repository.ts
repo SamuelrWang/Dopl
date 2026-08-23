@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
 import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
+import { visibleChannelsOr } from "./repository-visibility";
 
 /**
  * Pure data access for channels, members, workspace membership + profiles.
@@ -45,11 +46,7 @@ export async function listChannels(
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null);
   if (!opts.includeArchived) query = query.is("archived_at", null);
-  const orParts = ["visibility.eq.public"];
-  if (opts.memberChannelIds.length > 0) {
-    orParts.push(`id.in.(${opts.memberChannelIds.join(",")})`);
-  }
-  query = query.or(orParts.join(","));
+  query = query.or(visibleChannelsOr(opts.memberChannelIds));
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as ChannelRow[];

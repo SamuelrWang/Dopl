@@ -75,17 +75,22 @@ const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
 // are all the same server). Injected like makeGrantKeyFor, and the REAL implementations, so the
 // block stays pinned to what ships.
 const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
+// 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped
+// `dopl_channel`, reading `isKnowledgeReadCall` off the module head. Injected like
+// makeGrantKeyFor, and the REAL implementation, so the block stays pinned to what ships.
+const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
-  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
-  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName);
+  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
+  KB_OPS.isKnowledgeReadCall);
 
 const CHANNEL_SHORT = "dopl_channel";
 // The work tools that were live-gated under `full` even when the rest of DENIED_BUILTINS was

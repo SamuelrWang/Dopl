@@ -247,3 +247,28 @@ export const AWAIT_POLL_INTERVAL_MS = 1_500;
  * revoked mid-hold is cut off on the very next message at any tick count.
  */
 export const AWAIT_REVALIDATE_EVERY_TICKS = 10;
+
+/**
+ * HOW LONG A LAUNCH DIRECTIVE STAYS ANSWERABLE (2026-08-22).
+ *
+ * ⚠ **IT IS A LIVENESS BOUND, NOT A PATIENCE BOUND.** A directive asks a machine
+ * to start a process NOW; if no desktop has claimed it in two minutes, the
+ * machine that would have run it is asleep, signed out, or has the launch toggle
+ * off — and starting an agent later, against a goal whose context has moved on,
+ * is worse than not starting one. Compare {@link CONSENT_TTL_MS} (24h), which
+ * bounds a HUMAN decision and must outlast the desktop watcher's park window;
+ * nothing parks here.
+ *
+ * ⚠ Comfortably longer than the MCP op's own hold (`wait_ms` default 15s, cap
+ * 30s), and that gap is the point: the hold timing out is NOT the directive
+ * expiring. The agent is told the request is still pending and told where to
+ * look for the result — re-issuing instead would queue a second agent.
+ *
+ * ⚠ **ENFORCED LAZILY, AT READ TIME, AND THERE IS NO CRON** — `server/
+ * service-launch.ts › toDirective` reports a non-terminal row past this window
+ * as `expired`, so the stored `status` and the reported one may disagree. A
+ * sweep would be a scheduled job whose only output is cosmetic, and this repo's
+ * standing lesson is that a cron is an environment fact nothing in the tree can
+ * observe.
+ */
+export const LAUNCH_DIRECTIVE_TTL_MS = 120_000;

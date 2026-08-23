@@ -73,11 +73,17 @@ const { diag } = require('./diag');
 // Display string for the wire: one line, whitespace collapsed, bounded, or null. ⚠ Same
 // discipline as session-store's `durableName`: channel name and thread title are
 // counterparty-influenced text on their way to a renderer.
-function displayText(value) {
+// ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-22, defaulting to the 80 every existing caller had.
+// `templateName` takes 120 — the COLUMN's bound on both ends — because clipping an identity to
+// fit a display default would report a name no template has.
+function displayText(value, max = 80) {
   if (typeof value !== 'string') return null;
-  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max).trim();
   return s || null;
 }
+
+// The AGENT TEMPLATE a session runs as, as a NAME and never an id. `null` for a blank agent.
+const TEMPLATE_NAME_MAX = 120;
 
 /**
  * A SESSION'S NAME IS ITS AGENT ID — the whole derivation, since 2026-08-21.
@@ -153,6 +159,10 @@ function liveSummary(s, name) {
     model: (s && s.liveModel) || modelPick(s),
     channelName: displayText(ctx.channelName),
     threadTitle: displayText(ctx.taskTitle),
+    // ⚠ SPAWN-TIME, AND IT CANNOT MOVE. `context.template` is captured once at spawn
+    // (`session-launch-op.js`) and never re-resolved, which is what makes it free to carry in
+    // the STATE half of the server digest rather than the quantized churn half.
+    templateName: displayText(ctx.template && ctx.template.name, TEMPLATE_NAME_MAX),
     ...metrics(s),
   };
 }
@@ -188,6 +198,9 @@ function endedSummary(e, name) {
     model: null,
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
+    // ⚠ FROZEN AT SETTLE (`session-teardown.js`): an ended session must still report what it
+    // RAN AS, and reading null here would push a row that ERASES the name.
+    templateName: displayText(e && e.templateName, TEMPLATE_NAME_MAX),
     contextUsed: metricOrNull(e && e.contextUsed),
     contextWindow: metricOrNull(e && e.contextWindow),
     tokensSpent: metricOrNull(e && e.tokensSpent),
@@ -197,8 +210,8 @@ function endedSummary(e, name) {
 }
 
 /**
- * One entry widened with the two facts a SERVER ROW needs: `channel_sessions` keys on
- * `(user_id, session_key)` and fences on `workspace_id`.
+ * One entry widened with the two facts a SERVER ROW needs: `channel_sessions` keys on `(user_id,
+ * session_key)` and fences on `workspace_id`.
  * ⚠ `sessionId` is EPHEMERAL (a park or recreate mints a new one) — the wrong upsert key.
  * ⚠ Neither field goes on the wire: `wireSummary` strips them, so the IPC payload and
  * `DesktopSessionSummary` stay byte-unchanged. One derivation, two projections.
@@ -216,11 +229,11 @@ function wireSummary(entry) {
 }
 
 /**
- * Have the summaries actually changed? The engine dispatches on EVERY SDK event, so without
- * this the renderer is woken dozens of times per turn by effects it cannot see.
- * ⚠ Compared as a stable string, not field-by-field, so a member added to the shape is checked
- * automatically instead of silently dropped. Order is already stable (registry preserves
- * insertion; the ended list is append-only).
+ * Have the summaries actually changed? The engine dispatches on EVERY SDK event, so without this the
+ * renderer is woken dozens of times per turn by effects it cannot see.
+ * ⚠ Compared as a stable string, not field-by-field, so a member added to the shape is checked automatically
+ * instead of silently dropped. Order is already stable (registry preserves insertion; the ended list is
+ * append-only).
  */
 function summariesDigest(list) {
   return JSON.stringify(list || []);
@@ -232,16 +245,15 @@ function summariesDigest(list) {
 
 const SESSIONS_EVENT = 'dopl:sessions';
 
-// A burst of engine dispatches (one turn is many) must cost ONE render. 200ms is below where a
-// state flip reads as laggy and above one turn's event storm. Mirrors ui-sync's COALESCE_MS.
+// A burst of engine dispatches (one turn is many) must cost ONE render. 200ms is below where a state flip
+// reads as laggy and above one turn's event storm. Mirrors ui-sync's COALESCE_MS.
 const PUSH_COALESCE_MS = 200;
 
-// ⚠ `MAX_ENDED` (12) AND `endedKept` STOOD HERE AND ARE DELETED (2026-08-22, Samuel's ruling).
-// They were an in-memory list bounded by COUNT and lost on quit. Ended cards are projected from
-// the DURABLE history now (`agent-history.js`, injected as `deps.endedRecords`), bounded by
-// SEVEN DAYS from `endedAt` and swept by `agent-retention.js`. A count bound in front of a
-// durable set would be a second, shorter retention rule nobody asked for.
-// ⚠ THE NAME LEDGER STOOD HERE TOO AND IS DELETED (2026-08-21) — see `nameOf`.
+// ⚠ `MAX_ENDED` (12) AND `endedKept` STOOD HERE AND ARE DELETED (2026-08-22, Samuel's ruling). They were an
+// in-memory list bounded by COUNT and lost on quit. Ended cards are projected from the DURABLE history now
+// (`agent-history.js`, injected as `deps.endedRecords`), bounded by SEVEN DAYS from `endedAt` and swept by
+// `agent-retention.js`. A count bound in front of a durable set would be a second, shorter retention rule
+// nobody asked for. ⚠ THE NAME LEDGER STOOD HERE TOO AND IS DELETED (2026-08-21) — see `nameOf`.
 let deps = { sessions: null, endedRecords: null };
 let getWindowsFn = null;
 let pushTimer = null;
@@ -253,10 +265,9 @@ let lastChangeDigest = null;
 /**
  * The engine binds its in-memory registry here at load, plus the reader for retained ENDED
  * records (`agent-history.js › listEnded`).
- * ⚠ INJECTED, NOT REQUIRED: this module is import-free below the sentinel so its suites can
- * evaluate it as source. An absent `endedRecords` degrades to "no ended cards" rather than
- * throwing — the live half is what an operator is mid-way through, and it must not go dark
- * because a history file could not be read.
+ * ⚠ INJECTED, NOT REQUIRED: this module is import-free below the sentinel so its suites can evaluate it as
+ * source. An absent `endedRecords` degrades to "no ended cards" rather than throwing — the live half is what
+ * an operator is mid-way through, and it must not go dark because a history file could not be read.
  */
 function bind(d) {
   deps = {
@@ -265,9 +276,9 @@ function bind(d) {
   };
 }
 
-/** Arm the push. ⚠ `getWindows()` is called at SEND time, never captured — the window is
- *  rebuilt on reopen and a pop-out can appear at any moment (wiring plan Phase 10; it fans
- *  out over main/app-windows.js's registry). Idempotent. */
+/** Arm the push. ⚠ `getWindows()` is called at SEND time, never captured — the window is rebuilt on reopen
+ *  and a pop-out can appear at any moment (wiring plan Phase 10; it fans out over main/app-windows.js's
+ *  registry). Idempotent. */
 function start(opts) {
   getWindowsFn = opts && typeof opts.getWindows === 'function' ? opts.getWindows : null;
   lastDigest = null; // a fresh window has seen nothing; the next touch must reach it
@@ -281,11 +292,10 @@ function windowAlive(win) {
 /**
  * The retained ENDED records — read from the durable history, never from a local list.
  *
- * ⚠ THIS IS WHY A RESTART KEEPS THE CARDS. The predecessor (`sweepEnded` over `endedKept`) was
- * in-memory, so quitting the app erased every ended agent even though its work had happened;
- * the durable file is read fresh on every projection instead. The BOUND is not here either —
- * `agent-history.js` owns `RETENTION_MS` and `agent-retention.js` runs the sweep, so this reads
- * whatever survives and applies no second rule of its own.
+ * ⚠ THIS IS WHY A RESTART KEEPS THE CARDS. The predecessor (`sweepEnded` over `endedKept`) was in-memory, so
+ * quitting the app erased every ended agent even though its work had happened; the durable file is read fresh
+ * on every projection instead. The BOUND is not here either — `agent-history.js` owns `RETENTION_MS` and
+ * `agent-retention.js` runs the sweep, so this reads whatever survives and applies no second rule of its own.
  * ⚠ NEVER THROWS. A history file that cannot be read costs the ended cards, not the live ones.
  */
 function retainedEnded() {

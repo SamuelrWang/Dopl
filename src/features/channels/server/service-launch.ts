@@ -1,0 +1,455 @@
+import "server-only";
+// ⚠ THE ONE CROSS-FEATURE IMPORT ON THIS PATH, AND IT IS THE COMPOSITION RATHER
+// THAN THE COPY. `resolveTemplateRef` applies `canSeeTemplate` — the visibility
+// matrix that is ALREADY written twice (that function and
+// `agent_templates_member_select`) and documented as having to move together. A
+// third statement of it here is precisely the shape F-278 is filed against
+// ("the copy is the one that will not notice"). INVARIANTS §1 says there are no
+// cross-feature imports; F-275 records that the tree has never obeyed that and
+// that `channels → agent-templates` already exists on the client side.
+import {
+  resolveTemplateRef,
+  type TemplateRefMatch,
+} from "@/features/agent-templates/server/service";
+import { LAUNCH_DIRECTIVE_TTL_MS, PRESENCE_ONLINE_WINDOW_MS } from "../constants";
+import type { LaunchDirective, LaunchRefusalReason } from "../types";
+import {
+  LaunchDirectiveNotClaimableError,
+  LaunchDirectiveNotFoundError,
+  LaunchTemplateAmbiguousError,
+  LaunchTemplateNotFoundError,
+} from "./errors";
+import * as launchRepo from "./repository-launch";
+import type { LaunchDirectiveRow } from "./repository-launch";
+import * as collab from "./repository-collab";
+import * as repoTasks from "./repository-tasks";
+import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+
+/**
+ * LAUNCH-OVER-MCP — an operator's external agent asking that operator's OWN
+ * desktop to start an agent (Samuel's ruling, 2026-08-22: approved, with a local
+ * desktop toggle as the consent).
+ *
+ * ⚠ **THE SERVER STARTS NOTHING, AND CANNOT.** Agents live in a desktop main
+ * process no server can reach. What this service does is FILE A REQUEST and
+ * report what came back. Every result sentence has to survive that: "launched"
+ * means a machine SAID it launched, and there is no third party to check it
+ * against.
+ *
+ * ⚠ **`operator_user_id` IS ALWAYS `ctx.userId` AND IS NEVER A PARAMETER.** Not
+ * on the create, not on the claim, not on the decide. An agent may ask its own
+ * operator's machine to do something; the ability to name a DIFFERENT operator
+ * would be the ability to start a process on a stranger's computer, and the way
+ * to make that unreachable is for no function in this file to accept the
+ * argument. The type signatures below are the enforcement, not a convention.
+ */
+
+/** The refusal contract, as a value. ⚠ ONE DECLARATION — the column's CHECK, the
+ *  route schema and the MCP render all point at this.
+ *  ⚠ SEVEN SINCE 2026-08-22: `no-template` is the agent-templates word — a directive
+ *  named a template the OPERATOR's machine could not resolve (deleted, or invisible
+ *  to them though visible to the orchestrator). ⚠ THE COLUMN CHECK CAUGHT UP ON
+ *  2026-08-23 (`20260823140000_channel_launch_directives_template.sql`, WRITTEN —
+ *  applied is a measurement, §12), in the same wave as the producer that makes the
+ *  word reachable: `main/launch-directives.js › spawn` resolves the directive's
+ *  template at CLAIM time. This list and that CHECK are back in agreement. */
+export const LAUNCH_REFUSAL_REASONS = [
+  "cap",
+  "busy",
+  "no-sdk",
+  "auth-hold",
+  "no-bridge",
+  "no-counterparty",
+  "no-template",
+] as const;
+
+function isTerminal(status: string): boolean {
+  return status === "launched" || status === "refused" || status === "expired";
+}
+
+/**
+ * ROW → DTO, **with lazy expiry applied**.
+ *
+ * ⚠ **THE STORED `status` AND THE REPORTED ONE MAY DISAGREE, ON PURPOSE.** There
+ * is no cron sweeping this table (INVARIANTS §12's standing lesson: a scheduled
+ * job is an environment fact nothing in the repo can observe, and this one would
+ * exist purely to make a column cosmetically accurate). So a non-terminal row
+ * past its TTL is REPORTED as `expired` at read time. Every reader goes through
+ * this function, so there is one answer to "is it still live".
+ * ⚠ The direction is fail-safe: expiry can only ever make a directive look LESS
+ * live. It never resurrects one, and it never turns a decided row into anything.
+ */
+function toDirective(row: LaunchDirectiveRow, now: number): LaunchDirective {
+  const expired = !isTerminal(row.status) && now > Date.parse(row.expires_at);
+  return {
+    id: row.id,
+    // ⚠ ON THE DTO ON PURPOSE, AND IT DISCLOSES NOTHING (F-284, 2026-08-23).
+    // Every read that reaches this mapper is already fenced on
+    // `operator_user_id = ctx.userId` (`repository-launch.ts`), so this can only
+    // ever be the caller's own id. It is here because the DESKTOP re-checks
+    // ownership locally before acting — `main/launch-directive-wire.js ›
+    // directiveFrom` reads it and `main/launch-directives.js › handle` drops any
+    // row that is not the signed-in operator's. Omitting it made every row the
+    // breaker-open backstop polled compare against `''` and be discarded, i.e.
+    // the F-273 recovery read returned rows nothing could ever action.
+    operatorUserId: row.operator_user_id,
+    channelId: row.channel_id,
+    threadId: row.task_id,
+    goal: row.goal,
+    model: row.model,
+    // ⚠ BOTH, ALWAYS, AND NEVER ONE. `template_id` is `ON DELETE SET NULL`, so a
+    // null id ALONE cannot say whether no template was named or the named one was
+    // deleted — and the desktop's answer to those two is opposite (launch blank
+    // vs refuse `no-template`, spec E-4). Mapping only the id would make the DTO
+    // the place the signal was lost, one layer above the wire narrowing that gets
+    // blamed for it.
+    templateId: row.template_id,
+    templateName: row.template_name,
+    status: expired ? "expired" : (row.status as LaunchDirective["status"]),
+    refusalReason: row.refusal_reason as LaunchRefusalReason | null,
+    agentId: row.agent_id,
+    claimedAt: row.claimed_at,
+    decidedAt: row.decided_at,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * IS THE OPERATOR'S MACHINE EVEN THERE?
+ *
+ * ⚠ **A HINT, AND THE RESULT MUST SAY SO.** `agent_presence` is per-(user,
+ * workspace), not per-machine and not per-channel: it says some listener of this
+ * operator's heartbeat recently, not that the machine which would run this agent
+ * is up, not that the desktop's launch toggle is on, and not that it has an SDK.
+ * So an ONLINE reading proves nothing and the flow continues to the real
+ * decision, which is the desktop's.
+ * ⚠ What it DOES buy is the OFFLINE case, which is the common one and the one
+ * worth short-circuiting: filing a directive against a machine that is provably
+ * not listening produces a row nobody will ever claim, a 15-second hold, and a
+ * timeout the agent has to interpret. Refusing before the row exists turns that
+ * into an immediate, honest answer.
+ * ⚠ THE WINDOW IS `PRESENCE_ONLINE_WINDOW_MS`, deliberately reused — a second
+ * liveness number would let the roster call a member offline while this path
+ * happily filed a directive for them.
+ */
+async function operatorIsOnline(ctx: ChannelContext): Promise<boolean> {
+  const presence = await collab.presenceForWorkspace(ctx.workspaceId);
+  const mine = presence.get(ctx.userId);
+  // ⚠ NO ROW AND NO STAMP BOTH READ AS OFFLINE — the fail-safe direction. A
+  // presence projection that cannot say when it last heard from a machine is not
+  // evidence the machine is up, and the cost of being wrong this way is one
+  // honest refusal instead of a directive nobody will ever claim.
+  if (!mine?.lastSeenAt) return false;
+  // ⚠ Recomputed from the stamp rather than trusting `online`, so this path
+  // cannot drift from the window even if that projection is later re-derived.
+  const seenAt = Date.parse(mine.lastSeenAt);
+  if (Number.isNaN(seenAt)) return false;
+  return Date.now() - seenAt < PRESENCE_ONLINE_WINDOW_MS;
+}
+
+export type CreateLaunchInput = {
+  /** Channel slug or id. ⚠ Resolved through the ordinary visibility gate. */
+  channel: string;
+  /** Thread to start the agent on. Must belong to `channel`. */
+  threadId?: string;
+  goal?: string;
+  model?: string;
+  /**
+   * The agent template to run as — **an id OR an exact name**, resolved here
+   * (2026-08-23).
+   *
+   * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/`
+   * never sees a template id it did not obtain by asking the agent-templates
+   * service what THIS caller can see, so "name a template you cannot see" has no
+   * spelling on this path. See {@link resolveTemplateForDirective}.
+   */
+  template?: string;
+};
+
+/**
+ * ⚠ WHAT A DIRECTIVE STORES ABOUT A TEMPLATE, AND WHY IT IS NOT THE CONTENT.
+ *
+ * The row carries the resolved `id` plus a NAME SNAPSHOT and nothing else. The
+ * INSTRUCTIONS, fields and knowledge bases are read on the DESKTOP, at spawn,
+ * under the OPERATOR's own credential (`main/template-resolve.js`) — which is
+ * load-bearing rather than tidy: `knowledgeBases` is viewer-filtered, and on this
+ * lane the caller who NAMED the template and the operator who RUNS it are
+ * routinely different people. Resolving content here would attach the
+ * orchestrator's reach to the operator's session.
+ */
+type DirectiveTemplate = { id: string; name: string } | null;
+
+/**
+ * RESOLVE THE CALLER'S `template` REF — **the CREATE fence, under the
+ * ORCHESTRATOR's credential** (spec §3e).
+ *
+ * ⚠ THERE ARE TWO FENCES ON THIS LANE AND THEY BELONG TO DIFFERENT PEOPLE. This
+ * one says the caller cannot NAME what it cannot SEE. The other runs on the
+ * desktop at spawn and says the OPERATOR cannot RUN what THEY cannot see. Both
+ * are required and neither substitutes: a `team` template the orchestrator is in
+ * and the operator is not passes here and is refused there, as `no-template`.
+ * That is a real, fail-closed state, stated in the docs rather than debugged.
+ *
+ * ⚠ AMBIGUITY REFUSES AND LISTS. Never picks — see
+ * {@link LaunchTemplateAmbiguousError}.
+ */
+async function resolveTemplateForDirective(
+  ctx: ChannelContext,
+  ref: string | undefined
+): Promise<DirectiveTemplate> {
+  if (ref === undefined) return null;
+  const resolution = await resolveTemplateRef(
+    {
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+      source: ctx.source,
+      role: ctx.role,
+      // ⚠ CARRIED, NOT DROPPED, AND IT IS ARM 2 OF THE MATRIX (M-10). A
+      // workspace-scoped API key may be shared between humans, so it inherits no
+      // one person's reach and must see NOTHING beyond `visibility: 'workspace'`.
+      // `canSeeTemplate` reads this field; handing it `null` would let such a key
+      // resolve the key-owner's private templates by name.
+      apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
+    },
+    ref
+  );
+  if (resolution.kind === "ambiguous") {
+    throw new LaunchTemplateAmbiguousError(
+      ref,
+      resolution.matches as ReadonlyArray<TemplateRefMatch>
+    );
+  }
+  if (resolution.kind === "not-found") {
+    throw new LaunchTemplateNotFoundError(ref);
+  }
+  return { id: resolution.id, name: resolution.name };
+}
+
+/**
+ * `offline` = no row was created and nothing was asked; the caller renders the
+ * honest caveat. Any other outcome carries the filed directive.
+ */
+export type CreateLaunchResult =
+  | { offline: true; directive: null }
+  | { offline: false; directive: LaunchDirective };
+
+/**
+ * FILE A LAUNCH DIRECTIVE.
+ *
+ * THREE GATES, IN THIS ORDER, AND THE ORDER IS THE CHEAPNESS ORDER:
+ *  1. **THE CHANNEL MUST BE VISIBLE AND THE CALLER MUST BE A MEMBER.**
+ *     `loadVisibleChannel` alone is NOT enough here and this is the one place in
+ *     the feature that says so out loud: it admits a non-member to a PUBLIC
+ *     channel (§5), and a launch is not a read. Starting an agent in a room you
+ *     never joined is not something a member of the room agreed to, so the
+ *     membership row is required on top.
+ *  2. **A `threadId`, IF GIVEN, MUST BELONG TO THAT CHANNEL.** Otherwise a
+ *     directive could stamp an agent onto an exchange in a different room —
+ *     including one the caller cannot read. Refused, never silently dropped: a
+ *     dropped thread id starts the agent in the wrong place and reports success.
+ *  3. **THE TEMPLATE REF, IF GIVEN, MUST RESOLVE FOR THIS CALLER** (2026-08-23).
+ *     Id or exact name, through the agent-templates visibility matrix; ambiguous
+ *     names REFUSE and list. See {@link resolveTemplateForDirective}.
+ *  4. **PRESENCE.** See {@link operatorIsOnline} — the only gate that can pass
+ *     while the answer is still "no", which is why it is last and why it does
+ *     not pretend to be a decision.
+ *
+ * ⚠ **THE TEMPLATE GATE IS DELIBERATELY ABOVE PRESENCE, WHICH BREAKS THE
+ * CHEAPNESS ORDER ON PURPOSE.** `offline` is a 200 that says "nothing was asked",
+ * and it is the ordinary answer for a closed laptop. Checking presence first
+ * would answer a MISSPELLED OR AMBIGUOUS TEMPLATE with "your machine is asleep" —
+ * the caller fixes the wrong thing, asks again when the machine is up, and gets
+ * the real refusal a minute later. A bad ref is the caller's own error and is
+ * answerable without anyone's machine.
+ *
+ * ⚠ `operator_user_id` is `ctx.userId`. {@link CreateLaunchInput} has no field
+ * for it.
+ */
+export async function createLaunchDirective(
+  ctx: ChannelContext,
+  input: CreateLaunchInput
+): Promise<CreateLaunchResult> {
+  const { channel, membership } = await loadVisibleChannel(ctx, input.channel);
+  if (membership === null) {
+    // ⚠ NOT-FOUND-SHAPED on purpose: to a non-member of a public channel this
+    // reads exactly like a private channel they cannot see, which is the answer
+    // §5 gives everywhere else. A distinct "you may read but not launch" error
+    // would be a new fact about the room.
+    throw new LaunchDirectiveNotFoundError(input.channel);
+  }
+
+  let taskId: string | null = null;
+  if (input.threadId) {
+    const task = await repoTasks.findTaskByChannelAndId(
+      channel.id,
+      input.threadId
+    );
+    // ⚠ Reuses the thread-not-in-this-channel refusal rather than minting a
+    // launch-specific one: it is the same fact, and ids must not be probeable
+    // across channels through a new door.
+    if (!task) throw new LaunchDirectiveNotFoundError(input.threadId);
+    taskId = task.id;
+  }
+
+  const template = await resolveTemplateForDirective(ctx, input.template);
+
+  if (!(await operatorIsOnline(ctx))) {
+    return { offline: true, directive: null };
+  }
+
+  const now = Date.now();
+  const row = await launchRepo.insertLaunchDirective(ctx.userId, {
+    workspace_id: ctx.workspaceId,
+    channel_id: channel.id,
+    task_id: taskId,
+    goal: input.goal ?? null,
+    model: input.model ?? null,
+    // ⚠ THE PAIR, WRITTEN TOGETHER. `template_name` is a SNAPSHOT and is what
+    // survives the FK's `ON DELETE SET NULL` — without it a template deleted
+    // between here and the claim is indistinguishable from no template at all,
+    // and the desktop would launch a blank agent wearing an identity the caller
+    // asked for and will not notice is missing (E-4).
+    template_id: template?.id ?? null,
+    template_name: template?.name ?? null,
+    expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
+  });
+  return { offline: false, directive: toDirective(row, now) };
+}
+
+/**
+ * **WHAT IS STILL AWAITING THIS OPERATOR'S DECISION** — the desktop's
+ * breaker-open backstop (F-273).
+ *
+ * ⚠ EXPIRED ROWS ARE DROPPED HERE, NOT IN SQL. Expiry is lazy and
+ * {@link toDirective} is the one place that decides it; a `WHERE expires_at >
+ * now()` in the repository would be a SECOND rule, and two rules for one
+ * question drift. The cost is reading a handful of dead rows and discarding
+ * them, on a poll that only runs while realtime is DOWN for that workspace.
+ *
+ * ⚠ IT RETURNS `claimed` ROWS TOO — a machine that claimed and crashed before
+ * deciding has to find its own row again. Nothing can re-action one: the CAS only
+ * moves a row out of `pending`.
+ */
+export async function listPendingLaunchDirectives(
+  ctx: ChannelContext
+): Promise<LaunchDirective[]> {
+  const now = Date.now();
+  const rows = await launchRepo.listPendingLaunchDirectives(
+    ctx.userId,
+    ctx.workspaceId
+  );
+  return rows
+    .map((row) => toDirective(row, now))
+    .filter((d) => d.status !== "expired");
+}
+
+/** Read one directive, expiry applied. ⚠ Own-scoped in the repository. */
+export async function getLaunchDirective(
+  ctx: ChannelContext,
+  id: string
+): Promise<LaunchDirective> {
+  const row = await launchRepo.findLaunchDirective(
+    ctx.userId,
+    ctx.workspaceId,
+    id
+  );
+  if (!row) throw new LaunchDirectiveNotFoundError(id);
+  return toDirective(row, Date.now());
+}
+
+/**
+ * **THE DESKTOP LANE — CLAIM.** Move `pending → claimed`, single-winner.
+ *
+ * ⚠ THE FRESHNESS CHECK IS HERE AND THE ATOMICITY IS IN THE REPOSITORY, and the
+ * split is deliberate: `now` is a service concern (lazy expiry lives at read
+ * time), while single-winner is a database concern. Putting `expires_at > now()`
+ * into the CAS would collapse "lost the race" and "too late" into one `null` and
+ * the desktop could not tell a sibling machine from a stale request.
+ *
+ * ⚠ THREE FAILURES, THREE MEANINGS, ONE POSTURE — stand down, do not retry:
+ * `expired` (too late), `taken` (a sibling machine won), `decided` (already
+ * answered). All are 409.
+ */
+export async function claimLaunchDirective(
+  ctx: ChannelContext,
+  id: string
+): Promise<LaunchDirective> {
+  const now = Date.now();
+  const existing = await launchRepo.findLaunchDirective(
+    ctx.userId,
+    ctx.workspaceId,
+    id
+  );
+  if (!existing) throw new LaunchDirectiveNotFoundError(id);
+  if (isTerminal(existing.status)) {
+    throw new LaunchDirectiveNotClaimableError("decided");
+  }
+  if (now > Date.parse(existing.expires_at)) {
+    throw new LaunchDirectiveNotClaimableError("expired");
+  }
+
+  const row = await launchRepo.claimLaunchDirective(
+    ctx.userId,
+    ctx.workspaceId,
+    id,
+    new Date(now).toISOString()
+  );
+  // ⚠ `null` HERE IS THE RACE, and only the race: the pre-read above already
+  // ruled out missing / decided / expired, so the row moved between the two
+  // statements. That is exactly what the CAS is for, and the loser is told.
+  if (!row) throw new LaunchDirectiveNotClaimableError("taken");
+  return toDirective(row, now);
+}
+
+export type DecideLaunchInput =
+  | { status: "launched"; agentId: string }
+  | { status: "refused"; refusalReason: LaunchRefusalReason };
+
+/**
+ * **THE DESKTOP LANE — DECIDE.** Write the terminal outcome.
+ *
+ * ⚠ A DECISION IS FINAL. The repository's UPDATE only matches `pending` or
+ * `claimed`, so a retried or duplicated decide cannot flip a `launched` into a
+ * `refused` — the second call is a 409, not a silent overwrite. That matters
+ * because the requester may already have read the first outcome and started
+ * addressing `@<agentId>`.
+ *
+ * ⚠ **AN EXPIRED DIRECTIVE MAY STILL BE DECIDED, AND THAT IS NOT A BUG.** If the
+ * machine really did start an agent, the truthful record is `launched` with the
+ * agent id, however late it is. Refusing the write would leave a running agent
+ * that no directive accounts for — the worst of the available outcomes. Expiry
+ * governs whether a NEW claim may begin, not whether a completed one may be
+ * reported.
+ */
+export async function decideLaunchDirective(
+  ctx: ChannelContext,
+  id: string,
+  input: DecideLaunchInput
+): Promise<LaunchDirective> {
+  const now = Date.now();
+  const row = await launchRepo.decideLaunchDirective(
+    ctx.userId,
+    ctx.workspaceId,
+    id,
+    {
+      status: input.status,
+      agent_id: input.status === "launched" ? input.agentId : null,
+      refusal_reason:
+        input.status === "refused" ? input.refusalReason : null,
+      decided_at: new Date(now).toISOString(),
+    }
+  );
+  if (!row) {
+    // ⚠ Distinguish "not yours / gone" from "already decided" — the desktop logs
+    // them differently, and only one of them is worth an operator's attention.
+    const existing = await launchRepo.findLaunchDirective(
+      ctx.userId,
+      ctx.workspaceId,
+      id
+    );
+    if (!existing) throw new LaunchDirectiveNotFoundError(id);
+    throw new LaunchDirectiveNotClaimableError("decided");
+  }
+  return toDirective(row, now);
+}

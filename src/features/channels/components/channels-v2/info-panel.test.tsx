@@ -58,11 +58,10 @@ function peer(over: Partial<ChannelPeerSession> = {}): ChannelPeerSession {
     state: "working",
     channelName: "Website",
     threadTitle: "Alpha audit",
-    // ⚠ FRESH BY CONSTRUCTION, never a literal. `peerCardsFor` drops a row older
-    // than `PRESENCE_ONLINE_WINDOW_MS` (2026-08-20), so a hardcoded stamp makes
-    // this fixture pass on the day it is written and silently stop counting
-    // afterwards — the badge tests would then assert the staleness path while
-    // reading like they assert the happy one.
+    // ⚠ FRESH BY DEFAULT, and since 2026-08-22 that is a convenience rather than
+    // a requirement: `peerCardsFor` no longer ages a row out at all, and the two
+    // cases below OVERRIDE this with a stale stamp to pin exactly that. What the
+    // stamp still decides is the CARD's ink (`agents-model.ts › peerRowStale`).
     updatedAt: new Date().toISOString(),
     ...over,
   };
@@ -178,24 +177,29 @@ describe("the tab row's count badges", () => {
     expect(badgeOf("Agents")).toBe("0");
   });
 
-  // ⚠ A STALE PEER ROW IS NOT A LIVE AGENT. `channel_sessions` rows outlive the
-  // process that wrote them and nothing sweeps them, so a crashed desktop leaves
-  // `working` on disk forever. The row must age out of the badge exactly as it
-  // ages out of `peer-activity.tsx › peerWorkingOn`.
-  it("drops a STALE peer row — a crashed desktop is not a working agent", () => {
+  // ⚠ A QUIET PEER ROW IS STILL A LIVE AGENT (Samuel, 2026-08-22 — this REVERSES
+  // the 2026-08-20 pair that stood here and expected `"0"`). `updated_at` is
+  // pushed on a state CHANGE and never on a timer, so an idle agent's row ages
+  // while the agent is perfectly alive; ageing it out of the badge made the
+  // count disagree with the list the operator was looking at — and then made the
+  // card vanish under a running agent. **The badge and the list run one
+  // derivation** (`agents-model.ts › peerCardsFor`), so both keep the row; the
+  // CARD dims. Liveness is membership: the push replaces the whole set, so a
+  // session that ended leaves by omission.
+  it("KEEPS a long-quiet peer row — the badge counts what exists, not what is fresh", () => {
     renderPanel({
       agentSessions: [],
       peerSessions: [peer({ updatedAt: "2026-08-20T12:00:00.000Z" })],
     });
-    expect(badgeOf("Agents")).toBe("0");
+    expect(badgeOf("Agents")).toBe("1");
   });
 
-  it("drops a peer row whose updatedAt cannot be parsed — absent reads as stale", () => {
+  it("keeps a peer row whose updatedAt cannot be parsed — age is not the rule", () => {
     renderPanel({
       agentSessions: [],
       peerSessions: [peer({ updatedAt: "not-a-date" })],
     });
-    expect(badgeOf("Agents")).toBe("0");
+    expect(badgeOf("Agents")).toBe("1");
   });
 
   // ⚠ THE CASE THE WHOLE `undefined` PATH EXISTS FOR.

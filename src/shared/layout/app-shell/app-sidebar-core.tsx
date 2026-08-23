@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import {
   BookOpen,
+  Bot,
   Hash,
   Home,
   MessagesSquare,
@@ -30,6 +31,7 @@ export type NavSection =
   | "skills"
   | "chats"
   | "channels"
+  | "agents"
   | "ontology"
   | "members";
 
@@ -44,6 +46,11 @@ export const NAV: ReadonlyArray<{
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
   { label: "Channels", icon: Hash, section: "channels" },
+  // AGENT TEMPLATES (2026-08-22). ⚠ The label is "Agents" and the path segment
+  // is `agents`, NOT `agent-templates`: the operator's noun for the thing they
+  // author here is the agent (INVARIANTS §5 — the noun on every agent surface is
+  // AGENT, and a qualifier is a copy regression, not a style preference).
+  { label: "Agents", icon: Bot, section: "agents" },
   { label: "Members", icon: Users, section: "members" },
 ];
 

@@ -48,6 +48,10 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
   assert.equal(entry.state, "working");
   assert.equal(entry.channelName, "general");
   assert.equal(entry.threadTitle, "Ship the thing");
+  // ⚠ 2026-08-22: the fixture carries no template, and `null` is the honest answer for a
+  // BLANK agent. Absent would be a different claim on a wire whose reader cannot tell them
+  // apart once JSON.stringify has dropped it.
+  assert.equal(entry.templateName, null);
 });
 
 test("REPORT: `list()` narrows the two report-only fields back off — the wire is unchanged", () => {
@@ -83,8 +87,11 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // terms as `detail` / `toolMode` / `messageMode`: `session-state-push.js › reportRow` picks
     // columns by name, so the wire is unchanged and the claim here stays the narrower one.
     "model",
-    "name", "sessionId", "startedAt", "state",
-    "taskId", "threadTitle", "tokensSpent", "toolLabel", "toolMode",
+    "name", "sessionId", "startedAt", "state", "taskId",
+    // ⚠ `templateName` joined 2026-08-22 (agent templates) and is the ONE field on this list
+    // that is NOT local-only: it is named in `reportRow` on purpose, because Phase 4 added the
+    // column to receive it. It is still not REPORT-only, which is all this case claims.
+    "templateName", "threadTitle", "tokensSpent", "toolLabel", "toolMode",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
   assert.equal("key" in m.list()[0], false);

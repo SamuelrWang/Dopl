@@ -80,6 +80,13 @@ function settle(s, outcome, keepWindow) {
       channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId,
       channelName: (s.context && s.context.channelName) || null,
       threadTitle: (s.context && s.context.taskTitle) || null,
+      // ⚠ THE AGENT TEMPLATE IT RAN AS (2026-08-22), FROZEN LIKE THE REST OF THE IDENTITY.
+      // A DENORMALIZED SNAPSHOT, never a pointer: the session must report what it RAN AS
+      // even after the template is renamed or deleted, which is the same rule that makes
+      // `context.template` a spawn-time capture in the first place. Without it here, an
+      // ENDED row would push `templateName: null` to `channel_sessions` and ERASE the name
+      // the live row had been reporting all run.
+      templateName: (s.context && s.context.template && s.context.template.name) || null,
       endedAt: Date.now(),
       // The final measurement, frozen here for the same reason the identity is: the registry
       // entry is about to go and `metrics(s)` is the only reader of it.

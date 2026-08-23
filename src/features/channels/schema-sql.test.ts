@@ -14,6 +14,10 @@
  *   4. ⚠ `role` is PUBLIC, `agent_tool_profile` is NOT. The column grant is the
  *      only thing enforcing that for PostgREST *and* CDC; a future
  *      `GRANT SELECT ON channel_members` silently undoes it.
+ *   5. ⚠ `channel_sessions`' EIGHT operator-only columns — the seven telemetry
+ *      ones and `template_name` — are never in a `GRANT SELECT (…)` list. The
+ *      DTO split is the fence (`server/session-visibility.test.ts`); this is the
+ *      belt for the PostgREST door that `channel_sessions_member_select` opens.
  *
  * ⚠ Comments are STRIPPED before matching — migration headers quote SQL at
  * length (rollback blocks, verification SELECTs) and a naive scan pins a
@@ -232,14 +236,17 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     ),
   ];
 
-  // SEVEN since 2026-08-18: `channel_mention_reads` (migration
-  // `20260818140000`, the Tags inbox's read-state) is the newest child. ⚠ The
-  // NUMBER is not the point and re-blessing it is not the fix — the point is
-  // the assertion below, that every one of them CASCADES, which is what makes
-  // a non-DM channel delete atomic in one statement (INVARIANTS §5). A new
-  // child that does not cascade fails the next case, not this one.
-  it("finds all seven child FKs", () => {
-    expect(refs.length).toBe(7);
+  // EIGHT since 2026-08-22: `channel_launch_directives` (migration
+  // `20260822160000`, the launch-over-MCP mailbox) is the newest child;
+  // `channel_mention_reads` (`20260818140000`, the Tags inbox's read-state) was
+  // the seventh. ⚠ The NUMBER is not the point and re-blessing it is not the
+  // fix — the point is the assertion below, that every one of them CASCADES,
+  // which is what makes a non-DM channel delete atomic in one statement
+  // (INVARIANTS §5). A new child that does not cascade fails the next case, not
+  // this one. ⚠ A directive is deliberately NOT kept when its channel goes: it
+  // asks for an agent IN that channel, so the request is meaningless without it.
+  it("finds all eight child FKs", () => {
+    expect(refs.length).toBe(8);
   });
 
   it("each one cascades — none is SET NULL or RESTRICT", () => {
@@ -314,5 +321,143 @@ describe("channel_members column privileges (Samuel 2026-08-10: role yes, permis
       /GRANT\s+SELECT\s+ON\s+public\.channel_members\b/gi
     );
     expect(tableWide.length).toBe(0);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 5. channel_sessions column privileges — the coarse projection is public,
+//    telemetry and the TEMPLATE NAME are not
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * THE BELT BEHIND THE DTO SPLIT (`20260822150000`, extended `20260823130000`).
+ *
+ * ⚠ **THIS IS NOT THE FENCE AND THE SUITE WILL NOT PRETEND IT IS.** Every
+ * application read of `channel_sessions` runs on `supabaseAdmin()`
+ * (service_role), which is not subject to RLS and keeps every column grant, so
+ * these privileges cannot see the peer read at all. What stops an operator-only
+ * field reaching a peer is `server/collab-dto.ts › mapPeerSessionStateRow`,
+ * which CONSTRUCTS a narrow object, and `server/session-visibility.test.ts` is
+ * the property test over it.
+ *
+ * What the belt IS for: the OTHER door. `channel_sessions_member_select`
+ * (`20260820200000`) lets any channel member read any member's rows for that
+ * channel, so a raw `GET /rest/v1/channel_sessions?select=*` would hand a peer
+ * another operator's model, token spend — and, since 2026-08-23, the NAME OF A
+ * TEMPLATE THAT MAY BE PRIVATE. Nothing in `src/` makes that call, and these
+ * cases keep it that way by construction rather than by grep.
+ */
+describe("channel_sessions column privileges (operator-only stays operator-only)", () => {
+  const grants = statementsMatching(
+    /GRANT\s+SELECT\s*\([^)]*\)\s*\n?\s*ON\s+public\.channel_sessions\b/gi
+  );
+
+  function grantedColumns(stmt: string): string[] {
+    const cols = /GRANT\s+SELECT\s*\(([^)]*)\)/i.exec(stmt);
+    expect(cols, `no column list in: ${stmt}`).toBeTruthy();
+    return cols![1]
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+  }
+
+  /**
+   * ⚠ THE EIGHT, AS A LIST, AND IT MUST STAY PARALLEL TO
+   * `collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS`. A column classified PRIVATE
+   * in one place and granted in the other is a fence with a hole and a green
+   * suite — which is exactly the failure the DTO's two parallel arrays exist to
+   * prevent on the application side.
+   */
+  const OPERATOR_ONLY = [
+    "tool_label",
+    "model",
+    "context_used",
+    "context_window",
+    "tokens_spent",
+    "started_at",
+    "last_activity_at",
+    "template_name",
+  ];
+
+  it("the table-wide SELECT grant is revoked from anon and authenticated", () => {
+    const revokes = statementsMatching(
+      /REVOKE\s+SELECT\s+ON\s+public\.channel_sessions\b/gi
+    );
+    expect(revokes.length).toBeGreaterThan(0);
+    const last = revokes[revokes.length - 1];
+    expect(last).toMatch(/\banon\b/);
+    expect(last).toMatch(/\bauthenticated\b/);
+    // ⚠ A bare `REVOKE SELECT (cols)` is the opposite change.
+    expect(last).not.toMatch(/REVOKE\s+SELECT\s*\(/i);
+  });
+
+  it("NO operator-only column is granted, in any migration, ever", () => {
+    expect(grants.length).toBeGreaterThan(0);
+    for (const stmt of grants) {
+      const cols = grantedColumns(stmt);
+      for (const priv of OPERATOR_ONLY) {
+        expect(cols, `${priv} must never appear in a channel_sessions GRANT`).not.toContain(priv);
+      }
+    }
+  });
+
+  it("`template_name` specifically — a private template's name is an existence oracle", () => {
+    // ⚠ Called out on its own line rather than left to the loop above, because
+    // it is the ONE of the eight whose leak is not merely a privacy cost: a peer
+    // seeing `Acme Contract Auditor` on a colleague's session learns that
+    // `agent_templates` row exists, and that table carries NO name uniqueness
+    // precisely so nothing can be probed that way (INVARIANTS §5A).
+    for (const stmt of grants) {
+      expect(grantedColumns(stmt)).not.toContain("template_name");
+    }
+    expect(ALL_SQL).toMatch(
+      /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+template_name\s+TEXT/i
+    );
+  });
+
+  it("`detail` IS granted — the one refinement that crosses to a peer", () => {
+    // ⚠ And it crosses ONLY because its vocabulary is closed and coarse
+    // (`20260822150000`'s own stated condition). If it ever becomes free-form it
+    // becomes PRIVATE in the same change, and this case is where that shows up.
+    expect(grantedColumns(grants[grants.length - 1])).toContain("detail");
+  });
+
+  it("the columns RLS and the peer card depend on are granted", () => {
+    // ⚠ channel_id / workspace_id are inputs to this table's OWN SELECT policy,
+    // so revoking either makes the policy unevaluable rather than merely hiding
+    // a field. user_id / state / updated_at are the peer card itself.
+    const cols = grantedColumns(grants[grants.length - 1]);
+    for (const c of ["channel_id", "workspace_id", "user_id", "state", "updated_at"]) {
+      expect(cols, `${c} must stay readable`).toContain(c);
+    }
+  });
+
+  it("nothing later hands the whole table back", () => {
+    const tableWide = statementsMatching(
+      /GRANT\s+SELECT\s+ON\s+public\.channel_sessions\b/gi
+    );
+    expect(tableWide.length).toBe(0);
+  });
+
+  it("`template_name` is nullable with no default, and carries the label CHECK", () => {
+    const file = FILES.find((f) =>
+      f.name.startsWith("20260823130000")
+    );
+    expect(file, "20260823130000_channel_sessions_template_name.sql is missing").toBeTruthy();
+    // ⚠ NULLABLE AND UNDEFAULTED — "this session has no template" must be
+    // sayable, and it is said as NULL. A NOT NULL or a `DEFAULT ''` would make
+    // every pre-existing row claim a template named "".
+    expect(file!.sql).not.toMatch(/template_name\s+TEXT\s+NOT\s+NULL/i);
+    expect(file!.sql).not.toMatch(/template_name\s+TEXT\s+DEFAULT/i);
+    // ⚠ SHAPE, NOT A REFERENCE. The column is deliberately NOT an FK: a session
+    // reports what it RAN AS after the template is renamed or deleted.
+    expect(file!.sql).not.toMatch(/template_name[\s\S]{0,120}REFERENCES/i);
+    // The four clauses `agent_templates_name_charset_check` carries, at the same
+    // length — a name legal on a template must never be refusable here.
+    expect(file!.sql).toMatch(/char_length\(template_name\)\s+BETWEEN\s+1\s+AND\s+120/i);
+    expect(file!.sql).toMatch(/template_name\s*=\s*btrim\(template_name\)/i);
+    expect(file!.sql).toMatch(/template_name\s+!~\s+'\[\[:cntrl:\]\]'/i);
+    // The assertion block, so a bad landing aborts rather than looking fine.
+    expect(file!.sql).toMatch(/RAISE\s+EXCEPTION/i);
   });
 });

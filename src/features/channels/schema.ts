@@ -239,6 +239,20 @@ export const TaskCreateSchema = z.object({
    * ⚠ Security gate: launch predicate ALSO requires `authorUserId === me` AND
    * `taskCreatedBy === me`, so a peer's handoff can never open a window on
    * someone else's machine.
+   *
+   * ⚠ **NO CURRENT BUILD READS THIS STAMP (F-274, measured 2026-08-22).** The
+   * consumer — `dopl-desktop-app/main/targeting.js › requesterTaskOpen` — has no
+   * caller; its listener path went with the session window (F-228). Everything
+   * described above still HAPPENS (the field is accepted, stripped from caller
+   * metadata, re-stamped server-side and stored), and the last layer is missing,
+   * so a thread created with it behaves exactly like one created without it.
+   * ⚠ KEPT AND STILL ACCEPTED ON PURPOSE: refusing it would 400 every older
+   * external agent for no gain — an inert stamp is harmless — and a future
+   * desktop could pick the lane back up. What was removed is the PROMISE, in the
+   * two agent-facing strings that made it (`channel-description.ts`,
+   * `channel-ops-threads.ts › opCreateThread`). ⚠ The live capability is the MCP
+   * op `launch_agent` over `channel_launch_directives`, which asks the machine
+   * and reports what it said.
    */
   handoff: z.boolean().optional(),
   /** REMOVED (rollback §1) — see {@link removedParam}. */
@@ -465,3 +479,20 @@ export type {
   ConsentStatusFilter,
   PresenceHeartbeatInput,
 } from "./schema-collab";
+
+/**
+ * LAUNCH-OVER-MCP schemas live in `schema-launch.ts` (2026-08-22), re-exported
+ * here so this file stays the one barrel and there is no third path to a symbol
+ * — the same arrangement `schema-sessions.ts` and `schema-collab.ts` have.
+ */
+export {
+  LaunchClaimSchema,
+  LaunchCreateSchema,
+  LaunchDecideSchema,
+  LaunchRefusalReasonSchema,
+} from "./schema-launch";
+export type {
+  LaunchClaimInput,
+  LaunchCreateInput,
+  LaunchDecideInput,
+} from "./schema-launch";

@@ -16,6 +16,9 @@ const store = require('./session-store');
 // 2026-08-22: the PRIVATE TURN's window. A resume rebuilds the query, so the depth the old one
 // was carrying is owed by nobody — see `session-private.js › resetPrivateTurn`.
 const privateTurn = require('./session-private');
+// 2026-08-22, F-272: the concurrency + cost ceiling. `session-launch.js` takes it the same way
+// and for the same reason — the number lives in ONE place and every spawn shape asks it.
+const sessionWindowless = require('./session-windowless');
 const { Notification } = require('electron');
 const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const { diag } = require('./diag');
@@ -47,6 +50,19 @@ function knownProfile(p) {
 // resume builds its first turn from this context (io.takeFraming -> prompt-framing
 // .deliverySection), and without them the session knows only the channel's display name and
 // cannot address dopl_channel.
+// ⚠ AND `template`, SINCE 2026-08-23 (F-288) — A NAME-ONLY STUB, ON PURPOSE.
+// `context.template` is a spawn-time capture, and this function is the ONLY thing standing
+// between a crash resume and a session that reports no template at all: `session-summary.js ›
+// liveSummary` reads `ctx.template && ctx.template.name`, `templateName` sits in
+// `session-telemetry.js › STATE_FIELDS`, and a null there bypasses the cadence floor and ERASES
+// `channel_sessions.template_name` under a still-running agent.
+// ⚠ THE STUB IS SUFFICIENT AND THE BODY IS DELIBERATELY ABSENT. `instructions` / `fields` /
+// `knowledgeBases` have exactly one consumer — `prompt-framing-template.js › templateRoleFraming`,
+// reached through the one-shot `session-seed.js › takeFraming` — and a resume never runs it
+// (`session-engine.js` sets `freshFraming: spec.parkedShell === true && !spec.resumeSdkId`, and
+// `startResume` always passes `resumeSdkId`). The SDK resume carries the original ROLE block.
+// ⚠ SO A CONSUMER THAT LATER READS `template.instructions` OFF A LIVE SESSION MUST NOT ASSUME IT
+// IS THERE. That is the cost of the stub, stated rather than discovered.
 function contextFromRecord(rec) {
   const r = rec || {};
   return {
@@ -55,6 +71,7 @@ function contextFromRecord(rec) {
     authorName: r.counterpartyName || null,
     channelId: r.channelId || null,
     workspaceId: r.workspaceId || null,
+    template: r.templateName ? { name: r.templateName } : null,
   };
 }
 
@@ -190,11 +207,44 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   // this operator's agents, and only `rec.agentId` says which one this record is.
   const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: agentId };
   if (deps.hasLiveSession(slot)) return false;
+  // ── ⚠ THE CONCURRENCY CEILING APPLIES TO A RESUME TOO (2026-08-22, F-272) ────────────────
+  //
+  // ⚠ IT DID NOT, AND THE GAP WAS EXACTLY ONE SESSION WIDE. This function guarded
+  // `hasLiveSession(slot)` — "is THIS slot taken" — and never `liveCount`, so a machine sitting
+  // at all six could resume a seventh. Two producers could reach it: the startup crash scan's
+  // opt-in notification (`offerResume`, which the operator can click at any moment, including
+  // one when six agents are already running) and the sign-in relaunch path behind it.
+  //
+  // ⚠ ENFORCED RATHER THAN DOCUMENTED AS HEADROOM, and the choice was deliberate. The argument
+  // for +1 is that a resume RESTORES work the operator already started, so it is not new load —
+  // but `MAX_CONCURRENT_SESSIONS` IS A COST CEILING, not only a concurrency one (INVARIANTS §11:
+  // the narration ring, the pending-inbound queue, the gated-body ledger and the retained-ended
+  // set are each N times it), and a resumed session costs a full `claude` child exactly like a
+  // fresh one. A documented +1 is also not a bound: nothing stops a second crash record being
+  // resumed at 7, then 8 — the guard that was missing is the only thing that ever said no.
+  // ⚠ AND SAMUEL RULED THE NUMBER STAYS AT SIX for the multi-machine wave. Letting one lane
+  // quietly exceed it is that ruling being overridden by an omission.
+  //
+  // ⚠ THE REFUSAL SHAPE IS THIS FUNCTION'S EXISTING `false`, and the VOCABULARY is `launch()`'s
+  // `cap` — said in the log rather than returned, because `startResume` answers a boolean and
+  // widening it to a skip shape would change a contract two callers read for no gain. The
+  // operator's notification click simply does not resume, which is what `false` already means
+  // for every other refusal here.
+  if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) {
+    diag('session-park: resume refused — cap', `(${sessionWindowless.MAX_CONCURRENT_SESSIONS} live)`);
+    return false;
+  }
   let sdk;
   try { sdk = await deps.getSdk(); } catch (_) { return false; }
   // ⚠ Re-check AFTER the await: a reopen shell or racing launch may have created this slot
   // during getSdk, and startSession would overwrite the Map entry and orphan that window.
   if (deps.hasLiveSession(slot)) return false;
+  // ⚠ AND THE CAP AFTER IT TOO, for the same reason `launch()` re-checks its slot: `getSdk` is
+  // wide enough for a peer wake or the operator's own button to have taken the last slot.
+  if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) {
+    diag('session-park: resume refused — cap (taken during getSdk)');
+    return false;
+  }
   const s = await deps.startSession({
     key: store.slotKey(slot),
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,

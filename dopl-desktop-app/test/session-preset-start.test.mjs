@@ -62,7 +62,7 @@
 // `allowed`/`auto_allowed` case is excised with its module (see the ⚠ block where it stood).
 //
 // ONE CALLER supplies a posture today, and the census in §2 is the authority on that:
-// channel-dir-ipc.js (`sessions:launch`, the operator's own click on the Agents tab, reading the
+// session-ipc-ops.js (`sessions:launch`, the operator's own click on the Agents tab, reading the
 // durable record). trigger.js still APPEARS in that census — it names the key — but what it
 // hands in is a pinned `manual`; the case says so.
 
@@ -87,7 +87,10 @@ const PREFS = read("channel-prefs.js");
 // `channel-dir-ipc.js` was split off the 500-line cap. The record's ONE consumer did not
 // change — only the file it lives in. `channel-dir-ipc.js` is still read below, because the
 // "and by nothing else" half must keep covering the half that stayed.
-const DIRIPC = read("session-ipc-ops.js");
+// ⚠ REPOINTED AGAIN 2026-08-22 (the agent-templates wave): the `sessions:launch` BODY moved
+// to `main/session-launch-op.js` in a §1 split, so the DURABLE POSTURE READ this file is a
+// census of moved with it. `session-ipc-ops.js` still registers the op.
+const DIRIPC = read("session-launch-op.js");
 const CHANIPC = read("channel-dir-ipc.js");
 
 const { initialSessionState } = loadReducer();
@@ -280,11 +283,16 @@ test("H2: the peer-triggered launch consumes NOTHING, and carries no stored post
 // gains a second reader, H2 is re-openable and these are the tests that must go red first.
 
 test("H2/split: the DURABLE posture is read by sessions:launch and by nothing else", () => {
-  const body = DIRIPC.slice(DIRIPC.indexOf("ipcMain.handle('sessions:launch'"));
+  // ⚠ THE BODY IS THE WHOLE FILE NOW (2026-08-22). `main/session-launch-op.js` IS the launch
+  // handler's body — one function, one lane — so there is no longer a sibling handler to slice
+  // away from. That is a strictly tighter assertion than the old prefix slice: a stray
+  // `launchStartModes` anywhere in this module is still the only read, and there is nothing
+  // else in it for one to hide behind.
+  const body = DIRIPC.slice(DIRIPC.indexOf("async function launchFromButton("));
   assert.match(body, /channelPrefs\.launchStartModes\(p\.channelId\)/, "consumed here");
+  assert.equal(stripComments(DIRIPC).match(/launchStartModes/g).length, 1, "read exactly once");
   // ...and the pinned 'manual' it replaced is really gone from this handler.
-  assert.ok(!/tools: 'manual'/.test(body.slice(0, body.indexOf("ipcMain.handle('sessions:reopen'"))),
-    "the hard-pinned tool axis that ignored the operator's pick is gone");
+  assert.ok(!/tools: 'manual'/.test(body), "the hard-pinned tool axis that ignored the operator's pick is gone");
   for (const [name, src] of [
     ["session-engine", ENGINE], ["session-park", PARK],
     ["channel-context", CONTEXT], ["trigger", TRIGGER],

@@ -21,6 +21,20 @@ export interface ChannelContext {
   source: "user" | "agent";
   /** Caller's workspace role; null when the auth layer didn't resolve one. */
   role: Role | null;
+  /**
+   * Workspace a workspace-scoped API key is locked to; `null` for session
+   * callers and user-scoped keys (2026-08-23).
+   *
+   * ⚠ **CARRIED FOR EXACTLY ONE READER AND IT IS A FENCE, NOT A HINT.**
+   * `service-launch.ts › resolveTemplateForDirective` hands it to
+   * `agent-templates › canSeeTemplate`, whose SECOND arm is M-10: a
+   * workspace-scoped key may be shared between humans, so it inherits nobody's
+   * personal reach and sees only `visibility: 'workspace'` rows. Building that
+   * context with `null` would let such a key resolve the key-owner's PRIVATE
+   * templates by name. Nothing else in channels reads it — the channel fences are
+   * membership rows, not per-person visibility.
+   */
+  apiKeyWorkspaceId?: string | null;
   /** Which Dopl runtime the request speaks for: `desktop-session` (spawned
    *  session), `desktop-ui` (operator typing in the app), undefined for
    *  everything else. ⚠ Server-resolved from `X-Dopl-Runtime` and bounded by the
@@ -42,6 +56,9 @@ export interface AuthLike {
   workspaceId: string;
   role?: Role | null;
   agentTokenId?: string | null;
+  /** ⚠ See {@link ChannelContext.apiKeyWorkspaceId} — the M-10 fence, and the
+   *  one field on this context whose ABSENCE widens rather than narrows. */
+  apiKeyWorkspaceId?: string | null;
   runtime?: string | null;
   appVersion?: string | null;
   sessionId?: string | null;
@@ -53,6 +70,12 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
+    // ⚠ `?? null`, so a caller that forgot the field gets the RESTRICTIVE value
+    // for every *other* fence — but note this one reads backwards: `null` means
+    // "not a workspace key", which is the WIDER answer at `canSeeTemplate`'s arm
+    // 2. That is why `WorkspaceAuthContext` always sets it explicitly and why
+    // this line exists at all rather than the field being left off the context.
+    apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
     // ⚠ Re-narrowed rather than trusted: a second check through the SAME
     // predicate means no other construction path can widen what counts as a
     // desktop runtime — no ctx off an agent token can claim `desktop-ui`.

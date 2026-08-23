@@ -10,6 +10,7 @@ import KnowledgePage from "#/pages/knowledge";
 import KnowledgeDetailPage from "#/pages/knowledge/detail";
 import MembersPage from "#/pages/members";
 import OntologyPage from "#/pages/ontology";
+import AgentsPage from "#/pages/agents";
 import OntologyDetailPage from "#/pages/ontology/detail";
 import SettingsPage from "#/pages/settings";
 import ChannelsPage from "#/pages/channels";
@@ -74,6 +75,14 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   // `channels: true` for exactly this row (INVARIANTS §11), and
   // `main/shell-mode.js › CHANNELS_PAGE` is the one string main navigates to.
   { path: "channels/:channelId", label: "Channel", element: <ChannelsPage /> },
+  // AGENT TEMPLATES (2026-08-22) — name, instructions, model, custom fields,
+  // attached knowledge bases and a visibility scope, authored on one page.
+  // ⚠ NO `agents/:templateId` DETAIL ROW, deliberately: a template is edited in
+  // a modal, not at a URL. The deep-link hand copy in
+  // `dopl-desktop-app/main/deep-link-target.js › WORKSPACE_PAGES` therefore
+  // wants `agents: false` — a `true` there would hand the renderer a third
+  // segment that matches nothing.
+  { path: "agents", label: "Agents", element: <AgentsPage /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
 ];

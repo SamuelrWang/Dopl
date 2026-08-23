@@ -13,7 +13,7 @@
  * THE SOURCE IS LOCAL RUNTIME STATE, NOT A TABLE (INVARIANTS §5).
  * `spa-bridge.ts › DesktopSessionSummary` over `sessions.summaries` /
  * `sessions.onSummaries`, projected by `dopl-desktop-app/main/session-summary.js`.
- * The server stores none of it: `session-state-push.js › rowFor` picks the
+ * The server stores none of it: `session-state-push.js › reportRow` picks the
  * `channel_sessions` columns by name and takes no metric.
  *
  * ⚠ IT IS AN OPERATOR SURFACE, NOT A ROSTER, and that is structural rather than
@@ -32,6 +32,7 @@
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import { normalizeAgentModel } from "../../lib/agent-models";
+import { metric } from "./agent-metrics";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 
 /**
@@ -202,45 +203,70 @@ export function ownAgentsFor(
  * OTHER members' agents on the same surface — the peer cards, and the peer half
  * of the tab's badge. Same one-derivation argument as {@link ownAgentsFor}.
  *
- * ⚠ FOUR PREDICATES, ALL LOAD-BEARING. Own rows are excluded because the LOCAL
- * feed is the richer truth for mine (a peer row carries no metrics); `ended` is
- * excluded through the shared {@link isAgentActive} because the server row
- * outlives the run it describes; the thread narrowing matches the tab's own
- * scope; and the row must be FRESH. Dropping any one of them makes the badge
- * count rows the list does not draw.
- *
- * ⚠ THE FRESHNESS GUARD JOINED 2026-08-20 (Samuel), AND IT IS THE SAME ONE
- * `peer-activity.tsx › peerWorkingOn` ALREADY APPLIED. `channel_sessions` rows
- * outlive the process that wrote them (`main/session-state-push.js` says so in
- * its own header and names sign-out as the uncovered case), and there is no
- * server-side sweep — `session-state-service.ts › listChannelSessions` returns
- * every row for the channel. So a crashed desktop left a card reading `working`
- * forever, next to a peer-activity row that had correctly gone silent for the
- * SAME row: two surfaces, one fact, opposite answers. An indicator that believes
- * a dead machine is strictly worse than no indicator, because the reader waits
- * for a reply that is not coming.
- *
- * ⚠ IT FAILS TOWARD SILENCE, like every other read of this stamp. An absent or
- * unparseable `updatedAt` reads as STALE, never as fresh.
- * ⚠ THE WINDOW IS `PRESENCE_ONLINE_WINDOW_MS`, DELIBERATELY REUSED — a second
- * staleness number would let the roster call a member offline while their agent
- * card still says working (INVARIANTS §11).
+ * ⚠ THREE PREDICATES, AND THE ROW'S PRESENCE IS THE FOURTH FACT — not a filter.
+ * Own rows go because the LOCAL feed is the richer truth for mine (a peer row
+ * carries no metrics); `ended` goes through the shared {@link isAgentActive},
+ * which a legacy desktop could still report; the thread narrowing matches the
+ * tab's scope. **LIVENESS IS MEMBERSHIP:** the push is a FULL-SET REPLACE keyed
+ * on `(user, workspace)`, so an ended session is deleted by OMISSION and
+ * `session-state-push.js › liveForWire` keeps it off the wire to begin with
+ * (INVARIANTS §11). A row in the fetch is a session that has not gone away.
+ * ⚠ THE WALL-CLOCK FRESHNESS GUARD IS DELETED (Samuel, 2026-08-22): *"the card
+ * STAYS until the session actually goes away."* It stood from 2026-08-20 and it
+ * read `updated_at` as a HEARTBEAT, which that column has never been. The push
+ * fires on state change only — `session-state-push.js` says so in its own header
+ * and forbids a timer — and the reconcile is narrower still:
+ * `server/repository-sessions.ts › sessionRowMatches` compares field by field
+ * and does NOT touch `updated_at` for a row whose projection did not move, so
+ * the read's ordering survives a busy machine. An idle peer agent — alive,
+ * listening, about to answer — therefore aged past `PRESENCE_ONLINE_WINDOW_MS`
+ * and its card VANISHED mid-run. A liveness rule built on a stamp that is not a
+ * heartbeat cannot be tuned; it has to go.
+ * ⚠ WHAT THE GUARD REALLY BOUGHT IS KEPT, AS INK RATHER THAN ABSENCE. Rows do
+ * outlive a crashed or signed-out desktop (`session-state-push.js`'s own KNOWN
+ * GAP), so {@link peerRowStale} answers "this row has not moved in a while" and
+ * `agents-tab.tsx` DIMS such a card. A quiet card beats a vanished one: the
+ * disappearance is unattributable.
+ * ⚠ IT NOW DIVERGES FROM `peer-activity.tsx › peerWorkingOn`, deliberately: that
+ * row makes a PRESENT-TENSE claim a reader waits on ("Diana's agent is working…")
+ * so it fails toward silence and keeps the window. This answers "does this agent
+ * exist", which age does not settle.
  */
 export function peerCardsFor(
   peers: readonly ChannelPeerSession[],
   currentUserId: string | null,
-  openThreadId: string | null = null,
-  now: number = Date.now(),
-  windowMs: number = PRESENCE_ONLINE_WINDOW_MS
+  openThreadId: string | null = null
 ): ChannelPeerSession[] {
   return peers.filter((p) => {
     if (p.userId === currentUserId) return false;
     if (!isAgentActive(p.state)) return false;
     if (openThreadId && p.threadId !== openThreadId) return false;
-    const ts = p.updatedAt ? new Date(p.updatedAt).getTime() : NaN;
-    if (Number.isNaN(ts)) return false;
-    return now - ts < windowMs;
+    return true;
   });
+}
+
+/**
+ * HAS THIS PEER ROW GONE QUIET — the staleness TREATMENT, never a filter
+ * (Samuel, 2026-08-22).
+ * ⚠ IT DECIDES INK, NOT MEMBERSHIP, and that separation is the whole ruling. The
+ * row still renders; it renders DIMMER. {@link peerCardsFor} decides whether
+ * there is a card at all, and no timestamp may reach it.
+ * ⚠ IT IS NOT A HEARTBEAT READ AND DOES NOT PRETEND TO BE. `updated_at` moves on
+ * a projection CHANGE, so a long-lived idle agent is stale by this measure and
+ * perfectly alive — which is why the answer is a shade, not a disappearance.
+ * ⚠ ABSENT OR UNPARSEABLE READS AS STALE, the direction every read of this stamp
+ * fails in. ⚠ THE WINDOW IS `PRESENCE_ONLINE_WINDOW_MS`, DELIBERATELY REUSED — a
+ * second staleness number would let the roster call a member offline while their
+ * agent card still reads at full strength.
+ */
+export function peerRowStale(
+  peer: Pick<ChannelPeerSession, "updatedAt">,
+  now: number = Date.now(),
+  windowMs: number = PRESENCE_ONLINE_WINDOW_MS
+): boolean {
+  const ts = peer.updatedAt ? new Date(peer.updatedAt).getTime() : NaN;
+  if (Number.isNaN(ts)) return true;
+  return now - ts >= windowMs;
 }
 
 /**
@@ -441,29 +467,6 @@ export function agentLiveness(session: {
     : { tone: "idle", label: "Idle" };
 }
 
-/** `84_000` → `"84k"`. Tokens are only ever glanced at here; the exact integer is
- *  noise at caption size, and above a million the thousands are too. */
-export function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    const m = value / 1_000_000;
-    return `${m >= 10 ? Math.round(m) : m.toFixed(1)}M`;
-  }
-  return `${Math.round(value / 1000)}k`;
-}
-
-/**
- * A metric, or `null`. ⚠ The one place the wire's three absences collapse into
- * one: an older main omits the field, a model this build has no window for has
- * no denominator, and nothing is measured before the first turn reports usage.
- * All three mean "cannot say", and NONE of them means zero — a context meter
- * reading 0% of a window that is nearly full is a lie the operator acts on.
- */
-export function metric(value: number | null | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : null;
-}
-
 /**
  * ⚠ THE IMPERATIVE OPS MOVED TO `agents-controls.ts` (2026-08-20) — `canControlAgents`,
  * `useAgentControls`, `openAgentWindow`, `launchAgentOnThread`, `messageAgent`,
@@ -472,4 +475,7 @@ export function metric(value: number | null | undefined): number | null {
  * §1 seam — the bridge grew four ops in three days while the wire shape moved twice.
  * ⚠ NOT re-exported here: a barrel would keep every consumer pointed at this file and make
  * the split invisible, which is how the last one got tangled (`permission-modes.ts`).
+ * ⚠ AND `formatTokens` / `metric` MOVED TO `agent-metrics.ts` (2026-08-22), on the same rule
+ * and with the same no-barrel clause: this file is WHICH AGENTS EXIST, that one is HOW A
+ * MEASUREMENT (or its absence) READS.
  */

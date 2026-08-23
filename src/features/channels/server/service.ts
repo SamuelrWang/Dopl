@@ -63,6 +63,18 @@ export { awaitNewMessages } from "./service-await";
 // takes it through this barrel. `AwaitHoldResult` did not and is dropped.
 export type { AwaitHoldCounters } from "./service-await";
 
+// THE WORKSPACE-WIDE HOLD (2026-08-22) — `op="await"` with no `channel`, across
+// every channel the caller is a MEMBER of. ⚠ Its own module, and NOT a mode on
+// `awaitNewMessages`: the two holds have different fences (a resolved channel id
+// vs. a re-proved membership set) and collapsing them would put two
+// authorization stories behind one signature. See its docblock for how the M2
+// access invariant is preserved on a path with no channel to resolve.
+export { awaitWorkspaceMessages } from "./service-await-workspace";
+export type {
+  WorkspaceAwaitCounters,
+  WorkspaceChannelMessage,
+} from "./service-await-workspace";
+
 export {
   createChannel,
   updateChannel,
@@ -121,3 +133,18 @@ export {
   listSessionStates,
   reportSessionStates,
 } from "./session-state-service";
+
+// LAUNCH-OVER-MCP (Samuel, 2026-08-22) — an operator's external agent asking
+// that operator's OWN desktop to start an agent. ⚠ Its own module because it is
+// the one channel write that produces NO MESSAGE: a directive stays off
+// `channel_messages` on purpose (INVARIANTS §5 — the loop brake, and transcript
+// purity), so none of the post-path machinery applies to it and none of it
+// should be reachable from here.
+export {
+  createLaunchDirective,
+  getLaunchDirective,
+  listPendingLaunchDirectives,
+  claimLaunchDirective,
+  decideLaunchDirective,
+  LAUNCH_REFUSAL_REASONS,
+} from "./service-launch";

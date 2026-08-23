@@ -73,9 +73,25 @@ export interface DesktopSessionSummary {
   /**
    * WHAT IT IS DOING RIGHT NOW, one step finer than the pill (2026-08-20).
    * Derived by `dopl-desktop-app/main/session-detail.js › detailFor` from the
-   * reducer event that last moved the session, and LOCAL-ONLY — it never reaches
-   * `channel_sessions` (`session-state-push.js › reportRow` picks its columns by
-   * name), so a peer's card never sees it.
+   * reducer event that last moved the session.
+   *
+   * ⚠ **IT IS NO LONGER LOCAL-ONLY, AND THIS BLOCK SAID IT WAS UNTIL
+   * 2026-08-22.** It now CROSSES as `channel_sessions.detail` (migration
+   * `20260822150000`), so a PEER's card does see it — an orchestrator reading
+   * `read_sessions` from another machine could not tell a session blocked on an
+   * approval apart from one grinding through a tool, and neither could the
+   * Agents tab's peer half.
+   * ⚠ **IT CROSSES ONLY BECAUSE THIS UNION IS CLOSED**, and that is the
+   * condition on the permission rather than a description of it. Six fixed
+   * coarse words say what CLASS of work is happening and never which tool, which
+   * model, or what it cost. **Widening this member to free-form text would make
+   * it operator-only material on a peer-visible column** — if that is ever
+   * wanted, the value goes on the operator-only side beside `model` and the
+   * metrics, and `server/collab-dto.ts › mapPeerSessionStateRow` stops emitting
+   * it in the same change. The server narrows anything off this list to `null`
+   * (`narrowSessionDetail`), so a SEVENTH key added here stores and renders as
+   * nothing until the server learns it — it never 400s a push and never reaches
+   * a reader raw.
    *
    * ⚠ NULL OVER ANY PILL BUT `working`, by construction: it REFINES the pill and
    * never contradicts it. A card showing "Idle" and "Thinking…" at once is the
@@ -92,7 +108,11 @@ export interface DesktopSessionSummary {
     | null;
   /** The short name of the tool in flight, bounded. Meaningful only under
    *  `detail: "tool"`; `null` when the tool could not be named, which the copy
-   *  degrades to "Running a command" rather than to a blank. */
+   *  degrades to "Running a command" rather than to a blank.
+   *  ⚠ IT CROSSES as `channel_sessions.tool_label` (2026-08-22) and is
+   *  **OPERATOR-ONLY** on the far side — unlike `detail` beside it, this is a
+   *  free-form name out of the tool registry, which is exactly the class of
+   *  value a peer may not read. `mapPeerSessionStateRow` never names it. */
   toolLabel?: string | null;
   /**
    * THE LIVE PERMISSION POSTURE (2026-08-20) — what this RUNNING session is
@@ -130,8 +150,12 @@ export interface DesktopSessionSummary {
    * dated id like `claude-opus-4-5-20251101`, or a `[1m]` long-context variant),
    * NOT necessarily a member of the four ids `sessions.setModel` accepts. Render
    * it; do not match it against that list.
-   * ⚠ LOCAL-ONLY: it never reaches `channel_sessions` (`session-state-push.js ›
-   * reportRow` picks its columns by name), so a PEER's card never carries it.
+   * ⚠ **IT CROSSES, AND IT IS OPERATOR-ONLY ON THE FAR SIDE** — this block said
+   * "LOCAL-ONLY: it never reaches `channel_sessions`" until 2026-08-22, and the
+   * column exists now (`20260822150000`). What kept a peer from seeing it was
+   * the absence of anywhere to put it; what keeps a peer from seeing it now is
+   * `server/collab-dto.ts › mapPeerSessionStateRow`, which BUILDS the coarse
+   * projection and never names this field. A PEER's card still carries no model.
    * ⚠ Optional: an older main omits it.
    */
   model?: string | null;
@@ -168,17 +192,56 @@ export interface DesktopSessionSummary {
   endedAt?: number | null;
   channelName: string | null;
   threadTitle: string | null;
+  /**
+   * The AGENT TEMPLATE this session was launched as, by NAME (2026-08-22).
+   *
+   * ⚠ A DENORMALIZED SNAPSHOT, never a pointer, and it can never change: the
+   * template is resolved ONCE at spawn (`main/template-resolve.js`) and the
+   * session keeps what it RAN AS even after that template is renamed or deleted.
+   * Frozen with the rest of the identity when the agent ends.
+   * ⚠ THE NAME, NEVER THE ID. An id here would be ownership information on a
+   * surface that only ever wanted a label.
+   * ⚠ `null` IS A REAL ANSWER — a blank agent has no template — and optional
+   * because an older main omits the field entirely. Absent and `null` mean the
+   * same thing.
+   * ⚠ ON THE SERVER SIDE THE SAME FACT IS OPERATOR-ONLY. `channel_sessions
+   * .template_name` never reaches a peer's projection: a private template's name
+   * on a colleague's card is an existence oracle, which is exactly what
+   * 404-not-403 and the deliberate absence of name uniqueness both exist to
+   * close. This field is the OPERATOR's own view of their OWN machine, which is
+   * a different question.
+   */
+  templateName?: string | null;
   // ── THE AGENT-VIEW NUMBERS (wiring plan Phase 5, 2026-08-18) ───────────────
-  // Runtime metrics the SERVER STORES NONE OF: `session-state-push.js › rowFor`
-  // picks its columns by name, so widening this wire shape did not widen
-  // `channel_sessions`. They exist only while the desktop that measured them is
-  // running, which is exactly the scope of the Agents tab.
+  //
+  // ⚠ **"Runtime metrics the SERVER STORES NONE OF" IS WHAT THIS BLOCK SAID
+  // UNTIL 2026-08-22, AND IT IS NOW FALSE.** `channel_sessions` grew a column
+  // per number in migration `20260822150000` (`context_used`, `context_window`,
+  // `tokens_spent`, `started_at`, `last_activity_at`), because an orchestrator
+  // driving agents over MCP is not on the machine that measured them and had no
+  // way to ask. The sentence was true when it was written — the wire shape had
+  // been widened and the push had not — and it stopped being true when the push
+  // was.
+  //
+  // ⚠ THEY ARE **OPERATOR-ONLY** ON THE FAR SIDE. What used to keep them off a
+  // peer's card was that they were nowhere to read; what keeps them off it now
+  // is `server/collab-dto.ts › mapPeerSessionStateRow`, which builds the coarse
+  // projection and never names them (the column GRANT in that migration is the
+  // belt, not the fence — every server read runs on the admin client). A peer
+  // sees a handle and a state; never what an agent costs its operator.
+  //
+  // ⚠ UNITS DO NOT SURVIVE THE CROSSING UNCHANGED, and this is the one thing to
+  // get right on the push side: `startedAt` / `lastActivityAt` are EPOCH MS
+  // here, and the columns are `TIMESTAMPTZ` with an ISO-8601 wire schema
+  // (`schema-sessions.ts`). The desktop converts; a raw epoch number sent as
+  // either field is a zod failure that 400s the whole report.
   //
   // ⚠ `null` IS A REAL ANSWER EVERYWHERE BELOW and never means zero — an older
   // main omits the field entirely, a model this build has no window for has no
   // denominator, and nothing is measured before the first turn reports usage.
   // Render the absence; do not default it to 0 (INVARIANTS §11 — UNKNOWN is not
-  // EMPTY).
+  // EMPTY). The columns are NULLABLE WITH NO DEFAULTS for exactly this reason,
+  // and the migration's assertion block aborts if one acquires a default.
   /** Tokens occupying the context window: the prompt the model LAST saw. Falls
    *  after a compaction — this is occupancy, not spend. */
   contextUsed?: number | null;

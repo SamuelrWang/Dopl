@@ -155,6 +155,25 @@ export type SessionPillState = "working" | "idle" | "ended";
  * `dopl_channel(op="read_sessions")`. Server-visible projection of the
  * desktop's `session-summary.list()`.
  */
+/**
+ * WHICH OF SIX SITUATIONS a live session is in — one step finer than
+ * {@link SessionPillState} and the only refinement that crosses machines.
+ *
+ * ⚠ **A CLOSED KEY VOCABULARY, NOT PROSE, AND THAT IS WHY IT MAY BE SEEN BY A
+ * PEER.** Six fixed words, each coarse enough to show a counterparty: they say
+ * what CLASS of work is happening and never which tool, which model, or what it
+ * cost. Anything free-form belongs on the operator-only side
+ * ({@link ChannelSessionTelemetry}).
+ *
+ * ⚠ A DELIBERATE COPY of `src/features/channels/types.ts › SessionDetailKey`
+ * (itself derived from the desktop's own `DesktopSessionSummary["detail"]`) —
+ * this package cannot import across the tree boundary. `channel-session-
+ * staleness.test.ts` pins the two against that file's text.
+ * ⚠ AN UNKNOWN KEY NEVER ARRIVES: the server narrows anything outside this set
+ * to `null` before it reaches the wire, so a newer desktop's seventh key reads
+ * as "no refinement" rather than as raw text in a rendered result.
+ */
+export type SessionDetailKey = "thinking" | "tool" | "posting" | "permission" | "awaiting_peer" | "awaiting_inbound";
 export interface ChannelSessionState {
     channelId: string;
     /** Thread (task) this session is on, or null. */
@@ -162,10 +181,53 @@ export interface ChannelSessionState {
     /** Friendly handle the pills show (flint / onyx / …). */
     name: string;
     state: SessionPillState;
+    /**
+     * WHICH OF SIX SITUATIONS this session is in — see {@link SessionDetailKey}.
+     * ⚠ OPTIONAL **and** nullable: ABSENT means this projection does not carry the
+     * field (an older server), `null` means the machine reported no refinement.
+     * Neither means "doing nothing". ⚠ It only ever REFINES `working`.
+     */
+    detail?: SessionDetailKey | null;
     channelName: string | null;
     threadTitle: string | null;
     updatedAt: string;
 }
+/**
+ * OPERATOR-ONLY session telemetry (server ruling, 2026-08-22). Rides only on
+ * OWN-scoped reads — `listChannelSessions` (`GET /api/channels/sessions`) and
+ * the `sessions` block on an await result. A PEER's session never carries these
+ * fields: the server's channel-scoped mapper cannot emit them.
+ *
+ * ⚠ **EVERY MEASURED `null` MEANS UNKNOWN, NEVER ZERO.** Render "unknown" or
+ * render nothing; never render `0` for an absent count, and never divide by an
+ * absent `contextWindow`.
+ *
+ * ⚠ **THE NAME IS ABOUT THE AUDIENCE, NOT THE SUBJECT** (2026-08-23):
+ * `templateName` is an identity snapshot rather than a measurement and rides
+ * here because it reaches the same single reader.
+ */
+export interface ChannelSessionTelemetry {
+    model: string | null;
+    /** The tool running right now ("Bash", "Edit"). */
+    toolLabel: string | null;
+    contextUsed: number | null;
+    contextWindow: number | null;
+    tokensSpent: number | null;
+    startedAt: string | null;
+    lastActivityAt: string | null;
+    /**
+     * The agent TEMPLATE this session was launched from, by name, AS OF SPAWN.
+     *
+     * ⚠ **A SNAPSHOT, NOT A POINTER** — a session reports what it RAN AS, so this
+     * may name a template that has since been renamed or deleted. That is correct,
+     * not stale. ⚠ OPERATOR-ONLY like the rest of this interface: a private
+     * template's name reaching a peer is an existence oracle. `null` = no
+     * template, or a desktop older than the field.
+     */
+    templateName: string | null;
+}
+/** The caller's OWN session — coarse projection plus the operator-only half. */
+export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry;
 export interface ChannelThreadCreateInput {
     title: string;
     mode?: ThreadMode;
@@ -280,4 +342,60 @@ export interface AwaitMessagesOptions {
 export interface AwaitResult {
     messages: ChannelMessage[];
     timedOut: boolean;
+    /**
+     * THE CALLER'S OWN AGENT SESSIONS, as of the moment the hold RETURNED
+     * (2026-08-22). One own-scoped read at return time, so an orchestrator that
+     * was going to follow every await with a `read_sessions` no longer has to —
+     * which halves the loop.
+     *
+     * ⚠ **OPTIONAL, AND IT STAYS OPTIONAL.** A server older than this wave sends
+     * no such key and a client must read that as "not reported", never as "you
+     * have no sessions" (INVARIANTS §13 — an older deployment is a supported
+     * peer). ⚠ Distinguish it from `[]`, which IS a claim: the server looked and
+     * this machine is reporting nothing.
+     *
+     * ⚠ OWN-SCOPED, always. A peer's session never appears here, and the rich
+     * telemetry is exactly why: see {@link ChannelSessionTelemetry}.
+     * ⚠ It is a SNAPSHOT AT RETURN, never sampled during the hold — the tick loop
+     * is the hottest path in the tree and nothing was added to it.
+     */
+    sessions?: ChannelSessionStateOwn[];
+}
+/**
+ * WORKSPACE-WIDE long-poll result — `awaitWorkspaceMessages`, the `channel`-less
+ * await. Same cursor semantics and the same `sessions` block; the difference is
+ * that each message names the channel it came from, because a page can span
+ * several.
+ *
+ * ⚠ `seq` IS WORKSPACE-GLOBAL AND GAPPY, which is what makes one cursor legal
+ * across every channel at once — the same number that makes a per-channel `seq`
+ * range meaningless as a count.
+ */
+export interface WorkspaceAwaitResult extends AwaitResult {
+    messages: WorkspaceChannelMessage[];
+    /**
+     * HOW MANY CHANNELS THE HOLD WAS WATCHING when it returned.
+     *
+     * ⚠ **REPORTED RATHER THAN INFERRED, AND `0` IS THE CASE IT EXISTS FOR.** A
+     * caller who belongs to no channel would otherwise read an empty page as
+     * "nothing happened" and re-arm forever on a hold that can never fire. It is
+     * also the number that lets a render say the scope out loud — a workspace hold
+     * watches channels you are a MEMBER of, and a public channel you never joined
+     * is NOT among them.
+     */
+    channelCount: number;
+}
+/**
+ * A message on a workspace-wide page: the ordinary shape plus the channel it
+ * belongs to, resolved server-side.
+ *
+ * ⚠ `channelName` / `channelSlug` are MEMBER-TYPED — a channel is named by
+ * whoever opened it — so they are counterparty-influenced display text on their
+ * way into a rendered result, exactly like `ChannelSessionState.channelName`.
+ * ⚠ Either may be `null` when the channel row could not be resolved; a render
+ * must fall back to the id rather than print an empty label.
+ */
+export interface WorkspaceChannelMessage extends ChannelMessage {
+    channelName: string | null;
+    channelSlug: string | null;
 }

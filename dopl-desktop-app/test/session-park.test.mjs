@@ -59,6 +59,15 @@ for (const banned of ["require(", "electron", "process.", "child_process", "@ant
 
 const flush = () => new Promise((r) => setImmediate(r));
 
+// ⚠ THE CEILING, READ OUT OF THE FILE THAT OWNS IT (2026-08-22, F-272). `session-windowless.js`
+// is not sliceable — it requires consent/targeting/channel-post — so the harness stubs it; taking
+// the NUMBER from its source is what stops the stub becoming a second, agreeing-with-itself
+// ceiling while production enforces a different one. That is exactly the failure C-2 caught on
+// the other side of this tree.
+const WINDOWLESS_SRC = readFileSync(join(HERE, "..", "main", "session-windowless.js"), "utf8");
+const REAL_MAX = Number((WINDOWLESS_SRC.match(/MAX_CONCURRENT_SESSIONS = (\d+)/) || [])[1]);
+assert.ok(REAL_MAX > 0, "MAX_CONCURRENT_SESSIONS not found in session-windowless.js");
+
 function harness(over = {}) {
   const cfg = { gateSdk: null, ...over };
   const calls = { buildSdkOptions: [], consume: [], dispatch: [], startSession: [], query: [] };
@@ -98,11 +107,23 @@ function harness(over = {}) {
   // the private-turn depth they would have spent must be reset, or the next private turn opens on
   // top of a surplus and withdraws Axis B's outbound widening for turns nobody made private. The
   // REAL module is injected rather than a stub — it is pure, and the reset is the behaviour.
+  // ⚠ `sessionWindowless` JOINED THE INJECTED SET ON 2026-08-22 (F-272): `startResume` enforces
+  // `MAX_CONCURRENT_SESSIONS`, which it did not before — a resume could reach seven. It is a
+  // STUB rather than the real module because `session-windowless.js` requires consent/targeting/
+  // channel-post and is not sliceable — but the NUMBER is read out of that file's source below,
+  // so the stub cannot drift from the ceiling it is standing in for. `liveCount` is the real
+  // one-liner (unsettled sessions in the registry), restated.
+  const sessionWindowless = {
+    MAX_CONCURRENT_SESSIONS: cfg.cap === undefined ? REAL_MAX : cfg.cap,
+    liveCount: (map) => { let n = 0; for (const s of map.values()) if (!s.settled) n += 1; return n; },
+  };
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
+    "sessionWindowless", "diag",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
   )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
-    createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")), diag);
+    createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
+    sessionWindowless, diag);
   api.bind(deps);
   return { ...api, deps, sessions, calls, cfg, store };
 }
@@ -237,6 +258,73 @@ test("startResume refuses BEFORE the await too, when the slot is already live", 
   h.sessions.set("c1:t1:a1b2c3d4", { key: "c1:t1:a1b2c3d4", settled: false });
   assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "nudge"), false);
   assert.deepEqual(h.calls.startSession, []);
+});
+
+// ── ⚠ THE CONCURRENCY CEILING, ON THE ONE SPAWN THAT WAS OUTSIDE IT (2026-08-22, F-272) ─────
+//
+// This function guarded `hasLiveSession(slot)` — "is THIS slot taken" — and never `liveCount`,
+// so a machine at all six could resume a seventh. The reachable producer is `offerResume`'s
+// notification, which the operator may click at any moment, including one when six agents are
+// already running.
+//
+// ⚠ ENFORCED RATHER THAN DOCUMENTED AS +1 HEADROOM, and these cases are what that decision cost.
+// `MAX_CONCURRENT_SESSIONS` is a COST ceiling — every per-session bound is multiplicative against
+// it — and a resumed session costs a full `claude` child exactly like a fresh one. A documented
+// +1 is also not a bound: nothing would have stopped a second crash record resuming at 7.
+
+/** `n` live agents on unrelated slots, so nothing but the COUNT is in the way. */
+function fill(h, n) {
+  for (let i = 0; i < n; i += 1) h.sessions.set(`fill-${i}`, { key: `fill-${i}`, settled: false });
+}
+
+test("CAP: a resume at the ceiling is refused, and asks nothing of the SDK", async () => {
+  const h = harness();
+  fill(h, REAL_MAX);
+  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), false);
+  assert.deepEqual(h.calls.startSession, [], "no seventh session");
+  assert.deepEqual(h.calls.buildSdkOptions, [], "and no options were assembled for one");
+});
+
+test("CAP: one below the ceiling still resumes — the guard is a bound, not a block", async () => {
+  const h = harness();
+  fill(h, REAL_MAX - 1);
+  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
+  assert.equal(h.calls.startSession.length, 1);
+});
+
+// ⚠ A SETTLED SESSION IS NOT LIVE, and this is the case that would make the guard WRONG rather
+// than merely strict: a crash scan resumes records whose sessions have just been marked ended, so
+// counting settled entries would refuse the exact resume the feature exists for.
+test("CAP: settled registry entries do not count against it", async () => {
+  const h = harness();
+  fill(h, REAL_MAX);
+  for (const s of h.sessions.values()) s.settled = true;
+  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
+});
+
+// ⚠ THE SAME CHECK-THEN-ACT RACE THE SLOT GUARD ALREADY HANDLED. `getSdk` is wide enough for a
+// peer wake or the operator's own button to take the last slot, and `launch()` re-checks its own
+// guard after the await for exactly this reason.
+test("CAP: a slot taken DURING getSdk is caught by the post-await re-check", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const h = harness({ gateSdk: gate });
+  fill(h, REAL_MAX - 1);
+  const resuming = h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n");
+  fill(h, REAL_MAX); // a racing launch takes the last one while we are parked on getSdk
+  release();
+  assert.equal(await resuming, false);
+  assert.deepEqual(h.calls.startSession, [], "the cap is re-read after the await, like the slot");
+});
+
+// ⚠ THE NUMBER IS NOT THIS FILE'S. The harness stubs `session-windowless.js`, so without this the
+// suite could agree with itself about a ceiling production does not enforce.
+test("CAP: the ceiling under test is the one `session-windowless.js` actually declares", () => {
+  assert.equal(REAL_MAX, 6, "Samuel's multi-machine ruling: the number does not go up");
+  assert.match(SRC, /sessionWindowless\.MAX_CONCURRENT_SESSIONS/,
+    "startResume reads the shared constant, never a local copy");
+  assert.equal(/MAX_CONCURRENT_SESSIONS = \d/.test(SRC), false,
+    "…and does not declare a second one");
 });
 
 // ── THE INSTANCE ID A RESUME COMES BACK WEARING (2026-08-22) ──────────────────────

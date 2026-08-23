@@ -104,6 +104,14 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     "milestone",
     "create_thread",
     "set_thread_mode",
+    // ⚠ `launch_agent` WRITES. It files a `channel_launch_directives` row and
+    // asks a machine to start a process — it is not merely a read that happens
+    // to wait, and a read-only token must be refused it or a `dopl.read` session
+    // can spawn agents through a non-admin tool.
+    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: `tools/parity-harness.ts` parses this
+    // set out of the SOURCE TEXT, so a quoted phrase in a comment is read as an
+    // op name and fails the WRITE_OPS-subset-of-enum check.
+    "launch_agent",
   ]),
 };
 

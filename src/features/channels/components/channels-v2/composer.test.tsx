@@ -22,7 +22,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const send = vi.fn();
 const fanOutThreads = vi.fn();
@@ -32,6 +32,22 @@ vi.mock("../../hooks/use-thread-writes", () => ({
     send: { mutate: send },
     fanOutThreads: { mutate: fanOutThreads },
     pending: false,
+  }),
+}));
+
+/**
+ * ⚠ THE TEMPLATE PICKER'S READ IS MOCKED, and the composer has mounted the
+ * picker since 2026-08-22. What this file pins is that the BOT ICON did not
+ * change — the picker is a second glyph beside it, exactly as "New thread" is
+ * (`agent-templates/components/template-picker.test.tsx` owns the popover).
+ */
+const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
+vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
+  useAgentTemplates: () => ({
+    templates: templateList.templates,
+    loading: false,
+    error: null,
+    refetch: () => {},
   }),
 }));
 
@@ -204,7 +220,8 @@ describe("the composer's two agent controls", () => {
       canLaunch: true,
       launchBusy: false,
       launchError: null,
-      launchAgent: vi.fn().mockResolvedValue(undefined),
+      launchAgent: vi.fn().mockResolvedValue({ ok: true }),
+      approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
       ...over,
     };
   }
@@ -289,5 +306,107 @@ describe("the composer's two agent controls", () => {
   it("shows no alert when there is nothing to report", () => {
     mount({ newAgent: launcher() });
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+/**
+ * THE CHEVRON BESIDE THE BOT ICON (2026-08-22, the agent-templates launch wave).
+ *
+ * ⚠ THE PINNED PROPERTY IS THE ONE-CLICK BLANK LAUNCH — Samuel's standing
+ * channels-v2 ruling (*one lane, one-click launch*), which the templates spec
+ * proposed trading for a popover plus Enter and which he refused. The Bot icon
+ * still spawns a blank agent on the FIRST click, with a payload carrying no
+ * template; the picker is an adjacent zone with its own accessible name.
+ *
+ * ⚠ THREE GLYPHS NOW, THREE ACTS. `Bot` = launch blank (bridge, posts nothing),
+ * the chevron = choose an identity, `MessageSquarePlus` = raise a REQUEST at
+ * another member (a write). Re-merging any two of them makes one unreachable —
+ * which is exactly what happened to the thread panel in 2026-08-21.
+ */
+describe("the composer's template chevron", () => {
+  function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls {
+    return {
+      canLaunch: true,
+      launchBusy: false,
+      launchError: null,
+      launchAgent: vi.fn().mockResolvedValue({ ok: true }),
+      approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
+      ...over,
+    };
+  }
+
+  it("keeps the Bot icon a ONE-CLICK BLANK launch, opening nothing", () => {
+    const controls = launcher();
+    mount({ newAgent: controls, openThreadId: "t-1" });
+
+    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
+    expect(controls.launchAgent).toHaveBeenCalledWith("t-1");
+    // ⚠ EXACTLY ONE ARGUMENT — a spelled-out `null` template would be a
+    // different object on the wire from the one this icon has always sent.
+    expect(vi.mocked(controls.launchAgent).mock.calls[0].length).toBe(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("opens the picker from the chevron, which launches nothing itself", () => {
+    const controls = launcher();
+    mount({ newAgent: controls });
+
+    const chevron = screen.getByRole("button", { name: "Launch from template" });
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(chevron);
+
+    expect(screen.getByRole("menu")).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Blank agent/ })).toBeTruthy();
+    expect(controls.launchAgent).not.toHaveBeenCalled();
+  });
+
+  it("does NOT open the thread panel — three glyphs, three acts", () => {
+    mount({ newAgent: launcher() });
+    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
+    expect(
+      screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed")
+    ).toBe("false");
+  });
+
+  it("renders no chevron where the bridge cannot launch", () => {
+    mount({ newAgent: launcher({ canLaunch: false }) });
+    expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
+  });
+
+  it("disables the chevron only while a launch is in flight", () => {
+    mount({ newAgent: launcher({ launchBusy: true }) });
+    expect(
+      (screen.getByRole("button", { name: "Launch from template" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+  });
+
+  it("carries the picked template into the SAME launch op the Bot icon uses", async () => {
+    templateList.templates = [
+      {
+        id: "tpl-9",
+        workspaceId: "ws-1",
+        name: "Code auditor",
+        description: null,
+        instructions: null,
+        model: null,
+        fields: [],
+        visibility: "private",
+        teamIds: [],
+        knowledgeBases: [],
+        createdBy: ME,
+        createdAt: "2026-08-01T00:00:00Z",
+        updatedAt: "2026-08-01T00:00:00Z",
+      },
+    ];
+    const controls = launcher();
+    mount({ newAgent: controls, openThreadId: "t-1" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
+    await waitFor(() =>
+      expect(controls.launchAgent).toHaveBeenCalledWith("t-1", "tpl-9", undefined)
+    );
+    templateList.templates = [];
   });
 });

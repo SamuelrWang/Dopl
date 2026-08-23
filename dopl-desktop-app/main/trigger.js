@@ -220,7 +220,7 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   // 2026-08-20 — THE WINDOWLESS POSTURE. There is no Accept UI, so the message axis is
   // floored at auto_inbound; the OUT half is the channel's durable auto-send setting.
   // ⚠ THE RULE LIVES IN channel-prefs (`windowlessMessageMode`) AND IS SHARED WITH THE
-  // REQUESTER LANE (`channel-dir-ipc.js › sessions:launch`). It was inlined here while
+  // REQUESTER LANE (`session-ipc-ops.js › sessions:launch`). It was inlined here while
   // that lane pinned its own answer, which is exactly the drift the shared function
   // removes. ⚠ Its second argument was the ARM's message axis and is now always null
   // (the arm is deleted) — the parameter STAYS because the requester lane still passes a

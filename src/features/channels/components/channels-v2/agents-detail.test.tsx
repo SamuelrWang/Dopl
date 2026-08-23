@@ -176,8 +176,10 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
     expect(screen.getByText("Running")).toBeTruthy();
   });
 
-  it("gives a PEER card the coarse word only — there is no detail on that wire", () => {
-    const peer: ChannelPeerSession = {
+  /** A peer row, fresh by default. ⚠ Freshness is no longer what decides whether
+   *  there is a card (Samuel, 2026-08-22) — only how brightly it draws. */
+  function peerRow(over: Partial<ChannelPeerSession> = {}): ChannelPeerSession {
+    return {
       userId: PEER,
       channelId: CHANNEL_ID,
       threadId: "t-1",
@@ -185,9 +187,12 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
       state: "working",
       channelName: "Website",
       threadTitle: "UI-kit design",
-      // ⚠ Fresh by construction — `peerCardsFor` drops a stale row (2026-08-20).
       updatedAt: new Date().toISOString(),
+      ...over,
     };
+  }
+
+  function renderPeer(peer: ChannelPeerSession) {
     render(
       <AgentsTab
         sessions={[]}
@@ -198,9 +203,49 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
         onOpenAgent={noop}
       />
     );
+    return screen.getByText("onyx").closest("[class]")?.parentElement as HTMLElement;
+  }
+
+  it("gives a PEER card the coarse word only — there is no detail on that wire", () => {
+    renderPeer(peerRow());
     expect(screen.getByText("onyx")).toBeTruthy();
     expect(screen.getByText("Running")).toBeTruthy();
     expect(screen.queryByText("Thinking…")).toBeNull();
+  });
+
+  /**
+   * ⚠ THE REPORTED BUG (Samuel, 2026-08-22): the peer card appeared and then
+   * DISAPPEARED while the agent was still live. `updated_at` is pushed on state
+   * CHANGE, never on a timer, so an idle agent's row simply ages — and the
+   * 2026-08-20 freshness guard read that age as death. The card stays.
+   */
+  it("STILL DRAWS a peer card whose row has not moved in an hour", () => {
+    renderPeer(
+      peerRow({
+        state: "idle",
+        updatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      })
+    );
+    expect(screen.getByText("onyx")).toBeTruthy();
+    expect(screen.getByText("Idle")).toBeTruthy();
+  });
+
+  /** ⚠ …DIMMED, which is the whole of what the deleted guard was really for.
+   *  `data-stale` is the hook; `opacity-60` is the shade. */
+  it("dims the quiet card and says when it last moved", () => {
+    const card = renderPeer(
+      peerRow({ updatedAt: new Date(Date.now() - 60 * 60_000).toISOString() })
+    );
+    const stale = card.closest("[data-stale]") as HTMLElement;
+    expect(stale).not.toBeNull();
+    expect(stale.className).toContain("opacity-60");
+    expect(screen.getByText(/last update/)).toBeTruthy();
+  });
+
+  it("leaves a FRESH card at full strength, with no timing clause", () => {
+    const card = renderPeer(peerRow());
+    expect(card.closest("[data-stale]")).toBeNull();
+    expect(screen.queryByText(/last update/)).toBeNull();
   });
 });
 

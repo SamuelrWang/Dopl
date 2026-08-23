@@ -1,0 +1,171 @@
+import { z } from "zod";
+import {
+  SAFE_LABEL_RE,
+  safeLabel,
+  safeLabelMessage,
+  safeOptionalProse,
+} from "@/shared/lib/safe-label";
+
+/**
+ * Zod schemas for agent templates. REST handlers parse against these, so the
+ * service sees one shape whatever the entry point is — the same contract
+ * `src/features/skills/schema.ts` holds for skills.
+ *
+ * ⚠ THE LABEL/PROSE SPLIT IS THE WHOLE DESIGN HERE, and it is not about
+ * length. A LABEL is spliced into a line the server writes (the launch payload
+ * an agent reads back, a picker row); PROSE is rendered as itself. So `name`,
+ * `model` and BOTH HALVES OF EVERY CUSTOM FIELD are charset-bounded, while
+ * `description` and `instructions` are not — instructions is a system prompt
+ * and multi-line markdown in it is the point.
+ */
+
+/** Rendered into the template picker and into the launch payload. Matches the
+ *  `agent_templates_name_charset_check` bound in the migration. */
+const NameSchema = safeLabel("Template name", 120);
+
+/** Prose. Newline/tab allowed; empty string preserved (a cleared textarea
+ *  sends one, and the service maps it to NULL). */
+const DescriptionSchema = safeOptionalProse("Template description", 2000);
+
+/**
+ * The system-prompt block. 32 KB, matching the DB CHECK.
+ * ⚠ NOT bounded to 1 MB like `skills.body`: a skill body is a PROCEDURE meant
+ * to be long, and a template's instructions are a system prompt that is
+ * prepended to every turn of every session spawned from it. The bound is a
+ * cost signal as much as a DoS floor.
+ */
+const MAX_INSTRUCTIONS_CHARS = 32_768;
+const InstructionsSchema = safeOptionalProse(
+  "Instructions",
+  MAX_INSTRUCTIONS_CHARS
+);
+
+/**
+ * Model identifier. ⚠ DELIBERATELY NOT AN ENUM. The model roster lives in the
+ * desktop and moves faster than this repo deploys; an enum here would mean a
+ * server release to accept a model the desktop already runs, and the failure
+ * mode would be a 400 on a value the operator can see in their own picker.
+ * Charset-bounded because it renders into the launch payload.
+ */
+const ModelSchema = safeLabel("Model", 120);
+
+// ─── Custom fields ──────────────────────────────────────────────────────
+
+/**
+ * ⚠ THE SERIALIZED SIZE CAP IS THE REAL BOUND AND IT LIVES IN TWO PLACES ON
+ * PURPOSE. Per-field lengths below stop one absurd value; this stops a
+ * thousand reasonable ones. It is re-asserted as a CHECK in the migration
+ * (`octet_length(fields::text) <= 8192`) because the service is the only
+ * writer and a schema is a fence the DB cannot see.
+ * ⚠ Measured the same way the CHECK measures — UTF-8 BYTES of the serialized
+ * array, not `.length` — so a CJK or emoji payload cannot pass zod and then
+ * fail the constraint as an opaque 500.
+ */
+export const MAX_FIELDS_BYTES = 8192;
+
+/** Bounds chosen so `MAX_FIELD_COUNT` fields at max size lands ABOVE the byte
+ *  cap — the count is a sanity rail, the bytes are the contract. */
+const MAX_FIELD_COUNT = 50;
+
+export const TemplateFieldSchema = z.object({
+  key: safeLabel("Field key", 80),
+  /** ⚠ A LABEL, not prose: field values are spliced into the launch payload
+   *  line-by-line, so a newline in one forges a line in the server's voice.
+   *  Empty is legal — a key with no value yet is a legitimate half-filled
+   *  form, and `safeLabel` would reject `""` (it carries a `.min(1)`).
+   *  ⚠ `SAFE_LABEL_RE` is IMPORTED, never re-typed: `@/shared/lib/safe-label`
+   *  is explicit that two copies of a neutralizer drift, and the copy that
+   *  drifts is the one that stops neutralizing. */
+  value: z
+    .string()
+    .trim()
+    .max(1000)
+    .refine((v) => v === "" || SAFE_LABEL_RE.test(v), {
+      message: safeLabelMessage("Field value"),
+    }),
+});
+
+export const TemplateFieldsSchema = z
+  .array(TemplateFieldSchema)
+  .max(MAX_FIELD_COUNT, `At most ${MAX_FIELD_COUNT} custom fields`)
+  .refine(
+    (fields) =>
+      new Set(fields.map((f) => f.key)).size === fields.length,
+    { message: "Custom field keys must be unique" }
+  )
+  .refine(
+    (fields) =>
+      new TextEncoder().encode(JSON.stringify(fields)).length <= MAX_FIELDS_BYTES,
+    { message: `Custom fields must serialize to ${MAX_FIELDS_BYTES} bytes or less` }
+  );
+
+// ─── Visibility ─────────────────────────────────────────────────────────
+
+export const TemplateVisibilitySchema = z.enum([
+  "private",
+  "team",
+  "workspace",
+]);
+
+/** Same bound `SkillUpdateSchema.teamIds` uses. */
+const TeamIdsSchema = z.array(z.string().uuid()).max(50);
+
+/** Attached KB ids. The set is REPLACED, never merged — see `updateTemplate`. */
+const KnowledgeBaseIdsSchema = z.array(z.string().uuid()).max(50);
+
+// ─── Create / update ────────────────────────────────────────────────────
+
+/**
+ * ⚠ `teamIds` REQUIRES `visibility: 'team'`, refused rather than ignored.
+ * Mirrors `SkillUpdateSchema`'s refine: silently dropping the field would
+ * return a 2xx while the grant set never moved, and the client would render a
+ * sharing state the server does not hold.
+ */
+const teamIdsMatchVisibility = (patch: {
+  visibility?: "private" | "team" | "workspace";
+  teamIds?: string[];
+}) => patch.teamIds === undefined || patch.visibility === "team";
+
+const TEAM_IDS_MESSAGE = {
+  message: "teamIds requires visibility 'team'",
+} as const;
+
+export const AgentTemplateCreateSchema = z
+  .object({
+    name: NameSchema,
+    description: DescriptionSchema.nullable().optional(),
+    instructions: InstructionsSchema.nullable().optional(),
+    model: ModelSchema.nullable().optional(),
+    fields: TemplateFieldsSchema.optional(),
+    /** Omitted → the service defaults to `'private'`, matching `createSkill`
+     *  and `createBase`. */
+    visibility: TemplateVisibilitySchema.optional(),
+    teamIds: TeamIdsSchema.optional(),
+    knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+  })
+  .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
+export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>;
+
+/**
+ * All fields optional. ⚠ `null` and ABSENT differ and both are meaningful:
+ * absent leaves the column alone, `null` CLEARS it. `fields`,
+ * `knowledgeBaseIds` and `teamIds` are REPLACE-SET (absent = untouched,
+ * `[]` = empty it) — there is no add/remove verb, because a partial mutation
+ * over a set that two clients can edit is how sets silently diverge.
+ */
+export const AgentTemplateUpdateSchema = z
+  .object({
+    name: NameSchema.optional(),
+    description: DescriptionSchema.nullable().optional(),
+    instructions: InstructionsSchema.nullable().optional(),
+    model: ModelSchema.nullable().optional(),
+    fields: TemplateFieldsSchema.optional(),
+    visibility: TemplateVisibilitySchema.optional(),
+    teamIds: TeamIdsSchema.optional(),
+    knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "Patch must change at least one field",
+  })
+  .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
+export type AgentTemplateUpdateInput = z.infer<typeof AgentTemplateUpdateSchema>;

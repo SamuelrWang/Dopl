@@ -45,6 +45,7 @@
 
 import { useCallback } from "react";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 
 /** Whether the pause / end controls can be offered at all. Feature-detected like
  *  every other bridge capability: an older main has the feed and not the
@@ -263,9 +264,44 @@ export function canLaunchAgents(): boolean {
  * wire value meaning "a responder session whose thread never became first-class"
  * (`spa-bridge.ts › DesktopSessionSummary`), and collapsing the two would make a
  * deliberate channel agent indistinguishable from a thread that failed to
- * resolve. The `null` is cast past the bridge's `taskId: string` for the same
- * reason as the result above: main is widening it, and this side must not go red
- * in the window between the two ships.
+ * resolve.
+ *
+ * ⚠ `templateId` IS AN ID, NEVER A SNAPSHOT (2026-08-22, agent templates). The
+ * SPA names the identity; **MAIN resolves its content** through
+ * `GET /api/agent-templates/{id}/resolve` under the operator's own credential,
+ * at spawn. A renderer-supplied `{name, instructions}` would be renderer-authored
+ * text landing in a prompt, and main could not tell a real template from a
+ * fabricated one — the same class of mistake as F-267, with PROMPT TEXT as the
+ * thing that got forged instead of a tool profile. Resolving in main also keeps
+ * the knowledge-base viewer filter on the OPERATOR's credential and reads the
+ * template fresh, so an edit landed a moment ago is honoured. The picker still
+ * renders the name from its own cache — the optimistic render is a LABEL, the
+ * authoritative resolve is the PROMPT.
+ *
+ * ⚠ `overrides` ARE EPHEMERAL AND MAIN RE-VALIDATES THEM
+ * (`@/features/agent-templates/lib/launch-overrides.ts`). Nothing here is written
+ * back to the template; this side's bounds exist to keep the web from OFFERING a
+ * payload main would reject, exactly as `agent-models.ts` does for the roster.
+ *
+ * ⚠ NO CASTS ANY MORE (2026-08-22, once Phase 1's declaration landed). Both new
+ * fields and the widened result are declared on `spa-bridge.ts › launch`, so the
+ * payload and the reply are TYPED off the bridge rather than asserted past it.
+ * They were cast for exactly as long as the two trees were out of step, which is
+ * the same window `taskId: null` spent cast before it.
+ *
+ * ⚠ THE OPTIONAL CHAINS ON THE REPLY STAY, and they are not redundant with the
+ * declaration. `Promise<{ ok: boolean; … }>` is what a CURRENT main answers; the
+ * two trees ship separately, so a main predating any given field answers an
+ * object without it — and the two-success-shapes rule above means a reply may
+ * legitimately carry `agentId` and no `ok` at all. The type describes the
+ * contract; the chains survive the build that has not adopted it yet.
+ *
+ * ⚠ `template-approval` IS NOT A FAILURE, IT IS A QUESTION (2026-08-22). Main
+ * refuses the FIRST launch of a foreign template on this machine and hands back
+ * the name and instructions it resolved, for the approval modal to show verbatim
+ * (`agent-templates/components/template-approval.tsx`). The payload is forwarded
+ * here untouched and read tolerantly by the picker; nothing in this module
+ * interprets it.
  */
 export async function launchAgentOnThread(payload: {
   channelId: string;
@@ -276,17 +312,72 @@ export async function launchAgentOnThread(payload: {
   threadTitle: string | null;
   counterpartyId: string | null;
   direct: boolean;
-}): Promise<{ ok: boolean; agentId?: string; reason?: string }> {
+  /** The identity to wear, or `null`/absent for a BLANK agent. */
+  templateId?: string | null;
+  /** This run's ephemeral re-points. Absent ⇒ the template's own values. */
+  overrides?: TemplateLaunchOverrides;
+}): Promise<{
+  ok: boolean;
+  agentId?: string;
+  reason?: string;
+  template?: { name?: string | null; instructions?: string | null } | null;
+}> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.launch !== "function") return { ok: false, reason: "no-bridge" };
-  const res = (await sessions.launch(
-    payload as typeof payload & { taskId: string }
-  )) as
-    | { ok?: boolean; agentId?: string; sessionId?: string; reason?: string }
-    | null
-    | undefined;
+  const res = await sessions.launch(payload);
   const agentId = typeof res?.agentId === "string" && res.agentId ? res.agentId : undefined;
-  return { ok: res?.ok === true || agentId !== undefined, agentId, reason: res?.reason };
+  return {
+    ok: res?.ok === true || agentId !== undefined,
+    agentId,
+    reason: res?.reason,
+    template: res?.template ?? null,
+  };
+}
+
+/**
+ * Whether this build can REMEMBER a first-use approval of another member's
+ * template (2026-08-22).
+ *
+ * ⚠ IT DETECTS `sessions.approveTemplate`, the op it is about to USE — the strict
+ * form of this family's rule ({@link canMessageAgent} carries the bug that earned
+ * it). ⚠ DO NOT WIDEN IT TO `sessions.launch`: every build with the launch op
+ * would then claim the approval op, and the modal would spin on a desktop that
+ * cannot store the answer.
+ *
+ * ⚠ THE DECLARATION DOES NOT REPLACE THIS CHECK, and the op being `?`-optional in
+ * `spa-bridge.ts` is exactly the point: an older main ships a `sessions` object
+ * without the member, and the type cannot know which main is on the other side
+ * (INVARIANTS §11). This read no longer needs a local widening — the member is
+ * declared — but the `typeof` gate is the real fence and stays.
+ */
+export function canApproveTemplate(): boolean {
+  return typeof getSpaBridge()?.sessions?.approveTemplate === "function";
+}
+
+/**
+ * STORE THIS OPERATOR'S FIRST-USE APPROVAL of a foreign template, on THIS Mac.
+ *
+ * ⚠ MACHINE-LOCAL, AND THAT IS THE SECURITY CONTENT rather than a storage
+ * detail. Main keeps it in `electron-store` beside `orchestratorLaunchEnabled`,
+ * for the reason that toggle's own docblock gives: a spawned session runs with
+ * `Bash` and the operator's device token is on disk, so any server-stored version
+ * of this flag could be flipped by an agent holding the operator's own credential
+ * — pre-approving itself across every machine they own. **There is no route, no
+ * MCP op and no settings column for it, deliberately.**
+ *
+ * ⚠ THE VERDICT IS RETURNED, NEVER SWALLOWED. An approval the operator believes
+ * they gave and main did not store means the next launch asks again, which reads
+ * as a broken modal unless this side can say what happened.
+ */
+export async function approveTemplate(
+  templateId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const sessions = getSpaBridge()?.sessions;
+  if (typeof sessions?.approveTemplate !== "function") {
+    return { ok: false, reason: "no-bridge" };
+  }
+  const res = await sessions.approveTemplate(templateId);
+  return { ok: res?.ok === true, reason: res?.reason };
 }
 
 export type AgentControl = "pause" | "end";

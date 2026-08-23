@@ -180,57 +180,6 @@ export type ConsentDecisionSurface = "web" | "desktop";
 export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
 
 /**
- * SESSION RUN STATE. The three states desktop `session-summary.js` reduces
- * every engine phase/activity to, and the ONLY vocabulary session state is ever
- * reported in — over IPC to the **Agents tab** (`components/channels-v2/
- * agents-tab.tsx`, INVARIANTS §5), over MCP to an external agent. ⚠ The TYPE
- * name is still `SessionPillState` and the desktop reducer's is still
- * `pillState`: the web's session PILLS were deleted in wiring plan Phase 5
- * (2026-08-18) and the names outlived them on the desktop side.
- *
- * ⚠ No `thinking` state, and the REASON CHANGED on 2026-08-20 — re-read it
- * before quoting it, because both earlier reasons are now retired. It was never
- * that streaming is off (F-146 corrected that in four places). Nor is it still
- * "pillState cannot see what has been RENDERED this turn": the desktop lifted
- * that fact at the engine's dispatch funnel, and
- * `dopl-desktop-app/main/session-detail.js` derives a six-valued `detail` from
- * it today.
- *
- * What keeps THIS type at three values is that it is the SERVER's vocabulary and
- * a wire contract with three enforcers — `channel_sessions.state`'s CHECK, the
- * `z.enum` in `schema-sessions.ts`, and the membership set the MCP renderer
- * splices through (`channel-ops-read.ts`). The write path validates the ARRAY, so
- * a single row carrying a fourth value 400s the desktop's whole push
- * unretryably and silently stops every later one for that workspace. **The finer
- * signal is deliberately LOCAL to the machine running the agent** and rides the
- * IPC summaries wire as `DesktopSessionSummary["detail"]`, never this table
- * (INVARIANTS §11).
- */
-export type SessionPillState = "working" | "idle" | "ended";
-
-/**
- * One live (or just-ended) session, as answered by
- * `dopl_channel(op="read_sessions")`. Server-visible projection of desktop
- * `session-summary.list()` — ⚠ the SAME derivation the pills use, lifted, never
- * a second one (F-142).
- *
- * Delivery: desktop pushes ON STATE CHANGE (not heartbeat) into
- * `channel_sessions`; the read is scoped to the caller's own sessions. See
- * `session-state-service.ts`.
- */
-export type ChannelSessionState = {
-  channelId: string;
-  threadId: string | null;
-  /** Friendly handle (flint / onyx / …) the pills show. */
-  name: string;
-  state: SessionPillState;
-  /** ⚠ Counterparty-influenced display text — neutralized before storage. */
-  channelName: string | null;
-  threadTitle: string | null;
-  updatedAt: string;
-};
-
-/**
  * Message kind. `message` = chat; the `task_*` values are structured
  * activity events (payload in `metadata`, human-readable render in
  * `body`); `system` = joins / topic changes.
@@ -434,3 +383,20 @@ export type ChannelConsentRequest = {
 
 // `AwaitResult` (long-poll) is an MCP/SDK shape and lives in
 // `packages/dopl-client/src/channel-types.ts`, where its only callers are.
+
+/**
+ * SESSION and LAUNCH types live in `types-sessions.ts` / `types-launch.ts`
+ * (split 2026-08-22 at the 500-line cap). ⚠ Re-exported here so every existing
+ * `@/features/channels/types` import is unchanged — **this file is the barrel,
+ * and there is no third path to a symbol.** Same arrangement `schema.ts` has
+ * with `schema-sessions.ts` / `schema-collab.ts` / `schema-launch.ts`.
+ */
+export type {
+  SessionPillState,
+  SessionDetailKey,
+  ChannelSessionState,
+  ChannelSessionTelemetry,
+  ChannelSessionStateOwn,
+} from "./types-sessions";
+
+export type { LaunchRefusalReason, LaunchDirective } from "./types-launch";

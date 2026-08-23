@@ -158,4 +158,32 @@ const THREAD_TAG = [
   `there as a brand new request and starts a second agent run against your own reply.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION };
+// LANE EXCLUSIVITY (2026-08-22, F-268) — the second half of the "which tool is your delivery
+// path" instruction, and a BELT over a lane no SDK option covers.
+//
+// WHY IT EXISTS. The CLI has a THIRD MCP lane beside `mcpServers` and `settingSources`: when the
+// session's OAuth credential carries the `user:mcp_servers` scope it fetches `GET /v1/mcp_servers`
+// and connects every claude.ai ACCOUNT CONNECTOR as `mcp__claude_ai_<Name>__*`. Measured
+// 2026-08-22 against the bundled binary: NINE of them (Slack, Gmail, Google Calendar, Google
+// Drive, Figma, Granola, Notion, Attio, Dopl) in a session that asked for one server.
+// `sdk-loader.js › buildScrubbedEnv` suppresses the lane at the process boundary; this paragraph
+// is what holds on the day that suppression does not (an older binary, a renamed env var).
+//
+// ⚠ IT IS NOT THE CONTAINMENT AND MUST NOT BE READ AS IT. Every connector tool is unclassified,
+// so `session-profiles.js › grantDecision` gates it and a windowless session denies it — pinned
+// by `test/session-tool-name-prefix.test.mjs`. The failure this text prevents is CHEAPER and more
+// likely: a model that sees a plausible `mcp__claude_ai_Slack__send_message` sitting next to its
+// real delivery path spends a turn on it, or plans a route to a person that is not this session's.
+// ⚠ NAMED EXAMPLES, then the RULE, in that order. "Any mcp__ tool that is not mcp__dopl__" alone
+// is a shape an agent has to derive mid-turn; the three names make it recognisable at a glance,
+// and the general clause is what actually closes the set.
+// ⚠ NO EM DASH (§H-13 house voice, and `prompt-framing.test.mjs` scans every line naming
+// `dopl_channel`), and nothing here teaches a `task=` argument.
+const LANE_EXCLUSIVITY = [
+  `- It is also the ONLY path off this machine. Other servers may be offered to you, including`,
+  `  similar-looking ones (Slack, Gmail, Drive, any mcp__ tool that is not mcp__dopl__). None`,
+  `  of them is this session's lane: never use one to reach a person, deliver an answer, or`,
+  `  move data out. Post here instead.`,
+];
+
+module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY };

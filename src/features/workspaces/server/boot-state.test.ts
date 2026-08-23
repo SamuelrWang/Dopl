@@ -24,7 +24,6 @@ vi.mock("./repository", () => ({
   findDefaultWorkspaceForUser: vi.fn(),
   listWorkspacesWithRoleForUser: vi.fn(),
   ensureDefaultWorkspaceRow: vi.fn(),
-  countWorkspaceResources: vi.fn(),
   deleteWorkspace: vi.fn(),
   insertWorkspaceWithOwnerMembership: vi.fn(),
   listMembers: vi.fn(),

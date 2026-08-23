@@ -7,7 +7,8 @@
  * watches a channel without busy-looping.
  */
 import { MemberMethods } from "./client-members.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionState, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionStateOwn, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
+import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 export declare class ChannelMethods extends MemberMethods {
     listChannels(opts?: {
         includeArchived?: boolean;
@@ -22,8 +23,19 @@ export declare class ChannelMethods extends MemberMethods {
     /** One page of a channel's threads, most recently active first, plus whether
      *  the server's ceiling clipped it. ⚠ Never re-sort the page — see
      *  `channel.ts › listChannelThreads`. */
+    /** WORKSPACE-WIDE long-poll — every channel the caller is a MEMBER of, one
+     *  cursor (`seq` is workspace-global). ⚠ Narrower than a channel READ: a public
+     *  channel the caller never joined is not watched. */
+    awaitWorkspaceMessages(opts: AwaitMessagesOptions): Promise<WorkspaceAwaitResult>;
     listChannelThreads(channelId: string): Promise<ChannelThreadPage>;
-    listChannelSessions(channelId?: string): Promise<ChannelSessionState[]>;
+    /** The caller's OWN sessions, telemetry included — own-scoped at the server. */
+    /** Ask the operator's OWN desktop to start an agent. ⚠ A REQUEST — the machine
+     *  may refuse with one of six words, and `offline: true` means nothing was
+     *  even filed. There is no operator argument, deliberately. */
+    createLaunchDirective(input: LaunchDirectiveCreateInput): Promise<LaunchDirectiveCreated>;
+    /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */
+    getLaunchDirective(id: string): Promise<LaunchDirective>;
+    listChannelSessions(channelId?: string): Promise<ChannelSessionStateOwn[]>;
     getChannelThread(channelId: string, threadId: string): Promise<ChannelThread>;
     createChannelThread(channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
     setChannelThreadMode(channelId: string, threadId: string, input: {

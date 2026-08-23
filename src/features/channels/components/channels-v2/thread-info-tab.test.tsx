@@ -70,9 +70,9 @@ function peer(over: Partial<ChannelPeerSession> = {}): ChannelPeerSession {
     state: "working",
     channelName: "Website",
     threadTitle: "UI-kit design",
-    // ⚠ FRESH BY CONSTRUCTION — `peerCardsFor` ages a row out against
-    // `PRESENCE_ONLINE_WINDOW_MS`, so a literal stamp makes this fixture pass on
-    // the day it is written and silently assert the staleness path afterwards.
+    // ⚠ FRESH BY DEFAULT — a convenience since 2026-08-22, not a requirement:
+    // `peerCardsFor` no longer ages a row out (Samuel: the card stays until the
+    // session goes away). The stamp only decides the card's INK now.
     updatedAt: new Date().toISOString(),
     ...over,
   };

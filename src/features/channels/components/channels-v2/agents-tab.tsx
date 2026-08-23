@@ -31,41 +31,30 @@
  * or "channel session" — the noun on this surface is the AGENT.
  */
 
-import { Bot, CornerDownRight, Plus } from "lucide-react";
-import { Avatar } from "@/shared/ui/avatar";
-import { UsageMeter } from "@/shared/ui/usage-meter";
-import { formatRelativeTime } from "@/shared/lib/format-time";
-import { cn } from "@/shared/lib/utils";
+import { useMemo } from "react";
+import { ChevronDown, Plus } from "lucide-react";
+import {
+  TemplateLaunchPicker,
+  useTemplatePicker,
+} from "@/features/agent-templates/components/template-picker";
+import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import type { ChannelMember } from "../../types";
-import { memberPerson } from "./view-model";
-import { CARD_BUTTON, PANEL_CARD } from "./bits";
-import { AgentEndedPill, AgentLiveness } from "./agent-bits";
+import { AgentCard, PeerCards } from "./agents-tab-cards";
 import {
-  agentDisplayId,
-  agentEndedAt,
-  agentLiveness,
   agentKey,
-  agentRunningModel,
   agentsPerThread,
-  formatTokens,
-  metric,
   ownAgentsFor,
   peerCardsFor,
 } from "./agents-model";
-import { agentModelShortLabel } from "../../lib/agent-models";
+import type { AgentLaunchOutcome } from "./use-agents-panel";
 
-/** Absolute epoch ms → the relative phrase the cards use. `formatRelativeTime`
- *  takes an ISO string and answers "" for an absent one, which is the right
- *  degradation: the caller drops the whole clause rather than printing a stub. */
-function relative(at: number | null): string {
-  return at === null ? "" : formatRelativeTime(new Date(at).toISOString());
-}
 
 export function AgentsTab({
   sessions,
   channelId,
+  workspaceId = null,
   openThreadId = null,
   members = [],
   currentUserId = null,
@@ -74,6 +63,7 @@ export function AgentsTab({
   launchBusy = false,
   launchError = null,
   onLaunchAgent,
+  onApproveTemplate,
   openAgent,
   onOpenAgent,
 }: {
@@ -81,6 +71,12 @@ export function AgentsTab({
    *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
   sessions: readonly DesktopSessionSummary[] | null;
   channelId: string;
+  /** THE TEMPLATE PICKER'S ONE INPUT. ⚠ Absent ⇒ NO CHEVRON, and the New Agent
+   *  button is exactly what it was — the same feature-detected degradation every
+   *  bridge affordance in this family follows, applied to a READ instead of an
+   *  op (a picker with no workspace to list is a control that can only be
+   *  empty). */
+  workspaceId?: string | null;
   /** The OPEN thread (2026-08-20): scopes the tab — thread view shows that
    *  thread's agents alone; channel view shows the whole channel's. */
   openThreadId?: string | null;
@@ -97,13 +93,60 @@ export function AgentsTab({
    *  push — nothing announces it, so the button's own row is the only place it
    *  can be said (`use-agents-panel.ts › launchRefusalText`). */
   launchError?: string | null;
-  onLaunchAgent?: (threadId: string) => void;
+  /**
+   * ⚠ THE ZERO-TEMPLATE CALL IS THE PINNED ONE. `onLaunchAgent(threadId)` is
+   * still what the New Agent button does in ONE CLICK, and the two optional
+   * arguments exist for the picker beside it (Samuel's "one lane, one-click
+   * launch" ruling — the picker never intercepts the button).
+   */
+  onLaunchAgent?: (
+    threadId: string,
+    templateId?: string | null,
+    overrides?: TemplateLaunchOverrides
+  ) => Promise<AgentLaunchOutcome> | void;
+  /** Store a first-use approval for another member's template, machine-locally.
+   *  ⚠ Absent ⇒ the approval modal says the build cannot remember it, rather
+   *  than looping on a refusal it can never clear. */
+  onApproveTemplate?: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
 }) {
   const byUser = new Map(members.map((m) => [m.userId, m]));
   const me = currentUserId ? (byUser.get(currentUserId) ?? null) : null;
+  // ⚠ CALLED UNCONDITIONALLY, ABOVE EVERY EARLY RETURN. The tab bails out for a
+  // browser (`sessions === null`) further down, and a hook behind that branch is
+  // a hook-order violation on the very first desktop render.
+  const picker = useTemplatePicker();
+  // `userId → name` for the picker's authorship marker. ⚠ THE CHANNEL ROSTER,
+  // which is not the workspace's — a template shared by someone outside this
+  // channel resolves to no name and the marker degrades to "by another member"
+  // rather than disappearing (`template-picker.tsx › authorMarker`).
+  const memberNames = useMemo(
+    () =>
+      new Map(
+        members.map((m) => [m.userId, m.displayName || m.email || ""] as const)
+      ),
+    [members]
+  );
+
+  /**
+   * The picker's launch, adapted from the flat prop the tab already takes.
+   *
+   * ⚠ IT NEVER INVENTS A SUCCESS. A caller that hands down a void-returning
+   * `onLaunchAgent` (an older mount, a test double) leaves the picker with
+   * nothing to read, and reporting that as `{ ok: true }` would swallow a
+   * refusal — this whole family's oldest bug. `no-bridge` is the honest answer
+   * and it already has copy.
+   */
+  async function launchFromPicker(
+    threadId: string,
+    templateId: string | null,
+    overrides?: TemplateLaunchOverrides
+  ): Promise<AgentLaunchOutcome> {
+    const res = await onLaunchAgent?.(threadId, templateId, overrides);
+    return res ?? { ok: false, reason: "no-bridge" };
+  }
   // Peers: other members' live rows, thread-scoped like everything on the tab.
   // Own rows are excluded — the LOCAL feed below is the richer truth for mine.
   // ⚠ THE PREDICATE IS `agents-model.ts › peerCardsFor`, NOT AN INLINE FILTER
@@ -117,21 +160,68 @@ export function AgentsTab({
   // The only two things that take it away are the capability being absent
   // (`canLaunch`) and a launch already in flight, which is a double-submit guard
   // and not a cap.
+  //
+  // \u26a0 IT IS A SPLIT BUTTON SINCE 2026-08-22, AND THE LEFT HALF IS UNCHANGED
+  // (Samuel: *one lane, one-click launch*). The face still launches a BLANK agent
+  // in exactly ONE CLICK with a byte-identical payload; the picker lives behind
+  // an ADJACENT, visually attached chevron that is its own hit target. A popover
+  // in front of the face would put a keystroke on the most common action in the
+  // product, which is what the spec's OQ-4 proposed and this ruling refused.
   const launchRow = canLaunch && openThreadId && onLaunchAgent && (
     <div className="mb-3">
-      <button
-        type="button"
-        disabled={launchBusy}
-        onClick={() => onLaunchAgent(openThreadId)}
-        className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
-      >
-        <Plus size={13} aria-hidden />
-        {launchBusy ? "Starting\u2026" : "New Agent"}
-      </button>
+      <div className="flex items-stretch overflow-hidden rounded-[10px] border border-dashed border-border-strong">
+        <button
+          type="button"
+          disabled={launchBusy}
+          onClick={() => void onLaunchAgent(openThreadId)}
+          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
+        >
+          <Plus size={13} aria-hidden />
+          {launchBusy ? "Starting\u2026" : "New Agent"}
+        </button>
+        {workspaceId && (
+          <>
+            {/* The hairline is what makes the pair read as ONE control with two
+                zones rather than two buttons that happen to touch. */}
+            <span aria-hidden className="w-px shrink-0 self-stretch bg-border-strong" />
+            <button
+              type="button"
+              disabled={launchBusy}
+              onClick={(e) => picker.toggleFrom(e.currentTarget)}
+              aria-haspopup="menu"
+              aria-expanded={picker.open}
+              // \u26a0 ITS OWN NAME, never "New Agent". Two controls sharing an
+              // accessible name is one control as far as a screen reader is
+              // concerned, and the whole point of the split is that they are two.
+              aria-label="Launch from template"
+              // w-8 = 32px, comfortably over the 24px floor Samuel set for this
+              // zone. A 4px sliver would hide the feature behind a dare.
+              className="flex w-8 shrink-0 items-center justify-center text-text-secondary transition-colors hover:bg-card-surface-subtle hover:text-text-primary disabled:opacity-60"
+            >
+              <ChevronDown size={13} aria-hidden />
+            </button>
+          </>
+        )}
+      </div>
       {launchError && (
         <p role="alert" className="mt-1.5 px-0.5 text-caption text-danger">
           {launchError}
         </p>
+      )}
+      {workspaceId && (
+        <TemplateLaunchPicker
+          open={picker.open}
+          at={picker.at}
+          onClose={picker.close}
+          workspaceId={workspaceId}
+          currentUserId={currentUserId}
+          memberNames={memberNames}
+          busy={launchBusy}
+          launch={(templateId, overrides) =>
+            launchFromPicker(openThreadId, templateId, overrides)
+          }
+          approve={onApproveTemplate}
+        />
       )}
     </div>
   );
@@ -182,183 +272,6 @@ export function AgentsTab({
           <PeerCards peers={peerCards} byUser={byUser} />
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * Other members' agents — STATE ONLY, never openable (Samuel, 2026-08-20): the
- * card exists so the operator can see who else has an agent on the exchange
- * and whether it is working; nothing private is reachable from it.
- */
-function PeerCards({
-  peers,
-  byUser,
-}: {
-  peers: readonly ChannelPeerSession[];
-  byUser: ReadonlyMap<string, ChannelMember>;
-}) {
-  if (peers.length === 0) return null;
-  return (
-    <>
-      {peers.map((peer) => {
-        const owner = byUser.get(peer.userId) ?? null;
-        const ownerName = owner?.displayName || "A teammate";
-        return (
-          <div key={`${peer.userId}:${peer.name}:${peer.threadId ?? ""}`} className={PANEL_CARD}>
-            <div className="flex items-center gap-2">
-              {owner ? (
-                <Avatar person={memberPerson(owner)} size="xs" />
-              ) : (
-                <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
-              )}
-              <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-                {peer.name}
-              </span>
-              {/* ⚠ A PEER ROW HAS NO `detail` AND NO `listening` — the
-                  cross-machine wire carries the coarse state alone (INVARIANTS
-                  §11) — so the SAME mapping degrades it to Running / Idle. */}
-              <AgentLiveness {...agentLiveness(peer)} />
-            </div>
-            <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
-              <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
-              <span className="min-w-0 truncate">
-                {ownerName}&apos;s agent
-                {peer.threadTitle ? ` · ${peer.threadTitle}` : ""}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-/**
- * One agent rectangle, on the same `.bento` card face as a thread card
- * (`bits.tsx › PANEL_CARD`) — the two tabs are one column and a second card
- * shape would read as a second surface.
- *
- * The meter is the shared `UsageMeter` at `tone="ramp"`: a context window is
- * GLANCED at, not read. `over` is not passed — it is an entitlement verdict the
- * caller owns, and a full context window is not an entitlement event.
- *
- * ⚠ EVERY NUMBER IS OPTIONAL AND EVERY ABSENCE IS RENDERED AS ONE. No meter
- * without a denominator, no "Started" without a stamp, no `0` standing in for
- * "not measured yet" (INVARIANTS §11).
- */
-function AgentCard({
-  agent,
-  owner = null,
-  siblings,
-  viewing,
-  onOpen,
-}: {
-  agent: DesktopSessionSummary;
-  /** The card's owner (me) — every card wears its member's avatar (2026-08-20). */
-  owner?: ChannelMember | null;
-  siblings: number;
-  viewing: boolean;
-  onOpen: () => void;
-}) {
-  // A session with no first-class thread is a real session; it just has no title
-  // to show, and saying so beats an empty line.
-  const threadTitle = agent.threadTitle ?? "No thread title";
-  const contextUsed = metric(agent.contextUsed);
-  const contextWindow = metric(agent.contextWindow);
-  const tokensSpent = metric(agent.tokensSpent);
-  const started = relative(metric(agent.startedAt));
-  const lastActivity = relative(metric(agent.lastActivityAt));
-  const ended = agent.state === "ended";
-  // ⚠ WHEN IT ENDED, IN THE LINE THAT ALREADY EXISTS (2026-08-22) — no new
-  // element, and it is the one thing about an ended agent an operator actually
-  // sorts by ("which of these finished last"). ⚠ ABSENT ON AN OLDER MAIN and on
-  // an agent that ended before the field shipped, which renders as the clause
-  // simply not being there; the PILL is what states the fact, never this.
-  // ⚠ NO RETENTION COUNTDOWN. The history is swept on main's own schedule and
-  // there is nothing the operator can do about it, so a clock here would be
-  // anxiety with no action attached.
-  const endedAt = relative(agentEndedAt(agent));
-  // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
-  // have been switched mid-run, or spawned before the posture changed.
-  const modelLabel = agentModelShortLabel(agentRunningModel(agent));
-  const timing = [
-    started && `Started ${started}`,
-    ended ? endedAt && `Ended ${endedAt}` : lastActivity && `Last activity ${lastActivity}`,
-  ].filter(Boolean);
-
-  return (
-    <div className={cn(PANEL_CARD, viewing && "border-border-highlight")}>
-      <div className="flex items-center gap-2">
-        {owner ? (
-          <Avatar person={memberPerson(owner)} size="xs" />
-        ) : (
-          <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
-        )}
-        <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-          {agentDisplayId(agent)}
-        </span>
-        {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22), it
-            does not join it: "Ended" beside a dot reading "Ended" is one fact
-            said twice. ⚠ MY OWN cards get the finer sentence; the peer cards
-            above do not, because the cross-machine wire carries the coarse
-            state alone. */}
-        {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
-      </div>
-
-      <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
-        <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
-        <span className="min-w-0 truncate">{threadTitle}</span>
-        {siblings > 0 && (
-          // Says the shared-thread case out loud. The grouping already puts the
-          // two cards together; this is what tells you the adjacency is the
-          // point rather than a coincidence of ordering.
-          <span className="shrink-0 text-text-muted">
-            · {siblings + 1} of yours here
-          </span>
-        )}
-        {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
-              (2026-08-22). It rides the existing detail line rather than earning
-              chrome of its own — minimal copy (INVARIANTS §5), and a fourth pill
-              on a 340px card is clutter. Absent renders NOTHING: a main that does
-              not report a model has said nothing about what this agent is running,
-              and "Default" would be this build claiming to know
-              (`agents-model.ts › agentRunningModel`). */}
-        {modelLabel && (
-          <span className="shrink-0 text-text-muted">· {modelLabel}</span>
-        )}
-      </div>
-
-      {timing.length > 0 && (
-        <span className="text-caption text-text-muted">{timing.join(" · ")}</span>
-      )}
-
-      {contextUsed !== null && contextWindow !== null && (
-        <UsageMeter
-          label="Context tokens"
-          used={contextUsed}
-          limit={contextWindow}
-          tone="ramp"
-          formatValue={formatTokens}
-          className="mt-0.5"
-        />
-      )}
-
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-caption text-text-muted">
-          {tokensSpent === null
-            ? "Tokens spent: not measured yet"
-            : `Tokens spent: ${formatTokens(tokensSpent)}`}
-        </span>
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-current={viewing ? "true" : undefined}
-          className={CARD_BUTTON}
-        >
-          {viewing ? "Viewing" : "Open"}
-        </button>
-      </div>
     </div>
   );
 }

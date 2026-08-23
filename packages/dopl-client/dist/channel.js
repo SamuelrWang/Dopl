@@ -17,6 +17,7 @@ exports.getChannel = getChannel;
 exports.listChannelMembers = listChannelMembers;
 exports.readMessages = readMessages;
 exports.awaitMessages = awaitMessages;
+exports.awaitWorkspaceMessages = awaitWorkspaceMessages;
 exports.createChannel = createChannel;
 exports.inviteToChannel = inviteToChannel;
 exports.postMessage = postMessage;
@@ -25,6 +26,8 @@ exports.listChannelSessions = listChannelSessions;
 exports.getChannelThread = getChannelThread;
 exports.createChannelThread = createChannelThread;
 exports.setChannelThreadMode = setChannelThreadMode;
+exports.createLaunchDirective = createLaunchDirective;
+exports.getLaunchDirective = getLaunchDirective;
 const enc = encodeURIComponent;
 /** Network read-timeout for the long-poll — above the server cap. */
 const AWAIT_TIMEOUT_MS = 55_000;
@@ -78,6 +81,34 @@ async function awaitMessages(t, channelId, opts) {
         // ⚠ A retry opens a second long-poll — never auto-retry this one.
         retries: 0,
         toolName: "channel_await",
+    });
+}
+/**
+ * WORKSPACE-WIDE long-poll — the `channel`-less await. Holds across every channel
+ * the caller is a MEMBER of and returns the moment anything lands.
+ *
+ * ⚠ SAME BOUNDS AS {@link awaitMessages}, deliberately: one call stays at ~50s
+ * because `/api/channels/await` has `maxDuration` 60, and a multi-minute hold is
+ * assembled ABOVE this layer by re-issuing on the same cursor. ⚠ `retries: 0` —
+ * a retry opens a SECOND long-poll and can double-count arrivals.
+ *
+ * ⚠ It is NARROWER than `op="read"`: a PUBLIC channel the caller never joined is
+ * not watched. `channelCount` on the result says how many channels were being
+ * watched, so ZERO memberships is reported rather than rendered as silence.
+ */
+async function awaitWorkspaceMessages(t, opts) {
+    const params = new URLSearchParams();
+    params.set("since", String(opts.since));
+    params.set("timeoutMs", String(opts.timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS));
+    if (opts.excludeAuthor !== undefined) {
+        params.set("excludeAuthor", opts.excludeAuthor);
+    }
+    return t.request(`/api/channels/await?${params.toString()}`, {
+        method: "GET",
+        timeoutMs: AWAIT_TIMEOUT_MS,
+        // ⚠ A retry opens a second long-poll — never auto-retry this one.
+        retries: 0,
+        toolName: "channel_await_workspace",
     });
 }
 // ─── Write ──────────────────────────────────────────────────────────
@@ -135,6 +166,12 @@ async function listChannelThreads(t, channelId) {
  * all of the caller's in the active workspace. ⚠ Own-scoped server-side — a
  * peer's sessions never come back.
  */
+/**
+ * The caller's OWN sessions. ⚠ OWN-SCOPED AT THE SERVER (`ctx.userId`), which is
+ * what licenses the operator-only telemetry on the returned shape — a PEER's
+ * session comes back from `GET /api/channels/[channelId]/sessions` instead, and
+ * carries the coarse projection only.
+ */
 async function listChannelSessions(t, channelId) {
     const query = channelId ? `?channelId=${enc(channelId)}` : "";
     const data = await t.request(`/api/channels/sessions${query}`, { toolName: "channel_read_sessions" });
@@ -172,4 +209,32 @@ async function setChannelThreadMode(t, channelId, threadId, input) {
         toolName: "channel_set_thread_mode",
     });
     return data.task;
+}
+// ─── Launch directives (launch-over-MCP, 2026-08-22) ────────────────
+/**
+ * ASK THE OPERATOR'S OWN DESKTOP TO START AN AGENT.
+ *
+ * ⚠ A REQUEST, NOT A COMMAND. The server files a row; the machine decides. The
+ * `offline` branch means the machine is not listening and NOTHING WAS FILED.
+ * ⚠ There is no operator argument, by design — see
+ * {@link LaunchDirectiveCreateInput}.
+ */
+async function createLaunchDirective(t, input) {
+    return t.request("/api/channels/launch-directives", {
+        method: "POST",
+        body: input,
+        toolName: "channel_launch_agent",
+    });
+}
+/**
+ * POLL ONE DIRECTIVE — what a bounded hold reads while the desktop decides.
+ *
+ * ⚠ COARSE POLLING ONLY (1-2s). A directive lives at most two minutes and the
+ * decision is a human-scale toggle plus a process spawn; polling faster buys
+ * nothing and multiplies requests across every armed launch.
+ * ⚠ Another operator's directive answers 404, indistinguishable from absent.
+ */
+async function getLaunchDirective(t, id) {
+    const data = await t.request(`/api/channels/launch-directives/${enc(id)}`, { toolName: "channel_launch_poll" });
+    return data.directive;
 }

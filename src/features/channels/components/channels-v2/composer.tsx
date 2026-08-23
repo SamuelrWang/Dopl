@@ -43,19 +43,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AtSign,
   Bot,
+  ChevronDown,
   Expand,
   MessageSquarePlus,
   Mic,
   Paperclip,
   Smile,
-  X,
   Zap,
 } from "lucide-react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
-import { FIELD_WELL } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
-import { AgentTargetPill, IconButton } from "./bits";
+import { IconButton } from "./bits";
+import { AgentRequestPanel } from "./composer-request-panel";
 import { agentLabel } from "./fixtures";
 import {
   insertMentionHandle,
@@ -65,6 +64,10 @@ import {
   type MentionSuggestion,
 } from "./composer-mentions";
 import type { AgentLaunchControls } from "./use-agents-panel";
+import {
+  TemplateLaunchPicker,
+  useTemplatePicker,
+} from "@/features/agent-templates/components/template-picker";
 import { useThreadWrites } from "../../hooks/use-thread-writes";
 import { newClientMsgId } from "../../lib/optimistic-cache";
 import type { ChannelMember } from "../../types";
@@ -130,6 +133,18 @@ export function ChannelsV2Composer({
     if (next > 0) el.style.height = `${next}px`;
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [draft]);
+  // ⚠ THE CHEVRON BESIDE THE BOT ICON, and nothing in front of it. The Bot icon
+  // itself still launches a BLANK agent in one click (Samuel's *one lane,
+  // one-click launch* ruling); this is the adjacent zone that opens the picker.
+  const picker = useTemplatePicker();
+  // `userId → name`, for the picker's foreign-authorship marker.
+  const memberNames = useMemo(
+    () =>
+      new Map(
+        members.map((m) => [m.userId, m.displayName || m.email || ""] as const)
+      ),
+    [members]
+  );
   const [title, setTitle] = useState("");
   const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [removedAgents, setRemovedAgents] = useState<ReadonlySet<string>>(
@@ -345,14 +360,43 @@ export function ChannelsV2Composer({
                 instance (2026-08-21), so agents already standing here are not a
                 reason to take the control away. */}
             {newAgent?.canLaunch && (
-              <IconButton
-                icon={Bot}
-                label="New Agent"
-                size={15}
-                className="h-6 w-6"
-                disabled={newAgent.launchBusy}
-                onClick={() => void newAgent.launchAgent(openThreadId)}
-              />
+              // ⚠ NO GAP BETWEEN THE PAIR — they read as one control with two
+              // zones. The surrounding row's `gap-0.5` would otherwise put the
+              // chevron the same distance from the Bot icon as from "New
+              // thread", which is a different act entirely.
+              <span className="flex shrink-0 items-center">
+                <IconButton
+                  icon={Bot}
+                  label="New Agent"
+                  size={15}
+                  className="h-6 w-6"
+                  disabled={newAgent.launchBusy}
+                  onClick={() => void newAgent.launchAgent(openThreadId)}
+                />
+                {/* ⚠ 24×24, matching the icon row's own density and clearing the
+                    24px floor Samuel set for this zone. `IconButton` takes no
+                    onClick with the event, and the popover anchors off the
+                    clicked element, so the chevron is spelled out with that
+                    component's classes rather than wrapped. */}
+                <button
+                  type="button"
+                  onClick={(e) => picker.toggleFrom(e.currentTarget)}
+                  disabled={newAgent.launchBusy}
+                  aria-haspopup="menu"
+                  aria-expanded={picker.open}
+                  // ⚠ ITS OWN NAME. Sharing "New Agent" with the glyph beside it
+                  // would make them one control to a screen reader.
+                  aria-label="Launch from template"
+                  title="Launch from template"
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] transition-colors",
+                    "text-text-secondary hover:bg-surface-raised-1 hover:text-text-primary",
+                    newAgent.launchBusy && "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  <ChevronDown size={12} aria-hidden />
+                </button>
+              </span>
             )}
             {/* NEW THREAD — the panel this glyph's predecessor opened, moved off
                 the Bot icon and otherwise untouched. */}
@@ -404,81 +448,29 @@ export function ChannelsV2Composer({
               {newAgent.launchError}
             </p>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-/**
- * The recessed new-thread panel. Body is the kit's concave section face
- * (`SECTION_BOX_INSET`) so it reads as pressed INTO the composer card; the
- * pills are the raised `CHIP` that face is written to carry, and the title is
- * the concave `FIELD_WELL` — a second, deeper well inside the first.
- */
-function AgentRequestPanel({
-  targets,
-  removed,
-  title,
-  onTitleChange,
-  onRemove,
-  onDismiss,
-}: {
-  targets: Array<{ id: string; label: string }>;
-  removed: ReadonlySet<string>;
-  title: string;
-  onTitleChange: (next: string) => void;
-  onRemove: (id: string) => void;
-  onDismiss: () => void;
-}) {
-  const addressed = targets.filter((target) => !removed.has(target.id));
-
-  return (
-    <div className={cn(SECTION_BOX_INSET, "flex flex-col gap-2 rounded-[10px] p-2.5")}>
-      <div className="flex items-center gap-2">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          New agent thread
-        </span>
-        <span className="flex-1" />
-        <IconButton
-          icon={X}
-          label="Close new agent thread"
-          size={13}
-          className="h-5 w-5"
-          onClick={onDismiss}
-        />
-      </div>
-
-      {addressed.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {addressed.map((target) => (
-            <AgentTargetPill
-              key={target.id}
-              label={target.label}
-              onRemove={() => onRemove(target.id)}
+          {/* ⚠ THE SAME COMPONENT THE AGENTS TAB MOUNTS, and mounting it twice
+              is FINE — unlike `useAgentsPanel`, whose one-mount rule is about a
+              POLL INTERVAL. `useAgentTemplates` is a react-query read on a
+              stable key, so two mounts share one fetch and one cache entry, and
+              the read only happens while a popover is actually open. */}
+          {newAgent?.canLaunch && (
+            <TemplateLaunchPicker
+              open={picker.open}
+              at={picker.at}
+              onClose={picker.close}
+              workspaceId={workspaceId}
+              currentUserId={currentUserId}
+              memberNames={memberNames}
+              busy={newAgent.launchBusy}
+              launch={(templateId, overrides) =>
+                newAgent.launchAgent(openThreadId, templateId, overrides)
+              }
+              approve={newAgent.approveTemplate}
             />
-          ))}
+          )}
         </div>
-      ) : (
-        // Fail-closed, said out loud: with nobody addressed there is no
-        // thread. "Everyone" is not a shape this product has (INVARIANTS §5).
-        <p className="py-1 text-caption text-text-muted">
-          No agent addressed — this thread reaches nobody.
-        </p>
-      )}
-
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-        spellCheck={false}
-        aria-label="Thread title"
-        placeholder="Title — what is this thread about?"
-        className={cn(
-          FIELD_WELL,
-          "h-8 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted"
-        )}
-      />
+      </div>
     </div>
   );
 }

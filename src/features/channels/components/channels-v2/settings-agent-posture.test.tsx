@@ -101,15 +101,37 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     expect(CHANNEL_PREFS).not.toMatch(/const PRESETS_KEY\s*=/);
     expect(CHANNEL_PREFS).not.toMatch(/const ARM_TTL_MS\s*=/);
     expect(CHANNEL_PREFS).not.toMatch(/^function (arm|consume|clear)PermissionPreset/m);
-    // The one consumer, COUNTED. A second reader of this record is the failure H2
-    // exists to prevent, and it would not look like one from here.
+    // The consumers, COUNTED. A reader of this record that no human is attending is
+    // the failure H2 exists to prevent, and it would not look like one from here.
     // ⚠ COUNTED, NOT NAMED, SINCE 2026-08-20 (F-237). This asserted the read lived
     // in `channel-dir-ipc.js`; the desktop split that file and the read moved to
     // `session-ipc-ops.js`, reddening this suite on a change that did not touch the
-    // rule. The file it lives in is the desktop's business; that there is exactly
-    // ONE is ours. `channel-prefs.js` is excluded as the definition site.
+    // rule. The file it lives in is the desktop's business; how many there are is
+    // ours. `channel-prefs.js` is excluded as the definition site.
+    //
+    // ⚠ IT WENT FROM ONE TO TWO ON 2026-08-22, AND THAT IS A RULING, NOT A DRIFT
+    // (Samuel's launch-over-MCP approval). `launch-directives.js` is the ORCHESTRATOR
+    // lane: an operator's own external agent files a `channel_launch_directives` row
+    // and that operator's own desktop spawns from it, with NO CLICK. H2's rule is not
+    // "a click must happen" — it is that a stored posture may only apply to a launch a
+    // human is APPROVING, and Samuel ruled the approval for this lane a LOCAL,
+    // PER-MACHINE, DEFAULT-OFF toggle. **The toggle IS that human.**
+    // ⚠ WHAT MAKES IT A REAL APPROVAL is that it is unreachable by the thing it
+    // governs: an `electron-store` boolean behind one `appWindowOnly` IPC pair, with
+    // NO route, NO MCP op and NO `workspace_settings` column — because a spawned
+    // session has `Bash` and the device token is on disk, so a server-side flag could
+    // be flipped by the very agents the lane creates.
+    // ⚠ AND THE DIRECTIVE SUPPLIES ONLY A GOAL AND A MODEL. The posture still comes
+    // from THIS record and the tool profile from main's own watched-channel DTO, so a
+    // directive-launched agent is exactly as contained as a button-launched one.
+    // The desktop-side argument and its cases live in
+    // `dopl-desktop-app/test/session-preset-census.test.mjs` (which pins the same fact
+    // from the other side, by file name) and `test/launch-directives.test.mjs`.
+    // ⚠ A THIRD READER STILL NEEDS AN ARGUMENT OF THIS SHAPE. Do not raise this number
+    // without one.
     const readers = desktopMainFilesContaining("channelPrefs.launchStartModes(");
-    expect(readers).toHaveLength(1);
+    expect(readers).toHaveLength(2);
+    expect(readers).toContain("launch-directives.js");
   });
 
   it("drops the whole posture subsection, heading included, with no bridge", () => {

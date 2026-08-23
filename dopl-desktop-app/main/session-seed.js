@@ -266,6 +266,16 @@ function pendingTranscript(s) {
 // spawn-idle session has no `pendingHistory` and the history seed's producer is deleted), and the
 // order states the rule that matters if they ever are: real thread content beats a synthesized
 // launch instruction.
+//
+// ── ⚠ THE TOOL PROFILE RIDES INTO THE CONTEXT HERE, AND NOWHERE ELSE (2026-08-22) ────────────
+//
+// `prompt-framing-template.js › knowledgeLines` has to know whether this session can reach
+// `mcp__dopl__dopl_kb` at all, because `read_only` HARD-DENIES it and
+// `prompt-profile-drift.test.mjs` fails any turn that ORDERS a hard-denied tool. The profile is
+// a fact about the SESSION (`s.profile`), not about the launch payload, so it is spread on at
+// framing time rather than stored in `s.context`: read from the session object it can never
+// disagree with what `buildSdkOptions` computed from the same field, and it cannot be handed in
+// by a caller. The spread is a fresh object per wake — one shot, one turn.
 function takeFraming(s, transcript) {
   if (!s || s.freshFraming !== true) return '';
   s.freshFraming = false;
@@ -273,7 +283,7 @@ function takeFraming(s, transcript) {
   // (identity + the room model + THE LAW) instead of the pair-bound responder framing.
   return framing.buildFencedTurn({
     side: s.side, bind: s.bind, message: transcript || s.launchGoal || '',
-    context: (s && s.context) || {}, nonce: s.nonce,
+    context: { ...((s && s.context) || {}), profile: s.profile }, nonce: s.nonce,
   });
 }
 

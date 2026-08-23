@@ -9,7 +9,7 @@
 // auto-opens alike. It does not forbid durability, so the split was BY CONSUMER:
 //   THE ARM      single use, expiring, ONE consumer — `trigger.js › inboundApproved`.
 //   THIS RECORD  durable, no TTL, spent by nothing, ONE consumer —
-//                `channel-dir-ipc.js › sessions:launch`, the Agents tab's own button. The
+//                `session-ipc-ops.js › sessions:launch`, the Agents tab's own button. The
 //                operator launching THEIR OWN agent on THEIR OWN thread; the click IS the
 //                consent, and no row is raised.
 // Samuel's ruling deleted the arm (its web controls had stopped rendering at the 2026-08-18

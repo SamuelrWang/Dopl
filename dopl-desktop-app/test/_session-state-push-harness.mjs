@@ -14,6 +14,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -45,11 +46,28 @@ const EXPORTED = [
   "nameReportable",
 ];
 
-/** A fresh copy of the module, with a fake transport, a fake log and a fake store. */
+// THE QUANTIZER IS THE REAL MODULE, NOT A STUB (2026-08-22, the orchestrator wave).
+// `session-telemetry.js` is pure — no electron, no store — so it imports cleanly under
+// `node --test` and there is no reason to fake it. Injecting the real one is what makes these
+// suites test ONE program: a stubbed quantizer would let the row shape and the floor drift
+// apart from the code that ships, which is the failure the source-extraction idiom exists to
+// avoid in the first place.
+export const telemetry = createRequire(import.meta.url)(join(MAIN, "session-telemetry.js"));
+
+/**
+ * A fresh copy of the module, with a fake transport, a fake log, a fake store and a CLOCK.
+ *
+ * ⚠ THE CLOCK IS INJECTABLE BECAUSE THE FLOOR READS ONE. `opts.clock` is a `{ now }` box a case
+ * advances by hand; without it the block sees a real `Date` and the floor's 10s would cost the
+ * suite ten seconds of wall time to observe once. `Date` is shadowed inside the block exactly
+ * the way `setTimeout` already is — the code under test is unchanged by either.
+ */
 export function load(opts = {}) {
   const posts = [];
   const logged = [];
   const disk = { ...(opts.disk || {}) };
+  const clock = opts.clock || null;
+  const fakeDate = clock ? { now: () => clock.now } : Date;
   let answers = opts.answers ? [...opts.answers] : [];
   const apiFetch = async (pathname, options) => {
     posts.push({ pathname, options });
@@ -65,14 +83,15 @@ export function load(opts = {}) {
   // Immediate, so RETRY_DELAY_MS costs nothing here. It shadows the global inside the block.
   const fakeSetTimeout = (fn) => { Promise.resolve().then(fn); return { unref() {} }; };
   const api = new Function(
-    "apiFetch", "diag", "store", "setTimeout",
+    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-  )(apiFetch, (...parts) => logged.push(parts.join(" ")), store, fakeSetTimeout);
+  )(apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate);
   return {
     ...api,
     posts,
     logged,
     disk,
+    clock,
     setAnswers: (list) => { answers = [...list]; },
   };
 }

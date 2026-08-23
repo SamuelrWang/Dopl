@@ -179,6 +179,33 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
   },
 
+  // ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ────────
+  //
+  // MAY ANOTHER AGENT CAUSE THIS MACHINE TO SPAWN A SESSION? Default FALSE, per machine, and it
+  // is the STANDING CONSENT for the whole `channel_launch_directives` lane
+  // (`main/launch-directives.js`) — with it off, a directive addressed to this operator is
+  // ignored silently and expires server-side where the orchestrator can see it happen.
+  //
+  // ⚠ IT IS ITS OWN NAMESPACE, NOT A MEMBER OF `channels`, because it takes no channel: one
+  // operator, one Mac, one answer. Both members are FEATURE-PROBED by the SPA and an older main
+  // simply has no toggle, which reads as OFF — the correct terminal answer, not a compatibility
+  // mode (UNKNOWN is not EMPTY).
+  //
+  // ⚠ THIS BRIDGE IS THE ONLY WAY THE VALUE MOVES, AND THAT IS THE SECURITY CONTENT rather
+  // than a storage detail. A spawned session runs with `Bash` and this operator's device token
+  // is on disk (§6), so a SERVER-STORED version of this flag could be flipped by an agent
+  // holding the operator's own credential — arming every machine they own. There is no route,
+  // no MCP op and no column for it, deliberately; read `main/channel-prefs.js`'s block before
+  // adding any second writer.
+  //
+  // ⚠ `set` ANSWERS MAIN'S OWN VALUE, never an echo, so the SPA's optimistic switch reverts on
+  // `{ok:false}` instead of showing a state nothing is enforcing.
+  orchestratorLaunch: {
+    get: () => ipcRenderer.invoke('orchestrator:getLaunchEnabled'),
+    set: (enabled) =>
+      ipcRenderer.invoke('orchestrator:setLaunchEnabled', { enabled: enabled === true }),
+  },
+
   // `reopen` — the session card's "Open thread" button, on the sender-bound handler in
   // `main/session-ipc-ops.js` (`sessions:reopen`, which requires an app-owned window's TOP
   // frame). ⚠ It said "the SAME op renderer/preload.js exposes" until 2026-08-20: that preload
@@ -251,7 +278,24 @@ contextBridge.exposeInMainWorld('dopl', {
     },
     // LAUNCH (2026-08-20): attach MY OWN agent to a thread, windowless. The
     // payload is display strings + ids; main validates and owns the posture.
+    // ⚠ THE ONE OP HERE THAT FORWARDS ITS PAYLOAD RAW, and `templateId` (2026-08-22) rides that
+    // property rather than adding a coercion: main re-validates every field of this object
+    // anyway (`session-launch-op.js`), and a preload that half-coerced a UUID would be a second
+    // opinion about what a template id is. An absent / null / '' id is a BLANK agent, exactly as
+    // before templates existed.
     launch: (payload) => ipcRenderer.invoke('sessions:launch', payload || {}),
+
+    // ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). Records a
+    // MACHINE-LOCAL decision and starts nothing. Call it when the operator has read that
+    // template's instructions in the launch sheet and chosen to run as it, then relaunch.
+    // ⚠ IT WIDENS NO CONTAINMENT. A launch from an approved template is contained exactly like a
+    // launch from any other: same tool profile, same permission axes, same working folder.
+    // ⚠ NEVER SERVER-REACHABLE, and that is the security content rather than the storage: a
+    // server-writable approval would let a credential-holding agent pre-approve itself on every
+    // machine the operator owns (`main/channel-prefs.js` states the same rule for the
+    // orchestrator toggle it lives beside).
+    approveTemplate: (templateId) =>
+      ipcRenderer.invoke('sessions:approveTemplate', { templateId: asId(templateId) }),
 
     // ⚠ CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot see the server's
     // cascade, so without it an ended agent's frozen history outlives its thread by up to

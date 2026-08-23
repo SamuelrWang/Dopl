@@ -48,6 +48,42 @@ export interface SpaBridgeSurface {
   appOrigin?: string;
   syncWatch?(workspaceId: string | null): Promise<unknown>;
   onSyncEvent?(cb: (e: { workspaceId: string; table: string }) => void): () => void;
+  /**
+   * THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) — may another
+   * agent cause THIS MACHINE to spawn a session, with no click?
+   *
+   * ⚠ IT IS THE STANDING CONSENT FOR THE WHOLE `channel_launch_directives` LANE, and Samuel
+   * ruled it as the replacement for "the click IS that human" there: a directive arrives with
+   * no human attending, so the operator's prior decision on this machine has to BE the human.
+   * Default **FALSE**. With it off, `main/launch-directives.js` reads a directive addressed to
+   * this operator and ignores it SILENTLY — the row then expires server-side, visibly to the
+   * orchestrator, which is a better answer than a refusal this machine has to be trusted to
+   * send.
+   *
+   * ⚠ IT LIVES OUTSIDE THE SERVER ENTIRELY AND THAT IS THE SECURITY CONTENT, not a storage
+   * detail. It is an `electron-store` boolean written by ONE `appWindowOnly` IPC pair
+   * (`main/channel-dir-ipc.js › orchestrator:get/setLaunchEnabled`, storage
+   * `main/channel-prefs.js › get/setOrchestratorLaunch`). **There is no route, no MCP op and no
+   * `workspace_settings` column for it, deliberately.** A spawned session runs with `Bash` and
+   * this operator's device token is on disk (§6), so any server-stored version of this flag
+   * could be flipped by an agent holding the operator's own credential — arming every machine
+   * they own. Never add a remotely-addressable writer.
+   *
+   * ⚠ IT DECIDES WHO MAY PRESS, NEVER WHAT IS ALLOWED. A directive-driven launch is exactly as
+   * contained as a Launch-button one: the channel's durable posture still supplies both
+   * permission axes, the channel's tool profile still bounds what is reachable, and
+   * `session-profiles.js › SESSION_HARD_DENY` is unconditional either way.
+   *
+   * ⚠ FEATURE-DETECT BOTH MEMBERS, and read an absent bridge as OFF — an older main has no
+   * toggle and a plain browser has no bridge, and in both cases the lane is not running.
+   * ⚠ `set` ANSWERS MAIN'S OWN VALUE: `{ ok: false }` means the store did not end up holding
+   * what was asked for, so an optimistic switch must REVERT rather than render a state nothing
+   * is enforcing. Same rule `sessions.setMode` / `setModel` follow.
+   */
+  orchestratorLaunch?: {
+    get(): Promise<{ enabled: boolean }>;
+    set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
+  };
   /** THE OPERATOR'S OWN AGENTS.
    *  ⚠ "SHARED BY BOTH PRELOADS" / "SPA-ONLY" IS RETIRED (2026-08-20): the remote
    *  preload is deleted and orphaned, so there is only one preload left and
@@ -216,11 +252,53 @@ export interface SpaBridgeSurface {
       threadTitle?: string | null;
       counterpartyId?: string | null;
       direct?: boolean;
+      /**
+       * ⚠ AN ID, NEVER A SNAPSHOT (2026-08-22, agent templates). The SPA names the
+       * identity it wants; **MAIN resolves the CONTENT** over
+       * `GET /api/agent-templates/{id}/resolve`, under the operator's own credential,
+       * at spawn (`main/template-resolve.js`). A renderer-supplied
+       * `{name, instructions}` would be renderer-authored text landing in a prompt and
+       * main could not tell a real template from a fabricated one — F-267 with PROMPT
+       * TEXT as the thing forged. It also keeps the knowledge-base viewer filter on the
+       * OPERATOR's credential, and reads the row fresh.
+       *
+       * ⚠ ABSENT / `null` / `""` ALL MEAN A BLANK AGENT, byte-identically to a launch
+       * from before templates existed: no resolve, no round trip, no role block.
+       * ⚠ A PRESENT BUT MALFORMED ID IS A REFUSAL, not a silent blank launch.
+       */
+      templateId?: string | null;
+      /**
+       * THIS SPAWN's ephemeral re-points, from the launch sheet. Never written back to
+       * the template.
+       *
+       * ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE", on both keys — so an untouched
+       * sheet and a plain row click produce identical launches.
+       * ⚠ `fields` REPLACES the template's own set; it is never merged.
+       * ⚠ MAIN RE-VALIDATES ALL OF IT (F-281): `@/shared/lib/safe-label` imports zod, so
+       * no renderer surface can hold `SAFE_LABEL_RE` and this side enforces only the
+       * numbers. `main/template-resolve.js › narrowOverrides` applies the charset rule
+       * and DROPS a row that fails it.
+       */
+      overrides?: {
+        model?: string | null;
+        fields?: { key: string; value: string }[];
+      };
     }): Promise<{
       ok: boolean;
       agentId?: string;
       sessionId?: string | null;
+      /**
+       * ⚠ `template-approval` IS A QUESTION, NOT A FAILURE (2026-08-22, OQ-3). The first
+       * time a FOREIGN template (one this operator did not write) launches on this
+       * machine, main refuses and hands back the name and instructions it resolved so the
+       * SPA can show them verbatim. Answer it with `approveTemplate` and relaunch.
+       * ⚠ `no-template` means the picked template did not resolve for this operator —
+       * deleted, or not visible to them. One word for both, because the endpoint is
+       * 404-never-403 and the difference is deliberately not observable.
+       */
       reason?: string;
+      /** Present ONLY with `reason: "template-approval"` — the text to show. */
+      template?: { name?: string | null; instructions?: string | null } | null;
     }>;
     /** Interrupt the turn in flight, from the Agents tab. The session stays live,
      *  resumable and named. ⚠ Name the `agentId` when a thread holds more than
@@ -241,6 +319,26 @@ export interface SpaBridgeSurface {
       taskId: string,
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    /**
+     * RECORD THIS MACHINE'S FIRST-USE APPROVAL of another member's agent template
+     * (2026-08-22, OQ-3). Call it after the operator has read that template's instructions
+     * in the approval sheet, then relaunch.
+     *
+     * ⚠ IT GRANTS NOTHING BUT THE PROMPT. No tool, no permission axis, no delivery lane and
+     * no working folder: it decides only whether that template's TEXT may become an agent's
+     * role on this Mac. A launch from an approved template is contained exactly like any
+     * other launch.
+     * ⚠ MACHINE-LOCAL AND NEVER SERVER-REACHABLE, and that is the security content rather
+     * than a storage detail: a spawned session has `Bash` and the operator's credential is
+     * on disk, so a server-stored approval would let a credential-holding agent pre-approve
+     * itself across every machine they own. Same store, same rule and the same argument as
+     * the launch-over-MCP toggle (`main/channel-prefs.js`).
+     * ⚠ PER TEMPLATE, NOT PER AUTHOR: what the operator read and consented to was one body
+     * of instructions.
+     * ⚠ THE VERDICT IS RETURNED, NEVER SWALLOWED. An approval main did not store means the
+     * next launch asks again, which reads as a broken modal unless this side can say so.
+     */
+    approveTemplate?(templateId: string): Promise<{ ok: boolean; reason?: string }>;
     /**
      * ⚠ CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot observe the
      * server's delete cascade, so without it an ended agent's frozen history outlives its

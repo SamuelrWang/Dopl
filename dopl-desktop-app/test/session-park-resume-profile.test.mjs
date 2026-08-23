@@ -50,10 +50,20 @@ function harness() {
     // the shell-recreate lane — nothing in the surviving block reads a record.
     slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
   };
+  // ⚠ `sessionWindowless` JOINED 2026-08-22 (F-272): `startResume` now enforces
+  // `MAX_CONCURRENT_SESSIONS`. These cases are about the PROFILE a resume comes back with, so the
+  // ceiling is deliberately out of their way — the cap's own cases live in
+  // `session-park.test.mjs`, and a resume refused here would pass every profile assertion
+  // vacuously by never constructing a session at all.
+  const sessionWindowless = {
+    MAX_CONCURRENT_SESSIONS: Number.MAX_SAFE_INTEGER,
+    liveCount: () => 0,
+  };
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "sessionWindowless", "diag",
     `${BLOCK}\n return { bind, startResume, knownProfile };`
-  )(io, store, { randomBytes: () => ({ toString: () => "dead" }) }, ids.newAgentId, ids.isAgentId, null, () => {});
+  )(io, store, { randomBytes: () => ({ toString: () => "dead" }) }, ids.newAgentId, ids.isAgentId, null,
+    sessionWindowless, () => {});
   api.bind({
     sessions,
     getSdk: async () => ({ query: () => ({}) }),
@@ -102,6 +112,47 @@ test("C7: the rest of the resume spec is unchanged (ids, counterparty, resume id
   // D1: the header identity is restored from the record — `contextFromRecord` is live, and this
   // is the ONE test left that drives it now that the recreate path is deleted.
   assert.equal(spec.context.authorName, "David");
+});
+
+// ── ⚠ F-288 — THE TEMPLATE IDENTITY SURVIVES A CRASH RESUME ──────────────────────────────
+//
+// ⚠ **THE HALF `resumeParked` DOES NOT COVER, AND THE DOC SAID IT DID.** INVARIANTS §5A justified
+// template survival on the grounds that a park/resume "works IN PLACE and never rewrites
+// `s.context`" — true of `resumeParked`, and false of `startResume`, which is a full
+// re-`startSession` off a durable record. So a CRASH resume rebuilt the context from
+// `contextFromRecord`, which named five keys and no template: `session-summary.js › liveSummary`
+// reported `templateName: null`, `templateName` is in `session-telemetry.js › STATE_FIELDS` (so
+// the change bypassed the cadence floor and pushed at once), and `repository-sessions.ts ›
+// sessionRowMatches` saw a changed row and wrote NULL over the name — under a still-running agent
+// whose orchestrator was reading it in `read_sessions` to tell six agents apart.
+//
+// ⚠ A NAME-ONLY STUB IS THE WHOLE FIX. Nothing after spawn reads `instructions` / `fields` /
+// `knowledgeBases`: their one consumer is `prompt-framing-template.js › templateRoleFraming` via
+// the one-shot `session-seed.js › takeFraming`, and `session-engine.js` sets `freshFraming` false
+// whenever `resumeSdkId` is present — which `startResume` always passes. The SDK's own resume
+// carries the original ROLE block.
+test("F-288: a crash resume rehydrates `context.template` as a name-only stub", async () => {
+  const h = harness();
+  await h.startResume({ ...REC, templateName: "Contract Auditor" }, "sdk-1", "continue");
+  const ctx = h.started[0].context;
+  assert.deepEqual(ctx.template, { name: "Contract Auditor" },
+    "the resumed session must report the template it was launched from, not null");
+  // ⚠ THE READER'S OWN EXPRESSION, so this pins the shape `liveSummary` actually asks for rather
+  // than a shape that merely looks right here.
+  assert.equal(ctx.template && ctx.template.name, "Contract Auditor");
+  // …and the body is deliberately NOT persisted or rehydrated.
+  for (const k of ["instructions", "fields", "knowledgeBases", "authoredByCaller", "model"]) {
+    assert.equal(k in ctx.template, false, `${k} must not be rebuilt from disk`);
+  }
+});
+
+test("F-288: a record with NO template resumes with `template: null`, not undefined", async () => {
+  // ⚠ NULL, NOT ABSENT: `session-launch-op.js` puts `template: null` on a blank launch too, and a
+  // consumer that had to tell "absent" from "null" would be a consumer with two paths for one
+  // state (the durable whitelist's own stated rule).
+  const h = harness();
+  await h.startResume(REC, "sdk-1", "continue");
+  assert.equal(h.started[0].context.template, null);
 });
 
 // ⚠ REWRITTEN, NOT REMOVED — the section it shared a test with is what went.

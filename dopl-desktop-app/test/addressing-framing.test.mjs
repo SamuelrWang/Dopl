@@ -259,7 +259,11 @@ test("a WOKEN requester (`scope: 'thread'`) IS ordered to read the thread it is 
 
 test("the spawn-idle launch really is a REQUESTER, and really is the only `scope` producer", () => {
   // If either of these stops holding, the discriminator above is measuring the wrong thing.
-  const OPS = readFileSync(MAIN("session-ipc-ops.js"), "utf8");
+  // ⚠ REPOINTED 2026-08-22 (the agent-templates wave): the `sessions:launch` BODY moved to
+  // `main/session-launch-op.js` in a §1 split. `session-ipc-ops.js` still registers the op and
+  // still owns the sender binding; what this test is about is what ONE LAUNCH IS, which is the
+  // other side of that seam.
+  const OPS = readFileSync(MAIN("session-launch-op.js"), "utf8");
   assert.match(OPS, /engine\.launchRequesterSession\(\{/, "the New Agent lane is the requester lane");
   assert.match(OPS, /idle: true/, "…and it is the spawn-idle one");
   assert.match(OPS, /scope: channelLevel \? 'channel' : 'thread'/, "…and it is what sets scope");

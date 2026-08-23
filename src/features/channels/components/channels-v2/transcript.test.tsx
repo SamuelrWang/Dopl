@@ -2,22 +2,21 @@
 /**
  * The wired transcript. The property this file exists for:
  *
- * **SIDE COMES FROM `author_user_id`, THE AGENT CHIP COMES FROM `authorKind`,
- * AND THE TWO NEVER SWAP JOBS.** `authorKind` is caller-assertable
- * (INVARIANTS §5) — an explicit body value beats `ctx.source`, which is
- * load-bearing because the desktop posts agent results over the operator's own
- * cookie session. Letting it pick a side would let a caller choose which half
- * of somebody else's screen their words land on. `author_user_id` is always
+ * **SIDE COMES FROM `author_user_id`, THE PILL'S AGENT NAME COMES FROM
+ * `authorKind`, AND THE TWO NEVER SWAP JOBS.** `authorKind` is caller-assertable
+ * (INVARIANTS §5) — an explicit body value beats `ctx.source`, load-bearing
+ * because the desktop posts agent results over the operator's own cookie
+ * session. Letting it pick a side would let a caller choose which half of
+ * somebody else's screen their words land on. `author_user_id` is always
  * `ctx.userId` and is the signal the layout hangs off.
  *
  * Also pinned: `task_started` renders as NOTHING while a TERMINAL lifecycle row
  * renders as a slim receipt line (the shipping desktop's trigger lanes still
  * post both — INVARIANTS §5), a thread's opening message becomes a CARD in the
- * channel view while the rest of its messages stay in the thread view, and the
- * scroll-target row carries `data-message-id`.
- *
- * How a body WRAPS and which way its text reads is `transcript-body.test.tsx` —
- * a separate file because this one has no headroom under the 500-line cap.
+ * channel view while the rest stay in the thread view, and the scroll-target row
+ * carries `data-message-id`. How a body WRAPS is `transcript-body.test.tsx` and
+ * the attribution PILL is `agent-attribution.test.tsx` — separate files because
+ * this one has no headroom under the 500-line cap.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -72,8 +71,12 @@ describe("channels-v2 transcript — sides", () => {
         formatChannelTimestamp
       )
     );
-    expect(rowFor("MY-TEXT").className).toContain("flex-row-reverse");
-    expect(rowFor("THEIR-TEXT").className).not.toContain("flex-row-reverse");
+    // ⚠ THE AXIS MOVED, THE RULE DID NOT (2026-08-22, the attribution pill): the
+    // row is a COLUMN, so the side is `items-end`/`items-start`, not
+    // `flex-row-reverse`. Still `authorUserId === currentUserId` (§5).
+    expect(rowFor("MY-TEXT").className).toContain("items-end");
+    expect(rowFor("THEIR-TEXT").className).toContain("items-start");
+    expect(rowFor("THEIR-TEXT").className).not.toContain("items-end");
   });
 
   it("hangs MY AGENT right and a PEER's agent left — never a third column", () => {
@@ -99,8 +102,10 @@ describe("channels-v2 transcript — sides", () => {
         formatChannelTimestamp
       )
     );
-    expect(rowFor("MY-AGENT").className).toContain("flex-row-reverse");
-    expect(rowFor("PEER-AGENT").className).not.toContain("flex-row-reverse");
+    expect(rowFor("MY-AGENT").className).toContain("items-end");
+    expect(rowFor("PEER-AGENT").className).not.toContain("items-end");
+    // ⚠ Both rows are UNSTAMPED, so both NAME LINES read the bare noun — the
+    // chip is gone (`attribution-pill.tsx › attributionName`).
     expect(screen.getAllByText("Agent")).toHaveLength(2);
   });
 
@@ -122,7 +127,7 @@ describe("channels-v2 transcript — sides", () => {
         formatChannelTimestamp
       )
     );
-    expect(rowFor("CLAIMED").className).not.toContain("flex-row-reverse");
+    expect(rowFor("CLAIMED").className).not.toContain("items-end");
   });
 
   it("labels the viewer 'You' and a peer by their roster name", () => {

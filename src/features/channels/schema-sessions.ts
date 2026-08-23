@@ -95,6 +95,103 @@ const SessionStateEntrySchema = z.object({
   state: closedEnum<SessionPillState>()(["working", "idle", "ended"]),
   channelName: safeLabel("Channel name", 120).nullable().optional(),
   threadTitle: safeLabel("Thread title", 200).nullable().optional(),
+
+  // ── TELEMETRY (2026-08-22, migration 20260822150000) ──────────────────────
+  //
+  // ⚠ EVERY ONE IS `.nullable().optional()`, AND BOTH HALVES ARE LOAD-BEARING.
+  // `optional` is the ROLLOUT contract: a desktop older than this wave sends no
+  // such key, and a REQUIRED field here would 400 its whole report — `retryable
+  // (400)` is false, so that machine's `read_sessions` answers `[]` forever
+  // (INVARIANTS §11, §13). `nullable` is the SEMANTIC one: a desktop that HAS
+  // this build and genuinely does not know a number sends `null`, which is a
+  // different statement from omitting the key and must survive as `null` all
+  // the way to the render.
+  //
+  // ⚠ **NULL IS UNKNOWN. NEVER COERCE ONE TO 0** — see `types.ts ›
+  // ChannelSessionTelemetry`. There is no `.default()` anywhere below and there
+  // must not be.
+  //
+  // ⚠ `SESSION_REPORT_MAX` IS UNTOUCHED (still 32) — these are columns on a row
+  // that already existed, not more rows. Widening the array bound because rows
+  // got wider is the mistake its docblock exists to refuse.
+  /**
+   * WHICH OF SIX SITUATIONS the session is in — the CLOSED key vocabulary
+   * `dopl-desktop-app/main/session-detail.js › detailFor` derives
+   * (`thinking` / `tool` / `posting` / `permission` / `awaiting_peer` /
+   * `awaiting_inbound`). ⚠ **THE ONE REFINEMENT THAT CROSSES TO A PEER**, and it
+   * crosses only because the vocabulary is closed and coarse.
+   *
+   * ⚠ **NOT A `z.enum`, DELIBERATELY, AND THE REASON IS THE SAME ONE
+   * `SESSION_REPORT_MAX` CARRIES.** zod validates the ARRAY: a desktop shipping a
+   * SEVENTH key would 400 its ENTIRE push, `retryable(400)` is false, and every
+   * later push for that workspace fails identically — leaving `read_sessions`
+   * answering `[]` for that machine forever (INVARIANTS §11, §13). An older or
+   * NEWER desktop must both degrade, not fail. So the write bound is SHAPE
+   * (`safeLabel`, 40 chars — it is spliced into MCP narration and must not be
+   * able to open a line), and the closed-VALUE test lives on the READ side in
+   * `collab-dto.ts › narrowSessionDetail`, where an unknown key becomes `null`
+   * instead of poisoning a push.
+   * ⚠ 40 rather than 200: this field is a KEY. A bound that comfortably fits a
+   * sentence is a bound that invites one, and a sentence here is operator-only
+   * material on a peer-visible column.
+   */
+  detail: safeLabel("Session detail", 40).nullable().optional(),
+  /** The tool running right now. Same charset class, much shorter. */
+  toolLabel: safeLabel("Tool label", 80).nullable().optional(),
+  /** Model id/label. ⚠ Operator-only on the way OUT, still neutralized on the
+   *  way IN — the operator's own result is narration too. */
+  model: safeLabel("Model", 120).nullable().optional(),
+  // ⚠ `.int().nonnegative()` and NO `.default(0)`. A negative or fractional
+  // count is a reporting bug, and refusing it here is a 400 that names the
+  // field rather than a nonsense number rendered as fact.
+  contextUsed: z.number().int().nonnegative().nullable().optional(),
+  contextWindow: z.number().int().nonnegative().nullable().optional(),
+  tokensSpent: z.number().int().nonnegative().nullable().optional(),
+  /** ⚠ `.datetime()` — these land in TIMESTAMPTZ columns, and an unparseable
+   *  string reaches Postgres as a cast error, i.e. an opaque 500 for a
+   *  malformed request (the same rule `SessionStateQuerySchema` states). */
+  startedAt: z.string().datetime({ offset: true }).nullable().optional(),
+  lastActivityAt: z.string().datetime({ offset: true }).nullable().optional(),
+
+  // ── THE AGENT TEMPLATE (2026-08-23, migration 20260823130000) ─────────────
+  /**
+   * THE TEMPLATE THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
+   *
+   * ⚠ **ACCEPTED HERE BEFORE ANY DESKTOP SENDS IT, AND THAT ORDER IS THE WHOLE
+   * POINT.** Phase 1 of the templates wave teaches `main/session-state-push.js`
+   * to put `templateName` on the reported row. The two trees ship separately, so
+   * for some window a NEWER desktop pushes to an OLDER server — and zod
+   * validates the ARRAY, so ONE unknown key on ONE row 400s that machine's WHOLE
+   * push, `retryable(400)` is false, and every later push for that workspace
+   * fails identically, leaving `read_sessions` answering `[]` for it forever
+   * (INVARIANTS §11, §13). ⚠ **A 400 HERE POISONS THE WORKSPACE; IT DOES NOT
+   * DROP A FIELD.** So the field lands on the server FIRST and stays inert.
+   * (zod objects strip unknown keys rather than refusing them, which would make
+   * this merely belt — but the belt is what the additive-fields discipline is,
+   * and relying on a parser's default mode for a wire contract is how the
+   * default gets changed under you.)
+   *
+   * ⚠ `.nullable().optional()` for the SAME two reasons the telemetry block
+   * states: `optional` is the rollout contract (an older desktop sends no key),
+   * `nullable` is the semantic one (a session launched from no template says so
+   * explicitly).
+   *
+   * ⚠ **THE NAME, NEVER THE ID.** The server does not resolve a template here —
+   * main captured the resolved template at spawn and reports what it RAN AS, so
+   * the value survives a rename or a delete. See
+   * `20260823130000_channel_sessions_template_name.sql` for why this is a
+   * denormalized snapshot rather than an FK.
+   *
+   * ⚠ Bound is `safeLabel` at **120** — character for character the column's
+   * CHECK, which is itself character for character
+   * `agent_templates_name_charset_check`. The mirror is load-bearing: a name
+   * that is LEGAL on a template must never be refusable into this projection, or
+   * a legitimate launch 400s the operator's entire session push. And it is
+   * bounded at all because it is operator-authored free text spliced into MCP
+   * narration — operator-only is not the same as trusted, and a newline in your
+   * own result forges a line in your own result.
+   */
+  templateName: safeLabel("Template name", 120).nullable().optional(),
 });
 export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 

@@ -424,7 +424,14 @@ export function ChannelsV2Core({
               }
               launchBusy={agentsPanel.launchBusy}
               launchError={agentsPanel.launchError}
-              onLaunchAgent={(id) => void agentsPanel.launchAgent(id)}
+              // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22). The
+              // template picker inside the tab AWAITS this to learn whether main
+              // asked for a first-use approval; a `void` wrapper here would make
+              // every picker launch look like a build with no bridge.
+              onLaunchAgent={(id, templateId, overrides) =>
+                agentsPanel.launchAgent(id, templateId, overrides)
+              }
+              onApproveTemplate={agentsPanel.approveTemplate}
               openAgent={sel.openAgent}
               onOpenAgent={sel.setOpenAgent}
               mentions={mentions}

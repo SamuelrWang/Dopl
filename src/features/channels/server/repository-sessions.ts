@@ -16,15 +16,24 @@ import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
 
 // ⚠ PostgREST truncates an un-limited select SILENTLY. Far above the desktop's
 // live ceiling (`dopl-desktop-app/main/session-windowless.js ›
-// MAX_CONCURRENT_SESSIONS`, 6, plus `main/session-summary.js › MAX_ENDED`, 12);
-// exists only to make truncation loud.
+// MAX_CONCURRENT_SESSIONS`, 6, measured 2026-08-22); exists only to make
+// truncation loud.
 //
-// ⚠ IT USED TO NAME `MAX_SESSION_WINDOWS`, THE WINDOW BUDGET, WHICH IS DELETED
-// with the v1 session window. Same number, different thing: what is left counts
-// RUNNING sessions rather than open windows, so it is the ceiling this limit has
-// to stay far above. ⚠ The channel read below is NOT user-scoped — it spans every
-// member's rows, so its headroom is that ceiling times the channel roster, which
-// is the case that will reach 500 first if one ever does.
+// ⚠ THE DERIVATION HAD A SECOND TERM AND IT IS GONE (2026-08-22, F-269 — the
+// same correction `schema-sessions.ts › SESSION_REPORT_MAX` took as F-255, which
+// left this copy behind). It read "plus `main/session-summary.js › MAX_ENDED`,
+// 12", and **`MAX_ENDED` IS DELETED**: ended-agent retention moved to a durable
+// seven-day history (`main/agent-history.js`), which no in-memory 12 bounds. The
+// term never belonged here anyway — the wire set is LIVE ONLY
+// (`main/session-state-push.js › liveForWire` drops ended rows before they are
+// sent), so no quantity of retained ended agents reaches this table.
+//
+// ⚠ IT ALSO USED TO NAME `MAX_SESSION_WINDOWS`, THE WINDOW BUDGET, WHICH IS
+// DELETED with the v1 session window. Same number, different thing: what is left
+// counts RUNNING sessions rather than open windows, so it is the ceiling this
+// limit has to stay far above. ⚠ The channel read below is NOT user-scoped — it
+// spans every member's rows, so its headroom is that ceiling times the channel
+// roster, which is the case that will reach 500 first if one ever does.
 const SESSION_ROWS_LIMIT = 500;
 
 // ─── Session states (rollback §3.5, read-session-state) ─────────────
@@ -158,27 +167,77 @@ async function sessionRowsWhere(
   return (data ?? []) as SessionStateRow[];
 }
 
-/** Columns the reconcile compares. ⚠ `id` / `created_at` / `updated_at` are
- *  deliberately absent — identity and history, neither reported by the desktop
- *  nor something the diff should look at. */
+/**
+ * Columns the reconcile compares. ⚠ `id` / `created_at` / `updated_at` are
+ * deliberately absent — identity and history, neither reported by the desktop
+ * nor something the diff should look at.
+ *
+ * ⚠ **EVERY REPORTED COLUMN MUST BE IN THIS LIST, TELEMETRY INCLUDED**
+ * (2026-08-22). The reconcile writes only rows that DIFFER, so a column the
+ * SELECT does not fetch reads back as `undefined`, compares unequal against the
+ * reported value, and makes every row look changed — or, if it were also left
+ * out of {@link sessionRowMatches}, a push carrying nothing but new token counts
+ * would be discarded as a no-op and the numbers would freeze at their first
+ * value while the row kept claiming to be current. The two lists below and this
+ * string are one statement of "what a session row is"; `repository-sessions-columns.test.ts`
+ * pins them against {@link SessionStateUpsert}'s own keys so adding a column to
+ * the type and not to these is a red test rather than a silent freeze.
+ *
+ * ⚠ **THAT SENTENCE WAS A CLAIM ABOUT A TEST THAT DID NOT EXIST UNTIL
+ * 2026-08-23** — it named `repository-sessions.test.ts`, which never pinned
+ * anything of the kind, and three columns were added under it. The pin is real
+ * now and lives in its own file (the 500-line cap took it out of the behaviour
+ * suite). Do not restate the guarantee here without opening that file.
+ */
 const SESSION_DIFF_COLUMNS =
-  "session_key, channel_id, task_id, name, state, channel_name, thread_title";
+  "session_key, channel_id, task_id, name, state, channel_name, thread_title, " +
+  "detail, tool_label, model, context_used, context_window, tokens_spent, " +
+  "started_at, last_activity_at, template_name";
 
 /** ⚠ Field by field, NEVER JSON.stringify: key ORDER differs between a
  *  PostgREST row and a service-built object, so a string compare reports every
  *  row as changed — touching every `updated_at` on every push and destroying
- *  the read's ordering. */
+ *  the read's ordering.
+ *
+ *  ⚠ The BIGINT columns compare with `!==` against a value PostgREST may hand
+ *  back as a STRING. `Number()` is applied to both sides for exactly those
+ *  three, and `null` is compared as `null` — never coerced, because `Number
+ *  (null)` is 0 and a stored NULL would then read as equal to a reported 0.
+ */
 function sessionRowMatches(
   stored: SessionStateUpsert,
   reported: SessionStateUpsert
 ): boolean {
+  const sameCount = (
+    a: number | string | null | undefined,
+    b: number | null
+  ): boolean => {
+    if (a === null || a === undefined) return b === null;
+    if (b === null) return false;
+    return Number(a) === b;
+  };
   return (
     stored.channel_id === reported.channel_id &&
     stored.task_id === reported.task_id &&
     stored.name === reported.name &&
     stored.state === reported.state &&
     stored.channel_name === reported.channel_name &&
-    stored.thread_title === reported.thread_title
+    stored.thread_title === reported.thread_title &&
+    stored.detail === reported.detail &&
+    stored.tool_label === reported.tool_label &&
+    stored.model === reported.model &&
+    sameCount(stored.context_used, reported.context_used) &&
+    sameCount(stored.context_window, reported.context_window) &&
+    sameCount(stored.tokens_spent, reported.tokens_spent) &&
+    stored.started_at === reported.started_at &&
+    stored.last_activity_at === reported.last_activity_at &&
+    // ⚠ In practice this never moves for a live session — a template is captured
+    // at spawn and a session cannot change identity mid-run. It is compared
+    // anyway because the rule above admits no exceptions: a column in the SELECT
+    // but not in this compare reads back as a difference nobody made on the
+    // FIRST push after the field ships, and a column in neither freezes at its
+    // first value while the row keeps claiming to be current.
+    stored.template_name === reported.template_name
   );
 }
 
@@ -207,9 +266,15 @@ export async function listChannelSessionStates(
  * whole content is "user U is running an agent on thread T". The thread is gone,
  * so the statement the row makes is gone, whoever's machine wrote it. ⚠ The
  * PEER'S ACTUAL AGENT IS NOT REACHABLE and is not touched — it dies on its own
- * idle/abandon timer, and until it does its next push simply re-inserts nothing
- * (`replaceSessionStates` reconciles against the thread the desktop still
- * reports; the card's freshness guard is what stops a stale row rendering).
+ * idle/abandon timer, and until it does its next push re-inserts the row with
+ * `task_id` nulled ({@link healDeadThreadRefs}, F-241). ⚠ **THAT ROW IS NOT
+ * STALE, IT IS THREADLESS**, and the tab reads it as such: a thread-scoped
+ * Agents tab drops it (no `threadId` to match), a channel-scoped one keeps it,
+ * because the agent IS still running. ⚠ **This sentence claimed "the card's
+ * freshness guard is what stops a stale row rendering" until 2026-08-22 — there
+ * is no such guard any more.** `components/channels-v2/agents-model.ts ›
+ * peerCardsFor` filters on membership, not on age (Samuel: the card stays until
+ * the session goes away); age only DIMS a card now.
  *
  * ⚠ THE FK IS `ON DELETE SET NULL`, WHICH IS WHY THIS EXISTS. `channel_sessions
  * .task_id REFERENCES channel_tasks(id) ON DELETE SET NULL` (`20260805120000`),
@@ -357,7 +422,12 @@ export async function replaceSessionStates(
     .limit(SESSION_ROWS_LIMIT);
   if (readError) throw readError;
   const stored = new Map<string, SessionStateUpsert>();
-  for (const row of (data ?? []) as SessionStateUpsert[]) {
+  // ⚠ THROUGH `unknown`, and the reason is worth a line rather than a `@ts-expect-error`:
+  // `SESSION_DIFF_COLUMNS` stopped being a single string LITERAL when the telemetry columns
+  // made it too long for one line, so the client can no longer infer a row shape from it and
+  // widens `data` to its error union. The cast was always the boundary here (the admin client
+  // is untyped — see this file's header); it now needs two steps to say so.
+  for (const row of (data ?? []) as unknown as SessionStateUpsert[]) {
     stored.set(row.session_key, row);
   }
 

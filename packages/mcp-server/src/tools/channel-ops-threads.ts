@@ -118,12 +118,20 @@ export async function opCreateThread(
   // listener may later act on; `session-dispatch.maybeOpenRequesterSession`
   // silently answers false when window mode is off, when `requesterTaskOpen`
   // refuses, when the concurrency ceiling is spent, and (commonly) when the
-  // operator's desktop is not running. No observation is available here — the
-  // decision happens minutes later on another machine and never reports back.
-  // So: state the request as a request, keep do-not-race as the default (two
-  // watchers on one thread is a genuine failure), and give the fallback for
-  // noticing that nothing picked it up. Never say "you are done" — that leaves
-  // NOBODY awaiting the reply.
+  // operator's desktop is not running.
+  //
+  // ⚠ **AND SINCE F-228 THE ANSWER IS ALWAYS "NOTHING OPENED" (F-274,
+  // 2026-08-22).** `main/targeting.js › requesterTaskOpen` — the predicate that
+  // consumed the stamp — has NO CALLER; its listener path died with the session
+  // window. The server half still works perfectly and the last layer is missing,
+  // which is the shape that produces the most confident wrong copy.
+  //
+  // ⚠ THE OLD COPY'S OPERATIVE INSTRUCTION WAS "do NOT arm op=await yet", AND
+  // THAT IS WHAT MADE IT A DEFECT RATHER THAN AN OVERSTATEMENT: an external
+  // session did exactly that, nothing opened, and NOBODY watched the thread —
+  // the counterparty's reply landing to no one, silently, on both sides. So the
+  // block now says the flag changed nothing, tells the caller to arm the wait
+  // ITSELF, and points at `op="launch_agent"` for the capability that is real.
   if (handoff) {
     const since =
       created.openingSeq === null
@@ -131,10 +139,10 @@ export async function opCreateThread(
         : String(created.openingSeq);
     return ok(
       [
-        `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}, WITH HANDOFF.`,
-        `The handoff was REQUESTED, not confirmed. The thread is stamped for your operator's Dopl app to pick up and drive; this server hands the request off and never learns whether a session started, and the app starts none if it is not running or if it is already at its concurrency ceiling.`,
-        `So: do NOT arm op="await" yet — if a session DID open, it owns the reply, and a second watcher here would race it for the same message. Check instead with dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}") — a session that took the thread shows activity on it.`,
-        `IF NOTHING PICKS IT UP (no progress and no reply after a few minutes), the handoff did not land, and nobody is waiting on ${member.label}. Say so to your operator — they can open the thread in the Dopl app and launch an agent on it — or drive the exchange yourself from here with dopl_channel(op="await", channel="${ch.id}", since=${since}).`,
+        `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. \`handoff\` was set and it CHANGED NOTHING.`,
+        `⚠ THE HANDOFF LANE OPENS NOTHING TODAY (F-274). The flag is still accepted and still stamped on the thread, but no current Dopl app reads that stamp — the reader was removed with the session window — so this thread behaves exactly as it would have without the flag: **nothing started on your operator's machine, and THIS session still owns the reply.**`,
+        `So YOU are the one waiting on ${member.label}, and you must arm the wait yourself: dopl_channel(op="await", channel="${ch.id}", since=${since}). ⚠ Do NOT skip that on the assumption a session took over — if you end your turn here, NOBODY is watching this thread and ${member.label}'s reply will be read by no one.`,
+        `IF WHAT YOU WANTED WAS AN AGENT RUNNING ON YOUR OPERATOR'S MACHINE, that is a different call and it exists: dopl_channel(op="launch_agent", channel="${ch.id}", thread="${thread.id}", goal="..."). It ASKS the machine, waits briefly, and tells you what it said — including if your operator has that turned off.`,
       ].join("\n"),
     );
   }

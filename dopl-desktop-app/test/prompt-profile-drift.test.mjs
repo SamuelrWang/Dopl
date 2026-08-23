@@ -46,14 +46,38 @@ const CH = "11111111-1111-4111-8111-111111111111";
 const WS = "22222222-2222-4222-8222-222222222222";
 const TASK = "33333333-3333-4333-8333-333333333333";
 
+// ⚠ A TEMPLATE-BUILT TURN IS ONE OF THE SHAPES (2026-08-22, agent templates). An AGENT TEMPLATE
+// splices a ROLE BLOCK into the requester turn, and that block can NAME TOOLS — it teaches the
+// KB calls for the bases a template attached. So a template turn has to be inside every scan in
+// this file, or the one turn shape that can order a tool by data would be the one shape nobody
+// checked. ⚠ THE PROFILE IS PART OF THE INPUT for that shape: `templateRoleFraming` gates the KB
+// instruction on it, and `read_only` HARD-DENIES `mcp__dopl__dopl_kb`.
+const TEMPLATE = {
+  name: "Code Auditor",
+  instructions: "Audit the diff. Cite file and line.",
+  model: null,
+  fields: [{ key: "repo", value: "acme/api" }],
+  knowledgeBases: [{ id: "kb-1111", name: "Handbook" }],
+  authoredByCaller: false,
+};
+
 /** Every shape of turn this module can build, so no branch escapes the scan. */
-function everyTurn() {
+function everyTurn(profile = "full") {
   const turns = [];
   const contexts = [
     { channelName: "Ops" },
     { channelName: "Ops", channelId: CH, workspaceId: WS },
     { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK },
   ];
+  for (const context of contexts) {
+    turns.push({
+      label: `template requester ${Object.keys(context).length} ids / ${profile}`,
+      text: buildFencedTurn({
+        side: "requester", message: "x", nonce: "n",
+        context: { ...context, profile, template: TEMPLATE },
+      }),
+    });
+  }
   for (const context of contexts) {
     for (const side of ["responder", "requester"]) {
       turns.push({
@@ -117,7 +141,7 @@ test("the dopl MCP server is pinned alwaysLoad, so nothing the prompt names is d
 test("no built session turn ORDERS a tool the profile hard-denies", () => {
   for (const profile of PROFILES) {
     const denied = buildSessionToolConfig(profile).disallowedTools;
-    for (const { label, text } of everyTurn()) {
+    for (const { label, text } of everyTurn(profile)) {
       for (const tool of denied) {
         assert.ok(
           !callsTool(text, tool),
@@ -130,9 +154,52 @@ test("no built session turn ORDERS a tool the profile hard-denies", () => {
 
 test("the specific regression: no session turn tells the agent to call ToolSearch", () => {
   // The scan above would catch this, but the named case is what a reader greps for.
-  for (const { label, text } of everyTurn()) {
-    assert.ok(!/ToolSearch/.test(text), `${label}: ToolSearch is back in a session turn`);
+  for (const profile of PROFILES) {
+    for (const { label, text } of everyTurn(profile)) {
+      assert.ok(!/ToolSearch/.test(text), `${label}: ToolSearch is back in a session turn`);
+    }
   }
+});
+
+// ── ⚠ THE CONTAINMENT TEST FOR AGENT TEMPLATES (2026-08-22) ─────────────────────────────────
+//
+// ⚠ IT IS A NAME SCAN, NOT `callsTool`, AND THE DIFFERENCE IS THE WHOLE POINT. `callsTool` looks
+// for `Name(` — the shape a BUILT-IN call takes. An MCP tool is never taught that way in this
+// tree: the framing writes `mcp__dopl__dopl_channel with op "read"`, and the role block writes
+// `mcp__dopl__dopl_kb, op "get_tree"`. So the loop above, run over the dopl family, would answer
+// "no call ordered" about a turn that names a hard-denied tool in the only form an agent would
+// ever act on. For the DOPL half the honest assertion is that the NAME does not appear at all.
+//
+// ⚠ WHAT IT CATCHES, CONCRETELY: `read_only` puts the whole of `DOPL_SAFE_TOOLS` into
+// `disallowedTools`, `mcp__dopl__dopl_kb` among them, and a template's ATTACHED KNOWLEDGE section
+// is the one part of a prompt built from OPERATOR DATA that would order it. The block gates on
+// `kbReadable(profile)` and lists the base NAMES with no call under `read_only` — §11's
+// UNKNOWN-is-not-EMPTY rule — and this is what fails if that gate is ever dropped.
+test("a TEMPLATE-built turn names no dopl tool its profile hard-denies", () => {
+  const doplDenied = (profile) =>
+    buildSessionToolConfig(profile).disallowedTools.filter((t) => t.startsWith("mcp__dopl__"));
+  for (const profile of PROFILES) {
+    const denied = doplDenied(profile);
+    assert.ok(denied.length > 0, `${profile}: the deny list carries no dopl name — re-read the table`);
+    for (const { label, text } of everyTurn(profile)) {
+      for (const tool of denied) {
+        assert.ok(!text.includes(tool), `${label}: names ${tool}, which this profile hard-denies`);
+      }
+    }
+  }
+});
+
+test("…and under a profile that CAN reach it, the template turn really does name the KB tool", () => {
+  // ⚠ THE OTHER HALF, because a scan that only ever asserts an absence passes just as happily
+  // against a block that emits nothing at all. Under `dopl_only` / `full` the KB read resolves
+  // `allow` at the windowless floor (OQ-1), so ordering it is correct rather than merely allowed.
+  for (const profile of ["dopl_only", "full"]) {
+    const [{ text }] = everyTurn(profile);
+    assert.ok(text.includes("mcp__dopl__dopl_kb"), `${profile}: the KB instruction went missing`);
+  }
+  const [{ text: readOnly }] = everyTurn("read_only");
+  assert.ok(!readOnly.includes("mcp__dopl__dopl_kb"), "read_only must order no KB call");
+  assert.ok(readOnly.includes("Handbook"), "read_only still NAMES the base — UNKNOWN is not EMPTY");
 });
 
 test("what F3 was really protecting survives: never report the channel tool missing", () => {

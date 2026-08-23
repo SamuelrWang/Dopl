@@ -206,3 +206,85 @@ export class DirectChannelImmutableError extends ChannelError {
     super(`Direct message ${aspect} can't be changed`);
   }
 }
+
+/**
+ * A launch directive id that resolves to nothing THIS operator owns.
+ *
+ * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY: it does not exist, it belongs
+ * to another operator, or it is in another workspace. Splitting them would make
+ * this a probe primitive for every directive in the deployment — the same rule
+ * `ChannelNotFoundError` follows for a private channel, and the same reason.
+ */
+export class LaunchDirectiveNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Launch directive not found: ${ref}`);
+  }
+}
+
+/**
+ * A directive that is no longer claimable or decidable — already taken by
+ * another of this operator's machines, already decided, or past its TTL.
+ *
+ * ⚠ NOT AN ERROR ON THE DESKTOP'S SIDE OF THE CONVERSATION: losing a claim race
+ * is the DESIGNED outcome for every machine but one, and the route answers 409
+ * so the loser can stand down without logging a fault. It is an error only in
+ * the sense that nothing was written.
+ */
+export class LaunchDirectiveNotClaimableError extends ChannelError {
+  constructor(public readonly reason: "taken" | "decided" | "expired") {
+    super(`Launch directive is not claimable: ${reason}`);
+  }
+}
+
+/**
+ * A directive named a TEMPLATE that does not resolve for the CALLER
+ * (2026-08-23).
+ *
+ * ⚠ ONE ERROR FOR "no such template" AND "not visible to you", exactly as
+ * `agent-templates/server/errors.ts › AgentTemplateNotFoundError` is, and it
+ * carries that error's CODE rather than a channels-flavoured one: the two are
+ * the same fact reached through two doors, and an agent that learned to read
+ * `AGENT_TEMPLATE_NOT_FOUND` from `/resolve` must not have to learn a second
+ * spelling here. Splitting them would make this a probe primitive for other
+ * people's private templates — the oracle the 404-never-403 rule closes.
+ *
+ * ⚠ THROWN IN THE CHANNELS FEATURE RATHER THAN RE-THROWN FROM THE TEMPLATE ONE.
+ * `agent-templates/server › resolveTemplateRef` answers with a union and throws
+ * nothing, so this feature's error mapper does not have to import another
+ * feature's error classes to know what a 404 means.
+ */
+export class LaunchTemplateNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Agent template not found: ${ref}`);
+  }
+}
+
+/**
+ * A directive named a template by NAME and more than one visible template
+ * carries it (2026-08-23).
+ *
+ * ⚠ **A REFUSAL, AND NEVER A PICK.** `agent_templates` has no name uniqueness by
+ * design, so two people may each keep a "Researcher" and one of them may be
+ * shared with the caller. Any collision rule — mine wins, newest wins,
+ * most-recently-used wins — launches an identity the caller did not choose and
+ * says nothing about it.
+ *
+ * ⚠ THE MATCH LIST RIDES ON THE ERROR AND IS NOT AN ORACLE: every row in it
+ * already passed `canSeeTemplate` for this caller, so it discloses exactly what
+ * `GET /api/agent-templates` would. It carries `visibility` because that is what
+ * makes the disambiguation actionable — "the private one is mine".
+ */
+export class LaunchTemplateAmbiguousError extends ChannelError {
+  constructor(
+    public readonly ref: string,
+    public readonly matches: ReadonlyArray<{
+      id: string;
+      name: string;
+      visibility: string;
+    }>
+  ) {
+    super(
+      `Agent template name is ambiguous: ${ref} matches ${matches.length} templates you can see`
+    );
+  }
+}

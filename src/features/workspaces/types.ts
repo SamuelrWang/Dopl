@@ -58,14 +58,73 @@ export interface WorkspaceWithRole extends Workspace {
   role: Role;
 }
 
+/** Series the overview histogram can plot. Unrecognised values are a 400. */
+export type OverviewSeriesMetric = "messages" | "mcp" | "threads";
+
+/** One daily bin. `date` is a UTC calendar day, `YYYY-MM-DD`. */
+export interface OverviewSeriesPoint {
+  date: string;
+  count: number;
+}
+
 /**
- * Head-counts behind the overview stat cards. Read by the `/overview` server
- * component and `GET /api/workspaces/[workspaceSlug]/overview-counts` (SPA twin).
+ * Daily-binned series behind the overview histogram. Read by
+ * `GET /api/workspaces/[workspaceSlug]/overview-series?metric=`.
+ * Always 31 points, oldest first, ending on the current UTC day —
+ * zero-filled so the chart never has to gap-fill.
  */
-export interface WorkspaceOverviewCounts {
-  knowledgeBases: number;
-  skills: number;
-  members: number;
+export interface WorkspaceOverviewSeries {
+  metric: OverviewSeriesMetric;
+  days: OverviewSeriesPoint[];
+}
+
+/** One row of the overview "Recent activity" feed. Viewer-filtered server-side. */
+export interface OverviewActivityRow {
+  id: string;
+  channelId: string;
+  channelName: string;
+  kind: "message" | "thread_opened" | "thread_closed";
+  /** Display name of the acting user/agent; null when unattributable. */
+  actorName: string | null;
+  /** Message snippet or thread title, pre-truncated server-side. */
+  preview: string;
+  /** ISO timestamp. */
+  at: string;
+}
+
+/** One bar of the overview member-load card: share of user messages, last 30 days. */
+export interface OverviewMemberLoadRow {
+  userId: string;
+  name: string;
+  /** 0–100, this member's share of the 30-day user-authored message total. */
+  percent: number;
+}
+
+/**
+ * Everything the overview page renders except the histogram (see
+ * `WorkspaceOverviewSeries`) and credits (reuses `GET /api/billing/status`).
+ * Read by `GET /api/workspaces/[workspaceSlug]/overview`.
+ */
+export interface WorkspaceOverview {
+  counts: {
+    /** `channel_messages` with `kind='message'` created since UTC midnight. */
+    messagesToday: number;
+    /** `channel_sessions` rows with `state <> 'ended'` — live agent sessions. */
+    agentsRunning: number;
+    members: number;
+    /** Non-direct, non-deleted, non-archived channels. */
+    channels: number;
+  };
+  /** Newest first, viewer-filtered, at most 8 rows. */
+  activity: OverviewActivityRow[];
+  /**
+   * Top members by 30-day user-authored message count, at most 6 rows,
+   * descending. `totalMessages` is the shared denominator.
+   */
+  memberLoad: {
+    totalMessages: number;
+    rows: OverviewMemberLoadRow[];
+  };
 }
 
 export interface WorkspaceMembership {

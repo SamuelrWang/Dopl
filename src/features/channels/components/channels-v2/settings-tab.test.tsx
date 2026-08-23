@@ -175,6 +175,11 @@ describe("no dead rows, and nothing behind a click", () => {
     expect(screen.queryByText("For the next request you allow")).toBeNull();
     expect(screen.queryByText("Permissions")).toBeNull();
     expect(screen.queryByText("Sends")).toBeNull();
+    // ⚠ AND THE MACHINE-SCOPED GROUP (2026-08-22) — heading included. Its
+    // bridge is `dopl.orchestratorLaunch`, absent here, so a browser must not
+    // be shown a switch that grants a capability nothing can store.
+    expect(screen.queryByText("Orchestrator launches")).toBeNull();
+    expect(screen.queryByText("On this Mac, every channel")).toBeNull();
     // The DURABLE half is a cloud write and is there either way.
     expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeTruthy();
   });
@@ -338,6 +343,7 @@ describe("a settings panel, not documentation", () => {
   const fullTab = () =>
     agentView({
       folder: { label: "~/repo", busy: false, onChoose: noop, onClear: noop },
+      orchestrator: { on: false, busy: false, onToggle: noop },
     }).container;
 
   it("keeps every secondary line short, and prints none of the cut copy", () => {
@@ -374,5 +380,67 @@ describe("a settings panel, not documentation", () => {
     expect(html).toContain("text-caption");
     expect(html).toContain("text-body");
     expect(html).toContain("text-text-primary");
+  });
+});
+
+/**
+ * ORCHESTRATOR LAUNCHES — the one PER-MACHINE control on a per-channel tab
+ * (2026-08-22).
+ *
+ * ⚠ THE FAILURE THIS GUARDS IS A MISREAD, NOT A CRASH. Every other group here
+ * governs `(this channel, this Mac)`. An operator who reads this one the same
+ * way turns it on "for #website" and has in fact handed an external Claude
+ * session their whole machine, every channel. **The GROUP LABEL is the entire
+ * correction**, which is why it is asserted rather than left to review — and why
+ * it is a heading rather than an explainer sentence the minimal-copy bound above
+ * would (rightly) reject.
+ */
+describe("Orchestrator launches — a machine-scoped group, labelled as one", () => {
+  const row = (over: { on?: boolean; busy?: boolean; onToggle?: (on: boolean) => void } = {}) =>
+    agentView({
+      orchestrator: { on: false, busy: false, onToggle: noop, ...over },
+    });
+
+  it("renders the switch under a label naming the MACHINE scope", () => {
+    row();
+    expect(screen.getByText("Orchestrator launches")).toBeTruthy();
+    // ⚠ The scope statement. If this heading ever goes, the control starts
+    // reading as per-channel and the group is a trap.
+    expect(screen.getByText("On this Mac, every channel")).toBeTruthy();
+  });
+
+  it("is OFF by default and mirrors the stored value", () => {
+    const { container } = row();
+    expect(
+      container.querySelector('[aria-label="Orchestrator launches on this Mac"]')
+        ?.getAttribute("aria-checked")
+    ).toBe("false");
+    cleanup();
+    const on = row({ on: true }).container;
+    expect(
+      on.querySelector('[aria-label="Orchestrator launches on this Mac"]')
+        ?.getAttribute("aria-checked")
+    ).toBe("true");
+  });
+
+  it("reports the operator's intent and writes nothing itself", () => {
+    const onToggle = vi.fn();
+    row({ onToggle });
+    fireEvent.click(
+      screen.getByLabelText("Orchestrator launches on this Mac")
+    );
+    expect(onToggle).toHaveBeenCalledWith(true);
+  });
+
+  /** ⚠ A second click landing on top of an unsettled write is the case worth
+   *  refusing — this grants a capability, so the last word must be main's. */
+  it("goes inert while the write is in flight, and says so", () => {
+    const onToggle = vi.fn();
+    row({ busy: true, onToggle });
+    expect(screen.getByText("Saving…")).toBeTruthy();
+    fireEvent.click(
+      screen.getByLabelText("Orchestrator launches on this Mac")
+    );
+    expect(onToggle).not.toHaveBeenCalled();
   });
 });

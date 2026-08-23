@@ -45,6 +45,15 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     thread_title: "Deploy check",
     created_at: "2026-08-05T12:00:00.000Z",
     updated_at: "2026-08-05T12:00:05.000Z",
+    detail: null,
+    tool_label: null,
+    model: null,
+    context_used: null,
+    context_window: null,
+    tokens_spent: null,
+    started_at: null,
+    last_activity_at: null,
+    template_name: null,
     ...over,
   };
 }
@@ -69,27 +78,54 @@ describe("listSessionStates", () => {
         threadId: TASK,
         name: "flint",
         state: "working",
+        detail: null,
         channelName: "General",
         threadTitle: "Deploy check",
         updatedAt: "2026-08-05T12:00:05.000Z",
+        model: null,
+        toolLabel: null,
+        contextUsed: null,
+        contextWindow: null,
+        tokensSpent: null,
+        startedAt: null,
+        lastActivityAt: null,
+        templateName: null,
       },
       {
         channelId: CHAN,
         threadId: null,
         name: "onyx",
         state: "idle",
+        detail: null,
         channelName: "General",
         threadTitle: null,
         updatedAt: "2026-08-05T12:00:05.000Z",
+        model: null,
+        toolLabel: null,
+        contextUsed: null,
+        contextWindow: null,
+        tokensSpent: null,
+        startedAt: null,
+        lastActivityAt: null,
+        templateName: null,
       },
       {
         channelId: CHAN,
         threadId: TASK,
         name: "quartz",
         state: "ended",
+        detail: null,
         channelName: "General",
         threadTitle: "Deploy check",
         updatedAt: "2026-08-05T12:00:05.000Z",
+        model: null,
+        toolLabel: null,
+        contextUsed: null,
+        contextWindow: null,
+        tokensSpent: null,
+        startedAt: null,
+        lastActivityAt: null,
+        templateName: null,
       },
     ]);
   });
@@ -152,6 +188,15 @@ describe("reportSessionStates", () => {
         state: "working",
         channel_name: "General",
         thread_title: "Deploy check",
+        detail: null,
+        tool_label: null,
+        model: null,
+        context_used: null,
+        context_window: null,
+        tokens_spent: null,
+        started_at: null,
+        last_activity_at: null,
+        template_name: null,
       },
     ]);
   });
@@ -174,7 +219,44 @@ describe("reportSessionStates", () => {
       state: "idle",
       channel_name: null,
       thread_title: null,
+      // ⚠ EVERY TELEMETRY FIELD ABSENT ON THE WIRE BECOMES `null`, NEVER `0`.
+      // An older desktop omits all eight keys, and a count defaulted to zero
+      // here would be a measurement nobody took, stored as fact.
+      detail: null,
+      tool_label: null,
+      model: null,
+      context_used: null,
+      context_window: null,
+      tokens_spent: null,
+      started_at: null,
+      last_activity_at: null,
+      // ⚠ 2026-08-23 — the NINTH absent key, and the one that will arrive from a
+      // NEWER desktop rather than be missing from an older one. Absent and
+      // explicit-null are the same statement here ("no template"), which is why
+      // the service is allowed to collapse them with `?? null`.
+      template_name: null,
     });
+  });
+
+  /**
+   * ⚠ THE SERVER STORES WHAT THE DESKTOP REPORTED AND RESOLVES NOTHING. `main`
+   * captured the template at spawn and reports its NAME; this service does not
+   * look a template up, does not check that one still exists under that name,
+   * and must not — a session reports what it RAN AS, which is the whole reason
+   * the column is a denormalized TEXT snapshot rather than an FK
+   * (`20260823130000_channel_sessions_template_name.sql`).
+   */
+  it("carries a reported template name straight to its column, unresolved", async () => {
+    vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
+      stored: 1,
+      changed: 1,
+      removed: 0,
+    });
+    await reportSessionStates(ctx, [
+      { ...entry, templateName: "Code Auditor" },
+    ]);
+    const rows = vi.mocked(sessionRepo.replaceSessionStates).mock.calls[0][2];
+    expect(rows[0].template_name).toBe("Code Auditor");
   });
 
   it("an EMPTY report is a real instruction — it clears the caller's set", async () => {

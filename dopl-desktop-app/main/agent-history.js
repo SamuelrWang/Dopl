@@ -60,10 +60,15 @@ function numberOrNull(value) {
 }
 
 /** Bounded display string, the discipline every counterparty-influenced field here is under
- *  (`session-store.js › durableName`): one line, collapsed, 80 chars, or null. */
-function historyName(value) {
+ *  (`session-store.js › durableName`): one line, collapsed, `max` chars (80 by default), or null.
+ *  ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-23 (F-287). 80 is a DISPLAY default and the right
+ *  number for `channelName` / `threadTitle`; it is the wrong one for a field carrying a real
+ *  server bound, and the caller passes that instead — the same shape `session-summary.js ›
+ *  displayText(value, max)` and `session-store.js › durableName(value, max)` take. */
+function historyName(value, max) {
   if (typeof value !== 'string') return null;
-  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  const cap = typeof max === 'number' && max > 0 ? max : 80;
+  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, cap).trim();
   return s || null;
 }
 
@@ -86,6 +91,18 @@ function durableHistory(rec) {
     workspaceId: String(r.workspaceId || ''),
     channelName: historyName(r.channelName),
     threadTitle: historyName(r.threadTitle),
+    // ⚠ THE TEMPLATE IT RAN AS (2026-08-22). A whitelist DROPS what it does not name, so without
+    // this line the frozen name never survives the write.
+    // ⚠ **AT 120, THE COLUMN'S OWN BOUND — NOT `historyName`'s 80 DISPLAY DEFAULT** (F-287,
+    // 2026-08-23). This line used to reason that "`session-summary.js` re-bounds at 120 on the
+    // way out", which is exactly backwards: re-bounding a value already clipped to 80 restores
+    // nothing, and `endedSummary`'s `displayText(e.templateName, TEMPLATE_NAME_MAX)` is a no-op
+    // on it. A 100-character name was DESTROYED AT THE WRITE, then reported to the operator as a
+    // spelling no template has — and §5A's "a stale name here is correct, not drift" rule tells
+    // them not to read that as an error. `channelName` / `threadTitle` above are display strings
+    // and 80 is right for them; `templateName` is the one IDENTITY in this whitelist, which is
+    // why the bound is wrong here and only here.
+    templateName: historyName(r.templateName, 120),
     endedAt: Number(r.endedAt) || 0,
     // ⚠ THE FINAL MEASUREMENT, FROZEN WITH THE IDENTITY. The session object is gone by the time
     // anything reads this, so a live read would blank every number at exactly the moment the

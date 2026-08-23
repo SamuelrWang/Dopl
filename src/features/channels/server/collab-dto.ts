@@ -1,8 +1,10 @@
 import type {
   ChannelConsentRequest,
   ChannelSessionState,
+  ChannelSessionStateOwn,
   ConsentKind,
   ConsentStatus,
+  SessionDetailKey,
   SessionPillState,
 } from "../types";
 import type { ProfileRef } from "./dto";
@@ -65,7 +67,75 @@ export type SessionStateRow = {
   thread_title: string | null;
   created_at: string;
   updated_at: string;
+  /** One of six CLOSED situation keys (`session-detail.js › detailFor`).
+   *  Peer-visible — and peer-visible ONLY because the vocabulary is closed.
+   *  ⚠ Typed `string | null` at the ROW because the column is TEXT and a newer
+   *  desktop may store a seventh key; `narrowSessionDetail` is what turns it
+   *  into a value a surface may render. */
+  detail: string | null;
+  // ── OPERATOR-ONLY TELEMETRY (20260822150000, Samuel's ruling) ────────────
+  // ⚠ NULL IS "UNKNOWN", NEVER ZERO. A desktop that does not report a number
+  // has not reported that its agent spent nothing; the render says so.
+  tool_label: string | null;
+  model: string | null;
+  context_used: number | string | null;
+  context_window: number | string | null;
+  tokens_spent: number | string | null;
+  started_at: string | null;
+  last_activity_at: string | null;
+  /** ⚠ NOT TELEMETRY, AND OPERATOR-ONLY FOR ITS OWN REASONS (20260823130000,
+   *  Samuel's OQ-5 ruling). The name of the agent template this session was
+   *  launched from, SNAPSHOTTED AT SPAWN — deliberately not an FK, so a session
+   *  goes on reporting what it RAN AS after the template is renamed or deleted.
+   *  It sits in this block because the AUDIENCE is the same one, which is the
+   *  only thing {@link OPERATOR_ONLY_SESSION_COLUMNS} is about: it is
+   *  operator-authored free text (the `detail` ruling's own stated condition for
+   *  going private), and a private template's name on a peer's screen is an
+   *  existence oracle for a row that has no name uniqueness precisely so that it
+   *  cannot be probed. NULL = no template, or a desktop older than the field. */
+  template_name: string | null;
 };
+
+/**
+ * THE FENCE, AS DATA — the columns a PEER may never read, and the DTO fields
+ * they map to.
+ *
+ * ⚠ Exported so the visibility split is TESTABLE AS A PROPERTY rather than as a
+ * list of examples: `session-visibility.test.ts` asserts that no key in the
+ * peer mapper's output is one of these, for every row it is handed. A new
+ * telemetry column is added HERE first, and the property test then covers it
+ * without anyone remembering to write a case for it.
+ *
+ * ⚠ The two arrays are parallel by construction and pinned as such — a column
+ * added to one and not the other is a fence with a hole and a green suite.
+ *
+ * ⚠ **"OPERATOR-ONLY" IS AN AUDIENCE, NOT A SUBJECT.** Seven of the eight are
+ * telemetry (what an agent runs on and what it costs); `template_name` is an
+ * IDENTITY snapshot and joined on 2026-08-23. Nothing here is about measurement —
+ * the one question this array asks is "may a PEER read it", and the answer for
+ * every entry is no.
+ */
+export const OPERATOR_ONLY_SESSION_COLUMNS = [
+  "tool_label",
+  "model",
+  "context_used",
+  "context_window",
+  "tokens_spent",
+  "started_at",
+  "last_activity_at",
+  "template_name",
+] as const;
+
+export const OPERATOR_ONLY_SESSION_FIELDS = [
+  "toolLabel",
+  "model",
+  "contextUsed",
+  "contextWindow",
+  "tokensSpent",
+  "startedAt",
+  "lastActivityAt",
+  "templateName",
+] as const;
 
 /**
  * ONE ROW AS THE DESKTOP REPORTS IT (rollback §3.5, the write half). Column
@@ -84,9 +154,103 @@ export type SessionStateUpsert = {
   state: string;
   channel_name: string | null;
   thread_title: string | null;
+  detail: string | null;
+  tool_label: string | null;
+  model: string | null;
+  context_used: number | null;
+  context_window: number | null;
+  tokens_spent: number | null;
+  started_at: string | null;
+  last_activity_at: string | null;
+  /** ⚠ A SNAPSHOT THE DESKTOP REPORTS, NOT A LOOKUP THE SERVER PERFORMS. The
+   *  server never resolves a template id here — main holds the resolved template
+   *  on `context.template` from spawn (spec §3d) and reports its NAME, which is
+   *  what keeps the row true after a rename or a delete. */
+  template_name: string | null;
 };
 
-export function mapSessionStateRow(row: SessionStateRow): ChannelSessionState {
+/**
+ * THE SIX KEYS `channel_sessions.detail` MAY RENDER AS — a MEMBERSHIP TEST, not
+ * a cast.
+ *
+ * ⚠ **THIS IS WHAT KEEPS `detail` PEER-SAFE, AND IT IS THE WHOLE ARGUMENT FOR
+ * LETTING THE COLUMN CROSS TO A PEER AT ALL.** The field is peer-visible ONLY
+ * because it is one of six fixed, coarse words. Free-form prose in it — "reading
+ * 4 files in ~/clients/acme" — is operator-only material, and a mapper that
+ * passed the column through would ship it to every member of the channel. So the
+ * column is narrowed HERE, on the way out, and anything outside the set becomes
+ * `null` (= "no refinement reported").
+ *
+ * ⚠ **THE WRITE PATH IS DELIBERATELY LOOSER THAN THIS, AND THAT ASYMMETRY IS ON
+ * PURPOSE.** `schema-sessions.ts` accepts any short safe label rather than a
+ * `z.enum`, because zod validates the ARRAY: a desktop shipping a SEVENTH key
+ * would otherwise 400 its entire push, `retryable(400)` is false, and that
+ * machine's `read_sessions` would answer `[]` forever (INVARIANTS §11, §13). So
+ * a newer key STORES fine and simply renders as nothing until the server learns
+ * it — which is exactly what `agents-model.ts › agentDetailLabel` already does
+ * with an unknown key, and the fail-CLOSED direction either way.
+ *
+ * ⚠ The set is DERIVED from the shared type, so it cannot drift from
+ * `spa-bridge-shapes.ts`; `session-visibility.test.ts` pins the array against
+ * that file's declaration.
+ */
+const SESSION_DETAIL_KEYS: ReadonlySet<string> = new Set<SessionDetailKey>([
+  "thinking",
+  "tool",
+  "posting",
+  "permission",
+  "awaiting_peer",
+  "awaiting_inbound",
+]);
+
+export function narrowSessionDetail(
+  value: string | null | undefined
+): SessionDetailKey | null {
+  if (typeof value !== "string") return null;
+  return SESSION_DETAIL_KEYS.has(value) ? (value as SessionDetailKey) : null;
+}
+
+/**
+ * A BIGINT off PostgREST, as a number — or `null`.
+ *
+ * ⚠ `null` MEANS UNKNOWN AND MUST SURVIVE AS `null`. `Number(null)` is `0`, and
+ * a 0 here renders as "this agent has spent no tokens", which is a claim the
+ * row never made. Same rule for a value that does not parse: unknown, not zero.
+ */
+function bigintOrNull(value: number | string | null): number | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * THE PEER PROJECTION — what a member of the channel may see of ANOTHER
+ * member's session (Samuel's ruling, 2026-08-22: telemetry is OPERATOR-ONLY,
+ * peers keep coarse).
+ *
+ * ⚠ THIS FUNCTION IS THE FENCE, and it is a fence because it BUILDS a narrow
+ * object rather than deleting keys from a wide one. A `delete`-based or
+ * `omit`-based scrub fails OPEN when a column is added; construction fails
+ * CLOSED, because a new field reaches a peer only when somebody types its name
+ * here. The column-privilege GRANT in `20260822150000` is the belt; **this is
+ * the load-bearing half**, because every read in `repository-sessions.ts` runs
+ * on the RLS- and grant-bypassing admin client.
+ *
+ * ⚠ THERE IS DELIBERATELY NO `mapSessionStateRow` ANY MORE. One mapper with an
+ * audience argument has a default, and a default is how the rich shape reaches
+ * a peer surface that forgot to pass the argument. Two names, no default: a
+ * call site must say whose eyes it is rendering for.
+ *
+ * ⚠ `channelId` IS KEPT even though it is not in the coarse projection's
+ * charter. It is the ROUTING KEY the caller already supplied (this read is
+ * channel-scoped by construction), not a fact about anybody's machine, and
+ * `hooks/use-channel-agent-sessions.ts › ChannelPeerSession` is typed on it.
+ * ⚠ The wire name stays `threadId`, not `taskId` — the §5 boundary rule
+ * (storage says `task`, the wire and the domain say `thread`).
+ */
+export function mapPeerSessionStateRow(
+  row: SessionStateRow
+): ChannelSessionState {
   return {
     channelId: row.channel_id,
     threadId: row.task_id,
@@ -105,9 +269,42 @@ export function mapSessionStateRow(row: SessionStateRow): ChannelSessionState {
     // "(unrecognized state)" rather than emitting whatever the row carried.
     // Named here so the next reader does not take this cast for a guarantee.
     state: row.state as SessionPillState,
+    // ⚠ NARROWED, NEVER PASSED THROUGH — see `narrowSessionDetail`. This is the
+    // one line that keeps a free-form value in the column from reaching a peer.
+    detail: narrowSessionDetail(row.detail),
     channelName: row.channel_name,
     threadTitle: row.thread_title,
     updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * THE OWNER PROJECTION — the caller's OWN sessions, telemetry included.
+ *
+ * ⚠ Reachable from exactly two places, both own-scoped by the repository's
+ * `user_id` fence: `listSessionStates` (→ `GET /api/channels/sessions` →
+ * `read_sessions`) and the await route's return-time session block. If a third
+ * call site appears, the question to answer first is whether its fence is
+ * `ctx.userId`; if it is not, it wants {@link mapPeerSessionStateRow}.
+ */
+export function mapOwnSessionStateRow(
+  row: SessionStateRow
+): ChannelSessionStateOwn {
+  return {
+    ...mapPeerSessionStateRow(row),
+    model: row.model,
+    toolLabel: row.tool_label,
+    contextUsed: bigintOrNull(row.context_used),
+    contextWindow: bigintOrNull(row.context_window),
+    tokensSpent: bigintOrNull(row.tokens_spent),
+    startedAt: row.started_at,
+    lastActivityAt: row.last_activity_at,
+    // ⚠ THE ONLY MAPPER THAT MAY NAME THIS FIELD. A peer seeing it learns that a
+    // template with that name exists on somebody else's account — and
+    // `agent_templates` deliberately has no name uniqueness so that nothing can
+    // be probed that way. Adding it to {@link mapPeerSessionStateRow} would undo
+    // both that decision and the 404-not-403 rule in one line.
+    templateName: row.template_name,
   };
 }
 

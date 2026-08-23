@@ -122,6 +122,16 @@ describe("H-3 write-gate coverage", () => {
       .sort();
     expect(sessionOnlyRoutes).toEqual(
       [
+        // DELETE hard-deletes an agent template (2026-08-22). Permanent — no
+        // trash, no restore — and a `team`/`workspace` template may be what a
+        // whole team spawns from, so the blast radius is other people's
+        // tooling, not the caller's own row. An agent token has no confirm
+        // dialog to gate it: the same argument the team DELETE and the thread
+        // DELETE below carry. ⚠ Per-METHOD, and the OTHER TWO ARE THE POINT —
+        // GET and PATCH on that file stay ungated, because an ORCHESTRATOR
+        // AGENT LISTING AND EDITING TEMPLATES IS THE FEATURE. Narrowing this
+        // route to `sessionOnly` wholesale would gate the thing it exists for.
+        "agent-templates/[templateId]/route.ts",
         // POST mints a 90-day device token, DELETE revokes one — an agent must
         // never bootstrap a fresh credential for itself, nor kill the one its
         // siblings depend on.

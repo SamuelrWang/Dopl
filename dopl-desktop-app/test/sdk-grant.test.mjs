@@ -44,15 +44,20 @@ const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
 // F-139 (2026-08-05): the block matches tool names through mcp-tool-names' normalizers, because
 // the `mcp__<server>__` segment is the CLIENT's and never ours. Injected like makeGrantKeyFor.
 const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
+// 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped
+// `dopl_channel`, reading `isKnowledgeReadCall` off the module head. Injected like
+// makeGrantKeyFor, and the REAL implementation, so the block stays pinned to what ships.
+const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
-  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName",
+  "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
-  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName);
+  KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
+  KB_OPS.isKnowledgeReadCall);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });

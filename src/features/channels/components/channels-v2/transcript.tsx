@@ -4,18 +4,22 @@
  * Channels v2 — THE TRANSCRIPT: the rows of one channel or one thread.
  *
  * Authorship is a SIDE, not a style: peers left, the viewer right, and an agent
- * hangs on its OPERATOR's side with an "Agent" chip beside the name — never in
- * a third column (INVARIANTS §5).
+ * hangs on its OPERATOR's side — never in a third column (INVARIANTS §5).
  *
- * ⚠ THE CHIP NAMES WHICH AGENT SINCE 2026-08-22 (Samuel: two of his agents posted
- * in one thread and the transcript showed an undifferentiated "Agent" pill —
- * *"it looks like one agent sending"*). A post whose `client_msg_id` carries the
- * per-instance stamp renders `Agent · <id>` with a deterministic accent
- * (`bits.tsx › AgentChip`, off `agents-model.ts › parseAgentPostStamp`); an
- * unstamped one keeps the plain chip. **The run-grouping moved with it** —
- * `view-model-rows.ts › isContinuation` breaks on a different agent id, because a
- * continuation has no chip to put the id in and two agents in one collapsed run
- * is the exact defect being fixed.
+ * ⚠ ATTRIBUTION IS ONE PILL SINCE 2026-08-22 (Samuel, from two reference
+ * screenshots). Every message group is headed by `attribution-pill.tsx ›
+ * AttributionPill` — a capsule holding the author's avatar, their name and the
+ * message timestamp stacked beside it — and the message blocks render BELOW it
+ * at full width. **The grey `Agent · <id>` chip is DELETED**; an agent row says
+ * so in its NAME LINE instead, reading `Agent #<agentId>` for a stamped post and
+ * plain `Agent` for an unstamped one (`agents-model.ts › parseAgentPostStamp`).
+ * The per-agent accent survives on the pill's BORDER.
+ *
+ * ⚠ THE RUN-GROUPING IS UNCHANGED AND STILL LOAD-BEARING (F-251). A continuation
+ * has no pill to put an id in, so `view-model-rows.ts › isContinuation` breaks on
+ * a different agent id — two of one operator's agents collapsing into a single
+ * run under one name is the defect that bought all of this
+ * (*"it looks like one agent sending"*).
  *
  * ⚠ THE SIDE COMES FROM `author_user_id`, NEVER FROM `authorKind`.
  * `authorKind` is CALLER-ASSERTABLE — an explicit body value wins over
@@ -32,9 +36,9 @@
  */
 
 import { Bot } from "lucide-react";
-import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
-import { AddresseePill, AgentChip, CARD_BUTTON } from "./bits";
+import { AddresseePill, CARD_BUTTON } from "./bits";
+import { AttributionPill } from "./attribution-pill";
 import { MessageMarkdown } from "./message-markdown";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, ThreadCardRow, TranscriptRow } from "./view-model-rows";
@@ -159,7 +163,26 @@ function Receipt({ row }: { row: ReceiptRow }) {
   );
 }
 
-/** The shell every authored row shares: avatar gutter, name line, side. */
+/**
+ * The shell every authored row shares: the ATTRIBUTION PILL as the group header,
+ * the body blocks under it, and the side.
+ *
+ * ⚠ THE HEADER IS A PILL AND THE AVATAR MOVED INSIDE IT (Samuel, 2026-08-22).
+ * The `w-10` avatar gutter and the baseline name/chip/time row are GONE:
+ * `attribution-pill.tsx › AttributionPill` carries avatar + name + time as one
+ * capsule, and the message blocks stack BELOW it at full column width. That
+ * changes the row from a horizontal pair into a column, so **the side is now
+ * `items-end` / `items-start` on this element rather than `flex-row-reverse`** —
+ * the RULE is unchanged (INVARIANTS §5: `authorUserId === currentUserId`), only
+ * the axis it is expressed on. The bodies keep their own `items-end`, which is
+ * what `MESSAGE_BLOCK`'s 92% cap gives them something to pull against.
+ *
+ * ⚠ A CONTINUATION STILL DROPS THE HEADER, and now drops NO indent with it.
+ * Under the gutter layout a continuation had to keep a `w-10` spacer or it lined
+ * up left of the row it continued; with the pill above the body, the first row's
+ * body starts at the same edge a continuation's does, so the spacer would be the
+ * thing that misaligned them.
+ */
 function AuthoredRow({
   id,
   side,
@@ -178,7 +201,7 @@ function AuthoredRow({
   authorLabel: string;
   time: string;
   agent: boolean;
-  /** WHICH agent, when the writer stamped it — see `bits.tsx › AgentChip`. */
+  /** WHICH agent, when the writer stamped it — see `attribution-pill.tsx`. */
   agentId?: string | null;
   continuation: boolean;
   flash: boolean;
@@ -191,26 +214,23 @@ function AuthoredRow({
       className={cn(
         // The negative margin + padding pair keeps the flash tint from
         // shifting layout: the row always owns the strip it may highlight.
-        "-mx-2 flex gap-3 rounded-[10px] px-2 py-1 transition-colors duration-700",
-        mine && "flex-row-reverse",
+        "-mx-2 flex flex-col gap-1.5 rounded-[10px] px-2 py-1 transition-colors duration-700",
+        mine ? "items-end" : "items-start",
         flash && "bg-link/10 duration-150"
       )}
     >
-      <div className="w-10 shrink-0">
-        {!continuation && <Avatar person={author} size="md" />}
-      </div>
-      <div className={cn("flex min-w-0 flex-1 flex-col gap-1.5", mine && "items-end")}>
-        {!continuation && (
-          <div className={cn("flex items-baseline gap-2", mine && "flex-row-reverse")}>
-            {/* `wrap-anywhere` for the same reason as the body: a roster name
-                with no spaces in it must not widen the row past the pane. */}
-            <span className="wrap-anywhere text-body font-semibold text-text-primary">
-              {authorLabel}
-            </span>
-            {agent && <AgentChip agentId={agentId} className="self-center" />}
-            <span className="text-micro text-text-muted">{time}</span>
-          </div>
-        )}
+      {!continuation && (
+        <AttributionPill
+          author={author}
+          authorLabel={authorLabel}
+          agent={agent}
+          agentId={agentId}
+          time={time}
+        />
+      )}
+      {/* ⚠ `w-full` so the column is the row's full width whatever the article's
+          align-items says — the pill hugs its content, the bodies must not. */}
+      <div className={cn("flex w-full min-w-0 flex-col gap-1.5", mine && "items-end")}>
         {children}
       </div>
     </article>

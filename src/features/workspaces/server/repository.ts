@@ -4,7 +4,6 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type {
   Workspace,
   WorkspaceMembership,
-  WorkspaceOverviewCounts,
   WorkspaceWithRole,
   Role,
 } from "../types";
@@ -289,38 +288,6 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db.from("workspaces").delete().eq("id", workspaceId);
   if (error) throw error;
-}
-
-/**
- * Head-counts for the overview stat cards: three parallel
- * `count: "exact", head: true` queries. Soft-deleted bases/skills excluded.
- * ⚠ A failed count is `null` from PostgREST and degrades to 0, never throws.
- */
-export async function countWorkspaceResources(
-  workspaceId: string
-): Promise<WorkspaceOverviewCounts> {
-  const db = supabaseAdmin();
-  const count = (table: string, soft: boolean) => {
-    let q = db
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId);
-    if (soft) q = q.is("deleted_at", null);
-    return q;
-  };
-  const [kb, sk, mem] = await Promise.all([
-    count("knowledge_bases", true),
-    count("skills", true),
-    db
-      .from("workspace_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId),
-  ]);
-  return {
-    knowledgeBases: kb.count ?? 0,
-    skills: sk.count ?? 0,
-    members: mem.count ?? 0,
-  };
 }
 
 export interface ProfileSummary {

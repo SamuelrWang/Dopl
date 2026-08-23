@@ -1,17 +1,14 @@
 // SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="read_sessions")` ->
 // GET /api/channels/sessions -> `channel_sessions`.
 //
-// ⚠ A PUSH ON STATE CHANGE, NOT A HEARTBEAT. presence.js beats every 30s per listener per
-// workspace unconditionally (~120 writes/hour/machine, forever); this writes when a session's
-// DERIVED state actually moves — launch, first tool, park, end. A handful of writes per session
-// lifetime. That difference is the whole argument for the table existing. Do NOT "simplify" it
-// to a timer.
-// ⚠ THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place engine state becomes
-// a pill state, and it already coalesces and fires only when the digest moved. This SUBSCRIBES
-// and re-derives nothing. Anything else is the two-readers-one-fact defect.
-// ⚠ SEPARATE MODULE because session-summary.js is network-free above `module.exports` — its
-// suite reads it as SOURCE and evaluates the block with fakes injected. An apiFetch there ends
-// that. The seam is a subscription.
+// ⚠ A PUSH ON STATE CHANGE, NOT A HEARTBEAT. presence.js beats every 30s per listener per workspace unconditionally
+// (~120 writes/hour/machine, forever); this writes when a session's DERIVED state actually moves — launch, first
+// tool, park, end. A handful of writes per session lifetime. That difference is the whole argument for the table
+// existing. Do NOT "simplify" it to a timer. ⚠ THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place
+// engine state becomes a pill state, and it already coalesces and fires only when the digest moved. This SUBSCRIBES
+// and re-derives nothing. Anything else is the two-readers-one-fact defect. ⚠ SEPARATE MODULE because
+// session-summary.js is network-free above `module.exports` — its suite reads it as SOURCE and evaluates the block
+// with fakes injected. An apiFetch there ends that. The seam is a subscription.
 //
 // TRANSPORT IS api.js: a short POST with no abort wiring and no long-poll, so it inherits the
 // shared 401 repair (api-repair.js — a second copy of that repair produced the 1.8.x Channels
@@ -19,18 +16,15 @@
 // only because its long-poll wires a caller abort signal in.
 //
 // ── ROW LIFETIME ────────────────────────────────────────────────────────────────────────
-// ⚠ A session's row exists while its PILL does and is DELETED when the pill leaves, ended rows
-// included — the row IS that projection (session-summary's retention rule). Keeping `ended`
-// rows to sweep later needs a scheduler this product does not have, so "later" means never and
-// the table grows unbounded; and an `ended` row for a window-less session answers "what is
-// flint doing?" with a session the operator cannot open.
-// ⚠ THE DELETE IS IMPLICIT, which is why this POSTS THE WHOLE SET: the server replaces the
-// caller's set. A delta protocol needs an explicit "this one is gone" that a crashed or quit
-// desktop never sends.
-// KNOWN GAP: rows outlive the process that wrote them. Bounded by (a) the first push for a
-// workspace in a new run replacing its whole set and (b) `reportedWorkspaces` being PERSISTED,
-// so a run starting with no sessions clears them. NOT covered: signing out — the credential
-// that could delete the rows is gone before anything here can react.
+// ⚠ A session's row exists while its PILL does and is DELETED when the pill leaves, ended rows included — the row IS
+// that projection (session-summary's retention rule). Keeping `ended` rows to sweep later needs a scheduler this
+// product does not have, so "later" means never and the table grows unbounded; and an `ended` row for a window-less
+// session answers "what is flint doing?" with a session the operator cannot open. ⚠ THE DELETE IS IMPLICIT, which is
+// why this POSTS THE WHOLE SET: the server replaces the caller's set. A delta protocol needs an explicit "this one is
+// gone" that a crashed or quit desktop never sends. KNOWN GAP: rows outlive the process that wrote them. Bounded by
+// (a) the first push for a workspace in a new run replacing its whole set and (b) `reportedWorkspaces` being
+// PERSISTED, so a run starting with no sessions clears them. NOT covered: signing out — the credential that could
+// delete the rows is gone before anything here can react.
 //
 // ── IDENTITY ────────────────────────────────────────────────────────────────────────────
 // ⚠ CROSS-ACCOUNT GUARD. Signing out does not end engine sessions, so operator A's sessions
@@ -43,14 +37,17 @@
 
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
+// THE QUANTIZER + CADENCE FLOOR (2026-08-22). ABOVE the sentinel like `apiFetch`, so the harness
+// injects the REAL module. Its header carries the derivations; this file only spends them.
+const telemetry = require('./session-telemetry');
 const Store = require('electron-store');
 
 const store = new Store();
 
 // ─── BEGIN SESSION-STATE-PUSH (injectable; unit-tested via source extraction) ───────────
-// ⚠ `apiFetch`, `diag` and `store` are free vars from here down, so
+// ⚠ `apiFetch`, `diag`, `store`, `telemetry` and `Date` are free vars from here down, so
 // test/session-state-push.test.mjs evaluates this verbatim with fakes — no Electron, no
-// network, no disk.
+// network, no disk, and a clock a case can drive.
 
 const ENDPOINT = '/api/channels/sessions';
 const HTTP_TIMEOUT_MS = 15000;
@@ -80,6 +77,11 @@ const origin = new Map();
 // workspaceId -> digest of the set this process last STORED there. ⚠ An unchanged digest is
 // not sent: a window rebuild, a re-mount or an identical re-derivation must not cost a write.
 const pushedDigest = new Map();
+// ⚠ THE CADENCE FLOOR'S TWO FACTS (2026-08-22): the STATE HALF of the stored set, and when it
+// was stored. Beside `pushedDigest` rather than folded into it because they answer a different
+// question — that map says "is this set new", these say "is what is new worth a write NOW".
+const pushedStateDigest = new Map();
+const pushedAt = new Map();
 // One line per (workspace, failure shape). A subsystem that dies must say so ONCE, not once
 // per state change.
 const loggedFailures = new Set();
@@ -91,9 +93,16 @@ const short = (id) => String(id || '').slice(0, 8);
  * ONE REPORT ENTRY -> THE WIRE ROW. The only mapping here, and it is a rename: `key` is the
  * server's `sessionKey` (the stable (channel, thread) key the table upserts on, NOT the
  * ephemeral `sessionId`), and an empty `taskId` becomes the NULL the column stores.
- * ⚠ state / name / channelName / threadTitle pass through byte-for-byte — this module gets no
- * vote on what a session's state is.
- */
+ * ⚠ state / name / channelName / threadTitle pass through byte-for-byte — no vote on state.
+ * ── ⚠ EIGHT RICH FIELDS JOINED IT ON 2026-08-22 (the orchestrator wave, F-270) ─────────────
+ * `session-telemetry.js › telemetryFields`, whose header is where the argument lives. The
+ * BY-NAME PICK IS UNCHANGED (a summary field not named here still does not cross), and those
+ * values are QUANTIZED: `lastActivityAt` moves on every engine dispatch, so an unquantized
+ * widening turns the digest gate off and makes this a per-event writer.
+ * ⚠ `templateName` JOINED THE SAME DAY (agent templates) and is QUANTIZATION-EXEMPT: an
+ * IDENTITY, not a metric. It rides the STATE half (`session-telemetry.js › STATE_FIELDS`) so a
+ * change PUSHES, which is free because `context.template` is a spawn-time capture that is never
+ * re-resolved. ⚠ THE NAME, NEVER THE ID: the server stores it verbatim and resolves nothing. */
 function reportRow(e) {
   return {
     sessionKey: String((e && e.key) || ''),
@@ -103,6 +112,8 @@ function reportRow(e) {
     state: (e && e.state) || '',
     channelName: (e && e.channelName) || null,
     threadTitle: (e && e.threadTitle) || null,
+    templateName: telemetry.labelOrNull(e && e.templateName, telemetry.TEMPLATE_NAME_MAX),
+    ...telemetry.telemetryFields(e),
   };
 }
 
@@ -136,17 +147,16 @@ function ownedBy(entries, userId) {
 }
 
 // ── THE AD-HOC SESSION NEVER GOES ON THE WIRE ───────────────────────────────────────────
-// ⚠ An UNTHREADED inbound (the ordinary DM) has no first-class thread, so trigger.taskIdFor
-// mints `task-<channelId>-<seq>`, which the server's `SESSION_KEY_RE` and
-// `threadId: z.string().uuid()` both refuse. Zod validates the ARRAY, so ONE such entry 400s
-// the WHOLE payload; retryable(400) is false, so the digest is never recorded and every later
-// push for that workspace fails identically — `read_sessions` answers [] for the machine,
-// valid UUID-threaded sessions included, and stale rows are never cleared.
-// ⚠ Filter client-side; do NOT widen the server schema. `read_sessions` answers "what is this
-// member's agent doing on THIS thread", and an ad-hoc session has no thread for the answer to
-// be about. Widening the key charset also gives up the reconcile's delete-by-key safety.
-// The predicate RESTATES the server's contract (uuid channel, uuid thread or none) rather than
-// sniffing `!key.startsWith('task-')`: the reason to drop a row is that the server refuses it.
+// ⚠ An UNTHREADED inbound (the ordinary DM) has no first-class thread, so trigger.taskIdFor mints
+// `task-<channelId>-<seq>`, which the server's `SESSION_KEY_RE` and `threadId: z.string().uuid()` both refuse.
+// Zod validates the ARRAY, so ONE such entry 400s the WHOLE payload; retryable(400) is false, so the digest is
+// never recorded and every later push for that workspace fails identically — `read_sessions` answers [] for
+// the machine, valid UUID-threaded sessions included, and stale rows are never cleared.
+// ⚠ Filter client-side; do NOT widen the server schema. `read_sessions` answers "what is this member's agent
+// doing on THIS thread", and an ad-hoc session has no thread for the answer to be about. Widening the key
+// charset also gives up the reconcile's delete-by-key safety. The predicate RESTATES the server's contract
+// (uuid channel, uuid thread or none) rather than sniffing `!key.startsWith('task-')`: the reason to drop a
+// row is that the server refuses it.
 const WIRE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function serverReportable(e) {
@@ -158,19 +168,19 @@ function serverReportable(e) {
 
 // ── A ROW WITH NO USABLE HANDLE DOES NOT GO ON THE WIRE EITHER (2026-08-22) ─────────────
 //
-// ⚠ THE SAME FAILURE AS THE AD-HOC KEY ABOVE, REACHED BY A THIRD ROAD, AND THIS IS THE BELT
-// RATHER THAN THE FIX. `channel_sessions.name` carries CHECK `^[a-z][a-z0-9-]{1,30}$` and
-// `src/features/channels/schema-sessions.ts › SESSION_NAME_RE` restates it character for
-// character. Zod validates the ARRAY, so ONE bad name 400s the WHOLE payload, `retryable(400)`
-// is false, the digest is never recorded, and every later push for that workspace fails
-// identically — `read_sessions` answers [] for the machine for the life of the run.
+// ⚠ THE SAME FAILURE AS THE AD-HOC KEY ABOVE, REACHED BY A THIRD ROAD, AND THIS IS THE BELT RATHER THAN THE
+// FIX. `channel_sessions.name` carries CHECK `^[a-z][a-z0-9-]{1,30}$` and
+// `src/features/channels/schema-sessions.ts › SESSION_NAME_RE` restates it character for character. Zod
+// validates the ARRAY, so ONE bad name 400s the WHOLE payload, `retryable(400)` is false, the digest is never
+// recorded, and every later push for that workspace fails identically — `read_sessions` answers [] for the
+// machine for the life of the run.
 //
-// ⚠ AND `''` IS A REACHABLE VALUE, NOT A HYPOTHETICAL. `session-summary.js › nameOf` answers the
-// empty string for a session carrying no `agentId` — deliberately, because inventing a name there
-// would be worse — and the producer that could hand one over was `session-park.js › startResume`
-// resuming a PRE-MULTIPLAYER durable record. That producer is fixed in the same change (it mints
-// an id), so nothing in the tree feeds this today. It stays because the COST of the next producer
-// getting it wrong is a workspace silently blanked, and the check is a regex.
+// ⚠ AND `''` IS A REACHABLE VALUE, NOT A HYPOTHETICAL. `session-summary.js › nameOf` answers the empty string
+// for a session carrying no `agentId` — deliberately, because inventing a name there would be worse — and the
+// producer that could hand one over was `session-park.js › startResume` resuming a PRE-MULTIPLAYER durable
+// record. That producer is fixed in the same change (it mints an id), so nothing in the tree feeds this
+// today. It stays because the COST of the next producer getting it wrong is a workspace silently blanked, and
+// the check is a regex.
 //
 // ⚠ THE PREDICATE RESTATES THE SERVER'S CONTRACT rather than sniffing for '' — the reason to drop
 // a row is that the endpoint refuses it, which is the same rule `serverReportable` follows.
@@ -348,6 +358,12 @@ async function cycle(entries) {
     // A different operator's server state is unknown here and their failures are not ours.
     // ⚠ Nothing carries across except the origin stamps, which are the whole point.
     pushedDigest.clear();
+    // ⚠ THE FLOOR'S STATE GOES WITH THE DIGEST, ALL THREE TOGETHER. A surviving `pushedAt`
+    // would delay the NEW operator's first write for one THEY never made, and a surviving state
+    // digest would misread their first set as churn — and the first write for a workspace is
+    // the one carrying its whole set.
+    pushedStateDigest.clear();
+    pushedAt.clear();
     loggedFailures.clear();
     lastUserId = userId;
   }
@@ -361,10 +377,24 @@ async function cycle(entries) {
   for (const [ws, rows] of groups) {
     const digest = setDigest(rows);
     if (pushedDigest.get(ws) === digest) continue;
+    // ── THE CADENCE FLOOR (2026-08-22) — A DELAY, NOT A SCHEDULE ─────────────────────────
+    // ⚠ NOTHING IS QUEUED AND NO TIMER IS ARMED. A churn-only set inside the window is not
+    // written and its digest is NOT recorded, so the session's NEXT projection move carries it —
+    // the same bargain the bounded retry makes. A machine that falls quiet never writes it, and
+    // nothing wakes up to. ⚠ A STATE CHANGE BYPASSES IT (`telemetry.STATE_FIELDS` is the whole
+    // definition of which is which). ⚠ SILENT: a skipped churn push is constant and
+    // working-as-designed; one line per skip is the quiet cousin of a log storm.
+    const state = telemetry.stateDigest(rows);
+    const stateMoved = pushedStateDigest.get(ws) !== state;
+    if (!stateMoved && !telemetry.floorAllows(pushedAt.get(ws), Date.now())) continue;
     // Serial on purpose: a burst of parallel writes is what this design exists to avoid.
     const stored = await send(ws, rows);
     if (!stored) continue; // NOT recorded, so the next real change retries
     pushedDigest.set(ws, digest);
+    pushedStateDigest.set(ws, state);
+    // ⚠ STAMPED AFTER THE SEND. `send` can hold 15s plus a retry, and a stamp taken before it
+    // would let the very next cycle read the floor as already expired.
+    pushedAt.set(ws, Date.now());
     rememberWorkspace(userId, ws, rows.length > 0);
   }
 }
@@ -460,6 +490,7 @@ module.exports = {
   liveForWire, // 2026-08-22: an ENDED row is local-only — see its block
   nameReportable, // 2026-08-22: the belt against a nameless row 400-ing the whole set
   setDigest,
+  TELEMETRY_MIN_INTERVAL_MS: telemetry.TELEMETRY_MIN_INTERVAL_MS, // 2026-08-22, the floor
   retryable,
   reportedWorkspaces,
 };

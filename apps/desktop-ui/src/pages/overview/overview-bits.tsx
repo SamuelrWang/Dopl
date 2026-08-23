@@ -1,24 +1,5 @@
 import type { ReactNode } from "react";
-import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-
-/**
- * The per-card overflow affordance. Inert in this pass — the page is a static
- * clone, so there is nothing yet for `Popover` to open. Kept a real `<button>`
- * with a label so swapping in the kit's `Popover` later is a wrap, not a
- * rewrite, and so the card is not decorated with an unreachable glyph.
- */
-export function KebabButton({ label }: { label: string }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      className="-mr-1 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised-2 hover:text-text-secondary"
-    >
-      <MoreHorizontal size={14} aria-hidden="true" />
-    </button>
-  );
-}
 
 /**
  * Small raised icon plate at a card's top-left. `.raised-tab` is the kit's
@@ -61,4 +42,12 @@ export function StatFigure({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
+}
+
+/**
+ * Card counts read "03", not "3" — the clone's zero-padding, kept now that the
+ * numbers are live. Anything into double figures groups normally.
+ */
+export function padCount(value: number): string {
+  return value >= 0 && value < 10 ? `0${value}` : value.toLocaleString();
 }

@@ -27,6 +27,9 @@ const channel_render_1 = require("./channel-render");
 const channel_render_threads_1 = require("./channel-render-threads");
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 const channel_addressing_1 = require("./channel-addressing");
+// ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
+// statement, in channel-session-render.ts, shared with `await`'s session block.
+const channel_session_render_1 = require("./channel-session-render");
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 async function opList(client) {
@@ -128,10 +131,9 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
     lines.push(`\nNO CURSOR FROM THIS READ — it is deliberately not offering one. \`thread\` FILTERED other exchanges out of this page, and \`await\` is CHANNEL-WIDE with a strict "greater than", so a seq taken from here would skip every message this filter hid — permanently, because a cursor only moves forward. Await from the highest seq below which you have seen EVERYTHING in this channel. If you do not have one, establish it by reading the channel unscoped (drop \`thread\`) and awaiting from that page's last seq.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-/** Peer-influenced display text (a session's channel name / thread title),
- *  neutralized for a rendered result — never an empty span. */
+/** Peer-influenced display text (a session's channel name), neutralized for a
+ *  rendered result — never an empty span. */
 const NO_NAME = "(unnamed)";
-const NO_TITLE = "(untitled)";
 /**
  * READ-SESSION-STATE — the caller's OWN live sessions: handle, reduced state
  * (working / idle / ended — desktop `session-summary.js` vocabulary;
@@ -148,6 +150,19 @@ const NO_TITLE = "(untitled)";
  *
  * ⚠ The empty answer means "no live sessions being reported", never "you have
  * no sessions" — an asleep, signed-out, or older-build machine reports nothing.
+ *
+ * ⚠ AND THE SAME CAVEAT NOW APPLIES ROW BY ROW (2026-08-22). A row is a REPORT,
+ * not an observation: nothing on the server watches the machine, so a desktop
+ * that CRASHED leaves its last push standing and this op read it back as a live
+ * `working` forever. `channel-session-render.ts` hedges any row quiet longer
+ * than `SESSION_STALE_WINDOW_MS` into "last reported <state>" and the legend
+ * says what that means. The stamp is NOT a heartbeat, so the hedge is a hedge
+ * and never a claim the agent stopped.
+ *
+ * ⚠ THE TELEMETRY IS OPERATOR-ONLY, and this op is entitled to it because the
+ * server read is own-scoped — `GET /api/channels/sessions` maps through
+ * `collab-dto.ts › mapOwnSessionStateRow`. A peer's session reaches no surface
+ * in this file.
  */
 async function opReadSessions(client, ref) {
     // ⚠ Resolve filter to id — a slug would not match the stored channel_id.
@@ -164,42 +179,22 @@ async function opReadSessions(client, ref) {
     if (sessions.length === 0) {
         return (0, respond_1.ok)(`No live sessions of yours are being reported${channelLabel} right now. This lists the agent sessions running on YOUR OWN machine, not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`);
     }
+    // ⚠ ONE `now` FOR THE WHOLE PAGE. Calling `Date.now()` per line lets two
+    // sessions pushed in the same instant land on either side of the window and
+    // render with different tenses, which reads as a fact about them.
+    const now = Date.now();
+    const anyStale = sessions.some((s) => (0, channel_session_render_1.sessionIsStale)(s, now));
     const lines = [
         `## Your sessions — ${sessions.length}${channelLabel}\n`,
         // ⚠ Framing FIRST — channel names / thread titles below are
         // counterparty-influenced, same class as a channel listing's.
         `${channel_render_1.UNTRUSTED_LISTING_HEADER}\n`,
     ];
-    for (const s of sessions)
-        lines.push(formatSessionLine(s));
-    lines.push(`\nEach line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished). To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`);
+    for (const s of sessions) {
+        lines.push((0, channel_session_render_1.formatSessionLine)(s, { telemetry: true, now }));
+    }
+    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`, `\n${channel_session_render_1.SESSION_TELEMETRY_NOTE}`);
     return (0, respond_1.ok)(lines.join("\n"));
-}
-/**
- * ⚠ `state` is spliced into SERVER NARRATION, not a code span, so it must pass
- * a MEMBERSHIP test — a state carrying a newline could open a second
- * `_dopl_status` block. Its only other guards are the column's
- * `CHECK (state IN (…))` (in a migration NOT applied to the live database) and
- * an unchecked `as SessionPillState` in `collab-dto.ts`, so this is the layer
- * that actually holds. Membership, not neutralization: the set is closed and 3
- * long, so anything outside it is not a state we can render.
- */
-const SESSION_STATES = new Set([
-    "working",
-    "idle",
-    "ended",
-]);
-const UNKNOWN_STATE = "(unrecognized state)";
-/** One session row, all peer-influenced text neutralized. */
-function formatSessionLine(s) {
-    const where = s.channelName ? ` · in ${(0, channel_shared_1.inlineOr)(s.channelName, NO_NAME)}` : "";
-    const on = s.threadTitle
-        ? ` · thread ${(0, channel_shared_1.inlineOr)(s.threadTitle, NO_TITLE)}`
-        : s.threadId
-            ? ` · thread ${(0, channel_shared_1.inlineOr)(s.threadId, NO_TITLE)}`
-            : " · no thread";
-    const state = SESSION_STATES.has(s.state) ? s.state : UNKNOWN_STATE;
-    return `- **${(0, channel_shared_1.inlineOr)(s.name, NO_NAME)}** — ${state}${on}${where}`;
 }
 async function opListThreads(client, ref, selfUserId = null) {
     // Hot-path parity with read/await: ref straight to the route (slug-or-id +

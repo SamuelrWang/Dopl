@@ -123,6 +123,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     counterpartyName: "David", // D1: the header identity, persisted for a reopen
     channelName: "Ops",
     taskTitle: "Ship the invoice import",
+    templateName: "Code Auditor", // F-288: the agent's TEMPLATE identity, persisted for a resume
     turns: 7, // FIX #9: the running cap counters, persisted for a P2 rehydrate
     costUsd: 0.42,
     ownPostSeq: 11, // 2026-08-22: the outbound post counter, persisted for the SAME resume
@@ -135,12 +136,26 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // id is persisted and RE-USED by a resume, so a counter that reset re-minted client_msg_ids
     // the server already held and its idempotency short-circuit swallowed the resumed agent's
     // replies — a silent data loss, not a cosmetic revert.
+    // "templateName" (2026-08-23, F-288) is the third of that family and the same argument again:
+    // `context.template` lives only on the live session object, so a CRASH RESUME rebuilt the
+    // context without it, reported `templateName: null`, and — because `templateName` is in
+    // `session-telemetry.js › STATE_FIELDS` and so bypasses the cadence floor — ERASED
+    // `channel_sessions.template_name` on the next push, under a still-running agent.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
     "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "phase", "profile",
-    "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle", "turns",
-    "workspaceId",
+    "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle", "templateName",
+    "turns", "workspaceId",
   ]);
   assert.equal(rec.ownPostSeq, 11);
+  assert.equal(rec.templateName, "Code Auditor");
+  // ⚠ AT THE COLUMN'S OWN 120, NOT `durableName`'s 80 DISPLAY DEFAULT (F-287): a template name is
+  // an IDENTITY, and persisting a clipped one would resume reporting a name no template has.
+  assert.equal(durableSessionRecord({ templateName: "N".repeat(200) }).templateName.length, 120);
+  assert.equal(durableSessionRecord({ channelName: "C".repeat(200) }).channelName.length, 80,
+    "…and a DISPLAY string keeps the display default");
+  for (const junk of [undefined, null, "", "   ", 7, {}]) {
+    assert.equal(durableSessionRecord({ templateName: junk }).templateName, null, JSON.stringify(junk));
+  }
   // Same NaN discipline as `turns` / `costUsd`: a hand-edited store lands on 0, never NaN.
   for (const junk of [undefined, null, "x", NaN, {}, -1 / 0]) {
     assert.equal(durableSessionRecord({ ownPostSeq: junk }).ownPostSeq, 0, JSON.stringify(junk));

@@ -1,0 +1,500 @@
+// THE LAUNCH-DIRECTIVE WATCHER — an ORCHESTRATOR asks, this machine decides, and the local
+// toggle is the decision (2026-08-22, Samuel's launch-over-MCP ruling).
+//
+// ── WHAT THIS IS ─────────────────────────────────────────────────────────────────────────
+//
+// An agent holding this operator's own Dopl credential writes a row into
+// `channel_launch_directives` saying "start an agent on this channel with this goal". This
+// module watches for those rows, CLAIMS one, spawns the session through the ordinary funnel, and
+// writes back what happened. It is the only path by which anything other than a human click
+// starts a session on this Mac.
+//
+// ⚠ AND IT IS OFF UNLESS THE OPERATOR TURNED IT ON, PER MACHINE. `channel-prefs.js ›
+// getOrchestratorLaunch` defaults FALSE and is reachable from exactly one `appWindowOnly` IPC
+// pair — no route, no MCP op, no column. **THE TOGGLE IS THE CONSENT**, and Samuel ruled it as
+// the replacement for "the click IS that human" on this lane: there is no click at directive
+// time, so the operator's standing local decision has to be the human, and a consent a program
+// can grant itself is not one.
+//
+// ── ⚠ THE §6 THREAT THIS SHAPE IS BUILT AROUND ───────────────────────────────────────────
+//
+// A spawned session runs on this Mac as this user, under the channel's tool profile — which
+// under `bypass` pre-approves `Bash` — and this operator's device token is on disk. So the agent
+// this lane creates can read the credential that would let it write MORE directives. That is not
+// hypothetical containment theatre; it is the ordinary shape of the thing.
+//
+// EVERYTHING BELOW FOLLOWS FROM IT:
+//   • THE ARMING SWITCH IS NOT ON THE SERVER. If it were, an agent holding the operator's own
+//     credential could arm every machine the operator owns, and the lane would be
+//     self-authorizing. It is a local `electron-store` boolean, by ruling.
+//   • THE DIRECTIVE SUPPLIES **GOAL**, **MODEL** AND **WHICH TEMPLATE**, AND NOTHING ELSE. Not
+//     the permission axes, not the tool profile, not the working folder. Those come from the
+//     operator's own durable per-channel record and from main's own watched-channel DTO — the
+//     same two sources the Launch button reads. **A directive-driven agent is exactly as
+//     contained as a button-driven one**, and nothing an orchestrator writes can widen it.
+//     ⚠ **A TEMPLATE WIDENS PROMPT CONTENT ONLY. It never supplies, influences, or relaxes a
+//     containment input — tool profile, permission axes, working folder and delivery lane are
+//     still the machine's, resolved from the machine's own state.** INVARIANTS §5A's sentence,
+//     enforced by `spawn`'s ORDER: the profile is computed from `watchedChannel` BEFORE any
+//     template text exists. ⚠ AND THE DIRECTIVE CARRIES AN **ID**, NEVER CONTENT — resolved here
+//     under THIS OPERATOR's credential, so one they cannot see is refused (`no-template`).
+//   • THE ROW IS NOT THE AUTHORIZATION. The realtime frame is a prompt, not a permit: this
+//     module CLAIMS over an authenticated route before it acts on a single field. See below.
+//
+// ── ⚠ THE REALTIME FILTER IS WORKSPACE-WIDE, AND RLS IS NOT THE SAME FENCE ───────────────
+//
+// The binding is `workspace_id=eq.<id>` (`realtime.js › addChannel`), matching the
+// `channel_messages` one beside it. RLS makes the SELECT owner-only, so a frame for a
+// colleague's directive should not reach this client — but "should not" is a policy on a table
+// this desktop does not own, evaluated by a service this desktop does not run, and the frame
+// filter itself does not encode the operator at all. So `operatorUserId` is re-checked LOCALLY
+// against the live identity before anything happens, and the claim re-checks it server-side
+// anyway. Two fences, because the cost of the outer one being wrong is another member's
+// orchestrator steering this machine.
+// ⚠ AND THE POLLED HALF NEEDS THE SAME FIELD — F-284: the server DTO omitted it, so every row
+// `pollWorkspace` fetched failed this re-check. `service-launch.ts › toDirective` carries it now.
+//
+// ── HOW A DIRECTIVE IS ACTED ON ──────────────────────────────────────────────────────────
+//
+//   1. ARRIVE   a realtime INSERT frame, or the 60s backstop poll when push is down.
+//   2. IGNORE   toggle off -> silently, with no server write at all. ⚠ THE SILENCE IS THE
+//               DESIGN: the row expires server-side, which the orchestrator SEES, and that beats
+//               a refusal — a refusal from a machine that has not opted in is an admission that
+//               the machine is listening.
+//   3. MINE?    `operatorUserId` against the live identity. Not mine -> silent, as above.
+//   4. CLAIM    a CAS on the server row. ⚠ LOSING IS A NORMAL NO-OP, NOT AN ERROR: the operator
+//               may have four machines watching the same workspace and exactly one of them
+//               should launch. Whoever loses stops, quietly.
+//   5. RESOLVE  the TEMPLATE, if one was named — this operator's credential, this machine's call.
+//               404 -> `no-template`; timeout/5xx -> `busy`; a NULLED id beside a live NAME is a
+//               DELETION and refuses without asking (E-4).
+//   6. LAUNCH   through `session-engine.launchRequesterSession`, the same funnel the button
+//               uses, on the SPAWN-IDLE lane with the goal delivered at wake.
+//   7. DECIDE   `launched` + the agent id, or `refused` + one of the seven words. Exactly one of
+//               them, always — see `launch-directive-wire.js › decideBody`.
+//
+// ⚠ IDEMPOTENCE IS BELT AND BRACES. The server CAS is the real guarantee; `decided` below is the
+// local belt, because a realtime frame and a backstop poll can deliver the same row within
+// milliseconds of each other and the claim is a network round-trip wide.
+//
+// The wire shapes and the route paths live in `launch-directive-wire.js`, which states which of
+// them are the OTHER lane's contract and which are this tree's own vocabulary.
+
+const { apiFetch } = require('./api');
+const realtime = require('./realtime');
+const channelPrefs = require('./channel-prefs');
+const wire = require('./launch-directive-wire');
+const sessionModel = require('./session-model');
+const { diag } = require('./diag');
+
+const HTTP_TIMEOUT_MS = 15000;
+
+// ⚠ THE BACKSTOP IS FOR THE BREAKER, NOT FOR CORRECTNESS. When realtime is healthy this poll
+// does nothing at all — it checks `isWorkspaceHealthy` first and returns. It exists because a
+// directive is a REQUEST somebody is waiting on, and `realtime.js`'s breaker holds a long
+// cooldown by design: without this, arming the lane and then flapping the WS would leave an
+// orchestrator waiting for the row's whole expiry window with no signal.
+// ⚠ 60s IS DELIBERATELY SLOW. The push path is the normal one and is near-instant; polling this
+// degraded one faster would spend steady-state request budget on an already-broken case.
+// `unref`'d, so it never holds a quit open.
+const POLL_MS = 60000;
+
+// The local dedupe ledger. ⚠ BOUNDED, oldest evicted first by insertion order — the idiom
+// `session-windowless.js › MAX_NOTIFIED_DENIALS` and `trigger-outcomes.js › MAX_REMEMBERED_ENDS`
+// use. An unbounded Set keyed by a server-minted id leaks for the life of the process, and an
+// eviction costs at worst one extra CAS the server refuses.
+const MAX_REMEMBERED = 256;
+
+let armed = false;
+let deps = { getUserId: null, launch: null, watchedChannel: null, workspaces: null };
+let pollTimer = null;
+const decided = new Set(); // directive ids this process has already acted on
+const inflight = new Set(); // …and the ones it is acting on right now
+
+function remember(id) {
+  if (decided.size >= MAX_REMEMBERED) decided.delete(decided.values().next().value);
+  decided.add(id);
+}
+
+/** THE STANDING CONSENT, read at DECISION TIME and never cached. The operator may turn the lane
+ *  off while a directive is in flight, and the next one must see that immediately. */
+function enabled() {
+  try { return channelPrefs.getOrchestratorLaunch() === true; } catch (_err) { return false; }
+}
+
+// ── The two authenticated calls ──────────────────────────────────────────────────────────
+//
+// ⚠ BOTH RIDE `api.js`, which carries the shared 401 repair (`api-repair.js` — a second copy of
+// that repair produced the 1.8.x Channels outage) and the app-version stamp. Never a raw fetch.
+
+async function post(workspaceId, path, body) {
+  try {
+    const res = await apiFetch(path, {
+      method: 'POST', workspaceId, body, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
+    });
+    if (!res || !res.ok) return { ok: false, status: (res && res.status) || 0 };
+    let parsed = null;
+    try { parsed = await res.json(); } catch (_err) { parsed = null; }
+    return { ok: true, body: parsed || {} };
+  } catch (err) {
+    return { ok: false, status: 0, error: (err && err.message) || 'network error' };
+  }
+}
+
+/**
+ * THE CAS. Returns the claimed directive, or null.
+ *
+ * ⚠ NULL IS THE ORDINARY ANSWER AND CARRIES NO ALARM. Another of this operator's machines won
+ * the race; the row expired; the orchestrator withdrew it. None of those is a failure of this
+ * machine and none of them produces a decision — the winner will write one.
+ * ⚠ AND A CLAIM THAT FAILS ON THE NETWORK IS ALSO A NO-OP, deliberately: an unclaimed directive
+ * is still `pending`, so it expires visibly. Retrying would be this machine competing with itself.
+ */
+async function claim(d) {
+  const res = await post(d.workspaceId, wire.ROUTES.claim, wire.claimBody(d.id));
+  if (!res.ok) {
+    // ⚠ **409 IS THE DESIGNED OUTCOME FOR EVERY MACHINE BUT ONE, NOT AN ERROR** (F-286).
+    // `service-launch.ts › claimLaunchDirective` throws `LaunchDirectiveNotClaimableError` when
+    // the CAS matches no row — taken, decided, or expired — which `http-mapping.ts` maps to 409.
+    // So on the ORDINARY multi-machine path (header step 4) the loser lands here, and telling it
+    // "the row stays pending" asserts the opposite of the truth: the row is CLAIMED and another
+    // machine is launching it. 404 is the same kind of answer. Only network faults and 5xx leave
+    // the row genuinely pending.
+    if (res.status === 409 || res.status === 404) {
+      diag('launch-directive: claim lost', String(d.id).slice(0, 8),
+        `— HTTP ${res.status}, another machine won or the row is gone (a normal no-op)`);
+      return null;
+    }
+    diag('launch-directive: claim failed', String(d.id).slice(0, 8),
+      res.status ? `HTTP ${res.status}` : res.error || 'network', '— the row stays pending and expires');
+    return null;
+  }
+  // ⚠ THREE ENVELOPE SHAPES ACCEPTED, DELIBERATELY. The route answers `{ directive }` today (the
+  // suite pins that against `claim/route.ts`); the generosity predates it landing and is kept,
+  // because `{directive}`, `{ok, directive}` and the bare row all mean the same thing — the
+  // discriminator is whether a claimable ROW came back, not which envelope carried it. ⚠ IT
+  // WIDENS NOTHING: authorization already happened server-side, and `directiveFrom` narrows.
+  const body = res.body || {};
+  const granted = body.directive || (body.ok === undefined && body.id ? body : null);
+  if (!granted || body.ok === false) {
+    diag('launch-directive: claim lost', String(d.id).slice(0, 8),
+      '—', String(body.reason || 'another machine won'), '(a normal no-op)');
+    return null;
+  }
+  // ⚠ RE-NARROWED FROM THE CLAIM'S OWN ANSWER, not carried over from the realtime frame. The
+  // frame is a prompt; the CLAIMED row is what was granted, and if they disagree the
+  // authenticated one wins.
+  return wire.directiveFrom(granted, d.workspaceId);
+}
+
+/** The terminal write. Best-effort by the same logic as the claim — the machine has already
+ *  done the thing; a lost decision costs the orchestrator a wait, not a wrong action. */
+async function decide(d, outcome) {
+  const body = wire.decideBody(d.id, outcome);
+  const res = await post(d.workspaceId, wire.ROUTES.decide, body);
+  diag('launch-directive', String(d.id).slice(0, 8), body.status,
+    body.agentId ? `agent ${body.agentId}` : `(${body.refusalReason})`,
+    res.ok ? '' : '— DECISION NOT RECORDED, the orchestrator will see it expire');
+}
+
+// ── The launch ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * SPAWN, THROUGH THE ORDINARY FUNNEL. Returns `{ agentId }` or `{ refused: <word> }`.
+ *
+ * ⚠ EVERY CONTAINMENT INPUT COMES FROM THIS MACHINE, NOT FROM THE DIRECTIVE. Stated field by
+ * field because this is the whole safety argument:
+ *   toolProfile   `channel-listener.js › watchedChannel` — MAIN's own full server DTO off the
+ *                 loop entry, the same read `sessions:launch` makes (F-267 fixed it to this) and
+ *                 the same one `trigger.js` makes on the responder lane. Unwatched -> refuse.
+ *   startModes    the operator's DURABLE per-channel posture, through
+ *                 `channel-prefs.js › launchStartModes` — both axes, message axis floored at
+ *                 `auto_inbound` for the windowless reason.
+ *   windowless    literal `true`. There is one spawn shape.
+ * The directive supplies `goal`, `model` and a TEMPLATE ID. None reaches a permission decision.
+ *
+ * ── ⚠ THE TEMPLATE, RESOLVED HERE AND ONLY HERE (2026-08-23) ─────────────────────────────
+ * The row carries an ID and a NAME SNAPSHOT; the CONTENT is fetched by THIS machine, at claim
+ * time (`template-resolve.js › resolveTemplate`). Three consequences, each deliberate:
+ *   1. THE SECOND FENCE IS THE OPERATOR'S. The orchestrator proved it could SEE the template at
+ *      create; this proves the OPERATOR can. Routinely different people — a `team` template the
+ *      orchestrator is in and the operator is not is created fine and REFUSED here as
+ *      `no-template`, which is fail-closed and the designed outcome rather than a bug.
+ *   2. `knowledgeBases` IS VIEWER-FILTERED AGAINST WHOEVER RESOLVES, so a shared template cannot
+ *      launder access to a private base. 3. REFUSE, NEVER DEGRADE: no branch drops an
+ *      unresolvable template and launches blank — a blank agent wearing no identity goes
+ *      unnoticed.
+ *
+ * ⚠ NO FIRST-USE APPROVAL ON THIS LANE — a RULING, not an omission (OQ-3). The BUTTON lane's
+ * one-modal gate (`session-launch-op.js`, answering its own renderer with `template-approval`)
+ * has no equivalent here: there is no human at the keyboard and the toggle already stands in for
+ * the click, so `template-approval` has no producer here, is not in the wire vocabulary, and the
+ * column cannot store it.
+ *
+ * ⚠ `operatorArmed: true`, AND IT IS THE TOGGLE THAT EARNS IT. `startSession`'s FIX-4 guard
+ * refuses a handed-in posture on a `parkedShell` unless a human armed it just now, because a
+ * shell is normally woken by something that is NOT the approving human. Here that human is the
+ * operator who turned this lane on, on this machine — Samuel's ruling exactly. ⚠ WITHOUT IT the
+ * spawn would drop the operator's own posture and inherit the reducer's `manual` tool axis, which
+ * is not "safer" in any useful sense — it is the operator's configured channel behaving
+ * differently depending on who pressed, the drift H2's one-consumer rule exists to make visible.
+ *
+ * ⚠ SPAWN-IDLE, WITH THE GOAL DELIVERED AT WAKE. `idle: true` registers the agent with prepared
+ * context and starts NO query, so a directive costs no `claude` child until someone talks to the
+ * agent. The goal rides as `firstMessage` -> `s.launchGoal` -> `session-seed.js › takeFraming`,
+ * which fences it as the WAKE turn's request body (the 1.17.1 wake design; before it the launch
+ * goal reached nobody at all on this lane). ⚠ THROUGH THE FENCE, NEVER THE PREAMBLE: the goal is
+ * text another agent wrote, so it is a BODY, like the thread title the button's goal interpolates.
+ */
+async function spawn(d) {
+  const channel = deps.watchedChannel ? deps.watchedChannel(d.channelId) : null;
+  if (!channel) {
+    // ⚠ NOT WATCHING THIS CHANNEL IS A REFUSAL, NOT A CRASH, and `no-bridge` is the honest word:
+    // this machine has no context for that channel, so it has nothing to launch INTO. Failing
+    // closed here is also what stops a directive naming an arbitrary channel id from reaching a
+    // spawn with a fail-closed `read_only` profile and looking like it worked.
+    return { refused: 'no-bridge' };
+  }
+  const targeting = require('./targeting');
+  const channelLevel = d.taskId === '';
+
+  // ── THE TEMPLATE, UNDER THIS OPERATOR'S CREDENTIAL ─────────────────────────────────────
+  // ⚠ AFTER the watched-channel lookup and BEFORE `deps.launch` — the order IS the containment
+  // statement: the tool profile is already decided by the time any template text exists here.
+  let template = null;
+  if (d.templateId) {
+    const resolved = await require('./template-resolve').resolveTemplate(d.templateId, d.workspaceId);
+    // ⚠ `resolved.reason` IS ALREADY ONE OF THE WIRE WORDS — `no-template` for a 404 (deleted, or
+    // invisible to THIS operator; 404-never-403 makes those one answer and this machine must not
+    // try to tell them apart), `busy` for a timeout, a network failure or a 5xx. Passed through
+    // rather than re-mapped: `decideBody › refusalFor` is the closed-vocabulary gate.
+    if (!resolved.ok) return { refused: resolved.reason };
+    template = resolved.template;
+  } else if (d.templateName) {
+    // ⚠ E-4 — THE DELETION SIGNAL, AND IT REFUSES WITHOUT A RESOLVE ATTEMPT. `template_id` is
+    // `ON DELETE SET NULL`, so a template deleted between CREATE and CLAIM leaves the id null and
+    // the NAME standing. There is no id left to ask about. On the id alone this machine cannot
+    // tell "no template requested" from "template deleted" — which is why the server snapshots
+    // the name — and the answer to a deletion is REFUSE, never a blank launch.
+    diag('launch-directive: template deleted before claim —', String(d.templateName).slice(0, 40));
+    return { refused: 'no-template' };
+  }
+
+  const res = await deps.launch({
+    channelId: d.channelId,
+    taskId: d.taskId,
+    workspaceId: d.workspaceId || null,
+    goal: d.goal || defaultGoal(channelLevel),
+    counterpartyId: null,
+    direct: false,
+    context: {
+      channelName: String(channel.name || '').slice(0, 120),
+      taskTitle: null,
+      channelId: d.channelId,
+      workspaceId: d.workspaceId || null,
+      taskId: d.taskId,
+      scope: channelLevel ? 'channel' : 'thread',
+      workspaceSegment: null,
+      // ── ⚠ THE RESOLVED TEMPLATE, CAPTURED AT SPAWN AND NEVER RE-READ ───────────────────
+      // The SAME `context.template` key the button lane uses — `session-launch.js › launch`
+      // forwards `context` on a literal whitelist and `startSession` merges it — so this costs
+      // zero funnel changes: one resolution point, two lanes, one consumer
+      // (`prompt-framing-template.js › templateRoleFraming`).
+      // ⚠ A SESSION KEEPS ITS SPAWN-TIME TEMPLATE CONTENT, and that FALLS OUT rather than being
+      // enforced: the role block is built at WAKE from what was captured here, so a template
+      // edited or deleted afterwards neither changes nor stops this session (E-1 / E-2).
+      // ⚠ `null` when none was named — `templateRoleFraming` returns `[]` and the turn is
+      // byte-identical to what this lane produced before templates existed.
+      template,
+    },
+    toolProfile: targeting.resolveToolProfile(channel),
+    mode: 'interactive',
+    windowless: true,
+    startModes: channelPrefs.launchStartModes(d.channelId),
+    // ── ⚠ THE MODEL PRECEDENCE CHAIN, DIRECTIVE LANE (spec §3c) ────────────────────────────
+    //   directive.model  >  template.model  >  channelPrefs.getLaunchModel  >  SDK default
+    //                                                     (`modelArg` null ⇒ no --model at all)
+    //
+    // ⚠ THE ORCHESTRATOR'S EXPLICIT `model` BEATS THE TEMPLATE'S, for the same reason the launch
+    // sheet does on the button lane: one is a deliberate per-call choice, the other a default.
+    // The template's named position is BELOW it and ABOVE the channel, and nowhere else.
+    // ⚠ EVERY LINK IS `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING THE
+    // DIRECTIVE'S OWN (F-285, 2026-08-23). It used to be a ternary coercing `d.model` through
+    // `aliasForModelId`, which knows FULL IDS ONLY: a legitimate alias like `opus` (a member of
+    // `MODEL_CHOICES`, the value this tree spends as argv) collapsed to `'default'`, committed the
+    // ternary, and threw the template's AND the channel's picks away. An unrecognised id now FALLS
+    // THROUGH, which is what `channel-schema.ts › model` promises ("silently FALLS BACK to whatever
+    // the channel is set to") and what INVARIANTS §10's `launch_agent` bullet records — F-5's
+    // tree-wide rule on every link: unknown model falls back, never refuses.
+    model: sessionModel.chainModel(d.model)
+      || require('./session-launch-op').templateModel(sessionModel, template)
+      || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId)),
+    idle: true,
+    operatorArmed: true,
+  });
+  if (res && res.agentId) return { agentId: res.agentId };
+  return { refused: wire.refusalFor(res && res.skipped) };
+}
+
+/** The goal a directive with none falls back to — the same sentence the New Agent button
+ *  composes, because a directive with no goal is asking for exactly that agent. */
+function defaultGoal(channelLevel) {
+  return channelLevel
+    ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
+    : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.';
+}
+
+// ── The one entry point every source funnels into ────────────────────────────────────────
+
+/**
+ * ⚠ SILENT ON EVERY REFUSAL THAT IS NOT A DECISION. Toggle off, not mine, already handled,
+ * not pending — none of these writes to the server, and none of them logs per occurrence. The
+ * row expires and the orchestrator reads that; this machine says nothing about a request it was
+ * never entitled to answer.
+ */
+async function handle(raw, workspaceId) {
+  if (!armed || !enabled()) return;
+  const d = wire.directiveFrom(raw, workspaceId);
+  if (!d || d.status !== wire.STATUS_PENDING) return;
+  const me = (deps.getUserId && deps.getUserId()) || null;
+  // ⚠ THE LOCAL OWNER RE-CHECK. The realtime filter is workspace-wide — see the header.
+  if (!me || d.operatorUserId !== me) return;
+  if (decided.has(d.id) || inflight.has(d.id)) return;
+  inflight.add(d.id);
+  try {
+    const claimed = await claim(d);
+    if (!claimed) { remember(d.id); return; } // lost the race, or the row is gone
+    // ⚠ REMEMBERED THE MOMENT IT IS OURS, BEFORE THE SPAWN. `launch` awaits `getSdk()`, which is
+    // wide enough for the backstop poll to deliver the same row again — and the second pass
+    // would find the row `claimed` rather than `pending` and stop, but only if the server got
+    // there first. This does not depend on that.
+    remember(claimed.id);
+    const outcome = await spawn(claimed);
+    await decide(claimed, outcome);
+  } catch (err) {
+    diag('launch-directive: handler threw —', (err && err.message) || String(err));
+    // ⚠ NO DECISION IS WRITTEN ON A THROW, DELIBERATELY. This machine does not know whether the
+    // spawn happened, and `refused` would be a claim it cannot support; letting the row expire
+    // is the honest answer and is what `sweep` reasons about on the next start.
+  } finally {
+    inflight.delete(d.id);
+  }
+}
+
+/** The realtime lane's entry (`main/realtime.js › onDirective`). */
+function deliver(workspaceId, row) {
+  void handle(row, workspaceId);
+}
+
+// ── The breaker-open backstop ────────────────────────────────────────────────────────────
+
+// ⚠ THE READ EXISTS — F-273 IS CLOSED (measured 2026-08-23). `ROUTES.pending` resolves to
+// `src/app/api/channels/launch-directives/route.ts › handleGet`, an authed collection GET over
+// `service-launch.ts › listPendingLaunchDirectives` answering `{ directives }` and fenced on
+// `operator_user_id`. This is a working recovery path, not a stub.
+// ⚠ THE 404 SELF-DISABLE STAYS, AND NOT AS A LEFTOVER: it is the OLDER-DEPLOYMENT degradation
+// (INVARIANTS §13 — an older peer is supported). Such a server still 404s, and standing down
+// after the first is still right — one dead request per run instead of one per minute, visible
+// in `listener.log`. Against it realtime is the only path and a missed directive expires, which
+// the orchestrator already handles (a closed laptop produces it too).
+let pollUnavailable = false;
+
+async function pollWorkspace(wsId) {
+  try {
+    const res = await apiFetch(wire.ROUTES.pending, {
+      method: 'GET', workspaceId: wsId, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
+    });
+    if (res && res.status === 404 && !pollUnavailable) {
+      pollUnavailable = true;
+      // ⚠ NOT A FILED GAP — an OLDER SERVER. Worded as the deployment fact it is, so an operator
+      // reading `listener.log` is not sent to a finding that closed on 2026-08-22.
+      diag('launch-directives: this server has no pending-directives read (it predates it) —',
+        'the breaker-open backstop is disabled for this run;',
+        'realtime is the only delivery path, and a missed directive expires');
+    }
+    if (!res || !res.ok) return;
+    const body = await res.json().catch(() => null);
+    const rows = (body && (body.directives || body.rows)) || [];
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) await handle(row, wsId);
+  } catch (_err) { /* the backstop is best-effort by construction */ }
+}
+
+async function poll() {
+  if (!armed || !enabled() || pollUnavailable) return;
+  const list = (deps.workspaces && deps.workspaces()) || [];
+  for (const wsId of list) {
+    // ⚠ ONLY WHILE PUSH IS DOWN FOR **THIS** WORKSPACE. A healthy sub already delivers these,
+    // and polling beside it would double every claim attempt for no benefit.
+    if (realtime.isWorkspaceHealthy(wsId)) continue;
+    await pollWorkspace(wsId);
+  }
+}
+
+// ── Arming ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⚠ CRASH SAFETY — A CLAIMED-BUT-UNDECIDED DIRECTIVE IS LEFT TO LAZY-EXPIRE. THE CHOICE, STATED.
+ *
+ * The alternative was to re-read claimed rows on start and decide them. REJECTED, because this
+ * process cannot tell the two cases apart: a directive claimed at 09:00:01 and crashed at
+ * 09:00:02 may have spawned an agent that died with the process, or may have spawned nothing.
+ * `refused` would be a claim this machine cannot support and `launched` would name an agent that
+ * does not exist. **An expiry is the only honest terminal state for an outcome nobody observed**,
+ * and the orchestrator already handles expiry — it is the toggle-off path's normal answer.
+ * ⚠ AND IT COSTS NOTHING TO SAFETY. A claimed row is not `pending`, so no machine re-actions it;
+ * the worst case is one orchestrator request that times out instead of being refused promptly.
+ * ⚠ WHAT WOULD CHANGE THE ANSWER: a directive that carried the agent id it expected, or a
+ * session record durable enough to answer "did this directive's spawn survive". Neither exists,
+ * and inventing one for this is a bigger change than the lane.
+ */
+function start(opts) {
+  const o = opts || {};
+  deps = {
+    getUserId: typeof o.getUserId === 'function' ? o.getUserId : null,
+    launch: typeof o.launch === 'function' ? o.launch : null,
+    watchedChannel: typeof o.watchedChannel === 'function' ? o.watchedChannel : null,
+    workspaces: typeof o.workspaces === 'function' ? o.workspaces : null,
+  };
+  if (!deps.launch || !deps.getUserId) {
+    diag('launch-directives: NOT armed — no launch funnel or no identity');
+    return;
+  }
+  armed = true;
+  refresh();
+  if (!pollTimer) {
+    pollTimer = setInterval(() => { void poll(); }, POLL_MS);
+    if (typeof pollTimer.unref === 'function') pollTimer.unref();
+  }
+  diag('launch-directives: armed —', enabled() ? 'lane ENABLED by this operator' : 'lane off (default)');
+}
+
+/**
+ * Re-read the toggle and tell realtime what to bind. ⚠ CALLED AFTER EVERY FLIP, because the
+ * binding is decided at JOIN time and cannot be added to a live channel — `realtime.js ›
+ * setDirectives` rejoins for exactly that reason. Idempotent, so a caller may assert its intent
+ * whenever it likes.
+ */
+function refresh() {
+  try { realtime.setDirectives(armed && enabled(), deliver); }
+  catch (err) { diag('launch-directives: realtime arm failed —', err && err.message); }
+}
+
+function stop() {
+  armed = false;
+  pollUnavailable = false; // a new run may reach a newer server
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  decided.clear();
+  inflight.clear();
+  try { realtime.setDirectives(false, null); } catch (_err) { /* already down */ }
+}
+
+module.exports = {
+  start,
+  stop,
+  refresh, // the toggle moved: rebind realtime
+  deliver, // main/realtime.js's handler
+  handle, // the one funnel — exported for the suite
+  POLL_MS,
+  MAX_REMEMBERED,
+};

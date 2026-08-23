@@ -49,8 +49,18 @@ function metricOrNull(value) {
  *                  identical cost arithmetic. A DIFFERENT question from occupancy.
  *   startedAt      `s.startedAt`, stamped when the engine created this session object.
  *   lastActivityAt `s.lastActivityAt`, stamped at the engine's one dispatch funnel.
- * ⚠ NONE of them reaches the server: `session-state-push.js › rowFor` picks its columns by name,
- * so a widened wire shape does not widen `channel_sessions`. Runtime metrics stay local.
+ * ⚠ THEY REACH THE SERVER NOW, AND THIS BULLET SAID THE OPPOSITE UNTIL 2026-08-22 (F-270). It
+ * read "NONE of them reaches the server: `session-state-push.js › rowFor` picks its columns by
+ * name, so a widened wire shape does not widen `channel_sessions`" — and it was wrong TWICE
+ * over. The symbol was never `rowFor`; the real one is `session-state-push.js › reportRow`, and
+ * the stale anchor had been copied into four files. And the CLAIM is now false: the orchestrator
+ * wave added these five plus `detail` / `toolLabel` / `model` to that by-name pick, with
+ * nullable columns on the far side to receive them.
+ * ⚠ WHAT IS STILL TRUE, AND IS THE PART WORTH KEEPING: the pick is BY NAME, so a metric added
+ * HERE does not reach `channel_sessions` until somebody names it there — deliberately.
+ * ⚠ AND THEY ARE QUANTIZED ON THE WAY OUT (`session-telemetry.js`): the values a peer reads are
+ * bucketed, because `lastActivityAt` moves on every dispatch and an unquantized wire would turn
+ * the state-change writer into a per-event one.
  */
 function metrics(s) {
   return {

@@ -24,6 +24,10 @@ const channel_addressing_1 = require("./channel-addressing");
 // ⚠ Whether a pending call may be promised to outlive the turn is ONE decision
 // in ONE module, from the caller's observed runtime.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
+// ⚠ The session block and every rule inside it (the staleness hedge, the
+// operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
+// `read_sessions` — see channel-session-render.ts.
+const channel_session_render_1 = require("./channel-session-render");
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = (0, channel_await_budget_1.resolveAwaitHoldMs)(process.env.DOPL_AWAIT_HOLD_MS);
 const AWAIT_HOLD_CEILING_MS = (0, channel_await_budget_1.resolveAwaitHoldCeilingMs)(process.env.DOPL_AWAIT_HOLD_MS);
@@ -114,6 +118,15 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     const startedAt = Date.now();
     const deadline = startedAt + holdMs;
     let messages = [];
+    // ⚠ THE OWN-SESSION SNAPSHOT the route attaches AT RETURN TIME (2026-08-22).
+    // `undefined` until a hold actually answers, and it stays `undefined` if the
+    // server never sent the key — an older deployment, or a session read that
+    // failed behind an otherwise-good hold. **`undefined` and `[]` are different
+    // answers** and the renderer treats them as such; never normalize one to the
+    // other here.
+    // ⚠ LAST WRITER WINS, deliberately: the inner poll loop re-issues, and the
+    // freshest snapshot is the one from the call that ended the hold.
+    let sessions;
     // What ended the hold when it was an inner failure rather than the clock, so
     // the result can NAME it: "the wait timed out" after a socket reset is not
     // actionable.
@@ -153,6 +166,8 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
             pollError = e;
             break;
         }
+        if (result.sessions !== undefined)
+            sessions = result.sessions;
         if (result.messages.length > 0) {
             messages = result.messages;
             break;
@@ -186,6 +201,11 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         return (0, respond_1.ok)([
             timedOut,
             ...(0, channel_wake_guidance_1.awaitTimedOutLines)(ref, since, runtime, rearmStopRule(ref)),
+            // ⚠ RENDERED ON A TIMEOUT TOO, and that is the case it earns most: a
+            // hold that came back empty is exactly when an orchestrator has to
+            // decide whether the agent it is waiting on is still alive. Answering
+            // that used to cost a second call.
+            ...(0, channel_session_render_1.sessionBlockLines)(sessions),
         ].join("\n"));
     }
     const lines = [
@@ -214,5 +234,9 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         }
     }
     lines.push(...(0, channel_wake_guidance_1.awaitArrivedLines)(ref, lastSeq, runtime, rearmStopRule(ref)));
+    // ⚠ AFTER the messages and after the re-arm guidance — a block of server
+    // narration spliced between counterparty bodies would let a body's last line
+    // read as the start of this section.
+    lines.push(...(0, channel_session_render_1.sessionBlockLines)(sessions));
     return (0, respond_1.ok)(lines.join("\n"));
 }

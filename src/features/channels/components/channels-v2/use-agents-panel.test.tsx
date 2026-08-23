@@ -27,6 +27,7 @@ import {
   launchRefusalText,
   useAgentsPanel,
   PEER_SESSIONS_POLL_MS,
+  type AgentLaunchOutcome,
 } from "./use-agents-panel";
 import { AgentsTab } from "./agents-tab";
 import type { Channel, ChannelThread } from "../../types";
@@ -334,5 +335,125 @@ describe("useAgentsPanel › launch", () => {
     expect(typeof holder.value!.refetch).toBe("function");
     // One exported interval, both readers (`thread-window.tsx` is the second).
     expect(PEER_SESSIONS_POLL_MS).toBe(30_000);
+  });
+});
+
+/**
+ * THE TEMPLATE HALF OF THE LAUNCH (2026-08-22).
+ *
+ * ⚠ THE PINNED PROPERTY IS THAT A BLANK LAUNCH DID NOT MOVE. The one-click
+ * button and the composer's Bot icon call `launchAgent(threadId)` and the
+ * payload must reach main byte-identical to what it always was — a `templateId:
+ * null` key spelled out would be a NEW object on a wire that main and this tree
+ * ship separately on.
+ *
+ * ⚠ AND `template-approval` IS NOT AN ERROR LINE. It is main asking a question
+ * about another member's prose; the picker owns the modal
+ * (`agent-templates/components/template-approval.tsx`), and a red line under the
+ * button saying "could not start the agent" while that modal is open would
+ * report the question as a failure.
+ */
+describe("useAgentsPanel › templates", () => {
+  it("puts NEITHER key on the wire for a blank launch", async () => {
+    const launch = bridge({ ok: true });
+    const holder = mount([thread]);
+    await act(async () => {
+      await holder.value!.launchAgent("t-1");
+    });
+    const payload = launch.mock.calls[0][0];
+    expect("templateId" in payload).toBe(false);
+    expect("overrides" in payload).toBe(false);
+  });
+
+  it("carries the template id and the ephemeral overrides when given", async () => {
+    const launch = bridge({ ok: true });
+    const holder = mount([thread]);
+    await act(async () => {
+      await holder.value!.launchAgent("t-1", "tpl-9", { model: "claude-sonnet-5" });
+    });
+    const payload = launch.mock.calls[0][0];
+    expect(payload.templateId).toBe("tpl-9");
+    expect(payload.overrides).toEqual({ model: "claude-sonnet-5" });
+  });
+
+  it("words a template that vanished between the picker and the click", () => {
+    // ⚠ The endpoint deliberately cannot tell DELETED from INVISIBLE
+    // (404-never-403), so neither does the copy.
+    const text = launchRefusalText("no-template");
+    expect(text).toBe("That template is gone — reload the list");
+  });
+
+  it("returns the approval question WITHOUT writing an error line", async () => {
+    bridge({
+      ok: false,
+      reason: "template-approval",
+      template: { name: "Code auditor", instructions: "Be terse." },
+    } as { ok: boolean; reason?: string });
+    const holder = mount([thread]);
+    let outcome: AgentLaunchOutcome | null = null;
+    await act(async () => {
+      outcome = await holder.value!.launchAgent("t-1", "tpl-9");
+    });
+    expect(outcome!.reason).toBe("template-approval");
+    expect(outcome!.template).toEqual({
+      name: "Code auditor",
+      instructions: "Be terse.",
+    });
+    // The whole point: no red line under a modal that is asking permission.
+    expect(holder.value!.launchError).toBeNull();
+  });
+
+  it("still writes an error line for every OTHER refusal", async () => {
+    bridge({ ok: false, reason: "no-template" });
+    const holder = mount([thread]);
+    await act(async () => {
+      await holder.value!.launchAgent("t-1", "tpl-9");
+    });
+    expect(holder.value!.launchError).toBe("That template is gone — reload the list");
+  });
+
+  it("answers `busy` rather than silence when a launch is already in flight", async () => {
+    // ⚠ The picker AWAITS this. An early `return` would leave a row click
+    // looking exactly like a launch that succeeded and had not pushed yet.
+    let release: (() => void) | null = null;
+    const launch = vi.fn().mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve({ ok: true }); })
+    );
+    (window as { dopl?: unknown }).dopl = { apiRequest: vi.fn(), sessions: { launch } };
+    const holder = mount([thread]);
+    let first: Promise<unknown> | null = null;
+    await act(async () => {
+      first = holder.value!.launchAgent("t-1");
+      await Promise.resolve();
+    });
+    const second = await holder.value!.launchAgent("t-1");
+    expect(second).toEqual({ ok: false, reason: "busy" });
+    await act(async () => {
+      release!();
+      await first;
+    });
+    expect(launch).toHaveBeenCalledTimes(1);
+  });
+
+  it("feature-detects `approveTemplate` on the op it is about to use", async () => {
+    // An older main has the launch op and not this one — the modal must be able
+    // to say so rather than looping on a refusal it can never clear.
+    bridge({ ok: true });
+    const holder = mount([thread]);
+    expect(await holder.value!.approveTemplate("tpl-9")).toEqual({
+      ok: false,
+      reason: "no-bridge",
+    });
+
+    const approveTemplate = vi.fn().mockResolvedValue({ ok: true });
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { launch: vi.fn(), approveTemplate },
+    };
+    expect(await holder.value!.approveTemplate("tpl-9")).toEqual({
+      ok: true,
+      reason: undefined,
+    });
+    expect(approveTemplate).toHaveBeenCalledWith("tpl-9");
   });
 });

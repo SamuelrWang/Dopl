@@ -46,9 +46,14 @@ import {
   opReadSessions,
 } from "./channel-ops-read";
 import { opAwait } from "./channel-ops-await";
+// ⚠ WORKSPACE-WIDE await is a SIBLING op, not a branch inside `opAwait`: the
+// per-channel result vocabulary splices `ref` into every sentence, and threading
+// an absent ref through it would produce guidance with a hole in it.
+import { opAwaitWorkspace } from "./channel-ops-await-workspace";
 import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread, opSetThreadMode } from "./channel-ops-threads";
+import { opLaunchAgent } from "./channel-ops-launch";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
 /**
@@ -154,12 +159,27 @@ export function registerChannelTool(
             args.thread,
           );
         }
+        // ⚠ `channel` IS OPTIONAL HERE AND ONLY HERE AMONG THE HOLDS. Omitting
+        // it holds across EVERY channel the caller is a MEMBER of — a different
+        // service, a different fence (a re-proved membership set rather than one
+        // resolved channel id) and a different re-arm stop rule, which is why it
+        // is a different handler rather than a flag. `since` stays required on
+        // BOTH: `seq` is workspace-global, so one cursor is legal across every
+        // channel, but a hold with no cursor is a firehose either way.
         case "await": {
-          const miss = missingParams("await", args, ["channel", "since"]);
+          const miss = missingParams("await", args, ["since"]);
           if (miss) return miss;
+          if (args.channel === undefined || args.channel.trim() === "") {
+            return opAwaitWorkspace(
+              client,
+              args.since as number,
+              args.timeout_ms,
+              selfUserId,
+            );
+          }
           return opAwait(
             client,
-            args.channel as string,
+            args.channel,
             args.since as number,
             args.timeout_ms,
             selfUserId,
@@ -234,6 +254,26 @@ export function registerChannelTool(
             args.thread as string,
             args.mode as "interactive" | "autonomous",
           );
+        }
+        // ⚠ ASKS THE OPERATOR'S OWN MACHINE TO START AN AGENT. `goal`, `model`,
+        // `thread` and `wait_ms` are all optional; only `channel` is required.
+        // The op NEVER names an operator — the server stamps the authenticated
+        // caller, because the only machine an agent may ask is its own
+        // operator's, and there is no argument here that could say otherwise.
+        case "launch_agent": {
+          const miss = missingParams("launch_agent", args, ["channel"]);
+          if (miss) return miss;
+          return opLaunchAgent(client, args.channel as string, {
+            thread: args.thread,
+            goal: args.goal,
+            model: args.model,
+            // ⚠ PASSED THROUGH AS A STRING, NEVER PARSED HERE. Whether it is an
+            // id or a name — and whether a name is ambiguous — is decided
+            // SERVER-SIDE, against the caller's own template visibility, which
+            // this process cannot evaluate.
+            template: args.template,
+            waitMs: args.wait_ms,
+          });
         }
       }
     },

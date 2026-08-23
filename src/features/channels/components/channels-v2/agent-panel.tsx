@@ -72,10 +72,9 @@ import {
   agentLiveness,
   agentKey,
   agentRunningModel,
-  formatTokens,
-  metric,
   parseAgentPostStamp,
 } from "./agents-model";
+import { formatTokens, metric } from "./agent-metrics";
 import { agentModelShortLabel } from "../../lib/agent-models";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";

@@ -91,6 +91,17 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       model: "claude-haiku-4-5",
       channelName: "general",
       threadTitle: "Ship the thing",
+      // ⚠ WIDENED AGAIN 2026-08-22 by ONE field, `templateName` (agent templates). The pin
+      // failed on the ADD, which is the review this comment records:
+      //   • It is the SPAWN-TIME capture, `context.template.name`, and it can never move: the
+      //     resolve happens once at launch and a session keeps what it ran as.
+      //   • THE NAME, NEVER THE ID. An id here would be an ownership fact travelling where a
+      //     label was asked for, and the server resolves nothing from this column.
+      //   • ⚠ UNLIKE every other field reviewed above, it DOES reach the server — deliberately,
+      //     onto `channel_sessions.template_name`, which is OPERATOR-ONLY by construction on
+      //     that side (`collab-dto.ts › mapOwnSessionStateRow` builds a narrow object, so a new
+      //     column fails CLOSED for peers). `null` here: the fixture is a blank agent.
+      templateName: null,
       contextUsed: 84000,
       contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
       tokensSpent: 1200000,

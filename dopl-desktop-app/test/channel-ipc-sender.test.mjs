@@ -184,6 +184,16 @@ const OPS = [
   // asserted by the shared loops below, from all five surfaces.
   ["channels:getLaunchPosture", CH, null],
   ["channels:setLaunchPosture", { channelId: CH, preset: PRESET }, { ok: false }],
+  // ⚠ TWO JOINED 2026-08-22 (Samuel's launch-over-MCP ruling): the MACHINE-WIDE standing
+  // consent for the `channel_launch_directives` lane. They are the FIRST ops in this file whose
+  // subject is not a channel — there is no id to UUID-gate, the payload is a bare boolean, and
+  // the sender binding is therefore the ONLY guard on them, which is exactly why they belong in
+  // this census. A refused `get` must not disclose whether the lane is armed and a refused `set`
+  // must not arm it; both fall out of the shared loops below, from all five surfaces.
+  // ⚠ AND THE REFUSAL SHAPES ARE THE HONEST "off" — `{enabled:false}` / `{ok:false}` are what a
+  // machine that never enabled the lane answers too, so the difference discloses nothing.
+  ["orchestrator:getLaunchEnabled", undefined, { enabled: false }],
+  ["orchestrator:setLaunchEnabled", { enabled: true }, { ok: false }],
   // ⚠ JOINED 2026-08-22 (Samuel's ended-agent ruling): the desktop half of the thread-delete
   // cascade. Main cannot see the SERVER's cascade, so an ended agent's frozen 7-day history
   // would outlive the thread it worked. It drops LOCAL stores only — never a `channel_message`,
@@ -203,6 +213,17 @@ const OPS = [
   // ⚠ JOINED 2026-08-20: the Agents tab's launch — the one START verb, own-thread
   // only, UUID-gated on BOTH ids, posture owned by main (see preload-parity).
   ["sessions:launch", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ JOINED 2026-08-22 (OQ-3, agent templates): the machine-local FIRST-USE APPROVAL of
+  // ANOTHER member's template. It is the SECOND op in this file whose subject is not a
+  // channel, so it is the second one with no `channelId` to probe with — hence the FOURTH
+  // tuple slot below, which names the bad payload explicitly instead of letting the shared
+  // loop assume every op is channel-gated.
+  // ⚠ IT GRANTS NOTHING AND STARTS NOTHING. No query, no window, no tool, no post: it
+  // decides only whether a foreign template's TEXT may become an agent's role on this Mac,
+  // and a launch from an approved template is contained exactly like any other. The sender
+  // binding matters anyway, because a forged call skips a question the operator should have
+  // been asked.
+  ["sessions:approveTemplate", { templateId: CH }, { ok: false }, { templateId: "not-a-uuid" }],
   // ⚠ AND ONE MORE 2026-08-18 (wiring plan Phase 10): the pop-out thread window. It is the
   // only op here that can MINT a window, which is exactly why it lives under the same
   // binding — and why its own guards (UUID channel, isSafeSegment on the other two, the
@@ -325,15 +346,43 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
   }
 });
 
+// ⚠ THE TWO MACHINE-WIDE OPS HAVE NO BAD PAYLOAD TO REJECT, WHICH IS WHY THEY ARE LISTED HERE
+// RATHER THAN QUIETLY PASSING (2026-08-22). `orchestrator:get/setLaunchEnabled` take no id: the
+// subject is the machine, so `get` has no argument at all and `set`'s is a bare boolean that
+// `=== true` coerces rather than refuses. There is therefore no id-shaped rejection for the
+// refusal to be indistinguishable FROM, and the sender binding is the ONLY guard on them —
+// which is the point of naming them, not an exemption from scrutiny. The bad-SENDER half of the
+// loop below still runs for both, and it is the half that matters for these two.
+const NO_BAD_PAYLOAD = new Set(["orchestrator:getLaunchEnabled", "orchestrator:setLaunchEnabled"]);
+
 test("a refusal is INDISTINGUISHABLE from a bad-payload rejection", async () => {
   // The refusal shape deliberately matches what a non-UUID id already returns, so a
   // hostile page cannot use the difference to probe which window it is running in.
   const ipc = bootIpc();
-  for (const [name, payload, refusal] of OPS) {
-    const badPayload = typeof payload === "string" ? "not-a-uuid" : { ...payload, channelId: "not-a-uuid" };
-    assert.deepEqual(await ipc.handlers[name](ipc.shell, badPayload), refusal, `${name} bad payload`);
+  for (const [name, payload, refusal, explicitBad] of OPS) {
+    if (!NO_BAD_PAYLOAD.has(name)) {
+      // ⚠ THE FOURTH SLOT IS THE OP'S OWN BAD PAYLOAD, for the ops that are not gated on a
+      // `channelId`. Corrupting a key an op does not read would have driven a VALID payload
+      // through this arm and asserted the refusal shape of a call that really succeeded.
+      const badPayload = explicitBad !== undefined
+        ? explicitBad
+        : typeof payload === "string" ? "not-a-uuid" : { ...payload, channelId: "not-a-uuid" };
+      assert.deepEqual(await ipc.handlers[name](ipc.shell, badPayload), refusal, `${name} bad payload`);
+    }
     assert.deepEqual(await ipc.handlers[name](ipc.foreign, payload), refusal, `${name} bad sender`);
   }
+  // ⚠ AND THE EXEMPTION IS NOT A HOLE: a BOUND sender really does get the real answer on both,
+  // so the refusals above are the binding working rather than the ops being broken.
+  assert.deepEqual(await ipc.handlers["orchestrator:getLaunchEnabled"](ipc.shell), { enabled: true });
+  assert.deepEqual(await ipc.handlers["orchestrator:setLaunchEnabled"](ipc.shell, { enabled: true }),
+    { ok: true, enabled: true });
+  assert.deepEqual(ipc.writes, [{ orchestratorLaunch: true }], "the legitimate write lands");
+  // ⚠ AND A FORGED `set` WROTE NOTHING. This is the assertion the toggle actually turns on: the
+  // value is the standing consent for another agent to spawn sessions on this Mac, and the ONLY
+  // writer is a bound app-window top frame (there is no route and no MCP op — §6).
+  const clean = bootIpc();
+  await clean.handlers["orchestrator:setLaunchEnabled"](clean.foreign, { enabled: true });
+  assert.deepEqual(clean.writes, [], "an unbound sender cannot arm the launch lane");
 });
 
 // ── The pop-out op's own gates ───────────────────────────────────────────────

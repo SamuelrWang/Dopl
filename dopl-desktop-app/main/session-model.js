@@ -107,6 +107,26 @@ function normalizeModel(value) {
   return aliasForModelId(value);
 }
 
+/**
+ * ONE LINK OF A LAUNCH'S MODEL PRECEDENCE CHAIN: the alias this value asks for, or `''` meaning
+ * **the chain continues** (2026-08-23, F-285).
+ *
+ * ⚠ IT IS `normalizeModel` WITH ONE DIFFERENCE, AND THE DIFFERENCE IS THE WHOLE POINT.
+ * `'default'` is not a pick — it is "the CLI's own", i.e. no opinion — so it must not END a chain
+ * whose lower links may have one. Every launch lane spells its precedence as
+ * `chainModel(a) || chainModel(b) || …`, so a link that names nothing this build knows steps
+ * aside instead of silently spending the SDK default and discarding the rest (F-5: unknown model
+ * FALLS BACK, never refuses).
+ * ⚠ IT LIVES HERE, NOT IN A LANE, because there are two lanes — the button
+ * (`session-launch-op.js › templateModel`) and the directive (`launch-directives.js › spawn`) —
+ * and a rule restated once per lane is a rule that drifts in one of them.
+ */
+function chainModel(value) {
+  if (!value) return '';
+  const alias = normalizeModel(value);
+  return alias === 'default' ? '' : alias;
+}
+
 // The value that may become `--model <argv>`, or null for "set no model option at all".
 // It re-normalizes rather than trusting its caller, because this is the last gate.
 function modelArg(value) {
@@ -255,6 +275,7 @@ module.exports = {
   normalizeModelId,
   aliasForModelId,
   normalizeModel,
+  chainModel, // 2026-08-23: one link of a launch's model precedence chain ('' = keep going)
   modelArg,
   contextWindowFor,
   promptTokens,

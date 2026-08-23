@@ -3,7 +3,6 @@ import { HttpError } from "@/shared/lib/http-error";
 import type {
   Workspace,
   WorkspaceMembership,
-  WorkspaceOverviewCounts,
   WorkspaceWithRole,
   Role,
 } from "../types";
@@ -13,7 +12,6 @@ import { touchLastSeen } from "./last-seen";
 import { seedNewWorkspace } from "./seed-workspace";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
-  countWorkspaceResources,
   deleteWorkspace,
   findWorkspaceById,
   findWorkspaceByPublicId,
@@ -215,18 +213,6 @@ export async function listMyWorkspacesWithRole(
   userId: string
 ): Promise<WorkspaceWithRole[]> {
   return listWorkspacesWithRoleForUser(userId);
-}
-
-/**
- * Head-counts for the overview stat cards; the `/overview` RSC page and
- * `GET /api/workspaces/[workspaceSlug]/overview-counts` both read through here
- * so they cannot drift. ⚠ Membership is NOT checked — callers resolve
- * membership-scoped first (`resolveApiWorkspace`).
- */
-export async function getWorkspaceOverviewCounts(
-  workspaceId: string
-): Promise<WorkspaceOverviewCounts> {
-  return countWorkspaceResources(workspaceId);
 }
 
 export async function createWorkspaceForUser(

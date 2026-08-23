@@ -44,9 +44,8 @@ import { AgentStream } from "./agent-stream";
 import {
   agentDisplayId,
   agentLiveness,
-  formatTokens,
-  metric,
 } from "./agents-model";
+import { formatTokens, metric } from "./agent-metrics";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { AgentComposer } from "./agent-composer";
 import { PostureControls } from "./agent-posture";

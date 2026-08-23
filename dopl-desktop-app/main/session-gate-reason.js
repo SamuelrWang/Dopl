@@ -44,6 +44,11 @@ const GATE_REASONS = [
   'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
   //                             sibling `propose_close` went with thread closing, Phase 4)
   'tool-mode', //                AXIS A: the current toolMode covers this tool
+  'knowledge-read-op', //        2026-08-22 (OQ-1): an OP-SCOPED `dopl_kb` READ. Axis A does NOT
+  //                             cover the tool (it is a write tool), the CALL is a read, and
+  //                             that distinction is exactly what an audit of "what ran with no
+  //                             click?" needs to see — `tool-mode` here would claim the operator
+  //                             had granted the whole tool, which they had not.
 ];
 
 // Build the explainer. `deps` are the session-profile table's own predicates — passed in rather
@@ -100,7 +105,15 @@ function makeGateReason(deps) {
     const channel = d.isChannelTool(a.toolName);
     if (decision === 'allow') {
       if (grantedFor(a)) return 'granted-for-session';
-      if (!channel) return 'tool-mode';
+      // ⚠ THE ORDER MIRRORS `grantDecision` AGAIN: Axis A is consulted BEFORE the op-scoped
+      // knowledge branch, so a `dopl_kb` call under `bypass` (where `BYPASS_TOOLS` really does
+      // carry the whole tool) is honestly reported as `tool-mode`, and only a call Axis A
+      // MISSED can be a `knowledge-read-op`.
+      if (!channel) {
+        const name = d.canonicalDoplName(a.toolName);
+        if (d.toolModeAllows(a.toolMode, name)) return 'tool-mode';
+        return d.isKnowledgeReadCall(name, a.input) ? 'knowledge-read-op' : 'tool-mode';
+      }
       // M3: the Axis-B allows are different rules and the diag must be able to tell them
       // apart — "your outbound setting sent this" vs "your inbound setting read this".
       if (d.isOwnChannelRead(a.input, a.channelId)) return 'auto-inbound-read';

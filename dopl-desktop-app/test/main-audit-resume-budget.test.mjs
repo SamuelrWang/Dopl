@@ -48,10 +48,17 @@ function harness() {
     // The record's OWN slot, all three parts — as `main/session-store.js › slotKey` composes it.
     slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
   };
+  // ⚠ `sessionWindowless` JOINED 2026-08-22 (F-272): `startResume` now enforces
+  // `MAX_CONCURRENT_SESSIONS`, which it did not before — a resume could reach seven. These cases
+  // are about the CAP BUDGET (turns and cost) rehydrating, so the CONCURRENCY ceiling is
+  // deliberately out of their way; its own cases live in `session-park.test.mjs`. A resume
+  // refused here would pass every budget assertion vacuously by constructing nothing.
+  const sessionWindowless = { MAX_CONCURRENT_SESSIONS: Number.MAX_SAFE_INTEGER, liveCount: () => 0 };
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "sessionWindowless", "diag",
     `${BLOCK}\n return { bind, startResume };`
-  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, ids.newAgentId, ids.isAgentId, null, () => {});
+  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, ids.newAgentId, ids.isAgentId, null,
+    sessionWindowless, () => {});
   api.bind({
     sessions,
     getSdk: async () => ({ query: () => ({}) }),

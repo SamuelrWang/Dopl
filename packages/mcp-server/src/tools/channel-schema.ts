@@ -55,13 +55,18 @@ export const CHANNEL_INPUT_SHAPE = {
       // Neither may come back as a WORD either — `channel-law.test.ts ›
       // REMOVED_VOCABULARY` scans every string literal in this file.
       "set_thread_mode",
+      // ASK THE OPERATOR'S DESKTOP TO START AN AGENT on a channel. ⚠ A REQUEST,
+      // never a command: the desktop may refuse, and the refusal is one of seven
+      // reasons. `channel` required; the hold is bounded and a timeout is a
+      // PENDING directive, not a failure.
+      "launch_agent",
     ])
     .describe("Operation to perform."),
   channel: z
     .string()
     .optional()
     .describe(
-      'Channel slug or id. Required for every op except three: "open" (which creates a channel), "list" (which lists them all), and "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace).',
+      'Channel slug or id. Required for every op except four: "open" (which creates a channel), "list" (which lists them all), "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace), and "await" (where OMITTING it holds across EVERY channel you are a member of at once, instead of one).',
     ),
   direct: z
     .boolean()
@@ -191,7 +196,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is always channel-wide).',
+      'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel).',
     ),
   // ⚠ `outcome` ("completed" | "failed") was a param here, required by
   // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
@@ -204,7 +209,47 @@ export const CHANNEL_INPUT_SHAPE = {
     .min(0)
     .optional()
     .describe(
-      'op="read": return only messages with seq greater than this. op="await" (required): the last seq you have processed.',
+      'op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is workspace-global, which is what lets ONE cursor cover every channel at once when you omit `channel`.',
+    ),
+  goal: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .optional()
+    .describe(
+      'op="launch_agent" (optional, but you almost always want it): what the agent should DO, in your own words (<=2000 chars). It becomes that agent\'s opening instruction. Say what "done" looks like, and ask it to post a milestone (op="milestone") when each work item starts and finishes — those milestones are what come back to you on your next await, attributed to the agent that posted them. With no goal, an agent starts with nothing to do and waits.',
+    ),
+  model: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe(
+      'op="launch_agent" (optional): the model to run the agent on. Omit it to use whatever the operator has set for that channel — which is the right default and what you should do unless you were told otherwise. An id that machine does not recognize is NOT refused — it silently FALLS BACK to whatever the channel is set to, and nothing tells you it did, so pass a model only when you were told which one.',
+    ),
+  // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
+  // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
+  // inventing a second convention. Bounded at 120, `agent_templates.name`'s own
+  // cap, so a legal name is never refused client-side as an opaque -32602.
+  template: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe(
+      'op="launch_agent" (optional): the AGENT TEMPLATE the new agent should run as — its id, or its exact name. A template is a saved identity (instructions, a default model, custom fields, attached knowledge bases) that your operator wrote; omitting this starts a blank agent, which is the right default unless you were told to use one. ⚠ IT IS RESOLVED UNDER **YOUR** VISIBILITY WHEN YOU ASK AND UNDER **THE OPERATOR\'S** WHEN THEIR MACHINE STARTS IT — two different people — so a private or team template of yours can be refused there with "could not resolve the TEMPLATE you named". ⚠ IF A NAME MATCHES MORE THAN ONE TEMPLATE YOU CAN SEE, THE CALL IS REFUSED AND EVERY MATCH IS LISTED WITH ITS ID: pick one and re-issue with the ID. Names are deliberately not unique, so nothing here guesses for you.',
+    ),
+  wait_ms: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(30_000)
+    .optional()
+    .describe(
+      'op="launch_agent" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to look for the agent in read_sessions. Do not re-issue on a timeout, or you queue a second agent.',
     ),
   limit: z.coerce
     .number()

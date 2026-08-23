@@ -35,6 +35,7 @@ const uiSync = require('./ui-sync');
 const settings = require('./settings');
 const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle echo seam (2026-08-20)
 const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
+const launchDirectives = require('./launch-directives'); // 2026-08-22: the orchestrator launch lane
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -327,6 +328,30 @@ if (!gotLock) {
     listener.start((status, meta) => tray.update(status, meta), {
       openChannel: navigateToChannels,
     });
+
+    // ── THE ORCHESTRATOR LAUNCH LANE (2026-08-22, Samuel's launch-over-MCP ruling) ─────────
+    //
+    // ⚠ ARMED AFTER `listener.start`, AND THE ORDER IS LOAD-BEARING IN ONE DIRECTION. It binds
+    // a second `postgres_changes` listener onto the listener's OWN per-workspace WebSocket
+    // (`main/realtime.js › setDirectives`), so realtime has to exist first; and it resolves a
+    // directive's channel context through `listener.watchedChannel`, which answers null until
+    // the first reconcile — a directive arriving before then is REFUSED (`no-bridge`) rather
+    // than launched blind, which is the right failure.
+    //
+    // ⚠ IT IS OFF UNLESS THE OPERATOR TURNED IT ON, PER MACHINE, and `start` reads that toggle
+    // before it binds anything: a default install adds no binding, names the table nowhere, and
+    // is unaffected by the lane's presence or absence on the server.
+    // ⚠ THE CONTAINMENT INPUTS ARE MAIN'S, NOT THE DIRECTIVE'S — `watchedChannel` is the same
+    // full server DTO `sessions:launch` reads (F-267), and the posture is the operator's own
+    // durable per-channel record. A directive supplies a goal and a model.
+    try {
+      launchDirectives.start({
+        getUserId: () => (authTokens.getAuthState() || {}).userId || null,
+        launch: (spec) => require('./session-engine').launchRequesterSession(spec),
+        watchedChannel: (channelId) => listener.watchedChannel(channelId),
+        workspaces: () => require('./realtime').desiredWorkspaceIds(),
+      });
+    } catch (err) { diag('launchDirectives.start error', err && err.message); }
 
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
     // no-ops when signed out or the CLI/endpoint isn't available).

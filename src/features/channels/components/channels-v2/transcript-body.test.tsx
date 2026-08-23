@@ -160,9 +160,15 @@ describe("channels-v2 transcript — my own message: anchored right, text left",
 
   it("STILL hangs the block on my side — the side is not what changed", () => {
     renderBothSides();
-    expect(rowFor(UNBROKEN).className).toContain("flex-row-reverse");
-    expect(rowFor("THEIR-TEXT").className).not.toContain("flex-row-reverse");
-    // `items-end` on the body's own column is what anchors it.
+    // ⚠ THE ROW IS A COLUMN SINCE THE ATTRIBUTION PILL (2026-08-22): the header
+    // sits ABOVE the bodies rather than beside an avatar gutter, so the side is
+    // carried by `items-end` / `items-start` and no longer by
+    // `flex-row-reverse`. The RULE is untouched — `authorUserId ===
+    // currentUserId`, INVARIANTS §5 — and this file pins the geometry, so the
+    // class it names had to move with it.
+    expect(rowFor(UNBROKEN).className).toContain("items-end");
+    expect(rowFor("THEIR-TEXT").className).not.toContain("items-end");
+    // `items-end` on the body's own column is what anchors the block itself.
     expect(bodyFor(UNBROKEN).parentElement?.className).toContain("items-end");
     expect(bodyFor("THEIR-TEXT").parentElement?.className).not.toContain(
       "items-end"
@@ -185,11 +191,14 @@ describe("channels-v2 transcript — my own message: anchored right, text left",
     );
   });
 
-  it("anchors a CONTINUATION the same way, spacer and all", () => {
-    // A continuation drops the avatar and the name line, not the geometry: it
-    // shares `AuthoredRow`'s column, so it must inherit the same `items-end` +
-    // cap, and it must keep the `w-10` gutter or it would line up left of the
-    // header row it continues.
+  it("anchors a CONTINUATION the same way — and now carries no spacer", () => {
+    // A continuation drops the pill, not the geometry: it shares `AuthoredRow`'s
+    // column, so it inherits the same `items-end` + cap.
+    // ⚠ THE `w-10` GUTTER IS GONE AND ITS ABSENCE IS THE POINT (2026-08-22).
+    // Under the old avatar-gutter layout a continuation had to keep an empty
+    // spacer or it lined up LEFT of the row it continued. The avatar now lives
+    // inside the pill ABOVE the bodies, so the header row's own body starts at
+    // the column edge — a spacer here would be what misaligned the two.
     renderRows(
       channelRows(
         [
@@ -204,9 +213,9 @@ describe("channels-v2 transcript — my own message: anchored right, text left",
     const run = rowFor(UNBROKEN);
     expect(run).not.toBe(rowFor("FIRST-LINE")); // two rows, one run
     expect(rowFor("FIRST-LINE").textContent).toContain("You");
-    expect(run.textContent).not.toContain("You"); // no name line = continuation
-    expect(run.className).toContain("flex-row-reverse");
-    expect(run.firstElementChild?.className).toContain("w-10");
+    expect(run.textContent).not.toContain("You"); // no pill = continuation
+    expect(run.className).toContain("items-end");
+    expect(run.innerHTML).not.toContain("w-10");
     expect(bodyFor(UNBROKEN).parentElement?.className).toContain("items-end");
     expect(bodyFor(UNBROKEN).className).toContain("max-w-[92%]");
   });

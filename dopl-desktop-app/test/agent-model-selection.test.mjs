@@ -172,8 +172,29 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
   // Everything below the launch boundary speaks the alias vocabulary, and `buildSdkOptions`
   // re-coerces against it as the last gate. Converting at the boundary is what keeps a full id
   // from reaching a layer that would coerce it to 'default' and silently drop the pick.
-  assert.match(read("session-ipc-ops.js"),
-    /aliasForModelId\(channelPrefs\.getLaunchModel\(p\.channelId\)\)/, "the operator's own Launch");
+  // ⚠ REPOINTED 2026-08-22: the launch body moved to `main/session-launch-op.js` (§1 split).
+  // ⚠ AND THE CHAIN GREW A LINK IN FRONT OF IT. An AGENT TEMPLATE may carry a default model,
+  // and it outranks the channel's durable pick — so the assertion is that the channel read is
+  // still the FALLBACK of that expression, not that it is the whole of it. `templateModel`
+  // answers '' (not 'default') when a template names no model or names one this build does
+  // not know, which is what keeps an unknown template model falling THROUGH to this read
+  // instead of ending the chain one link early.
+  const OPS = read("session-launch-op.js");
+  // ⚠ AND THE LAUNCH SHEET SITS IN FRONT OF BOTH SINCE PHASE 2: `overrides.model` is a
+  // DELIBERATE PER-CALL CHOICE and the other two are DEFAULTS, which is the same ordering
+  // argument the directive lane's explicit `model` param wins on.
+  assert.match(OPS,
+    /model: overrides\.model \|\| templateModel\(sessionModel, template\)\s*\|\| sessionModel\.aliasForModelId\(channelPrefs\.getLaunchModel\(p\.channelId\)\)/,
+    "the operator's own Launch: the sheet, then the template default, then the channel's pick");
+  // ⚠ THE RULE ITSELF MOVED TO `session-model.js › chainModel` ON 2026-08-23 (F-285) — the
+  // DIRECTIVE lane needed the identical answer for its OWN link, and a rule written once per lane
+  // is a rule that drifts in one of them. `templateModel` is now only "which field to read".
+  assert.match(read("session-model.js"), /alias === 'default' \? '' : alias/,
+    "an unrecognised model falls THROUGH to the next link, it does not end the chain");
+  assert.match(OPS, /return sessionModel\.chainModel\(/,
+    "the button lane must not restate the rule — it delegates");
+  assert.match(read("launch-directives.js"), /model: sessionModel\.chainModel\(d\.model\)/,
+    "…and so does the directive lane's own link, which used to be a ternary on aliasForModelId");
   assert.match(read("trigger.js"),
     /aliasForModelId\(channelPrefs\.getLaunchModel\(entry\.channel\.id\)\)/, "the peer-triggered lane");
 });

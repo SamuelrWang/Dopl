@@ -46,9 +46,14 @@ const BASE = "https://api.example.test";
 const PUBLIC_SURFACE = [
     "appendChatMessages",
     "awaitChannelMessages",
+    // WORKSPACE-WIDE hold (2026-08-22) — one cursor across every channel the
+    // caller is a MEMBER of. A SIBLING of the per-channel await, never a flag on
+    // it: different fence, different stop rule.
+    "awaitWorkspaceMessages",
     "claimOntologyAnchor",
     "consumeCredits",
     "createChannel",
+    "createLaunchDirective",
     "createChannelThread",
     "createChatFolder",
     "createKbBase",
@@ -68,6 +73,13 @@ const PUBLIC_SURFACE = [
     "getActiveWorkspace",
     "getBaseUrl",
     "getChannel",
+    // LAUNCH-OVER-MCP (2026-08-22): file a directive, then poll the row. ⚠ EXACTLY
+    // TWO METHODS, and the omissions are the point — CLAIM, DECIDE and the
+    // pending-directives LIST are the DESKTOP's lane, reached from
+    // `main/launch-directives.js` over its own authenticated fetch. Publishing
+    // them here would put "claim another machine's directive" and "enumerate my
+    // operator's launch queue" on the SDK every MCP tool holds.
+    "getLaunchDirective",
     "getChannelThread",
     "getChat",
     "getKbBase",

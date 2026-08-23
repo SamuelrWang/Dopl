@@ -213,6 +213,33 @@ function withSessionStamp(servers, sessionId) {
 // ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL do not match the permission pattern. PATH / HOME /
 // keychain access are never removed.
 const PERMISSION_ENV_RE = /PERMISSION|BYPASS|ACCEPT_EDITS|DONT_ASK|SKIP_PERMISSIONS|AUTO_APPROVE|DANGEROUS/i;
+
+// ⚠ THE THIRD MCP LANE, AND THE ONLY LEVER WE HAVE LEFT ON IT (2026-08-22, F-268).
+// `mcpServers` and `settingSources` do NOT cover it. When the session's OAuth credential carries
+// the `user:mcp_servers` scope, the CLI fetches `GET /v1/mcp_servers` with that Bearer and
+// connects EVERY claude.ai ACCOUNT CONNECTOR as `mcp__claude_ai_<Name>__*`. Measured 2026-08-22
+// against the bundled binary (claude 2.1.220 / claude-agent-sdk 0.3.220): the init message's
+// `mcp_servers` listed 12 servers, NINE of them connectors (Slack, Gmail, Google Calendar, Google
+// Drive, Figma, Granola, Notion, Attio, Dopl) that no option in `buildSdkOptions` asked for.
+// ⚠ THE SETTINGS KILL SWITCH IS UNREADABLE TO US, WHICH IS THE IRONY: the CLI's own off switch is
+// the `disableClaudeAiConnectors` SETTING, and `settingSources: []` — our isolation — is exactly
+// what stops it being read. Tightening the sandbox removed the switch. The env var is the lever
+// that survives, and `--strict-mcp-config` is NOT an alternative (it hard-errors on machines with
+// an enterprise managed-mcp.json).
+// ⚠ POLARITY IS INVERTED AND EMPTY IS A NO-OP. The binary's eligibility chain is
+// `if (su(process.env.ENABLE_CLAUDEAI_MCP_SERVERS) || <setting>) return {}`, where `su` is
+// "explicitly set FALSY" — `['0','false','no','off']`. So the var DISABLES the lane, and `''`,
+// `'1'` or unset all leave it ON. Measured, same run: unset -> 9 connectors, `''` -> 9,
+// `'0'` -> 0, `'false'` -> 0, with the `dopl` server itself untouched in every case.
+// ⚠ SET LAST AND UNCONDITIONALLY, so an inherited `ENABLE_CLAUDEAI_MCP_SERVERS=1` in the parent
+// env cannot re-admit the lane. It does not match PERMISSION_ENV_RE and would otherwise copy
+// straight through the loop above.
+// ⚠ CONTAINMENT ALREADY HELD — this is the OFFERED SURFACE, not execution. Every connector tool
+// is unclassified, so `grantDecision` gates it and a windowless session denies it
+// (`test/session-tool-name-prefix.test.mjs`). What this removes is an inventory of the operator's
+// connected accounts sitting in a prompt that can be auto-sent, and its per-turn token cost.
+const CLAUDEAI_MCP_ENV = 'ENABLE_CLAUDEAI_MCP_SERVERS';
+const CLAUDEAI_MCP_OFF = '0';
 function buildScrubbedEnv() {
   const src = process.env || {};
   const out = {};
@@ -220,6 +247,7 @@ function buildScrubbedEnv() {
     if (/^(CLAUDE_CODE_|ANTHROPIC_)/.test(k) && PERMISSION_ENV_RE.test(k)) continue; // drop permission knobs
     out[k] = src[k];
   }
+  out[CLAUDEAI_MCP_ENV] = CLAUDEAI_MCP_OFF; // last word, always — see the block above
   return out;
 }
 
@@ -230,4 +258,6 @@ module.exports = {
   withSessionStamp, // F2: this run's slot key, onto the entry above
   buildSecretPathDenyRules, // credential-path deny every session runs with
   buildScrubbedEnv,
+  CLAUDEAI_MCP_ENV, // F-268: the connector lane's only reachable off switch
+  CLAUDEAI_MCP_OFF,
 };

@@ -1,7 +1,11 @@
 import "server-only";
 import type { SessionStateEntryInput } from "../schema-sessions";
-import type { ChannelSessionState } from "../types";
-import { mapSessionStateRow, type SessionStateUpsert } from "./collab-dto";
+import type { ChannelSessionState, ChannelSessionStateOwn } from "../types";
+import {
+  mapOwnSessionStateRow,
+  mapPeerSessionStateRow,
+  type SessionStateUpsert,
+} from "./collab-dto";
 import * as sessionRepo from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
 import { loadVisibleChannel } from "./service-shared";
@@ -20,7 +24,17 @@ import { loadVisibleChannel } from "./service-shared";
  * cards, fenced by `loadVisibleChannel` — ⚠ which admits a PUBLIC channel's
  * non-member readers (§5's channel-visible rule); the member SELECT policy
  * (20260820200000) is the PostgREST belt, not this admin-client path's fence.
- * Peers see the state projection alone.
+ *
+ * ⚠ **AND SINCE 2026-08-22 THE TWO SCOPES CARRY TWO SHAPES** (Samuel: telemetry
+ * is OPERATOR-ONLY, peers keep coarse). The row got seven operator-only columns
+ * — model, current tool, context used/window, tokens, started/last-activity —
+ * and **THIS SERVICE IS WHERE THE SPLIT IS ENFORCED**, because both reads run on
+ * the RLS- and grant-bypassing admin client and neither RLS nor the column
+ * GRANT can see them. The mechanism is two mappers with two return types
+ * (`collab-dto.ts › mapOwnSessionStateRow` / `mapPeerSessionStateRow`) and NO
+ * default audience: a call site must name whose eyes it renders for, and TypeScript
+ * refuses a peer surface that assigns the rich shape. The GRANT in migration
+ * `20260822150000` is the belt for the PostgREST/CDC doors this path never uses.
  *
  * Delivery is PUSH ON STATE CHANGE ({@link reportSessionStates}, called by
  * `main/session-state-push.js`), never a heartbeat. An empty answer is reported
@@ -30,22 +44,35 @@ import { loadVisibleChannel } from "./service-shared";
 export async function listSessionStates(
   ctx: ChannelContext,
   channelId?: string
-): Promise<ChannelSessionState[]> {
+): Promise<ChannelSessionStateOwn[]> {
   const rows = await sessionRepo.listSessionStates(
     ctx.userId,
     ctx.workspaceId,
     channelId
   );
-  return rows.map(mapSessionStateRow);
+  // ⚠ THE OWN MAPPER, and the licence for it is the `ctx.userId` fence one line
+  // up — not this function's name. Every row here belongs to the caller's own
+  // machine, which is the only condition under which telemetry may be rendered.
+  return rows.map(mapOwnSessionStateRow);
 }
 
 /**
  * EVERY member's sessions in ONE channel — the Agents tab's PEER CARDS
  * (Samuel, 2026-08-20). ⚠ NOT caller-scoped, and that is deliberate and
  * bounded: the reader must be able to READ the channel (`loadVisibleChannel`,
- * the same fence every channel read uses), and what comes back is the STATE
- * projection alone — `userId` rides so the card can wear its owner's avatar;
- * no transcript, no tools, no tokens exist in the table to leak.
+ * the same fence every channel read uses), and what comes back is the COARSE
+ * projection alone.
+ *
+ * ⚠ **ITS DOCBLOCK USED TO SAY "no transcript, no tools, no tokens EXIST IN THE
+ * TABLE to leak", AND THAT SENTENCE EXPIRED ON 2026-08-22.** They exist now
+ * (migration `20260822150000`). The absence of a thing to leak was doing the
+ * security work, and the replacement for it is {@link mapPeerSessionStateRow},
+ * which cannot emit them because it never names them. ⚠ Do not "simplify" this
+ * to spreading the row: the read is deliberately `select("*")`, so the wide row
+ * IS in memory here and only the mapper stands between it and a peer.
+ *
+ * ⚠ THE READER MAY BE A NON-MEMBER of a PUBLIC channel — that is §5's rule and
+ * this fence inherits it, which is a second reason the projection is coarse.
  */
 export async function listChannelSessions(
   ctx: ChannelContext,
@@ -56,12 +83,24 @@ export async function listChannelSessions(
     ctx.workspaceId,
     channel.id
   );
-  return rows.map((row) => ({ ...mapSessionStateRow(row), userId: row.user_id }));
+  // ⚠ `userId` rides so the card can wear its owner's avatar. It is the ONE
+  // field added on top of the coarse projection, and it is an identity the
+  // roster already publishes — not a fact about the machine.
+  return rows.map((row) => ({
+    ...mapPeerSessionStateRow(row),
+    userId: row.user_id,
+  }));
 }
 
 /** API shape → column shape. ⚠ The one place the two vocabularies meet, and
  *  where `undefined` becomes the `null` the column stores — the schema lets a
- *  field be absent, the database has no such value. */
+ *  field be absent, the database has no such value.
+ *
+ *  ⚠ `?? null` ON EVERY TELEMETRY FIELD, AND NEVER `?? 0`. An older desktop
+ *  omits the key; the column then stores NULL, which the read renders as
+ *  "unknown". Defaulting a count to 0 here would manufacture a measurement
+ *  nobody took, and it would do it in the one place where the absence is still
+ *  visible. */
 function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
   return {
     session_key: entry.sessionKey,
@@ -71,6 +110,20 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     state: entry.state,
     channel_name: entry.channelName ?? null,
     thread_title: entry.threadTitle ?? null,
+    detail: entry.detail ?? null,
+    tool_label: entry.toolLabel ?? null,
+    model: entry.model ?? null,
+    context_used: entry.contextUsed ?? null,
+    context_window: entry.contextWindow ?? null,
+    tokens_spent: entry.tokensSpent ?? null,
+    started_at: entry.startedAt ?? null,
+    last_activity_at: entry.lastActivityAt ?? null,
+    // ⚠ `?? null` for the same reason, and one more: absent and `null` are both
+    // "no template to report" here, so nothing is lost by collapsing them — see
+    // the column comment in `20260823130000`. Do NOT try to distinguish a
+    // desktop that predates the field from a blank launch; only the DIRECTIVE
+    // lane needs that distinction (spec E-4) and it is a different table.
+    template_name: entry.templateName ?? null,
   };
 }
 

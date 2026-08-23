@@ -25,7 +25,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
 import { PeerActivityRow, peerActivityText, peerWorkingOn } from "./peer-activity";
-import { peerCardsFor } from "./agents-model";
+import { peerCardsFor, peerRowStale } from "./agents-model";
 import { indexMembers } from "./view-model";
 import { CHANNEL_ID, ME, PEER, member } from "./test-fixtures";
 
@@ -165,47 +165,80 @@ describe("PeerActivityRow — what actually paints", () => {
 });
 
 /**
- * THE TWO PEER PREDICATES, HELD AGAINST EACH OTHER (Samuel, 2026-08-20).
+ * THE TWO PEER PREDICATES, HELD APART (Samuel, 2026-08-22 — this SUPERSEDES the
+ * 2026-08-20 "they must agree about liveness" ruling this block used to pin).
  *
- * ⚠ THEY DISAGREED, AND IT WAS VISIBLE ON ONE SCREEN. `peerWorkingOn` applied the
- * liveness window; `peerCardsFor` — which draws the Agents tab's peer cards AND
- * feeds its badge — applied none, and there is no server-side sweep either
- * (`session-state-service.ts › listChannelSessions` returns every row). So one
- * crashed teammate's desktop produced a silent peer-activity row and a pulsing
- * "working" card at the same time, about the same row.
+ * ⚠ THE CARD MUST NOT VANISH UNDER A LIVE AGENT: *"the card STAYS until the
+ * session actually goes away."* The 2026-08-20 pass made `peerCardsFor` apply
+ * `peerWorkingOn`'s wall-clock window, on the reasoning that one crashed desktop
+ * must not show a card and a silent activity row at once. That fix was aimed at
+ * the wrong column. **`updated_at` IS NOT A HEARTBEAT** — the desktop pushes ON
+ * STATE CHANGE ONLY (`main/session-state-push.js`, which forbids a timer in its
+ * own header), and `server/repository-sessions.ts › sessionRowMatches` compares
+ * field by field and deliberately does NOT re-stamp a row whose projection did
+ * not move. So an IDLE peer agent, alive and listening, crossed 90 s and lost its
+ * card mid-run: the exact report.
  *
- * They are NOT the same function and must not become one — the row is
- * `working`-only and thread-scoped, the cards keep `idle` and can be
- * channel-scoped. What must never differ again is the answer to "is this machine
- * alive", so that is what these cases pin.
+ * ⚠ WHAT REPLACES IT IS MEMBERSHIP, WHICH IS A REAL SIGNAL. The push REPLACES the
+ * caller's whole set, so an ended session is deleted by omission, and
+ * `session-state-push.js › liveForWire` keeps ended rows off the wire besides
+ * (INVARIANTS §11). A row in the fetch IS a live session.
+ *
+ * ⚠ THEY ANSWER DIFFERENT QUESTIONS AND MUST NOT BE MERGED. The ROW makes a
+ * present-tense claim a reader waits on ("Diana's agent is working…") and keeps
+ * the window; the CARD answers "does this agent exist", which age cannot settle.
+ * The 2026-08-20 concern survives as INK: `peerRowStale` still marks a quiet row
+ * and `agents-tab.tsx` dims it (pinned in `agents-detail.test.tsx`).
  */
-describe("peerCardsFor and peerWorkingOn agree about LIVENESS", () => {
+describe("peerCardsFor keeps the card; peerWorkingOn keeps the window", () => {
   const STALE = new Date(NOW - PRESENCE_ONLINE_WINDOW_MS - 1).toISOString();
 
-  it("both drop a row older than the window", () => {
+  /** ⚠ THE REPORTED BUG, PINNED SHUT. An idle agent pushes nothing for as long
+   *  as it stays idle, so this row is the COMMON case, not an edge one. */
+  it("keeps an IDLE peer row far older than the window — the card must not vanish", () => {
+    const idle = [peer({ state: "idle", updatedAt: STALE })];
+    expect(peerCardsFor(idle, ME, THREAD)).toHaveLength(1);
+    // …while the activity ROW, which claims present-tense work, still refuses it.
+    expect(peerWorkingOn(idle, ME, THREAD, NOW)).toHaveLength(0);
+  });
+
+  it("keeps a WORKING row older than the window too — same rule, no exception", () => {
     const rows = [peer({ updatedAt: STALE })];
+    expect(peerCardsFor(rows, ME, THREAD)).toHaveLength(1);
     expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(0);
-    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(0);
   });
 
-  it("both drop an unparseable stamp — absent reads as stale, never as fresh", () => {
+  it("keeps a row whose stamp cannot be parsed — age is not the card's business", () => {
     const rows = [peer({ updatedAt: "not-a-date" })];
+    expect(peerCardsFor(rows, ME, THREAD)).toHaveLength(1);
     expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(0);
-    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(0);
   });
 
-  it("both keep a fresh working row", () => {
-    const rows = [peer()];
-    expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(1);
-    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(1);
+  /** ⚠ THE OTHER HALF OF THE RULE: a row ABSENT from the fetch yields no card.
+   *  That is the whole liveness signal now, so it is pinned beside its twin —
+   *  a `peerCardsFor` that returned something for an empty read would mean the
+   *  card had started outliving the session in the other direction. */
+  it("yields NOTHING for a row that is no longer in the fetch", () => {
+    expect(peerCardsFor([], ME, THREAD)).toHaveLength(0);
   });
 
-  // ⚠ WHERE THEY LEGITIMATELY DIFFER, stated so the agreement above is not read
-  // as "these are the same function". An `idle` peer is alive and gets a card; it
-  // is not doing anything a reader should wait for, so it gets no activity row.
-  it("differ on IDLE, deliberately — alive is not the same as working", () => {
-    const rows = [peer({ state: "idle" })];
-    expect(peerWorkingOn(rows, ME, THREAD, NOW)).toHaveLength(0);
-    expect(peerCardsFor(rows, ME, THREAD, NOW)).toHaveLength(1);
+  it("still drops MY OWN row, an ENDED row, and another thread's", () => {
+    expect(peerCardsFor([peer({ userId: ME })], ME, THREAD)).toHaveLength(0);
+    expect(peerCardsFor([peer({ state: "ended" })], ME, THREAD)).toHaveLength(0);
+    expect(peerCardsFor([peer({ threadId: "t-b" })], ME, THREAD)).toHaveLength(0);
+    // ⚠ Channel scope keeps the other thread's row — the narrowing is the TAB's,
+    // not a property of the peer.
+    expect(peerCardsFor([peer({ threadId: "t-b" })], ME, null)).toHaveLength(1);
+  });
+
+  it("marks the quiet row STALE rather than dropping it", () => {
+    expect(peerRowStale(peer({ updatedAt: STALE }), NOW)).toBe(true);
+    expect(peerRowStale(peer({ updatedAt: "not-a-date" }), NOW)).toBe(true);
+    expect(peerRowStale(peer(), NOW)).toBe(false);
+    // The boundary is the same one the roster's presence dot uses.
+    const edge = peer({
+      updatedAt: new Date(NOW - PRESENCE_ONLINE_WINDOW_MS + 1).toISOString(),
+    });
+    expect(peerRowStale(edge, NOW)).toBe(false);
   });
 });

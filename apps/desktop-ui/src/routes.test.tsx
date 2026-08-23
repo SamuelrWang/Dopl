@@ -85,6 +85,19 @@ describe("app routes", () => {
     );
   });
 
+  it("gives the agents page its sidebar nav row", async () => {
+    // ⚠ FOUR PLACES, OR IT HALF-LANDS (the table's own docblock): the route row
+    // here, the `NavSection` member + `NAV` row in
+    // `src/shared/layout/app-shell/app-sidebar-core.tsx`, and the deep-link hand
+    // copy. This pins the first two together — a route with no nav row is a page
+    // nobody can reach, and neither half fails on its own.
+    renderAt("/acme-ab12cd/agents");
+    expect(await screen.findByRole("link", { name: "Agents" })).toHaveAttribute(
+      "href",
+      "/acme-ab12cd/agents"
+    );
+  });
+
   it("redirects the workspace root to the home page", async () => {
     // What the root route owes is the redirect, and it owes it to whatever
     // `WORKSPACE_HOME_PATH` names — six funnels (index, boot, workspace
@@ -143,10 +156,29 @@ describe("app routes", () => {
       "chats",
       "channels",
       "channels/:channelId",
+      "agents",
       "members",
       "settings",
     ]);
     expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("channels-v2");
+  });
+
+  it("registers the agents page — one row, and NO detail child", () => {
+    // ⚠ THE ABSENCE IS THE ASSERTION. A template is edited in a modal, not at a
+    // URL, so `agents` must stay paramless: an `agents/:templateId` row would
+    // resolve to nothing, and the deep-link hand copy
+    // (`dopl-desktop-app/main/deep-link-target.js › WORKSPACE_PAGES`) would then
+    // want a `true` that hands the renderer a third segment matching no route.
+    const paths = WORKSPACE_PAGES.map((page) => page.path);
+    expect(paths).toContain("agents");
+    expect(paths.some((p) => p.startsWith("agents/"))).toBe(false);
+
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/acme-ab12cd/agents"],
+    });
+    expect(router.state.matches.at(-1)?.route.path).toBe("agents");
+    // Inside the shell, like every other workspace page.
+    expect(router.state.matches[0]?.route.path).toBe("/:workspaceSegment");
   });
 
   it("routes a named channel to the channels page, with its id", () => {

@@ -16,6 +16,10 @@ import {
   ConsentNotFoundError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
+  LaunchDirectiveNotClaimableError,
+  LaunchDirectiveNotFoundError,
+  LaunchTemplateAmbiguousError,
+  LaunchTemplateNotFoundError,
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
@@ -50,6 +54,32 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
+  }
+  // ⚠ 404 FOR "not yours", not 403 — see the error's own docblock. A 403 would
+  // confirm the id exists, which is exactly the probe the single error prevents.
+  if (err instanceof LaunchDirectiveNotFoundError) {
+    return new HttpError(404, "LAUNCH_DIRECTIVE_NOT_FOUND", err.message);
+  }
+  // ⚠ 409, and the desktop lane reads it as "stand down", NOT as a fault: losing
+  // the claim CAS is the designed outcome for every machine but one.
+  if (err instanceof LaunchDirectiveNotClaimableError) {
+    return new HttpError(409, "LAUNCH_DIRECTIVE_NOT_CLAIMABLE", err.message);
+  }
+  // ⚠ 404 AND THE AGENT-TEMPLATES CODE, not a channels-flavoured one. The `/resolve`
+  // endpoint answers `AGENT_TEMPLATE_NOT_FOUND` for the same fact, and the MCP layer
+  // branches on the CODE to tell a missing TEMPLATE from a missing CHANNEL — both of
+  // which arrive here as a 404 from the same call.
+  if (err instanceof LaunchTemplateNotFoundError) {
+    return new HttpError(404, "AGENT_TEMPLATE_NOT_FOUND", err.message);
+  }
+  // ⚠ 409 WITH `details.matches`, because the REFUSAL IS ONLY USEFUL WITH THE LIST.
+  // "That name is ambiguous" with nothing else forces the caller to guess or to go
+  // read the template list through another tool; the ids it needs are already in
+  // hand and every one of them passed this caller's own visibility check.
+  if (err instanceof LaunchTemplateAmbiguousError) {
+    return new HttpError(409, "AGENT_TEMPLATE_AMBIGUOUS", err.message, {
+      matches: err.matches,
+    });
   }
   // SIX ARMS ENDED HERE (channels rollback §1) and each was a named-agent or
   // breakout-room refusal: CHANNEL_AGENT_NOT_FOUND / _NOT_IN_CHANNEL /

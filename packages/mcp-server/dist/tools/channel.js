@@ -40,9 +40,14 @@ const channel_description_1 = require("./channel-description");
 const channel_schema_1 = require("./channel-schema");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_await_1 = require("./channel-ops-await");
+// ⚠ WORKSPACE-WIDE await is a SIBLING op, not a branch inside `opAwait`: the
+// per-channel result vocabulary splices `ref` into every sentence, and threading
+// an absent ref through it would produce guidance with a hole in it.
+const channel_ops_await_workspace_1 = require("./channel-ops-await-workspace");
 const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
+const channel_ops_launch_1 = require("./channel-ops-launch");
 const identity_1 = require("./identity");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -138,10 +143,20 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 // ids are real `metadata.taskId` values and must stay filterable.
                 args.thread);
             }
+            // ⚠ `channel` IS OPTIONAL HERE AND ONLY HERE AMONG THE HOLDS. Omitting
+            // it holds across EVERY channel the caller is a MEMBER of — a different
+            // service, a different fence (a re-proved membership set rather than one
+            // resolved channel id) and a different re-arm stop rule, which is why it
+            // is a different handler rather than a flag. `since` stays required on
+            // BOTH: `seq` is workspace-global, so one cursor is legal across every
+            // channel, but a hold with no cursor is a firehose either way.
             case "await": {
-                const miss = (0, respond_1.missingParams)("await", args, ["channel", "since"]);
+                const miss = (0, respond_1.missingParams)("await", args, ["since"]);
                 if (miss)
                     return miss;
+                if (args.channel === undefined || args.channel.trim() === "") {
+                    return (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.timeout_ms, selfUserId);
+                }
                 return (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime);
             }
             case "members": {
@@ -198,6 +213,27 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 if (miss)
                     return miss;
                 return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
+            }
+            // ⚠ ASKS THE OPERATOR'S OWN MACHINE TO START AN AGENT. `goal`, `model`,
+            // `thread` and `wait_ms` are all optional; only `channel` is required.
+            // The op NEVER names an operator — the server stamps the authenticated
+            // caller, because the only machine an agent may ask is its own
+            // operator's, and there is no argument here that could say otherwise.
+            case "launch_agent": {
+                const miss = (0, respond_1.missingParams)("launch_agent", args, ["channel"]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_launch_1.opLaunchAgent)(client, args.channel, {
+                    thread: args.thread,
+                    goal: args.goal,
+                    model: args.model,
+                    // ⚠ PASSED THROUGH AS A STRING, NEVER PARSED HERE. Whether it is an
+                    // id or a name — and whether a name is ambiguous — is decided
+                    // SERVER-SIDE, against the caller's own template visibility, which
+                    // this process cannot evaluate.
+                    template: args.template,
+                    waitMs: args.wait_ms,
+                });
             }
         }
     });

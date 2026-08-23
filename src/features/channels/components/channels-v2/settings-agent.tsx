@@ -67,7 +67,12 @@ import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
-import { AgentFolderRows, AutoSendRows } from "./settings-desktop-rows";
+import { useOrchestratorLaunch } from "../../hooks/use-orchestrator-launch";
+import {
+  AgentFolderRows,
+  AutoSendRows,
+  OrchestratorLaunchRows,
+} from "./settings-desktop-rows";
 import { cn } from "@/shared/lib/utils";
 import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
 import {
@@ -157,6 +162,8 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const launchPosture = useChannelLaunchPosture(props.channelId);
   const folder = useChannelFolder(props.channelId);
   const autoSend = useChannelAutoSend(props.channelId);
+  // ⚠ NO `channelId` — this one is per-MACHINE (`use-orchestrator-launch.ts`).
+  const orchestrator = useOrchestratorLaunch();
 
   return (
     <ChannelAgentSettingsView
@@ -183,6 +190,15 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
               on: autoSend.on,
               busy: autoSend.busy,
               onToggle: (next) => void autoSend.update(next),
+            }
+          : null
+      }
+      orchestrator={
+        orchestrator.bridge
+          ? {
+              on: orchestrator.enabled,
+              busy: orchestrator.busy,
+              onToggle: (next) => void orchestrator.update(next),
             }
           : null
       }
@@ -231,6 +247,21 @@ export interface ChannelAgentSettingsViewProps {
   folder: AgentFolderState | null;
   /** Auto-send (2026-08-20), or null outside the desktop shell (row absent). */
   autoSend?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
+  /**
+   * ORCHESTRATOR LAUNCHES (2026-08-22), or null without the bridge (group
+   * absent, heading included). ⚠ **THE ONLY PER-MACHINE CONTROL ON THIS TAB** —
+   * no `channelId` anywhere in its chain; the scope argument is
+   * `hooks/use-orchestrator-launch.ts` and the label that carries it is
+   * `settings-desktop-rows.tsx › OrchestratorLaunchRows`.
+   * ⚠ A SEPARATE gate from `folder` / `autoSend`: those probe `dopl.channels`,
+   * this probes `dopl.orchestratorLaunch`, and a main with one and not the
+   * other is the ordinary shape while this ships.
+   */
+  orchestrator?: {
+    on: boolean;
+    busy: boolean;
+    onToggle: (on: boolean) => void;
+  } | null;
 }
 
 export function ChannelAgentSettingsView({
@@ -243,6 +274,7 @@ export function ChannelAgentSettingsView({
   modelSupported = false,
   folder,
   autoSend = null,
+  orchestrator = null,
 }: ChannelAgentSettingsViewProps) {
   return (
     <>
@@ -386,6 +418,18 @@ export function ChannelAgentSettingsView({
             bridge (no dead rows); `settings-desktop-rows.tsx` owns both. */}
         {folder && <AgentFolderRows folder={folder} SettingName={SettingName} />}
         {autoSend && <AutoSendRows autoSend={autoSend} SettingName={SettingName} />}
+
+        {/* ⚠ THE MACHINE-SCOPED GROUP, LAST AND UNDER ITS OWN LABEL. It is
+            deliberately NOT folded into the durable per-channel group above:
+            everything there answers "on this channel", this answers "on this
+            Mac", and one heading cannot honestly cover both. Same no-dead-rows
+            rule — absent whole, heading included, without its own bridge. */}
+        {orchestrator && (
+          <OrchestratorLaunchRows
+            orchestrator={orchestrator}
+            GroupLabel={GroupLabel}
+          />
+        )}
       </div>
     </>
   );

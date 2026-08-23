@@ -33,7 +33,7 @@
 // ⚠ WHAT DID **NOT** CHANGE, AND MUST NOT: H2 ITSELF. A stored posture still only ever reaches a
 // spawn by being HANDED IN per launch (`spec.startModes`), by a caller executing a decision a
 // human is making right now. The posture below is read at exactly ONE call site —
-// `channel-dir-ipc.js › sessions:launch`, the operator's own Launch button on their own thread —
+// `session-ipc-ops.js › sessions:launch`, the operator's own Launch button on their own thread —
 // and every other spawn shape (a peer wake, a resume, a recreate) passes nothing and inherits
 // the reducer's manual/ask. **Wiring this record to a second consumer re-opens the failure H2
 // exists to prevent.** `test/session-preset-start.test.mjs` pins the consumer count, and that
@@ -132,7 +132,7 @@ function defaultPreset() {
 //                        responder launch. A peer's request; a human clicking
 //                        Allow on a card they are looking at right now.
 //   THIS POSTURE         durable, no TTL, ONE consumer —
-//                        `channel-dir-ipc.js › sessions:launch`, the Agents
+//                        `session-ipc-ops.js › sessions:launch`, the Agents
 //                        tab's own button. The operator launching THEIR OWN
 //                        agent onto THEIR OWN thread, with no peer involved and
 //                        no consent row raised, because the click IS the
@@ -226,6 +226,142 @@ function setAutoSend(channelId, on) {
   store.set(AUTO_SEND_KEY, next);
   diag('channel-prefs: autoSend', String(channelId).slice(0, 8), on === true ? 'on' : 'off');
   return on === true;
+}
+
+// ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ──────────
+//
+// MAY ANOTHER AGENT — an ORCHESTRATOR holding this operator's own Dopl credential — cause this
+// MACHINE to spawn a session? Default FALSE. It is the standing consent for the whole
+// `channel_launch_directives` lane (`main/launch-directives.js`); with it OFF the watcher reads
+// a directive addressed to this operator and IGNORES IT SILENTLY, and the directive expires
+// server-side where the orchestrator can see it happen.
+//
+// ⚠ IT IS MACHINE-WIDE, NOT PER CHANNEL, and it is the one record in this file that is. It
+// lives here because this is where the local, never-POSTed, default-restrictive launch settings
+// already are and a second electron-store module for one boolean would be worse — but it is
+// keyed by NOTHING: one operator, one Mac, one answer. A per-channel version was not built
+// because the question it answers is "do I let a program press the button on this laptop",
+// which is not a fact about a channel.
+//
+// ── ⚠ WHY IT LIVES OUTSIDE THE SERVER ENTIRELY, AND WHY THAT IS THE POINT (§6 threat) ───────
+//
+// THE TOGGLE IS THE CONSENT. Samuel's ruling replaces "the click IS that human" for this lane:
+// there is no click at directive time, so the standing local decision has to BE the human, and
+// a consent that a program can grant itself is not one.
+//
+// ⚠ A SPAWNED SESSION HAS `Bash` AND THE DEVICE TOKEN IS ON DISK. Under the `bypass` tool
+// posture `Bash` is pre-approved, the session runs on this Mac as this user, and this operator's
+// Dopl credential is in the app's own store — so an agent that can reach a SERVER-STORED
+// setting can reach it with the operator's own authority and flip it. Any surface a Dopl
+// credential can address is therefore disqualified: not a `workspace_settings` column, not a
+// member preference, not an MCP op, not an authenticated route. **A server-side "allow
+// orchestrated launches" flag would let a compromised or merely over-eager agent grant itself
+// the right to spawn more agents on every machine the operator owns — which is the escalation
+// this whole lane has to not have.**
+//
+// ⚠ SO THE ONLY WRITER IS THE APP-WINDOW IPC PAIR (`channel-dir-ipc.js ›
+// orchestrator:getLaunchEnabled / setLaunchEnabled`, `appWindowOnly`), reachable from the
+// bundled SPA's top frame and from nothing else. `Bash` on this machine could of course rewrite
+// the electron-store file directly — that is true of every local setting and is not what this
+// defends against. What it defends against is the REMOTE path: no request, from any credential,
+// to any Dopl endpoint, can change this value, so a compromised workspace cannot arm a fleet.
+//
+// ⚠ AND IT NARROWS NOTHING ELSE. A directive-driven launch is exactly as contained as a button
+// launch: same channel tool profile, same durable posture, same `SESSION_HARD_DENY`, same
+// windowless message floor. This toggle decides WHO MAY PRESS, never WHAT IS ALLOWED.
+//
+// Default OFF — an absent, corrupt or non-boolean record reads false, the same fail-closed rule
+// auto-send follows.
+const ORCHESTRATOR_LAUNCH_KEY = 'orchestratorLaunchEnabled'; // a bare boolean
+
+function getOrchestratorLaunch() {
+  try {
+    return store.get(ORCHESTRATOR_LAUNCH_KEY) === true;
+  } catch (_err) {
+    return false; // an unreadable store is not a grant
+  }
+}
+
+function setOrchestratorLaunch(on) {
+  const next = on === true;
+  try {
+    store.set(ORCHESTRATOR_LAUNCH_KEY, next);
+  } catch (err) {
+    diag('channel-prefs: could not persist the orchestrator launch toggle —', err && err.message);
+    return getOrchestratorLaunch();
+  }
+  diag('channel-prefs: orchestrator launch', next ? 'ENABLED' : 'disabled');
+  return next;
+}
+
+// ── ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3) ─────────────
+//
+// A `team` or `workspace` template's `instructions` are written by ANOTHER WORKSPACE MEMBER and
+// they execute ON THIS MACHINE, in this operator's session, under this operator's credential,
+// with this operator's tool profile and KB reach. That is a materially different exposure from
+// every other shared-content surface in the product: a shared SKILL is pulled per call and read
+// as a procedure, while a shared TEMPLATE is STANDING CONFIGURATION for an autonomous agent.
+//
+// The fence (`prompt-framing-template.js`) stops WIDENING. It does not stop MISDIRECTION, and
+// nothing text-shaped can. What addresses misdirection is INFORMING A HUMAN, once, before the
+// first run: the selector's authorship marker, and this — ONE approval, the first time a given
+// FOREIGN template launches on THIS MACHINE, with its instructions shown verbatim.
+//
+// ⚠ IT LIVES IN electron-store BESIDE `orchestratorLaunchEnabled`, AND FOR THAT TOGGLE'S EXACT
+// REASON. A spawned session has `Bash` and this operator's Dopl credential is on disk, so any
+// surface a Dopl credential can address is disqualified: a server-stored approval lets a
+// credential-holding agent PRE-APPROVE ITSELF ACROSS THE FLEET, which is the escalation this
+// whole family has to not have. No request, from any credential, to any Dopl endpoint, can write
+// this. `Bash` on this machine could rewrite the store file directly — true of every local
+// setting, and not what this defends against; the REMOTE path is.
+//
+// ⚠ KEYED BY TEMPLATE ID, AND APPROVAL IS PER TEMPLATE, NOT PER AUTHOR. Approving Ada's
+// "Code Auditor" says nothing about Ada's next template, because the thing the operator read and
+// consented to was a specific body of instructions.
+// ⚠ IT IS NOT A RECORD OF THE INSTRUCTIONS THEY READ. An edited template keeps its approval,
+// deliberately: re-prompting on every edit would train the operator to click through, and the
+// author could already have edited it between the approval and the launch. The approval is
+// "I have decided to trust this template", which is a decision about a THING, not a diff.
+// ⚠ DEFAULT DENY — an absent, corrupt or non-boolean record reads false, the same fail-closed
+// rule auto-send and the orchestrator toggle both follow.
+//
+// ⚠ NOTHING HERE APPLIES TO THE OPERATOR'S OWN TEMPLATES. `authoredByCaller === true` never
+// reaches this store: an approval prompt over your own configuration is the noise that teaches
+// people to stop reading approval prompts.
+// ⚠ NOR TO THE DIRECTIVE LANE. There is no human at the keyboard there, and the answer is
+// already written down one block above: `orchestratorLaunchEnabled` STANDS IN FOR THE CLICK. A
+// second machine-local gate for the same threat, guarding the same lane, is a fence nobody reads.
+const TEMPLATE_APPROVAL_KEY = 'approvedAgentTemplates'; // { [templateId]: true }
+
+// Bounded, because the map is written from a launch path and an unbounded local store is the
+// shape that has bitten this tree before. Oldest key out; a re-approval is one click.
+const MAX_APPROVED_TEMPLATES = 200;
+
+function isTemplateApproved(templateId) {
+  if (!templateId) return false;
+  try {
+    const map = store.get(TEMPLATE_APPROVAL_KEY);
+    return !!(map && typeof map === 'object' && map[templateId] === true);
+  } catch (_err) {
+    return false; // an unreadable store is not a grant
+  }
+}
+
+function approveTemplate(templateId) {
+  if (!templateId) return false;
+  try {
+    const map = store.get(TEMPLATE_APPROVAL_KEY);
+    const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
+    const keys = Object.keys(next);
+    if (keys.length >= MAX_APPROVED_TEMPLATES) delete next[keys[0]];
+    next[templateId] = true;
+    store.set(TEMPLATE_APPROVAL_KEY, next);
+  } catch (err) {
+    diag('channel-prefs: could not persist a template approval —', err && err.message);
+    return false;
+  }
+  diag('channel-prefs: template approved', String(templateId).slice(0, 8));
+  return true;
 }
 
 // ── Storage for the durable posture ─────────────────────────────────────────
@@ -323,6 +459,18 @@ function getLaunchModel(channelId) {
 module.exports = {
   getAutoSend,
   setAutoSend,
+  // 2026-08-22: the MACHINE-WIDE standing consent for the orchestrator launch lane. Read the
+  // block above before wiring a second reader or writer — the "outside the server entirely"
+  // property is the security content, not the storage.
+  ORCHESTRATOR_LAUNCH_KEY,
+  getOrchestratorLaunch,
+  setOrchestratorLaunch,
+  // 2026-08-22 (OQ-3): FIRST-USE APPROVAL for another member's agent template. Same
+  // machine-local, never-server-reachable property as the toggle above, and the block over these
+  // two functions says why that property is the security content.
+  TEMPLATE_APPROVAL_KEY,
+  isTemplateApproved,
+  approveTemplate,
   // The DURABLE launch posture — see the block above for why it is not the arm.
   readPostureFrom,
   effectivePosture, // 2026-08-22: the WIRE shape — the pair plus an always-present `model`

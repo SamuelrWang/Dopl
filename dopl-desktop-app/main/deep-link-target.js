@@ -85,6 +85,12 @@ const WORKSPACE_PAGES = {
   skills: true,
   chats: false,
   channels: true,
+  // ⚠ `false` — AGENT TEMPLATES HAVE NO DETAIL ROUTE (2026-08-22). A template is
+  // edited in a modal, not at a URL, so `routes.tsx` carries a paramless
+  // `agents` row and nothing else; a `true` here would hand the renderer a third
+  // segment that matches no route. The drift test derives this value from the
+  // route table, so flipping it is a two-file change or it goes red.
+  agents: false,
   members: false,
   settings: false,
 };

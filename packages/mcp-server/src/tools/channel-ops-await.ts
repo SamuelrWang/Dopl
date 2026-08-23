@@ -33,6 +33,10 @@ import {
   awaitArrivedLines,
   awaitTimedOutLines,
 } from "./channel-wake-guidance";
+// ⚠ The session block and every rule inside it (the staleness hedge, the
+// operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
+// `read_sessions` — see channel-session-render.ts.
+import { sessionBlockLines } from "./channel-session-render";
 
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = resolveAwaitHoldMs(process.env.DOPL_AWAIT_HOLD_MS);
@@ -136,6 +140,15 @@ export async function opAwait(
   const startedAt = Date.now();
   const deadline = startedAt + holdMs;
   let messages: ChannelMessage[] = [];
+  // ⚠ THE OWN-SESSION SNAPSHOT the route attaches AT RETURN TIME (2026-08-22).
+  // `undefined` until a hold actually answers, and it stays `undefined` if the
+  // server never sent the key — an older deployment, or a session read that
+  // failed behind an otherwise-good hold. **`undefined` and `[]` are different
+  // answers** and the renderer treats them as such; never normalize one to the
+  // other here.
+  // ⚠ LAST WRITER WINS, deliberately: the inner poll loop re-issues, and the
+  // freshest snapshot is the one from the call that ended the hold.
+  let sessions: AwaitResult["sessions"];
   // What ended the hold when it was an inner failure rather than the clock, so
   // the result can NAME it: "the wait timed out" after a socket reset is not
   // actionable.
@@ -173,6 +186,7 @@ export async function opAwait(
       pollError = e;
       break;
     }
+    if (result.sessions !== undefined) sessions = result.sessions;
     if (result.messages.length > 0) {
       messages = result.messages;
       break;
@@ -212,6 +226,11 @@ export async function opAwait(
       [
         timedOut,
         ...awaitTimedOutLines(ref, since, runtime, rearmStopRule(ref)),
+        // ⚠ RENDERED ON A TIMEOUT TOO, and that is the case it earns most: a
+        // hold that came back empty is exactly when an orchestrator has to
+        // decide whether the agent it is waiting on is still alive. Answering
+        // that used to cost a second call.
+        ...sessionBlockLines(sessions),
       ].join("\n"),
     );
   }
@@ -241,5 +260,9 @@ export async function opAwait(
     }
   }
   lines.push(...awaitArrivedLines(ref, lastSeq, runtime, rearmStopRule(ref)));
+  // ⚠ AFTER the messages and after the re-arm guidance — a block of server
+  // narration spliced between counterparty bodies would let a body's last line
+  // read as the start of this section.
+  lines.push(...sessionBlockLines(sessions));
   return ok(lines.join("\n"));
 }

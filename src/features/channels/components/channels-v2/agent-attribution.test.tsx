@@ -32,6 +32,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { Transcript } from "./transcript";
 import { agentAccent } from "./bits";
+import { attributionName } from "./attribution-pill";
 import { indexMembers } from "./view-model";
 import { threadRows } from "./view-model-rows";
 import { parseAgentPostStamp } from "./agents-model";
@@ -143,21 +144,24 @@ describe("parseAgentPostStamp — the one reader of the wire format", () => {
 });
 
 describe("the transcript's attribution pill", () => {
-  it("names the agent when the post is stamped", () => {
+  it("names the agent IN THE NAME LINE when the post is stamped", () => {
     renderThread([byAgent("m-1", { agentId: A })]);
-    expect(within(rowFor("BODY-m-1")).getByText(A)).not.toBeNull();
+    // ⚠ ONE TEXT NODE, `Agent #<id>` (Samuel, 2026-08-22). The grey
+    // `Agent · <id>` chip is deleted; the pill's NAME says which agent, and the
+    // `#` is literal rather than a separator a screen reader has to spell.
+    expect(within(rowFor("BODY-m-1")).getByText(`Agent #${A}`)).not.toBeNull();
   });
 
   /** ⚠ An unstamped agent post renders exactly what it always did. Inventing an
    *  id, or dropping the chip, both report "cannot say" as something else. */
-  it("keeps the plain chip on an UNSTAMPED agent post", () => {
+  it("reads the bare noun on an UNSTAMPED agent post", () => {
     renderThread([byAgent("m-1", { agentId: null })]);
     const row = rowFor("BODY-m-1");
     expect(within(row).getByText("Agent")).not.toBeNull();
-    expect(within(row).queryByText(A)).toBeNull();
+    expect(within(row).queryByText(/#/)).toBeNull();
   });
 
-  it("keeps the plain chip on a machine-level courtesy post", () => {
+  it("reads the bare noun on a machine-level courtesy post", () => {
     const courtesy = message({
       id: "m-c",
       seq: 1,
@@ -170,7 +174,7 @@ describe("the transcript's attribution pill", () => {
     renderThread([courtesy]);
     const row = rowFor("COURTESY");
     expect(within(row).getByText("Agent")).not.toBeNull();
-    expect(within(row).queryByText("a1b2c3d4")).toBeNull();
+    expect(within(row).queryByText(/a1b2c3d4/)).toBeNull();
   });
 
   /** ⚠ `client_msg_id` is CALLER-SUPPLIED. A human whose client happened to pick
@@ -186,8 +190,10 @@ describe("the transcript's attribution pill", () => {
     });
     renderThread([human]);
     const row = rowFor("HUMAN");
-    expect(within(row).queryByText("Agent")).toBeNull();
-    expect(within(row).queryByText(A)).toBeNull();
+    // The pill reads the member's own name, never "Agent" and never an id.
+    expect(within(row).getByText("You")).not.toBeNull();
+    expect(within(row).queryByText(/Agent/)).toBeNull();
+    expect(within(row).queryByText(new RegExp(A))).toBeNull();
   });
 });
 
@@ -205,10 +211,10 @@ describe("a different agent breaks the run", () => {
       byAgent("m-2", { agentId: B, seq: 2 }),
       byAgent("m-3", { agentId: A, seq: 3 }),
     ]);
-    // Three rows, three headers, and each names its own agent.
-    expect(within(rowFor("BODY-m-1")).getByText(A)).not.toBeNull();
-    expect(within(rowFor("BODY-m-2")).getByText(B)).not.toBeNull();
-    expect(within(rowFor("BODY-m-3")).getByText(A)).not.toBeNull();
+    // Three rows, three pills, and each names its own agent.
+    expect(within(rowFor("BODY-m-1")).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-2")).getByText(`Agent #${B}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-3")).getByText(`Agent #${A}`)).not.toBeNull();
   });
 
   /** ⚠ THE SAME agent still groups — this must not turn every agent post into
@@ -218,9 +224,9 @@ describe("a different agent breaks the run", () => {
       byAgent("m-1", { agentId: A, seq: 1 }),
       byAgent("m-2", { agentId: A, seq: 2 }),
     ]);
-    // The second row is a continuation: no name line, so no chip on it.
-    expect(within(rowFor("BODY-m-2")).queryByText("Agent")).toBeNull();
-    expect(within(rowFor("BODY-m-1")).getByText(A)).not.toBeNull();
+    // The second row is a continuation: no pill, so nothing names an agent.
+    expect(within(rowFor("BODY-m-2")).queryByText(/Agent/)).toBeNull();
+    expect(within(rowFor("BODY-m-1")).getByText(`Agent #${A}`)).not.toBeNull();
   });
 
   /** ⚠ Two legacy posts still group — `null === null`. A main that predates the
@@ -230,7 +236,7 @@ describe("a different agent breaks the run", () => {
       byAgent("m-1", { agentId: null, seq: 1 }),
       byAgent("m-2", { agentId: null, seq: 2 }),
     ]);
-    expect(within(rowFor("BODY-m-2")).queryByText("Agent")).toBeNull();
+    expect(within(rowFor("BODY-m-2")).queryByText(/Agent/)).toBeNull();
   });
 
   /** ⚠ …but `null` never MATCHES a real id, so a stamped post after an unstamped
@@ -240,7 +246,7 @@ describe("a different agent breaks the run", () => {
       byAgent("m-1", { agentId: null, seq: 1 }),
       byAgent("m-2", { agentId: A, seq: 2 }),
     ]);
-    expect(within(rowFor("BODY-m-2")).getByText(A)).not.toBeNull();
+    expect(within(rowFor("BODY-m-2")).getByText(`Agent #${A}`)).not.toBeNull();
   });
 
   /** A HUMAN run is untouched — the stamp is only read on agent rows. */
@@ -251,6 +257,80 @@ describe("a different agent breaks the run", () => {
     ]);
     expect(within(rowFor("H2")).queryByText("You")).toBeNull();
     expect(within(rowFor("H1")).getByText("You")).not.toBeNull();
+  });
+});
+
+/**
+ * THE PILL ITSELF (Samuel, 2026-08-22, from two reference screenshots).
+ *
+ * ⚠ ONE HEADER IDIOM FOR THE WHOLE TRANSCRIPT. Human and agent rows wear the
+ * SAME capsule — avatar left, name over timestamp to its right — because a
+ * second header shape for agent rows is how two surfaces come to word one
+ * exchange differently. The old avatar-gutter row and the grey `Agent · <id>`
+ * chip are both gone.
+ *
+ * ⚠ THE ACCENT SURVIVES ON THE BORDER, and that is the half a screenshot cannot
+ * catch. `agentAccent` returns a border/fill/ink triple built for a CHIP; the
+ * pill re-uses it and neutralises the last two, so the elevated card face stays
+ * the card face and the name stays primary ink. If a refactor ever lets the fill
+ * through, the pill silently becomes four differently-coloured boxes.
+ */
+describe("the attribution pill", () => {
+  /** The pill element for a row — the capsule, not the article. */
+  const pillIn = (row: HTMLElement) =>
+    row.querySelector("[data-agent-id], .bento") as HTMLElement;
+
+  it("names the wording in one place, for all three cases", () => {
+    expect(attributionName({ agent: false, agentId: null, authorLabel: "You" })).toBe("You");
+    expect(attributionName({ agent: true, agentId: A, authorLabel: "You" })).toBe(`Agent #${A}`);
+    expect(attributionName({ agent: true, agentId: null, authorLabel: "You" })).toBe("Agent");
+  });
+
+  it("carries the avatar, the name and the message TIME in one capsule", () => {
+    renderThread([byAgent("m-1", { agentId: A })]);
+    const pill = pillIn(rowFor("BODY-m-1"));
+    expect(pill.className).toContain("rounded-full");
+    // The reference's subtitle slot holds the transcript's own time format.
+    const time = formatChannelTimestamp("2026-08-18T12:00:00.000Z");
+    expect(within(pill).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(pill).getByText(time)).not.toBeNull();
+  });
+
+  /** ⚠ A HUMAN ROW GETS THE SAME PILL. The transcript is one system. */
+  it("heads a HUMAN row with the same capsule, name and time", () => {
+    renderThread([
+      message({ id: "h", seq: 1, body: "HI", authorUserId: ME, metadata: { taskId: "t-1" } }),
+    ]);
+    const pill = pillIn(rowFor("HI"));
+    expect(pill.className).toContain("rounded-full");
+    expect(within(pill).getByText("You")).not.toBeNull();
+  });
+
+  it("puts the per-agent accent on the BORDER and leaves the card face alone", () => {
+    renderThread([byAgent("m-1", { agentId: B })]);
+    const pill = pillIn(rowFor("BODY-m-1"));
+    // The border half of this agent's accent survived the merge…
+    const border = agentAccent(B)
+      .split(" ")
+      .find((c) => c.startsWith("border-")) as string;
+    expect(pill.className).toContain(border);
+    // …and the fill/ink halves did NOT: the pill keeps the elevated card face
+    // and primary ink, or the name is unreadable and the capsule is a chip.
+    expect(pill.className).toContain("bg-bg-elevated");
+    expect(pill.className).toContain("text-text-primary");
+    for (const cls of agentAccent(B).split(" ")) {
+      if (cls.startsWith("bg-") || cls.startsWith("text-")) {
+        expect(pill.className).not.toContain(cls);
+      }
+    }
+  });
+
+  it("wears no hardcoded colour, size or shadow — tokens and kit only", () => {
+    renderThread([byAgent("m-1", { agentId: A })]);
+    const html = pillIn(rowFor("BODY-m-1")).outerHTML;
+    expect(html).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+    expect(html).not.toMatch(/\btext-(xs|sm|base|lg)\b/);
+    expect(html).not.toMatch(/\bshadow-\[/);
   });
 });
 

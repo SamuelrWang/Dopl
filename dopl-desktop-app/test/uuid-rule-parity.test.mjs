@@ -53,6 +53,15 @@ const EXPECTED = {
   // three: the block may hold no require. Only `channel-dir-ipc.js` could give its copy up,
   // because its whole pure block moved into ipc-guards.js.
   "ui-bridge.js": "inside UI-BRIDGE-PURE (isWorkspaceId), sliced by ui-bridge-guards.test",
+  // ⚠ JOINED 2026-08-22 (the orchestrator launch lane), and it is a REVIEW rather than a rename:
+  // `launch-directive-wire.js` states the desktop's half of the `channel_launch_directives`
+  // contract, and its whole body sits inside LAUNCH-DIRECTIVE-WIRE — a pure block that
+  // `launch-directives.test.mjs` evaluates and that, like every other entry here, MAY HOLD NO
+  // REQUIRE. `ipc-guards.js › isUuid` is therefore unreachable from it.
+  // ⚠ AND THE COPY IS LOAD-BEARING, not incidental: it is what refuses a directive whose `id` or
+  // `channel_id` is not a UUID. Those two strings are about to be POSTed and handed to a spawn,
+  // and the row arrives over a realtime frame this module deliberately does not trust.
+  "launch-directive-wire.js": "inside LAUNCH-DIRECTIVE-WIRE, sliced by launch-directives.test",
 };
 
 /** Every occurrence of the rule in main/, by file. */

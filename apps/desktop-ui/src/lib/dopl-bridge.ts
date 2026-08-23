@@ -97,6 +97,33 @@ export interface DoplBridge {
    *  here). Injected by main as a preload constant. */
   appOrigin?: string;
   /**
+   * THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) — may
+   * another agent cause THIS MACHINE to spawn a session, with no click? Default **FALSE**.
+   *
+   * ⚠ IT IS THE STANDING CONSENT for the `channel_launch_directives` lane
+   * (`main/launch-directives.js`), and Samuel ruled it as the replacement for "the click IS
+   * that human" there — a directive arrives with nobody attending, so the operator's prior
+   * decision on this machine has to BE the human. Off, a directive addressed to this operator
+   * is ignored SILENTLY and expires server-side, visibly to the orchestrator.
+   *
+   * ⚠ IT LIVES OUTSIDE THE SERVER ENTIRELY, deliberately: an `electron-store` boolean with
+   * exactly one writer, the `appWindowOnly` IPC pair. **No route, no MCP op, no
+   * `workspace_settings` column** — a spawned session has `Bash` and the device token is on
+   * disk (§6), so a server-stored flag could be flipped by an agent holding the operator's own
+   * credential and arm every machine they own.
+   * ⚠ IT DECIDES WHO MAY PRESS, NEVER WHAT IS ALLOWED — a directive launch is exactly as
+   * contained as a button launch.
+   *
+   * ⚠ MIRRORED FROM `src/shared/lib/spa-bridge.ts › SpaBridgeSurface` and pinned by
+   * `dopl-desktop-app/test/preload-parity.test.mjs › APP_OPS`. Feature-detect BOTH members and
+   * read an absent bridge as OFF. `set` answers MAIN's value — `{ ok: false }` means the store
+   * did not take it, so an optimistic switch must revert.
+   */
+  orchestratorLaunch?: {
+    get(): Promise<{ enabled: boolean }>;
+    set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
+  };
+  /**
    * Per-channel durable settings, all of them read by the SETTINGS TAB
    * (`channels-v2/settings-agent.tsx`): the label-only folder ops, the launch
    * posture, and auto-send.
@@ -247,11 +274,53 @@ export interface DoplBridge {
       threadTitle?: string | null;
       counterpartyId?: string | null;
       direct?: boolean;
+      /**
+       * ⚠ AN ID, NEVER A SNAPSHOT (2026-08-22, agent templates). The SPA names the
+       * identity it wants; **MAIN resolves the CONTENT** over
+       * `GET /api/agent-templates/{id}/resolve`, under the operator's own credential,
+       * at spawn (`main/template-resolve.js`). A renderer-supplied
+       * `{name, instructions}` would be renderer-authored text landing in a prompt and
+       * main could not tell a real template from a fabricated one — F-267 with PROMPT
+       * TEXT as the thing forged. It also keeps the knowledge-base viewer filter on the
+       * OPERATOR's credential, and reads the row fresh.
+       *
+       * ⚠ ABSENT / `null` / `""` ALL MEAN A BLANK AGENT, byte-identically to a launch
+       * from before templates existed: no resolve, no round trip, no role block.
+       * ⚠ A PRESENT BUT MALFORMED ID IS A REFUSAL, not a silent blank launch.
+       */
+      templateId?: string | null;
+      /**
+       * THIS SPAWN's ephemeral re-points, from the launch sheet. Never written back to
+       * the template.
+       *
+       * ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE", on both keys — so an untouched
+       * sheet and a plain row click produce identical launches.
+       * ⚠ `fields` REPLACES the template's own set; it is never merged.
+       * ⚠ MAIN RE-VALIDATES ALL OF IT (F-281): `@/shared/lib/safe-label` imports zod, so
+       * no renderer surface can hold `SAFE_LABEL_RE` and this side enforces only the
+       * numbers. `main/template-resolve.js › narrowOverrides` applies the charset rule
+       * and DROPS a row that fails it.
+       */
+      overrides?: {
+        model?: string | null;
+        fields?: { key: string; value: string }[];
+      };
     }): Promise<{
       ok: boolean;
       agentId?: string;
       sessionId?: string | null;
+      /**
+       * ⚠ `template-approval` IS A QUESTION, NOT A FAILURE (2026-08-22, OQ-3). The first
+       * time a FOREIGN template (one this operator did not write) launches on this
+       * machine, main refuses and hands back the name and instructions it resolved so the
+       * SPA can show them verbatim. Answer it with `approveTemplate` and relaunch.
+       * ⚠ `no-template` means the picked template did not resolve for this operator —
+       * deleted, or not visible to them. One word for both, because the endpoint is
+       * 404-never-403 and the difference is deliberately not observable.
+       */
       reason?: string;
+      /** Present ONLY with `reason: "template-approval"` — the text to show. */
+      template?: { name?: string | null; instructions?: string | null } | null;
     }>;
     /** Interrupt the turn in flight. The session stays live and named. */
     pause?(
@@ -267,6 +336,26 @@ export interface DoplBridge {
       taskId: string,
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
+    /**
+     * RECORD THIS MACHINE'S FIRST-USE APPROVAL of another member's agent template
+     * (2026-08-22, OQ-3). Call it after the operator has read that template's instructions
+     * in the approval sheet, then relaunch.
+     *
+     * ⚠ IT GRANTS NOTHING BUT THE PROMPT. No tool, no permission axis, no delivery lane and
+     * no working folder: it decides only whether that template's TEXT may become an agent's
+     * role on this Mac. A launch from an approved template is contained exactly like any
+     * other launch.
+     * ⚠ MACHINE-LOCAL AND NEVER SERVER-REACHABLE, and that is the security content rather
+     * than a storage detail: a spawned session has `Bash` and the operator's credential is
+     * on disk, so a server-stored approval would let a credential-holding agent pre-approve
+     * itself across every machine they own. Same store, same rule and the same argument as
+     * the launch-over-MCP toggle (`main/channel-prefs.js`).
+     * ⚠ PER TEMPLATE, NOT PER AUTHOR: what the operator read and consented to was one body
+     * of instructions.
+     * ⚠ THE VERDICT IS RETURNED, NEVER SWALLOWED. An approval main did not store means the
+     * next launch asks again, which reads as a broken modal unless this side can say so.
+     */
+    approveTemplate?(templateId: string): Promise<{ ok: boolean; reason?: string }>;
     /** ⚠ Call after a thread DELETE succeeds (2026-08-22): drops every local trace of that
      *  thread's ended agents. Local history only — never a `channel_message`. */
     forgetThread?(

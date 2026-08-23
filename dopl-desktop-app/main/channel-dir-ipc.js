@@ -163,6 +163,50 @@ function register(opts = {}) {
     return { ok: true, on: channelPrefs.setAutoSend(p.channelId, p.on === true) };
   }));
 
+  // ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ────────
+  //
+  // MACHINE-WIDE, not per channel, so it takes no `channelId` and there is nothing to UUID-gate
+  // — the payload is a bare boolean and `=== true` is the whole validation. It is the one op
+  // pair in this file whose subject is the MACHINE rather than a channel; it lives here because
+  // this is the `appWindowOnly` surface and a second IPC module for two handlers would be a
+  // second place to forget the binding.
+  //
+  // ⚠ THIS PAIR IS THE **ONLY** WAY THE VALUE MOVES, AND THAT IS THE SECURITY PROPERTY. Read
+  // `main/channel-prefs.js`'s block before touching either: the toggle is the standing consent
+  // for another agent to spawn sessions on this Mac, and a spawned session has `Bash` plus this
+  // operator's device token on disk (§6). A server-reachable version of this setting would let
+  // an agent holding that credential arm the fleet with the operator's own authority. **Never
+  // add a route, an MCP op, a `workspace_settings` column or any other remotely-addressable
+  // writer for it.**
+  //
+  // ⚠ THE FAILURE DIRECTION OF A FORGED `set` IS THE ONLY REASON IT IS ON THIS BRIDGE AT ALL: a
+  // hostile page in an app window's top frame could enable the lane — the same authority the
+  // Settings row hands the operator, and no wider. It grants no tool, widens no posture and
+  // reaches no other machine; a directive-driven launch is exactly as contained as a button
+  // launch (same channel tool profile, same durable posture, same hard-deny set).
+  // ⚠ THE ANSWER IS MAIN'S OWN VALUE, NEVER AN ECHO OF THE REQUEST — the same rule
+  // `sessions:setMode` and `sessions:setModel` follow. `set` reports `{ok:false}` when the store
+  // did not end up holding what was asked for, which is what lets the SPA's optimistic toggle
+  // REVERT rather than show a switch nothing is enforcing.
+  // ⚠ AND BOTH REFUSAL SHAPES FAIL CLOSED AND ARE INDISTINGUISHABLE FROM A GENUINE "off": a
+  // rejected sender reads `{enabled:false}` / `{ok:false}`, exactly like a machine that has
+  // never enabled the lane. A hostile page learns nothing from the difference.
+  ipcMain.handle('orchestrator:getLaunchEnabled', appWindowOnly('getLaunchEnabled', { enabled: false }, () =>
+    ({ enabled: channelPrefs.getOrchestratorLaunch() })));
+  ipcMain.handle('orchestrator:setLaunchEnabled', appWindowOnly('setLaunchEnabled', { ok: false }, (_event, payload) => {
+    const want = (payload || {}).enabled === true;
+    const got = channelPrefs.setOrchestratorLaunch(want);
+    // ⚠ THE FLIP HAS TO REACH REALTIME, and it cannot be a value the socket reads later: a
+    // `postgres_changes` binding is fixed at JOIN time, so arming the lane REJOINS the
+    // per-workspace channels (`main/realtime.js › setDirectives`). Without this call the
+    // operator would turn the toggle on and nothing would subscribe until the next reconcile —
+    // a setting that appears to work and silently does not, for up to five minutes.
+    // ⚠ Lazy-required so this IPC module keeps loading in the harnesses, which stub `require`.
+    try { require('./launch-directives').refresh(); }
+    catch (err) { diag('orchestrator toggle: could not re-arm the directive lane —', err && err.message); }
+    return got === want ? { ok: true, enabled: got } : { ok: false, reason: 'store', enabled: got };
+  }));
+
   // ⚠ ONE REGISTRATION ENTRY POINT. The session + window ops take the SAME registry accessor
   // and the same binding; splitting the file did not split the wiring, because a second
   // `register(...)` in index.js would be a second place to forget `getSenderIds` — and an

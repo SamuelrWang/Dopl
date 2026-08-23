@@ -15,7 +15,7 @@
  * ⚠ THE SOURCE IS LOCAL RUNTIME STATE, NOT A TABLE (INVARIANTS §5).
  * `spa-bridge.ts › DesktopSessionSummary` over `sessions.summaries` /
  * `sessions.onSummaries`, projected by `dopl-desktop-app/main/session-summary.js`.
- * The server stores none of it: `session-state-push.js › rowFor` picks the
+ * The server stores none of it: `session-state-push.js › reportRow` picks the
  * `channel_sessions` columns by name and takes no metric.
  *
  * ⚠ DESKTOP-ONLY, AND SILENT-BUT-NOT-BLANK WITHOUT IT. `null` means "could not

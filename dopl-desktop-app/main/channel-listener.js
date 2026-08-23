@@ -13,14 +13,12 @@
 //
 // Auth is via forwarded Supabase cookies (see auth.js for why not a bearer). No renderer IPC.
 //
-// SPLIT NOTE (§2 refactor): this file was 914 lines. The I/O layer moved to
-// listener-io.js, targeting/handoff to targeting.js, and the notify→spawn→reply
-// pipeline to trigger.js; per-message dispatch (the ONE surviving route — the other
-// session-window routes are deleted,
-// classify, and the verdict outcomes) moved to listener-messages.js when Q10
-// needed one more line and this file was sitting exactly on the cap. What is
-// left is the long-poll loop, channel-set reconciliation, and the public
-// start/stop/restart/status/setHandlers surface.
+// SPLIT NOTE (§2 refactor): this file was 914 lines. The I/O layer moved to listener-io.js,
+// targeting/handoff to targeting.js, and the notify→spawn→reply pipeline to trigger.js;
+// per-message dispatch (the ONE surviving route — the other session-window routes are deleted,
+// classify, and the verdict outcomes) moved to listener-messages.js when Q10 needed one more line
+// and this file was sitting exactly on the cap. What is left is the long-poll loop, channel-set
+// reconciliation, and the public start/stop/restart/status/setHandlers surface.
 
 const { Notification } = require('electron');
 const auth = require('./auth');
@@ -368,17 +366,21 @@ function setStatus() {
   }
 }
 
-// Round C: the channels currently being watched, for the tray "Channel folders"
-// submenu (id + name only — never cursors/tokens/workspace internals). Sorted by
-// name for a stable menu.
+// Round C: the channels currently being watched, for the tray "Channel folders" submenu (id +
+// name only — never cursors/tokens/workspace internals). Sorted by name for a stable menu.
+// ⚠ IT IS A PROJECTION AND MUST STAY ONE — a caller needing a FIELD takes `watchedChannel` below.
 function listWatchedChannels() {
-  const out = [];
-  for (const entry of loops.values()) {
-    if (!entry || !entry.channel || !entry.channel.id) continue;
-    out.push({ id: entry.channel.id, name: entry.channel.name || 'Channel' });
-  }
-  out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  return out;
+  return [...loops.values()].filter((e) => e && e.channel && e.channel.id)
+    .map((e) => ({ id: e.channel.id, name: e.channel.name || 'Channel' }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+// MAIN'S OWN FULL RECORD for ONE watched channel — the server DTO `reconcile` stored on the loop
+// entry, and the same object `trigger.js` hands `targeting.resolveToolProfile` on the responder
+// lane, so the two launch lanes cannot disagree about one channel. ONE reader:
+// `session-ipc-ops.js › sessions:launch` (F-267). Unwatched -> null; that caller fails closed.
+function watchedChannel(channelId) {
+  return (loops.get(String(channelId || '')) || {}).channel || null;
 }
 
 // Register window-control callbacks (from index.js) used when a notification is
@@ -429,12 +431,11 @@ function start(statusCb, h) {
   setStatus();
 }
 
-// Re-run reconciliation now (e.g. right after a fresh sign-in).
-// Called on sign-in AND on sign-out (index.js `onSignedOut`), i.e. exactly when the
-// identity behind every cached lookup may have changed. channel-context caches a
-// channel's name + counterparty for a minute; without this, signing out and back in
-// as a DIFFERENT account could resolve the previous operator's channel identity for
-// up to that minute. Cheap, and the only caller `forget()` needs.
+// Re-run reconciliation now (e.g. right after a fresh sign-in). Called on sign-in AND on sign-out
+// (index.js `onSignedOut`), i.e. exactly when the identity behind every cached lookup may have
+// changed. channel-context caches a channel's name + counterparty for a minute; without this,
+// signing out and back in as a DIFFERENT account could resolve the previous operator's channel
+// identity for up to that minute. Cheap, and the only caller `forget()` needs.
 function restart() {
   try { require('./channel-context').forget(); } catch (_) { /* cache is optional */ }
   if (!running) { start(onStatus); return; }
@@ -450,9 +451,8 @@ function restart() {
 //      changed; beat now so the web shows the agent back online promptly).
 //   3. reconcile() to pick up channels joined while asleep — single-flight, so a
 //      resume+unlock double-fire coalesces onto one pass.
-// A wake left a loop mid-backoff is untouched (no awaitCtrl); it recovers on its
-// own capped-backoff schedule. Debounced by the caller (index.js) so rapid
-// resume/unlock pairs collapse.
+// A wake left a loop mid-backoff is untouched (no awaitCtrl); it recovers on its own capped-backoff
+// schedule. Debounced by the caller (index.js) so rapid resume/unlock pairs collapse.
 function wake() {
   if (!running) { start(onStatus); return; }
   for (const entry of loops.values()) {
@@ -496,4 +496,4 @@ function stop() {
   setStatus();
 }
 
-module.exports = { start, stop, restart, wake, status, setHandlers, listWatchedChannels };
+module.exports = { start, stop, restart, wake, status, setHandlers, listWatchedChannels, watchedChannel };

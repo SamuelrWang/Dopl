@@ -22,6 +22,8 @@
 // THE OPS HERE, and why each is bound:
 //
 //   sessions:launch          ⚠ STARTS a windowless session on my own thread
+//   sessions:approveTemplate records this machine's first-use approval of ANOTHER
+//                            member's agent template; starts nothing, grants no tool
 //   sessions:reopen          opens the AGENT WINDOW on a live session (starts no query)
 //   sessions:openAgentWindow (F-212) opens the AGENT window on one of my own agents
 //   sessions:setMode         moves a LIVE session's two permission axes — supervision, not
@@ -87,135 +89,37 @@ function register(opts = {}) {
     return fn(event, ...args);
   };
 
-  // NEW AGENT ON A THREAD (2026-08-20; SPAWN-IDLE and multi-agent since 2026-08-21). A
-  // WINDOWLESS requester-side session: the clicking human IS the consent (it is
-  // their own agent on their own thread — no row is raised), the message axis is
-  // floored at auto_inbound, and the OUT half is the channel's auto-send posture.
-  // UUID-gated channel; taskId must be a UUID too (first-class threads only —
-  // a legacy exchange has no thread to attach to). Fail shape: { ok: false }.
+  // NEW AGENT ON A THREAD — the operator's own Launch button, windowless and SPAWN-IDLE.
   //
-  // ⚠ TWO THINGS CHANGED ON 2026-08-21 (Samuel's rulings 2 and 3) AND BOTH ARE CONTRACT:
+  // ⚠ THE BODY LIVES IN `main/session-launch-op.js` SINCE 2026-08-22 (a §1 split; that file's
+  // header carries the argument and every comment that used to sit here). What stays HERE is
+  // the IPC SURFACE: the op name, the sender binding, and the refusal shape. The wrapper is
+  // written LITERALLY at the site, exactly like every other op in this file, because
+  // `test/channel-ipc-sender.test.mjs`'s structural belt reads that shape and a guard hidden
+  // inside a factory passes review while disarming the next op somebody adds.
   //
-  //   1. IT MINTS AN AGENT ID AND RETURNS IT — `{ ok: true, agentId }`. The id is the ADDRESS
-  //      of the thing just created: it names the pill, it is what a human @-mentions in the
-  //      thread to talk to THIS agent rather than its siblings, and it is the third argument
-  //      every other op here now takes. `sessionId` still rides along and is still an opaque
-  //      React key, never an address.
-  //   2. IT STARTS NOTHING. The session is registered IDLE with prepared context (channel,
-  //      thread, workspace, operator, posture) and NO first SDK turn: `query()` does not run
-  //      until the first inbound message for this agent arrives, at which point it launches
-  //      with the full framing plus that message. So the button is cheap, pressing it twice
-  //      genuinely gives you two agents, and an agent nobody talks to costs no `claude` child.
-  //      Ordinary idle timers apply from the spawn (`session-engine.js`).
-  //
-  // ⚠ `counterpartyId` IS OPTIONAL NOW and no longer refuses the launch. It used to be
-  // REQUIRED because it FENCED THE FEED — only that member's replies could reach the session.
-  // The fan-out ruling replaced that fence with the thread (`main/session-dispatch.js`), so
-  // demanding it here would refuse a legitimate spawn on a thread whose other party the caller
-  // has not resolved. It still rides through when known: it labels the outbound consent card.
-  //
-  // ⚠ AND `taskId` IS NULLABLE SINCE 2026-08-21 (Samuel's CHANNEL-LEVEL AGENT ruling) — `null`
-  // spawns an agent attached to the CHANNEL rather than to a thread. Its key is
-  // `<channelId>::<agentId>`: the same three-part key with an empty middle segment, so nothing
-  // about the slot, the state push or the resolution rules is special-cased. What differs is
-  // only its FEED SCOPE, and that falls out of the fan-out for free — an untagged main-room post
-  // resolves `firstClassTaskId(m) === ''`, so it reaches exactly the sessions whose own thread
-  // id is '' and no others.
-  //
-  // ⚠ `null` AND `''` ARE DIFFERENT REQUESTS THAT LAND ON THE SAME SCOPE, and both are accepted
-  // rather than one being normalised away at the boundary. `null` is the SPA asking for a
-  // channel-level agent; `''` is the legacy wire value for a responder whose exchange never
-  // became a first-class thread. They coincide because both see exactly the untagged main-room
-  // traffic — there is no third scope for them to disagree about — and refusing `''` here would
-  // refuse an older caller for no behavioural gain.
-  // ⚠ A SUPPLIED `taskId` MUST STILL BE A UUID: first-class threads only.
-  //
-  // ⚠ THERE IS NO `no-counterparty` REFUSAL ANY MORE, on this lane or any other. It was the
-  // consequence of the counterparty FENCING the feed; the fan-out replaced that fence with the
-  // thread, and a channel-level agent has no counterparty to resolve by construction.
-  ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, async (_event, payload) => {
-    const p = payload || {};
-    if (!isUuid(p.channelId)) return { ok: false };
-    const channelLevel = p.taskId == null || p.taskId === '';
-    if (!channelLevel && !isUuid(p.taskId)) return { ok: false };
-    const engine = require('./session-engine');
-    const channelPrefs = require('./channel-prefs');
-    const targeting = require('./targeting');
-    const listener = require('./channel-listener');
-    // ⚠ CONTAINMENT: the profile comes from MAIN's own watched-channel record
-    // (the server DTO), never the renderer's claim — a forged call must not
-    // widen it. An unwatched channel fails restrictive.
-    const watched = (listener.listWatchedChannels() || []).find((c) => c.id === p.channelId);
-    const toolProfile = watched ? targeting.resolveToolProfile(watched) : 'read_only';
-    const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
-    // ⚠ THE GOAL IS DISPLAY/SEED TEXT ONLY ON THIS LANE and is never sent as a turn — a
-    // SPAWN-IDLE session has no first turn at all. It survives because `startSession` still
-    // builds the initiating-request payload from it, and because a CHANNEL-LEVEL agent has no
-    // thread to be told to read.
-    const goal = channelLevel
-      ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
-      : title
-        ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.`
-        : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.';
-    const res = await engine.launchRequesterSession({
-      channelId: p.channelId,
-      // '' is the CHANNEL-LEVEL scope, not a missing value — see the block above.
-      taskId: channelLevel ? '' : p.taskId,
-      workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
-      goal,
-      counterpartyId: isUuid(p.counterpartyId) ? p.counterpartyId : null,
-      direct: p.direct === true,
-      context: {
-        channelName: typeof p.channelName === 'string' ? p.channelName.slice(0, 120) : '',
-        taskTitle: channelLevel ? null : (title || null),
-        channelId: p.channelId,
-        workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
-        taskId: channelLevel ? '' : p.taskId,
-        // ⚠ THE SCOPE THE FRAMING READS (2026-08-21). `prompt-framing.js` cannot infer
-        // "channel-level" from an absent thread id alone — a legacy responder also has none —
-        // so the launch that KNOWS states it.
-        scope: channelLevel ? 'channel' : 'thread',
-        workspaceSegment: typeof p.workspaceSegment === 'string' ? p.workspaceSegment : null,
-      },
-      toolProfile,
-      mode: 'interactive',
-      windowless: true,
-      // THE DURABLE POSTURE, CONSUMED HERE AND NOWHERE ELSE (2026-08-20).
-      // ⚠ `tools` was PINNED to 'manual' and the operator's Settings-tab pick was
-      // never read on this lane at all, so "Tools = Bypass" did nothing for the
-      // one launch shape the button in front of them starts. It is a real read
-      // now — and this is the ONLY call site, which is what keeps H2 intact: the
-      // click on Launch is the human decision this posture applies to, exactly
-      // like the consent Allow is the arm's. A peer wake, a resume and a
-      // recreate still pass nothing and still inherit manual/ask.
-      // ⚠ MESSAGES WIDENS, NEVER NARROWS, and it is floored at auto_inbound for
-      // the windowless reason (no Accept UI exists). Auto-send is the durable
-      // OUT switch; an auto_outbound / auto_both posture is a second way to say
-      // the same thing, so either turns the floor into auto_both — and neither
-      // can drop below it.
-      startModes: channelPrefs.launchStartModes(p.channelId),
-      // ⚠ THE CHANNEL'S CHOSEN MODEL (2026-08-22, Samuel's ruling), read through its OWN reader.
-      // `getLaunchModel` is deliberately not `getLaunchPosture`: that one has exactly ONE
-      // consumer and a census pins the count, because a second reader of the stored PERMISSION
-      // pair re-opens H2. A model grants nothing and reaches no gate, so it may travel further —
-      // and keeping the two readers apart is what makes that distinction checkable.
-      // The full id is converted to the argv-safe ALIAS here, because everything below this line
-      // speaks the alias vocabulary (`session-model.js` carries the two-list argument).
-      model: require('./session-model').aliasForModelId(channelPrefs.getLaunchModel(p.channelId)),
-      // ⚠ SPAWN IDLE (ruling 3): register, prepare the context, send NO first turn. The FIRST
-      // inbound message for this agent is what starts its query.
-      idle: true,
-      // ⚠ `operatorArmed` IS WHAT LETS THE DURABLE POSTURE REACH AN IDLE SPAWN. `startSession`'s
-      // FIX-4 guard refuses a handed-in posture on a `parkedShell` unless a human armed it just
-      // now — because a shell is normally woken by something that is NOT the approving human.
-      // Here the click on New Agent IS that human, in the same breath as the posture read, which
-      // is exactly the case the flag exists for. Nothing else on this surface sets it.
-      operatorArmed: true,
-    });
-    // THE ANSWER IS THE ADDRESS. `agentId` is present on every successful launch.
-    if (res && res.agentId) return { ok: true, agentId: res.agentId, sessionId: res.sessionId || null };
-    return { ok: false, reason: (res && res.skipped) || 'unknown' };
-  }));
+  // ⚠ IT RETURNS AN ADDRESS: `{ ok: true, agentId }`. It STARTS NOTHING — the session is
+  // registered idle and its query launches on the first message for that agent.
+  // ⚠ REFUSALS ON THIS LANE, as words the SPA renders: `cap`, `busy`, `no-sdk`, `auth-hold`,
+  // `disabled`, and since 2026-08-22 `no-template` (the picked template is gone or not visible)
+  // and `template-approval` (a FOREIGN template's first run on this machine needs one click).
+  // ⚠ `template-approval` IS AN IPC WORD ONLY. It is NOT a member of the
+  // `channel_launch_directives` refusal vocabulary and must not be added to it: the directive
+  // lane has no human at the keyboard and `orchestratorLaunchEnabled` stands in for the click
+  // there (OQ-3), so a directive can never produce it.
+  ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, (_event, payload) => (
+    require('./session-launch-op').launchFromButton(payload)
+  )));
+
+  // ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). It records a
+  // MACHINE-LOCAL decision and starts nothing; the renderer relaunches afterwards. It grants no
+  // tool, widens no axis and touches no containment input — it decides only whether a foreign
+  // template's TEXT may become an agent's role on this Mac. The store is unreachable from any
+  // Dopl endpoint, deliberately (`main/channel-prefs.js`): a server-writable approval lets a
+  // credential-holding agent pre-approve itself across every machine the operator owns.
+  ipcMain.handle('sessions:approveTemplate', appWindowOnly('sessions:approveTemplate', { ok: false }, (_event, payload) => (
+    require('./session-launch-op').approveTemplate(payload)
+  )));
 
   // FORGET EVERY LOCAL TRACE OF THIS THREAD'S ENDED AGENTS (2026-08-22, Samuel's ended-agent
   // ruling). The thread-delete cascade's desktop half.

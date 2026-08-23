@@ -62,6 +62,19 @@ export declare function opRead(client: DoplClient, ref: string, since?: number, 
  *
  * ⚠ The empty answer means "no live sessions being reported", never "you have
  * no sessions" — an asleep, signed-out, or older-build machine reports nothing.
+ *
+ * ⚠ AND THE SAME CAVEAT NOW APPLIES ROW BY ROW (2026-08-22). A row is a REPORT,
+ * not an observation: nothing on the server watches the machine, so a desktop
+ * that CRASHED leaves its last push standing and this op read it back as a live
+ * `working` forever. `channel-session-render.ts` hedges any row quiet longer
+ * than `SESSION_STALE_WINDOW_MS` into "last reported <state>" and the legend
+ * says what that means. The stamp is NOT a heartbeat, so the hedge is a hedge
+ * and never a claim the agent stopped.
+ *
+ * ⚠ THE TELEMETRY IS OPERATOR-ONLY, and this op is entitled to it because the
+ * server read is own-scoped — `GET /api/channels/sessions` maps through
+ * `collab-dto.ts › mapOwnSessionStateRow`. A peer's session reaches no surface
+ * in this file.
  */
 export declare function opReadSessions(client: DoplClient, ref?: string): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;

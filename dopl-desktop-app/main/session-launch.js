@@ -93,7 +93,7 @@ async function launch(a) {
     firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence
     // H2: the posture a HUMAN chose for THIS launch, and the only way one reaches a spawn.
     // `trigger.js` passes the arm it consumed on a consent-approved responder launch;
-    // `channel-dir-ipc.js › sessions:launch` passes the channel's durable posture. Anything
+    // `session-ipc-ops.js › sessions:launch` passes the channel's durable posture. Anything
     // that passes nothing inherits the reducer's manual/ask.
     // ⚠ `adoptsConsent` RODE HERE and is gone (F-228): it named the ONE spawn allowed to spend
     // the pre-consent card's entry-keyed arm, and there is no card.

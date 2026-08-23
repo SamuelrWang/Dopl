@@ -80,6 +80,7 @@ let client = null;
 let getToken = null;
 let getTokenInfo = null;
 let onInsertCb = null;
+let onDirectiveCb = null;
 let onHealthCb = null;
 let coalescer = null;
 let started = false;
@@ -113,6 +114,23 @@ const breaker = createBreaker({
   cooldownMs: REALTIME.BREAKER_COOLDOWN_MS,
 });
 const subs = new Map(); // wsId -> { channel, subscribed, resubTimer }
+
+// ── ⚠ THE SECOND POSTGRES_CHANGES BINDING (2026-08-22, the orchestrator launch lane) ────────
+//
+// `channel_launch_directives` INSERTs ride the SAME per-workspace WebSocket and the SAME
+// Realtime channel as `channel_messages` — a second `.on('postgres_changes', …)` before
+// `.subscribe()`, not a second socket and not a second breaker.
+//
+// ⚠ GATED ON THE OPERATOR'S LOCAL TOGGLE, AND THAT IS A BLAST-RADIUS DECISION AS MUCH AS A
+// CONSENT ONE. Supabase evaluates every binding at JOIN time, so a binding naming a table that
+// does not exist yet — a build newer than its project's migrations, the ordinary state of a dev
+// tree mid-wave — errors the WHOLE channel and `channel_messages` wakes die with it. Default-OFF
+// means almost every install never adds the binding and cannot be hurt by the lane's absence
+// server-side. A machine that HAS opted in and hits it DEGRADES rather than breaks: `onStatus`
+// marks the sub down, the breaker opens, and the loops fall back to the held long-poll exactly
+// as for any other subscribe failure.
+// ⚠ A BINDING CAN ONLY BE ADDED BEFORE `.subscribe()`, so a flip REBUILDS the joined channels.
+let bindDirectives = false;
 
 function subscribedCount() {
   let n = 0;
@@ -289,6 +307,23 @@ function onStatus(wsId, status, err) {
   emitHealth();
 }
 
+// ⚠ A DIRECTIVE FRAME IS **NOT** WAKE-ONLY — the one exception to the trust model at the top of
+// this file, named here rather than discovered. The doorbell rule holds for messages because the
+// woken loop refetches over the authed long-poll; a directive has no such refetch, the row IS
+// the message. So this module still reads NOTHING out of the payload: it hands `payload.new`
+// straight to `main/launch-directives.js`, which re-checks `operator_user_id` locally (the
+// filter is WORKSPACE-wide, so a colleague's frame arrives here too) and CLAIMS the row over an
+// authenticated route before acting on a field of it. **The claim is the authorization path;
+// this frame only makes it prompt.**
+function onDirective(wsId, payload) {
+  const row = payload && payload.new;
+  if (!row || !onDirectiveCb) return;
+  // The id PREFIX only — a directive carries a free-text goal, and this log is a support
+  // artifact. `launch-directives.js` owns what may be said about one.
+  diag('realtime directive', String(wsId).slice(0, 8), 'row', String(row.id || '').slice(0, 8));
+  try { onDirectiveCb(wsId, row); } catch (_) { /* one directive must not kill the socket */ }
+}
+
 function addChannel(wsId) {
   if (subs.has(wsId)) return;
   // Register BEFORE subscribing: a status callback that fires synchronously would
@@ -296,16 +331,25 @@ function addChannel(wsId) {
   // we get for a failed join.
   const entry = { channel: null, subscribed: false, resubTimer: null, lastReason: null, lastStatus: null };
   subs.set(wsId, entry);
-  entry.channel = client
+  let ch = client
     .channel(`dopl-desktop:${wsId}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'channel_messages', filter: `workspace_id=eq.${wsId}` },
       (payload) => onInsert(wsId, payload)
-    )
-    // Take BOTH callback args: realtime-js passes the join-error payload second,
-    // and dropping it is what made every failure read as a bare CHANNEL_ERROR.
-    .subscribe((status, err) => onStatus(wsId, status, err));
+    );
+  // ⚠ SECOND, AND ONLY WHEN THE OPERATOR HAS ARMED THE LANE — see `bindDirectives` above for
+  // why the gate is here and not in the handler.
+  if (bindDirectives) {
+    ch = ch.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'channel_launch_directives', filter: `workspace_id=eq.${wsId}` },
+      (payload) => onDirective(wsId, payload)
+    );
+  }
+  // Take BOTH callback args: realtime-js passes the join-error payload second,
+  // and dropping it is what made every failure read as a bare CHANNEL_ERROR.
+  entry.channel = ch.subscribe((status, err) => onStatus(wsId, status, err));
 }
 
 function removeChannel(wsId) {
@@ -395,8 +439,37 @@ function refreshAuth() {
     .catch((err) => diag('realtime refreshAuth error', err && err.message));
 }
 
+/**
+ * ARM OR DISARM the directive binding, and take the handler with it. One caller:
+ * `main/launch-directives.js`, at start and on every flip of the local toggle.
+ *
+ * ⚠ THE HANDLER RIDES HERE RATHER THAN IN `start()`'s OPTIONS, and it is the better shape as
+ * well as the only available one: the handler and the subscription that feeds it are armed by
+ * the SAME call, so neither can exist without the other. (`channel-listener.js`, which calls
+ * `start()`, sat at 499 lines against the hard 500-line §1 cap.) The message wake path is
+ * untouched.
+ *
+ * ⚠ IT REBUILDS THE JOINED CHANNELS — a `postgres_changes` binding can only be added BEFORE
+ * `.subscribe()`. One rejoin per workspace on a rare, operator-driven flip, and in exchange a
+ * machine that never opts in never names the table on the wire. Idempotent.
+ * ⚠ IT DOES NOT TOUCH THE BREAKER: a rejoin takes the same `onStatus` path as any other, so a
+ * flip on a project without the table degrades to the long-poll rather than failing loudly.
+ */
+function setDirectives(on, handler) {
+  const next = on === true;
+  onDirectiveCb = next && typeof handler === 'function' ? handler : null;
+  if (next === bindDirectives) return;
+  bindDirectives = next;
+  diag('realtime directives', next ? 'ARMED' : 'disarmed', '— rejoining', subs.size, 'ws');
+  if (!started || !client) return; // the next addChannel will read the new value
+  for (const wsId of Array.from(subs.keys())) { removeChannel(wsId); addChannel(wsId); }
+  emitHealth();
+}
+
 function stop() {
   started = false;
+  bindDirectives = false;
+  onDirectiveCb = null;
   for (const wsId of Array.from(subs.keys())) removeChannel(wsId);
   try { if (client) client.disconnect(); } catch (_) { /* best-effort */ }
   client = null;
@@ -413,9 +486,14 @@ module.exports = {
   start,
   stop,
   setWorkspaces,
+  setDirectives, // 2026-08-22: arm/disarm the launch-directive binding on the SAME per-ws WS
   refreshAuth,
   isHealthy,
   isWorkspaceHealthy,
   desiredCount: () => desiredWorkspaces.size, // Q4: the `want=` count reconcile self-heals on
+  // 2026-08-22: the workspaces push WANTS, for the directive backstop — it polls exactly the
+  // ones this module is trying and failing to keep a healthy sub on. A COPY, never the live Set:
+  // the reconcile owns membership and a caller must not be able to edit it.
+  desiredWorkspaceIds: () => [...desiredWorkspaces],
   snapshot: describeState,
 };

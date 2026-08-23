@@ -193,7 +193,7 @@ Full trace: composer "Request" mode → Send → `setSending(true)` dims the but
 3. Skill move-to-folder reverts to the old folder name for the whole round trip (`skill-view.tsx:506`).
 4. "Manage billing" success message renders in `text-danger` red (`plans-billing-core.tsx:192`).
 5. Get-started "Downloading {asset}" is hardcoded JSX bound to nothing — says "Downloading" forever if the download fails (`get-started-screen.tsx:79-84`).
-6. Overview stat row renders hard `0`s while loading, then jumps (`pages/overview/index.tsx:67`).
+6. ~~Overview stat row renders hard `0`s while loading, then jumps~~ — done (2026-08-22). The page was static constants when this was filed; wiring it put all three reads (`overview`, `overview-series`, the shared billing status) behind ONE `PageLoading` gate in `apps/desktop-ui/src/pages/overview/index.tsx › OverviewSurface`, so no figure paints before its payload.
 
 ### Stale-value toggles (disabled but showing old value through the await)
 ✅ **THE MEMBERS, CHANNELS AND CHATS ONES ARE DONE (2026-08-08).** A converted write patches the cache in `onMutate`, so the control shows the NEW value provisionally instead of the old one disabled — which is the whole difference this section was describing. Covered: member role select, team access level, resource scope control, chat pin star, channel visibility pill, share-scope pills, **team rename crumb/list row** (which additionally now RESETS the input on failure — it previously kept the rejected name on screen, the worst version of this bug because the operator cannot tell the write failed).

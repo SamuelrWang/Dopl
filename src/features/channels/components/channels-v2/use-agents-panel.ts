@@ -16,10 +16,12 @@
 import { useState } from "react";
 import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions";
 import {
+  approveTemplate,
   canLaunchAgents,
   launchAgentOnThread,
 } from "./agents-controls";
 import type { Channel, ChannelThread } from "../../types";
+import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 
 /**
  * `channel_sessions` is unpublished (INVARIANTS §7), so the peer projection polls.
@@ -64,7 +66,26 @@ const LAUNCH_REFUSALS: Record<string, string> = {
   // described the deleted session-window master switch and sent the operator
   // looking for a toggle that no longer exists.
   disabled: "The agent could not be started",
+  // ⚠ THE TEMPLATE PICKER'S OWN REFUSAL (2026-08-22). Main resolves the template
+  // ITSELF at spawn, so a template deleted — or narrowed out of this operator's
+  // visibility — between the picker row rendering and the click answers 404, and
+  // main REFUSES rather than degrading to a blank agent: the operator picked an
+  // IDENTITY, and an agent silently wearing none is worse than nothing because
+  // nobody notices for several turns. The endpoint deliberately cannot tell
+  // "deleted" from "invisible" (404-never-403), so neither can this copy.
+  "no-template": "That template is gone — reload the list",
 };
+
+/**
+ * ⚠ NOT A REFUSAL — A QUESTION, AND THE ONE WORD THIS MAP MUST NOT CARRY. Main
+ * answers it for the FIRST launch of another member's template on this machine,
+ * with `{ template: { name, instructions } }` for the approval modal to show
+ * verbatim (`agent-templates/components/template-approval.tsx`). Rendering
+ * "could not start the agent" underneath a modal that is asking permission would
+ * report the question as a failure, so `launchAgent` deliberately leaves
+ * `launchError` alone for this one word and hands the outcome back to the caller.
+ */
+export const LAUNCH_APPROVAL_REASON = "template-approval";
 
 export function launchRefusalText(reason: string | undefined): string {
   return (reason && LAUNCH_REFUSALS[reason]) || "Could not start the agent";
@@ -81,6 +102,13 @@ export function launchRefusalText(reason: string | undefined): string {
  * ⚠ `useAgentsPanel`'s return satisfies it STRUCTURALLY, so there is nothing to
  * keep in step: the page hands the panel down and the type checks it.
  */
+export interface AgentLaunchOutcome {
+  ok: boolean;
+  reason?: string;
+  /** Rides {@link LAUNCH_APPROVAL_REASON} only. Read tolerantly. */
+  template?: { name?: string | null; instructions?: string | null } | null;
+}
+
 export interface AgentLaunchControls {
   /** The bridge op exists on this build. Absent ⇒ offer no control at all. */
   canLaunch: boolean;
@@ -88,8 +116,29 @@ export interface AgentLaunchControls {
   /** The last refusal's copy, or null. ⚠ Never swallowed — a refusal is not a
    *  push, so the button's own surface is the only place it can be said. */
   launchError: string | null;
-  /** `null` starts a CHANNEL-LEVEL agent; a thread id starts one on it. */
-  launchAgent: (threadId: string | null) => Promise<void>;
+  /**
+   * `null` starts a CHANNEL-LEVEL agent; a thread id starts one on it.
+   *
+   * ⚠ `templateId` AND `overrides` ARE BOTH OPTIONAL AND THE ZERO-ARGUMENT CALL
+   * IS THE PINNED ONE (2026-08-22). `launchAgent(threadId)` still spawns a BLANK
+   * agent with a byte-identical payload, because that is what the New Agent
+   * button and the composer's Bot icon do in ONE CLICK and Samuel's channels-v2
+   * ruling is that they keep doing it. The picker is a second, adjacent control.
+   *
+   * ⚠ IT RETURNS THE OUTCOME NOW, and the reason is `template-approval`: that
+   * word needs a MODAL rather than a line of copy, and only the caller that
+   * opened the picker can own it. Every other refusal is still reported through
+   * {@link AgentLaunchControls.launchError}, so nothing has two places to look.
+   */
+  launchAgent: (
+    threadId: string | null,
+    templateId?: string | null,
+    overrides?: TemplateLaunchOverrides
+  ) => Promise<AgentLaunchOutcome>;
+  /** Store a first-use approval for a FOREIGN template, machine-locally.
+   *  ⚠ Feature-detected inside (`agents-controls.ts › approveTemplate`); an
+   *  older main answers `no-bridge` and the modal says so. */
+  approveTemplate: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 export function useAgentsPanel({
@@ -122,8 +171,16 @@ export function useAgentsPanel({
   const [launchBusy, setLaunchBusy] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
-  const launchAgent = async (threadId: string | null) => {
-    if (!channel || launchBusy) return;
+  const launchAgent = async (
+    threadId: string | null,
+    templateId?: string | null,
+    overrides?: TemplateLaunchOverrides
+  ): Promise<AgentLaunchOutcome> => {
+    // ⚠ A GUARDED CALL ANSWERS `busy` RATHER THAN `undefined`. The picker awaits
+    // this, and a silent early return would leave a row click looking exactly
+    // like a launch that succeeded and had not pushed yet — the same silence
+    // `LAUNCH_REFUSALS` exists to end.
+    if (!channel || launchBusy) return { ok: false, reason: "busy" };
     const thread = threadId ? (threads.find((t) => t.id === threadId) ?? null) : null;
     // My agent's counterparty is the thread's OTHER party — the target when I
     // asked, the asker when I was asked. A thread I'm not party to has none.
@@ -140,7 +197,7 @@ export function useAgentsPanel({
     // to return silently, the same blank screen a discarded `{ok:false}` gave.
     if (threadId !== null && !counterpartyId) {
       setLaunchError(launchRefusalText("no-counterparty"));
-      return;
+      return { ok: false, reason: "no-counterparty" };
     }
     setLaunchBusy(true);
     setLaunchError(null);
@@ -153,10 +210,19 @@ export function useAgentsPanel({
         threadTitle: thread?.title ?? null,
         counterpartyId,
         direct: channel.isDirect,
+        // ⚠ ABSENT, NOT `null`, WHEN THERE IS NO TEMPLATE — a blank launch must
+        // put the same object on the wire it always did, so the one-click path
+        // stays byte-identical to a main that has never heard of templates.
+        ...(templateId ? { templateId } : {}),
+        ...(overrides ? { overrides } : {}),
       });
-      if (!res.ok) setLaunchError(launchRefusalText(res.reason));
-      else refreshDesktopSessions?.();
+      // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
+      if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {
+        setLaunchError(launchRefusalText(res.reason));
+      }
+      if (res.ok) refreshDesktopSessions?.();
       void refetch();
+      return { ok: res.ok, reason: res.reason, template: res.template };
     } finally {
       setLaunchBusy(false);
     }
@@ -167,6 +233,12 @@ export function useAgentsPanel({
     canLaunch: canLaunchAgents(),
     launchBusy,
     launchAgent,
+    // ⚠ A THIN PASS-THROUGH ON PURPOSE. It stores nothing here and caches
+    // nothing here: the approval lives in the desktop's `electron-store`, and a
+    // renderer-side "already approved" memo would be exactly the fence the
+    // untrusted text is in a position to influence (`agents-controls.ts ›
+    // approveTemplate`).
+    approveTemplate,
     launchError,
     // Wave 3: the peer projection's re-read, handed to the page's `refetchAll` so
     // peer cards ride the `channel_messages` doorbell that is already paid for

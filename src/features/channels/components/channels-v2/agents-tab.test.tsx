@@ -26,12 +26,29 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+
+/**
+ * ⚠ THE TEMPLATE PICKER'S READ IS MOCKED because the tab MOUNTS the picker since
+ * 2026-08-22 — the split button's chevron. Its own cases live in
+ * `./agents-tab-launch.test.tsx` (split at the 500-line cap); this stub only
+ * keeps the tab renderable here.
+ */
+vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
+  useAgentTemplates: () => ({
+    templates: [],
+    loading: false,
+    error: null,
+    refetch: () => {},
+  }),
+}));
+
 import { AgentsTab } from "./agents-tab";
 import { ChannelsV2AgentPanel } from "./agent-panel";
 // ⚠ The control strip is its own module since 2026-08-22 (split at the 500-line
 // cap when the 1:1 composer landed in the panel); its copy travelled with it.
 import { AGENT_CONTROL_REFUSED } from "./agent-panel-controls";
-import { agentKey, agentsForChannel, formatTokens } from "./agents-model";
+import { agentKey, agentsForChannel } from "./agents-model";
+import { formatTokens } from "./agent-metrics";
 import { CHANNEL_ID, ME, message } from "./test-fixtures";
 
 afterEach(() => {

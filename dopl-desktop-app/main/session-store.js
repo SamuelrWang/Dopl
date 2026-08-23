@@ -99,13 +99,19 @@ function reloadDisposition(phase) {
   return isTerminalPhase(phase) ? 'ignore' : 'resume';
 }
 
-// A durable DISPLAY string: one line, whitespace collapsed, capped at 80 chars, or
+// A durable DISPLAY string: one line, whitespace collapsed, capped at `max` (80 by default), or
 // null when there is nothing usable. Same LENGTH/newline bound sanitizeName applies
 // (not its fence-token strip; these strings never enter a framed prompt, and every
 // framing path re-sanitizes on its own), so an identity field can never grow into a blob.
-function durableName(value) {
+// ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-23 (F-287/F-288), and 80 is a DISPLAY default rather
+// than a rule. A field that carries a real server bound passes it — `templateName` is an IDENTITY
+// bounded at 120 by `agent_templates_name_charset_check`, and clipping it to a display default
+// would persist a name no template has, which is the same defect `session-summary.js ›
+// displayText(value, max)` was parameterized to avoid on the wire half.
+function durableName(value, max) {
   if (typeof value !== 'string') return null;
-  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  const cap = typeof max === 'number' && max > 0 ? max : 80;
+  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, cap).trim();
   return s || null;
 }
 
@@ -157,6 +163,22 @@ function durableSessionRecord(rec) {
     counterpartyName: durableName(r.counterpartyName),
     channelName: durableName(r.channelName),
     taskTitle: durableName(r.taskTitle),
+    // 2026-08-23 (F-288) — THE TEMPLATE NAME, and it is whitelisted for a REPORTING reason rather
+    // than a header one. `context.template` is a spawn-time capture that lives only on the live
+    // session object; nothing on disk carried it, so `session-park.js › startResume` — a full
+    // re-`startSession`, unlike `resumeParked`, which works in place — rebuilt the context without
+    // it. `session-summary.js › liveSummary` then reported `templateName: null`, and `templateName`
+    // is in `session-telemetry.js › STATE_FIELDS`, so the null bypassed the cadence floor and
+    // ERASED `channel_sessions.template_name` on the next push, under a still-running agent whose
+    // orchestrator was reading that name to tell six agents apart.
+    // ⚠ THE NAME ALONE IS ENOUGH, and only the name is stored. `instructions` / `fields` /
+    // `knowledgeBases` are read by exactly one consumer — `prompt-framing-template.js ›
+    // templateRoleFraming`, through the one-shot `session-seed.js › takeFraming` — which a resume
+    // never runs (`session-engine.js` sets `freshFraming` false whenever `resumeSdkId` is present,
+    // and the SDK resume carries the original ROLE block anyway). Persisting the body would put
+    // another member's prompt text on disk to answer a question nobody asks after spawn.
+    // ⚠ 120, NOT THE 80 DEFAULT: this is an identity, bounded by the column's own CHECK.
+    templateName: durableName(r.templateName, 120),
     // FIX #9: the running cap counters, whitelisted so a P2 recreate rehydrates the
     // budget (a turn/cost-capped session must not reopen with a fresh cap). Coerced to a
     // finite number so a hand-edited store can never inject NaN into the reducer.

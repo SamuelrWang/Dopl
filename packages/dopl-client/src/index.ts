@@ -93,6 +93,8 @@ export type {
   ChannelMessagePosted,
   ChannelMessageKind,
   ChannelSessionState,
+  ChannelSessionStateOwn,
+  ChannelSessionTelemetry,
   ChannelThread,
   ChannelThreadCreated,
   ChannelThreadCreateInput,
@@ -100,9 +102,12 @@ export type {
   ChannelVisibility,
   MessageIntent,
   ReadMessagesOptions,
+  SessionDetailKey,
   SessionPillState,
   ThreadMode,
   ThreadOutcome,
+  WorkspaceAwaitResult,
+  WorkspaceChannelMessage,
   ThreadStatus,
 } from "./channel-types.js";
 export type {
@@ -122,3 +127,12 @@ export type {
   OntologySummary,
   OntologyTemplateField,
 } from "./ontology-types.js";
+
+// LAUNCH-OVER-MCP types — their own module since 2026-08-22 (`channel-types.ts`
+// hit the 500-line cap). ⚠ Re-exported here unchanged, so no consumer moved.
+export type {
+  LaunchDirective,
+  LaunchDirectiveCreateInput,
+  LaunchDirectiveCreated,
+  LaunchRefusalReason,
+} from "./launch-types.js";

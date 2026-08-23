@@ -39,6 +39,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         read_sessions: "read_sessions";
         create_thread: "create_thread";
         set_thread_mode: "set_thread_mode";
+        launch_agent: "launch_agent";
     }>;
     channel: z.ZodOptional<z.ZodString>;
     direct: z.ZodOptional<z.ZodBoolean>;
@@ -73,6 +74,10 @@ export declare const CHANNEL_INPUT_SHAPE: {
     handoff: z.ZodOptional<z.ZodBoolean>;
     thread: z.ZodOptional<z.ZodString>;
     since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+    goal: z.ZodOptional<z.ZodString>;
+    model: z.ZodOptional<z.ZodString>;
+    template: z.ZodOptional<z.ZodString>;
+    wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     timeout_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
 };

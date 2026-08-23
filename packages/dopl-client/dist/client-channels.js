@@ -72,8 +72,25 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     /** One page of a channel's threads, most recently active first, plus whether
      *  the server's ceiling clipped it. ⚠ Never re-sort the page — see
      *  `channel.ts › listChannelThreads`. */
+    /** WORKSPACE-WIDE long-poll — every channel the caller is a MEMBER of, one
+     *  cursor (`seq` is workspace-global). ⚠ Narrower than a channel READ: a public
+     *  channel the caller never joined is not watched. */
+    awaitWorkspaceMessages(opts) {
+        return channel.awaitWorkspaceMessages(this.transport, opts);
+    }
     listChannelThreads(channelId) {
         return channel.listChannelThreads(this.transport, channelId);
+    }
+    /** The caller's OWN sessions, telemetry included — own-scoped at the server. */
+    /** Ask the operator's OWN desktop to start an agent. ⚠ A REQUEST — the machine
+     *  may refuse with one of six words, and `offline: true` means nothing was
+     *  even filed. There is no operator argument, deliberately. */
+    createLaunchDirective(input) {
+        return channel.createLaunchDirective(this.transport, input);
+    }
+    /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */
+    getLaunchDirective(id) {
+        return channel.getLaunchDirective(this.transport, id);
     }
     listChannelSessions(channelId) {
         return channel.listChannelSessions(this.transport, channelId);

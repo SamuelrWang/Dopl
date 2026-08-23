@@ -42,6 +42,8 @@ import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
 import { activeAgentCount } from "./agents-model";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
+import type { AgentLaunchOutcome } from "./use-agents-panel";
+import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 import type { AuthorIndex } from "./view-model";
 import type {
   Channel,
@@ -123,6 +125,7 @@ export function ChannelsV2InfoPanel({
   launchBusy = false,
   launchError = null,
   onLaunchAgent,
+  onApproveTemplate,
   openAgent,
   onOpenAgent,
   mentions,
@@ -161,7 +164,16 @@ export function ChannelsV2InfoPanel({
   /** The last launch refusal's copy, or null. Passed through — the tab owns
    *  where it sits. */
   launchError?: string | null;
-  onLaunchAgent?: (threadId: string) => void;
+  /** ⚠ WIDENED FOR THE TEMPLATE PICKER (2026-08-22), and the one-argument call
+   *  is still what the New Agent button makes. Passed straight through — this
+   *  panel decides nothing about launches. */
+  onLaunchAgent?: (
+    threadId: string,
+    templateId?: string | null,
+    overrides?: TemplateLaunchOverrides
+  ) => Promise<AgentLaunchOutcome> | void;
+  /** Machine-local first-use approval for a foreign template. Passed through. */
+  onApproveTemplate?: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;
   /** `agentsModel › agentKey` of the agent whose view is open — read only to
    *  mark its card "Viewing". The panel itself renders at page level, over this
    *  column. */
@@ -279,6 +291,9 @@ export function ChannelsV2InfoPanel({
         <AgentsTab
           sessions={agentSessions}
           channelId={channel.id}
+          // The template picker's one input — off the channel this panel is
+          // already rendering, so no new prop reaches this component for it.
+          workspaceId={channel.workspaceId}
           openThreadId={openThreadId}
           members={members}
           currentUserId={index.currentUserId}
@@ -287,6 +302,7 @@ export function ChannelsV2InfoPanel({
           launchBusy={launchBusy}
           launchError={launchError}
           onLaunchAgent={onLaunchAgent}
+          onApproveTemplate={onApproveTemplate}
           openAgent={openAgent}
           onOpenAgent={onOpenAgent}
         />
