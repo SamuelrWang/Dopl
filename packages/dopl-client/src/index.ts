@@ -8,9 +8,11 @@ export {
   DoplNetworkError,
   DoplTimeoutError,
 } from "./errors.js";
+export { isStandardWorkspace } from "./types.js";
 export type {
   BuildResult,
   CreditConsumeResponse,
+  WorkspaceKind,
   WorkspaceRole,
   WorkspaceSummary,
   WorkspaceListItem,
@@ -94,6 +96,7 @@ export type {
   ChannelMessageKind,
   ChannelSessionState,
   ChannelSessionStateOwn,
+  ChannelSessionsPage,
   ChannelSessionTelemetry,
   ChannelThread,
   ChannelThreadCreated,

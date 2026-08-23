@@ -34,8 +34,16 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       "channelId",
     ]);
     const ctx = buildChannelContext(auth);
-    const sessions = await listSessionStates(ctx, query.channelId);
-    return NextResponse.json({ sessions });
+    // ⚠ `operatorOnline` IS ADDITIVE AND RIDES BESIDE THE ROWS (2026-08-23,
+    // F-294): the caller's own `agent_presence` freshness, so the MCP render can
+    // tell an idle-but-alive agent from a desktop that died. An older client
+    // ignores the key; an older SERVER omits it, which the render reads as
+    // "not reported" and hedges exactly as it did before.
+    const { sessions, operatorOnline } = await listSessionStates(
+      ctx,
+      query.channelId
+    );
+    return NextResponse.json({ sessions, operatorOnline });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

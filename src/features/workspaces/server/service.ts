@@ -6,7 +6,7 @@ import type {
   WorkspaceWithRole,
   Role,
 } from "../types";
-import { meetsMinRole } from "../types";
+import { isStandardWorkspace, meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
 import { touchLastSeen } from "./last-seen";
 import { seedNewWorkspace } from "./seed-workspace";
@@ -120,12 +120,18 @@ export async function resolveMembershipOrThrow(
  *   1. `X-Workspace-Id` header (or export `?workspaceId=`, threaded as
  *      `headerWorkspaceId`) — UUID only. Blank or non-UUID → 400
  *      `WORKSPACE_INVALID`, never coerced to "no header".
- *   2. No header → the caller's ACTIVE memberships
+ *   2. No header → the caller's ACTIVE STANDARD memberships
  *      (`listWorkspacesWithRoleForUser`), ONE query powering count,
  *      auto-target and the 400 body:
  *        - exactly 1 → auto-target (role from the same lookup);
  *        - 0 → 400 `WORKSPACE_REQUIRED`, `workspaces: []`;
  *        - 2+ → 400 `WORKSPACE_REQUIRED` listing {name, slug, role}.
+ *
+ * ⚠ `kind='link'` containers are NOT candidates and are NOT listed: a user with
+ * one standard workspace and N home-channel links still auto-targets their
+ * standard one, and a link-only user gets WORKSPACE_REQUIRED exactly as a
+ * membership-less user does today. Reaching a link workspace is an EXPLICIT
+ * act — step 1's header (or `workspace=`), which stays unfiltered.
  *
  * ⚠ NEVER use `findDefaultWorkspaceForUser` here — oldest-OWNED only
  * (billing-webhook legacy), which diverges from membership. The API-key
@@ -146,7 +152,9 @@ export async function resolveActiveWorkspace(
     return resolveMembershipOrThrow(trimmed, userId);
   }
 
-  const memberships = await listWorkspacesWithRoleForUser(userId);
+  const memberships = (await listWorkspacesWithRoleForUser(userId)).filter(
+    isStandardWorkspace
+  );
   if (memberships.length === 1) {
     return resolveMembershipOrThrow(memberships[0].id, userId);
   }
@@ -208,7 +216,15 @@ export async function renameDefaultWorkspaceIfUntitled(
   return updateWorkspace(workspace.id, patch);
 }
 
-/** The caller's workspaces, each row carrying their role. */
+/**
+ * The caller's workspaces, each row carrying their role and (once the column
+ * exists) its `kind`.
+ *
+ * ⚠ UNFILTERED, deliberately: the desktop main process discovers home channels
+ * by fanning over `GET /api/workspaces`, so dropping `kind='link'` here would
+ * stop home-channel agents waking. Filtering is the CONSUMER's job — every
+ * user-facing list runs the rows through `isStandardWorkspace`.
+ */
 export async function listMyWorkspacesWithRole(
   userId: string
 ): Promise<WorkspaceWithRole[]> {

@@ -55,6 +55,13 @@ export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-
  */
 export interface LaunchDirective {
     id: string;
+    /**
+     * The operator whose machine was asked — **always your own id** (2026-08-23).
+     * The read is fenced on it server-side, so it echoes the caller back rather
+     * than telling you anything new. It exists because the desktop re-checks
+     * ownership locally before it acts on a directive.
+     */
+    operatorUserId: string;
     channelId: string;
     threadId: string | null;
     goal: string | null;

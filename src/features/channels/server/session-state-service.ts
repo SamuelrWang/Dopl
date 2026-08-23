@@ -6,9 +6,34 @@ import {
   mapPeerSessionStateRow,
   type SessionStateUpsert,
 } from "./collab-dto";
+import * as collab from "./repository-collab";
 import * as sessionRepo from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
 import { loadVisibleChannel } from "./service-shared";
+
+/**
+ * THE OWN-SCOPED SESSION READ'S WHOLE ANSWER — the rows, AND whether the machine
+ * that would have written them is still there (2026-08-23, F-294).
+ *
+ * ⚠ **THE SECOND FIELD EXISTS BECAUSE THE FIRST ONE CANNOT ANSWER "IS IT ALIVE".**
+ * `channel_sessions` is pushed on state CHANGE, so an idle-but-alive agent and a
+ * crashed desktop produce the SAME quiet row, and the MCP render had to hedge
+ * both as "may be offline" — a lie about the idle one, told within ~2 minutes.
+ * `agent_presence` DOES beat unconditionally (~120/hr, `main/presence.js`), so
+ * joining it here separates the two without touching the push contract and
+ * without a single new write. ⚠ **The renderer must never re-derive freshness
+ * from a stamp of its own** — see the boolean note in {@link listSessionStates}.
+ * ⚠ **IT IS PER-(USER, WORKSPACE), NOT PER-MACHINE**, exactly like the
+ * `launch_agent` pre-check (`service-launch.ts › operatorIsOnline`), so it can
+ * only ever soften a hedge into "unchanged" and never harden one into a claim.
+ */
+export interface OwnSessionsReport {
+  sessions: ChannelSessionStateOwn[];
+  /** ⚠ `false` covers no row, no stamp and an unreadable stamp alike. The
+   *  "not reported" case is the WIRE KEY being absent, which is the routes'
+   *  fail-soft branch — never a `false` here. */
+  operatorOnline: boolean;
+}
 
 /**
  * SESSION-STATE SERVICE — the read half of "what is flint doing?" over MCP. A
@@ -44,16 +69,28 @@ import { loadVisibleChannel } from "./service-shared";
 export async function listSessionStates(
   ctx: ChannelContext,
   channelId?: string
-): Promise<ChannelSessionStateOwn[]> {
-  const rows = await sessionRepo.listSessionStates(
-    ctx.userId,
-    ctx.workspaceId,
-    channelId
-  );
-  // ⚠ THE OWN MAPPER, and the licence for it is the `ctx.userId` fence one line
-  // up — not this function's name. Every row here belongs to the caller's own
-  // machine, which is the only condition under which telemetry may be rendered.
-  return rows.map(mapOwnSessionStateRow);
+): Promise<OwnSessionsReport> {
+  // ⚠ **CONCURRENT, AND BOTH READS ARE THE CALLER'S OWN.** The presence lookup is
+  // a PK hit on a tiny table (`repository-collab.ts › presenceForUser`), so this
+  // adds latency only if it is serialized behind the session read — which on the
+  // await route would be one extra round trip on the one path the feature's whole
+  // egress budget is written around.
+  const [rows, presence] = await Promise.all([
+    sessionRepo.listSessionStates(ctx.userId, ctx.workspaceId, channelId),
+    collab.presenceForUser(ctx.userId, ctx.workspaceId),
+  ]);
+  return {
+    // ⚠ THE OWN MAPPER, and the licence for it is the `ctx.userId` fence one line
+    // up — not this function's name. Every row here belongs to the caller's own
+    // machine, which is the only condition under which telemetry may be rendered.
+    sessions: rows.map(mapOwnSessionStateRow),
+    // ⚠ A BOOLEAN, NOT THE STAMP. The stamp is the operator's own so nothing
+    // leaks, but it is also a second liveness number on the wire that a client
+    // could re-derive against a window of its own — which is exactly the drift
+    // `SESSION_STALE_WINDOW_MS`'s duplicate-plus-pin exists to prevent. The
+    // SERVER owns the window; the wire carries the answer.
+    operatorOnline: presence?.online === true,
+  };
 }
 
 /**

@@ -4,7 +4,7 @@ import {
   resolveActiveWorkspace,
   WorkspaceResolutionError,
 } from "@/features/workspaces/server/service";
-import type { Role } from "@/features/workspaces/types";
+import type { Role, WorkspaceKind } from "@/features/workspaces/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
 import { readAppVersionHeader } from "./app-version-header";
@@ -30,6 +30,14 @@ export interface WorkspaceAuthContext {
   workspaceId: string;
   workspaceSlug: string;
   workspacePublicId: string;
+  /**
+   * `link` = a hidden home-channel container, which has no plan of its own.
+   * FREE — the resolver already read the row. Absent = "standard" (the column
+   * is written-not-applied); read it through
+   * `features/workspaces/types.ts › isStandardWorkspace`, never by hand. Routing
+   * / billing hint, NEVER an authz signal — membership is what grants access.
+   */
+  workspaceKind?: WorkspaceKind;
   role: Role;
   /**
    * Recognized `X-Dopl-Runtime` (`desktop-session` | `desktop-ui`), else
@@ -175,6 +183,7 @@ export function withWorkspaceAuth(
         workspaceId: workspace.id,
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,
+        workspaceKind: workspace.kind,
         role: membership.role,
         // ⚠ Header CLAIM bounded by the presenting credential: an agent token
         // can never buy the `desktop-ui` stamp (runtime-header.ts).

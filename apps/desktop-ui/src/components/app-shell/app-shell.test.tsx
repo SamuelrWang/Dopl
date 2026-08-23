@@ -147,6 +147,41 @@ describe("app shell", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  // ⚠ `GET /api/workspaces` is UNFILTERED and now answers with the account
+  // surface's `kind='link'` CONTAINERS — one per relationship, and the caller is
+  // a member of every one. A rail that showed them would list plumbing.
+  it("keeps link containers out of the rail and the switcher", async () => {
+    const inner = sendRequest.getMockImplementation()!;
+    sendRequest.mockImplementation((req: { path: string; body?: unknown }) =>
+      req.path === "/api/workspaces"
+        ? Promise.resolve(
+            ok({
+              workspaces: [
+                { ...WORKSPACE, role: "owner" },
+                {
+                  ...WORKSPACE,
+                  id: "ws-link-1",
+                  name: "Priya Shah",
+                  slug: "link-priya",
+                  publicId: "aa11bb",
+                  kind: "link",
+                  role: "member",
+                },
+              ],
+            })
+          )
+        : inner(req)
+    );
+
+    renderShell("/acme-ab12cd/overview");
+
+    await screen.findByText("page body");
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Priya Shah" })
+    ).not.toBeInTheDocument();
+  });
+
   it("rewrites a stale segment to the canonical one, keeping the page", async () => {
     const router = renderShell("/acme/overview");
 

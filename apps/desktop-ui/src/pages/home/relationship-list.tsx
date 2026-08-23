@@ -1,63 +1,57 @@
-import { useMemo, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
-import type { HomeChannel } from "./mock";
-
-type Filter = "all" | "needs-you" | "links";
+import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { peerLabel, type HomeFilter, type HomeRow } from "./home-rows";
 
 /**
  * Home's left pane — the RELATIONSHIP list. Deliberately not the workspace
  * channels tree: one flat list of people, filterable, no sections to manage.
+ *
+ * ⚠ IT RENDERS `rows`, IT DOES NOT FILTER THEM. The page owns the filter state
+ * and the filtered set, because the RECORD PANE resolves its selection from the
+ * same set — filtering privately here let the pane fall back to a row the list
+ * was no longer showing, so typing into search left a stranger's card open.
  */
 export function RelationshipList({
-  channels,
+  rows,
+  linkCount,
   selectedId,
   onSelect,
-  query,
+  filter,
+  onFilterChange,
 }: {
-  channels: HomeChannel[];
-  selectedId: string;
+  /** Already filtered — the page's `visibleRows`. */
+  rows: HomeRow[];
+  /** Counted over ALL rows, so the tab's badge does not shrink as you type. */
+  linkCount: number;
+  selectedId: string | null;
   onSelect: (id: string) => void;
-  /** Lives in the page header's search bar, beside New link. */
-  query: string;
+  filter: HomeFilter;
+  onFilterChange: (filter: HomeFilter) => void;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
-
-  const needsYou = channels.filter((c) => c.status === "needs-you").length;
-  const pending = channels.filter((c) => c.status === "pending").length;
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return channels.filter((c) => {
-      if (filter === "needs-you" && c.status !== "needs-you") return false;
-      if (filter === "links" && c.status !== "pending") return false;
-      if (!q) return true;
-      return (c.name + " " + c.context).toLowerCase().includes(q);
-    });
-  }, [channels, filter, query]);
+  const visible = rows;
 
   return (
     <div className="flex w-[290px] shrink-0 flex-col">
-      <div className="flex flex-col gap-2.5 px-4 pt-1 pb-2.5">
-        <SegmentedControl<Filter>
+      <div className="flex flex-col gap-2.5 px-4 pb-2.5 pt-1">
+        <SegmentedControl<HomeFilter>
           options={[
             { key: "all", label: "All" },
-            { key: "needs-you", label: "Needs you", count: needsYou },
-            { key: "links", label: "Links", count: pending },
+            { key: "links", label: "Links", count: linkCount },
           ]}
           value={filter}
-          onChange={setFilter}
+          onChange={onFilterChange}
         />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-3">
-        {visible.map((c) => (
+        {visible.map((row) => (
           <RelationshipRow
-            key={c.id}
-            channel={c}
-            selected={c.id === selectedId}
-            onSelect={() => onSelect(c.id)}
+            key={row.id}
+            row={row}
+            selected={row.id === selectedId}
+            onSelect={() => onSelect(row.id)}
           />
         ))}
         {visible.length === 0 && (
@@ -71,15 +65,26 @@ export function RelationshipList({
 }
 
 function RelationshipRow({
-  channel,
+  row,
   selected,
   onSelect,
 }: {
-  channel: HomeChannel;
+  row: HomeRow;
   selected: boolean;
   onSelect: () => void;
 }) {
-  const pending = channel.status === "pending";
+  const pending = row.kind === "link";
+  const name =
+    row.kind === "relationship" ? peerLabel(row.relationship) : (row.link.label ?? "Link");
+  const subline =
+    row.kind === "relationship"
+      ? (row.relationship.peer.email ?? "")
+      : row.link.url;
+  const lastLine =
+    row.kind === "relationship"
+      ? (row.relationship.lastMessagePreview ?? "No messages yet")
+      : "Not yet claimed";
+
   return (
     <button
       type="button"
@@ -95,12 +100,16 @@ function RelationshipRow({
       )}
     >
       <Avatar
-        person={{
-          userId: channel.id,
-          email: channel.email,
-          displayName: channel.name,
-          avatarUrl: null,
-        }}
+        person={
+          row.kind === "relationship"
+            ? {
+                userId: row.relationship.peer.userId,
+                email: row.relationship.peer.email,
+                displayName: row.relationship.peer.displayName,
+                avatarUrl: row.relationship.peer.avatarUrl,
+              }
+            : { userId: row.id, email: null, displayName: name, avatarUrl: null }
+        }
         size="sm"
         className={cn(pending && "opacity-55")}
       />
@@ -112,34 +121,22 @@ function RelationshipRow({
               pending ? "text-text-secondary" : "text-text-primary"
             )}
           >
-            {channel.name}
+            {name}
           </span>
           <span className="shrink-0 text-micro text-text-muted">
-            {channel.lastTime}
+            {formatChannelTimestamp(row.at)}
           </span>
         </span>
         <span className="block truncate text-caption text-text-muted">
-          {channel.context}
+          {subline}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5">
-          {channel.status === "needs-you" && (
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
-          )}
           {pending && (
             <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 text-micro font-medium text-text-secondary">
               Link out
             </span>
           )}
-          <span
-            className={cn(
-              "truncate text-caption",
-              channel.status === "needs-you"
-                ? "font-medium text-text-secondary"
-                : "text-text-muted"
-            )}
-          >
-            {channel.lastLine}
-          </span>
+          <span className="truncate text-caption text-text-muted">{lastLine}</span>
         </span>
       </span>
     </button>

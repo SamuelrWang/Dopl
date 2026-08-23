@@ -168,6 +168,15 @@ describe("H-3 write-gate coverage", () => {
         // DELETE below carries. ⚠ Per-METHOD: GET and the set-mode PATCH on that
         // file stay ungated.
         "channels/[channelId]/tasks/[taskId]/route.ts",
+        // HOME CHANNELS (2026-08-23), same credential class as
+        // `workspaces/[workspaceSlug]/join-link` above: POST mints the claim
+        // URL, DELETE revokes it, and the claim SPENDS one — the outcome of
+        // which is a workspace membership. GET on the links file stays ungated
+        // (`sessionOnly` is per-method), so an agent can still read the
+        // caller's own pending links.
+        "home/link/[token]/claim/route.ts",
+        "home/links/[linkId]/route.ts",
+        "home/links/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
         "oauth/grants/[id]/route.ts",

@@ -45,6 +45,11 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "resolve",
   "invite",
   "join",
+  // Home-channel claim links (2026-08-23): `/link/{token}` is a top-level
+  // route, and `/link/` is already in `shared/auth/public-routes.ts ›
+  // PUBLIC_ROUTES`. A workspace slugged "link" would be silently shadowed by
+  // it, exactly as one slugged "join" would.
+  "link",
   "login",
   "mcp",
   "oauth",

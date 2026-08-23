@@ -84,6 +84,10 @@ const RESERVED_TOP_LEVEL = new Set([
   "get-started",
   "invite",
   "join",
+  // `/link/{token}` — the home-channel claim page. Same class as `invite`/`join`:
+  // a token-bearing entry route, and retiring it would send every claim to the
+  // download page.
+  "link",
   "login",
   "oauth",
   "pricing",

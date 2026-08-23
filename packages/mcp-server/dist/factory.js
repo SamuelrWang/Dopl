@@ -9,6 +9,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = exports.createServer = void 0;
 exports.bootServer = bootServer;
+const client_1 = require("@dopl/client");
 const server_js_1 = require("./server.js");
 const identity_js_1 = require("./tools/identity.js");
 var server_js_2 = require("./server.js");
@@ -55,6 +56,9 @@ async function bootServer(client, opts = {}) {
     // Session default: an X-Workspace-Id pin naming a membership wins; else
     // exactly one membership auto-targets; else ⚠ NO transport default — the
     // wrapper demands `workspace=` per call, so no header-less loopback fires.
+    // ⚠ Only STANDARD memberships can auto-target: a home-channel container must
+    // never become the workspace a no-arg tool call silently lands in. A PIN is
+    // explicit addressing and still matches the full directory.
     const pin = client.getWorkspaceId();
     let active = null;
     let source = null;
@@ -69,8 +73,9 @@ async function bootServer(client, opts = {}) {
             diag(`[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${directoryLoadFailed ? " (directory load had failed)" : ""}; ignoring it and resolving from memberships`);
         }
     }
-    if (!active && directory.length === 1) {
-        active = directory[0];
+    const listable = directory.filter(client_1.isStandardWorkspace);
+    if (!active && listable.length === 1) {
+        active = listable[0];
         source = "sole membership";
     }
     // ⚠ Clear an unresolved constructor pin so loopback calls never carry a bogus

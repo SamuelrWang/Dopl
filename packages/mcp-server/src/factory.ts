@@ -6,6 +6,7 @@
  * orphan-skill cleanup) in `index.ts`.
  */
 
+import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
@@ -112,6 +113,9 @@ export async function bootServer(
   // Session default: an X-Workspace-Id pin naming a membership wins; else
   // exactly one membership auto-targets; else ⚠ NO transport default — the
   // wrapper demands `workspace=` per call, so no header-less loopback fires.
+  // ⚠ Only STANDARD memberships can auto-target: a home-channel container must
+  // never become the workspace a no-arg tool call silently lands in. A PIN is
+  // explicit addressing and still matches the full directory.
   const pin = client.getWorkspaceId();
   let active: WorkspaceListItem | null = null;
   let source: "header pin" | "sole membership" | null = null;
@@ -129,8 +133,9 @@ export async function bootServer(
       );
     }
   }
-  if (!active && directory.length === 1) {
-    active = directory[0];
+  const listable = directory.filter(isStandardWorkspace);
+  if (!active && listable.length === 1) {
+    active = listable[0];
     source = "sole membership";
   }
   // ⚠ Clear an unresolved constructor pin so loopback calls never carry a bogus

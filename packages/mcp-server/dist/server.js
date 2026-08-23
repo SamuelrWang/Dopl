@@ -22,6 +22,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildInstructions = void 0;
 exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
+const client_1 = require("@dopl/client");
 const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
 const chats_js_1 = require("./tools/chats.js");
@@ -72,6 +73,7 @@ function createServer(client, options = {}) {
         directory: options.directory,
         directoryLoadFailed: options.directoryLoadFailed,
     });
+    const listableDirectory = (options.directory ?? []).filter(client_1.isStandardWorkspace);
     const server = new mcp_js_1.McpServer({
         name: "dopl",
         // ⚠ Source of truth is package.json via version.ts, so the MCP handshake
@@ -80,7 +82,10 @@ function createServer(client, options = {}) {
     }, {
         // ⚠ Thread the boot-resolved pin so a 2+-membership connection with a pin
         // is told the pin IS its default, not "pass workspace= on every call".
-        instructions: (0, instructions_js_1.buildInstructions)(options.directory ?? [], {
+        // ⚠ LISTABLE directory only — the targeting table an agent reads must not
+        // advertise `kind='link'` home-channel containers. The full directory
+        // still seeds the cache above, so `workspace=<link>` resolves.
+        instructions: (0, instructions_js_1.buildInstructions)(listableDirectory, {
             pin: options.workspaceSource === "header pin" && options.workspace
                 ? { name: options.workspace.name, slug: options.workspace.slug }
                 : null,

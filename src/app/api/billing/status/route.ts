@@ -7,6 +7,9 @@ import { getWorkspaceBillingStatus } from "@/features/billing/server/status-serv
  * renders, including the MCP credit meter. Any active member may read. Payload assembled by
  * `billing/server/status-service.ts`.
  */
-export const GET = withWorkspaceAuth(async (_request, { workspaceId }) =>
-  NextResponse.json(await getWorkspaceBillingStatus(workspaceId))
+export const GET = withWorkspaceAuth(
+  async (_request, { workspaceId, workspaceKind, userId }) =>
+    NextResponse.json(
+      await getWorkspaceBillingStatus(workspaceId, { userId, workspaceKind })
+    )
 );

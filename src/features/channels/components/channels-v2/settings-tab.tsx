@@ -66,6 +66,15 @@ export interface ChannelsV2SettingsTabProps {
    * off a label.
    */
   agent?: ReactNode;
+  /**
+   * Whether this container's membership can CHANGE (`channel-surface.tsx ›
+   * ChannelSurfaceCapabilities`). Default `true`. `false` drops the invite row
+   * AND the delete row — NO DEAD ROWS is the rule this section already keeps,
+   * and "Add members" in a fixed two-person container is the deadest of them.
+   * Delete goes with it because the container's one channel is not the caller's
+   * to remove; see `canDelete` below.
+   */
+  memberManagement?: boolean;
   onInvite: () => void;
   onToggleVisibility: () => void;
   onToggleArchive: () => void;
@@ -83,6 +92,7 @@ export function ChannelsV2SettingsTab({
   channel,
   canManage,
   agent,
+  memberManagement = true,
   onInvite,
   onToggleVisibility,
   onToggleArchive,
@@ -90,7 +100,7 @@ export function ChannelsV2SettingsTab({
   onRequestLeave,
 }: ChannelsV2SettingsTabProps) {
   // A DM is a fixed 1:1 pair — no invite affordance (the server also rejects).
-  const canInvite = channel.isMember && !channel.isDirect;
+  const canInvite = memberManagement && channel.isMember && !channel.isDirect;
   // A DM is always private (immutable), so it has no visibility toggle.
   const canToggleVisibility = canManage && !channel.isDirect;
   // The non-owner's exit. A DM must NEVER offer "Leave channel": leaving deletes
@@ -98,7 +108,13 @@ export function ChannelsV2SettingsTab({
   // is what destroys the conversation permanently. Both DM participants get the
   // reversible "Delete conversation" instead.
   const canLeave = channel.isMember && !canManage && !channel.isDirect;
-  const canDelete = canManage || (channel.isMember && channel.isDirect);
+  // ⚠ `memberManagement: false` KILLS DELETE TOO, not just invite. In a fixed
+  // two-person container the channel IS the relationship: deleting it leaves a
+  // container whose relationship can no longer be rendered by either side, and
+  // the host's own list still holds the row. NO DEAD ROWS, and this one was
+  // worse than dead — it worked.
+  const canDelete =
+    memberManagement && (canManage || (channel.isMember && channel.isDirect));
 
   const hasActions = canInvite || canToggleVisibility || canManage || canDelete || canLeave;
 

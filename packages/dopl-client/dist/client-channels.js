@@ -92,6 +92,9 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     getLaunchDirective(id) {
         return channel.getLaunchDirective(this.transport, id);
     }
+    /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`
+     *  rides beside the rows because presence is a fact about the MACHINE, not
+     *  about any one session. See `channel-types.ts › ChannelSessionsPage`. */
     listChannelSessions(channelId) {
         return channel.listChannelSessions(this.transport, channelId);
     }

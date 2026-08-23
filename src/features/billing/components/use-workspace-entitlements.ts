@@ -30,6 +30,10 @@ export interface WorkspaceCreditsStatus {
   remaining: number;
   periodStart: string;
   periodEnd: string;
+  /** Present only when the zeroes were NOT measured — a link container whose
+   *  caller has no billing workspace runs unmetered
+   *  (`server/credits-service.ts › unmetered`). */
+  degraded?: true;
 }
 
 export interface WorkspaceEntitlementsStatus {

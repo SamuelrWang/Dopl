@@ -19,7 +19,7 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { DoplClient } from "@dopl/client";
+import { DoplClient, isStandardWorkspace } from "@dopl/client";
 import type { WorkspaceListItem, WorkspaceRole, WorkspaceSummary } from "@dopl/client";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerSkillTools } from "./tools/skills.js";
@@ -126,6 +126,7 @@ export function createServer(
     directory: options.directory,
     directoryLoadFailed: options.directoryLoadFailed,
   });
+  const listableDirectory = (options.directory ?? []).filter(isStandardWorkspace);
 
   const server = new McpServer(
     {
@@ -137,7 +138,10 @@ export function createServer(
     {
       // ⚠ Thread the boot-resolved pin so a 2+-membership connection with a pin
       // is told the pin IS its default, not "pass workspace= on every call".
-      instructions: buildInstructions(options.directory ?? [], {
+      // ⚠ LISTABLE directory only — the targeting table an agent reads must not
+      // advertise `kind='link'` home-channel containers. The full directory
+      // still seeds the cache above, so `workspace=<link>` resolves.
+      instructions: buildInstructions(listableDirectory, {
         pin:
           options.workspaceSource === "header pin" && options.workspace
             ? { name: options.workspace.name, slug: options.workspace.slug }

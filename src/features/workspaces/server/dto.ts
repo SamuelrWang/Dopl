@@ -1,6 +1,7 @@
 import "server-only";
 import type {
   Workspace,
+  WorkspaceKind,
   WorkspaceMembership,
   Invitation,
   InvitedRole,
@@ -16,6 +17,8 @@ export interface WorkspaceRow {
   public_id: string;
   description: string | null;
   icon_url: string | null;
+  /** Absent until migration 20260823150000 is applied — see `WORKSPACE_COLS`. */
+  kind?: WorkspaceKind;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +43,10 @@ export function mapWorkspaceRow(row: WorkspaceRow): Workspace {
     publicId: row.public_id,
     description: row.description,
     iconUrl: row.icon_url,
+    // ⚠ Spread-when-present, never `kind: row.kind`: on today's database the
+    // column does not exist, and an explicit `undefined` would change the DTO
+    // (and every `toStrictEqual`) for a change that has not happened yet.
+    ...(row.kind ? { kind: row.kind } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -4,37 +4,19 @@ import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
-import { CONSENT_INBOX_POLL_MS } from "../../constants";
 import { useChannels } from "../../hooks/use-channels";
 import { channelKeys } from "../../client/query-keys";
-import { useChannelMessages } from "../../hooks/use-channel-messages";
-import { useChannelMembers } from "../../hooks/use-channel-members";
-import { useChannelThreads } from "../../hooks/use-channel-threads";
-import { useChannelMentions } from "../../hooks/use-channel-mentions";
-import { useMentionWrites } from "../../hooks/use-mention-writes";
-import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
-import { useConsentInbox } from "../../hooks/use-consent-inbox";
-import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsOnboardingCore } from "../channels-onboarding-core";
-import { ChannelsV2SettingsSlot } from "./settings-slot";
 import { ChannelsV2Overlays } from "./overlays";
 import { ChannelsV2Sidebar } from "./sidebar";
-import { ChannelsV2MessagePane } from "./message-pane";
-import { ChannelsV2InfoPanel } from "./info-panel";
 import { ChannelsV2InboxPane } from "./inbox-pane";
-import { PopOutThreadButton } from "./pop-out";
-import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
-import { useChannelsV2Live } from "./live";
-import { useDesktopSessions } from "./use-desktop-sessions";
-import type { Channel, ChannelMention } from "../../types";
+import { ChannelSurface } from "./channel-surface";
+import { useChannelSurfaceData } from "./channel-surface-data";
+import type { Channel } from "../../types";
 // Kept on one line each: this file has repeatedly sat within a handful of lines
-// of the 500-line cap, and CROSSED it on 2026-08-20 (453 after the selection
-// split below; re-measure, do not quote).
+// of the 500-line cap, and CROSSED it on 2026-08-20 (re-measure, do not quote).
 import { splitChannels } from "./view-model";
-import { useInlineConsent } from "./use-inline-consent";
-import { useChannelsV2Derivations } from "./derivations";
-import { useAgentsPanel } from "./use-agents-panel";
 import { useChannelsV2Selection } from "./use-channels-v2-selection";
 
 export interface ChannelsV2CoreProps {
@@ -80,6 +62,14 @@ export interface ChannelsV2CoreProps {
  * Phase 12, 2026-08-18): `channels-view-core.tsx` and the two-pane surface
  * under it are DELETED, and `/:workspaceSegment/channels` mounts this tree.
  *
+ * ⚠ EVERYTHING RIGHT OF THE TREE IS `channel-surface.tsx` NOW (2026-08-23), and
+ * its state is `channel-surface-data.ts`. What is left HERE is the part that is
+ * about the WORKSPACE rather than about one channel: the channel LIST, the tree,
+ * the Inbox takeover, the first-run explainer and the create dialogs. The move
+ * was a lift — same DOM, same order, same hooks in the same order — because the
+ * second host of that surface (`channel-surface-standalone.tsx`, one fixed
+ * channel with no tree) must not be a second implementation of it.
+ *
  * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). FIVE write families land
  * from this tree (INVARIANTS §7), all through the existing write layer, none a
  * new endpoint: the composer's send / request fan-out (Phase 3), the Tags
@@ -99,13 +89,13 @@ export interface ChannelsV2CoreProps {
  * ⚠ Every read of `myFavoritedAt` is `!= null`, never `!==` — version skew;
  * `sidebar.tsx › isFavorite` carries the reason.
  *
- * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read below is a feature
- * hook — `use-channels`, `use-channel-messages`, `use-channel-members`,
- * `use-channel-threads`, `use-consent-inbox`, and `use-channel-mentions`, the
- * one Phase 6 added because the Tags inbox is a genuinely new projection with
- * no existing read to adapt. Where a hook's shape did not fit (the sidebar's
- * 24h window, the transcript's sides, the thread parties) the adaptation is
- * `view-model.ts`, at the COMPONENT boundary, never a fork of the hook.
+ * ⚠ NO PARALLEL HOOK LAYER AND NO AD-HOC FETCHES. Every read on this surface is
+ * a feature hook — `use-channels` here, and `use-channel-messages`,
+ * `use-channel-members`, `use-channel-threads`, `use-consent-inbox` and
+ * `use-channel-mentions` in the surface's data hook. Where a hook's shape did not
+ * fit (the sidebar's 24h window, the transcript's sides, the thread parties) the
+ * adaptation is `view-model.ts`, at the COMPONENT boundary, never a fork of the
+ * hook.
  *
  * ⚠ Next-free by construction so the desktop SPA can bundle it — the same
  * constraint the retired `channels-view-core.tsx` documented. The ONE router
@@ -120,6 +110,11 @@ export interface ChannelsV2CoreProps {
  * the ONE `useRefetchGate` the reads register, and AN EVENT IS A DOORBELL,
  * NEVER CONTENT: the signal triggers a filtered refetch, no payload is merged,
  * so RLS and the service filters stay authoritative.
+ *   ⚠ THE COORDINATOR IS MOUNTED ABOVE THE CHANNEL BRANCH and always has been:
+ *   the Inbox takeover and the empty-workspace explainer both render with no
+ *   channel open, and the channel list has to keep hearing the doorbell through
+ *   them. That is why `useChannelSurfaceData` is called HERE rather than inside
+ *   the surface it feeds.
  */
 export function ChannelsV2Core({
   workspaceId,
@@ -150,155 +145,26 @@ export function ChannelsV2Core({
   }, [sel.selectedId, channels]);
   const channel = channels.find((c) => c.id === effectiveId) ?? null;
 
-  const {
-    messages,
-    loading: messagesLoading,
-    refetch: refetchMessages,
-  } = useChannelMessages(channel?.id ?? null, workspaceId);
-  const { members, refetch: refetchMembers } = useChannelMembers(
-    channel?.id ?? null,
-    workspaceId
-  );
-  const {
-    threads,
-    truncated: threadsTruncated,
-    loading: threadsLoading,
-    refetch: refetchThreads,
-  } = useChannelThreads(channel?.id ?? null, workspaceId);
-  // THE TAGS INBOX — my mentions in this channel, each row carrying my own
-  // read-state. ⚠ The unread BADGE is arithmetic over these rows inside
-  // `InfoTab`; nothing derives it a second time.
-  const {
-    mentions,
-    truncated: mentionsTruncated,
-    loading: mentionsLoading,
-    refetch: refetchMentions,
-  } = useChannelMentions(channel?.id ?? null, workspaceId);
-  // ⚠ Poll BACKSTOP for a downed socket only; pauses while the tab is hidden.
-  // ⚠ WORKSPACE-WIDE ON PURPOSE: the Inbox badge counts every pending draft, and
-  // the same rows place the thread view's send box. One read, two consumers — a
-  // channel-scoped copy would make the badge lie.
-  // ⚠ `outbound`, NOT `requests` (Samuel, 2026-08-22 — the inbound consent
-  // retirement). No surface in this tree can act on an INBOUND row any more, and
-  // a badge is a claim that something is actionable.
-  const { outbound: requests } = useConsentInbox(
-    workspaceId,
-    undefined,
-    CONSENT_INBOX_POLL_MS
-  );
-  // MY OWN AGENTS — the ONE read on this page that is not a server projection.
-  // It is this machine's live session state over the Electron bridge
-  // (`agents-model.ts`), so it is workspace-wide by nature and each consumer
-  // slices it; `null` means "could not ask" (plain browser, or an older main)
-  // and is deliberately carried as null all the way to the tab, which words the
-  // two absences differently.
-  // ⚠ `refresh` is the REFUSAL path only (`agents-model.ts ›
-  // DesktopSessionsFeed`) — main answering `{ok:false}` is the one fact no
-  // push announces. Not a poll.
-  const { sessions: agentSessions, refresh: refreshAgents } =
-    useDesktopSessions();
-
-  // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
-  // ⚠ DECLARED ABOVE THE LIVE WIRING because `refetchAll` names its `refetch`.
-  const agentsPanel = useAgentsPanel({
-    channel,
-    workspaceId,
-    currentUserId,
-    threads,
-    refreshDesktopSessions: refreshAgents,
-  });
-
-  // Realtime → coalesced refetch, deferred while a local write is in flight. The whole
-  // wiring is `live.ts`, split out at the Phase 10 cap; what stays here is WHAT a doorbell
-  // invalidates, which is the core's own business.
-  // ⚠ `gate` is handed to every writer on this surface, and `live.ts` hands the SAME
-  // coordinator to the subscriptions — one coordinator, both ends (INVARIANTS §7/§8).
-  const { gate } = useChannelsV2Live({
-    workspaceId,
-    refetchAll: () => {
-      // ⚠ INVALIDATE THE PREFIX, don't refetch ONE observer. `query.refetch()`
-      // revalidates only the mounted key-variant, so any other variant of the
-      // channels list (`include=archived` is the one that exists) stays stale
-      // behind a doorbell that fired for it. `client/query-keys.ts` designs the
-      // WRITE path around prefix invalidation for exactly this reason; the
-      // realtime path had not followed.
-      void queryClient.invalidateQueries({ queryKey: channelKeys.list().all });
-      void refetchMessages();
-      void refetchMembers();
-      void refetchThreads();
-      // A new message can BE a new mention, and the doorbell that rings for it
-      // is `channel_messages` — `channel_mention_reads` is deliberately not in
-      // the publication (INVARIANTS §7; migration `20260818140000` states why),
-      // so this refetch is the whole delivery path for a mention arriving.
-      void refetchMentions();
-      // PEER AGENT CARDS (2026-08-20). `channel_sessions` is UNPUBLISHED and stays
-      // that way (INVARIANTS §7): its row is rewritten on every projection move, so
-      // publishing it would buy WAL decode plus a per-subscriber RLS evaluation on
-      // each of those, for every member — the cost that §7's first bullet refuses.
-      // A peer agent that does anything visible POSTS, and that `channel_messages`
-      // doorbell is already paid for. So the cards ride it, and the 30s poll drops
-      // back to being the idle backstop it should always have been.
-      void agentsPanel.refetch();
-    },
-    refetchMembers: () => void refetchMembers(),
-  });
-  // ⚠ THE SAME gate the reads register — the mark-read write holds the realtime
-  // doorbell open for its own life, or a coalesced refetch mid-flight reverts
-  // the optimistic `read` flag under the click that set it.
-  const { markRead } = useMentionWrites({ workspaceId, gate });
-  // THE FAVOURITE TOGGLE (Samuel, 2026-08-19) — a FIFTH write family on this
-  // surface, on the same gate as the other four, and the existing per-member
-  // preference route rather than a new one (`PATCH /members`, `favorite`).
-  // `consent` decides the OUTBOUND send box and the Inbox's rows — same
-  // mutation, same gate. ⚠ Its INBOUND callers are gone (Samuel, 2026-08-22).
-  const { favorite, consent } = useChannelPreferenceWrites({ workspaceId, gate });
-
-  const { index, openThread, treeThreads, rows } = useChannelsV2Derivations({
-    members,
-    currentUserId,
-    messages,
-    threads,
-    openThreadId: sel.requestedThreadId,
-  });
-
-  // The thread view's outbound send box — `use-inline-consent.ts`.
-  const { outboundByThread, decideOutbound, consentBusy } = useInlineConsent({
-    messages,
-    requests,
-    consent,
-  });
-
-  const channelName = channel
-    ? channelDisplayName(channel, members, currentUserId)
-    : "";
-
-  // The Tags inbox's click: mark read, land the center pane on the right
-  // transcript, then signal the scroll. The scroll effect runs POST-render, so
-  // the swapped transcript is in the DOM before it looks for the message row.
+  // The open channel's reads, its derivations, its writes and THE refetch
+  // coordinator — `channel-surface-data.ts`. The channel LIST is the one read
+  // this page owns that the surface does not, so it rides the same doorbell
+  // through `onDoorbell` rather than standing up a second coordinator
+  // (INVARIANTS §7/§8: one `useRefetchGate` per live surface).
   //
-  // ⚠ The mark-read is OPTIMISTIC (`use-mention-writes.ts`), which is what makes
-  // the badge drop in the same frame as the navigation. The nonced scroll signal
-  // is `use-channels-v2-selection.ts › jumpToMessage`.
-  const openMention = (mention: ChannelMention) => {
-    if (!mention.read && channel) {
-      markRead.mutate({
-        channelId: channel.id,
-        messageIds: [mention.messageId],
-      });
-    }
-    sel.jumpToMessage(mention.threadId, mention.messageId);
-  };
-
-  // ⚠ MARK-ALL SENDS THE IDS IT IS DISPLAYING, never a flag. The list is
-  // bounded and says when it clipped, so "all" can only honestly mean the page
-  // — and naming the ids makes that true by construction rather than by comment
-  // (INVARIANTS §9). Already-read rows are filtered out so a no-op click sends
-  // no request at all.
-  const markAllMentionsRead = () => {
-    const unread = mentions.filter((m) => !m.read).map((m) => m.messageId);
-    if (unread.length === 0 || !channel) return;
-    markRead.mutate({ channelId: channel.id, messageIds: unread });
-  };
+  // ⚠ INVALIDATE THE PREFIX, don't refetch ONE observer. `query.refetch()`
+  // revalidates only the mounted key-variant, so any other variant of the
+  // channels list (`include=archived` is the one that exists) stays stale
+  // behind a doorbell that fired for it. `client/query-keys.ts` designs the
+  // WRITE path around prefix invalidation for exactly this reason.
+  const data = useChannelSurfaceData({
+    workspaceId,
+    channel,
+    currentUserId,
+    openThreadId: sel.requestedThreadId,
+    onDoorbell: () => {
+      void queryClient.invalidateQueries({ queryKey: channelKeys.list().all });
+    },
+  });
 
   // A create lands the operator ON the new channel — the same rule the retired
   // page used, so a fresh room is never created into an unchanged view.
@@ -320,14 +186,14 @@ export function ChannelsV2Core({
       <ChannelsV2Sidebar
         rooms={rooms}
         direct={direct}
-        threads={treeThreads}
-        members={members}
+        threads={data.treeThreads}
+        members={data.members}
         currentUserId={currentUserId}
         selectedChannelId={channel?.id ?? null}
-        openThreadId={openThread?.id ?? null}
+        openThreadId={data.openThread?.id ?? null}
         onSelectChannel={sel.selectChannel}
         onOpenThread={sel.openThread}
-        consentCount={requests.length}
+        consentCount={data.requests.length}
         inboxOpen={sel.inboxOpen}
         onOpenInbox={sel.openInbox}
         canCreate={canCreate}
@@ -337,134 +203,24 @@ export function ChannelsV2Core({
 
       {sel.inboxOpen ? (
         <ChannelsV2InboxPane
-          requests={requests}
-          onDecide={(id, decision) => consent.mutate({ id, decision })}
-          busy={consentBusy}
+          requests={data.requests}
+          onDecide={(id, decision) => data.consent.mutate({ id, decision })}
+          busy={data.consentBusy}
           onOpen={sel.selectChannel}
         />
       ) : channel ? (
-        <>
-          <ChannelsV2MessagePane
-            channelId={channel.id}
-            workspaceId={workspaceId}
-            channelName={channelName}
-            thread={openThread}
-            rows={rows}
-            index={index}
-            members={members}
-            loading={messagesLoading}
-            outboundAsk={openThread ? (outboundByThread.get(openThread.id) ?? null) : null}
-            outboundBusy={consentBusy}
-            onDecideOutbound={decideOutbound}
-            scrollTarget={sel.scrollTarget}
-            infoOpen={sel.infoOpen}
-            // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
-            // rendering — never a flip inside the mutation. Two fast clicks send
-            // `true` then `false` and converge; a toggle verb would race.
-            favorited={channel.myFavoritedAt != null}
-            onToggleFavorite={() =>
-              favorite.mutate({
-                channelId: channel.id,
-                favorite: channel.myFavoritedAt == null,
-              })
-            }
-            gate={gate}
-            // The composer's New Agent icon (2026-08-21) — handed down whole,
-            // never re-mounted: a second `useAgentsPanel` is a second peer poll.
-            newAgent={agentsPanel}
-            // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
-            // hides ITSELF outside the desktop shell (feature detection), so the
-            // web tree gets no affordance for a window it cannot open.
-            popOut={
-              openThread ? (
-                <PopOutThreadButton
-                  workspaceSlug={workspaceSlug}
-                  channelId={channel.id}
-                  threadId={openThread.id}
-                />
-              ) : null
-            }
-            // "Anthony's agent is working…", off the peer projection the Agents tab
-            // already polls. Thread view only — the row is about ONE exchange.
-            peerActivity={
-              openThread ? (
-                <PeerActivityRow
-                  peers={peerWorkingOn(
-                    agentsPanel.peerSessions,
-                    currentUserId,
-                    openThread.id
-                  )}
-                  byUser={index.byId}
-                  currentUserId={currentUserId}
-                />
-              ) : null
-            }
-            onToggleInfo={sel.toggleInfo}
-            onExitThread={() => sel.openThread(null)}
-            onOpenThread={sel.openThread}
-          />
-          {sel.infoOpen && (
-            <ChannelsV2InfoPanel
-              channel={channel}
-              channelName={channelName}
-              members={members}
-              threads={threads}
-              threadsTruncated={threadsTruncated}
-              threadsLoading={threadsLoading}
-              index={index}
-              openThread={openThread}
-              onOpenThread={sel.openThread}
-              agentSessions={agentSessions}
-              peerSessions={agentsPanel.peerSessions}
-              canLaunchAgent={
-                agentsPanel.canLaunch &&
-                !!openThread &&
-                (openThread.createdBy === currentUserId ||
-                  openThread.targetUserId === currentUserId)
-              }
-              launchBusy={agentsPanel.launchBusy}
-              launchError={agentsPanel.launchError}
-              // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22). The
-              // template picker inside the tab AWAITS this to learn whether main
-              // asked for a first-use approval; a `void` wrapper here would make
-              // every picker launch look like a build with no bridge.
-              onLaunchAgent={(id, templateId, overrides) =>
-                agentsPanel.launchAgent(id, templateId, overrides)
-              }
-              onApproveTemplate={agentsPanel.approveTemplate}
-              openAgent={sel.openAgent}
-              onOpenAgent={sel.setOpenAgent}
-              mentions={mentions}
-              mentionsTruncated={mentionsTruncated}
-              mentionsLoading={mentionsLoading}
-              onOpenMention={openMention}
-              onMarkAllMentionsRead={markAllMentionsRead}
-              // THE SETTINGS TAB (Samuel, 2026-08-19). This cluster hung off the
-              // pane HEADER until then; the header keeps only the info toggle.
-              // ⚠ THREAD-SCOPED WHILE A THREAD IS OPEN (2026-08-21) — the branch
-              // is `settings-slot.tsx`, which owns why it lives at the MOUNT.
-              settings={
-                <ChannelsV2SettingsSlot
-                  channel={channel}
-                  workspaceId={workspaceId}
-                  workspaceSlug={workspaceSlug}
-                  currentUserId={currentUserId}
-                  role={role}
-                  members={members}
-                  thread={openThread}
-                  agentSessions={agentSessions}
-                  gate={gate}
-                  onDeselect={() => sel.selectChannel(null)}
-                  onExitThread={() => sel.openThread(null)}
-                  onRosterChanged={() => {
-                    void refetchChannels();
-                    void refetchMembers();
-                  }}
-                />
-              }
-            />
-          )}
-        </>
+        // ⚠ A FRAGMENT of the same two panes this file used to render inline, so
+        // the DOM this page emits did not move when the surface was extracted.
+        <ChannelSurface
+          workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
+          channel={channel}
+          currentUserId={currentUserId}
+          role={role}
+          data={data}
+          selection={sel}
+          onRosterChanged={refetchChannels}
+        />
       ) : (
         // THE FIRST-RUN EXPLAINER, rehomed here at the cutover. It says what
         // channels are for and what responding needs; Samuel's third-round
@@ -480,15 +236,15 @@ export function ChannelsV2Core({
 
       <ChannelsV2Overlays
         openAgent={sel.openAgent}
-        agentSessions={agentSessions}
-        messages={messages}
+        agentSessions={data.agentSessions}
+        messages={data.messages}
         currentUserId={currentUserId}
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         createOpen={sel.createOpen}
         directOpen={sel.directOpen}
         onCloseAgent={() => sel.setOpenAgent(null)}
-        onRefreshSessions={refreshAgents}
+        onRefreshSessions={data.refreshAgents}
         onCreateOpenChange={sel.setCreateOpen}
         onDirectOpenChange={sel.setDirectOpen}
         onCreated={onCreated}

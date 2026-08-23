@@ -20,6 +20,16 @@
  *     there must not be: printing `0 tokens` for a desktop that reported no
  *     number is a measurement nobody took, stated as fact, in the surface an
  *     orchestrator uses to decide whether to keep an agent alive.
+ *
+ * ⚠ **AND SINCE 2026-08-23 THE FIRST RULE HAS A SECOND WITNESS** (F-294). A quiet
+ * row alone cannot tell "idle but alive" from "the desktop is gone", so the hedge
+ * said the more alarming of the two about an agent that was merely between turns.
+ * `agent_presence` DOES beat on a timer, unconditionally, and the caller's OWN
+ * presence freshness now rides in as {@link SessionRenderOpts.operatorOnline}: a
+ * quiet row under a LIVE heartbeat renders "quiet Xm" (unchanged), and only a
+ * quiet row under a quiet machine keeps "may be offline". ⚠ Absent = UNKNOWN and
+ * keeps the old hedge — an older server sends no such key, and this must not read
+ * a missing fact as evidence of life.
  */
 import type { ChannelSessionState, ChannelSessionStateOwn } from "@dopl/client";
 /**
@@ -64,8 +74,41 @@ export declare function sessionIsStale(session: Pick<ChannelSessionState, "updat
  * "no model").
  * ⚠ Still passed through `inlineOr` by the caller — it is a value in a line WE
  * wrote, and the desktop is not a trusted formatter.
+ *
+ * ⚠ **AND THE RESULT IS ONE TOKEN, ALWAYS — F-293, A LIVE DEFECT.** The bundled
+ * CLI ships explicit long-context ids spelled with a bracket suffix
+ * (`claude-opus-5[1m]`, `claude-sonnet-4-6[1m]`; `main/session-model.js ›
+ * contextWindowFor` reads that suffix as the window), and `narration.ts ›
+ * neutralizeInline` turns `[` and `]` into SPACES because they are markdown
+ * structure. So the model clause rendered `` `opus-5 1m` `` — a bare `1m` sitting
+ * in the one segment {@link SESSION_TELEMETRY_NOTE} promises holds bare NAMES,
+ * one clause away from `started 12m ago` and `stale, 10m ago`. A relative time is
+ * exactly what `coarseAge` emits, so an operator reads a time shard as a template
+ * or a model. **Whatever the neutralizer would blank into a space is joined with
+ * a HYPHEN here instead**, so no desktop-supplied id can ever split the model slot
+ * into two bare names.
  */
 export declare function shortModelLabel(model: string): string;
+/**
+ * WHAT THE RENDER KNOWS BEYOND THE ROW ITSELF.
+ *
+ * ⚠ `operatorOnline` IS THE CALLER'S OWN MACHINE, NOT THIS SESSION'S. It is
+ * `agent_presence` for (caller, workspace), derived server-side against
+ * `PRESENCE_ONLINE_WINDOW_MS` — the same number as {@link SESSION_STALE_WINDOW_MS}
+ * and deliberately so. It says a listener of this operator's heartbeat recently;
+ * it does not say WHICH machine, and on a multi-machine operator it can be a
+ * different one. That is why it only ever softens a hedge into "unchanged" and
+ * never hardens anything into a claim.
+ * ⚠ **THREE STATES, AND `undefined` IS THE THIRD.** `true` = heartbeating,
+ * `false` = no fresh beat, `undefined` = NOT REPORTED (an older server, or the
+ * presence read failed behind an already-earned payload). Absent takes the same
+ * branch as `false`, because a fact nobody reported is not evidence of life.
+ */
+export interface SessionRenderOpts {
+    telemetry?: boolean;
+    now?: number;
+    operatorOnline?: boolean;
+}
 /**
  * ONE session row, all peer-influenced text neutralized.
  *
@@ -74,10 +117,7 @@ export declare function shortModelLabel(model: string): string;
  * own-scoped row may still want the short line (the `await` block keeps it
  * compact when there are many sessions). Passing `undefined` renders coarse.
  */
-export declare function formatSessionLine(s: ChannelSessionState | ChannelSessionStateOwn, opts?: {
-    telemetry?: boolean;
-    now?: number;
-}): string;
+export declare function formatSessionLine(s: ChannelSessionState | ChannelSessionStateOwn, opts?: SessionRenderOpts): string;
 /**
  * THE LEGEND under a set of session lines. One sentence per thing a reader
  * could get wrong, and no more.
@@ -85,8 +125,12 @@ export declare function formatSessionLine(s: ChannelSessionState | ChannelSessio
  * ⚠ IT NAMES THE STALE CASE EXPLICITLY. A model that sees "last reported
  * working" without being told what that means will round it back to "working" —
  * the reading this whole file exists to prevent.
+ *
+ * ⚠ **AND SINCE F-294 THERE ARE TWO QUIET-ROW READINGS, SO THE LEGEND BRANCHES
+ * ON THE SAME FACT THE LINES DID.** Explaining "may be offline" over a page whose
+ * lines all say "quiet" teaches the wrong caveat, which is worse than none.
  */
-export declare function sessionLegend(anyStale: boolean): string;
+export declare function sessionLegend(anyStale: boolean, operatorOnline?: boolean): string;
 /**
  * THE SESSION BLOCK AN `await` RETURNS WITH ITS RESULT — the caller's own agents
  * as of the moment the hold came back.
@@ -107,11 +151,11 @@ export declare function sessionLegend(anyStale: boolean): string;
  * timeout, so it is one line per session and one legend — never the full
  * `read_sessions` preamble.
  */
-export declare function sessionBlockLines(sessions: readonly ChannelSessionStateOwn[] | undefined, now?: number): string[];
+export declare function sessionBlockLines(sessions: readonly ChannelSessionStateOwn[] | undefined, now?: number, operatorOnline?: boolean): string[];
 /**
  * TELEMETRY IS THE CALLER'S OWN, AND THE RESULT SAYS SO ONCE.
  * ⚠ Stated because an orchestrator that sees model/tokens on its own lines will
  * otherwise assume it can see a PEER'S, ask for them, and be silently answered
  * with a coarse row it reads as "that agent is running no model".
  */
-export declare const SESSION_TELEMETRY_NOTE = "Template, model, context, tokens, current tool and start time are reported for YOUR OWN sessions only \u2014 a peer's agent is visible to you as a handle and a state, never as a template or a cost. Where a line carries two bare names, the first is the agent TEMPLATE it was launched from and the second is the model. A template name is what the session was launched as and is never updated afterwards, so it may name a template that has since been renamed or deleted. A field that is absent was NOT REPORTED by the machine running that session; it is not a zero, and no template named is not a template hidden.";
+export declare const SESSION_TELEMETRY_NOTE = "Template, model, context, tokens, current tool and start time are reported for YOUR OWN sessions only \u2014 a peer's agent is visible to you as a handle and a state, never as a template or a cost. Where a line carries two bare names, the first is the agent TEMPLATE it was launched from and the second is the model; the MODEL is always ONE unbroken token, so a name containing a space is a template and never a model. A template name is what the session was launched as and is never updated afterwards, so it may name a template that has since been renamed or deleted. A field that is absent was NOT REPORTED by the machine running that session; it is not a zero, and no template named is not a template hidden.";

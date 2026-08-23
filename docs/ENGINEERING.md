@@ -1303,6 +1303,8 @@ move, desktop flows included).
 
 ### 9.4 The proxy matcher — what may leave it, and what may never (2026-08-07, P0-4)
 
+⚠ **Location note (2026-08-23):** the two lists this section names — `PUBLIC_ROUTES` and `SELF_AUTH_ROUTES` — were extracted from `src/proxy.ts` to `src/shared/auth/public-routes.ts` when the proxy hit the 500-line cap. `config.matcher` and every decision made with the lists are still in `proxy.ts`. INVARIANTS §3 is the current statement; the table below reads correctly with that substitution.
+
 **Read this before editing `config.matcher` in `src/proxy.ts`.** The matcher is
 an auth boundary written as a negative lookahead: every alternative added to it
 is a set of URLs the session gate stops running for. Widening it by one
@@ -2010,7 +2012,7 @@ Phase 4 retires usedopl.com, after which the bundled SPA is the only client and 
 - **The anti-brick clamp's `latest` is DERIVED, not declared** (`src/shared/version/latest-release.ts`). A floor above the newest published build is REFUSED at the server, so a fat-fingered floor cannot take the fleet offline — and the number that clamp compares against is read from **`https://github.com/SamuelrWang/Dopl/releases/latest/download/latest-mac.yml`**, the electron-updater channel file the desktop already consumes. Not the REST API: unauthenticated `api.github.com` is 60/hr **per IP** and a lambda egresses from a shared pool (a design-time probe hit `403 rate limit exceeded` from an ordinary IP), while the channel file is a release ASSET served off the asset CDN, outside that quota. It is also the same fact the client's `GUARD 2` reads, and a `tag_name` can exist with no mac artifact behind it while a `version:` in the channel file cannot. **Nothing is bumped by hand at release time; `npm run release` is unchanged.**
 - **`DOPL_DESKTOP_LATEST_VERSION` still exists, and should normally be UNSET.** It is now only the fallback for the seconds before a cold lambda has reached GitHub, and the manual override for a feed that has gone away. **Do not set it from `dopl-desktop-app/package.json`** — that file is a claim about what should ship and runs AHEAD of what is published (`1.8.2` there vs `1.7.24` released, as F-125's residual was closed), and a latest ahead of reality is what permits a floor nothing can install. A derived value always beats a declared one.
 - **The derivation never touches the request path.** `GET /api/version` reads a per-instance cache and schedules the refresh with `after()` (10-min TTL on success, 60s backoff on failure, single-flight); `GET` is a synchronous function, so it cannot await a socket even by accident. Every failure degrades toward a LOWER `latest`, which refuses MORE floors and blocks FEWER people: a throw, a timeout, a 403, a 5xx or a 200 full of HTML all leave the previous value in place — **expiry schedules a refresh, it never blanks the value**, because a stale-low latest blocks nobody while a `null` latest disables the clamp entirely.
-- **`GET /api/version` is unauthenticated, and that takes TWO places.** Having no auth wrapper is not enough: `src/proxy.ts` 401s every unmatched `/api/**` path before a route runs, so `/api/version` is listed in its `PUBLIC_ROUTES` **and** `SELF_AUTH_ROUTES` (the one entry there that is not machine-*authenticated* — it qualifies on the property that list turns on: nothing below the auth call can change its answer). It shipped missing from both, the desktop read the 401 as "no answer", and the whole gate was silently inert. Pinned by `proxy.test.ts`.
+- **`GET /api/version` is unauthenticated, and that takes TWO places.** Having no auth wrapper is not enough: `src/proxy.ts` 401s every unmatched `/api/**` path before a route runs, so `/api/version` is listed in `PUBLIC_ROUTES` **and** `SELF_AUTH_ROUTES` (both lists moved out of `proxy.ts` to `src/shared/auth/public-routes.ts` on 2026-08-23 — INVARIANTS §3 holds the current location; `/api/version` is the one `SELF_AUTH_ROUTES` entry that is not machine-*authenticated* — it qualifies on the property that list turns on: nothing below the auth call can change its answer). It shipped missing from both, the desktop read the 401 as "no answer", and the whole gate was silently inert. Pinned by `proxy.test.ts`.
 - **Policy is pure, the shell is not** — the `update-policy.js`/`updater.js` split. `main/min-version.js` holds every decision as a truth table (no electron, no timers, no I/O); `main/version-gate.js` holds the fetch, the timer and the notification. **FAIL OPEN is the whole design:** offline, a timeout, a 5xx, a captive portal's HTML, a malformed floor, an unparseable own version — every one is "no floor" and the app opens. Only a well-formed floor strictly above a well-formed running version blocks. **No floor is ever cached to disk**, so a cold boot can never start inside a block with no network to re-check against.
 - **TWO anti-brick guards, from two different sources of truth.** Server: a floor above the declared latest is refused. Client: `GUARD 1` — no updater at all (dev, unpackaged, electron-updater failed to load) degrades to a warning, because no button could end that block; `GUARD 2` — the updater has genuinely COMPLETED a check and found nothing newer, so the floor is above the newest build that exists; degrade rather than hold the app hostage to a config mistake. A FAILED check never sets that evidence — it learned nothing.
 - **It composes with the updater, it does not replace it.** `updater.js` keeps owning the feed, the download, the 4h timer and the restart prompt; it grew `updateState()` (`supported/checked/available/ready/checking/failed/version/percent`) and an `onState` fan-out. The gate rides the SAME 4h cadence — the floor and the release feed answer the same question — plus `wake.js` (a Mac can sleep across a release) and a 10-minute retry for the machine that booted offline and would otherwise not learn there is a floor for 4h. The screen's buttons are `updater.checkNow` / `updater.requestRestart`, never a second implementation.
@@ -2479,7 +2481,7 @@ A freshly-seeded skill has its SKILL.md body on the skill row and ZERO `skill_ve
 
 ### `/api/version` — a forced-upgrade gate that shipped never blocking anyone, and a clamp that decayed (F-125)
 
-- **`/api/version` — a forced-upgrade gate that shipped never blocking anyone, and a clamp that decayed (F-125):** having no auth wrapper on the route was not enough. `src/proxy.ts` 401s every unmatched `/api/**` path before a route runs, so the path has to be listed in **both** its `PUBLIC_ROUTES` and `SELF_AUTH_ROUTES`. Without those entries the desktop got a 401, read it as "no answer", failed open, and the entire gate silently blocked nobody — which is exactly how it shipped, and how a live `version gate: floor fetch 401` caught it. `proxy.test.ts` now pins the signed-out 200. Separately, the anti-brick clamp's `latest` was `DOPL_DESKTOP_LATEST_VERSION`, bumped by hand, so it decayed — and a decayed clamp refuses legitimate floors, i.e. the gate fails safe and useless at the same time. Both failure directions were real: **stale-LOW** refused a floor that was genuinely published, and **stale-HIGH** came from copying `dopl-desktop-app/package.json`'s version as the old docs instructed, which runs AHEAD of what is published and would have bricked every Mac. `latest` is now derived from the release feed the updater already reads (`latest-release.ts`), READ from a cache in the handler and REFRESHED after the response — so GitHub being slow, rate-limited or gone cannot add a millisecond to the route, and every degraded value refuses MORE floors than the truth would, never fewer. **`GET` is a synchronous function on purpose** — it cannot await a socket even by accident — and a test pins that. The refusal is invisible on the wire (served as the same plain "no floor" a correct unset config produces), so it is logged, deduped on (reason, value), and the line names WHICH origin it read: a derived latest means "publish the build", a declared one means "your env var is stale", and a log that names the wrong knob is worse than one that names none.
+- **`/api/version` — a forced-upgrade gate that shipped never blocking anyone, and a clamp that decayed (F-125):** having no auth wrapper on the route was not enough. `src/proxy.ts` 401s every unmatched `/api/**` path before a route runs, so the path has to be listed in **both** `PUBLIC_ROUTES` and `SELF_AUTH_ROUTES` (which lived in `proxy.ts` at the time; they are `src/shared/auth/public-routes.ts` since 2026-08-23 — INVARIANTS §3). Without those entries the desktop got a 401, read it as "no answer", failed open, and the entire gate silently blocked nobody — which is exactly how it shipped, and how a live `version gate: floor fetch 401` caught it. `proxy.test.ts` now pins the signed-out 200. Separately, the anti-brick clamp's `latest` was `DOPL_DESKTOP_LATEST_VERSION`, bumped by hand, so it decayed — and a decayed clamp refuses legitimate floors, i.e. the gate fails safe and useless at the same time. Both failure directions were real: **stale-LOW** refused a floor that was genuinely published, and **stale-HIGH** came from copying `dopl-desktop-app/package.json`'s version as the old docs instructed, which runs AHEAD of what is published and would have bricked every Mac. `latest` is now derived from the release feed the updater already reads (`latest-release.ts`), READ from a cache in the handler and REFRESHED after the response — so GitHub being slow, rate-limited or gone cannot add a millisecond to the route, and every degraded value refuses MORE floors than the truth would, never fewer. **`GET` is a synchronous function on purpose** — it cannot await a socket even by accident — and a test pins that. The refusal is invisible on the wire (served as the same plain "no floor" a correct unset config produces), so it is logged, deduped on (reason, value), and the line names WHICH origin it read: a derived latest means "publish the build", a declared one means "your env var is stale", and a log that names the wrong knob is worse than one that names none.
 
 *Relocated from* `src/app/api/version/route.ts`
 
@@ -3232,3 +3234,63 @@ The same investigation read the MCP surface's prose against the code under it. F
 **The pattern across all four:** none was a wrong belief about the world. Each was a sentence written
 when it was true, left standing next to code that moved — and every one of them had its correct
 statement already written down somewhere else in the same package.
+
+---
+
+## 2026-08-23 — Home channels: why a hidden WORKSPACE, and why the channel surface split in two
+
+Two decisions from the home-channels wave. Current state for both is INVARIANTS §4A and §7; what is
+here is only the argument, so neither is restated in two places.
+
+### Why `kind='link'` CONTAINERS and not workspace-less channels
+
+The obvious shape was a channel with no workspace: two people, one conversation, nothing tenant-like
+about it. It was refused on one property of the existing schema, and the property is worth stating
+plainly because it will keep being the answer to this class of question.
+
+**Every fence in this system is keyed on `workspace_id`.** RLS, through
+`is_current_workspace_member`. The realtime subscription filter, on both subscribers. The
+channel-child workspace guard trigger. MCP workspace targeting. Credits. A channel with no workspace
+would need a **second, parallel statement of each one of them** — and the second copy is the one that
+drifts. This repo has filed that finding under a dozen ids already (the mention masker and the
+transcript tint, the KB-attach fence, the IPC sender guard); every instance began as a reasonable
+local copy of a rule stated elsewhere.
+
+`kind` is ONE column on the table those fences already key on, so a two-member container inherits all
+of them at zero marginal cost, and a home channel is reached by the ordinary routes, the ordinary
+realtime and the ordinary MCP surface because it IS an ordinary workspace.
+
+**The consequence was priced in, not discovered.** Link containers are real rows in `workspaces` and
+`workspace_members`, so every read that enumerates "the caller's workspaces" — the rail, the
+switcher, workspace resolution, seat billing, the MCP directory — now has to say which kinds it
+means. That sweep is the cost of the decision and it was paid in the same wave; the migration header
+(`20260823150000_home_link_channels.sql`) says so in its own words so that nobody re-derives it as a
+bug. The one place the sweep deliberately does NOT reach is `GET /api/workspaces` itself: the desktop
+listener fans over that list to decide what to watch, so filtering at the route would silently
+unwatch every relationship.
+
+### Why the channel surface split into a renderer, a data host, and two hosts of that
+
+`channels-v2-core.tsx` was the only thing that knew how to be a channel. The home page needed the
+same surface pinned to ONE container with no channel tree beside it and no app shell around it, and
+there were two ways to get it: parameterize the core until it could render headless, or lift the
+part that both hosts need.
+
+The part that both hosts need turned out to be exactly one thing that cannot be forgotten: **the
+refetch coordinator.** INVARIANTS §7 records why — a surface that mounts a server read without
+registering the live loop fails with **no error shape**. The transcript simply stops updating, and
+the 2026-08-20 agent window proved that a half-live surface looks healthy from the outside for as
+long as anyone cares to watch it.
+
+So the seam is drawn there. `channel-surface.tsx` renders and does not fetch. `channel-surface-data.ts`
+owns the reads, the derivations and the ONE `useChannelsV2Live` call, **so that a mount cannot forget
+it** — there is no third code path for the live loop, and a future fifth surface gets liveness by
+calling one hook rather than by remembering a rule. `channel-surface-standalone.tsx` is the second
+host; `channels-v2-core.tsx` is the first.
+
+**What the core kept is the interesting half.** The channels-LIST invalidation belongs to the TREE,
+and a pinned host has no tree — so it did not move into the shared hook. It arrives as the host's
+`onDoorbell` prop, which the core fills with the prefix invalidation §7 requires and the standalone
+host leaves unset. **The rule the seam encodes: a doorbell's SHARED consequences go in the shared
+hook; a doorbell's host-specific consequences arrive as a prop.** Splitting on "what is on screen"
+instead would have put the coordinator on the wrong side of the line.

@@ -12,6 +12,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
+const client_1 = require("@dopl/client");
 const narration_js_1 = require("./tools/narration.js");
 const instructions_js_1 = require("./instructions.js");
 /** Membership cache TTL (slug→id). Seeded at boot, refreshed on demand. */
@@ -23,7 +24,8 @@ function createWorkspaceDirectory(client, options = {}) {
     let workspaceListCache = options.directory && !options.directoryLoadFailed
         ? { workspaces: options.directory, loadedAt: Date.now() }
         : null;
-    async function getWorkspaceList() {
+    /** The cache, kind and all. ⚠ RESOLUTION reads this; LISTING never does. */
+    async function getAllWorkspaces() {
         if (workspaceListCache &&
             Date.now() - workspaceListCache.loadedAt < WORKSPACE_CACHE_TTL_MS) {
             return workspaceListCache.workspaces;
@@ -35,16 +37,22 @@ function createWorkspaceDirectory(client, options = {}) {
         };
         return result.workspaces;
     }
+    async function getWorkspaceList() {
+        return (await getAllWorkspaces()).filter(client_1.isStandardWorkspace);
+    }
     async function resolveWorkspaceRef(ref) {
+        // ⚠ Resolves against the UNFILTERED directory: `workspace=<link id>` is how
+        // an agent acting in a home channel addresses its container, and the
+        // container is deliberately absent from every listing.
         // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
         // first pass — id alone forces a wasteful refresh.
-        let list = await getWorkspaceList();
+        let list = await getAllWorkspaces();
         let match = list.find((w) => w.id === ref || w.slug === ref);
         if (match)
             return match;
         // Force-refresh once — covers a mid-session membership add.
         workspaceListCache = null;
-        list = await getWorkspaceList();
+        list = await getAllWorkspaces();
         match = list.find((w) => w.id === ref || w.slug === ref);
         return match ?? null;
     }

@@ -1,4 +1,9 @@
 import "server-only";
+import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+import {
+  isStandardWorkspace,
+  type WorkspaceKind,
+} from "@/features/workspaces/types";
 import {
   CREDITS_PER_MCP_CALL,
   monthlyCreditsForPlan,
@@ -26,11 +31,45 @@ import {
  * credits it is not entitled to.
  */
 
+/** Who is burning the credit, for the link-container reroute below. */
+export interface CreditCaller {
+  userId: string;
+  /** The TARGET workspace's kind. Absent = standard (column not yet applied). */
+  workspaceKind?: WorkspaceKind;
+}
+
+/**
+ * Which workspace's counter a charge aimed at `workspaceId` actually lands on.
+ * Standard workspace → itself. `null` → nothing to charge; run unmetered.
+ *
+ * PROVISIONAL (Samuel, 2026-08-23: "bill workspace plans separately; MCP burns
+ * bill each side's own plan; wiring now, hash out later"). A `link` container is
+ * a two-member relationship, not a tenant, and has no plan — so the burn is
+ * charged to the CALLER's own billing workspace: their oldest-owned STANDARD
+ * workspace. Each side of a home channel therefore spends their own allowance.
+ * `findDefaultWorkspaceForUser` is sanctioned here — its third sanctioned use,
+ * alongside signup-bootstrap and the billing grandfather (INVARIANTS §4).
+ */
+export async function resolveBillingWorkspaceId(
+  workspaceId: string,
+  caller?: CreditCaller
+): Promise<string | null> {
+  if (!caller || isStandardWorkspace({ kind: caller.workspaceKind })) {
+    return workspaceId;
+  }
+  const owned = await findDefaultWorkspaceForUser(caller.userId);
+  return owned?.id ?? null;
+}
+
 /** What a workspace's credit meter says right now. */
 export interface CreditsSummary extends CreditPeriod {
   used: number;
   limit: number;
   remaining: number;
+  /** Present only when the zeroes were NOT measured — see `unmetered()`. Absent
+   *  on every real reading, so a renderer can tell "nothing spent" from
+   *  "nothing counted". */
+  degraded?: true;
 }
 
 /** The consume decision, plus everything a refusal needs to explain itself. */
@@ -98,17 +137,20 @@ export async function summarizeCredits(
  * tool call.
  */
 export async function consumeMcpCredits(
-  workspaceId: string
+  workspaceId: string,
+  caller?: CreditCaller
 ): Promise<CreditConsumeResult> {
+  const target = await resolveBillingWorkspaceId(workspaceId, caller);
+  if (!target) return unmetered();
   const [billing, memberCount] = await Promise.all([
-    getWorkspaceBilling(workspaceId),
-    countActiveMembers(workspaceId),
+    getWorkspaceBilling(target),
+    countActiveMembers(target),
   ]);
   const plan = entitledPlanFor(billing, memberCount);
   const period = creditPeriodFor(billing, plan);
   const limit = monthlyCreditsForPlan(plan);
   const outcome = await consumeWorkspaceCredits(
-    workspaceId,
+    target,
     period.periodStart,
     CREDITS_PER_MCP_CALL,
     limit
@@ -122,3 +164,29 @@ export async function consumeMcpCredits(
     upgradeUrl: upgradeUrl(),
   };
 }
+
+/**
+ * A burn with no counter to charge: a link container whose caller owns no
+ * standard workspace. ⚠ FAIL OPEN, matching `POST /api/mcp/credits/consume`'s
+ * posture — an unbillable caller in a home channel must not be bricked. Zeroed
+ * counters, because nothing was measured.
+ *
+ * ⚠ `degraded: true` IS THE SAME STAMP THE ROUTE'S `failOpen()` PUTS ON ITS
+ * OWN ZEROES, and it must be: both answers are "allowed, and these numbers mean
+ * nothing", and a reader that can only recognise one of them puts a made-up
+ * `used: 0` on the settings meter as if it were measured.
+ */
+export function unmetered(): UnmeteredResult {
+  return {
+    ...creditPeriodFor(null, "free"),
+    allowed: true,
+    used: 0,
+    limit: 0,
+    remaining: 0,
+    upgradeUrl: upgradeUrl(),
+    degraded: true,
+  };
+}
+
+/** A `CreditConsumeResult` whose counters were never measured. */
+export type UnmeteredResult = CreditConsumeResult & { degraded: true };

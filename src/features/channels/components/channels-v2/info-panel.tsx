@@ -133,6 +133,7 @@ export function ChannelsV2InfoPanel({
   mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
+  infoTab,
   settings,
 }: {
   channel: Channel;
@@ -187,6 +188,15 @@ export function ChannelsV2InfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
+  /**
+   * REPLACES the INFO tab's body in channel view — an account-level 1:1 shows a
+   * person card where a workspace channel shows `info-tab.tsx`. Absent is the
+   * channels page's own body, which is every caller but Home.
+   * ⚠ THREAD VIEW IGNORES IT. The column is already thread-scoped while a thread
+   * is open (the ruling above), so Info renders the THREAD's facts and a card
+   * about the counterparty would answer a question the reader did not ask.
+   */
+  infoTab?: ReactNode;
   /**
    * The SETTINGS tab's body — `settings-slot.tsx › ChannelsV2SettingsSlot`, which
    * is `channel-manage.tsx › ChannelsV2ManageActions` in channel view and
@@ -264,6 +274,8 @@ export function ChannelsV2InfoPanel({
             agentSessions={agentSessions}
             peerSessions={peerSessions}
           />
+        ) : infoTab !== undefined ? (
+          infoTab
         ) : (
           <InfoTab
             channel={channel}

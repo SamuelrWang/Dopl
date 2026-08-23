@@ -15,6 +15,12 @@ import { findMembership } from "./repository";
  * `invitations.ts` (which is about getting someone IN); both are re-exported
  * from there so no importer moved.
  *
+ * ⚠ NO `assertMemberAddable` GATE HERE, and its absence is the rule: neither
+ * write ADDS anybody. `updateMemberRole` re-grades an existing row and
+ * `removeMember` deletes one, and removal from a `kind='link'` container is
+ * deliberately allowed (`authz.ts › assertMemberAddable`). A member-ADD write
+ * added to this file would need the gate.
+ *
  * ⚠ TERMINATION IS A ROW DELETE, NOT A STATUS FLIP. Nothing writes
  * `workspace_members.status` to anything but `'active'`; the only exits are the
  * DELETE below and the `auth.users` cascade behind account deletion. "No longer

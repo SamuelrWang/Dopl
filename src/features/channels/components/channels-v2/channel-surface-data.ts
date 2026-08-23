@@ -1,0 +1,243 @@
+"use client";
+
+/**
+ * ONE CHANNEL'S LIVE STATE — every read the per-channel surface renders, the ONE
+ * refetch coordinator those reads and its writes register through, and the pure
+ * derivations over them.
+ *
+ * ⚠ IT OWNS `useChannelsV2Live` SO THAT A MOUNT CANNOT FORGET IT. INVARIANTS §7:
+ * a live surface that skips the refetch coordinator fails with NO ERROR SHAPE —
+ * the transcript simply stops updating — and that has already shipped once
+ * (`agent-window.tsx`, 2026-08-20). Both hosts of the surface take THIS hook and
+ * therefore take exactly one coordinator each: `channels-v2-core.tsx`, which
+ * folds its channel-LIST invalidation in through `onDoorbell` because the list is
+ * the TREE's read and not the surface's, and `channel-surface-standalone.tsx`,
+ * which has no tree beside it and folds in nothing.
+ *
+ * ⚠ EVERYTHING BELOW IS LIFTED VERBATIM out of `channels-v2-core.tsx`
+ * (2026-08-23) — the hook ORDER, the arguments and every ⚠ note are that file's.
+ * The order is load-bearing: `useAgentsPanel` must precede the live wiring that
+ * names its `refetch`, and both write hooks must follow the `gate` they settle
+ * into.
+ *
+ * ⚠ IT TAKES A `channel` THAT MAY BE `null`, because the workspace page mounts it
+ * above its own channel branch: the Inbox takeover and the first-run explainer
+ * both render with no channel open, and the coordinator has to stay registered
+ * through them or the tree stops hearing the doorbell.
+ */
+
+import { CONSENT_INBOX_POLL_MS } from "../../constants";
+import { useChannelMessages } from "../../hooks/use-channel-messages";
+import { useChannelMembers } from "../../hooks/use-channel-members";
+import { useChannelThreads } from "../../hooks/use-channel-threads";
+import { useChannelMentions } from "../../hooks/use-channel-mentions";
+import { useMentionWrites } from "../../hooks/use-mention-writes";
+import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
+import { useConsentInbox } from "../../hooks/use-consent-inbox";
+import { useChannelsV2Live } from "./live";
+import { useDesktopSessions } from "./use-desktop-sessions";
+import { useAgentsPanel } from "./use-agents-panel";
+import { useChannelsV2Derivations } from "./derivations";
+import { useInlineConsent } from "./use-inline-consent";
+import type { MutationGate } from "@/shared/hooks/use-api-mutation";
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { ChannelsV2Derivations } from "./derivations";
+import type {
+  Channel,
+  ChannelConsentRequest,
+  ChannelMember,
+  ChannelMention,
+  ChannelMessage,
+  ChannelThread,
+} from "../../types";
+
+export interface ChannelSurfaceData extends ChannelsV2Derivations {
+  messages: ChannelMessage[];
+  messagesLoading: boolean;
+  members: ChannelMember[];
+  refetchMembers: () => void;
+  threads: ChannelThread[];
+  threadsTruncated: boolean;
+  threadsLoading: boolean;
+  mentions: ChannelMention[];
+  mentionsTruncated: boolean;
+  mentionsLoading: boolean;
+  /** The viewer's pending OUTBOUND reviews, workspace-wide — see the note at the
+   *  read below for why the scope is not the channel's. */
+  requests: ChannelConsentRequest[];
+  /** THIS MACHINE's live agents, or `null` for "could not ask". */
+  agentSessions: DesktopSessionSummary[] | null;
+  refreshAgents: () => void;
+  agentsPanel: ReturnType<typeof useAgentsPanel>;
+  /** THE surface's refetch coordinator — every write on it settles into this. */
+  gate: MutationGate;
+  markRead: ReturnType<typeof useMentionWrites>["markRead"];
+  favorite: ReturnType<typeof useChannelPreferenceWrites>["favorite"];
+  consent: ReturnType<typeof useChannelPreferenceWrites>["consent"];
+  outboundByThread: ReturnType<typeof useInlineConsent>["outboundByThread"];
+  decideOutbound: (id: string, decision: "allow" | "deny") => void;
+  consentBusy: boolean;
+}
+
+export function useChannelSurfaceData({
+  workspaceId,
+  channel,
+  currentUserId,
+  openThreadId,
+  onDoorbell,
+}: {
+  workspaceId: string;
+  /** `null` while the host is showing something other than a channel. */
+  channel: Channel | null;
+  currentUserId: string;
+  /** The thread the host asked for; resolved against this channel's list. */
+  openThreadId: string | null;
+  /**
+   * A host read this hook does not own, invalidated on the SAME doorbell.
+   * ⚠ The workspace page's channel LIST is the only caller: a second
+   * `useRefetchGate` beside this one would be a second coordinator on one
+   * surface, which is what INVARIANTS §7/§8 forbid.
+   */
+  onDoorbell?: () => void;
+}): ChannelSurfaceData {
+  const {
+    messages,
+    loading: messagesLoading,
+    refetch: refetchMessages,
+  } = useChannelMessages(channel?.id ?? null, workspaceId);
+  const { members, refetch: refetchMembers } = useChannelMembers(
+    channel?.id ?? null,
+    workspaceId
+  );
+  const {
+    threads,
+    truncated: threadsTruncated,
+    loading: threadsLoading,
+    refetch: refetchThreads,
+  } = useChannelThreads(channel?.id ?? null, workspaceId);
+  // THE TAGS INBOX — my mentions in this channel, each row carrying my own
+  // read-state. ⚠ The unread BADGE is arithmetic over these rows inside
+  // `InfoTab`; nothing derives it a second time.
+  const {
+    mentions,
+    truncated: mentionsTruncated,
+    loading: mentionsLoading,
+    refetch: refetchMentions,
+  } = useChannelMentions(channel?.id ?? null, workspaceId);
+  // ⚠ Poll BACKSTOP for a downed socket only; pauses while the tab is hidden.
+  // ⚠ WORKSPACE-WIDE ON PURPOSE: the Inbox badge counts every pending draft, and
+  // the same rows place the thread view's send box. One read, two consumers — a
+  // channel-scoped copy would make the badge lie.
+  // ⚠ `outbound`, NOT `requests` (Samuel, 2026-08-22 — the inbound consent
+  // retirement). No surface in this tree can act on an INBOUND row any more, and
+  // a badge is a claim that something is actionable.
+  const { outbound: requests } = useConsentInbox(
+    workspaceId,
+    undefined,
+    CONSENT_INBOX_POLL_MS
+  );
+  // MY OWN AGENTS — the ONE read here that is not a server projection. It is this
+  // machine's live session state over the Electron bridge (`agents-model.ts`), so
+  // it is workspace-wide by nature and each consumer slices it; `null` means
+  // "could not ask" (plain browser, or an older main) and is deliberately carried
+  // as null all the way to the tab, which words the two absences differently.
+  // ⚠ `refresh` is the REFUSAL path only (`agents-model.ts ›
+  // DesktopSessionsFeed`) — main answering `{ok:false}` is the one fact no
+  // push announces. Not a poll.
+  const { sessions: agentSessions, refresh: refreshAgents } =
+    useDesktopSessions();
+
+  // The Agents tab's peer projection + launch action — `use-agents-panel.ts`.
+  // ⚠ DECLARED ABOVE THE LIVE WIRING because `refetchAll` names its `refetch`.
+  const agentsPanel = useAgentsPanel({
+    channel,
+    workspaceId,
+    currentUserId,
+    threads,
+    refreshDesktopSessions: refreshAgents,
+  });
+
+  // Realtime → coalesced refetch, deferred while a local write is in flight. The whole
+  // wiring is `live.ts`, split out at the Phase 10 cap; what stays here is WHAT a doorbell
+  // invalidates, which is the surface's own business.
+  // ⚠ `gate` is handed to every writer on this surface, and `live.ts` hands the SAME
+  // coordinator to the subscriptions — one coordinator, both ends (INVARIANTS §7/§8).
+  const { gate } = useChannelsV2Live({
+    workspaceId,
+    refetchAll: () => {
+      // ⚠ INVALIDATE THE PREFIX, don't refetch ONE observer. `query.refetch()`
+      // revalidates only the mounted key-variant, so any other variant of the
+      // channels list (`include=archived` is the one that exists) stays stale
+      // behind a doorbell that fired for it. That list belongs to the TREE, so
+      // its invalidation arrives here as the host's `onDoorbell` — see the prop.
+      onDoorbell?.();
+      void refetchMessages();
+      void refetchMembers();
+      void refetchThreads();
+      // A new message can BE a new mention, and the doorbell that rings for it
+      // is `channel_messages` — `channel_mention_reads` is deliberately not in
+      // the publication (INVARIANTS §7; migration `20260818140000` states why),
+      // so this refetch is the whole delivery path for a mention arriving.
+      void refetchMentions();
+      // PEER AGENT CARDS (2026-08-20). `channel_sessions` is UNPUBLISHED and stays
+      // that way (INVARIANTS §7): its row is rewritten on every projection move, so
+      // publishing it would buy WAL decode plus a per-subscriber RLS evaluation on
+      // each of those, for every member — the cost that §7's first bullet refuses.
+      // A peer agent that does anything visible POSTS, and that `channel_messages`
+      // doorbell is already paid for. So the cards ride it, and the 30s poll drops
+      // back to being the idle backstop it should always have been.
+      void agentsPanel.refetch();
+    },
+    refetchMembers: () => void refetchMembers(),
+  });
+  // ⚠ THE SAME gate the reads register — the mark-read write holds the realtime
+  // doorbell open for its own life, or a coalesced refetch mid-flight reverts
+  // the optimistic `read` flag under the click that set it.
+  const { markRead } = useMentionWrites({ workspaceId, gate });
+  // THE FAVOURITE TOGGLE (Samuel, 2026-08-19) — a FIFTH write family on this
+  // surface, on the same gate as the other four, and the existing per-member
+  // preference route rather than a new one (`PATCH /members`, `favorite`).
+  // `consent` decides the OUTBOUND send box and the Inbox's rows — same
+  // mutation, same gate. ⚠ Its INBOUND callers are gone (Samuel, 2026-08-22).
+  const { favorite, consent } = useChannelPreferenceWrites({ workspaceId, gate });
+
+  const derivations = useChannelsV2Derivations({
+    members,
+    currentUserId,
+    messages,
+    threads,
+    openThreadId,
+  });
+
+  // The thread view's outbound send box — `use-inline-consent.ts`.
+  const { outboundByThread, decideOutbound, consentBusy } = useInlineConsent({
+    messages,
+    requests,
+    consent,
+  });
+
+  return {
+    ...derivations,
+    messages,
+    messagesLoading,
+    members,
+    refetchMembers: () => void refetchMembers(),
+    threads,
+    threadsTruncated,
+    threadsLoading,
+    mentions,
+    mentionsTruncated,
+    mentionsLoading,
+    requests,
+    agentSessions,
+    refreshAgents,
+    agentsPanel,
+    gate,
+    markRead,
+    favorite,
+    consent,
+    outboundByThread,
+    decideOutbound,
+    consentBusy,
+  };
+}

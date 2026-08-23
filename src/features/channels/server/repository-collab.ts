@@ -328,6 +328,50 @@ export async function presenceForWorkspace(
   return out;
 }
 
+/**
+ * ONE MEMBER'S PRESENCE — the PK lookup, for the caller's OWN row.
+ *
+ * ⚠ **A SIBLING OF {@link presenceForWorkspace}, NOT A DUPLICATE OF IT, AND THE
+ * REASON IS THE HOT PATH** (2026-08-23, F-294). The session render joins the
+ * CALLER'S own presence on every returned `await` hold — the one read the await
+ * route already pays for is guarded by a paragraph about not multiplying the
+ * feature's growing egress consumer, and pulling up to `PRESENCE_ROWS_LIMIT`
+ * rows of a workspace to look at exactly one of them is the wrong shape to put
+ * beside it. This is `(user_id, workspace_id)`, which is the table's PRIMARY KEY.
+ * ⚠ `service-launch.ts › operatorIsOnline` still reads the whole workspace: it
+ * runs once per `launch_agent`, which is cold, and re-pointing it belongs to a
+ * change that can re-measure it rather than to this one.
+ *
+ * ⚠ **THE WINDOW IS THE SAME ONE, READ FROM THE SAME CONSTANT.** A second
+ * liveness number would let the roster call a member offline while the session
+ * surface told their orchestrator the machine was up.
+ * ⚠ NO ROW, NO STAMP, OR AN UNREADABLE STAMP ALL READ AS OFFLINE — the fail-safe
+ * direction every other presence reader picks. `null` here is not "unknown"; the
+ * UNKNOWN case is the caller never calling this, which the render reads off an
+ * ABSENT key.
+ */
+export async function presenceForUser(
+  userId: string,
+  workspaceId: string
+): Promise<MemberPresence | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("agent_presence")
+    .select("last_seen_at")
+    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) throw error;
+  const lastSeenAt = (data as { last_seen_at: string } | null)?.last_seen_at;
+  if (!lastSeenAt) return null;
+  const seenAt = Date.parse(lastSeenAt);
+  if (Number.isNaN(seenAt)) return { online: false, lastSeenAt };
+  return {
+    online: Date.now() - seenAt < PRESENCE_ONLINE_WINDOW_MS,
+    lastSeenAt,
+  };
+}
+
 /** Member user-ids per channel — pairs with presence for online counts. */
 export async function channelMemberUserIds(
   channelIds: string[]

@@ -14,7 +14,7 @@ import {
 import { AwaitQuerySchema } from "@/features/channels/schema";
 import { DEFAULT_AWAIT_TIMEOUT_MS } from "@/features/channels/constants";
 import type { ChannelContext } from "@/features/channels/server/service-shared";
-import type { ChannelSessionStateOwn } from "@/features/channels/types";
+import type { OwnSessionsReport } from "@/features/channels/server/session-state-service";
 
 /**
  * WORKSPACE-WIDE long-poll — the `channel`-less await (2026-08-22).
@@ -62,7 +62,7 @@ function logHold(
  *  already earned must not become a 500. */
 async function ownSessionsAtReturn(
   ctx: ChannelContext
-): Promise<ChannelSessionStateOwn[] | undefined> {
+): Promise<OwnSessionsReport | undefined> {
   try {
     return await listSessionStates(ctx);
   } catch (err) {
@@ -99,14 +99,17 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     });
     channelCount = result.channelCount;
     outcome = result.messages.length > 0 ? "hit" : "timeout";
-    const sessions = await ownSessionsAtReturn(ctx);
+    const report = await ownSessionsAtReturn(ctx);
     return NextResponse.json({
       messages: result.messages,
       timedOut: result.messages.length === 0,
       // ⚠ REPORTED, not inferred. A caller who belongs to NO channel would otherwise read an
       // empty page as "nothing happened" and re-arm forever on a hold that can never fire.
       channelCount: result.channelCount,
-      ...(sessions === undefined ? {} : { sessions }),
+      // ⚠ Both keys or neither — the per-channel route states why at length.
+      ...(report === undefined
+        ? {}
+        : { sessions: report.sessions, operatorOnline: report.operatorOnline }),
     });
   } catch (err) {
     return toChannelErrorResponse(err);

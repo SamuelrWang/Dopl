@@ -149,6 +149,12 @@ export async function opAwait(
   // ⚠ LAST WRITER WINS, deliberately: the inner poll loop re-issues, and the
   // freshest snapshot is the one from the call that ended the hold.
   let sessions: AwaitResult["sessions"];
+  // ⚠ THE CALLER'S OWN MACHINE, FROM THE SAME SNAPSHOT (2026-08-23, F-294) — so
+  // a quiet row under a live heartbeat renders "quiet Xm" instead of accusing
+  // the desktop of being offline. It MOVES WITH `sessions` and only with it: the
+  // route emits both keys or neither, and carrying one forward from an older
+  // poll would pair a fresh row set with a stale liveness answer.
+  let operatorOnline: AwaitResult["operatorOnline"];
   // What ended the hold when it was an inner failure rather than the clock, so
   // the result can NAME it: "the wait timed out" after a socket reset is not
   // actionable.
@@ -186,7 +192,10 @@ export async function opAwait(
       pollError = e;
       break;
     }
-    if (result.sessions !== undefined) sessions = result.sessions;
+    if (result.sessions !== undefined) {
+      sessions = result.sessions;
+      operatorOnline = result.operatorOnline;
+    }
     if (result.messages.length > 0) {
       messages = result.messages;
       break;
@@ -230,7 +239,7 @@ export async function opAwait(
         // hold that came back empty is exactly when an orchestrator has to
         // decide whether the agent it is waiting on is still alive. Answering
         // that used to cost a second call.
-        ...sessionBlockLines(sessions),
+        ...sessionBlockLines(sessions, undefined, operatorOnline),
       ].join("\n"),
     );
   }
@@ -263,6 +272,6 @@ export async function opAwait(
   // ⚠ AFTER the messages and after the re-arm guidance — a block of server
   // narration spliced between counterparty bodies would let a body's last line
   // read as the start of this section.
-  lines.push(...sessionBlockLines(sessions));
+  lines.push(...sessionBlockLines(sessions, undefined, operatorOnline));
   return ok(lines.join("\n"));
 }

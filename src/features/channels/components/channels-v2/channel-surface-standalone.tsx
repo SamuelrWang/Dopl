@@ -1,0 +1,126 @@
+"use client";
+
+/**
+ * THE PER-CHANNEL SURFACE, PINNED TO ONE CHANNEL AND MOUNTABLE ANYWHERE — the
+ * full channels-v2 experience (header, transcript, composer, the Info / Threads /
+ * Agents / Settings column, the agent view) for a container the caller already
+ * knows, with no channel tree beside it and no app shell around it.
+ *
+ * ⚠ IT IS A HOST, WHICH IS THE WHOLE REASON IT EXISTS. `channel-surface.tsx`
+ * renders and does not fetch; the reads, the derivations and — the part that
+ * cannot be forgotten — the ONE refetch coordinator are `channel-surface-data.ts`,
+ * and a surface that mounts without registering it fails with NO ERROR SHAPE
+ * (INVARIANTS §7: the transcript stops updating and nothing anywhere says so).
+ * This file is the second host of that hook; `channels-v2-core.tsx` is the first.
+ * **There is no third code path for the live loop.**
+ *
+ * ⚠ SELECTION IS LOCAL AND THREAD-ONLY. `use-channels-v2-selection.ts` carries
+ * eight pieces of "which surface am I looking at"; here the channel is FIXED, so
+ * the ones this surface moves are the open thread, the info toggle, the open
+ * agent and the scroll signal. Nothing routes: the tree's channel pick, the
+ * Inbox takeover and the create dialogs have no host here.
+ *
+ * ⚠ NOTHING FROM THE APP SHELL. No workspace-access context, no router, no
+ * layout provider — every fact arrives as a prop, exactly as it does on the
+ * workspace page. The one ambient requirement is a TanStack `QueryClientProvider`,
+ * which every read hook in this tree needs and which the app root already mounts.
+ */
+
+import { cn } from "@/shared/lib/utils";
+import type { Role } from "@/features/workspaces/types";
+import { ChannelSurface } from "./channel-surface";
+import { ChannelsV2AgentPanel } from "./agent-panel";
+import { useChannelSurfaceData } from "./channel-surface-data";
+import { useChannelsV2Selection } from "./use-channels-v2-selection";
+import type {
+  ChannelSurfaceCapabilities,
+  ChannelSurfaceSlots,
+} from "./channel-surface";
+import type { Channel } from "../../types";
+
+export function StandaloneChannelSurface({
+  workspaceId,
+  workspaceSlug = "",
+  channel,
+  currentUserId,
+  role = "member",
+  initialThreadId = null,
+  onDeleted,
+  slots,
+  capabilities,
+  className,
+}: {
+  workspaceId: string;
+  /**
+   * The workspace SEGMENT, for the pop-out's route and the agent window's.
+   * Defaulted so a caller with no segment in hand still mounts — main degrades an
+   * unusable one rather than refusing — but a desktop host that wants a working
+   * pop-out has to pass the real slug.
+   */
+  workspaceSlug?: string;
+  /** The container this surface is pinned to, already resolved by the caller. */
+  channel: Channel;
+  currentUserId: string;
+  /**
+   * The viewer's WORKSPACE role, which gates the manage half of the Settings tab
+   * alongside the channel's own `role`. Defaults to the least-privileged answer:
+   * a host that does not know cannot be the one to widen it.
+   */
+  role?: Role;
+  initialThreadId?: string | null;
+  /**
+   * The Settings tab deleted this channel. ⚠ THE HOST HAS TO ACT ON IT: the
+   * channel is a PROP here, so nothing below can stop rendering a row the server
+   * no longer has. The workspace page answers this by clearing its selection;
+   * a pinned host has to drop or replace the container itself.
+   */
+  onDeleted?: () => void;
+  slots?: ChannelSurfaceSlots;
+  capabilities?: ChannelSurfaceCapabilities;
+  className?: string;
+}) {
+  const sel = useChannelsV2Selection({
+    initialChannelId: channel.id,
+    initialThreadId,
+  });
+  const data = useChannelSurfaceData({
+    workspaceId,
+    channel,
+    currentUserId,
+    openThreadId: sel.requestedThreadId,
+  });
+
+  return (
+    // `relative` is the agent view's containing block — it is absolutely
+    // positioned against this surface, and without a positioned ancestor here it
+    // escapes to whatever the host page happens to have.
+    <div className={cn("relative flex min-h-0 flex-1", className)}>
+      <ChannelSurface
+        workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
+        channel={channel}
+        currentUserId={currentUserId}
+        role={role}
+        data={data}
+        selection={sel}
+        onDeselect={onDeleted}
+        slots={slots}
+        capabilities={capabilities}
+      />
+      {/* ⚠ The Sent lane reads the OPEN CHANNEL's transcript, so the panel takes
+          `messages` rather than fetching: one read, and the panel cannot show a
+          message the transcript beside it does not have. On the workspace page
+          this same panel is `overlays.tsx`, beside the create dialogs it has no
+          use for here. */}
+      <ChannelsV2AgentPanel
+        openAgent={sel.openAgent}
+        sessions={data.agentSessions}
+        messages={data.messages}
+        currentUserId={currentUserId}
+        workspaceSlug={workspaceSlug}
+        onClose={() => sel.setOpenAgent(null)}
+        onRefreshSessions={data.refreshAgents}
+      />
+    </div>
+  );
+}

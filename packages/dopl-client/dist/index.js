@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DoplTimeoutError = exports.DoplNetworkError = exports.DoplAuthError = exports.DoplApiError = exports.DoplAbortError = exports.workspaceContext = exports.DoplClient = void 0;
+exports.isStandardWorkspace = exports.DoplTimeoutError = exports.DoplNetworkError = exports.DoplAuthError = exports.DoplApiError = exports.DoplAbortError = exports.workspaceContext = exports.DoplClient = void 0;
 var client_js_1 = require("./client.js");
 Object.defineProperty(exports, "DoplClient", { enumerable: true, get: function () { return client_js_1.DoplClient; } });
 var transport_js_1 = require("./transport.js");
@@ -11,3 +11,5 @@ Object.defineProperty(exports, "DoplApiError", { enumerable: true, get: function
 Object.defineProperty(exports, "DoplAuthError", { enumerable: true, get: function () { return errors_js_1.DoplAuthError; } });
 Object.defineProperty(exports, "DoplNetworkError", { enumerable: true, get: function () { return errors_js_1.DoplNetworkError; } });
 Object.defineProperty(exports, "DoplTimeoutError", { enumerable: true, get: function () { return errors_js_1.DoplTimeoutError; } });
+var types_js_1 = require("./types.js");
+Object.defineProperty(exports, "isStandardWorkspace", { enumerable: true, get: function () { return types_js_1.isStandardWorkspace; } });

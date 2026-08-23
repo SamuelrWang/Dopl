@@ -1,44 +1,48 @@
-// SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="read_sessions")` ->
-// GET /api/channels/sessions -> `channel_sessions`.
+// SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="read_sessions")` -> GET /api/channels/sessions -> `channel_sessions`.
 //
 // ⚠ A PUSH ON STATE CHANGE, NOT A HEARTBEAT. presence.js beats every 30s per listener per workspace unconditionally
 // (~120 writes/hour/machine, forever); this writes when a session's DERIVED state actually moves — launch, first
 // tool, park, end. A handful of writes per session lifetime. That difference is the whole argument for the table
-// existing. Do NOT "simplify" it to a timer. ⚠ THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place
-// engine state becomes a pill state, and it already coalesces and fires only when the digest moved. This SUBSCRIBES
-// and re-derives nothing. Anything else is the two-readers-one-fact defect. ⚠ SEPARATE MODULE because
-// session-summary.js is network-free above `module.exports` — its suite reads it as SOURCE and evaluates the block
-// with fakes injected. An apiFetch there ends that. The seam is a subscription.
+// existing. Do NOT "simplify" it to a timer. ⚠ A KEEPALIVE WAS CONSIDERED HERE AND NOT BUILT (2026-08-23, F-294): a LIVE
+// session past some TELEMETRY_KEEPALIVE_MS folding a wall-clock bucket into its digest so the next natural cycle
+// re-reports (≤6 writes/hour/machine — the cost was never the objection). Refused for two reasons. The machine's
+// liveness is NOT missing from the wire — `agent_presence` carries it unconditionally — so the fix went to the side that
+// was lying (`server/session-state-service.ts › listSessionStates` joins it, `channel-session-render.ts ›
+// SessionRenderOpts` renders "quiet Xm" not "may be offline"), with no contract change and no new write; and a
+// wall-clock value inside `setDigest`'s input turns the digest gate this module is built around into a writer for sets
+// that did not move (`session-telemetry.js` argues the same hazard for `lastActivityAt`). A future wave that still needs
+// it needs a reason this one did not have, and must state it HERE.
+// ⚠ THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place engine state becomes a pill state, and it
+// already coalesces and fires only when the digest moved. This SUBSCRIBES and re-derives nothing. Anything else is the
+// two-readers-one-fact defect. ⚠ SEPARATE MODULE because session-summary.js is network-free above `module.exports` —
+// its suite reads it as SOURCE and evaluates the block with fakes injected. An apiFetch there ends that — the seam is a subscription.
 //
-// TRANSPORT IS api.js: a short POST with no abort wiring and no long-poll, so it inherits the
-// shared 401 repair (api-repair.js — a second copy of that repair produced the 1.8.x Channels
-// outage), the app-version stamp and the undici pool reset. listener-io.js keeps its own SEND
-// only because its long-poll wires a caller abort signal in.
+// TRANSPORT IS api.js: a short POST with no abort wiring and no long-poll, so it inherits the shared 401 repair
+// (api-repair.js — a second copy of that repair produced the 1.8.x Channels outage), the app-version stamp and the undici
+// pool reset. listener-io.js keeps its own SEND only because its long-poll wires a caller abort signal in.
 //
 // ── ROW LIFETIME ────────────────────────────────────────────────────────────────────────
-// ⚠ A session's row exists while its PILL does and is DELETED when the pill leaves, ended rows included — the row IS
-// that projection (session-summary's retention rule). Keeping `ended` rows to sweep later needs a scheduler this
-// product does not have, so "later" means never and the table grows unbounded; and an `ended` row for a window-less
-// session answers "what is flint doing?" with a session the operator cannot open. ⚠ THE DELETE IS IMPLICIT, which is
-// why this POSTS THE WHOLE SET: the server replaces the caller's set. A delta protocol needs an explicit "this one is
-// gone" that a crashed or quit desktop never sends. KNOWN GAP: rows outlive the process that wrote them. Bounded by
-// (a) the first push for a workspace in a new run replacing its whole set and (b) `reportedWorkspaces` being
-// PERSISTED, so a run starting with no sessions clears them. NOT covered: signing out — the credential that could
-// delete the rows is gone before anything here can react.
+// ⚠ A session's row exists while its PILL does and is DELETED when the pill leaves, ended rows included — the row IS that
+// projection (session-summary's retention rule). Keeping `ended` rows to sweep later needs a scheduler this product does
+// not have, so "later" means never and the table grows unbounded; and an `ended` row for a window-less session answers
+// "what is flint doing?" with a session the operator cannot open. ⚠ THE DELETE IS IMPLICIT, which is why this POSTS THE
+// WHOLE SET: the server replaces the caller's set. A delta protocol needs an explicit "this one is gone" that a crashed
+// or quit desktop never sends. KNOWN GAP: rows outlive the process that wrote them. Bounded by (a) the first push for a
+// workspace in a new run replacing its whole set and (b) `reportedWorkspaces` being PERSISTED, so a run starting with no
+// sessions clears them. NOT covered: signing out — the credential that could delete the rows is gone before anything
+// here can react.
 //
 // ── IDENTITY ────────────────────────────────────────────────────────────────────────────
-// ⚠ CROSS-ACCOUNT GUARD. Signing out does not end engine sessions, so operator A's sessions
-// are still in the registry when operator B signs in on the same Mac — and a push under B's
-// credential files A's handles, channel names and thread titles as B's, readable by B through
-// `read_sessions`. Every session key is therefore stamped with the identity current WHEN THIS
-// MODULE FIRST SAW IT, and only matching keys are reported. A key first seen with no resolvable
-// identity is never reported — fail closed. Signing back in as the SAME operator resumes
-// reporting automatically.
+// ⚠ CROSS-ACCOUNT GUARD. Signing out does not end engine sessions, so operator A's sessions are still in the registry
+// when operator B signs in on the same Mac — and a push under B's credential files A's handles, channel names and
+// thread titles as B's, readable by B through `read_sessions`. Every session key is therefore stamped with the identity
+// current WHEN THIS MODULE FIRST SAW IT, and only matching keys are reported. A key first seen with no resolvable
+// identity is never reported — fail closed. Signing back in as the SAME operator resumes reporting automatically.
 
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
-// THE QUANTIZER + CADENCE FLOOR (2026-08-22). ABOVE the sentinel like `apiFetch`, so the harness
-// injects the REAL module. Its header carries the derivations; this file only spends them.
+// THE QUANTIZER + CADENCE FLOOR (2026-08-22). ABOVE the sentinel like `apiFetch`, so the harness injects the REAL
+// module. Its header carries the derivations; this file only spends them.
 const telemetry = require('./session-telemetry');
 const Store = require('electron-store');
 
@@ -52,14 +56,14 @@ const store = new Store();
 const ENDPOINT = '/api/channels/sessions';
 const HTTP_TIMEOUT_MS = 15000;
 
-// Workspaces this machine has written rows into, persisted beside the listener's cursors. For
-// ONE case: a run that starts with no sessions in a workspace a previous run left rows in.
-// Without it those rows stand claiming `working` for a process that is gone.
+// Workspaces this machine has written rows into, persisted beside the listener's cursors. For ONE case: a run that
+// starts with no sessions in a workspace a previous run left rows in. Without it those rows stand claiming `working` for
+// a process that is gone.
 const REPORTED_WORKSPACES_KEY = 'sessionReportWorkspaces';
 
-// ⚠ BOUNDED RETRY, deliberately small (ui-sync's ~39 000-attempt storm is the cautionary tale).
-// Two attempts, one fixed gap, then STOP — the digest is NOT recorded on failure, so the
-// session's next real state change is the retry. Bounded by the session's life, not a timer.
+// ⚠ BOUNDED RETRY, deliberately small (ui-sync's ~39 000-attempt storm is the cautionary tale). Two attempts, one fixed
+// gap, then STOP — the digest is NOT recorded on failure, so the session's next real state change is the retry. Bounded
+// by the session's life, not a timer.
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
 

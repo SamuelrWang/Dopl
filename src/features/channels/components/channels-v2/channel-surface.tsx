@@ -1,0 +1,273 @@
+"use client";
+
+/**
+ * ONE CHANNEL, WHOLE — everything right of the channel tree: the breadcrumb
+ * header, the transcript, the composer, and the Info / Threads / Agents /
+ * Settings column beside them.
+ *
+ * ⚠ EXTRACTED FROM `channels-v2-core.tsx` ON 2026-08-23 SO A SECOND HOST CAN
+ * MOUNT IT. The workspace page is one host (the tree, the Inbox takeover and the
+ * first-run explainer stay there); `channel-surface-standalone.tsx` is the other,
+ * for a surface pinned to ONE channel with no tree beside it. **It is a
+ * FRAGMENT, not a wrapper** — two flex siblings, exactly the two the core used to
+ * render inline — so composing it changed no DOM on the workspace page.
+ *
+ * ⚠ IT RENDERS, IT DOES NOT FETCH. Every read, the refetch coordinator and the
+ * writes are `channel-surface-data.ts`, mounted by the HOST: the coordinator has
+ * to stay registered while the workspace page is showing something other than a
+ * channel (INVARIANTS §7), and a hook inside this file would unmount with the
+ * branch.
+ *
+ * ⚠ TWO KNOBS, AND BOTH DEFAULT TO THE WORKSPACE PAGE'S BEHAVIOUR — see
+ * {@link ChannelSurfaceSlots} and {@link ChannelSurfaceCapabilities}. A host that
+ * passes neither gets the surface the channels page has always rendered.
+ */
+
+import type { ReactNode } from "react";
+import type { Role } from "@/features/workspaces/types";
+import { channelDisplayName } from "../../lib/channel-display";
+import { ChannelsV2SettingsSlot } from "./settings-slot";
+import { ChannelsV2MessagePane } from "./message-pane";
+import { ChannelsV2InfoPanel } from "./info-panel";
+import { PopOutThreadButton } from "./pop-out";
+import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
+import type { ChannelSurfaceData } from "./channel-surface-data";
+import type { ChannelsV2Selection } from "./use-channels-v2-selection";
+import type { Channel, ChannelMention } from "../../types";
+
+export interface ChannelSurfaceSlots {
+  /**
+   * REPLACES the Info tab's body in CHANNEL view — an account-level 1:1 shows a
+   * person card where a workspace channel shows its metadata and roster.
+   *
+   * ⚠ THE TAB ROW IS NOT A SLOT and never becomes one: Info / Threads N /
+   * Agents N / Settings is the column's design, and a host that could delete a
+   * tab could ship a surface missing one with nothing saying so.
+   *
+   * ⚠ THREAD VIEW IGNORES IT, deliberately. With a thread open this column is
+   * already thread-scoped (Samuel, 2026-08-21 — `info-panel.tsx` owns the rule),
+   * so Info renders the THREAD's facts; a person card there would answer a
+   * question the reader did not ask.
+   */
+  infoTab?: ReactNode;
+}
+
+export interface ChannelSurfaceCapabilities {
+  /**
+   * Whether this container's membership can be CHANGED. Default `true` — the
+   * workspace page's behaviour. `false` hides the invite affordance and its
+   * dialog, AND the Settings tab's delete row, for a fixed two-person container
+   * where "add members" names an operation that cannot happen and deleting the
+   * one channel would strand the container it lives in.
+   */
+  memberManagement?: boolean;
+}
+
+export interface ChannelSurfaceProps {
+  workspaceId: string;
+  /** The workspace SEGMENT — the pop-out's route and the agent window's. */
+  workspaceSlug: string;
+  /** The RESOLVED row, not an id: the host owns which channel this is, and
+   *  asking for both is how the two come to disagree. */
+  channel: Channel;
+  currentUserId: string;
+  role: Role;
+  data: ChannelSurfaceData;
+  selection: ChannelsV2Selection;
+  /** A host read the roster can invalidate — the workspace page's channel list.
+   *  This surface always refetches its OWN roster beside it. */
+  onRosterChanged?: () => void;
+  /**
+   * The channel was DELETED from the Settings tab. The selection is cleared here
+   * either way; a host that pins the surface to one channel (rather than picking
+   * from a tree) has to stop rendering it, and this is the only notice it gets.
+   */
+  onDeselect?: () => void;
+  slots?: ChannelSurfaceSlots;
+  capabilities?: ChannelSurfaceCapabilities;
+}
+
+export function ChannelSurface({
+  workspaceId,
+  workspaceSlug,
+  channel,
+  currentUserId,
+  role,
+  data,
+  selection: sel,
+  onRosterChanged,
+  onDeselect,
+  slots,
+  capabilities,
+}: ChannelSurfaceProps) {
+  const {
+    members,
+    threads,
+    mentions,
+    agentSessions,
+    agentsPanel,
+    index,
+    openThread,
+    rows,
+    gate,
+  } = data;
+  const channelName = channelDisplayName(channel, members, currentUserId);
+
+  // The Tags inbox's click: mark read, land the center pane on the right
+  // transcript, then signal the scroll. The scroll effect runs POST-render, so
+  // the swapped transcript is in the DOM before it looks for the message row.
+  //
+  // ⚠ The mark-read is OPTIMISTIC (`use-mention-writes.ts`), which is what makes
+  // the badge drop in the same frame as the navigation. The nonced scroll signal
+  // is `use-channels-v2-selection.ts › jumpToMessage`.
+  const openMention = (mention: ChannelMention) => {
+    if (!mention.read) {
+      data.markRead.mutate({
+        channelId: channel.id,
+        messageIds: [mention.messageId],
+      });
+    }
+    sel.jumpToMessage(mention.threadId, mention.messageId);
+  };
+
+  // ⚠ MARK-ALL SENDS THE IDS IT IS DISPLAYING, never a flag. The list is
+  // bounded and says when it clipped, so "all" can only honestly mean the page
+  // — and naming the ids makes that true by construction rather than by comment
+  // (INVARIANTS §9). Already-read rows are filtered out so a no-op click sends
+  // no request at all.
+  const markAllMentionsRead = () => {
+    const unread = mentions.filter((m) => !m.read).map((m) => m.messageId);
+    if (unread.length === 0) return;
+    data.markRead.mutate({ channelId: channel.id, messageIds: unread });
+  };
+
+  return (
+    <>
+      <ChannelsV2MessagePane
+        channelId={channel.id}
+        workspaceId={workspaceId}
+        channelName={channelName}
+        thread={openThread}
+        rows={rows}
+        index={index}
+        members={members}
+        loading={data.messagesLoading}
+        outboundAsk={openThread ? (data.outboundByThread.get(openThread.id) ?? null) : null}
+        outboundBusy={data.consentBusy}
+        onDecideOutbound={data.decideOutbound}
+        scrollTarget={sel.scrollTarget}
+        infoOpen={sel.infoOpen}
+        // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
+        // rendering — never a flip inside the mutation. Two fast clicks send
+        // `true` then `false` and converge; a toggle verb would race.
+        favorited={channel.myFavoritedAt != null}
+        onToggleFavorite={() =>
+          data.favorite.mutate({
+            channelId: channel.id,
+            favorite: channel.myFavoritedAt == null,
+          })
+        }
+        gate={gate}
+        // The composer's New Agent icon (2026-08-21) — handed down whole,
+        // never re-mounted: a second `useAgentsPanel` is a second peer poll.
+        newAgent={agentsPanel}
+        // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
+        // hides ITSELF outside the desktop shell (feature detection), so the
+        // web tree gets no affordance for a window it cannot open.
+        popOut={
+          openThread ? (
+            <PopOutThreadButton
+              workspaceSlug={workspaceSlug}
+              channelId={channel.id}
+              threadId={openThread.id}
+            />
+          ) : null
+        }
+        // "Anthony's agent is working…", off the peer projection the Agents tab
+        // already polls. Thread view only — the row is about ONE exchange.
+        peerActivity={
+          openThread ? (
+            <PeerActivityRow
+              peers={peerWorkingOn(
+                agentsPanel.peerSessions,
+                currentUserId,
+                openThread.id
+              )}
+              byUser={index.byId}
+              currentUserId={currentUserId}
+            />
+          ) : null
+        }
+        onToggleInfo={sel.toggleInfo}
+        onExitThread={() => sel.openThread(null)}
+        onOpenThread={sel.openThread}
+      />
+      {sel.infoOpen && (
+        <ChannelsV2InfoPanel
+          channel={channel}
+          channelName={channelName}
+          members={members}
+          threads={threads}
+          threadsTruncated={data.threadsTruncated}
+          threadsLoading={data.threadsLoading}
+          index={index}
+          openThread={openThread}
+          onOpenThread={sel.openThread}
+          agentSessions={agentSessions}
+          peerSessions={agentsPanel.peerSessions}
+          canLaunchAgent={
+            agentsPanel.canLaunch &&
+            !!openThread &&
+            (openThread.createdBy === currentUserId ||
+              openThread.targetUserId === currentUserId)
+          }
+          launchBusy={agentsPanel.launchBusy}
+          launchError={agentsPanel.launchError}
+          // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22). The
+          // template picker inside the tab AWAITS this to learn whether main
+          // asked for a first-use approval; a `void` wrapper here would make
+          // every picker launch look like a build with no bridge.
+          onLaunchAgent={(id, templateId, overrides) =>
+            agentsPanel.launchAgent(id, templateId, overrides)
+          }
+          onApproveTemplate={agentsPanel.approveTemplate}
+          openAgent={sel.openAgent}
+          onOpenAgent={sel.setOpenAgent}
+          mentions={mentions}
+          mentionsTruncated={data.mentionsTruncated}
+          mentionsLoading={data.mentionsLoading}
+          onOpenMention={openMention}
+          onMarkAllMentionsRead={markAllMentionsRead}
+          infoTab={slots?.infoTab}
+          // THE SETTINGS TAB (Samuel, 2026-08-19). This cluster hung off the
+          // pane HEADER until then; the header keeps only the info toggle.
+          // ⚠ THREAD-SCOPED WHILE A THREAD IS OPEN (2026-08-21) — the branch
+          // is `settings-slot.tsx`, which owns why it lives at the MOUNT.
+          settings={
+            <ChannelsV2SettingsSlot
+              channel={channel}
+              workspaceId={workspaceId}
+              workspaceSlug={workspaceSlug}
+              currentUserId={currentUserId}
+              role={role}
+              members={members}
+              thread={openThread}
+              agentSessions={agentSessions}
+              gate={gate}
+              memberManagement={capabilities?.memberManagement}
+              onDeselect={() => {
+                sel.selectChannel(null);
+                onDeselect?.();
+              }}
+              onExitThread={() => sel.openThread(null)}
+              onRosterChanged={() => {
+                onRosterChanged?.();
+                data.refetchMembers();
+              }}
+            />
+          }
+        />
+      )}
+    </>
+  );
+}

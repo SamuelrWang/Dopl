@@ -20,6 +20,8 @@ const NON_WORKSPACE_ROOTS = new Set([
   "get-started",
   "invite",
   "join",
+  // `/link/{token}` — the home-channel claim page, like `invite`/`join` above.
+  "link",
   "login",
   "oauth",
   "onboarding",

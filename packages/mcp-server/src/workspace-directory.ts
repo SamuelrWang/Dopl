@@ -10,6 +10,7 @@
  * retries instead of serving a bogus empty list for a full TTL.
  */
 
+import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem, WorkspaceRole } from "@dopl/client";
 import type { ToolResponse } from "./tools/respond.js";
 import { inlineOr } from "./tools/narration.js";
@@ -54,9 +55,16 @@ export interface WorkspaceDirectoryOptions {
 }
 
 export interface WorkspaceDirectory {
-  /** The caller's memberships, cached for {@link WORKSPACE_CACHE_TTL_MS}. */
+  /**
+   * The caller's LISTABLE memberships, cached for
+   * {@link WORKSPACE_CACHE_TTL_MS}. ⚠ `kind='link'` home-channel containers are
+   * excluded — they are never advertised to an agent.
+   */
   getWorkspaceList(): Promise<WorkspaceListItem[]>;
-  /** A slug-or-UUID `workspace=` ref resolved against those memberships. */
+  /**
+   * A slug-or-UUID `workspace=` ref resolved against ALL memberships, links
+   * included: explicit addressing is how a home channel is reached.
+   */
   resolveWorkspaceRef(ref: string): Promise<WorkspaceListItem | null>;
   /** The isError response for a no-`workspace=` call with no session default. */
   noWorkspaceError(): Promise<ToolResponse>;
@@ -77,7 +85,8 @@ export function createWorkspaceDirectory(
       ? { workspaces: options.directory, loadedAt: Date.now() }
       : null;
 
-  async function getWorkspaceList(): Promise<WorkspaceListItem[]> {
+  /** The cache, kind and all. ⚠ RESOLUTION reads this; LISTING never does. */
+  async function getAllWorkspaces(): Promise<WorkspaceListItem[]> {
     if (
       workspaceListCache &&
       Date.now() - workspaceListCache.loadedAt < WORKSPACE_CACHE_TTL_MS
@@ -92,17 +101,24 @@ export function createWorkspaceDirectory(
     return result.workspaces;
   }
 
+  async function getWorkspaceList(): Promise<WorkspaceListItem[]> {
+    return (await getAllWorkspaces()).filter(isStandardWorkspace);
+  }
+
   async function resolveWorkspaceRef(
     ref: string,
   ): Promise<WorkspaceListItem | null> {
+    // ⚠ Resolves against the UNFILTERED directory: `workspace=<link id>` is how
+    // an agent acting in a home channel addresses its container, and the
+    // container is deliberately absent from every listing.
     // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
     // first pass — id alone forces a wasteful refresh.
-    let list = await getWorkspaceList();
+    let list = await getAllWorkspaces();
     let match = list.find((w) => w.id === ref || w.slug === ref);
     if (match) return match;
     // Force-refresh once — covers a mid-session membership add.
     workspaceListCache = null;
-    list = await getWorkspaceList();
+    list = await getAllWorkspaces();
     match = list.find((w) => w.id === ref || w.slug === ref);
     return match ?? null;
   }

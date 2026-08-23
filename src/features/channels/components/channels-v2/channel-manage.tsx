@@ -72,6 +72,13 @@ export interface ChannelsV2ManageProps {
   members: ChannelMember[];
   /** The page's ONE refetch coordinator — every write below settles into it. */
   gate: MutationGate;
+  /**
+   * Whether this container's membership can CHANGE (`channel-surface.tsx ›
+   * ChannelSurfaceCapabilities`). Default `true` — the channels page. `false`
+   * drops the invite row AND its dialog, because a host that cannot add members
+   * must not mount a surface for doing it.
+   */
+  memberManagement?: boolean;
   /** A deleted channel must not stay selected. */
   onDeselect: () => void;
   /** Membership changed under the invite dialog — refetch list + roster. */
@@ -96,6 +103,7 @@ export function ChannelsV2ManageActions({
   role,
   members,
   gate,
+  memberManagement = true,
   onDeselect,
   onRosterChanged,
 }: ChannelsV2ManageProps) {
@@ -140,6 +148,7 @@ export function ChannelsV2ManageActions({
       <ChannelsV2SettingsTab
         channel={channel}
         canManage={canManage}
+        memberManagement={memberManagement}
         // The agent half, INLINE (2026-08-19 ruling — see the file docblock).
         // A non-member has no agent settings of their own here, and passing
         // nothing is what gives them the tab's empty state.
@@ -167,16 +176,20 @@ export function ChannelsV2ManageActions({
         onConfirm={lifecycle.toggleVisibility}
       />
 
-      <InviteDialog
-        workspaceId={workspaceId}
-        workspaceSlug={workspaceSlug}
-        channelId={channel.id}
-        currentUserId={currentUserId}
-        canManage={canManage || meetsMinRole(role, "admin")}
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        onChanged={onRosterChanged}
-      />
+      {/* ⚠ NOT MOUNTED AT ALL when membership is fixed — the dialog opens a
+          roster read of its own, and there is no row left to open it. */}
+      {memberManagement && (
+        <InviteDialog
+          workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
+          channelId={channel.id}
+          currentUserId={currentUserId}
+          canManage={canManage || meetsMinRole(role, "admin")}
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          onChanged={onRosterChanged}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

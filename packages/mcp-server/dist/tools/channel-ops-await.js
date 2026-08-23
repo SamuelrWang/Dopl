@@ -127,6 +127,12 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     // ⚠ LAST WRITER WINS, deliberately: the inner poll loop re-issues, and the
     // freshest snapshot is the one from the call that ended the hold.
     let sessions;
+    // ⚠ THE CALLER'S OWN MACHINE, FROM THE SAME SNAPSHOT (2026-08-23, F-294) — so
+    // a quiet row under a live heartbeat renders "quiet Xm" instead of accusing
+    // the desktop of being offline. It MOVES WITH `sessions` and only with it: the
+    // route emits both keys or neither, and carrying one forward from an older
+    // poll would pair a fresh row set with a stale liveness answer.
+    let operatorOnline;
     // What ended the hold when it was an inner failure rather than the clock, so
     // the result can NAME it: "the wait timed out" after a socket reset is not
     // actionable.
@@ -166,8 +172,10 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
             pollError = e;
             break;
         }
-        if (result.sessions !== undefined)
+        if (result.sessions !== undefined) {
             sessions = result.sessions;
+            operatorOnline = result.operatorOnline;
+        }
         if (result.messages.length > 0) {
             messages = result.messages;
             break;
@@ -205,7 +213,7 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
             // hold that came back empty is exactly when an orchestrator has to
             // decide whether the agent it is waiting on is still alive. Answering
             // that used to cost a second call.
-            ...(0, channel_session_render_1.sessionBlockLines)(sessions),
+            ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
     const lines = [
@@ -237,6 +245,6 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     // ⚠ AFTER the messages and after the re-arm guidance — a block of server
     // narration spliced between counterparty bodies would let a body's last line
     // read as the start of this section.
-    lines.push(...(0, channel_session_render_1.sessionBlockLines)(sessions));
+    lines.push(...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline));
     return (0, respond_1.ok)(lines.join("\n"));
 }

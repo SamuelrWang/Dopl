@@ -21,6 +21,16 @@
  *     there must not be: printing `0 tokens` for a desktop that reported no
  *     number is a measurement nobody took, stated as fact, in the surface an
  *     orchestrator uses to decide whether to keep an agent alive.
+ *
+ * ⚠ **AND SINCE 2026-08-23 THE FIRST RULE HAS A SECOND WITNESS** (F-294). A quiet
+ * row alone cannot tell "idle but alive" from "the desktop is gone", so the hedge
+ * said the more alarming of the two about an agent that was merely between turns.
+ * `agent_presence` DOES beat on a timer, unconditionally, and the caller's OWN
+ * presence freshness now rides in as {@link SessionRenderOpts.operatorOnline}: a
+ * quiet row under a LIVE heartbeat renders "quiet Xm" (unchanged), and only a
+ * quiet row under a quiet machine keeps "may be offline". ⚠ Absent = UNKNOWN and
+ * keeps the old hedge — an older server sends no such key, and this must not read
+ * a missing fact as evidence of life.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SESSION_TELEMETRY_NOTE = exports.SESSION_STALE_WINDOW_MS = void 0;
@@ -140,6 +150,20 @@ function sessionIsStale(session, now = Date.now(), windowMs = exports.SESSION_ST
     return age >= windowMs;
 }
 /**
+ * THE CHARACTERS `neutralizeInline` WOULD TURN INTO A SPACE — its
+ * markdown-structure class, plus whitespace itself.
+ *
+ * ⚠ **A DELIBERATE RESTATEMENT of `narration.ts › neutralizeInline`'s class**, and
+ * `channel-session-liveness.test.ts` holds the two against each other character
+ * by character rather than trusting this comment. It is stated a second time
+ * because the two do OPPOSITE things with the same set: the neutralizer blanks
+ * them so text cannot pose as structure, and {@link shortModelLabel} joins them
+ * so ONE id cannot pose as TWO names (F-293). A class that grew in one place and
+ * not the other would re-open exactly that.
+ */
+const MODEL_LABEL_BREAKERS = /[`*_#>[\]{}|\s]+/g;
+const MODEL_LABEL_EDGE = /^[`*_#>[\]{}|\s]+|[`*_#>[\]{}|\s]+$/g;
+/**
  * A model id, shortened for a glance.
  *
  * ⚠ COSMETIC ONLY, and it never invents a name: it drops a leading vendor
@@ -151,13 +175,34 @@ function sessionIsStale(session, now = Date.now(), windowMs = exports.SESSION_ST
  * "no model").
  * ⚠ Still passed through `inlineOr` by the caller — it is a value in a line WE
  * wrote, and the desktop is not a trusted formatter.
+ *
+ * ⚠ **AND THE RESULT IS ONE TOKEN, ALWAYS — F-293, A LIVE DEFECT.** The bundled
+ * CLI ships explicit long-context ids spelled with a bracket suffix
+ * (`claude-opus-5[1m]`, `claude-sonnet-4-6[1m]`; `main/session-model.js ›
+ * contextWindowFor` reads that suffix as the window), and `narration.ts ›
+ * neutralizeInline` turns `[` and `]` into SPACES because they are markdown
+ * structure. So the model clause rendered `` `opus-5 1m` `` — a bare `1m` sitting
+ * in the one segment {@link SESSION_TELEMETRY_NOTE} promises holds bare NAMES,
+ * one clause away from `started 12m ago` and `stale, 10m ago`. A relative time is
+ * exactly what `coarseAge` emits, so an operator reads a time shard as a template
+ * or a model. **Whatever the neutralizer would blank into a space is joined with
+ * a HYPHEN here instead**, so no desktop-supplied id can ever split the model slot
+ * into two bare names.
  */
 function shortModelLabel(model) {
     const stripped = model
         .replace(/^claude-/i, "")
         .replace(/-\d{8}$/, "")
         .trim();
-    return stripped.length > 0 ? stripped : model;
+    const base = stripped.length > 0 ? stripped : model;
+    // ⚠ EDGES FIRST, so `opus-5[1m]` becomes `opus-5-1m` and not `opus-5-1m-`. A
+    // label that is ALL breakers survives as itself and fails the ordinary way, in
+    // `inlineOr` — the same rule the empty-strip fallback above follows: this
+    // function never blanks a name, because a blank reports "no model".
+    const single = base
+        .replace(MODEL_LABEL_EDGE, "")
+        .replace(MODEL_LABEL_BREAKERS, "-");
+    return single.length > 0 ? single : base;
 }
 /** `62% of 200000` — or `null` when either half is unknown.
  *  ⚠ NEVER divides by an absent or zero window. */
@@ -220,6 +265,19 @@ function telemetryClauses(s, now) {
     return out;
 }
 /**
+ * IS A QUIET ROW MERELY QUIET?
+ *
+ * ⚠ Two conditions, and BOTH are required. The row must be past the window
+ * (otherwise it still speaks for itself), and the caller's machine must be
+ * heartbeating NOW. ⚠ **AN UNREADABLE `updatedAt` IS EXCLUDED ON PURPOSE** — the
+ * fail-safe direction {@link sessionIsStale} already picks. Presence licenses us
+ * to say "this report is still current"; it does not license us to date a report
+ * whose own stamp we cannot read.
+ */
+function rowIsQuietNotGone(age, stale, operatorOnline) {
+    return stale && age !== null && operatorOnline === true;
+}
+/**
  * ONE session row, all peer-influenced text neutralized.
  *
  * `telemetry` decides whether the operator-only clauses are rendered at all —
@@ -239,11 +297,23 @@ function formatSessionLine(s, opts = {}) {
     // ⚠ THE HEDGE, and it replaces the state clause rather than annotating it.
     // "working · stale" still reads as "working" to a skimming model; "last
     // reported working" cannot.
+    //
+    // ⚠ **AND THE MIDDLE BRANCH IS THE OPPOSITE TRADE, ON PURPOSE** (F-294). When
+    // presence says the machine is heartbeating, the state clause is KEPT and only
+    // annotated — because here we WANT it read as the state. The push is
+    // change-driven, so a live machine that has said nothing has nothing to say:
+    // "unchanged" is the honest word and "may be offline" was a lie the surface
+    // told about every idle-but-alive agent within ~2 minutes. It still stops short
+    // of a fresh observation ("quiet", not "as of now"), because a push that FAILED
+    // also leaves a live machine looking quiet.
     const age = ageMs(s.updatedAt, now);
     const stale = sessionIsStale(s, now);
-    const head = stale
-        ? `last reported ${state} · stale${age === null ? "" : `, ${coarseAge(age)} ago`} — its desktop may be offline`
-        : state;
+    const quiet = rowIsQuietNotGone(age, stale, opts.operatorOnline);
+    const head = quiet
+        ? `${state} · quiet ${coarseAge(age)} — your desktop is online, so this is UNCHANGED, not unknown`
+        : stale
+            ? `last reported ${state} · stale${age === null ? "" : `, ${coarseAge(age)} ago`} — its desktop may be offline`
+            : state;
     // ⚠ NOT neutralized, and it does not need to be: this is OUR OWN copy, chosen
     // from a closed map by a key the server already narrowed. Nothing the desktop
     // wrote reaches the line — which is the whole reason `detail` is a key.
@@ -262,11 +332,20 @@ function formatSessionLine(s, opts = {}) {
  * ⚠ IT NAMES THE STALE CASE EXPLICITLY. A model that sees "last reported
  * working" without being told what that means will round it back to "working" —
  * the reading this whole file exists to prevent.
+ *
+ * ⚠ **AND SINCE F-294 THERE ARE TWO QUIET-ROW READINGS, SO THE LEGEND BRANCHES
+ * ON THE SAME FACT THE LINES DID.** Explaining "may be offline" over a page whose
+ * lines all say "quiet" teaches the wrong caveat, which is worse than none.
  */
-function sessionLegend(anyStale) {
+function sessionLegend(anyStale, operatorOnline) {
     const base = 'Each line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished).';
     if (!anyStale)
         return base;
+    if (operatorOnline === true) {
+        // ⚠ The trailing clause covers the one row that can still take the other
+        // branch under a live heartbeat: an `updatedAt` this server could not parse.
+        return `${base} A line reading **quiet Xm** is ALIVE, not unknown: your desktop is still heartbeating, and this projection only moves when a session's state does — so nothing has been reported because nothing CHANGED. It is not fresh evidence either; it is the last report, still standing. (A line that instead reads **last reported <state>** carries a stamp that could not be read — treat that one as UNKNOWN.)`;
+    }
     return `${base} A line reading **last reported <state>** is NOT a live state: nothing has been reported for that session in a while, and its desktop may be asleep, signed out, or gone. Treat it as UNKNOWN — do not wait on it as if it were still working, and do not report it as stopped either.`;
 }
 /**
@@ -289,7 +368,11 @@ function sessionLegend(anyStale) {
  * timeout, so it is one line per session and one legend — never the full
  * `read_sessions` preamble.
  */
-function sessionBlockLines(sessions, now = Date.now()) {
+function sessionBlockLines(sessions, now = Date.now(), 
+// ⚠ THIRD, POSITIONAL AND OPTIONAL, so the five call sites that pass only the
+// set keep compiling. See {@link SessionRenderOpts.operatorOnline}: absent is
+// "not reported", which takes the offline-hedge branch.
+operatorOnline) {
     if (sessions === undefined)
         return [];
     if (sessions.length === 0) {
@@ -302,10 +385,14 @@ function sessionBlockLines(sessions, now = Date.now()) {
     const anyStale = sessions.some((s) => sessionIsStale(s, now));
     const lines = [``, `### Your agents — ${sessions.length}`];
     for (const s of sessions) {
-        lines.push(formatSessionLine(s, { telemetry: true, now }));
+        lines.push(formatSessionLine(s, { telemetry: true, now, operatorOnline }));
     }
     if (anyStale) {
-        lines.push(`A line reading **last reported <state>** is NOT a live state — nothing has been reported for that session in a while and its desktop may be gone. Treat it as UNKNOWN: do not wait on it as if it were working, and do not report it as stopped.`);
+        // ⚠ Same branch the lines above took, for the reason `sessionLegend` states:
+        // a caveat about a form the page does not contain teaches the wrong lesson.
+        lines.push(operatorOnline === true
+            ? `A line reading **quiet Xm** is ALIVE — your desktop is still heartbeating and this projection only moves when a session's state does, so nothing was reported because nothing CHANGED. Do not read it as a fresh observation, and do not read it as stopped.`
+            : `A line reading **last reported <state>** is NOT a live state — nothing has been reported for that session in a while and its desktop may be gone. Treat it as UNKNOWN: do not wait on it as if it were working, and do not report it as stopped.`);
     }
     return lines;
 }
@@ -315,4 +402,4 @@ function sessionBlockLines(sessions, now = Date.now()) {
  * otherwise assume it can see a PEER'S, ask for them, and be silently answered
  * with a coarse row it reads as "that agent is running no model".
  */
-exports.SESSION_TELEMETRY_NOTE = "Template, model, context, tokens, current tool and start time are reported for YOUR OWN sessions only — a peer's agent is visible to you as a handle and a state, never as a template or a cost. Where a line carries two bare names, the first is the agent TEMPLATE it was launched from and the second is the model. A template name is what the session was launched as and is never updated afterwards, so it may name a template that has since been renamed or deleted. A field that is absent was NOT REPORTED by the machine running that session; it is not a zero, and no template named is not a template hidden.";
+exports.SESSION_TELEMETRY_NOTE = "Template, model, context, tokens, current tool and start time are reported for YOUR OWN sessions only — a peer's agent is visible to you as a handle and a state, never as a template or a cost. Where a line carries two bare names, the first is the agent TEMPLATE it was launched from and the second is the model; the MODEL is always ONE unbroken token, so a name containing a space is a template and never a model. A template name is what the session was launched as and is never updated afterwards, so it may name a template that has since been renamed or deleted. A field that is absent was NOT REPORTED by the machine running that session; it is not a zero, and no template named is not a template hidden.";

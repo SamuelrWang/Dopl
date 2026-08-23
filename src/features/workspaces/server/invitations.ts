@@ -10,7 +10,7 @@ import type {
 import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { recordActivity } from "@/features/members/server/activity";
-import { requireWorkspaceRole } from "./authz";
+import { assertMemberAddableById, requireWorkspaceRole } from "./authz";
 import {
   type InvitationRow,
   mapInvitationRow,
@@ -61,6 +61,10 @@ export async function createInvitation(
   input: CreateInvitationInput
 ): Promise<Invitation> {
   await requireWorkspaceRole(input.workspaceId, input.invitedBy, "admin");
+
+  // ⚠ A home-channel container holds its pair and nobody else (authz.ts).
+  // Before the token is minted, so no invite can exist for one.
+  await assertMemberAddableById(input.workspaceId);
 
   // ⚠ Solo is single-member — EVERY member-add path must gate. Fail fast so
   // the 402 lands on click, before minting a token that could never be used.

@@ -1215,7 +1215,7 @@ COMMIT;
 
 ## F-205 — The v2 Tags inbox's scroll target points at message ids that do not exist (2026-08-18)
 
-- Location: `src/features/channels/components/channels-v2/fixtures-mentions.ts` (the rows) → `› channels-v2-core.tsx › openMention` → `› message-pane.tsx`'s scroll effect, which looks the row up by `[data-message-id]`
+- Location: `src/features/channels/components/channels-v2/fixtures-mentions.ts` (the rows) → `› channel-surface.tsx › openMention` → `› message-pane.tsx`'s scroll effect, which looks the row up by `[data-message-id]`. ⚠ **Anchor repointed 2026-08-23, historical location only:** `openMention` lived in `› channels-v2-core.tsx` when this was written and moved out with the channel-surface extraction. Nothing about the finding changed.
 - The transcript's scroll plumbing is REAL and exercised (`transcript.test.tsx` pins `data-message-id`); the mentions inbox that drives it is fixture-driven until wiring-plan Phase 6, and its `messageId` values name no stored message. **So a click marks read, sets the thread and fires a nonced target that resolves to nothing.** Nothing throws — the effect returns early on a miss
 - Deliberate, and the alternative was worse: pointing fixture rows at whatever real messages happen to be loaded would make the inbox assert that a real person tagged the viewer, which is a fabricated claim about somebody's words. The heatmap claims nothing about anybody; a mention does
 - Phase 6 replaces the fixture with mention-addressed rows plus a read-state store (`channel_messages` has no read-state column today), at which point the ids are real and this closes without a code change to the plumbing
@@ -2171,3 +2171,264 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 - **Two refs have no addressable symbol** (both quote a file-header docblock, above any declaration) and became grep patterns, which the rule permits: `session-outbound-tag.js` (grep `the tag is an INVARIANT`) and `launch-directives.js`'s header (grep `AND NOTHING ELSE`).
 - **Three stale CONTENT corrections landed with the anchors**, found the same way: the planned migration filename (`…120000_channel_launch_directives_template_id.sql`) is not what shipped (`20260823140000_channel_launch_directives_template.sql`); and §3b/§3c both described the model chain as passing every value through `aliasForModelId` ⇒ `'default'`, which F-285 replaced with `chainModel` in this same wave.
 - Status: **closed**; entry kept as the record.
+
+---
+
+## The 2026-08-23 LIVE-TELEMETRY PAIR — F-293 and F-294
+
+Two defects reported from PRODUCTION rather than from an audit — both observed by test agents driving the real
+`dopl_channel` surface, both in the same line of `read_sessions` / the `await` session block, and both invisible to
+all twelve green gates because every existing case fed the renderer values that could not trigger them.
+
+⚠ **Id note, the fourth time in four days:** `F-293`–`F-294` were taken after re-reading this file fresh
+(`grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' | sort -n | tail -1` → **F-292**).
+If a concurrent wave also claimed either, the earlier claim wins and this block renumbers.
+
+⚠ **What the pair is worth repeating for: BOTH ARE THE RENDERER STATING SOMETHING IT DID NOT MEASURE**, in the one
+surface an orchestrator uses to decide whether to keep an agent alive — the exact failure `channel-session-render.ts`'s
+two-rule header exists to prevent, arriving twice from directions the header did not name. F-293 invents a NUMBER out
+of a security transform; F-294 invents a VERDICT out of a missing fact. Neither is catchable by a test that asserts
+what one side does: F-293 needs the render held against the neutralizer's character class, F-294 needs the session
+table held against the presence table.
+
+## F-293 — a long-context model id split into two bare names, one of them shaped exactly like a relative time (2026-08-23)
+
+- Location: `packages/mcp-server/src/tools/channel-session-render.ts › shortModelLabel`, against
+  `packages/mcp-server/src/tools/narration.ts › neutralizeInline` and `dopl-desktop-app/main/session-model.js › contextWindowFor`.
+- Found during: live use. Two test agents independently read a session line whose model segment said `opus-5 1m`
+  where another call had said `opus-5`. The session had **no template**, which is what made it dangerous.
+- Severity: moderate. Nothing crashes; a surface that promises "two bare names = template, then model" printed one
+  value as two, one clause away from `started 12m ago` and `stale, 10m ago`.
+- **The mechanism, in three hops.** The bundled CLI marks its 200k models `supports_1m_suffix` and ships ids like
+  `claude-opus-5[1m]`; `session-model.js › contextWindowFor` reads that exact suffix as the window, and
+  `session-telemetry.js › telemetryFields` puts `s.liveModel` — the SDK's OWN reported id — on the wire. Then
+  `shortModelLabel` strips the vendor prefix (`opus-5[1m]`), and `neutralizeInline` turns `[` and `]` into SPACES
+  because they are markdown structure. `` `opus-5 1m` ``. **`1m` is byte-for-byte what `coarseAge` emits between 30s
+  and 90s.**
+- **⚠ THE "TWO CALL PATHS DIVERGED" HYPOTHESIS WAS WRONG, AND SAYING SO IS THE POINT.** The two renders were suspected
+  because the same session looked different from each. Driven with one identical DTO they are **byte-identical** —
+  `read_sessions` and `sessionBlockLines` both call `formatSessionLine(s, {telemetry:true, now})` with one struck
+  `now`, and the routes behind them share `mapOwnSessionStateRow`. What differed was **the ROW, at two moments in one
+  session's life**: before the SDK's `system/init` reports a live id the push carries the operator's PICK
+  (`claude-opus-5`, a `MODEL_IDS` member, no suffix); after it, the CLI's own id, suffixed. A "the two surfaces
+  disagree" report is evidence about the DATA at least as often as about the code, and the parity is now PINNED so the
+  suspicion cannot be re-litigated.
+- **✅ RESOLVED.** `shortModelLabel` joins with a hyphen every character `neutralizeInline` would blank (edges trimmed
+  first, so `opus-5[1m]` → `opus-5-1m` and not `opus-5-1m-`), and falls back to the original when the join would empty
+  the label — the same never-blank rule the vendor-prefix strip already followed. The suffix is **kept**: it is the 1M
+  variant of a 200k model, and dropping it would render two different runs under one name.
+  `SESSION_TELEMETRY_NOTE` now states the promise ("the MODEL is always ONE unbroken token"), so it is checkable.
+- **Pinned by** `packages/mcp-server/src/tools/channel-session-liveness.test.ts`: the live reproduction, the
+  both-paths byte-diff over five DTO shapes, a no-whitespace property over six id spellings, and a test that holds
+  the joined class against `neutralizeInline`'s blanking class **character by character** — the drift that would
+  silently re-open this.
+- Status: **closed**; entry kept as the record.
+
+## F-294 — an idle-but-alive agent was reported as "its desktop may be offline" within ~2 minutes (2026-08-23)
+
+- Location: `packages/mcp-server/src/tools/channel-session-render.ts › formatSessionLine`,
+  `src/features/channels/server/session-state-service.ts › listSessionStates`,
+  `src/features/channels/server/repository-collab.ts › presenceForUser`, and the three own-scoped routes
+  (`app/api/channels/sessions/route.ts`, `app/api/channels/await/route.ts`, `app/api/channels/[channelId]/await/route.ts`).
+- Found during: live use, by test agents waiting on agents that were fine.
+- Severity: **major as a teaching defect**, which is how this repo classifies it (cf. F-274, F-291). The hedge exists
+  to stop an orchestrator waiting on a dead machine; telling it the same thing about a live one spends the signal.
+- **The mechanism.** `channel_sessions` is pushed on state CHANGE (`main/session-state-push.js` FORBIDS a timer, in
+  capitals, with the write-cost argument), while `SESSION_STALE_WINDOW_MS` is 90s of ROW AGE. So an agent that is
+  idle-and-alive and an agent whose desktop died produce **the same quiet row**, and the renderer — correctly refusing
+  to assert a live state — reported the more alarming of the two about the common case.
+- **Two fixes were weighed. The one taken corrects the surface that was lying.** `agent_presence` already beats
+  unconditionally per (user, workspace) (`main/presence.js`, ~120/hr) and is exactly the fact the session table lacks,
+  so the own-scoped read joins it and both surfaces carry a boolean `operatorOnline`. Quiet row + live heartbeat →
+  **"<state> · quiet Xm — your desktop is online, so this is UNCHANGED, not unknown"**; quiet row + quiet machine →
+  today's offline hedge, unchanged. **No push-contract change, no new write, and the crash case is still covered** —
+  presence stops beating when the process dies.
+- **Why the PUSH-SIDE keepalive was NOT taken, recorded in the file that would have carried it.** The candidate was a
+  coarse liveness re-report (a LIVE session past `TELEMETRY_KEEPALIVE_MS` folding a wall-clock bucket into its digest
+  so the next natural cycle re-reports; ≤6 writes/hour/machine). **The write cost was never the objection.** It was
+  refused because (a) the machine's liveness was never missing from the wire, so the fix belongs where the lie was
+  told, and (b) a wall-clock value inside `setDigest`'s input turns the digest gate the whole module is built around
+  into a writer for sets that did not move — the hazard `session-telemetry.js`'s header already spends its length on
+  for `lastActivityAt`. `session-state-push.js`'s header now states this beside the no-timer rule, with the standing
+  instruction that a future wave needing it must argue for it THERE.
+- **Four rules the fix keeps, each of which was a way to get this wrong.** ⚠ **Absent ≠ false.** Three states, and an
+  older server's missing key takes the OFFLINE branch, because a fact nobody reported is not evidence of life.
+  ⚠ **A boolean, not a stamp** — the freshness window stays the server's, or a client re-derives it against a second
+  number and the duplicate-plus-pin discipline is defeated. ⚠ **An unreadable `updatedAt` keeps the old hedge even
+  under a live heartbeat** — presence licenses "this report is still current", never "this report is N minutes old".
+  ⚠ **`sessions` and `operatorOnline` ride or stay together** — both come from one read, and a `false` emitted from a
+  read that FAILED reports the operator's machine as gone on the strength of our own outage.
+- **⚠ WHAT IT DELIBERATELY STOPS SHORT OF.** "quiet"/"unchanged", never "as of now". A push that FAILED also leaves a
+  live machine looking quiet (`send` does not record the digest, and the retry is the next state change), and
+  `agent_presence` is per-(user, workspace) rather than per-machine — the same caveat `service-launch.ts ›
+  operatorIsOnline` states. It may soften a hedge; it may never harden one into a claim.
+- **Pinned by** `channel-session-liveness.test.ts` (line + legend + block on all three presence states, the
+  unreadable-stamp carve-out, and the end-to-end page through `opReadSessions`),
+  `src/features/channels/server/session-state-service.test.ts` (own-scoped read, fail-safe on no row, and that the two
+  reads are CONCURRENT — the await route pays for this once per returned hold), and
+  `src/app/api/channels/sessions/route.test.ts` (the key on the wire).
+- ⚠ **One piece of debt this created and did not pay.** `service-launch.ts › operatorIsOnline` still answers the same
+  question by pulling up to `PRESENCE_ROWS_LIMIT` rows and picking one; `presenceForUser` is the PK lookup and is the
+  shape both want. It was left alone because it runs once per `launch_agent` (cold) and re-pointing it belongs to a
+  change that can re-measure it. **Two readers of one fact is the pattern this repo files findings about** — this one
+  is named here rather than left to be discovered.
+- ⚠ **And `dopl-desktop-app/main/session-state-push.js` is now AT 500 — the cap, exactly.** The keepalive rationale
+  above was paid for by reflowing prose already in the header (F-282's move, no word deleted). **The next correction
+  to that file is a split, not a comment**; F-282 names the seam (transport vs policy).
+- Status: **closed**; entry kept as the record.
+
+## The 2026-08-23 HOME-CHANNELS WAVE — F-295 through F-300
+
+Six entries from building account-level 1:1 channels on hidden `kind='link'` container workspaces
+(INVARIANTS §4A). **F-295 and F-300 are engineering debt. F-296 through F-299 are DEFERRED PRODUCT
+DECISIONS, not bugs** — each was raised in the wave's security review, each was consciously left
+where it is, and each is filed here so the trade does not evaporate into "nobody thought about it".
+**They need Samuel, not a fix.**
+
+⚠ **Id note, the fifth time in five days:** `F-295`–`F-300` were taken after re-reading this file
+fresh (`grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' | sort -n | tail -1`
+→ **F-294**). If a concurrent wave also claimed any of these, the earlier claim wins and this block
+renumbers.
+
+## F-295 — `WorkspaceKind` + `isStandardWorkspace` exist TWICE, in two packages, with no drift gate (2026-08-23)
+
+- Location: `src/features/workspaces/types.ts › isStandardWorkspace` (and `› WorkspaceKind`) against
+  `packages/dopl-client/src/types.ts › isStandardWorkspace` (re-exported by `packages/dopl-client/src/index.ts`,
+  consumed by `packages/mcp-server/src/workspace-directory.ts`, `› factory.ts` and `› server.ts`).
+- Found during: the home-channels wave. The SDK package cannot import from `src/`, so the predicate was
+  copied rather than shared — the same reason `packages/dopl-client` carries its own `Workspace` shape.
+- Severity: **conflict.** The two copies agree TODAY (both `(workspace.kind ?? "standard") !== "link"`,
+  both `"standard" | "link"`). Nothing makes them keep agreeing.
+- **Why this copy is worse than the average copy.** The predicate is the single filter INVARIANTS §4A
+  names as THE way every consumer drops link containers out of a list — and the two copies sit on
+  opposite sides of the surface split: the web/SPA consumers take the `src/` one, the entire MCP
+  surface takes the package one. **A third kind added to one copy makes the MCP directory and the
+  workspace rail disagree about what a workspace is, with no type error and no test failure.** The
+  predicate's own docblock warns it is not an authz check; it does not warn that it is duplicated.
+- **This repo already has the shape of the remedy** — `scripts/check-knowledge-type-drift.ts` exists
+  for exactly this class (knowledge types, server vs SDK) and is one of the four non-suite gates in
+  the definition of green. A `workspace-kind` case belongs in it or in a sibling.
+- ⚠ **Word this as the state of the GATE, not of the code:** if a drift check for this pair has since
+  been added, this entry closes on that fact alone — the duplication itself is accepted and is not
+  what is being filed. **Verify before acting:** `grep -rn "isStandardWorkspace\|WorkspaceKind" scripts/`.
+- Proposed resolution: fix-now (add the drift case) — Status: **open**
+
+## F-296 — deleting a link container does not block the pair, and the same-link re-claim degenerates into a permanent 409 (2026-08-23, DEFERRED TO SAMUEL)
+
+- Location: `src/features/home/server/service-writes.ts › claimLink`, against `› repo.insertClaim`
+  (`upsert` on `channel_link_claims` with `onConflict: "link_id,claimed_by", ignoreDuplicates: true`)
+  and `workspaces/server/repository.ts › deleteWorkspace`.
+- Found during: the home-channels security review.
+- Severity: **question** (product) with a **bug-shaped tail** — the two halves are separable and the
+  second may be resolvable without a product call.
+- **THE PRODUCT HALF, which is the deferred one.** Deleting a link container removes the relationship
+  and nothing else: **there is no pair-level block.** The creator's other still-live links are
+  unaffected, so the person who was just removed can open any of them and be back. Deletion therefore
+  means "end this conversation", never "do not let this person back in", and **the UI does not say
+  which of those it is.** A block list is a real feature with real questions behind it (is it
+  symmetric? does it survive a new account? is it visible to the blocked party?), which is exactly why
+  it is not being invented here.
+- **THE MECHANICAL HALF, measured.** A re-claim of the **same** link by the **same** account after the
+  container is deleted does NOT succeed and does not cleanly refuse either. `claimLink` finds no pair
+  container, **spends a use** (`consumeLinkUse`), mints a container, gets `false` back from
+  `insertClaim` (the `(link_id, claimed_by)` row from the first claim is still there — claims are
+  never deleted with the container), deletes the container it just made, re-reads, finds nothing, and
+  throws **409 `LINK_CLAIM_RACE`, "Try again"**. Retrying burns another use. On a single-use link the
+  first attempt exhausts it. **The 409's copy tells the user to do the one thing that cannot work.**
+- **Which side is wrong is genuinely unclear, so both are left standing** (this log's rule). The unique
+  key is doing exactly what its docblock says it is for — making a CONCURRENT double-claim converge —
+  and the post-deletion path is a case that design never considered. Candidate answers: delete the
+  claim rows with the container (turns deletion into "we were never connected"), or detect the
+  own-prior-claim before spending a use and answer with something truthful.
+- Proposed resolution: **needs-user-decision** (the block question); the 409 path may be fixable
+  independently once Samuel says what deletion MEANS — Status: **open**
+
+## F-297 — the public claim surface has no rate limit of any kind (2026-08-23, DEFERRED TO SAMUEL)
+
+- Location: `src/app/api/home/link/[token]/info/route.ts` (unauthenticated by design) and
+  `src/app/api/home/link/[token]/claim/route.ts`; the `PUBLIC_ROUTES` entry is
+  `shared/auth/public-routes.ts › PUBLIC_ROUTES` (`/api/home/link/`).
+- Found during: the home-channels security review.
+- Severity: **question** (product), with a real abuse surface behind it.
+- **What is and is not defended.** The token is 32 bytes of base64url, so guessing is not the threat.
+  What is undefended is **volume**: `…/info` takes no session, no IP budget and no per-token budget,
+  and it is a database read plus a profile lookup per call. The repo has the primitive already —
+  `shared/auth/oauth-rate-limit.ts` carries the per-IP limits on `/api/oauth/register` and `/token`,
+  which is the same class of route (public, pre-account, cheap to call, expensive to serve).
+- ⚠ **`…/claim` is authed and `sessionOnly`, so it rides `withUserAuth`'s existing per-subject budget
+  — but that budget is keyed on `mcp:<tokenId>` for BEARER callers, and a session caller never enters
+  that branch** (INVARIANTS §3). A claim flood from one signed-in account is unbudgeted.
+- **Why it was deferred rather than fixed:** picking a number is a product call about what a legitimate
+  link-sharing pattern looks like (one bio link opened by a thousand people is the SUCCESS case, and a
+  naive per-token limit punishes exactly that), and the wave had no traffic to calibrate against.
+- Proposed resolution: needs-user-decision — Status: **open**
+
+## F-298 — no per-user mint quota, and the pending-links list filters AFTER its limit (2026-08-23, DEFERRED TO SAMUEL)
+
+- Location: `src/features/home/server/service-writes.ts › mintLink` (no quota check of any kind) and
+  `› service-reads.ts › listMyPendingLinks` against `› repository.ts › listLinksByCreator`.
+- Found during: the home-channels security review.
+- Severity: **question** (product) plus one **measured listing defect**.
+- **The quota half.** `mintLink` inserts unconditionally. Nothing bounds how many live links one
+  account may hold, so the only cost of minting is a row.
+- ⚠ **The listing half is not a product question, it is an ordering bug, and it is why the quota
+  question has a deadline.** `listLinksByCreator(userId, HOME_LINK_LIMIT)` takes the newest **50** rows
+  (revoked ones excluded in SQL), and `listMyPendingLinks` **then** drops the expired and exhausted
+  ones in code. **So the filter runs AFTER the limit:** a user with 50 newer dead-but-unrevoked links
+  sees an EMPTY list while live links sit behind the cliff, and — per INVARIANTS §9 — this read carries
+  no `truncated`, so the surface renders that as "you have no links". **A cap that renders identically
+  to an empty list is the failure §9 names.** Filter-before-limit fixes it; a quota makes it unreachable.
+- Proposed resolution: needs-user-decision (the quota); **the filter/limit ordering is fix-now and does
+  not need Samuel** — Status: **open**
+
+## F-299 — a claim reveals both parties' email addresses immediately, with no accept step (2026-08-23, DEFERRED TO SAMUEL)
+
+- Location: `src/features/home/server/service-reads.ts › hydrateRelationships` →
+  `src/features/home/types.ts › HomePeer` (`email`), returned by `GET /api/home/relationships` and
+  directly in `POST …/claim`'s `HomeLinkClaimResult`.
+- Found during: the home-channels security review.
+- Severity: **question** (product). Not a leak — every field is a workspace peer's ordinary profile
+  data, and the two parties ARE co-members of a workspace the instant the claim lands.
+- **What makes it worth a decision anyway: the claim is UNILATERAL.** Opening a URL and signing in is
+  the whole of it. The creator does not approve, is not asked, and learns of the new relationship by
+  seeing it appear — **and by then the claimer already has their email address**, carried in the claim
+  response itself. Every other path to co-membership in this product has an accept step
+  (`workspace_invitations`, join links land on a page that names what you are joining). A public
+  "here is my Dopl" link deliberately does not, which is the feature and also the exposure.
+- ⚠ **The PRE-auth surface is correctly narrow and should not be confused with this**: `getLinkPublicInfo`
+  returns a display name and three booleans, never an email, never a user id, and explicitly does not
+  fall back from a null display name to the email. **The exposure is entirely POST-claim.**
+- **The mitigation the wave considered was the mint default** — a single-use default makes an
+  unrevoked link a one-shot rather than a standing door. ⚠ **Verify the current default rather than
+  assuming it:** `grep -n "maxUses" src/features/home/server/service-writes.ts` and the mint schema
+  (`schema.ts › HomeLinkMintSchema`, whose `maxUses` is `nullish` with `null` = unlimited). A default
+  is not consent, and it does not answer the question.
+- **The options, none taken:** an accept step before the container mints; omitting `email` from
+  `HomePeer` until both sides have posted; or ruling that a link IS the consent and writing that into
+  the mint copy so the creator knows what they are handing out.
+- Proposed resolution: needs-user-decision — Status: **open**
+
+## F-300 — presence and listener fan-out are LINEAR in relationship count, and a relationship is a workspace (2026-08-23)
+
+- Location: `dopl-desktop-app/main/channel-listener.js` (the `for (const ws of workspaces)` enumeration
+  and its per-workspace subscribe) and `dopl-desktop-app/main/presence.js` (`beatOnce`'s
+  `for (const wsId of workspaceIds)` serial POST loop, `HEARTBEAT_MS` = 30 s).
+- Found during: the home-channels wave, reasoning about what §4A's "`GET /api/workspaces` is unfiltered
+  BY CONTRACT" costs the desktop.
+- Severity: **smell**, scale-triggered. Correct today; wrong at a size nobody has reached.
+- **The mechanism, and why it is a consequence of a good decision rather than a mistake.** The listener
+  fans over `io.listWorkspaces()` — the unfiltered route — precisely so home channels are watched at
+  all; filtering there would silently unwatch every relationship. But a link container IS a workspace,
+  so **each relationship adds one realtime subscription and one presence beat per 30 s tick, forever,
+  for a room holding one channel and two people.** A user with 60 relationships beats 60 serial HTTP
+  requests every 30 s from every signed-in machine, against ~1–3 before this feature existed.
+- **`presence.js` already carries the guard for the first-order symptom and names it**: a beat that
+  outlasts its tick sets `beating` and the next tick is skipped, so ticks cannot pile up. **That bounds
+  the damage; it does not bound the work.** A skipped tick is presence going stale, which is what
+  `agent_presence` is read for (F-294 made a live-vs-dead verdict depend on it).
+- **The shape of the answer, if it is ever needed:** presence is per-(user, workspace) and the beats are
+  independent, so a batch endpoint taking N workspace ids is one request instead of N; the listener's
+  subscriptions are the harder half, since each is a real Realtime binding.
+- ⚠ **Do NOT "fix" this by filtering `GET /api/workspaces`** — INVARIANTS §4A states why, and the
+  failure mode is silent.
+- Proposed resolution: defer (scale-triggered) — Status: **open**

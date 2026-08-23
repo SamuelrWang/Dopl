@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
 import type { Workspace } from "../types";
+import { isStandardWorkspace } from "../types";
 import { workspaceSegment } from "../url";
 
 export interface WorkspaceDangerZoneCoreProps {
@@ -37,9 +38,11 @@ export function WorkspaceDangerZoneCore({
     setError(null);
     try {
       await apiRequest<void>(`/api/workspaces/${segment}`, { method: "DELETE" });
-      // Land on the first remaining one; caller routes to onboarding if none.
+      // Land on the first remaining STANDARD one; caller routes to onboarding
+      // if none. ⚠ The route is unfiltered — landing on a hidden home-channel
+      // container would navigate into a workspace with no UI.
       const next = await apiRequest<{ workspaces?: Workspace[] }>("/api/workspaces")
-        .then((body) => body.workspaces?.[0] ?? null)
+        .then((body) => body.workspaces?.find(isStandardWorkspace) ?? null)
         .catch(() => null);
       onDeleted(next);
     } catch (err) {

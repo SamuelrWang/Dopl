@@ -19,9 +19,13 @@ import {
  * a tool result, and it already has to read `allowed`.
  */
 export const POST = withWorkspaceAuth(
-  async (_request, { workspaceId }) => {
+  async (_request, { workspaceId, workspaceKind, userId }) => {
     try {
-      return NextResponse.json(await consumeMcpCredits(workspaceId));
+      // ⚠ A `kind='link'` home-channel container has no plan; the caller's own
+      // billing workspace pays (`credits-service.ts › resolveBillingWorkspaceId`).
+      return NextResponse.json(
+        await consumeMcpCredits(workspaceId, { userId, workspaceKind })
+      );
     } catch (err) {
       // ⚠ FAIL OPEN, DECIDED NOT INHERITED. Failing closed on a DB blip bricks every agent:
       // the registrar refuses the call and the operator sees "out of credits" for a workspace

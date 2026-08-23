@@ -11,7 +11,7 @@
  * op, by re-issuing with the same cursor.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionStateOwn, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
 import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
@@ -68,7 +68,7 @@ export declare function listChannelThreads(t: DoplTransport, channelId: string):
  * session comes back from `GET /api/channels/[channelId]/sessions` instead, and
  * carries the coarse projection only.
  */
-export declare function listChannelSessions(t: DoplTransport, channelId?: string): Promise<ChannelSessionStateOwn[]>;
+export declare function listChannelSessions(t: DoplTransport, channelId?: string): Promise<ChannelSessionsPage>;
 export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
 export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
 /**

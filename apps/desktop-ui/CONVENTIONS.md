@@ -24,15 +24,34 @@ apps/desktop-ui/
     ├── components/       # cross-page components (layout, page states)
     ├── hooks/            # generic hooks (use-api-query)
     ├── lib/              # api, api-transport, dopl-bridge, query-client
-    ├── pages/            # one folder or file per ported page
-    ├── features/         # feature modules, mirroring src/features/<name>/
+    ├── pages/            # ONE FOLDER per page: pages/<name>/index.tsx + siblings
+    ├── features/         # tests mirroring src/features/<name>/ (see below)
     └── styles/           # tokens.css, kit.css, index.css
 ```
 
-Ported pages keep the web app's module boundaries: a feature's components,
-hooks and types live under `src/features/<name>/`, and `src/pages/<name>-page.tsx`
-is the thin route entry that composes them. Nothing goes in a top-level `utils/`
-or `components/` dump — if it is used by one feature it lives in that feature.
+**A page is a FOLDER, and its parts are colocated beside it.** `pages/<name>/index.tsx`
+is the route entry; everything only that page uses sits next to it as a sibling,
+and the colocated test is `index.test.tsx`. **Measured 2026-08-23: 14 of 14 pages
+follow this and there is not one loose `pages/*.tsx` file**; 13 of the 14 carry
+colocated siblings (`agent-window` is the lone single-file page). Re-run, never
+quote:
+
+```
+ls -d apps/desktop-ui/src/pages/*/ | wc -l
+ls apps/desktop-ui/src/pages/*.tsx 2>/dev/null | wc -l   # must stay 0
+```
+
+⚠ **This paragraph used to say `src/pages/<name>-page.tsx` plus a per-page
+`src/features/<name>/`, and neither half has ever described this tree** (corrected
+2026-08-23). The `-page.tsx` suffix appears nowhere, and **`apps/desktop-ui/src/features/`
+holds only TESTS** — two of them, mirroring the web feature modules they exercise.
+Real feature code is not re-homed here at all: it is imported from the web tree
+through the `@/…` alias (see *Sharing code with the web app* below), which is the
+whole reason the port playbook's reuse-by-import instruction works.
+
+Nothing goes in a top-level `utils/` or `components/` dump — if it is used by one
+page it lives in that page's folder; if it is genuinely cross-page it goes in
+`src/components/`.
 
 Tests are colocated (`foo.tsx` → `foo.test.tsx`), Vitest + jsdom +
 `@testing-library/react`. `npm test` runs them.

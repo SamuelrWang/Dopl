@@ -1,5 +1,6 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
+import { truncatePreview } from "@/shared/lib/preview";
 import type {
   OverviewActivityRow,
   OverviewMemberLoadRow,
@@ -47,9 +48,6 @@ import { listProfileSummaries } from "./repository";
 
 /** Rows the activity feed shows. */
 const ACTIVITY_LIMIT = 8;
-/** Chars of message body kept for a preview. Truncated HERE, not in the
- *  renderer — an untruncated body on the wire is the payload we are avoiding. */
-const PREVIEW_CHARS = 120;
 /** Bars the member-load card shows. */
 const MEMBER_LOAD_ROWS = 6;
 /** Window the member-load card describes. */
@@ -133,13 +131,6 @@ export async function getWorkspaceOverviewSeries(
   return { metric, days };
 }
 
-function truncate(text: string): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > PREVIEW_CHARS
-    ? `${flat.slice(0, PREVIEW_CHARS - 1)}…`
-    : flat;
-}
-
 interface ActivityInput {
   messages: OverviewMessageRow[];
   opened: OverviewTaskRow[];
@@ -167,7 +158,7 @@ export function mergeActivity(input: ActivityInput): OverviewActivityRow[] {
       actorName: m.author_user_id
         ? (input.names.get(m.author_user_id) ?? null)
         : null,
-      preview: truncate(m.body),
+      preview: truncatePreview(m.body),
       at: m.created_at,
     })),
     ...input.opened.map((t) => ({
@@ -176,7 +167,7 @@ export function mergeActivity(input: ActivityInput): OverviewActivityRow[] {
       channelName: channelName(t.channel_id),
       kind: "thread_opened" as const,
       actorName: input.names.get(t.created_by) ?? null,
-      preview: truncate(t.title),
+      preview: truncatePreview(t.title),
       at: t.created_at,
     })),
     ...input.closed
@@ -189,7 +180,7 @@ export function mergeActivity(input: ActivityInput): OverviewActivityRow[] {
         channelName: channelName(t.channel_id),
         kind: "thread_closed" as const,
         actorName: null,
-        preview: truncate(t.title),
+        preview: truncatePreview(t.title),
         at: t.closed_at,
       })),
   ];

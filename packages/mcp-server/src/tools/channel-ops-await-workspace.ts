@@ -170,6 +170,12 @@ export async function opAwaitWorkspace(
   let messages: WorkspaceChannelMessage[] = [];
   let channelCount = 0;
   let sessions: WorkspaceAwaitResult["sessions"];
+  // ⚠ MOVES WITH `sessions` AND ONLY WITH IT (2026-08-23, F-294) — the caller's
+  // own `agent_presence` freshness, which is what lets a quiet row render as
+  // "quiet Xm" rather than as an accusation that the desktop died. The route
+  // emits both keys or neither; pairing a fresh row set with a liveness answer
+  // carried over from an earlier poll is the one way to make it lie.
+  let operatorOnline: WorkspaceAwaitResult["operatorOnline"];
   let pollError: unknown = null;
 
   for (let poll = 0; poll < AWAIT_MAX_POLLS; poll++) {
@@ -197,7 +203,10 @@ export async function opAwaitWorkspace(
       break;
     }
     channelCount = result.channelCount;
-    if (result.sessions !== undefined) sessions = result.sessions;
+    if (result.sessions !== undefined) {
+      sessions = result.sessions;
+      operatorOnline = result.operatorOnline;
+    }
     if (result.messages.length > 0) {
       messages = result.messages;
       break;
@@ -216,7 +225,7 @@ export async function opAwaitWorkspace(
           `Nothing was missed: the cursor never advanced, so re-arm NOW, before you end your turn, with the SAME since — dopl_channel(op="await", since=${since}).`,
           `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
           workspaceRearmStopRule(),
-          ...sessionBlockLines(sessions),
+          ...sessionBlockLines(sessions, undefined, operatorOnline),
         ].join("\n"),
       );
     }
@@ -235,7 +244,7 @@ export async function opAwaitWorkspace(
         scopeNote(channelCount),
         `Re-arm with the SAME since — dopl_channel(op="await", since=${since}) — before you end your turn if you are still waiting on something.`,
         workspaceRearmStopRule(),
-        ...sessionBlockLines(sessions),
+        ...sessionBlockLines(sessions, undefined, operatorOnline),
       ].join("\n"),
     );
   }
@@ -265,6 +274,6 @@ export async function opAwaitWorkspace(
     `Highest seq shown: ${lastSeq}. Re-arm with dopl_channel(op="await", since=${lastSeq}) — and read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`,
   );
   lines.push(workspaceRearmStopRule());
-  lines.push(...sessionBlockLines(sessions));
+  lines.push(...sessionBlockLines(sessions, undefined, operatorOnline));
   return ok(lines.join("\n"));
 }

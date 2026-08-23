@@ -1,7 +1,19 @@
 import "server-only";
 import { getWorkspaceEntitlements } from "./entitlements";
 import { getWorkspaceBilling } from "./workspace-billing";
-import { summarizeCredits, type CreditsSummary } from "./credits-service";
+import {
+  resolveBillingWorkspaceId,
+  summarizeCredits,
+  unmetered,
+  type CreditCaller,
+  type CreditsSummary,
+} from "./credits-service";
+
+/** The consume path's unmetered answer, narrowed to the meter's fields. */
+function unmeteredSummary(): CreditsSummary {
+  const { periodStart, periodEnd, used, limit, remaining, degraded } = unmetered();
+  return { periodStart, periodEnd, used, limit, remaining, degraded };
+}
 
 /**
  * `GET /api/billing/status` payload, assembled here so the route stays thin
@@ -32,19 +44,29 @@ export interface WorkspaceBillingStatusPayload {
 }
 
 export async function getWorkspaceBillingStatus(
-  workspaceId: string
+  workspaceId: string,
+  caller?: CreditCaller
 ): Promise<WorkspaceBillingStatusPayload> {
+  // ⚠ Same reroute as the consume path, or the meter would report a link
+  // container's empty counter while enforcement charges the caller's own plan.
+  const target = await resolveBillingWorkspaceId(workspaceId, caller);
+
+  // ⚠ UNRESOLVABLE IS ITS OWN ANSWER, not a fallback to the container id. With
+  // `?? workspaceId` the meter reads the container's untouched counter and
+  // reports "0 of 200 used" against a free plan, while enforcement is running
+  // UNMETERED and charging nothing — two surfaces describing the same call
+  // differently. Reporting the consume path's own posture, `degraded` stamp
+  // included, is the only way they agree (PROVISIONAL, see `credits-service.ts
+  // › resolveBillingWorkspaceId`).
   const [entitlements, billing] = await Promise.all([
-    getWorkspaceEntitlements(workspaceId),
-    getWorkspaceBilling(workspaceId),
+    getWorkspaceEntitlements(target ?? workspaceId),
+    getWorkspaceBilling(target ?? workspaceId),
   ]);
   // ⚠ Credits read the ENTITLED plan and the same period helpers the consume
   // path uses, so the meter cannot disagree with what enforcement charges.
-  const credits = await summarizeCredits(
-    workspaceId,
-    entitlements.plan,
-    billing
-  );
+  const credits: CreditsSummary = target
+    ? await summarizeCredits(target, entitlements.plan, billing)
+    : unmeteredSummary();
 
   return {
     plan: entitlements.plan,

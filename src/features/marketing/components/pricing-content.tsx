@@ -7,7 +7,12 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { PLANS, type PlanDef } from "@/features/billing/plans";
 import { billingPath } from "@/features/billing/url";
 import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
+import { isStandardWorkspace } from "@/features/workspaces/types";
+import type { WorkspaceKind } from "@/features/workspaces/types";
 import type { User } from "@supabase/supabase-js";
+
+/** Only what this page reads off `GET /api/workspaces`. */
+type WorkspaceWireRow = { id: string; kind?: WorkspaceKind };
 
 /**
  * Body of /pricing (its only render site — no page chrome of its own).
@@ -85,11 +90,13 @@ export function PricingContent() {
   // `/api/billing/status` fails closed without workspace context, so resolve
   // membership first (withUserAuth — never 400s). Exactly 1 workspace → read
   // status; 2+ → skip it (public page can't pick one) and hand off in-app.
-  const workspacesQuery = useApiQuery<{ workspaces: { id: string }[] }>(
+  const workspacesQuery = useApiQuery<{ workspaces: WorkspaceWireRow[] }>(
     "/api/workspaces",
     { enabled: user !== null }
   );
-  const workspaces = workspacesQuery.data?.workspaces;
+  // ⚠ The route is unfiltered; hidden home-channel containers must not make a
+  // single-workspace user look multi-workspace and skip the status read.
+  const workspaces = workspacesQuery.data?.workspaces.filter(isStandardWorkspace);
   const soleWorkspaceId =
     workspaces && workspaces.length === 1 ? workspaces[0].id : undefined;
   const multiWorkspace = (workspaces?.length ?? 0) >= 2;

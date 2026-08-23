@@ -7,6 +7,7 @@ import type {
   WorkspaceWithRole,
   Role,
 } from "../types";
+import { isStandardWorkspace } from "../types";
 import {
   type WorkspaceMemberRow,
   type WorkspaceRow,
@@ -14,8 +15,16 @@ import {
   mapMemberRow,
 } from "./dto";
 
-const WORKSPACE_COLS =
-  "id, owner_id, name, slug, public_id, description, icon_url, created_at, updated_at";
+/**
+ * ⚠ `*`, deliberately, and it is the ONLY safe spelling right now: `kind`
+ * (migration 20260823150000) is WRITTEN-NOT-APPLIED, and naming a nonexistent
+ * column in a PostgREST select is a 42703 error, not a null. `*` returns `kind`
+ * once the migration lands and simply omits it before, so kind-awareness costs
+ * nothing today. `mapWorkspaceRow` whitelists the fields, so the star never
+ * widens the DTO. Same reason NO query filters on `kind` — every kind filter in
+ * this feature runs in CODE, through `isStandardWorkspace`.
+ */
+const WORKSPACE_COLS = "*";
 const MEMBER_COLS =
   "workspace_id, user_id, role, status, joined_at, invited_by, invited_at, last_seen_at";
 
@@ -79,43 +88,72 @@ export async function findMemberWorkspaceBySlug(
 }
 
 /**
- * Oldest-OWNED workspace resolver: literal slug "default" (legacy), else oldest
- * owned by created_at ASC.
+ * Oldest-owned STANDARD workspace: literal slug "default" (legacy), else oldest
+ * by created_at ASC. ⚠ Link containers are never candidates — they carry no
+ * plan and must not become anyone's default.
  *
- * ⚠ OWNERSHIP-based, diverging from active membership. ONLY for the signup
- * bootstrap (`ensureDefaultWorkspace`) and the Stripe webhook grandfather path.
- * MUST NOT be used for request auth — `resolveActiveWorkspace` resolves off
- * active memberships so an owned workspace cannot swallow another's request.
+ * ⚠ OWNERSHIP-based, diverging from active membership. THREE sanctioned uses:
+ * the signup bootstrap (`ensureDefaultWorkspace`), the Stripe webhook
+ * grandfather path, and the link-workspace billing reroute
+ * (`billing/server/credits-service.ts`). MUST NOT be used for request auth —
+ * `resolveActiveWorkspace` resolves off active memberships so an owned
+ * workspace cannot swallow another's request.
  */
 export async function findDefaultWorkspaceForUser(
   userId: string
 ): Promise<Workspace | null> {
   const legacy = await findWorkspaceBySlug(userId, "default");
-  if (legacy) return legacy;
+  if (legacy && isStandardWorkspace(legacy)) return legacy;
 
-  const db = supabaseAdmin();
-  const { data, error } = await db
+  // ⚠ No `.limit(1)`: the kind filter runs in code, so the oldest row may be a
+  // link container the pick has to skip. The read is ceiling-bounded instead
+  // (`OWNED_WORKSPACE_LIMIT`).
+  const owned = await listWorkspacesOwnedBy(userId);
+  return owned.find(isStandardWorkspace) ?? null;
+}
+
+/**
+ * STANDARD workspaces OWNED by a user. The Stripe webhook's grandfather path
+ * uses this to detect ambiguous legacy-subscription mappings (2+ owned → warn);
+ * link containers must not make an unambiguous mapping look ambiguous.
+ */
+export async function countWorkspacesOwnedBy(userId: string): Promise<number> {
+  const owned = await listWorkspacesOwnedBy(userId);
+  return owned.filter(isStandardWorkspace).length;
+}
+
+/**
+ * Ceiling on the owned-workspace read below. ⚠ A CEILING, not a page: an
+ * account owns a handful of real workspaces and one link container per
+ * relationship, and 200 is the same order as `HOME_RELATIONSHIP_LIMIT` for the
+ * same reason — containers are contacts, not a feed.
+ */
+const OWNED_WORKSPACE_LIMIT = 200;
+
+/**
+ * Every workspace owned by a user, oldest first. Kind filtering is the
+ * caller's.
+ *
+ * ⚠ BOUNDED, and the ordering is what makes the bound safe: `created_at ASC`
+ * means the ceiling drops the NEWEST rows, and every caller wants the oldest —
+ * `findDefaultWorkspaceForUser` reads `[0]` of the standard ones, so its answer
+ * is identical with or without the limit. `countWorkspacesOwnedBy` only asks
+ * "more than one?".
+ *
+ * ⚠ NOT a cold path any more: `findDefaultWorkspaceForUser` is on the MCP
+ * credit-consume reroute, which runs once per tool call for every home-channel
+ * agent. An unbounded scan there is a per-call full read of one owner's
+ * workspaces.
+ */
+async function listWorkspacesOwnedBy(userId: string): Promise<Workspace[]> {
+  const { data, error } = await supabaseAdmin()
     .from("workspaces")
     .select(WORKSPACE_COLS)
     .eq("owner_id", userId)
     .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(OWNED_WORKSPACE_LIMIT);
   if (error) throw error;
-  return data ? mapWorkspaceRow(data as WorkspaceRow) : null;
-}
-
-/**
- * Workspaces OWNED by a user. The Stripe webhook's grandfather path uses this
- * to detect ambiguous legacy-subscription mappings (2+ owned → warn).
- */
-export async function countWorkspacesOwnedBy(userId: string): Promise<number> {
-  const { count, error } = await supabaseAdmin()
-    .from("workspaces")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_id", userId);
-  if (error) throw error;
-  return count ?? 0;
+  return ((data ?? []) as WorkspaceRow[]).map(mapWorkspaceRow);
 }
 
 export async function listWorkspacesForUser(userId: string): Promise<Workspace[]> {

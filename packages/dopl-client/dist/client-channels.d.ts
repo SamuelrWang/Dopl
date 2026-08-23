@@ -7,7 +7,7 @@
  * watches a channel without busy-looping.
  */
 import { MemberMethods } from "./client-members.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionStateOwn, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
 import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 export declare class ChannelMethods extends MemberMethods {
     listChannels(opts?: {
@@ -35,7 +35,10 @@ export declare class ChannelMethods extends MemberMethods {
     createLaunchDirective(input: LaunchDirectiveCreateInput): Promise<LaunchDirectiveCreated>;
     /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */
     getLaunchDirective(id: string): Promise<LaunchDirective>;
-    listChannelSessions(channelId?: string): Promise<ChannelSessionStateOwn[]>;
+    /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`
+     *  rides beside the rows because presence is a fact about the MACHINE, not
+     *  about any one session. See `channel-types.ts › ChannelSessionsPage`. */
+    listChannelSessions(channelId?: string): Promise<ChannelSessionsPage>;
     getChannelThread(channelId: string, threadId: string): Promise<ChannelThread>;
     createChannelThread(channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThreadCreated>;
     setChannelThreadMode(channelId: string, threadId: string, input: {

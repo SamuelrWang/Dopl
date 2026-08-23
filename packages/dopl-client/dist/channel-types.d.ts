@@ -228,6 +228,27 @@ export interface ChannelSessionTelemetry {
 }
 /** The caller's OWN session — coarse projection plus the operator-only half. */
 export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry;
+/**
+ * `listChannelSessions`' whole answer — the rows AND whether the machine that
+ * would have written them is still heartbeating (2026-08-23, F-294).
+ *
+ * ⚠ **THE SECOND FIELD IS NOT ABOUT ANY ONE SESSION AND MUST NOT BE FOLDED INTO
+ * ONE.** `agent_presence` is per-(user, workspace): it says a listener of this
+ * operator's heartbeat recently, which is why it lives on the ENVELOPE rather
+ * than repeated onto every row as if each machine had answered separately.
+ * ⚠ **OPTIONAL, AND IT STAYS OPTIONAL** — INVARIANTS §13, an older deployment is
+ * a supported peer. Absent = NOT REPORTED, and a render must treat that exactly
+ * as it treats `false`: a fact nobody reported is not evidence of life.
+ * ⚠ It is a BOOLEAN and never a stamp, deliberately: the freshness window is the
+ * server's (`PRESENCE_ONLINE_WINDOW_MS`), and a stamp on the wire invites a
+ * client to re-derive it against a second number.
+ * ⚠ Precedent for the envelope shape is `ChannelThreadPage`, for the same reason
+ * — one fact about the PAGE that is not a fact about any row on it.
+ */
+export interface ChannelSessionsPage {
+    sessions: ChannelSessionStateOwn[];
+    operatorOnline?: boolean;
+}
 export interface ChannelThreadCreateInput {
     title: string;
     mode?: ThreadMode;
@@ -360,6 +381,16 @@ export interface AwaitResult {
      * is the hottest path in the tree and nothing was added to it.
      */
     sessions?: ChannelSessionStateOwn[];
+    /**
+     * IS THE CALLER'S OWN MACHINE STILL HEARTBEATING, as of the same instant
+     * (2026-08-23, F-294). See {@link ChannelSessionsPage} for the whole rule.
+     *
+     * ⚠ **IT RIDES OR STAYS WITH `sessions`, NEVER ALONE.** Both come from ONE
+     * own-scoped read at return time, and a `false` emitted when that read FAILED
+     * would report the operator's machine as gone on the strength of a server-side
+     * error — the exact class of lie the `undefined` ≠ `[]` rule above exists for.
+     */
+    operatorOnline?: boolean;
 }
 /**
  * WORKSPACE-WIDE long-poll result — `awaitWorkspaceMessages`, the `channel`-less

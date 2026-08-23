@@ -15,7 +15,7 @@ import {
 import { AwaitQuerySchema } from "@/features/channels/schema";
 import { DEFAULT_AWAIT_TIMEOUT_MS } from "@/features/channels/constants";
 import type { ChannelContext } from "@/features/channels/server/service-shared";
-import type { ChannelSessionStateOwn } from "@/features/channels/types";
+import type { OwnSessionsReport } from "@/features/channels/server/session-state-service";
 
 /**
  * Long-poll for new messages. Validates access up front, then holds on `seq > since` (~1.5s
@@ -80,7 +80,7 @@ function logHold(
  */
 async function ownSessionsAtReturn(
   ctx: ChannelContext
-): Promise<ChannelSessionStateOwn[] | undefined> {
+): Promise<OwnSessionsReport | undefined> {
   try {
     return await listSessionStates(ctx);
   } catch (err) {
@@ -119,14 +119,19 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     });
     outcome = result.messages.length > 0 ? "hit" : "timeout";
     // ⚠ AFTER the hold, never during it — see `ownSessionsAtReturn`.
-    const sessions = await ownSessionsAtReturn(ctx);
+    const report = await ownSessionsAtReturn(ctx);
     return NextResponse.json({
       messages: result.messages,
       timedOut: result.messages.length === 0,
-      // ⚠ The key is OMITTED rather than sent as `null` when the read failed:
+      // ⚠ The keys are OMITTED rather than sent as `null` when the read failed:
       // `undefined` serializes away, and "absent" is the shape the client
       // contract defines as "not reported".
-      ...(sessions === undefined ? {} : { sessions }),
+      // ⚠ BOTH KEYS COME FROM THE SAME READ AND GO OR STAY TOGETHER (F-294).
+      // Sending `operatorOnline: false` from a FAILED read would tell an
+      // orchestrator its machine is gone on the strength of our own outage.
+      ...(report === undefined
+        ? {}
+        : { sessions: report.sessions, operatorOnline: report.operatorOnline }),
     });
   } catch (err) {
     return toChannelErrorResponse(err);

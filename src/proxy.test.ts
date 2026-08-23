@@ -382,6 +382,7 @@ describe("mixed-case canonicalization (audit fix S-8)", () => {
     "/api/Channels/ABC",
     "/_next/Static/chunk.js",
     "/invite/SignedTokenABC",
+    "/link/ClaimTokenABC",
     "/auth/callback?code=AbC",
   ])("does NOT rewrite case-sensitive path %s", async (path) => {
     const res = await proxy(req(path));

@@ -6,7 +6,7 @@ import { canGrantRole } from "../member-policy";
 import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { recordActivity } from "@/features/members/server/activity";
-import { requireWorkspaceRole } from "./authz";
+import { assertMemberAddableById, requireWorkspaceRole } from "./authz";
 import { findMembership, findWorkspaceById } from "./repository";
 
 /**
@@ -53,6 +53,10 @@ export async function getOrCreateJoinLink(
   callerId: string
 ): Promise<{ token: string }> {
   await requireWorkspaceRole(workspaceId, callerId, "admin");
+  // ⚠ A home-channel container holds its pair and nobody else (authz.ts). A
+  // join link IS a member-add path, so the refusal is on MINTING one, not on
+  // the request it would later produce.
+  await assertMemberAddableById(workspaceId);
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("workspace_join_links")
@@ -87,6 +91,7 @@ export async function rotateJoinLink(
   callerId: string
 ): Promise<{ token: string }> {
   await requireWorkspaceRole(workspaceId, callerId, "admin");
+  await assertMemberAddableById(workspaceId);
   const token = generateToken();
   const db = supabaseAdmin();
   const { error } = await db.from("workspace_join_links").upsert(
@@ -179,6 +184,11 @@ export async function requestJoin(
       workspacePublicId: workspace?.publicId ?? "",
     };
   }
+
+  // ⚠ A home-channel container holds its pair and nobody else (authz.ts).
+  // Reached only if a link predates the container's kind, since minting is
+  // refused above — the request must still not park.
+  await assertMemberAddableById(info.workspaceId);
 
   // ⚠ Solo is single-member — EVERY member-add path must gate. 402 up front
   // rather than parking a request no admin could approve. Already-active
@@ -285,6 +295,10 @@ export async function resolveJoinRequest(
   action: { kind: "approve"; role: "admin" | "member" | "viewer" } | { kind: "decline" }
 ): Promise<void> {
   const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
+  // ⚠ A home-channel container holds its pair and nobody else (authz.ts).
+  // Gated on the whole decision, not just `approve`: a container has no queue
+  // to decline from either.
+  await assertMemberAddableById(workspaceId);
   // ⚠ Same policy as updateMemberRole (member-policy.ts): only the owner mints
   // admins, else an admin could elevate an accomplice here.
   if (action.kind === "approve" && !canGrantRole(callerRole, action.role)) {

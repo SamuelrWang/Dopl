@@ -37,6 +37,30 @@ export interface InvitationStatus {
   alreadyAccepted: boolean;
 }
 
+/**
+ * "standard" = a real user-facing workspace. "link" = a hidden two-member
+ * container minted when a home channel link is claimed — never shown in the
+ * rail/switcher, never a default-resolution candidate, bills to each side's
+ * own plan.
+ */
+export type WorkspaceKind = "standard" | "link";
+
+/**
+ * THE shared kind predicate — every UI list, navigation menu, membership count
+ * and implicit default-resolution site filters through this and nothing else.
+ *
+ * ⚠ Absent `kind` reads as "standard": the column (migration 20260823150000) is
+ * written-not-applied, so rows read today carry no kind and must behave exactly
+ * as they do now.
+ *
+ * ⚠ NOT an authz check. Explicit addressing of a link workspace (by id, slug,
+ * segment or `workspace=`) stays allowed — that is how a home channel is
+ * reached.
+ */
+export function isStandardWorkspace(workspace: { kind?: WorkspaceKind }): boolean {
+  return (workspace.kind ?? "standard") !== "link";
+}
+
 export interface Workspace {
   id: string;
   ownerId: string;
@@ -45,6 +69,8 @@ export interface Workspace {
   publicId: string;
   description: string | null;
   iconUrl: string | null;
+  /** Absent on rows read before the kind migration is applied = "standard". */
+  kind?: WorkspaceKind;
   createdAt: string;
   updatedAt: string;
 }

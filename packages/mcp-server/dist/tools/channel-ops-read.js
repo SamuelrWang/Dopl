@@ -175,7 +175,12 @@ async function opReadSessions(client, ref) {
         channelId = ch.id;
         channelLabel = ` in **${(0, channel_shared_1.inlineOr)(ch.name, NO_NAME)}**`;
     }
-    const sessions = await client.listChannelSessions(channelId);
+    // ⚠ THE PAGE, NOT AN ARRAY (2026-08-23, F-294). `operatorOnline` is the
+    // caller's own `agent_presence` freshness and it is what separates an
+    // idle-but-alive agent from a desktop that died — the row alone cannot,
+    // because the push is change-driven. ⚠ `undefined` = an older server did not
+    // report it, and the render must hedge exactly as it did before.
+    const { sessions, operatorOnline } = await client.listChannelSessions(channelId);
     if (sessions.length === 0) {
         return (0, respond_1.ok)(`No live sessions of yours are being reported${channelLabel} right now. This lists the agent sessions running on YOUR OWN machine, not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`);
     }
@@ -191,9 +196,9 @@ async function opReadSessions(client, ref) {
         `${channel_render_1.UNTRUSTED_LISTING_HEADER}\n`,
     ];
     for (const s of sessions) {
-        lines.push((0, channel_session_render_1.formatSessionLine)(s, { telemetry: true, now }));
+        lines.push((0, channel_session_render_1.formatSessionLine)(s, { telemetry: true, now, operatorOnline }));
     }
-    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`, `\n${channel_session_render_1.SESSION_TELEMETRY_NOTE}`);
+    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`, `\n${channel_session_render_1.SESSION_TELEMETRY_NOTE}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opListThreads(client, ref, selfUserId = null) {

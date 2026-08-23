@@ -13,7 +13,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository-sessions");
+// ⚠ The presence lane is mocked too since F-294: `listSessionStates` now joins
+// the caller's OWN heartbeat so the render can tell idle-but-alive from gone.
+vi.mock("./repository-collab");
 
+import * as collab from "./repository-collab";
 import * as sessionRepo from "./repository-sessions";
 import { listSessionStates, reportSessionStates } from "./session-state-service";
 import type { SessionStateRow } from "./collab-dto";
@@ -60,6 +64,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(collab.presenceForUser).mockResolvedValue(null);
 });
 
 describe("listSessionStates", () => {
@@ -72,7 +77,7 @@ describe("listSessionStates", () => {
 
     const out = await listSessionStates(ctx);
 
-    expect(out).toEqual([
+    expect(out.sessions).toEqual([
       {
         channelId: CHAN,
         threadId: TASK,
@@ -144,7 +149,74 @@ describe("listSessionStates", () => {
 
   it("an empty store returns [] — the honest 'no live sessions' the op renders", async () => {
     vi.mocked(sessionRepo.listSessionStates).mockResolvedValue([]);
-    expect(await listSessionStates(ctx)).toEqual([]);
+    expect((await listSessionStates(ctx)).sessions).toEqual([]);
+  });
+});
+
+/**
+ * THE SECOND HALF OF THE ANSWER (2026-08-23, F-294) — IS THE MACHINE THERE?
+ *
+ * ⚠ **THE DEFECT THIS PINS: AN IDLE-BUT-ALIVE AGENT READ AS "its desktop may be
+ * offline" WITHIN ~2 MINUTES.** `channel_sessions` is pushed on state CHANGE, so
+ * a quiet row and a dead machine are indistinguishable ON THAT TABLE. They are
+ * NOT indistinguishable on `agent_presence`, which beats unconditionally — so
+ * the read joins it, and the render stops guessing.
+ *
+ * ⚠ It is a BOOLEAN on the wire, derived HERE against `PRESENCE_ONLINE_WINDOW_MS`.
+ * Sending the stamp instead would invite a client to re-derive freshness against
+ * a window of its own, which is the drift `SESSION_STALE_WINDOW_MS`'s
+ * duplicate-plus-pin exists to prevent.
+ */
+describe("listSessionStates — the operator's own presence rides beside the rows", () => {
+  beforeEach(() => {
+    vi.mocked(sessionRepo.listSessionStates).mockResolvedValue([]);
+  });
+
+  it("reads presence for the CALLER, in the CALLER's workspace — never a peer's", async () => {
+    await listSessionStates(ctx);
+    expect(collab.presenceForUser).toHaveBeenCalledWith(USER, WS);
+  });
+
+  it("a fresh heartbeat answers online", async () => {
+    vi.mocked(collab.presenceForUser).mockResolvedValue({
+      online: true,
+      lastSeenAt: "2026-08-23T12:00:00.000Z",
+    });
+    expect((await listSessionStates(ctx)).operatorOnline).toBe(true);
+  });
+
+  it("a stale heartbeat answers offline", async () => {
+    vi.mocked(collab.presenceForUser).mockResolvedValue({
+      online: false,
+      lastSeenAt: "2026-08-23T11:00:00.000Z",
+    });
+    expect((await listSessionStates(ctx)).operatorOnline).toBe(false);
+  });
+
+  it("NO presence row answers offline — the fail-safe direction, never `undefined`", async () => {
+    vi.mocked(collab.presenceForUser).mockResolvedValue(null);
+    // ⚠ `false` here and NEVER `undefined`: "not reported" is a WIRE state (the
+    // route omitting the key), and a missing row is a measured absence.
+    expect((await listSessionStates(ctx)).operatorOnline).toBe(false);
+  });
+
+  it("the two reads are CONCURRENT — the await route pays for this one per hold", async () => {
+    let sessionsSettled = false;
+    vi.mocked(sessionRepo.listSessionStates).mockImplementation(
+      async () =>
+        new Promise((resolve) =>
+          setTimeout(() => {
+            sessionsSettled = true;
+            resolve([]);
+          }, 5)
+        )
+    );
+    vi.mocked(collab.presenceForUser).mockImplementation(async () => {
+      // ⚠ If these were serialized, the session read would already be done.
+      expect(sessionsSettled).toBe(false);
+      return null;
+    });
+    await listSessionStates(ctx);
   });
 });
 

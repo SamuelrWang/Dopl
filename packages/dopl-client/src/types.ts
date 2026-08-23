@@ -60,6 +60,18 @@ export interface ListResult {
   offset: number;
 }
 
+/**
+ * "standard" = a real user-facing workspace. "link" = a hidden two-member
+ * container minted when a home channel link is claimed — never shown in the
+ * rail/switcher, never a default-resolution candidate, bills to each side's
+ * own plan.
+ *
+ * ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › WorkspaceKind`,
+ * which is the source of this wording. Edit that one and copy it down; the two
+ * drifting is how a reader learns two different rules for one column.
+ */
+export type WorkspaceKind = "standard" | "link";
+
 export interface WorkspaceSummary {
   id: string;
   ownerId: string;
@@ -67,8 +79,15 @@ export interface WorkspaceSummary {
   slug: string;
   publicId: string;
   description: string | null;
+  /** Absent on servers predating the `workspaces.kind` column = `standard`. */
+  kind?: WorkspaceKind;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Shared kind predicate — every LISTING filters through this, no resolution does. */
+export function isStandardWorkspace(workspace: { kind?: WorkspaceKind }): boolean {
+  return (workspace.kind ?? "standard") !== "link";
 }
 
 /**

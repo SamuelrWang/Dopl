@@ -46,9 +46,16 @@ export interface WorkspaceDirectoryOptions {
     directoryLoadFailed?: boolean;
 }
 export interface WorkspaceDirectory {
-    /** The caller's memberships, cached for {@link WORKSPACE_CACHE_TTL_MS}. */
+    /**
+     * The caller's LISTABLE memberships, cached for
+     * {@link WORKSPACE_CACHE_TTL_MS}. ⚠ `kind='link'` home-channel containers are
+     * excluded — they are never advertised to an agent.
+     */
     getWorkspaceList(): Promise<WorkspaceListItem[]>;
-    /** A slug-or-UUID `workspace=` ref resolved against those memberships. */
+    /**
+     * A slug-or-UUID `workspace=` ref resolved against ALL memberships, links
+     * included: explicit addressing is how a home channel is reached.
+     */
     resolveWorkspaceRef(ref: string): Promise<WorkspaceListItem | null>;
     /** The isError response for a no-`workspace=` call with no session default. */
     noWorkspaceError(): Promise<ToolResponse>;

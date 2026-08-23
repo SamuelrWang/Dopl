@@ -15,6 +15,7 @@ import { ConnectAgentBanner } from "@/features/onboarding/components/connect-age
 import { WelcomePopup } from "@/features/onboarding/components/welcome-popup";
 import { TourProviderCore } from "@/features/tour/components/tour-provider-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
+import { isStandardWorkspace } from "@/features/workspaces/types";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
@@ -198,8 +199,16 @@ export function AppShellLayout() {
   );
 }
 
+/**
+ * ⚠ FILTERED, and `GET /api/workspaces` is unfiltered ON PURPOSE (2026-08-23).
+ * The account surface's relationships are `kind='link'` CONTAINER workspaces —
+ * one per person you are connected to — and the caller is a member of every one
+ * of them. Unfiltered, the rail and the switcher would fill with plumbing.
+ * `isStandardWorkspace` is THE predicate (absent kind = standard); never a hand
+ * comparison here.
+ */
 const selectWorkspaces = (body: { workspaces?: WorkspaceLike[] }) =>
-  body.workspaces ?? [];
+  (body.workspaces ?? []).filter(isStandardWorkspace);
 
 /** Swap the routed workspace segment for the canonical one, keeping the rest
  *  of the path (`/old-slug/skills/x` → `/acme-ab12/skills/x`). */

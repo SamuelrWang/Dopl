@@ -3,6 +3,10 @@ import { withUserAuth } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getStripe } from "@/features/billing/server/stripe";
 import { getProfileBillingRef } from "@/features/billing/server/subscriptions";
+import {
+  isStandardWorkspace,
+  type WorkspaceKind,
+} from "@/features/workspaces/types";
 
 export const DELETE = withUserAuth(async (_request, { userId }) => {
   try {
@@ -15,9 +19,11 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
     // Cascading a workspace with other active members would vaporize co-members' KBs/skills.
     // ⚠ Two-query manual join: PostgREST `!inner` joins return opaque 500s on this schema since
     // the May 2026 workspace_id denormalization migrations (rationale in attachments.ts).
+    // ⚠ `*` rather than `id, name`, for the reason `workspaces/server/repository.ts ›
+    // WORKSPACE_COLS` gives: naming the not-yet-applied `kind` column is a 42703, not a null.
     const { data: ownedWorkspaces, error: ownedError } = await admin
       .from("workspaces")
-      .select("id, name")
+      .select("*")
       .eq("owner_id", user.id);
     if (ownedError) {
       console.error(
@@ -32,11 +38,23 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
     const ownedIds = (ownedWorkspaces ?? []).map(
       (w) => (w as { id: string }).id
     );
-    if (ownedIds.length > 0) {
+
+    // ⚠ THE GUARD IS STANDARD-ONLY. Every `kind='link'` container the caller owns
+    // has a second active member BY CONSTRUCTION — that member IS the relationship
+    // — so an unfiltered guard 409s every account that ever claimed a home link,
+    // with a "transfer ownership" instruction there is no UI to follow. A container
+    // is the caller's own plumbing and cascades with them.
+    // ⚠ `ownedIds` above stays UNFILTERED: it feeds the Stripe sweep, and a
+    // container carrying a subscription row would be a bug worth cancelling.
+    const standardOwned = (ownedWorkspaces ?? []).filter((w) =>
+      isStandardWorkspace(w as { kind?: WorkspaceKind })
+    );
+    const guardedIds = standardOwned.map((w) => (w as { id: string }).id);
+    if (guardedIds.length > 0) {
       const { data: coMembers, error: coMembersError } = await admin
         .from("workspace_members")
         .select("workspace_id")
-        .in("workspace_id", ownedIds)
+        .in("workspace_id", guardedIds)
         .neq("user_id", user.id)
         .eq("status", "active");
       if (coMembersError) {
@@ -53,7 +71,7 @@ export const DELETE = withUserAuth(async (_request, { userId }) => {
         (coMembers ?? []).map((m) => (m as { workspace_id: string }).workspace_id)
       );
       if (sharedIds.size > 0) {
-        const names = (ownedWorkspaces ?? [])
+        const names = standardOwned
           .filter((w) => sharedIds.has((w as { id: string }).id))
           .map((w) => (w as { name: string }).name)
           .filter(Boolean);

@@ -175,7 +175,17 @@ async function listChannelThreads(t, channelId) {
 async function listChannelSessions(t, channelId) {
     const query = channelId ? `?channelId=${enc(channelId)}` : "";
     const data = await t.request(`/api/channels/sessions${query}`, { toolName: "channel_read_sessions" });
-    return data.sessions;
+    return {
+        sessions: data.sessions,
+        // ⚠ NARROWED TO A REAL BOOLEAN OR NOTHING, never passed through. An older
+        // deployment sends no key and a malformed one could send anything; both must
+        // land on `undefined` ("not reported"), because the render's three-state rule
+        // turns a truthy non-boolean into a claim that the machine is alive. Same
+        // discipline `createChannelThread` applies to `openingSeq`.
+        ...(typeof data.operatorOnline === "boolean"
+            ? { operatorOnline: data.operatorOnline }
+            : {}),
+    };
 }
 async function getChannelThread(t, channelId, threadId) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, { toolName: "channel_get_thread" });

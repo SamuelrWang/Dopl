@@ -79,18 +79,39 @@ beforeEach(() => {
     changed: 1,
     removed: 0,
   });
-  vi.mocked(listSessionStates).mockResolvedValue([]);
+  vi.mocked(listSessionStates).mockResolvedValue({
+    sessions: [],
+    operatorOnline: false,
+  });
 });
 
 describe("GET — the read", () => {
   it("answers the caller's own sessions", async () => {
     const res = await get();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ sessions: [] });
+    expect(await res.json()).toEqual({ sessions: [], operatorOnline: false });
     expect(listSessionStates).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1", workspaceId: "ws-1" }),
       undefined
     );
+  });
+
+  /**
+   * ⚠ THE SECOND KEY IS THE ANTIDOTE TO THE STALE-IDLE LIE (F-294). Without it
+   * the MCP render cannot tell a desktop that DIED from an agent that is merely
+   * between turns, because the push is change-driven and both look identical on
+   * the wire. It is derived server-side against `PRESENCE_ONLINE_WINDOW_MS`, so
+   * no client re-derives freshness against a second number.
+   */
+  it("reports the caller's own presence freshness beside the rows", async () => {
+    vi.mocked(listSessionStates).mockResolvedValue({
+      sessions: [],
+      operatorOnline: true,
+    });
+    expect(await (await get()).json()).toEqual({
+      sessions: [],
+      operatorOnline: true,
+    });
   });
 
   it("refuses a malformed `?channelId=` with a 400, not a 500 (F-145)", async () => {

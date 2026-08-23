@@ -6,6 +6,7 @@ import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 import { Popover, MenuItem, MenuDivider } from "@/shared/ui/popover-menu";
 import { RolePill } from "@/features/members/components/member-bits";
+import { isStandardWorkspace } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { WorkspaceLike } from "./workspace-types";
 import styles from "./app-shell.module.css";
@@ -49,6 +50,10 @@ export function WorkspaceSwitcherCore({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const active = workspaces.find((w) => w.publicId === workspacePublicId) ?? null;
+  // ⚠ `GET /api/workspaces` is unfiltered (the desktop listener fans over it),
+  // so the SWITCH LIST drops `kind='link'` home-channel containers here. `active`
+  // stays off the full list — the header must still name where you are.
+  const switchable = workspaces.filter(isStandardWorkspace);
 
   function setOpenState(next: boolean) {
     setOpen(next);
@@ -135,10 +140,10 @@ export function WorkspaceSwitcherCore({
           <p className="px-2.5 pt-1 pb-1 text-label font-semibold uppercase tracking-wide text-text-muted">
             Switch workspace
           </p>
-          {isLoading && workspaces.length === 0 ? (
+          {isLoading && switchable.length === 0 ? (
             <p className="px-2.5 py-1.5 text-small text-text-muted">Loading…</p>
           ) : (
-            workspaces.map((ws) => {
+            switchable.map((ws) => {
               const isActive = ws.publicId === workspacePublicId;
               return (
                 <button

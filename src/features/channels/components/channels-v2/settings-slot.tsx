@@ -40,6 +40,7 @@ export function ChannelsV2SettingsSlot({
   thread,
   agentSessions,
   gate,
+  memberManagement,
   onDeselect,
   onExitThread,
   onRosterChanged,
@@ -54,6 +55,10 @@ export function ChannelsV2SettingsSlot({
   thread: ChannelThread | null;
   agentSessions: readonly DesktopSessionSummary[] | null;
   gate: MutationGate;
+  /** Whether this container's membership can CHANGE — `channel-surface.tsx ›
+   *  ChannelSurfaceCapabilities`. Undefined is the channels page's answer (yes);
+   *  a fixed two-person container passes `false` and loses the invite half. */
+  memberManagement?: boolean;
   /** A deleted CHANNEL must not stay selected. */
   onDeselect: () => void;
   /** A deleted THREAD must not stay selected — back to channel view. */
@@ -88,6 +93,7 @@ export function ChannelsV2SettingsSlot({
       role={role}
       members={members}
       gate={gate}
+      memberManagement={memberManagement}
       onDeselect={onDeselect}
       onRosterChanged={onRosterChanged}
     />

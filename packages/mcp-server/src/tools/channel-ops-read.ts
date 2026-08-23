@@ -15,7 +15,7 @@
 import type {
   ChannelMember,
   ChannelMessage,
-  ChannelSessionStateOwn,
+  ChannelSessionsPage,
   ChannelThread,
   DoplClient,
 } from "@dopl/client";
@@ -221,7 +221,12 @@ export async function opReadSessions(
     channelLabel = ` in **${inlineOr(ch.name, NO_NAME)}**`;
   }
 
-  const sessions: ChannelSessionStateOwn[] =
+  // ⚠ THE PAGE, NOT AN ARRAY (2026-08-23, F-294). `operatorOnline` is the
+  // caller's own `agent_presence` freshness and it is what separates an
+  // idle-but-alive agent from a desktop that died — the row alone cannot,
+  // because the push is change-driven. ⚠ `undefined` = an older server did not
+  // report it, and the render must hedge exactly as it did before.
+  const { sessions, operatorOnline }: ChannelSessionsPage =
     await client.listChannelSessions(channelId);
 
   if (sessions.length === 0) {
@@ -243,10 +248,10 @@ export async function opReadSessions(
     `${UNTRUSTED_LISTING_HEADER}\n`,
   ];
   for (const s of sessions) {
-    lines.push(formatSessionLine(s, { telemetry: true, now }));
+    lines.push(formatSessionLine(s, { telemetry: true, now, operatorOnline }));
   }
   lines.push(
-    `\n${sessionLegend(anyStale)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`,
+    `\n${sessionLegend(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`,
     `\n${SESSION_TELEMETRY_NOTE}`,
   );
   return ok(lines.join("\n"));
