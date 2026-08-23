@@ -5,7 +5,7 @@
 - **[docs/INVARIANTS.md](docs/INVARIANTS.md) is the STANDING READ.** Load it before any structural or
   architectural work. It is the terse, verified statement of how the system behaves right now:
   layout + the 500-line cap, the repository/service/handler split, auth wrappers and gates, workspace
-  resolution, the channels model, consent + trust, realtime, the write layer, read projections, the MCP
+  resolution, the channels model, outbound consent review, realtime, the write layer, read projections, the MCP
   surface, desktop session rules, migrations, the release pipeline, and the testing gates.
 - **[docs/ENGINEERING.md](docs/ENGINEERING.md) is the ARCHAEOLOGY.** Consult it when you need the
   *rationale* or the *history* behind a rule — why it exists, what it replaced, what incident bought it.

@@ -39,6 +39,12 @@ const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
 
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
+// ⚠ `resolvePerm` AND `denyPendingPermissions` MOVED TO `main/session-permissions.js` ON
+// 2026-08-22 (the §2 cap, and the DENIAL COPY: a windowless auto-deny is not a decision, so it
+// may not say "Denied by operator"). Nothing this file pins changed — the verdict is still
+// "did a live awaited resolver really take it", and `dispatch` still propagates it — but the
+// slice now reads two sources, and the harness's `denyPending` mirror follows the moved one.
+const PERMS = readFileSync(M("session-permissions.js"), "utf8");
 // §3 SPLIT: buildSdkOptions + the query lifecycle live in main/session-query.js now.
 const QUERY = readFileSync(M("session-query.js"), "utf8");
 const io = require(M("session-io.js"));
@@ -84,7 +90,7 @@ function harness() {
     "sessionSummary",
     "sessionNarration",
     `${cut("function dispatch(s, event) {", "function runEffect(s, eff) {")}
-     ${cut("function resolvePerm(s, requestId, decision) {", "function runLifecycle(")}
+     ${PERMS.slice(PERMS.indexOf("function denialMessage(s, requestId) {"), PERMS.indexOf("module.exports = {"))}
      function runEffect(s, eff) {
        if (eff.type === 'resolvePermission') return resolvePerm(s, eff.requestId, eff.decision);
        if (eff.type === 'denyPending') {
@@ -178,8 +184,10 @@ test("F1: the shipped engine really propagates that verdict (and denyPending is 
   assert.match(ENGINE, /\n {2}return resolvedLive;\n\}/, "dispatch returns it");
   assert.match(ENGINE, /case 'resolvePermission':\n\s*return resolvePerm\(s, eff\.requestId, eff\.decision\);/,
     "the only effect whose return value is read");
-  assert.match(ENGINE, /case 'denyPending':[\s\S]*?s\.pendingPermissions\.clear\(\);\n\s*s\.pendingNames\.clear\(\);/,
+  assert.match(PERMS, /s\.pendingPermissions\.clear\(\);\n\s*s\.pendingNames\.clear\(\);/,
     "the harness mirror matches the shipped park teardown");
+  assert.match(ENGINE, /case 'denyPending':[\s\S]*?denyPendingPermissions\(s, 'Session paused'\)/,
+    "…and the engine still runs it before a park's abort");
 });
 
 // ── ⚠ F1/F7's TWO REPORTING PINS ENDED HERE — 2026-08-20, F-228 ──────────────────────

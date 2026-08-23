@@ -121,10 +121,21 @@ function enqueue(s, a) {
 // so a call that names no agent resolves nothing on a real thread rather than picking one at
 // random. `session-dispatch.feedLiveSession` is the one production caller and it iterates the
 // thread's live sessions, naming each — the fan-out. Fail-closed by construction.
+// ⚠ AND THE SPAWN-IDLE WAKE BELT SINCE 2026-08-22 (Samuel's ruling). An UNWOKEN spawn-idle
+// session — registered by New Agent, holding a slot and an @-mention address, with no `claude`
+// child at all — is fed NOTHING until something names its agent id. `session-dispatch.js ›
+// mayFeed` is the primary gate and carries the whole argument; this is the belt, here rather than
+// only there because this function is the ENTRY POINT (`session-engine.feedInbound`) and a second
+// caller must not be able to wake an agent by saying nothing to it. Refusing is the same shape as
+// a full queue: `false`, and the caller falls through.
+// ⚠ IT READS THE VERDICT, NOT THE BODY. `a.addressing` is the parsed @agent-id verdict FOR THIS
+// READER, computed against this machine's live ids; re-parsing here would be a second spelling of
+// the addressing rule, which is how two readers come to disagree about one message.
 function feedInbound(a) {
   if (!deps || !deps.sessions) return false;
   const s = deps.sessions.get(store.slotKey(a));
   if (!s || s.settled) return false;
+  if (s.awaitingDirective === true && !(a.addressing && a.addressing.me === true)) return false;
   return enqueue(s, a);
 }
 

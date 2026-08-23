@@ -15,6 +15,14 @@
 // neither reverse it nor post anything into the channel. Bridging some gated tools to a
 // consent row the way an outbound post is bridged is a later wave and a product question.
 //
+// ── THE STORM (2026-08-22, Samuel's ruling 6b) — section 2 below ─────────────────────
+// One notification PER DENIED CALL was the first shape, and live testing produced a burst
+// of identical banners: a wall of the same notice is dismissed wholesale, which takes the
+// first informative one with it, so the loud version lost the same information the silent
+// version did. The notice is now de-duplicated PER TOOL PER SESSION — first denial of T on
+// S notifies, later ones do not. ⚠ THE DENY IS UNCHANGED AND STILL FIRES EVERY TIME; only
+// the interruption is collapsed, and the diag line still records every call.
+//
 // The real file, evaluated with a stub `require` so the real `claimGate` is the one under
 // test and only the notifier / diag are swapped (the `channel-ipc-sender.test.mjs` idiom).
 //
@@ -146,4 +154,110 @@ test("a notifier that throws must never break the deny", async () => {
   assert.equal(m.claimGate(s, REQ, (rid, d) => decisions.push([rid, d])), true);
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(decisions, [["req-1", "deny"]]);
+});
+
+// ── 2. THE DENIAL STORM IS ONE BANNER (ruling 6b) ───────────────────────────────────
+//
+// ⚠ EVERY TEST HERE ALSO ASSERTS THE DENY STILL FIRES. The failure mode a dedupe invites is
+// exactly the one this whole file exists to prevent — collapsing the NOTICE into a decision.
+
+/** Re-arm the one pending permission and claim the gate again, N times. */
+function storm(m, s, payload, n) {
+  const decisions = [];
+  for (let i = 0; i < n; i += 1) {
+    s.pendingPermissions.set("req-1", {});
+    m.claimGate(s, payload, (rid, d) => decisions.push([rid, d]));
+  }
+  return decisions;
+}
+
+test("a STORM of one tool on one session is ONE notice — and N denies", async () => {
+  const m = load();
+  const s = session();
+  const decisions = storm(m, s, REQ, 25);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(m.notices.length, 1, "a burst of identical banners is the defect, not the fix");
+  assert.equal(decisions.length, 25, "the DENY is a decision and must happen every single time");
+  assert.ok(decisions.every(([rid, d]) => rid === "req-1" && d === "deny"));
+  assert.equal(m.diags.filter((d) => d.includes("gated tool denied")).length, 25,
+    "and the local log still records every one — the notice is what is de-duplicated");
+});
+
+test("a DIFFERENT tool on the same session still notifies — the key is per TOOL", () => {
+  const m = load();
+  const s = session();
+  storm(m, s, REQ, 5);
+  storm(m, s, { ...REQ, name: "WebFetch" }, 5);
+  storm(m, s, { ...REQ, name: "Task" }, 5);
+  assert.equal(m.notices.length, 3, "three tools refused is three things the operator must learn");
+  assert.deepEqual(m.notices.map((n) => n.title.match(/Bash|WebFetch|Task/)[0]),
+    ["Bash", "WebFetch", "Task"]);
+});
+
+test("the same tool on ANOTHER session still notifies — the memory is per SESSION", () => {
+  // ⚠ AND IT LIVES ON THE SESSION OBJECT, so it dies with the session rather than leaking one
+  // entry per session into module state for the life of the process.
+  const m = load();
+  const a = session();
+  const b = session({ context: { channelName: "Other" } });
+  storm(m, a, REQ, 3);
+  storm(m, b, REQ, 3);
+  assert.equal(m.notices.length, 2, "a second session's first denial is news to the operator");
+  assert.match(m.notices[0].body, /Website/);
+  assert.match(m.notices[1].body, /Other/);
+});
+
+test("the dedupe set is BOUNDED, oldest-out — an unbounded Set is the shape that bit this tree", async () => {
+  // The idiom is `trigger-outcomes.js › MAX_REMEMBERED_ENDS`: a cap with eviction by insertion
+  // order. Read the cap from source so the test cannot drift from the constant it is proving.
+  const cap = Number(/const MAX_NOTIFIED_DENIALS = (\d+);/.exec(SRC)[1]);
+  assert.ok(cap > 0 && cap <= 256, `a real cap, measured: ${cap}`);
+  const m = load();
+  const s = session();
+  for (let i = 0; i < cap; i += 1) storm(m, s, { ...REQ, name: `Tool${i}` }, 1);
+  assert.equal(m.notices.length, cap, "each distinct tool announced once");
+  assert.equal(s.notifiedDenials.size, cap, "and the set never exceeds the cap");
+  // One more distinct tool evicts the OLDEST entry (Tool0), and the set still holds `cap`.
+  storm(m, s, { ...REQ, name: "Overflow" }, 1);
+  assert.equal(s.notifiedDenials.size, cap, "bounded — it does not grow past the cap");
+  assert.equal(m.notices.length, cap + 1);
+  // ⚠ The cost of an eviction is at worst ONE repeated banner, never a missed deny.
+  const before = m.notices.length;
+  const decisions = storm(m, s, { ...REQ, name: "Tool0" }, 4);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(m.notices.length, before + 1, "the evicted tool may announce once more");
+  assert.equal(decisions.length, 4, "and all four calls were still denied");
+  assert.ok(decisions.every(([, d]) => d === "deny"));
+});
+
+test("the notice is skipped, never the deny — with a notifier that throws mid-storm", async () => {
+  const m = load();
+  const s = session();
+  m.notices.push = () => { throw new Error("notification subsystem gone"); };
+  const decisions = storm(m, s, REQ, 10);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(decisions.length, 10);
+  assert.ok(decisions.every(([, d]) => d === "deny"));
+});
+
+test("a hostile tool name cannot mint unbounded keys — the key is the SANITIZED label", () => {
+  // The dedupe key is the string the operator actually reads (collapsed, trimmed, capped at 40),
+  // so names differing only past the cap are ONE banner to a human and ONE entry here.
+  const m = load();
+  const s = session();
+  const base = "B".repeat(60);
+  for (const suffix of ["aaa", "bbb", "ccc"]) storm(m, s, { ...REQ, name: base + suffix }, 3);
+  assert.equal(m.notices.length, 1, "identical-looking banners collapse into one");
+  assert.equal(s.notifiedDenials.size, 1);
+});
+
+test("the OUTBOUND gate is still exempt from all of this — it has a real decision surface", () => {
+  const m = load();
+  const s = session();
+  for (let i = 0; i < 5; i += 1) {
+    s.pendingPermissions.set("req-1", {});
+    m.claimGate(s, { type: "outbound_gate", requestId: "req-1", text: "hi" }, () => {});
+  }
+  assert.deepEqual(m.notices, [], "it bridges to a consent row; it was never a denial");
+  assert.equal(s.notifiedDenials, undefined, "and it does not even touch the denial memory");
 });

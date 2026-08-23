@@ -457,7 +457,6 @@ export {
   ConsentDecisionSchema,
   ConsentListQuerySchema,
   PresenceHeartbeatSchema,
-  TrustMutateSchema,
 } from "./schema-collab";
 export type {
   ConsentCreateInput,
@@ -465,5 +464,4 @@ export type {
   ConsentListQuery,
   ConsentStatusFilter,
   PresenceHeartbeatInput,
-  TrustMutateInput,
 } from "./schema-collab";

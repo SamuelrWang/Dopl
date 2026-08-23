@@ -362,7 +362,16 @@ export async function resolvePostMetadata(
   // NOT conditioned on a surviving thread tag, unlike `handoff` / `fanoutGroup`:
   // those two are claims ABOUT a thread, and this is a claim about the BODY,
   // which stands on its own in a plain channel post. Empty stamps no key.
-  const mentioned = await resolveBodyMentions(input.body, ctx.userId, roster);
+  // ⚠ `ctx.source` decides whether the AUTHOR survives the resolution: an agent
+  // tagging its own operator is that agent's escalation path, a human tagging
+  // themselves is not an inbox item. The credential answers it, never the body —
+  // see `service-writes-metadata-mentions.ts`.
+  const mentioned = await resolveBodyMentions(
+    input.body,
+    ctx.userId,
+    roster,
+    ctx.source === "agent"
+  );
   if (mentioned.length > 0) metadata[MENTIONS_METADATA_KEY] = mentioned;
 
   return { metadata };

@@ -14,13 +14,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const M = (p) => join(HERE, "..", "main", p);
+const MAIN = join(HERE, "..", "main");
+const M = (p) => join(MAIN, p);
 
 const priv = require(M("session-private.js"));
 const profiles = require(M("session-profiles.js"));
@@ -157,10 +159,140 @@ test("WINDOW: two 1:1 messages each get a covered turn", () => {
   assert.equal(priv.isPrivateTurn(s), true, "the second one is still owed a covered turn");
 });
 
-test("WINDOW: it FLOORS AT ZERO — a stray `result` cannot make the next private turn public", () => {
-  // The drained tail of a superseded query dispatches `result` after a park/resume. A negative
-  // depth would read as "already closed" for the NEXT private turn, which is the failure
-  // direction that matters.
+// ── 3b. THE DEPTH LEAK (2026-08-22, Samuel's ruling — the confirmed root cause) ───────────────
+
+test("LEAK: a SECOND 1:1 message while the agent works costs +1, not +2", () => {
+  // ⚠ THE BUG, IN THREE LINES. The `+2` exists to cover a CHANNEL turn that happened to be in
+  // flight: that turn's `result` spends one, leaving the private turn covered by the second. When
+  // the turn in flight is ITSELF private, its own depth is ALREADY paying for it — so a second
+  // `+2` spends one on a turn that was already counted, and the surplus never drains.
+  const s = sess({ state: { messageMode: "auto_both", activity: "idle" } });
+  assert.equal(priv.openPrivateTurn(s), 1, "idle: the message IS the next turn");
+  s.state.activity = "working"; // the agent picks it up
+  assert.equal(priv.openPrivateTurn(s), 2, "…and the second message adds ONE, not two");
+  priv.closePrivateTurn(s); // private turn 1 ends
+  priv.closePrivateTurn(s); // private turn 2 ends
+  assert.equal(priv.isPrivateTurn(s), false, "the window closes exactly when the private work does");
+});
+
+test("LEAK: two 1:1 messages while WORKING used to leave the session privately gated forever", () => {
+  // The pre-fix arithmetic: 2 + 2 = 4 against three turns to run (the channel turn plus two
+  // private ones), so the session came out of it at depth 1 and every CHANNEL turn afterwards had
+  // AXIS B's outbound widening withdrawn. That is the posture degradation, exactly: the agent
+  // silently unable to auto-send, on a session nobody had made private.
+  const s = sess({ state: { messageMode: "auto_both", activity: "working" } });
+  assert.equal(priv.openPrivateTurn(s), 2, "a NON-private turn in flight still costs two");
+  assert.equal(priv.openPrivateTurn(s), 3, "…and the second private message costs one");
+  for (let i = 0; i < 3; i += 1) priv.closePrivateTurn(s); // channel turn + two private turns
+  assert.equal(priv.isPrivateTurn(s), false);
+  assert.equal(profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, post())), "allow",
+    "and the channel posture is BACK — this is the assertion the leak failed");
+});
+
+test("LEAK: a torn-down query closes the window outright — it owes no results", () => {
+  // ⚠ WHY A RESET AND NOT MORE ARITHMETIC. `session-query.js › consume` drops a superseded
+  // query's tail (`s.query !== q`), so the `result` events that would have spent this depth never
+  // arrive. A park, an auth hold, a crash or an End therefore STRANDS whatever was open, and the
+  // next private turn opens on top of it. Zero is the only correct answer for a query that is gone.
+  const s = sess({ state: { messageMode: "auto_both", activity: "working" } });
+  priv.openPrivateTurn(s);
+  assert.equal(priv.isPrivateTurn(s), true);
+  assert.equal(priv.resetPrivateTurn(s), 0);
+  assert.equal(priv.isPrivateTurn(s), false);
+  assert.equal(priv.resetPrivateTurn(null), 0, "and no session at all is not a throw");
+});
+
+// ⚠ THE REAL LANE, DRIVEN TWICE, THROUGH THE REAL REDUCER. The cases above use a static fixture
+// whose `activity` never moves, and that fixture is EXACTLY what hid this bug: the double-count
+// only happens when the first 1:1 message has already flipped the session to `working`, which is
+// something only the reducer does. This drives `session-reopen.js › messageByTask` — the shipped
+// op behind the agent view's composer — with a dispatch that runs the REAL reducer and stores its
+// state, so the second call reads the activity the first call produced.
+function composer() {
+  const src = readFileSync(join(MAIN, "session-reopen.js"), "utf8");
+  const resolver = src.slice(src.indexOf("function resolveSession("), src.indexOf("// PURE READ —"));
+  const body = resolver + src.slice(src.indexOf("function messageByTask("), src.indexOf("// ── C-8: THE SESSIONS A QUIT WOULD ORPHAN"));
+  const { loadReducer } = require("./_reducer-block.mjs");
+  const RED = loadReducer();
+  const s = {
+    key: `${CH}:${THREAD}:a1b2c3d4`,
+    agentId: "a1b2c3d4",
+    settled: false,
+    windowless: true,
+    channelId: CH,
+    nonce: "n1",
+    state: { ...RED.initialSessionState({ messageMode: "auto_both" }), activity: "idle", phase: "running" },
+  };
+  const sessions = new Map([[s.key, s]]);
+  const fn = new Function(
+    "deps", "store", "framing", "privateTurn", "floorWindowlessMessage",
+    `${body}\n return messageByTask;`
+  )(
+    {
+      sessions,
+      // THE REAL REDUCER, and its state really applied — the whole point of this harness.
+      dispatch: (sess, ev) => { sess.state = RED.sessionReducer(sess.state, ev).state; },
+    },
+    { slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+      threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:` },
+    seed,
+    priv,
+    profiles.floorWindowlessMessage
+  );
+  return { fn, s };
+}
+
+test("LEAK: TWO 1:1 messages through the REAL op leave the window exactly two turns deep", () => {
+  const h = composer();
+  const send = () => h.fn({ channelId: CH, taskId: THREAD, text: "what did they say?" });
+  assert.deepEqual(send(), { ok: true });
+  assert.equal(h.s.privateDepth, 1, "an IDLE agent: the message IS the next turn");
+  assert.equal(h.s.state.activity, "working", "…and the reducer moved it, which the old fixture never did");
+  assert.deepEqual(send(), { ok: true });
+  assert.equal(h.s.privateDepth, 2,
+    "the second message costs ONE — the in-flight turn is already private and already counted");
+  // Two turns run, two ends, window closed, posture back.
+  priv.closePrivateTurn(h.s);
+  priv.closePrivateTurn(h.s);
+  assert.equal(priv.isPrivateTurn(h.s), false);
+  assert.equal(profiles.grantDecision(io.grantArgs(h.s, DOPL_CHANNEL_TOOL, post())), "allow",
+    "the channel posture is back; before the fix the session was left at depth 1 forever");
+});
+
+test("LEAK: a 1:1 message onto a CHANNEL turn in flight still over-covers by one, deliberately", () => {
+  // The safe direction is unchanged: a channel turn that happened to be running when the operator
+  // typed also has its posts held for approval. Bounded to that single turn.
+  const h = composer();
+  h.s.state.activity = "working"; // a channel turn is mid-flight, and it is NOT private
+  h.fn({ channelId: CH, taskId: THREAD, text: "quick question" });
+  assert.equal(h.s.privateDepth, 2);
+});
+
+test("LEAK: the three teardown sites really call it, in the shipped source", () => {
+  // Both effect cases (`abortQuery` runs on EVERY terminal and every park; `denyPending` runs
+  // before a park's abort) and the resume itself, which can follow a crash where no effect ran.
+  const engine = readFileSync(join(MAIN, "session-engine.js"), "utf8");
+  const park = readFileSync(join(MAIN, "session-park.js"), "utf8");
+  const abort = engine.slice(engine.indexOf("case 'abortQuery':"), engine.indexOf("case 'clearIdle':"));
+  assert.match(abort, /sessionPrivate\.resetPrivateTurn\(s\);[\s\S]*s\.abortController\.abort\(\)/,
+    "abortQuery closes the window before it tears the query down");
+  assert.match(abort, /case 'denyPending':[\s\S]*sessionPrivate\.resetPrivateTurn\(s\);/);
+  assert.match(park, /privateTurn\.resetPrivateTurn\(s\);/, "and resumeParked, for the crash path");
+});
+
+test("WINDOW: it FLOORS AT ZERO — an extra `result` cannot make the next private turn public", () => {
+  // ⚠ THE JUSTIFICATION WAS WRONG AND IS CORRECTED (2026-08-22). It read "the drained tail of a
+  // superseded query dispatches `result` after a park/resume" — it does NOT: `session-query.js ›
+  // consume` guards on `s.query !== q` and returns immediately, so the old query's tail reaches
+  // no dispatch at all. (That guard is exactly why `resetPrivateTurn` had to be added: the
+  // results a torn-down query still OWED are dropped, so the depth they would have spent is
+  // stranded rather than over-spent.)
+  //
+  // ⚠ THE FLOOR IS STILL RIGHT, ON A HONEST REASON. Depth accounting has two writers on different
+  // clocks — `openPrivateTurn` at the operator's keyboard, `closePrivateTurn` at every turn end,
+  // plus a `resetPrivateTurn` at every teardown — and a NEGATIVE depth would read as "already
+  // closed" for the NEXT private turn, silently publishing a private answer. Flooring is what
+  // makes every accounting error fail in the safe direction, without depending on which one it was.
   const s = sess();
   for (let i = 0; i < 5; i += 1) priv.closePrivateTurn(s);
   assert.equal(s.privateDepth, 0);

@@ -233,8 +233,12 @@ test("THE busy defer announces, ahead of the RESEND bubble, and nothing else doe
   const sites = trigger.match(/queued\.announce\([^)]*\)/g) || [];
   assert.equal(sites.length, 1, "one per busy defer, and the engine's `busy` skip is the only one left");
 
-  // The engine defer threads under the FIRST-CLASS id when the record carries one.
-  assert.ok(trigger.includes("queued.announce(entry, m, rec.taskId || taskId, 'session')"));
+  // The engine defer threads under the id the launch itself runs under, which prefers the
+  // message's FIRST-CLASS (UUID) id and falls back to the deterministic legacy one
+  // (`trigger.js › taskIdFor`). ⚠ It read `rec.taskId || taskId` until 2026-08-22, off a
+  // PERSISTED consent record; the inbound consent lane is deleted (Samuel's ruling) and the id
+  // is resolved once, from the message in hand, so there is one binding rather than a fallback.
+  assert.ok(trigger.includes("queued.announce(entry, m, taskId, 'session')"));
 
   // Ordered: the milestone lands in the thread BEFORE the untagged resend bubble, so a
   // requester reading top-down sees the reason before the ask.

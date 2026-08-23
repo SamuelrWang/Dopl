@@ -43,29 +43,36 @@ const consentCreateBase = {
 };
 
 /**
- * Create a consent request (desktop POSTs on trigger / on drafted reply).
+ * Create an OUTBOUND consent request — the operator's own agent drafted a reply
+ * and a human has to Send it before it leaves the machine.
  *
  * ⚠ `operatorUserId` is NEVER in the body — always the authenticated caller, so
- * a caller can only raise a request addressed to themselves. `requesterUserId`
- * derived server-side from the triggering message.
+ * a caller can only raise a request addressed to themselves.
  *
- * Discriminated on `kind`: only OUTBOUND carries `proposedReply` — accepting it
- * on inbound would let a caller pre-seed the outbound review's payload.
- * `messageSeq` is the de-dupe key for BOTH kinds, so retries can't stack cards.
+ * ⚠ THE INBOUND ARM IS DELETED (2026-08-22, Samuel: "remove all the stuff about
+ * declining and approving of threads"), and DELETED rather than refused at the
+ * service. This was a `z.discriminatedUnion("kind", …)` with an `inbound`
+ * member; a `kind:"inbound"` body now fails schema validation at the route with
+ * the ordinary 400, which is the shape this tree retires things in — a validator
+ * that still ACCEPTS the value and then throws is a second place to keep in step
+ * and a lane that half-exists.
+ *
+ * ⚠ `kind` STAYS ON THE WIRE, as a literal. The column is not going anywhere
+ * (decided inbound rows are kept for audit) and the desktop still SENDS the
+ * field, so dropping it would 400 an outbound create from an older build over a
+ * value that is correct. It is a one-member literal on purpose: it names which
+ * lane survived, in the request itself.
+ *
+ * ⚠ `proposedReply` was always outbound-only — accepting it on inbound would
+ * have let a caller pre-seed the outbound review's payload. `messageSeq` is the
+ * de-dupe key, so a retry cannot stack review cards.
  */
-export const ConsentCreateSchema = z.discriminatedUnion("kind", [
-  z.object({
-    ...consentCreateBase,
-    kind: z.literal("inbound"),
-    messageSeq: ConsentMessageSeqSchema.optional(),
-  }),
-  z.object({
-    ...consentCreateBase,
-    kind: z.literal("outbound"),
-    messageSeq: ConsentMessageSeqSchema.optional(),
-    proposedReply: z.string().max(16000).optional(),
-  }),
-]);
+export const ConsentCreateSchema = z.object({
+  ...consentCreateBase,
+  kind: z.literal("outbound"),
+  messageSeq: ConsentMessageSeqSchema.optional(),
+  proposedReply: z.string().max(16000).optional(),
+});
 export type ConsentCreateInput = z.infer<typeof ConsentCreateSchema>;
 
 /**
@@ -89,8 +96,10 @@ export type ConsentDecisionInput = z.infer<typeof ConsentDecisionSchema>;
 
 /**
  * Consent inbox filter. `pending` (default, web inbox) = still needs an answer.
- * `decided` = audit view; ONLY way to read the `auto_allowed` rows a trust rule
- * writes ("your agent ran N times without asking"). `all` = both.
+ * `decided` = audit view, and since 2026-08-22 that is where the retired INBOUND
+ * lane's history lives: decided inbound rows are kept, and this is the only
+ * filter that returns them (along with any `auto_allowed` row a standing trust
+ * rule ever wrote — none did). `all` = both.
  */
 const ConsentStatusFilterSchema = z.enum(["pending", "decided", "all"]);
 export type ConsentStatusFilter = z.infer<typeof ConsentStatusFilterSchema>;
@@ -102,13 +111,11 @@ export const ConsentListQuerySchema = z.object({
 });
 export type ConsentListQuery = z.infer<typeof ConsentListQuerySchema>;
 
-// ─── Trust (per-teammate standing consent) ──────────────────────────────────
-
-/** POST / DELETE /trust body: the teammate whose agent is (un)trusted. */
-export const TrustMutateSchema = z.object({
-  trustedUserId: z.string().uuid(),
-});
-export type TrustMutateInput = z.infer<typeof TrustMutateSchema>;
+// ⚠ `TrustMutateSchema` STOOD HERE AND IS DELETED (2026-08-22) with the
+// `POST` / `DELETE /api/channels/trust` routes it parsed and the
+// `agent_trust_rules` table behind them. Standing consent existed to auto-allow
+// INBOUND requests; that lane is retired, so there is nothing left for a rule to
+// grant. See `20260822140000_retire_inbound_consent_and_trust.sql`.
 
 // ─── Presence (desktop heartbeat) ───────────────────────────────────────────
 

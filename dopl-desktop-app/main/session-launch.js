@@ -98,6 +98,13 @@ async function launch(a) {
     // ⚠ `adoptsConsent` RODE HERE and is gone (F-228): it named the ONE spawn allowed to spend
     // the pre-consent card's entry-keyed arm, and there is no card.
     startModes: a.startModes,
+    // ⚠ THE MODEL, FORWARDED AND NEVER INVENTED (2026-08-22, Samuel's model-selection ruling).
+    // The funnel had no `model` field at all, so `startSession`'s `sessionModel.normalizeModel
+    // (spec.model)` could only ever answer 'default' on every lane that goes through here — the
+    // per-session picker's value had one producer left (a resume's stored record) and no way in
+    // from a launch. It is coerced at the construction site and again at `buildSdkOptions`, the
+    // last step before a child process can see it, so a bad value here is 'default', never argv.
+    model: a.model,
     windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
     // 2026-08-21 ruling 3: SPAWN IDLE. Registers the agent with prepared context and starts no
     // query; the first inbound message for this agent is what launches it.

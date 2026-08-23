@@ -1,9 +1,18 @@
 "use client";
 
 /**
- * Channels v2 — the SETTINGS tab's AGENT half: the durable launch posture, the
- * durable per-channel tool profile, the desktop-only working folder, and the
- * standing per-teammate trust roster. All of it INLINE, and all of it DURABLE.
+ * Channels v2 — the SETTINGS tab's AGENT half: the durable launch posture (both
+ * permission axes and, since 2026-08-22, the MODEL), the durable per-channel tool
+ * profile, and the desktop-only working folder and auto-send rows. All of it
+ * INLINE, and all of it DURABLE.
+ *
+ * ⚠ THE TRUST ROSTER IS DELETED (Samuel, 2026-08-22). "Always allow <teammate>"
+ * was standing consent for an INBOUND ask — it pre-approved the decision the same
+ * ruling just retired everywhere ("remove all the stuff about declining and
+ * approving of threads"), so it governed nothing. It never fired once.
+ * `use-trust-rules.ts`, the `trust` mutation, its optimistic cache patch and the
+ * `/api/channels/trust` client path all went with it; the table and its two
+ * routes are being deleted server-side in the same wave.
  *
  * ⚠ THE PERMISSION ARM IS DELETED, NOT REHOMED (2026-08-20, Samuel's ruling). It
  * lived here, and being here is what broke it: a single-use, 30-minute fuse among
@@ -28,9 +37,8 @@
  * ⚠ NO NEW WRITES, NO NEW PATHS — as of the 2026-08-19 inlining, which is what
  * that ruling was about. (The 2026-08-20 split above DID change one: these two
  * selects moved from the arm's bridge ops to the posture's. Nothing else here
- * did.) The folder is still {@link useChannelFolder}, and the tool profile and
- * trust rows still call back into `channel-manage.tsx`'s mutations on the page's
- * ONE `gate`.
+ * did.) The folder is still {@link useChannelFolder}, and the tool profile still
+ * calls back into `channel-manage.tsx`'s mutation on the page's ONE `gate`.
  *
  * ⚠ NO DEAD ROWS (INVARIANTS §5). Both desktop-only groups are gated on their
  * own bridge, so a plain browser renders neither the controls NOR a heading over
@@ -38,14 +46,13 @@
  *
  * ⚠ NO `role="menu"` IDIOMS. The old panel used checked menu items for
  * everything because a menu may only own menu items; inline, the launch posture
- * is two `SelectMenu`s, Tools is a real radiogroup and trust is a real `Switch`
- * per row.
+ * is two `SelectMenu`s and Tools is a real radiogroup.
  *
  * ⚠ MINIMAL COPY — SAMUEL, 2026-08-19 (third ruling of the day, and it
  * SUPERSEDES the explain-it-in-the-UI half of the two above). The first inline
  * pass carried an explainer paragraph under almost every control — the arm's
- * lifetime, the durable note, the folder note, two sentences of trust scope, and
- * a full sentence per tool profile. **"We should not be explaining everything to
+ * lifetime, the durable note, the folder note, two sentences of trust scope (the
+ * trust section is itself gone now), and a full sentence per tool profile. **"We should not be explaining everything to
  * the user."** They are all gone. The rule for this tab now: a row is a NAME + a
  * CONTROL, plus at most a few-word secondary line; **no paragraph-style
  * `text-caption` block anywhere.** It is a settings panel, not documentation.
@@ -58,9 +65,7 @@
 
 import type { ReactNode } from "react";
 import { Check } from "lucide-react";
-import { Avatar } from "@/shared/ui/avatar";
 import { SelectMenu } from "@/shared/ui/select-menu";
-import { Switch } from "@/shared/ui/switch";
 import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
 import { AgentFolderRows, AutoSendRows } from "./settings-desktop-rows";
 import { cn } from "@/shared/lib/utils";
@@ -73,10 +78,12 @@ import {
 import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
 import { useChannelFolder } from "../../hooks/use-channel-folder";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
+import {
+  AGENT_MODEL_DEFAULT,
+  AGENT_MODEL_OPTIONS,
+} from "../../lib/agent-models";
 import { PanelHeading } from "./bits";
-import { memberPerson } from "./view-model";
-import { memberLabel } from "../../lib/channel-display";
-import type { AgentToolProfile, ChannelMember } from "../../types";
+import type { AgentToolProfile } from "../../types";
 
 /**
  * WHAT EACH TOOL PROFILE MEANS. ⚠ Source of truth is
@@ -122,43 +129,22 @@ const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
   { value: "read_only", description: "Local files only" },
 ];
 
-/**
- * ⚠ TRUST IS WORKSPACE-WIDE. The row is
- * `UNIQUE (operator_user_id, trusted_user_id, workspace_id)` — no channel column,
- * ever — while the toggle lives in a per-CHANNEL tab, so a label is the only
- * thing that can carry the scope: every channel and DM in the workspace,
- * including ones that do not exist yet. **That is what this line is for, and it
- * is why the section kept a hint at all when the ruling below cut every other
- * one.**
- *
- * ⚠ WHAT IT NO LONGER SAYS, and where that went (Samuel, 2026-08-19 — minimal
- * copy): the second sentence spelled out the EFFECT — an auto-allowed request
- * raises no card anywhere and the session it starts gets whatever this channel's
- * Tools setting allows, which is the one place the two settings meet. Still
- * true, still the reason the two controls sit on one tab; it is not printed.
- */
-const TRUST_SCOPE_HINT = "Applies across the whole workspace";
-
-/**
- * Shown instead of the roster when nobody else is a member yet. ⚠ Rendering
- * NOTHING here hides that standing trust exists from a single-member workspace.
- */
-const TRUST_EMPTY_COPY = "Nobody else in this channel yet";
+// ⚠ THE "ALWAYS ALLOW" SECTION STOOD HERE AND IS DELETED (Samuel, 2026-08-22).
+// `TRUST_SCOPE_HINT`, `TRUST_EMPTY_COPY`, the `TrustRow` switch, the
+// `trustedIds` / `trustBusyIds` props and the `useTrustRules` read behind them
+// went with the INBOUND consent lane they were the standing-consent shortcut FOR
+// — a rule that pre-approves an ask nobody is asked any more. It never fired
+// once in production. `agent_trust_rules` and its two routes are being deleted
+// server-side in the same wave.
 
 export interface ChannelAgentSettingsProps {
   /** The channel's DB UUID — handed to both desktop bridges as-is. */
   channelId: string;
   /** The caller's own tool profile for THIS channel (never a teammate's). */
   profile: AgentToolProfile;
-  /** Other channel members (trust targets); the caller is excluded upstream. */
-  otherMembers: ChannelMember[];
-  trustedIds: ReadonlySet<string>;
-  /** Trust rows with a write in flight; clicks are ignored until it settles. */
-  trustBusyIds: ReadonlySet<string>;
   onSetToolProfile: (profile: AgentToolProfile) => void;
   /** True while the tool-profile write is in flight. */
   toolProfileBusy: boolean;
-  onToggleTrust: (userId: string, trusted: boolean) => void;
 }
 
 /**
@@ -180,6 +166,7 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
       posture={launchPosture.bridge ? launchPosture.posture : null}
       postureBusy={launchPosture.busy}
       onChangePosture={(patch) => void launchPosture.update(patch)}
+      modelSupported={launchPosture.modelSupported}
       folder={
         folder.bridge
           ? {
@@ -199,10 +186,6 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
             }
           : null
       }
-      otherMembers={props.otherMembers}
-      trustedIds={props.trustedIds}
-      trustBusyIds={props.trustBusyIds}
-      onToggleTrust={props.onToggleTrust}
     />
   );
 }
@@ -230,17 +213,24 @@ export interface ChannelAgentSettingsViewProps {
    *  absent). ⚠ NOT the arm — `use-channel-launch-posture.ts` says why they are
    *  two records with two consumers. */
   posture: PermissionPreset | null;
-  /** True while a posture write is in flight — both selects go inert. */
+  /** True while a posture write is in flight — every posture select goes inert. */
   postureBusy: boolean;
   onChangePosture: (patch: Partial<PermissionPreset>) => void;
+  /**
+   * This desktop understands the posture record's `model` field (2026-08-22).
+   *
+   * ⚠ FALSE RENDERS NO MODEL ROW — the no-dead-rows rule (INVARIANTS §5), and
+   * here it is worse than a dead row would normally be: an older main DROPS the
+   * field, so the pick would appear to save and every launch would ignore it.
+   * ⚠ It is a SEPARATE gate from `posture` being non-null, because the two axes
+   * exist on builds the model does not. `use-channel-launch-posture.ts ›
+   * ChannelLaunchPostureState.modelSupported` is where it is probed.
+   */
+  modelSupported?: boolean;
   /** The working folder, or null outside the desktop shell (row absent). */
   folder: AgentFolderState | null;
   /** Auto-send (2026-08-20), or null outside the desktop shell (row absent). */
   autoSend?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
-  otherMembers: ChannelMember[];
-  trustedIds: ReadonlySet<string>;
-  trustBusyIds: ReadonlySet<string>;
-  onToggleTrust: (userId: string, trusted: boolean) => void;
 }
 
 export function ChannelAgentSettingsView({
@@ -250,12 +240,9 @@ export function ChannelAgentSettingsView({
   posture,
   postureBusy,
   onChangePosture,
+  modelSupported = false,
   folder,
   autoSend = null,
-  otherMembers,
-  trustedIds,
-  trustBusyIds,
-  onToggleTrust,
 }: ChannelAgentSettingsViewProps) {
   return (
     <>
@@ -306,6 +293,40 @@ export function ChannelAgentSettingsView({
                 disabled={postureBusy}
               />
             </SettingRow>
+            {/* THE MODEL (Samuel, 2026-08-22) — durable, per channel, and read
+                at the same one call site the two axes are.
+
+                ⚠ IT SITS IN THIS GROUP AND NOT THE ONE BELOW, and the heading is
+                why: "When you launch an agent" governs the launches the OPERATOR
+                starts, which is exactly the scope of this pick. The group below
+                is "for every session on this channel" — an inbound-triggered
+                session carries no launch posture at all, and putting the model
+                there would promise it applies to runs it cannot reach.
+
+                ⚠ ABSENT ON A MAIN THAT HAS NO MODEL FIELD, never disabled. Such
+                a build DROPS the value on write, so a greyed row would be the
+                mild version of the failure and a live one would be the loud
+                version: a control that says Opus over agents that all launch on
+                the default. `modelSupported` is a probe over the get reply — the
+                bridge grew a FIELD here, not an op, so there is no member to
+                detect (`permission-modes.ts › hasModelKey`).
+
+                ⚠ "Default" IS A REAL PICK and writes NO id — the SDK's own
+                default applies. `lib/agent-models.ts` owns the roster and is the
+                ONE place an id becomes a label. */}
+            {modelSupported && (
+              <SettingRow name="Model">
+                <SelectMenu<string>
+                  value={posture.model ?? AGENT_MODEL_DEFAULT}
+                  options={AGENT_MODEL_OPTIONS}
+                  onChange={(model) =>
+                    onChangePosture({ model: model || null })
+                  }
+                  ariaLabel="Model for agents you launch"
+                  disabled={postureBusy}
+                />
+              </SettingRow>
+            )}
           </>
         )}
 
@@ -366,71 +387,7 @@ export function ChannelAgentSettingsView({
         {folder && <AgentFolderRows folder={folder} SettingName={SettingName} />}
         {autoSend && <AutoSendRows autoSend={autoSend} SettingName={SettingName} />}
       </div>
-
-      {/* ⚠ ONE hint line, and it is the SCOPE — see {@link TRUST_SCOPE_HINT} for
-          why that is the one claim a per-channel tab cannot leave implicit. */}
-      <PanelHeading title="Always allow" />
-      <div className="px-3.5">
-        <Note>{TRUST_SCOPE_HINT}</Note>
-      </div>
-      {otherMembers.length === 0 ? (
-        <div className="px-3.5 pt-1">
-          <Note>{TRUST_EMPTY_COPY}</Note>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-px px-2 pt-1">
-          {otherMembers.map((member) => (
-            <TrustRow
-              key={member.userId}
-              member={member}
-              trusted={trustedIds.has(member.userId)}
-              busy={trustBusyIds.has(member.userId)}
-              onToggle={onToggleTrust}
-            />
-          ))}
-        </div>
-      )}
     </>
-  );
-}
-
-/**
- * One teammate's standing trust. Same row anatomy as the Info tab's roster
- * (`info-tab.tsx › MemberRow`) so the two panels sit at one height, with the
- * kit `Switch` where that one carries a `RolePill`.
- *
- * ⚠ Busy DISABLES rather than hiding the control: a double click during the
- * write is the case `channel-manage.tsx › handleToggleTrust` guards, and the row
- * must keep saying which way it is going while it settles.
- */
-function TrustRow({
-  member,
-  trusted,
-  busy,
-  onToggle,
-}: {
-  member: ChannelMember;
-  trusted: boolean;
-  busy: boolean;
-  onToggle: (userId: string, trusted: boolean) => void;
-}) {
-  const name = memberLabel(member);
-  return (
-    <div className="flex h-[46px] items-center gap-2.5 rounded-[8px] px-2">
-      <Avatar person={memberPerson(member)} size="sm" />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-medium text-text-primary">
-          {name}
-        </span>
-        {busy && <span className="text-caption text-text-muted">Saving…</span>}
-      </span>
-      <Switch
-        checked={trusted}
-        disabled={busy}
-        onChange={(next) => onToggle(member.userId, next)}
-        aria-label={`Always allow ${name}`}
-      />
-    </div>
   );
 }
 
@@ -463,17 +420,11 @@ function SettingName({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * A short secondary line. ⚠ A FEW WORDS, NEVER A PARAGRAPH (Samuel, 2026-08-19).
- * It survived the copy cut for the two places a row genuinely cannot stand
- * alone — trust's SCOPE and the empty roster — and adding a third sentence to
- * this tab through it is the regression the ruling forbids.
- */
-function Note({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-caption leading-snug text-text-secondary">{children}</p>
-  );
-}
+// ⚠ `Note` STOOD HERE AND IS DELETED (2026-08-22). It was the tab's one
+// secondary-line recipe and its only two callers were trust's SCOPE hint and the
+// empty-roster line, both of which went with the "Always allow" section. The
+// minimal-copy ruling (INVARIANTS §5) stands: a row on this tab is a NAME + a
+// CONTROL, and there is now no recipe here to hang a third sentence off.
 
 /**
  * A named setting with its control on the right. The 340px panel is why the

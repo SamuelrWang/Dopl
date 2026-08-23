@@ -1,63 +1,34 @@
 "use client";
 
 /**
- * THE THREAD VIEW'S TWO CONSENT SURFACES (Samuel, 2026-08-20), split out of
- * `message-pane.tsx` at the 500-line cap — one file per reason to change:
- * this is "the open thread owes or offers a decision", whole.
+ * THE THREAD VIEW'S SEND BOX (Samuel, 2026-08-20), split out of
+ * `message-pane.tsx` at the 500-line cap — one file per reason to change: this
+ * is "the open thread is holding something of mine that has not gone out yet",
+ * whole.
  *
- * - **The awaiting strip** (under the header): the viewer was ASKED on this
- *   thread and has not answered — Launch agent / Decline, the same CAS'd
- *   consent mutation the transcript card uses. Nothing FLOATS: the arrival
- *   pop-up is deleted, so a decision is made where the thread already is.
- * - **The send box** (above the composer): this operator's OWN agent drafted
- *   a reply on this thread and auto-send is off — the draft + Send/Cancel,
- *   the Inbox's old `LaunchPanel` in its outbound mode, deciding on the
- *   first click.
+ * The operator's OWN agent drafted a reply on this thread and auto-send is off —
+ * the draft + Send / Cancel, `launch-panel.tsx › LaunchPanel` in the outbound
+ * mode that is now its only mode, deciding on the first click.
  *
- * ⚠ THESE TWO ARE NOT THE ONLY DECISION SURFACES. `inbox-pane.tsx › InboxRow`
- * decides as well, on the same CAS'd `PATCH /consent/[id]`, and it has to: both
- * surfaces here need a row the seq→thread join could PLACE onto this open
- * thread, and the Inbox is the durable home of last resort for the ones it could
- * not (untagged triggers, aged-out pages, seq-less outbound drafts). It is not a
- * passive list. A row no surface can decide is a hung agent, which is the whole
- * reason the third one exists.
+ * ⚠ `ThreadAwaitingStrip` STOOD HERE AND IS DELETED (Samuel, 2026-08-22): *"remove
+ * all the stuff about declining and approving of threads — you have the thread,
+ * you open it, and either you launch agent or you don't."* It was the INBOUND
+ * half — "This request is awaiting your answer", Decline / Launch agent under the
+ * thread header — and it went with the transcript card's inline pair and the
+ * Inbox's inbound rows. **The open thread offers no decision about being asked.**
+ * A thread is a thread; the operator either launches an agent on it (the
+ * composer's and the Agents tab's direct launch) or does not.
+ *
+ * ⚠ THE TWO DIRECTIONS WERE NEVER SYMMETRIC AND THAT IS WHY ONE SURVIVED. An
+ * inbound ask was somebody else's agent wanting to run on this machine, and
+ * Samuel's ruling is that the operator simply decides that by launching or not
+ * launching. An OUTBOUND draft is words about to leave under the operator's own
+ * name — the last gate before a machine speaks for a human, and nothing about
+ * this ruling touches it.
  */
 
 import { LaunchPanel } from "../launch-panel";
 import type { ChannelConsentRequest, ChannelThread } from "../../types";
-
-export function ThreadAwaitingStrip({
-  thread,
-  requested,
-  onDecideThread,
-}: {
-  thread: ChannelThread | null;
-  requested: ReadonlySet<string>;
-  onDecideThread: (threadId: string, decision: "allow" | "deny") => void;
-}) {
-  if (!thread || !requested.has(thread.id)) return null;
-  return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-6 py-1.5">
-      <span className="min-w-0 flex-1 truncate text-caption text-text-secondary">
-        This request is awaiting your answer.
-      </span>
-      <button
-        type="button"
-        onClick={() => onDecideThread(thread.id, "deny")}
-        className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
-      >
-        Decline
-      </button>
-      <button
-        type="button"
-        onClick={() => onDecideThread(thread.id, "allow")}
-        className="auth-btn-3d h-7 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white"
-      >
-        Launch agent
-      </button>
-    </div>
-  );
-}
 
 export function ThreadSendBox({
   thread,

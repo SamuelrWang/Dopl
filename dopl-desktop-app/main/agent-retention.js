@@ -23,8 +23,10 @@
 // PRUNE THEMSELVES to the live set on every cycle and a second cleaner would be a second
 // answer: `session-state-push.js › origin` and `› loggedAdHoc` (both pruned in `trackOrigin` /
 // `reportable`), and `session-narration.js › dirty` (cleared on every flush).
-// ⚠ `consent-watcher.js`'s records are keyed by `(channelId, seq)` — a REQUEST, not an agent —
-// and settle on their own decision. They are not per-agent artifacts and are not swept here.
+// ⚠ `consent-watcher.js`'s records were keyed by `(channelId, seq)` — a REQUEST, not an agent —
+// and settled on their own decision, so they were never per-agent artifacts and were never swept
+// here. That module is DELETED with the inbound consent lane (2026-08-22); nothing replaced it,
+// so there is no fourth self-pruning store to account for.
 // ⚠ `ownPostIds` / `ownPostSeq` live ON the session object and die with it at `settle`; they
 // are never persisted, so there is nothing to sweep.
 //

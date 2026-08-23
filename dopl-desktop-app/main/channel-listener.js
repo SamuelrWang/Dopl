@@ -1,17 +1,20 @@
 // Background Channels listener.
 //
 // For every non-archived channel the signed-in user can see, runs an
-// authenticated long-poll (`/api/channels/[id]/await`) with a persisted `since`
-// cursor and capped-exponential reconnect backoff. New human messages from
-// other users trigger a native consent prompt; only on explicit approval does
-// session-spawner run a Claude session and post the reply back with an
-// idempotent client_msg_id. One active session per channel.
+// authenticated long-poll (`/api/channels/[id]/await`) with a persisted `since` cursor and
+// capped-exponential reconnect backoff. An ADDRESSED message from another member raises a native
+// notification whose button launches a windowless SDK session; that session posts its own reply
+// with an idempotent client_msg_id.
+// ⚠ IT SAID "trigger a native consent prompt; only on explicit approval…" and "consent is a
+// main-process native dialog" until 2026-08-22 — both described the INBOUND CONSENT LANE, deleted
+// (see `trigger.js`'s header): the button LAUNCHES, approving nothing, because there is no row.
+// "One active session per channel" went earlier, with the one-agent-per-thread law (2026-08-21
+// multiplayer); `MAX_CONCURRENT_SESSIONS` is the bound now.
 //
-// Auth is via forwarded Supabase cookies (see auth.js for why not a bearer).
-// No renderer IPC is added — consent is a main-process native dialog.
+// Auth is via forwarded Supabase cookies (see auth.js for why not a bearer). No renderer IPC.
 //
 // SPLIT NOTE (§2 refactor): this file was 914 lines. The I/O layer moved to
-// listener-io.js, targeting/handoff to targeting.js, and the consent→spawn→reply
+// listener-io.js, targeting/handoff to targeting.js, and the notify→spawn→reply
 // pipeline to trigger.js; per-message dispatch (the ONE surviving route — the other
 // session-window routes are deleted,
 // classify, and the verdict outcomes) moved to listener-messages.js when Q10
@@ -26,11 +29,11 @@ const claudeRuntime = require('./claude-runtime'); // "can a session run at all"
 const presence = require('./presence');
 const io = require('./listener-io');
 const targeting = require('./targeting');
-const trigger = require('./trigger');
+// ⚠ `require('./trigger')` IS DELETED (2026-08-22): its ONE use here was `trigger.resolvers`,
+// handed to the consent watcher. The trigger path is reached through `listener-messages.js`.
 // Per-message dispatch (⚠ the three session-window routes are GONE, classify, and the three
 // verdict outcomes) lives in listener-messages.js — extracted at the 500-line cap.
 const messages = require('./listener-messages');
-const watcher = require('./consent-watcher');
 const sessionEngine = require('./session-engine');
 const realtime = require('./realtime');
 const heal = require('./listener-heal');
@@ -49,7 +52,9 @@ let refreshTimer = null;
 let cliWarned = false;
 let myUserId = null; // resolved operator identity (H2); null until known
 let reconciling = null; // in-flight reconcile promise (M1 re-entrancy guard)
-let onPendingCb = null; // tray pending-count callback (from index.js handlers)
+// ⚠ `onPendingCb` IS DELETED (2026-08-22): it carried the tray's "Pending: N" count, written by
+// `consent-watcher.js › emitCount` — the INBOUND consent records awaiting a decision. There are
+// none (see `trigger.js`'s header), so the count has no producer and the tray item went too.
 const loops = new Map(); // channelId -> loop entry
 // Q4 fix 2: the last workspace set we successfully enumerated, so a `want=0`
 // realtime state can be repaired without waiting for a pass that may fail.
@@ -138,7 +143,7 @@ async function channelLoop(entry) {
 
     if (entry.seedMode) {
       // Drain history quietly until caught up to the tip, then go live. Avoids
-      // replaying a backlog as consent prompts on first watch.
+      // replaying a backlog as ask notifications on first watch.
       //
       // L1 (known v1 limitation, documented): a genuine trigger that lands in the
       // very first await window while we're still seeding is absorbed into this
@@ -173,7 +178,7 @@ async function backoff(entry) {
 // ── Channel-set reconciliation ──────────────────────────────────────────────
 // M1: reconcile is NOT re-entrant — the startup call and the deep-link restart()
 // (+3s timer) can both await the network and then both start loops for the same
-// channel (dup long-polls + double consent dialogs). Coalesce concurrent calls
+// channel (dup long-polls + double ask notifications). Coalesce concurrent calls
 // onto one in-flight promise; subsequent callers await the running pass.
 function reconcile() {
   if (reconciling) return reconciling;
@@ -196,7 +201,9 @@ async function reconcileInner() {
     stopLoops();
     presence.setWorkspaces([]); // stop heartbeating when signed out
     if (REALTIME.ENABLED) realtime.setWorkspaces([]); // drop the WS subscriptions
-    watcher.reset(); // FIX 1: drop in-memory pending records + zero the tray count
+    // ⚠ `watcher.reset()` STOOD HERE (FIX 1: drop in-memory pending records + zero the tray
+    // count) and went with `consent-watcher.js` on 2026-08-22. There is no in-memory record set
+    // to drop on sign-out and no count to zero — the ask notification holds nothing durable.
     lastGoodWorkspaceIds = [];
     diag('reconcile: signed out (no blob, no cookie session) — listener idle');
     setStatus();
@@ -232,9 +239,9 @@ async function reconcileInner() {
     // Feature B/C: refresh the userId->displayName cache once per workspace per
     // reconcile so notification copy has requester + target names.
     await io.refreshNameCache(ws);
-    // H-3: no trust refresh here any more. Trust is evaluated server-side on
-    // every consent create (the row is born 'auto_allowed'), so there is nothing
-    // to cache and no window in which a revoked rule keeps auto-allowing.
+    // H-3: no trust refresh here any more, and since 2026-08-22 no trust READ anywhere on this
+    // machine's inbound path — the standing rules whose whole job was to make a row born
+    // `auto_allowed` never fired once, and the inbound row is deleted with them.
     // Canonical URL segment for the notification deep-link (Feature B).
     const workspaceSegment = ws.slug && ws.publicId ? `${ws.slug}-${ws.publicId}` : null;
     // Q4 fix 2b: null = "never got an answer" (after the bounded retry ladder), so
@@ -317,12 +324,13 @@ async function reconcileInner() {
         // E1; C reappears → reconcile creates E2, loops.set(C, E2); E1's in-flight
         // await then resolves and its final pass throws → this .catch runs. Without
         // the guard it would loops.delete(C) and evict the healthy E2, so the next
-        // reconcile starts E3 while E2 still polls = two loops / double consent.
+        // reconcile starts E3 while E2 still polls = two loops / double notification.
         if (loops.get(id) === entry) loops.delete(id);
       });
-      // Crash-recovery for parked / in-flight consent is handled GLOBALLY and once
-      // by consent-watcher.resume() at start — durable server rows + the web
-      // Pending Requests list replace the old per-channel replay + orphan sweep.
+      // ⚠ NO CRASH-RECOVERY PASS FOR AN ASK ANY MORE (2026-08-22). This pointed at
+      // `consent-watcher.resume()`, which reloaded durable inbound records so a request parked
+      // across a quit stayed answerable. The record went with the row: an ask nobody acted on is
+      // not acted on, and the message is still in the thread for the operator to launch from.
     } else {
       existing.channel = d.channel;
       existing.workspaceId = d.workspaceId;
@@ -376,19 +384,15 @@ function listWatchedChannels() {
 // Register window-control callbacks (from index.js) used when a notification is
 // clicked: openChannel(workspaceSegment) shows the window + navigates the webview.
 // Delegates to targeting.js, which owns the handoff used by trigger.js/FYI.
-// onPending({count,segment}) drives the tray "Pending: N" item + click target.
+// ⚠ `onPending({count,segment})` WAS THE SECOND HANDLER AND IS DELETED (2026-08-22) — it drove
+// the tray "Pending: N" item, whose only producer was the inbound consent watcher.
 function setHandlers(h) {
   targeting.setHandlers(h);
-  if (h && h.onPending) {
-    onPendingCb = h.onPending;
-    watcher.start({ resolvers: trigger.resolvers, onPendingCount: onPendingCb });
-  }
 }
 
 function start(statusCb, h) {
   onStatus = statusCb || onStatus;
   if (h) targeting.setHandlers(h);
-  if (h && h.onPending) onPendingCb = h.onPending;
   if (running) { reconcile(); return; }
   running = true;
   presence.start(); // Feature 5: heartbeat (self-gates on sign-in + workspace set)
@@ -404,10 +408,9 @@ function start(statusCb, h) {
       onHealthChange: onRealtimeHealth,
     });
   }
-  // Round B: the async consent watcher — decoupled from the long-poll loop. It
-  // polls each pending consent row off-loop and dispatches to trigger.resolvers
-  // (spawn / review / echo). Idempotent; resumes durable pending records once.
-  watcher.start({ resolvers: trigger.resolvers, onPendingCount: onPendingCb });
+  // ⚠ `watcher.start({ resolvers: trigger.resolvers, … })` IS DELETED (2026-08-22): it ran the
+  // consent poll loop that drove the INBOUND lane's spawn / decline / expiry resolvers off this
+  // loop. The ask is a notification, and its Launch button calls `trigger` directly.
   // 2026-08-04: warn ONLY when NOTHING here can run a session. The old notice fired
   // on the EXTERNAL-CLI probe and told most installs their channel auto-responses
   // were off while the bundled binary answered fine. claude-runtime.js owns that
@@ -486,7 +489,8 @@ function stop() {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   healer.stop(); // cancel any pending self-heal retry
   stopLoops();
-  watcher.stop(); // Round B: stop the async consent poll loop
+  // ⚠ `watcher.stop()` went with the consent poll loop (2026-08-22) — there is no second timer
+  // family left in this module to tear down.
   presence.stop(); // Feature 5: stop heartbeating on shutdown
   realtime.stop(); // Push transport: close the Realtime WS
   setStatus();

@@ -31,6 +31,9 @@ const framing = require('./session-seed');
 // 2026-08-22: the PRIVATE TURN's window. Required at module scope like `store` and `framing`, so
 // the source-extraction test injects it and the block stays free of runtime handles.
 const privateTurn = require('./session-private');
+// 2026-08-22: the frozen model enum + the id -> alias seam. A free var inside the block below,
+// like `store` and `framing`, so the source-extraction test injects it.
+const sessionModel = require('./session-model');
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
@@ -291,6 +294,54 @@ function setModeByTask(a) {
   return { ok: true, tools: st.toolMode, messages: st.messageMode };
 }
 
+// ── THE LIVE MODEL: SWITCH A RUNNING AGENT'S MODEL (2026-08-22, Samuel's ruling) ─────────────
+//
+// ⚠ THE SDK REALLY SUPPORTS THIS, AND THAT IS WHY IT IS A SWITCH RATHER THAN A DEFERRAL.
+// `Query.setModel(model?: string): Promise<void>` — "Change the model used for subsequent
+// responses. Only available in STREAMING INPUT MODE" (the bundled SDK's own `sdk.d.ts`), and
+// every session in this tree runs in streaming input mode by construction: `sdk.query({ prompt:
+// s.pushIterator, … })` takes an async iterable, never a string. So the running child is told,
+// and the change applies from the next response rather than the next launch.
+//
+// ⚠ IT IS RECORDED AS WELL AS APPLIED, and both halves are load-bearing. `s.model` is what
+// `session-query.js › buildSdkOptions` reads on the NEXT assembly — a park/resume, a crash
+// resume, the post-sign-in relaunch — so a switch that only called the SDK would silently revert
+// the operator's pick the first time the session was rebuilt. Writing it without calling would be
+// the opposite lie: the control would report a model the running turn is not using.
+//
+// ⚠ THE VALUE IS COERCED TWICE ON THE WAY IN, exactly like the launch path. The caller speaks the
+// ID vocabulary (what a UI offers, what the durable posture stores); `aliasForModelId` maps it to
+// the frozen ALIAS enum, and `buildSdkOptions` re-coerces at the last step before a child process
+// can see it. An unknown value lands on 'default', which means "no model option at all" — the
+// CLI's own pick, i.e. clearing the override, which is exactly what `setModel(undefined)` does.
+//
+// ⚠ NOT CONTAINMENT, AND NOT SUPERVISION EITHER. It grants nothing, gates nothing and reaches no
+// tool decision — `grantDecision` never reads a model. The failure direction of a forged call is
+// that the operator's own agent answers on a different model, which is why it sits with the other
+// per-agent ops behind the SAME app-window sender gate rather than needing a new argument.
+// ⚠ ASYNC, unlike its three neighbours, because the SDK call is a promise. It resolves after the
+// switch has been ACCEPTED so a UI can render main's truth rather than its own request; a throw
+// (a settled query, a child that died between the resolve and the call) answers `{ ok: false }`
+// and leaves `s.model` alone, because a recorded pick nothing applied is the lie above.
+async function setModelByTask(a) {
+  const channelId = String((a && a.channelId) || '');
+  const taskId = String((a && a.taskId) || '');
+  if (!deps.sessions) return { ok: false };
+  const s = resolveSession(a, channelId, taskId);
+  if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  const alias = sessionModel.aliasForModelId(a && a.model);
+  const arg = sessionModel.modelArg(alias); // null == 'default' == clear the override
+  try {
+    if (s.query && typeof s.query.setModel === 'function') await s.query.setModel(arg || undefined);
+  } catch (_) {
+    return { ok: false, reason: 'switch-failed' };
+  }
+  // ⚠ AFTER the SDK accepted it, never before: `s.model` is what the next assembly reads, so
+  // recording a switch that did not land would survive the running query and outlive the error.
+  s.model = alias;
+  return { ok: true, model: alias };
+}
+
 // ── THE DIRECT 1:1 LANE: THE OPERATOR TALKS TO THEIR OWN AGENT ───────────────────
 //
 // F-212's third lane, closed 2026-08-20. The entry parked it on a security decision and
@@ -431,4 +482,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask, listOrphanRisk, endLiveSessions };
+module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, setModelByTask, messageByTask, listOrphanRisk, endLiveSessions };

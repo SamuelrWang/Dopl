@@ -62,6 +62,42 @@ function endedEmit(state, outcome, reason, summary) {
 // the citation was not.
 const INACTIVE_NOTE = 'This session went inactive.';
 
+// ── ⚠ A TERMINAL POST MUST SAY WHY, AND THE METADATA ALREADY KNOWS (2026-08-22, Samuel) ──────
+//
+// A `task_failed` shipped with NO BODY while its own metadata carried the reason — `{interrupted}`,
+// `{declined}`, `{dropped}`, `{capped}` — so the requester's card fell back to a generic failure
+// on endings that were not failures at all. The flag decides the RENDER; the body is what a person
+// reads, and leaving it undefined threw away a fact this process was already holding.
+//
+// ⚠ TWO OF THE FOUR HAVE NO PRODUCER LEFT, AND THEY ARE NAMED ANYWAY. `{declined}` and
+// `{dropped}` were `trigger-outcomes.js`'s inbound-consent terminals, deleted 2026-08-22 with the
+// approve-IN lane (`main/trigger.js`'s header carries the ruling). They stay in this table
+// because `CALM_FLAG_KEYS` stay reserved server-side (INVARIANTS §5), installed builds still
+// write them, and the WEB still renders them — so the copy has to exist for the flag, not for
+// this build's producers.
+//
+// ⚠ AND `onEnded` CURRENTLY POSTS ONLY `task_progress`, so these bodies reach nobody TODAY. That
+// is a fact about which KINDS the desktop posts, not about the rule: the rule is "a terminal
+// carries its reason", and it must already be true on the day a terminal kind posts again. A body
+// added later, under pressure, is how the generic failure came back the first time.
+const TERMINAL_BODIES = {
+  interrupted: 'Interrupted',
+  capped: 'Limit reached',
+  declined: 'Request declined',
+  dropped: 'Reply was not sent',
+};
+
+// The calm one-liner for a terminal's metadata, or undefined when nothing in it explains the end
+// (a REAL error, which is exactly the case that should read as a bare failure).
+// ⚠ ORDER IS FIXED BY THE KEY LIST, not by object iteration on the caller's shape, so two flags
+// on one post can never produce two different bodies on two machines.
+const TERMINAL_FLAG_ORDER = ['declined', 'dropped', 'interrupted', 'capped'];
+function terminalBody(extra) {
+  const e = extra || {};
+  for (const key of TERMINAL_FLAG_ORDER) if (e[key] === true) return TERMINAL_BODIES[key];
+  return undefined;
+}
+
 function endLifecycle(reason) {
   if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
   if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
@@ -163,6 +199,8 @@ function parkEffects(state, opts) {
 
 module.exports = {
   gatePhase,
+  terminalBody, // 2026-08-22: a terminal post's body says what its metadata already knows
+  TERMINAL_BODIES,
   endedEmit,
   endLifecycle,
   endEffects,

@@ -19,8 +19,6 @@ import {
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
-  TrustedNotMemberError,
-  TrustSelfError,
 } from "./errors";
 
 /**
@@ -94,12 +92,6 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof DirectChannelImmutableError) {
     return new HttpError(400, "DIRECT_CHANNEL_IMMUTABLE", err.message);
-  }
-  if (err instanceof TrustSelfError) {
-    return new HttpError(400, "TRUST_SELF", err.message);
-  }
-  if (err instanceof TrustedNotMemberError) {
-    return new HttpError(422, "TRUST_NOT_MEMBER", err.message);
   }
   return null;
 }

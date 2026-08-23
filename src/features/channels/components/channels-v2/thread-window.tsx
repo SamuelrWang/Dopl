@@ -53,7 +53,6 @@ import { ChannelsV2MessagePane } from "./message-pane";
 import { useChannelsV2Live } from "./live";
 import { indexMembers } from "./view-model";
 import { threadRows } from "./view-model-rows";
-import { requestedThreadIds } from "./view-model-requested";
 import { useInlineConsent } from "./use-inline-consent";
 import { PEER_SESSIONS_POLL_MS } from "./use-agents-panel";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
@@ -130,22 +129,25 @@ export function ChannelsV2ThreadWindow({
     refetchMembers: () => void refetchMembers(),
   });
 
-  // The awaiting-strip's whole diet (Samuel, 2026-08-20): this window is a
-  // decision surface like the in-page thread view — an undecided ask opened
-  // here must be decidable here, not one window switch away. Channel-scoped
-  // read, same poll the main page uses, same CAS'd consent mutation.
-  const { requests } = useConsentInbox(
+  // The SEND BOX's whole diet: this window is a decision surface like the
+  // in-page thread view — a draft this operator's agent is holding on the thread
+  // they popped out must be sendable here, not one window switch away.
+  // Channel-scoped read, same poll the main page uses, same CAS'd mutation.
+  //
+  // ⚠ `outbound` ONLY (Samuel, 2026-08-22). The INBOUND half fed
+  // `thread-consent.tsx › ThreadAwaitingStrip`, which is deleted with the rest
+  // of that lane — this window has no inbound decision to offer either.
+  const { outbound: requests } = useConsentInbox(
     workspaceId,
     channelId,
     CONSENT_INBOX_POLL_MS
   );
-  const { consent } = useChannelPreferenceWrites({
-    workspaceId,
-    currentUserId,
-    gate,
+  const { consent } = useChannelPreferenceWrites({ workspaceId, gate });
+  const { outboundByThread, decideOutbound, consentBusy } = useInlineConsent({
+    messages,
+    requests,
+    consent,
   });
-  const { decideThread, outboundByThread, decideOutbound, consentBusy } =
-    useInlineConsent({ messages, requests, consent });
 
   // EVERY member's session state for this channel — the peer-activity row above
   // the composer (2026-08-20). ⚠ THIS WINDOW NEEDS ITS OWN READ. The three-column
@@ -159,11 +161,6 @@ export function ChannelsV2ThreadWindow({
     workspaceId,
     PEER_SESSIONS_POLL_MS
   );
-  const requested = useMemo(
-    () => requestedThreadIds(messages, requests),
-    [messages, requests]
-  );
-
   const index = useMemo(
     () => indexMembers(members, currentUserId),
     [members, currentUserId]
@@ -215,8 +212,6 @@ export function ChannelsV2ThreadWindow({
         index={index}
         members={members}
         loading={messagesLoading}
-        requested={requested}
-        onDecideThread={decideThread}
         outboundAsk={thread ? (outboundByThread.get(thread.id) ?? null) : null}
         outboundBusy={consentBusy}
         onDecideOutbound={decideOutbound}

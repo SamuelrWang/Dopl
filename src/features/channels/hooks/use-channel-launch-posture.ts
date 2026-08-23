@@ -3,14 +3,23 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   DEFAULT_PERMISSION_PRESET,
+  hasModelKey,
   normalizePermissionPreset,
   type PermissionPreset,
 } from "../lib/permission-modes";
 
 /**
  * Per-channel DURABLE LAUNCH POSTURE over the desktop bridge
- * (`window.dopl.channels.get/setLaunchPosture`). The two axes the operator's OWN
- * agent starts on when they press Launch on the Agents tab.
+ * (`window.dopl.channels.get/setLaunchPosture`). The two axes — and, since
+ * 2026-08-22, the MODEL — the operator's OWN agent starts on when they press
+ * Launch.
+ *
+ * ⚠ THE MODEL RIDES THE SAME RECORD AND THE SAME TWO OPS, which is why it is a
+ * field here rather than a hook of its own: main stores one launch posture per
+ * channel and reads it at one call site (`session-ipc-ops.js › sessions:launch`).
+ * A second record would be a second thing to keep in step at spawn time. ⚠ It is
+ * NOT a third permission axis — `permission-modes.ts › PermissionPreset.model`
+ * carries that argument.
  *
  * ⚠ THE VOCABULARY CAME OUT OF THE SINGLE-USE ARM, AND THE ARM IS DELETED
  * (2026-08-20, Samuel's ruling). The file this was split out of —
@@ -99,9 +108,24 @@ export interface ChannelLaunchPostureState {
   bridge: DoplLaunchPostureBridge | null;
   /** The pair the operator's next own launch will start on. */
   posture: PermissionPreset;
+  /**
+   * THIS DESKTOP UNDERSTANDS THE MODEL FIELD (2026-08-22).
+   *
+   * ⚠ IT IS A CAPABILITY, NOT A VALUE, and the Settings tab renders NO MODEL ROW
+   * when it is false — the no-dead-rows rule every desktop-only group on that tab
+   * follows (INVARIANTS §5). A row that wrote a field main drops is worse than no
+   * row: the operator picks Opus, the write "succeeds", and every agent keeps
+   * launching on the default with nothing anywhere saying so.
+   *
+   * ⚠ FALSE UNTIL THE FIRST READ ANSWERS. It is a probe over the reply
+   * (`permission-modes.ts › hasModelKey`), not a synchronous member check, so it
+   * flips after mount like `bridge` does — and failing toward "no row" is the
+   * correct direction while the answer is outstanding.
+   */
+  modelSupported: boolean;
   /** True while a write is in flight. */
   busy: boolean;
-  /** Persist a new value on one axis; the other is carried through unchanged. */
+  /** Persist a new value on one axis; the others are carried through unchanged. */
   update: (patch: Partial<PermissionPreset>) => Promise<void>;
 }
 
@@ -113,6 +137,7 @@ export function useChannelLaunchPosture(
     DEFAULT_PERMISSION_PRESET
   );
   const [busy, setBusy] = useState(false);
+  const [modelSupported, setModelSupported] = useState(false);
 
   // ⚠ Feature-detect after mount so SSR and first client render agree.
   useEffect(() => {
@@ -129,11 +154,13 @@ export function useChannelLaunchPosture(
     bridge
       .getLaunchPosture(channelId)
       .then((next) => {
-        if (alive) {
-          setPosture(
-            normalizePermissionPreset(next) ?? DEFAULT_PERMISSION_PRESET
-          );
-        }
+        if (!alive) return;
+        setPosture(normalizePermissionPreset(next) ?? DEFAULT_PERMISSION_PRESET);
+        // ⚠ PROBED OFF THE RAW REPLY, before the normalizer, and it is a
+        // one-way latch to TRUE. A later read that answers without the key is a
+        // version skew this hook cannot resolve, and yanking a control out from
+        // under a mid-pick operator is worse than one stale row.
+        if (hasModelKey(next)) setModelSupported(true);
       })
       .catch(() => {
         if (alive) setPosture(DEFAULT_PERMISSION_PRESET);
@@ -169,7 +196,13 @@ export function useChannelLaunchPosture(
       const optimistic: PermissionPreset = { ...posture, ...patch };
       if (
         optimistic.tools === previous.tools &&
-        optimistic.messages === previous.messages
+        optimistic.messages === previous.messages &&
+        // ⚠ `?? null` ON BOTH SIDES so an absent model and an explicit `null`
+        // compare EQUAL here. They are different facts to the capability probe
+        // above, but they are the same POSTURE — and without the coalesce the
+        // first Default pick on a fresh channel would look like a change, write,
+        // and put a `model` key on a record that had none.
+        (optimistic.model ?? null) === (previous.model ?? null)
       ) {
         return;
       }
@@ -198,5 +231,5 @@ export function useChannelLaunchPosture(
     [bridge, busy, channelId, posture]
   );
 
-  return { bridge, posture, busy, update };
+  return { bridge, posture, modelSupported, busy, update };
 }

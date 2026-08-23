@@ -130,16 +130,28 @@ export type MessageAuthorKind = "user" | "agent" | "system";
 export type AgentToolProfile = "full" | "dopl_only" | "read_only";
 
 /**
- * Consent request kind. `inbound` = a teammate's agent addressed the operator
- * and the operator must Allow / Deny before their machine spawns; `outbound` =
- * the operator's own agent drafted a reply awaiting Send / Cancel.
+ * Consent request kind. `outbound` = the operator's own agent drafted a reply
+ * awaiting Send / Cancel, and it is the ONLY kind anything writes.
+ *
+ * ⚠ `inbound` IS A READ-ONLY HISTORICAL VALUE (2026-08-22, Samuel). It meant "a
+ * teammate's agent addressed the operator; Allow or Deny before this machine
+ * spawns", and that lane is retired: a peer's ask notifies, and the operator
+ * launches a session or does not. The value stays in this union because DECIDED
+ * inbound rows are KEPT for audit and `mapConsentRow` casts the column onto this
+ * type — deleting it would not delete the rows, it would make them fail to type.
+ * ⚠ `schema-collab.ts › ConsentCreateSchema` no longer ACCEPTS it, so a create
+ * naming it is a 400. That asymmetry is the point: readable, unwritable.
  */
 export type ConsentKind = "inbound" | "outbound";
 
 /**
  * Consent request lifecycle. `pending` awaits a decision; `allowed` / `denied`
- * are human decisions; `auto_allowed` was resolved by a standing trust rule;
- * `expired` elapsed unanswered.
+ * are human decisions; `expired` elapsed unanswered.
+ *
+ * ⚠ `auto_allowed` IS READ-ONLY HISTORY, on `inbound`'s terms: it was written
+ * only by the standing-trust birth in `createConsentRequest`, and
+ * `agent_trust_rules` is dropped (2026-08-22), so nothing can produce one. Kept
+ * so a stored row still types and still lists in the audit view.
  */
 export type ConsentStatus =
   | "pending"
@@ -150,8 +162,13 @@ export type ConsentStatus =
 
 /**
  * Which surface recorded a HUMAN decision, persisted into `decided_by`. Desktop
- * dialog and web card are equal peers, so audit must distinguish them. `trust`
- * is server-written for a standing-rule auto-allow, never caller-supplied.
+ * dialog and web card are equal peers, so audit must distinguish them.
+ *
+ * ⚠ `decided_by` can also hold `'trust'`, which is NOT in this union and never
+ * was — it was server-written at CREATE time for a standing-rule auto-allow, and
+ * deliberately unacceptable from a caller. That writer is deleted (2026-08-22),
+ * so the value is stored history only; the DTO types the column as
+ * `string | null` for exactly this reason.
  */
 export type ConsentDecisionSurface = "web" | "desktop";
 
@@ -370,10 +387,14 @@ export type ChannelMember = {
 };
 
 /**
- * A human-in-the-loop consent request: `inbound` (Allow / Deny before the
- * operator's machine spawns) or `outbound` (Send / Cancel before the operator's
- * agent's reply leaves the machine). A server-side row so either surface (web
- * or desktop) can answer it.
+ * A human-in-the-loop consent request: `outbound` — Send / Cancel before the
+ * operator's own agent's reply leaves the machine. A server-side row so either
+ * surface (web or desktop) can answer it, first answer wins.
+ *
+ * ⚠ A STORED ROW MAY STILL BE `inbound` (Allow / Deny before the operator's
+ * machine spawned). That lane is retired (2026-08-22) and nothing raises one any
+ * more, but decided rows are kept for audit and this type is what the audit read
+ * returns — see {@link ConsentKind}.
  */
 export type ChannelConsentRequest = {
   id: string;
@@ -401,18 +422,15 @@ export type ChannelConsentRequest = {
   requesterAvatarUrl: string | null;
 };
 
-/** A per-teammate standing-consent rule ("always allow Alice's agent"). */
-export type AgentTrustRule = {
-  id: string;
-  operatorUserId: string;
-  trustedUserId: string;
-  workspaceId: string;
-  createdAt: string;
-  /** Hydrated trusted-teammate display for the settings list. */
-  trustedName: string | null;
-  trustedEmail: string | null;
-  trustedAvatarUrl: string | null;
-};
+// ⚠ `AgentTrustRule` STOOD HERE AND IS DELETED (2026-08-22, Samuel). It was the
+// per-teammate standing-consent rule ("always allow Alice's agent"), and it only
+// ever auto-allowed an INBOUND consent request — the lane that is retired. The
+// `agent_trust_rules` table goes with it
+// (`20260822140000_retire_inbound_consent_and_trust.sql`), so nothing this type
+// described exists: not the routes, not the service, not the repository reads,
+// not the relation. It never fired in production either — the rule was on hold
+// by Samuel's own ruling (INVARIANTS §6) and the settings surface that would
+// have written one was never wired.
 
 // `AwaitResult` (long-poll) is an MCP/SDK shape and lives in
 // `packages/dopl-client/src/channel-types.ts`, where its only callers are.

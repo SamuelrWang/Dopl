@@ -58,7 +58,19 @@ const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
 //                     session-replay · session-peer-post · session-history · session-history-copy
 //   attended handoff  attended-handoff · attended-prompt (reachable only from a pre-consent card)
 //   the headless lane trigger-headless · session-pool (Samuel: one executor, not two)
+// ⚠ THREE MORE JOINED THEM ON 2026-08-22 — THE INBOUND CONSENT RETIREMENT (Samuel's ruling).
+// `consent-watcher` / `consent-store` / `consent-cadence` were the whole approve-IN lane: the poll
+// loop that watched a server `inbound` row off the long-poll loop, its electron-store durability
+// (the watched map + the settled-key TTL), and its adaptive scan cadence. A peer's ask now raises
+// a NOTIFICATION whose button LAUNCHES and whose Dismiss decides nothing — there is no row, no
+// record and nothing to re-poll. ⚠ `main/consent.js` is deliberately NOT on this list: it is LIVE
+// and owns the OUTBOUND row (`session-windowless.js › bridgeOutbound`), which is untouched.
+// Tier 2 is the one that matters here as always: `trigger.js`, `trigger-outcomes.js` and
+// `channel-listener.js` each `require`d the watcher, and `module.exports` is read at load.
 const REMOVED = [
+  "consent-watcher",
+  "consent-store",
+  "consent-cadence",
   "channel-agents",
   "channel-roster",
   "channel-engagement",
@@ -194,7 +206,17 @@ test("every surviving mention of a deleted module is annotated as history, not s
 // with no reader — recorded in `session-spawner.js`'s header but pinned nowhere, which is the
 // asymmetry this list exists to close. A reader for it would resume a session against an
 // executor that no longer exists.
-const RETIRED_STORE_KEYS = ["sessionWindowMode", "preConsentWindowMode", "claudeSessions"];
+// ⚠ THREE MORE JOINED 2026-08-22 WITH THE INBOUND CONSENT RETIREMENT. `pendingConsent` was the
+// Round-B per-channel hold; `channelWatched` / `channelSettled` were `consent-store.js`'s durable
+// pending-request map and its no-replay settled-key set. All three are still on shipped machines'
+// disks and NOTHING may read them: a reader would resurrect a decision surface that has no
+// decision behind it, and `channelSettled` in particular would suppress asks whose "settlement"
+// was recorded by a lane that no longer exists. `main/listener-io.js` names all three in prose,
+// which is how the next reader finds this.
+const RETIRED_STORE_KEYS = [
+  "sessionWindowMode", "preConsentWindowMode", "claudeSessions",
+  "pendingConsent", "channelWatched", "channelSettled",
+];
 
 test("no retired window store key has a reader anywhere in main/", () => {
   for (const key of RETIRED_STORE_KEYS) {

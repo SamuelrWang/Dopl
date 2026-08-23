@@ -82,26 +82,22 @@ export interface ChannelsV2SidebarProps {
   /** Threads of the OPEN channel, already windowed to the sidebar's rule
    *  (active in the last 24h OR requested — `view-model-requested.ts`). */
   threads: ChannelThread[];
-  /** Thread ids the viewer has been asked about and has not answered. */
-  requestedThreads: ReadonlySet<string>;
-  /**
-   * THE ASK SIGNAL — channelId → how many threads there are awaiting THIS
-   * viewer's answer (Samuel's ruling, 2026-08-20: option (a), a per-channel
-   * count). `view-model-requested.ts › pendingAsksByChannel`.
-   *
-   * ⚠ WORKSPACE-WIDE BY CONSTRUCTION, which is the whole feature: the page's
-   * consent read takes no `channelId`, so a channel the operator is NOT looking
-   * at can still say somebody is waiting on them. A channel-scoped read here
-   * would signal only the channel already on screen.
-   */
-  pendingAsks?: ReadonlyMap<string, number>;
   members: ChannelMember[];
   currentUserId: string;
   selectedChannelId: string | null;
   openThreadId: string | null;
   onSelectChannel: (id: string) => void;
   onOpenThread: (id: string) => void;
-  /** Pending consent requests — a REAL count, so the Inbox row gets a badge. */
+  /**
+   * Drafts this operator's own agent is holding for their Send — a REAL count,
+   * so the Inbox row gets a badge.
+   *
+   * ⚠ OUTBOUND-ONLY SINCE 2026-08-22 (Samuel — the inbound consent retirement).
+   * It counted BOTH directions of the consent inbox while an inbound ask was
+   * something the operator answered; with that lane deleted, an inbound row is
+   * not a thing this page can act on, and a badge is a claim that something is
+   * actionable. The caller slices it — `use-consent-inbox.ts › outbound`.
+   */
   consentCount: number;
   /** The center pane is showing the inbox, so the Inbox row is the selected one. */
   inboxOpen: boolean;
@@ -126,8 +122,6 @@ export function ChannelsV2Sidebar({
   rooms,
   direct,
   threads,
-  requestedThreads,
-  pendingAsks,
   members,
   currentUserId,
   selectedChannelId,
@@ -214,8 +208,6 @@ export function ChannelsV2Sidebar({
       person={channelDisplayPeerPerson(channel, members, currentUserId)}
       selected={channel.id === selectedChannelId && !threadSelected && !inboxOpen}
       threads={channel.id === selectedChannelId ? threads : []}
-      requestedThreads={requestedThreads}
-      askCount={pendingAsks?.get(channel.id) ?? 0}
       openThreadId={inboxOpen ? null : openThreadId}
       collapsed={threadsCollapsed.has(channel.id)}
       onToggleThreads={toggleThreads}
@@ -267,9 +259,11 @@ export function ChannelsV2Sidebar({
           ))}
           {/* WIRED: the consent inbox lives in this row (a second-round ruling
               in the port's intent doc, deleted at the cutover — INVARIANTS §7),
-              its badge is the real pending count, and since
-              Phase 8 the row OPENS the inbox — the center column lists every
-              request waiting on this viewer as a launch panel. */}
+              its badge is the real pending count, and since Phase 8 the row
+              OPENS the inbox — the center column lists every draft waiting on
+              this viewer's Send.
+              ⚠ OUTBOUND-ONLY since 2026-08-22: the inbound half of that pane is
+              deleted, so both the badge and the list count one lane. */}
           <NavRow
             label={INBOX_NAV_ROW.label}
             icon={INBOX_NAV_ROW.icon}

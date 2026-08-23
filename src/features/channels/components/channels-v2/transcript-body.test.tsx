@@ -59,8 +59,6 @@ function renderRows(rows: TranscriptRow[]) {
       rows={rows}
       index={INDEX}
       flashId={null}
-      requested={new Set()}
-      onDecideThread={vi.fn()}
       onOpenThread={vi.fn()}
     />
   );

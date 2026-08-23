@@ -1,38 +1,41 @@
 // trigger-outcomes.js — EVERY ECHO INTO THE CHANNEL THAT IS NOT A REPLY.
 //
-// Extracted from trigger.js to hold that AT-CAP file (§2, 500 lines) under the cap while
-// H2 adds the permission-arm consumption to the approval path. TWO FAMILIES live here, and
-// they share the one shape that matters: nothing was (or will be) posted as an ANSWER, and
-// the only job left is to stop the peer waiting on one.
+// Extracted from trigger.js to hold that AT-CAP file (§2, 500 lines) under the cap. TWO FAMILIES
+// lived here, and ONE IS LEFT. What they shared is the shape that matters: nothing was (or will
+// be) posted as an ANSWER, and the only job is to stop the peer waiting on one.
 //
-//   (1) THE REQUEST TERMINALS (the original tenants). Each posts `task_failed` with the
-//       SAME deterministic taskId as the original `task_started`, so they group, and the
-//       metadata flag is what the web renders:
-//         { declined: true }     → a calm "Declined" (a human said no)
-//         { dropped: true }      → "Reply was not sent" (an approved reply was cancelled)
-//         { interrupted: true }  → a calm "Interrupted" (the app died mid-spawn)
-//         (no flag)              → a REAL error
-//       That distinction is load-bearing: a bare task_failed reads as a fault, and none of
-//       these are faults.
+// ── ⚠ (1) THE REQUEST TERMINALS ARE DELETED (2026-08-22, Samuel's inbound-consent ruling) ────
+//
+// `inboundDenied`, `inboundExpired`, `outboundCancelled` and `onInterrupted` each posted a
+// `task_failed` under the original `task_started`'s deterministic taskId, and the METADATA FLAG
+// was what the web rendered: `{declined}` a calm "Declined", `{dropped}` "Reply was not sent",
+// `{interrupted}` a calm "Interrupted", no flag a REAL error. Every one of the four was a
+// resolver of `consent-watcher.js`, dispatched when a WATCHED INBOUND RECORD reached a terminal
+// status — and there are no inbound records: the row, the watcher, its durable store and its poll
+// cadence are all deleted (`trigger.js`'s header carries the ruling). A peer's ask now raises a
+// notification whose Dismiss decides nothing, so there is no decline to echo, no expiry to
+// report, and no mid-spawn record for a restart to find interrupted.
+//
+// ⚠ THE FLAG VOCABULARY ITSELF IS NOT RETIRED and must not be treated as free: `CALM_FLAG_KEYS`
+// stay reserved server-side (INVARIANTS §5), installed builds still write them, and the web still
+// renders them. What went is this machine's four PRODUCERS of them.
 //
 //   (2) THE SESSION LIFECYCLE ECHO — `lifecycleHandlers`, the engine's `setLifecycleHandlers`
-//       seam. ⚠ MOVED HERE FROM `main/session-window.js` ON 2026-08-20, and the move is the
-//       point: that file was the SESSION WINDOW FACTORY, deleted with the window model
-//       (INVARIANTS §11, F-228), and this half is nothing to do with windows. It is what
-//       tells a WAITING PEER that this machine stopped, it is required of the quit path
-//       (§11's quit guard depends on it), and a WINDOWLESS session needs it exactly as much
-//       as a windowed one did. Deleting the factory with this attached would have silently
-//       taken peer notification with it — which is why the move is its own wave, ahead of
-//       any deletion.
+//       seam, and now the whole of this file. ⚠ MOVED HERE FROM `main/session-window.js` ON
+//       2026-08-20, and the move is the point: that file was the SESSION WINDOW FACTORY, deleted
+//       with the window model (INVARIANTS §11, F-228), and this half is nothing to do with
+//       windows. It is what tells a WAITING PEER that this machine stopped, it is required of the
+//       quit path (§11's quit guard depends on it), and a WINDOWLESS session needs it exactly as
+//       much as a windowed one did. Deleting the factory with this attached would have silently
+//       taken peer notification with it — which is why the move is its own wave, ahead of any
+//       deletion.
 //
-// SEAM: the three record→shape helpers stay in trigger.js (they are shared with the
-// approval path) and are injected via bind(), the session-park idiom. The lifecycle echo
-// takes NO injection — it derives its own targets from the flat info object the engine
-// hands it. Leaf deps are required directly; nothing here requires trigger.js back.
+// SEAM: the lifecycle echo takes NO injection — it derives its own targets from the flat info
+// object the engine hands it. ⚠ `bind({ entryFromRecord, msgFromRecord, taskIdFor })` went with
+// the terminals above: those three record→shape helpers existed to rebuild an `entry`/`m` pair
+// from a PERSISTED consent record, and nothing persists one. Leaf deps are required directly;
+// nothing here requires trigger.js back.
 
-const { Notification } = require('electron');
-const targeting = require('./targeting');
-const watcher = require('./consent-watcher');
 const { postTaskEvent } = require('./channel-post');
 const { diag } = require('./diag');
 
@@ -65,57 +68,6 @@ const AUTH_HELD_REPLY =
 // nothing about this machine.
 const CANNOT_RUN =
   "I couldn't pick this up — my agent isn't able to run it right now. Try me again later, or reach me another way.";
-
-let deps = null; // { entryFromRecord, msgFromRecord, taskIdFor }
-
-function bind(d) {
-  deps = d || null;
-}
-
-// ── Resolver: outbound CANCELLED (web Cancel / expiry) → drop, no re-spawn ────
-async function outboundCancelled(rec) {
-  const entry = deps.entryFromRecord(rec);
-  const m = deps.msgFromRecord(rec, '');
-  diag('outbound review: reply dropped (cancelled/expired)');
-  // M-4: a cancelled reply is NOT a finished request; do not tell teammates an
-  // answer was delivered. task_failed WITHOUT declined → this is a drop, not a deny.
-  await postTaskEvent(
-    entry, m, 'task_failed', deps.taskIdFor(rec),
-    { durationMs: Date.now() - rec.startedAt, dropped: true },
-    'Reply was not sent.'
-  );
-  watcher.settle(rec.key, 'cancelled');
-}
-
-// ── Resolver: inbound DENIED → declined echo ─────────────────────────────────
-async function inboundDenied(rec) {
-  const entry = deps.entryFromRecord(rec);
-  const m = deps.msgFromRecord(rec, '');
-  // Decision echo: the web renders task_failed + { declined: true } as a calm
-  // "Declined", distinct from an error (which carries no declined flag).
-  await postTaskEvent(entry, m, 'task_failed', deps.taskIdFor(rec), { declined: true }, 'Request declined');
-  watcher.settle(rec.key, 'denied');
-}
-
-// ── Resolver: inbound EXPIRED → silent drop ──────────────────────────────────
-async function inboundExpired(rec) {
-  diag('inbound expired (no decision) — dropping', rec.key);
-  watcher.settle(rec.key, 'expired');
-}
-
-// ── Resolver: interrupted spawn → terminal echo (FIX 2) ──────────────────────
-// The app died mid-spawn AFTER task_started was posted; on the next launch the
-// watcher settles that 'spawning' record 'interrupted' and calls this so the
-// requester's session card stops pulsing "active". We post the SAME deterministic
-// taskId as task_started so they group, with metadata { interrupted: true } — the
-// web renders that as a calm "Interrupted" (a bare task_failed = a real error).
-// Error-suppression semantics, like deny: no reply text, generic body only. The
-// record is already settled by the watcher, so there is nothing to settle here.
-async function onInterrupted(rec) {
-  const entry = deps.entryFromRecord(rec);
-  const m = deps.msgFromRecord(rec, '');
-  await postTaskEvent(entry, m, 'task_failed', deps.taskIdFor(rec), { interrupted: true }, 'Request interrupted');
-}
 
 // ⚠ `notifyReplied(entry, reply)` STOOD HERE AND IS DELETED (2026-08-20) — zero callers. It
 // raised a local "Dopl: replied in <channel>" banner carrying the REPLY TEXT, and its caller
@@ -241,11 +193,6 @@ function onEnded(info, kind, extra, bodyOverride) {
 const lifecycleHandlers = { onLaunched, onEnded };
 
 module.exports = {
-  bind,
-  outboundCancelled,
-  inboundDenied,
-  inboundExpired,
-  onInterrupted,
   // (2) the engine's lifecycle seam — index.js hands this to setLifecycleHandlers.
   lifecycleHandlers,
   // the peer-facing courtesy replies, all read by trigger.js's terminals

@@ -33,6 +33,17 @@ export declare function opList(client: DoplClient): Promise<ToolResponse>;
  * establishes no such bound. `await` is `gt("seq", since)`, so a LARGER `since`
  * returns FEWER messages: awaiting from the channel-wide max drops every row in
  * `(threadMax, channelMax]` permanently, since the cursor only moves forward.
+ *
+ * ⚠ SO A SCOPED READ PRINTS NO SEQ AT ALL (2026-08-22, Samuel's ruling). It used
+ * to print `Highest seq shown: <n>` and then spend four sentences telling the
+ * reader not to use `<n>` — a footgun wrapped in prose is still a footgun, and
+ * the number is what survives a skim. The two options were "omit it" and "return
+ * an explicitly safe `nextSince`"; the second is not available here, because the
+ * only safe value is the caller's OWN prior channel-wide cursor and this op
+ * cannot see it. Omitting is therefore not a lesser fix: there is no number this
+ * read is entitled to hand back. ⚠ The message lines above still carry each
+ * message's own `**#seq**`, so nothing is hidden — what is withheld is the
+ * SUMMARY line that reads like a cursor.
  */
 export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string): Promise<ToolResponse>;
 /**

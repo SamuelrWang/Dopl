@@ -244,6 +244,23 @@ const APP_OPS = [
   //     it moves one live session's reducer state, and the channel's stored posture is
   //     untouched. Collapsing the two would make a per-session decision permanent.
   "sessions.setMode",
+  // ⚠ ONE MORE JOINED ON 2026-08-22: `sessions.setModel`, the LIVE model switch (Samuel's
+  // model-selection ruling). The same review, and it lands in a materially milder place:
+  //   • The main-process handler EXISTS and was checked first — `main/session-ipc-ops.js`
+  //     registers `sessions:setModel`, `appWindowOnly`, UUID-gating `channelId`, coercing the
+  //     value against `session-model.js`'s frozen ID list at the boundary and converting to the
+  //     argv-safe ALIAS inside. `session-query.js › buildSdkOptions` coerces once more, as the
+  //     last step before the value could become `--model` on a child process.
+  //   • THE FAILURE DIRECTION IS THE MILDEST ON THIS BRIDGE: a forged call makes the operator's
+  //     OWN agent answer on a different model. It grants no tool, widens no posture, reaches no
+  //     other machine, and the permission table never reads a model at all.
+  //   • AN UNKNOWN VALUE CLEARS THE OVERRIDE rather than being refused, which is deliberate:
+  //     "let the CLI choose" is a legitimate ask and is what an unset channel already does. A
+  //     forged string therefore cannot even pin a model, only un-pin one.
+  //   • ⚠ IT IS NOT `channels.setLaunchPosture`'s `model` FIELD. That one governs the NEXT spawn
+  //     and is durable; this moves one running session and stores nothing per channel. Same
+  //     distinction `setMode` carries above, for the same reason.
+  "sessions.setModel",
   "sessions.summaries",
   "signOut",
   "syncWatch",

@@ -13,7 +13,10 @@ let updateReadyVersion = null; // staged-update version; see refreshUpdateReady(
 let updateNote = null; // { text, busy } — what the updater is doing right now
 let peerSkew = null; // Q10: the newest older-build peer seen this run ({ peer, mine, who })
 let versionFloor = null; // min-version gate, WARNING state only ({ tray, ... }) or null
-let pendingCount = 0; // Round B: number of pending consent requests (inbound + review)
+// ⚠ `pendingCount` STOOD HERE AND IS DELETED (2026-08-22). It counted INBOUND consent requests
+// awaiting a human decision, written by `consent-watcher.js › emitCount` through index.js. The
+// inbound consent lane is deleted (`trigger.js`'s header carries the ruling), so the number has
+// no producer: an ask is a notification, and the messages behind it are in the channel.
 
 function iconPath() {
   // Base 16px + a trayTemplate@2x.png sibling for retina (nativeImage picks up
@@ -189,14 +192,9 @@ function buildMenu() {
   if (authItem.signedOut) {
     template.push({ label: authItem.label, click: () => handlers.onSignIn && handlers.onSignIn() });
   }
-  // Round B: surface pending consent requests and let a click jump straight to the
-  // Channels / Pending Requests view (reuses the notification-click open path).
-  if (pendingCount > 0) {
-    template.push({
-      label: `Pending: ${pendingCount} request${pendingCount === 1 ? '' : 's'}`,
-      click: () => handlers.onPending && handlers.onPending(),
-    });
-  }
+  // ⚠ THE "Pending: N" ITEM STOOD HERE AND IS DELETED (2026-08-22). It surfaced the count of
+  // inbound consent requests and jumped to the Channels / Pending Requests view; with no inbound
+  // lane there is nothing pending on this machine to count. `handlers.onPending` went with it.
   // A staged update sits with the other CALLS TO ACTION at the top, not buried
   // under the submenus where it lived before: it is the item that explains a
   // whole class of "the fix does not work" (Q10c).
@@ -304,14 +302,8 @@ function setVersionFloor(notice) {
   if (tray) buildMenu();
 }
 
-// Round B: update the "Pending: N" tray item. Called from the consent watcher via
-// index.js whenever a pending request is created or resolved.
-function setPendingCount(n) {
-  const next = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-  if (next === pendingCount) return;
-  pendingCount = next;
-  if (tray) buildMenu();
-}
+// ⚠ `setPendingCount(n)` STOOD HERE AND IS DELETED (2026-08-22) with the menu item it rebuilt.
+// Its ONE caller was index.js's `onPending` handler, fed by the consent watcher.
 
 // Round C: rebuild the menu now (after a channel folder is set / cleared) so the
 // "Channel folders" submenu reflects the change without waiting for a status tick.
@@ -325,5 +317,5 @@ function destroy() {
 
 module.exports = {
   create, update, setUpdateReady, setUpdateNote, setPeerSkew, setVersionFloor,
-  setPendingCount, refresh, destroy,
+  refresh, destroy,
 };

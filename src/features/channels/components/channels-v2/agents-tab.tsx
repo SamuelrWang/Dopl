@@ -47,12 +47,14 @@ import {
   agentEndedAt,
   agentLiveness,
   agentKey,
+  agentRunningModel,
   agentsPerThread,
   formatTokens,
   metric,
   ownAgentsFor,
   peerCardsFor,
 } from "./agents-model";
+import { agentModelShortLabel } from "../../lib/agent-models";
 
 /** Absolute epoch ms → the relative phrase the cards use. `formatRelativeTime`
  *  takes an ISO string and answers "" for an absent one, which is the right
@@ -277,6 +279,9 @@ function AgentCard({
   // there is nothing the operator can do about it, so a clock here would be
   // anxiety with no action attached.
   const endedAt = relative(agentEndedAt(agent));
+  // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
+  // have been switched mid-run, or spawned before the posture changed.
+  const modelLabel = agentModelShortLabel(agentRunningModel(agent));
   const timing = [
     started && `Started ${started}`,
     ended ? endedAt && `Ended ${endedAt}` : lastActivity && `Last activity ${lastActivity}`,
@@ -311,6 +316,16 @@ function AgentCard({
           <span className="shrink-0 text-text-muted">
             · {siblings + 1} of yours here
           </span>
+        )}
+        {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
+              (2026-08-22). It rides the existing detail line rather than earning
+              chrome of its own — minimal copy (INVARIANTS §5), and a fourth pill
+              on a 340px card is clutter. Absent renders NOTHING: a main that does
+              not report a model has said nothing about what this agent is running,
+              and "Default" would be this build claiming to know
+              (`agents-model.ts › agentRunningModel`). */}
+        {modelLabel && (
+          <span className="shrink-0 text-text-muted">· {modelLabel}</span>
         )}
       </div>
 

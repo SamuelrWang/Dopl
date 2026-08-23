@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * THE LIVE PERMISSION CONTROLS — both axes, on a session that is ALREADY RUNNING
- * (Samuel, 2026-08-20).
+ * THE LIVE AGENT CONTROLS — both permission axes and the MODEL, on a session that
+ * is ALREADY RUNNING (Samuel, 2026-08-20; the model 2026-08-22).
  *
  * ⚠ ITS OWN FILE because it is its own reason to change: the agent window's other content is
  * a set of LANES over a feed, and this is a write surface over the two axes — which move when
@@ -14,12 +14,30 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
 import type { MessageMode, ToolMode } from "../../lib/permission-modes";
-import { canSetAgentMode, setAgentMode } from "./agents-controls";
+import {
+  AGENT_MODEL_DEFAULT,
+  agentModelOptionsFor,
+} from "../../lib/agent-models";
+import {
+  canSetAgentMode,
+  canSetAgentModel,
+  setAgentMode,
+  setAgentModel,
+} from "./agents-controls";
+import { agentRunningModel } from "./agents-model";
 
 /** What a refused posture change says. ⚠ Exported for the test: a select that moves while
  *  main refuses is the exact lie the deleted session window's selects earned a fix for
  *  twice — the control claims a posture nothing is enforcing. */
 export const POSTURE_REFUSED = "That didn't apply. The agent may have just ended.";
+
+// ⚠ A SUCCESSFUL MODEL CHANGE SAYS NOTHING, AND THAT IS THE DESIGN (2026-08-22).
+// `sessions.setModel` reports no timing, and it does not need to: main stamps
+// `DesktopSessionSummary.model` from `system/init` and from every assistant
+// message, so the FEED is the confirmation and the select below re-renders from
+// main's own value. A sentence promising "applied now" would be this renderer
+// stamping a claim it cannot check — the same no-optimistic-stamp rule both axes
+// follow. Only a REFUSAL earns copy, and it shares `POSTURE_REFUSED`.
 
 /**
  * THE LIVE MESSAGE AXIS, FLOORED — F-236's SPA half (2026-08-20).
@@ -78,9 +96,25 @@ export function PostureControls({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [canSet] = useState(() => canSetAgentMode());
+  // ⚠ A SEPARATE CAPABILITY, DETECTED SEPARATELY (2026-08-22). The model op is
+  // landing on the desktop in this same wave, so a build with the two axes and no
+  // model selector is a real and expected shape — gating both on one flag would
+  // either hide working controls or render one that can only refuse
+  // (`agents-controls.ts › canSetAgentModel` carries the argument).
+  const [canModel] = useState(() => canSetAgentModel());
   // An ENDED agent has no posture to change; main answers `no-session` and the honest face
   // of that is no control, not a control that always refuses.
   if (!canSet || agent.state === "ended") return null;
+
+  // ⚠ MAIN'S VALUE, LIKE BOTH AXES. Absent means this build does not report a
+  // running model, and the select then shows Default rather than a guess.
+  // ⚠ THE EFFECTIVE MODEL IS FREE-FORM AND MAY NOT BE ONE OF THE FOUR PICKABLE
+  // IDS (`spa-bridge.ts › DesktopSessionSummary.model`: a dated id, a `[1m]`
+  // variant). `agentModelOptionsFor` appends it so the control SHOWS what the
+  // agent is on — a `SelectMenu` whose value matches no option renders blank,
+  // which is the surface saying nothing where it has an answer.
+  const model = agentRunningModel(agent) ?? AGENT_MODEL_DEFAULT;
+  const modelOptions = agentModelOptionsFor(model);
 
   const apply = (axis: "tools" | "messages", mode: string) => {
     setBusy(true);
@@ -91,6 +125,16 @@ export function PostureControls({
     // and the feed would then show this card's posture unchanged, reading as a
     // refusal that never happened. `agents-controls.ts`'s header carries the rule.
     void setAgentMode({ channelId, taskId, agentId: agent.agentId, axis, mode })
+      .then((res) => {
+        if (!res.ok) setNotice(POSTURE_REFUSED);
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const applyModel = (next: string) => {
+    setBusy(true);
+    setNotice(null);
+    void setAgentModel({ channelId, taskId, agentId: agent.agentId, model: next })
       .then((res) => {
         if (!res.ok) setNotice(POSTURE_REFUSED);
       })
@@ -119,6 +163,18 @@ export function PostureControls({
           ariaLabel="Message permissions for this agent"
           disabled={busy}
         />
+        {/* THE LIVE MODEL (Samuel, 2026-08-22). ⚠ ABSENT, NOT DISABLED, without
+            the op — the rule every control in this family follows. */}
+        {canModel && (
+          <SelectMenu<string>
+            value={model}
+            options={modelOptions}
+            onChange={applyModel}
+            prefix="Model"
+            ariaLabel="Model for this agent"
+            disabled={busy}
+          />
+        )}
       </div>
       {notice && (
         <p role="status" className="mt-1.5 text-caption text-text-muted">
@@ -126,9 +182,13 @@ export function PostureControls({
         </p>
       )}
       {/* ⚠ SAYS WHEN IT TAKES EFFECT, because "next launch" is what every other posture
-          control in this product means and a reader has no way to tell them apart. */}
+          control in this product means and a reader has no way to tell them apart.
+          ⚠ IT IS SCOPED TO THE TWO AXES and always has been — those are the ones
+          `session-io.js › grantArgs` re-reads at every gate decision. The MODEL's
+          timing is main's to report and rides the notice line above, so this
+          sentence must not be widened to cover it. */}
       <p className="mt-1.5 text-micro text-text-muted">
-        Applies to this agent from its next decision.
+        Permissions apply to this agent from its next decision.
       </p>
     </div>
   );

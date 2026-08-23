@@ -333,9 +333,12 @@ export async function postMessage(
   // ⚠ Channel membership is NOT enough: nothing sweeps `channel_members` on
   // workspace-leave, so a departed teammate stays a channel member — the post
   // lands, `openingSeq`/`await` arms, and nothing ever answers. Assert ACTIVE
-  // workspace membership too (same predicate `trust-service.isTrustedRequester`
-  // checks at consumption). Channel check runs first, so the second round-trip
+  // workspace membership too. Channel check runs first, so the second round-trip
   // is only paid once a `toUserId` is a channel member.
+  // ⚠ This cited "the same predicate `trust-service.isTrustedRequester` checks at
+  // consumption" until 2026-08-22. That file is DELETED with the trust retirement
+  // (INVARIANTS §6), so this is now the only place the rule is stated — it is not
+  // a second copy of a check that lives elsewhere, and nothing re-asserts it later.
   if (
     input.toUserId &&
     !(

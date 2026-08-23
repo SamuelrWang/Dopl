@@ -40,6 +40,14 @@ import type { ChannelMessage } from "@dopl/client";
  * mid-word included. A stricter rule here would say "you tagged nobody" about a
  * body the server's parser reads as a tag, which is the two-parsers-disagreeing
  * bug that module exists to prevent.
+ *
+ * ⚠ IT DOES NOT MIRROR THE CODE RULE, DELIBERATELY (2026-08-22). The server
+ * skips a handle inside a code span or a fenced block; this predicate does not,
+ * so a body whose ONLY handle is backticked still counts as "the author tried to
+ * tag somebody" and still earns {@link tagOutcomeNote}'s zero branch — which is
+ * the one line that explains WHY it tagged nobody. Teaching the exception here
+ * would swallow the report and leave the agent believing the tag was never
+ * written. This asks "did the AUTHOR try"; only the server answers "did it land".
  */
 export declare function bodyCarriesATag(body: string): boolean;
 /**
@@ -54,14 +62,33 @@ export declare function resolvedMentionCount(message: ChannelMessage): number;
  * one line in the phase that catches a SILENT failure — a misspelled handle
  * resolves to nobody, and without this the agent believes it escalated.
  *
- * ⚠ THE ZERO BRANCH UNDER-PROMISES ON PURPOSE. An absent stamp has two causes
- * and this package can distinguish neither: the handle really names nobody, or
- * the server it is talking to does not resolve mentions yet (INVARIANTS §13 —
- * the web half deploys on its own schedule, and an old server answers a new
- * client). It leads with the likely cause and the actionable remedy, then says
- * the other case out loud rather than asserting a delivery failure it cannot
- * prove. The author's OWN id is dropped by the server resolver too, so a
- * self-tag lands on this branch legitimately.
+ * ⚠ THE ZERO BRANCH NAMES THE CAUSES IT ACTUALLY HAS, and it under-promises at
+ * the end. Four things make the server resolve an `@…` to nobody, and this
+ * package can distinguish none of them — it cannot see the roster and cannot see
+ * the body's markdown structure the way the write path does:
+ *   1. THE HANDLE IS IN CODE. A backticked or fenced `@handle` is quoted text
+ *      and tags nobody (2026-08-22 — `lib/mentions.ts`, THE CODE RULE). ⚠ Listed
+ *      FIRST because it is the cause an agent hits without noticing: writing
+ *      ABOUT tagging, in a body that formats handles as code, is exactly what
+ *      produced the incident that bought the rule.
+ *   2. SPELLING. Exact equality against a roster-derived handle, never a prefix.
+ *   3. NOT IN THIS CHANNEL. Resolution is scoped to the channel roster, so a
+ *      workspace member who is not in the room resolves to nobody.
+ *   4. AMBIGUITY FAILS CLOSED. A handle two members both answer to resolves to
+ *      neither rather than being guessed.
+ *
+ * ⚠ SELF-TAGGING IS NO LONGER A CAUSE, and the removal is the point. The server
+ * used to drop the AUTHOR unconditionally, so an agent tagging its own operator
+ * — the one escalation it has — landed here and read as a spelling mistake.
+ * Since 2026-08-22 (`server/service-writes-metadata-mentions.ts`) an AGENT's tag
+ * at its own account is KEPT, so a self-tag now reports as a real tag. Do not
+ * re-add "you may have tagged yourself" to this copy: it would tell an agent to
+ * stop doing the thing that works.
+ *
+ * ⚠ THE CLOSING CAVEAT STAYS. An old server that does not resolve mentions at
+ * all is indistinguishable from here (INVARIANTS §13 — the web half deploys on
+ * its own schedule), so the line ends by saying so rather than asserting a
+ * delivery failure it cannot prove.
  */
 export declare function tagOutcomeNote(channelId: string, count: number): string;
 /**

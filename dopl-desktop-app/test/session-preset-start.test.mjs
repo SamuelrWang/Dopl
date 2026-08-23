@@ -50,13 +50,21 @@
 //
 // ⚠ AND THE DIRECTION IS THE SAFE ONE, WHICH IS WHY THIS IS NOT A WEAKENING. H2's rule was "a
 // stored pair may only apply to a launch a human is approving in that moment". A peer-triggered
-// launch now gets NO stored pair: `inboundApproved` pins `const startModes = null;` and the tool
-// axis floors at the reducer's `manual`. "At most one, and only for a human" became "none".
+// launch gets NO stored pair: the tool axis is pinned to the reducer's own `manual`. "At most
+// one, and only for a human" became "none".
+//
+// ⚠ AND WHAT MOVED ON 2026-08-22 (Samuel's INBOUND CONSENT RETIREMENT). Once more the invariant
+// is untouched and the MECHANISM it was measured through is what went: `trigger.js ›
+// inboundApproved` — the consent-APPROVED responder launch, the lane every H2 argument in this
+// file was framed around — is deleted with the inbound consent row, the watcher that polled it
+// and the resolvers it dispatched. A peer's ask raises a NOTIFICATION whose button calls
+// `launchResponderSession` directly. §3 is rewritten onto that lane, and the
+// `allowed`/`auto_allowed` case is excised with its module (see the ⚠ block where it stood).
 //
 // ONE CALLER supplies a posture today, and the census in §2 is the authority on that:
 // channel-dir-ipc.js (`sessions:launch`, the operator's own click on the Agents tab, reading the
 // durable record). trigger.js still APPEARS in that census — it names the key — but what it
-// hands in is null; the case says so.
+// hands in is a pinned `manual`; the case says so.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -75,7 +83,6 @@ const PARK = read("session-park.js");
 const TRIGGER = read("trigger.js");
 const CONTEXT = read("channel-context.js");
 const PREFS = read("channel-prefs.js");
-const WATCHER = read("consent-watcher.js");
 // ⚠ REPOINTED 2026-08-20 (F-226): `sessions:launch` moved to `session-ipc-ops.js` when
 // `channel-dir-ipc.js` was split off the 500-line cap. The record's ONE consumer did not
 // change — only the file it lives in. `channel-dir-ipc.js` is still read below, because the
@@ -185,7 +192,18 @@ test("H2: the preset is not, and cannot become, part of any GRANT", () => {
 test("H2: startResume (the crash/interrupted resume) passes NO startModes either", () => {
   const body = PARK.slice(PARK.indexOf("async function startResume("), PARK.indexOf("async function resume("));
   assert.ok(body.includes("deps.startSession("), "startResume really spawns");
-  assert.ok(!/startModes/.test(body), "a resume is not a fresh human decision");
+  // ⚠ CODE ONLY SINCE 2026-08-22. The resume now passes `windowless: true` and its comment says
+  // OUT LOUD that it is still not handing in a posture — which a whole-source scan read as the
+  // violation. The rule is about the CALL, and the annotation explaining why is exactly what §14
+  // asks for beside a change like this.
+  assert.ok(!/startModes/.test(stripComments(body)), "a resume is not a fresh human decision");
+  // ⚠ AND THE THING IT DOES NOW PASS IS NOT ONE. `windowless: true` is a fact about the SHAPE —
+  // no accept surface — and what it buys is the AXIS B FLOOR at the construction site, which is
+  // supervision widening in the safe direction. Before it, a crash-resumed responder came back at
+  // the reducer's `ask` and `session-gate.js › enqueue` held the peer's next reply forever.
+  assert.match(stripComments(body), /windowless: true,/);
+  assert.ok(!/getLaunchPosture|launchStartModes|channelPrefs/.test(stripComments(body)),
+    "…and it still reaches no stored record of any kind");
 });
 
 test("H2: the requester launch mints NO posture of its own — it forwards its caller's", () => {
@@ -208,34 +226,38 @@ test("H2: the requester launch mints NO posture of its own — it forwards its c
 
 // ── 3. THE ONE CONSUMER ──────────────────────────────────────────────────────
 
-test("H2: the consent-approved launch consumes NOTHING, and carries no posture at all", () => {
-  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This was
-  // "exactly ONE place in main/ consumes the arm, and it is the consent-approved launch". It
-  // sliced `inboundApproved` and pinned three things: `channelPrefs.consumePermissionPreset(entry.channel.id)`
-  // was called there, that it happened ONLY under `meta && meta.humanAllowed === true` (standing
-  // trust — `auto_allowed` — consumed nothing, because H2's rule is that a stored pair may only
-  // apply to a launch a human is approving IN THAT MOMENT), and that the result was handed to
-  // the launch. Then it asserted no other module consumed one.
+test("H2: the peer-triggered launch consumes NOTHING, and carries no stored posture at all", () => {
+  // ⚠ REWRITTEN TWICE, NEVER REMOVED (INVARIANTS §14). It began as "exactly ONE place in main/
+  // consumes the arm, and it is the consent-approved launch": it sliced `inboundApproved` and
+  // pinned `channelPrefs.consumePermissionPreset(entry.channel.id)`, that it ran ONLY under
+  // `meta.humanAllowed === true` (standing trust — `auto_allowed` — consumed nothing, because
+  // H2's rule is that a stored pair may only apply to a launch a human is approving IN THAT
+  // MOMENT), and that the result reached the launch.
   //
-  // The single-use ARM is deleted. `inboundApproved` now reads `const startModes = null;`, the
-  // watcher no longer passes `humanAllowed`, and `consumePermissionPreset` does not exist.
+  // The single-use ARM went on 2026-08-20 and `inboundApproved` itself went on 2026-08-22 with
+  // the inbound consent lane. ⚠ THE LANE DID NOT: a peer's ask still ends in a windowless
+  // responder session on this machine, and that spawn is still where a peer's request meets the
+  // operator's stored preferences. It must keep meeting none of them, so the case follows the
+  // lane to its new entry point rather than being deleted with the resolver's name.
   //
-  // ⚠ THE RULE MOVED IN THE SAFE DIRECTION AND IS ASSERTED IN ITS NEW, STRONGER FORM. "At most
-  // one consumer, and only for a human decision" has become "NO consumer, and no posture at
-  // all": a peer-triggered launch inherits the reducer's `manual`, the most restrictive value,
-  // and there is no stored pair on this path for a future edit to widen. The census in §2 is
-  // what keeps that true across the tree; this case pins the lane itself, because the lane is
-  // where a peer's request meets the operator's stored preferences and it must keep meeting
-  // none of them.
-  const body = TRIGGER.slice(TRIGGER.indexOf("async function inboundApproved("), TRIGGER.indexOf("async function launchResponderSession("));
-  assert.ok(body.length > 0, "the resolver still exists — an empty slice passes every negative below");
-  assert.match(body, /const startModes = null;/, "pinned null, not merely absent");
-  assert.match(body, /startModes/, "…and still handed to the launch, so the seam stays visible");
+  // ⚠ THE RULE MOVED IN THE SAFE DIRECTION AND IS ASSERTED IN ITS STRONGEST FORM YET. "At most
+  // one consumer, and only for a human decision" is now "NO consumer, and a LITERAL most-
+  // restrictive value": there is no stored pair on this path at all for a future edit to widen.
+  const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
+  assert.ok(body.length > 0, "the lane still exists — an empty slice passes every negative below");
+  assert.match(body, /startModes: \{ tools: 'manual', messages \}/,
+    "pinned to the most restrictive member, not merely absent");
   const code = stripComments(body);
-  assert.ok(!/channelPrefs\.|consumePermissionPreset|getLaunchPosture|launchStartModes/.test(code),
-    "the approval path reaches the prefs store on NO path — an ambient read here IS H2");
+  assert.ok(!/channelPrefs\.getLaunchPosture|channelPrefs\.launchStartModes|consumePermissionPreset/.test(code),
+    "the peer-triggered path reaches no stored posture on ANY path — an ambient read here IS H2");
   assert.ok(!/humanAllowed/.test(code),
     "and no authority verdict is read: nothing depends on the allowed/auto_allowed distinction now");
+  // ⚠ AND THE ENTRY POINT IS A NOTIFICATION BUTTON, WHICH IS WHY THERE IS NO SECOND DECISION TO
+  // CARRY A POSTURE ON. `handleTrigger` raises the banner and returns; the LAUNCH action calls
+  // this function. If a future edit gives that banner a posture control, it lands here.
+  const trigCode = stripComments(TRIGGER);
+  assert.ok(!/createConsentRequest\(/.test(trigCode), "no inbound consent row is created");
+  assert.match(trigCode, /actionText: 'Launch agent'/, "the button LAUNCHES; it approves nothing");
   // Nowhere else in the tree either — the arm's whole API is gone, not merely unused.
   for (const [name, src] of [["session-engine", ENGINE], ["session-park", PARK], ["channel-context", CONTEXT]]) {
     assert.ok(!/consumePermissionPreset|armPermissionPreset|getPermissionPreset/.test(src),
@@ -280,27 +302,26 @@ test("H2/split: the DURABLE posture is read by sessions:launch and by nothing el
 });
 
 test("H2/split: the RESPONDER lane reads NO stored record, and its tool axis floors at manual", () => {
-  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20; INVARIANTS §14). This read "the RESPONDER lane still
-  // consumes the arm, and never the posture" — the split's positive half, that a peer-driven
-  // launch took the ARM's tool axis and never the durable one. The arm is deleted, so the
-  // positive half has no subject.
+  // ⚠ REWRITTEN TWICE (INVARIANTS §14). This read "the RESPONDER lane still consumes the arm, and
+  // never the posture" — the split's positive half, that a peer-driven launch took the ARM's tool
+  // axis and never the durable one. The arm went 2026-08-20; the `startModes && startModes.tools`
+  // plumbing that survived it went 2026-08-22, when the inbound consent lane took its ONE caller
+  // (`inboundApproved`, which pinned `const startModes = null;`) with it. A parameter whose only
+  // producer passed null is a seam nobody can read, so the value is spelled where it applies.
   //
   // ⚠ THE NEGATIVE HALF IS THE WHOLE POINT AND IT IS UNCHANGED: a peer-driven launch must not
   // inherit a setting the operator left on a tab. That is what separates the two lanes, and with
-  // one record left it is the ONLY thing separating them — so it matters more, not less. The
-  // `startModes && startModes.tools` expression survives with `startModes` pinned null upstream,
-  // which is why the FLOOR is asserted rather than the read: `|| 'manual'` is what a peer's
-  // request actually gets, and it is the most restrictive member.
+  // one record left it is the ONLY thing separating them — so it matters more, not less.
   const body = TRIGGER.slice(TRIGGER.indexOf("async function launchResponderSession("));
-  assert.match(body, /startModes: \{ tools: \(startModes && startModes\.tools\) \|\| 'manual', messages \}/,
-    "the tool axis floors at manual for anything a peer can trigger");
+  assert.match(body, /startModes: \{ tools: 'manual', messages \}/,
+    "the tool axis is the most restrictive member for anything a peer can trigger");
   assert.ok(!/getLaunchPosture|launchStartModes/.test(stripComments(body)),
     "a peer-driven launch must not inherit a setting the operator left on a tab");
-  // ⚠ THE `startModes` PARAMETER STAYS EVEN THOUGH ITS ONE CALLER NOW PASSES null, and it is
-  // asserted rather than left implicit: the REQUESTER lane still passes a real value into the
-  // SHARED message derivation below, and one derivation with two inputs is the design. Scrubbing
-  // the parameter here is how the two lanes get two answers again.
-  assert.match(body, /channelPrefs\.windowlessMessageMode\(\s*entry\.channel\.id,\s*startModes && startModes\.messages\s*\)/);
+  // ⚠ THE `picked` PARAMETER OF THE SHARED DERIVATION STAYS, and this lane passes an EXPLICIT
+  // null rather than omitting it: the REQUESTER lane still passes a real value, and one
+  // derivation with two inputs is the design. An omitted argument reads as an oversight; a
+  // written `null` reads as "this lane has no pick", which is the fact.
+  assert.match(body, /channelPrefs\.windowlessMessageMode\(entry\.channel\.id, null\)/);
 });
 
 test("H2/split: ONE derivation of the windowless message axis, shared by both lanes", () => {
@@ -332,30 +353,21 @@ test("H2: the AMBIENT read is gone — channel-context no longer exposes startin
     "nor the always-returns-a-usable-pair reader it used");
 });
 
-test("H2: the allowed/auto_allowed reading SURVIVES the arm, exported and uncalled", () => {
-  // ⚠ REWRITTEN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This read "the
-  // watcher tells the resolver WHICH kind of allow it was" and pinned
-  // `safeResolve('inboundApproved', rec, { humanAllowed: isHumanAllow(status) })`. The
-  // distinction existed for ONE reason — only a live human decision could consume the
-  // single-use arm — and with the arm deleted `processRecord` no longer passes it.
-  //
-  // ⚠ `isHumanAllow` IS DELIBERATELY KEPT, EXPORTED, WITH NO PRODUCTION CALLER, and that is
-  // exactly the shape that gets deleted as dead code by the next person tidying up — so it is
-  // pinned here rather than left to a comment. The server still makes the distinction and this
-  // is the ONE statement of how to read it; the next thing that needs "was a human looking at
-  // this" must import it instead of re-deriving it from a status string.
-  assert.match(WATCHER, /function isHumanAllow\(status\) \{\s*return String\(status \|\| ''\) === 'allowed';/,
-    "`allowed` is a person clicking; `auto_allowed` is standing server-side trust");
-  assert.match(WATCHER, /isHumanAllow,/, "still exported, or the next caller cannot reach it");
-  // ⚠ AND IT MUST NOT HAVE QUIETLY RE-ACQUIRED ONE. A verdict flowing again without the review
-  // that removing it got is the same class of drift in the other direction.
-  const code = stripComments(WATCHER);
-  assert.ok(!/humanAllowed/.test(code), "no authority verdict is passed to any resolver");
-  // It was always a call ARGUMENT and never stamped on the persisted record — an authority
-  // verdict must not survive a restart and re-authorize a later launch from disk. Still true,
-  // now trivially, and kept because the storage shape is what made it safe.
-  assert.ok(!/rec\.humanAllowed/.test(WATCHER), "never persisted on the record");
-});
+// ⚠ "H2: the allowed/auto_allowed reading SURVIVES the arm, exported and uncalled" STOOD HERE AND
+// IS DELETED (2026-08-22, Samuel's INBOUND CONSENT RETIREMENT). It pinned
+// `consent-watcher.js › isHumanAllow` — `String(status) === 'allowed'` — kept exported with no
+// production caller, as the ONE statement of how to tell a person clicking Allow from the
+// server's standing trust (`auto_allowed`), so the next thing needing "was a human looking at
+// this" would import it rather than re-derive it from a status string. It also asserted the
+// verdict had not quietly re-acquired a caller, and was never stamped on a persisted record.
+//
+// ⚠ IT IS EXCISED RATHER THAN REPOINTED BECAUSE BOTH ENDS ARE GONE, and the deletion is the
+// answer to the question it was preserving: `agent_trust_rules` is INBOUND-ONLY and has never
+// fired — zero `auto_allowed` rows in the table's history — so the distinction it was the one
+// statement of has no live producer, and `consent-watcher.js` is deleted whole. A statement of
+// how to read a value nothing can set is the same hazard as dead COPY: it is what a future
+// wiring reuses without re-reading. `test/removed-vocabulary.test.mjs` now refuses the module
+// name, which is the guard that replaces this one.
 
 // ── 4. THE STORAGE CONTRACT the invariant rests on ───────────────────────────
 //
@@ -368,9 +380,10 @@ test("H2: the allowed/auto_allowed reading SURVIVES the arm, exported and uncall
 //     pinned `channelPrefs.clearPermissionPreset(rec.channelId)` inside BOTH `inboundDenied` and
 //     `inboundExpired`, so a posture armed for a request the operator then refused or ignored
 //     could not survive into the NEXT launch on that channel.
-// Neither function exists. `trigger-outcomes.js` no longer requires `channel-prefs` at all,
-// which `test/consent-local-expiry.test.mjs` asserts as an absence so a regrowth cannot be a
-// one-line edit.
+// Neither function exists, and neither does `trigger-outcomes.js`'s dependency on
+// `channel-prefs` (⚠ the absence used to be asserted by `test/consent-local-expiry.test.mjs`,
+// which is deleted 2026-08-22 with the watcher it drove; the writer census below is what still
+// refuses a regrowth, and it scans the whole of main/ rather than one file).
 //
 // ⚠ WHAT THOSE TWO ENFORCED IS NOW TRUE BY CONSTRUCTION, WHICH IS WHY THEY ARE NOT REPOINTED.
 // They existed to stop a stored pair reaching a launch nobody approved. An inbound request now

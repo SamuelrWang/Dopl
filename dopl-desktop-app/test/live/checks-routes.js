@@ -61,7 +61,12 @@ async function checkRouteCoverage(ctx) {
     // is not deployed until master is pushed. Check 10 is the one that reads what that 404
     // means; this row only asserts it is not a 5xx.
     ['GET  /api/channels/sessions', () => api.sessions(id), (s) => okish(s) || absent(s)],
-    ['GET  /api/channels/trust', () => api.trust(), (s) => okish(s) || refusal(s)],
+    // ⚠ `GET /api/channels/trust` STOOD HERE UNTIL 2026-08-22 and is now asserted GONE, in
+    // `checkRetiredRoutes` below. It is a MOVE rather than a deletion: a coverage row that
+    // simply vanishes leaves nothing watching the route, and a retired route that quietly
+    // answers again is a capability with no model behind it — the same failure `checkRetiredRoutes`
+    // was built for. Its row here expected `okish || refusal`, so the 404 the deletion produces
+    // would have failed check 7 on the first live run.
   ];
   if (thread) {
     calls.push(['GET  /api/channels/{id}/tasks/{taskId}', () => api.thread(id, thread.id), okish]);
@@ -158,6 +163,23 @@ async function checkRetiredRoutes(ctx) {
     fails.push(`POST /api/channels/{id}/agents answered ${summon.status} — summon is still reachable`);
   } else if (summon.status >= 500) {
     fails.push(`the retired summon verb answered ${summon.status} rather than a clean refusal`);
+  }
+
+  // ── TRUST, RETIRED 2026-08-22 (Samuel's ruling) ───────────────────────────────────────
+  // The two `/api/channels/trust` verbs, `trust-service.ts`, the `useTrustRules` client path and
+  // the `agent_trust_rules` table all went together. ⚠ THIS ROW IS THE DEPLOY MEASUREMENT, not a
+  // repo claim (CLAUDE.md rule 4): the route is deleted in the tree, and only a live run can say
+  // whether the deployment still answers it. A standing auto-allow that outlives its UI is the
+  // sharpest version of "a capability with no model behind it" — it decides what runs WITHOUT a
+  // human, and nothing left in the product could show or revoke one.
+  for (const verb of ['GET', 'POST', 'DELETE']) {
+    const res = await ctx.api.request(verb, '/api/channels/trust', verb === 'GET' ? undefined : {});
+    lines.push(`${verb.padEnd(6)}/channels/trust -> ${res.status} (must be gone)`);
+    if (okish(res.status)) {
+      fails.push(`${verb} /api/channels/trust answered ${res.status} — the retired trust surface is still reachable`);
+    } else if (res.status >= 500) {
+      fails.push(`the retired ${verb} /api/channels/trust answered ${res.status} rather than a clean refusal`);
+    }
   }
 
   return verdict(fails, { extraLines: lines });

@@ -7,10 +7,11 @@
  * ⚠ ITS OWN FILE since 2026-08-20, on the seam `sidebar-rows.tsx`'s header
  * already names. That file said the column is "a LIST OF SECTIONS and a SET OF
  * ROW FACES", which change for different reasons. A BRANCH turned out to be a
- * third reason: it composes a face with its children and now owns an
- * interaction (the disclosure) and a signal (the ask badge) that belong to
- * neither the section layout nor the row face. It went from eight lines to a
- * hundred in two days, which is what made the third reason visible.
+ * third reason: it composes a face with its children and owns an interaction
+ * (the disclosure) that belongs to neither the section layout nor the row face.
+ * ⚠ It owned a SIGNAL too — the per-channel ask badge — until 2026-08-22, when
+ * the inbound consent lane was retired (Samuel); `requestedThreads` and
+ * `askCount` went with it.
  */
 
 import { ChevronDown } from "lucide-react";
@@ -54,8 +55,6 @@ export function ChannelBranch({
   person,
   selected,
   threads,
-  requestedThreads,
-  askCount,
   openThreadId,
   collapsed,
   onToggleThreads,
@@ -67,11 +66,6 @@ export function ChannelBranch({
   person: ReturnType<typeof channelDisplayPeerPerson>;
   selected: boolean;
   threads: ChannelThread[];
-  requestedThreads: ReadonlySet<string>;
-  /** Threads here awaiting this viewer's answer. ⚠ It rides the CHANNEL row, so
-   *  it survives the collapse below — a retracted branch still says somebody is
-   *  waiting, which is the case the signal matters most in. */
-  askCount: number;
   openThreadId: string | null;
   /** This channel's threads are retracted. */
   collapsed: boolean;
@@ -92,7 +86,6 @@ export function ChannelBranch({
           person={person}
           selected={selected}
           unread={channel.unread}
-          askCount={askCount}
           reserveTrailing={canCollapse}
           onSelect={() => onSelectChannel(channel.id)}
         />
@@ -125,7 +118,6 @@ export function ChannelBranch({
             key={thread.id}
             thread={thread}
             selected={thread.id === openThreadId}
-            requested={requestedThreads.has(thread.id)}
             onOpen={() => onOpenThread(thread.id)}
           />
         ))}

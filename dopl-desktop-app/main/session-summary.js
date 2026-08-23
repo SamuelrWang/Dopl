@@ -98,6 +98,15 @@ function nameOf(s) {
   return String((s && s.agentId) || '');
 }
 
+/** The operator's PICK, as something to display — or '' when they picked nothing. `'default'` is
+ *  the frozen enum's "ask for no model at all", so it names no model and must not be rendered as
+ *  one. Never coerced further here: `session-engine.js` already coerced it at the construction
+ *  site against the frozen list, and this is a read. */
+function modelPick(s) {
+  const pick = String((s && s.model) || '');
+  return pick && pick !== 'default' ? pick : null;
+}
+
 
 /** One LIVE session object -> its summary. `name` is handed in (it is `nameOf(s)`; the argument
  *  survives so the ENDED branch, whose session object is gone, can pass the frozen id). */
@@ -133,6 +142,15 @@ function liveSummary(s, name) {
     // launched on. Absent reads fail-closed, as `session-io.js › grantArgs` treats it.
     toolMode: (s && s.state && s.state.toolMode) || 'manual',
     messageMode: (s && s.state && s.state.messageMode) || 'ask',
+    // ⚠ WHICH MODEL IS REALLY ANSWERING (2026-08-22, Samuel's model-selection ruling), and the
+    // precedence is deliberate: the SDK's own reported id FIRST (`s.liveModel`, stamped from
+    // system/init and from every assistant message, so a mid-session `Query.setModel` shows up
+    // without a second wiring), then the operator's PICK, then null. A card that showed the pick
+    // over the live id would go wrong the moment the two differed — which is the normal case,
+    // since 'default' means "whatever the CLI chose" and the CLI is the one that knows.
+    // ⚠ NULL IS A REAL ANSWER, not a gap: a SPAWN-IDLE agent has started no query, so nothing has
+    // reported a model and nothing has been picked. Saying null is honest; guessing is not.
+    model: (s && s.liveModel) || modelPick(s),
     channelName: displayText(ctx.channelName),
     threadTitle: displayText(ctx.taskTitle),
     ...metrics(s),
@@ -164,6 +182,10 @@ function endedSummary(e, name) {
     // No posture to change; a retained one would offer a control over nothing.
     toolMode: null,
     messageMode: null,
+    // ⚠ NOT FROZEN AT SETTLE, so it is null here rather than stale. The metrics beside it ARE
+    // frozen because the operator wants to read what the run cost; a model is a control's current
+    // value, and a control over an ended agent is a control over nothing.
+    model: null,
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
     contextUsed: metricOrNull(e && e.contextUsed),

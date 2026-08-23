@@ -229,11 +229,22 @@ test("drainPage dispatches BEFORE it advances, in that order, in the shipped sou
   assert.ok(dispatch < advance, "the cursor advance must stay downstream of the dispatch");
 });
 
-test("the two fail-closed returns in handleTrigger now answer a REASON, not silence", () => {
+test("the fail-closed return in handleTrigger answers a REASON, not silence", () => {
+  // ⚠ ONE DEFERRING RETURN, DOWN FROM TWO (2026-08-22, Samuel's INBOUND CONSENT RETIREMENT).
+  // `return 'no-consent-row';` was the OTHER one — `consent.createConsentRequest` answers null on
+  // ANY network error or non-2xx, and that null was the motivating incident at the head of this
+  // file. There is no consent POST on this path any more: the ask is a native notification, so
+  // the only thing that can stop it is having no runtime to launch. The C-3 CONTRACT is
+  // unchanged and is what these cases pin — a reason string holds the cursor, silence advances
+  // it — and `no-consent-row` still exercises it as a fixture above, because drainPage treats
+  // every non-empty reason identically.
   assert.match(TRIGGER, /return 'no-claude-runtime';/);
-  assert.match(TRIGGER, /return 'no-consent-row';/);
-  // Both are upstream of the durable record, which is what makes a retry side-effect-free.
+  // It is the FIRST statement of the function, so a deferral can never leave a side effect
+  // behind for the retry to duplicate. (It used to have to be stated as "upstream of
+  // `watcher.register`"; there is no durable record to be half-written any more.)
   const body = TRIGGER.slice(TRIGGER.indexOf("async function handleTrigger("));
-  assert.ok(body.indexOf("return 'no-consent-row';") < body.indexOf("watcher.register({"),
-    "a deferral must never leave a half-registered request behind");
+  assert.ok(body.indexOf("return 'no-claude-runtime';") < body.indexOf("notifyAsk({"),
+    "the runtime probe must stay ahead of the notification it would otherwise raise");
+  assert.equal(/return 'no-consent-row';/.test(TRIGGER), false,
+    "the consent-row deferral is deleted with the row");
 });

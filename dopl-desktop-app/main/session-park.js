@@ -13,6 +13,9 @@
 
 const io = require('./session-io');
 const store = require('./session-store');
+// 2026-08-22: the PRIVATE TURN's window. A resume rebuilds the query, so the depth the old one
+// was carrying is owed by nobody — see `session-private.js › resetPrivateTurn`.
+const privateTurn = require('./session-private');
 const { Notification } = require('electron');
 const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const { diag } = require('./diag');
@@ -63,6 +66,12 @@ function contextFromRecord(rec) {
 function resumeParked(s) {
   if (!deps || !s || s.settled || s.resuming) return;
   s.resuming = true;
+  // ⚠ THE PRIVATE WINDOW DOES NOT SURVIVE THE TORN-DOWN QUERY (2026-08-22). The depth is spent by
+  // each turn's `result`, and the results this session was still owed died with the query the park
+  // aborted — so a resume that inherited the depth would gate the OUT half of Axis B for turns
+  // nobody made private. The park's own `abortQuery` effect resets it too; both, because a resume
+  // can also follow a crash, where no effect ran.
+  privateTurn.resetPrivateTurn(s);
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
   s.resumeSdkId = s.sdkSessionId || s.resumeSdkId || null;
@@ -197,6 +206,17 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // corrupt / future-version value fall through normalizeProfile's global fallback and resume
     // at FULL access — the most permissive profile, from the least trustworthy input.
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
+    // ⚠ A RESUMED SESSION IS WINDOWLESS, AND SAYING SO IS LOAD-BEARING (2026-08-22). It used to
+    // pass nothing, so `spec.windowless` was undefined on every crash resume: the credential
+    // preflight's ROLLBACK branch (`startSession`: `spec.windowless && holdIfNoCredential`) could
+    // not fire, and — the symptom that was actually reached — `startSession`'s AXIS B floor did
+    // not apply, so the session came back at the reducer's `ask` on a shape with NO ACCEPT
+    // SURFACE. `session-gate.js › enqueue` then HELD the peer's next reply with nothing left able
+    // to release it (F-236, from the one lane that never derived its own posture).
+    // ⚠ IT IS NOT A POSTURE AND MUST NOT BECOME ONE: H2 still forbids a resume handing in
+    // `startModes`, and this passes none — the floor is a fact about having no surface, applied
+    // by the construction site to whatever the reducer's defaults were.
+    windowless: true,
     counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // L1 binding + the DM flag
     context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId,
     // ⚠ Rehydrate the running cap budget. Without both counters a

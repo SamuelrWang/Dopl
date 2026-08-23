@@ -65,11 +65,18 @@ export function harness(over = {}) {
     emit: (s, payload) => calls.emit.push(payload),
     denyPending: (s, message) => calls.denyPending.push(message),
   };
+  // ⚠ `floorWindowlessMessage` JOINED THE INJECTED SET ON 2026-08-22 (F-236's last hole). The
+  // AUTH HOLD is the one park that RESETS the posture, so `resumeAfterSignIn` has to put AXIS B's
+  // windowless floor back or a recovered session comes back at `ask` on a shape with no accept
+  // surface — and `session-gate.js › enqueue` then holds the peer's next reply with no drain left
+  // to release it. The REAL rule is injected rather than a stub: it is pure, and it is the
+  // behaviour these cases are about.
   const api = new Function(
-    "deps", "detect", "store", "diag", "credentialState",
+    "deps", "detect", "store", "diag", "credentialState", "floorWindowlessMessage",
     `${HOLD_BLOCK}\n return { holdIfNoCredential, holdIfAuthFailure, holdIfAuthMessage, resumeAfterSignIn };`
   )(deps, detect, { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) }, () => {},
-    () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }));
+    () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }),
+    require(M("session-profiles.js")).floorWindowlessMessage);
   return { ...api, calls, state };
 }
 

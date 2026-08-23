@@ -80,6 +80,12 @@ const { TOOL_MODES, MESSAGE_MODES, DEFAULT_PRESET, normalizePreset, defaultPrese
 
 const OK = { tools: "accept_edits", messages: "auto_inbound" };
 
+/** What a pair looks like ON THE WIRE: the stored shape plus the always-present `model` key.
+ *  ⚠ STORAGE omits the key and the WIRE cannot — the web's capability probe is an OWN-KEY test,
+ *  so a reply without it reads as "this desktop has no model concept" and hides the model row.
+ *  `main/channel-prefs.js › effectivePosture` carries the full argument. */
+const onWire = (pair) => ({ ...pair, model: null });
+
 // ── The frozen enums ─────────────────────────────────────────────────────────
 
 test("the enums are exactly the desktop's real modes, in both axes", () => {
@@ -197,7 +203,11 @@ function bootIpc() {
   const map = {};
   const prefsStub = {
     // The two ops this section drives, backed by the REAL sliced map ops.
-    getLaunchPosture: (channelId) => prefs.readPostureFrom(map, channelId) || prefs.defaultPreset(),
+    // ⚠ `effectivePosture` IS THE REAL COMPOSITION, not a re-spelling of it. This stub used to
+    // read `readPostureFrom(...) || defaultPreset()` — which is what `getLaunchPosture` did at
+    // the time — and that duplication is precisely what let main's wire shape change underneath
+    // a green suite. One spelling, in the module under test.
+    getLaunchPosture: (channelId) => prefs.effectivePosture(map, channelId),
     setLaunchPosture: (channelId, raw) => {
       const res = prefs.postureInto(map, channelId, raw);
       return res.ok ? { ok: true } : { ok: false };
@@ -279,7 +289,7 @@ test("round trip: set then get returns the stored pair", async () => {
   const { handlers, event } = bootIpc();
   const set = await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset: OK });
   assert.deepEqual(set, { ok: true });
-  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), OK);
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(OK));
 });
 
 test("get before any set is the restrictive default, never a neighbour's pair", async () => {
@@ -289,13 +299,13 @@ test("get before any set is the restrictive default, never a neighbour's pair", 
   // Settings tab would render nothing for a null). Same fail-closed direction, stated as the
   // pair rather than as an absence.
   const { handlers, event } = bootIpc();
-  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), DEFAULT_PRESET);
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(DEFAULT_PRESET));
 });
 
 test("the round trip is per channel: setting A leaves B at the default", async () => {
   const { handlers, event } = bootIpc();
   await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset: OK });
-  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_B), DEFAULT_PRESET);
+  assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_B), onWire(DEFAULT_PRESET));
 });
 
 test("an unknown mode over IPC is rejected and stores nothing", async () => {

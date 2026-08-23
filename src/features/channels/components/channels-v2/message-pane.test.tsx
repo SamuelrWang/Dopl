@@ -110,7 +110,6 @@ function paneProps(over: Partial<Props> = {}): Props {
     index: INDEX,
     members: MEMBERS,
     loading: false,
-    requested: new Set<string>(),
     scrollTarget: null,
     infoOpen: false,
     favorited: false,

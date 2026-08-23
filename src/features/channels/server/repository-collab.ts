@@ -3,11 +3,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import type { AgentPresenceStatus } from "../types";
 import type { MemberPresence } from "./dto";
-import type {
-  ConsentRequestRow,
-  PresenceRow,
-  TrustRuleRow,
-} from "./collab-dto";
+import type { ConsentRequestRow, PresenceRow } from "./collab-dto";
 
 /**
  * ⚠ Explicit row caps. PostgREST applies its own `max-rows` to an un-limited
@@ -23,9 +19,17 @@ const PRESENCE_ROWS_LIMIT = 5_000;
 export const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
 
 /**
- * Pure data access for the collaboration tables (consent requests, trust rules,
- * presence) plus the presence read-helpers. ⚠ Service-role admin client
- * (RLS-bypassing) — visibility + authz live in the SERVICES.
+ * Pure data access for the collaboration tables (consent requests, presence)
+ * plus the presence read-helpers. ⚠ Service-role admin client (RLS-bypassing) —
+ * visibility + authz live in the SERVICES.
+ *
+ * ⚠ IT READ A THIRD TABLE UNTIL 2026-08-22: `agent_trust_rules`, behind
+ * `listTrustRules` / `findTrustRule` / `insertTrustRule` / `deleteTrustRule`.
+ * The table is DROPPED (`20260822140000_retire_inbound_consent_and_trust.sql`) with the
+ * inbound consent lane it existed to auto-allow, so the four readers are gone
+ * rather than left pointing at a relation that is not there. Same change took
+ * `expireRevokedAutoAllow` below it — see that tombstone for why an
+ * `auto_allowed` row can no longer be born.
  */
 
 // ─── Consent requests ───────────────────────────────────────────────
@@ -245,101 +249,22 @@ export async function updateConsentDecision(
   return (data as ConsentRequestRow | null) ?? null;
 }
 
-/**
- * Retire ONE `auto_allowed` row whose standing trust rule no longer holds.
- * ⚠ Compare-and-swap on `status = 'auto_allowed'` for the same reason
- * `updateConsentDecision` CASes on `pending`: multi-writer surface, so a
- * revocation sweep must never clobber a status another writer already moved.
- *
- * ⚠ `decided_by` / `decided_at` are LEFT ALONE — "a trust rule allowed this row,
- * at this time" stays true and is the audit trail. `expires_at` is null on an
- * auto-allow (which is why it never elapsed), so stamping it here records the
- * moment the authority died.
- */
-export async function expireRevokedAutoAllow(
-  id: string
-): Promise<ConsentRequestRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_consent_requests")
-    .update({ status: "expired", expires_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("status", "auto_allowed")
-    .select("*")
-    .maybeSingle();
-  if (error) throw error;
-  return (data as ConsentRequestRow | null) ?? null;
-}
+// ⚠ `expireRevokedAutoAllow` STOOD HERE AND IS DELETED (2026-08-22). It CAS'd
+// one `auto_allowed` row to `expired` when the standing trust rule behind it had
+// been revoked. `auto_allowed` had exactly ONE writer — `insertConsentRequest`,
+// on an INBOUND create whose requester was trusted — and both halves are gone:
+// the inbound kind is retired and `agent_trust_rules` is dropped. So no row of
+// that status can be born, and the sweep guards a shape with no producer.
+// ⚠ The STATUS VALUE survives in `STATUS_FILTERS.decided` on purpose: it stays
+// readable if the column ever holds one, because retiring a writer is not a
+// licence to hide history. (Measured before the drop: zero `auto_allowed` rows
+// in the table's history — re-measure, never quote.)
 
 // ⚠ `findMessageAuthorBySeq` STOOD HERE AND MOVED to `repository-messages.ts`
 // (2026-08-20). It reads `channel_messages`, which that file owns, and it was a
 // second (channel, seq) → `maybeSingle()` lookup sitting one file away from its
 // twin — the shape a third copy gets added to. It is still the consent path's,
 // only its address changed.
-
-// ─── Trust rules ────────────────────────────────────────────────────
-
-export async function listTrustRules(
-  operatorUserId: string,
-  workspaceId: string
-): Promise<TrustRuleRow[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("agent_trust_rules")
-    .select("*")
-    .eq("operator_user_id", operatorUserId)
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as TrustRuleRow[];
-}
-
-export async function findTrustRule(
-  operatorUserId: string,
-  trustedUserId: string,
-  workspaceId: string
-): Promise<TrustRuleRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("agent_trust_rules")
-    .select("*")
-    .eq("operator_user_id", operatorUserId)
-    .eq("trusted_user_id", trustedUserId)
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as TrustRuleRow | null) ?? null;
-}
-
-export async function insertTrustRule(row: {
-  operator_user_id: string;
-  trusted_user_id: string;
-  workspace_id: string;
-}): Promise<TrustRuleRow> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("agent_trust_rules")
-    .insert(row)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as TrustRuleRow;
-}
-
-export async function deleteTrustRule(
-  operatorUserId: string,
-  trustedUserId: string,
-  workspaceId: string
-): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("agent_trust_rules")
-    .delete()
-    .eq("operator_user_id", operatorUserId)
-    .eq("trusted_user_id", trustedUserId)
-    .eq("workspace_id", workspaceId);
-  if (error) throw error;
-}
 
 // ─── Presence ───────────────────────────────────────────────────────
 

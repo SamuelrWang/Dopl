@@ -51,6 +51,10 @@
 // This module OWNS the storage + validation. The IPC surface lives in channel-dir-ipc.js.
 
 const Store = require('electron-store');
+// ⚠ THE MODEL'S FROZEN LIST LIVES IN `session-model.js`, NOT HERE, and this file only validates
+// against it — the same discipline the two axes follow against `session-profiles.js`. That module
+// is PURE (no electron), so requiring it costs this one nothing.
+const { normalizeModelId } = require('./session-model');
 const { diag } = require('./diag');
 
 const store = new Store();
@@ -84,7 +88,25 @@ function normalizePreset(raw) {
   const messages = typeof raw.messages === 'string' ? raw.messages : '';
   if (TOOL_MODES.indexOf(tools) === -1) return null;
   if (MESSAGE_MODES.indexOf(messages) === -1) return null;
-  return { tools: tools, messages: messages };
+  // ── ⚠ THE MODEL IS A THIRD FIELD AND IT IS NOT A THIRD AXIS (2026-08-22, Samuel's ruling) ──
+  //
+  // It rides the same record because it is the same decision — what the operator's own agent
+  // starts as when they press Launch — but it is NOT permission. The two axes decide whether the
+  // operator is ASKED; this decides which model answers. Nothing about containment reads it, and
+  // it must never be folded into the pair the H2 argument is about.
+  //
+  // ⚠ IT VALIDATES SOFT, WHERE THE AXES VALIDATE HARD. An unknown TOOL or MESSAGE value rejects
+  // the WHOLE write (a half-applied posture is the "one switch, two meanings" confusion the two
+  // axes exist to remove); an unknown MODEL is simply ABSENT, which is the SDK default and is
+  // exactly today's behaviour for every channel that has never chosen one. Failing the whole
+  // write would mean a desktop that has not heard of a newer model could not store a posture at
+  // all — refusing the permission pair over a model name is the wrong trade in both directions.
+  // ⚠ AND ABSENT IS NOT A MEMBER: the key is OMITTED rather than written as '' or null, so a
+  // record from before this field and a record whose model was cleared are the same record.
+  const model = normalizeModelId(raw.model);
+  return model
+    ? { tools: tools, messages: messages, model: model }
+    : { tools: tools, messages: messages };
 }
 
 // The restrictive pair every non-consenting launch shape gets. A helper rather
@@ -145,13 +167,38 @@ function readPostureFrom(map, channelId) {
   return normalizePreset(map[channelId]);
 }
 
+// THE EFFECTIVE POSTURE AS THE RENDERER SEES IT — the stored pair or the restrictive default,
+// and ALWAYS carrying a `model` key.
+//
+// ⚠ THE KEY IS PRESENT ON THE WAY OUT EVEN WHEN THE STORED RECORD OMITS IT, and that asymmetry
+// with `readPostureFrom` is the whole point rather than an inconsistency to tidy away. STORAGE
+// omits the key so a record from before this field and a record whose model was cleared are the
+// same record (see `normalizePreset`). The WIRE cannot: the web's capability probe
+// (`lib/permission-modes.ts › hasModelKey`) is an OWN-KEY test, and it reads a missing key as
+// "this desktop has no model concept" and renders NO model row at all. Answering the pair alone
+// therefore told every channel that had not already stored a model that the feature did not
+// exist — and the only way to store one is the row that was never drawn. `model: null` is this
+// build saying "I know the field; nothing is chosen; the SDK default applies", which is a
+// different fact from silence (INVARIANTS §11 — UNKNOWN is not EMPTY).
+function effectivePosture(map, channelId) {
+  const stored = readPostureFrom(map, channelId);
+  const base = stored || defaultPreset();
+  return { tools: base.tools, messages: base.messages, model: (stored && stored.model) || null };
+}
+
 // Write the pair in place. { ok: false } and NO mutation when the id is missing
 // or either axis is unknown — fail-closed, so a rejected write can never leave a
 // half-applied posture behind.
 function postureInto(map, channelId, raw) {
   const preset = normalizePreset(raw);
   if (!map || !channelId || !preset) return { ok: false };
-  map[channelId] = { tools: preset.tools, messages: preset.messages };
+  // ⚠ WRITTEN FIELD BY FIELD, never `{...preset}`: this is the boundary that guarantees nothing
+  // but the validated members is ever stored, and a spread would carry whatever `normalizePreset`
+  // grew next. `model` is omitted when absent (see above) so the stored shape is unchanged for
+  // every channel that has not chosen one.
+  map[channelId] = preset.model
+    ? { tools: preset.tools, messages: preset.messages, model: preset.model }
+    : { tools: preset.tools, messages: preset.messages };
   return { ok: true, preset: preset };
 }
 
@@ -195,9 +242,11 @@ function getAllPostures() {
  * is absent has NOT been chosen and the card must not claim it was, but a
  * durable setting that is absent IS manual/ask, and saying so is the truth.
  * Reading never writes.
+ * ⚠ AND IT ALWAYS CARRIES `model` (2026-08-22) — `null` when none is stored. See
+ * `effectivePosture` for why the WIRE shape and the STORED shape differ here.
  */
 function getLaunchPosture(channelId) {
-  return readPostureFrom(getAllPostures(), channelId) || defaultPreset();
+  return effectivePosture(getAllPostures(), channelId);
 }
 
 /**
@@ -255,16 +304,34 @@ function launchStartModes(channelId) {
   };
 }
 
+/**
+ * THE CHANNEL'S CHOSEN MODEL, as a full id, or '' for the SDK default (2026-08-22).
+ *
+ * ⚠ IT IS A SEPARATE READER FROM `getLaunchPosture` ON PURPOSE, AND THE REASON IS H2. That
+ * function has exactly ONE consumer — `session-ipc-ops.js › sessions:launch`, the operator's own
+ * click — and `test/session-preset-start.test.mjs` pins the count, because a second reader of the
+ * stored PERMISSION pair re-opens the failure H2 exists to prevent (a posture reaching a spawn
+ * nobody is attending). The MODEL is not that: it grants nothing, widens nothing, and reaches no
+ * gate, so the PEER-TRIGGERED lane (`trigger.js`) may inherit it and must not be able to inherit
+ * the pair alongside it. Two readers, so the census stays honest about which one is which.
+ */
+function getLaunchModel(channelId) {
+  const posture = readPostureFrom(getAllPostures(), channelId);
+  return (posture && posture.model) || '';
+}
+
 module.exports = {
   getAutoSend,
   setAutoSend,
   // The DURABLE launch posture — see the block above for why it is not the arm.
   readPostureFrom,
+  effectivePosture, // 2026-08-22: the WIRE shape — the pair plus an always-present `model`
   postureInto,
   getLaunchPosture,
   setLaunchPosture,
   windowlessMessageMode,
   launchStartModes,
+  getLaunchModel, // 2026-08-22: the model half, readable WITHOUT the permission pair
   TOOL_MODES,
   MESSAGE_MODES,
   DEFAULT_PRESET,

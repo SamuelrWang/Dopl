@@ -41,8 +41,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChannelsV2SettingsTab } from "./settings-tab";
+import { channel } from "./test-fixtures";
 import { ChannelAgentSettings } from "./settings-agent";
-import { channel, member as makeMember } from "./test-fixtures";
 import { agentView, copy, desktopSource, disabled } from "./settings-agent-harness";
 import { UNRESOLVED_TOOL_PROFILE } from "../../constants";
 import type { Channel } from "../../types";
@@ -75,12 +75,8 @@ function mount(over: Partial<Channel>, canManage: boolean, handlers = {}) {
           <ChannelAgentSettings
             channelId={ch.id}
             profile={ch.myAgentToolProfile ?? UNRESOLVED_TOOL_PROFILE}
-            otherMembers={[]}
-            trustedIds={new Set()}
-            trustBusyIds={new Set()}
             onSetToolProfile={vi.fn()}
             toolProfileBusy={false}
-            onToggleTrust={vi.fn()}
           />
         ) : null
       }
@@ -320,48 +316,20 @@ describe("the Agent folder row", () => {
   });
 });
 
-describe("trust is labelled with the scope it actually has", () => {
-  it("carries the SCOPE, and still shows the section with nobody to point it at", () => {
-    // ⚠ Two short lines, not an explanation. SCOPE is the one claim a
-    // per-CHANNEL tab cannot leave implicit (the row is UNIQUE (operator,
-    // trusted, workspace), no channel column; saying nothing reads as
-    // per-channel), and an empty roster rendering nothing would hide that
-    // standing trust exists at all. Both survived the 2026-08-19 cut for that.
-    const text = copy({ otherMembers: [] });
-    expect(text).toContain("Always allow");
-    expect(text).toContain("Applies across the whole workspace");
-    expect(text).toContain("Nobody else in this channel yet");
-    expect(text).not.toMatch(/in this channel[^.]*trust/i);
-  });
-
-  it("gives each teammate a real switch carrying their current state", () => {
-    const named = (n: string) => screen.getByRole("switch", { name: `Always allow ${n}` });
-    agentView({
-      otherMembers: [
-        makeMember({ userId: "u-alice", displayName: "Alice" }),
-        makeMember({ userId: "u-bo", displayName: "Bo" }),
-      ],
-      trustedIds: new Set(["u-bo"]),
-    });
-    expect(named("Alice").getAttribute("aria-checked")).toBe("false");
-    expect(named("Bo").getAttribute("aria-checked")).toBe("true");
-  });
-
-  it("toggles a teammate through the caller's mutation", () => {
-    const onToggleTrust = vi.fn();
-    agentView({ onToggleTrust });
-    fireEvent.click(screen.getByRole("switch", { name: "Always allow Alice" }));
-    expect(onToggleTrust).toHaveBeenCalledWith("u-alice", true);
-  });
-
-  it("marks a row in flight and refuses the second click that would race it", () => {
-    const onToggleTrust = vi.fn();
-    const busy = new Set(["u-alice"]);
-    expect(copy({ trustBusyIds: busy, onToggleTrust })).toContain("Saving…");
-    const toggle = screen.getByRole("switch", { name: "Always allow Alice" });
-    expect(disabled(toggle)).toBe(true);
-    fireEvent.click(toggle);
-    expect(onToggleTrust).not.toHaveBeenCalled();
+/**
+ * ⚠ THE TRUST SUITE STOOD HERE AND IS DELETED (Samuel, 2026-08-22). "Always
+ * allow <teammate>" was standing consent for an INBOUND ask — the decision that
+ * ruling retired everywhere — so the section, its scope hint, its empty-roster
+ * line, its switches and the four tests pinning them all went together. Kept as
+ * an ABSENCE below, because a section nobody asserts is a section that quietly
+ * comes back.
+ */
+describe("the tab offers no standing approval", () => {
+  it("renders no Always-allow section and no trust switch", () => {
+    const text = copy();
+    expect(text).not.toContain("Always allow");
+    expect(text).not.toContain("Applies across the whole workspace");
+    expect(screen.queryByRole("switch", { name: /Always allow/ })).toBeNull();
   });
 });
 

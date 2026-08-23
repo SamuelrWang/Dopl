@@ -93,10 +93,16 @@ function harness(over = {}) {
     emit: () => {},
   };
 
+  // ⚠ `privateTurn` JOINED THE INJECTED SET ON 2026-08-22 (Samuel's private-turn depth ruling):
+  // a resume REBUILDS the query, so the `result` events the old one still owed die with it and
+  // the private-turn depth they would have spent must be reset, or the next private turn opens on
+  // top of a surplus and withdraws Axis B's outbound widening for turns nobody made private. The
+  // REAL module is injected rather than a stub — it is pure, and the reset is the behaviour.
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "diag",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn", "diag",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
-  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification, diag);
+  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
+    createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")), diag);
   api.bind(deps);
   return { ...api, deps, sessions, calls, cfg, store };
 }

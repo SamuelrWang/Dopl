@@ -68,8 +68,11 @@ vi.mock("../../hooks/use-channel-mentions", () => ({
     refetch: () => {},
   }),
 }));
+// ⚠ THE PAGE READS `outbound`, NOT `requests` (2026-08-22 — the inbound consent
+// retirement), so the stub has to carry that slice or every render throws on an
+// undefined array.
 vi.mock("../../hooks/use-consent-inbox", () => ({
-  useConsentInbox: () => ({ requests: [] }),
+  useConsentInbox: () => ({ requests: [], outbound: [] }),
 }));
 vi.mock("../../hooks/use-mention-writes", () => ({
   useMentionWrites: () => ({ markRead: { mutate: () => {} } }),

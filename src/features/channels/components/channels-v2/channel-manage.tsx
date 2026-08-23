@@ -19,9 +19,16 @@
  * `ChannelFolderControl` were **deleted**, their controls rebuilt INLINE as
  * `settings-agent.tsx › ChannelAgentSettings`, which this file mounts into the
  * tab's `agent` slot. ⚠ **The wiring is untouched by that**: the same
- * `prefs.toolProfile`, the same `prefs.trust` + `trustBusyIds` guard, the same
- * `useTrustRules` read, the same bridges. Only the chrome changed, and a future
+ * `prefs.toolProfile`, the same bridges. Only the chrome changed, and a future
  * reader must not conclude a write moved.
+ *
+ * ⚠ THE TRUST HALF IS DELETED (Samuel, 2026-08-22 — the inbound consent
+ * retirement). `useTrustRules`, `prefs.trust`, the `trustBusyIds` double-fire
+ * guard and `handleToggleTrust` all went with the "Always allow" section they
+ * fed: standing consent for an ask nobody is asked any more. **This surface no
+ * longer opens `/api/channels/trust` at all**, so the "zero requests until the
+ * tab opens" assertion in `pages/channels/index.test.tsx` now has one fewer read
+ * to be true about.
  *
  * ⚠ THIS FILE EXISTS BECAUSE THE OLD PAGE'S HEADER WAS THE ONLY ENTRY POINT TO
  * FIVE LIVE CONTROLS. `channels-view-core.tsx` and `channel-pane.tsx` were
@@ -47,7 +54,6 @@ import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { UNRESOLVED_TOOL_PROFILE } from "../../constants";
 import { useChannelLifecycleWrites } from "../../hooks/use-channel-lifecycle-writes";
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
-import { useTrustRules } from "../../hooks/use-trust-rules";
 import { channelDisplayName } from "../../lib/channel-display";
 import { CreateChannelDialog } from "../create-channel-dialog";
 import { DirectMessageDialog } from "../direct-message-dialog";
@@ -97,13 +103,8 @@ export function ChannelsV2ManageActions({
   const [goPublicOpen, setGoPublicOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
-  // ⚠ Double-fire guard ONLY — the optimistic half is a cache patch.
-  const [trustBusyIds, setTrustBusyIds] = useState<ReadonlySet<string>>(
-    () => new Set<string>()
-  );
 
-  const { trustedIds } = useTrustRules(workspaceId);
-  const prefs = useChannelPreferenceWrites({ workspaceId, currentUserId, gate });
+  const prefs = useChannelPreferenceWrites({ workspaceId, gate });
   const lifecycle = useChannelLifecycleWrites({
     channel,
     workspaceId,
@@ -116,7 +117,6 @@ export function ChannelsV2ManageActions({
   const displayName = channelDisplayName(channel, members, currentUserId);
   const peerName =
     displayName === "Direct message" ? "your teammate" : displayName;
-  const otherMembers = members.filter((m) => m.userId !== currentUserId);
   // ⚠ A row with no profile resolves the way the DESKTOP resolves it
   // (INVARIANTS §6). The Tools control renders this as a containment claim, so
   // the web must never pick a wider answer than the machine will run.
@@ -135,22 +135,6 @@ export function ChannelsV2ManageActions({
     prefs.toolProfile.mutate({ channelId: channel.id, profile });
   }
 
-  async function handleToggleTrust(userId: string, trusted: boolean) {
-    if (trustBusyIds.has(userId)) return;
-    setTrustBusyIds((s) => new Set(s).add(userId));
-    try {
-      await prefs.trust.mutateAsync({ userId, trusted });
-    } catch {
-      // Rollback + toast are the mutation's; this only clears the guard.
-    } finally {
-      setTrustBusyIds((s) => {
-        const next = new Set(s);
-        next.delete(userId);
-        return next;
-      });
-    }
-  }
-
   return (
     <>
       <ChannelsV2SettingsTab
@@ -164,12 +148,8 @@ export function ChannelsV2ManageActions({
             <ChannelAgentSettings
               channelId={channel.id}
               profile={toolProfile}
-              otherMembers={otherMembers}
-              trustedIds={trustedIds}
-              trustBusyIds={trustBusyIds}
               onSetToolProfile={handleSetToolProfile}
               toolProfileBusy={prefs.toolProfile.pending}
-              onToggleTrust={handleToggleTrust}
             />
           ) : null
         }

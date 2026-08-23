@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChannelAgentSettings } from "@/features/channels/components/channels-v2/settings-agent";
-import type { ChannelMember } from "@/features/channels/types";
 import { installBridge } from "#/test-utils/bridge";
 
 /**
@@ -52,25 +51,10 @@ import { installBridge } from "#/test-utils/bridge";
 
 const CHANNEL = "44444444-4444-4444-8444-444444444444";
 
-function member(over: Partial<ChannelMember> = {}): ChannelMember {
-  return {
-    channelId: CHANNEL,
-    userId: "u-alice",
-    role: "member",
-    lastReadAt: null,
-    notifyScope: null,
-    agentToolProfile: null,
-    favoritedAt: null,
-    agentOnline: false,
-    lastSeenAt: null,
-    addedBy: null,
-    joinedAt: "2026-08-01T00:00:00.000Z",
-    displayName: "Alice",
-    email: "alice@example.com",
-    avatarUrl: null,
-    ...over,
-  };
-}
+// ⚠ THE `member` FIXTURE STOOD HERE AND IS DELETED WITH THE TRUST ROSTER
+// (2026-08-22). It existed to populate `otherMembers`, the trust targets — this
+// tab has no roster of any kind now, so a fixture for one is a prop that would
+// have to be re-added to be used.
 
 /**
  * `window.dopl` carrying the channels bridge over a real in-memory store, so a
@@ -130,21 +114,16 @@ afterEach(() => {
 
 function mountAgent(over: Partial<Parameters<typeof ChannelAgentSettings>[0]> = {}) {
   const onSetToolProfile = vi.fn();
-  const onToggleTrust = vi.fn();
   render(
     <ChannelAgentSettings
       channelId={CHANNEL}
       profile="full"
-      otherMembers={[member()]}
-      trustedIds={new Set()}
-      trustBusyIds={new Set()}
       toolProfileBusy={false}
       onSetToolProfile={onSetToolProfile}
-      onToggleTrust={onToggleTrust}
       {...over}
     />
   );
-  return { onSetToolProfile, onToggleTrust };
+  return { onSetToolProfile };
 }
 
 // The SETTINGS TAB's two selects. ⚠ They read the DURABLE posture since
@@ -234,22 +213,21 @@ describe("choosing, inline", () => {
     await waitFor(() => expect(sends().textContent).toContain("Ask each time"));
   });
 
-  it("toggles trust for a listed teammate", async () => {
+  /**
+   * ⚠ THE TRUST SUITE STOOD HERE AND IS DELETED (Samuel, 2026-08-22 — the inbound
+   * consent retirement). "Always allow <teammate>" was standing consent for an
+   * INBOUND ask, which is the decision that ruling removed, so the section, its
+   * scope hint, its empty-roster line and its `Switch` rows all went with it. Kept
+   * as an ABSENCE: a section nobody asserts is a section that quietly comes back,
+   * and this one would come back writing to a route that no longer exists.
+   */
+  it("offers no standing approval — the trust roster is gone", async () => {
     bridge();
-    const { onToggleTrust } = mountAgent();
-    fireEvent.click(screen.getByRole("switch", { name: "Always allow Alice" }));
-    expect(onToggleTrust).toHaveBeenCalledWith("u-alice", true);
-  });
-
-  it("keeps the trust section with nobody to point it at, instead of hiding it", async () => {
-    bridge();
-    mountAgent({ otherMembers: [] });
-    // ⚠ One short line each (Samuel, 2026-08-19 — minimal copy). The scope
-    // survived the cut because a per-CHANNEL tab cannot leave workspace-wide
-    // implicit; the two-sentence scope/effect paragraph did not.
-    expect(screen.getByText("Applies across the whole workspace")).toBeInTheDocument();
-    expect(screen.getByText("Nobody else in this channel yet")).toBeInTheDocument();
-    expect(screen.queryByText(/Trust covers the whole workspace/)).toBeNull();
+    mountAgent();
+    await waitFor(() => expect(queryPermissions()).not.toBeNull());
+    expect(screen.queryByRole("switch", { name: /Always allow/ })).toBeNull();
+    expect(screen.queryByText("Always allow")).toBeNull();
+    expect(screen.queryByText("Applies across the whole workspace")).toBeNull();
   });
 });
 
@@ -309,22 +287,14 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
         <ChannelAgentSettings
           channelId={CHANNEL}
           profile="full"
-          otherMembers={[member()]}
-          trustedIds={new Set()}
-          trustBusyIds={new Set()}
           toolProfileBusy={false}
           onSetToolProfile={vi.fn()}
-          onToggleTrust={vi.fn()}
         />
         <ChannelAgentSettings
           channelId={CHANNEL}
           profile="full"
-          otherMembers={[member()]}
-          trustedIds={new Set()}
-          trustBusyIds={new Set()}
           toolProfileBusy={false}
           onSetToolProfile={vi.fn()}
-          onToggleTrust={vi.fn()}
         />
       </>
     );
@@ -356,22 +326,14 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
         <ChannelAgentSettings
           channelId={CHANNEL}
           profile="full"
-          otherMembers={[member()]}
-          trustedIds={new Set()}
-          trustBusyIds={new Set()}
           toolProfileBusy={false}
           onSetToolProfile={vi.fn()}
-          onToggleTrust={vi.fn()}
         />
         <ChannelAgentSettings
           channelId={CHANNEL}
           profile="full"
-          otherMembers={[member()]}
-          trustedIds={new Set()}
-          trustBusyIds={new Set()}
           toolProfileBusy={false}
           onSetToolProfile={vi.fn()}
-          onToggleTrust={vi.fn()}
         />
       </>
     );

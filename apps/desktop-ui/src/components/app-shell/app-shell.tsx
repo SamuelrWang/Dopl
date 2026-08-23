@@ -58,7 +58,15 @@ export function AppShellLayout() {
   // `CONSENT_INBOX_POLL_MS`'s own docblock forbids. The channels page keeps
   // its interval as the realtime BACKSTOP; an always-mounted badge does not
   // get one.
-  const { requests: consentRequests } = useConsentInbox(workspace?.id);
+  //
+  // ⚠ OUTBOUND ONLY (Samuel, 2026-08-22). The badge counted BOTH directions of
+  // the consent inbox while an INBOUND ask was something the operator answered;
+  // that lane is retired — the transcript card's Decline / Launch agent pair,
+  // the thread's awaiting strip and the Inbox pane's inbound rows are all
+  // deleted. A nav badge is a claim that something is ACTIONABLE, and an inbound
+  // row now leads to no surface that can act on it. Same slice the channels
+  // page's own sidebar badge takes.
+  const { outbound: consentRequests } = useConsentInbox(workspace?.id);
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Seeded to the gear's section: Escape-then-reopen must not flash the wrong pane.
@@ -120,8 +128,9 @@ export function AppShellLayout() {
           <AppSidebarCore
             workspaceSegment={segment}
             activeSection={activeSectionFromPath(location.pathname)}
-            // The badge counts pending consent requests, which arrive over the
-            // consent realtime signal (bridge-fed here) and the poll above.
+            // The badge counts drafts this operator's own agent is holding for
+            // their Send, which arrive over the consent realtime signal
+            // (bridge-fed here).
             consentCount={consentRequests.length}
             onOpenSettings={openSettings}
             Link={RouterLink}

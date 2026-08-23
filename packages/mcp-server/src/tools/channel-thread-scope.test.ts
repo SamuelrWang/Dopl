@@ -135,9 +135,14 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
     expect(text).not.toMatch(/since=\d/);
     expect(text).not.toContain("the channel's own highest is 91");
-    // Thread max stays as DISPLAY only.
-    expect(text).toContain("Highest seq shown: 44");
-    expect(text).toContain("THIS READ DID NOT ADVANCE A CHANNEL-WIDE CURSOR");
+    // ⚠ AND NO SUMMARY SEQ EITHER (2026-08-22, Samuel). The trailer used to
+    // print `Highest seq shown: 44` and then spend four sentences forbidding it;
+    // a number wrapped in a warning is what survives a skim, so the number is
+    // gone. Asserted on the TRAILER, not the whole text: each message line still
+    // carries its own `**#44**`, and hiding those would hide the transcript.
+    const trailer = text.slice(text.lastIndexOf("\n\n"));
+    expect(trailer).not.toMatch(/\d/);
+    expect(text).toContain("NO CURSOR FROM THIS READ");
     expect(text).toContain("drop `thread`");
     // ⚠ Nothing may suggest passing a thread INTO an await.
     expect(text).not.toMatch(/op="await"[^)]*thread/);

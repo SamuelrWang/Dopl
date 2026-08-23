@@ -293,17 +293,20 @@ test("EVERY decision site calls submitDecision, and none still calls patchDecisi
     .sort();
   assert.deepEqual(
     callers,
-    ["session-windowless.js", "trigger.js"],
+    ["session-windowless.js"],
     "a new decision surface is a new way for a decision to vanish silently — review it here " +
       "rather than updating this list reflexively"
   );
 
-  const T = M("trigger.js");
   const WL = M("session-windowless.js");
-  // The notification Allow (inbound) carries the channel name so the copy can say WHICH
-  // request was lost.
-  assert.match(T, /consent\.submitDecision\(entry\.workspaceId, created\.rowId, 'allow', \{/);
-  assert.match(T, /channelName: entry\.channel\.name/);
+  // ⚠ AND IT SHRANK BY ONE MORE ON 2026-08-22 (Samuel's INBOUND CONSENT RETIREMENT). `trigger.js`
+  // held the third site — the notification ALLOW on an inbound row, carrying the channel name so
+  // the failure copy could say WHICH request was lost:
+  //     consent.submitDecision(entry.workspaceId, created.rowId, 'allow', { channelName: … })
+  // There is no inbound row and no Allow. The ask is a notification whose button LAUNCHES a
+  // session directly, so there is no decision that can fail to land and nothing for F-067's
+  // signal to report. ⚠ THE CENSUS IS NOW ONE FILE, and that is exactly when a census is most
+  // worth keeping: a SECOND surface reappearing is the event this case exists to catch.
   // The WINDOWLESS outbound gate — the surface that replaced the pre-consent window's
   // Accept / Deny, and now also the outbound REVIEW the headless lane used to raise. Its Send
   // carries the channel name; its cancel path (the tool call this row was gating is gone)

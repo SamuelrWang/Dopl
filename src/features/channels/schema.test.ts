@@ -19,7 +19,6 @@ import {
   ChannelMemberRemoveSchema,
   ConsentCreateSchema,
   ConsentDecisionSchema,
-  TrustMutateSchema,
   PresenceHeartbeatSchema,
 } from "./schema";
 
@@ -294,68 +293,82 @@ describe("member add / remove schemas", () => {
   });
 });
 
+/**
+ * ⚠ EVERY CASE HERE USED TO BE WRITTEN AGAINST `kind:"inbound"` and is rewritten
+ * against `outbound` (2026-08-22, Samuel). The inbound arm of the discriminated
+ * union is DELETED with the lane, so it is no longer a shape the schema knows
+ * about — a rejected value, not an accepted one with a guard behind it.
+ */
 describe("ConsentCreateSchema", () => {
   it("requires channelId (uuid) + kind", () => {
     expect(
-      ConsentCreateSchema.safeParse({ channelId: UUID, kind: "inbound" }).success
+      ConsentCreateSchema.safeParse({ channelId: UUID, kind: "outbound" }).success
     ).toBe(true);
-    expect(ConsentCreateSchema.safeParse({ kind: "inbound" }).success).toBe(false);
+    expect(ConsentCreateSchema.safeParse({ kind: "outbound" }).success).toBe(false);
     expect(
-      ConsentCreateSchema.safeParse({ channelId: "nope", kind: "inbound" }).success
+      ConsentCreateSchema.safeParse({ channelId: "nope", kind: "outbound" }).success
     ).toBe(false);
   });
 
-  it("kind: inbound|outbound only", () => {
+  it("kind: OUTBOUND only — `inbound` is refused at the schema (2026-08-22)", () => {
+    // ⚠ THE RETIREMENT, PINNED AT THE DOOR. Samuel: "remove all the stuff about
+    // declining and approving of threads". The arm is deleted rather than
+    // accepted-then-thrown, so the refusal is the route's ordinary 400 and there
+    // is no second place that has to stay in step. A regression here would
+    // silently re-open a lane with no surface left to decide it.
+    expect(ConsentCreateSchema.safeParse({ channelId: UUID, kind: "inbound" }).success).toBe(false);
     expect(ConsentCreateSchema.safeParse({ channelId: UUID, kind: "outbound" }).success).toBe(true);
     expect(ConsentCreateSchema.safeParse({ channelId: UUID, kind: "sideways" }).success).toBe(false);
+    // ⚠ And `kind` is still REQUIRED, not defaulted: the desktop sends it, and a
+    // default would let a body that named nothing look like a valid outbound.
+    expect(ConsentCreateSchema.safeParse({ channelId: UUID }).success).toBe(false);
   });
 
   it("summary caps at 200 (renders on the card); defaults empty", () => {
-    expect(ConsentCreateSchema.parse({ channelId: UUID, kind: "inbound" }).summary).toBe("");
+    expect(ConsentCreateSchema.parse({ channelId: UUID, kind: "outbound" }).summary).toBe("");
     expect(
-      ConsentCreateSchema.safeParse({ channelId: UUID, kind: "inbound", summary: "a".repeat(200) }).success
+      ConsentCreateSchema.safeParse({ channelId: UUID, kind: "outbound", summary: "a".repeat(200) }).success
     ).toBe(true);
     expect(
-      ConsentCreateSchema.safeParse({ channelId: UUID, kind: "inbound", summary: "a".repeat(201) }).success
+      ConsentCreateSchema.safeParse({ channelId: UUID, kind: "outbound", summary: "a".repeat(201) }).success
     ).toBe(false);
   });
 
   it("messageSeq: a real positive integer — NOT coerced (L-1)", () => {
-    const parsed = ConsentCreateSchema.parse({ channelId: UUID, kind: "inbound", messageSeq: 42 });
+    const parsed = ConsentCreateSchema.parse({ channelId: UUID, kind: "outbound", messageSeq: 42 });
     expect(parsed.messageSeq).toBe(42);
     // ⚠ JSON body, not a query string: `z.coerce.number()` turns all of these
     // into valid-looking seqs (null/""/[] → 0, true → 1).
     for (const junk of [null, "", [], true, "42", 0, -1, 1.5]) {
       expect(
-        ConsentCreateSchema.safeParse({ channelId: UUID, kind: "inbound", messageSeq: junk }).success,
+        ConsentCreateSchema.safeParse({ channelId: UUID, kind: "outbound", messageSeq: junk }).success,
         `messageSeq ${JSON.stringify(junk)} must be rejected`
       ).toBe(false);
     }
   });
 
-  it("discriminated union: proposedReply is outbound-only (L-3)", () => {
+  it("proposedReply rides the outbound review, capped at the body length (L-3)", () => {
     const outbound = ConsentCreateSchema.parse({
       channelId: UUID,
       kind: "outbound",
       messageSeq: 7,
       proposedReply: "here you go",
     });
-    expect(outbound.kind === "outbound" && outbound.proposedReply).toBe("here you go");
-    // Inbound is a request to RUN, not a drafted reply — field dropped, never
-    // carried into proposed_reply.
-    const inbound = ConsentCreateSchema.parse({
-      channelId: UUID,
-      kind: "inbound",
-      messageSeq: 7,
-      proposedReply: "pre-seeded",
-    });
-    expect("proposedReply" in inbound).toBe(false);
+    expect(outbound.proposedReply).toBe("here you go");
+    expect(
+      ConsentCreateSchema.safeParse({
+        channelId: UUID,
+        kind: "outbound",
+        proposedReply: "x".repeat(16_001),
+      }).success
+    ).toBe(false);
   });
 
-  it("messageSeq is accepted on BOTH kinds (it is the de-dupe key)", () => {
+  it("messageSeq is optional — it is the de-dupe key, not a requirement", () => {
     expect(
       ConsentCreateSchema.parse({ channelId: UUID, kind: "outbound", messageSeq: 9 }).messageSeq
     ).toBe(9);
+    expect(ConsentCreateSchema.parse({ channelId: UUID, kind: "outbound" }).messageSeq).toBeUndefined();
   });
 });
 
@@ -379,13 +392,9 @@ describe("ConsentDecisionSchema", () => {
   });
 });
 
-describe("TrustMutateSchema", () => {
-  it("trustedUserId must be a uuid", () => {
-    expect(TrustMutateSchema.safeParse({ trustedUserId: UUID }).success).toBe(true);
-    expect(TrustMutateSchema.safeParse({ trustedUserId: "x" }).success).toBe(false);
-    expect(TrustMutateSchema.safeParse({}).success).toBe(false);
-  });
-});
+// ⚠ `TrustMutateSchema`'s block STOOD HERE AND IS DELETED (2026-08-22) with the
+// schema, the two `/api/channels/trust` routes and the `agent_trust_rules`
+// table. Standing consent only ever auto-allowed an INBOUND request.
 
 describe("PresenceHeartbeatSchema", () => {
   it("status: optional, closed enum matching the DB CHECK (L-7)", () => {

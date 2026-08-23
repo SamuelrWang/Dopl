@@ -21,7 +21,6 @@ import {
   ChannelAgentSettingsView,
   type ChannelAgentSettingsViewProps,
 } from "./settings-agent";
-import { member as makeMember } from "./test-fixtures";
 import { DEFAULT_PERMISSION_PRESET } from "../../lib/permission-modes";
 
 /** The desktop modules these claims are ABOUT. ⚠ Off `process.cwd()` (the vitest
@@ -69,10 +68,6 @@ export function agentView(over: Partial<ChannelAgentSettingsViewProps> = {}) {
       postureBusy={false}
       onChangePosture={noop}
       folder={null}
-      otherMembers={[makeMember({ userId: "u-alice", displayName: "Alice" })]}
-      trustedIds={new Set()}
-      trustBusyIds={new Set()}
-      onToggleTrust={noop}
       {...over}
     />
   );

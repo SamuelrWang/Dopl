@@ -95,7 +95,7 @@ handoff) {
     // ⚠ HANDOFF IS A REQUEST, NOT AN OUTCOME. It is a metadata STAMP a desktop
     // listener may later act on; `session-dispatch.maybeOpenRequesterSession`
     // silently answers false when window mode is off, when `requesterTaskOpen`
-    // refuses, when the window budget is spent, and (commonly) when the
+    // refuses, when the concurrency ceiling is spent, and (commonly) when the
     // operator's desktop is not running. No observation is available here — the
     // decision happens minutes later on another machine and never reports back.
     // So: state the request as a request, keep do-not-race as the default (two
@@ -108,9 +108,9 @@ handoff) {
             : String(created.openingSeq);
         return (0, respond_1.ok)([
             `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}, WITH HANDOFF.`,
-            `The handoff was REQUESTED, not confirmed. The thread is stamped for your operator's Dopl app to pick up and drive; this server hands the request off and never learns whether a window opened, and the app opens none if it is not running, if session windows are off, or if its window budget is spent.`,
+            `The handoff was REQUESTED, not confirmed. The thread is stamped for your operator's Dopl app to pick up and drive; this server hands the request off and never learns whether a session started, and the app starts none if it is not running or if it is already at its concurrency ceiling.`,
             `So: do NOT arm op="await" yet — if a session DID open, it owns the reply, and a second watcher here would race it for the same message. Check instead with dopl_channel(op="get_thread", channel="${ch.id}", thread="${thread.id}") — a session that took the thread shows activity on it.`,
-            `IF NOTHING PICKS IT UP (no progress and no reply after a few minutes), the handoff did not land, and nobody is waiting on ${member.label}. Say so to your operator — they can open the thread in the Dopl app — or drive the exchange yourself from here with dopl_channel(op="await", channel="${ch.id}", since=${since}).`,
+            `IF NOTHING PICKS IT UP (no progress and no reply after a few minutes), the handoff did not land, and nobody is waiting on ${member.label}. Say so to your operator — they can open the thread in the Dopl app and launch an agent on it — or drive the exchange yourself from here with dopl_channel(op="await", channel="${ch.id}", since=${since}).`,
         ].join("\n"));
     }
     const cursor = created.openingSeq === null

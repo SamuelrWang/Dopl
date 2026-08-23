@@ -66,7 +66,12 @@ export function channelMentionsPath(channelId: string): string {
 }
 
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
-export const CHANNEL_TRUST_PATH = "/api/channels/trust";
+// ⚠ `CHANNEL_TRUST_PATH` STOOD HERE AND IS DELETED (Samuel, 2026-08-22). Its one
+// reader (`use-trust-rules.ts`) and its one writer (the `trust` mutation in
+// `use-channel-preference-writes.ts`) went with the inbound consent lane the
+// "Always allow" roster was standing consent for. The ROUTE is being deleted
+// server-side in the same wave; a client path constant left standing is how a
+// deleted endpoint gets called again.
 
 export const channelKeys = {
   /** The workspace channel list. `.all` covers both archived variants. */
@@ -80,7 +85,6 @@ export const channelKeys = {
   mentions: (channelId: string): ApiResourceKeys =>
     apiResource(channelMentionsPath(channelId)),
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
-  trust: (): ApiResourceKeys => apiResource(CHANNEL_TRUST_PATH),
 };
 
 /** The exact query params `useChannels` reads with. */

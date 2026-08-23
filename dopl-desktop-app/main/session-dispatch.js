@@ -43,6 +43,42 @@
 // (`session-seed.frameContinuation`), and the ADDRESSING LAW that decides whether a message may
 // START an agent is untouched — `targeting.classify` is not consulted here and is not changed.
 //
+// ── THE SPAWN-IDLE WAKE RULE (2026-08-22, Samuel's ruling) ────────────────────────────────
+//
+// ⚠ ONE CLASS OF SESSION IS EXEMPT FROM THE FAN-OUT, AND IT IS EXEMPT UNTIL SOMEBODY DIRECTS IT.
+// A SPAWN-IDLE agent (`sessions:launch` with `idle: true` — the New Agent button) is REGISTERED
+// and has started no `claude` child at all: it holds a slot, a pill and an @-mention address, and
+// `wakeEffects` starts its query on the first fed turn. Under the plain fan-out that first turn
+// was whatever happened to be said next in the thread — so an agent an operator parked "ready"
+// woke up on a passing remark between two other people, spent its launch on it, and answered
+// something nobody asked it.
+//
+// SO AN UNWOKEN SPAWN-IDLE SESSION IS FED NOTHING. It wakes on exactly two things:
+//   (a) A 1:1 MESSAGE from its own operator — `sessions:message` → `session-reopen.messageByTask`
+//       → the reducer's `steer`, which is already a wake trigger and does not come through this
+//       file at all.
+//   (b) A THREAD OR MAIN-ROOM MESSAGE THAT @-MENTIONS ITS AGENT ID, from ANY author. ⚠ ANY: the
+//       operator, a peer, or a PEER'S AGENT. That is Samuel's ruling verbatim ("user tells peer:
+//       I'm going to wake another agent, you direct it"), and it is safe for the same reason the
+//       parse itself is: an agent id is minted on this machine and known to no server, so a peer
+//       can only name one they were told, and the parse is intersected with the ids actually live
+//       on this thread.
+//
+// ⚠ EVERYTHING ELSE IS DROPPED, NOT QUEUED. There is no backlog to replay: the agent reads the
+// thread ON DEMAND once directed, and that read costs no permission (`session-profiles.js ›
+// isOwnChannelRead` scopes by channel only, and the windowless message floor auto-allows it), so
+// nothing is lost by not pushing it. Queueing would only defer the same problem — a woken agent
+// would open with a pile of context nobody addressed to it.
+//
+// ⚠ THE FLAG IS ITS OWN (`s.awaitingDirective`), NOT AN OVERLOAD OF `freshFraming`. That marker
+// answers "does this turn carry the full framing", is consumed by `session-seed.takeFraming`, and
+// is one-shot; this answers "may anything reach this agent yet", is read on every message, and is
+// cleared by the WAKE rather than by the framing. Two questions, two fields — and the session
+// engine clears this one at its single dispatch funnel so BOTH wake lanes clear it identically.
+//
+// ⚠ AND IT IS BELT-AND-BRACES. `session-gate.js › feedInbound` refuses the same message again,
+// because this file is not the only thing that could ever call it.
+//
 // ⚠ SELF-FILTERING IS BY client_msg_id, NOT BY AUTHOR. Every agent on this machine posts under
 // the OPERATOR'S OWN account with `authorKind: 'agent'`, so authorship cannot tell three of my
 // agents apart, nor tell any of them from me. `session-outbound-tag.js` stamps each post with
@@ -115,6 +151,21 @@ function wroteIt(s, m) {
   return s.ownPostIds.has(String(id));
 }
 
+// TRUE iff this session is a SPAWN-IDLE agent nobody has directed yet. ⚠ `=== true` ONLY, so a
+// session object that predates the flag — or any shape that simply does not carry it — keeps the
+// plain fan-out behaviour. A wake rule that fails toward "feed it" is the safe direction here:
+// the failure it guards is a wasted launch, not a leak.
+function unwoken(s) {
+  return !!(s && s.awaitingDirective === true);
+}
+
+// May this message reach this session at all? The fan-out's ONE hold-back, and it is not a
+// consent decision: an unwoken spawn-idle agent takes ONLY a message that names it.
+function mayFeed(s, addressing) {
+  if (!unwoken(s)) return true;
+  return !!(addressing && addressing.me === true);
+}
+
 function feedLiveSession(entry, m, myUserId) {
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
   // session at all. Safe only because the server refuses task_* kinds from an agent
@@ -140,8 +191,13 @@ function feedLiveSession(entry, m, myUserId) {
   const addressed = mentionedAgentIds(m.body, live.map((s) => String(s.agentId || '')));
   const authorName = authorLabel(m); // the AUTHOR, not just the account — see authorLabel
   let fed = 0;
+  let held = 0; // spawn-idle agents nobody has directed yet — see THE SPAWN-IDLE WAKE RULE above
   for (const s of live) {
     if (wroteIt(s, m)) continue; // never feed a session its own post back
+    // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. Framing only —
+    // EXCEPT for the one session class below, where it is also the wake key.
+    const addressing = addressingFor(s.agentId, addressed);
+    if (!mayFeed(s, addressing)) { held += 1; continue; }
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
       taskId: taskId,
@@ -149,18 +205,22 @@ function feedLiveSession(entry, m, myUserId) {
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
       authorName: authorName,
-      // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. Framing only.
-      addressing: addressingFor(s.agentId, addressed),
+      addressing: addressing,
     });
     if (ok) fed += 1;
   }
-  if (fed) {
+  if (fed || held) {
+    // ⚠ THE HELD COUNT IS ON THE LINE ON PURPOSE. A spawn-idle agent that never wakes looks
+    // identical, from the outside, to one this machine failed to route to — and the whole point
+    // of the rule is that the drop is DELIBERATE. Without this the only evidence of a working
+    // hold-back is an absence.
     diag('fan-out', entry.channel.id.slice(0, 8), 'seq', m.seq,
-      'fed', fed, 'of', live.length, addressed.length ? `addressed:${addressed.join(',')}` : 'unaddressed');
+      'fed', fed, 'of', live.length, held ? `held:${held} (awaiting a directive)` : '',
+      addressed.length ? `addressed:${addressed.join(',')}` : 'unaddressed');
   }
   return fed > 0;
 }
 
 // ─── END SESSION-DISPATCH-PURE ─────────────────────────────────────────────────
 
-module.exports = { feedLiveSession, mentionedAgentIds, addressingFor };
+module.exports = { feedLiveSession, mentionedAgentIds, addressingFor, mayFeed };

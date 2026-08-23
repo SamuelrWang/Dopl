@@ -83,6 +83,12 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       //     fail-closed (`manual` / `ask`), exactly as `session-io.js › grantArgs` treats it.
       toolMode: "manual",
       messageMode: "ask",
+      // ⚠ WIDENED AGAIN 2026-08-22 by ONE field, `model` (Samuel's model-selection ruling), and
+      // the fixture's value shows the PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats
+      // the operator's pick, because 'default' means "whatever the CLI chose" and the CLI is the
+      // one that knows. LOCAL-only like `detail` and the two axes — `session-state-push.js ›
+      // reportRow` picks its columns by name, so it never reaches `channel_sessions`.
+      model: "claude-haiku-4-5",
       channelName: "general",
       threadTitle: "Ship the thing",
       contextUsed: 84000,

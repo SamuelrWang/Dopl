@@ -157,11 +157,21 @@ test("re-seeing the same message is idempotent, and a re-address wins", () => {
 // behalf at all — see the second excision block, at the case below.
 
 test("trigger.js: the responder spawn context carries the thread id (legacy ids included)", () => {
+  // ⚠ REPOINTED 2026-08-22, SAME INVARIANT. It used to read `taskId: rec.taskId || taskId` off a
+  // slice bounded by `toolProfile: rec.toolProfile` — both of those named a PERSISTED consent
+  // record, and the inbound consent lane is deleted (Samuel's ruling; `main/trigger.js`'s
+  // header). The id is resolved once, from the message in hand, and the SAME binding rides both
+  // the engine's `taskId` and the spawn `context` the framing reads.
   const src = M("trigger.js");
-  const call = src.slice(src.indexOf("sessionEngine.launchResponderSession({"), src.indexOf("toolProfile: rec.toolProfile"));
-  assert.match(call, /taskId: rec\.taskId \|\| taskId/, "the same id the engine runs the session under");
+  const call = src.slice(
+    src.indexOf("sessionEngine.launchResponderSession({"),
+    src.indexOf("startModes: { tools: 'manual', messages }")
+  );
+  assert.match(call, /^\s*taskId,$/m, "the engine runs the session under the resolved id");
+  assert.match(call, /channelId: entry\.channel\.id, workspaceId: entry\.workspaceId, taskId,/,
+    "…and the spawn CONTEXT carries the same one, which is what the framing reads");
   // taskIdFor is what resolves that id, and it falls back to the legacy shape.
-  assert.match(src, /return rec\.taskId \|\| `task-\$\{rec\.channelId\}-\$\{rec\.seq\}`;/);
+  assert.match(src, /return targeting\.firstClassTaskId\(m\) \|\| `task-\$\{entry\.channel\.id\}-\$\{m\.seq\}`;/);
 });
 
 // ⚠ THE SECOND SPAWN SITE IS GONE (2026-08-20, F-228). A test stood here —
@@ -182,50 +192,20 @@ test("trigger.js: the responder spawn context carries the thread id (legacy ids 
 // tag — is pinned by the two tests either side of this block. Those are the paths a legacy id
 // can still travel.
 
-test("every terminal echo tags through taskIdFor(rec), never the raw rec.taskId", () => {
-  // ⚠ REWRITTEN DOWN, NOT REMOVED (2026-08-20, Samuel's ruling; INVARIANTS §14). This case had
-  // two halves and the FIRST is deleted: it sliced `trigger.js › outboundApproved` and pinned
-  // THREE tags inside it — the reply itself (`postResult(entry, m, reply, { taskId: taskIdFor(rec) })`),
-  // its `task_finished`, and the post-failed `task_failed` — plus that none of the three read
-  // `rec.taskId` raw. That resolver posted the reply the `claude -p` lane had drafted, once a
-  // human clicked Send on its review row: the DESKTOP posting on the agent's behalf, because a
-  // headless run hands back a string and exits. Deleted with the lane.
-  //
-  // ⚠ THE INVARIANT IS UNCHANGED AND THE SECOND HALF STILL CARRIES IT. `rec.taskId` is unset for
-  // a LEGACY inbound — it was `toOutbound` that used to backfill it, and that is deleted too —
-  // so reading it directly is exactly how an echo ends up untagged, groups into nothing the
-  // requester is watching, and reaches A's machine as a brand-new request. Every surviving
-  // terminal echo lives in `trigger-outcomes.js` and goes through the injected `taskIdFor`.
-  //
-  // ⚠ AND THE REPLY ITSELF IS NOT ORPHANED BY THE EXCISION — it moved INTO the session. A
-  // windowless agent posts its OWN bytes through the pre-approved `dopl_channel` tool when its
-  // held call is released, and the thread id reaches it through the SPAWN CONTEXT, which is what
-  // the case above this block pins. Nothing writes on the agent's behalf any more, so there is
-  // no desktop-side reply tag left in trigger.js to assert.
-  const src = M("trigger.js");
-  const moved = M("trigger-outcomes.js");
-  assert.equal(moved.match(/rec\.taskId/g), null, "trigger-outcomes.js must not read rec.taskId");
-  assert.equal((moved.match(/taskIdFor\(rec\)/g) || []).length, 3, "cancelled + denied + interrupted");
-  // ⚠ THE COUNT IS THE PIN. `outboundCancelled` is one of those three and NOW HAS NO CALLER —
-  // its only dispatcher was the watcher's `await-outbound` expiry arm, deleted with the phase.
-  // It is deliberately kept (approve-out itself is alive; only the watcher phase died), so the
-  // count must stay 3 rather than quietly becoming 2 when somebody prunes it as dead.
-  assert.match(moved, /async function outboundCancelled\(rec\)/);
-
-  // trigger.js's own remaining reads of `rec.taskId` are ALL the same derivation: `taskIdFor`
-  // itself, plus three inline `rec.taskId || taskId` spellings where `taskId` is already
-  // `taskIdFor(rec)`. None can produce an untagged post. Pinned by exclusion so a BARE
-  // `rec.taskId` cannot slip in beside them — CODE only, since the comments name the anti-pattern
-  // in order to warn about it.
-  const code = src.split("\n")
-    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
-    .join("\n");
-  const raws = code.match(/rec\.taskId(?! \|\| (?:taskId|`task-))/g) || [];
-  assert.deepEqual(raws, [], `trigger.js reads rec.taskId without the fallback: ${raws}`);
-  assert.match(src, /return rec\.taskId \|\| `task-\$\{rec\.channelId\}-\$\{rec\.seq\}`;/,
-    "…and taskIdFor is still the one place that resolves it");
-});
+// ⚠ "every terminal echo tags through taskIdFor(rec), never the raw rec.taskId" STOOD HERE AND
+// IS DELETED (2026-08-22, Samuel's INBOUND CONSENT RETIREMENT). It pinned that the three
+// surviving terminal echoes in `trigger-outcomes.js` — `outboundCancelled`, `inboundDenied`,
+// `onInterrupted` — each tagged through the injected `taskIdFor(rec)` rather than reading
+// `rec.taskId` raw, because `rec.taskId` is UNSET for a legacy inbound and an untagged echo
+// reaches the requester's machine as a brand-new request. All three are deleted with the
+// consent-watcher records they were resolvers for; `trigger-outcomes.js` posts only the calm
+// `session_ended` note now, and that note derives its own targets from the engine's flat
+// lifecycle info (`echoTargets`), never from a record.
+//
+// ⚠ THE INVARIANT IS NOT ORPHANED AND ITS LAST LIVE CARRIER IS THE CASE ABOVE. "Every outbound
+// tag names the thread" now has exactly one path on this machine: the SPAWN CONTEXT, read by
+// `prompt-framing.deliverySection`, so the agent posts its own bytes already tagged. The
+// legacy-id half of the rule is pinned there too, on `taskIdFor`'s own fallback.
 
 // ── the bound, and the direction it fails in ─────────────────────────────────────
 

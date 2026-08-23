@@ -111,6 +111,13 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
 // the moment the turn is built (`session-engine.js › noteSiblings`), and an agent may spawn a
 // second later. Saying "possibly others" when the list is empty is the honest version; claiming
 // "you are the only one" would be a fact this process cannot promise.
+//
+// ⚠ THE UNADDRESSED DEFAULT WAS FLIPPED ON 2026-08-22 (Samuel's ruling). The deleted sentence,
+// "So is a message that mentions no agent id at all, unless a sibling has already claimed it",
+// defaults to ACT with the check hung off a subordinate clause, and no agent ran the check:
+// across 40 real messages in live testing the protocol fired ZERO times and every sibling
+// answered everything. The default is STAND AND LOOK now, and the claim is an ACT to post BEFORE
+// working. COORDINATE IN THE OPEN survives beneath it as the mechanism, not as the protocol.
 function agentIdentityFraming(ctx) {
   const c = ctx || {};
   const mine = AGENT_ID_RE.test(String(c.agentId || '')) ? String(c.agentId) : '';
@@ -125,8 +132,10 @@ function agentIdentityFraming(ctx) {
     `YOUR AGENT ID IS ${mine}.`,
     `- Messages @-mentioning another agent id are not addressed to you. Do not act on them.`,
     `  You may use them as context for what is happening around you.`,
-    `- A message @-mentioning ${mine} is for you. So is a message that mentions no agent id at`,
-    `  all, unless a sibling has already claimed it.`,
+    `- A message @-mentioning ${mine} is for you.`,
+    `- A message that names NO agent id is NOT automatically yours. Read the thread and check`,
+    `  whether a sibling has already answered it or claimed it; if one has, stand down. If you`,
+    `  ARE going to act on it, CLAIM IT IN ONE SHORT LINE first, then do the work.`,
     `- ${who} Some of them work individual threads and some watch the channel's main room; you`,
     `  do not see everything they see.`,
     `- COORDINATE IN THE OPEN: briefly agree who acts. If a task is already claimed by a`,
@@ -256,18 +265,26 @@ function deliveryCall(ctx) {
 // ⚠ attended-prompt.js KEPT its ToolSearch order, and had to — it ran in the operator's own
 // unconstrained Claude Code. That module is deleted (2026-08-20); the asymmetry is recorded
 // because it is the one case where an ordered ToolSearch was right, not because it is live.
-// unconstrained Claude Code. prompt-profile-drift.test.mjs pins the two apart against the REAL
-// deny lists.
+// prompt-profile-drift.test.mjs pins the two apart against the REAL deny lists.
 // ⚠ What IS load-bearing: never report the tool missing. Otherwise an agent posts "CONFIRMED:
 // I do not have the mcp__dopl__dopl_channel tool" THROUGH the tool it says is absent.
 //
 // The scoped thread read: a fresh responder spawn carries NONE of the thread it is answering
 // (the channel-history seed is wired only for a recreated/reopened shell), and op "read" takes
 // a `thread` FILTER (packages/mcp-server/src/tools/channel-schema.ts), so one scoped call is
-// the whole seed. Printed only when channel + workspace + thread are all known, and never for
-// the requester (that session opened the thread and drives it).
+// the whole seed. Printed only when channel + workspace + thread are all known.
 // ⚠ STATED ONCE per turn: emitted by the turn builders above the delivery section, so no
 // delivery branch can print a second copy.
+// ⚠ THE WOKEN LANE READS TOO (2026-08-22, Samuel's ruling), BY THE OPPOSITE ROUTE TO THE ONE it
+// assumed: it put a spawn-idle agent on the RESPONDER side. Measured, its only producer is
+// `session-ipc-ops.js › sessions:launch` calling `engine.launchRequesterSession({idle:true})`,
+// main's ONLY caller of it, so a woken New Agent is a 'requester' and `side !== 'requester'` was
+// itself what silenced the read. `scope === 'thread'` discriminates because that launch is also
+// main's only producer of `context.scope`; a scope-less requester is the older shape that DID
+// open its own thread and still gets none (`prompt-tool-name.test.mjs` pins that half).
+// ⚠ AND THE READ IS NO LONGER "THE ONLY WAY": that clause was false (an UNSCOPED own-channel
+// read works from spawn zero) and agents took it literally, manufacturing amnesia by refusing to
+// look elsewhere. The imperative survives; the copy now says the read REPEATS.
 function firstActions(side, ctx) {
   const lines = [
     `FIRST ACTIONS THIS TURN, before you plan or answer anything:`,
@@ -281,13 +298,14 @@ function firstActions(side, ctx) {
   const channelId = idToken(ctx && ctx.channelId);
   const workspaceId = idToken(ctx && ctx.workspaceId);
   const taskId = idToken(ctx && ctx.taskId);
-  if (side !== 'requester' && channelId && workspaceId && taskId) {
+  // JOINING (see above) = not the requester, OR a woken New Agent on a thread it did not open.
+  if ((side !== 'requester' || (ctx && ctx.scope) === 'thread') && channelId && workspaceId && taskId) {
     lines.push(
       `- Your SECOND action is to read the exchange you are joining: mcp__dopl__dopl_channel`,
       `  with op "read", channel "${channelId}", workspace "${workspaceId}", thread "${taskId}".`,
       `  That read is filtered to this one thread. You start with none of its earlier messages`,
-      `  in context, so it is the only way to see what has already been said. Do it before you`,
-      `  write your reply.`
+      `  in context, so read it before you write anything, and read it again whenever you need`,
+      `  to know what has been said since.`
     );
   }
   return lines;

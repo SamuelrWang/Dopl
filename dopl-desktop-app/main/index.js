@@ -44,7 +44,10 @@ const quitGuard = require('./quit-guard');
 
 const store = new Store();
 let mainWindow = null;
-let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
+// ⚠ `latestPendingSegment` STOOD HERE AND IS DELETED (2026-08-22). It remembered the newest
+// pending INBOUND consent request's workspace segment so the tray "Pending: N" item could open
+// straight to it. That lane is deleted (`main/trigger.js`'s header carries the ruling): an ask
+// is a notification whose own body click already navigates to the thread.
 
 // `isAppOrigin` / `maybeBeginAuth` were destructured here for `wireNavigation`, which is
 // deleted (see below). index.js no longer opens anything externally, so the M4 sign-in CSRF
@@ -190,12 +193,7 @@ if (!gotLock) {
       // reloads the app (which resolves to /login) and re-reconciles the listener.
       onSignIn: () => authActions.beginSignIn({ showWindow: showMainWindow }),
       onSignOut: () => { void spaSignOut({ auth, authTokens, listener, showMainWindow }); },
-      // Round B: clicking "Pending: N" opens the app to the most-recent pending
-      // channel (reusing the notification-click open path), else just the window.
-      onPending: () => {
-        if (latestPendingSegment) navigateToChannels(latestPendingSegment);
-        else showMainWindow();
-      },
+      // ⚠ `onPending` STOOD HERE AND IS DELETED (2026-08-22) with the tray item it opened.
       // ⚠ The windowMode toggle and the "Sessions" submenu accessors are GONE with
       // window mode (2026-08-20, settings.js header) — no session window is ever minted.
       // Round C "Channel folders": accessors read fresh on every rebuild; the chosen
@@ -322,16 +320,12 @@ if (!gotLock) {
     // Start the Channels listener; it drives the tray status label. The
     // openChannel handler lets a clicked notification open + navigate the window
     // — since Phase 9 it is handed (segment, channelId) and lands ON the channel,
-    // which is the "windowing inverts" ruling's whole focus-the-app half;
-    // onPending feeds the tray "Pending: N" count + remembers the newest pending
-    // channel so the tray item can open straight to it (Round B — segment only,
-    // so it lands on the page and the Inbox badge takes it from there).
+    // which is the "windowing inverts" ruling's whole focus-the-app half.
+    // ⚠ THE SECOND HANDLER, `onPending`, IS DELETED (2026-08-22): it fed the tray "Pending: N"
+    // count and remembered the newest pending channel, and its only producer was the inbound
+    // consent watcher.
     listener.start((status, meta) => tray.update(status, meta), {
       openChannel: navigateToChannels,
-      onPending: ({ count, segment }) => {
-        if (segment) latestPendingSegment = segment;
-        tray.setPendingCount(count);
-      },
     });
 
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;

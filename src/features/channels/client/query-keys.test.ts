@@ -2,10 +2,11 @@
  * The drift guard between the channels READS and the channels WRITES.
  *
  * `client/query-keys.ts` is where an optimistic write learns which cache entry
- * to patch. Four of the read hooks it has to agree with are not built from it
- * (`use-channels`, `use-channel-threads`, `use-trust-rules`,
- * `use-consent-inbox` each hold their path as a literal), and a path that
- * drifts by one character makes every write against it a silent no-op: the
+ * to patch. Some of the read hooks it has to agree with are not built from it
+ * (`use-channels` and `use-consent-inbox` each hold their path as a literal —
+ * `use-trust-rules` was a third until 2026-08-22, when it was DELETED with the
+ * inbound consent lane), and a path that drifts by one character makes every
+ * write against it a silent no-op: the
  * patch lands in an entry nobody observes, the screen does not move, and no
  * test fails. So the literals are read off those files here, and this is the
  * test that fails when one of them moves.
@@ -18,7 +19,6 @@ import { apiQueryKey } from "@/shared/api/query-keys";
 import { MAX_MESSAGE_LIMIT } from "../constants";
 import {
   CHANNEL_CONSENT_PATH,
-  CHANNEL_TRUST_PATH,
   channelKeys,
   channelListParams,
   channelMessagesParams,
@@ -41,9 +41,6 @@ describe("channel paths", () => {
 
   it("agrees with the read hooks that hold their path as a literal", () => {
     expect(source("../hooks/use-channels.ts")).toContain(`"${channelsPath()}"`);
-    expect(source("../hooks/use-trust-rules.ts")).toContain(
-      `"${CHANNEL_TRUST_PATH}"`
-    );
     expect(source("../hooks/use-consent-inbox.ts")).toContain(
       `"${CHANNEL_CONSENT_PATH}"`
     );

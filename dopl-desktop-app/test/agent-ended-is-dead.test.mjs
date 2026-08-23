@@ -1,7 +1,8 @@
 // ENDED IS DEAD: NO REVIVAL, ON ANY PATH (2026-08-22, Samuel's ruling).
 //
 // ⚠ THE PROPERTY IS ALREADY TRUE AND IT IS TRUE BY CONSTRUCTION, WHICH IS EXACTLY WHY IT NEEDS
-// PINNING. `session-engine.js › settle` does `sessions.delete(s.key)`, and EVERY wake path in
+// PINNING. `session-teardown.js › settle` (in `session-engine.js` until the 2026-08-22 §2 split)
+// does `sessions.delete(s.key)`, and EVERY wake path in
 // the tree resolves against that one registry — so an ended agent is unreachable not because
 // five call sites each check for it, but because there is nothing left to find. That is the
 // strongest shape available and the most fragile to a well-meaning edit: the day somebody
@@ -238,14 +239,19 @@ test("REDUCER: a settled state refuses EVERY event, which is the belt behind all
 // tree. The fallback is the READ side of the same ruling this file's other cases enforce: an
 // ended agent cannot be woken, fed or messaged, and it can still be READ.
 
+// ⚠ IT MOVED TO `main/session-teardown.js` ON 2026-08-22 (the §2 500-line cap), WITH `settle`
+// AND FOR THE SAME REASON THIS FILE PAIRS THEM: `narrationFor` is the one read whose correctness
+// depends on what `settle` wrote a moment earlier, so the write and the read are one thing to
+// change. Nothing it does changed; `sessionOn` reaches it through the engine's `bind()` payload
+// rather than as a module-scope free var.
 function narration(sessions, history) {
-  const ENGINE = read("session-engine.js");
+  const TEARDOWN = read("session-teardown.js");
   const registryApi = registry(sessions);
   return new Function(
-    "sessionOn", "sessionNarration", "agentHistory", "store",
-    `${fnOf(ENGINE, "narrationFor")}\n return narrationFor;`
+    "deps", "sessionNarration", "agentHistory", "store",
+    `${fnOf(TEARDOWN, "narrationFor")}\n return narrationFor;`
   )(
-    registryApi.sessionOn,
+    { sessionOn: registryApi.sessionOn },
     require(join(MAIN, "session-narration.js")),
     { historyFor: (key) => history.get(key) || null },
     store
@@ -291,13 +297,15 @@ test("STRUCTURE: `settle` deletes the registry entry, and freezes the history BE
   // ⚠ ORDER IS THE WHOLE THING. The narration ring lives on the session object; freezing it
   // after the delete would capture nothing, and keeping the object to avoid that would be the
   // revival path this file exists to prevent.
-  const ENGINE = read("session-engine.js");
-  const settle = fnOf(ENGINE, "settle");
+  const TEARDOWN = read("session-teardown.js");
+  const settle = fnOf(TEARDOWN, "settle");
   const froze = settle.indexOf("agentHistory.record(");
-  const deleted = settle.indexOf("sessions.delete(s.key)");
+  const deleted = settle.indexOf("deps.sessions.delete(s.key)");
   assert.ok(froze !== -1, "settle freezes the history");
   assert.ok(deleted !== -1, "settle drops the registry entry");
   assert.ok(froze < deleted, "the ring is captured while the object still exists");
-  // The retained card must never be a session: nothing may put an ended key back in the Map.
-  assert.ok(!/sessions\.set\([^)]*ended/i.test(ENGINE), "no path re-registers an ended session");
+  // The retained card must never be a session: nothing may put an ended key back in the Map,
+  // in EITHER file — the registry is the engine's and the delete is the teardown's.
+  const ENGINE = read("session-engine.js");
+  assert.ok(!/sessions\.set\([^)]*ended/i.test(ENGINE + TEARDOWN), "no path re-registers an ended session");
 });

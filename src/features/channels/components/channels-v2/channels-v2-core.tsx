@@ -83,9 +83,10 @@ export interface ChannelsV2CoreProps {
  * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). FIVE write families land
  * from this tree (INVARIANTS §7), all through the existing write layer, none a
  * new endpoint: the composer's send / request fan-out (Phase 3), the Tags
- * inbox's mark-read (Phase 6), the Inbox pane's consent decision (Phase 8),
- * the channel-management writes the CUTOVER added (create / invite / visibility
- * / archive / delete / leave / tool profile / trust), which arrived WHOLESALE
+ * inbox's mark-read (Phase 6), the Inbox pane's OUTBOUND send decision (Phase 8;
+ * its inbound half retired 2026-08-22), the channel-management writes the CUTOVER
+ * added (create / invite / visibility / archive / delete / leave / tool profile —
+ * TRUST went with that same retirement), which arrived WHOLESALE
  * from the deleted page and live in `channel-manage.tsx`, and the header
  * bookmark's FAVOURITE (2026-08-19), which rides the same per-member preference
  * route as the tool profile. All five hold the same `useRefetchGate` gate the
@@ -173,14 +174,18 @@ export function ChannelsV2Core({
     loading: mentionsLoading,
     refetch: refetchMentions,
   } = useChannelMentions(channel?.id ?? null, workspaceId);
-  // ⚠ Poll BACKSTOP scoped to THIS page for a downed socket only — consent
-  // INSERTs do arrive over realtime. Pauses while the tab is hidden.
-  //
-  // ⚠ WORKSPACE-WIDE ON PURPOSE, not scoped to the open channel: the sidebar's
-  // Inbox badge counts every pending request, and the same rows are joined
-  // against this channel's transcript below to derive the REQUESTED state. One
-  // read, two consumers — a channel-scoped copy would make the badge lie.
-  const { requests } = useConsentInbox(workspaceId, undefined, CONSENT_INBOX_POLL_MS);
+  // ⚠ Poll BACKSTOP for a downed socket only; pauses while the tab is hidden.
+  // ⚠ WORKSPACE-WIDE ON PURPOSE: the Inbox badge counts every pending draft, and
+  // the same rows place the thread view's send box. One read, two consumers — a
+  // channel-scoped copy would make the badge lie.
+  // ⚠ `outbound`, NOT `requests` (Samuel, 2026-08-22 — the inbound consent
+  // retirement). No surface in this tree can act on an INBOUND row any more, and
+  // a badge is a claim that something is actionable.
+  const { outbound: requests } = useConsentInbox(
+    workspaceId,
+    undefined,
+    CONSENT_INBOX_POLL_MS
+  );
   // MY OWN AGENTS — the ONE read on this page that is not a server projection.
   // It is this machine's live session state over the Electron bridge
   // (`agents-model.ts`), so it is workspace-wide by nature and each consumer
@@ -244,27 +249,24 @@ export function ChannelsV2Core({
   // THE FAVOURITE TOGGLE (Samuel, 2026-08-19) — a FIFTH write family on this
   // surface, on the same gate as the other four, and the existing per-member
   // preference route rather than a new one (`PATCH /members`, `favorite`).
-  // `consent` also decides INLINE (card / thread strip, Samuel 2026-08-20 —
-  // the arrival pop-up is gone) — same mutation, same gate.
-  const { favorite, consent } = useChannelPreferenceWrites({
-    workspaceId,
+  // `consent` decides the OUTBOUND send box and the Inbox's rows — same
+  // mutation, same gate. ⚠ Its INBOUND callers are gone (Samuel, 2026-08-22).
+  const { favorite, consent } = useChannelPreferenceWrites({ workspaceId, gate });
+
+  const { index, openThread, treeThreads, rows } = useChannelsV2Derivations({
+    members,
     currentUserId,
-    gate,
+    messages,
+    threads,
+    openThreadId: sel.requestedThreadId,
   });
 
-  const { index, openThread, requested, pendingAsks, treeThreads, rows } =
-    useChannelsV2Derivations({
-      members,
-      currentUserId,
-      messages,
-      threads,
-      requests,
-      openThreadId: sel.requestedThreadId,
-    });
-
-  // Inline consent (card/strip decision + thread send box) — `use-inline-consent.ts`.
-  const { decideThread, outboundByThread, decideOutbound, consentBusy } =
-    useInlineConsent({ messages, requests, consent });
+  // The thread view's outbound send box — `use-inline-consent.ts`.
+  const { outboundByThread, decideOutbound, consentBusy } = useInlineConsent({
+    messages,
+    requests,
+    consent,
+  });
 
   const channelName = channel
     ? channelDisplayName(channel, members, currentUserId)
@@ -325,8 +327,6 @@ export function ChannelsV2Core({
         openThreadId={openThread?.id ?? null}
         onSelectChannel={sel.selectChannel}
         onOpenThread={sel.openThread}
-        requestedThreads={requested}
-        pendingAsks={pendingAsks}
         consentCount={requests.length}
         inboxOpen={sel.inboxOpen}
         onOpenInbox={sel.openInbox}
@@ -353,8 +353,6 @@ export function ChannelsV2Core({
             index={index}
             members={members}
             loading={messagesLoading}
-            requested={requested}
-            onDecideThread={decideThread}
             outboundAsk={openThread ? (outboundByThread.get(openThread.id) ?? null) : null}
             outboundBusy={consentBusy}
             onDecideOutbound={decideOutbound}

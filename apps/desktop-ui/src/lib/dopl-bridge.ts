@@ -128,10 +128,10 @@ export interface DoplBridge {
      */
     getLaunchPosture?(
       channelId: string
-    ): Promise<{ tools: string; messages: string } | null>;
+    ): Promise<{ tools: string; messages: string; model?: string } | null>;
     setLaunchPosture?(
       channelId: string,
-      preset: { tools: string; messages: string }
+      preset: { tools: string; messages: string; model?: string }
     ): Promise<{ ok: boolean }>;
     /** AUTO-SEND — the durable per-channel out-half. Default OFF (ask first); ON
      *  maps the windowless session's message axis to `auto_both` and the agent's
@@ -201,6 +201,17 @@ export interface DoplBridge {
       mode: string,
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string; tools?: string; messages?: string }>;
+    /** Switch a LIVE session's MODEL and record the pick (2026-08-22). Really
+     *  switches — the bundled SDK's `Query.setModel` works in streaming input
+     *  mode, which is the only mode main uses. See `@/shared/lib/spa-bridge` for
+     *  the four ids, the clear-on-unknown rule, and why the answer must be
+     *  rendered rather than the request echoed. */
+    setModel?(
+      channelId: string,
+      taskId: string,
+      model: string,
+      agentId?: string
+    ): Promise<{ ok: boolean; reason?: string; model?: string }>;
     /** The agent's work ring: read once on mount, then listen. */
     narration?(
       channelId: string,

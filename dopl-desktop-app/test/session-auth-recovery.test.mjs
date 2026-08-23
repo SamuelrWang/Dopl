@@ -317,7 +317,13 @@ test("the engine injects its OWN startQuery + denyPending (no second query assem
   // IPC `event.sender` (a window's webContents) for the two deleted auth handlers. The rest is the
   // point and is unchanged — the hold reuses the engine's OWN startQuery, so a resumed launch
   // inherits H1's supersede-before-relaunch instead of assembling a second query.
+  // ⚠ `denyPendingPermissions` MOVED TO `main/session-permissions.js` ON 2026-08-22 (the §2 cap +
+  // the denial-copy ruling) and is destructured at the engine's module scope, so this bind reads
+  // exactly as it did. What must stay true is that the auth hold is handed the REAL fail-closed
+  // sweep and not a stub — a hold that leaves a resolver dangling blocks the SDK child forever.
   assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions \}\)/);
+  assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
+    "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");
   assert.match(QUERY, /env: sessionAuth\.withStoredCredential\(buildScrubbedEnv\(\)\)/,
     "and the stored setup-token reaches the SDK env through the SAME scrubbed base");

@@ -43,6 +43,10 @@ const ctx: ChannelContext = {
   source: "user",
   role: "member",
 };
+/** Same account, AGENT credential — `source` derives from `auth.agentTokenId`
+ *  (`service-shared.ts`) and is the only thing that decides whether a self-tag
+ *  survives. Nothing in a body can reach this. */
+const agentCtx: ChannelContext = { ...ctx, source: "agent" };
 
 function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
   return {
@@ -153,9 +157,124 @@ describe("postMessage — the mention stamp (wiring plan Phase 6)", () => {
     expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
   });
 
-  it("drops the AUTHOR — tagging yourself is not an inbox item", async () => {
+  it("drops the AUTHOR for a HUMAN — tagging yourself is not an inbox item", async () => {
     await postMessage(ctx, "room", { body: "@sam is on it, @diana FYI" });
     expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+  });
+
+  it("KEEPS the author for an AGENT — that is its escalation path to its operator", async () => {
+    // ⚠ 2026-08-22 (Samuel). An agent posts ON its operator's account, so the
+    // one tag it has for "my own human has to see this" resolved to the AUTHOR
+    // and was dropped — the Tags inbox was unreachable from the machine that
+    // most needs it. The credential decides, never the body.
+    await postMessage(agentCtx, "room", { body: "@sam I am blocked on access" });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([USER]);
+  });
+
+  it("an AGENT tagging its operator AND a peer keeps both, in body order", async () => {
+    await postMessage(agentCtx, "room", { body: "@diana ready — @sam FYI" });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER, USER]);
+  });
+
+  it("the agent self-tag is still NOT an address — it starts nobody", async () => {
+    // The escalation lands in an inbox. It does not put a session in front of
+    // anything, on the operator's machine or anyone else's (INVARIANTS §5).
+    await postMessage(agentCtx, "room", { body: "@sam decision needed" });
+    const meta = capturedMetadata();
+    expect(meta[MENTIONS_METADATA_KEY]).toEqual([USER]);
+    expect(has(meta, "to_user_id")).toBe(false);
+  });
+
+  describe("markup is not a handle (2026-08-22, F-266)", () => {
+    // ⚠ The MATCH RULE is pinned in `lib/mentions.ts`'s own suite and the two
+    // ends are held together in `mentions-tint-parity.test.ts`. These cases pin
+    // that the WRITE PATH runs it — the half that stamps the inbox.
+
+    it("a BOLD tag stamps, which is the defect that bit", async () => {
+      await postMessage(ctx, "room", { body: "**@diana** please review" });
+      expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+    });
+
+    it("an agent's BOLD escalation to its own operator lands (both rules at once)", async () => {
+      // ⚠ THE CASE THE WHOLE WAVE IS FOR. `**@sam** I am blocked` is how an
+      // agent writes an urgent escalation: the emphasis strip has to fire AND
+      // the author has to survive resolution. Before 2026-08-22 it failed twice
+      // over — the token kept its `**`, and the author was dropped anyway.
+      await postMessage(agentCtx, "room", { body: "**@sam** I am blocked on access" });
+      expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([USER]);
+    });
+
+    it("every emphasis marker stamps", async () => {
+      for (const body of ["*@diana*", "__@diana__", "~~@diana~~", "<b>@diana</b>"]) {
+        vi.mocked(repoMessages.insertMessage).mockClear();
+        await postMessage(ctx, "room", { body });
+        expect(capturedMetadata()[MENTIONS_METADATA_KEY], body).toEqual([PEER]);
+      }
+    });
+
+    it("an ESCAPED @ stamps nobody — the author asked for that in the body", async () => {
+      await postMessage(ctx, "room", { body: "write it literally: \\@diana" });
+      expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+    });
+
+    it("a URL in a link DESTINATION stamps nobody", async () => {
+      await postMessage(ctx, "room", {
+        body: "the runbook is [here](https://ex.com/users/@diana)",
+      });
+      expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+    });
+
+    it("…while the link's own TEXT still stamps", async () => {
+      await postMessage(ctx, "room", {
+        body: "[@diana](https://ex.com) owns this",
+      });
+      expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+    });
+
+    it("keeps the roster off the write path when everything taggable is masked", async () => {
+      // ⚠ The cost argument (INVARIANTS §12) has to survive the new masks: a
+      // body whose only `@` is escaped or inside a destination must not pay a
+      // roster + profile read, exactly like a body with no `@` at all.
+      await postMessage(ctx, "room", { body: "see [docs](https://ex.com/@diana)" });
+      expect(vi.mocked(repo.listMembers)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("code does not tag (2026-08-22, Samuel)", () => {
+    // ⚠ MEASURED, not hypothetical: agents writing docs about @-tagging fired
+    // REAL tags at both operators from backticked handles (seqs 647 / 653). The
+    // match rule lives in `lib/mentions.ts`; these cases pin that the WRITE PATH
+    // actually runs it, which is the half that stamps the inbox.
+
+    it("a backticked handle stamps nothing", async () => {
+      await postMessage(ctx, "room", {
+        body: "to tag her, write `@diana` in the body",
+      });
+      expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+    });
+
+    it("a fenced example stamps nothing", async () => {
+      await postMessage(ctx, "room", {
+        body: 'like this:\n\n```\npost(body="@diana ping")\n```\n',
+      });
+      expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+    });
+
+    it("a mixed body stamps only the handle written as PROSE", async () => {
+      await postMessage(ctx, "room", {
+        body: "the docs say `@dan` — @diana can you check?",
+      });
+      expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+    });
+
+    it("an agent's OWN handle in code does not escalate either", async () => {
+      // The two rules compose in the safe order: keeping the author (above) is
+      // about WHO survives resolution, not about what counts as a tag.
+      await postMessage(agentCtx, "room", {
+        body: "the operator handle is `@sam`, for reference",
+      });
+      expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+    });
   });
 
   it("SECURITY: a caller-supplied mention set is STRIPPED, never honored", async () => {

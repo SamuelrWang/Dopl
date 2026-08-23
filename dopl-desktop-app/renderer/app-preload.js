@@ -163,6 +163,12 @@ contextBridge.exposeInMainWorld('dopl', {
         preset: {
           tools: asMode(preset && preset.tools),
           messages: asMode(preset && preset.messages),
+          // ⚠ THE MODEL JOINED THE POSTURE ON 2026-08-22 (Samuel's ruling) AND IS NOT A THIRD
+          // AXIS. It rides the same record because it is the same decision — what MY agent starts
+          // as when I press Launch — but it grants nothing and reaches no gate. Main validates it
+          // against `session-model.js › MODEL_IDS` and an unknown value is simply ABSENT (the SDK
+          // default), where an unknown value on either AXIS rejects the whole write.
+          model: asMode(preset && preset.model),
         },
       }),
     // AUTO-SEND (2026-08-20): the DURABLE per-channel posture for the operator's own
@@ -297,6 +303,19 @@ contextBridge.exposeInMainWorld('dopl', {
         taskId: asId(taskId),
         axis: asMode(axis),
         mode: asMode(mode),
+        agentId: asId(agentId),
+      }),
+
+    // ⚠ THE LIVE MODEL SWITCH (2026-08-22, Samuel's model-selection ruling). It takes the ID
+    // vocabulary a UI offers (`main/session-model.js › MODEL_IDS`); main coerces against that
+    // frozen list and converts to the argv-safe ALIAS, so an unknown string CLEARS the override
+    // rather than reaching a child process. It moves ONE live session and records the pick; the
+    // per-channel record governing the NEXT spawn is `channels.setLaunchPosture`'s `model` field.
+    setModel: (channelId, taskId, model, agentId) =>
+      ipcRenderer.invoke('sessions:setModel', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+        model: asMode(model),
         agentId: asId(agentId),
       }),
 

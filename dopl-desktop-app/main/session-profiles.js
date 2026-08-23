@@ -110,6 +110,25 @@ function buildSessionToolConfig(profile) {
   // full: pre-approve local reads only; hard-deny ONLY the universal floor. Everything else —
   // work tools, delegation, outbound, persistence, escalation, op-scoped dopl_channel —
   // reaches canUseTool.
+  //
+  // ⚠ YES, `dopl_only` PRE-APPROVES MORE THAN `full` DOES. IT WAS MEASURED, THEN LEFT ALONE
+  // (2026-08-22, ruling 4). `dopl_only.preApproved` carries WEB_TOOLS + DOPL_READ_TOOLS on top
+  // of READ_BUILTINS while `full`'s is READ_BUILTINS alone, so on paper the RESTRICTED profile
+  // reaches more WITHOUT A GATE than the permissive one. Measured across every profile × every
+  // toolMode × the whole tool universe, the inversion splits in two:
+  //   DOPL_READ_TOOLS — CLOSED at every mode a windowless session can be in. The tool floor
+  //     (`floorWindowlessTool`) puts Axis A at `auto` or `bypass`, and AUTO_TOOLS and
+  //     BYPASS_TOOLS both carry DOPL_READ_TOOLS, so `full` answers `allow` where `dopl_only`
+  //     answers `preapproved` — ungated either way. It survives only at `manual` /
+  //     `accept_edits`, which the floor makes unreachable and which nothing else mints (this
+  //     tree has no windowed session). Widening `full` here would buy no reach and would
+  //     SHADOW five tools past canUseTool, costing the gate diag line for nothing.
+  //   WEB_TOOLS — REAL, AND IT SURVIVES THE FLOOR: at `auto`, `full` GATES WebFetch / WebSearch
+  //     because they are ESCALATION_TOOLS, while `dopl_only` pre-approves them outright. ⚠ The
+  //     safe direction is NOT to widen `full`: pre-approving an escalation tool on the widest
+  //     profile shadows the NETWORK past the gate and empties ESCALATION_TOOLS of meaning.
+  //     Narrowing `dopl_only` instead is a posture decision (its whole point is "look things
+  //     up" with no shell), so it is recorded here rather than silently resolved either way.
   return {
     builtinTools: [],
     preApproved: READ_BUILTINS.slice(),
@@ -150,7 +169,19 @@ function isOwnChannelPost(input, sessionChannelId) {
 // reach, so it is not own-channel-scoped. `open`, `invite`, `create_thread`, `set_thread_mode`
 // and every post stay gated in every posture. (`close_thread` was named here too and left the
 // tool's enum with thread closing — wiring plan Phase 4, 2026-08-18.)
-const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members'];
+//
+// `read_sessions` JOINED ON 2026-08-22 (Samuel's ruling 7, investigation A4). Its absence was
+// an OMISSION, not a rule: it is strictly weaker than the `read` already on this list, because
+// it returns THIS OPERATOR'S OWN sessions — handle, state, thread — and never a peer's, so it
+// carries no counterparty content at all (packages/mcp-server channel-description.ts: "This is
+// YOUR side only — it never shows a PEER's sessions"). It may be moot under the windowless
+// message floor, which auto-allows the inbound half anyway; the list should be correct.
+// ⚠ IT IS THE ONE READ WHOSE `channel` IS AN OPTIONAL FILTER rather than a required argument
+// (channel-schema.ts), so an unfiltered call spans the WORKSPACE — which is exactly the shape
+// that keeps `list` off this list, and it still qualifies for the reason `list` does not:
+// `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
+const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members',
+  'read_sessions'];
 
 // Read twin of isOwnChannelPost, SAME scoping rule and safe failure: a `channel` naming
 // anything but this session's id (slug included) is ANOTHER channel and gates.
@@ -286,6 +317,38 @@ function floorWindowlessMessage(mode) {
   return m === 'auto_outbound' ? 'auto_both' : 'auto_inbound';
 }
 
+// ⚠ AXIS A'S WINDOWLESS FLOOR — THE ONE STATEMENT OF IT (2026-08-22, Samuel's ruling 4).
+//
+// ⚠ IT SITS BESIDE THE AXIS-B FLOOR ABOVE BECAUSE IT IS THE SAME FACT ABOUT THE SAME SHAPE,
+// not because the axes mix. A windowless session has NO GATE SURFACE:
+// `session-windowless.js › claimGate` answers a `permission_request` with
+// `setImmediate(() => decide(rid, 'deny'))`. The floor above exists because a HELD INBOUND is
+// held forever there; this one exists because a GATED TOOL is DENIED there. Under `manual` —
+// Axis A's start value AND its park reset, so the common case, not an odd one — `toolModeAllows`
+// returns false for every name, so EVERY work tool is silently denied, including the read tools
+// `prompt-framing.js` ORDERS the agent to use. Flooring at `auto` makes AUTO_TOOLS
+// (READ_BUILTINS + EDIT_TOOLS + MultiEdit + DOPL_READ_TOOLS) reachable with no gate to answer.
+//
+//     manual        -> auto
+//     accept_edits  -> auto
+//     auto          -> auto
+//     bypass        -> bypass     (NEVER NARROWED — widen-only, exactly like the message floor)
+//
+// ⚠ WHAT IT DOES NOT TOUCH, AND MUST NOT. `SESSION_HARD_DENY`, the secret-path deny rules, and
+// each profile's `disallowedTools` are all checked BEFORE Axis A and are unreachable from here;
+// so is the Axis-A/Axis-B invariant, because `grantDecision` branches a channel tool to Axis B
+// before Axis A is ever consulted. This widens what MY agent may do on THIS machine, inside the
+// profile it was launched with, and nothing else — no tool posture can send a message.
+//
+// ⚠ AND IT IS APPLIED TO THE READ, NOT TO STATE. The message floor has two state-writing lanes
+// (`channel-prefs.js › windowlessMessageMode`, `session-reopen.js › setModeByTask`); this one is
+// applied once at decision time in `session-io.js › grantArgs`, which is the single read of both
+// axes. The trade is written out there.
+function floorWindowlessTool(mode) {
+  const m = normalizeToolMode(mode); // fail-closed to `manual`, which then floors to `auto`
+  return m === 'bypass' ? 'bypass' : 'auto';
+}
+
 // AXIS B WITH THE OUT-HALF WITHDRAWN — the PRIVATE TURN's gate (2026-08-22, Samuel's ruling).
 //
 // ⚠ IT IS THE EXACT INVERSE OF `floorWindowlessMessage` ABOVE and sits beside it for that
@@ -399,5 +462,6 @@ module.exports = {
   AUTO_TOOLS, BYPASS_TOOLS, DOPL_READ_TOOLS, DOPL_WRITE_TOOLS,
   normalizeToolMode, normalizeMessageMode, toolModeAllows, autoInboundMode,
   floorWindowlessMessage, // AXIS B's windowless floor — one statement, two lanes (F-236)
+  floorWindowlessTool, // ...and AXIS A's, applied at the READ (session-io.js › grantArgs)
   privateTurnMessageMode, // ...and its inverse: the PRIVATE TURN withdraws the OUT half
 };

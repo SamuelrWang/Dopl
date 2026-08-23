@@ -1,35 +1,31 @@
 "use client";
 
 /**
- * INLINE CONSENT for the channels page (Samuel, 2026-08-20): one hook owning
- * the thread→pending-request join and the card/strip decision callback.
- * Extracted from `channels-v2-core.tsx` at the 500-line cap — a
- * reason-to-change split: this is the "answer an ask from wherever you are
- * standing" concern, whole.
+ * THE OUTBOUND SEND BOX'S WIRING: the thread→pending-draft join and the decision
+ * callback the box's Send / Cancel fire.
  *
- * ⚠ THE ARRIVAL POP-UP IS GONE (Samuel, 2026-08-20, second ruling of the day
- * — it shipped that morning). NOTHING FLOATS OVER THE PAGE: a decision is made
- * where the row already is. The transcript card and the thread strip are the two
- * surfaces THIS hook feeds, and they are the ones a placed row reaches.
+ * ⚠ IT WAS THE INBOUND HOOK UNTIL 2026-08-22 (Samuel): *"remove all the stuff
+ * about declining and approving of threads — you have the thread, you open it,
+ * and either you launch agent or you don't."* `decideThread` and the
+ * `pendingRequestIdByThread` join it stood on are DELETED with the two surfaces
+ * they fed (the transcript card's inline Decline / Launch agent, and
+ * `thread-consent.tsx › ThreadAwaitingStrip`). **There is no inbound decision on
+ * this page.** Launching an agent on a thread is a direct act — the card's
+ * "Launch agent" calls `use-agents-panel.ts › launchAgent`, which spawns one on
+ * that thread and answers to nobody's request.
  *
- * ⚠ THEY ARE NOT THE ONLY DECISION SURFACES — `inbox-pane.tsx › InboxRow`
- * decides too, on the same CAS'd mutation, and it is not wired through here. Its
- * job is the rows the seq→thread join below CANNOT place (untagged triggers,
- * aged-out pages, seq-less outbound drafts), which is exactly the set this hook
- * returns nothing for. Do not "consolidate" the Inbox into this join: the rows it
- * exists for are the ones the join has already failed on, and a hung agent is
- * what a row nobody can decide becomes.
+ * ⚠ WHAT IS LEFT IS ONE DIRECTION AND IT IS THE OPERATOR'S OWN. Their agent
+ * drafted a reply, auto-send is off, and a human decides whether it leaves the
+ * machine. That is still a `pending` consent row and still the CAS'd
+ * `PATCH /consent/[id]`.
  *
  * ⚠ NO NEW WRITE PATH. `consent` is the caller's `useChannelPreferenceWrites`
- * mutation — the same CAS'd `PATCH /consent/[id]` every consent surface uses.
+ * mutation — the same CAS'd `PATCH /consent/[id]` the Inbox's outbound rows use.
  */
 
 import { useMemo } from "react";
 import type { ApiMutation } from "@/shared/hooks/use-api-mutation";
-import {
-  pendingOutboundByThread,
-  pendingRequestIdByThread,
-} from "./view-model-requested";
+import { pendingOutboundByThread } from "./view-model-requested";
 import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 
 export function useInlineConsent({
@@ -44,19 +40,8 @@ export function useInlineConsent({
     { request: ChannelConsentRequest }
   >;
 }) {
-  // Thread → pending consent-request id, the seq-keyed join.
-  const pendingByThread = useMemo(
-    () => pendingRequestIdByThread(messages, requests),
-    [messages, requests]
-  );
-
-  const decideThread = (threadId: string, decision: "allow" | "deny") => {
-    const id = pendingByThread.get(threadId);
-    if (id) consent.mutate({ id, decision });
-  };
-
-  // Thread → my own agent's draft awaiting my Send (the thread view's send
-  // box, Samuel 2026-08-20). Same seq-keyed join, outbound rows.
+  // Thread → my own agent's draft awaiting my Send (the thread view's send box,
+  // Samuel 2026-08-20). Seq-keyed join, outbound rows.
   const outboundByThread = useMemo(
     () => pendingOutboundByThread(messages, requests),
     [messages, requests]
@@ -66,7 +51,6 @@ export function useInlineConsent({
     consent.mutate({ id, decision });
 
   return {
-    decideThread,
     outboundByThread,
     decideOutbound,
     consentBusy: consent.pending,

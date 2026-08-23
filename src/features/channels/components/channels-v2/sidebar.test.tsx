@@ -50,7 +50,6 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsV2Sideb
     openThreadId: null,
     onSelectChannel: vi.fn(),
     onOpenThread: vi.fn(),
-    requestedThreads: new Set<string>(),
     consentCount: 0,
     inboxOpen: false,
     onOpenInbox: vi.fn(),
@@ -106,7 +105,10 @@ describe("channels-v2 sidebar", () => {
     expect(within(row("Front-end")).queryByText(/^\d+$/)).toBeNull();
   });
 
-  it("badges the Inbox row only when a real pending-consent count exists", () => {
+  // ⚠ THE COUNT IS OUTBOUND-ONLY since 2026-08-22 (Samuel — the inbound consent
+  // retirement); the CALLER slices it. This component renders the number it is
+  // handed and asserts only that a zero is not a badge.
+  it("badges the Inbox row only when a real pending count exists", () => {
     renderSidebar({ consentCount: 0 });
     expect(within(row("Inbox")).queryByText("0")).toBeNull();
     cleanup();
@@ -223,39 +225,34 @@ describe("the sidebar's 24h window", () => {
         now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000
       ).toISOString(),
     });
-    expect(
-      sidebarThreads([fresh, stale], new Set(), now).map((t) => t.id)
-    ).toEqual(["fresh"]);
+    expect(sidebarThreads([fresh, stale], now).map((t) => t.id)).toEqual(["fresh"]);
   });
 
   it("reads an ABSENT lastActivityAt as inactive, never as active", () => {
     // ⚠ Absent means "this read did not derive it" (INVARIANTS §5), and the
     // fail-safe direction is the one presence has: stale reads OFFLINE.
-    expect(
-      sidebarThreads([thread({ lastActivityAt: undefined })], new Set(), now)
-    ).toEqual([]);
+    expect(sidebarThreads([thread({ lastActivityAt: undefined })], now)).toEqual([]);
   });
 
-  /** ⚠ THE RULING'S SECOND ARM (Samuel 2026-08-18: "active in the last 24 hours
-   *  OR REQUESTED"). Unbuilt until Phase 3 because nothing derived `requested`;
-   *  it now comes from the viewer's own consent inbox. */
-  it("admits a REQUESTED thread however old it is", () => {
+  /**
+   * ⚠ THE RULING'S SECOND ARM IS GONE (Samuel, 2026-08-22). "Active in the last
+   * 24 hours OR REQUESTED" (2026-08-18) admitted an aged thread the viewer owed
+   * an answer on — the one they most needed a way back to while a `pending`
+   * inbound row was live. With no inbound decision, there is nothing to rescue,
+   * and the arm's two arguments left the signature. Pinned as an ABSENCE: a
+   * re-added optional arm would compile and silently widen the tree again.
+   */
+  it("admits NOTHING past the window — the requested arm is deleted", () => {
     const stale = thread({
       id: "asked",
       lastActivityAt: new Date(
         now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000
       ).toISOString(),
     });
-    expect(
-      sidebarThreads([stale], new Set(["asked"]), now).map((t) => t.id)
-    ).toEqual(["asked"]);
-  });
-
-  it("admits a requested thread with NO activity clock at all", () => {
-    const bare = thread({ id: "asked", lastActivityAt: undefined });
-    expect(
-      sidebarThreads([bare], new Set(["asked"]), now).map((t) => t.id)
-    ).toEqual(["asked"]);
+    expect(sidebarThreads([stale], now)).toEqual([]);
+    expect(sidebarThreads([thread({ id: "bare", lastActivityAt: undefined })], now)).toEqual(
+      []
+    );
   });
 });
 
@@ -426,16 +423,15 @@ describe("the sidebar's real Favorites section", () => {
   });
 });
 
-describe("the sidebar's REQUESTED glyph", () => {
-  it("wears the clock and says why, for a thread awaiting the viewer", () => {
-    renderSidebar({ requestedThreads: new Set(["t-kit"]) });
-    expect(
-      screen.getByRole("button", { name: "UI-kit design — awaiting your approval" })
-    ).not.toBeNull();
-  });
-
-  it("wears the plain title when nothing is pending", () => {
+/**
+ * ⚠ THE REQUESTED GLYPH IS DELETED (Samuel, 2026-08-22) — `Clock`,
+ * `text-warning` and the accessible name "— awaiting your approval" all went with
+ * the inbound consent lane. Every thread row wears `Bot` and its own title.
+ */
+describe("the sidebar's thread glyph", () => {
+  it("names a thread row by its title alone, with no approval state", () => {
     renderSidebar();
     expect(screen.getByRole("button", { name: "UI-kit design" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /awaiting your approval/ })).toBeNull();
   });
 });

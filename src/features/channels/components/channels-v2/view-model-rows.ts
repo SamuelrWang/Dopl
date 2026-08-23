@@ -22,6 +22,7 @@ import {
   lifecycleReceiptStatus,
   type ReceiptStatus,
 } from "../../lib/message-receipt";
+import { parseAgentPostStamp } from "./agents-model";
 import { fanoutGroupOf, threadIdOf, type AuthorIndex } from "./view-model";
 import type { ChannelMessage, ChannelThread } from "../../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
@@ -89,6 +90,21 @@ export interface MessageRow {
   side: MessageSide;
   /** Display claim only: renders the "Agent" chip beside the author name. */
   agent: boolean;
+  /**
+   * WHICH of the author's agents typed this, when the writer said so — the
+   * stamped per-instance id off `client_msg_id`
+   * (`agents-model.ts › parseAgentPostStamp`).
+   *
+   * ⚠ `null` IS "CANNOT SAY", AND IT IS THE COMMON CASE ON OLD ROWS. It never
+   * means "not an agent" — {@link MessageRow.agent} answers that, off
+   * `authorKind`, and the two are independent: an agent post with no stamp is
+   * `agent: true, agentId: null` and wears the plain chip.
+   *
+   * ⚠ IT CHANGES NO SIDE AND NO IDENTITY. `client_msg_id` is a caller-supplied
+   * idempotency key, so this is a DISPLAY claim exactly like `agent` is — the
+   * row still hangs on the server-stamped `author_user_id`.
+   */
+  agentId: string | null;
   author: AvatarPerson;
   authorLabel: string;
   /** Absolute wall-clock, so a row's time does not drift while it is read. */
@@ -218,16 +234,43 @@ function labelFor(message: ChannelMessage, index: AuthorIndex): string {
   );
 }
 
-/** Same author and same agent-claim as the row above → a continuation run. */
+/**
+ * Same author, same agent-claim AND same agent INSTANCE as the row above → a
+ * continuation run.
+ *
+ * ⚠ THE INSTANCE CONJUNCT IS THE HALF THAT MATTERS SINCE MULTIPLAYER (Samuel,
+ * 2026-08-22). A continuation drops the avatar, the name line and the chip — so
+ * two of one operator's agents alternating in a thread collapsed into a single
+ * unbroken run under one name, which is the "it looks like one agent sending"
+ * report exactly. The attribution pill cannot fix that on its own: on a
+ * continuation there is no pill to put an id in. A different stamped agent
+ * therefore BREAKS the run and earns its own header.
+ *
+ * ⚠ AN UNSTAMPED ROW STILL CONTINUES ONE. `null === null` for two legacy agent
+ * posts, so a main that predates the stamp groups exactly as it always did;
+ * `null` never MATCHES a real id, so a stamped post after an unstamped one gets
+ * its header. Both directions fail toward showing the reader a name rather than
+ * hiding one.
+ */
 function isContinuation(
   message: ChannelMessage,
   previous: ChannelMessage | null
 ): boolean {
   if (!previous) return false;
   if (previous.kind === "system") return false;
+  if (
+    previous.authorUserId !== message.authorUserId ||
+    previous.authorKind !== message.authorKind
+  ) {
+    return false;
+  }
+  // ⚠ AGENT ROWS ONLY, the same guard the `agentId` field carries: a HUMAN's
+  // `client_msg_id` is whatever their client chose, and a caller who happened to
+  // pick the stamp shape must not be able to split their own run.
+  if (message.authorKind !== "agent") return true;
   return (
-    previous.authorUserId === message.authorUserId &&
-    previous.authorKind === message.authorKind
+    parseAgentPostStamp(previous.clientMsgId) ===
+    parseAgentPostStamp(message.clientMsgId)
   );
 }
 
@@ -248,6 +291,13 @@ function toMessageRow(
     // DISPLAY CLAIM (INVARIANTS §5). The chip says "an agent typed this"; the
     // SIDE above still comes from the server-stamped author id.
     agent: message.authorKind === "agent",
+    // ⚠ ONLY ON AN AGENT ROW. A human post can carry any `client_msg_id` the
+    // client chose, including one shaped like the stamp, and reading it here
+    // unconditionally would let a caller hang an agent id off their own words.
+    agentId:
+      message.authorKind === "agent"
+        ? parseAgentPostStamp(message.clientMsgId)
+        : null,
     author: personFor(message, index),
     authorLabel: labelFor(message, index),
     time: formatTime(message.createdAt),

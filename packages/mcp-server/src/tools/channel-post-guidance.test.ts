@@ -389,3 +389,106 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
     expect(text).not.toContain("NOBODY IS TAGGED IN THIS POST");
   });
 });
+
+/**
+ * WHAT A CHAT POST'S RESULT CLAIMS ABOUT WHO GOT IT (2026-08-22).
+ *
+ * ⚠ The `intent:"chat"` branch of `channel-post-notes.ts` returned EARLY and
+ * never read `landedThread`, so a chat post threaded into a live exchange was
+ * told "no agent was put in front of it" — while `channel-addressing.ts` fact 3
+ * says a first-class thread tag is handed straight into the counterparty's
+ * running turn, addressing unread. `intent` governs ADDRESSING only.
+ */
+describe("chat + a thread tag — the branch that never read landedThread", () => {
+  const THREAD = "44444444-4444-4444-4444-444444444444";
+  const LEGACY = "task-dba90694-de4f-4950-83a9-f2d890c9ff3f-345";
+
+  async function chatResult(taskId?: string): Promise<string> {
+    const client = stubClient({
+      postChannelMessage: vi.fn(async () => ({
+        id: "m1",
+        seq: 9,
+        kind: "message",
+        metadata: taskId ? { taskId } : {},
+        authorUserId: "u-me",
+      })),
+      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
+    });
+    const res = await opPost(client, "eng", "thinking out loud", {
+      intent: "chat",
+      ...(taskId ? { thread: taskId } : {}),
+    });
+    expect(res.isError).toBeFalsy();
+    return res.content[0].text;
+  }
+
+  it("an UNTHREADED chat post is still told it reached no agent", async () => {
+    // CONTROL: the original line is correct for the case it was written for,
+    // and must not be talked into becoming a request.
+    const text = await chatResult();
+    expect(text).toContain("no agent was put in front of it");
+    expect(text).toContain("NOT a delivery failure to repair");
+  });
+
+  it("a THREADED chat post is NOT told it reached nobody", async () => {
+    const text = await chatResult(THREAD);
+    expect(text).not.toContain("no agent was put in front of it");
+    expect(text).toContain("CHAT, BUT THREADED");
+    expect(text).toContain("handed straight to the session");
+  });
+
+  it("…and it is told to WAIT rather than to repeat itself as a request", async () => {
+    // ⚠ The cost of the old line: an agent that believes nothing landed says the
+    // same thing again as a request, against work already running.
+    const text = await chatResult(THREAD);
+    expect(text).toContain("do NOT repeat it as a request");
+    expect(text).toContain('op="await"');
+  });
+
+  it("a LEGACY tag falls to the plain chat line — it wakes nobody", async () => {
+    // ⚠ Same predicate the non-chat path uses: only a first-class (uuid) id
+    // reaches a session. A `task-…` label groups on a card and routes nothing.
+    const text = await chatResult(LEGACY);
+    expect(text).toContain("no agent was put in front of it");
+    expect(text).not.toContain("CHAT, BUT THREADED");
+  });
+});
+
+/**
+ * THE ZERO-TAG DIAGNOSTIC, after the self-tag rule changed (2026-08-22).
+ * The copy blamed spelling and an old server; the causes it actually has are
+ * code, spelling, non-membership and contested handles — and self-tagging
+ * stopped being one of them.
+ */
+describe("the zero-tag line names the causes it actually has", () => {
+  const zero = () => tagOutcomeNote("chan-1", 0);
+
+  it("leads with CODE — the cause an agent hits without noticing", () => {
+    expect(zero()).toContain("THE HANDLE WAS IN CODE");
+    expect(zero()).toContain("working as intended");
+  });
+
+  it("still names spelling, and now names the two the roster explains", () => {
+    expect(zero()).toContain("SPELLING");
+    expect(zero()).toContain("THEY ARE NOT IN THIS CHANNEL");
+    expect(zero()).toContain("TWO MEMBERS ANSWER TO IT");
+    expect(zero()).toContain('op="members"');
+  });
+
+  it("does NOT tell an agent it may have tagged itself", () => {
+    // ⚠ An agent's tag at its OWN operator is now KEPT (the escalation path,
+    // `server/service-writes-metadata-mentions.ts`). Naming it as a cause here
+    // would talk the agent out of the one thing that works.
+    expect(zero().toLowerCase()).not.toContain("yourself");
+    expect(zero().toLowerCase()).not.toContain("your own");
+  });
+
+  it("keeps the old-server caveat, and keeps it LAST", () => {
+    // INVARIANTS §13: an old server that stamps nothing is indistinguishable
+    // from here, so the line may not assert a delivery failure it cannot prove.
+    expect(zero()).toContain("looks identical from here");
+    expect(zero().indexOf("looks identical from here")).toBeGreaterThan(
+      zero().indexOf("THE HANDLE WAS IN CODE"),
+    );
+  });
+});

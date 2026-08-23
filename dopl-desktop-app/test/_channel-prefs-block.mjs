@@ -22,6 +22,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -61,14 +62,25 @@ const EXPORTED = [
   // THE DURABLE LAUNCH POSTURE's map ops — and since the arm's deletion, the only
   // per-channel record in this block. ⚠ There is no TTL argument and no `at`, which
   // used to be the difference from the arm's readers and is now simply the shape.
-  "readPostureFrom", "postureInto",
+  // ⚠ `effectivePosture` IS THE WIRE SHAPE, and it is exported here so the IPC harness in
+  // `channel-prefs.test.mjs` can stub `getLaunchPosture` with the REAL composition instead of
+  // re-spelling it. A stub that re-implements the function under test can only assert about a
+  // shape main might not produce — which is exactly how the always-present `model` key went
+  // missing on the wire while every suite stayed green.
+  "readPostureFrom", "effectivePosture", "postureInto",
 ];
 
 /** The pure block, evaluated verbatim. Module-level and shared — the block holds no
- *  state of its own (every op takes the map it works on), so one copy is safe. */
+ *  state of its own (every op takes the map it works on), so one copy is safe.
+ *  ⚠ `normalizeModelId` IS INJECTED SINCE 2026-08-22 (Samuel's model-selection ruling): the
+ *  durable posture gained a MODEL field, validated against `session-model.js`'s frozen id list
+ *  rather than against a fourth copy of it here. The REAL function is handed in — it is pure,
+ *  and its fail-closed answer (an unknown id is ABSENT, not a rejected write) is the behaviour
+ *  the cases below are about. */
 export const prefs = new Function(
+  "normalizeModelId",
   `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-)();
+)(createRequire(import.meta.url)(join(HERE, "..", "main", "session-model.js")).normalizeModelId);
 
 /** Two real UUIDs, so the per-channel isolation cases are about ids the IPC gate
  *  would actually accept. */

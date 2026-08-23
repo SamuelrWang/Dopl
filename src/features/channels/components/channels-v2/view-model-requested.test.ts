@@ -1,22 +1,23 @@
 /**
- * `requested` — the state the mock had a word for and the model never did.
+ * THE OUTBOUND SEND-BOX JOIN, and the sidebar's thread window.
  *
- * The property this file exists for: **it is derived from the VIEWER'S OWN
- * consent inbox, and it therefore says one thing and not its mirror image.**
- * "You have not answered this" is derivable; "your addressee has not answered
- * you" is not, because a consent read is scoped to `(operator, workspace)` with
- * the operator always `ctx.userId` (INVARIANTS §6). A future change that starts
- * reporting the second from the absence of a pending row would report
- * NEVER-ASKED as APPROVED — see REFACTOR-FINDINGS F-206.
+ * ⚠ THIS FILE WAS FOUR TIMES THIS SIZE AND MOSTLY ABOUT `requested` (Samuel,
+ * 2026-08-22 — the inbound consent retirement). `requestedThreadIds`,
+ * `pendingRequestIdByThread`, `pendingAsksByChannel` and `consentExemptThreadIds`
+ * are DELETED along with every surface they fed, so the suites that pinned them
+ * went too — including the pair that held the seq-less asymmetry (a row that
+ * cannot name its thread still counts as an ask) and the `sidebarThreads`
+ * exemption arm. **Do not restore a suite here without restoring the lane**: a
+ * test for a derivation nobody renders is how a deleted feature grows a file back.
+ *
+ * What is left is the ONE join with a live consumer and the properties that made
+ * extracting it worth doing: the FIRST-WINS tie-break, the honesty rule on `seq`,
+ * and the stable empty identity a `useMemo` chain depends on.
  */
 
 import { describe, expect, it } from "vitest";
 import {
-  consentExemptThreadIds,
-  pendingAsksByChannel,
   pendingOutboundByThread,
-  pendingRequestIdByThread,
-  requestedThreadIds,
   sidebarThreads,
 } from "./view-model-requested";
 import { CHANNEL_ID, message, thread, ME, PEER } from "./test-fixtures";
@@ -32,7 +33,7 @@ function consent(
     workspaceId: "ws-1",
     operatorUserId: ME,
     requesterUserId: PEER,
-    kind: "inbound",
+    kind: "outbound",
     messageSeq: 2,
     summary: "",
     bodyPreview: "",
@@ -55,34 +56,62 @@ const OPENER = message({
 });
 const PLAIN = message({ id: "chat", seq: 3 });
 
-describe("requestedThreadIds", () => {
-  it("marks the thread whose triggering message still has a pending request", () => {
-    const ids = requestedThreadIds([OPENER, PLAIN], [consent()]);
-    expect([...ids]).toEqual(["t-1"]);
+describe("pendingOutboundByThread", () => {
+  it("places a pending draft on the thread its triggering seq names", () => {
+    expect(pendingOutboundByThread([OPENER, PLAIN], [consent()]).get("t-1")?.id).toBe(
+      "c-1"
+    );
   });
 
-  it("ignores a DECIDED request — the state is 'unanswered', not 'was asked'", () => {
-    expect(requestedThreadIds([OPENER], [consent({ status: "allowed" })]).size).toBe(0);
-    expect(requestedThreadIds([OPENER], [consent({ status: "denied" })]).size).toBe(0);
-    expect(requestedThreadIds([OPENER], [consent({ status: "expired" })]).size).toBe(0);
-    // ⚠ `auto_allowed` too: a trust rule answered it, so nothing is waiting.
+  /**
+   * ⚠ AN INBOUND ROW IS A ROW WITH NO SURFACE (2026-08-22). Decided inbound rows
+   * are KEPT for audit and still type (`types.ts › ConsentKind` says why), so the
+   * filter has to refuse them rather than rely on them not existing — the cast is
+   * how a historical row reaches this join in production.
+   */
+  it("never places an INBOUND row — that lane has no surface left", () => {
+    const historical = { ...consent(), kind: "inbound" } as ChannelConsentRequest;
+    expect(pendingOutboundByThread([OPENER], [historical]).size).toBe(0);
+  });
+
+  it("ignores a DECIDED draft — the box is for what has NOT gone out", () => {
+    for (const status of ["allowed", "denied", "expired", "auto_allowed"] as const) {
+      expect(pendingOutboundByThread([OPENER], [consent({ status })]).size).toBe(0);
+    }
+  });
+
+  it("matches on (channel, seq), not seq alone", () => {
+    // `seq` is globally unique today, which is exactly why the redundancy is
+    // worth keeping: the day it stops being, this read must not place a draft on
+    // a thread in a different channel.
     expect(
-      requestedThreadIds([OPENER], [consent({ status: "auto_allowed" })]).size
+      pendingOutboundByThread([OPENER], [consent({ channelId: "ch-other" })]).size
     ).toBe(0);
   });
 
-  it("ignores an OUTBOUND review — that gate is about this operator's own reply", () => {
-    expect(requestedThreadIds([OPENER], [consent({ kind: "outbound" })]).size).toBe(0);
+  it("places nothing when the triggering message carries no thread tag", () => {
+    expect(pendingOutboundByThread([PLAIN], [consent({ messageSeq: 3 })]).size).toBe(0);
   });
 
-  it("ignores a seq-less request rather than guessing which thread it names", () => {
+  it("takes the OLDEST pending draft when a thread carries two — first wins", () => {
+    // Ascending seq, so the first match is the draft that has been waiting
+    // longest. Last-wins would send a different draft than the one on screen.
+    const FIRST = message({ id: "m-first", seq: 2, metadata: { taskId: "t-1" } });
+    const SECOND = message({ id: "m-second", seq: 5, metadata: { taskId: "t-1" } });
+    const map = pendingOutboundByThread(
+      [FIRST, SECOND],
+      [consent({ id: "o-old", messageSeq: 2 }), consent({ id: "o-new", messageSeq: 5 })]
+    );
+    expect(map.get("t-1")?.id).toBe("o-old");
+  });
+
+  it("ignores a seq-less row rather than guessing which thread it names", () => {
     // ⚠ A seq-less row is also the one the de-dupe index does not cover
-    // (INVARIANTS §6) — there is no trigger identity to match on, either.
-    // ⚠ THE DROP IS DELIBERATE AND STAYS: this set wears the Clock glyph and
-    // the words "awaiting your approval", which are an assertion about ONE
-    // thread. What such a row costs the operator is answered separately, by
-    // `consentExemptThreadIds` below.
-    expect(requestedThreadIds([OPENER], [consent({ messageSeq: null })]).size).toBe(0);
+    // (INVARIANTS §6) — there is no trigger identity to match on, either. It
+    // stays reachable from the Inbox pane, which is why that pane still decides.
+    expect(pendingOutboundByThread([OPENER], [consent({ messageSeq: null })]).size).toBe(
+      0
+    );
   });
 
   it("ignores an ABSENT seq the same way it ignores a null one", () => {
@@ -91,268 +120,76 @@ describe("requestedThreadIds", () => {
     const absent = { ...consent() } as Partial<ChannelConsentRequest>;
     delete absent.messageSeq;
     expect(
-      requestedThreadIds([OPENER], [absent as ChannelConsentRequest]).size
+      pendingOutboundByThread([OPENER], [absent as ChannelConsentRequest]).size
     ).toBe(0);
   });
 
   it("does NOT let two missing values agree with each other", () => {
     // ⚠ THE SELF-MATCH. With the seq absent on BOTH sides, the old key
-    // `"ch-1:undefined"` matched `"ch-1:undefined"` and marked a thread
-    // requested on the strength of nothing at all. Both sides must be numbers.
+    // `"ch-1:undefined"` matched `"ch-1:undefined"` and placed a draft on the
+    // strength of nothing at all. Both sides must be numbers.
     const seqless = { ...consent() } as Partial<ChannelConsentRequest>;
     delete seqless.messageSeq;
     const untimed = { ...OPENER } as Partial<ChannelMessage>;
     delete untimed.seq;
     expect(
-      requestedThreadIds(
+      pendingOutboundByThread(
         [untimed as ChannelMessage],
         [seqless as ChannelConsentRequest]
       ).size
     ).toBe(0);
   });
 
-  it("matches on (channel, seq), not seq alone", () => {
-    // `seq` is globally unique today, which is exactly why the redundancy is
-    // worth keeping: the day it stops being, this read must not mark a thread
-    // in a different channel.
-    expect(
-      requestedThreadIds([OPENER], [consent({ channelId: "ch-other" })]).size
-    ).toBe(0);
-  });
-
-  it("marks nothing when the triggering message carries no thread tag", () => {
-    expect(requestedThreadIds([PLAIN], [consent({ messageSeq: 3 })]).size).toBe(0);
-  });
-
-  it("marks every thread of a fan-out the viewer has been asked about", () => {
-    const second = message({
-      id: "op-b",
-      seq: 4,
-      metadata: { taskId: "t-2", fanoutGroup: "grp-1" },
-    });
-    const ids = requestedThreadIds(
-      [OPENER, second],
-      [consent(), consent({ id: "c-2", messageSeq: 4 })]
-    );
-    expect([...ids].sort()).toEqual(["t-1", "t-2"]);
+  // ⚠ Stable empty identity: this feeds a `useMemo` chain, and a fresh `Map` per
+  // call is a new reference every render for a result that never changed.
+  it("returns the SAME empty map twice — no reference churn downstream", () => {
+    expect(pendingOutboundByThread([], [])).toBe(pendingOutboundByThread([], []));
   });
 });
 
 /**
- * THE OTHER HALF OF A SEQ-LESS ASK.
+ * THE SIDEBAR'S THREAD WINDOW — 24h of activity, and nothing else.
  *
- * A pending inbound consent row with no `message_seq` is LEGAL — the de-dupe
- * index is partial on `message_seq IS NOT NULL` precisely because a request
- * raised without a triggering seq has no trigger identity (migration
- * `20260726140000`). Dropping it from `requestedThreadIds` is right: the row
- * carries no thread reference of any kind (there is no task/thread column on
- * `channel_consent_requests`), so naming one would be a guess wearing the words
- * "awaiting your approval".
- *
- * ⚠ BUT THE SAME SET ALSO DROVE THE SIDEBAR'S 24h-WINDOW EXEMPTION, and there
- * the drop meant the operator had a live pending ask with NO ROW ANYWHERE to
- * walk into once its thread aged out. REACHABILITY is not an assertion, so it
- * can be answered by the join that IS possible: channel + requester + the
- * operator who must decide, against a thread's two parties (INVARIANTS §5).
+ * ⚠ IT HAD TWO MORE ARMS UNTIL 2026-08-22 (`requested`, and a seq-less `exempt`
+ * set), both there to keep an UNANSWERED ASK reachable past the window. With no
+ * inbound decision to make there is nothing to keep reachable for, and the
+ * signature lost both arguments.
  */
-describe("consentExemptThreadIds — the join a seq-less ask DOES support", () => {
-  const ASKED = thread({
-    id: "t-asked",
-    createdBy: PEER, // the requester opened it…
-    targetUserId: ME, // …addressed to the viewer, who must decide
-  });
-  const seqless = (over: Partial<ChannelConsentRequest> = {}) =>
-    consent({ messageSeq: null, ...over });
-
-  it("admits the thread this requester opened for this operator, in this channel", () => {
-    expect([...consentExemptThreadIds([ASKED], [seqless()])]).toEqual(["t-asked"]);
-  });
-
-  it("admits NOTHING from a row that CAN name its thread — that one is `requested`", () => {
-    // A row with a seq is placed exactly by `requestedThreadIds`; a second,
-    // looser answer for it would put rows in the tree that surface never marked.
-    expect(consentExemptThreadIds([ASKED], [consent()]).size).toBe(0);
-  });
-
-  it("does not reach across channels, requesters, or addressees", () => {
-    expect(
-      consentExemptThreadIds([ASKED], [seqless({ channelId: "ch-other" })]).size
-    ).toBe(0);
-    expect(
-      consentExemptThreadIds([ASKED], [seqless({ requesterUserId: "u-third" })]).size
-    ).toBe(0);
-    expect(
-      consentExemptThreadIds([ASKED], [seqless({ operatorUserId: "u-third" })]).size
-    ).toBe(0);
-  });
-
-  it("drops a row whose requester is GONE rather than matching every thread", () => {
-    // `requester_user_id` is ON DELETE SET NULL. Matching a null against a
-    // thread's `createdBy` is not a join, it is a wildcard.
-    expect(
-      consentExemptThreadIds([ASKED], [seqless({ requesterUserId: null })]).size
-    ).toBe(0);
-  });
-
-  it("ignores decided and outbound rows, like every other consent read here", () => {
-    expect(consentExemptThreadIds([ASKED], [seqless({ status: "denied" })]).size).toBe(0);
-    expect(consentExemptThreadIds([ASKED], [seqless({ kind: "outbound" })]).size).toBe(0);
-  });
-});
-
-describe("the sidebar's exemption arm", () => {
+describe("sidebarThreads", () => {
   const now = Date.parse("2026-08-18T12:00:00.000Z");
+  const fresh = thread({
+    id: "t-fresh",
+    lastActivityAt: new Date(now - 1_000).toISOString(),
+  });
   const stale = thread({
     id: "t-stale",
     createdBy: PEER,
     targetUserId: ME,
-    lastActivityAt: new Date(now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000).toISOString(),
+    lastActivityAt: new Date(
+      now - SIDEBAR_THREAD_ACTIVE_WINDOW_MS - 1_000
+    ).toISOString(),
   });
 
-  it("keeps an aged thread reachable when a seq-less ask points at it", () => {
-    const exempt = consentExemptThreadIds([stale], [consent({ messageSeq: null })]);
-    expect(sidebarThreads([stale], new Set(), now, exempt).map((t) => t.id)).toEqual([
-      "t-stale",
-    ]);
+  it("keeps a thread active inside the window", () => {
+    expect(sidebarThreads([fresh], now).map((t) => t.id)).toEqual(["t-fresh"]);
   });
 
-  it("still drops it with no pending ask at all", () => {
-    expect(sidebarThreads([stale], new Set(), now, new Set())).toEqual([]);
-  });
-});
-
-/**
- * THE ASK SIGNAL — how many threads in each channel await THIS viewer's answer
- * (Samuel's ruling, 2026-08-20: option (a), a per-channel count).
- *
- * ⚠ THE CASE THAT DEFINES IT is the seq-less row. `requestedThreadIds` above
- * must drop such a row — it cannot say which THREAD the ask is about without the
- * join — but this must keep it, because a channel with an ask nobody can locate
- * still has an ask. Requiring the join here would zero every channel whose
- * transcript is not loaded, which is every channel the operator is NOT looking
- * at: the entire set the signal exists for.
- */
-describe("pendingAsksByChannel", () => {
-  it("counts pending inbound rows per channel", () => {
-    const asks = pendingAsksByChannel([
-      consent({ id: "c-1", channelId: "ch-a", messageSeq: 1 }),
-      consent({ id: "c-2", channelId: "ch-a", messageSeq: 2 }),
-      consent({ id: "c-3", channelId: "ch-b", messageSeq: 3 }),
-    ]);
-    expect(asks.get("ch-a")).toBe(2);
-    expect(asks.get("ch-b")).toBe(1);
+  it("drops an aged thread — no pending ask can rescue one any more", () => {
+    expect(sidebarThreads([stale], now)).toEqual([]);
   });
 
-  it("counts a row with NO messageSeq — a locatable thread is not the question", () => {
-    const asks = pendingAsksByChannel([
-      consent({ id: "c-1", channelId: "ch-a", messageSeq: null }),
-    ]);
-    expect(asks.get("ch-a")).toBe(1);
-    // …and the thread-level derivation still refuses it, which is the asymmetry
-    // this pair exists to hold: two questions, two answers, one set of rows.
-    expect(
-      requestedThreadIds([], [consent({ channelId: "ch-a", messageSeq: null })]).size
-    ).toBe(0);
-  });
-
-  it("ignores OUTBOUND rows — those are the operator's own reply, not an ask", () => {
-    const asks = pendingAsksByChannel([
-      consent({ id: "c-1", channelId: "ch-a", kind: "outbound" }),
-    ]);
-    expect(asks.size).toBe(0);
-  });
-
-  it("ignores rows that are no longer pending", () => {
-    const asks = pendingAsksByChannel([
-      consent({ id: "c-1", channelId: "ch-a", status: "allowed" }),
-      consent({ id: "c-2", channelId: "ch-a", status: "denied" }),
-    ]);
-    expect(asks.size).toBe(0);
-  });
-
-  it("answers an empty map for no rows, and names no channel it did not see", () => {
-    expect(pendingAsksByChannel([]).size).toBe(0);
-    expect(pendingAsksByChannel([consent({ channelId: "ch-a" })]).get("ch-b")).toBeUndefined();
-  });
-
-  // ⚠ SAME ROWS AS THE INBOX BADGE, SLICED. The Inbox nav row counts
-  // `requests.length`; this groups the inbound half by channel. If the two ever
-  // derive from different filters they will disagree in the same column.
-  it("totals to the inbound rows the Inbox badge is counting", () => {
-    const rows = [
-      consent({ id: "c-1", channelId: "ch-a" }),
-      consent({ id: "c-2", channelId: "ch-b" }),
-      consent({ id: "c-3", channelId: "ch-b" }),
-      consent({ id: "c-4", channelId: "ch-c", kind: "outbound" }),
-    ];
-    const total = [...pendingAsksByChannel(rows).values()].reduce((a, b) => a + b, 0);
-    expect(total).toBe(rows.filter((r) => r.kind === "inbound").length);
-  });
-});
-
-/**
- * THE THREE SEQ-KEYED JOINS SHARE ONE IMPLEMENTATION (2026-08-20), and these are
- * the properties that made extracting it worth doing rather than cosmetic.
- *
- * ⚠ THE COPIES HAD DRIFTED ON THE TIE-BREAK. `pendingRequestIdByThread` did a bare
- * `map.set` (LAST row wins); `pendingOutboundByThread` guarded with `!map.has`
- * (FIRST wins). One thread carrying two pending rows therefore got two different
- * answers depending on which surface asked — and answering the card would settle a
- * different request than the one whose text was on it.
- */
-describe("the seq-keyed join — one rule for all three", () => {
-  // Two opening messages on ONE thread, each with its own pending ask.
-  const FIRST = message({ id: "m-first", seq: 2, metadata: { taskId: "t-1" } });
-  const SECOND = message({ id: "m-second", seq: 5, metadata: { taskId: "t-1" } });
-
-  it("takes the OLDEST pending ask when a thread carries two — first wins", () => {
-    const map = pendingRequestIdByThread(
-      [FIRST, SECOND],
-      [
-        consent({ id: "c-old", messageSeq: 2 }),
-        consent({ id: "c-new", messageSeq: 5 }),
-      ]
+  /** ABSENT `lastActivityAt` means the read did not derive it, never "no
+   *  activity" — the same fail-safe direction presence has. */
+  it("reads an undated thread as INACTIVE rather than as fresh", () => {
+    expect(sidebarThreads([thread({ id: "t-x", lastActivityAt: undefined })], now)).toEqual(
+      []
     );
-    // Ascending seq, so the first match is the ask that has been waiting longest —
-    // the one `transcript.tsx` says it is deciding.
-    expect(map.get("t-1")).toBe("c-old");
   });
 
-  it("applies the SAME tie-break on the outbound side", () => {
-    const map = pendingOutboundByThread(
-      [FIRST, SECOND],
-      [
-        consent({ id: "o-old", kind: "outbound", messageSeq: 2 }),
-        consent({ id: "o-new", kind: "outbound", messageSeq: 5 }),
-      ]
-    );
-    expect(map.get("t-1")?.id).toBe("o-old");
-  });
-
-  it("never crosses the kinds — an outbound row is not an unanswered ask", () => {
-    const outbound = [consent({ id: "o-1", kind: "outbound" })];
-    expect(requestedThreadIds([OPENER], outbound).size).toBe(0);
-    expect(pendingRequestIdByThread([OPENER], outbound).size).toBe(0);
-    expect(pendingOutboundByThread([OPENER], outbound).get("t-1")?.id).toBe("o-1");
-  });
-
-  // ⚠ THE HONESTY RULE, shared by all three: two missing values must not agree
-  // with each other. A seq-less row and a seq-less message both stringify into
-  // `"ch-1:undefined"` under a `!= null` guard and self-match.
-  it("drops a seq-less row rather than letting two absences match", () => {
-    const seqless = [consent({ id: "c-null", messageSeq: null })];
-    const noSeq = message({ id: "m-null", metadata: { taskId: "t-1" } });
-    delete (noSeq as { seq?: number }).seq;
-    expect(requestedThreadIds([noSeq], seqless).size).toBe(0);
-    expect(pendingRequestIdByThread([noSeq], seqless).size).toBe(0);
-    expect(pendingOutboundByThread([noSeq], seqless).size).toBe(0);
-  });
-
-  // ⚠ Stable empty identity: these feed `useMemo` chains, and a fresh `Map` per
-  // call is a new reference every render for a result that never changed.
-  it("returns the SAME empty map twice — no reference churn downstream", () => {
-    expect(pendingRequestIdByThread([], [])).toBe(pendingRequestIdByThread([], []));
-    expect(pendingOutboundByThread([], [])).toBe(pendingOutboundByThread([], []));
-    expect(requestedThreadIds([], [])).toBe(requestedThreadIds([], []));
+  it("preserves the server's activity order rather than re-sorting", () => {
+    expect(sidebarThreads([fresh, stale, fresh], now).map((t) => t.id)).toEqual([
+      "t-fresh",
+      "t-fresh",
+    ]);
   });
 });

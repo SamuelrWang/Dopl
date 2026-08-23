@@ -139,11 +139,14 @@ function shouldSeed(channelId) {
   return seedModeFor(isSeeded(channelId), getCursor(channelId));
 }
 
-// NOTE (Round B): the per-channel `pendingConsent` store + its getPending /
-// setPending / clearPending helpers were removed. Consent is now a DURABLE server
-// row watched by consent-watcher.js, whose own persisted `channelWatched` /
-// `channelSettled` stores are the crash-recovery + no-replay source of truth. Any
-// legacy `pendingConsent` key left in electron-store is dead and simply ignored.
+// NOTE (Round B): the per-channel `pendingConsent` store + its getPending / setPending /
+// clearPending helpers were removed, and their replacement has now been removed too.
+// ⚠ THE REPLACEMENT WAS `consent-watcher.js`'s `channelWatched` / `channelSettled` stores (a
+// durable inbound consent row plus a no-replay settled set), and the whole inbound lane is
+// DELETED — 2026-08-22, Samuel's ruling; `main/trigger.js`'s header carries it. THREE dead
+// electron-store keys therefore survive on shipped machines and are simply ignored:
+// `pendingConsent`, `channelWatched`, `channelSettled`. Nothing reads any of them; a reader
+// added back would resurrect a decision surface that no longer exists.
 
 // ── Stale-session notification + feature-availability flag ───────────────────
 function notifyStale() {

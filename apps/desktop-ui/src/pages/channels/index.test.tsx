@@ -196,23 +196,26 @@ const THREAD = {
   lastActivityAt: "2026-08-01T12:00:00.000Z",
 };
 
+/** ⚠ AN OUTBOUND DRAFT NOW (2026-08-22). It was `kind: "inbound"` — a teammate's
+ *  agent asking to run here — and that whole lane is deleted. What is left to
+ *  decide is the operator's OWN agent's reply, waiting on their Send. */
 const CONSENT: ChannelConsentRequest = {
   id: "cr-1",
   channelId: CHANNEL_ID,
   workspaceId: "",
   operatorUserId: "u-1",
-  requesterUserId: "u-2",
-  kind: "inbound",
+  requesterUserId: null,
+  kind: "outbound",
   messageSeq: 1,
-  summary: "Run the channels port",
-  bodyPreview: "Can your agent take the channels port?",
-  proposedReply: null,
+  summary: "Reply about the channels port",
+  bodyPreview: "",
+  proposedReply: "Yes — starting on the client queries now.",
   status: "pending",
   decidedBy: null,
   decidedAt: null,
   createdAt: "2026-08-01T12:01:00.000Z",
   expiresAt: null,
-  requesterName: "Ada",
+  requesterName: null,
   requesterAvatarUrl: null,
 };
 
@@ -289,7 +292,6 @@ beforeEach(() => {
         requests: consentDecided ? [] : [{ ...CONSENT, workspaceId }],
       });
     }
-    if (path === "/api/channels/trust") return json({ rules: [] });
     if (path === "/api/channels/consent/cr-1" && method === "PATCH") {
       consentDecided = true;
       return json({
@@ -355,10 +357,9 @@ describe("channels page", () => {
       expect(requestsTo(path)[0].headers["x-workspace-id"]).toBe(workspaceId);
     }
 
-    // ⚠ `/api/channels/trust` is NOT in that list any more (2026-08-19). The
-    // manage cluster moved off the pane header into the right panel's SETTINGS
-    // tab, so `useTrustRules` mounts with the tab rather than with the page —
-    // which is the point: a read behind a closed tab is a read nobody asked for.
+    // ⚠ `/api/channels/trust` IS NEVER READ BY ANYTHING ANY MORE (2026-08-22): the
+    // ROUTE and its hook are deleted with the trust roster they fed. The
+    // assertion stays as the cheap catch for a reintroduced read that would 404.
     expect(requestsTo("/api/channels/trust")).toHaveLength(0);
   });
 
@@ -400,30 +401,36 @@ describe("channels page", () => {
     expect(within(crumb).getByText("migration")).toBeInTheDocument();
   });
 
-  it("decides a pending ask INLINE; the Inbox row both navigates and decides", async () => {
+  /**
+   * THE SURVIVING DECISION END TO END, and the RETIRED one pinned as an ABSENCE
+   * (Samuel, 2026-08-22 — the inbound consent retirement).
+   *
+   * ⚠ THE ABSENCE HALF IS WHY THIS TEST IS STILL HERE. The inbound lane was
+   * reachable from three surfaces, each optional-prop shaped, so re-adding any
+   * one would compile and render — and would offer the operator a decision no
+   * server route can take.
+   */
+  it("decides an OUTBOUND draft, and offers no inbound decision anywhere", async () => {
     renderPage();
+    await screen.findByText("Picked it up, wiring the client queries now.");
 
-    // The decision lives on the transcript's own surfaces (Samuel, 2026-08-20):
-    // the thread card carries Launch agent / Decline. The Inbox row navigates —
-    // and (same-day review) ALSO carries the decision, because the seq→thread
-    // join cannot place every row and an undecidable row is a hung agent.
-    const inbox = await screen.findByRole("button", { name: /Inbox/ });
-    // The card's decision is already on the transcript before any nav.
-    await screen.findByRole("button", { name: "Launch agent" });
+    // ⚠ NOTHING ON THE TRANSCRIPT ASKS FOR AN ANSWER: the card's inline pair and
+    // the thread strip are deleted, "Requested" has no derivation left, and a
+    // Decline exists on no surface in this product.
+    expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
+    expect(screen.queryByText("Requested")).toBeNull();
+    expect(screen.queryByText(/awaiting your answer/i)).toBeNull();
+    expect(screen.queryByText(/'s agent is asking/)).toBeNull();
 
-    fireEvent.click(inbox);
-    const row = await screen.findByText("Ada's agent is asking");
-    // The row carries the same verbs the inline card does.
-    expect(screen.getByRole("button", { name: "Launch agent" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /Inbox/ }));
 
-    // The row body is the navigation: back to the channel, where the card decides.
-    fireEvent.click(row.closest("[role=button]")!);
-    const cardLaunch = await screen.findByRole("button", {
-      name: "Launch agent",
-    });
-    fireEvent.click(cardLaunch);
+    // ONE lane, ONE verb pair — the inbound row's Decline / Launch agent is gone.
+    await screen.findByText("Your agent wants to reply");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Launch agent" })).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() =>
       expect(requestsTo("/api/channels/consent/cr-1", "PATCH")).toHaveLength(1)
     );
@@ -431,10 +438,9 @@ describe("channels page", () => {
     expect(patch.body).toEqual({ decision: "allow" });
     expect(patch.headers["x-workspace-id"]).toBe(workspaceId);
 
+    // The inbox holds only `pending` rows, so a decided one leaves it.
     await waitFor(() =>
-      expect(
-        screen.queryByRole("button", { name: "Launch agent" })
-      ).not.toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument()
     );
   });
 
@@ -471,10 +477,12 @@ describe("channels page", () => {
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete channel" })).toBeInTheDocument();
 
-    // And the tab's own read arrives with it, not before it.
-    await waitFor(() =>
-      expect(requestsTo("/api/channels/trust").length).toBeGreaterThan(0)
-    );
+    // ⚠ THE TAB NO LONGER OPENS A READ OF ITS OWN (2026-08-22). It used to fire
+    // `useTrustRules` on mount, and this asserted the read ARRIVED WITH the tab
+    // rather than with the page. Trust is deleted with the inbound consent lane,
+    // so the honest assertion is the mirror image: opening the tab reaches the
+    // controls and still asks the server for nothing extra.
+    expect(requestsTo("/api/channels/trust")).toHaveLength(0);
   });
 
   it("has no Links tab left to render an empty state into", async () => {

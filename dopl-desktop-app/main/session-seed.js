@@ -73,14 +73,61 @@ function frameContinuation(nonce, message, authorName, addressing) {
   ].join('\n');
 }
 
-// The @-addressing note for ONE fed message, or no lines at all when nobody was addressed.
+// The @-addressing verdict for ONE fed message, as prose above the fence.
 // ⚠ `addressing.ids` are agent ids (`^[a-z][a-z0-9]{7}$`), filtered against this machine's live
 // sessions before they get here, so the join below can never open a line of its own.
+//
+// ⚠ THE UNADDRESSED CASE USED TO SAY NOTHING AT ALL, and silence is not neutral (2026-08-22,
+// Samuel's ruling). `session-dispatch.js › addressingFor` answers `null` for "nobody was named",
+// this returned `[]` for it, and the only standing rule the agent then had was
+// `prompt-framing.js › agentIdentityFraming`'s old default of "an unnamed message is yours".
+// Across 40 real messages in live testing every sibling therefore answered every unaddressed
+// message and the coordination protocol fired ZERO times. The verdict is now STATED on that
+// branch, and it states the flipped default.
+//
+// ⚠ `undefined` IS NOT `null` HERE, AND THE DIFFERENCE IS DELIBERATE. `null` is a COMPUTED
+// verdict: the fan-out parsed the body and found no agent id, so "nobody named you" is a thing
+// this machine knows. `undefined` is the ARGUMENT NOT SUPPLIED by a caller that never ran the
+// verdict, and telling such a session that no sibling claimed the message would be a claim the
+// call site cannot back. Every production path supplies one: `session-reducer.js › pushInbound`
+// normalizes with `event.addressing || null` (pinned in addressing-framing.test.mjs), and
+// `session-gate.js` carries the same field through the hold.
+//
+// ⚠ THE MULTI-ADDRESSEE TIE-BREAK IS A RULE, NOT A SUGGESTION. "COORDINATE IN THE OPEN" is what
+// was already there and it is what failed in production, so a message naming two live agents
+// gets a DETERMINISTIC winner instead of an invitation to negotiate. The order is real and it is
+// the same on every reader's machine: `session-dispatch.js › mentionedAgentIds` pushes ids in
+// the order they appear in the BODY, intersected with `liveOnThread` order (registry insertion,
+// i.e. spawn order), and the same array is handed to every session. So "the first id named in
+// this list" is a rule each agent can apply alone, from the list it is looking at, with no round
+// trip. The stand-down is not absolute: the others take it back if the first one plainly never
+// acted, because a deterministic winner that has already ended is otherwise a dead thread.
 function addressingLines(addressing) {
-  if (!addressing || !Array.isArray(addressing.ids) || !addressing.ids.length) return [];
-  const ids = addressing.ids.join(', ');
+  if (addressing === undefined) return [];
+  const list = (addressing && Array.isArray(addressing.ids)) ? addressing.ids : [];
+  if (!list.length) {
+    return [
+      `NOBODY IS NAMED IN THIS MESSAGE, so it is NOT automatically yours. Every agent working`,
+      `this thread was handed it, not just you. Read the thread before you answer: if a sibling`,
+      `has already claimed it or already answered it, stand down and stay quiet. If you are`,
+      `going to take it, claim it in one short line first, then do the work.`,
+    ];
+  }
+  const ids = list.join(', ');
   if (addressing.me === true) {
-    return [`This message @-mentions YOUR agent id. It is addressed to you: act on it.`];
+    if (list.length === 1) {
+      return [`This message @-mentions YOUR agent id. It is addressed to you: act on it.`];
+    }
+    const first = list[0];
+    return [
+      `This message @-mentions YOUR agent id, and it names more than one agent: ${ids}.`,
+      `WHO ACTS IS DECIDED BY ORDER, not by judgement and not by whoever is quickest: the FIRST`,
+      `id in that list acts, and the others stand down. That is the rule, not a suggestion.`,
+      `- If ${first} is your agent id, you are the one who acts. Do the work.`,
+      `- If it is not, do not answer and do not start. Take it over only if ${first} has plainly`,
+      `  not acted (nothing from it on this thread, no claim and no reply), and then say in one`,
+      `  short line that you are picking it up because ${first} did not.`,
+    ];
   }
   return [
     `This message @-mentions another agent (${ids}), not you. It is NOT addressed to you:`,
@@ -195,13 +242,38 @@ function pendingTranscript(s) {
 // read it. Its producer was `channel-deliver`, which is deleted; the value was `''` at every call
 // site, so the framing reads the session's OWN context, exactly as a pair (ASSIST) session always
 // did.
+//
+// ── ⚠ THE OPERATOR'S LAUNCH GOAL WAS DEAD TEXT, AND THIS IS WHERE IT COMES BACK (2026-08-22) ──
+//
+// `sessions:launch` (the New Agent button) composes a GOAL — "Join the thread "<title>" as my
+// agent: read it with dopl_channel and carry the work forward", or the channel-level equivalent —
+// and hands it in as `spec.firstMessage`. On every OTHER lane that string becomes the fenced body
+// of `buildFencedTurn` and is pushed as the session's first turn. On the SPAWN-IDLE lane it
+// reached NOBODY: `startSession` sets `firstTurn = ''` for a `parkedShell`, and the wake path
+// (`session-park.js › resumeParked` -> the reducer's `pushInbound` / `pushTurn`) never pushes
+// `s.firstTurn` — only `session-query.js › startQuery` does, and a spawn-idle session never runs
+// it. So a woken agent opened on an EMPTY FENCE: full framing, `BEGIN-REQUEST-<nonce>`, nothing,
+// `END-REQUEST-<nonce>`. Everything it was launched to do was in a string nothing read.
+//
+// ⚠ IT IS DELIVERED THROUGH THE `message` SLOT RATHER THAN PREPENDED, and that is the whole of
+// the fix being one expression. The goal interpolates a THREAD TITLE that arrived from the
+// renderer, so it is not fully trusted text and must sit INSIDE the fence like every other body;
+// and the requester framing this lane builds already opens "The GOAL is delimited below", which
+// is exactly what this is. Prepending it above the fence would have made it read as OUR
+// instruction and put semi-untrusted text in the trusted preamble.
+//
+// ⚠ THE TRANSCRIPT STILL WINS when there is one. They are never both present in practice (a
+// spawn-idle session has no `pendingHistory` and the history seed's producer is deleted), and the
+// order states the rule that matters if they ever are: real thread content beats a synthesized
+// launch instruction.
 function takeFraming(s, transcript) {
   if (!s || s.freshFraming !== true) return '';
   s.freshFraming = false;
   // D2: `bind` rides through, so a room-bound TEAM shell wakes with the team framing
   // (identity + the room model + THE LAW) instead of the pair-bound responder framing.
   return framing.buildFencedTurn({
-    side: s.side, bind: s.bind, message: transcript, context: (s && s.context) || {}, nonce: s.nonce,
+    side: s.side, bind: s.bind, message: transcript || s.launchGoal || '',
+    context: (s && s.context) || {}, nonce: s.nonce,
   });
 }
 
@@ -307,6 +379,7 @@ function frameOperatorTurn(nonce, text) {
 
 module.exports = {
   frameContinuation,
+  addressingLines, // 2026-08-22: exported so the verdict's four branches are unit-testable alone
   frameOperatorTurn, // 2026-08-20: the direct 1:1 lane (F-212)
   frameHistorySeed, // v2.5 D3
   initialRequestPayload, // the initiating ask, once, as display (moved from session-io.js)

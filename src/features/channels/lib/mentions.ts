@@ -34,11 +34,67 @@
  *     resolves to NOBODY. The alternative is that the order a roster read
  *     happens to return decides whose inbox a message lands in — silent, and
  *     wrong for exactly one of the two people every time.
+ *  6. ⚠ CODE DOES NOT TAG. A handle inside an inline code span or a fenced code
+ *     block names NOBODY ({@link maskCodeRegions}) — see THE CODE RULE below.
+ *  7. ⚠ MARKUP IS NOT A HANDLE, IN BOTH DIRECTIONS ({@link maskMarkupRegions},
+ *     {@link TRAILING_PUNCTUATION}, {@link TRAILING_HTML_TAG}). Delimiters that
+ *     WRAP a handle come off it, so `**@diana**`, `~~@diana~~` and
+ *     `<b>@diana</b>` all tag; text markdown reads as structure rather than as
+ *     words is blanked, so an escaped `\@diana`, a link/image DESTINATION and a
+ *     link reference definition tag nobody. Every case is a MEASURED
+ *     disagreement with the transcript's tint, not a guess — F-266.
  *
  * The author's own id is dropped by the SERVER resolver, not here: "who does
  * this text name" and "who should be told" are different questions, and the
  * transcript still tints your own name where you wrote it.
+ *
+ * ── THE CODE AND MARKUP RULES LIVE IN `mentions-mask.ts` ────────────────────
+ * Rules 6 and 7 are enforced by masking, and both the masks and the reasoning
+ * that bought them moved into `lib/mentions-mask.ts` at the 2026-08-22 split.
+ * ⚠ The short version, because a reader here must not conclude the rules are
+ * optional: code is QUOTED TEXT and tags nobody — measured, not theorised, after
+ * two agents writing DOCUMENTATION about @-tagging put backticked handles in
+ * their bodies and TAGGED BOTH OPERATORS for real (channel seqs 647 / 653,
+ * 2026-08-21). Markup is not a handle either, in both directions. The full
+ * argument, and the measurement each mask answers to, is in that file.
+ * ── TWO MECHANISMS, ONE OUTCOME — AND EXACTLY ONE KNOWN GAP ─────────────────
+ * They are still two different predicates (the renderer lexes with `marked`, the
+ * server masks text) and that is not going to change without moving the server
+ * onto `marked`. What changed on 2026-08-22 (F-266, RESOLVED) is that they now
+ * AGREE on every shape anybody measured but one.
+ *
+ * ⚠ THE AGREEMENT IS A MEASUREMENT AND IT IS RE-RUNNABLE, which is the only
+ * reason it is safe to write down. `mentions-tint-parity.test.ts` walks
+ * `marked` the way `message-markdown.tsx` walks it, collects every string that
+ * reaches `MentionText`, and asserts tint === stamp over the whole case table.
+ * **It is the guard; this paragraph is only its summary.** Before this, the
+ * SPA suite pinned the tint for `**@dianataylor**` while the server stamped
+ * nobody — a test on each side, agreeing with neither.
+ *
+ * ⚠ THE ONE SURVIVING GAP IS INDENTED (four-space) CODE: `marked` calls it code
+ * and does not tint; this masker does not model it and the server tags. It is
+ * excluded from the parity table BY NAME, with the reason, so the exclusion is a
+ * decision a reader can see rather than a case nobody thought of. See
+ * {@link maskCodeRegions}.
+ *
+ * ⚠ AUTOLINKS LOOK LIKE A GAP AND ARE NOT ONE. A `<https://…/@handle>` and a
+ * bare `https://…/@handle` both TINT — `marked` makes the url its own link TEXT
+ * — and both tag. Making a URL's `@` stop tagging would break that agreement,
+ * so it is not a fix; it is a new divergence wearing a fix's clothes.
  */
+
+import { maskNonTaggingRegions } from "./mentions-mask";
+
+/**
+ * ⚠ THE MASKS ARE RE-EXPORTED, NOT RE-DECLARED. `mentions-mask.ts` is the split
+ * half of this module (2026-08-22); every existing `lib/mentions` import keeps
+ * working, and there is no second path to the same symbol.
+ */
+export {
+  maskCodeRegions,
+  maskMarkupRegions,
+  maskNonTaggingRegions,
+} from "./mentions-mask";
 
 /** Roster row reduced to what the match rule reads. Structural on purpose:
  *  the server's `channel_members` + profile join and the client's
@@ -57,9 +113,46 @@ export interface MentionCandidate {
  */
 export const MENTION_TOKEN_RE = /(@[^\s@]+)/g;
 
-/** Stripped from the END of a token. A handle cannot end in one of these, and
- *  prose routinely does. */
-const TRAILING_PUNCTUATION = /[.,:;!?'"`)\]}>]+$/;
+/**
+ * Stripped from the END of a token. A handle cannot end in one of these, and
+ * prose routinely does.
+ *
+ * ⚠ `*`, `_` AND `~` JOINED THIS CLASS ON 2026-08-22 (F-266), AND THAT IS THE
+ * LOAD-BEARING HALF OF THE FIX. `**@diana**` yields the token `@diana**`, which
+ * resolved to nobody while the transcript tinted it — so a BOLD escalation, which
+ * is exactly how an agent writes "a human has to see this", showed a highlight
+ * and stamped an empty set. Measured: `**`, `*`, `__`, `_` and `~~` all tinted
+ * and all stamped nothing.
+ *
+ * ⚠ THE `@(diana` ARGUMENT DOES NOT APPLY, because these are TRAILING. Leading
+ * punctuation still comes off nothing (rule 2): guessing where a handle STARTS is
+ * how `@…` inside a URL becomes a tag, and that reasoning is about the front of
+ * the token only.
+ *
+ * ⚠ THE RESIDUAL IS A HANDLE WHOSE LAST CHARACTER IS ONE OF THESE — `@diana_`
+ * clips to `diana`. That is a PRE-EXISTING class, not a new one: a display name
+ * ending in `!` or `.` has always clipped the same way, and `insertableHandle`
+ * has always been able to offer such a handle. `_` is legal INSIDE a handle and
+ * is untouched (`@diana_taylor` resolves whole — pinned in `mentions.test.ts`),
+ * which is the case the finding asked to verify before adding it.
+ */
+const TRAILING_PUNCTUATION = /[.,:;!?'"`)\]}>*_~]+$/;
+
+/**
+ * One trailing HTML tag, stripped BEFORE the punctuation class gets to it.
+ *
+ * ⚠ ORDER IS LOAD-BEARING AND THAT IS THE WHOLE REASON THIS IS A SEPARATE STEP.
+ * `>` is already in {@link TRAILING_PUNCTUATION}, so stripping punctuation first
+ * turns `@diana</b>` into `@diana</b` — a shape nothing else can recover. The
+ * loop in {@link mentionHandleOf} therefore runs this first, then punctuation,
+ * then repeats until neither moves (`**@diana**.` needs two passes).
+ *
+ * ⚠ WHY IT COUNTS AS A DELIMITER AT ALL. `message-markdown.tsx` renders inline
+ * `html` tokens as their own LITERAL TEXT and lexes the run between them as an
+ * ordinary text leaf, so `<b>@diana</b>` TINTS (measured). The tag is markdown
+ * structure to the lexer and never part of the handle.
+ */
+const TRAILING_HTML_TAG = /<\/?[A-Za-z][A-Za-z0-9-]*\s*\/?>$/;
 
 /** Handle -> the member it names, or `null` when two or more members claim it
  *  (rule 5: ambiguity resolves to nobody). */
@@ -141,11 +234,27 @@ export function insertableHandle(
   return null;
 }
 
-/** A token (`@diana,`) -> its comparable handle (`diana`), or null when the
- *  token carries no handle at all. */
+/**
+ * A token (`@diana,`) -> its comparable handle (`diana`), or null when the token
+ * carries no handle at all.
+ *
+ * ⚠ THE STRIP IS A LOOP, not two calls (2026-08-22). A token routinely carries
+ * BOTH kinds of trailing run and in either order: `**@diana**.` is emphasis then
+ * punctuation, `@diana</b>` is a tag whose `>` the punctuation class would eat
+ * first. One pass in a fixed order gets one of those wrong, and which one depends
+ * on the order you picked — so it runs to a fixed point instead.
+ */
 export function mentionHandleOf(token: string): string | null {
   if (!token.startsWith("@")) return null;
-  const handle = token.slice(1).replace(TRAILING_PUNCTUATION, "").toLowerCase();
+  let handle = token.slice(1);
+  for (;;) {
+    const before = handle;
+    handle = handle
+      .replace(TRAILING_HTML_TAG, "")
+      .replace(TRAILING_PUNCTUATION, "");
+    if (handle === before) break;
+  }
+  handle = handle.toLowerCase();
   return handle.length > 0 ? handle : null;
 }
 
@@ -160,10 +269,27 @@ export function resolveMentionToken(
   return index.get(handle) ?? null;
 }
 
-/** Every `@…` run in a body, in order, delimiters kept by `split`. */
+
+/**
+ * Every `@…` run in a body, in order, delimiters kept by `split`.
+ *
+ * ⚠ THE MASK RUNS ON EVERY @-CARRYING BODY (2026-08-22). It used to be gated on
+ * `body.includes("`") || body.includes("~")` — a char list that had to be kept in
+ * step with the masker's own patterns, and the markup pass added three more
+ * (`\`, `]`, `<`). A gate that must enumerate what it is gating is a second copy
+ * of the rule; the cheap exit that MATTERS is the `@` check above it, which is
+ * what keeps the roster read off the hot write path, and the masking is regex
+ * over a body already capped at 16k.
+ *
+ * ⚠ THIS IS THE ONE FUNNEL both {@link resolveMentions} and the server's
+ * cheap-exit check run through, so nothing masked can reach the resolver by
+ * either door.
+ */
 export function mentionTokensOf(body: string): string[] {
   if (!body.includes("@")) return [];
-  return body.split(MENTION_TOKEN_RE).filter((part) => part.startsWith("@"));
+  return maskNonTaggingRegions(body)
+    .split(MENTION_TOKEN_RE)
+    .filter((part) => part.startsWith("@"));
 }
 
 /**

@@ -1,5 +1,4 @@
 import type {
-  AgentTrustRule,
   Channel,
   ChannelConsentRequest,
   ChannelMessage,
@@ -52,9 +51,6 @@ export interface ThreadsCache {
 }
 export interface ChannelsCache {
   channels: Channel[];
-}
-export interface TrustCache {
-  rules: AgentTrustRule[];
 }
 export interface ConsentCache {
   requests: ChannelConsentRequest[];
@@ -311,47 +307,11 @@ export function setFavorite(
   });
 }
 
-/**
- * Trust renders from the RULE LIST, so the optimistic add needs a ROW, not a
- * flag. Only `trustedUserId` is read by the view's lens; the rest is filled so
- * the row is a valid `AgentTrustRule` needing no special case.
- */
-export function addTrustRuleRow(
-  cache: TrustCache | undefined,
-  input: { trustedUserId: string; operatorUserId: string; workspaceId: string }
-): TrustCache | undefined {
-  if (!cache) return cache;
-  if (cache.rules.some((r) => r.trustedUserId === input.trustedUserId)) {
-    return cache;
-  }
-  return {
-    ...cache,
-    rules: [
-      ...cache.rules,
-      {
-        id: pendingMessageId(input.trustedUserId),
-        operatorUserId: input.operatorUserId,
-        trustedUserId: input.trustedUserId,
-        workspaceId: input.workspaceId,
-        createdAt: new Date().toISOString(),
-        trustedName: null,
-        trustedEmail: null,
-        trustedAvatarUrl: null,
-      },
-    ],
-  };
-}
-
-export function removeTrustRuleRow(
-  cache: TrustCache | undefined,
-  trustedUserId: string
-): TrustCache | undefined {
-  if (!cache) return cache;
-  return {
-    ...cache,
-    rules: cache.rules.filter((r) => r.trustedUserId !== trustedUserId),
-  };
-}
+// ⚠ `TrustCache`, `addTrustRuleRow` AND `removeTrustRuleRow` STOOD HERE AND ARE
+// DELETED (Samuel, 2026-08-22). They were the optimistic half of the "Always
+// allow" roster — standing consent for an INBOUND ask, which is the decision
+// that ruling retired. Their one caller was the `trust` mutation in
+// `use-channel-preference-writes.ts`, deleted with them.
 
 /**
  * A decided consent request leaves the inbox at once. The inbox only holds

@@ -7,6 +7,16 @@
  * hangs on its OPERATOR's side with an "Agent" chip beside the name — never in
  * a third column (INVARIANTS §5).
  *
+ * ⚠ THE CHIP NAMES WHICH AGENT SINCE 2026-08-22 (Samuel: two of his agents posted
+ * in one thread and the transcript showed an undifferentiated "Agent" pill —
+ * *"it looks like one agent sending"*). A post whose `client_msg_id` carries the
+ * per-instance stamp renders `Agent · <id>` with a deterministic accent
+ * (`bits.tsx › AgentChip`, off `agents-model.ts › parseAgentPostStamp`); an
+ * unstamped one keeps the plain chip. **The run-grouping moved with it** —
+ * `view-model-rows.ts › isContinuation` breaks on a different agent id, because a
+ * continuation has no chip to put the id in and two agents in one collapsed run
+ * is the exact defect being fixed.
+ *
  * ⚠ THE SIDE COMES FROM `author_user_id`, NEVER FROM `authorKind`.
  * `authorKind` is CALLER-ASSERTABLE — an explicit body value wins over
  * `ctx.source`, which is load-bearing because the desktop posts agent results
@@ -24,8 +34,7 @@
 import { Bot } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
-import { AddresseePill, CARD_BUTTON, PendingChip } from "./bits";
-import { AgentChip } from "./bits";
+import { AddresseePill, AgentChip, CARD_BUTTON } from "./bits";
 import { MessageMarkdown } from "./message-markdown";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, ThreadCardRow, TranscriptRow } from "./view-model-rows";
@@ -34,18 +43,31 @@ export function Transcript({
   rows,
   index,
   flashId,
-  requested,
-  onDecideThread,
+  canLaunchAgent = false,
+  launchBusy = false,
+  onLaunchAgent,
   onOpenThread,
 }: {
   rows: TranscriptRow[];
   index: AuthorIndex;
   /** Briefly set right after a Tags-inbox click lands on a row. */
   flashId: string | null;
-  /** Thread ids the viewer has been asked about and has not answered. */
-  requested: ReadonlySet<string>;
-  /** Decide a pending ask inline, right on the card (Samuel, 2026-08-20). */
-  onDecideThread: (threadId: string, decision: "allow" | "deny") => void;
+  /**
+   * The direct-launch bridge op exists on this build (`use-agents-panel.ts ›
+   * AgentLaunchControls.canLaunch`). ⚠ FALSE RENDERS NO BUTTON AT ALL, never a
+   * disabled one — the feature-detection rule the whole bridge family follows,
+   * and a plain browser has no agent to start.
+   */
+  canLaunchAgent?: boolean;
+  /** A launch is in flight — the double-submit guard, not a capability. */
+  launchBusy?: boolean;
+  /**
+   * Start MY OWN agent on this card's thread (Samuel, 2026-08-22). ⚠ NOT A
+   * CONSENT DECISION — it raises no row, answers no request and asks nobody. It
+   * is the same direct launch the composer's Bot icon and the Agents tab's New
+   * Agent button fire.
+   */
+  onLaunchAgent?: (threadId: string) => void;
   onOpenThread: (id: string) => void;
 }) {
   if (rows.length === 0) {
@@ -79,8 +101,9 @@ export function Transcript({
               row={row}
               index={index}
               flash={row.id === flashId}
-              requested={requested}
-              onDecide={onDecideThread}
+              canLaunchAgent={canLaunchAgent}
+              launchBusy={launchBusy}
+              onLaunch={() => onLaunchAgent?.(row.openThreadId)}
               onOpen={() => onOpenThread(row.openThreadId)}
             />
           );
@@ -144,6 +167,7 @@ function AuthoredRow({
   authorLabel,
   time,
   agent,
+  agentId = null,
   continuation,
   flash,
   children,
@@ -154,6 +178,8 @@ function AuthoredRow({
   authorLabel: string;
   time: string;
   agent: boolean;
+  /** WHICH agent, when the writer stamped it — see `bits.tsx › AgentChip`. */
+  agentId?: string | null;
   continuation: boolean;
   flash: boolean;
   children: React.ReactNode;
@@ -181,7 +207,7 @@ function AuthoredRow({
             <span className="wrap-anywhere text-body font-semibold text-text-primary">
               {authorLabel}
             </span>
-            {agent && <AgentChip className="self-center" />}
+            {agent && <AgentChip agentId={agentId} className="self-center" />}
             <span className="text-micro text-text-muted">{time}</span>
           </div>
         )}
@@ -261,6 +287,7 @@ function Message({
       authorLabel={row.authorLabel}
       time={row.time}
       agent={row.agent}
+      agentId={row.agentId}
       continuation={row.continuation}
       flash={flash}
     >
@@ -298,32 +325,34 @@ function Message({
  * never-asked as approved. Filed as REFACTOR-FINDINGS F-206; the pill states the
  * party and nothing else until a projection exists.
  *
- * ⚠ What IS derivable is the mirror image: a thread addressed to the VIEWER
- * whose own consent request is still pending renders `PendingChip`. That is
- * their own inbox, joined on the triggering seq — real data, and asymmetric for
- * exactly the reason above.
+ * ⚠ AND IT CARRIES NO PENDING STATE OF THE VIEWER'S OWN EITHER, SINCE 2026-08-22
+ * (Samuel): *"remove all the stuff about declining and approving of threads — you
+ * have the thread, you open it, and either you launch agent or you don't."* The
+ * `PendingChip`, the `requested` set behind it and the inline **Decline /
+ * Launch agent** consent pair are all DELETED. What is left is TWO ACTIONS and
+ * neither is an answer to anybody: **Open thread** (the existing selection nav)
+ * and **Launch agent** (the direct launch — `use-agents-panel.ts › launchAgent`,
+ * which spawns a responder-style agent on this card's own thread). No decline
+ * anywhere.
  */
 function ThreadCardMessage({
   row,
   index,
   flash,
-  requested,
-  onDecide,
+  canLaunchAgent,
+  launchBusy,
+  onLaunch,
   onOpen,
 }: {
   row: ThreadCardRow;
   index: AuthorIndex;
   flash: boolean;
-  requested: ReadonlySet<string>;
-  onDecide: (threadId: string, decision: "allow" | "deny") => void;
+  canLaunchAgent: boolean;
+  launchBusy: boolean;
+  onLaunch: () => void;
   onOpen: () => void;
 }) {
   const first = row.threads[0];
-  const waiting = row.threads.some((t) => requested.has(t.id));
-  // The thread on this card THIS viewer owes an answer on (at most one — a
-  // fan-out raises one thread per addressee).
-  const ownedPending =
-    row.threads.find((t) => requested.has(t.id))?.id ?? null;
   return (
     <AuthoredRow
       id={row.id}
@@ -347,7 +376,6 @@ function ThreadCardMessage({
             Agent thread
           </span>
           <span className="flex-1" />
-          {waiting && <PendingChip />}
         </div>
         {/* `m-0.5 mt-0`: the sliver of ink left visible around the white panel
             is the reference's border-line (thinned from m-1, Samuel
@@ -399,39 +427,39 @@ function ThreadCardMessage({
 
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-caption text-text-muted" />
-          {/* INLINE DECISION (Samuel, 2026-08-20; closes F-214's one-click
-              gap): when THIS viewer owes an answer on one of the card's
-              threads, the decision lives here rather than in something that
-              floats over the page — the arrival pop-up is deleted. Same
-              consent mutation, same CAS, same gate. "Launch agent" = the
-              consent ALLOW, one click, saved/default launch settings; a
-              fan-out addresses one thread at this viewer, so the first owed
-              thread is the one being decided.
+          {/* ⚠ TWO ACTIONS, AND NEITHER IS A CONSENT DECISION (Samuel,
+              2026-08-22). The inline Decline / Launch agent pair that stood
+              here answered a `pending` inbound row through the CAS'd
+              `PATCH /consent/[id]`; that lane is gone, along with the strip
+              under the thread header and the Inbox's inbound rows. **THERE IS
+              NO DECLINE ANYWHERE.**
 
-              ⚠ THIS IS ONE OF THREE DECISION SURFACES, NOT ONE OF TWO. The
-              card and `thread-consent.tsx › ThreadAwaitingStrip` decide rows
-              the seq→thread join could PLACE; `inbox-pane.tsx › InboxRow`
-              decides the ones it could not (untagged triggers, aged-out
-              pages, seq-less outbound drafts) and is the durable home of last
-              resort. It is not a passive list — do not restate it as one, and
-              do not remove its buttons on the strength of this comment. */}
-          {ownedPending && (
-            <>
-              <button
-                type="button"
-                onClick={() => onDecide(ownedPending, "deny")}
-                className={CARD_BUTTON}
-              >
-                Decline
-              </button>
-              <button
-                type="button"
-                onClick={() => onDecide(ownedPending, "allow")}
-                className="auth-btn-3d h-8 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white"
-              >
-                Launch agent
-              </button>
-            </>
+              "Launch agent" is the DIRECT launch — the same bridge op the
+              composer's Bot icon and the Agents tab's New Agent button fire
+              (`use-agents-panel.ts › launchAgent`), spawning one of the
+              operator's own agents on THIS card's thread. It raises no consent
+              row and answers no request.
+
+              ⚠ IT IS `openThreadId`, THE SAME THREAD "Open thread" OPENS, and
+              that identity is load-bearing: a fan-out card names N threads, and
+              `view-model-rows.ts › ownThreadOf` already picked the one this
+              viewer is party to. Launching on any other one would start an
+              agent in an exchange the operator cannot write in.
+
+              ⚠ ABSENT, NOT DISABLED, WITHOUT THE BRIDGE. A plain browser has no
+              agent to start, and a permanently greyed button is
+              indistinguishable from a broken one (`bits.tsx › IconButton`
+              carries the same rule). `launchBusy` is the in-flight guard over a
+              real click and is a different fact. */}
+          {canLaunchAgent && (
+            <button
+              type="button"
+              disabled={launchBusy}
+              onClick={onLaunch}
+              className="auth-btn-3d h-8 shrink-0 rounded-[8px] px-3 text-caption font-medium text-white disabled:opacity-60"
+            >
+              Launch agent
+            </button>
           )}
           <button type="button" onClick={onOpen} className={CARD_BUTTON}>
             Open thread

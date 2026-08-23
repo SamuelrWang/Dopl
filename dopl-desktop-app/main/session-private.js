@@ -61,12 +61,39 @@ function turnInFlight(state) {
 /**
  * OPEN the window for a message just pushed. Returns the new depth.
  * ⚠ IT ADDS RATHER THAN SETS, so two 1:1 messages in a row each get their own covered turn.
+ *
+ * ⚠ THE `+2` DOUBLE-COUNTED WHEN THE IN-FLIGHT TURN WAS ALREADY PRIVATE (2026-08-22, the confirmed
+ * root cause of the posture degradation). The extra unit exists to cover a CHANNEL turn that
+ * happened to be running when the operator typed — that turn's `result` spends one, leaving the
+ * private turn covered by the second. But when the turn in flight is ITSELF private, its own
+ * depth is already paying for it: adding two spends one on a turn that was already counted, and
+ * the surplus never drains. Two 1:1 messages sent while the agent was working therefore left the
+ * session at depth 3 with two turns to run, and every CHANNEL turn after that had AXIS B's
+ * outbound widening withdrawn — the agent silently unable to auto-send, on a session nobody had
+ * made private.
+ * ⚠ THE DIRECTION OF THE REMAINING OVER-COVER IS UNCHANGED AND STILL DELIBERATE: a NON-private
+ * turn in flight still costs +2, because the alternative failure is a private answer posted in
+ * public.
  */
 function openPrivateTurn(s) {
   if (!s) return 0;
-  const add = turnInFlight(s.state) ? 2 : 1;
+  const add = (turnInFlight(s.state) && !isPrivateTurn(s)) ? 2 : 1;
   s.privateDepth = (Number(s.privateDepth) || 0) + add;
   return s.privateDepth;
+}
+
+/**
+ * A QUERY WAS TORN DOWN: the window closes outright. ⚠ A torn-down query OWES NO RESULTS — its
+ * consume loop is superseded by `session-query.js`'s `s.query !== q` guard, so the `result` events
+ * that would have spent this depth are dropped on the floor. Without this, a park, an auth hold, a
+ * crash or an operator End left the surplus behind on a session that is resumable, and the NEXT
+ * private turn opened on top of it. Called from the `abortQuery` / `denyPending` effects
+ * (`session-engine.js`) and from `session-park.js › resumeParked`, which rebuilds the query.
+ */
+function resetPrivateTurn(s) {
+  if (!s) return 0;
+  s.privateDepth = 0;
+  return 0;
 }
 
 /**
@@ -104,6 +131,7 @@ module.exports = {
   turnInFlight,
   openPrivateTurn,
   closePrivateTurn,
+  resetPrivateTurn, // 2026-08-22: a torn-down query owes no results — the window closes with it
   isPrivateTurn,
   effectiveMessageMode,
 };

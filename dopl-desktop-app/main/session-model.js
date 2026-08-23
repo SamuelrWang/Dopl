@@ -44,11 +44,67 @@ const { diag } = require('./diag');
 
 // THE PICKER'S CLOSED SET. [0] is the fail-closed member, the same convention the two mode
 // tables use ('manual' / 'ask'): 'default' asks for nothing and therefore risks nothing.
-// A renderer copy lives in session.html + session-preload.js and is pinned against this one.
+// ⚠ THIS IS THE ONLY COPY (re-measured 2026-08-22). It read "a renderer copy lives in
+// session.html + session-preload.js and is pinned against this one" — both files were deleted
+// with the session window on 2026-08-20 (F-228), and the four-copy agreement test that pinned
+// them ended in the same change. `test/session-model.test.mjs § 2` states the surviving census
+// and the rule to re-apply if a new surface ever offers this enum: a surface may only offer
+// values main will spend, asserted by DRIVING each copy's coercion, never by grepping.
 const MODEL_CHOICES = ['default', 'opus', 'sonnet', 'haiku', 'fable'];
 
+// ── ⚠ THE SECOND VOCABULARY: FULL MODEL IDS (2026-08-22, Samuel's model-selection ruling) ────
+//
+// The ruling names the values the operator picks as FULL IDS, not aliases, and the SPA renders
+// exactly those. This tree already had a frozen enum and it is ALIASES, for a reason its header
+// states and that has not stopped being true: an alias is version-stable, so a shipped desktop
+// build does not go stale the week a new model lands. Both are right about different things, so
+// there are two lists and ONE of them reaches argv.
+//
+//   MODEL_IDS       what a UI offers and what the DURABLE per-channel posture stores. The
+//                   operator's pick round-trips through the bridge unchanged, which is what lets
+//                   a select show what it set.
+//   MODEL_CHOICES   what becomes `--model <argv>`. Unchanged, still the last gate, still fails
+//                   closed to 'default' (no `model` option at all — the CLI's own pick).
+//
+// ⚠ THE MAP IS THE SEAM AND IT IS DELIBERATELY LOSSY IN ONE PLACE: `claude-haiku-4-5-20251001` is
+// a DATED id and resolves to the `haiku` alias, which the bundled CLI resolves to
+// `claude-haiku-4-5`. That is the same model, and taking the alias is what keeps the argv
+// version-stable — but it means the value that reaches the child is not byte-identical to the
+// value the operator picked, and a future ruling that needs a pinned date has to change THIS
+// line rather than discovering the difference in the field.
+const MODEL_IDS = [
+  'claude-fable-5',
+  'claude-opus-5',
+  'claude-sonnet-5',
+  'claude-haiku-4-5-20251001',
+];
+const ID_TO_ALIAS = {
+  'claude-fable-5': 'fable',
+  'claude-opus-5': 'opus',
+  'claude-sonnet-5': 'sonnet',
+  'claude-haiku-4-5-20251001': 'haiku',
+};
+
+// A stored/picked model ID, or '' for "absent" — which means the SDK default, i.e. today's
+// behaviour for every channel that has never chosen one. Fail-closed like every other coercion
+// here: an unknown string is ABSENT, never passed through.
+function normalizeModelId(value) {
+  return MODEL_IDS.indexOf(value) === -1 ? '' : value;
+}
+
+// The argv-safe ALIAS for a picked id, or 'default' when nothing valid was picked.
+function aliasForModelId(value) {
+  const id = normalizeModelId(value);
+  return id ? ID_TO_ALIAS[id] : MODEL_CHOICES[0];
+}
+
+// ⚠ IT ACCEPTS BOTH VOCABULARIES SINCE 2026-08-22, and still answers in exactly one. A caller
+// holding a full id (the durable posture) and a caller holding an alias (the per-session picker)
+// must not have to know which one the layer below wants — that is how a value reaches argv
+// un-coerced. Everything unrecognised is still 'default'.
 function normalizeModel(value) {
-  return MODEL_CHOICES.indexOf(value) === -1 ? MODEL_CHOICES[0] : value;
+  if (MODEL_CHOICES.indexOf(value) !== -1) return value;
+  return aliasForModelId(value);
 }
 
 // The value that may become `--model <argv>`, or null for "set no model option at all".
@@ -195,6 +251,9 @@ function observe(s, msg, dispatch) {
 
 module.exports = {
   MODEL_CHOICES,
+  MODEL_IDS, // 2026-08-22: what a UI offers and the durable posture stores
+  normalizeModelId,
+  aliasForModelId,
   normalizeModel,
   modelArg,
   contextWindowFor,

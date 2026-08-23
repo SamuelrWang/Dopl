@@ -78,7 +78,12 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // retention clock the OPERATOR's own cards render from, and `reportRow` picks the server
     // columns by name so it never reaches `channel_sessions`.
     "agentId", "channelId", "channelName", "contextUsed", "contextWindow", "detail", "endedAt",
-    "lastActivityAt", "listening", "messageMode", "name", "sessionId", "startedAt", "state",
+    "lastActivityAt", "listening", "messageMode",
+    // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same
+    // terms as `detail` / `toolMode` / `messageMode`: `session-state-push.js › reportRow` picks
+    // columns by name, so the wire is unchanged and the claim here stays the narrower one.
+    "model",
+    "name", "sessionId", "startedAt", "state",
     "taskId", "threadTitle", "tokensSpent", "toolLabel", "toolMode",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.

@@ -29,6 +29,9 @@ const spawner = require('./session-spawner');
 const { getStoredOAuthToken } = require('./claude-token');
 const detect = require('./session-auth-detect');
 const store = require('./session-store');
+// AXIS B's windowless floor — the ONE statement of it (F-236). A hold RESETS the posture, so the
+// release has to put the floor back; see `resumeAfterSignIn`.
+const { floorWindowlessMessage } = require('./session-profiles');
 const { diag } = require('./diag');
 
 // The auth-critical env vars sdk-loader.buildScrubbedEnv deliberately preserves (its
@@ -233,6 +236,22 @@ async function resumeAfterSignIn(s) {
   // Clear the reducer-visible hold BEFORE anything can spawn: `steer` below goes through
   // wakeEffects, which refuses to resume while authHeld is true.
   try { deps.dispatch(s, { type: 'auth_release' }); } catch (err) { diag('session-auth: release dispatch failed', err && err.message); }
+  // ⚠ AND RE-APPLY AXIS B's WINDOWLESS FLOOR (2026-08-22, F-236's last hole). The HOLD is the one
+  // park that resets the posture — `auth_hold` writes `messageMode: 'ask'`, because a session
+  // whose CREDENTIAL is gone relaunches rather than resuming and the arm it was given belongs to
+  // the run that ended. That reset is right for the TOOL axis and wrong for this one: a windowless
+  // session has NO ACCEPT SURFACE, so a recovered session came back BELOW the floor and
+  // `session-gate.js › enqueue` HELD the next peer reply with no drain left to release it
+  // (`decideInbound` / `drainQueue` / `drainInbound` all went with the session window). The
+  // operator signed in and their agent then silently stopped receiving.
+  // ⚠ THE SHARED RULE, NEVER A LOCAL SPELLING, and it is dispatched through the reducer's own
+  // `set_message_mode` so the value is coerced fail-closed and the `modes` echo repaints.
+  if (s.windowless === true) {
+    const floored = floorWindowlessMessage(s.state && s.state.messageMode);
+    if (!s.state || s.state.messageMode !== floored) {
+      try { deps.dispatch(s, { type: 'set_message_mode', mode: floored }); } catch (_) { /* best effort */ }
+    }
+  }
   try {
     if (hold.kind === 'preflight') {
       if (s.state) { s.state.phase = 'launching'; s.state.parked = false; s.state.activity = 'working'; }

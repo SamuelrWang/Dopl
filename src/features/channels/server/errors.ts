@@ -68,19 +68,13 @@ export class ConsentAlreadyDecidedError extends ChannelError {
   }
 }
 
-/** A trust rule would name the operator themselves — meaningless, refused. */
-export class TrustSelfError extends ChannelError {
-  constructor() {
-    super("You cannot add a trust rule for yourself");
-  }
-}
-
-/** The trusted target is not an active member of the workspace. */
-export class TrustedNotMemberError extends ChannelError {
-  constructor(public readonly userId: string) {
-    super(`User is not an active workspace member: ${userId}`);
-  }
-}
+// ⚠ `TrustSelfError` and `TrustedNotMemberError` STOOD HERE AND ARE DELETED
+// (2026-08-22). Both were raised only by `trust-service.ts › createTrustRule`,
+// which is deleted with the `agent_trust_rules` table and the two `/trust`
+// routes. Their `TRUST_SELF` / `TRUST_NOT_MEMBER` codes left
+// `http-mapping.ts` in the same change — an error class with no thrower still
+// publishes an API code, and a published code is a contract somebody writes a
+// client against.
 
 /** Task the caller can't act on. ⚠ Wrong-channel and wrong-workspace collapse
  *  to ONE not-found so ids can't be probed. */

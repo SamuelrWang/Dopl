@@ -28,6 +28,14 @@
 // what a tool may do; `grantDecision` returns off Axis B before Axis A is consulted, and the
 // profile is checked first. A floored session still cannot post out without the outbound gate.
 //
+// ── THE TWIN FILE (2026-08-22) ───────────────────────────────────────────────────────
+// AXIS A HAS A WINDOWLESS FLOOR OF ITS OWN NOW — `floorWindowlessTool`, floored at `auto`,
+// because the same missing surface that holds an inbound reply forever also turns a GATED TOOL
+// into a silent deny. It lives beside this one in `session-profiles.js` and is pinned in
+// `session-tool-floor.test.mjs`. The two are NOT symmetrical in where they apply: this one
+// writes STATE at two lanes, that one is applied at the READ in `session-io.js › grantArgs` and
+// leaves state alone. Both files say why.
+//
 // Run: `node --test dopl-desktop-app/test/session-mode-floor.test.mjs`
 
 import { test } from "node:test";
@@ -153,9 +161,18 @@ test("LIVE: a mode already at or above the floor is passed through untouched", (
   }
 });
 
-test("LIVE: the TOOL axis is NOT floored — this is Axis B's rule and only Axis B's", () => {
-  // ⚠ The two axes are independent, and a floor leaking across them would be the exact
+test("LIVE: the TOOL axis is not floored IN STATE — this lane is Axis B's and only Axis B's", () => {
+  // ⚠ The two axes are independent, and THIS floor leaking across them would be the exact
   // inversion the split exists to prevent (a message rule answering a tool question).
+  //
+  // ⚠ REQUIREMENT CHANGE, 2026-08-22 (Samuel's ruling 4). Axis A NOW HAS A WINDOWLESS FLOOR TOO
+  // — `session-profiles.js › floorWindowlessTool`, floored at `auto` — and this assertion is
+  // still exactly right, because that floor is applied to the READ (`session-io.js › grantArgs`)
+  // and deliberately does NOT rewrite the reducer's stored `toolMode`. So the select keeps
+  // showing what the operator set, which is what these three lines pin. What it must no longer
+  // be read as is "the tool axis has no floor": it does, one lane over, and the whole of it
+  // lives in `session-tool-floor.test.mjs`. Deleting this test to make room for that one would
+  // drop the only pin on state NOT being rewritten here.
   const h = harness();
   const res = h.fn({ channelId: CH, taskId: "task-1", axis: "tools", mode: "manual" });
   assert.equal(h.dispatched[0].type, "set_tool_mode");

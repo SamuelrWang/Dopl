@@ -129,11 +129,21 @@ describe("H-3 write-gate coverage", () => {
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
         "billing/checkout/route.ts",
-        // The consent gate keeps a HUMAN in the loop on a spawned agent. Reachable
-        // by an agent = it self-approves its own outbound review or grants itself
-        // permanent standing consent.
+        // The consent gate keeps a HUMAN in the loop. PATCH records the
+        // operator's Send / Cancel on their OWN agent's drafted reply; reachable
+        // by an agent token, a contained session reads its bearer off disk and
+        // self-approves its reply out of the machine.
+        // ⚠ `channels/trust/route.ts` STOOD BESIDE IT AND IS DELETED
+        // (2026-08-22, Samuel). Standing consent ("always allow Alice's agent")
+        // auto-allowed INBOUND requests, and the inbound lane is retired — the
+        // two routes, `trust-service.ts`, the repository reads and the
+        // `agent_trust_rules` table all go together
+        // (`20260822140000_retire_inbound_consent_and_trust.sql`). ⚠ NARROWING THIS SET
+        // IS THE EXACT MOVE THIS FILE EXISTS TO CATCH, so it is a deliberate
+        // edit, and it is safe for ONE reason only: the route is GONE, not
+        // ungated. If `src/app/api/channels/trust/` ever comes back, it comes
+        // back with `sessionOnly` and comes back to this list first.
         "channels/consent/[id]/route.ts",
-        "channels/trust/route.ts",
         // PATCH writes `agentToolProfile` and `favorite` (2026-08-19). The
         // profile is a CONTAINMENT control: a Bash-capable session could
         // otherwise read its own bearer off disk and durably re-widen its own

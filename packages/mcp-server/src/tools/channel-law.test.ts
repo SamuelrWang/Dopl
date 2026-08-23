@@ -244,6 +244,54 @@ describe("what the law and the ops around it may NOT say", () => {
     ).toEqual([]);
   });
 
+  /**
+   * ⚠ INBOUND CONSENT IS RETIRED (2026-08-22, Samuel: "remove all the stuff
+   * about declining and approving of threads"). The tool used to teach a
+   * SYMMETRIC model — your call is reviewed on your side, and theirs holds your
+   * message for their operator to Allow or Deny. Only the first half survives.
+   *
+   * ⚠ THIS IS A PROSE PIN, not a vocabulary entry, and deliberately so. The
+   * REMOVED_VOCABULARY table above is for surfaces an MCP client REJECTS (op
+   * names, argument names); the word "inbound" is ordinary English elsewhere in
+   * this description ("check for inbound turns you have not read yet"), so a
+   * blanket ban would force a rephrase of a correct sentence to catch a claim
+   * that is really about APPROVAL, not about the word.
+   */
+  it("says a message NOTIFIES the receiving side rather than being held there", () => {
+    expect(DESCRIPTION).toContain("WHAT HAPPENS ON THE RECEIVING SIDE IS NOT THAT");
+    expect(DESCRIPTION).toContain("simply NOTIFIES them");
+    expect(DESCRIPTION).toContain(
+      "Nothing you send sits in a queue over there waiting to be approved",
+    );
+    // ⚠ The actionable half: an agent that reads silence as "pending review"
+    // waits on a decision that is never coming.
+    expect(DESCRIPTION).toContain("means nobody has picked it up YET");
+  });
+
+  it("keeps the OUTBOUND review, and keeps it scoped to the caller's own machine", () => {
+    // ⚠ Untouched by the retirement, and the one an agent must still plan for.
+    // A pin, because "consent was removed" is exactly the over-read that would
+    // delete this too.
+    expect(DESCRIPTION).toContain("wait for YOUR OWN operator to approve it");
+    expect(DESCRIPTION).toContain("Your outgoing call is reviewed on YOUR machine");
+  });
+
+  it("no longer claims the other side can AUTO-ACCEPT what you send", () => {
+    // The per-channel setting sends the OPERATOR'S OWN posts automatically; it
+    // never accepted a peer's message on their behalf, and the lane that did is
+    // gone.
+    expect(DESCRIPTION).not.toContain("accept inbound replies");
+    expect(DESCRIPTION).not.toMatch(/inbound (consent|request|approval)/i);
+  });
+
+  it("teaches that a handle inside CODE tags nobody", () => {
+    // ⚠ Joined to `lib/mentions.ts`'s code rule (2026-08-22). An agent writing
+    // documentation about @-tagging tagged two real operators off backticked
+    // handles; the server now skips them, and the description has to say so or
+    // the agent reads a zero-tag report as a spelling mistake.
+    expect(DESCRIPTION).toContain("A HANDLE INSIDE CODE TAGS NOBODY");
+  });
+
   it("describes a thread as writable by exactly its two parties, with no exception", () => {
     // ⚠ The two-party rule is the RULE, not a default — no exception may come back.
     expect(DESCRIPTION).toContain("between exactly TWO parties");

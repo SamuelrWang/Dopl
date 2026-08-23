@@ -26,6 +26,7 @@
 //   sessions:openAgentWindow (F-212) opens the AGENT window on one of my own agents
 //   sessions:setMode         moves a LIVE session's two permission axes — supervision, not
 //                            containment; see its own block
+//   sessions:setModel        switches a LIVE session's MODEL (Query.setModel) and records it
 //   sessions:message         ⚠ THE OTHER OP THAT STARTS A TURN — see its own block
 //   sessions:narration       reads my own agent's work ring, for that window's first paint
 //   sessions:pause           interrupts the turn my agent is running on a thread
@@ -193,6 +194,14 @@ function register(opts = {}) {
       // the same thing, so either turns the floor into auto_both — and neither
       // can drop below it.
       startModes: channelPrefs.launchStartModes(p.channelId),
+      // ⚠ THE CHANNEL'S CHOSEN MODEL (2026-08-22, Samuel's ruling), read through its OWN reader.
+      // `getLaunchModel` is deliberately not `getLaunchPosture`: that one has exactly ONE
+      // consumer and a census pins the count, because a second reader of the stored PERMISSION
+      // pair re-opens H2. A model grants nothing and reaches no gate, so it may travel further —
+      // and keeping the two readers apart is what makes that distinction checkable.
+      // The full id is converted to the argv-safe ALIAS here, because everything below this line
+      // speaks the alias vocabulary (`session-model.js` carries the two-list argument).
+      model: require('./session-model').aliasForModelId(channelPrefs.getLaunchModel(p.channelId)),
       // ⚠ SPAWN IDLE (ruling 3): register, prepare the context, send NO first turn. The FIRST
       // inbound message for this agent is what starts its query.
       idle: true,
@@ -342,6 +351,27 @@ function register(opts = {}) {
       agentId: asAgentId(p.agentId),
       axis: axis,
       mode: mode,
+    });
+  }));
+
+  // ⚠ THE LIVE MODEL SWITCH (2026-08-22, Samuel's ruling). It moves ONE running session onto
+  // another model and RECORDS the pick, so a later park/resume keeps it; the bundled SDK supports
+  // it in streaming input mode (`Query.setModel`), the only mode this tree uses, so it really
+  // switches. Full argument at `main/session-reopen.js › setModelByTask`. It is NOT
+  // `channels:setLaunchPosture`, which governs the NEXT spawn — a session can be moved off what
+  // it launched on. The value is the ID vocabulary (`session-model.js › MODEL_IDS`), coerced HERE
+  // and again inside; an unknown value lands on 'default', which CLEARS the override rather than
+  // refusing, because the CLI's own pick is a legitimate thing to ask for.
+  ipcMain.handle('sessions:setModel', appWindowOnly('sessions:setModel', { ok: false }, async (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const engine = require('./session-engine');
+    if (typeof engine.setModelByTask !== 'function') return { ok: false };
+    return engine.setModelByTask({
+      channelId: p.channelId,
+      taskId: String(p.taskId || ''),
+      agentId: asAgentId(p.agentId),
+      model: require('./session-model').normalizeModelId(p.model),
     });
   }));
 

@@ -1,5 +1,4 @@
 import type {
-  AgentTrustRule,
   ChannelConsentRequest,
   ChannelSessionState,
   ConsentKind,
@@ -10,10 +9,16 @@ import type { ProfileRef } from "./dto";
 
 /**
  * DB row shapes + mappers for the v1.2 collaboration tables
- * (`channel_consent_requests`, `agent_trust_rules`, `agent_presence`).
+ * (`channel_consent_requests`, `agent_presence`).
  * Hand-written rather than pulled from the generated `Database` type — the
  * same cast-at-the-boundary pattern the rest of the channels feature uses,
  * since the repository talks to the untyped `supabaseAdmin()` client.
+ *
+ * ⚠ THERE WAS A THIRD TABLE, `agent_trust_rules`, and `TrustRuleRow` /
+ * `mapTrustRow` are DELETED with it (2026-08-22 — the table is dropped in
+ * `20260822140000_retire_inbound_consent_and_trust.sql`). It only ever auto-allowed
+ * INBOUND consent requests, and that lane is retired; a row shape for a relation
+ * that does not exist is a type that compiles and can never be satisfied.
  */
 
 export type ConsentRequestRow = {
@@ -32,14 +37,6 @@ export type ConsentRequestRow = {
   decided_at: string | null;
   created_at: string;
   expires_at: string | null;
-};
-
-export type TrustRuleRow = {
-  id: string;
-  operator_user_id: string;
-  trusted_user_id: string;
-  workspace_id: string;
-  created_at: string;
 };
 
 export type PresenceRow = {
@@ -136,21 +133,5 @@ export function mapConsentRow(
     expiresAt: row.expires_at,
     requesterName: requester?.display_name || requester?.email || null,
     requesterAvatarUrl: requester?.avatar_url ?? null,
-  };
-}
-
-export function mapTrustRow(
-  row: TrustRuleRow,
-  trusted: ProfileRef | undefined
-): AgentTrustRule {
-  return {
-    id: row.id,
-    operatorUserId: row.operator_user_id,
-    trustedUserId: row.trusted_user_id,
-    workspaceId: row.workspace_id,
-    createdAt: row.created_at,
-    trustedName: trusted?.display_name || trusted?.email || null,
-    trustedEmail: trusted?.email ?? null,
-    trustedAvatarUrl: trusted?.avatar_url ?? null,
   };
 }

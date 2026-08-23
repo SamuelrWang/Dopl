@@ -71,9 +71,12 @@ import {
   agentDisplayId,
   agentLiveness,
   agentKey,
+  agentRunningModel,
   formatTokens,
   metric,
+  parseAgentPostStamp,
 } from "./agents-model";
+import { agentModelShortLabel } from "../../lib/agent-models";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
@@ -82,18 +85,6 @@ import { useAgentNarration } from "./use-agent-narration";
 // not an arbitrary cut: it changes when the bridge does, this file when the layout
 // does. `AGENT_CONTROL_REFUSED` moved with it, being that strip's copy.
 import { AgentControls } from "./agent-panel-controls";
-
-/**
- * THE PER-INSTANCE POST STAMP, as `dopl-desktop-app/main/session-outbound-tag.js
- * › nextOwnPostId` mints it: `agent-<agentId>-<n>`. Anchored at BOTH ends and
- * carrying the agent-id charset (`main/agent-id.js › AGENT_ID_RE`) on purpose —
- * "starts with something id-shaped" is not good enough here, because the OTHER
- * `agent-…` producer on that machine is `main/channel-post.js › postResult`,
- * whose id is `agent-<channelId>-<seq>` and whose channel UUID can begin with
- * eight id-shaped characters. That form carries four more `-` groups, so an
- * exact match rules it out and a `startsWith` would not.
- */
-const AGENT_POST_STAMP_RE = /^agent-([a-z][a-z0-9]{7})-\d+$/;
 
 /**
  * WHAT THIS AGENT POSTED. Pure and exported for the test.
@@ -124,6 +115,11 @@ const AGENT_POST_STAMP_RE = /^agent-([a-z][a-z0-9]{7})-\d+$/;
  * failure to notice.
  * ⚠ NO `agentId` AT ALL falls back to today's behaviour byte for byte: such a
  * main runs one agent per thread, so the thread IS the instance.
+ *
+ * ⚠ THE STAMP IS PARSED BY `agents-model.ts › parseAgentPostStamp`, NOT BY A
+ * PATTERN WRITTEN HERE (2026-08-22). The transcript's per-agent attribution pill
+ * reads the same token, and two hand-written charsets for one wire format is the
+ * duplicate the review wave already caught once.
  */
 export function agentSentMessages(
   messages: readonly ChannelMessage[],
@@ -143,8 +139,8 @@ export function agentSentMessages(
       return false;
     }
     if (!mine) return true;
-    const stamped = AGENT_POST_STAMP_RE.exec(m.clientMsgId ?? "");
-    return !stamped || stamped[1] === mine;
+    const stamped = parseAgentPostStamp(m.clientMsgId);
+    return stamped === null || stamped === mine;
   });
 }
 
@@ -279,6 +275,17 @@ function AgentPanelHeader({
           <span className="truncate">
             in {agent.threadTitle ?? "no thread title"}
           </span>
+        {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
+            (2026-08-22). It rides the detail line that already exists rather than
+            earning chrome of its own — minimal copy (INVARIANTS §5). Absent
+            renders NOTHING: a main that does not report a model has said nothing
+            about what this agent is running, and "Default" would be this build
+            claiming to know (`agents-model.ts › agentRunningModel`). */}
+          {agentModelShortLabel(agentRunningModel(agent)) && (
+            <span className="shrink-0 text-text-muted">
+              · {agentModelShortLabel(agentRunningModel(agent))}
+            </span>
+          )}
         </span>
       </span>
       {/* ⚠ The pill REPLACES the liveness on an ended agent — one fact, one

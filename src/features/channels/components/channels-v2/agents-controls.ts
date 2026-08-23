@@ -145,6 +145,62 @@ export async function setAgentMode(payload: {
 }
 
 /**
+ * Whether this build can move a LIVE agent's MODEL (2026-08-22).
+ *
+ * ⚠ IT DETECTS `sessions.setModel`, the op it is about to USE — the strict form
+ * of this family's rule ({@link canMessageAgent} carries the bug that earned it).
+ * ⚠ DO NOT WIDEN IT TO `sessions.setMode`. That op is present on every build with
+ * the live posture strip, so detecting it would render a model selector on
+ * desktops that predate the model op and refuse on all of them.
+ */
+export function canSetAgentModel(): boolean {
+  return typeof getSpaBridge()?.sessions?.setModel === "function";
+}
+
+/**
+ * MOVE A LIVE AGENT'S MODEL.
+ *
+ * ⚠ IT PROMISES NO TIMING, AND MAIN DOES NOT REPORT ONE. The two axes' strip can
+ * say "from its next decision" because that is provable from the engine
+ * (`main/session-io.js › grantArgs` re-reads them at every gate); a model swap
+ * may instead need the SDK query rebuilt. **The confirmation is the FEED**, not a
+ * sentence: main stamps `DesktopSessionSummary.model` from `system/init` and from
+ * every assistant message, so a successful switch re-renders the control from
+ * main's own value with no second wiring — which is the same
+ * no-optimistic-stamp rule {@link setAgentMode}'s callers follow.
+ *
+ * ⚠ `""` IS "BACK TO THE DEFAULT", the same wire value the durable row writes as
+ * "no id stored" (`lib/agent-models.ts › AGENT_MODEL_DEFAULT`). One vocabulary,
+ * two surfaces.
+ *
+ * ⚠ `agentId` NAMES THE INSTANCE — the module header's rule. Without it main
+ * moves the OLDEST live agent on the thread, which under multiplayer is a
+ * different agent than the card these controls belong to.
+ *
+ * ⚠ THE VERDICT IS RETURNED, NEVER SWALLOWED. A model the operator believes they
+ * switched and the agent never ran on is this lane's worst outcome.
+ */
+export async function setAgentModel(payload: {
+  channelId: string;
+  taskId: string;
+  agentId?: string;
+  /** An SDK model id, or `""` for the SDK default. */
+  model: string;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const sessions = getSpaBridge()?.sessions;
+  if (typeof sessions?.setModel !== "function") {
+    return { ok: false, reason: "no-bridge" };
+  }
+  const res = await sessions.setModel(
+    payload.channelId,
+    payload.taskId,
+    payload.model,
+    payload.agentId
+  );
+  return { ok: res?.ok === true, reason: res?.reason };
+}
+
+/**
  * TALK TO MY OWN AGENT, out of band — F-212's direct 1:1 lane.
  *
  * ⚠ THE ONE BRIDGE CALL IN THIS MODULE THAT STARTS A TURN. Everything else here

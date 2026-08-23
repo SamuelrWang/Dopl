@@ -11,7 +11,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelMessage, ChannelThread } from "../types";
 import {
-  addTrustRuleRow,
   appendPendingMessage,
   buildPendingMessage,
   buildPendingThread,
@@ -21,7 +20,6 @@ import {
   patchChannel,
   pendingMessageId,
   reconcileMessage,
-  removeTrustRuleRow,
   retagPendingMessage,
   setFavorite,
   setToolProfile,
@@ -288,19 +286,11 @@ describe("the writes that used to be hand-rolled overrides", () => {
     expect(next?.channels[1]).toBe(rows[1] as never);
   });
 
-  it("adds and removes a trust rule row, and is idempotent on add", () => {
-    const added = addTrustRuleRow(
-      { rules: [] },
-      { trustedUserId: "peer", operatorUserId: ME, workspaceId: "ws" }
-    );
-    const again = addTrustRuleRow(added, {
-      trustedUserId: "peer",
-      operatorUserId: ME,
-      workspaceId: "ws",
-    });
-    expect(again?.rules).toHaveLength(1);
-    expect(removeTrustRuleRow(again, "peer")?.rules).toHaveLength(0);
-  });
+  // ⚠ THE TRUST-ROW SUITE STOOD HERE AND IS DELETED (Samuel, 2026-08-22).
+  // `addTrustRuleRow` / `removeTrustRuleRow` were the optimistic half of the
+  // "Always allow" roster — standing consent for an INBOUND ask, which is the
+  // decision that ruling retired. Both functions and their one caller went with
+  // it; there is nothing left here to be idempotent about.
 
   it("drops a decided consent request from the inbox", () => {
     const next = dropConsentRequest(

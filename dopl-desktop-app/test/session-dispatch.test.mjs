@@ -95,7 +95,7 @@ function harness(over = {}) {
   const io = { displayNameFor: (id) => cfg.displayName(id) };
   const api = new Function(
     "targeting", "sessionEngine", "io", "diag",
-    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, addressingFor };`
+    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, addressingFor, mayFeed, unwoken };`
   )(targeting, sessionEngine, io, () => {});
   return { ...api, calls, cfg };
 }
@@ -190,6 +190,69 @@ test("feed: the parser takes the closed agent-id charset and nothing near it", (
   assert.deepEqual(h.mentionedAgentIds(`@${A1}`, []), [], "an empty roster addresses nobody");
 });
 
+// ── THE SPAWN-IDLE WAKE RULE (2026-08-22, Samuel's ruling) ───────────────────
+//
+// ⚠ THE ONE HOLD-BACK IN THE FAN-OUT, and the fixture above is what makes these cases honest:
+// `agent()` carries NO `awaitingDirective` field, so every case ABOVE this block drives the
+// absent-flag path and pins that the old behaviour is untouched. A woken agent, an agent from a
+// build that predates the flag, and a session object built by any other shape all keep being fed
+// everything on the thread.
+
+const idle = (id, ownPostIds = []) => ({ ...agent(id, ownPostIds), awaitingDirective: true });
+
+test("wake: an UNWOKEN spawn-idle agent is fed NOTHING by an unaddressed message", () => {
+  const h = harness({ agents: [idle(A1)] });
+  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false, "nothing took it");
+  assert.equal(h.calls.feedInbound.length, 0, "and it never reached the gate");
+});
+
+test("wake: an @-mention of ITS OWN id wakes it, from ANY author", () => {
+  // Samuel's ruling names the third case explicitly: the operator tells a PEER "I'm going to
+  // wake another agent, you direct it". A peer can only name an id they were told, and the parse
+  // is intersected with this machine's live ids, so the reach is bounded by what was disclosed.
+  for (const author of [ME, PEER, "third-party"]) {
+    const h = harness({ agents: [idle(A1)] });
+    assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: author, body: `@${A1} take this` }), ME), true, author);
+    assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1]);
+    assert.deepEqual(h.calls.feedInbound[0].addressing, { me: true, ids: [A1] });
+  }
+  // …and a PEER'S AGENT is an author like any other (authorKind is framing, never a gate).
+  const byAgent = harness({ agents: [idle(A1)] });
+  assert.equal(byAgent.feedLiveSession(entry, peerMsg({ authorKind: "agent", body: `@${A1} go` }), ME), true);
+});
+
+test("wake: a message addressed to a SIBLING does not wake the idle one", () => {
+  // The sibling is fed (it was named); the unwoken agent is held back even though it received
+  // the same message under the plain fan-out. `addressing.me` is the key, not `addressing`.
+  const h = harness({ agents: [agent(A2), idle(A1)] });
+  assert.equal(h.feedLiveSession(entry, peerMsg({ body: `@${A2} you take it` }), ME), true);
+  assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A2], "only the addressee");
+});
+
+test("wake: the hold-back is PER SESSION — a woken sibling still gets everything", () => {
+  const h = harness({ agents: [agent(A1), idle(A2)] });
+  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
+  assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1],
+    "the live agent is fed, the undirected one is not");
+});
+
+test("wake: `mayFeed` is the rule, and it is `=== true` on both sides", () => {
+  // ⚠ FAIL TOWARD FEEDING. A session object that does not carry the flag — an older shape, a
+  // harness, anything the engine did not build — keeps the plain fan-out, because the failure
+  // this guards is a wasted launch, not a leak.
+  for (const junk of [undefined, null, false, "true", 1, {}]) {
+    assert.equal(h0.mayFeed({ awaitingDirective: junk }, null), true, JSON.stringify(junk));
+  }
+  assert.equal(h0.mayFeed(null, null), true, "no session at all is not a hold-back");
+  assert.equal(h0.mayFeed({ awaitingDirective: true }, null), false);
+  assert.equal(h0.mayFeed({ awaitingDirective: true }, { me: false, ids: [A2] }), false,
+    "somebody else's addressee is not a directive");
+  assert.equal(h0.mayFeed({ awaitingDirective: true }, { me: true, ids: [A1] }), true);
+  // And a truthy-but-wrong `me` must not open it either.
+  assert.equal(h0.mayFeed({ awaitingDirective: true }, { me: "yes", ids: [A1] }), false);
+});
+const h0 = harness();
+
 test("feed: no live session -> false (falls through to classify)", () => {
   const h = harness({ agents: [] });
   assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false);
@@ -257,7 +320,10 @@ test("route (1) is gated on nothing but a live session's own existence", () => {
 test("the module exports ONE route, and nothing that was deleted comes back", () => {
   // The dead-tissue pin. Deleting a route while leaving its export is how a caller keeps
   // finding it, and this module's export list IS the listener's menu.
-  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, addressingFor \};/);
+  // ⚠ `mayFeed` JOINED THE LIST ON 2026-08-22 (Samuel's SPAWN-IDLE WAKE RULE): the fan-out's one
+  // hold-back, exported so its truth table can be driven directly rather than only through the
+  // route. It is a ROUTING predicate like the two beside it, not a new route.
+  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, addressingFor, mayFeed \};/);
   for (const gone of [
     "maybeOpenRequesterSession", "maybeSurfaceRequesterReply", "noteRequestLifecycle",
     "maybeReopenAddressedThread", "diagRuntimeGateSkip", "REQUEST_MILESTONES",

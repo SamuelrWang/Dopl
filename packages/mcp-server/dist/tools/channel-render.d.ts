@@ -101,6 +101,11 @@ export declare function memberRef(userId: string, view: MemberView): string;
  * Message lines plus, when anything is tagged, the id legend. `selfUserId`
  * turns "to `2dac1943-…`" into "to you"; names come from the listing's own
  * hydrated authors, so no extra round-trip on the read/await path.
+ *
+ * ⚠ A ONE-MESSAGE PAGE RENDERS IN FULL — see {@link clipBody}. That is the
+ * escape hatch the clip marker points at, so it is a CONTRACT of this function,
+ * not an optimization: never clip a single-message page, or the remedy the
+ * marker names stops working and there is no other way to read a long body.
  */
 export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null): string[];
 /**

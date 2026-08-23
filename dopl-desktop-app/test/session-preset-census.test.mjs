@@ -52,15 +52,19 @@ test("H2: exactly TWO callers in main/ hand a posture in, and neither arms a dor
       "(session-ipc-ops.js = sessions:launch, the operator's own click on the Agents tab, " +
       "handing in the DURABLE record — it lived in channel-dir-ipc.js until the 2026-08-20 " +
       "split off the 500-line cap (F-226), which moved the FILE and not the consumer; " +
-      "trigger.js = the consent-approved responder lane, which " +
-      "since 2026-08-20 hands in a pinned NULL — it still names the key, so it still shows up " +
-      "here, and that is right: the seam is what must stay reviewed, not the value on this pass)"
+      "trigger.js = the PEER-TRIGGERED responder lane, which hands in a pinned most-restrictive " +
+      "pair — it still names the key, so it still shows up here, and that is right: the seam is " +
+      "what must stay reviewed, not the value on this pass)"
   );
   // ⚠ THE MEMBERSHIP IS TWO AND THE EFFECTIVE COUNT IS ONE, so the difference is asserted rather
   // than left to the string above. `trigger.js` appearing in a grep for `startModes:` used to mean
   // it consumed the single-use arm; it now means it spells out that it consumes nothing.
-  assert.match(read("trigger.js"), /const startModes = null;/,
-    "the responder lane hands in null — a census member that supplies no posture");
+  // ⚠ THE SPELLING CHANGED ON 2026-08-22 AND THE FACT DID NOT. It was `const startModes = null;`
+  // threaded into `{ tools: (startModes && startModes.tools) || 'manual', … }` — a seam whose one
+  // producer (`inboundApproved`) passed null, and which went with the inbound consent lane
+  // (Samuel's ruling). The value is written where it applies now.
+  assert.match(read("trigger.js"), /startModes: \{ tools: 'manual', messages \}/,
+    "the responder lane hands in the most restrictive tool axis — a census member with no stored posture");
   // ⚠ THE PARKED-SHELL CARVE-OUT ASSERTED `[]` UNTIL SAMUEL'S SPAWN-IDLE RULING (2026-08-21).
   // `operatorArmed` lets a handed-in posture reach a DORMANT shell, and the argument for why the
   // New Agent click may is written where it is exercised (`main/session-ipc-ops.js`, the

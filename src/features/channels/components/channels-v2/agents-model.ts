@@ -31,6 +31,7 @@
 
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
+import { normalizeAgentModel } from "../../lib/agent-models";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 
 /**
@@ -77,6 +78,47 @@ export function agentDisplayId(session: {
 }): string {
   const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
   return id || session.name || "Agent";
+}
+
+/**
+ * THE PER-INSTANCE POST STAMP, as `dopl-desktop-app/main/session-outbound-tag.js
+ * › nextOwnPostId` mints it: `agent-<agentId>-<n>`. Anchored at BOTH ends and
+ * carrying the agent-id charset (`main/agent-id.js › AGENT_ID_RE`) on purpose —
+ * "starts with something id-shaped" is not good enough here, because the OTHER
+ * `agent-…` producer on that machine is `main/channel-post.js › postResult`,
+ * whose id is `agent-<channelId>-<seq>` and whose channel UUID can begin with
+ * eight id-shaped characters. That form carries four more `-` groups, so an
+ * exact match rules it out and a `startsWith` would not.
+ *
+ * ⚠ ONE DECLARATION, AND IT LIVES HERE (2026-08-22). It stood in
+ * `agent-panel.tsx` as long as `agentSentMessages` was its only reader; the
+ * transcript's per-agent attribution pill is the second, and a second charset
+ * written out by hand is how the two come to disagree about what an agent id is.
+ * The review wave already caught one such duplicate attempt — do not re-declare
+ * this pattern anywhere, import {@link parseAgentPostStamp}.
+ */
+const AGENT_POST_STAMP_RE = /^agent-([a-z][a-z0-9]{7})-\d+$/;
+
+/**
+ * WHICH OF MY AGENTS WROTE THIS POST — the agent id off a `client_msg_id`, or
+ * `null` when the row is not stamped by one instance.
+ *
+ * ⚠ `null` IS "CANNOT SAY", NEVER "SOME OTHER AGENT". Three real classes of
+ * agent-authored row carry no per-instance stamp: a main older than the stamp,
+ * an agent that supplied its own idempotency key, and every courtesy no-op
+ * `main/channel-post.js › postCourtesy` sends about the MACHINE rather than
+ * about one agent (`agent-<channelUUID>-<seq>` — the UUID form fails the
+ * anchored pattern above, and that failure IS the discriminator). Both readers
+ * fail toward the OLD behaviour on `null`: `agent-panel.tsx ›
+ * agentSentMessages` keeps showing the row, and the transcript keeps the plain
+ * "Agent" pill (INVARIANTS §11 — render what IS known, never a blank or a guess
+ * standing in for it).
+ */
+export function parseAgentPostStamp(
+  clientMsgId: string | null | undefined
+): string | null {
+  if (typeof clientMsgId !== "string") return null;
+  return AGENT_POST_STAMP_RE.exec(clientMsgId)?.[1] ?? null;
 }
 
 /**
@@ -300,6 +342,34 @@ export function agentEndedAt(
   session: DesktopSessionSummary & { endedAt?: number | null }
 ): number | null {
   return metric(session.endedAt);
+}
+
+/**
+ * WHICH MODEL THIS AGENT IS ACTUALLY RUNNING ON, or `null` (2026-08-22).
+ *
+ * ⚠ ADDITIVE AND OPTIONAL, read off a widened LOCAL type rather than declared on
+ * `spa-bridge.ts › DesktopSessionSummary` — the same rule {@link agentDisplayId}
+ * and {@link agentEndedAt} follow, and for the same reason: the bridge type is the
+ * DESKTOP's to widen, main and this tree ship separately, and this side must
+ * compile and behave against either version of it.
+ *
+ * ⚠ ABSENT IS "THIS BUILD CANNOT SAY", NOT "THE DEFAULT". Every surface that
+ * shows it renders the ABSENCE — no chip at all — rather than the word "Default",
+ * because a card states what an agent IS RUNNING and a build that does not report
+ * a model has said nothing about that (INVARIANTS §11 — UNKNOWN is not EMPTY).
+ * The Settings tab's durable row is the opposite case: there the operator is
+ * PICKING, and "Default" is one of the picks.
+ *
+ * ⚠ IT IS THE EFFECTIVE MODEL, NOT THE CHANNEL'S STORED PICK. A live agent may
+ * have been switched mid-run (`agent-posture.tsx`), or have been spawned before
+ * the channel's posture changed, so the card must read the SESSION rather than
+ * the record — which is exactly the F-142 defect ("the web chip shows Idle while
+ * the desktop works") restated for a different field.
+ */
+export function agentRunningModel(
+  session: DesktopSessionSummary & { model?: string | null }
+): string | null {
+  return normalizeAgentModel(session.model);
 }
 
 export type AgentLivenessTone = "working" | "waiting" | "idle" | "ended";

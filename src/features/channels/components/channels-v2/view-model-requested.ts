@@ -1,12 +1,27 @@
 /**
- * Channels v2 — WHICH THREADS THE VIEWER HAS BEEN ASKED ABOUT, and which ones
- * the sidebar tree therefore shows.
+ * Channels v2 — THE OUTBOUND SEND-BOX JOIN: which open thread, if any, is
+ * holding a draft this operator's own agent wants to send.
  *
  * Its own file because it has its own reason to change: `view-model.ts` derives
- * ROWS from reads, and this derives an ADMISSION RULE from a join between two
- * of them (the consent inbox and the transcript). It is also the one derivation
- * in this tree that is bounded by what the SERVER will show the caller rather
- * than by what the design asks for — see the asymmetry note below.
+ * ROWS from reads, and this derives a PLACEMENT from a join between two of them
+ * (the consent inbox and the transcript).
+ *
+ * ⚠ THE INBOUND HALF OF THIS FILE IS DELETED (Samuel, 2026-08-22): *"remove all
+ * the stuff about declining and approving of threads — you have the thread, you
+ * open it, and either you launch agent or you don't."* `requestedThreadIds`,
+ * `pendingRequestIdByThread`, `pendingAsksByChannel` and `consentExemptThreadIds`
+ * went with the surfaces they fed — the transcript card's Decline / Launch agent
+ * pair, `thread-consent.tsx › ThreadAwaitingStrip`, the Inbox's inbound rows, the
+ * sidebar's `Clock` glyph and its per-channel ask badge. **There is no
+ * `requested` state anywhere in this tree any more**, derived or otherwise, and a
+ * reader must not re-derive one: an inbound ask is no longer a thing the operator
+ * answers, so nothing may render as if it were. Launching an agent on a thread is
+ * a direct act (`use-agents-panel.ts › launchAgent`), not a reply to a request.
+ *
+ * ⚠ WHAT SURVIVES IS THE OUTBOUND LANE, WHOLE. This operator's OWN agent
+ * drafting a reply and waiting on their Send is a different question with a
+ * different answer, it is still `pending` on `channel_consent_requests`, and
+ * `thread-consent.tsx › ThreadSendBox` still renders it.
  */
 
 import { SIDEBAR_THREAD_ACTIVE_WINDOW_MS } from "../../constants";
@@ -18,69 +33,24 @@ import type {
 } from "../../types";
 
 /**
- * THREADS THIS VIEWER HAS BEEN ASKED ABOUT AND HAS NOT ANSWERED — the
- * `requested` state, derived rather than stored.
+ * THE SEQ-KEYED JOIN ITSELF — thread → the pending consent row that belongs on it.
  *
- * There is no `requested` status on `channel_tasks` and there never was
- * (the port's intent doc § New agent thread, deleted at the Phase 12 cutover —
- * INVARIANTS §5). Server-side the state is: a thread whose
- * addressee's machine raised a consent request that is still `pending`
- * (INVARIANTS §6). This joins the two reads the page already has — the consent
- * inbox and the transcript — on the one column that links them, the triggering
- * message's `seq`.
+ * ⚠ FIRST WINS. `messages` arrives in ascending `seq`, so first is the OLDEST
+ * unsent draft — the one that has been waiting. Last-wins would silently move the
+ * send box onto whichever row arrived most recently, so a Send would dispatch a
+ * different draft than the one whose text is on screen.
  *
- * ⚠ ASYMMETRIC BY CONSTRUCTION, AND THAT IS THE FINDING, NOT A BUG HERE. A
- * consent read is scoped to `(operator, workspace)` and the operator is always
- * `ctx.userId` (INVARIANTS §6), so a REQUESTER cannot see whether their
- * addressee has answered — no projection exposes that, and inventing one from
- * "no pending row" would report never-asked as approved. So this returns the
- * threads addressed TO the viewer, and a request the viewer SENT carries no
- * requested state at all. See REFACTOR-FINDINGS F-206.
+ * ⚠ BOTH SIDES MUST BE FINITE NUMBERS BEFORE EITHER GOES IN A KEY. `message_seq`
+ * is a NULLABLE bigint and a wire row that omits it entirely arrives as
+ * `undefined`, which sails through a `!== null` guard and stringifies to
+ * `"ch-1:undefined"` — and a message whose own `seq` went missing produces the
+ * SAME key and self-matches, placing a draft on a thread because two absences
+ * agreed with each other.
  *
  * ⚠ Matched on `(channelId, messageSeq)`, not on `messageSeq` alone. `seq` is
- * globally unique today (INVARIANTS §5), so the channel is redundant — and it
- * is exactly the kind of redundancy to keep, because the day it stops being
- * unique this read would silently mark the wrong thread.
- *
- * ⚠ THE SEQ IS COMPARED AS A NUMBER, NOT AS "NOT NULL". `message_seq` is a
- * NULLABLE bigint and the DTO types it `number | null` — but a wire row that
- * omits the key entirely arrives as `undefined`, which sails through a
- * `!== null` guard and then stringifies to the key `"ch-1:undefined"`. A
- * message whose own `seq` ever went absent would produce that SAME key and
- * self-match, marking a thread requested on the strength of two missing values
- * agreeing with each other. Both sides are therefore required to be finite
- * numbers before either is put in a key.
- */
-export function requestedThreadIds(
-  messages: ChannelMessage[],
-  consentRequests: ChannelConsentRequest[]
-): ReadonlySet<string> {
-  const joined = joinRequestsToThreads(messages, consentRequests, isPendingInbound);
-  return joined.size === 0 ? EMPTY_REQUESTED : new Set(joined.keys());
-}
-
-/**
- * THE SEQ-KEYED JOIN ITSELF — thread → the pending consent row that triggered it.
- *
- * ⚠ ONE IMPLEMENTATION SINCE 2026-08-20, AND THE EXTRACTION FOUND A REAL
- * DISAGREEMENT. Three functions here wrote this loop out longhand, and the copies
- * had drifted on the tie-break: `pendingRequestIdByThread` did a bare `map.set`
- * (LAST row wins) while `pendingOutboundByThread` guarded with `!map.has` (FIRST
- * wins). Same join, same shape, opposite answers as soon as one thread carried two
- * pending rows.
- *
- * ⚠ FIRST WINS, EVERYWHERE. `messages` arrives in ascending `seq`, so first is the
- * OLDEST unanswered ask — the one that has been waiting, and the one
- * `transcript.tsx` already describes itself as deciding ("the first owed thread is
- * the one being decided"). Last-wins would silently move the decision to whichever
- * ask arrived most recently, so answering a card would settle a different request
- * than the one whose text is on it.
- *
- * ⚠ THE HONESTY RULE IS SHARED TOO: both sides must be finite numbers before
- * either goes in a key. A wire row that omits `message_seq` arrives as `undefined`,
- * which sails through a `!== null` guard and stringifies to `"ch-1:undefined"` —
- * and a message whose own `seq` went missing produces the SAME key and self-matches,
- * marking a thread requested because two absences agreed with each other.
+ * globally unique today (INVARIANTS §5), so the channel is redundant — and it is
+ * exactly the kind of redundancy to keep, because the day it stops being unique
+ * this read would silently place the draft on the wrong thread.
  */
 function joinRequestsToThreads(
   messages: ChannelMessage[],
@@ -103,30 +73,12 @@ function joinRequestsToThreads(
 }
 
 /**
- * THREAD → PENDING CONSENT-REQUEST ID, the join {@link requestedThreadIds}
- * makes, kept as a MAP so the transcript's request card can carry an inline
- * decision (Samuel, 2026-08-20 — the recipient had no accept affordance
- * anywhere but the Inbox pane, one unmarked nav hop away; F-214's fix).
- * Same seq-keyed join, same honesty rule: a seq-less row maps no thread.
- */
-export function pendingRequestIdByThread(
-  messages: ChannelMessage[],
-  consentRequests: ChannelConsentRequest[]
-): ReadonlyMap<string, string> {
-  const joined = joinRequestsToThreads(messages, consentRequests, isPendingInbound);
-  if (joined.size === 0) return EMPTY_REQUEST_IDS;
-  const map = new Map<string, string>();
-  for (const [threadId, request] of joined) map.set(threadId, request.id);
-  return map;
-}
-
-/**
  * THREAD → PENDING OUTBOUND REVIEW, the send-box join (Samuel, 2026-08-20):
  * when this operator's own agent has drafted a reply awaiting their Send, the
  * THREAD VIEW is where the send box renders — the outbound row's `messageSeq`
- * is the TRIGGERING ask's seq, so the same seq-keyed join places it on the
- * thread the reply belongs to. Same honesty rule: a seq-less row maps no
- * thread and stays reachable from the Inbox list only.
+ * is the TRIGGERING ask's seq, so the seq-keyed join places it on the thread the
+ * reply belongs to. A seq-less row maps no thread and stays reachable from the
+ * Inbox list only.
  */
 export function pendingOutboundByThread(
   messages: ChannelMessage[],
@@ -137,57 +89,18 @@ export function pendingOutboundByThread(
 }
 
 /**
- * HOW MANY THREADS IN EACH CHANNEL ARE AWAITING THIS VIEWER'S ANSWER — the
- * sidebar's ASK SIGNAL (Samuel's ruling, 2026-08-20: option (a), a per-channel
- * count).
+ * A pending OUTBOUND review — this operator's own agent has drafted a reply and
+ * is waiting on their Send.
  *
- * ⚠ IT IS THE SAME ROWS THE INBOX ROW COUNTS, SLICED BY CHANNEL. The Inbox nav
- * badge is `requests.length` over the whole workspace; this is that set grouped
- * by `channelId`. One read, two scopes — a second read for the sidebar would be
- * the two-readers-one-fact defect, and the two badges would drift apart the
- * moment either was filtered differently.
+ * ⚠ IT RE-STATES THE SERVER'S OWN `pending` FILTER rather than trusting it
+ * (INVARIANTS §6 — the list read returns pending rows only), for the same reason
+ * the seq check does not trust `!= null`.
  *
- * ⚠ NO `seq` JOIN, DELIBERATELY, and that is the one place this differs from
- * {@link requestedThreadIds} directly above. That function answers "which THREAD
- * is this about", which it can only do by matching the triggering message's
- * `seq` against the loaded transcript — so it necessarily drops a row whose seq
- * is absent, and it can only ever speak about the OPEN channel, whose transcript
- * is the only one loaded. This answers "does this CHANNEL have something waiting
- * for you", which the consent row states on its own. Requiring the join here
- * would silently under-count every channel the viewer is not looking at, which
- * is precisely the set the signal exists for.
- *
- * ⚠ THE READ IS ALREADY WORKSPACE-WIDE at the page level (`useConsentInbox` with
- * no `channelId`), which is what makes "visible without opening the channel"
- * true rather than aspirational.
- *
- * `pending` is the server's own filter (INVARIANTS §6 — the list read returns
- * pending rows only); `isPendingInbound` re-states it rather than trusting it,
- * for the same reason the seq check does not trust `!= null`.
+ * ⚠ IT HAD AN INBOUND TWIN UNTIL 2026-08-22 and deliberately does not any more.
+ * `kind === "inbound"` is not a state this tree renders: the addressee's decision
+ * lane is deleted, and a helper for it left standing is an invitation to
+ * reintroduce the surface.
  */
-export function pendingAsksByChannel(
-  consentRequests: ChannelConsentRequest[]
-): ReadonlyMap<string, number> {
-  const counts = new Map<string, number>();
-  for (const r of consentRequests) {
-    if (!isPendingInbound(r)) continue;
-    if (!r.channelId) continue;
-    counts.set(r.channelId, (counts.get(r.channelId) ?? 0) + 1);
-  }
-  return counts;
-}
-
-/** A pending INBOUND consent row — the only kind that says "you have been asked
- *  and have not answered". An outbound review is about this operator's own
- *  reply, and a decided row is answered. */
-function isPendingInbound(r: ChannelConsentRequest): boolean {
-  return r.kind === "inbound" && r.status === "pending";
-}
-
-/** A pending OUTBOUND review — this operator's own agent has drafted a reply and
- *  is waiting on their Send. ⚠ A NAMED TWIN of {@link isPendingInbound} rather
- *  than an inline compare: the inbound side had a helper and this side did not,
- *  which is how one of them comes to be edited without the other. */
 function isPendingOutbound(r: ChannelConsentRequest): boolean {
   return r.kind === "outbound" && r.status === "pending";
 }
@@ -199,69 +112,11 @@ function isSeq(value: number | null | undefined): value is number {
 }
 
 /**
- * THREADS A SEQ-LESS PENDING ASK MAKES REACHABLE — the sidebar's window
- * exemption for the requests {@link requestedThreadIds} cannot place.
- *
- * ⚠ WHY THIS IS A SECOND FUNCTION AND NOT A WIDENING OF THE FIRST. A consent
- * row carries NO thread reference of any kind — the table is
- * `(channel_id, workspace_id, operator_user_id, requester_user_id, kind,
- * message_seq, …)` and nothing else links it to `channel_tasks` (migration
- * `20260726100000`). A seq-less row is LEGAL: the de-dupe index is partial on
- * `message_seq IS NOT NULL` precisely because a request raised without a
- * triggering seq has no trigger identity (migration `20260726140000`). So for
- * such a row there is no honest way to say WHICH thread is waiting — and
- * {@link requestedThreadIds} keeps dropping it, because its answer wears the
- * Clock glyph and the words "awaiting your approval", which are an assertion
- * about one thread.
- *
- * ⚠ BUT DROPPING IT TWICE WAS THE BUG. The same set also drives the sidebar's
- * 24h-window exemption, and there the cost of the drop is that the operator has
- * a live pending ask with NO ROW ANYWHERE to walk into once the thread ages
- * out. That is a reachability question, not an assertion, so it can be answered
- * by the join that IS possible: the row names a CHANNEL, a REQUESTER, and the
- * OPERATOR who must decide — and a thread is one requester + one target
- * (INVARIANTS §5). Threads in that channel that this requester opened AND
- * addressed to this operator are the candidate set. It may admit more than one
- * thread, which is exactly why it is kept out of the glyph: showing a reader a
- * row they can open over-claims nothing, and calling that row "awaiting your
- * approval" would.
- *
- * ⚠ A NULL `requesterUserId` (the requester's account was deleted) joins to
- * nothing and is dropped — matching every thread with no `createdBy` is not a
- * join, it is a wildcard.
+ * Stable identity for the common empty case — this feeds `useMemo` chains, and a
+ * fresh `Map` per call is a new reference each render, which is exactly what a
+ * downstream `useMemo` dependency compares. The derivation is cheap; the churn it
+ * caused downstream was not.
  */
-export function consentExemptThreadIds(
-  threads: ChannelThread[],
-  consentRequests: ChannelConsentRequest[]
-): ReadonlySet<string> {
-  const seqless = consentRequests.filter(
-    (r) => isPendingInbound(r) && !isSeq(r.messageSeq) && r.requesterUserId !== null
-  );
-  if (seqless.length === 0) return EMPTY_REQUESTED;
-  const ids = new Set<string>();
-  for (const thread of threads) {
-    const named = seqless.some(
-      (r) =>
-        r.channelId === thread.channelId &&
-        r.requesterUserId === thread.createdBy &&
-        r.operatorUserId === thread.targetUserId
-    );
-    if (named) ids.add(thread.id);
-  }
-  return ids;
-}
-
-/**
- * Stable identities for the common empty case — these feed `useMemo` chains.
- *
- * ⚠ THE MAPS GOT ONE TOO, 2026-08-20. Only the Set had a shared empty, so
- * `pendingRequestIdByThread` and `pendingOutboundByThread` minted a fresh `Map` on
- * every call — a new reference each render, which is exactly what a downstream
- * `useMemo` dependency compares. The derivations are cheap; the churn they caused
- * downstream was not.
- */
-const EMPTY_REQUESTED: ReadonlySet<string> = new Set<string>();
-const EMPTY_REQUEST_IDS: ReadonlyMap<string, string> = new Map<string, string>();
 const EMPTY_OUTBOUND: ReadonlyMap<string, ChannelConsentRequest> = new Map<
   string,
   ChannelConsentRequest
@@ -269,8 +124,15 @@ const EMPTY_OUTBOUND: ReadonlyMap<string, ChannelConsentRequest> = new Map<
 
 /**
  * The threads the SIDEBAR TREE shows: active inside
- * {@link SIDEBAR_THREAD_ACTIVE_WINDOW_MS} **OR requested** (Samuel,
- * 2026-08-18 — the ruling's full text).
+ * {@link SIDEBAR_THREAD_ACTIVE_WINDOW_MS}.
+ *
+ * ⚠ THE "OR REQUESTED" ARM IS DELETED (Samuel, 2026-08-22), and so is the
+ * seq-less `exempt` arm beside it. Both existed to keep an UNANSWERED ASK
+ * reachable past the 24h window — the one thread the operator most needed a way
+ * back to while a `pending` inbound row was still live. With no inbound decision
+ * to make, there is nothing to keep reachable for: a thread the operator wants is
+ * a thread they open, and the window is the only rule left. **Do not restore
+ * either arm without restoring the lane they were built for.**
  *
  * ⚠ CLIENT-SIDE arithmetic over `lastActivityAt`, exactly as presence is over
  * `lastSeenAt` (INVARIANTS §5) — the repository read is one plain bounded,
@@ -278,32 +140,15 @@ const EMPTY_OUTBOUND: ReadonlyMap<string, ChannelConsentRequest> = new Map<
  * `lastActivityAt` means the read did not derive it, never "no activity", so it
  * reads INACTIVE here: the same fail-safe direction presence has.
  *
- * ⚠ THE REQUESTED ARM IS WHAT KEEPS AN UNANSWERED ASK REACHABLE. A request
- * raised more than 24h ago that the viewer never answered would otherwise fall
- * out of the tree while its consent row is still live — the one thread they
- * most need a way back to. It is derived from the viewer's OWN consent inbox
- * ({@link requestedThreadIds}), so it only ever admits threads addressed to
- * them; a request they SENT ages out on the window alone.
- *
  * ⚠ ORDER IS PRESERVED, never re-sorted: the server clipped its page against
  * the activity order, so a re-sorted page is the wrong rows in a plausible
  * order (INVARIANTS §5).
- *
- * ⚠ `exempt` IS THE SAME ARM WITH A WEAKER CLAIM ({@link consentExemptThreadIds}):
- * a seq-less pending ask cannot name its thread, so those threads are made
- * REACHABLE here without being marked requested anywhere the reader can see. It
- * is deliberately a separate argument rather than unioned into `requested` by
- * the caller — the union would put a Clock glyph on every candidate.
  */
 export function sidebarThreads(
   threads: ChannelThread[],
-  requested: ReadonlySet<string> = EMPTY_REQUESTED,
-  now: number = Date.now(),
-  exempt: ReadonlySet<string> = EMPTY_REQUESTED
+  now: number = Date.now()
 ): ChannelThread[] {
   return threads.filter((thread) => {
-    if (requested.has(thread.id)) return true;
-    if (exempt.has(thread.id)) return true;
     if (!thread.lastActivityAt) return false;
     const ts = new Date(thread.lastActivityAt).getTime();
     if (Number.isNaN(ts)) return false;

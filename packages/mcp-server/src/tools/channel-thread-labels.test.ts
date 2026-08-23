@@ -304,6 +304,45 @@ describe("F2 — the session suffix on a message line", () => {
     expect(text).not.toContain("session `seq 345`");
   });
 
+  it("names the AGENT segment of a THREE-part multiplayer slot key", async () => {
+    // ⚠ `<channelId>:<taskId>:<agentId>` (`main/session-store.js › sessionKey`).
+    // The render sliced after the FIRST colon, which predates the third segment
+    // and printed `<thread>:<agent>` — not a session identity, and a repeat of
+    // the thread tag two clauses away. The AGENT id is the half that
+    // distinguishes two sessions on the SAME thread, which is what multiplayer
+    // is for.
+    const text = await readText([
+      msg({
+        metadata: { session_id: `${CHANNEL_UUID}:${THREAD_UUID}:flintxyz` },
+      }),
+    ]);
+
+    expect(text).toContain("· session `flintxyz`");
+    expect(text).not.toContain("79ce5325:");
+  });
+
+  it("TWO agents on ONE thread are two different session tags", async () => {
+    // The multiplayer case the two-segment key could not express at all.
+    const text = await readText([
+      msg({ seq: 1, metadata: { session_id: `${CHANNEL_UUID}:${THREAD_UUID}:flintxyz` } }),
+      msg({ seq: 2, metadata: { session_id: `${CHANNEL_UUID}:${THREAD_UUID}:emberqrs` } }),
+    ]);
+
+    expect(text).toContain("· session `flintxyz`");
+    expect(text).toContain("· session `emberqrs`");
+  });
+
+  it("an EMPTY agent segment falls back rather than rendering an empty span", async () => {
+    // A responder with no first-class thread collapses the MIDDLE segment; a
+    // mid-wave record can leave the last one empty. Neither may render as ``.
+    const text = await readText([
+      msg({ metadata: { session_id: `${CHANNEL_UUID}:${THREAD_UUID}:` } }),
+    ]);
+
+    expect(text).toContain("· session `79ce5325`");
+    expect(text).not.toContain("session ``");
+  });
+
   it("SECURITY: the suffix is one inline span, so it cannot forge a line", async () => {
     // ⚠ Unreachable today (server-written from a shape-checked header), but the
     // render sits in the LINE HEAD outside untrusted-body framing and must be
@@ -314,5 +353,101 @@ describe("F2 — the session suffix on a message line", () => {
 
     expect(text.split("\n").filter((l) => l.startsWith("- **#"))).toHaveLength(1);
     expect(text).not.toContain("#9001");
+  });
+});
+
+/**
+ * SESSION DEATH, AND WHY IT NEEDS ITS OWN CLAUSE. The desktop posts a session
+ * ending as `kind='task_progress'` carrying `metadata.session_ended`
+ * (`main/session-effects.js`) — deliberately NON-TERMINAL, because one member's
+ * window closing is not the thread failing. That is right for the thread and
+ * wrong for a READER: "a step landed" and "the agent working this is gone"
+ * arrived here as the same line, and `await`'s own stop rule is keyed on whether
+ * the member showed activity.
+ */
+describe("the session_ended marker on a message line (2026-08-22)", () => {
+  const progress = (over: Record<string, unknown> = {}) =>
+    msg({ kind: "task_progress", body: "Session ended", ...over });
+
+  it("renders DISTINCTLY, not as an ordinary task_progress", async () => {
+    const text = await readText([
+      progress({ metadata: { session_ended: true } }),
+    ]);
+
+    expect(text).toContain("· SESSION ENDED");
+    // ⚠ It REPLACES the kind tag: printing both says "a step landed · the
+    // session died" in one clause, which is the ambiguity this fixes.
+    expect(text).not.toContain("· task_progress");
+  });
+
+  it("leaves an ordinary milestone reading as a milestone", async () => {
+    // CONTROL: a marker that fired on every task_progress would tell a waiting
+    // agent to stop on every step that landed.
+    const text = await readText([progress({ body: "schema applied" })]);
+
+    expect(text).toContain("· task_progress");
+    expect(text).not.toContain("SESSION ENDED");
+  });
+
+  it("only a literal `true` counts — a truthy value is not the marker", async () => {
+    // Mirrors the server's own strictness (`takeCalmFlags` re-stamps literal
+    // booleans only), so the render cannot claim an end the stamp never made.
+    const text = await readText([
+      progress({ metadata: { session_ended: "yes" } }),
+    ]);
+
+    expect(text).not.toContain("SESSION ENDED");
+  });
+});
+
+/**
+ * BODY CLIPPING. `read` rendered bodies untruncated and a 128,000-character body
+ * was measured in live use — one message eating an agent's whole context on the
+ * call it made to orient itself.
+ */
+describe("a long body is clipped on a multi-message page (2026-08-22)", () => {
+  const LONG = "x".repeat(2600);
+
+  it("clips at the cap and says how many characters are missing", async () => {
+    const text = await readText([msg({ seq: 4, body: LONG }), msg({ seq: 5 })]);
+
+    expect(text).toContain("600 chars clipped");
+    // ⚠ The body really is shorter, not merely annotated: 2000 kept, 600 gone.
+    expect(text).toContain("x".repeat(2000));
+    expect(text).not.toContain("x".repeat(2001));
+  });
+
+  it("the remedy it names RETURNS THE MESSAGE — one seq, one row", async () => {
+    // ⚠ The marker must not point at `op="get_thread"`: that op renders no
+    // message bodies at all. `since=<seq-1>, limit=1` is the call that does.
+    const text = await readText([msg({ seq: 4, body: LONG }), msg({ seq: 5 })]);
+
+    expect(text).toContain('op="read", channel="general", since=3, limit=1');
+  });
+
+  it("A ONE-MESSAGE PAGE IS NEVER CLIPPED — that is what the remedy relies on", async () => {
+    // ⚠ A CONTRACT, not an optimization: clip the single-message page and the
+    // call the marker names hands back another clipped copy, with no third way
+    // to read a long body anywhere on this surface.
+    const text = await readText([msg({ seq: 4, body: LONG })]);
+
+    expect(text).not.toContain("chars clipped");
+    expect(text).toContain(LONG);
+  });
+
+  it("leaves an ordinary body alone", async () => {
+    const text = await readText([msg({ body: "a normal reply" }), msg({ seq: 2 })]);
+
+    expect(text).toContain("a normal reply");
+    expect(text).not.toContain("clipped");
+  });
+
+  it("keeps the clipped body INDENTED, so it cannot forge a message row", async () => {
+    // The body is indented two spaces under its line head; a marker appended at
+    // column 0 would sit outside that and read as narration.
+    const text = await readText([msg({ seq: 4, body: LONG }), msg({ seq: 5 })]);
+    const marker = text.split("\n").find((l) => l.includes("chars clipped"))!;
+
+    expect(marker.startsWith("  ")).toBe(true);
   });
 });

@@ -5,11 +5,19 @@
 // pieces make that work and are exercised here against the REAL source:
 //   1. targeting.firstClassTaskId(m) — a UUID-gated read of the inbound message's
 //      metadata.taskId. Pure + exported + electron-free, so we `require` it.
-//   2. trigger.js taskIdFor(rec) — already prefers rec.taskId over the legacy
-//      `task-<channelId>-<seq>` fallback. trigger.js pulls in electron, so (like
-//      classify.test) we source-extract just that one pure function and eval it.
-// handleTrigger puts firstClassTaskId(m) onto rec.taskId via watcher.register,
-// so firstClassTaskId -> rec.taskId -> taskIdFor(rec) is the inheritance chain.
+//   2. trigger.js taskIdFor(entry, m) — prefers the message's own first-class id over the
+//      legacy `task-<channelId>-<seq>` fallback. trigger.js pulls in electron, so (like
+//      classify.test) we source-extract just that one pure function and eval it, injecting
+//      `targeting` (the REAL module, since it is electron-free).
+//
+// ⚠ THE CHAIN LOST ITS MIDDLE LINK ON 2026-08-22, AND THAT IS WHY THE SIGNATURE CHANGED.
+// It used to be `firstClassTaskId(m) -> rec.taskId -> taskIdFor(rec)`: `handleTrigger` stamped
+// the id onto a DURABLE pending-request record via `consent-watcher.register`, and the id was
+// read back off that record when the operator eventually clicked Allow, possibly on another run
+// of the app. The inbound consent lane is deleted (Samuel's ruling; `main/trigger.js`'s header)
+// so there is no record and no later read: `taskIdFor(entry, m)` derives the id from the message
+// that is still in hand. The RULE it encodes is unchanged and is what these cases pin — a
+// first-class UUID wins, anything else falls back to the deterministic legacy form.
 //
 // `.mjs` (ESM) to stay clean under the repo's shared eslint config; `createRequire`
 // loads the CommonJS targeting module.
@@ -44,8 +52,9 @@ function extractFn(src, name) {
   return src.slice(start, i);
 }
 const { taskIdFor } = new Function(
+  "targeting",
   `${extractFn(TRIGGER, "taskIdFor")}\n return { taskIdFor };`
-)();
+)(require("../main/targeting.js"));
 
 const UUID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 const withTaskId = (taskId) => ({
@@ -85,22 +94,19 @@ test("firstClassTaskId returns '' for a malformed near-UUID", () => {
   assert.equal(firstClassTaskId(withTaskId(UUID.replace(/-/g, ""))), ""); // no dashes
 });
 
-test("inheritance: a UUID inbound threads reply + lifecycle under it (taskIdFor prefers rec.taskId)", () => {
-  const m = withTaskId(UUID);
-  // handleTrigger: rec.taskId = firstClassTaskId(m) || undefined, spread into the
-  // durable record by watcher.register — modeled here as a plain object spread.
-  const rec = { channelId: "chan-1", seq: 9, taskId: firstClassTaskId(m) || undefined };
-  assert.equal(rec.taskId, UUID);
-  // task_started / reply / task_finished all route through taskIdFor(rec):
-  assert.equal(taskIdFor(rec), UUID);
+const entryFor = (id) => ({ channel: { id } });
+
+test("inheritance: a UUID inbound threads reply + lifecycle under it (taskIdFor prefers it)", () => {
+  const m = { ...withTaskId(UUID), seq: 9 };
+  assert.equal(firstClassTaskId(m), UUID);
+  // the launch context, the reply and every lifecycle echo all route through taskIdFor:
+  assert.equal(taskIdFor(entryFor("chan-1"), m), UUID);
 });
 
 test("legacy fallback unchanged: no first-class id -> deterministic task-<ch>-<seq>", () => {
-  const legacyInbound = withTaskId(`task-old-${UUID}-2`); // a legacy id, not a UUID
-  const rec = { channelId: "chan-1", seq: 9, taskId: firstClassTaskId(legacyInbound) || undefined };
-  assert.equal(rec.taskId, undefined);
-  assert.equal(taskIdFor(rec), "task-chan-1-9");
+  const legacyInbound = { ...withTaskId(`task-old-${UUID}-2`), seq: 9 }; // legacy id, not a UUID
+  assert.equal(firstClassTaskId(legacyInbound), "");
+  assert.equal(taskIdFor(entryFor("chan-1"), legacyInbound), "task-chan-1-9");
   // A wholly unthreaded inbound behaves identically.
-  const plain = { channelId: "chan-2", seq: 4, taskId: firstClassTaskId({ metadata: {} }) || undefined };
-  assert.equal(taskIdFor(plain), "task-chan-2-4");
+  assert.equal(taskIdFor(entryFor("chan-2"), { metadata: {}, seq: 4 }), "task-chan-2-4");
 });

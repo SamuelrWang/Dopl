@@ -8,10 +8,12 @@
 // so a re-run can never double-post. Tokens are never logged; a message body is
 // never logged verbatim.
 //
-// Both take a synthesized `entry` ({ channel:{id,name}, workspaceId }) and `m`
-// ({ seq }) so they work identically whether called from the live trigger path
-// (real entry/m in hand) or from the async consent-watcher resolvers (entry/m
-// rebuilt from a persisted pending-request record).
+// Both take a synthesized `entry` ({ channel:{id,name}, workspaceId }) and `m` ({ seq }).
+// ⚠ THAT SHAPE EXISTED FOR A SECOND CALLER THAT IS NOW GONE: the async `consent-watcher.js`
+// resolvers rebuilt an entry/m pair from a PERSISTED pending-request record, and both the
+// watcher and the record are deleted with the inbound consent lane (2026-08-22). Every caller
+// left has the real entry/m in hand. The synthesized shape stays because `trigger-outcomes.js ›
+// echoTargets` still builds one from the engine's flat lifecycle info object.
 
 const { Notification } = require('electron');
 const io = require('./listener-io');

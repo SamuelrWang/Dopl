@@ -15,8 +15,13 @@ import "server-only";
  *                            the server stamps (addressing, task keys, the
  *                            fan-out group)
  *   - `service-tasks.ts`   — first-class task lifecycle (create / set mode)
- *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
- *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
+ *   - `consent-service.ts` — OUTBOUND review requests (v1.2). ⚠ It carried the
+ *                            INBOUND lane too until 2026-08-22; that half is
+ *                            retired, and `trust-service.ts` — per-teammate
+ *                            standing consent, which existed only to auto-allow
+ *                            an inbound request — is DELETED with it, along with
+ *                            `POST|DELETE /api/channels/trust` and the
+ *                            `agent_trust_rules` table.
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
  *
  * GONE in the channels rollback (§1, 2026-08-05): `service-agents.ts` (summon /
@@ -109,12 +114,6 @@ export {
   getConsentRequest,
   decideConsentRequest,
 } from "./consent-service";
-
-export {
-  listTrustRules,
-  createTrustRule,
-  deleteTrustRule,
-} from "./trust-service";
 
 export { heartbeatPresence } from "./presence-service";
 

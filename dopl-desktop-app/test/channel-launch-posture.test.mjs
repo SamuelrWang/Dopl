@@ -168,6 +168,14 @@ test("getLaunchPosture falls back to the restrictive default, never to null", ()
   // on its own: a null here would make the Settings tab render nothing where it must render
   // Manual / Ask, and a caller that treated null as "no constraint" would be the wrong
   // direction entirely.
+  // ⚠ THE FALLBACK MOVED INTO `effectivePosture` (2026-08-22) and did not weaken: that helper is
+  // `readPostureFrom(...) || defaultPreset()` plus the always-present `model` key the renderer's
+  // own-key capability probe needs. Driven for real — shape and all — in
+  // `agent-model-selection.test.mjs`'s two WIRE cases; pinned here as the SPELLING, because the
+  // store-backed reader is the half source extraction cannot reach.
   const body = SRC.slice(SRC.indexOf("function getLaunchPosture("));
-  assert.match(body.slice(0, 220), /readPostureFrom\(getAllPostures\(\), channelId\) \|\| defaultPreset\(\)/);
+  assert.match(body.slice(0, 220), /effectivePosture\(getAllPostures\(\), channelId\)/);
+  const helper = SRC.slice(SRC.indexOf("function effectivePosture("));
+  assert.match(helper.slice(0, 400), /stored \|\| defaultPreset\(\)/,
+    "the restrictive fallback must survive the move, or an unset channel reads as no constraint");
 });

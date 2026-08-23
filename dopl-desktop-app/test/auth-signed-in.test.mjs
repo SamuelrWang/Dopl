@@ -11,6 +11,11 @@
 //   consent-watcher.js  tick       -> no consent polling, no consent windows
 //   mcp-config.js       ensure     -> "mcp-config: skip (signed out)"
 //
+// ⚠ THE THIRD OF THOSE FOUR NO LONGER EXISTS (2026-08-22). `consent-watcher.js` is deleted with
+// the inbound consent lane (Samuel's ruling; `main/trigger.js`'s header carries it), so THREE
+// gates are pinned below rather than four. The defect it demonstrated is unchanged — a dead blob
+// silencing every sync gate at once — and the surviving three are what still demonstrates it.
+//
 // …while the app's own window rendered perfectly signed in on the cookie session,
 // so nothing prompted for sign-in and there was no sign-out control. The observed
 // end state was `realtime wake … (loop=miss)` and `want=0` persisting across
@@ -44,7 +49,6 @@ const STATE = M("auth-state.js");
 const AUTH = M("auth.js");
 const COOKIES = M("auth-cookies.js");
 const LISTENER = M("channel-listener.js");
-const WATCHER = M("consent-watcher.js");
 const PRESENCE = M("presence.js");
 const MCP = M("mcp-config.js");
 const ACTIONS = M("auth-actions.js");
@@ -286,9 +290,11 @@ test("auth.isSignedIn is the cookie-aware one, so no call site had to change", (
   );
 });
 
-test("the four dark-listener gates all consult the shared gate", () => {
+test("the dark-listener gates all consult the shared gate", () => {
+  // ⚠ TWO, NOT THREE (2026-08-22). The consent watcher's `tick` was the third and its module is
+  // deleted; a pin on a file that cannot exist fails on `ENOENT` rather than on the rule, which
+  // is the shape that gets a whole suite deleted instead of corrected.
   assert.match(PRESENCE, /auth\.isSignedIn\(\)/, "presence heartbeat");
-  assert.match(WATCHER, /auth\.isSignedIn\(\)/, "consent watcher tick");
   assert.match(LISTENER, /auth\.isSignedIn\(\)/, "tray status line");
 });
 

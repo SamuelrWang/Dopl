@@ -1,6 +1,8 @@
 // Durable session persistence (v1.9 Session Window, Track T1).
 //
-// Two structures, mirroring the consent-watcher durability discipline:
+// Two structures, mirroring the durability discipline `consent-watcher.js` used to hold (that
+// module is deleted with the inbound consent lane, 2026-08-22; the DISCIPLINE is what was worth
+// keeping and it is stated here in full):
 //   sessionRecords  { [sessionKey]: durable record }   — one per (channelId,taskId)
 //   sessionIds      { [sessionKey]: sdkSessionId }      — the resume map (the SESSION_KEY analog)
 //
@@ -108,7 +110,8 @@ function durableName(value) {
 }
 
 // Whitelist the durable fields so a live handle can never leak into electron-store
-// even if the caller passes an enriched record (mirrors consent-watcher's durable()).
+// even if the caller passes an enriched record. ⚠ It mirrored `consent-watcher.js`'s own
+// `durable()`; that module is deleted (2026-08-22), so this is now the ONE statement of the rule.
 function durableSessionRecord(rec) {
   const r = rec || {};
   return {

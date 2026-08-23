@@ -74,7 +74,7 @@ vi.mock("../../hooks/use-channel-threads", () => ({
 // on the window now — mocked here like the other reads, no QueryClient in this
 // suite. The strip's own behaviour is pinned in message-pane's suite.
 vi.mock("../../hooks/use-consent-inbox", () => ({
-  useConsentInbox: () => ({ requests: [], inbound: [], outbound: [] }),
+  useConsentInbox: () => ({ requests: [], outbound: [] }),
 }));
 vi.mock("../../hooks/use-channel-preference-writes", () => ({
   useChannelPreferenceWrites: () => ({

@@ -50,8 +50,15 @@ const STORE = M("session-store.js");
 const PARK = M("session-park.js");
 const ENGINE = M("session-engine.js");
 
+// ⚠ `"claude-opus-5"` LEFT THIS LIST ON 2026-08-22 (Samuel's model-selection ruling) AND IT IS
+// NOT A WEAKENING. It was junk because the picker's only vocabulary was ALIASES; the ruling names
+// the values an operator picks as FULL IDS, so the durable per-channel posture stores one and
+// `normalizeModel` now accepts BOTH — answering, always, in the alias vocabulary that reaches
+// argv. The four ids are a FROZEN list of their own (`MODEL_IDS`) and are coerced exactly as
+// hard; `§1b` below drives them, and the shell-shaped strings that made this list matter are
+// all still here.
 const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "Opus", "opus ", "sonnet;rm -rf /",
-  "claude-opus-5", "--dangerously-skip-permissions", "opus --print", "haiku\n--model=x"];
+  "claude-opus-4-5", "--dangerously-skip-permissions", "opus --print", "haiku\n--model=x"];
 
 // ── 0. the frozen tables stand alone ─────────────────────────────────────────
 // The sentinel block evaluated in a plain Node context with NO require, NO electron and NO
@@ -85,6 +92,58 @@ test("the enum offers exactly five choices, with the fail-closed one first", () 
 test("normalizeModel takes a member and refuses everything else", () => {
   for (const m of model.MODEL_CHOICES) assert.equal(model.normalizeModel(m), m);
   for (const junk of JUNK) assert.equal(model.normalizeModel(junk), "default", JSON.stringify(junk));
+});
+
+// ── 1b. THE SECOND VOCABULARY: FULL IDS (2026-08-22, Samuel's model-selection ruling) ────────
+// The UI and the durable per-channel posture speak FULL IDS; argv speaks ALIASES. Two frozen
+// lists and one map between them, because each is right about a different thing: an id is what
+// an operator picked and must round-trip through the bridge unchanged, an alias is
+// version-stable and is what may become `--model`.
+
+test("the id list is frozen, and the four members are the ruling's four", () => {
+  assert.deepEqual(model.MODEL_IDS,
+    ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"]);
+});
+
+test("normalizeModelId takes a member and answers '' — ABSENT — for everything else", () => {
+  // ⚠ ABSENT, NOT A MEMBER. There is no 'default' id: an unchosen model is the SDK's own pick,
+  // which is today's behaviour for every channel that has never touched this, and the durable
+  // posture OMITS the key rather than storing a sentinel.
+  for (const id of model.MODEL_IDS) assert.equal(model.normalizeModelId(id), id);
+  for (const junk of JUNK.concat(["opus", "claude-opus-5 ", "CLAUDE-OPUS-5"])) {
+    assert.equal(model.normalizeModelId(junk), "", JSON.stringify(junk));
+  }
+});
+
+test("aliasForModelId is the seam, and it fails closed to 'default'", () => {
+  assert.equal(model.aliasForModelId("claude-fable-5"), "fable");
+  assert.equal(model.aliasForModelId("claude-opus-5"), "opus");
+  assert.equal(model.aliasForModelId("claude-sonnet-5"), "sonnet");
+  assert.equal(model.aliasForModelId("claude-haiku-4-5-20251001"), "haiku");
+  for (const junk of JUNK) assert.equal(model.aliasForModelId(junk), "default", JSON.stringify(junk));
+});
+
+test("normalizeModel accepts BOTH vocabularies and answers in exactly one", () => {
+  // A caller holding an id (the durable posture) and a caller holding an alias (the per-session
+  // picker) must not have to know which one the layer below wants — that is how a value reaches
+  // argv un-coerced. The ANSWER is always an alias, so `modelArg` below is unchanged.
+  for (const m of model.MODEL_CHOICES) assert.equal(model.normalizeModel(m), m);
+  for (const id of model.MODEL_IDS) {
+    const out = model.normalizeModel(id);
+    assert.notEqual(model.MODEL_CHOICES.indexOf(out), -1, id);
+    assert.equal(out, model.aliasForModelId(id));
+  }
+  for (const junk of JUNK) assert.equal(model.normalizeModel(junk), "default", JSON.stringify(junk));
+});
+
+test("an ID still cannot reach argv as itself — the alias is what argv gets", () => {
+  // The argv gate is unchanged and this is the case that says so: whatever vocabulary went in,
+  // what comes out is one lowercase word from the frozen alias list, or nothing at all.
+  for (const id of model.MODEL_IDS) {
+    const arg = model.modelArg(id);
+    assert.match(arg, /^[a-z]+$/, id);
+    assert.notEqual(model.MODEL_CHOICES.indexOf(arg), -1, id);
+  }
 });
 
 test("modelArg is the argv gate: null for 'default', the bare alias otherwise, junk NEVER", () => {

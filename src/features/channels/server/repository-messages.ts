@@ -217,26 +217,15 @@ export async function findOwnMessageByClientId(
   return (data as ChannelMessageRow | null) ?? null;
 }
 
-/**
- * Author of the message at (channel, seq) — the consent path's inbound-requester
- * derivation. ⚠ ONE COLUMN, on purpose: see {@link findMessageBySeq} above.
- * ⚠ Moved here from `repository-collab.ts` on 2026-08-20 — it reads
- * `channel_messages`, and this file owns that table.
- */
-export async function findMessageAuthorBySeq(
-  channelId: string,
-  seq: number
-): Promise<string | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("author_user_id")
-    .eq("channel_id", channelId)
-    .eq("seq", seq)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as { author_user_id: string | null } | null)?.author_user_id ?? null;
-}
+// ⚠ `findMessageAuthorBySeq` STOOD HERE AND IS DELETED (2026-08-22). Its ONE
+// caller was `consent-service.ts › createConsentRequest`, deriving
+// `requester_user_id` from the message that triggered an INBOUND consent
+// request — the lane Samuel retired. It moved into this file from
+// `repository-collab.ts` two days earlier, which is exactly the kind of history
+// that makes a dead reader look live: it had a recent, deliberate-looking
+// change and no callers behind it. {@link findMessageBySeq} below is the
+// surviving (channel, seq) read and answers a different question — the LEGACY
+// thread pair check needs the whole row, not just the author.
 
 /**
  * One message by per-channel `seq`. Backs the LEGACY thread pair check: a

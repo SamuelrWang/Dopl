@@ -235,6 +235,12 @@ const OPS = [
   // at all) — the profile is checked first and no posture can widen it. `preload-parity`
   // carries the full review.
   ["sessions:setMode", { channelId: CH, taskId: "t1", axis: "tools", mode: "bypass" }, { ok: false }],
+  // ⚠ JOINED 2026-08-22 (Samuel's model-selection ruling): the LIVE model switch. Same binding,
+  // same UUID gate; the value is coerced against `session-model.js`'s frozen ID list here and
+  // converted to the argv-safe alias inside, so a forged string CLEARS the override rather than
+  // reaching a child process. It grants nothing and reaches no gate — the failure direction of a
+  // forged call is that the operator's own agent answers on a different model.
+  ["sessions:setModel", { channelId: CH, taskId: "t1", model: "claude-opus-5" }, { ok: false }],
   ["sessions:narration", { channelId: CH, taskId: "t1" }, { entries: [] }],
 ];
 

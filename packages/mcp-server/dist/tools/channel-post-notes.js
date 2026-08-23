@@ -43,9 +43,27 @@ function postAddressLines(f) {
  * to=<one member>", exactly what an `intent:"chat"` caller decided against, so
  * rendering it talks every deliberate chat message into becoming a request. The
  * chat line states the same fact with the opposite advice.
+ *
+ * ⚠ BUT CHAT STILL HAS TO READ `landedThread` (fixed 2026-08-22). This branch
+ * returned early and never looked at it, so a chat post THREADED into a
+ * first-class exchange was told "no agent was put in front of it" — and
+ * `channel-addressing.ts` fact 3 says that is false: `feedLiveSession` hands a
+ * uuid-tagged message straight into the counterparty's running turn without
+ * reading the addressing at all. `intent` governs ADDRESSING; the thread tag is
+ * a different route into the same session, and only ADDRESSING was skipped. An
+ * agent told nothing was in front of its message says the same thing again
+ * louder, into a session that already has it.
  */
 function addressingNoteLines(f) {
     if (f.intent === "chat") {
+        // ⚠ Same predicate the non-chat path uses, for the same reason: only a
+        // FIRST-CLASS (uuid) tag reaches a session. A legacy `task-…` tag groups on
+        // a card and wakes nobody, so it correctly falls to the plain chat line.
+        if ((0, channel_addressing_1.routesToASession)(f.landedThread)) {
+            return [
+                `CHAT, BUT THREADED — \`intent\`="chat" means this ADDRESSES nobody, and in a DIRECT channel it also skipped the other member. The THREAD TAG is a different route and it does not read addressing at all: a message carrying a first-class thread id is handed straight to the session the other party already has open on that thread, so this may be in front of their agent right now. So do NOT repeat it as a request — that lands as a second, unthreaded ask against work already running. If you want an answer, wait for it with dopl_channel(op="await", channel="${f.channelId}", since=<this seq>).`,
+            ];
+        }
         return [
             `CHAT — you posted this as \`intent\`="chat", so it addresses nobody: the people in **${f.safeChannelName}** can read it, no agent was put in front of it, and in a DIRECT channel the automatic address to the other member was skipped too. That is the point of the field, so this is NOT a delivery failure to repair. If you meant to ask for work, post again WITHOUT \`intent\` (a request is the default) and name who it is for.`,
         ];

@@ -38,7 +38,6 @@ const INDEX = indexMembers(MEMBERS, ME);
 
 function renderRows(
   rows: ReturnType<typeof channelRows>,
-  requested: ReadonlySet<string> = new Set(),
   // ⚠ The SAME index the rows were derived from, or the body's mention lookup
   // runs against a different roster than `channelRows` did.
   index: typeof INDEX = INDEX
@@ -49,8 +48,6 @@ function renderRows(
       rows={rows}
       index={index}
       flashId={null}
-      requested={requested}
-      onDecideThread={vi.fn()}
       onOpenThread={onOpenThread}
     />
   );
@@ -382,7 +379,6 @@ describe("channels-v2 transcript — what it refuses to render", () => {
         index,
         formatChannelTimestamp
       ),
-      new Set(),
       index
     );
     const [stamped, bare] = screen.getAllByText("@Sam");
@@ -428,19 +424,22 @@ describe("channels-v2 transcript — the request fan-out", () => {
     }),
   ];
 
-  function renderFanOut(requested: ReadonlySet<string> = new Set()) {
+  function renderFanOut(
+    over: { canLaunchAgent?: boolean; launchBusy?: boolean } = {}
+  ) {
     const onOpenThread = vi.fn();
+    const onLaunchAgent = vi.fn();
     render(
       <Transcript
         rows={channelRows(OPENERS, THREADS, FANOUT_INDEX, formatChannelTimestamp)}
         index={FANOUT_INDEX}
         flashId={null}
-        requested={requested}
-        onDecideThread={vi.fn()}
-      onOpenThread={onOpenThread}
+        onLaunchAgent={onLaunchAgent}
+        onOpenThread={onOpenThread}
+        {...over}
       />
     );
-    return { onOpenThread };
+    return { onOpenThread, onLaunchAgent };
   }
 
   it("draws ONE card for two threads, with a pill per ADDRESSEE", () => {
@@ -467,7 +466,10 @@ describe("channels-v2 transcript — the request fan-out", () => {
       authorKind: "agent",
       metadata: { taskId: "t-a" },
     });
-    renderRows(channelRows([...OPENERS, reply], THREADS, FANOUT_INDEX, formatChannelTimestamp), new Set(), FANOUT_INDEX);
+    renderRows(
+      channelRows([...OPENERS, reply], THREADS, FANOUT_INDEX, formatChannelTimestamp),
+      FANOUT_INDEX
+    );
     expect(screen.getAllByText("Agent thread")).toHaveLength(1);
     expect(screen.queryByText("AGENT-REPLY")).toBeNull();
   });
@@ -481,13 +483,6 @@ describe("channels-v2 transcript — the request fan-out", () => {
     expect(screen.queryByText(/awaiting approval/)).toBeNull();
   });
 
-  it("shows REQUESTED only when the VIEWER's own consent is pending", () => {
-    renderFanOut();
-    expect(screen.queryByText("Requested")).toBeNull();
-    cleanup();
-    renderFanOut(new Set(["t-b"]));
-    expect(screen.getByText("Requested")).not.toBeNull();
-  });
 
   it("opens the viewer's OWN thread of the group", () => {
     const { onOpenThread } = renderFanOut();

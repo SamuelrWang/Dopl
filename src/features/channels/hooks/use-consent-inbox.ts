@@ -12,7 +12,7 @@ const selectRequests = (body: { requests: ChannelConsentRequest[] }) =>
 const NO_REQUESTS: ChannelConsentRequest[] = [];
 
 /**
- * The caller's pending consent inbox (both inbound + outbound), refetched live
+ * The caller's pending consent inbox, refetched live
  * on any consent event. The SERVICE scopes the read to `(operator, workspace)`
  * and returns only `pending` rows (a decision on another surface removes it
  * here on the next refetch). Pass a `channelId` to scope the server query, or
@@ -52,17 +52,26 @@ export function useConsentInbox(
 
   useConsentRealtime(workspaceId, () => void query.refetch());
 
-  // Memoized: these feed the view's `useMemo`s, and a fresh array identity per
+  // Memoized: this feeds the views' `useMemo`s, and a fresh array identity per
   // render would recompute every consent-derived view on every keystroke.
   const requests = query.data ?? NO_REQUESTS;
-  const inbound = useMemo(
-    () => requests.filter((r) => r.kind === "inbound"),
-    [requests]
-  );
+  // ⚠ THE `inbound` SLICE STOOD BESIDE THIS ONE AND IS DELETED (Samuel,
+  // 2026-08-22 — the inbound consent retirement). Every surface it fed is gone:
+  // the transcript card's Decline / Launch agent pair, `thread-consent.tsx ›
+  // ThreadAwaitingStrip`, the Inbox's inbound rows, the sidebar's ask badge. An
+  // exported slice with no consumer is an invitation to build a fourth.
+  //
+  // ⚠ `outbound` IS WHAT EVERY CONSUMER TAKES, `requests` IS NOT. Both badges
+  // (the channels sidebar's Inbox row and the app nav's channels row) and the
+  // Inbox pane count this, because a badge is a claim that something is
+  // ACTIONABLE and a stored inbound row leads to no surface that can act on it.
+  // The read still returns both kinds — DECIDED inbound rows are kept for audit
+  // (INVARIANTS §6) — so the filter is doing real work, not restating a server
+  // guarantee.
   const outbound = useMemo(
     () => requests.filter((r) => r.kind === "outbound"),
     [requests]
   );
 
-  return { requests, inbound, outbound, refetch: query.refetch };
+  return { requests, outbound, refetch: query.refetch };
 }

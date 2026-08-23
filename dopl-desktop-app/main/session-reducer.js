@@ -1,8 +1,7 @@
 // Session lifecycle state machine (v1.9 Session Window, Track T1).
 //
-// PURE module: no electron / SDK / fs / path / crypto references anywhere in the extracted block below, so
-// test/session-reducer.test.mjs slices the sentinel block and evaluates it verbatim in a plain Node context
-// (same idiom as classify / tool-profiles).
+// PURE module: no electron / SDK / fs / path / crypto reference anywhere in the extracted block below, so
+// test/session-reducer.test.mjs slices the sentinel block and evaluates it verbatim (the classify idiom).
 //
 // `sessionReducer(state, event) -> { state, effects }` is the single decision point for the imperative shell
 // (session-engine.js), which EXECUTES the returned effects — every effect is a side-effect-FREE descriptor
@@ -15,7 +14,7 @@
 // here at module scope, ABOVE the sentinel, so inside the block below they are free vars —
 // which is what lets test/_reducer-block.mjs prepend those modules' blocks and evaluate the set
 // with no `require` in scope, exactly as before the splits.
-const { gatePhase, endedEmit, endEffects, modesEmit, parkEffects } = require('./session-effects');
+const { gatePhase, endedEmit, endEffects, modesEmit, parkEffects, terminalBody } = require('./session-effects');
 const {
   DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, TOOL_MODES, MESSAGE_MODES,
   coerceMode, initialSessionState, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
@@ -448,8 +447,8 @@ function sessionReducer(state, event) {
   }
 
   // ⚠ TWO PRODUCERS, NOT THREE (corrected 2026-08-20): the C-4 launch watchdog and the C-5
-  // abandonment. This named "C-5 eviction" as well; the window-budget LRU is deleted and the
-  // surviving ceiling refuses rather than evicts. Copy: session-effects.INACTIVE_NOTE.
+  // abandonment. The window-budget LRU it also named is deleted; the surviving ceiling refuses
+  // rather than evicts. Copy: session-effects.INACTIVE_NOTE.
   if (type === 'inactive') {
     return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'inactive') };
   }
@@ -476,7 +475,8 @@ function sessionReducer(state, event) {
       effects: [
         { type: 'abortQuery' },
         { type: 'settle', outcome: 'interrupted' },
-        { type: 'lifecycle', kind: 'task_failed', extra: { interrupted: true } },
+        // ⚠ 2026-08-22: an undefined body made an ending that is not a failure read as one.
+        { type: 'lifecycle', kind: 'task_failed', extra: { interrupted: true }, body: terminalBody({ interrupted: true }) },
         { type: 'emit', payload: { type: 'error', message: 'Session ended unexpectedly.' } },
       ],
     };

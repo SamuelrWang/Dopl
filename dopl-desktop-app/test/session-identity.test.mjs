@@ -103,9 +103,18 @@ test("handleSdkMessage's init payload carries taskTitle / channelName / from", (
 
 test("trigger.js: the responder session context carries taskTitle", () => {
   const src = readFileSync(M("trigger.js"), "utf8");
-  const call = src.slice(src.indexOf("sessionEngine.launchResponderSession({"), src.indexOf("toolProfile: rec.toolProfile"));
+  // ⚠ THE SLICE BOUND MOVED ON 2026-08-22 and the old one was `toolProfile: rec.toolProfile` —
+  // both `rec.*` reads named a PERSISTED consent record, and the inbound consent lane is deleted
+  // (Samuel's ruling; `main/trigger.js`'s header). `String.slice` with a -1 end silently returns
+  // almost the whole file, so a stale bound here degrades into a scan of the module rather than
+  // of the call: the bound is a live literal from inside the object.
+  const call = src.slice(
+    src.indexOf("sessionEngine.launchResponderSession({"),
+    src.indexOf("startModes: { tools: 'manual', messages }")
+  );
+  assert.ok(call.length > 0 && call.length < 3000, "the slice really bounds the call");
   assert.match(call, /channelName: entry\.channel\.name/, "the channel name still rides");
-  assert.match(call, /authorName: rec\.requesterName/, "the peer name still rides");
+  assert.match(call, /authorName: requesterName/, "the peer name still rides");
   assert.match(call, /taskTitle: targeting\.metaStr\(m, 'taskTitle'\) \|\| null/,
     "the responder context now carries the SAME server-stamped taskTitle the consent payload reads");
 });
@@ -114,7 +123,11 @@ test("trigger.js: the responder session context carries taskTitle", () => {
 
 test("trigger.js: the responder session context carries the channel + workspace ids", () => {
   const src = readFileSync(M("trigger.js"), "utf8");
-  const call = src.slice(src.indexOf("sessionEngine.launchResponderSession({"), src.indexOf("toolProfile: rec.toolProfile"));
+  const call = src.slice(
+    src.indexOf("sessionEngine.launchResponderSession({"),
+    src.indexOf("startModes: { tools: 'manual', messages }")
+  );
+  assert.ok(call.length > 0 && call.length < 3000, "the slice really bounds the call");
   assert.match(call, /channelId: entry\.channel\.id/, "the concrete channel id, not just its name");
   assert.match(call, /workspaceId: entry\.workspaceId/, "and the workspace a multi-workspace token needs");
 });

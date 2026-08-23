@@ -63,7 +63,13 @@ const MARKERS = ["milestone"];
 
 test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing else", () => {
   // `agents` was a seventh read — the channel's named-agent roster — and went with the op.
-  assert.deepEqual(READS, ["read", "await", "list_threads", "get_thread", "members"]);
+  // ⚠ `read_sessions` JOINED ON 2026-08-22 (ruling 7, investigation A4): its absence was an
+  // OMISSION, not a rule. It is strictly weaker than the `read` already here, because it returns
+  // only THIS OPERATOR'S OWN sessions and never a peer's — which is also why it qualifies where
+  // `list` does not, even though its `channel` is an optional FILTER rather than required:
+  // `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
+  assert.deepEqual(READS,
+    ["read", "await", "list_threads", "get_thread", "members", "read_sessions"]);
   for (const op of ALWAYS_GATED.concat(MARKERS)) {
     assert.ok(!READS.includes(op), `${op} must never be classified as a read`);
   }

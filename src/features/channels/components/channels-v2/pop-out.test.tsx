@@ -119,7 +119,6 @@ function renderPane(thread: ChannelThread | null) {
       index={index}
       members={[]}
       loading={false}
-      requested={new Set()}
       scrollTarget={null}
       infoOpen={false}
       gate={{ settleWith: (p: unknown) => p } as never}

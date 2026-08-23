@@ -662,7 +662,7 @@ Consequence for copy: inside a member's own window there is exactly ONE session 
 - **The LOOP BRAKE is member-count-independent.** An UNADDRESSED **agent-authored** message can never trigger, at any N (`targeting.js:146`). It does not weaken as members are added, so N-party work does not need to re-establish it.
 - **⚠ BECAUSE THE TRIGGER KEYS ON A COUNT, THE ROSTER IS A BEHAVIOUR — AND A WORKSPACE DEPARTURE NOW REMOVES THE ROW RATHER THAN FILTERING IT (2026-08-10, C-20, Samuel: "fully and cleanly removed").** This is the concrete cost of the bullet above: `memberCount === 2` is *known-exact*, so **one ghost row turns a live 1:1 into a "3-party" room and silently disables the implicit trigger for the two people still in it.** No error, no signal — the room simply stops waking anyone. Until this wave a departed member's `channel_members` rows outlived the departure and only the ADDRESSING check refused to act on them, so ghosts could accrue. `membership-admin.removeMember` now calls `channels/server/service-workspace-departure.removeWorkspaceDepartedMember` **after** the membership delete and never before (running it first and then failing the delete would evict a still-active member from every room), best-effort so a channels failure cannot 500 a workspace removal that already committed. Backfill applied (`20260810140000`; zero ghosts existed).
 - **THE INVARIANT THAT MAKES THAT SWEEP — AND ITS BACKFILL — A PLAIN `NOT EXISTS`: TERMINATION IS A ROW DELETE, NOT A STATUS FLIP.** Nothing in this app ever writes `workspace_members.status` to anything but `'active'`; every add path upserts `status:'active'` and the only exits are `membership-admin.removeMember`'s DELETE and the `auth.users` cascade behind account deletion. **There is no self-serve "leave workspace" route, no deactivation, and no status flip** — so "no longer an active member" and "has no row" are the same statement. Stated once here and once in `membership-admin.ts`'s docblock. **Adding a deactivated state would silently break both the sweep and its backfill**, neither of which would fail loudly.
-- **⚠ THE SWEEP IS `channel_members` + DM CLOSE ONLY. Three things it deliberately or accidentally does NOT touch, and the distinction matters.** DELIBERATE: `channel_tasks` — an open thread whose creator or target left is left alone (addressing already fails closed, the survivor keeps `closeTask`, and the alternative is minting channel messages with no member author behind them; **the survivor is still never told, and that half of C-20 stays open**). FINE BY CONSTRUCTION: `channel_trust`, which re-checks `isActiveWorkspaceMember` at READ time (`trust-service.ts:47,60`) and needs no sweep at all — **consider that shape first for anything new, it is cheaper than a departure hook.** NOT DELIBERATE, now F-191: **`channel_sessions` and `channel_task_participants`**, whose departed-user rows are unswept and unfiltered. Zero orphans exist today (measured), because nobody has left this workspace yet.
+- **⚠ THE SWEEP IS `channel_members` + DM CLOSE ONLY. Three things it deliberately or accidentally does NOT touch, and the distinction matters.** DELIBERATE: `channel_tasks` — an open thread whose creator or target left is left alone (addressing already fails closed, the survivor keeps `closeTask`, and the alternative is minting channel messages with no member author behind them; **the survivor is still never told, and that half of C-20 stays open**). FINE BY CONSTRUCTION: `channel_trust`, which re-checked `isActiveWorkspaceMember` at READ time and needed no sweep at all — **consider that shape first for anything new, it is cheaper than a departure hook.** ⚠ **The file that did it, `channels/server/trust-service.ts`, was DELETED on 2026-08-22 with the inbound-consent retirement (INVARIANTS §6), and the `agent_trust_rules` table with it** — the SHAPE is still the lesson, the code is not there to read. NOT DELIBERATE, now F-191: **`channel_sessions` and `channel_task_participants`**, whose departed-user rows are unswept and unfiltered. Zero orphans exist today (measured), because nobody has left this workspace yet.
 - **A THREAD is one requester + one target. Reads are channel-visible; writes are pair-only.** `listChannelTasks` is unfiltered and gated only by channel visibility (`service-reads.ts:314`), so a third member CAN read a pair's thread — that is today's deliberate design, not an oversight. Writes are refused **403 `TASK_FORBIDDEN`** unless the poster is the thread's `created_by` or `target_user_id` (`isThreadParticipant` / `service-writes-metadata.ts`) — **for a UUID id ONLY**. **The pair is the WHOLE rule again (channels rollback, 2026-08-05, F-141):** the multiplayer wave's `mayWriteThread` widened it with a participant set, and that async function collapsed back to the synchronous `isThreadParticipant`, so a threaded post costs no participant query and nothing widens the pair. **THE LEGACY-ID GATE IS CLOSED (2026-07-31; F-083 bullet 3 / audit Q10 — anywhere a doc still says a legacy id "skips the gate entirely", it is wrong).** A caller-supplied `task-{channelId}-{seq}` id is now validated against its opening message's `{author, to_user_id}` pair by the one shared resolver `isLegacyThreadParticipant`, and a non-participant's tag is **SILENTLY STRIPPED — never 403'd** (the installed desktop 1.7.16 posts legacy ids for lifecycle events and a hard refusal would break it). Whether reads should stay channel-transparent is an OPEN PRODUCT CALL (audit P1), not a bug to fix on sight.
 - **A SESSION binds ONE counterparty, and only a DM can resolve one.** `session-engine.js` stores `counterpartyId` (`:303`) and `feedInbound` accepts turns only from it (`counterpartyFor`, `:420`); `channel-context.js:38` resolves a counterparty **only** when the server's own `isDirect` flag is set. So a group thread has NO counterparty at all: "Open session" paints the no-peer note and seeds no history. Widening this binding from one counterparty to a thread's participant set is planned and NOT built. **A bound counterparty is NOT evidence of a DM**, though — `session-dispatch` binds a requester session to the task's `taskTarget` in any channel — so the session also carries `direct`, plumbed from the same server `isDirect` flag through every launch shape (`trigger.js`, `session-dispatch.js`, `session-park.js`'s three specs) and persisted on the durable record. It exists for ONE statement: in a DM the server addresses an unaddressed post (`resolveDirectPeer`), so the outbound approval card names the recipient (`directChannel` on the post surface → `postDestinationText` / `outboundLabel`); anywhere else it names the channel. Strict `=== true` at every hop — a launch shape that does not carry it understates the destination, never invents one.
 - **The session history fence is TWO-PARTY BY DEFAULT, and is now widened for ROOM MODE ONLY (2026-07-31).** `pairRows` (`session-history.js`) drops every row not authored by one of the two parties, in BOTH the rendered window and the agent seed. The fence itself is FIX F4 and is load-bearing: `metadata.taskId` is caller-settable, so relaxing it while a legacy id still skipped the participation check would re-open the exact injection F4 exists for. **The sequencing note that stood here — "close the legacy-id gate FIRST, then widen" — has been DISCHARGED:** the gate closed in the same wave (bullet above), and only then did `pairRows` widen, and only on `bind === 'room'`. A pair-bound session takes the identical path it took before; the room arm is the new one. Separately, the drop is SILENT (a bare `continue` — no count, no notice), which is a real defect and is not the same thing as the fence.
@@ -2664,7 +2664,9 @@ Named agents were later deleted and the field stayed, because the ambiguity was 
 
 The first correction concluded the CHANNEL-wide max M was the right number and shipped that. That is the wrong direction and makes the loss strictly worse: `await` is `gt("seq", since)`, so a LARGER `since` returns FEWER messages. The rows in `(N, M]` are exactly the other exchanges this reader has not seen — awaiting from N delivers them, awaiting from M drops them permanently, because the cursor only moves forward. It was caught in production by a counterparty's agent reading the hint against the schema, in the exchange that was testing the feature.
 
-The standing conclusion: NEITHER number is a cursor. A safe `since` is the highest seq below which the reader has seen EVERYTHING channel-wide, and a thread-scoped read deliberately filtered rows out, so it establishes no such bound and cannot. `channel-ops-read.ts › opRead` therefore offers no number at all on the scoped branch — it states the thread high-water mark as DISPLAY, says the read advanced no channel-wide cursor, and points at the unscoped read that can establish one. The real fix would be a thread filter on `await` (or an opaque resume token) so "watch MY exchange" becomes expressible instead of approximated.
+The standing conclusion: NEITHER number is a cursor. A safe `since` is the highest seq below which the reader has seen EVERYTHING channel-wide, and a thread-scoped read deliberately filtered rows out, so it establishes no such bound and cannot. The real fix would be a thread filter on `await` (or an opaque resume token) so "watch MY exchange" becomes expressible instead of approximated.
+
+**A THIRD PASS, 2026-08-22 — and the second correction was still half-wrong.** It kept printing the thread high-water mark "as DISPLAY" and spent four sentences forbidding its use as a cursor. Samuel's ruling: a footgun wrapped in prose is still a footgun, and the number is the part that survives a skim. The scoped branch now prints **no seq at all** — the alternative, returning an explicitly safe `nextSince`, is not available, because the only safe value is the caller's own prior channel-wide cursor and the op cannot see it. Nothing is hidden: every message line still carries its own `**#seq**`. What is withheld is the SUMMARY line that LOOKS like a cursor, which is the only thing an agent was ever going to copy. **Three passes on one hint, and each earlier one failed the same way — it kept the number and improved the warning.**
 
 *Relocated from* `packages/mcp-server/src/tools/channel-ops-read.ts › opRead`
 
@@ -3056,3 +3058,177 @@ window's.
    `ReferenceError` sitting on a branch an earlier early-return had made unreachable. **A
    fail-closed guard is a good default and a terrible diagnostic: when a wiring bug and a correct
    refusal produce the same value, only a test that drives the WIRING can tell them apart.**
+
+## 2026-08-22 — Inbound consent is retired, and two parsers stop disagreeing
+
+Samuel's post-incident rulings, after a four-agent investigation of a live multiplayer test.
+
+### A code span is a QUOTE, and the server did not know that
+
+Two agents were asked to write documentation about @-tagging. They did — with the handles in
+backticks, as anyone documenting a syntax would — and **tagged both operators for real** (channel
+seqs 647 / 653). Nothing was addressed and nothing was asked; two humans got inbox items out of
+prose ABOUT the feature.
+
+`lib/mentions.ts` opens with a warning that a second copy of the match rule is how the two ends come
+to disagree about what counts as a tag, and there was no second copy. There was something subtler
+and worse: **the renderer obeyed a rule the module had never written down.** `message-markdown.tsx`
+lexes with `marked`, so a `codespan` token never reaches the mention leaf — the tint is
+*structurally* impossible inside code, and the file said so in a comment ("code is quoted text, and
+tinting it would claim somebody was tagged by an example"). The SERVER, running the same parser over
+the raw body, had no notion of markdown structure at all. So the transcript refused to draw a tag
+that the stamp had already delivered, and the stamp is the half the Tags inbox reads.
+
+The fix is a masker in the lib, not a copy of the renderer's lexer. That keeps ONE statement of the
+rule while letting the two ends reach it by the mechanisms they each already have — structure on the
+client, a length-preserving blank on the server. **The mask blanks rather than deletes**, because
+deleting a span out of `@di`x`ana` leaves `@diana` and tags somebody the body never named. Indented
+four-space blocks are deliberately NOT masked: guessing whether an indented line is code or a
+wrapped bullet, with no block context, costs real tags — and that shape fails the safe way round
+anyway (server tags, transcript does not tint).
+
+### The one tag an agent had, and the one the resolver dropped
+
+The same resolver dropped the AUTHOR unconditionally, with a good reason attached: a self-mention
+that raised your own badge is a count you could inflate by typing your own name. True of a human.
+But **an agent posts on its operator's account**, so "the author" is the very person it is trying to
+reach — and the Tags inbox is what an operator watches instead of reading every message. The escape
+hatch for "my own human has to see this" was the one tag that silently did nothing.
+
+The discriminator had to be the CREDENTIAL, never the body: `ctx.source === "agent"` is
+`auth.agentTokenId` and nothing a caller can assert, so the human self-tag stays dropped and the
+badge stays un-inflatable. The two rulings compose in the safe order — keeping the author answers
+WHO survives resolution, the code rule answers WHAT counts as a tag, so an agent's own handle in
+backticks still escalates nothing.
+
+### "Remove all the stuff about declining and approving of threads"
+
+Consent was symmetric: approve-in and approve-out. The inbound half asked the operator to Allow or
+Deny before their machine spawned on a teammate's ask. It is gone. A peer's ask notifies; the
+operator launches a session or does not. There is no row to decide, so there is nothing to decline.
+
+**The retirement is a DELETE, not a disarm** — the union's inbound arm, `trust-service.ts`, the two
+`/trust` routes, the repository reads, `revalidateAutoAllow`, and the `agent_trust_rules` table
+itself. Three things made that safe rather than brave:
+
+1. **`agent_trust_rules` was inbound-only by its own schema comment** ("a rule means the operator
+   auto-allows INBOUND consent requests … It NEVER affects outbound review"), so nothing outbound
+   was standing on it.
+2. **It had never fired.** Trust was ON HOLD by Samuel's own earlier ruling — "the seam is left open
+   and empty on purpose" — so no rule was ever written and no consent row was ever born
+   `auto_allowed`.
+3. **Which is what made `revalidateAutoAllow` deletable.** That guard re-derived the trust rule on
+   every consume-time read and existed so OLD desktops would fail closed. Deleting a fail-closed
+   guard is normally the worst move in the file; it is correct here for one reason only — the status
+   it guarded has no writer left, so it protects a shape that cannot be produced. **A guard kept
+   alive over a shape with no producer teaches the next reader that the producer is still there.**
+
+**What was NOT deleted is the more interesting half.** Decided inbound rows are KEPT, and
+`requester_user_id` stays hydrated for them with no writer left — the same rule the reserved metadata
+keys follow: *a column something renders is not dead*. `kind:"inbound"` and `status:"auto_allowed"`
+stay in the TypeScript unions as read-only history; deleting either value would not delete the rows,
+it would make them fail to type. Only the STALE PENDING inbound rows are expired by the migration,
+because nothing can decide them any more and a prompt with no surface sits forever.
+
+**And `write-gate-coverage.test.ts` lost an entry, which is exactly the move that file exists to
+catch.** Narrowing the `sessionOnly` set is safe here for one reason — the route is GONE, not
+ungated — and the test says so in place, so the next reader has to answer the same question rather
+than inherit the answer.
+
+### The desktop half: three modules, and what a durable record was actually buying
+
+The server side of that ruling is above. On the desktop the inbound lane was not a branch, it was
+an ARCHITECTURE: `consent-watcher.js` polled each pending row off the channel long-poll loop and
+dispatched into a set of injected resolvers; `consent-store.js` held its electron-store durability
+(the watched map, the settled-key TTL) so a request parked across a quit stayed answerable;
+`consent-cadence.js` held the adaptive scan ladder that kept the poll cheap. All three are deleted,
+and with them the tray's "Pending: N" item, whose only writer was the watcher's count.
+
+**What that machinery bought, stated plainly, because it is the thing that had to be given up.** A
+consent row is durable, replayable and settle-able: the operator could answer days later, on
+another surface, on another run of the app, and the record would still be there and could not be
+double-spawned. What replaces it is a NOTIFICATION, which does not outlive its process. **That is a
+real loss and it is the right trade**, because the durability was serving a decision whose only
+outcomes were "the operator clicked, or did not" — and an ask nobody acted on is still sitting in
+the thread, where the channels page can launch from it. The peer's message was never the thing at
+risk; only the prompt about it was.
+
+**One consequence worth naming: the message body no longer needs re-fetching.** The old lane
+deliberately did NOT persist the untrusted body, so approval had to `refetchMessage` it — a network
+call on the path from a click to a spawn, with `retry` / `gone` branches behind it. A notification
+lives inside the process that raised it, so the message is still in hand and the whole function is
+deleted. **Machinery removed at one end removes machinery at the other**, which is the usual shape
+of these and is worth expecting rather than discovering.
+
+**And the deletion had to reach the STORE KEYS, not just the code.** `pendingConsent`,
+`channelWatched` and `channelSettled` are still on every shipped machine's disk. `channelSettled` is
+the dangerous one: a reader added back would suppress asks whose "settlement" was recorded by a lane
+that no longer exists — a silent, permanent drop with no error shape. `removed-vocabulary.test.mjs`
+refuses a READER for all three by name, which is the same guard the session-window retirement earned
+for `sessionWindowMode`.
+
+### A message that names the wrong actor sends a capable agent down a path
+
+`'Denied by operator'` was the message on every denied tool call, including the WINDOWLESS auto-deny
+where nobody was asked — there is no surface to ask on, so `claimGate` denies immediately. In live
+testing that one sentence cost about eight messages of agent diagnosis and two operator escalations:
+the agent treated the refusal as a DECISION, explained itself, proposed narrower variants, asked the
+counterparty to reconsider, and finally reported to its operator that they had denied something they
+had never been shown.
+
+**The lesson is not "write better copy".** Every one of those turns was the agent behaving
+correctly given what it was told. A refusal message is not decoration around a boolean — it is the
+INPUT to whatever the agent does next, and naming a decider who does not exist creates work that
+cannot converge. The fix is two messages and a rule for telling them apart, and the rule is
+bookkeeping rather than `s.windowless`: every session is windowless, and the OUTBOUND gate on a
+windowless session IS answered by a human. `denialMessage` fails toward `'Denied by operator'`,
+because claiming nobody was asked when we do not know is the same error in the other direction.
+
+### A `+2` that was right about one case and wrong about the case it caused
+
+The private turn withdraws Axis B's outbound widening for as long as the operator's 1:1 message is
+covered, and the window is a DEPTH rather than a flag because a `steer` queues behind the turn in
+flight. `+2` when the agent is working: the in-flight turn's `result` spends one, the private turn
+is covered by the second.
+
+That is correct for a CHANNEL turn in flight and wrong for a PRIVATE one, which is already paying
+for itself. Two 1:1 messages sent while the agent worked therefore left a surplus that never
+drained, and every later CHANNEL turn on that session had its outbound widening withdrawn — an
+agent silently unable to auto-send, on a session nobody had made private. **The suite could not see
+it**, and the reason is the interesting part: it drove `openPrivateTurn` against a static fixture
+whose `activity` never moved, and the double-count only happens once the FIRST message has flipped
+the session to `working`, which only the reducer does. A fixture that cannot reach a state is a
+fixture that cannot test the transition INTO it.
+
+The second half of the same leak is a different class: a torn-down query OWES results it will never
+deliver, because `consume` drops a superseded query's tail on the `s.query !== q` guard. Any
+accounting that is settled by an event stream has to be reset when the stream is discarded — and
+the existing "FLOORS AT ZERO" test had, until this pass, justified itself with exactly that drained
+tail, which is the one thing that cannot happen. **The floor was right and its stated reason was
+not**, which is how a correct guard survives with an argument nobody can check.
+
+### A narration audit finds four lies, and each one had a true statement one file away
+
+The same investigation read the MCP surface's prose against the code under it. Four of them:
+
+- A `chat` post's result said "no agent was put in front of it" — the branch returned early and never
+  read `landedThread`, while `channel-addressing.ts` fact 3, thirty lines away, says a first-class
+  thread tag is handed straight into the counterparty's running turn without reading addressing at
+  all. **`intent` governs ADDRESSING; a thread tag is a different route into the same session.**
+- A session ending rides `kind='task_progress'` with `metadata.session_ended` — non-terminal on
+  purpose, because one member's window closing is not the thread failing. Right for the thread,
+  wrong for a reader: "a step landed" and "the agent working this is gone" rendered as the same line,
+  and `await`'s stop rule is keyed on whether the addressed member showed activity. **A session end
+  reads as activity while meaning the opposite.**
+- The session tag sliced after the FIRST colon of the slot key — correct for the two-segment key it
+  was written against, and against multiplayer's `<channel>:<thread>:<agent>` it printed
+  `<thread>:<agent>`: not a session identity, and a repeat of the thread tag two clauses away.
+- Bodies rendered untruncated, and a 128,000-character one was measured. **The ruling proposed
+  pointing the clip marker at `op="get_thread"` — which renders no message bodies at all.** The
+  marker names `since=<seq-1>, limit=1` instead, and a one-message page is never clipped, which
+  makes the remedy true by construction rather than by intention. That last constraint is a
+  contract, not an optimization (F-264).
+
+**The pattern across all four:** none was a wrong belief about the world. Each was a sentence written
+when it was true, left standing next to code that moved — and every one of them had its correct
+statement already written down somewhere else in the same package.

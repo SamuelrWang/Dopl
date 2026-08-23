@@ -18,8 +18,17 @@
 //   ["abortQuery", "settle", "lifecycle", "emit"].
 // That test currently pins ["settle","lifecycle","emit"] — it pins the bug.
 //
-// session-engine.js is electron-bound, so `settle` is source-extracted and driven with
-// fakes (the idiom the rest of this directory uses).
+// Both modules are electron-bound, so `settle` and `denyPendingPermissions` are source-extracted
+// and driven with fakes (the idiom the rest of this directory uses).
+//
+// ⚠ `settle` MOVED TO `main/session-teardown.js` ON 2026-08-22 (the §2 500-line cap; the engine
+// sat exactly on it and the spawn-idle wake rule needed three fields in that file). NOTHING it
+// pins changed: same order, same C3 sweep, same history freeze before the registry delete. What
+// changed is HOW it reaches its world — the engine injects the registry, the durable projection,
+// the permission sweep and the tray refresh through `bind()`, so the harness below hands in a
+// `deps` object where it used to hand in four free vars. `denyPendingPermissions` STAYED in the
+// engine (the effect table calls it directly on the park path too) and is still sliced from
+// there, which is why this file reads two sources.
 //
 // ⚠ EVERY C3 RULE IN THIS FILE IS LIVE AND EVERY ONE OF THEM STILL RUNS. The 2026-08-20
 // session-window retirement (F-228) broke this suite WITHOUT touching a single thing it pins:
@@ -39,13 +48,22 @@ import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
+const TEARDOWN = readFileSync(join(HERE, "..", "main", "session-teardown.js"), "utf8");
+// ⚠ `denyPendingPermissions` MOVED AGAIN IN THE SAME WAVE — to `main/session-permissions.js`,
+// which owns how a held `canUseTool` promise is resolved AND what the agent is told when the
+// answer is no (a windowless auto-deny is not a decision, so it may not say "Denied by operator").
+// The C3 sweep it performs is byte-unchanged; only its address is.
+const PERMS = readFileSync(join(HERE, "..", "main", "session-permissions.js"), "utf8");
 
-const cut = (from, to) => {
-  const a = ENGINE.indexOf(from);
-  const b = ENGINE.indexOf(to);
-  assert.ok(a !== -1 && b > a, `engine slice ${from} not found`);
-  return ENGINE.slice(a, b);
+const cutFrom = (src, from, to) => {
+  const a = src.indexOf(from);
+  const b = src.indexOf(to);
+  assert.ok(a !== -1 && b > a, `slice ${from} not found`);
+  return src.slice(a, b);
 };
+const cut = (from, to) => cutFrom(ENGINE, from, to);
+const cutPerms = (from, to) => cutFrom(PERMS, from, to);
+const cutTeardown = (from, to) => cutFrom(TEARDOWN, from, to);
 
 // The REAL settle + the REAL denyPendingPermissions, evaluated verbatim with fakes for the
 // leaf deps (store / sessions / refreshTray / baseRecord).
@@ -71,15 +89,27 @@ function harness(over = {}) {
   const agentHistory = { frozen: [], record(r) { this.frozen.push(r); return true; } };
   const sessionMetrics = { metrics: () => ({ contextUsed: null, contextWindow: null, tokensSpent: null, startedAt: null, lastActivityAt: null }) };
   const api = new Function(
-    "store", "sessions", "refreshTray", "baseRecord", "sessionSummary",
+    "store", "deps", "sessionSummary",
     "agentHistory", "sessionMetrics", "sessionNarration", "diag",
-    `${cut("function denyPendingPermissions(s, message) {", "// A hidden window RESHOWS")}
-     ${cut("function settle(s, outcome, keepWindow) {", "function setLifecycleHandlers(")}
+    `${cutPerms("function denyPendingPermissions(s, message) {", "// Returns TRUE only when")}
+     ${cutTeardown("function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS")}
      return { settle, denyPendingPermissions };`
   )(
-    store, sessions, () => { calls.tray += 1; }, (s) => ({ key: s.key, phase: s.state.phase }), sessionSummary,
-    agentHistory, sessionMetrics, { ringFor: () => [] }, () => {}
+    store,
+    // The engine's `sessionTeardown.bind({...})` payload, faked. `denyPendingPermissions` is the
+    // REAL one, sliced above — the C3 sweep is what these cases are about, so it must not be a stub.
+    {
+      sessions,
+      baseRecord: (s) => ({ key: s.key, phase: s.state.phase }),
+      denyPendingPermissions: (s, msg) => denyPendingPermissionsRef(s, msg),
+      refreshTray: () => { calls.tray += 1; },
+      sessionOn: () => null,
+    },
+    sessionSummary, agentHistory, sessionMetrics, { ringFor: () => [] }, () => {}
   );
+  // ⚠ The real sweep, wired through the injected handle: `settle` calls it as
+  // `deps.denyPendingPermissions`, and the function it must call is the engine's own.
+  function denyPendingPermissionsRef(s, msg) { return api.denyPendingPermissions(s, msg); }
   calls.ended = sessionSummary.ended;
   calls.frozen = agentHistory.frozen;
 
@@ -154,8 +184,8 @@ test("C3: a session with no live handles settles without throwing (parked shell 
 });
 
 test("C3: the shipped settle really runs the teardown BEFORE it drops the handles", () => {
-  const body = cut("function settle(s, outcome, keepWindow) {", "function setLifecycleHandlers(");
-  const order = ["denyPendingPermissions(s, 'Session ended')", "s.pushIterator.close()", "s.abortController.abort()", "sessions.delete(s.key)"];
+  const body = cutTeardown("function settle(s, outcome, keepWindow) {", "// THE WORK LANE FOR ONE ADDRESS");
+  const order = ["deps.denyPendingPermissions(s, 'Session ended')", "s.pushIterator.close()", "s.abortController.abort()", "deps.sessions.delete(s.key)"];
   let at = -1;
   for (const needle of order) {
     const i = body.indexOf(needle);

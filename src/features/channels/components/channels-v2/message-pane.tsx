@@ -53,7 +53,7 @@ import { IconButton } from "./bits";
 import { useStickToBottom } from "./use-stick-to-bottom";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
-import { ThreadAwaitingStrip, ThreadSendBox } from "./thread-consent";
+import { ThreadSendBox } from "./thread-consent";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import type { AuthorIndex } from "./view-model";
 import type { TranscriptRow } from "./view-model-rows";
@@ -97,11 +97,10 @@ const FLASH_MS = 1600;
 const MISSING_NOTICE_MS = 6000;
 
 /**
- * The default for the three callbacks only the `"page"` chrome can fire. The
- * pop-out window has no info panel to toggle, no channel view to return to and
- * no thread cards in its rows, so it hands over none of them.
+ * The default for the callbacks only the `"page"` chrome can fire. The pop-out
+ * window has no info panel to toggle, no channel view to return to and no thread
+ * cards in its rows, so it hands over none of them.
  */
-const DECIDE_NOOP = () => {};
 const DECIDE_OUTBOUND_NOOP = () => {};
 const NOOP = () => {};
 
@@ -114,8 +113,6 @@ export function ChannelsV2MessagePane({
   index,
   members,
   loading,
-  requested,
-  onDecideThread = DECIDE_NOOP,
   outboundAsk = null,
   outboundBusy = false,
   onDecideOutbound = DECIDE_OUTBOUND_NOOP,
@@ -141,10 +138,6 @@ export function ChannelsV2MessagePane({
   index: AuthorIndex;
   members: ChannelMember[];
   loading: boolean;
-  /** Thread ids the viewer has been asked about and has not answered. */
-  requested: ReadonlySet<string>;
-  /** Inline decision from the transcript's request card (Samuel, 2026-08-20). */
-  onDecideThread?: (threadId: string, decision: "allow" | "deny") => void;
   /** The OPEN thread's pending outbound review (my agent's draft awaiting my
    *  Send), or null. Caller joins it — `pendingOutboundByThread`. */
   outboundAsk?: ChannelConsentRequest | null;
@@ -269,12 +262,11 @@ export function ChannelsV2MessagePane({
         onToggleFavorite={onToggleFavorite}
         onExitThread={onExitThread}
       />
-      {/* Both thread consent surfaces live in `thread-consent.tsx`. */}
-      <ThreadAwaitingStrip
-        thread={thread}
-        requested={requested}
-        onDecideThread={onDecideThread}
-      />
+      {/* ⚠ THE AWAITING STRIP STOOD HERE AND IS DELETED (Samuel, 2026-08-22).
+          "This request is awaiting your answer" + Decline / Launch agent under
+          the header was the INBOUND consent surface; the ruling retired the
+          whole lane. `thread-consent.tsx` keeps only the outbound send box,
+          below the scroller. */}
       {/* ⚠ THE SCROLLER OWNS THE TRANSCRIPT'S GUTTER, and it is the only thing
           that may (Samuel, 2026-08-19: the rows ran "a little too close" to the
           pane edge). `px-6` → `px-8` is one step on the scale this tree actually
@@ -306,8 +298,14 @@ export function ChannelsV2MessagePane({
             rows={rows}
             index={index}
             flashId={flashId}
-            requested={requested}
-            onDecideThread={onDecideThread}
+            // ⚠ THE CARD'S LAUNCH RIDES THE SAME CONTROLS THE COMPOSER'S BOT
+            // ICON DOES, handed down rather than re-mounted: a second
+            // `useAgentsPanel` is a second peer poll. Absent (the pop-out
+            // window) renders no button, which is correct — that surface has no
+            // thread cards in its rows either.
+            canLaunchAgent={newAgent?.canLaunch ?? false}
+            launchBusy={newAgent?.launchBusy ?? false}
+            onLaunchAgent={(id) => void newAgent?.launchAgent(id)}
             onOpenThread={onOpenThread}
           />
         )}

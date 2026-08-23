@@ -112,12 +112,47 @@ function claimGate(s, payload, decide) {
 // ⚠ NAMES THE TOOL AND THE CHANNEL, and nothing else. The tool NAME is a
 // counterparty-influenceable string on its way to an OS notification, so it is
 // bounded the same way every other display string on this path is.
+//
+// ── ONE NOTICE PER TOOL PER SESSION (2026-08-22, Samuel's ruling 6b) ─────────
+// ⚠ A DENIAL STORM MUST BE ONE BANNER, NOT N. In live testing a burst of denied
+// calls on one tool produced a burst of IDENTICAL notifications — which is a
+// worse surface than the silence it replaced, because a wall of the same banner
+// is dismissed wholesale and takes the first, informative one with it. The first
+// denial of tool T on session S notifies; later denials of T on S do not.
+//
+// ⚠ THE DENY IS UNCHANGED AND STILL HAPPENS EVERY TIME. `claimGate` has already
+// dispatched it above and the diag line still records every one. This
+// de-duplicates the INTERRUPTION, never the decision — a notice cannot become a
+// grant by being skipped.
+//
+// ⚠ BOUNDED, AND ON THE SESSION OBJECT. The idiom is `trigger-outcomes.js ›
+// MAX_REMEMBERED_ENDS`: a cap, oldest evicted first by insertion order. An
+// unbounded Set is the shape this tree has already been bitten by, and keying
+// module state by session id would leak one entry per session for the life of
+// the process — here the memory dies WITH the session object. 32 is far above
+// the tool vocabulary one agent exercises, and an eviction costs at worst one
+// repeated banner, never a missed deny.
+const MAX_NOTIFIED_DENIALS = 32;
+function firstDenialOf(s, tool) {
+  if (!s.notifiedDenials) s.notifiedDenials = new Set();
+  if (s.notifiedDenials.has(tool)) return false;
+  if (s.notifiedDenials.size >= MAX_NOTIFIED_DENIALS) {
+    s.notifiedDenials.delete(s.notifiedDenials.values().next().value);
+  }
+  s.notifiedDenials.add(tool);
+  return true;
+}
+
 function notifyDenied(s, payload) {
   try {
     const tool = String((payload && payload.name) || 'A tool')
       .replace(/[\r\n\t]+/g, ' ')
       .trim()
       .slice(0, 40);
+    // ⚠ KEYED ON THE SANITIZED, CAPPED LABEL — the string the operator actually reads, so two
+    // names that DISPLAY identically collapse into one banner (they are one banner to a human),
+    // and a hostile name cannot mint unbounded distinct keys past the cap above.
+    if (!firstDenialOf(s, tool)) return;
     const channelName = (s.context && s.context.channelName) || 'this channel';
     channelPost.notifyLocal(
       `Dopl: ${tool} was not allowed`,

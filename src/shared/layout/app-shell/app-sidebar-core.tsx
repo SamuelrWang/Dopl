@@ -70,6 +70,14 @@ export interface AppSidebarCoreProps {
   /** `activeSectionFromPath(currentPath)`; null on non-nav routes. */
   activeSection: NavSection | null;
   /** Pending consents badged on Channels; 0 hides the badge. */
+  /**
+   * Drafts this operator's own agent is holding for their Send.
+   *
+   * ⚠ OUTBOUND-ONLY SINCE 2026-08-22 (Samuel — the inbound consent retirement),
+   * which is why the copy below no longer says "approval": there is nothing left
+   * to approve. The CALLER slices it (`use-consent-inbox.ts › outbound`); this
+   * component renders whatever number it is handed.
+   */
   consentCount: number;
   onOpenSettings: (section: SettingsSection) => void;
   /** Workspace switcher — injected because it routes. */
@@ -113,8 +121,8 @@ export function AppSidebarCore({
                 <span aria-hidden>{consentCount}</span>
                 <span className="sr-only">
                   {consentCount === 1
-                    ? "1 pending approval"
-                    : `${consentCount} pending approvals`}
+                    ? "1 message waiting to send"
+                    : `${consentCount} messages waiting to send`}
                 </span>
               </span>
             )}

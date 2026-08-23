@@ -184,9 +184,10 @@ class Api {
     return this.request('POST', '/api/channels/presence', { channelId });
   }
 
-  trust() {
-    return this.request('GET', '/api/channels/trust');
-  }
+  // ⚠ `trust()` STOOD HERE AND IS DELETED (2026-08-22): the route it wrapped is gone. The
+  // retirement is asserted in `checks-routes.js › checkRetiredRoutes`, which calls
+  // `request()` directly — a named helper for a route that must NOT exist reads like a
+  // surface this harness still expects to work.
 
   // ── the surface an AGENT reads through ────────────────────────────────────────
 

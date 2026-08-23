@@ -27,6 +27,8 @@ const framing = require('./prompt-framing');
 // do not close (wiring plan Phase 4, 2026-08-18). The §2 split's point stands: no HTTP dep here.
 const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-in
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
+const sessionEffects = require('./session-effects'); // 2026-08-22: `terminalBody` — a terminal says why
+const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's windowless floor (F-236)
 const { getSdk } = require('./sdk-loader');
 const sessionQuery = require('./session-query'); const { buildSdkOptions, startQuery, consume } = sessionQuery; // §3 split: SDK options + the query lifecycle (H1)
 const sessionNarration = require('./session-narration'); // 2026-08-20: the agent window's work lane (F-212)
@@ -41,6 +43,14 @@ const sessionMetrics = require('./session-metrics'); // ...and what it cost, fro
 const sessionPrivate = require('./session-private'); // 2026-08-22: the 1:1 turn's window
 const sessionRegistry = require('./session-registry');
 const { liveOnThread, agentIdsOnThread, agentIdsInChannel, sessionOn, noteSiblings } = sessionRegistry;
+// §2 SPLIT (2026-08-22): the TERMINAL — teardown order, the history freeze, and the read of a
+// dead agent's ring. Injected below like every other engine handle; it never requires back.
+const sessionTeardown = require('./session-teardown');
+const { settle, narrationFor } = sessionTeardown;
+// §2 SPLIT (2026-08-22): how a held `canUseTool` promise is resolved, and — the reason it moved —
+// WHAT THE AGENT IS TOLD when the answer is no. A windowless auto-deny is not a decision.
+const sessionPermissions = require('./session-permissions');
+const { denyPendingPermissions, resolvePerm } = sessionPermissions;
 // ...and the SPAWN FUNNEL: what happens before a session exists (mint an id, ask the three
 // refusal questions, hand to startSession). Split off this file at the §2 cap on 2026-08-21.
 const sessionLaunch = require('./session-launch');
@@ -85,6 +95,10 @@ sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => re
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
 sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions }); sessionRegistry.bind({ sessions });
 sessionLaunch.bind({ sessions, getSdk, startSession, liveOnThread, sessionOn }); // the funnel cannot require the engine back // ...and the narration ring + the addressing reads take the same registry
+// §2 SPLIT: the terminal takes the registry, the durable projection, the fail-closed sweep, the
+// tray refresh and the address read. `baseRecord` is assigned below, so this bind is hoisted past
+// it deliberately — `bind` stores the reference and `settle` reads it at CALL time.
+sessionTeardown.bind({ sessions, baseRecord: (s) => io.baseRecord(s), denyPendingPermissions, refreshTray, sessionOn });
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
@@ -96,6 +110,18 @@ function dispatch(s, event) {
   // funnel, rather than as a reducer effect: the window is a fact about the SESSION OBJECT, not
   // reducer state, so it survives a park/resume like the nonce and no SDK event can forge it.
   if (event && event.type === 'result') sessionPrivate.closePrivateTurn(s);
+  // ⚠ A SPAWN-IDLE AGENT HAS BEEN DIRECTED (2026-08-22, Samuel's wake ruling). HERE, at the one
+  // dispatch funnel, because the wake has TWO lanes and they must clear the flag identically:
+  //   `steer`           the operator's own 1:1 message (`session-reopen.js › messageByTask`),
+  //                     which never passes through `session-dispatch.js` at all.
+  //   `inbound_arrived` a thread or main-room message that @-MENTIONED this agent — the ONLY
+  //                     inbound that reaches this line while the flag is set, because
+  //                     `session-dispatch.js › mayFeed` and `session-gate.js › feedInbound` both
+  //                     refuse an unaddressed one upstream.
+  // Clearing it on the DISPATCH rather than at either gate is what makes "woken" mean the same
+  // thing on both lanes, and it is a fact about the SESSION OBJECT (like the private-turn depth
+  // and the nonce), so it survives a park/resume and no SDK event can forge it.
+  if (event && (event.type === 'steer' || event.type === 'inbound_arrived')) s.awaitingDirective = false;
   const { state, effects } = sessionReducer(s.state, event);
   s.state = state; sessionSummary.noteActivity(s, event); sessionNarration.note(s, event); // §3.3: the pill's state + detail, and the agent window's work lane, all off the ONE funnel
   let resolvedLive = false;
@@ -137,11 +163,19 @@ function runEffect(s, eff) {
     case 'interruptQuery':
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
       break;
+    // ⚠ BOTH OF THESE ALSO CLOSE THE PRIVATE WINDOW (2026-08-22). The depth is spent by a turn's
+    // `result`, and a TORN-DOWN QUERY OWES NO RESULTS: its consume loop is superseded by the
+    // `s.query !== q` guard, so the +1 (or +2) it was carrying is never paid off and the NEXT
+    // private turn opens on top of a depth that should have been zero. That is the leak behind
+    // the posture degradation — a session that had been paused once held its outbound widening
+    // withdrawn for turns nobody asked to be private.
     case 'abortQuery':
+      sessionPrivate.resetPrivateTurn(s);
       try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
       try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
       break;
     case 'denyPending': // P1: DENY every awaited canUseTool promise (fail closed) before a
+      sessionPrivate.resetPrivateTurn(s);
       denyPendingPermissions(s, 'Session paused'); // park's abort — no resolver may dangle
       break;
     case 'clearIdle': if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; } break;
@@ -152,23 +186,20 @@ function runEffect(s, eff) {
   }
 }
 
-// Fail-close EVERY awaited canUseTool promise and drop the bookkeeping. A park runs this before its
-// abort (P1) so no resolver dangles on a resumable session; settle runs it (C3) — a settled session
-// will never answer a button again.
-function denyPendingPermissions(s, message) {
-  for (const resolve of s.pendingPermissions.values()) {
-    try { resolve({ behavior: 'deny', message: message || 'Session paused' }); } catch (_) { /* best effort */ }
-  }
-  s.pendingPermissions.clear();
-  s.pendingNames.clear();
-}
-
+// ⚠ `denyPendingPermissions` MOVED TO `main/session-permissions.js` (2026-08-22, the §2 cap). It
+// is unchanged: fail-close every awaited promise, then drop both maps.
 // A hidden window RESHOWS on anything that needs the operator: a gated tool request, a
 // `counterparty` reply, a HELD inbound, or an outbound post awaiting Send (v2.7 L3).
 const RESHOW_TYPES = new Set(['permission_request', 'counterparty', 'inbound_pending', 'outbound_gate']);
 function emit(s, payload) {
   // 2026-08-20: a WINDOWLESS session's pending gate bridges to a consent row (outbound post) or denies — session-windowless.js owns the policy.
-  if (sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }))) return;
+  if (sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }))) {
+    // ⚠ THE ONE PLACE THAT KNOWS NOBODY WAS ASKED. `claimGate` answers a `permission_request` by
+    // denying immediately (there is no surface); an `outbound_gate` bridges to a consent row a
+    // HUMAN answers. Stamping here is what lets `resolvePerm` tell those two denials apart.
+    if (payload && payload.type === 'permission_request') sessionPermissions.noteAutoDenied(s, payload.requestId);
+    return;
+  }
   if (!s.win || s.win.isDestroyed()) return;
   if (s.windowHidden && payload && RESHOW_TYPES.has(payload.type)) {
     try { s.win.show(); } catch (_) { /* best effort */ }
@@ -190,19 +221,10 @@ function scheduleIdle(s) {
   s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: t.type }); }, t.ms);
 }
 
-// Returns TRUE only when a live awaited resolver was actually taken (FIX F1): no resolver means the request is
-// already decided (a park deny-closed it) and the caller must NOT report success — a renderer believing a blanket {ok:true} stamped a DENIED post 'sent'.
-function resolvePerm(s, requestId, decision) {
-  const resolve = s.pendingPermissions.get(requestId);
-  if (!resolve) return false;
-  s.pendingPermissions.delete(requestId);
-  s.pendingNames.delete(requestId);
-  // FIX M1: FAIL CLOSED. ALLOW only on an explicit 'allow' (the reducer maps allow-once/allow-task
-  // -> 'allow'); anything else, unknown included, denies.
-  resolve(decision === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied by operator' });
-  return true;
-}
-
+// ⚠ `resolvePerm` MOVED WITH IT, AND ITS DENIAL COPY IS WHY (2026-08-22, Samuel's ruling). It
+// answered every deny with `'Denied by operator'`, including the WINDOWLESS auto-deny where nobody
+// was asked; that sentence cost ~8 messages of wasted agent diagnosis and two operator escalations
+// in live testing. `session-permissions.js` carries the argument and the two messages.
 function runLifecycle(s, kind, extra, body) {
   const info = { channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId, key: s.key, sdkSessionId: s.sdkSessionId }; // FIX #2: key+sdkSessionId (cycle) -> echoTargets dedup
   try {
@@ -215,64 +237,16 @@ function runLifecycle(s, kind, extra, body) {
   } catch (err) { diag('session-engine: lifecycle handler error', err && err.message); }
 }
 
-// The lifecycle echo lives here; its sibling, session-close-task.js's status flip, is deleted
-// with thread closing (Phase 4, 2026-08-18). Terminal: drop the live handles, mark the record ended, free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
-// `keepWindow` — the abandonment case alone; the argument is at session-effects.endEffects.
-// ⚠ IT NO LONGER NAMES A WINDOW, AND THE DESTROY IS GONE (2026-08-20, F-234). This function
-// ended with `if (!keepWindow && s.win && !s.win.isDestroyed()) s.win.destroy()`, which has
-// been dead since every session went windowless — `s.win` is null on all of them. What the
-// flag means now is "retain the ENDED PILL", which `session-summary.noteEnded` honours
-// unconditionally; the name is the engine's and is left alone rather than renamed for cosmetics.
-// Everything below still runs, terminal either way.
-function settle(s, outcome, keepWindow) {
-  if (s.settled) return;
-  s.settled = true;
-  // C3 (CRITICAL) — a settled session must leave NOTHING live. The CRASH path settles WITHOUT parking, so until
-  // now every awaited canUseTool promise hung forever (the SDK child blocks on it) and the push iterator kept the
-  // prompt stream open: the `claude` process outlived the window and could go on posting into the channel with
-  // nothing left to show it. Deny each awaited request fail-closed, close the iterator, and abort here, so teardown holds whichever branch reached it (the reducer aborts too).
-  denyPendingPermissions(s, 'Session ended');
-  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
-  if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
-  store.saveRecord(baseRecord(s)); // FIX #9: full record (phase 'ended') persists cap counters for a P2 rehydrate
-  if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
-  // ⚠ FREEZE THE HISTORY BEFORE THE REGISTRY ENTRY GOES (2026-08-22, Samuel's ruling). The
-  // narration ring lives on `s` and nowhere else, so this is the last moment it exists. Best
-  // effort by construction: `settle` is the ONE teardown every terminal reaches, and a disk
-  // failure here must not leave a `claude` child un-aborted.
-  try {
-    agentHistory.record({
-      key: s.key, agentId: s.agentId, sessionId: s.sessionId,
-      channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId,
-      channelName: (s.context && s.context.channelName) || null,
-      threadTitle: (s.context && s.context.taskTitle) || null,
-      endedAt: Date.now(),
-      // The final measurement, frozen here for the same reason the identity is: the registry
-      // entry is about to go and `metrics(s)` is the only reader of it.
-      ...sessionMetrics.metrics(s),
-      entries: sessionNarration.ringFor(s),
-    });
-  } catch (err) { diag('session-engine: could not freeze agent history —', err && err.message); }
-  sessions.delete(s.key); sessionSummary.noteEnded(s, keepWindow === true); // 2026-08-22: retention is the history file's, for 7 days
-  refreshTray();
-}
-
+// ⚠ `settle(s, outcome, keepWindow)` STOOD HERE AND MOVED TO `main/session-teardown.js`
+// (2026-08-22, the §2 cap). Nothing about it changed: it is still the ONE teardown every terminal
+// reaches, still runs the C3 fail-closed sweep before the abort, and still freezes the narration
+// ring into `agent-history` before the registry entry disappears. The engine executes it through
+// the `settle` effect exactly as before. Its sibling, `session-close-task.js`'s status flip, was
+// deleted with thread closing (Phase 4, 2026-08-18).
 function setLifecycleHandlers(h) { lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded }; }
 
-// THE WORK LANE FOR ONE ADDRESS — live if it is live, FROZEN if the agent has ended.
-// ⚠ THE FALLBACK IS THE WHOLE POINT (2026-08-22). This was `ringFor(sessionOn(a))`, and
-// `sessionOn` resolves against the LIVE registry `settle` has already deleted from — so an ENDED
-// agent's window answered `[]`, while `agent-history.js › historyFor` (the 7-day ring `settle`
-// freezes for exactly this read) had ZERO callers. Same key `settle` wrote, `store.slotKey`, so
-// an address naming no agent gets the live answer alone: `<channel>:<thread>:` matches no record.
-function narrationFor(a) {
-  const live = sessionOn(a);
-  if (live) return sessionNarration.ringFor(live);
-  const rec = agentHistory.historyFor(store.slotKey(a));
-  return rec && Array.isArray(rec.entries) ? rec.entries.slice() : [];
-}
-
+// ⚠ `narrationFor(a)` MOVED WITH IT, for the reason its own docblock now states: it is the one
+// read whose correctness depends on what `settle` wrote a moment earlier.
 // Build the session object, open (or ADOPT) its window, start the query (launch + resume). The per-session nonce is
 // minted HERE so the first turn's fence + every fed-inbound continuation share the SAME token (else injected content
 // forges it). v2.x: the CONCRETE channel + workspace UUIDs are merged into the context here — the framing reads only the context, while every spawn shape carries the ids on its spec (fresh responder/requester, parked resume, recreated shell).
@@ -304,6 +278,14 @@ async function startSession(spec, sdk) {
     ? { toolMode: armedModes.tools, messageMode: armedModes.messages }
     : {};
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(), ...startModes });
+  // ⚠ THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).
+  // Both LAUNCH lanes already derive their message axis through `channel-prefs.js ›
+  // windowlessMessageMode`, so for them this is a no-op. What it fixes is every shape that hands
+  // in NOTHING and inherits the reducer's `ask`: a crash resume above all (`session-park.js ›
+  // startResume`), which came back BELOW the floor on a session with no accept surface — so
+  // `session-gate.js › enqueue` held the peer's next reply forever with no drain left to release
+  // it. Same SHARED rule both lanes call; never a second spelling.
+  if (spec.windowless === true) state.messageMode = floorWindowlessMessage(state.messageMode);
   // P2: a reopen fallback opens a PARKED SHELL — a live window, NO SDK query yet. It boots
   // parked so a lazy wake (P1) resumes it; baseRecord persists s.state.phase = 'parked'.
   // FIX #9 / AUDIT D3: the running cap budget rehydrates on EVERY resume shape. It used to sit
@@ -319,6 +301,11 @@ async function startSession(spec, sdk) {
   // posture no human armed; this lane sets `operatorArmed` because the click IS the human).
   if (spec.parkedShell) { state.phase = 'parked'; state.parked = true; state.activity = 'parked'; }
   const context = { ...(spec.context || {}), channelId: spec.channelId, workspaceId: spec.workspaceId };
+  // ⚠ `firstTurn` IS STILL '' FOR A PARKED SHELL, AND THE GOAL IS NO LONGER LOST WITH IT
+  // (2026-08-22). `session-query.js › startQuery` is the ONE pusher of this field and a
+  // spawn-idle session never runs it, so anything put here would be dropped; `launchGoal` below
+  // carries `spec.firstMessage` to the WAKE turn instead, where `session-seed.js › takeFraming`
+  // fences it as that turn's request body. Its docblock carries the whole argument.
   const firstTurn = spec.parkedShell ? ''
     : spec.rawFirstTurn ? spec.rawFirstTurn
       : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context, nonce });
@@ -372,6 +359,17 @@ async function startSession(spec, sdk) {
     // or the agent answers nowhere and the peer gets nothing. `freshFraming` is the ONE-SHOT marker io.withSeed consumes, `freshRun` its stable twin.
     freshRun: spec.parkedShell === true && !spec.resumeSdkId,
     freshFraming: spec.parkedShell === true && !spec.resumeSdkId,
+    // ⚠ THE LAUNCH GOAL, HELD FOR THE WAKE TURN (2026-08-22). `takeFraming` fences it as that
+    // turn's request body when there is no channel transcript to seed. Stamped only where it can
+    // be read — a non-parked spawn already pushed `firstTurn` and must not carry a second copy.
+    launchGoal: spec.parkedShell === true ? String(spec.firstMessage == null ? '' : spec.firstMessage) : '',
+    // ⚠ THE SPAWN-IDLE WAKE FLAG (2026-08-22, Samuel's ruling). TRUE while this agent is
+    // registered, addressable and UNDIRECTED: the fan-out feeds it nothing but a message naming
+    // its own agent id, and a 1:1 `sessions:message` wakes it too. `dispatch` above clears it on
+    // either lane. ⚠ NOT `freshFraming` overloaded — that is a ONE-SHOT marker about whether a
+    // TURN carries the framing, consumed by the first turn built; this is read on EVERY message
+    // and answers whether anything may reach the agent at all.
+    awaitingDirective: spec.parkedShell === true,
     idleTimer: null,
     settled: false, windowHidden: false,
     lastInboundSeq: Number.isFinite(Number(spec.triggerSeq)) ? Number(spec.triggerSeq) : null,
@@ -461,7 +459,7 @@ async function init() {
     // purpose and stays resumable via P2. Only a live/awaiting record that died echoes.
     if (!rec || store.reloadDisposition(rec.phase) !== 'resume') continue;
     store.setRecordPhase(key, 'ended');
-    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: store.getSdkSessionId(key) }, 'task_failed', { interrupted: true }); // FIX #2: same key+sdk id dedupes with a same-cycle crash echo
+    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: store.getSdkSessionId(key) }, 'task_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true })); // FIX #2: same key+sdk id dedupes with a same-cycle crash echo
     const sdkId = store.getSdkSessionId(key);
     if (sdkId) sessionPark.offerResume(rec, sdkId);
   }
@@ -492,6 +490,7 @@ module.exports = {
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
   reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, setModeByTask: sessionReopen.setModeByTask, messageByTask: sessionReopen.messageByTask,
+  setModelByTask: sessionReopen.setModelByTask, // 2026-08-22: the LIVE model switch (Query.setModel)
   // ⚠ IT TAKES AN ADDRESS, NOT A KEY (2026-08-21). It used to be `(k) => ringFor(sessions.get(k))`
   // and its ONE caller built `${channelId}:${taskId}` by hand — a second, now-wrong statement of
   // the key format sitting in the IPC layer. It takes `{channelId, taskId, agentId?}` and goes

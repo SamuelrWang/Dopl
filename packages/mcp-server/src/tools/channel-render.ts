@@ -99,6 +99,28 @@ export function sessionIdOf(m: ChannelMessage): string | undefined {
 }
 
 /**
+ * THE SESSION THAT ENDED — `metadata.session_ended`, and it rides a
+ * `task_progress`, not a terminal kind.
+ *
+ * ⚠ SO THE KIND TAG ALONE CANNOT SHOW IT (2026-08-22). The desktop posts a
+ * session's death as `kind='task_progress'` with this flag
+ * (`main/session-effects.js`; `service-writes-metadata-markers.ts` reserves the
+ * key), deliberately NON-TERMINAL, because one member's window closing is not
+ * the thread failing. But that means "a step landed" and "the agent working this
+ * is gone" arrived at this surface as the SAME line, and the difference is the
+ * whole question a waiting agent is asking: `await`'s stop rule is "has the
+ * member I addressed shown activity", and a session end reads as activity while
+ * meaning the opposite.
+ *
+ * ⚠ SERVER-STAMPED, so it is worth reading. `takeCalmFlags` strips any caller
+ * copy and re-stamps only a literal `true`, only onto a thread tag the poster is
+ * entitled to — a peer cannot fabricate somebody else's session ending.
+ */
+function sessionEnded(m: ChannelMessage): boolean {
+  return (m.metadata as Record<string, unknown> | undefined)?.session_ended === true;
+}
+
+/**
  * WHO A MESSAGE IS FOR — `metadata.to_user_id`. Separates "for ME" from "for
  * another member's agent" from "for nobody". An unaddressed ask in a 3+ member
  * channel triggers no agent at all (deliberate, fail-closed), so "unaddressed"
@@ -162,6 +184,77 @@ function namesFromMessages(messages: ChannelMessage[]): Map<string, string> {
 }
 
 /**
+ * THE SLOT-KEY SEGMENT THAT NAMES A SESSION. `metadata.session_id` is the
+ * desktop's slot key, `<channelId>:<taskId>:<agentId>`
+ * (`main/session-store.js › sessionKey`), and the AGENT id is the only segment
+ * that distinguishes one session from another on the SAME thread — which is the
+ * whole point of multiplayer.
+ *
+ * ⚠ IT USED TO SLICE AFTER THE FIRST COLON, and that predates the third segment
+ * (fixed 2026-08-22). The key was `<channel>:<agent-or-thread>` when this was
+ * written, so the slice was the tail; against a three-segment key it renders
+ * `<thread>:<agent>` — an identity that is not a session, that repeats the
+ * thread already tagged two clauses away, and that is long enough to bury the
+ * one part a reader needs.
+ *
+ * ⚠ BOTH SHAPES STILL ARRIVE, so it reads from the END rather than counting
+ * segments: rows written before the widening carry two, and a mid-wave record
+ * can carry an EMPTY agent segment (the middle one is legitimately empty for a
+ * responder with no first-class thread). The `|| ` fallbacks walk back rather
+ * than rendering an empty span. ⚠ The agent charset (`^[a-z][a-z0-9]{7}$`)
+ * carries no colon, so the last segment is unambiguous.
+ */
+function sessionTail(sessionId: string): string {
+  const parts = sessionId.split(":");
+  if (parts.length < 2) return sessionId;
+  return parts[parts.length - 1] || parts[parts.length - 2] || sessionId;
+}
+
+/**
+ * HOW MUCH OF ONE BODY A MULTI-MESSAGE PAGE RENDERS (2026-08-22, Samuel).
+ *
+ * ⚠ `read` rendered bodies UNTRUNCATED and a single 128,000-character body was
+ * measured in live use — one message eating an agent's whole context on a call
+ * it made to orient itself. The write path caps a body at 16,000
+ * (`schema.ts › body`), so 128k is a row from a writer that cap never bound;
+ * either way the READ is where the reader's budget is spent.
+ *
+ * 2000 is chosen against the page, not the message: the default page is 100
+ * messages, so this bounds an ordinary `read` at ~200k characters worst case
+ * while leaving the overwhelming majority of real posts untouched — a chat
+ * message, a milestone and a normal reply are all far under it. A 16k
+ * deliverable clips, and that is correct: a transcript scan is not how you read
+ * one.
+ */
+const BODY_CLIP_CHARS = 2000;
+
+/**
+ * One body, clipped when the page holds more than one message.
+ *
+ * ⚠ THE MARKER NAMES A CALL THAT ACTUALLY RETURNS THE REST, and that is why the
+ * condition is "this page holds one message" rather than "this read is
+ * thread-scoped". A thread-scoped read is still a page of many, so pointing at
+ * one would hand back another clipped copy; `op="get_thread"` renders no message
+ * bodies AT ALL (it is title / mode / parties / timestamps — see
+ * {@link formatThreadDetail}), so pointing at that would be worse than silence.
+ * `since=<seq-1>, limit=1` returns exactly this message, and a one-message page
+ * is rendered in full — so the remedy is true by construction, for a threaded
+ * and an unthreaded message alike.
+ *
+ * ⚠ The count is of CHARACTERS DROPPED, not of the original length: "how much am
+ * I not seeing" is the question a reader has, and it is the one a clip can
+ * answer without the reader doing arithmetic.
+ */
+function clipBody(m: ChannelMessage, ref: string, clip: boolean): string {
+  if (!m.body) return "";
+  const body =
+    clip && m.body.length > BODY_CLIP_CHARS
+      ? `${m.body.slice(0, BODY_CLIP_CHARS)}\n… [${m.body.length - BODY_CLIP_CHARS} chars clipped — read this one message in full with dopl_channel(op="read", channel="${ref}", since=${Math.max(0, m.seq - 1)}, limit=1)]`
+      : m.body;
+  return `\n  ${body.replace(/\n/g, "\n  ")}`;
+}
+
+/**
  * One rendered message line. `task_*` events already carry a human-readable
  * render in `body`, so no per-kind special-casing — just tag non-chat kinds.
  *
@@ -175,37 +268,53 @@ function namesFromMessages(messages: ChannelMessage[]): Map<string, string> {
  *
  * Session suffix emitted only when the message carries a stamp — absence is the
  * external / older-build case, not a claim one session wrote everything.
+ *
+ * ⚠ A SESSION END REPLACES THE KIND TAG rather than sitting beside it. The kind
+ * is `task_progress` and printing both says "a step landed · the session died"
+ * in one clause; the marker is the whole meaning of the row, so it takes the
+ * slot. ⚠ SHOUTED, and it is the only tag here that is: every other clause is a
+ * label, this one is the reason a waiting agent should stop waiting.
  */
 function formatMessage(
   m: ChannelMessage,
   anyThreaded: boolean,
   view: MemberView,
+  ref: string,
+  clip: boolean,
 ): string {
   const author = formatAuthor(m);
-  const kindTag = m.kind !== "message" ? ` · ${m.kind}` : "";
+  const ended = sessionEnded(m);
+  const kindTag = ended
+    ? " · SESSION ENDED"
+    : m.kind !== "message"
+      ? ` · ${m.kind}`
+      : "";
   // ⚠ Tag lands in the line HEAD — neither indented as a body nor covered by
   // the untrusted header. 7 chars ("\n- **#9") starts a forged message row, so
   // it must stay neutralized.
   const threadTag = threadTagOf(m, anyThreaded);
-  // Slot key is `<channel>:<agent-or-thread>`; channel half is identical for
-  // every session in the room, so print the tail. ⚠ NOT `shortRef` — that is
-  // the THREAD helper and renders a legacy pair-slot tail as `seq 345`,
-  // borrowing thread vocabulary for a session identity that does not exist.
+  // ⚠ NOT `shortRef` — that is the THREAD helper and renders a legacy pair-slot
+  // tail as `seq 345`, borrowing thread vocabulary for a session identity that
+  // does not exist.
   const session = sessionIdOf(m);
   const sessionTag = session
-    ? ` · session ${inlineOr(sessionSlotRef(session.slice(session.indexOf(":") + 1) || session), UNREADABLE_ID)}`
+    ? ` · session ${inlineOr(sessionSlotRef(sessionTail(session)), UNREADABLE_ID)}`
     : "";
   const to = addresseeOf(m);
   const memberTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
   const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag} · ${m.createdAt}`;
-  const body = m.body ? `\n  ${m.body.replace(/\n/g, "\n  ")}` : "";
-  return `- ${head}${body}`;
+  return `- ${head}${clipBody(m, ref, clip)}`;
 }
 
 /**
  * Message lines plus, when anything is tagged, the id legend. `selfUserId`
  * turns "to `2dac1943-…`" into "to you"; names come from the listing's own
  * hydrated authors, so no extra round-trip on the read/await path.
+ *
+ * ⚠ A ONE-MESSAGE PAGE RENDERS IN FULL — see {@link clipBody}. That is the
+ * escape hatch the clip marker points at, so it is a CONTRACT of this function,
+ * not an optimization: never clip a single-message page, or the remedy the
+ * marker names stops working and there is no other way to read a long body.
  */
 export function formatMessages(
   messages: ChannelMessage[],
@@ -214,7 +323,10 @@ export function formatMessages(
 ): string[] {
   const view: MemberView = { selfUserId, names: namesFromMessages(messages) };
   const anyThreaded = messages.some((m) => threadIdOf(m) !== undefined);
-  const lines = messages.map((m) => formatMessage(m, anyThreaded, view));
+  const clip = messages.length > 1;
+  const lines = messages.map((m) =>
+    formatMessage(m, anyThreaded, view, ref, clip),
+  );
   const legend = threadLegend(messages, ref);
   if (legend) lines.push(`\n${legend}`);
   return lines;

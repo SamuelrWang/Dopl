@@ -12,14 +12,10 @@
  * `ReactionPill` did NOT survive the port and its absence is deliberate: emoji
  * reactions have no backing column of any kind, and inventing them would
  * attribute a reaction to a real person nobody made.
- *
- * `PendingChip` DID come back (wiring plan Phase 3), wired rather than
- * fixtured — see its own docblock for what "requested" is derived from and
- * whose view it is true in.
  */
 
 import type { ReactNode } from "react";
-import { Bot, Check, ChevronDown, ChevronRight, Clock, X, type LucideIcon } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 
@@ -60,58 +56,118 @@ export function IconTile({ children }: { children: ReactNode }) {
 }
 
 /**
- * Marks a message or a thread as having an agent party to it.
+ * THE FOUR CHIP FACES ONE AGENT ID CAN WEAR, and the reason there are exactly
+ * these four (Samuel, 2026-08-22 — "it looks like one agent sending").
+ *
+ * ⚠ NONE OF THEM IS ON THE SEVERITY RAMP, and that exclusion is the whole design
+ * constraint. `success` / `caution` / `warning` / `danger` are documented as an
+ * ORDERED ramp (docs/DESIGN-SYSTEM.md), so keying an identity off them would
+ * paint one of an operator's agents alarm-red and rank the rest — a status claim
+ * about a thing that has no status. What is left in the token set that carries no
+ * severity is the neutral chip face, `link`, `accent-primary` and one step of the
+ * elevation ramp, and that is the entire pool. Four is therefore a MEASUREMENT,
+ * not a design target.
+ *
+ * ⚠ INDEX 0 IS TODAY'S FACE, ON PURPOSE. An UNSTAMPED agent post keeps the plain
+ * chip byte for byte (see {@link AgentChip}), and a stamped one that hashes to 0
+ * must be indistinguishable from it — the accent says WHICH agent, never THAT
+ * there is one.
+ */
+const AGENT_ACCENTS = [
+  "border-border-strong bg-bg-inset text-text-secondary",
+  "border-link/25 bg-link/10 text-link",
+  "border-accent-primary/25 bg-accent-primary/10 text-accent-primary",
+  // The CTA ink, at chip scale — the strongest of the four and the precedent is
+  // this file's own: the sidebar's ask badge wore exactly this pair at exactly
+  // this size until the inbound lane was retired.
+  "border-surface-cta bg-surface-cta text-text-on-cta",
+] as const;
+
+/**
+ * ONE AGENT ID → ONE OF {@link AGENT_ACCENTS}, deterministically.
+ *
+ * ⚠ STABLE ACROSS RELOADS, MACHINES AND RENDERS, because it is a pure function
+ * of the id and nothing else — no counter, no order-of-appearance index, no
+ * palette cursor. An operator who learns that `k3v7d2mq` is the blue one must
+ * still be right after a refetch reorders the transcript.
+ *
+ * ⚠ IT IS A HINT, NOT A GUARANTEE OF DISTINCTNESS. Four faces over an 8-char
+ * id space collide, and two agents on one thread can land on the same one — which
+ * is exactly why the ID TEXT ships beside it rather than instead of it. The
+ * accent makes the split glanceable; the id is what makes it TRUE.
+ *
+ * Exported for the test: a palette that quietly stopped being deterministic looks
+ * identical in a screenshot.
+ */
+export function agentAccent(agentId: string): string {
+  let hash = 0;
+  for (let i = 0; i < agentId.length; i += 1) {
+    hash = (hash * 31 + agentId.charCodeAt(i)) >>> 0;
+  }
+  return AGENT_ACCENTS[hash % AGENT_ACCENTS.length];
+}
+
+/**
+ * Marks a message or a thread as having an agent party to it — and, when the
+ * writer stamped which of the operator's agents it was, WHICH one.
  *
  * ⚠ The UI TAGS the claim, it does not authenticate it. `authorKind` is
  * caller-assertable and scoped to one user (INVARIANTS §5) — this chip is a
  * DISPLAY claim about who typed, never about who they are. The side the row
  * hangs on comes from `author_user_id`, which the server stamps.
+ *
+ * ⚠ `agentId` EXISTS BECAUSE MULTIPLAYER BROKE THE PLAIN CHIP (Samuel,
+ * 2026-08-22). Two of one operator's agents posting into one thread both wore an
+ * undifferentiated "Agent" pill under one account name, so a transcript with two
+ * writers read as one. The id is the ONLY thing on the wire that tells them apart
+ * — `agents-model.ts › parseAgentPostStamp` off the writer's own
+ * `client_msg_id`, the same token `agentSentMessages` splits the panel's Sent
+ * lane on (F-251).
+ *
+ * ⚠ ABSENT IS THE OLD CHIP, NOT A BLANK. An unstamped agent post (an older main,
+ * an agent that supplied its own idempotency key, a machine-level courtesy post)
+ * renders exactly what it always did. Inventing an id for it, or dropping the
+ * chip because there is none, would both report "cannot say" as something else
+ * (INVARIANTS §11).
  */
-export function AgentChip({ className }: { className?: string }) {
+export function AgentChip({
+  agentId = null,
+  className,
+}: {
+  /** The stamped per-instance id, or `null` for an unattributed agent post. */
+  agentId?: string | null;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium text-text-secondary",
+        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-micro font-medium",
+        agentId ? agentAccent(agentId) : AGENT_ACCENTS[0],
         className
       )}
     >
       <Bot size={11} aria-hidden />
       Agent
+      {agentId && (
+        <>
+          {/* ⚠ The separator is decoration; the id is read out on its own so a
+              screen reader says "Agent k3v7d2mq" rather than spelling a middot. */}
+          <span aria-hidden>·</span>
+          <span className="font-mono tracking-tight">{agentId}</span>
+        </>
+      )}
     </span>
   );
 }
 
-/**
- * REQUESTED — a thread the viewer has been asked about and has not answered.
- *
- * ⚠ THERE IS NO `requested` STATUS ANYWHERE IN STORAGE, and this chip is not
- * quietly inventing one. Server-side the state is a live `pending`
- * `channel_consent_requests` row against the viewer (INVARIANTS §6); the join is
- * `view-model-requested.ts › requestedThreadIds`, off the consent inbox this
- * page already reads.
- *
- * ⚠ TRUE IN ONE DIRECTION ONLY. A consent read is scoped to
- * `(operator, workspace)`, so this can only ever say "YOU have not answered" —
- * never "your addressee has not answered". A requester's own card carries no
- * chip, and that is a missing projection, not a settled request (F-206).
- *
- * `Clock`, matching the sidebar's thread glyph: one shape means "waiting on
- * approval" in both columns (the port's intent doc § Sidebar glyph legend,
- * deleted at the Phase 12 cutover).
- */
-export function PendingChip({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-1.5 py-px text-micro font-medium text-warning",
-        className
-      )}
-    >
-      <Clock size={11} aria-hidden />
-      Requested
-    </span>
-  );
-}
+// ⚠ `PendingChip` STOOD HERE AND IS DELETED (Samuel, 2026-08-22). It said
+// "Requested" over a `Clock` on a thread card whose inbound consent row was still
+// `pending` — the whole vocabulary of being asked and owing an answer, which that
+// ruling retired ("remove all the stuff about declining and approving of
+// threads"). It went with the card's Decline / Launch agent pair,
+// `thread-consent.tsx › ThreadAwaitingStrip`, the Inbox's inbound rows, the
+// sidebar's `Clock` thread glyph and its per-channel ask badge. There is no
+// `requested` state left to chip.
 
 /** Right-aligned count pill on a nav row. ⚠ Only ever rendered where a REAL
  *  count exists — a badge is a claim about how much is waiting. */

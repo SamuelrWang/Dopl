@@ -9,23 +9,18 @@ import { toast } from "@/shared/ui/toast";
 import { ChannelApiError, channelRequest } from "../client/api";
 import {
   CHANNEL_CONSENT_PATH,
-  CHANNEL_TRUST_PATH,
   channelKeys,
   channelMembersPath,
 } from "../client/query-keys";
 import {
-  addTrustRuleRow,
   dropConsentRequest,
-  removeTrustRuleRow,
   setFavorite,
   setToolProfile,
   type ChannelsCache,
   type ConsentCache,
-  type TrustCache,
 } from "../lib/optimistic-cache";
 import type {
   AgentToolProfile,
-  AgentTrustRule,
   ChannelConsentRequest,
   ChannelMember,
 } from "../types";
@@ -44,21 +39,34 @@ import type {
  *
  * What each write's optimistic patch has to say is now the whole of it:
  * tool-profile sets one field on one channel row (in both the archived and
- * unarchived list variants — `.all` is a prefix key); trust adds or removes a
- * rule row; a consent decision drops the request, because the inbox holds only
- * `pending` rows and dropping it IS the decided state.
+ * unarchived list variants — `.all` is a prefix key); a consent decision drops
+ * the request, because the inbox holds only `pending` rows and dropping it IS
+ * the decided state.
  *
- * There were FOUR of these until 2026-08-08, when notify scope was removed
- * from the product (F-170) — its mutation, its cache patch and its bell
- * popover went together. FOUR again since 2026-08-19: the channel FAVOURITE
- * joined them, on the same route as the tool profile (`PATCH /members`, whose
- * schema now carries `favorite`) and patching the same channel-list cache the
- * sidebar's Favorites section reads.
+ * ⚠ THE COUNT IS THREE AND IT HAS MOVED TWICE — read the returns, not this
+ * paragraph. It was four until 2026-08-08, when notify scope left the product
+ * (F-170); four again from 2026-08-19, when the channel FAVOURITE joined on the
+ * tool profile's own route (`PATCH /members`, whose schema carries `favorite`);
+ * **three since 2026-08-22, when TRUST was deleted** with the inbound consent
+ * lane it was the standing-consent shortcut for (Samuel). Its mutation, its
+ * `addTrustRuleRow` / `removeTrustRuleRow` cache patch, `useTrustRules` and the
+ * `/api/channels/trust` client path went together, exactly as notify scope's set
+ * did.
  */
 
+/**
+ * ⚠ `currentUserId` LEFT THIS SHAPE ON 2026-08-22, and its absence is the point.
+ * Its ONLY reader was the trust mutation's optimistic row — `addTrustRuleRow`
+ * needed an `operatorUserId` to build a valid `AgentTrustRule` — and trust went
+ * with the inbound consent lane. None of the three surviving writes has any
+ * business knowing WHO the caller is: `toolProfile` and `favorite` write
+ * `ctx.userId`'s own membership row with no member field in the body, and
+ * `consent` is CAS'd against a row already scoped to `(operator, workspace)`.
+ * **Do not add it back for convenience** — a hook that takes an identity it does
+ * not use invites a caller to point a write at somebody else.
+ */
 export interface PreferenceWritesParams {
   workspaceId: string;
-  currentUserId: string;
   gate: MutationGate;
 }
 
@@ -69,10 +77,6 @@ function failed(err: unknown, fallback: string) {
 export interface ToolProfileDraft {
   channelId: string;
   profile: AgentToolProfile;
-}
-export interface TrustDraft {
-  userId: string;
-  trusted: boolean;
 }
 export interface ConsentDraft {
   id: string;
@@ -87,7 +91,6 @@ export interface FavoriteDraft {
 
 export function useChannelPreferenceWrites({
   workspaceId,
-  currentUserId,
   gate,
 }: PreferenceWritesParams) {
   const toolProfile = useApiMutationWith<
@@ -140,31 +143,17 @@ export function useChannelPreferenceWrites({
     }
   );
 
-  const trust = useApiMutationWith<TrustDraft, { rule?: AgentTrustRule }>(
-    channelRequest,
-    {
-      request: (draft) => ({
-        path: CHANNEL_TRUST_PATH,
-        method: draft.trusted ? "POST" : "DELETE",
-        workspaceId,
-        body: { trustedUserId: draft.userId },
-      }),
-      optimistic: (draft) =>
-        patchCache<TrustCache>(channelKeys.trust().all, (cache) =>
-          draft.trusted
-            ? addTrustRuleRow(cache, {
-                trustedUserId: draft.userId,
-                operatorUserId: currentUserId,
-                workspaceId,
-              })
-            : removeTrustRuleRow(cache, draft.userId)
-        ),
-      invalidate: () => [channelKeys.trust().all],
-      settleWith: gate,
-      onError: (err) => failed(err, "Couldn't update trust"),
-    }
-  );
-
+  /**
+   * SEND OR CANCEL an outbound draft — the CAS'd `PATCH /consent/[id]`.
+   *
+   * ⚠ ITS INBOUND CALLERS ARE GONE (Samuel, 2026-08-22). The transcript card's
+   * Decline / Launch agent pair, `thread-consent.tsx › ThreadAwaitingStrip` and
+   * the Inbox's inbound rows all fired this mutation against an INBOUND row;
+   * that lane is retired. The mutation itself is unchanged and is NOT
+   * kind-scoped — the wire shape is the server's, `"allow"` / `"deny"` are the
+   * same two values, and the two surfaces left (`ThreadSendBox`, `InboxRow`)
+   * only ever hand it an outbound id because that is all their callers read.
+   */
   const consent = useApiMutationWith<
     ConsentDraft,
     { request: ChannelConsentRequest }
@@ -184,5 +173,5 @@ export function useChannelPreferenceWrites({
     onError: (err) => failed(err, "Couldn't record decision"),
   });
 
-  return { toolProfile, favorite, trust, consent };
+  return { toolProfile, favorite, consent };
 }
