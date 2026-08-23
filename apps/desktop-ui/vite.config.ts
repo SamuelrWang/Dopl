@@ -155,9 +155,24 @@ export default defineConfig({
     // transports see one origin — mirroring the packaged topology where
     // both funnel into main. VITE_API_BASE_URL keeps parity with
     // api-transport's dev base.
+    //
+    // ⚠ `DOPL_DEV_API_TARGET` RETARGETS THE PROXY *WITHOUT* MOVING THE CLIENT,
+    // and that is the only way to point browser-dev at a LOCAL `next dev`.
+    // `VITE_API_BASE_URL` cannot do it: vite's `loadEnv` copies every
+    // `VITE_`-prefixed **shell** variable into `import.meta.env`, so setting it
+    // ALSO makes `src/lib/api-transport.ts` fetch that origin ABSOLUTELY —
+    // cross-origin, which preflights `POST /api/boot`, and no route in this repo
+    // answers OPTIONS. The workspace never resolves and every page stops at its
+    // error state. Unprefixed, this one reaches node only.
+    //   DOPL_DEV_API_TARGET=http://localhost:3000 npm run dev:ui
+    // The auth cookie rides along because cookies ignore PORT: a session minted
+    // at localhost:3000 is sent to localhost:5173 and forwarded verbatim.
     proxy: {
       "/api": {
-        target: process.env.VITE_API_BASE_URL || "https://www.usedopl.com",
+        target:
+          process.env.DOPL_DEV_API_TARGET ||
+          process.env.VITE_API_BASE_URL ||
+          "https://www.usedopl.com",
         changeOrigin: true,
       },
     },
