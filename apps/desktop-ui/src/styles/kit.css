@@ -38,13 +38,9 @@
 }
 
 .auth-btn-3d-light {
-  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
-  border: 1px solid #d4d4d4;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
-    0 2px 3px rgba(0, 0, 0, 0.08),
-    0 6px 14px rgba(0, 0, 0, 0.06);
+  background: var(--raised-light-face);
+  border: 1px solid var(--raised-light-line);
+  box-shadow: var(--raised-light-shadow);
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .auth-btn-3d-light:hover:not(:disabled) {
@@ -66,6 +62,22 @@
   cursor: not-allowed;
 }
 
+/* THE SELECTED FACE for a raised-light control (2026-08-24, /home's
+   conversation rows). Not a border of its own: the SAME darkened hairline and
+   soft halo the search pill wears while it is open, held permanently instead of
+   only while focused — one "this is the live one" signal, whether the thing is
+   focused or merely chosen.
+
+   ⚠ Declared AFTER `.auth-btn-3d-light` on purpose. Both live in this layer at
+   equal specificity, and the hover rule below re-states the ring so the pointer
+   passing over a selected row cannot wash the selection out — the lift still
+   happens, it is a `transform`. */
+.selected-ring,
+.selected-ring:hover:not(:disabled) {
+  border-color: var(--focus-line);
+  box-shadow: var(--raised-light-focus);
+}
+
 /* `.concave-field` = official kit name; `.auth-field-3d` = legacy alias. */
 .concave-field,
 .auth-field-3d {
@@ -81,12 +93,12 @@
 .concave-field:focus-within,
 .concave-field:focus,
 .auth-field-3d:focus-within {
-  border-color: rgba(24, 24, 24, 0.22);
+  border-color: var(--focus-line);
   box-shadow:
     inset 0 2px 5px rgba(0, 0, 0, 0.17),
     inset 0 1px 2px rgba(0, 0, 0, 0.09),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9),
-    0 0 0 3px rgba(24, 24, 24, 0.07);
+    var(--focus-halo);
 }
 
 /* Small raised light control — toolbar buttons, compact chrome. */
@@ -186,9 +198,9 @@
    No hover/active states on purpose — RESTING face only; behavioural states
    stay with the consumer (`.nav-chip`, SegmentedControl, Switch). */
 .raised-tab {
-  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  background: var(--raised-light-face);
   box-shadow:
-    inset 0 0 0 1px #d4d4d4,
+    inset 0 0 0 1px var(--raised-light-line),
     inset 0 2px 0 rgba(255, 255, 255, 0.9),
     inset 0 -2px 0 rgba(0, 0, 0, 0.06),
     0 2px 3px rgba(0, 0, 0, 0.08),
@@ -404,6 +416,188 @@
   background: var(--border-subtle);
 }
 
+/* ── Expanding search — round button that GROWS into a pill ────────────
+   Port of `src/features/marketing/marketing.css › .lp-nav-search*` (the
+   landing nav's search), PROPORTIONALLY SCALED to 6/7 (Samuel, 2026-08-24 —
+   "a notch smaller"). Landing measures 42px closed / 300px open / 42px toggle /
+   42px field with 16px trailing pad / 14px text; this is 36 / 260 / 36 / 36
+   with 14px pad and 12px (`--text-small`) text. The RATIO is what is preserved:
+   42÷14 and 36÷12 are both 3.0, so the pill reads as the same control one size
+   down, and 12px is the ramp's own "compact buttons" step. Only colour comes
+   from the app tokens. The shell composes `.auth-btn-3d-light` in the TSX and
+   only gets wider — never swapped for a field. 36px is THE control height for
+   this header: Invite and both segmented selectors are cut to it too.
+
+   ⚠ OVERLAY, NOT RESERVED LAYOUT. `.search-expand` stays one button wide and
+   the shell is absolutely pinned `right: 0` inside it, so the pill grows
+   LEFTWARD and no sibling moves. Reserving the open width instead shoves the
+   CTA sideways while the pill is still closed.
+
+   ⚠ The `[data-open]` rules must stay AFTER `.auth-btn-3d-light` — they
+   override its hover/press face for the span where the pill is a field. */
+.search-expand {
+  position: relative;
+  width: 36px;
+  height: 36px;
+}
+
+.search-expand-shell {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  /* The pill parks the icon at the leading edge; identical to centring at the
+     36px closed width. */
+  justify-content: flex-start;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  overflow: hidden;
+  /* ⚠ Must re-list the 3D rule's three properties. A bare `transition: width`
+     silently drops the hover/press feel. */
+  transition:
+    width 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
+}
+.search-expand[data-open="true"] .search-expand-shell {
+  width: 260px;
+}
+
+/* Open, the pill IS the control: a hover lift or a pressed face would read as
+   "clickable" while you are typing in it. Resting face, restated. */
+.search-expand[data-open="true"] .search-expand-shell:hover,
+.search-expand[data-open="true"] .search-expand-shell:active {
+  transform: none;
+  filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 2px 3px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.06);
+}
+
+/* ⚠ NO INNER CONCAVE WELL — a second bordered box inside a 36px pill leaves a
+   few px of surround and reads as a box in a box. Only the FOCUS signal is
+   borrowed from `.concave-field`: darkened hairline + 3px halo. */
+.search-expand[data-open="true"] .search-expand-shell:focus-within {
+  border-color: var(--focus-line);
+  box-shadow: var(--raised-light-focus);
+}
+
+.search-expand-toggle {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.search-expand-toggle:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -4px;
+  border-radius: 9999px;
+}
+
+.search-expand-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 14px 0 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: var(--text-small);
+  color: var(--text-primary);
+  /* ⚠ Invisible AND unreachable while collapsed: the shell only CLIPS it, and
+     a field a screen reader can still reach is worse than a visible one.
+     Delayed in, instant out, so the text never outruns the pill. */
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 120ms ease 0ms,
+    visibility 0s linear 260ms;
+}
+.search-expand-input::placeholder {
+  color: var(--text-muted);
+}
+.search-expand[data-open="true"] .search-expand-input {
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity 160ms ease 100ms,
+    visibility 0s linear 0s;
+}
+
+/* THE INFO COLUMN'S SLIDE SHELL — `channel-surface.tsx` wraps the info panel
+   in this so the column opens and closes instead of appearing (Samuel,
+   2026-08-24). Width, not transform: the panel is a flex SIBLING of the message
+   pane, and a transform would slide it over the transcript instead of giving
+   the transcript the space back.
+
+   ⚠ THE PANEL INSIDE KEEPS ITS OWN `w-[340px] shrink-0`, so it does not reflow
+   while the shell narrows — the shell clips it, the content never squashes.
+
+   ⚠ The host UNMOUNTS the panel one transition after close; the shell itself is
+   always rendered, or an opening slide would have no 0-width start state.
+
+   ⚠ `display: flex` IS LOAD-BEARING, not tidiness. The panel is an `<aside>`
+   whose full height came from being a flex ITEM of the surface row; wrapping it
+   in a block shell collapsed it to its content height and the divider down its
+   left edge stopped partway (Samuel, 2026-08-24). A flex shell stretches it
+   again. */
+.channel-info-slide {
+  display: flex;
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  transition: width 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.channel-info-slide[data-open="true"] {
+  width: 340px;
+}
+
+/* THE CONTENT SWAP — fade out, replace, fade in. Driven by
+   `src/shared/ui/crossfade.tsx › Crossfade`, which owns the timing and the
+   lagging token; this is only the transition. 150ms each way: `[data-out]` is
+   the way out, its removal is the way back.
+   ⚠ RECIPE ONLY — the element's layout (`flex`, `flex-1`, `min-h-0`) belongs to
+   the consumer, because a swap happens in panes and in columns alike.
+   ⚠ Coupled to `Crossfade`'s FADE_MS, and to the reduced-motion block below,
+   where the component drops its wait for the same reason. */
+.crossfade {
+  transition: opacity 150ms ease;
+}
+.crossfade[data-out] {
+  opacity: 0;
+}
+
+/* Flat TRACK for `SegmentedControl variant="track"` — the page-header
+   selector, where the trackless `.seg-pill` row is a filter row. Not
+   `.concave-track`: this one is flat, and its fill is a token utility the
+   consumer passes (utility layer > components layer), so the value here is a
+   fallback, not the design. Active option composes `.raised-tab` as always.
+   ⚠ The 3px pad is load-bearing at `size="lg"`: 30px options + 3 + 3 = the
+   36px control height the header's other controls are cut to. It does NOT
+   scale with the options — below 3px the track stops reading as a track. */
+.seg-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9999px;
+  background: #e9eaec;
+}
+
 } /* @layer components */
 
 /* ⚠ Outside `@layer components` on purpose — keyframes are not layered rules.
@@ -438,6 +632,13 @@
     animation: none;
   }
   .menu-row {
+    transition: none;
+  }
+  /* ⚠ Coupled the same way: `channel-surface.tsx` skips its unmount delay and
+     `Crossfade` drops its wait under this query, so nothing waits on a
+     transition that will not run. */
+  .channel-info-slide,
+  .crossfade {
     transition: none;
   }
 }

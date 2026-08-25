@@ -48,7 +48,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { Bookmark, ChevronRight, Hash, Info } from "lucide-react";
+import { Bookmark, ChevronRight, Hash, PanelRight } from "lucide-react";
 import { IconButton } from "./bits";
 import { useStickToBottom } from "./use-stick-to-bottom";
 import { Transcript } from "./transcript";
@@ -117,6 +117,7 @@ export function ChannelsV2MessagePane({
   outboundBusy = false,
   onDecideOutbound = DECIDE_OUTBOUND_NOOP,
   scrollTarget,
+  newThreadSignal,
   infoOpen = false,
   favorited = false,
   gate,
@@ -144,6 +145,9 @@ export function ChannelsV2MessagePane({
   outboundBusy?: boolean;
   onDecideOutbound?: (id: string, decision: "allow" | "deny") => void;
   scrollTarget: ScrollTarget | null;
+  /** Nonced ask from the Threads tab to open the composer's new-thread panel.
+   *  ⚠ PASSED STRAIGHT DOWN — the panel's state belongs to the composer. */
+  newThreadSignal?: number;
   /** `"page"` chrome only — the info toggle's pressed state. */
   infoOpen?: boolean;
   /** `"page"` chrome only — the viewer has favourited THIS CHANNEL
@@ -318,6 +322,7 @@ export function ChannelsV2MessagePane({
       />
       {peerActivity}
       <ChannelsV2Composer
+        newThreadSignal={newThreadSignal}
         channelId={channelId}
         workspaceId={workspaceId}
         members={members}
@@ -418,8 +423,13 @@ function PaneHeader({
           has none. Immediately LEFT of the info toggle, same `IconButton` face
           (Samuel, 2026-08-19); it was beside the crumb until then. */}
       {threadTitle !== null && popOut}
+      {/* ⚠ A PANEL GLYPH, NOT AN `Info` (Samuel, 2026-08-24). The control opens
+          and closes the column to its right, and `PanelRight` says that; the
+          circle-i said "read about this channel", which is one tab of four
+          inside it. **The LABEL stays "Channel info"** — three tests address
+          this button by that name, and it is still what the column is. */}
       <IconButton
-        icon={Info}
+        icon={PanelRight}
         label="Channel info"
         active={infoOpen}
         onClick={onToggleInfo}

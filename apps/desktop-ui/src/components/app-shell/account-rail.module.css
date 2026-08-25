@@ -20,24 +20,48 @@
   overflow: hidden;
 }
 
-/* One square tile face for every row: Home, workspaces, create. Resting face
+/* One ROUND tile face for every row: Home, workspaces, create. Resting face
    is transparent on the shell surface; hover = the nav-chip fill; the ACTIVE
    tile composes the kit's `.raised-tab` in the TSX (same selected face as the
-   sidebar's active chip). */
+   sidebar's active chip).
+
+   ⚠ 40px, NOT 38 (Samuel, 2026-08-24). The rail is 54px, so a 40px tile leaves
+   7px each side — EQUAL to the 7px gap between tiles and to the rail's own top
+   pad, which is what the eye was reading as "too much side padding". The fix
+   grows the tile; the rail's width is shell geometry and does not move.
+
+   ⚠ Fully rounded, to match the header's search and Invite pills exactly (the
+   landing's `border-radius: 999px`). On a square that is a circle, which is the
+   intent — the tiles and the buttons are one corner treatment. */
 .tile {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 10px;
+  border-radius: 9999px;
   background: transparent;
   color: rgba(255, 255, 255, 0.78);
   cursor: pointer;
   padding: 0;
   transition: background 0.12s ease;
+}
+
+/* The workspace GLYPH fills the tile — `WorkspaceGlyph size="md"` ships a 28px
+   rounded square, which inside a 40px circle left a fat ring of dead space.
+   34px, circular, leaves a 3px concentric ring.
+   ⚠ It must be a CIRCLE at this size, not a rounded square: a 40px circle
+   inscribes only ~28px of square, so a 34px rounded square pokes past the
+   tile's edge at the corners.
+   ⚠ `> span` and not `> *`: the create tile's child is a `<svg>` (lucide
+   `Plus`, sized by its own prop) and forcing 34px on it blows the icon up. */
+.tile > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  font-size: var(--text-title);
 }
 .tile:hover { background: rgba(255, 255, 255, 0.1); }
 .tile:focus-visible {
@@ -45,10 +69,12 @@
   outline-offset: 2px;
 }
 
+/* The Dopl mark is ARTWORK, not an avatar: it grows with the tile but keeps a
+   5px inset so a circular crop never eats the logo's own corners. */
 .homeMark {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
 }
 
 /* Home is not a sibling of the workspace tiles — the rule under it draws the

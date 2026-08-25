@@ -24,7 +24,7 @@
 
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
-import { PANEL_CARD } from "./bits";
+import { CARD_BUTTON, PANEL_CARD, TAB_ACTION } from "./bits";
 import { shortName, threadParties, type AuthorIndex } from "./view-model";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { ChannelThread } from "../../types";
@@ -58,6 +58,7 @@ export function ThreadsTab({
   index,
   openThreadId,
   onOpenThread,
+  onNewThread,
 }: {
   threads: ChannelThread[];
   truncated: boolean;
@@ -65,9 +66,22 @@ export function ThreadsTab({
   index: AuthorIndex;
   openThreadId: string | null;
   onOpenThread: (id: string) => void;
+  /**
+   * Opens the COMPOSER'S new-thread panel — the tab does not host a form of its
+   * own (Samuel, 2026-08-24). ⚠ Optional, and absent means NO BUTTON: a host
+   * that cannot reach the composer must not draw a control that does nothing.
+   */
+  onNewThread?: () => void;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
+      {onNewThread && (
+        <div className="mb-3 flex justify-end">
+          <button type="button" onClick={onNewThread} className={TAB_ACTION}>
+            New thread
+          </button>
+        </div>
+      )}
       {truncated && (
         <p className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-secondary">
           {THREADS_CLIPPED_NOTE}
@@ -128,19 +142,9 @@ function ThreadCard({
 
   return (
     <div className={cn(PANEL_CARD, viewing && "border-border-highlight")}>
-      <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-          {thread.title}
-        </span>
-        <button
-          type="button"
-          aria-current={viewing ? "true" : undefined}
-          onClick={onOpen}
-          className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
-        >
-          {viewing ? "Viewing" : "Open"}
-        </button>
-      </div>
+      <span className="min-w-0 truncate text-body font-semibold text-text-primary">
+        {thread.title}
+      </span>
 
       {parties.length > 0 && (
         <div className="flex min-w-0 items-center gap-2">
@@ -160,9 +164,22 @@ function ThreadCard({
         </div>
       )}
 
-      <span className="text-caption text-text-muted">
-        Updated {formatRelativeTime(thread.lastActivityAt)}
-      </span>
+      {/* ⚠ THE ACTION IS THE LAST ROW, RIGHT-ALIGNED — the same corner the agent
+          card puts it in (Samuel, 2026-08-24). It used to sit beside the title,
+          where two cards side by side offered their button at two heights. */}
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-caption text-text-muted">
+          Updated {formatRelativeTime(thread.lastActivityAt)}
+        </span>
+        <button
+          type="button"
+          aria-current={viewing ? "true" : undefined}
+          onClick={onOpen}
+          className={CARD_BUTTON}
+        >
+          {viewing ? "Viewing" : "Open"}
+        </button>
+      </div>
     </div>
   );
 }

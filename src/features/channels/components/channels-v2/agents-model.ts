@@ -82,6 +82,23 @@ export function agentDisplayId(session: {
 }
 
 /**
+ * THE SAME AGENT, SAID IN FULL: `Agent #<id>` (Samuel, 2026-08-24) — what the
+ * transcript pill already renders (`attribution-pill.tsx › attributionName`),
+ * now on the Agents tab's cards, so one agent reads the same in both places.
+ * ⚠ The `#` is LITERAL and belongs to the id, not a separator; one text node,
+ * for the reason that pill gives.
+ * ⚠ A LEGACY `name` IS NOT AN ID and gets no prefix — an older main emits a
+ * handle and no id, and `Agent #flint` would assert a shape it never minted.
+ */
+export function agentDisplayName(session: {
+  agentId?: string | null;
+  name?: string | null;
+}): string {
+  const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
+  return id ? `Agent #${id}` : agentDisplayId(session);
+}
+
+/**
  * THE PER-INSTANCE POST STAMP, as `dopl-desktop-app/main/session-outbound-tag.js
  * › nextOwnPostId` mints it: `agent-<agentId>-<n>`. Anchored at BOTH ends and
  * carrying the agent-id charset (`main/agent-id.js › AGENT_ID_RE`) on purpose —

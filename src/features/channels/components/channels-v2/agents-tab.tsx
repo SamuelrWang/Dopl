@@ -66,6 +66,7 @@ export function AgentsTab({
   onApproveTemplate,
   openAgent,
   onOpenAgent,
+  onNewThread,
 }: {
   /** The whole machine's feed, or `null` for "could not ask" — no bridge, or a
    *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
@@ -111,6 +112,13 @@ export function AgentsTab({
   /** `agentKey(session)` of the open agent view, or null. */
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
+  /**
+   * Opens the composer's new-thread panel. ⚠ THE LAUNCH BUTTON'S OTHER HALF:
+   * an agent runs INSIDE a thread, so with none open there is nothing to launch
+   * into and the honest first step is making one. Same lane, one step earlier —
+   * not a second way to launch.
+   */
+  onNewThread?: () => void;
 }) {
   const byUser = new Map(members.map((m) => [m.userId, m]));
   const me = currentUserId ? (byUser.get(currentUserId) ?? null) : null;
@@ -167,48 +175,80 @@ export function AgentsTab({
   // an ADJACENT, visually attached chevron that is its own hit target. A popover
   // in front of the face would put a keystroke on the most common action in the
   // product, which is what the spec's OQ-4 proposed and this ruling refused.
-  const launchRow = canLaunch && openThreadId && onLaunchAgent && (
+  // ⚠ THE BUTTON IS ON THE TAB WHETHER OR NOT A THREAD IS OPEN (Samuel,
+  // 2026-08-24). It used to require `openThreadId`, which meant the Agents tab
+  // in CHANNEL VIEW — where most people arrive — showed no way to start an
+  // agent at all. The gate that remains is the CAPABILITY (`canLaunch`), which
+  // is feature detection and stays: with no bridge, launching is impossible and
+  // a dead control is worse than none.
+  //
+  // ⚠ WITH NO THREAD IT OPENS THE NEW-THREAD PANEL, and that is not a second
+  // launch path. An agent runs inside a thread (INVARIANTS §5); with none open
+  // the first step of the SAME lane is making one, which is the composer's
+  // panel — the exact flow the Threads tab's button opens. The title says so,
+  // because a button that does something other than its label without a word is
+  // the surface lying.
+  const canStartThread = !openThreadId && !!onNewThread;
+  const launchRow = canLaunch && onLaunchAgent && (openThreadId || canStartThread) && (
     <div className="mb-3">
-      <div className="flex items-stretch overflow-hidden rounded-[10px] border border-dashed border-border-strong">
-        <button
-          type="button"
-          disabled={launchBusy}
-          onClick={() => void onLaunchAgent(openThreadId)}
-          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-text-primary transition-colors hover:bg-card-surface-subtle disabled:opacity-60"
-        >
-          <Plus size={13} aria-hidden />
-          {launchBusy ? "Starting\u2026" : "New Agent"}
-        </button>
-        {workspaceId && (
-          <>
-            {/* The hairline is what makes the pair read as ONE control with two
-                zones rather than two buttons that happen to touch. */}
-            <span aria-hidden className="w-px shrink-0 self-stretch bg-border-strong" />
-            <button
-              type="button"
-              disabled={launchBusy}
-              onClick={(e) => picker.toggleFrom(e.currentTarget)}
-              aria-haspopup="menu"
-              aria-expanded={picker.open}
-              // \u26a0 ITS OWN NAME, never "New Agent". Two controls sharing an
-              // accessible name is one control as far as a screen reader is
-              // concerned, and the whole point of the split is that they are two.
-              aria-label="Launch from template"
-              // w-8 = 32px, comfortably over the 24px floor Samuel set for this
-              // zone. A 4px sliver would hide the feature behind a dare.
-              className="flex w-8 shrink-0 items-center justify-center text-text-secondary transition-colors hover:bg-card-surface-subtle hover:text-text-primary disabled:opacity-60"
-            >
-              <ChevronDown size={13} aria-hidden />
-            </button>
-          </>
-        )}
+      <div className="flex justify-end">
+        {/* ⚠ IT CANNOT BE `TAB_ACTION` — a split button is a wrapper plus two
+            hit targets, and one class string cannot express that. It is cut to
+            the SAME geometry by hand (h-9, 15px pad, text-small) and must be
+            re-cut with it whenever that constant moves. */}
+        <div className="auth-btn-3d flex h-9 items-stretch overflow-hidden rounded-full">
+          <button
+            type="button"
+            disabled={launchBusy}
+            title={
+              openThreadId
+                ? undefined
+                : "Start a thread — an agent runs inside one"
+            }
+            onClick={() =>
+              openThreadId ? void onLaunchAgent(openThreadId) : onNewThread?.()
+            }
+            className="flex min-w-0 cursor-pointer items-center gap-1 px-[15px] text-small font-semibold text-text-on-cta disabled:opacity-60"
+          >
+            <Plus size={13} aria-hidden />
+            {launchBusy ? "Starting\u2026" : "Launch agent"}
+          </button>
+          {/* ⚠ THE CHEVRON NEEDS A THREAD TOO, and unlike the face it has no
+              honest fallback: "launch THIS template" names a target that does
+              not exist yet. It is absent in channel view rather than disabled. */}
+          {workspaceId && openThreadId && (
+            <>
+              {/* The hairline is what makes the pair read as ONE control with two
+                  zones rather than two buttons that happen to touch. */}
+              <span aria-hidden className="w-px shrink-0 self-stretch bg-white/25" />
+              <button
+                type="button"
+                disabled={launchBusy}
+                onClick={(e) => picker.toggleFrom(e.currentTarget)}
+                aria-haspopup="menu"
+                aria-expanded={picker.open}
+                // \u26a0 ITS OWN NAME, never the launch button's. Two controls
+                // sharing an accessible name is one control as far as a screen
+                // reader is concerned, and the whole point of the split is that
+                // they are two.
+                aria-label="Launch from template"
+                // w-8 = 32px, comfortably over the 24px floor Samuel set for
+                // this zone (it sat AT the floor only while the control was
+                // half-height). A 4px sliver would hide the feature behind a dare.
+                className="flex w-8 shrink-0 cursor-pointer items-center justify-center text-text-on-cta/75 transition-colors hover:text-text-on-cta disabled:opacity-60"
+              >
+                <ChevronDown size={13} aria-hidden />
+              </button>
+            </>
+          )}
+        </div>
       </div>
       {launchError && (
         <p role="alert" className="mt-1.5 px-0.5 text-caption text-danger">
           {launchError}
         </p>
       )}
-      {workspaceId && (
+      {workspaceId && openThreadId && (
         <TemplateLaunchPicker
           open={picker.open}
           at={picker.at}
@@ -246,11 +286,6 @@ export function AgentsTab({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
       {launchRow}
-      <p className="pb-3 text-caption text-text-muted">
-        {openThreadId
-          ? "Agents on this thread. Yours first."
-          : "Agents in this channel. Yours first."}
-      </p>
       {mine.length === 0 && peerCards.length === 0 ? (
         <p className="py-6 text-center text-caption text-text-muted">
           {openThreadId

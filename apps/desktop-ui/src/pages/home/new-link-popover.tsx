@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { Popover } from "@/shared/ui/popover-menu";
@@ -31,6 +30,10 @@ type UsesKey = (typeof USES)[number]["value"];
  * Mint-a-link — Home's one primary action. The link IS the invite: copy it,
  * send it anywhere; the relationship opens when it is claimed.
  *
+ * ⚠ The trigger reads "Invite" (Samuel, 2026-08-24) — it names the OUTCOME,
+ * not the mechanism, and matches the workspace overview's CTA face. The
+ * popover behind it is unchanged.
+ *
  * ⚠ `expiresAt` is computed HERE, as an absolute ISO instant, because that is
  * what the route validates (`schema.ts` refuses a past one). The picker's
  * windows are relative; the server never sees "7 days".
@@ -60,10 +63,9 @@ export function NewLinkPopover() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
-        className="auth-btn-3d flex items-center gap-2 rounded-[9px] px-4 py-2 text-small text-text-on-cta"
+        className="auth-btn-3d flex h-9 cursor-pointer items-center rounded-full px-[15px] text-small font-semibold text-white"
       >
-        <Link2 size={14} strokeWidth={2} />
-        New link
+        Invite
       </button>
       <Popover open={open} onClose={close} align="right" className="w-[300px]">
         <div className="px-2.5 pb-2.5 pt-2">

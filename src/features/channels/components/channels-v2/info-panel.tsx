@@ -35,6 +35,7 @@
 
 import { useState, type ReactNode } from "react";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { Crossfade } from "@/shared/ui/crossfade";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import { ThreadInfoTab } from "./thread-info-tab";
@@ -119,6 +120,7 @@ export function ChannelsV2InfoPanel({
   index,
   openThread,
   onOpenThread,
+  onNewThread,
   agentSessions,
   peerSessions = [],
   canLaunchAgent = false,
@@ -154,6 +156,9 @@ export function ChannelsV2InfoPanel({
    */
   openThread: ChannelThread | null;
   onOpenThread: (id: string) => void;
+  /** Threads tab's "New thread" — opens the COMPOSER's panel, one column left.
+   *  ⚠ Optional: a host with no composer to open draws no button. */
+  onNewThread?: () => void;
   /** THIS MACHINE'S live session feed, or `null` for "could not ask" (a plain
    *  browser, or a main without it). ⚠ Passed through, never collapsed to `[]`:
    *  the Agents tab words the two cases differently. */
@@ -265,62 +270,75 @@ export function ChannelsV2InfoPanel({
         />
       </div>
 
-      {activeTab === "info" ? (
-        openThread ? (
-          <ThreadInfoTab
-            thread={openThread}
-            members={members}
-            currentUserId={index.currentUserId}
-            agentSessions={agentSessions}
-            peerSessions={peerSessions}
-          />
-        ) : infoTab !== undefined ? (
-          infoTab
-        ) : (
-          <InfoTab
-            channel={channel}
-            channelName={channelName}
-            members={members}
-            threadCount={threads.length}
-            mentions={mentions}
-            mentionsTruncated={mentionsTruncated}
-            mentionsLoading={mentionsLoading}
-            index={index}
-            onOpenMention={onOpenMention}
-            onMarkAllMentionsRead={onMarkAllMentionsRead}
-          />
-        )
-      ) : activeTab === "threads" ? (
-        <ThreadsTab
-          threads={threads}
-          truncated={threadsTruncated}
-          loading={threadsLoading}
-          index={index}
-          openThreadId={openThreadId}
-          onOpenThread={onOpenThread}
-        />
-      ) : activeTab === "agents" ? (
-        <AgentsTab
-          sessions={agentSessions}
-          channelId={channel.id}
-          // The template picker's one input — off the channel this panel is
-          // already rendering, so no new prop reaches this component for it.
-          workspaceId={channel.workspaceId}
-          openThreadId={openThreadId}
-          members={members}
-          currentUserId={index.currentUserId}
-          peers={peerSessions}
-          canLaunch={canLaunchAgent}
-          launchBusy={launchBusy}
-          launchError={launchError}
-          onLaunchAgent={onLaunchAgent}
-          onApproveTemplate={onApproveTemplate}
-          openAgent={openAgent}
-          onOpenAgent={onOpenAgent}
-        />
-      ) : (
-        settings
-      )}
+      {/* THE TAB BODY SWAPS, THE TABS DO NOT MOVE (Samuel, 2026-08-24) — the
+          same gesture as /home's record pane, so it is the same primitive.
+          ⚠ RENDERED FROM `shown`, NOT `activeTab`: `Crossfade` hands back the
+          tab that is still on screen for one fade, and reading `activeTab` here
+          would swap the content out from under it and fade in what is already
+          there. A count ticking on the OPEN tab passes through unfaded — only a
+          tab change is a swap. */}
+      <Crossfade token={activeTab} className="flex min-h-0 flex-1 flex-col">
+        {(shown) =>
+          shown === "info" ? (
+            openThread ? (
+              <ThreadInfoTab
+                thread={openThread}
+                members={members}
+                currentUserId={index.currentUserId}
+                agentSessions={agentSessions}
+                peerSessions={peerSessions}
+              />
+            ) : infoTab !== undefined ? (
+              infoTab
+            ) : (
+              <InfoTab
+                channel={channel}
+                channelName={channelName}
+                members={members}
+                threadCount={threads.length}
+                mentions={mentions}
+                mentionsTruncated={mentionsTruncated}
+                mentionsLoading={mentionsLoading}
+                index={index}
+                onOpenMention={onOpenMention}
+                onMarkAllMentionsRead={onMarkAllMentionsRead}
+              />
+            )
+          ) : shown === "threads" ? (
+            <ThreadsTab
+              threads={threads}
+              truncated={threadsTruncated}
+              loading={threadsLoading}
+              index={index}
+              openThreadId={openThreadId}
+              onOpenThread={onOpenThread}
+              onNewThread={onNewThread}
+            />
+          ) : shown === "agents" ? (
+            <AgentsTab
+              sessions={agentSessions}
+              channelId={channel.id}
+              // The template picker's one input — off the channel this panel is
+              // already rendering, so no new prop reaches this component for it.
+              workspaceId={channel.workspaceId}
+              openThreadId={openThreadId}
+              members={members}
+              currentUserId={index.currentUserId}
+              peers={peerSessions}
+              canLaunch={canLaunchAgent}
+              launchBusy={launchBusy}
+              launchError={launchError}
+              onLaunchAgent={onLaunchAgent}
+              onApproveTemplate={onApproveTemplate}
+              openAgent={openAgent}
+              onOpenAgent={onOpenAgent}
+              onNewThread={onNewThread}
+            />
+          ) : (
+            settings
+          )
+        }
+      </Crossfade>
     </aside>
   );
 }

@@ -471,7 +471,8 @@ describe("channels page", () => {
     // ruling the same day): the popover behind "Channel settings" was DELETED
     // and its controls are inline, so the entry point to look for is the
     // control, not a button that opens one. The kebab's four items are rows.
-    expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeInTheDocument();
+    // ⚠ `findBy`: the body crossfades (2026-08-24) — tab flips now, contents a fade later.
+    expect(await screen.findByRole("radiogroup", { name: "Tools" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make public" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();

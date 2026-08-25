@@ -23,9 +23,30 @@ import { cn } from "@/shared/lib/utils";
 // posted agent-thread card, which moved to a dark-shell face on 2026-08-19 and
 // said so in its own docblock — leaving a "one caller" constant with none.
 
-/** The compact raised action on a message card ("Open thread"). */
+/**
+ * The compact raised action on a card ("Open thread", "Open", "Viewing").
+ *
+ * ⚠ A PILL, BOTTOM-RIGHT, AT THE APP'S ONE CONTROL SCALE (Samuel, 2026-08-24)
+ * — `h-9 px-[15px] text-small`, /home's Invite geometry; there is no smaller
+ * "card-sized" variant to drift back to. The POSITION is a contract this
+ * constant cannot enforce: every card puts its action on the LAST row, right-
+ * aligned, so the eye finds the same control in the same corner every time.
+ */
 export const CARD_BUTTON =
-  "btn-light shrink-0 rounded-[8px] px-2.5 py-1.5 text-caption font-medium text-text-primary";
+  "btn-light flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full px-[15px] text-small font-medium text-text-primary";
+
+/**
+ * THE RIGHT PANEL TAB'S OWN ACTION — top-right of a tab body, above its list
+ * (Threads' "New thread", Agents' "Launch agent"; Samuel, 2026-08-24).
+ *
+ * ⚠ `CARD_BUTTON`'S GEOMETRY, DARK FACE — a tab's action and a card's action
+ * are the same size of thing, and only the INK says which starts something new.
+ * Weight matches /home's Invite, because this IS that button. It was a 20px
+ * light rectangle for one review and read as a chip nobody could find; do not
+ * shrink it again.
+ */
+export const TAB_ACTION =
+  "auth-btn-3d flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full px-[15px] text-small font-semibold text-text-on-cta";
 
 /**
  * The RIGHT PANEL's card face — one `.bento` at panel width. The Threads tab's

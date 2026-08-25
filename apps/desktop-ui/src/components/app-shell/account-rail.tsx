@@ -18,6 +18,10 @@ export interface AccountRailProps {
   activeWorkspacePublicId: string | null;
   onNavigate: (path: string) => void;
   onCreateWorkspace: () => void;
+  /** Backdrop override only — /home repaints the rail its own frame ink so the
+   *  rail and the shell around it read as ONE slab. Needs `!` (module class and
+   *  utility are the same specificity). Layout stays in the module. */
+  className?: string;
 }
 
 /**
@@ -33,10 +37,11 @@ export function AccountRail({
   activeWorkspacePublicId,
   onNavigate,
   onCreateWorkspace,
+  className,
 }: AccountRailProps) {
   const isHome = activeWorkspacePublicId === null;
   return (
-    <nav className={styles.rail} aria-label="Account">
+    <nav className={cn(styles.rail, className)} aria-label="Account">
       <button
         type="button"
         title="Home"

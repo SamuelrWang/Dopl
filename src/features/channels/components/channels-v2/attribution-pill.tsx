@@ -116,6 +116,12 @@ export function AttributionPill({
   return (
     <span
       data-agent-id={agentId ?? undefined}
+      /* A STABLE HOOK FOR SCOPED RESTYLING, not a style of its own. /home wears
+         a raised face on these pills (`pages/home/home.module.css`) and the
+         workspace channels page must not — a host cannot reach this element any
+         other way, and selecting on `.bento` would catch every card in the
+         subtree. Carries no meaning; safe to ignore. */
+      data-attribution-pill=""
       className={cn(
         "bento inline-flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3.5",
         agentId && agentAccent(agentId),

@@ -33,7 +33,7 @@ import { memberPerson } from "./view-model";
 import { CARD_BUTTON, PANEL_CARD } from "./bits";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
-  agentDisplayId,
+  agentDisplayName,
   agentEndedAt,
   agentLiveness,
   agentRunningModel,
@@ -197,7 +197,7 @@ export function AgentCard({
           <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
         )}
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-          {agentDisplayId(agent)}
+          {agentDisplayName(agent)}
         </span>
         {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22), it
             does not join it: "Ended" beside a dot reading "Ended" is one fact

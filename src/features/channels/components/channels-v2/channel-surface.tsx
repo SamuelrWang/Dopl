@@ -23,7 +23,7 @@
  * passes neither gets the surface the channels page has always rendered.
  */
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Role } from "@/features/workspaces/types";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsV2SettingsSlot } from "./settings-slot";
@@ -34,6 +34,11 @@ import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import type { ChannelSurfaceData } from "./channel-surface-data";
 import type { ChannelsV2Selection } from "./use-channels-v2-selection";
 import type { Channel, ChannelMention } from "../../types";
+
+/** The info column stays mounted this long after close so its slide can run.
+ *  ⚠ Keep in sync with `.channel-info-slide`'s transition (globals.css + the
+ *  desktop `kit.css` copy). */
+const INFO_SLIDE_MS = 200;
 
 export interface ChannelSurfaceSlots {
   /**
@@ -113,6 +118,34 @@ export function ChannelSurface({
   } = data;
   const channelName = channelDisplayName(channel, members, currentUserId);
 
+  // ⚠ THE PANEL OUTLIVES `infoOpen` BY ONE TRANSITION, so the closing slide has
+  // something to clip; the shell it sits in is always rendered (see the JSX).
+  // Presentation only — `sel.infoOpen` stays the single source of truth for the
+  // toggle, and the OR below means this can never hold the column open, only
+  // briefly populated. Same shape as `Popover`'s exit phase.
+  //
+  // ⚠ THE ONLY setState IS INSIDE THE TIMER, and OPENING schedules a 0ms one it
+  // does not need — because mounting is already handled by the OR. Both are
+  // deliberate: `react-hooks/set-state-in-effect` (error, not warning) rejects a
+  // synchronous setState in an effect body, and a 0ms timer is how the same
+  // machine serves the open direction and the reduced-motion escape, where the
+  // kit turns the transition off and nothing may wait for it.
+  const [infoTrailing, setInfoTrailing] = useState(sel.infoOpen);
+  useEffect(() => {
+    if (infoTrailing === sel.infoOpen) return;
+    const instant =
+      sel.infoOpen ||
+      (typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const timer = setTimeout(
+      () => setInfoTrailing(sel.infoOpen),
+      instant ? 0 : INFO_SLIDE_MS
+    );
+    return () => clearTimeout(timer);
+  }, [sel.infoOpen, infoTrailing]);
+  const infoMounted = sel.infoOpen || infoTrailing;
+
   // The Tags inbox's click: mark read, land the center pane on the right
   // transcript, then signal the scroll. The scroll effect runs POST-render, so
   // the swapped transcript is in the DOM before it looks for the message row.
@@ -156,6 +189,11 @@ export function ChannelSurface({
         outboundBusy={data.consentBusy}
         onDecideOutbound={data.decideOutbound}
         scrollTarget={sel.scrollTarget}
+        // The Threads tab's "New thread", arriving from the OTHER column
+        // (2026-08-24). It travels through the selection hook because that is
+        // where cross-surface asks live, and because both hosts of this surface
+        // then get it without a second wiring.
+        newThreadSignal={sel.newThreadSignal}
         infoOpen={sel.infoOpen}
         // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
         // rendering — never a flip inside the mutation. Two fast clicks send
@@ -202,7 +240,16 @@ export function ChannelSurface({
         onExitThread={() => sel.openThread(null)}
         onOpenThread={sel.openThread}
       />
-      {sel.infoOpen && (
+      {/* THE INFO COLUMN SLIDES (Samuel, 2026-08-24). The shell is ALWAYS
+          rendered — a column that mounts at its open width has no 0-width start
+          state to animate from — and the panel inside mounts on open and stays
+          one transition past close so the closing slide has content to clip. */}
+      <div
+        className="channel-info-slide"
+        data-open={sel.infoOpen}
+        aria-hidden={!sel.infoOpen}
+      >
+      {infoMounted && (
         <ChannelsV2InfoPanel
           channel={channel}
           channelName={channelName}
@@ -213,6 +260,7 @@ export function ChannelSurface({
           index={index}
           openThread={openThread}
           onOpenThread={sel.openThread}
+          onNewThread={sel.requestNewThread}
           agentSessions={agentSessions}
           peerSessions={agentsPanel.peerSessions}
           canLaunchAgent={
@@ -268,6 +316,7 @@ export function ChannelSurface({
           }
         />
       )}
+      </div>
     </>
   );
 }

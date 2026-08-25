@@ -33,8 +33,13 @@ export function RelationshipList({
   const visible = rows;
 
   return (
-    <div className="flex w-[290px] shrink-0 flex-col">
+    // ⚠ Width from `home.module.css › .page --home-list-w`, NOT a local 290:
+    // the header's selector is indented by the same var so it lands on the
+    // record pane's left edge. One number for both.
+    <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
       <div className="flex flex-col gap-2.5 px-4 pb-2.5 pt-1">
+        {/* Same 42px scale as the header's selector and Invite — one control
+            height on this page. */}
         <SegmentedControl<HomeFilter>
           options={[
             { key: "all", label: "All" },
@@ -42,10 +47,13 @@ export function RelationshipList({
           ]}
           value={filter}
           onChange={onFilterChange}
+          size="lg"
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-3">
+      {/* Rows are floating cards now — they need a gutter between them, or the
+          drop shadows stack into one smudge. */}
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1">
         {visible.map((row) => (
           <RelationshipRow
             key={row.id}
@@ -91,12 +99,20 @@ function RelationshipRow({
       onClick={onSelect}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "flex w-full cursor-pointer items-start gap-2.5 rounded-[10px] border px-2.5 py-2.5 text-left transition-colors",
-        // On the inset base panel the selected row is a RAISED white card —
-        // same layer language as the floating record beside it.
-        selected
-          ? "kanban-card border-border-default bg-bg-elevated"
-          : "border-transparent hover:bg-surface-raised-2"
+        // EVERY row is a RAISED BUTTON, the same face and the same press as the
+        // header's search pill (Samuel, 2026-08-24): `.auth-btn-3d-light` gives
+        // the white gradient, the hairline, the hover lift and the pressed-in
+        // `:active` — these rows ARE interactive, and they now say so.
+        // ⚠ NO `bg-*` UTILITY HERE. The recipe's fill is a GRADIENT and a
+        // utility background would flatten it (the hazard `.raised-tab`'s note
+        // spells out: utilities outrank the kit layer).
+        "auth-btn-3d-light flex w-full cursor-pointer items-start gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left",
+        // Selection is a RING, not a fill and no longer a black line (Samuel,
+        // 2026-08-24): the same darkened hairline + soft halo the search pill
+        // wears while it is open, held permanently. It rides ON the raised face
+        // rather than replacing it, so a selected row stays the same KIND of
+        // thing as its neighbours — just the one you are in.
+        selected && "selected-ring"
       )}
     >
       <Avatar

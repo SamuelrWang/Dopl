@@ -204,8 +204,9 @@ describe("home page", () => {
   it("renders claimed relationships and pending links in one list", async () => {
     renderHome();
 
+    // The header's selector replaced the page title — "Chat" is the surface.
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Home" })
+      await screen.findByRole("tab", { name: "Chat", selected: true })
     ).toBeInTheDocument();
     // ⚠ `getAllBy`: the email is the list row's subline AND the person card's.
     expect(screen.getAllByText("priya@shahco.tax").length).toBeGreaterThan(0);
@@ -223,7 +224,7 @@ describe("home page", () => {
 
   it("drops link containers from the account rail", async () => {
     renderHome();
-    await screen.findByRole("heading", { level: 1, name: "Home" });
+    await screen.findByRole("tab", { name: "Chat", selected: true });
 
     expect(screen.getByRole("button", { name: "Acme" })).toBeInTheDocument();
     // The container workspace is named for the peer — it must not be a tile.
@@ -255,7 +256,19 @@ describe("home page", () => {
 
   it("searching filters the list by name and email", async () => {
     renderHome();
-    await screen.findByRole("heading", { level: 1, name: "Home" });
+    await screen.findByRole("tab", { name: "Chat", selected: true });
+
+    // The field is behind a collapsed pill — it is unreachable until the round
+    // toggle grows it (kit `.search-expand`).
+    expect(screen.getByLabelText("Search people")).toHaveAttribute(
+      "tabindex",
+      "-1"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByLabelText("Search people")).toHaveAttribute(
+      "tabindex",
+      "0"
+    );
 
     fireEvent.change(screen.getByLabelText("Search people"), {
       target: { value: "shahco" },
@@ -275,9 +288,9 @@ describe("home page", () => {
 
   it("mints a link with the picked window as an absolute future instant", async () => {
     renderHome();
-    await screen.findByRole("heading", { level: 1, name: "Home" });
+    await screen.findByRole("tab", { name: "Chat", selected: true });
 
-    fireEvent.click(screen.getByRole("button", { name: "New link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
     const before = Date.now();
     fireEvent.click(screen.getByRole("button", { name: "Create link" }));
 
@@ -298,7 +311,7 @@ describe("home page", () => {
 
   it("revokes a pending link and re-reads the list", async () => {
     renderHome();
-    await screen.findByRole("heading", { level: 1, name: "Home" });
+    await screen.findByRole("tab", { name: "Chat", selected: true });
 
     fireEvent.click(screen.getByText("Link out"));
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));

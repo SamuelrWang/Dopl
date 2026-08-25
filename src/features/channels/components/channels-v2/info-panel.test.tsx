@@ -294,7 +294,10 @@ describe("the Info tab's two scopes", () => {
 });
 
 describe("the badge agrees with the list under it", () => {
-  it("draws exactly as many agent cards as the Agents badge claims", () => {
+  // ⚠ `await` ON THE BODY, NOT THE TAB. The panel body crossfades (150ms), so a
+  // tab's content arrives one fade after its click — the badge and the tab
+  // state are still synchronous.
+  it("draws exactly as many agent cards as the Agents badge claims", async () => {
     renderPanel({
       agentSessions: [summary(), summary({ sessionId: "s-2", taskId: "t-b", name: "onyx" })],
       peerSessions: [peer({ name: "slate" })],
@@ -303,14 +306,15 @@ describe("the badge agrees with the list under it", () => {
     fireEvent.click(screen.getByRole("tab", { name: /^Agents/ }));
     // Three handles rendered, one per counted row.
     for (const handle of ["flint", "onyx", "slate"]) {
-      expect(screen.getByText(handle)).toBeTruthy();
+      expect(await screen.findByText(handle)).toBeTruthy();
     }
   });
 
-  it("draws exactly as many thread rows as the Threads badge claims", () => {
+  it("draws exactly as many thread rows as the Threads badge claims", async () => {
     renderPanel();
     expect(badgeOf("Threads")).toBe("2");
     fireEvent.click(screen.getByRole("tab", { name: /^Threads/ }));
+    await screen.findByText("Alpha audit");
     const panel = screen.getByRole("tab", { name: /^Threads/ }).closest("aside");
     expect(within(panel as HTMLElement).getByText("Alpha audit")).toBeTruthy();
     expect(within(panel as HTMLElement).getByText("Zebra sweep")).toBeTruthy();

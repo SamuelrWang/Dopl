@@ -40,7 +40,14 @@ const { live } = vi.hoisted(() => ({
 }));
 
 vi.mock("./live", () => ({ useChannelsV2Live: live }));
-vi.mock("./composer", () => ({ ChannelsV2Composer: () => null }));
+// ⚠ NOT `() => null` any more: the Threads tab's "New thread" reaches the
+// composer through this surface, and a mock that renders nothing cannot show
+// that it arrived. It stays inert — only the signal is exposed.
+vi.mock("./composer", () => ({
+  ChannelsV2Composer: ({ newThreadSignal }: { newThreadSignal?: number }) => (
+    <div data-testid="composer" data-new-thread={String(newThreadSignal ?? 0)} />
+  ),
+}));
 vi.mock("./settings-agent", () => ({ ChannelAgentSettings: () => null }));
 // The invite half's two dialogs. Both open reads of their own on mount, and the
 // `memberManagement` case below is about whether they are MOUNTED at all — which
@@ -182,39 +189,63 @@ describe("StandaloneChannelSurface — the host's two knobs", () => {
     expect(screen.getByRole("tab", { name: /^Info/ })).toBeTruthy();
   });
 
-  it("offers the invite row and its dialog by default", () => {
+  // ⚠ `await` ON THE TAB BODY throughout this block: the info column's body
+  // crossfades (150ms), so a tab's content lands one fade after its click. The
+  // NEGATIVE assertions have to come after a positive one from the SAME tab, or
+  // they pass merely because the fade has not finished.
+  it("offers the invite row and its dialog by default", async () => {
     mount();
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
-    expect(screen.getByText("Add members")).toBeTruthy();
+    expect(await screen.findByText("Add members")).toBeTruthy();
     expect(screen.getByTestId("invite-dialog")).toBeTruthy();
   });
 
-  it("hides the invite row AND its dialog under memberManagement: false", () => {
+  it("hides the invite row AND its dialog under memberManagement: false", async () => {
     // A fixed two-person container: "Add members" names an operation that cannot
     // happen, and NO DEAD ROWS is the rule this tab already keeps.
     mount({ capabilities: { memberManagement: false } });
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    // The rest of the tab is untouched — and awaiting it is what proves the two
+    // absences below are absences, not a body that has not arrived yet.
+    expect(await screen.findByText("Archive")).toBeTruthy();
     expect(screen.queryByText("Add members")).toBeNull();
     // ⚠ Not merely hidden — the dialog opens a roster read of its own, and there
     // is no row left to open it.
     expect(screen.queryByTestId("invite-dialog")).toBeNull();
-    // The rest of the tab is untouched.
-    expect(screen.getByText("Archive")).toBeTruthy();
   });
 
-  it("hides DELETE under memberManagement: false — the channel is the relationship", () => {
+  it("hides DELETE under memberManagement: false — the channel is the relationship", async () => {
     // ⚠ The host pins this surface to the ONE channel inside a two-person
     // container. Deleting it leaves a container whose relationship neither side
     // can render, while the host's list still holds the row: a live control
     // whose only outcome is a broken card.
     mount({ capabilities: { memberManagement: false } });
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    await screen.findByText("Archive");
     expect(screen.queryByText(/^Delete /)).toBeNull();
   });
 
-  it("still offers delete by default — the workspace page is unchanged", () => {
+  // ⚠ THE TWO COLUMNS ARE WIRED THROUGH THE SELECTION HOOK, not through each
+  // other, which is what makes this the surface's test rather than the tab's:
+  // both hosts of this surface get the wiring from one place.
+  it("carries the Threads tab's New thread across to the composer", async () => {
+    mount();
+    const signal = () =>
+      screen.getByTestId("composer").getAttribute("data-new-thread");
+    expect(signal()).toBe("0");
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Threads/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "New thread" }));
+    expect(signal()).toBe("1");
+
+    // A COUNTER, not a flag: asking twice asks twice.
+    fireEvent.click(screen.getByRole("button", { name: "New thread" }));
+    expect(signal()).toBe("2");
+  });
+
+  it("still offers delete by default — the workspace page is unchanged", async () => {
     mount();
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
-    expect(screen.getByText(/^Delete /)).toBeTruthy();
+    expect(await screen.findByText(/^Delete /)).toBeTruthy();
   });
 });

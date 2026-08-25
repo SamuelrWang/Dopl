@@ -87,8 +87,14 @@ function mount(over: Partial<React.ComponentProps<typeof ChannelsV2Composer>> = 
       // raises a REQUEST at another member over the write layer, opens from its
       // own "New thread" control. Two acts, two glyphs.
       fireEvent.click(screen.getByRole("button", { name: "New thread" })),
+    // ⚠ ONE BUTTON, TWO LABELS: "Send" with the panel closed, "Create" with it
+    // open (Samuel, 2026-08-24) — the second act raises a thread, it does not
+    // send a message. Matching both is what keeps this helper honest about
+    // there being ONE submit control.
     sendButton: () =>
-      screen.getByRole("button", { name: /^Send/ }) as HTMLButtonElement,
+      screen.getByRole("button", {
+        name: /^(Send|Create)$/,
+      }) as HTMLButtonElement,
   };
 }
 
@@ -129,6 +135,37 @@ describe("the plain composer sends CHAT", () => {
     expect(send).not.toHaveBeenCalled();
     fireEvent.keyDown(c.body, { key: "Enter" });
     expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("another surface can open the new-thread panel", () => {
+  const props = (newThreadSignal: number) => ({
+    channelId: CHANNEL_ID,
+    workspaceId: "ws-1",
+    members: MEMBERS,
+    currentUserId: ME,
+    gate: { begin: vi.fn(), end: vi.fn() },
+    newThreadSignal,
+  });
+  /** The panel's open state, read off the one thing that changes with it. */
+  const placeholder = () =>
+    (screen.getByLabelText("Message") as HTMLTextAreaElement).placeholder;
+
+  /** ⚠ THE SIGNAL IS A COUNTER, so this asserts the SECOND ask lands too — a
+   *  boolean prop would open once and then sit `true`, leaving the Threads
+   *  tab's button dead for the rest of the session. */
+  it("opens on a signal change, and again on the next one", () => {
+    const view = render(<ChannelsV2Composer {...props(0)} />);
+    expect(placeholder()).toBe("Write a message");
+
+    view.rerender(<ChannelsV2Composer {...props(1)} />);
+    expect(placeholder()).toBe("Describe the request");
+
+    // Dismiss it, then ask again — the second increment must reopen.
+    fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
+    expect(placeholder()).toBe("Write a message");
+    view.rerender(<ChannelsV2Composer {...props(2)} />);
+    expect(placeholder()).toBe("Describe the request");
   });
 });
 

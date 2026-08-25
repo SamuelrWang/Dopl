@@ -75,7 +75,7 @@ describe("the Ended pill", () => {
     expect(screen.getByText("Ended")).toBeTruthy();
     // ⚠ THE CARD IS STILL DRAWN. "My agent just finished" is something the
     // operator opened this tab to see — the pill states it, it does not hide it.
-    expect(screen.getByText("a1b2c3d4")).toBeTruthy();
+    expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy();
   });
 
   it("marks the slide-out panel's header", () => {

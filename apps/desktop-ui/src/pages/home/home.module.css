@@ -1,0 +1,87 @@
+/* /home page GEOMETRY + the record pane's frame. Layout and scoping only —
+   every colour, radius, shadow and type size comes from the tokens and the kit
+   (docs/DESIGN-SYSTEM.md). */
+
+/* ⚠ ONE SOURCE FOR THE COLUMN WIDTH, and it is load-bearing in TWO places
+   (Samuel, 2026-08-24): the relationship list IS this wide, and the header's
+   Chat/Knowledge/Agents selector is indented by exactly this much so it starts
+   on the record pane's left edge. The record pane has no left margin, so that
+   edge is the column's right edge — one number, or the two drift the first time
+   either is touched. Consumers read it as `w-[var(--home-list-w)]` /
+   `pl-[var(--home-list-w)]`; it is inherited, so it is declared on the page
+   surface both of them live inside. */
+.page {
+  --home-list-w: 290px;
+}
+
+/* ── The record pane's frame around the pinned channel surface ────────────
+   Colour/weight only; the card itself (radius, shadow, fill) is the kit's
+   `.bento` plus `bg-home-card` / `border-home-panel-line` in the TSX.
+
+   ⚠ WHY A SCOPED MODULE AND NOT A KIT RECIPE. `StandaloneChannelSurface` is
+   SHARED with the workspace channels page (INVARIANTS §7 — one surface, two
+   hosts). Its internal rules must stay the neutral hairlines there; only the
+   copy mounted on /home wears the account palette. A class the home pane owns
+   is the whole fence — nothing else can opt in by accident.
+
+   ⚠ WHY UNLAYERED. These override Tailwind UTILITIES on components this page
+   does not own. Tailwind's layer order puts `utilities` above `components`, and
+   a layer beats specificity outright — a `@layer components` rule can never win
+   this, no matter how many classes it stacks. A CSS module is unlayered, and
+   unlayered rules outrank every layered one.
+
+   ⚠ WHY IT SELECTS ON UTILITY CLASS NAMES. The dividers are Tailwind classes on
+   files in `features/channels/components/channels-v2/` — `border-border-default`
+   is the STRUCTURAL rule (the info column's `border-l`, the pane headers'
+   `border-b`), `border-border-subtle` the softer internal ones. If those class
+   names change there, this stops applying: it degrades to the neutral hairline,
+   which is the old look, not a broken one. */
+
+.frame :global(.border-border-default),
+.frame :global(.border-border-subtle) {
+  border-color: var(--home-panel-line);
+}
+
+/* Structural dividers match the pane's OWN 2px outer border; the soft internal
+   rules keep their hairline weight. `th` is excluded because a markdown table's
+   header cell carries the same `border-b border-border-default` and is not a
+   pane divider. */
+.frame :global(.border-l.border-border-default) {
+  border-left-width: 2px;
+}
+.frame :global(.border-b.border-border-default):not(th) {
+  border-bottom-width: 2px;
+}
+
+/* THE SENDER PILLS wear the raised-light face here (Samuel, 2026-08-24) — the
+   same elevation as the search button, one notch up from the flat `.bento` they
+   carry on the workspace channels page.
+
+   ⚠ NOT A FORKED RECIPE. The three values are the kit's own
+   `--raised-light-*` parts, which `.auth-btn-3d-light` and `.raised-tab` are
+   themselves built from, so this face cannot drift from theirs and no hex is
+   hardcoded here (docs/DESIGN-SYSTEM.md forbids that outright).
+
+   ⚠ NON-INTERACTIVE, and that is the point of doing it this way: the pill is a
+   `<span>` naming an author, so it gets the RESTING face and nothing else — no
+   hover lift, no pressed state, no pointer cursor. It looks raised; it is not a
+   button, and nothing here suggests it can be pressed.
+
+   The hook is `attribution-pill.tsx › AttributionPill`'s `data-attribution-pill`. */
+.frame :global([data-attribution-pill]) {
+  background: var(--raised-light-face);
+  border-color: var(--raised-light-line);
+  box-shadow: var(--raised-light-shadow);
+}
+
+/* THE INFO TOGGLE is a circle here, matching the header's collapsed search pill
+   (Samuel, 2026-08-24). Shape and size only — the glyph swap (`PanelRight`) and
+   the column's slide are in the shared surface and land everywhere.
+   ⚠ Keyed on the LABEL, which is stable and pinned by three tests
+   (`pop-out.test.tsx`, `thread-window.test.tsx`); the icon changed, the label
+   deliberately did not. If it ever does, this degrades to the square face. */
+.frame :global(button[aria-label="Channel info"]) {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+}

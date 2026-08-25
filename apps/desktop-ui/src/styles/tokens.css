@@ -72,6 +72,13 @@
   --color-surface-cta: var(--surface-cta);
   --color-text-on-cta: var(--text-on-cta);
 
+  /* /home's own four-value palette — the ACCOUNT surface reads cooler than the
+     workspace chrome (Samuel's wireframe, 2026-08-24). Scoped to that page. */
+  --color-home-frame: var(--home-frame);
+  --color-home-panel: var(--home-panel);
+  --color-home-panel-line: var(--home-panel-line);
+  --color-home-card: var(--home-card);
+
   /* ── Shadcn aliases (backward compat) ─────────────────────────── */
   --color-background: var(--bg-base);
   --color-foreground: var(--text-primary);
@@ -244,6 +251,38 @@
   --hairline-shine: rgba(255, 255, 255, 0.06);
 
   --agent-on: oklch(0.52 0.14 162);
+
+  /* /home palette (Samuel's wireframe, 2026-08-24). Four values, this page
+     only: the dark FRAME behind rail + shell, the base PANEL the header and
+     relationship list sit on, the hairline/track LINE, and the warm CARD the
+     record pane is filled with. Deliberately NOT aliases of the neutral
+     surface ramp — home is cooler and warmer at once, and folding either end
+     into `--bg-*` would repaint every workspace page. */
+  --home-frame: #373e4e;
+  --home-panel: #f1f3f5;
+  --home-panel-line: #e2ecf0;
+  --home-card: #fbfcfc;
+
+  /* THE RAISED-LIGHT FACE, as parts. `.auth-btn-3d-light` and `.raised-tab`
+     are ONE elevation (docs/DESIGN-SYSTEM.md) and both are built from these, so
+     the two cannot drift — and a SCOPED override can wear the same face without
+     forking the recipe into a hex (which the design system forbids).
+     Added 2026-08-24 for /home's sender pills. */
+  --raised-light-face: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  --raised-light-line: #d4d4d4;
+  /* The bevel + near drop both faces share; each adds its own far layer. */
+  --raised-light-bevel:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 2px 3px rgba(0, 0, 0, 0.08);
+  --raised-light-shadow: var(--raised-light-bevel), 0 6px 14px rgba(0, 0, 0, 0.06);
+  /* ATTENTION, in two parts: the hairline darkens and a soft halo replaces the
+     ambient drop. THE app-wide "this one is live" signal — `.concave-field` on
+     focus, the search pill while open, and a selected row wear the same one, so
+     it is stated once here (2026-08-24). */
+  --focus-line: rgba(24, 24, 24, 0.22);
+  --focus-halo: 0 0 0 3px rgba(24, 24, 24, 0.07);
+  --raised-light-focus: var(--raised-light-bevel), var(--focus-halo);
 
   /* Panel header — dark frame surface, white text. */
   --panel-header-surface: var(--surface-cta);

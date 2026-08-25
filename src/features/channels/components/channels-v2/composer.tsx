@@ -2,7 +2,7 @@
 
 /**
  * Channels v2 — the composer card, with the @-mention autocomplete floating
- * above its left edge and the NEW AGENT THREAD panel recessed inside it.
+ * above its left edge and the "New thread" panel recessed inside it.
  *
  * ⚠ TWO SENDS, ONE BUTTON, AND THEY ARE DIFFERENT WRITES. With the panel CLOSED
  * Send posts a plain chat message (`intent:"chat"` — the wire value is
@@ -77,7 +77,11 @@ import type { ChannelMember } from "../../types";
  * indistinguishable from a broken one.
  */
 function sendHint(panelOpen: boolean, canSend: boolean, pending: boolean): string {
-  if (canSend) return panelOpen ? "Send request" : "Send";
+  // ⚠ The enabled branch is the BUTTON'S OWN LABEL, twice over — a tooltip that
+  // says something other than the control it sits on is a second name for one
+  // action. "Create" with the panel open (Samuel, 2026-08-24): it raises a
+  // thread, and "Send request" described the transport.
+  if (canSend) return panelOpen ? "Create" : "Send";
   if (pending) return "Sending…";
   if (!panelOpen) return "Write a message first";
   return "A request needs a title and at least one agent";
@@ -93,6 +97,7 @@ export function ChannelsV2Composer({
   gate,
   newAgent,
   openThreadId = null,
+  newThreadSignal = 0,
 }: {
   /** ⚠ CAPTURED AT SUBMIT into every draft — never re-read from the selection
    *  while a write is in flight (INVARIANTS §8, rule 4). */
@@ -114,6 +119,10 @@ export function ChannelsV2Composer({
   newAgent?: AgentLaunchControls;
   /** Which exchange a new agent lands on; `null` is a CHANNEL-LEVEL agent. */
   openThreadId?: string | null;
+  /** Nonced ask from the Threads tab to open the new-thread panel. ⚠ A COUNTER,
+   *  not a boolean: the panel's state stays OWNED HERE, so there is no mirror to
+   *  drift. Each increment is one request; the default is nobody asking. */
+  newThreadSignal?: number;
 }) {
   const [draft, setDraft] = useState("");
   const draftRef = useRef<HTMLTextAreaElement>(null);
@@ -198,6 +207,21 @@ export function ChannelsV2Composer({
       return true;
     });
   };
+
+  // The Threads tab's "New thread" lands here (2026-08-24). It OPENS, never
+  // toggles — a button in another column that shut the panel you were typing in
+  // would be a trap — and resets addressees exactly as the glyph does.
+  // ⚠ ADJUSTED DURING RENDER: React's "state from a changed prop" shape, as in
+  // `use-channels-v2-selection.ts` and for its measured reason —
+  // `react-hooks/set-state-in-effect` is an ERROR here.
+  const [seenNewThread, setSeenNewThread] = useState(newThreadSignal);
+  if (newThreadSignal !== seenNewThread) {
+    setSeenNewThread(newThreadSignal);
+    if (!agentPanelOpen) {
+      setAgentPanelOpen(true);
+      setRemovedAgents(new Set());
+    }
+  }
 
   const addressed = targets.filter((target) => !removedAgents.has(target.id));
   const body = draft.trim();
@@ -434,7 +458,7 @@ export function ChannelsV2Composer({
                 !canSend && "cursor-not-allowed opacity-60"
               )}
             >
-              {agentPanelOpen ? "Send request" : "Send"}
+              {agentPanelOpen ? "Create" : "Send"}
             </button>
           </div>
 

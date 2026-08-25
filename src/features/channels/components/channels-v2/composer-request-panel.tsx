@@ -50,13 +50,17 @@ export function AgentRequestPanel({
   return (
     <div className={cn(SECTION_BOX_INSET, "flex flex-col gap-2 rounded-[10px] p-2.5")}>
       <div className="flex items-center gap-2">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          New agent thread
-        </span>
+        {/* ⚠ NOT `text-label` (Samuel, 2026-08-24). That ramp step is the
+            app's UPPERCASE section label and carries `uppercase tracking-wide
+            font-semibold` as part of its contract; this header reads as
+            sentence case at normal weight, which is `text-caption` — the step
+            written for exactly that. Dropping the three classes while keeping
+            `text-label` would have left a lie in the class list. */}
+        <span className="text-caption text-text-secondary">New thread</span>
         <span className="flex-1" />
         <IconButton
           icon={X}
-          label="Close new agent thread"
+          label="Close new thread"
           size={13}
           className="h-5 w-5"
           onClick={onDismiss}

@@ -36,6 +36,14 @@ export interface ChannelsV2Selection {
   inboxOpen: boolean;
   infoOpen: boolean;
   scrollTarget: ScrollTarget | null;
+  /**
+   * NONCED REQUEST to open the composer's new-thread panel, for surfaces that
+   * are not the composer (the Threads tab's button). Same shape and the same
+   * reason as `scrollTarget`: asking twice must ask twice, and a boolean here
+   * would be a SECOND source of truth for a panel the composer owns — the
+   * composer would have to mirror it, and the two would drift.
+   */
+  newThreadSignal: number;
   createOpen: boolean;
   directOpen: boolean;
   setOpenAgent: (key: string | null) => void;
@@ -48,6 +56,8 @@ export interface ChannelsV2Selection {
   openThread: (id: string | null) => void;
   openInbox: () => void;
   toggleInfo: () => void;
+  /** Ask the composer to open its new-thread panel. */
+  requestNewThread: () => void;
   /** The Tags inbox's jump: a thread AND a nonced scroll signal. */
   jumpToMessage: (threadId: string | null, messageId: string) => void;
 }
@@ -69,6 +79,7 @@ export function useChannelsV2Selection({
   const [inboxOpen, setInboxOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
+  const [newThreadSignal, setNewThreadSignal] = useState(0);
 
   // A SECOND notification, with the page already mounted, changes the route but
   // not the component — the initial `useState` above would never see it. So the
@@ -108,6 +119,10 @@ export function useChannelsV2Selection({
   }, []);
 
   const openInbox = useCallback(() => setInboxOpen(true), []);
+  const requestNewThread = useCallback(
+    () => setNewThreadSignal((n) => n + 1),
+    []
+  );
   const toggleInfo = useCallback(() => setInfoOpen((open) => !open), []);
 
   // ⚠ THE SCROLL SIGNAL IS NONCED, so clicking the same mention twice
@@ -129,6 +144,7 @@ export function useChannelsV2Selection({
     inboxOpen,
     infoOpen,
     scrollTarget,
+    newThreadSignal,
     createOpen,
     directOpen,
     setOpenAgent,
@@ -139,6 +155,7 @@ export function useChannelsV2Selection({
     openThread,
     openInbox,
     toggleInfo,
+    requestNewThread,
     jumpToMessage,
   };
 }
