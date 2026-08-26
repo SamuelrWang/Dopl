@@ -91,18 +91,27 @@ describe("the mount", () => {
   });
 
   /**
-   * ⚠ BOTH FLAGS, ASSERTED WHOLE — `toEqual`, never `toMatchObject`. A partial
+   * ⚠ EVERY FLAG, ASSERTED WHOLE — `toEqual`, never `toMatchObject`. A partial
    * match stays green when a flag is DROPPED from the object, which is the
    * regression itself: the control comes back on the guest's surface and
    * nothing anywhere errors. `memberManagement` is the container's fixed
    * two-person roster; `selfManagement` is rulings R2/R3 (2026-08-25) — a guest
    * runs no agent, and leaving is a one-way exit from their only Dopl surface.
+   *
+   * ⚠ AND `knowledge: true` IS THE ONE THAT OPENS SOMETHING (M4, 2026-08-26).
+   * It draws the Knowledge tab — the bases the operator granted INTO this
+   * channel — and it is safe here for a reason that is not "it is only a tab":
+   * every read behind it is on the guest-floored channel lane, which
+   * `channels-v2/guest-surface-reads.test.tsx` pins against the routes
+   * themselves. This assertion is where the guest's whole capability posture is
+   * stated in one place, so an ADDITION lands here as loudly as a removal.
    */
-  it("turns BOTH capability flags off — the roster AND the guest's own stake", async () => {
+  it("states the guest's whole capability posture — two off, knowledge on", async () => {
     await mount();
     expect(mocks.surfaceProps?.capabilities).toEqual({
       memberManagement: false,
       selfManagement: false,
+      knowledge: true,
     });
   });
 

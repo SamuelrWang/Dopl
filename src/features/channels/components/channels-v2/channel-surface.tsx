@@ -107,6 +107,31 @@ export interface ChannelSurfaceCapabilities {
    * manage their own agent there.
    */
   selfManagement?: boolean;
+  /**
+   * Draw the KNOWLEDGE tab — the knowledge bases granted INTO this channel,
+   * read-only unless the grant carries `guest_write` (Home Knowledge Panels M4,
+   * `knowledge-tab.tsx`).
+   *
+   * ⚠ DEFAULT `false`, WHICH INVERTS THE OTHER TWO, and the inversion is the
+   * decision. `memberManagement`/`selfManagement` default to the workspace
+   * page's behaviour because they REMOVE something; this one ADDS a tab, and the
+   * two hosts that want it are the container surfaces where the channel IS the
+   * application: the operator's /home record and the guest lane at
+   * `/c/[workspaceId]`. Both pass `true`, and they see the same list — which is
+   * the whole point of one component (the plan's "what do guests see").
+   *
+   * ⚠ THE WORKSPACE CHANNEL PAGE DELIBERATELY DOES NOT PASS IT (this wave). The
+   * lane is scoped to ONE channel's grants, and that page already carries the
+   * full knowledge surface, where the same bases are reachable with their
+   * folders, search, authoring and the grant controls that CREATED these rows. A
+   * narrower read of the same data one tab away would be a second answer to
+   * "what is in this knowledge base" with nothing saying which is complete.
+   *
+   * ⚠ IT IS SAFE ON EVERY HOST REGARDLESS: the tab reads the guest-floored lane
+   * (`knowledge-lane.ts`), never `/api/knowledge/**`. Turning it on somewhere
+   * new is a product decision, not an authorization one.
+   */
+  knowledge?: boolean;
 }
 
 export interface ChannelSurfaceProps {
@@ -342,6 +367,8 @@ export function ChannelSurface({
           mentionsLoading={data.mentionsLoading}
           onOpenMention={openMention}
           onMarkAllMentionsRead={markAllMentionsRead}
+          // THE KNOWLEDGE TAB (M4) — opt-in, see `ChannelSurfaceCapabilities`.
+          knowledge={capabilities?.knowledge}
           // ⚠ CALLED, not passed. The tab is a render function so it can be
           // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
           infoTab={slots?.infoTab?.({ gate })}

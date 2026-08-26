@@ -78,7 +78,11 @@ export function RelationshipRecord({
       // A link container holds at most two people — the peer arrives by
       // claiming its link, never through the channel roster, so "add members"
       // names an operation that cannot happen here.
-      capabilities={{ memberManagement: false }}
+      // ⚠ `knowledge: true` shows the OPERATOR exactly what the guest sees in
+      // this channel — same component, same lane, same `visible`-only list
+      // (M4). The /home Knowledge PANE (`knowledge-panels.tsx`) is the other
+      // half and answers a different question: what could be shared.
+      capabilities={{ memberManagement: false, knowledge: true }}
     />
   );
 }

@@ -335,3 +335,35 @@ describe("StandaloneChannelSurface — the viewer's own stake", () => {
     expect(screen.queryByText(/Join this channel/)).toBeNull();
   });
 });
+
+/**
+ * `knowledge` — THE THIRD CAPABILITY, and the only one that ADDS (Home
+ * Knowledge Panels M4).
+ *
+ * ⚠ WHAT IS UNDER TEST IS THE PASS-THROUGH, not the tab. The tab has its own
+ * suite (`knowledge-tab.test.tsx`) and the row has `info-panel.test.tsx`; what
+ * neither can see is this surface dropping the flag on its way to the column —
+ * a host would pass `knowledge: true` and get the old four tabs, with nothing
+ * failing anywhere.
+ *
+ * ⚠ THE DEFAULT IS OFF, WHICH INVERTS THE OTHER TWO. That is deliberate and the
+ * reason is written where the capability is declared: this one adds a tab over a
+ * channel-scoped grant lane, and the workspace page already has the whole
+ * knowledge surface.
+ */
+describe("StandaloneChannelSurface — the knowledge capability", () => {
+  it("draws no Knowledge tab by default", () => {
+    mount();
+    expect(screen.queryByRole("tab", { name: /^Knowledge/ })).toBeNull();
+  });
+
+  it("draws it — and mounts NOTHING behind it — when the host opts in", () => {
+    mount({ capabilities: { knowledge: true } });
+    expect(screen.getByRole("tab", { name: /^Knowledge/ })).toBeTruthy();
+    // ⚠ The tab's reads mount with the tab. Until it is opened this is a label
+    // and no request, which is the same property `selfManagement: false` buys
+    // the consent inbox (`guest-surface-reads.test.tsx`).
+    expect(screen.queryByText("Nothing has been shared into this channel yet."))
+      .toBeNull();
+  });
+});

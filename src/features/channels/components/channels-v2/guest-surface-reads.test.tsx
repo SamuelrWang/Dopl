@@ -29,8 +29,20 @@
  *
  * ⚠ MUTATION-VERIFY: reverting the consent read to `useConsentInbox(workspaceId, …)`
  * turns the guest case red and leaves the operator case green.
+ *
+ * ── THE KNOWLEDGE TAB'S READS (Home Knowledge Panels M4) ────────────────────
+ * The tab the guest lane turned on is the FOURTH thing this file guards, and it
+ * is guarded differently because it is a different failure. Its reads are not in
+ * `useChannelSurfaceData` at all — they mount with the tab — so what has to be
+ * pinned is not "is it mounted" but "is the route it addresses one a guest may
+ * reach". The last describe resolves each URL the tab builds down to the
+ * `route.ts` that serves it and reads the FLOOR out of that file's own source,
+ * the same technique `app/api/channels/guest-route-floor.test.ts` uses. A path
+ * typo, a moved route, or a lowered floor all fail it.
  */
 
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { CONSENT_INBOX_POLL_MS } from "../../constants";
@@ -82,6 +94,12 @@ vi.mock("./use-inline-consent", () => ({
 import { useChannelSurfaceData } from "./channel-surface-data";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelMentions } from "../../hooks/use-channel-mentions";
+import { stripComments, workspaceFloor } from "@/shared/auth/route-floor-parser";
+import {
+  channelKnowledgeBasesPath,
+  channelKnowledgeEntryPath,
+  channelKnowledgeTreePath,
+} from "./knowledge-lane";
 import type { Channel } from "../../types";
 import type { ChannelSurfaceCapabilities } from "./channel-surface";
 
@@ -147,5 +165,79 @@ describe("the reads a guest DOES keep", () => {
     // widens nothing.
     mount({ memberManagement: false, selfManagement: false });
     expect(vi.mocked(useChannelMentions)).toHaveBeenCalledWith(CHANNEL.id, WS);
+  });
+});
+
+/**
+ * 🔒 THE KNOWLEDGE TAB'S THREE URLS, RESOLVED TO THEIR ROUTES AND READ FOR THE
+ * FLOOR (M4).
+ *
+ * ⚠ THE ROUTE FILE IS FOUND, NOT NAMED. Each concrete URL is walked down
+ * `src/app/api`, taking an exact directory where one exists and the `[dynamic]`
+ * one otherwise — so this pin follows the tab's OWN path builders to whatever
+ * file actually answers them. Hard-coding the four file paths would pass against
+ * a tab that had quietly started asking somewhere else.
+ *
+ * ⚠ THE FLOOR IS A TRIPWIRE, NOT THE GATE. What actually admits the caller is
+ * the channel-membership fence plus the `(knowledge_base, channel)` grant row
+ * (`shared/api/channel-knowledge-lane.ts`, `service-channel-grants.ts`), and
+ * those have their own suites. What THIS assertion buys is the thing a fence
+ * test cannot see: that the SURFACE is pointed at the lane at all.
+ */
+describe("the Knowledge tab reads only routes a guest may reach", () => {
+  const API_ROOT = join(import.meta.dirname, "../../../../app/api");
+  const BASE = "55555555-5555-4555-8555-555555555555";
+  const ENTRY = "66666666-6666-4666-8666-666666666666";
+
+  /** The `route.ts` that serves one concrete URL. */
+  function routeFileFor(url: string): string {
+    let dir = API_ROOT;
+    for (const segment of url.replace(/^\/api\//, "").split("/")) {
+      const dirs = readdirSync(dir, { withFileTypes: true }).filter((e) =>
+        e.isDirectory()
+      );
+      const next =
+        dirs.find((e) => e.name === segment) ??
+        dirs.find((e) => e.name.startsWith("["));
+      if (!next) throw new Error(`no route serves "${segment}" under ${dir}`);
+      dir = join(dir, next.name);
+    }
+    return join(dir, "route.ts");
+  }
+
+  const READS: ReadonlyArray<readonly [string, "GET" | "PUT"]> = [
+    [channelKnowledgeBasesPath(CHANNEL.id), "GET"],
+    [channelKnowledgeTreePath(CHANNEL.id, BASE), "GET"],
+    [channelKnowledgeEntryPath(CHANNEL.id, ENTRY), "GET"],
+    // ⚠ The WRITE is on the list too. The tab only offers it where the grant
+    // says `guest_write`, but the route it posts to must be one the caller can
+    // reach at all — a `member`-floored PUT would refuse the guest before the
+    // grant was ever consulted, and the refusal would read as a save that
+    // silently failed.
+    [channelKnowledgeEntryPath(CHANNEL.id, ENTRY), "PUT"],
+  ];
+
+  it.each(READS)("%s %s is at minRole guest", (url, method) => {
+    const src = readFileSync(routeFileFor(url), "utf8");
+    expect(workspaceFloor(src, method)).toBe("guest");
+  });
+
+  it("builds every URL through the lane module — no hand-written /api path", () => {
+    // ⚠ The one way this pin can be walked around is a `fetch("/api/knowledge/…")`
+    // written straight into a component, which no route scan would ever see.
+    for (const file of [
+      "knowledge-lane.ts",
+      "knowledge-tab.tsx",
+      "knowledge-entry.tsx",
+      "use-channel-knowledge.ts",
+    ]) {
+      // ⚠ COMMENTS STRIPPED FIRST — these modules NAME the lane's routes in
+      // their docblocks, which is the whole point of the docblocks. The same
+      // `stripComments` the route-floor sweep uses, for the same reason.
+      const src = stripComments(
+        readFileSync(join(import.meta.dirname, file), "utf8")
+      );
+      expect(src).not.toMatch(/["'`]\/api\//);
+    }
   });
 });

@@ -133,7 +133,15 @@ export function GuestChannel({
           workspaceSlug={homeChannel.workspaceSegment}
           channel={channel}
           currentUserId={currentUserId}
-          capabilities={{ memberManagement: false, selfManagement: false }}
+          // ⚠ `knowledge: true` — the guest READS the bases the operator granted
+          // into this channel, and edits one only where the grant says so. The
+          // tab is on the guest-floored lane, so this adds no request the guest
+          // would be refused on (`channels-v2/guest-surface-reads.test.tsx`).
+          capabilities={{
+            memberManagement: false,
+            selfManagement: false,
+            knowledge: true,
+          }}
           onDeleted={onDeleted}
         />
       )}

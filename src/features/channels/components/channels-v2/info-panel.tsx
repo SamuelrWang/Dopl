@@ -2,10 +2,11 @@
 
 /**
  * Channels v2 — RIGHT COLUMN: the channel's tabs. Info (`info-tab.tsx`),
- * Threads (`threads-tab.tsx`), Agents (`agents-tab.tsx`) and Settings, which is
- * the pane header's evicted action cluster (`channel-manage.tsx` →
- * `settings-tab.tsx`, injected as a slot for the same reason the panes take
- * theirs: it is write-bearing and this file owns the tab row only).
+ * Threads (`threads-tab.tsx`), Agents (`agents-tab.tsx`), the opt-in Knowledge
+ * (`knowledge-tab.tsx`) and Settings, which is the pane header's evicted action
+ * cluster (`channel-manage.tsx` → `settings-tab.tsx`, injected as a slot for the
+ * same reason the panes take theirs: it is write-bearing and this file owns the
+ * tab row only).
  *
  * ⚠ THE FOURTH TAB WAS **LINKS** UNTIL 2026-08-19, and it was a deliberate empty
  * state ("No links in this channel yet.") — Files had left the row on 2026-08-18
@@ -34,6 +35,7 @@
  */
 
 import { useState, type ReactNode } from "react";
+import { cn } from "@/shared/lib/utils";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
@@ -41,6 +43,7 @@ import { InfoTab } from "./info-tab";
 import { ThreadInfoTab } from "./thread-info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { AgentsTab } from "./agents-tab";
+import { ChannelKnowledgeTab } from "./knowledge-tab";
 import { activeAgentCount } from "./agents-model";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
 import type { AgentLaunchOutcome } from "./use-agents-panel";
@@ -57,6 +60,7 @@ const TABS = [
   { key: "info", label: "Info" },
   { key: "threads", label: "Threads" },
   { key: "agents", label: "Agents" },
+  { key: "knowledge", label: "Knowledge" },
   { key: "settings", label: "Settings" },
 ] as const;
 
@@ -71,9 +75,26 @@ type TabKey = (typeof TABS)[number]["key"];
  * control here that navigates away from what the reader is looking at. It comes
  * back the moment the centre pane returns to the channel; the sidebar's tree
  * covers thread-to-thread movement meanwhile.
+ *
+ * ⚠ KNOWLEDGE IS OPT-IN AND IS THE ROW'S ONLY CAPABILITY-GATED TAB (Home
+ * Knowledge Panels M4). It is ABSENT by default, which inverts this file's usual
+ * "the default is the workspace page's behaviour" rule — deliberately, because
+ * the tab reads a CHANNEL-SCOPED grant lane and the workspace page already has
+ * the whole knowledge page one click away. See
+ * {@link ChannelSurfaceCapabilities.knowledge}.
+ *
+ * ⚠ THREAD VIEW KEEPS IT. A knowledge base is granted onto the CHANNEL, so it
+ * is as true inside one exchange as outside it, and the tab is the one place
+ * the guest can read what was shared with them.
  */
-function tabsFor(threadView: boolean): ReadonlyArray<(typeof TABS)[number]> {
-  return threadView ? TABS.filter((t) => t.key !== "threads") : TABS;
+function tabsFor(
+  threadView: boolean,
+  knowledge: boolean
+): ReadonlyArray<(typeof TABS)[number]> {
+  return TABS.filter(
+    (t) =>
+      (t.key !== "threads" || !threadView) && (t.key !== "knowledge" || knowledge)
+  );
 }
 
 /**
@@ -89,6 +110,13 @@ function tabsFor(threadView: boolean): ReadonlyArray<(typeof TABS)[number]> {
  * without the feed) must NOT render as a confident `0`. UNKNOWN is not EMPTY
  * (INVARIANTS §11), and a `0` on this tab is a claim about the operator's own
  * machine that the web cannot make.
+ *
+ * ⚠ KNOWLEDGE GETS NO BADGE EITHER, and not for want of a number. The granted
+ * list is read by the TAB BODY, only while the tab is open — a count on the row
+ * would mean mounting that read for every viewer of every channel, which is the
+ * cost the tab was designed to avoid. UNKNOWN is not EMPTY (INVARIANTS §11), and
+ * a `0` here would be the claim "nothing is shared with you" made by a surface
+ * that never asked.
  *
  * ⚠ INFO AND SETTINGS GET NO BADGE, deliberately. The Info tab already carries
  * the mentions unread count INSIDE it (`info-tab.tsx`, arithmetic over the rows
@@ -135,6 +163,7 @@ export function ChannelsV2InfoPanel({
   mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
+  knowledge = false,
   infoTab,
   settings,
 }: {
@@ -194,6 +223,14 @@ export function ChannelsV2InfoPanel({
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
   /**
+   * Draw the KNOWLEDGE tab (`ChannelSurfaceCapabilities.knowledge`). Default
+   * `false` — see {@link tabsFor} for why this one capability defaults CLOSED
+   * where the column's others default to the workspace page's behaviour.
+   * ⚠ The tab's reads mount with the tab, so `false` is not just a hidden
+   * control: nothing is requested at all.
+   */
+  knowledge?: boolean;
+  /**
    * REPLACES the INFO tab's body in channel view — an account-level 1:1 shows a
    * person card where a workspace channel shows `info-tab.tsx`. Absent is the
    * channels page's own body, which is every caller but Home.
@@ -220,7 +257,7 @@ export function ChannelsV2InfoPanel({
   const [tab, setTab] = useState<TabKey>("info");
   const openThreadId = openThread?.id ?? null;
   const threadView = openThread !== null;
-  const options = tabsFor(threadView);
+  const options = tabsFor(threadView, knowledge);
 
   // ⚠ THE DEAD-SELECTION FALLBACK. Opening a thread while the Threads tab is
   // showing removes the very tab that is selected, and a `value` matching no
@@ -233,8 +270,14 @@ export function ChannelsV2InfoPanel({
   // and the same idiom `agent-panel.tsx` uses for its exit frame. An effect would
   // paint the broken frame first. `activeTab` covers that restart so the body and
   // the row can never disagree even for one pass.
-  if (threadView && tab === "threads") setTab("info");
-  const activeTab: TabKey = threadView && tab === "threads" ? "info" : tab;
+  //
+  // ⚠ IT ASKS THE ROW, NOT THE CONDITIONS. Two tabs can now leave (`threads` on
+  // a thread, `knowledge` if a host ever revoked the capability while mounted),
+  // and re-listing the conditions here is how the row and the fallback come to
+  // disagree about which tabs exist.
+  const dead = !options.some((t) => t.key === tab);
+  if (dead) setTab("info");
+  const activeTab: TabKey = dead ? "info" : tab;
 
   // ⚠ THE BADGE RUNS ONE EXPORTED DERIVATION (`agents-model.ts ›
   // activeAgentCount`), never a sum written here: two derivations of one list is
@@ -259,7 +302,26 @@ export function ChannelsV2InfoPanel({
       aria-label="Channel info"
       className="flex w-[380px] shrink-0 flex-col border-l border-border-default"
     >
-      <div className="flex h-[56px] shrink-0 items-center border-b border-border-default px-3">
+      {/* ⚠ A FIFTH TAB IS OVER THE ROW'S WIDTH BUDGET, AND THE BUDGET IS A
+          MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4). `SegmentedControl`'s
+          trackless `lg` form takes its 12px side pad BECAUSE the four options with
+          two count badges overflowed 15px at the 340px this column then was
+          (docs/DESIGN-SYSTEM.md, 2026-08-25); the column is 380px now, so the four
+          leave roughly 55px spare and "Knowledge" wants ~90. Two things are done
+          about it and neither touches the shared primitive: the row TIGHTENS
+          (`gap-1`, and the header drops to `px-2`) only while the fifth tab is
+          present, and whatever remains SCROLLS rather than clipping — a tab pushed
+          past the edge with no way to reach it is the failure, a 6px discreet bar
+          is not. ⚠ A RULING IS OWED on whether the five-tab row keeps this scale, and
+          do NOT pre-empt it by shortening the label: "Knowledge" is what the product
+          calls the thing, and a tab named something else to fit is a worse answer than
+          a tab that scrolls. */}
+      <div
+        className={cn(
+          "flex h-[56px] shrink-0 items-center border-b border-border-default",
+          options.length > 4 ? "px-2" : "px-3"
+        )}
+      >
         <SegmentedControl
           options={options.map((t) => ({
             ...t,
@@ -271,6 +333,12 @@ export function ChannelsV2InfoPanel({
           // header's buttons, so a switcher does not read as a smaller class of control than
           // the things beside it.
           size="lg"
+          // Layout only, which is all `className` may carry here (the primitive's
+          // own contract). See the width-budget note above.
+          className={cn(
+            "min-w-0 flex-1 overflow-x-auto",
+            options.length > 4 && "gap-1"
+          )}
         />
       </div>
 
@@ -337,6 +405,14 @@ export function ChannelsV2InfoPanel({
               openAgent={openAgent}
               onOpenAgent={onOpenAgent}
               onNewThread={onNewThread}
+            />
+          ) : shown === "knowledge" ? (
+            // ⚠ MOUNTED WITH THE TAB, so the lane is not read for a viewer who
+            // never opens it — the same rule the Settings slot follows, for the
+            // same reason (INVARIANTS §5).
+            <ChannelKnowledgeTab
+              channelId={channel.id}
+              workspaceId={channel.workspaceId}
             />
           ) : (
             settings
