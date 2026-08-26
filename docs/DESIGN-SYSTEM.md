@@ -54,7 +54,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `divide-border-subtle`                        | 6% black         | list dividers              |
 | `bg-home-frame`                               | `#373e4e`        | /home ONLY — the dark slab behind shell root + surface + account rail (2026-08-24) |
 | `bg-home-panel`                               | `#f1f3f5`        | /home ONLY — the base panel (`.page-float` fill) |
-| `bg-home-panel-line` / `border-home-panel-line` | `#e2ecf0`      | /home ONLY — record-pane hairline + the header selector's track |
+| `border-home-panel-line`                      | `#e2ecf0`        | /home ONLY — the record-pane hairline. ⚠ The header selector's track is `--seg-fill` now, so the token's `bg-` variant has NO consumer (`grep -rn 'bg-home-panel-line' src apps` is empty); only the `border-` utility is live. |
 | `bg-home-card`                                | `#fbfcfc`        | /home ONLY — the record pane's fill |
 
 The four `home-*` values are a PAGE palette, not a second ramp: /home is the

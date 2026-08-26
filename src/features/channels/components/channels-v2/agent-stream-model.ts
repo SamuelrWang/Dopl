@@ -142,10 +142,18 @@ export interface StreamItem {
  *
  * ⚠ IT MIRRORS `main/session-narration.js › line(value, POST_CAP)` DELIBERATELY,
  * because that is what the frame's text has already been through: whitespace
- * collapsed to single spaces, trimmed, sliced at 1000. The consent row's
- * `proposedReply` is the SAME body untouched (`session-windowless.js ›
- * bridgeOutbound` posts `body` verbatim), so putting both through this is the
+ * collapsed to single spaces, trimmed, sliced at 1000, THEN TRIMMED AGAIN. The
+ * consent row's `proposedReply` is the SAME body untouched (`session-windowless.js
+ * › bridgeOutbound` posts `body` verbatim), so putting both through this is the
  * only way an equality can be true at all.
+ *
+ * ⚠ THE SECOND `.trim()` IS LOAD-BEARING AND MUST MATCH `line`. For a body over
+ * 1000 chars whose char 999 is the space between two words, `slice(0, 1000)`
+ * ends on that space; `line` drops it with its trailing trim and the frame text
+ * does too, so an echo WITHOUT the trailing trim keeps a space the frame lost
+ * and `landed.has(echo)` never matches — the card stays "Pending" over a message
+ * that was delivered. The two chains cannot drift: they must be character-for-
+ * character the same discipline.
  *
  * ⚠ **THE JOIN IS ON THE BODY BECAUSE THERE IS NO ID TO JOIN ON.** A consent row
  * carries `(channel, message_seq)` and nothing that names an AGENT — the row is
@@ -156,7 +164,7 @@ export interface StreamItem {
  * case either row approves the same bytes.
  */
 export function postEcho(text: string | null | undefined): string {
-  return String(text ?? "").replace(/\s+/g, " ").trim().slice(0, POST_CAP);
+  return String(text ?? "").replace(/\s+/g, " ").trim().slice(0, POST_CAP).trim();
 }
 
 /** `main/session-narration.js › POST_CAP`. ⚠ A COPY OF A WIRE CONSTANT, and it

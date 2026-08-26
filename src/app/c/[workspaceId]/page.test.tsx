@@ -102,18 +102,23 @@ describe("the auth gate", () => {
 });
 
 describe("what the URL is allowed to reach", () => {
-  it("404s a non-member — absent, never forbidden", async () => {
+  it("404s on EVERY null reason with one answer — the page never distinguishes them", async () => {
+    // ⚠ THE HOME FENCE IDIOM IS THE SERVICE'S, NOT THE PAGE'S. `getHomeChannel`
+    // returns `null` for a non-member, a standard workspace the caller genuinely
+    // belongs to, AND a nonexistent container — three facts collapsed to one so
+    // the URL is not an existence oracle (INVARIANTS §4A). Which reason produced
+    // the null is decided INSIDE that service (pinned in
+    // `home/server/service-reads.test.ts`), and it is mocked here, so this page
+    // test can only assert what the PAGE owns: any `null` becomes one
+    // `notFound()`, whatever container id is in the URL.
+    //
+    // ⚠ THIS REPLACES TWO TESTS THAT WERE THE SAME TEST. One passed the member id
+    // and one a "standard workspace" id, but with `getHomeChannel` mocked to
+    // `null` the id was irrelevant — the second exercised no standard-vs-link path
+    // and only duplicated the first.
     mocks.getHomeChannel.mockResolvedValue(null);
-    expect(await outcome()).toBe("NOT_FOUND");
-  });
-
-  it("404s a STANDARD workspace with the SAME answer", async () => {
-    // The service refuses a standard workspace the caller genuinely belongs to,
-    // and it must be indistinguishable from a container that does not exist.
-    mocks.getHomeChannel.mockResolvedValue(null);
-    expect(await outcome("55555555-5555-4555-8555-555555555555")).toBe(
-      "NOT_FOUND"
-    );
+    expect(await outcome(WS)).toBe("NOT_FOUND");
+    expect(await outcome("55555555-5555-4555-8555-555555555555")).toBe("NOT_FOUND");
   });
 
   it("404s a segment that is not a UUID WITHOUT calling the service", async () => {

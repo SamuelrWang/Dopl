@@ -15,21 +15,28 @@ import {
   ChannelInfoCardSchema,
   EMPTY_INFO_CARD,
   INFO_CARD_BUILT_IN_KEYS,
+  INFO_CARD_DB_FLOOR_BYTES,
+  INFO_CARD_ID_MAX,
   INFO_CARD_LABEL_MAX,
+  INFO_CARD_MAX_BYTES,
   INFO_CARD_MAX_ROWS,
   INFO_CARD_VALUE_MAX,
   hideBuiltInRow,
+  infoCardTextBytes,
+  infoCardWithinByteLimit,
   isEmptyInfoCard,
   newInfoCardRowId,
   parseInfoCard,
   removeInfoCardRow,
   upsertInfoCardRow,
   type ChannelInfoCard,
+  type ChannelInfoCardInput,
 } from "./info-card";
 
 /** ⚠ The DB's floor, restated here ON PURPOSE — a literal, not an import,
  *  because the value it must match lives in SQL and cannot be imported. Change
- *  `20260825120000_channel_info_card.sql` and this goes red. */
+ *  `20260825120000_channel_info_card.sql` and this (and INFO_CARD_DB_FLOOR_BYTES)
+ *  go red. */
 const DB_MAX_BYTES = 4096;
 
 const row = (id: string, label = "Phone", value = "+1") => ({ id, label, value });
@@ -178,19 +185,75 @@ describe("the pure editors", () => {
   });
 });
 
-describe("the caps sit UNDER the database's floor", () => {
-  it("the largest card the schema accepts is well inside 4 KiB", () => {
+describe("the byte guard sits UNDER the database's floor", () => {
+  /**
+   * ⚠ MEASURED THE WAY THE CHECK MEASURES IT. `channels_info_card_check` bounds
+   * `octet_length(info_card::text)`, and pg's jsonb text form carries a `": "`
+   * after every key and a `", "` between every element — bytes `JSON.stringify`
+   * never emits. `infoCardTextBytes` reproduces that spacing; the fixtures here
+   * fill with CJK (3 UTF-8 bytes each), the true worst case, and pin the actual
+   * cap constants (`INFO_CARD_ID_MAX = 64`, not a hardcoded 36).
+   */
+  const cjkRow = (i: number) => ({
+    id: `${i}`.padStart(INFO_CARD_ID_MAX, "0"),
+    label: "文".repeat(INFO_CARD_LABEL_MAX),
+    value: "字".repeat(INFO_CARD_VALUE_MAX),
+  });
+
+  it("the per-field caps do NOT bound the total — a full CJK card BLOWS the floor", () => {
+    // ⚠ THIS IS WHY THE BYTE GUARD EXISTS. Every field is at its zod cap and the
+    // card parses clean, yet measured as `info_card::text` it is far past 4 KiB —
+    // so a per-field cap alone would let a schema-valid card 500 at the DB.
     const worst = {
       hidden: [...INFO_CARD_BUILT_IN_KEYS],
-      rows: Array.from({ length: INFO_CARD_MAX_ROWS }, (_, i) => ({
-        // Ids are client-minted uuids in practice; the ceiling is slack.
-        id: `${i}`.padStart(36, "0"),
-        label: "x".repeat(INFO_CARD_LABEL_MAX),
-        value: "y".repeat(INFO_CARD_VALUE_MAX),
-      })),
+      rows: Array.from({ length: INFO_CARD_MAX_ROWS }, (_, i) => cjkRow(i)),
     };
     expect(ChannelInfoCardSchema.safeParse(worst).success).toBe(true);
-    const bytes = Buffer.byteLength(JSON.stringify(worst), "utf8");
-    expect(bytes).toBeLessThan(DB_MAX_BYTES);
+    // The measurement is HONEST: jsonb text form, CJK, over the floor.
+    expect(infoCardTextBytes(worst)).toBeGreaterThan(DB_MAX_BYTES);
+  });
+
+  it("the app ceiling is under the DB floor — the margin that prevents the 500", () => {
+    expect(INFO_CARD_MAX_BYTES).toBeLessThan(INFO_CARD_DB_FLOOR_BYTES);
+    expect(INFO_CARD_DB_FLOOR_BYTES).toBe(DB_MAX_BYTES);
+  });
+
+  it("the largest card the guard ADMITS still measures under the DB floor (jsonb text form)", () => {
+    // ⚠ THE INVARIANT THAT GOES RED IF THE CEILING IS RAISED PAST THE FLOOR:
+    // grow a CJK card row-by-row up to the byte guard, then measure it the way
+    // the CHECK does. If INFO_CARD_MAX_BYTES ever creeps to/over 4096, the
+    // admitted card would breach the floor and this fails.
+    const rows: ReturnType<typeof cjkRow>[] = [];
+    for (let i = 0; i < INFO_CARD_MAX_ROWS; i++) {
+      const next = { hidden: [...INFO_CARD_BUILT_IN_KEYS], rows: [...rows, cjkRow(i)] };
+      if (!infoCardWithinByteLimit(next)) break;
+      rows.push(cjkRow(i));
+    }
+    const admitted = { hidden: [...INFO_CARD_BUILT_IN_KEYS], rows };
+    expect(infoCardWithinByteLimit(admitted)).toBe(true);
+    expect(infoCardTextBytes(admitted)).toBeLessThan(DB_MAX_BYTES);
+  });
+
+  it("infoCardTextBytes counts the jsonb SEPARATORS JSON.stringify omits", () => {
+    // A single row: pg writes `": "` ×4 keys and `", "` ×2 element joins that the
+    // compact form drops. The honest count must exceed the compact one, or the
+    // measurement would undercount the constraint.
+    const one: ChannelInfoCardInput = {
+      hidden: ["email"],
+      rows: [{ id: "a", label: "Phone", value: "+1" }],
+    };
+    expect(infoCardTextBytes(one)).toBeGreaterThan(
+      Buffer.byteLength(JSON.stringify(one), "utf8")
+    );
+  });
+
+  it("the byte guard admits a small card and refuses one just over the ceiling", () => {
+    expect(infoCardWithinByteLimit({ hidden: [], rows: [row("a")] })).toBe(true);
+    // A pile of max-value CJK rows overruns the ceiling; the guard says no.
+    const big = {
+      hidden: [...INFO_CARD_BUILT_IN_KEYS],
+      rows: Array.from({ length: INFO_CARD_MAX_ROWS }, (_, i) => cjkRow(i)),
+    };
+    expect(infoCardWithinByteLimit(big)).toBe(false);
   });
 });

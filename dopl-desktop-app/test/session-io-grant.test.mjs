@@ -138,6 +138,9 @@ test("D2/L3: an own-channel post DISPATCHES a permission_request, rendered as it
     text: POST.body, to: null, gateReason: "message-approval-required",
   });
   assert.ok(!("channel" in rec.events[0].payload), "still a boolean destination, never a channel id");
+  // ⚠ A POST carries NO `threadOpen` — its own outbound_post frame already holds the pending card.
+  // Only a create_thread (which emits no such frame) gets the flag (F-321).
+  assert.ok(!("threadOpen" in rec.events[0].payload), "a post gate must not claim to be a thread open");
   s.pendingPermissions.get("r10")({ behavior: "deny", message: "Denied by operator" });
   assert.equal((await p).behavior, "deny", "a DENY on a post stops the message leaving the machine");
 });
@@ -159,9 +162,13 @@ test("THREAD OPEN: a gated own-channel create_thread raises the OUTBOUND payload
   assert.equal(rec.events[0].type, "permission_request", "the POLICY path is the same reducer event");
   // ⚠ `to` IS THE CALL'S OWN ADDRESSEE, through the SAME withPostSurface the post path uses, so
   // the operator is shown who the exchange would be opened with — not the session's assumed peer.
+  // ⚠ `threadOpen: true` is the create_thread discriminator (F-321): unlike a post, a thread open
+  // emits no `outbound_post` frame, so `session-narration.js › entryFor` needs this flag to mint
+  // the pending sent-lane card. A POST gate must NOT carry it (asserted in the post test above).
   assert.deepEqual(rec.events[0].payload, {
     type: "outbound_gate", requestId: "r40", toolUseId: "t40", ownChannel: true,
-    text: open.body, to: "bob@x.com", addressed: true, gateReason: "message-approval-required",
+    threadOpen: true, text: open.body, to: "bob@x.com", addressed: true,
+    gateReason: "message-approval-required",
   });
   assert.ok(!("channel" in rec.events[0].payload), "still a boolean destination, never a channel id");
   s.pendingPermissions.get("r40")({ behavior: "deny" });

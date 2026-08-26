@@ -27,14 +27,21 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 /**
  * ⚠ FIELD-LEVEL `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`.
  *
- * §9's granularity is per-METHOD, which is wrong HERE: this PATCH is four writes behind one verb
- * (`name`, `topic`, `visibility`, `archived`) and only `visibility` changes who can see the room.
- * Gating the whole method would spend an agent capability for nothing.
+ * §9's granularity is per-METHOD, which is wrong HERE: this PATCH is FIVE writes behind one verb
+ * (`name`, `topic`, `visibility`, `archived`, `infoCard`) and they do not share a gate. Gating the
+ * whole method would spend an agent capability for nothing.
  *
- * REFUSES: an agent (`dopl_at_*`) changing visibility at all. private→public exposes the entire
- * channel AND its history to every workspace member. BOTH directions are gated because it is
- * simpler and costs nothing — no MCP op or desktop call reaches this field (`@dopl/client` has no
- * channel-update method), and direction-free means no read of the current row.
+ * - `visibility` is the SESSION-ONLY field gated HERE: an agent (`dopl_at_*`) may not change it at
+ *   all. private→public exposes the entire channel AND its history to every workspace member. BOTH
+ *   directions are gated because it is simpler and costs nothing — no MCP op or desktop call reaches
+ *   this field (`@dopl/client` has no channel-update method), and direction-free means no read of the
+ *   current row.
+ * - `name` / `topic` / `archived` stay MANAGE-gated in the service (`canManageChannel`).
+ * - `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP, not session (Samuel,
+ *   2026-08-25): a home channel is "a relationship, not a tenancy", the card is its shared scratch
+ *   surface, and it changes no visibility, roster, lifecycle or fact — so it is NOT in
+ *   `SESSION_ONLY_FIELDS`. That gate and its byte fence both live in
+ *   `channels/server/service-writes.ts › updateChannel`, not in this route.
  *
  * Session callers are untouched: cookie (web + desktop main) and Supabase-JWT (SPA) callers never
  * set `agentTokenId`, so `components/go-public-dialog.tsx` is unaffected.

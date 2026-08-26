@@ -340,13 +340,18 @@ describe("the panel's button reaches it", () => {
     expect(openWin).toHaveBeenCalledWith("acme-a1b2", CHANNEL_ID, "t-1", undefined);
   });
 
-  // ⚠ THE DELETED NOTICE. "This agent runs without a window" described an
-  // implementation detail as if it were a fact about the agent. Nothing on this
-  // surface may say it again.
-  it("never tells the operator their agent has no window", () => {
+  // ⚠ THE DELETED NOTICE, ON THE MAIN THAT ONCE SHOWED IT. "This agent runs
+  // without a window" appeared on a build with only the OLDER `reopen` op and no
+  // `openAgentWindow`. The old test bound `openAgentWindow` and asserted the
+  // apology text was absent — which it was by construction, since that phrase was
+  // deleted from the source and nothing renders it. This binds ONLY `reopen` (the
+  // shape that used to apologise) and asserts the POSITIVE affordance that
+  // replaced it: the "Open window" button is offered whenever EITHER op exists.
+  it("offers Open window on a reopen-only main — never the deleted 'no window' apology", () => {
     (window as { dopl?: unknown }).dopl = {
       apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-      sessions: { openAgentWindow: vi.fn().mockResolvedValue({ ok: true }) },
+      // ⚠ ONLY `reopen`, not `openAgentWindow` — the build that used to apologise.
+      sessions: { reopen: vi.fn().mockResolvedValue({ ok: true }) },
     };
     const agent = summary();
     render(
@@ -359,6 +364,10 @@ describe("the panel's button reaches it", () => {
         onClose={() => {}}
       />
     );
+    // The affordance IS offered on this main (a real assertion, not a vacuous
+    // absence)…
+    expect(screen.getByRole("button", { name: "Open window" })).toBeTruthy();
+    // …and no apology is shown in its place.
     expect(screen.queryByText(/without a window/i)).toBeNull();
     expect(screen.queryByText(/not built yet/i)).toBeNull();
   });

@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { ChannelUpdateSchema } from "@/features/channels/schema";
 
 const API_ROOT = path.join(process.cwd(), "src/app/api");
 
@@ -220,5 +221,23 @@ describe("H-3 write-gate coverage", () => {
     expect(src).toMatch(/SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility"\s*\]/);
     expect(src).toMatch(/auth\.agentTokenId/);
     expect(src).toMatch(/SESSION_REQUIRED/);
+  });
+
+  /**
+   * ⚠ THE FULL FIELD SET, PINNED SO A SIXTH LANDS UNGATED VISIBLY. The route's
+   * field gate names only `visibility`; the service derives the MANAGE set by
+   * SUBTRACTION and leaves `infoCard` alone. Both are correct only while the
+   * schema's fields are EXACTLY these five — a sixth added to
+   * `ChannelUpdateSchema` would silently inherit the loose (member) gate unless
+   * somebody decides otherwise. This asserts the set against the real schema, so
+   * that decision cannot be skipped. (A pin on a symbol is not a pin — INVARIANTS
+   * §14 — so it reads the schema's own shape.)
+   */
+  it("ChannelUpdateSchema's fields are EXACTLY the five gated ones", () => {
+    // zod 4: `.refine()` adds a check to the same object type, so `.shape` is the
+    // object's own field map (no ZodEffects wrapper to unwrap).
+    expect(Object.keys(ChannelUpdateSchema.shape).sort()).toEqual(
+      ["archived", "infoCard", "name", "topic", "visibility"].sort()
+    );
   });
 });

@@ -75,13 +75,24 @@ export const HARDCODED_LINKED_THREADS: Array<{ label: string; badge?: number }> 
 /**
  * HARDCODED — no backing data yet (Samuel 2026-08-18).
  *
- * Thread-activity heatmap, one entry per recent slice, `0`–`4` = how busy.
- * Hand-authored so the strip reads like real traffic rather than noise. There
- * is no per-slice activity projection anywhere — the `channel_tasks_activity`
- * view carries ONE timestamp per thread, not a histogram.
+ * Thread-activity heatmap LEVELS, in `thread-activity.tsx › ActivityCells`'
+ * OWN encoding so this strip and the WIRED /home one wrap and read identically
+ * (F-316, 2026-08-25): `-1` is an EMPTY WELL (a quiet slice — the same pixel the
+ * real strip draws for a measured zero), and `0`–`4` index `ACTIVITY_SHADE`
+ * low→high. ⚠ A quiet slice is `-1`, NOT `0`: `0` is the palest GREEN, and using
+ * it for "nothing happened" is exactly the low-vs-empty confusion
+ * `activityLevels` maps to `-1` to avoid — the fixture must not diverge from it.
+ *
+ * ⚠ 31 ENTRIES, matching `service-overview.ts › OVERVIEW_SERIES_DAYS` (the real
+ * strip's window). A literal, not that import — a client fixture must not reach
+ * into a workspaces `server/` module — but the length is pinned in
+ * `fixtures.test.ts` so the two cannot drift. There is no per-slice activity
+ * projection anywhere (`channel_tasks_activity` carries ONE timestamp per
+ * thread, not a histogram), which is why this is still hand-authored.
  */
 export const HARDCODED_THREAD_ACTIVITY: number[] = [
-  1, 0, 2, 1, 3, 2, 1, 0, 2, 3, 4, 4, 3, 2, 4, 3, 1, 2, 0, 1, 3, 4, 2, 1,
+  -1, 0, 2, 1, 3, 2, 1, -1, 2, 3, 4, 4, 3, 2, 4, 3,
+  1, 2, -1, 1, 3, 4, 2, 1, 0, -1, 2, 3, 1, 4, 2,
 ];
 
 /** "Diana Taylor" → "Diana's agent". THE label form for an addressed agent —

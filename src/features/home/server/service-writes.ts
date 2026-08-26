@@ -123,7 +123,13 @@ export async function createHomeChannel(
  *     to be refused at claim time is worse than refusing here.
  *  3. An OPEN link is RETURNED, not replaced — the `getOrCreateJoinLink`
  *     precedent. Pressing "Add person" twice must hand back one URL; rotating
- *     silently would kill a link already pasted into an email.
+ *     silently would kill a link already pasted into an email. ⚠ BUT "open"
+ *     (the index predicate, un-revoked) is NOT "claimable": an expired or
+ *     exhausted-yet-unrevoked row matches `channel_links_one_open_per_workspace`
+ *     (so it BLOCKS a replacement mint) while `hydrateChannels` drops its
+ *     `linkOut` (so no Revoke button) — the channel is permanently un-invitable.
+ *     So judge `isClaimable` on the row: claimable → hand it back; dead →
+ *     REVOKE it (freeing the index) and fall through to mint fresh.
  *  4. The insert can still lose a race, and `channel_links_one_open_per_workspace`
  *     is what makes that CONVERGE: a 23505 means somebody else's mint won, so
  *     re-read and return theirs.
@@ -149,7 +155,15 @@ export async function mintContainerLink(
   }
 
   const open = await repo.findOpenLinkForWorkspace(workspaceId);
-  if (open) return { link: mapLinkRow(open) };
+  if (open) {
+    if (isClaimable(open)) return { link: mapLinkRow(open) };
+    // ⚠ Un-revoked but DEAD (expired/exhausted). Returning it would hand out a
+    // URL that 410s at claim, and leaving it un-revoked bricks the channel —
+    // the one-open index blocks a replacement and hydrateChannels hides the
+    // Revoke button. Revoke it (scoped to its OWN creator, since any member may
+    // mint and the dead link may be the other member's) then mint fresh below.
+    await repo.markLinkRevoked(open.id, open.creator_user_id);
+  }
 
   try {
     const row = await repo.insertLink({

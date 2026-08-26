@@ -22,6 +22,7 @@ import type {
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
+  ChannelThread,
 } from "@/features/channels/types";
 
 export const CHANNEL_ID = "ch-1";
@@ -130,14 +131,16 @@ export const MEMBERS: ChannelMember[] = [
 /** ONE thread on the primary channel — the pop-out's landing needs something real
  *  to select, and the `?thread=` case below is the whole reason it is here. */
 export const THREAD_ID = "t-1";
-export const THREAD = {
+// ⚠ TYPED (F-322 test-quality wave), which caught a stale `mode: "collab"` —
+// `ThreadMode` is `"interactive" | "autonomous"` and has been since 2026-08-18.
+export const THREAD: ChannelThread = {
   id: THREAD_ID,
   channelId: CHANNEL_ID,
   workspaceId: "",
   title: "Ship the release",
   status: "open",
   outcome: null,
-  mode: "collab",
+  mode: "interactive",
   createdBy: "u-1",
   targetUserId: null,
   createdAt: "2026-08-01T11:00:00.000Z",

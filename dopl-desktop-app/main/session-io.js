@@ -359,25 +359,25 @@ function makeCanUseTool(s, dispatch, log) {
       // The tag rides the OPERATOR's allow here; a deny (park included) carries nothing.
       s.pendingPermissions.set(requestId, outboundTag.wrapAllow(resolve, tag));
       s.pendingNames.set(requestId, grantName);
-      // v2.7 L3 — an OWN-CHANNEL POST decides on its own inline stream card, not in the bottom
-      // dock. The POLICY path is untouched: same `permission_request` reducer event, same
-      // pendingPermissions tracking (a park still deny-closes it fail-closed, the auto-approve
-      // drain still resolves it), same scoped grantName, same fail-closed permission_decision
-      // mapping. ONLY the renderer PAYLOAD differs — `outbound_gate` hands the already-painted
-      // pending card its requestId, so the card answers for ITSELF and the dock is free for the
-      // next NON-post request. Every other tool (Bash / Write / WebFetch / a CROSS-channel post,
-      // the exfil shape FIX #9 marks) keeps the dock payload below. FIX F4: the gate also carries
-      // the AUTHORIZED BYTES — the body this call holds, plus the destination name — so the card's
-      // surface comes from the input the decision covers, not the separately streamed copy. It
-      // doubles as the RE-CREATE path (FIX F5): a gate whose stream-time artifact never landed
-      // still paints a card, so a post can never gate invisibly. `to` is a display NAME and
-      // ownChannel a boolean — never another channel's id (§H-9). ⚠ AN OWN-CHANNEL `create_thread` TAKES IT TOO SINCE 2026-08-24 (Samuel's ruling) — `session-outbound-tag.js › outboundConsentShape` argues why, and on a windowless session that payload is the difference between a consent row and an auto-deny.
+      // v2.7 L3 — an OWN-CHANNEL POST decides on its own inline stream card, not the bottom
+      // dock. The POLICY path is untouched: same `permission_request` reducer event and
+      // pendingPermissions tracking (park deny-closes fail-closed, auto-approve drain resolves),
+      // same scoped grantName, same fail-closed decision mapping. ONLY the renderer PAYLOAD
+      // differs — `outbound_gate` hands the already-painted pending card its requestId, so it
+      // answers for ITSELF and the dock is free for the next NON-post request. Other tools keep
+      // the dock payload below. FIX F4: the gate carries the AUTHORIZED BYTES — this call's body
+      // plus the destination name — so the surface comes from the input the decision covers, not
+      // the streamed copy. Doubles as the RE-CREATE path (FIX F5): a gate whose stream-time
+      // artifact never landed still paints a card. `to` is a display NAME, ownChannel a boolean —
+      // never another channel's id (§H-9). ⚠ Own-channel `create_thread` takes it too (2026-08-24, Samuel) — `outboundConsentShape` argues why.
       const payload = outboundConsentShape(name, input, s.channelId)
         ? withPostSurface({
           type: 'outbound_gate',
           requestId,
           toolUseId: opts && opts.toolUseID,
           ownChannel: true, ...(s.direct === true ? { directChannel: true } : {}), // H2: in a DM the server addresses this post, so the card names who gets it
+          // ⚠ `threadOpen` → `entryFor` mints the pending card a create_thread lacks an `outbound_post` to carry, else a gated windowless one hangs to its 24h TTL (F-321).
+          ...(isOutboundPost(name, input, s.channelId) ? {} : { threadOpen: true }),
           text: input && input.body != null ? String(input.body) : '',
         }, input, s.counterpartyName, s.counterpartyId)
         : {

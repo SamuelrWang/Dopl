@@ -195,7 +195,7 @@ export function InfoTab({
           and nothing else. */}
       <ActivityCells
         levels={HARDCODED_THREAD_ACTIVITY}
-        label="Thread activity over the last 24 slices"
+        label="Thread activity over the last 31 slices"
       />
 
       <PanelHeading

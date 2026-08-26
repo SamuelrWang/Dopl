@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import { agentDisplayName } from "./agents-model";
 
 /**
  * RENAME ONE AGENT, IN PLACE (2026-08-25, Samuel's ruling). The card's title with a pencil that
@@ -70,15 +71,24 @@ export function AgentName({
       saving.current = false;
       return;
     }
+    // ⚠ A CLEARED NAME GOES TO `Agent #<id>`, NOT BACK TO `name`. The `name` prop
+    // IS the custom name being removed, so `next || name` repaints exactly what
+    // the clear was meant to erase and the gesture reads as a no-op. The
+    // canonical unnamed form is `agentDisplayName({ displayName: null })`, the
+    // same resolution the card uses everywhere else.
+    const cleared = agentDisplayName({ agentId, displayName: null });
     // Optimistic, and reverted below on anything but main's own value.
-    setShown(next || name);
+    setShown(next || cleared);
     const res = await rename(agentId, next);
     saving.current = false;
     if (!res?.ok) {
       setShown(name);
       return;
     }
-    setShown(res.displayName ?? name);
+    // Main's own answer. `displayName: null` is the go-back-to-`Agent #<id>`
+    // gesture (not "no change"), so resolve it through `agentDisplayName` rather
+    // than falling back to the `name` we just cleared.
+    setShown(agentDisplayName({ agentId, displayName: res.displayName ?? null }));
   };
 
   if (editing) {

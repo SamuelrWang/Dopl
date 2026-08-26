@@ -10,11 +10,16 @@ import {
   ChannelAddresseeNotMemberError,
   ChannelChatAddressedError,
   ChannelForbiddenError,
+  ChannelInfoCardTooLargeError,
   ChannelInviteeNotMemberError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
 } from "./errors";
+import {
+  INFO_CARD_MAX_BYTES,
+  infoCardTextBytes,
+} from "../info-card";
 // Who may post a LIFECYCLE marker, and the server-internal options answering it.
 import {
   assertLifecycleKindIsServerOwned,
@@ -289,7 +294,18 @@ export async function updateChannel(
   // ⚠ WHOLE-CARD REPLACE, never a merge. The client read this card, edited it
   // and is sending it back — merging server-side would make "remove the last
   // custom row" unexpressible, since an empty `rows` would read as "no opinion".
-  if (patch.infoCard !== undefined) dbPatch.info_card = patch.infoCard;
+  if (patch.infoCard !== undefined) {
+    // ⚠ THE BYTE FENCE IN FRONT OF `channels_info_card_check`. The zod caps bound
+    // each field but not the TOTAL, and a full CJK card measures well over the
+    // 4 KiB floor once `::text` adds its separators — which would 500 as an
+    // unclassifiable PostgREST constraint failure. Measure the same jsonb text
+    // form here and raise a real 413 first.
+    const bytes = infoCardTextBytes(patch.infoCard);
+    if (bytes > INFO_CARD_MAX_BYTES) {
+      throw new ChannelInfoCardTooLargeError(bytes, INFO_CARD_MAX_BYTES);
+    }
+    dbPatch.info_card = patch.infoCard;
+  }
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);
   return getChannel(ctx, channel.id);

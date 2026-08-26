@@ -228,6 +228,41 @@ describe("a delivered draft converges to the posted face", () => {
     expect(items[0].key).toBe("m:m-1");
   });
 
+  it("reconciles a >1000-char delivered post whose 1000th char is a space", () => {
+    // ⚠ THE BOUNDARY BUG (2026-08-25). main's `line(body, 1000)` collapses
+    // whitespace, trims, slices at 1000, THEN trims AGAIN; `postEcho` must apply
+    // the identical discipline or the two sides of the join drift. For a body
+    // over 1000 chars whose char 999 is the space between two words,
+    // `slice(0, 1000)` ends ON that space and only the second trim drops it. The
+    // frame arrives already `line()`'d (space gone); the delivered `body` is the
+    // RAW full string, so `postEcho(body)` must ALSO drop the boundary space —
+    // otherwise `landed.has(echo)` is false and the card stays "Pending" over a
+    // message the counterparty already has.
+    const raw = "a".repeat(999) + " " + "b".repeat(200); // 1200 chars; index 999 = space
+    // What main actually pushed onto the ring — computed by the reference chain,
+    // NOT by postEcho, so reverting postEcho's trailing trim breaks the join.
+    const mainLine = raw.replace(/\s+/g, " ").trim().slice(0, 1000).trim();
+    expect(mainLine).toBe("a".repeat(999)); // the boundary space is gone from the frame
+
+    const delivered = message({
+      id: "m-long",
+      authorKind: "agent",
+      body: raw, // the FULL untruncated body the channel stored
+      metadata: { intent: "chat", runtime: "desktop-session" },
+    });
+    const items = buildAgentStream({
+      entries: [heldPost(mainLine)],
+      sent: [],
+      delivered: [delivered],
+      pending: [],
+    });
+    // Reconciled to POSTED: one sent row, no lingering pending flag. With the
+    // trailing trim gone, `landed` keeps the boundary space, the echo does not,
+    // the join fails and this row would still be `pending`.
+    expect(items.filter((i) => i.lane === "sent")).toHaveLength(1);
+    expect(items[0].pending).toBeUndefined();
+  });
+
   it("survives a REMOUNT and a decision made on another surface", () => {
     // ⚠ No local state is consulted (the pressed-card `useState` Set is deleted):
     // a fresh mount with the same server facts answers identically, which is what

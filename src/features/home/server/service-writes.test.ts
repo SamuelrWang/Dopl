@@ -205,6 +205,52 @@ describe("mintContainerLink — the gate", () => {
     expect(mocked.insertLink).not.toHaveBeenCalled();
   });
 
+  it("REVOKES a dead (un-revoked but expired) open link and mints a fresh one", async () => {
+    // ⚠ "Open" = the one-open index predicate (revoked_at IS NULL), NOT
+    // "claimable". An expired-yet-unrevoked row would be handed out as a URL
+    // that 410s at claim, AND — left un-revoked — it bricks the channel: the
+    // unique index blocks a replacement while hydrateChannels hides the Revoke
+    // button. So the dead row is revoked (scoped to its OWN creator) and a fresh
+    // link is minted.
+    const dead = linkRow({
+      id: "dead",
+      workspace_id: WS,
+      max_uses: 1,
+      expires_at: new Date(Date.now() - 1000).toISOString(),
+    });
+    mocked.findOpenLinkForWorkspace.mockResolvedValue(dead);
+    mocked.insertLink.mockImplementation(async (args) =>
+      linkRow({ id: "fresh", token: args.token, workspace_id: args.workspaceId })
+    );
+
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+
+    expect(mocked.markLinkRevoked).toHaveBeenCalledWith("dead", CREATOR);
+    expect(mocked.insertLink).toHaveBeenCalled();
+    expect(result.link.id).toBe("fresh");
+  });
+
+  it("revokes a dead link scoped to ITS creator, not the caller (any member may mint)", async () => {
+    // The other member minted the now-dead link; the caller minting a
+    // replacement must still be able to revoke it, so the revoke is scoped to
+    // the link's own creator rather than the caller.
+    const dead = linkRow({
+      id: "dead",
+      creator_user_id: CLAIMER,
+      workspace_id: WS,
+      max_uses: 1,
+      use_count: 1,
+    });
+    mocked.findOpenLinkForWorkspace.mockResolvedValue(dead);
+    mocked.insertLink.mockImplementation(async (args) =>
+      linkRow({ id: "fresh", token: args.token, workspace_id: args.workspaceId })
+    );
+
+    await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+
+    expect(mocked.markLinkRevoked).toHaveBeenCalledWith("dead", CLAIMER);
+  });
+
   it("mints a BOUND, single-use link with an unguessable url-safe token", async () => {
     mocked.insertLink.mockImplementation(async (args) =>
       linkRow({

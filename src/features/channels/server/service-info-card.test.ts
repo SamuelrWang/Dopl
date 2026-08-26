@@ -23,7 +23,13 @@ vi.mock("./service-reads");
 import * as repo from "./repository";
 import * as reads from "./service-reads";
 import { updateChannel } from "./service-writes";
-import { ChannelForbiddenError } from "./errors";
+import { ChannelForbiddenError, ChannelInfoCardTooLargeError } from "./errors";
+import {
+  INFO_CARD_ID_MAX,
+  INFO_CARD_LABEL_MAX,
+  INFO_CARD_MAX_ROWS,
+  INFO_CARD_VALUE_MAX,
+} from "../info-card";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelMemberRow, ChannelRow } from "./dto";
 
@@ -107,6 +113,26 @@ describe("updateChannel — the info card is MEMBER-writable", () => {
   it("the owner may too — the loose gate widens, it does not move", async () => {
     await updateChannel(ctx(OWNER), "chan-1", { infoCard: CARD });
     expect(repo.updateChannel).toHaveBeenCalledOnce();
+  });
+
+  it("REFUSES a card over the byte ceiling BEFORE the DB can 500 on it", async () => {
+    // ⚠ THE FENCE IN FRONT OF `channels_info_card_check`. Every field is at its
+    // zod cap so the card parses, but the CJK jsonb text form is ~9.6 KB — past
+    // the 4 KiB floor. A per-field cap cannot catch this; the byte guard raises a
+    // real 4xx instead of letting an unclassifiable PostgREST error 500.
+    const tooLarge = {
+      hidden: ["email" as const],
+      rows: Array.from({ length: INFO_CARD_MAX_ROWS }, (_, i) => ({
+        id: `${i}`.padStart(INFO_CARD_ID_MAX, "0"),
+        label: "文".repeat(INFO_CARD_LABEL_MAX),
+        value: "字".repeat(INFO_CARD_VALUE_MAX),
+      })),
+    };
+    await expect(
+      updateChannel(ctx(MEMBER), "chan-1", { infoCard: tooLarge })
+    ).rejects.toBeInstanceOf(ChannelInfoCardTooLargeError);
+    // ⚠ AND NEVER REACHES THE WRITE — the whole point is the DB never sees it.
+    expect(repo.updateChannel).not.toHaveBeenCalled();
   });
 
   it("a NON-MEMBER of a public channel may not — reading a room is not joining it", async () => {

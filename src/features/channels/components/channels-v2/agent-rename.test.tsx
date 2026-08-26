@@ -104,7 +104,12 @@ describe("the agent card's inline rename", () => {
     expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy();
   });
 
-  it("an EMPTY name clears rather than storing a blank", async () => {
+  it("an EMPTY name clears to `Agent #<id>`, NOT back to the name being removed", async () => {
+    // ⚠ THE BUG (2026-08-25): the optimistic + resolved fallbacks were `next || name`
+    // and `res.displayName ?? name`, and `name` IS the custom name being cleared —
+    // so a clear repainted exactly what it was meant to erase and read as a no-op.
+    // `displayName: null` is the go-back-to-canonical gesture, so the card must show
+    // `Agent #<id>`, resolved the same way it resolves the name everywhere else.
     rename.mockResolvedValue({ ok: true, displayName: null });
     withBridge({ rename });
     render(<AgentName agentId="a1b2c3d4" name="Research bot" />);
@@ -114,8 +119,30 @@ describe("the agent card's inline rename", () => {
     fireEvent.keyDown(screen.getByLabelText("Agent name"), { key: "Enter" });
 
     await waitFor(() => expect(rename).toHaveBeenCalledWith("a1b2c3d4", ""));
-    // `displayName: null` means "no name" — the card falls back to what it was handed.
-    expect(await screen.findByText("Research bot")).toBeTruthy();
+    // The canonical unnamed form, not the old custom name.
+    expect(await screen.findByText("Agent #a1b2c3d4")).toBeTruthy();
+    expect(screen.queryByText("Research bot")).toBeNull();
+  });
+
+  it("clears OPTIMISTICALLY — `Agent #<id>` shows before main answers", async () => {
+    // The clear must not wait on the round trip to stop showing the old name.
+    let resolveRename: (v: { ok: true; displayName: null }) => void = () => {};
+    rename.mockReturnValue(
+      new Promise((res) => {
+        resolveRename = res;
+      })
+    );
+    withBridge({ rename });
+    render(<AgentName agentId="a1b2c3d4" name="Research bot" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Research bot" }));
+    fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "" } });
+    fireEvent.keyDown(screen.getByLabelText("Agent name"), { key: "Enter" });
+
+    // Before the promise resolves the card already reads the canonical form.
+    expect(await screen.findByText("Agent #a1b2c3d4")).toBeTruthy();
+    resolveRename({ ok: true, displayName: null });
+    await waitFor(() => expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy());
   });
 
   it("does not write when nothing changed", () => {

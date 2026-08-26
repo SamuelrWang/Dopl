@@ -228,7 +228,26 @@ test("⚠ neither the entry's url nor the token is interpolated into a diag on t
       new RegExp(`(^|,)\\s*${name.replace(".", "\\.")}\\s*(,|$)`).test(args) ||
       new RegExp(`\\$\\{${name.replace(".", "\\.")}\\}`).test(args)
     );
-  assert.ok(!passesValue(ENSURE, "probe\\.url"), "probe.url must never be logged");
+  // ⚠ POSITIVE CONTROL FIRST — the guard must actually FIRE on a leak, or a
+  // vacuous pass reads as a clean bill. (This replaces a bug: the identifier was
+  // passed DOUBLE-escaped, `"probe\\.url"`, so `.replace(".", "\\.")` produced a
+  // regex `probe\\.url` — a LITERAL backslash — which no real diag line has, so
+  // the assertion could never match and tested nothing.) The name here is the
+  // single-escaped identifier `probe.url`; `passesValue` does the regex escaping.
+  assert.ok(
+    passesValue("diag('origin drift', probe.url);", "probe.url"),
+    "control: a bare-argument leak MUST trip the guard"
+  );
+  assert.ok(
+    passesValue("diag(`stale ${probe.url}`);", "probe.url"),
+    "control: an interpolated leak MUST trip the guard"
+  );
+  assert.ok(
+    !passesValue("diag('no device token found');", "token"),
+    "control: the WORD in a message must NOT trip the guard — only the value"
+  );
+
+  assert.ok(!passesValue(ENSURE, "probe.url"), "probe.url must never be logged");
   assert.ok(!passesValue(ENSURE, "token"), "the token must never be logged");
   assert.ok(!passesValue(ENSURE, "MCP_URL"), "our own url stays out of it too");
   // And the whole module: the only place the bearer is allowed to appear is an argv/header build.

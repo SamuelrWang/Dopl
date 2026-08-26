@@ -208,6 +208,22 @@ export class DirectChannelImmutableError extends ChannelError {
 }
 
 /**
+ * The info card's serialized form exceeds the app byte ceiling.
+ *
+ * ⚠ THIS IS THE FRIENDLY 4xx IN FRONT OF THE DB CHECK. `channels_info_card_check`
+ * bounds `octet_length(info_card::text)` and a PostgREST constraint failure is
+ * not an `Error` this layer can classify — it falls through to a generic 500.
+ * The per-field zod caps cannot bound the TOTAL (a full CJK card is ~9.6 KB), so
+ * the write path measures the same jsonb text form and raises this first
+ * (`info-card.ts › infoCardWithinByteLimit`).
+ */
+export class ChannelInfoCardTooLargeError extends ChannelError {
+  constructor(bytes: number, limit: number) {
+    super(`Info card is too large (${bytes} bytes; limit ${limit})`);
+  }
+}
+
+/**
  * A launch directive id that resolves to nothing THIS operator owns.
  *
  * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY: it does not exist, it belongs

@@ -19,11 +19,16 @@ import { closedEnum } from "@/shared/lib/closed-enum";
  *
  * ⚠ THE DATABASE HOLDS A THIRD STATEMENT OF THE BOUNDS AND NO TYPESCRIPT CAN
  * REACH IT — `channels_info_card_check` (migration
- * `20260825120000_channel_info_card.sql`) asserts a JSON OBJECT under 4 KiB.
- * That constraint is the FLOOR, not the product rule: the caps below are far
- * tighter, and a card that satisfies them cannot approach it. If they are ever
- * loosened past the floor, the failure is an opaque 500 at the constraint, so
- * loosen the SQL first.
+ * `20260825120000_channel_info_card.sql`) asserts a JSON OBJECT whose
+ * `octet_length(info_card::text)` is under 4 KiB. ⚠ THE PER-FIELD CAPS DO NOT
+ * BOUND THE TOTAL: 12 rows × (64-char id + 40-char label + 200-char value)
+ * measures ~4.1 KB in ASCII and ~9.6 KB in CJK once `::text` adds the `": "` /
+ * `", "` separators and every CJK char costs 3 UTF-8 bytes — both OVER the
+ * floor. A card can therefore parse clean and then 500 at the constraint (a
+ * PostgREST failure is not an `Error`, so it falls to the generic handler). The
+ * total is bounded by {@link INFO_CARD_MAX_BYTES}, measured the SAME way the
+ * CHECK measures it ({@link infoCardTextBytes}) and enforced server-side before
+ * the DB sees the row (`service-writes.ts › updateChannel`).
  */
 
 /**
@@ -55,6 +60,21 @@ export const INFO_CARD_LABEL_MAX = 40;
 export const INFO_CARD_VALUE_MAX = 200;
 /** Client-minted row id. A uuid is 36; the ceiling is slack, not a target. */
 export const INFO_CARD_ID_MAX = 64;
+
+/**
+ * The DB's floor on `octet_length(info_card::text)`, RESTATED as a literal
+ * because it lives in SQL and cannot be imported (migration
+ * `20260825120000_channel_info_card.sql`). Change the migration and change this.
+ */
+export const INFO_CARD_DB_FLOOR_BYTES = 4096;
+
+/**
+ * The app's own ceiling on the serialized card, held UNDER the DB floor with a
+ * margin that absorbs any drift between {@link infoCardTextBytes} and Postgres's
+ * real jsonb text form. ⚠ This — not the per-field caps — is what keeps a
+ * schema-valid card from 500ing at the constraint; see the module header.
+ */
+export const INFO_CARD_MAX_BYTES = 3500;
 
 /** One custom row. `value` MAY be empty — a label with nothing beside it yet is
  *  a row mid-edit, not a malformed one. */
@@ -139,6 +159,48 @@ export const ChannelInfoCardSchema = z
   );
 
 export type ChannelInfoCardInput = z.infer<typeof ChannelInfoCardSchema>;
+
+/**
+ * Render a value the way Postgres renders `jsonb::text`, for byte-COUNTING only.
+ *
+ * ⚠ THE POINT IS THE SEPARATORS. `JSON.stringify` emits the compact form
+ * (`{"a":1}`); pg emits `{"a": 1}` — a space after every `:` and every `,` — so
+ * measuring the compact form UNDERCOUNTS the constraint by one byte per row
+ * field, which is exactly how a card slips past the app and 500s at the DB. pg
+ * reorders object keys, which does not change the byte count, and keeps
+ * non-ASCII as raw UTF-8, which `TextEncoder` then counts as the DB does. String
+ * escaping matches `JSON.stringify` for the charset `safe-label.ts` permits.
+ */
+function pgJsonbText(value: unknown): string {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(pgJsonbText).join(", ")}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    ([, v]) => v !== undefined
+  );
+  return `{${entries
+    .map(([k, v]) => `${JSON.stringify(k)}: ${pgJsonbText(v)}`)
+    .join(", ")}}`;
+}
+
+/**
+ * The byte length of a card's `info_card::text` form, as
+ * `channels_info_card_check` measures it. ⚠ `TextEncoder` (not `Buffer`) so this
+ * stays isomorphic — the desktop renderer imports this module too.
+ */
+export function infoCardTextBytes(card: ChannelInfoCardInput): number {
+  return new TextEncoder().encode(pgJsonbText(card)).length;
+}
+
+/** True when a card's serialized form is within the app ceiling — the guard the
+ *  write path applies before the DB can 500. */
+export function infoCardWithinByteLimit(card: ChannelInfoCardInput): boolean {
+  return infoCardTextBytes(card) <= INFO_CARD_MAX_BYTES;
+}
 
 /**
  * A stored `info_card` value → a card, defensively.

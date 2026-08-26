@@ -131,6 +131,43 @@ test("KINDS: an OUTBOUND post gate emits NO status line — the card carries it"
   assert.equal(entry, null);
 });
 
+// 2026-08-25 (F-321) — a POST gate rides its own outbound_post frame, but a
+// CREATE_THREAD gate has none: it renders as a plain tool_use. Without a pending
+// frame here the operator saw a dopl_channel row then silence to the 24h TTL. The
+// gate is stamped `threadOpen`, and this branch mints the SAME pending sent-lane
+// frame a post gets so the card renders a Send control.
+test("KINDS: a CREATE_THREAD gate DOES surface a pending sent-lane frame", () => {
+  const entry = m.entryFor(
+    {
+      type: "permission_request",
+      payload: {
+        type: "outbound_gate",
+        requestId: "r2",
+        threadOpen: true,
+        text: "the requester's initial request",
+      },
+    },
+    NOW
+  );
+  assert.ok(entry, "a threadOpen gate must not go silent");
+  assert.equal(entry.kind, "post");
+  assert.equal(entry.lane, "channel"); // the SPA maps this to the sent lane + its Send card
+  assert.equal(entry.pending, true);
+  assert.equal(entry.text, "the requester's initial request");
+});
+
+test("KINDS: only a THREAD-OPEN gate speaks — a post gate without the flag stays silent", () => {
+  // The discriminator is explicit, so a post gate (no threadOpen) is byte-for-byte
+  // the null it was, and the two never cross.
+  assert.equal(
+    m.entryFor(
+      { type: "permission_request", payload: { type: "outbound_gate", threadOpen: false, text: "x" } },
+      NOW
+    ),
+    null
+  );
+});
+
 test("KINDS: the DOCK's tool gate still speaks — it has no card to say it", () => {
   const entry = m.entryFor(
     { type: "permission_request", payload: { type: "permission_request", name: "Bash" } },

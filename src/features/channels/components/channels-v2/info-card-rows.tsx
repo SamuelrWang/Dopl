@@ -118,6 +118,11 @@ function RowEditor({
       }}
     >
       <CircleDashed size={14} className="shrink-0 text-text-muted" />
+      {/* ⚠ `flex-1 min-w-0`, NOT a fixed `w-[92px]` (~12 chars): the label cap is
+          40 chars (`INFO_CARD_LABEL_MAX`), and a 12-char field cannot show a
+          label being edited. It takes the same horizontal band the read-mode
+          `MetaRow` label truncates into, so the row does not change width between
+          reading and editing (design system: same type, same footprint). */}
       <input
         autoFocus
         value={label}
@@ -126,9 +131,8 @@ function RowEditor({
         spellCheck={false}
         placeholder="Label"
         onChange={(event) => setLabel(event.target.value)}
-        className={cn(UNDERLINE_FIELD, "w-[92px] text-small text-text-secondary")}
+        className={cn(UNDERLINE_FIELD, "min-w-0 flex-1 text-small text-text-secondary")}
       />
-      <span className="flex-1" />
       <input
         value={value}
         aria-label="Item value"

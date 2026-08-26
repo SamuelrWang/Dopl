@@ -193,9 +193,9 @@ function retention(historyFake) {
 const KEYS = ["k1", "k2"];
 
 test("PASS: EVERY bound cleaner is called with the SAME keys the history dropped", () => {
-  // ⚠ THIS IS THE ORPHAN GUARD. A sixth store added without a cleaner does not fail here — it
-  // fails in production, silently — which is why `agent-retention.js` writes the list out and
-  // why the missing-cleaner case below exists beside this one.
+  // ⚠ BEHAVIOURAL, NOT THE ORPHAN GUARD. This proves the three cleaners bound HERE all fire with
+  // the swept keys; it CANNOT catch a sixth store added without a cleaner, because it supplies the
+  // cleaner map itself. That guard is the source pin below — this header used to claim to be it.
   const seen = {};
   const r = retention({ sweep: () => KEYS, forget: () => {}, keysForThread: () => [] });
   r.bind({
@@ -205,6 +205,39 @@ test("PASS: EVERY bound cleaner is called with the SAME keys the history dropped
   });
   assert.deepEqual(r.sweepNow(NOW), KEYS);
   assert.deepEqual(seen, { clearRecord: KEYS, releaseEnded: KEYS, forgetNotice: KEYS });
+});
+
+test("ORPHAN GUARD: the declared cleaner list is EXACTLY what both cascades iterate", () => {
+  // ⚠ THE REAL ORPHAN GUARD, AT THE SOURCE. A store added to `deps`/`bind` but not wired into
+  // `sweepNow` (or `forgetKeys`) leaks keys silently in production — no runtime test can catch it,
+  // because a test that binds its own cleaners cannot see a store the code forgot to iterate. So
+  // pin the three lists against each other: the `deps` literal is the DECLARED set, and BOTH the
+  // clock sweep and the explicit-delete path must iterate that same set, no more and no less.
+  const src = read("agent-retention.js");
+
+  // Declared: the keys of the `deps` object literal.
+  const depsLiteral = src.match(/let deps = \{([^}]*)\}/);
+  assert.ok(depsLiteral, "the deps literal must be findable");
+  const declared = [...depsLiteral[1].matchAll(/(\w+):/g)].map((m) => m[1]).sort();
+  assert.deepEqual(declared, ["clearRecord", "forgetNotice", "releaseEnded"],
+    "the declared store set — update this pin deliberately when a store is added");
+
+  // Every declared cleaner is referenced as `deps.<name>` somewhere the passes read it, and no
+  // OTHER `deps.<name>` is referenced (a typo'd or removed store would show here).
+  const referenced = [...new Set(
+    [...src.matchAll(/deps\.(\w+)/g)].map((m) => m[1])
+  )].sort();
+  assert.deepEqual(referenced, declared,
+    "a store is declared-but-never-iterated (a leak) or iterated-but-undeclared (a typo)");
+
+  // And the explicit-delete path (`forgetKeys`) iterates the SAME three, so an EXPLICIT removal
+  // can never clean fewer stores than the clock does.
+  const forgetKeys = src.match(/function forgetKeys[\s\S]*?\n\}/);
+  assert.ok(forgetKeys, "forgetKeys must be findable");
+  for (const name of declared) {
+    assert.ok(forgetKeys[0].includes(`deps.${name}`),
+      `forgetKeys must iterate deps.${name} — the explicit delete must clean every store the clock does`);
+  }
 });
 
 test("PASS: nothing expired means nothing is touched at all", () => {

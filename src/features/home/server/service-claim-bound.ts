@@ -36,16 +36,23 @@ import { hydrateOneChannel } from "./service-reads";
  *  5. WORKSPACE membership first. The DB trigger is the hard fence; the step-3
  *     check is only a friendlier sentence in front of it.
  *  6. CHANNEL membership second, through the channels service.
- *     ⚠ ON FAILURE THIS PATH DELETES THE MEMBER ROW AND NOTHING ELSE. It may
- *     NOT roll the container back the way the unbound branch does: the owner's
- *     transcript lives in there, and a failed claim by a stranger must not be
- *     able to delete somebody's channel.
+ *     ⚠ ON FAILURE THIS PATH DELETES THE MEMBER ROW — never the CONTAINER. It
+ *     may not roll the container back the way the unbound branch does: the
+ *     owner's transcript lives in there, and a failed claim by a stranger must
+ *     not be able to delete somebody's channel.
  *  7. Record the claim. Its unique `(link_id, claimed_by)` converges a double
  *     claim — and the loser here KEEPS the container (see step 6) where the
  *     unbound loser drops the one it just minted.
  *  8. Revoke the link. Success means the seat is taken, so the chip clears at
  *     once and the one-open-per-container unique index is freed for the next
  *     invitation if this member later leaves.
+ *
+ * ⚠ THE SPEND (step 4) IS THE PIVOT: everything after it is wrapped so that ANY
+ * failure — capacity race at step 5, channel-join at step 6, a torn claim at
+ * step 7 — also REVOKES the link. An exhausted-but-unrevoked link is the same
+ * permanent brick `mintContainerLink` guards against: the one-open unique index
+ * blocks a replacement while `hydrateChannels` hides the Revoke button. The
+ * compensation revoke is best-effort and never masks the claim error.
  */
 export async function claimBoundLink(
   link: ChannelLinkRow,
@@ -94,82 +101,111 @@ export async function claimBoundLink(
     throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
   }
 
-  // The container's OWNER acts for every write below: the claimer is not a
-  // member of anything yet, so a context built for them would be refused by the
-  // channel's own gate. Same reason the unbound branch builds the CREATOR's.
-  const container = await findWorkspaceById(workspaceId);
-  if (!container) {
-    // The FK cascades this link away with its workspace, so this is a race with
-    // a container delete rather than a normal state — 410, not 500.
-    throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
-  }
-
-  // 5 ─ Workspace membership.
+  // ── POST-SPEND ─ the use is gone, so EVERY failure below must also REVOKE the
+  // link, not strand it. An exhausted-but-unrevoked row matches
+  // `channel_links_one_open_per_workspace` (blocking a replacement mint) and
+  // renders "invite out" over a filled/half-filled seat while `hydrateChannels`
+  // hides its Revoke button — the same permanent brick `mintContainerLink`
+  // guards against on the mint side. The compensation revoke is best-effort and
+  // must not mask the claim error (see `revokeQuietly`).
   try {
-    await repo.insertContainerMember({
+    // The container's OWNER acts for every write below: the claimer is not a
+    // member of anything yet, so a context built for them would be refused by the
+    // channel's own gate. Same reason the unbound branch builds the CREATOR's.
+    const container = await findWorkspaceById(workspaceId);
+    if (!container) {
+      // The FK cascades this link away with its workspace, so this is a race with
+      // a container delete rather than a normal state — 410, not 500.
+      throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
+    }
+
+    // 5 ─ Workspace membership.
+    try {
+      await repo.insertContainerMember({
+        workspaceId,
+        userId,
+        invitedBy: container.ownerId,
+      });
+    } catch (err) {
+      // The trigger is the fence step 3 only approximates; two concurrent claims
+      // of two different links both pass step 3 and exactly one lands here.
+      if (isContainerFullRaise(err)) throw containerFull();
+      throw err;
+    }
+
+    // 6 ─ Channel membership, through the channels service.
+    try {
+      await joinContainerChannel(workspaceId, container.ownerId, userId);
+    } catch (err) {
+      // ⚠ COMPENSATE, DO NOT ROLL BACK THE CONTAINER. Deleting the member row
+      // undoes exactly what step 5 did; deleting the workspace would take the
+      // owner's transcript with it. (The link revoke is the outer catch's job.)
+      await repo.deleteContainerMember(workspaceId, userId);
+      throw err;
+    }
+
+    // 7 ─ Record the claim.
+    const claimed = await repo.insertClaim({
+      linkId: link.id,
+      claimedBy: userId,
       workspaceId,
-      userId,
-      invitedBy: container.ownerId,
     });
-  } catch (err) {
-    // The trigger is the fence step 3 only approximates; two concurrent claims
-    // of two different links both pass step 3 and exactly one lands here.
-    if (isContainerFullRaise(err)) throw containerFull();
-    throw err;
-  }
+    if (!claimed) {
+      // The same account claimed twice concurrently. The winner already put this
+      // user in the container AND revoked the link, so there is nothing to undo
+      // and nothing to revoke — just read back what the winner built.
+      const winner = await repo.findMemberContainer(workspaceId, userId);
+      if (!winner) throw new HttpError(409, "LINK_CLAIM_RACE", "Try again");
+      return {
+        channel: await hydrateOneChannel(winner, userId),
+        existing: true,
+        bound: true,
+      };
+    }
 
-  // 6 ─ Channel membership, through the channels service.
-  try {
-    await joinContainerChannel(workspaceId, container.ownerId, userId);
-  } catch (err) {
-    // ⚠ COMPENSATE, DO NOT ROLL BACK THE CONTAINER. Deleting the member row
-    // undoes exactly what step 5 did; deleting the workspace would take the
-    // owner's transcript with it.
-    await repo.deleteContainerMember(workspaceId, userId);
-    throw err;
-  }
+    // 8 ─ Revoke. ⚠ AFTER the claim row: the link is single-use and already
+    // exhausted, so this turns a dead token into a revoked one. The CHIP reads
+    // `revoked_at IS NULL` — an exhausted-but-unrevoked link would keep
+    // rendering "invite out" over a seat that is filled.
+    await repo.markLinkRevoked(link.id, link.creator_user_id);
 
-  // 7 ─ Record the claim.
-  const claimed = await repo.insertClaim({
-    linkId: link.id,
-    claimedBy: userId,
-    workspaceId,
-  });
-  if (!claimed) {
-    // The same account claimed twice concurrently. The winner already put this
-    // user in the container, so there is nothing to undo and nothing to delete —
-    // just read back what the winner built.
-    const winner = await repo.findMemberContainer(workspaceId, userId);
-    if (!winner) throw new HttpError(409, "LINK_CLAIM_RACE", "Try again");
+    // ⚠ READ BACK THROUGH THE FENCE, rather than hydrating the workspace row this
+    // function already holds. Two reasons: `hydrateOneChannel` takes a REPOSITORY
+    // row and building one here would put `snake_case` in a service (§2), and the
+    // read re-proves through `findMemberContainer` that the join really landed —
+    // an insert that reported success while the row is absent is a bug to surface,
+    // not to paper over with a rendered card.
+    const joined = await repo.findMemberContainer(workspaceId, userId);
+    if (!joined) {
+      throw new HttpError(500, "CLAIM_INCOMPLETE", "The claim did not take");
+    }
     return {
-      channel: await hydrateOneChannel(winner, userId),
-      existing: true,
+      channel: await hydrateOneChannel(joined, userId),
+      existing: false,
       bound: true,
     };
+  } catch (err) {
+    // ⚠ The spend already happened. Whatever failed above (capacity race,
+    // channel join, a torn claim), the link must not be left exhausted-and-live
+    // to brick the container. Revoke it, then surface the ORIGINAL error.
+    await revokeQuietly(link);
+    throw err;
   }
+}
 
-  // 8 ─ Revoke. ⚠ AFTER the claim row, and fail-soft is NOT wanted here: the
-  // link is single-use and already exhausted, so a failed revoke leaves a dead
-  // token rather than a live one. It still runs first-class because the CHIP
-  // reads `revoked_at IS NULL` — an exhausted-but-unrevoked link would keep
-  // rendering "invite out" over a seat that is filled.
-  await repo.markLinkRevoked(link.id, link.creator_user_id);
-
-  // ⚠ READ BACK THROUGH THE FENCE, rather than hydrating the workspace row this
-  // function already holds. Two reasons: `hydrateOneChannel` takes a REPOSITORY
-  // row and building one here would put `snake_case` in a service (§2), and the
-  // read re-proves through `findMemberContainer` that the join really landed —
-  // an insert that reported success while the row is absent is a bug to surface,
-  // not to paper over with a rendered card.
-  const joined = await repo.findMemberContainer(workspaceId, userId);
-  if (!joined) {
-    throw new HttpError(500, "CLAIM_INCOMPLETE", "The claim did not take");
+/**
+ * Best-effort compensation revoke for a claim that failed AFTER the use was
+ * spent. ⚠ Scoped to the link's own creator (the claimer never owns it) and its
+ * own failure is swallowed: a failed revoke leaves the brick, but the claim
+ * error is the one the caller must see — masking it with a revoke error would
+ * hide why the claim failed. Idempotent against step 8 having already run.
+ */
+async function revokeQuietly(link: ChannelLinkRow): Promise<void> {
+  try {
+    await repo.markLinkRevoked(link.id, link.creator_user_id);
+  } catch {
+    // Intentionally ignored — see docblock.
   }
-  return {
-    channel: await hydrateOneChannel(joined, userId),
-    existing: false,
-    bound: true,
-  };
 }
 
 /** The container's one channel, joined by the claimer. */

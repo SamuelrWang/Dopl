@@ -40,8 +40,12 @@ export const POST = withUserAuth(
   async (request: NextRequest, { userId }: Ctx) => {
     try {
       const input = await parseJson(request, HomeLinkMintSchema);
+      // ⚠ `private, no-store` — the body carries the single-use claim URL, the
+      // same credential class the sibling `POST /api/home/channels` and the GET
+      // above both guard. A shared cache MUST NOT retain an invitation token.
       return NextResponse.json(
-        await mintContainerLink(userId, input.workspaceId, input)
+        await mintContainerLink(userId, input.workspaceId, input),
+        { headers: { "Cache-Control": "private, no-store" } }
       );
     } catch (err) {
       return toHttpErrorResponse(SOURCE, err);

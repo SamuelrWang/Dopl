@@ -24,7 +24,13 @@ export const POST = withUserAuth(
           { status: 400 }
         );
       }
-      return NextResponse.json(await claimLink(token, userId));
+      // ⚠ `private, no-store` — the claim response carries the joined channel's
+      // `linkOut` (a live claim URL when a seat remains) and the container's
+      // identity; a shared cache MUST NOT retain it. Same guard as the sibling
+      // `POST /api/home/channels` and `POST /api/home/links`.
+      return NextResponse.json(await claimLink(token, userId), {
+        headers: { "Cache-Control": "private, no-store" },
+      });
     } catch (err) {
       return toHttpErrorResponse("api/home/link/[token]/claim", err);
     }

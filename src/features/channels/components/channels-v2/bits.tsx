@@ -392,7 +392,11 @@ export function MetaRow({
       )}
     >
       <Icon size={14} className="shrink-0 text-text-muted" />
-      <span className="text-small text-text-secondary">{label}</span>
+      {/* ⚠ `min-w-0 truncate`: the label now hosts operator-authored custom-row
+          labels up to 40 chars (`info-card.ts › INFO_CARD_LABEL_MAX`) in a fixed
+          `h-9` row, so it must shrink-and-ellipsize rather than shove the value
+          off the right edge or grow the row's height. */}
+      <span className="min-w-0 truncate text-small text-text-secondary">{label}</span>
       <span className="flex-1" />
       <span className="flex min-w-0 items-center gap-1.5">{children}</span>
       {onRemove && (
@@ -409,9 +413,14 @@ export function MetaRow({
             label={`Remove ${label} from this card`}
             // `bare` = the naked-glyph idiom (the pane header's PanelRight
             // toggle), never a button face on a metadata row.
+            // ⚠ NO `h-6 w-6` HERE. `bare` sizes the hit area at 32px on purpose
+            // (icon-button.tsx: "THE HIT AREA GROWS RATHER THAN SHRINKS"), and
+            // twMerge would let an `h-6 w-6` override SHRINK it to 24px — the
+            // exact thing the bare docblock forbids. Only the `-mr-1` alignment
+            // nudge rides along.
             bare
             size={13}
-            className="-mr-1 h-6 w-6"
+            className="-mr-1"
             onClick={onRemove}
           />
         </span>

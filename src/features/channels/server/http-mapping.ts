@@ -5,6 +5,7 @@ import {
   ChannelAddresseeNotMemberError,
   ChannelChatAddressedError,
   ChannelForbiddenError,
+  ChannelInfoCardTooLargeError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
   ChannelLifecycleKindForbiddenError,
@@ -122,6 +123,9 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof DirectChannelImmutableError) {
     return new HttpError(400, "DIRECT_CHANNEL_IMMUTABLE", err.message);
+  }
+  if (err instanceof ChannelInfoCardTooLargeError) {
+    return new HttpError(413, "INFO_CARD_TOO_LARGE", err.message);
   }
   return null;
 }

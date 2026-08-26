@@ -188,7 +188,18 @@ function entryFor(event, now) {
     // would be one more thing to keep in step with the card.
     // ⚠ THE DOCK'S TOOL GATE STILL SPEAKS. It has no card, so this line is the only thing that
     // explains that silence — which is what a `status` entry is for.
-    if (p.type === 'outbound_gate') return null;
+    // ⚠ A HELD POST rides its own `outbound_post` frame (pending:true), so its gate needs no line.
+    // A held own-channel CREATE_THREAD does NOT — it renders as a plain `tool_use` frame with no
+    // `pending`, so without this the operator sees a `dopl_channel` row then silence to the 24h TTL
+    // (F-321). Mint the SAME pending sent-lane frame a post carries: `session-io.js` stamps
+    // `threadOpen` on exactly the create_thread gate, and `text` is `input.body` on both arms, so
+    // the SPA card reconciles this against the consent row `bridgeOutbound` built from that body.
+    if (p.type === 'outbound_gate') {
+      if (p.threadOpen === true) {
+        return { at: now, kind: 'post', lane: 'channel', text: line(p.text, POST_CAP), pending: true };
+      }
+      return null;
+    }
     return { at: now, kind: 'status', text: 'Waiting for permission' };
   }
   return null;

@@ -338,3 +338,67 @@ describe("8 — success", () => {
     expect(mocked.insertContainerMember).not.toHaveBeenCalled();
   });
 });
+
+describe("post-spend failure REVOKES the link, never strands it", () => {
+  /**
+   * ⚠ THE BRICK THIS PREVENTS. Step 4 spends the single use; if steps 5-7 then
+   * throw, the link is exhausted (use_count = max_uses) but un-revoked
+   * (revoked_at NULL). `findOpenLinkForWorkspace` still matches it (the
+   * one-open unique index blocks a replacement mint) and `hydrateChannels`
+   * drops its `linkOut` (so no Revoke button) — the container is permanently
+   * un-invitable. Every post-spend failure must therefore revoke.
+   */
+  it("revokes when the channel join fails mid-flight (step 6)", async () => {
+    mockAddMember.mockRejectedValue(new Error("channel service is down"));
+
+    await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toThrow(
+      "channel service is down"
+    );
+    // The member row is compensated (step 6's own catch) AND the link is
+    // revoked (the post-spend catch) — the container is never deleted.
+    expect(mocked.deleteContainerMember).toHaveBeenCalledWith(WS, CLAIMER);
+    expect(mocked.markLinkRevoked).toHaveBeenCalledWith("link-1", OWNER);
+    expect(deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("revokes when the workspace-member insert fails for a non-cap reason (step 5)", async () => {
+    mocked.insertContainerMember.mockRejectedValue(new Error("connection reset"));
+
+    await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toThrow(
+      "connection reset"
+    );
+    // The use is gone, so even a spend that never reached a member row must not
+    // leave the link live to brick the channel.
+    expect(mocked.markLinkRevoked).toHaveBeenCalledWith("link-1", OWNER);
+  });
+
+  it("does NOT mask the claim error when the compensation revoke itself fails", async () => {
+    mockAddMember.mockRejectedValue(new Error("channel service is down"));
+    mocked.markLinkRevoked.mockRejectedValue(new Error("revoke db is down"));
+
+    // The ORIGINAL claim error surfaces, not the revoke's — a failed revoke
+    // leaves the brick, but the caller must still see why the claim failed.
+    await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toThrow(
+      "channel service is down"
+    );
+  });
+
+  it("does NOT revoke a converged double-claim — the winner already did (step 7)", async () => {
+    // The loser returns the winner's channel; the winner's own step 8 revoked
+    // the link, so the loser revoking again would be redundant work on a path
+    // that changed nothing.
+    // ⚠ beforeEach re-establishes the RESOLVED values it owns but not addMember,
+    // so neutralize a prior test's rejection explicitly (see the file's ordering
+    // convention around describe 6). `mockReset` drops the implementation so the
+    // default (resolves undefined, which the code ignores) applies — the value
+    // addMember returns is never read.
+    mockAddMember.mockReset();
+    mocked.markLinkRevoked.mockResolvedValue(true);
+    mocked.insertClaim.mockResolvedValue(false);
+
+    const result = await claimBoundLink(boundLink(), CLAIMER);
+
+    expect(result).toEqual({ channel: CHANNEL, existing: true, bound: true });
+    expect(mocked.markLinkRevoked).not.toHaveBeenCalled();
+  });
+});

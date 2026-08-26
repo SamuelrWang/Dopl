@@ -8,7 +8,16 @@ import {
   renderWithProviders,
 } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
+import type {
+  Channel,
+  ChannelMember,
+  ChannelThread,
+} from "@/features/channels/types";
 import type { HomeChannelsPayload } from "@/features/home/types";
+import type {
+  WorkspaceOverviewSeries,
+  WorkspaceWithRole,
+} from "@/features/workspaces/types";
 import HomePage from "./index";
 
 /**
@@ -64,7 +73,10 @@ export const HOME: HomeChannelsPayload = {
   ],
 };
 
-export const CHANNEL = {
+// ⚠ TYPED, so a rename of any `Channel` field the endpoint sends breaks THIS
+// fixture at compile time rather than leaving the §8 stale-cache suite green
+// against a payload the endpoint stopped sending (F-322 test-quality wave).
+export const CHANNEL: Channel = {
   id: CHANNEL_ID,
   workspaceId: LINK_WORKSPACE_ID,
   slug: "priya-shah",
@@ -95,7 +107,7 @@ export const CHANNEL = {
 /** The container's roster, as `GET /api/channels/{id}/members` answers it — the
  *  caller plus, on a peer channel, the peer. ⚠ The Info tab reads this through
  *  `useChannelMembers`, on the SAME cache entry the surface uses. */
-export const MEMBERS = {
+export const MEMBERS: { members: ChannelMember[] } = {
   members: [
     {
       channelId: CHANNEL_ID,
@@ -134,7 +146,7 @@ export const MEMBERS = {
 
 /** BOUNDARY: the route and its envelope keep the STORAGE name `tasks`; the
  *  domain name is `thread`. */
-export const THREADS = {
+export const THREADS: { tasks: ChannelThread[]; truncated: boolean } = {
   tasks: [
     {
       id: "task-1",
@@ -165,7 +177,7 @@ export const THREADS = {
  * answer and an untestable picture: every assertion about the strip would pass
  * against a broken quantiser. One busy day gives the ramp something to reach.
  */
-export const SERIES = {
+export const SERIES: WorkspaceOverviewSeries = {
   metric: "messages",
   days: Array.from({ length: 31 }, (_, i) => ({
     date: `2026-07-${String(26 + i).padStart(2, "0")}`,
@@ -175,7 +187,7 @@ export const SERIES = {
 
 /** ⚠ Carries a `kind: "link"` CONTAINER beside the real workspace on purpose:
  *  `GET /api/workspaces` is unfiltered, and the rail must drop it. */
-export const WORKSPACES = {
+export const WORKSPACES: { workspaces: WorkspaceWithRole[] } = {
   workspaces: [
     { ...WORKSPACE, role: "owner" },
     {

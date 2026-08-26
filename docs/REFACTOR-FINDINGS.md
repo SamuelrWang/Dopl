@@ -3064,6 +3064,14 @@ where it surfaced, not because this wave caused it.
   (`channels-v2/thread-activity.tsx › ActivityCells` / `› ACTIVITY_SHADE`), so the two strips cannot
   look different. What differs is the DATA: /home quantises a real counted series; the channels page
   still maps `HARDCODED_THREAD_ACTIVITY`'s invented levels.
+- **CELL COUNT AND ZERO SEMANTICS ARE NOW ALIGNED TOO (2026-08-25, fix wave).** A later reviewer
+  measured that the two strips also diverged in CELL COUNT (fixture 24 vs `OVERVIEW_SERIES_DAYS` 31,
+  so they wrapped differently in the 380px column) and in ZERO ENCODING (the real strip maps a
+  measured zero to `-1` = empty well, the fixture painted `0` = palest green). The cheap honest half
+  landed: `HARDCODED_THREAD_ACTIVITY` is now 31 entries in `ActivityCells`' OWN encoding (`-1` for a
+  quiet slice, `0`–`4` shades), pinned in `fixtures.test.ts` against `OVERVIEW_SERIES_DAYS` and the
+  empty-well semantics. **The DATA gap below is untouched** — wiring the real series is still the
+  perf decision this entry parks.
 - **Why it was not fixed in the same change — a COST, not a difficulty.** The channels page would
   need the series threaded down through `channel-surface-data.ts` → `channel-surface.tsx` →
   `info-panel.tsx` → `info-tab.tsx` (mechanical), and would then pay **31 counted bins on every

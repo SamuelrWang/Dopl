@@ -239,32 +239,40 @@ describe("the transcript is untouched by a deletion", () => {
     />
   );
 
-  it("keeps every message and every attribution pill, before and after", async () => {
-    // ⚠ THIS IS THE RULING. What the agent POSTED is `channel_messages` — the server's shared
-    // record — and the delete op reaches only LOCAL stores. The id in the pill comes off
-    // `client_msg_id`, which is carried BY the message, so nothing in the deletion's path can
-    // move it.
+  it("renders every message and its pill from the MESSAGE ROW, with NO desktop feed", async () => {
+    // ⚠ THIS IS THE RULING, IN ITS HONEST FORM. What the agent POSTED is
+    // `channel_messages` — the server's shared record — and the delete op reaches
+    // only LOCAL desktop stores. The id in the pill comes off `client_msg_id`,
+    // carried BY the message, and `attribution-pill.tsx › attributionName`
+    // derives the label from that alone. So the state AFTER a delete — the agent's
+    // session summary gone, no bridge at all — is exactly the input asserted here,
+    // and the transcript is whole.
+    //
+    // ⚠ THE PREVIOUS FORM PROVED NOTHING: it rendered a module-constant `ROWS`
+    // twice around a MOCKED delete and asserted `after === before`. `Transcript`
+    // never reads the desktop feed the delete touches, so the two renders were
+    // byte-identical by construction whether or not the property held — a green
+    // test over a claim it could not have falsified.
+
+    // First, drive the real delete path so it is exercised (it resolves against a
+    // mock and touches only the bridge, never the transcript's inputs).
     del.mockResolvedValue({ ok: true, ended: true });
     withBridge({ delete: del });
-
-    const before = render(transcript()).container.innerHTML;
-    expect(screen.getByText("Working on the kit now.")).toBeTruthy();
-    expect(screen.getByText(`Agent #${AGENT_ID}`)).toBeTruthy();
-    cleanup();
-
-    // Delete the agent…
     render(<AgentDeleteButton agent={summary()} />);
     fireEvent.click(trash() as HTMLElement);
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await waitFor(() => expect(del).toHaveBeenCalled());
     cleanup();
 
-    // …and the same messages render exactly as they did.
-    const after = render(transcript()).container.innerHTML;
+    // Now render the transcript in the POST-DELETE world: no bridge, no feed. The
+    // messages and the id-derived pill are still there because they are the
+    // message's own data.
+    withBridge(null);
+    render(transcript());
     expect(screen.getByText("Kicking this off.")).toBeTruthy();
     expect(screen.getByText("Working on the kit now.")).toBeTruthy();
-    expect(screen.getByText(`Agent #${AGENT_ID}`)).toBeTruthy();
-    expect(after).toBe(before);
+    const pill = screen.getByText(`Agent #${AGENT_ID}`).closest("[data-agent-id]");
+    expect(pill?.getAttribute("data-agent-id")).toBe(AGENT_ID);
   });
 
   it("falls back to `Agent #<id>` — the label went, the identity did not", () => {

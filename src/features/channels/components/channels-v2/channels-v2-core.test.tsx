@@ -222,10 +222,19 @@ describe("ChannelsV2Core — the channel a caller names", () => {
   // replaces it is the refusal: the tree offers no way to put anything but a
   // channel (or the first-run explainer) in the center column, so a notification
   // can no longer land behind a pane.
-  it("has NO Inbox takeover to land behind — the center column is the channel", () => {
+  //
+  // ⚠ THIS USED TO assert `queryByText("open inbox")` was absent — but "open
+  // inbox" was the DELETED stub's OWN text and nothing in the live tree ever
+  // rendered it, so the absence was true no matter what and tested nothing. The
+  // honest statement is what the center column IS: the message pane for the
+  // named channel, and the ONLY center pane there is.
+  it("has NO Inbox takeover to land behind — the center column IS the channel pane", () => {
     renderCore(CH_A);
-    expect(screen.queryByText("open inbox")).toBeNull();
+    // The center is the message pane, showing the named channel…
     expect(open()).toBe(CH_A);
+    // …and it is the SOLE center pane — a takeover would have been a second one
+    // rendered in front of it.
+    expect(screen.getAllByTestId("pane")).toHaveLength(1);
   });
 
   it("naming nothing again selects nothing — it does not reset the pick", () => {
