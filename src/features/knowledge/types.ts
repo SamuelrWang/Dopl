@@ -161,6 +161,17 @@ export interface KnowledgeContext {
    * may be shared between humans, so a teammate's draft would leak.
    */
   apiKeyWorkspaceId?: string | null;
+  /**
+   * `X-Dopl-Session-Id` verbatim (the desktop's slot key, `<channelId>:<tail>`),
+   * or `null`/absent for every caller that sends none.
+   *
+   * ⚠ A NON-AUTHORIZATION SIGNAL (`shared/auth/session-header.ts`) and the ONLY
+   * forgeable field on this context. It is read in exactly one place —
+   * `service-audience.ts › narrowToSessionChannel` — where it may only NARROW an
+   * already-fenced channel set. Nothing else may read it, and nothing may grant
+   * on it.
+   */
+  sessionId?: string | null;
 }
 
 /** Snapshot of a base's contents. Folders and entries are FLAT arrays; UI

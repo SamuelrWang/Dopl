@@ -37,6 +37,22 @@ vi.mock("./repository", () => ({
 
 vi.mock("./embeddings", () => ({ scheduleEntryEmbedding: vi.fn() }));
 
+/**
+ * ⚠ THE AUDIENCE CEILING IS ON THE AGENT PATH THIS SUITE DRIVES.
+ * `getBaseById` now calls `service-audience.ts › resolveAgentAudience`, which
+ * reads the workspace's KIND on the service-role client for any `source:
+ * "agent"` caller — so without this mock the F-10 cases below reach a real
+ * Supabase client and time out. `standard` is the pre-ceiling world: the
+ * `unrestricted` branch, one read, nothing narrowed. The ceiling's own
+ * behaviour is pinned in `service-audience.test.ts`, not here.
+ */
+vi.mock("./repository-audience", () => ({
+  findWorkspaceKind: vi.fn().mockResolvedValue("standard"),
+  countActiveWorkspaceMembers: vi.fn(),
+  listChannelIdsForWorkspace: vi.fn(),
+  listGrantedBaseIdsForChannels: vi.fn(),
+}));
+
 import * as repo from "./repository";
 import {
   deleteBase,

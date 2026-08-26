@@ -31,12 +31,20 @@ export interface AuthLike {
   role: Role;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
+  sessionId?: string | null;
 }
 
 /**
  * `withWorkspaceAuth` (or MCP equivalent) result → `KnowledgeContext`. Source
  * derives from API-key presence: session = user, API key = agent. The key's
  * workspace lock is forwarded so the service can enforce M-10 visibility.
+ *
+ * ⚠ `sessionId` is forwarded VERBATIM and is the one forgeable field on the
+ * result. It exists for `service-audience.ts › narrowToSessionChannel`, which
+ * may only use it to NARROW an already-fenced channel set; the field's own
+ * docblock on `KnowledgeContext` carries the rule. Every route already hands
+ * this function the whole `withWorkspaceAuth` context, so it arrives with no
+ * per-route edit — which is also why nothing may start granting on it.
  */
 export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
   return {
@@ -45,6 +53,7 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
     role: auth.role,
     source: auth.agentTokenId ? "agent" : "user",
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
+    sessionId: auth.sessionId ?? null,
   };
 }
 

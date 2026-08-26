@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import { KnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
+import { audienceAdmits, resolveAgentAudience } from "./service-audience";
 import {
   assertBaseVisible,
   assertSameWorkspace,
@@ -18,6 +19,14 @@ import { seedWorkspace } from "./service-seed";
 /**
  * Knowledge base reads. `getBaseById` / `getBaseBySlug` are the foundational
  * visibility-checked lookups the other service modules build on.
+ *
+ * 🔒 THEY ARE ALSO WHERE THE AGENT AUDIENCE CEILING IS APPLIED
+ * (`service-audience.ts`, plan §4.2). Every other knowledge read — trees,
+ * entries, folders, stars, search, export — composes one of the lookups in this
+ * file, so fencing here fences the surface. ⚠ A NEW foundational lookup that
+ * reaches `repository-bases.ts` directly instead of composing one of these owes
+ * itself the same two lines; that is the regression to watch for, and
+ * `service-audience.test.ts` pins the three that exist by driving them.
  */
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -31,10 +40,14 @@ export async function listBases(
   ctx: KnowledgeContext
 ): Promise<KnowledgeBase[]> {
   const all = await repo.listBasesForWorkspace(ctx.workspaceId, false);
-  const visible = await filterTeamVisibleBases(
-    ctx,
-    all.filter((b) => canSeeBase(ctx, b))
-  );
+  // 🔒 The ceiling is the OUTERMOST filter, applied after the workspace gates
+  // rather than instead of them: an agent in a shared container gets the
+  // intersection of "what this caller could see anyway" and "what was granted
+  // into this container's channels". Neither gate is a substitute for the other.
+  const audience = await resolveAgentAudience(ctx);
+  const visible = (
+    await filterTeamVisibleBases(ctx, all.filter((b) => canSeeBase(ctx, b)))
+  ).filter((b) => audienceAdmits(audience, b.id));
   if (visible.length > 0) return visible;
   // ⚠ CRITICAL: gate on the UNFILTERED count, not what the caller sees —
   // else a member joining a workspace whose only bases are someone else's
@@ -53,7 +66,9 @@ export async function listBases(
   ) {
     await seedWorkspace(ctx);
     const seeded = await repo.listBasesForWorkspace(ctx.workspaceId, false);
-    return filterTeamVisibleBases(ctx, seeded.filter((b) => canSeeBase(ctx, b)));
+    return (
+      await filterTeamVisibleBases(ctx, seeded.filter((b) => canSeeBase(ctx, b)))
+    ).filter((b) => audienceAdmits(audience, b.id));
   }
   return visible;
 }
@@ -137,6 +152,7 @@ export async function getBaseById(
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
   // ⚠ 404, not 403, so visibility itself isn't an oracle.
   await assertBaseVisible(ctx, base);
+  await assertWithinAudience(ctx, base.id);
   return base;
 }
 
@@ -147,7 +163,30 @@ export async function getBaseBySlug(
   const base = await repo.findBaseBySlug(ctx.workspaceId, slug, false);
   if (!base) throw new KnowledgeBaseNotFoundError(slug);
   await assertBaseVisible(ctx, base);
+  await assertWithinAudience(ctx, base.id);
   return base;
+}
+
+/**
+ * 🔒 The single-base half of the ceiling. Throws the SAME
+ * `KnowledgeBaseNotFoundError` an invisible base throws, so "not granted into
+ * this container", "not visible to you" and "does not exist" are one answer —
+ * the 404-not-403 rule this file already applies to visibility, extended to
+ * audience for the same reason. A 403 here would tell an agent the id it
+ * guessed was real.
+ *
+ * ⚠ It runs AFTER `assertBaseVisible`, not before. The order costs nothing (the
+ * base row is already in hand) and keeps the audience read off the path of
+ * every caller the workspace gates already refuse.
+ */
+async function assertWithinAudience(
+  ctx: KnowledgeContext,
+  baseId: string
+): Promise<void> {
+  const audience = await resolveAgentAudience(ctx);
+  if (!audienceAdmits(audience, baseId)) {
+    throw new KnowledgeBaseNotFoundError(baseId);
+  }
 }
 
 async function fetchWorkspaceCreatedAt(
