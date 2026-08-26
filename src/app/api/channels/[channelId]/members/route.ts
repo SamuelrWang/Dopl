@@ -70,7 +70,10 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+// ⚠ `minRole: "guest"` — a guest sees who is in its own channel (INVARIANTS
+// §4A, §2B); the channel-membership fence is the true gate. POST/DELETE (roster
+// management) stay member+, so a guest cannot add or remove members.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
 export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
 /**

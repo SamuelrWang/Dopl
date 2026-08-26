@@ -24,4 +24,7 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost);
+// ⚠ `minRole: "guest"` — a guest is present in its channel and thus mentionable
+// (INVARIANTS §4A, §2B; Samuel's Q2 ruling: guests appear in presence). The
+// channel-membership fence bounds the heartbeat to the caller's own channels.
+export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

@@ -140,4 +140,6 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+// ⚠ `minRole: "guest"` — a guest long-polls its own channel for new activity
+// (INVARIANTS §4A, §2B); the channel-membership fence is the true gate.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });

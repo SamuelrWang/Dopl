@@ -75,7 +75,10 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+// ⚠ `minRole: "guest"` — a guest reads a single thread in its channel
+// (INVARIANTS §4A, §2B); the channel-membership fence is the true gate. PATCH
+// (mode) stays member+ and DELETE stays member+/sessionOnly.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 // ⚠ `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`, and
 // PER-METHOD, so the GET and the PATCH above are untouched. An agent token

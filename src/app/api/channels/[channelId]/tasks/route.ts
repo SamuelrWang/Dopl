@@ -78,5 +78,10 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+// ⚠ BOTH at `minRole: "guest"` — a guest lists AND creates threads in its
+// channel (INVARIANTS §4A, §2B; Samuel's Q1 ruling: guests may create threads).
+// The true gate is the channel-membership fence: `createTaskFanOut` refuses
+// `!membership` with `ChannelForbiddenError`, so a guest can only open a thread
+// in a channel it belongs to.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
+export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

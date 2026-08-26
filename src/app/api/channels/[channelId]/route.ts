@@ -79,6 +79,9 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+// ⚠ `minRole: "guest"` — a guest reads its own channel (INVARIANTS §4A, §2B).
+// `loadVisibleChannel` hides a private channel from a non-member (NOT-FOUND), so
+// the channel-membership fence is the true gate. PATCH/DELETE stay member+.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });

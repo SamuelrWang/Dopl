@@ -61,4 +61,8 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+// ⚠ POST lowered to `minRole: "guest"` — a guest may `@`-mention (e.g. the
+// operator's agent) in its channel (INVARIANTS §4A, §2B; Samuel's Q2 ruling).
+// The channel-membership fence is the true gate. GET (marking a mention read)
+// stays at the viewer default — it is NOT in the guest-allowed set.
+export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

@@ -3268,3 +3268,46 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   is a different axis: this bounds how many agents come into existence, not how long two talk.**
 - Proposed resolution: defer — it needs Samuel's call on the wire change before any of it.
   Status: **deferred**
+
+---
+
+### F-323 — a home-channel agent can still AUTHOR container-scoped KB a guest cannot read (guest-role §6 residual)
+
+- Location: the operator's spawned agent writing through `dopl_kb` / knowledge routes against a
+  `kind='link'` container; the read side is closed by `src/shared/auth/with-workspace-auth.ts`
+  (viewer+ default now rejects guest) and RLS (`is_workspace_member(...,'viewer')` false for a
+  guest), plus channel payloads carrying no KB. The pinning seam if it is ever forbidden is
+  `dopl-desktop-app/main/sdk-loader.js` (which tools a home-channel agent loads).
+- Found during: **guest-role M1, 2026-08-25** — Samuel's Q5 ruling ("accept the residual for MVP").
+- Severity: **smell / accepted-for-MVP** — no READ exposure to the guest at any layer (API is
+  viewer+ → guest 403; RLS denies; the channel carries no KB), so nothing leaks. What is filed is
+  the ASYMMETRY: the operator's agent CAN create container-scoped knowledge/skills/ontology in a
+  relationship the guest can never read back. Harmless for the read direction F-319 is about, but a
+  latent oddity (orphaned, guest-invisible KB accreting inside a two-person container).
+- Proposed resolution: **defer, per Samuel's Q5.** If the product later wants home-channel agents to
+  never author container KB at all, that is a separate `sdk-loader.js` tool-pinning change, not a
+  server fence. Status: **deferred (accepted for MVP)**
+
+### F-324 — a REAL guest is RLS-denied on direct/realtime channel reads (guest ranks below viewer)
+
+- Location: the channel-table SELECT policies (`channels_member_select`,
+  `channel_messages_member_select`, `channel_tasks_member_select`, `channel_members_member_select`,
+  … — all gate on `is_current_workspace_member(workspace_id, 'viewer')`), measured against the live
+  project 2026-08-25; `public.is_workspace_member` now ranks `guest` at -1, below `viewer`'s 0
+  (migration `20260825140000_guest_role.sql`).
+- Found during: **guest-role M0/M1 RLS verification, 2026-08-25** (the plan's §1.3 critical
+  question).
+- Severity: **smell / not-yet-live** — NOT a functional blocker today, for two reasons:
+  (1) every guest-reachable channel READ through the §2B API routes runs on the SERVICE-ROLE admin
+  client (`src/features/channels/server/repository.ts`, RLS-BYPASSING by its own docblock), so these
+  policies are never consulted on that path — which is why **no `channel_members`-based RLS arm was
+  added**; and (2) **no `role='guest'` row exists yet** — the bound claim still inserts the claimer
+  as `admin` until M2 wires `granted_role`. The residual: once M2 makes real guests, any DIRECT
+  user-client read or REALTIME subscription (which DO run under RLS) filters a guest out at the
+  `'viewer'` floor. The guest web lane gets its live updates from the `GET …/await` long-poll
+  (service-role, in the §2B set), so it degrades gracefully rather than breaking — but a future
+  realtime subscription for the guest surface would silently receive nothing.
+- Proposed resolution: **defer to M2/M5.** If the guest web lane ever subscribes to channel realtime,
+  the fix is a `channel_members`-based arm on those SELECT policies (channel RLS keys on
+  `channel_members`, its own enum `('owner','member')`) so a guest who is a channel member passes
+  even though its workspace role is below viewer. Status: **deferred**

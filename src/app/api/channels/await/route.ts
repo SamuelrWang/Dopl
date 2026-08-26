@@ -118,4 +118,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+// ⚠ `minRole: "guest"` — the workspace-wide await poll; a guest's results are
+// still bounded to its own channels by the service membership fence
+// (INVARIANTS §4A, §2B).
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });

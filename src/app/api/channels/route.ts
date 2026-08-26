@@ -35,5 +35,10 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+// ⚠ `minRole: "guest"` — a guest reaches the channel LISTING (INVARIANTS §4A,
+// §2B). The real gate is the per-channel membership fence in the service layer
+// (`repository-visibility.ts › visibleChannelsOr` hides channels the caller is
+// not a member of); the workspace floor is only a tripwire. POST (create) stays
+// member+ so a guest cannot mint channels.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });

@@ -47,5 +47,10 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+// ⚠ BOTH at `minRole: "guest"` — a guest reads AND posts in its channel
+// (INVARIANTS §4A, §2B). The true gate is the channel-membership fence:
+// `loadVisibleChannel` hides the transcript from a non-member, and
+// `service-writes.ts › postMessage` refuses `!membership` with
+// `ChannelForbiddenError`. The workspace floor is only a tripwire.
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
+export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });
