@@ -52,6 +52,10 @@ const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
 // §2 SPLIT into main/session-own-outbound.js, so the block reads them off the module head.
 // Injected like makeGrantKeyFor, and the REAL implementations, so the block stays pinned.
 const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
+// 2026-08-25 (Samuel's launch ruling, F-320): the OWN-MACHINE LAUNCH LANE, a THIRD §2 file on the
+// same precedent — `launch_agent` asks for a PROCESS rather than sending CONTENT, so it is its own
+// lane (both axes + a launch-depth bound) and not a fourth member of the outbound list.
+const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
@@ -59,13 +63,15 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
   "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
+  "isOwnMachineLaunch", "launchLaneVerdict",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
   KB_OPS.isKnowledgeReadCall,
   OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
-  OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound);
+  OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
+  LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });

@@ -40,6 +40,13 @@
 //                  prompt and this session has no surface to show one on, so the call was
 //                  refused automatically." It was never a posture the operator could set.
 //
+// ⚠ AND `launch_agent` IS NOT A THIRD MEMBER — IT IS A THIRD LANE (2026-08-25, F-320). It was
+// admitted on the SAME DAY'S ruling and to the SAME windowless sessions, so the temptation to
+// add one string to the list below is real: do not. A launch is not outbound CONTENT, it asks
+// for a PROCESS on the operator's machine, and this lane is governed by the message axis ALONE —
+// admitting it here would hand every windowless agent an unprompted launch under a message
+// posture. It lives in `session-own-launch.js`, gated on BOTH axes and on a depth bound.
+//
 // ⚠ THE BAR THE TWO SHARE, AND IT IS THE ONE TO KEEP: ANYTHING THAT SETTLES SHARED STATE NEVER
 // QUALIFIED. `close_thread` was deliberately never on this list, and `propose_close` — the
 // marker's original sibling — left the MCP enum entirely with thread closing (wiring plan

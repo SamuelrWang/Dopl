@@ -230,6 +230,14 @@ async function launchFromButton(payload) {
       || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(p.channelId)),
     // ⚠ SPAWN IDLE (ruling 3): register, prepare the context, send NO first turn.
     idle: true,
+    // ⚠ DEPTH 0 — "A HUMAN STARTED THIS", AND THIS IS THE ONLY LANE THAT MAY SAY SO (2026-08-25,
+    // F-320). It is the same fact `operatorArmed` below rides on, kept as its own field because it
+    // answers a different question: that one is "may this spawn take the posture the operator
+    // configured", this one is "may the agent this spawn creates ask for agents of its own".
+    // ⚠ THE DIRECTIVE LANE MUST NEVER COPY THIS LINE — it sets `operatorArmed` too (the toggle is
+    // its human), and a directive-spawned agent claiming depth 0 is exactly the unbounded chain
+    // `session-own-launch.js › MAX_LAUNCH_DEPTH` exists to stop.
+    launchDepth: 0,
     // ⚠ `operatorArmed` IS WHAT LETS THE DURABLE POSTURE REACH AN IDLE SPAWN. `startSession`'s
     // FIX-4 guard refuses a handed-in posture on a `parkedShell` unless a human armed it just
     // now. Here the click on New Agent IS that human, in the same breath as the posture read.

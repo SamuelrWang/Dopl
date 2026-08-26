@@ -35,6 +35,16 @@ const GATE_REASONS = [
   'not-covered-by-bypass', //    AXIS A miss on a CLASSIFIED tool while the posture is auto/bypass
   'unclassified-tool', //        FIX F3: a name in no list at all, which gates in EVERY mode
   'awaiting-approval', //        AXIS A miss under manual / accept_edits — the posture is "ask"
+  'launch-posture-required', //  2026-08-25 (F-320): an own-channel `launch_agent` while the two
+  //                             postures its lane needs are not BOTH set (tools `bypass` AND
+  //                             messages auto-outbound). Its own code because the operator's fix
+  //                             is TWO settings, not the one `message-approval-required` names.
+  'launch-depth-capped', //      ...and the DENY half: this session is at MAX_LAUNCH_DEPTH, so no
+  //                             posture can open it (`session-own-launch.js`). ⚠ IT IS NOT
+  //                             `hard-denied`: that code means the PROFILE refused a tool, and
+  //                             `dopl_channel` is hard-denied on no profile at all — reporting
+  //                             the bound as a profile deny would send an operator to a deny
+  //                             list that does not contain it.
   // allow / preapproved (carried for the diag line, so "never landed" and "landed but not
   // covered" are distinguishable in the field without a source read)
   'profile-preapproved', //      shadowed via allowedTools; never actually reaches canUseTool
@@ -43,6 +53,10 @@ const GATE_REASONS = [
   'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
   'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
   //                             sibling `propose_close` went with thread closing, Phase 4)
+  'auto-launch-own-machine', //  2026-08-25 (Samuel's ruling, F-320): an own-channel
+  //                             `launch_agent` that BOTH axes covered — the audit answer to
+  //                             "what asked this machine for a process with no click?", which no
+  //                             outbound code can give, because nothing left as CONTENT.
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
   //                             own-channel `create_thread`. ITS OWN CODE, for the reason the
   //                             marker has one: the question an audit asks is "what left this
@@ -81,6 +95,11 @@ function makeGateReason(deps) {
     // is the union, so the GATE code is shared even though the ALLOW codes are not. It stops on
     // the same fact ("your outbound setting is not auto"), and the operator's fix is identical.
     if (d.isOwnChannelOutbound(a.input, a.channelId)) return 'message-approval-required';
+    // ⚠ 2026-08-25 (F-320): an own-channel LAUNCH stops on a DIFFERENT fact from either half of
+    // the message axis — it needs tools=`bypass` AND messages auto-outbound, and naming only the
+    // message setting would send the operator to widen a posture that is already wide enough.
+    // A launch naming ANOTHER channel is not this case and falls through, as a post's does.
+    if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'launch-posture-required';
     const op = a.input && a.input.op;
     // A SLUG lands here too, and that is the single most confusing gate in the product: the
     // agent addressed its own channel by name, isOwnChannelPost compares against the ID, and the
@@ -109,9 +128,15 @@ function makeGateReason(deps) {
   };
   return function gateReason(args, decision) {
     const a = args || {};
-    if (decision === 'deny') return 'hard-denied';
-    if (decision === 'preapproved') return 'profile-preapproved';
     const channel = d.isChannelTool(a.toolName);
+    // ⚠ 2026-08-25 (F-320): `deny` HAS TWO CAUSES NOW. The profile's hard-deny is one; the LAUNCH
+    // DEPTH BOUND is the other, and it is the only one that can deny a channel op (`dopl_channel`
+    // is on no profile's deny list). Asked in this order so a hard-denied name can never be
+    // narrated as a depth cap, which would be a bound the operator could not find.
+    if (decision === 'deny') {
+      return channel && d.isOwnMachineLaunch(a.input, a.channelId) ? 'launch-depth-capped' : 'hard-denied';
+    }
+    if (decision === 'preapproved') return 'profile-preapproved';
     if (decision === 'allow') {
       if (grantedFor(a)) return 'granted-for-session';
       // ⚠ THE ORDER MIRRORS `grantDecision` AGAIN: Axis A is consulted BEFORE the op-scoped
@@ -123,6 +148,10 @@ function makeGateReason(deps) {
         if (d.toolModeAllows(a.toolMode, name)) return 'tool-mode';
         return d.isKnowledgeReadCall(name, a.input) ? 'knowledge-read-op' : 'tool-mode';
       }
+      // ⚠ THE LAUNCH LANE IS ASKED FIRST OF THE CHANNEL ALLOWS (2026-08-25, F-320), because it
+      // is the only one that is not a message: nothing left this machine as CONTENT, and an
+      // audit line claiming otherwise would put a launch under "what did my agent say".
+      if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'auto-launch-own-machine';
       // M3: the Axis-B allows are different rules and the diag must be able to tell them
       // apart — "your outbound setting sent this" vs "your inbound setting read this".
       if (d.isOwnChannelRead(a.input, a.channelId)) return 'auto-inbound-read';

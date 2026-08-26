@@ -137,7 +137,7 @@ function grantArgs(s, toolName, input) {
     profile: s.profile,
     toolName: toolName,
     input: input,
-    channelId: s.channelId,
+    channelId: s.channelId, launchDepth: s.launchDepth, // ...and F-320's RECURSION BOUND, stamped at spawn: ABSENT READS AS THE CAP (session-own-launch.js), so no lane opens it by forgetting to pass one
     allowForTask: st.allowForTask || [],
     // AXIS A — never consulted for a dopl_channel call. ⚠ FLOORED AT `auto` ON A WINDOWLESS
     // SESSION (2026-08-22, ruling 4; the rule is `session-profiles.js › floorWindowlessTool`,
@@ -205,7 +205,7 @@ function logGateVerdict(log, s, toolName, verdict, op) {
 // in `main/session-post-surface.js` — this file was AT the 500-line cap with zero headroom, and
 // threading the counterparty id through `withPostSurface` (so `to` is a display NAME, not the raw
 // id an agent typed) pushed it over. RE-EXPORTED BELOW, so every `io.<name>` caller is unchanged.
-const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface'); // the 1:1 gate; the post surface
+const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface'); const { denyMessageFor } = require('./session-permissions'); // the 1:1 gate; the post surface; which sentence a `deny` verdict carries (F-320)
 const { withPostSurface, postKindOf } = postSurface;
 
 // Map ONE SDK message to the reducer events the renderer needs. Only assistant (text turns +
@@ -349,7 +349,7 @@ function makeCanUseTool(s, dispatch, log) {
         'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');
     }
     if (decision === 'preapproved' || decision === 'allow') return Promise.resolve(outboundTag.allowResult(tag));
-    if (decision === 'deny') return Promise.resolve({ behavior: 'deny', message: 'Blocked for this session' });
+    if (decision === 'deny') return Promise.resolve({ behavior: 'deny', message: denyMessageFor(verdict.reason) }); // F-320: a deny has two causes now, and the LAUNCH BOUND is not "blocked by the profile"
     return new Promise((resolve) => {
       const requestId = (opts && opts.requestId) || crypto.randomUUID();
       // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for

@@ -38,6 +38,7 @@ const {
   OWN_CHANNEL_MARKER_OPS, OWN_CHANNEL_THREAD_OPS, OWN_CHANNEL_OUTBOUND_OPS,
   isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
 } = require('./session-own-outbound');
+const { isOwnMachineLaunch, launchLaneVerdict } = require('./session-own-launch'); // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25; F-320) — its own §2 file, on F-301's precedent
 const {
   READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, UNIVERSAL_HARD_DENY,
   // Retired tools: denied everywhere, so unregistering cannot loosen a hard-deny.
@@ -418,6 +419,9 @@ function grantDecision(args) {
     // CONTENT into this session's own channel, which is what the outbound half consents to; a
     // slug-addressed one classifies cross-channel and gates, exactly like a post.
     if (autoOutboundMode(a.messageMode) && isOwnChannelOutbound(a.input, a.channelId)) return 'allow';
+    // ⚠ THE OWN-MACHINE LAUNCH LANE, WHICH IS NOT A MEMBER OF THE OUTBOUND SET ABOVE: it needs
+    // BOTH axes and a DEPTH BOUND, and `session-own-launch.js` carries all three arguments.
+    if (isOwnMachineLaunch(a.input, a.channelId)) return launchLaneVerdict(a, autoOutboundMode(a.messageMode));
     // Own-channel READ follows the INBOUND half: a read sends nothing, it brings the peer's
     // words into context unseen — what auto_inbound consents to. `auto_outbound` alone does
     // NOT cover it.
@@ -450,7 +454,7 @@ const gateReason = makeGateReason({
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
-  OWN_CHANNEL_OUTBOUND_OPS,
+  OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, // 2026-08-25 (F-320): the own-machine launch lane
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
   toolModeAllows, isKnowledgeReadCall,

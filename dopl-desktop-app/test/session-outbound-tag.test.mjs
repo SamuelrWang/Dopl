@@ -159,8 +159,13 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
     "the auto-allowed path");
   assert.match(fn, /s\.pendingPermissions\.set\(requestId, outboundTag\.wrapAllow\(resolve, tag\)\);/,
     "and the gated one");
-  // The DENY branch must be byte-identical: the tag may not appear anywhere near it.
-  assert.match(fn, /if \(decision === 'deny'\) return Promise\.resolve\(\{ behavior: 'deny', message: 'Blocked for this session' \}\);/);
+  // THE DENY BRANCH CARRIES NO TAG — that is what this pin is for, and it still holds.
+  // ⚠ THE MESSAGE MOVED ON 2026-08-25 (F-320) and this line was the literal `'Blocked for this
+  // session'` until then. A `deny` verdict has TWO causes now — the profile's hard-deny, and the
+  // LAUNCH-DEPTH BOUND — so the sentence is chosen by `session-permissions.js › denyMessageFor`
+  // from the gate REASON. The tag is still absent from the branch, which is the invariant here.
+  assert.match(fn, /if \(decision === 'deny'\) return Promise\.resolve\(\{ behavior: 'deny', message: denyMessageFor\(verdict\.reason\) \}\)/);
+  assert.ok(!/decision === 'deny'[^\n]*\btag\b/.test(fn), "no tag rides a refused call");
 });
 
 // ── THE COUNTER SURVIVES A CRASH RESUME (2026-08-22) ─────────────────────────────

@@ -170,6 +170,12 @@ test("INVARIANT (1): AXIS A can NEVER auto-approve a dopl_channel op, bypass inc
     for (const input of [OWN_POST, CROSS_POST, DM_OPEN, { op: "read" }, { op: "invite" }, undefined]) {
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, toolMode }), "gate", `toolMode=${toolMode} must not decide ${JSON.stringify(input)}`);
     }
+    // ⚠ `launch_agent` IS THE ONE OP THAT READS AXIS A INSIDE THE CHANNEL BRANCH (2026-08-25,
+    // F-320) — admitted only under `bypass` AND auto-outbound, a CONJUNCTION, so the invariant
+    // survives it. Driven at depth 0, or the recursion bound answers first and this passes for
+    // the wrong reason; the lane's full table is `test/session-own-launch.test.mjs`.
+    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "launch_agent" }, toolMode, launchDepth: 0 }),
+      "gate", `toolMode=${toolMode}: no tool posture may start a process on its own`);
   }
 });
 

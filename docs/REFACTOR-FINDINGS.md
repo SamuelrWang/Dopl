@@ -96,6 +96,26 @@ the gate was environment-dependent — green in CI, which has no `.next/`, and r
 machine running the mandated always-on dev stack. A gate that is red only where the work happens is
 a gate people learn to ignore**, which is the same cost F-209's addendum measured from the other end.
 
+**✅ F-320 IS RESOLVED AND ITS ENTRY IS DELETED (2026-08-25, Samuel's ruling: *an agent session MUST
+be able to launch other agents*).** The fix is the OWN-MACHINE LAUNCH LANE —
+`dopl-desktop-app/main/session-own-launch.js`, a §2 file on F-301's precedent, carrying the
+admission argument, the two-axis conjunction and the recursion bound; `session-profiles.js ›
+grantDecision` asks it inside the Axis-B channel branch, and `session-gate-reason.js` gained three
+codes (`auto-launch-own-machine`, `launch-posture-required`, `launch-depth-capped`). **What the
+entry proposed and what shipped differ in one place, deliberately:** it offered "a queued consent
+for gated ops on windowless sessions, OR an explicit per-session may-launch posture", and what
+shipped is the second — the operator's EXISTING channel posture (tools `bypass` AND messages
+auto-outbound, both, or it gates), so no new posture, no new column and no new surface was minted.
+**The queued-consent half is NOT done and is re-filed as F-321**, because the entry's sharpest
+sentence — a surfaceless session's gate should be able to become an operator's pending decision —
+is still true of every other gated op and is not made anywhere else. **The entry's own argument for
+why `launch_agent` may not simply join the outbound lane was ACCEPTED, not argued away**, which is
+why this is a third lane rather than a third member: it lives verbatim in the new module's header
+and in `session-own-outbound.js`'s "do not add one string to this list" note. **F-322 is the bound's
+own residual** — the cap is ONE generation because a launch depth cannot cross the wire.
+⚠ **`session-profiles.js` REJOINED THE AT-CAP SET measured 2026-08-25 (499 of 500)**, which is
+F-282/F-283's standing shape and is why the lane took its own file rather than four more lines.
+
 ## Status legend
 
 - **open** — not yet addressed
@@ -3175,39 +3195,68 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Status: **open — awaiting Samuel.** Accepted for MVP in the meantime; do not narrow the claim role
   without the ruling.
 
-## F-320 — a WINDOWLESS orchestrator cannot launch a VISIBLE agent: `launch_agent` needs a prompt, and there is neither a surface nor a queue (2026-08-25)
+## F-321 — a WINDOWLESS session's gate still cannot become a PENDING operator decision; only an own-channel POST can (2026-08-25)
 
-- Location: `dopl-desktop-app/main/session-permissions.js › AUTO_DENY_MESSAGE` (the sentence),
-  `dopl-desktop-app/main/session-windowless.js › claimGate` (the branch), and the lane lists that
-  would have to admit the op — `dopl-desktop-app/main/session-own-outbound.js ›
-  OWN_CHANNEL_OUTBOUND_OPS` and `dopl-desktop-app/main/session-profiles.js › OWN_CHANNEL_READ_OPS`.
-- Found during: **this feature's own orchestration, 2026-08-25.** A windowless desktop-run
-  orchestrator session (`runtime=desktop-session`, no window surface) tried to put its workers in
-  visible windows and could not.
-- Severity: **major** (product) — an operator's explicit, stated intent has no path at all, and the
-  refusal is worded to stop the agent retrying, so it fails quietly and permanently.
-- **Verbatim, as the orchestrator received it:** *"This tool needs a permission prompt and this
-  session has no surface to show one on, so the call was refused automatically."*
-- **The mechanism is F-301's, one op over.** `dopl_channel(op="launch_agent")` is on no own-channel
-  lane, so it falls through to the Axis-A gate, and a windowless session answers a gate with `deny`.
-  No value of either axis reaches it: `bypass` cannot, because Axis A may never answer a message op;
-  `auto_both` cannot, because the op is not on the lane.
-- ⚠ **AND F-301'S FIX IS NOT AVAILABLE HERE, WHICH IS THE WHOLE REASON THIS IS A SEPARATE ENTRY.**
-  `create_thread` was admitted to the outbound lane by ruling, on the argument that it is own-channel
-  outbound CONTENT. `launch_agent` is not content — it starts a PROCESS on the operator's machine,
-  which is the exact thing INVARIANTS §11 gives its own separate consent (the local desktop toggle,
-  Samuel 2026-08-22). Reclassifying it onto the outbound lane would hand every windowless agent an
-  unprompted launch, which inverts that ruling rather than extending it.
-- **So the gap is a MISSING LANE, not a misclassification.** The refusal is synchronous and terminal;
-  nothing files the REQUEST for the operator to decide later — which is striking, because the feature
-  it is refusing already works that way one level down (`channel_launch_directives` is a mailbox the
-  operator's machine claims and decides, §11).
-- **What an operator has today, and both are workarounds.** Widen the session's tool posture by hand
-  from the agent view (the deny message itself says so), or fall back to in-session subagents — which
-  run invisibly inside the orchestrator and are precisely what the operator was trying not to get.
-- **Where a fix would live:** §11's desktop-session rules plus the launch-directive machinery. Every
-  piece exists (a directive row, an operator decision, a seven-word refusal vocabulary); what is
-  missing is a way for a SURFACELESS session's gate to become an operator's pending decision instead
-  of an immediate deny.
-- Proposed resolution: Samuel's call — a queued consent for gated ops on windowless sessions, or an
-  explicit per-session "may launch" posture set at launch time. Status: **open**
+- Location: `dopl-desktop-app/main/session-windowless.js › claimGate` (the two branches),
+  `main/session-outbound-tag.js › outboundConsentShape` (which calls decide the branch), and
+  `main/session-permissions.js › AUTO_DENY_MESSAGE` (what the other branch says).
+- Found during: **F-320's fix, 2026-08-25** — this is the half of F-320 that did NOT ship. That
+  entry offered Samuel two routes (a queued consent for gated ops, or a per-session may-launch
+  posture); the posture route shipped, so the launch op now has an answer. **The GENERAL gap it
+  described is untouched**, and it is not a launch problem — it is every other gated op's.
+- Severity: **smell** (product) — nothing is broken that was working; a whole class of gated call
+  is decided by nobody on the one spawn shape this tree has.
+- **THE ASYMMETRY, MEASURED 2026-08-25.** `claimGate` has exactly two branches: an `outbound_gate`
+  payload BRIDGES to a `channel_consent_requests` row plus a notification (`bridgeOutbound`), so a
+  human really decides it — and a `permission_request` payload is answered with
+  `setImmediate(() => decide(rid, 'deny'))`. `outboundConsentShape` is the whole membership test
+  for the first branch: an own-channel POST, and an own-channel `create_thread` since 2026-08-24.
+  Everything else — a cross-channel post, `open`, `invite`, `set_thread_mode`, a gated
+  `launch_agent`, and EVERY tool from the operator's own MCP servers — takes the second.
+- ⚠ **WHY `launch_agent` WAS NOT SIMPLY ADDED TO `outboundConsentShape`, THOUGH IT IS ONE LINE.**
+  The consent row it would raise is a POST's, field for field: `kind: 'outbound'`, a summary that
+  reads *"Reply from your agent in X"*, `proposedReply` = the bytes to send, and a SEND button.
+  A launch sends nothing and has no bytes — `launch_agent` carries `goal`, not `body`, so the card
+  would show an empty message and ask the operator to Send it. **That is a surface that names the
+  wrong act**, which is the same defect class as a denial naming the wrong actor (the ruling this
+  file's own `session-permissions.js` header records), and it would be approving a PROCESS through
+  a control labelled for a MESSAGE.
+- **What a fix needs, and why it is a product decision rather than a refactor:** a consent SHAPE
+  that is not a proposed reply (what is being asked for, by which agent, and what an approval
+  authorizes), plus an answer to the question INVARIANTS §11 already parks — *which gated tools
+  deserve an interruption?* — because the honest version of this is a queue an operator can drown
+  in. `bridgeOutbound` is the working mechanism; nothing here needs inventing, only deciding.
+- Proposed resolution: **needs-user-decision** (Samuel). Status: **open**
+
+## F-322 — the launch depth cannot cross the wire, so the recursion bound is ONE generation and cannot be raised in the desktop alone (2026-08-25)
+
+- Location: `dopl-desktop-app/main/session-own-launch.js › MAX_LAUNCH_DEPTH`,
+  `main/launch-directive-wire.js › directiveFrom` (the whitelist that would have to carry it),
+  `supabase/migrations/20260822160000_channel_launch_directives.sql` (the columns that exist),
+  `src/features/channels/server/service-launch.ts › toDirective` (the DTO).
+- Found during: **F-320's fix, 2026-08-25**, choosing the bound Samuel's ruling requires.
+- Severity: **smell** — the shipped bound is correct and fail-closed; what is filed is that it is
+  the ONLY bound this tree can currently express, and the reason is on the other side of the wire.
+- **THE MECHANISM.** A launch depth would have to be "parent + 1", and the parent's depth cannot
+  reach the child: an agent's `launch_agent` leaves this machine as a `channel_launch_directives`
+  row and comes back through the server, and that row has no depth column. `directiveFrom` is a
+  literal whitelist — **a field the table gains and that list does not name is dropped without a
+  word** (its own docblock says so) — so even a server that carried one would change nothing here
+  until the desktop names it. The machine can therefore distinguish exactly two states: a session a
+  human started at this machine's own launch surface (depth 0, `session-launch-op.js ›
+  launchFromButton`, the one lane that says so), and everything else, which is AT the cap.
+- **WHAT THAT COSTS, STATED SO IT IS NOT REDISCOVERED AS A BUG.** An operator's orchestrator may
+  staff itself; the agents it staffs may not staff themselves, and they are refused with
+  `launch-depth-capped` and a sentence that says the bound is a bound. A legitimate
+  orchestrator → sub-orchestrator → worker chain is therefore not expressible. **No lane ever
+  reads as depth 0 by accident** — absent normalizes to the cap — so the failure direction is
+  "cannot launch", never "unbounded".
+- **What raising it to 2 actually takes:** a nullable `launch_depth` on the table (with a CHECK),
+  the create route accepting it, `toDirective` answering it, `directiveFrom` naming it, and
+  `launch-directives.js › spawn` passing `depth + 1` into the funnel — plus the ruling that a
+  requester-supplied number may influence a containment input at all, which is the one part that
+  is NOT mechanical (every other field on that row is deliberately non-containment; the module's
+  header states that rule). ⚠ **F-315 (an unbounded agent CONVERSATION) is the adjacent shape and
+  is a different axis: this bounds how many agents come into existence, not how long two talk.**
+- Proposed resolution: defer — it needs Samuel's call on the wire change before any of it.
+  Status: **deferred**

@@ -106,6 +106,14 @@ async function launch(a) {
     // last step before a child process can see it, so a bad value here is 'default', never argv.
     model: a.model,
     windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
+    // ⚠ THE LAUNCH DEPTH — F-320's RECURSION BOUND, and this funnel FORWARDS it without inventing
+    // one (2026-08-25). Exactly ONE caller passes `0` and it is the New Agent button
+    // (`session-launch-op.js › launchFromButton`, where a human is at the keyboard); the directive
+    // lane, the peer-triggered responder, a resume and a recreate all pass nothing and land at
+    // `session-own-launch.js › MAX_LAUNCH_DEPTH`, which is the fail-CLOSED direction: a lane that
+    // forgets this field loses the right to launch agents rather than gaining it. ⚠ DO NOT give it
+    // a `|| 0` default here — that inverts the whole bound in one character.
+    launchDepth: a.launchDepth,
     // 2026-08-21 ruling 3: SPAWN IDLE. Registers the agent with prepared context and starts no
     // query; the first inbound message for this agent is what launches it.
     parkedShell: a.idle === true,

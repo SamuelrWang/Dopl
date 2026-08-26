@@ -317,7 +317,7 @@ async function startSession(spec, sdk) {
     taskId: spec.taskId || '',
     workspaceId: spec.workspaceId,
     side: state.side,
-    profile: spec.profile,
+    profile: spec.profile, launchDepth: spec.launchDepth, // ...and the LAUNCH-DEPTH stamp (2026-08-25, F-320): a containment input like the profile beside it, normalized fail-closed at the gate — ABSENT IS THE CAP, so only a lane that says "a human started this" (0) can launch agents (session-own-launch.js)
     // Item 9: human tool-profile label for the renderer's posture line (passed on init).
     profileLabel: require('./tool-profiles').profileLabel(spec.profile),
     mode: state.mode,

@@ -87,6 +87,12 @@ const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
 // ⚠ `isOwnChannelMarker` / `OWN_CHANNEL_MARKER_OPS` are RE-EXPORTED from the injected module
 // rather than returned out of the block, which is why the destructure below shrank.
 const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
+// 2026-08-25 (Samuel's launch ruling, F-320): the OWN-MACHINE LAUNCH LANE is a THIRD §2 file on
+// the same precedent — `launch_agent` is not outbound CONTENT, so it could not join the list
+// above; it needs BOTH axes plus a launch-depth bound. The block reads `isOwnMachineLaunch` /
+// `launchLaneVerdict` off the module head, so they are injected here like everything else, and
+// the REAL implementations, so the block stays pinned to what ships.
+const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   isChannelTool } = new Function(
@@ -95,6 +101,7 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
   "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
+  "isOwnMachineLaunch", "launchLaneVerdict",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool };`
@@ -102,7 +109,8 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
   KB_OPS.isKnowledgeReadCall,
   OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
-  OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound);
+  OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
+  LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict);
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";
