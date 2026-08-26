@@ -11,6 +11,8 @@ import {
   listStarredBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
+import { getChannelGrantMap } from "@/features/knowledge/server/service-channel-grants";
+import { isChannelVisibleTo } from "@/features/workspaces/server/service-overview";
 import type { KnowledgeBaseStats } from "@/features/knowledge/types";
 import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
 
@@ -26,10 +28,18 @@ import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
  *     `[]` for both "nothing starred" and a degraded read — an unreadable star means an unstarred
  *     card, never a missing one.
  *
- * ⚠ All four are SIBLING keys, additive on the wire: none may widen the `KnowledgeBase` type the
+ *   - `channelGrants` (ONLY when `?channelId=<uuid>` is sent): `{baseId → {level, guestWrite}}` for
+ *     the grants of THAT channel among the visible bases — the scope-A grant map behind Home
+ *     Knowledge Panels. ABSENT param ⇒ ABSENT key (never `{}`); a sent-but-ungranted channel yields
+ *     `{}` (asked, none granted). 🔒 The channelId is FENCED via `isChannelVisibleTo` BEFORE any
+ *     service-role grant read — a non-visible or cross-workspace channel is 404, the same answer an
+ *     unknown one gets, so existence is never an oracle (§9, the `overview-series?channelId=`
+ *     precedent). The fence read is SKIPPED entirely when no channelId is sent.
+ *
+ * ⚠ All are SIBLING keys, additive on the wire: none may widen the `KnowledgeBase` type the
  * SDK mirrors (`scripts/check-knowledge-type-drift.ts`).
  */
-async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
+async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildKnowledgeContext(auth);
     const bases = await listBases(ctx);
@@ -48,13 +58,40 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
         // Degraded value is `[]`, not a sentinel: unknown and unstarred render identically.
         listStarredBaseIds(ctx, bases).catch(() => [] as string[]),
       ]);
-    return NextResponse.json({
+    const base = {
       bases,
       ownerNames,
       baseStats,
       kbStorageLimit,
       starredBaseIds,
-    });
+    };
+
+    // ⚠ THE GRANT READ RUNS ONLY WHEN A CHANNEL WAS ASKED FOR. Absent param ⇒
+    // absent key: the workspace/knowledge pages must not pay two extra queries
+    // (fence + grants) for a scope nobody requested, and an absent key reads
+    // correctly as "this response was not channel-scoped".
+    const channelId = request.nextUrl.searchParams.get("channelId");
+    if (channelId === null) {
+      return NextResponse.json(base);
+    }
+
+    // 🔒 Fence the id against the caller's visible channels BEFORE any
+    // service-role grant read. A miss (not visible, archived, or another
+    // workspace) answers 404 — the same answer an unknown channel gets — so
+    // "cannot see" and "does not exist" stay indistinguishable.
+    if (!(await isChannelVisibleTo(ctx.workspaceId, ctx.userId, channelId))) {
+      return NextResponse.json(
+        { error: { code: "CHANNEL_NOT_FOUND", message: "Channel not found" } },
+        { status: 404 }
+      );
+    }
+
+    const channelGrants = await getChannelGrantMap(
+      ctx.workspaceId,
+      channelId,
+      bases.map((b) => b.id)
+    );
+    return NextResponse.json({ ...base, channelGrants });
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }

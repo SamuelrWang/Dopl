@@ -42,6 +42,14 @@ vi.mock("@/features/knowledge/server/service", () => ({
   resolveKbStorageLimit: vi.fn(),
 }));
 
+vi.mock("@/features/knowledge/server/service-channel-grants", () => ({
+  getChannelGrantMap: vi.fn(),
+}));
+
+vi.mock("@/features/workspaces/server/service-overview", () => ({
+  isChannelVisibleTo: vi.fn(),
+}));
+
 import { GET } from "./route";
 import {
   listBaseOwnerNames,
@@ -50,12 +58,16 @@ import {
   listStarredBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
+import { getChannelGrantMap } from "@/features/knowledge/server/service-channel-grants";
+import { isChannelVisibleTo } from "@/features/workspaces/server/service-overview";
 
 const mockListBases = vi.mocked(listBases);
 const mockOwnerNames = vi.mocked(listBaseOwnerNames);
 const mockBaseStats = vi.mocked(listBaseStats);
 const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
 const mockStarred = vi.mocked(listStarredBaseIds);
+const mockGrantMap = vi.mocked(getChannelGrantMap);
+const mockChannelVisible = vi.mocked(isChannelVisibleTo);
 
 function base(id: string, createdBy: string | null): KnowledgeBase {
   return { id, createdBy } as unknown as KnowledgeBase;
@@ -74,6 +86,13 @@ const STATS = {
 
 function getReq(): NextRequest {
   return new NextRequest("http://localhost/api/knowledge/bases", { method: "GET" });
+}
+
+function channelReq(channelId: string): NextRequest {
+  return new NextRequest(
+    `http://localhost/api/knowledge/bases?channelId=${channelId}`,
+    { method: "GET" }
+  );
 }
 
 beforeEach(() => {
@@ -207,5 +226,64 @@ describe("GET /api/knowledge/bases", () => {
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBeTruthy();
     expect(body.error.message).not.toContain("db down");
+  });
+});
+
+describe("GET /api/knowledge/bases?channelId= — the scope-A grant map", () => {
+  it("adds NO channelGrants key and reads NO fence when no channelId is sent", async () => {
+    const body = (await (
+      await GET(getReq(), { params: Promise.resolve({}) })
+    ).json()) as Record<string, unknown>;
+    // Absent param ⇒ absent key, never {} — the response was not channel-scoped.
+    expect("channelGrants" in body).toBe(false);
+    // The unscoped path must not pay the fence + grant queries.
+    expect(mockChannelVisible).not.toHaveBeenCalled();
+    expect(mockGrantMap).not.toHaveBeenCalled();
+  });
+
+  it("folds channelGrants in for a VISIBLE channel, fenced then read over the visible base ids", async () => {
+    mockChannelVisible.mockResolvedValue(true);
+    mockGrantMap.mockResolvedValue({
+      "kb-1": { level: "visible", guestWrite: true },
+      "kb-2": { level: "agent_only", guestWrite: false },
+    });
+
+    const res = await GET(channelReq("chan-9"), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.channelGrants).toEqual({
+      "kb-1": { level: "visible", guestWrite: true },
+      "kb-2": { level: "agent_only", guestWrite: false },
+    });
+    // Fenced with the CONTEXT's workspace + user, never the request's.
+    expect(mockChannelVisible).toHaveBeenCalledWith("ws-1", "user-1", "chan-9");
+    // Bounded fan: the map is read over exactly the visible base ids.
+    expect(mockGrantMap).toHaveBeenCalledWith("ws-1", "chan-9", ["kb-1", "kb-2"]);
+  });
+
+  it("404s a NON-VISIBLE channel and never reads the grant map (no existence oracle)", async () => {
+    mockChannelVisible.mockResolvedValue(false);
+
+    const res = await GET(channelReq("chan-hidden"), {
+      params: Promise.resolve({}),
+    });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("CHANNEL_NOT_FOUND");
+    // The fence runs BEFORE any service-role grant read.
+    expect(mockGrantMap).not.toHaveBeenCalled();
+  });
+
+  it("returns channelGrants {} for a visible-but-ungranted channel — asked, none granted", async () => {
+    mockChannelVisible.mockResolvedValue(true);
+    mockGrantMap.mockResolvedValue({});
+
+    const body = (await (
+      await GET(channelReq("chan-empty"), { params: Promise.resolve({}) })
+    ).json()) as Record<string, unknown>;
+    // The KEY is present (a channel was scoped) even though the map is empty —
+    // distinct from the unscoped case, which omits the key entirely.
+    expect("channelGrants" in body).toBe(true);
+    expect(body.channelGrants).toEqual({});
   });
 });

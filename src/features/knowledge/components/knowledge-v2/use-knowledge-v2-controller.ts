@@ -74,6 +74,8 @@ export function useKnowledgeV2Controller({
       baseStats: {},
       kbStorageLimit: null,
       starredBaseIds: [],
+      // This view is never channel-scoped; no scope-A grants to seed.
+      channelGrants: {},
     },
   });
   const bases = basesQuery.data?.bases ?? initialBases;

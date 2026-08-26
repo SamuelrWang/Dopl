@@ -236,17 +236,18 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     ),
   ];
 
-  // EIGHT since 2026-08-22: `channel_launch_directives` (migration
-  // `20260822160000`, the launch-over-MCP mailbox) is the newest child;
-  // `channel_mention_reads` (`20260818140000`, the Tags inbox's read-state) was
-  // the seventh. ⚠ The NUMBER is not the point and re-blessing it is not the
-  // fix — the point is the assertion below, that every one of them CASCADES,
-  // which is what makes a non-DM channel delete atomic in one statement
-  // (INVARIANTS §5). A new child that does not cascade fails the next case, not
-  // this one. ⚠ A directive is deliberately NOT kept when its channel goes: it
-  // asks for an agent IN that channel, so the request is meaningless without it.
-  it("finds all eight child FKs", () => {
-    expect(refs.length).toBe(8);
+  // NINE since 2026-08-26: `channel_resource_grants.channel_id` (migration
+  // `20260827120000`, the Home Knowledge Panels scope-A grant) is the newest
+  // child; `channel_launch_directives` (`20260822160000`, the launch-over-MCP
+  // mailbox) was the eighth and `channel_mention_reads` (`20260818140000`, the
+  // Tags inbox's read-state) the seventh. ⚠ The NUMBER is not the point and
+  // re-blessing it is not the fix — the point is the assertion below, that every
+  // one of them CASCADES, which is what makes a non-DM channel delete atomic in
+  // one statement (INVARIANTS §5). A new child that does not cascade fails the
+  // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
+  // goes: it is a share INTO that channel, meaningless without it.
+  it("finds all nine child FKs", () => {
+    expect(refs.length).toBe(9);
   });
 
   it("each one cascades — none is SET NULL or RESTRICT", () => {

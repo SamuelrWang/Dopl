@@ -71,6 +71,21 @@ export interface KnowledgeBaseStats {
   storageBytes: number | null;
 }
 
+/** A (knowledge_base, channel) grant's three states collapse to TWO stored
+ *  levels plus ABSENCE (no row = not shared). See
+ *  `20260827120000_channel_resource_grants.sql`. */
+export type ChannelGrantLevel = "agent_only" | "visible";
+
+/** One KB's grant on ONE channel, as projected onto the `channelGrants` sibling
+ *  key of `GET /api/knowledge/bases?channelId=`. `guestWrite` lives on the
+ *  grant, not the KB — a KB shared into N channels is N audience questions.
+ *  ⚠ NOT a field on `KnowledgeBase`: it rides the LIST response, so it never
+ *  widens the SDK-mirrored row type (`check-knowledge-type-drift`). */
+export interface ChannelResourceGrant {
+  level: ChannelGrantLevel;
+  guestWrite: boolean;
+}
+
 export interface KnowledgeFolder {
   id: string;
   workspaceId: string;

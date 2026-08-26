@@ -38,6 +38,7 @@ function entry(starredBaseIds: string[]): KnowledgeBaseList {
     },
     kbStorageLimit: 5_000_000,
     starredBaseIds,
+    channelGrants: {},
   };
 }
 

@@ -9,6 +9,7 @@
  */
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
+  ChannelResourceGrant,
   KnowledgeBase,
   KnowledgeBaseStats,
   KnowledgeFolder,
@@ -86,10 +87,23 @@ export interface KnowledgeBaseList {
    *  a base property, so it rides the response not the row. `[]` covers both
    *  "nothing starred" and degraded — both render identically. */
   starredBaseIds: string[];
+  /** `{baseId → {level, guestWrite}}` for the channel passed as `channelId`.
+   *  ⚠ `EMPTY_GRANTS` ({}) when NO channelId was requested OR a pre-grant server
+   *  sent no key — both mean "no scope-A grants to show here", which renders
+   *  identically. A base with no grant is simply ABSENT from the map. */
+  channelGrants: Record<string, ChannelResourceGrant>;
 }
 
+/** Shared frozen empty map — a stale cached payload (no `channelGrants` key)
+ *  and an unscoped read both fall back to THIS, never a fresh `{}` per read. */
+export const EMPTY_GRANTS: Readonly<Record<string, ChannelResourceGrant>> =
+  Object.freeze({});
+
 export async function fetchBaseList(
-  workspaceId?: string
+  workspaceId?: string,
+  /** When set, the request carries `?channelId=` and the response folds in the
+   *  scope-A `channelGrants` map for that channel. */
+  channelId?: string
 ): Promise<KnowledgeBaseList> {
   const data = await request<{
     bases: KnowledgeBase[];
@@ -97,7 +111,11 @@ export async function fetchBaseList(
     baseStats?: Record<string, KnowledgeBaseStats>;
     kbStorageLimit?: number | null;
     starredBaseIds?: string[];
-  }>("/api/knowledge/bases", { workspaceId });
+    channelGrants?: Record<string, ChannelResourceGrant>;
+  }>("/api/knowledge/bases", {
+    workspaceId,
+    query: channelId ? { channelId } : undefined,
+  });
   return {
     bases: data.bases,
     ownerNames: data.ownerNames ?? {},
@@ -106,6 +124,10 @@ export async function fetchBaseList(
     // could not resolve it, correctly.
     kbStorageLimit: data.kbStorageLimit ?? null,
     starredBaseIds: data.starredBaseIds ?? [],
+    // ⚠ §8 stale-cache: a payload cached before this field existed carries no
+    // `channelGrants` key. `?? EMPTY_GRANTS` keeps the read from crashing and
+    // renders "no grants", never a blank pane.
+    channelGrants: data.channelGrants ?? EMPTY_GRANTS,
   };
 }
 
