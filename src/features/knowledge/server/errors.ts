@@ -94,6 +94,28 @@ export class ChannelGrantInvalidError extends Error {
   }
 }
 
+/**
+ * The channel lane's grant is at `visible` but `guest_write` is OFF — the
+ * caller may READ this base through the channel and may not write it. → 403.
+ *
+ * ⚠ IT IS THE ONE REFUSAL ON THAT LANE THAT IS NOT A 404, AND THAT ASYMMETRY IS
+ * DELIBERATE. Everything upstream of it — no membership, no grant, `agent_only`,
+ * a dead base, another base's entry — answers NOT-FOUND, because the question
+ * "does this exist" must not be answerable. By the time this throws the caller
+ * has ALREADY been shown the entry by the very same grant, so there is nothing
+ * left to conceal: a 404 here would only mean "the thing you are looking at is
+ * not there".
+ */
+export class ChannelGrantReadOnlyError extends Error {
+  readonly code = "CHANNEL_GRANT_READ_ONLY";
+  constructor() {
+    super(
+      "This knowledge base is shared into the channel as read-only. Ask the owner to allow edits."
+    );
+    this.name = "ChannelGrantReadOnlyError";
+  }
+}
+
 /** Non-admin granting a team they don't belong to. → 403. */
 export class TeamScopeForbiddenError extends Error {
   readonly code = "TEAM_SCOPE_FORBIDDEN";

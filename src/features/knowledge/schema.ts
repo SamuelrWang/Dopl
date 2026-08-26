@@ -269,3 +269,37 @@ export const KnowledgeEntryMoveSchema = z.object({
   position: z.number().int().min(0).optional(),
 });
 export type KnowledgeEntryMoveInput = z.infer<typeof KnowledgeEntryMoveSchema>;
+
+/**
+ * `PUT /api/channels/{channelId}/knowledge/entries/{entryId}` — the GUEST LANE's
+ * entry write (M2, plan §3.4), and it is a STRICT SUBSET of
+ * `KnowledgeEntryUpdateSchema` rather than a reuse of it.
+ *
+ * ⚠ THE MISSING FIELDS ARE THE SCHEMA'S POINT. `excerpt`, `entryType` and
+ * `position` are all writable on the workspace PATCH and none of them is an
+ * EDIT: `position` reorders somebody else's tree, `entryType` reclassifies a
+ * document, `excerpt` rewrites what the base's owner sees in a list without
+ * touching the page. Samuel's ruling 3 scopes guest writes to "edit existing
+ * entries", and the cheapest honest reading of that is title + body. A caller
+ * that sends more gets a 400 at the boundary, not a silent drop — zod's default
+ * strip would have made the refusal invisible, so this object is `.strict()`.
+ *
+ * ⚠ `expectedVersion` IS THE ENTRY'S `updatedAt` and rides in the BODY, where
+ * the workspace PATCH takes the same value in `X-Updated-At`. Optional: absent
+ * means last-write-wins, present and stale means 412.
+ */
+export const ChannelLaneEntryUpdateSchema = z
+  .object({
+    title: z
+      .string()
+      .min(1)
+      .max(300)
+      .regex(noSlashRegex, noSlashMessage)
+      .optional(),
+    body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
+    expectedVersion: z.string().min(1).optional(),
+  })
+  .strict();
+export type ChannelLaneEntryUpdateInput = z.infer<
+  typeof ChannelLaneEntryUpdateSchema
+>;

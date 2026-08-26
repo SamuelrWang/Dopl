@@ -63,9 +63,17 @@ export function bodyBytes(body: string | null | undefined): number {
  * `deltaBytes` = NET change: `bodyBytes(next) - bodyBytes(previous)` on edit,
  * `bodyBytes(next)` on create. Delta ≤ 0 returns without touching the DB —
  * renames, moves, repositions and shrinks cost nothing.
+ *
+ * ⚠ TAKES `Pick<KnowledgeContext, "workspaceId">` RATHER THAN THE WHOLE CONTEXT
+ * (widened 2026-08-26 for the channel lane, whose `ChannelKnowledgeContext`
+ * deliberately carries no `role`). The narrow type is a claim the compiler
+ * checks: this is a PLAN gate, it asks the workspace's billing one question, and
+ * it must never grow into reading a caller's role and answering a visibility
+ * question with it. Every existing caller passes a full `KnowledgeContext` and
+ * is unaffected.
  */
 export async function assertStorageHeadroom(
-  ctx: KnowledgeContext,
+  ctx: Pick<KnowledgeContext, "workspaceId">,
   base: KnowledgeBase,
   deltaBytes: number
 ): Promise<void> {

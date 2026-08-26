@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import {
   AgentWriteDisabledError,
   ChannelGrantInvalidError,
+  ChannelGrantReadOnlyError,
   EntryNotFoundError,
   FolderCycleError,
   FolderNotFoundError,
@@ -65,6 +66,11 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   // The grant trigger's RAISE, already stripped of the two workspace ids.
   if (err instanceof ChannelGrantInvalidError) {
     return new HttpError(400, "CHANNEL_GRANT_INVALID", err.message);
+  }
+  // The channel lane's read-only grant — the ONE 4xx there that is not a 404;
+  // see the error class for why concealment has already stopped mattering.
+  if (err instanceof ChannelGrantReadOnlyError) {
+    return new HttpError(403, "CHANNEL_GRANT_READ_ONLY", err.message);
   }
   return null;
 }

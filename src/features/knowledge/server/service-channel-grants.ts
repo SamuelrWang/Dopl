@@ -1,43 +1,88 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { meetsMinRole } from "@/features/workspaces/types";
+import { isUuid } from "@/shared/lib/id/uuid";
 import type {
   ChannelGrantLevelInput,
   ChannelResourceGrant,
   KnowledgeBase,
   KnowledgeContext,
+  WriteSource,
 } from "../types";
-import { ChannelGrantInvalidError, ScopeChangeForbiddenError } from "./errors";
+import {
+  AgentWriteDisabledError,
+  ChannelGrantInvalidError,
+  ChannelGrantReadOnlyError,
+  KnowledgeBaseNotFoundError,
+  ScopeChangeForbiddenError,
+} from "./errors";
+import * as repo from "./repository";
 import {
   deleteChannelKnowledgeGrant,
+  findChannelKnowledgeGrant,
+  listChannelGrantsAtLevel,
   listChannelGrantsForBase,
   listChannelKnowledgeGrants,
   upsertChannelKnowledgeGrant,
 } from "./repository-channel-grants";
 
 /**
- * Channel resource GRANTS — the read half (M0) and the write half (M1). The
- * grant map behind the `channelGrants` sibling key of
- * `GET /api/knowledge/bases?channelId=`, and the three-state write behind
- * `PUT /api/knowledge/bases/[baseId]/channel-grants`.
+ * Channel resource GRANTS — the read half (M0), the write half (M1), and the
+ * GUEST LANE'S OWN GATES (M2). The grant map behind the `channelGrants` sibling
+ * key of `GET /api/knowledge/bases?channelId=`, the three-state write behind
+ * `PUT /api/knowledge/bases/[baseId]/channel-grants`, and
+ * `assertGrantVisible` / `assertGrantWritable` — the two questions every route
+ * under `/api/channels/[channelId]/knowledge/**` asks before it reads a row.
  *
  * 🔒 §3.3: THIS MODULE IMPORTS NOTHING FROM `service-shared.ts`'s GATE HALF.
  * Those gates encode the WORKSPACE audience — `canSeeBase` refuses a
  * private-to-guest KB and `assertBaseVisible` (via `requireEffectiveAccess`)
- * refuses guests outright — which is the wrong question for a channel-scoped
- * grant. The channel lane (M2) will own its own gates; this module only serves
- * callers who have ALREADY cleared the workspace floor and the channel
- * visibility fence at the route.
+ * refuses guests outright, because `defaultLevelForRole("guest")` is `null` —
+ * which is the wrong question for a channel-scoped grant. The lane owns the
+ * gates below instead, and `grant-lane.test.ts` scans this file AND
+ * `service-channel-lane.ts` for the import that would quietly undo it.
  *
- * ⚠ The CALLER fences the channel AND the base first, and the write half is
- * the reason that sentence is load-bearing rather than tidy. This service
- * assumes `channelId` was proved visible to the caller (route →
- * `isChannelVisibleTo`), that the `KnowledgeBase` it is handed came back from
- * the workspace service's own 404 gate (route → `getBaseById`), and that
- * `baseIds` is the caller's already-visibility-filtered list. It adds no oracle
- * of its own; those two fences are the boundary, and the ONE question it
- * answers itself is `canManage` (below).
+ * ⚠ THE CHANNEL FENCE IS NOT HERE AND MUST NOT MOVE HERE. Nothing in this file
+ * proves the caller is in the channel; `ChannelKnowledgeContext.channelId` is
+ * taken on trust, and it is only trustworthy because
+ * `shared/api/channel-knowledge-lane.ts › requireChannelKnowledgeContext` builds
+ * it from a channel the CHANNELS service already resolved and whose membership
+ * row it already required. Composing the two features at the route is §3.3's
+ * rule (no cross-feature import), and the cost of that rule is this sentence.
+ *
+ * ⚠ For the M0/M1 halves the CALLER additionally fences the base
+ * (route → `getBaseById`) and the channel (route → `isChannelVisibleTo`); the
+ * ONE question those halves answer themselves is `canManage`.
  */
+
+/**
+ * Request-scoped context for the CHANNEL lane. Deliberately NOT
+ * `KnowledgeContext`: it carries a `channelId` and, more to the point, it
+ * carries NO `role` and NO `apiKeyWorkspaceId`.
+ *
+ * 🔒 THE MISSING `role` IS THE DESIGN. Every workspace knowledge gate resolves
+ * an access LEVEL from the caller's workspace role, and a guest's is `null` — so
+ * a lane function handed a role would sooner or later be "tidied" into asking
+ * the workspace question and would answer `no` for exactly the caller this lane
+ * exists to serve. There is no role here to tidy with. The lane's authority is
+ * the grant row and nothing else.
+ */
+export interface ChannelKnowledgeContext {
+  workspaceId: string;
+  channelId: string;
+  userId: string;
+  /** Session vs. agent token, for the `last_edited_source` stamp and for the
+   *  agent refusal in {@link assertGrantWritable}. */
+  source: WriteSource;
+}
+
+/**
+ * Ceiling on the lane's base list. ⚠ Same reason as {@link BASE_GRANT_LIMIT}:
+ * PostgREST truncates an un-limited select silently, and a channel with 200
+ * knowledge bases shared into it is a bug report rather than a page to
+ * paginate.
+ */
+export const CHANNEL_GRANT_LIMIT = 200;
 
 /**
  * `{ baseId → {level, guestWrite} }` for the grants ON `channelId` among
@@ -61,6 +106,128 @@ export async function getChannelGrantMap(
     map[row.resource_id] = { level: row.level, guestWrite: row.guest_write };
   }
   return map;
+}
+
+/**
+ * `{ baseId → grant }` for every base granted onto this channel AT `visible` —
+ * the lane's list read, and the ONLY place the guest's base set comes from.
+ *
+ * ⚠ `agent_only` NEVER ENTERS THIS MAP, and the filter is in SQL rather than in
+ * a `.filter()` here. A grant at `agent_only` is a DIFFERENT AUDIENCE, not a
+ * lower rung of this one: the operator said "my agent may read this in this
+ * room", and the guest sitting in that room was not part of the sentence. Its
+ * mere existence must not leak, so it is absent from the list for the same
+ * reason it 404s in {@link assertGrantVisible} — those two must always agree, or
+ * a base appears in the list and then refuses to open (or worse, the reverse).
+ */
+export async function listVisibleChannelGrants(
+  ctx: ChannelKnowledgeContext
+): Promise<Record<string, ChannelResourceGrant>> {
+  const rows = await listChannelGrantsAtLevel(
+    supabaseAdmin(),
+    ctx.workspaceId,
+    ctx.channelId,
+    "visible",
+    CHANNEL_GRANT_LIMIT
+  );
+  const map: Record<string, ChannelResourceGrant> = {};
+  for (const row of rows) {
+    map[row.resource_id] = { level: row.level, guestWrite: row.guest_write };
+  }
+  return map;
+}
+
+/**
+ * 🔒 FENCES 3 AND 4 OF THE GUEST LANE (§3.2), and the only door to a row on it.
+ * Fences 1 and 2 — the `minRole:"guest"` floor and `loadVisibleChannel` with a
+ * REQUIRED membership — ran at the route before this was called.
+ *
+ * Answers with the grant and the base, or throws `KnowledgeBaseNotFoundError`.
+ * FOUR different failures collapse into that ONE answer, deliberately:
+ *   - `baseId` is not UUID-shaped (it would reach a `uuid =` filter as a 22P02
+ *     cast failure — a 500 and a `system_events` row per probe);
+ *   - there is NO grant row for (this channel, this base);
+ *   - there is one and it is `agent_only` — see {@link listVisibleChannelGrants}
+ *     for why that is not a lower level but a different audience;
+ *   - the base is deleted, or belongs to another workspace.
+ * "Not shared with you", "shared with somebody else" and "does not exist" have
+ * to be indistinguishable, or the lane becomes an id oracle for the container's
+ * whole knowledge surface.
+ *
+ * ⚠ THE GRANT IS READ BEFORE THE BASE, and the order is load-bearing rather
+ * than incidental: the base read is not narrowed by the channel at all, so
+ * doing it first would answer "does this uuid name a live base in this
+ * workspace" for every id a guest cares to try, and only then refuse.
+ *
+ * ⚠ THE SAME-WORKSPACE ASSERT IS REDUNDANT AND STAYS. The
+ * `enforce_channel_resource_grant()` trigger already guarantees
+ * `knowledge_bases.workspace_id = channels.workspace_id = grant.workspace_id`,
+ * and the grant read is workspace-filtered on top of that. It is asserted anyway
+ * because the consequence of the trigger being dropped in some future migration
+ * is a CROSS-TENANT read by a guest, which is the one outcome the whole design
+ * exists to prevent (§1) — and because `findBaseById` takes no workspace id.
+ */
+export async function assertGrantVisible(
+  ctx: ChannelKnowledgeContext,
+  baseId: string
+): Promise<{ base: KnowledgeBase; grant: ChannelResourceGrant }> {
+  if (!isUuid(baseId)) throw new KnowledgeBaseNotFoundError(baseId);
+
+  const row = await findChannelKnowledgeGrant(
+    supabaseAdmin(),
+    ctx.workspaceId,
+    ctx.channelId,
+    baseId
+  );
+  if (row === null || row.level !== "visible") {
+    throw new KnowledgeBaseNotFoundError(baseId);
+  }
+
+  // `includeDeleted` left at its default `false`, so a base whose grant outlived
+  // it reads as gone rather than as an empty tree.
+  const base = await repo.findBaseById(baseId, false);
+  if (base === null || base.workspaceId !== ctx.workspaceId) {
+    throw new KnowledgeBaseNotFoundError(baseId);
+  }
+
+  return { base, grant: { level: row.level, guestWrite: row.guest_write } };
+}
+
+/**
+ * 🔒 THE WRITE GATE FOR THE GUEST LANE (§3.4): membership (at the route) AND
+ * `visible` AND `guest_write === true` AND the base alive. Everything
+ * {@link assertGrantVisible} refuses, this refuses identically and with the same
+ * 404; the ONE refusal it adds of its own is a 403, because by then the caller
+ * has already been handed the row.
+ *
+ * ⚠ `agent_write_enabled` IS NOT CONSULTED, AND THAT IS ONLY SAFE BECAUSE OF THE
+ * LINE BELOW IT. That per-KB flag answers "may an AGENT write this base"; the
+ * grant's `guest_write` answers "may this channel's PEOPLE write it", and they
+ * are different questions about different callers. But an agent token can issue
+ * any HTTP the operator could (`full` profile has Bash and the 90-day device
+ * token is on disk), so leaving the human premise unstated would have made this
+ * route the one place `agent_write_enabled` could be walked around — F-10/F-10b
+ * re-opened through a new door. The lane is for people; an agent that wants a
+ * granted base uses the MCP/workspace surface, where its own gate applies.
+ *
+ * ⚠ THIS SERVICE IS THE FENCE, NOT RLS. Every read and write below it runs on
+ * the SERVICE-ROLE client, which bypasses row-level security entirely — the
+ * `channel_resource_grants` policies are defense-in-depth and will never fire
+ * for this caller. If this function returns, the write happens.
+ */
+export async function assertGrantWritable(
+  ctx: ChannelKnowledgeContext,
+  baseId: string
+): Promise<{ base: KnowledgeBase; grant: ChannelResourceGrant }> {
+  const { base, grant } = await assertGrantVisible(ctx, baseId);
+  if (ctx.source === "agent") {
+    throw new AgentWriteDisabledError(
+      base.id,
+      "The channel knowledge lane is a lane for people. An agent writes a knowledge base through the workspace surface, where the agent-write setting applies."
+    );
+  }
+  if (!grant.guestWrite) throw new ChannelGrantReadOnlyError();
+  return { base, grant };
 }
 
 /**

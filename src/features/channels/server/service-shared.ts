@@ -148,14 +148,22 @@ async function resolveChannelRef(
  * being created inside a `kind='link'` container — `createChannel` never reads
  * `workspace.kind`, `POST /api/channels` is `member`+ (the container's owner
  * clears it), the MCP `dopl_channel(op="open")` schema offers `visibility` and
- * no DB constraint exists. ELEVEN of the fourteen guest-floored CHANNEL routes
- * compose `loadVisibleChannel` — measured 2026-08-26; the three that do not are
+ * no DB constraint exists. FIFTEEN of the eighteen guest-floored CHANNEL-PATH
+ * routes compose `loadVisibleChannel` — re-measured 2026-08-26 after the knowledge
+ * lane's four pairs; the three that do not are
  * `channels/route.ts` GET, `channels/await/route.ts` GET and
  * `channels/presence/route.ts` POST, none of which takes a channel ref. ⚠ This
- * comment has now been wrong twice ("twelve", and elsewhere "seven"), so
- * RE-DERIVE rather than quote: walk each pair in `guest-route-floor.test.ts ›
- * GUEST_ALLOWED` to the service function its route calls, and check that
- * function against `grep -rn loadVisibleChannel src/features/channels/server`.
+ * comment has now been wrong three times ("twelve", "eleven of fourteen", and
+ * elsewhere "seven"), so RE-DERIVE rather than quote: walk each pair in
+ * `guest-route-floor.test.ts › GUEST_ALLOWED` to the service function its route
+ * calls, and check that function against
+ * `grep -rn loadVisibleChannel src/features/channels/server src/shared/api`.
+ * ⚠ THE FOUR NEWEST CALLERS ARE NOT IN THIS DIRECTORY. The channel KNOWLEDGE lane
+ * (`src/app/api/channels/[channelId]/knowledge/**`, INVARIANTS §4A) reaches this
+ * function through `shared/api/channel-knowledge-lane.ts` — the first caller
+ * outside `features/channels/server`, and why this gate is on the service barrel.
+ * It REQUIRES `membership !== null` on top, so the public arm below never admits
+ * it: its payload is a whole knowledge base rather than the channel's own content.
  * Before this fence an operator opening a second, public channel in their
  * container silently handed the guest its header, its whole transcript, its
  * thread list, its roster and a long-poll on it. A lowered floor plus an

@@ -9,14 +9,23 @@
  * inside a `kind='link'` container — `createChannel` never reads
  * `workspace.kind`, `POST /api/channels` is `member`+ (the container's owner
  * clears it), `dopl_channel(op="open")` exposes `visibility`, and no DB
- * constraint exists. ELEVEN of the fourteen guest-floored channel routes compose
- * `loadVisibleChannel` (measured 2026-08-26 — the three that do not are
+ * constraint exists. FIFTEEN of the eighteen guest-floored channel-path routes
+ * compose `loadVisibleChannel` (re-measured 2026-08-26 after the knowledge lane's
+ * four pairs — the three that do not are
  * `channels/route.ts` GET, `channels/await/route.ts` GET and
  * `channels/presence/route.ts` POST, none of which takes a channel ref;
  * re-derive by walking each route in `guest-route-floor.test.ts ›
  * GUEST_ALLOWED` to the service function it calls). So an operator opening a
  * second, public channel silently handed the guest its header, transcript,
  * thread list, roster and a long-poll.
+ *
+ * ⚠ THE KNOWLEDGE LANE DOES NOT REST ON THIS FENCE AND MUST NOT BE READ AS IF IT
+ * DID (Home Knowledge Panels M2, 2026-08-26). Its four pairs
+ * (`src/app/api/channels/[channelId]/knowledge/**`) require `membership !== null`
+ * ON TOP of `loadVisibleChannel` — because the caller this file's rule keeps out
+ * is a GUEST, and the one that lane keeps out is a workspace VIEWER, for whom the
+ * public arm is still, correctly, open. Pinned separately by
+ * `src/app/api/channels/[channelId]/knowledge/grant-lane.test.ts`.
  *
  * THREE HALVES OF ONE RULE, all pinned here because they must not drift apart:
  *   1. `service-shared.ts › loadVisibleChannel` — the single-ref read.

@@ -50,21 +50,38 @@
  * "guest" }` off an allowed GET, or raise an allowed POST back to `"member"`)
  * removes it from the discovered set → set A fails on that entry AND set B's
  * equality fails. Adding `guest` to any other route fails set B (both halves).
- * Breaking the parser fails set D. 15 entries.
+ * Breaking the parser fails set D. 19 entries.
  * MEASURED 2026-08-26 — 4 reverts, 4 failures, 0 vacuous: parser loses the
  * re-export branch (4 red); loses the function-declaration branch (1 red); stops
  * stripping comments (1 red); B2 back to comparing FILE NAMES while a SECOND
  * guest floor is added to an already-listed file (`…/members/route.ts` POST) —
  * the count sweep goes red, and the old file-name sweep stayed GREEN on that
  * exact tree (12 files either way), which is the gap it closed.
+ * RE-MEASURED 2026-08-26 for the four KNOWLEDGE-LANE additions — 4 reverts,
+ * 4 failures, 0 vacuous (49 tests baseline):
+ *   - raise `…/knowledge/bases` GET back to the viewer default   : 3 red (A, B, B2)
+ *   - raise the entry PUT alone, its GET left at `guest`         : 3 red (A, B, B2)
+ *     ⚠ THIS IS THE ONE B2's COUNT EXISTS FOR: the file stays on the sweep
+ *     either way, and only the per-METHOD occurrence count notices.
+ *   - drop `membership !== null` from the lane helper            : 1 red
+ *   - a lane route naming `loadVisibleChannel` itself            : 1 red
+ *     (a second, hand-rolled copy of the fence — the copy is what drifts)
  *
- * ⚠ FOURTEEN OF THE FIFTEEN ARE CHANNEL ROUTES; THE FIFTEENTH IS A METER
+ * ⚠ EIGHTEEN OF THE NINETEEN ARE CHANNEL ROUTES; THE NINETEENTH IS A METER
  * (2026-08-26). `mcp/credits/consume` sits at `guest` so a guest's tool calls
  * are BILLED — the registrar fails open on the 403 the `viewer` default
  * produced, so that floor made guest traffic free rather than refusing it
  * (F-325). It grants no data and no write; the entry lives here because this
  * file's contract is "nothing anywhere is at `guest` unless it is listed", and
  * that contract is worth more than the list staying channel-only.
+ *
+ * ⚠ FOUR OF THE EIGHTEEN ARE NOT CHANNEL CONTENT AT ALL (Home Knowledge Panels
+ * M2, 2026-08-26). `…/[channelId]/knowledge/**` serves KNOWLEDGE through a
+ * channel-scoped door, and it is the first time a guest floor sits in front of
+ * a payload the channel does not own. The floor is worth even less here than
+ * elsewhere: what admits the caller is a `(knowledge_base, channel)` grant row
+ * at `visible`, and the membership fence in front of it is REQUIRED rather than
+ * inherited — see the last describe in this file, and INVARIANTS §4A.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -144,6 +161,33 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // for every guest — and seeing that the operator's agent is working is the
   // guest lane's whole proposition. READ ONLY; launching stays closed.
   [`${CHANNELS_REL}/[channelId]/sessions/route.ts`, "GET"],
+  // ⚠ THE KNOWLEDGE LANE (Home Knowledge Panels M2, 2026-08-26; plan §3, and
+  // §4A's "a guest reaches knowledge ONLY through a (kb, channel) grant at
+  // `visible`"). FOUR pairs across THREE files, and the first guest floors in
+  // this codebase in front of a payload the channel does not own.
+  //
+  // These four are the ONLY way a guest reaches a knowledge base at all. Every
+  // route under `/api/knowledge/**` stays at the `viewer` default and therefore
+  // still refuses one — `defaultLevelForRole("guest")` is `null`, so even a
+  // lowered floor there would 404 in `requireEffectiveAccess`. The lane exists
+  // BECAUSE that is true: it carries its own gates
+  // (`knowledge/server/service-channel-grants.ts › assertGrantVisible` /
+  // `assertGrantWritable`) and reuses none of the workspace ones.
+  //
+  // ⚠ THE FLOOR IS THE WEAKEST OF FOUR FENCES HERE, not the gate. In order:
+  // this floor → `loadVisibleChannel` with membership REQUIRED (the public arm
+  // is refused outright, or a workspace viewer who never joined the channel
+  // would read the operator's granted bases) → the grant row at `visible`
+  // (`agent_only` is a 404, always — a different audience, and its existence
+  // must not leak) → base alive and same workspace.
+  [`${CHANNELS_REL}/[channelId]/knowledge/bases/route.ts`, "GET"], // bases granted into this channel
+  [`${CHANNELS_REL}/[channelId]/knowledge/bases/[baseId]/tree/route.ts`, "GET"], // folders + entry metadata of ONE granted base
+  [`${CHANNELS_REL}/[channelId]/knowledge/entries/[entryId]/route.ts`, "GET"], // one entry's body
+  // ⚠ THE ONLY GUEST *WRITE* ON THIS LIST OUTSIDE THE CHANNEL'S OWN TRANSCRIPT,
+  // and it is gated on a per-grant `guest_write` flag that defaults OFF (§3.4).
+  // Title and body only; no create, no move, no delete. `agent_write_enabled` is
+  // not consulted because the service refuses an agent token here outright.
+  [`${CHANNELS_REL}/[channelId]/knowledge/entries/[entryId]/route.ts`, "PUT"], // edit one entry (guest_write)
   // ⚠ THE ONE NON-CHANNEL ENTRY, AND IT IS A METER RATHER THAN A CAPABILITY
   // (2026-08-26, Samuel: "charge MCP calls from a guest to the user"; closes
   // F-325). At the `viewer` default this 403'd every guest-scoped consume call,
@@ -182,8 +226,15 @@ const KNOWN_FLOORS: ReadonlyArray<readonly [string, string, string]> = [
 ];
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 15 entries (pins the size against a silent add/drop)", () => {
-    expect(ALLOWED_KEYS.size).toBe(15);
+  it("has 19 entries (pins the size against a silent add/drop)", () => {
+    // 15 until Home Knowledge Panels M2 (2026-08-26) added the four
+    // `…/[channelId]/knowledge/**` pairs. ⚠ ENTRIES, NOT FILES: FOUR files carry
+    // two guest-floored methods each (`messages` GET+POST, `tasks` GET+POST,
+    // `mentions` GET+POST, and now `knowledge/entries` GET+PUT), so 19 entries
+    // live in 15 files — which is exactly why B2 counts occurrences rather than
+    // comparing file names. Re-derive both, never quote:
+    //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
+    expect(ALLOWED_KEYS.size).toBe(19);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {
@@ -383,5 +434,41 @@ describe("the floors guard a real gate, not just a list", () => {
     expect(writes).toMatch(/ChannelForbiddenError\("post to this channel"\)/);
     expect(fanout).toMatch(/loadVisibleChannel/);
     expect(fanout).toMatch(/ChannelForbiddenError\("create a task in this channel"\)/);
+  });
+
+  it("the KNOWLEDGE lane REQUIRES a membership row, rather than inheriting the public arm", () => {
+    // 🔒 THE LINE THE PLAN NAMED AS THE ONE THAT WILL REGRESS (§3.2 fence 2).
+    // `loadVisibleChannel` RETURNS SUCCESSFULLY with `membership: null` on the
+    // `visibility='public'` arm. A guest does not reach that arm
+    // (`mayReadPublicChannels`), but a workspace VIEWER does — and F-327 says a
+    // public channel can exist inside a container. Without this line such a
+    // viewer, who never joined the channel, would read every knowledge base
+    // granted into it.
+    //
+    // ⚠ SOURCE, not behaviour, and deliberately so: the behavioural proof lives
+    // in `…/knowledge/grant-lane.test.ts`, which drives the real fence. This is
+    // the four-floor list's own belt — the floors above are only safe because
+    // this line exists, so it is asserted where the floors are.
+    const helper = readFileSync(
+      join(import.meta.dirname, "..", "..", "..", "shared", "api", "channel-knowledge-lane.ts"),
+      "utf8"
+    );
+    expect(helper).toMatch(/loadVisibleChannel/);
+    expect(helper).toMatch(/if \(membership === null\) throw channelNotFound\(ref\);/);
+  });
+
+  it("all four knowledge-lane routes go through that ONE helper (no hand-rolled second fence)", () => {
+    // A route that resolved the channel itself would be a fourth copy of the
+    // fence, and the copy is what drifts. Every lane route imports the helper
+    // and none of them names `loadVisibleChannel`.
+    const laneRoutes = GUEST_ALLOWED.filter(([f]) => f.includes("/knowledge/")).map(
+      ([f]) => f
+    );
+    expect(new Set(laneRoutes).size).toBe(3);
+    for (const rel of new Set(laneRoutes)) {
+      const src = stripComments(readFileSync(join(API_ROOT, rel), "utf8"));
+      expect(src, rel).toMatch(/requireChannelKnowledgeContext\(auth\)/);
+      expect(src, rel).not.toMatch(/loadVisibleChannel/);
+    }
   });
 });

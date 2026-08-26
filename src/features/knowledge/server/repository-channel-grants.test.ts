@@ -12,9 +12,13 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   deleteChannelKnowledgeGrant,
+  findChannelKnowledgeGrant,
+  listChannelGrantsAtLevel,
   listChannelGrantsForBase,
   listChannelKnowledgeGrants,
   upsertChannelKnowledgeGrant,
@@ -61,6 +65,9 @@ function fakeClient(result: { data: unknown; error: unknown }) {
       return builder;
     },
     single() {
+      return Promise.resolve(result);
+    },
+    maybeSingle() {
       return Promise.resolve(result);
     },
     // Thenable tail for the delete chain, which has no explicit terminal.
@@ -131,6 +138,100 @@ describe("listChannelKnowledgeGrants", () => {
     const { client } = fakeClient({ data: null, error: new Error("db down") });
     await expect(
       listChannelKnowledgeGrants(client, "ws-1", "chan-1", ["kb-1"])
+    ).rejects.toThrow("db down");
+  });
+});
+
+describe("listChannelGrantsAtLevel — the GUEST LANE's list read", () => {
+  /**
+   * ⚠ THE `level` FILTER IS THE ASSERTION, and it needs a REPOSITORY test to
+   * exist at all. `grant-lane.test.ts` mocks this module, so a service-level pin
+   * cannot see the predicate — deleting `.eq("level", level)` left that whole
+   * suite GREEN (measured 2026-08-26), which would have put every `agent_only`
+   * grant in the container into a guest's base list.
+   */
+  it("filters by workspace + channel + type + LEVEL, and carries the ceiling", async () => {
+    const { client, calls } = fakeClient({ data: [ROW], error: null });
+
+    const out = await listChannelGrantsAtLevel(
+      client,
+      "ws-1",
+      "chan-1",
+      "visible",
+      200
+    );
+
+    expect(out).toEqual([ROW]);
+    expect(calls.from).toEqual(["channel_resource_grants"]);
+    expect(calls.eq).toEqual([
+      ["workspace_id", "ws-1"],
+      ["channel_id", "chan-1"],
+      ["resource_type", "knowledge_base"],
+      // 🔒 Without this term the lane lists `agent_only` grants — a DIFFERENT
+      // audience, whose existence must not leak to the people in the channel.
+      ["level", "visible"],
+    ]);
+    // PostgREST truncates an un-limited select silently.
+    expect(calls.limit).toEqual([200]);
+  });
+
+  it("passes `agent_only` through unchanged when that is what is asked for", async () => {
+    // The parameter is a parameter, not a decoration around a hardcoded value.
+    const { client, calls } = fakeClient({ data: [], error: null });
+    await listChannelGrantsAtLevel(client, "ws-1", "chan-1", "agent_only", 5);
+    expect(calls.eq).toContainEqual(["level", "agent_only"]);
+    expect(calls.limit).toEqual([5]);
+  });
+
+  it("throws when the query errors", async () => {
+    const { client } = fakeClient({ data: null, error: new Error("db down") });
+    await expect(
+      listChannelGrantsAtLevel(client, "ws-1", "chan-1", "visible", 200)
+    ).rejects.toThrow("db down");
+  });
+});
+
+describe("findChannelKnowledgeGrant — the lane's per-base PK lookup", () => {
+  it("filters by workspace + channel + type + resource and answers the row", async () => {
+    const { client, calls } = fakeClient({ data: ROW, error: null });
+
+    expect(
+      await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1")
+    ).toEqual(ROW);
+    expect(calls.eq).toEqual([
+      ["workspace_id", "ws-1"],
+      ["channel_id", "chan-1"],
+      ["resource_type", "knowledge_base"],
+      ["resource_id", "kb-1"],
+    ]);
+  });
+
+  it("answers NULL for a missing row rather than throwing", async () => {
+    // `maybeSingle`, not `single`: "not shared" is the third state and the
+    // COMMON one, so it must not arrive as an error the service has to decode.
+    const { client } = fakeClient({ data: null, error: null });
+    expect(
+      await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-9")
+    ).toBeNull();
+  });
+
+  it("returns the row AT WHATEVER LEVEL IT CARRIES — the service decides", () => {
+    // ⚠ No `level` filter here on purpose, and it is not an oversight: the
+    // service must be able to tell `agent_only` from absent in order to give
+    // them the SAME answer deliberately. A filter here would make that decision
+    // in SQL, where the reasoning cannot be written down.
+    const src = readFileSync(
+      resolve(__dirname, "repository-channel-grants.ts"),
+      "utf8"
+    );
+    const fn = src.slice(src.indexOf("export async function findChannelKnowledgeGrant"));
+    expect(fn.slice(0, fn.indexOf("}"))).not.toMatch(/\.eq\("level"/);
+  });
+
+  it("throws when the query errors", async () => {
+    const { client } = fakeClient({ data: null, error: new Error("db down") });
+    await expect(
+      findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1")
     ).rejects.toThrow("db down");
   });
 });

@@ -55,6 +55,68 @@ export async function listChannelKnowledgeGrants(
 }
 
 /**
+ * Every grant on ONE channel AT ONE LEVEL, with no base-id set to narrow it —
+ * the read behind the guest lane's base list (M2), where the caller has no
+ * visible base list of its own to intersect with. The grant rows ARE the list.
+ *
+ * ⚠ `limit` IS REQUIRED for the same reason `listChannelGrantsForBase` takes
+ * one: PostgREST truncates an un-limited select SILENTLY, and a silently short
+ * list here reads to a guest as "the operator un-shared something".
+ *
+ * ⚠ `level` IS A PARAMETER RATHER THAN A HARDCODED `'visible'`, and the caller
+ * always passes `'visible'` today. Filtering in SQL keeps `agent_only` rows from
+ * ever entering the process on this lane — a post-filter in JS would put the ids
+ * of bases the caller may not know exist one `.map()` away from a response body.
+ */
+export async function listChannelGrantsAtLevel(
+  db: SupabaseClient,
+  workspaceId: string,
+  channelId: string,
+  level: ChannelGrantLevel,
+  limit: number
+): Promise<ChannelResourceGrantRow[]> {
+  const { data, error } = await db
+    .from("channel_resource_grants")
+    .select(CHANNEL_RESOURCE_GRANT_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("channel_id", channelId)
+    .eq("resource_type", "knowledge_base")
+    .eq("level", level)
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as ChannelResourceGrantRow[];
+}
+
+/**
+ * ONE (channel, knowledge_base) grant row, or `null` — the PK lookup behind the
+ * lane's per-base gate. Returns the row AT WHATEVER LEVEL IT CARRIES; the
+ * service decides that `agent_only` is indistinguishable from absent, because
+ * the two answers must look identical from outside.
+ *
+ * ⚠ `baseId` REACHES A `uuid =` FILTER, so a caller that has not shape-checked
+ * it hands Postgres a 22P02 cast failure — a 500 plus a `system_events` row on
+ * every probe. The service checks the shape first (`requireConsentId`'s
+ * rationale, `shared/api/channel-route.ts`).
+ */
+export async function findChannelKnowledgeGrant(
+  db: SupabaseClient,
+  workspaceId: string,
+  channelId: string,
+  baseId: string
+): Promise<ChannelResourceGrantRow | null> {
+  const { data, error } = await db
+    .from("channel_resource_grants")
+    .select(CHANNEL_RESOURCE_GRANT_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("channel_id", channelId)
+    .eq("resource_type", "knowledge_base")
+    .eq("resource_id", baseId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as ChannelResourceGrantRow | null;
+}
+
+/**
  * Every channel ONE knowledge base is granted into — the other direction of the
  * same table, and the query `channel_resource_grants_resource_idx
  * (workspace_id, resource_type, resource_id)` is named for. Behind the settings

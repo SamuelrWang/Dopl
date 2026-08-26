@@ -33,6 +33,16 @@ import "server-only";
  */
 
 export { buildChannelContext } from "./service-shared";
+// ⚠ `loadVisibleChannel` IS ON THE BARREL AS OF 2026-08-26 AND IT IS THE ONLY
+// GATE THAT IS. Every other handler reaches it indirectly, through a read or a
+// write that composes it — but the channel KNOWLEDGE lane
+// (`src/app/api/channels/[channelId]/knowledge/**`) has no channels-feature
+// payload to ask for: its payload is knowledge's, and §3.3 forbids the knowledge
+// service importing this feature. So the composition happens at the route layer,
+// and the fence it composes has to be nameable from outside this directory.
+// ⚠ Its `membership: null` return is NOT a refusal — see its own docblock. The
+// lane requires membership explicitly.
+export { loadVisibleChannel } from "./service-shared";
 // ⚠ `ChannelContext` / `AuthLike` were re-exported here and are NOT (2026-08-20):
 // no caller outside this directory ever took them through the barrel, and the ones
 // inside import from `./service-shared` directly. A barrel row with no importer is
