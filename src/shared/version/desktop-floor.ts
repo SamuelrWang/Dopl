@@ -23,7 +23,7 @@ export const MIN_VERSION_ENV = "DOPL_DESKTOP_MIN_VERSION";
  * one without the other fails the build rather than arming the anti-brick clamp
  * against our own floor.
  */
-export const DEFAULT_MIN_VERSION = "1.20.0";
+export const DEFAULT_MIN_VERSION = "1.21.0";
 
 /** Env spellings that mean "no floor, on purpose" rather than a typo. */
 const FLOOR_OFF = new Set(["", "none", "0", "off"]);
@@ -40,7 +40,7 @@ export const LATEST_VERSION_ENV = "DOPL_DESKTOP_LATEST_VERSION";
 /** Declared latest when the env var is UNSET — cold-start clamp fallback. ⚠ Set
  *  alongside `DEFAULT_MIN_VERSION` in the SAME release commit so the clamp can
  *  never refuse the floor shipped beside it. Release feed wins when reachable. */
-export const DEFAULT_DECLARED_LATEST = "1.20.0";
+export const DEFAULT_DECLARED_LATEST = "1.21.0";
 
 /**
  * `1.8.2`, optionally `1.9.0-beta.2`. ⚠ Deliberately RE-STATED rather than
