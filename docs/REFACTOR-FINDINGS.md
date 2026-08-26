@@ -3503,3 +3503,43 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   reintroduces the disabled-affordance flash the comment exists to prevent.
   Status: **open** (not fixed here: CLAUDE.md's "the CODE looks wrong → file it, change neither
   side", and the file is another wave's lane)
+
+### F-332 — ✅ RESOLVED 2026-08-26 — the dev fixture fallback OUTLIVED its migration, and on a link container it would have painted invented agents under a channel that has none
+
+- Location (as filed): `src/features/agent-templates/client/mock.ts` (seven hardcoded `AgentTemplate`
+  rows) and the `isMockFallback` predicate + `isMockData` field in
+  `src/features/agent-templates/hooks/use-agent-templates.ts`, plus the
+  "Sample data" note in `components/agent-templates-core.tsx`. ⚠ **No symbol anchor is written for
+  either — both names are gone from the tree, and an anchor at a deleted symbol is the exact rot
+  `check-doc-refs.mjs` class (c) exists to fail.** All three are DELETED in this change and
+  `hooks/use-agent-templates.test.ts` is rewritten down to the properties that survive
+  (INVARIANTS §14 — a mixed test file whose feature is deleted is rewritten, not removed).
+- Found during: **home Agents tab M0, 2026-08-26**, measuring the premise the fallback was built on.
+- **THE PREMISE WAS FALSE BY THEN.** The fixtures were written on 2026-08-23 because
+  `20260822200000_agent_templates.sql` was unapplied and the list read 500'd on a missing relation.
+  It is applied — name `agent_templates`, history version `20260823091848`, re-measured 2026-08-26
+  via MCP `list_migrations` **joined on the NAME** (§12's F-304 re-stamp rule). INVARIANTS §12 had
+  recorded all three agent-template migrations as applied since 2026-08-24 while §5A still said
+  "WRITTEN — applied is a measurement" for the same three files: **one document disagreeing with
+  itself about deploy state is what kept a temporary affordance looking current.** Both are corrected
+  in this change.
+- ⚠ **AND THE FALLBACK'S SECOND GATE STOPPED MEANING WHAT IT SAID.** The condition is
+  `error != null && data === undefined` — i.e. "the fetch failed", chosen deliberately over "the list
+  is empty". That was sound while the only way to fail was a missing relation. It is NOT sound now
+  that the same hook reads a link CONTAINER (`/home` → `StandaloneChannelSurface` → `template-picker`),
+  where **a 403/404 is an ORDINARY answer**: a roster change, a stale workspace header, a guest
+  opening the tab. So on a dev build the failure mode had inverted — from "show something while the
+  table does not exist" to "show two invented agents under a channel that genuinely has none".
+- Severity: **dev/test builds only, and that is the ceiling, not the argument for keeping it.**
+  `process.env.NODE_ENV` is folded by both bundlers that compile this module, so a shipped build
+  could never take the branch and never did. The cost was to the people reading the surface: every
+  live review of /home on a dev build was one 403 away from a fabricated roster, with a single muted
+  "Sample data" word as the only tell.
+- Resolution, in this change: `client/mock.ts` deleted; the hook returns `query.data ?? []` and the
+  `error`, so a failed read renders the plain error state and nothing else, in every build;
+  `isMockData` is off `UseAgentTemplatesResult` (no consumer outside the page kept it);
+  INVARIANTS §5A gains the standing 🚫 rule that no fixture fallback may come back on this read, and
+  its three migration bullets are amended to APPLIED with the command.
+  Status: ✅ **resolved 2026-08-26** — the entry is KEPT rather than deleted because the finding is
+  the RULE (a fallback keyed on "the fetch failed" becomes a liar the moment failure becomes normal),
+  and a future tidy-up that re-adds review fixtures needs to meet it.

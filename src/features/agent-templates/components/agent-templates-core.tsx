@@ -144,17 +144,6 @@ export function AgentTemplatesCore({
     <div className="page-float flex flex-col antialiased">
       <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
         <h1 className="text-display font-semibold text-text-primary">Agents</h1>
-        {/* ⚠⚠ DEV MOCK — TEMPORARY, delete with `../client/mock.ts` and the
-            `isMockData` branch in `../hooks/use-agent-templates.ts` once
-            `20260822200000_agent_templates.sql` is applied. Every card below is
-            hardcoded when this shows; a future session must not read the grid as
-            real rows.
-            ⚠ CANNOT APPEAR IN A PRODUCTION BUILD: `isMockData` is gated on
-            `process.env.NODE_ENV`, which both bundlers fold at build time, so a
-            shipped build renders the plain error state and nothing else. */}
-        {list.isMockData && (
-          <span className="text-caption text-text-muted">Sample data</span>
-        )}
         <span className="flex-1" />
         <button
           type="button"
