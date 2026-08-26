@@ -21,6 +21,7 @@ import {
   ContainerTemplateEditor,
   HomeWorkspaceTemplateEditor,
 } from "./agent-editor";
+import { CopyToChannelDialog, UseInThisChannelButton } from "./agent-copy";
 
 /**
  * /home → Agents. THE THREE TEMPLATE SCOPES OF ONE CHANNEL (Samuel's rulings,
@@ -96,6 +97,8 @@ export function HomeAgentPanels({
 }) {
   const [scope, setScope] = useState<PrivateScope>("channel");
   const [editing, setEditing] = useState<EditorTarget | null>(null);
+  /** The scope-C row waiting on its confirm step (plan §3, M4). */
+  const [copying, setCopying] = useState<AgentTemplate | null>(null);
 
   const containerList = useAgentTemplates(channel?.workspaceId ?? null);
   // Scope C is fetched only once it is ASKED FOR — a reader who never opens the
@@ -197,6 +200,18 @@ export function HomeAgentPanels({
             template,
           })
         }
+        // ⚠ SCOPE C ONLY. A scope-B row is already in this container; "use it
+        // here" would be a copy of a thing into the place it already is.
+        cardActionFor={
+          scope === "all"
+            ? (template) => (
+                <UseInThisChannelButton
+                  disabled={copying !== null}
+                  onClick={() => setCopying(template)}
+                />
+              )
+            : undefined
+        }
         action={
           <div className="flex items-center gap-2">
             <button
@@ -239,6 +254,22 @@ export function HomeAgentPanels({
           workspaceSegment={homeWorkspaceSegment}
           template={editing.template}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {copying && (
+        <CopyToChannelDialog
+          source={copying}
+          containerWorkspaceId={channel.workspaceId}
+          onClose={() => setCopying(null)}
+          // ⚠ THE PILL FOLLOWS THE COPY HOME. The new row is a CONTAINER row and
+          // the operator is looking at the home shelf, so leaving the scope
+          // where it was would make a successful write look like nothing
+          // happened — and the next thing they want is the row they just made.
+          onCopied={() => {
+            setCopying(null);
+            setScope("channel");
+          }}
         />
       )}
     </div>
@@ -284,11 +315,11 @@ const SCOPE_OPTIONS: ReadonlyArray<SelectMenuOption<PrivateScope>> = [
  * ONE CAPTION LINE PER SCOPE, and each is a RULING rather than an explainer
  * (minimal UI copy; plan §4.4).
  *
- * ⚠ THE SECOND ONE NAMES THE M4 CONTROL ("Use in this channel", plan §3) — it
- * is the plan's own wording and it ships with the pane, so **M4 is what makes
- * it true**. A scope-C template CANNOT launch into a container: `getTemplateById`
- * is workspace-filtered and resolve passes the LAUNCH workspace, so the id 404s
- * (plan §0.3). Copying is the answer, and this line is what says so.
+ * ⚠ THE SECOND ONE NAMES A CONTROL, AND SINCE M4 THAT CONTROL EXISTS — "Use in
+ * this channel" on every scope-C card (`agent-copy.tsx`). A scope-C template
+ * CANNOT launch into a container: `getTemplateById` is workspace-filtered and
+ * resolve passes the LAUNCH workspace, so the id 404s (plan §0.3). Copying is
+ * the answer, and this line is what says so.
  */
 const CAPTIONS: Record<PrivateScope, string> = {
   channel: "Yours alone until you share it.",

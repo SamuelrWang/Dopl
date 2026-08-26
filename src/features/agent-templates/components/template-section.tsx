@@ -84,6 +84,7 @@ export function TemplateGrid({
   onOpen,
   pendingIds,
   markerFor,
+  actionFor,
 }: {
   templates: ReadonlyArray<AgentTemplate>;
   /** ⚠ Only ever rendered against a RESOLVED read — see `resolved` on
@@ -96,6 +97,8 @@ export function TemplateGrid({
   pendingIds?: ReadonlySet<string>;
   /** `by <member>` for a row this operator did not write, else `null`. */
   markerFor?: (template: AgentTemplate) => string | null;
+  /** A SECOND control for a row, under the body ({@link TemplateCard}). */
+  actionFor?: (template: AgentTemplate) => ReactNode;
 }) {
   if (templates.length === 0) {
     return <p className="px-1 pb-1 text-caption text-text-muted">{emptyLine}</p>;
@@ -109,6 +112,7 @@ export function TemplateGrid({
           onOpen={onOpen}
           pending={pendingIds?.has(template.id) ?? false}
           marker={markerFor?.(template) ?? null}
+          action={actionFor?.(template) ?? null}
         />
       ))}
     </div>
@@ -155,7 +159,11 @@ export function TemplateSection({
  * does nothing is worse than one that does not invite the press. Both surfaces
  * pass one now (the /home face gained its editor in `home-agents-tab.plan.md`
  * M3), so the branch is kept for the next surface that lists templates it
- * cannot author. There is no kebab, no per-card delete, and **no launch control** —
+ * cannot author. ⚠ **A row may carry ONE second control (`action`), and it goes
+ * INSIDE the face rather than on top of it** — a `<button>` may not contain a
+ * `<button>`, so an action turns the card into a `div` whose body is the button.
+ * The /home face's scope-C rows use it for "Use in this channel" (the COPY, §3).
+ * There is no kebab, no per-card delete, and **no launch control** —
  * launch-time SELECTION belongs to the Chat face's picker and must not grow a
  * beachhead here (§5A: a second launch surface fights `resolve`'s singularity).
  *
@@ -170,11 +178,13 @@ function TemplateCard({
   onOpen,
   pending,
   marker,
+  action,
 }: {
   template: AgentTemplate;
   onOpen?: (template: AgentTemplate) => void;
   pending: boolean;
   marker: string | null;
+  action: ReactNode;
 }) {
   const model = agentModelShortLabel(template.model);
   const description = template.description?.trim();
@@ -201,20 +211,40 @@ function TemplateCard({
     </>
   );
   const face = "bento flex min-h-[92px] flex-col gap-1.5 p-3 text-left";
+  const raise =
+    "transition-shadow hover:shadow-[0_2px_4px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.07)]";
+
+  // ⚠ A SECOND CONTROL MOVES THE PRESSABLE ELEMENT *INSIDE* THE CARD, it does
+  // not overlay one. A `<button>` may not contain a `<button>` — an absolutely
+  // positioned action on top of a card-shaped button is invalid HTML that
+  // renders, which is the worst kind — so when a row carries an action the FACE
+  // becomes a plain `div` and the body is the button within it. The whole card
+  // still opens the editor everywhere except the action's own footprint.
+  if (action) {
+    return (
+      <div {...pendingRow(pending, cn(face, onOpen && raise))}>
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={() => onOpen(template)}
+            className="flex flex-1 cursor-pointer flex-col items-start gap-1.5 text-left"
+          >
+            {body}
+          </button>
+        ) : (
+          body
+        )}
+        <div className="pt-0.5">{action}</div>
+      </div>
+    );
+  }
 
   if (!onOpen) return <div {...pendingRow(pending, face)}>{body}</div>;
   return (
     <button
       type="button"
       onClick={() => onOpen(template)}
-      {...pendingRow(
-        pending,
-        cn(
-          face,
-          "cursor-pointer",
-          "transition-shadow hover:shadow-[0_2px_4px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.07)]"
-        )
-      )}
+      {...pendingRow(pending, cn(face, "cursor-pointer", raise))}
     >
       {body}
     </button>

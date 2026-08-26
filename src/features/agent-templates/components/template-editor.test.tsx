@@ -292,6 +292,7 @@ describe("no concave surfaces", () => {
     "agent-panels.tsx",
     "agent-panel-cards.tsx",
     "agent-editor.tsx",
+    "agent-copy.tsx",
   ].map((name) =>
     path.join(process.cwd(), "apps", "desktop-ui", "src", "pages", "home", name)
   );

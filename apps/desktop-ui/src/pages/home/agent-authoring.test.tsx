@@ -265,3 +265,83 @@ describe("the writes stay in their own workspace", () => {
     expect(templateCalls(apiRequest, WORKSPACE_ID)).toHaveLength(0);
   });
 });
+
+/**
+ * "USE IN THIS CHANNEL" — the COPY (plan §3, M4, Samuel's ruling Q2).
+ *
+ * ⚠ THE LOAD-BEARING ASSERTION IS ON THE REQUEST BODY. What the copy CARRIES
+ * and what it DROPS is not visible on screen — a container row with no bases
+ * and a container row with the home row's bases render identically — so a suite
+ * that only looked at the DOM would pass while the write 400d on an
+ * unreachable KB id.
+ */
+describe("use in this channel", () => {
+  /** Reach the copy control on the scope-C card. */
+  async function openCopyConfirm(): Promise<void> {
+    renderHome();
+    await openAgents();
+    await screen.findByText("Scratch agent");
+    await chooseScope("across all channels");
+    await screen.findByText("Fundraise analyst");
+    fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
+    await screen.findByRole("button", { name: "Make a copy" });
+  }
+
+  it("posts a PRIVATE copy to the CONTAINER, with the knowledge bases dropped", async () => {
+    await openCopyConfirm();
+    fireEvent.click(screen.getByRole("button", { name: "Make a copy" }));
+
+    await waitFor(() => expect(createCall()).toBeDefined());
+    const call = createCall()!;
+    // 🔒 THE CONTAINER, not the workspace the row came from.
+    expect(call.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
+    // 🔒 Forced `private`; `teamIds` and `knowledgeBaseIds` absent, which is what
+    // "cleared" means on a create body. The name carries UNCHANGED — no
+    // "(copy)" suffix, because templates have no name uniqueness to dodge.
+    expect(call.opts.body).toEqual({
+      name: "Fundraise analyst",
+      visibility: "private",
+      description: "Reads the data room",
+      instructions: "Cite the memo.",
+      model: "claude-opus-5",
+      fields: [{ key: "round", value: "seed" }],
+    });
+  });
+
+  it("says the knowledge bases stay behind BEFORE anything is written", async () => {
+    await openCopyConfirm();
+    // ⚠ The drop is a rule the operator has to know in advance: the copy is not
+    // the agent they were using, it is that agent without its reading. One line,
+    // and it names the count.
+    expect(document.body.textContent).toContain("attached knowledge base stays behind");
+    expect(document.body.textContent).toContain("snapshot");
+    expect(createCall()).toBeUndefined();
+  });
+
+  it("lands the copy in the CHANNEL's list and points the pill at it", async () => {
+    await openCopyConfirm();
+    fireEvent.click(screen.getByRole("button", { name: "Make a copy" }));
+
+    // The pill follows the copy home — the new row is a container row, and a
+    // successful write that left the operator on the home shelf would look like
+    // nothing happened.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Which private agents").textContent).toContain(
+        "in this channel"
+      )
+    );
+    expect(screen.getByText("Scratch agent")).toBeInTheDocument();
+    // Two rows now read "Fundraise analyst" nowhere: the container copy is here,
+    // and the home original is behind the pill.
+    expect(screen.getAllByText("Fundraise analyst")).toHaveLength(1);
+  });
+
+  it("offers no copy control on a row already IN this channel", async () => {
+    renderHome();
+    await openAgents();
+    await screen.findByText("Scratch agent");
+    // Scope B. Copying a container row into its own container is a copy of a
+    // thing into the place it already is.
+    expect(screen.queryByRole("button", { name: "Use in this channel" })).toBeNull();
+  });
+});

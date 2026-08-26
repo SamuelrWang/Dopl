@@ -69,6 +69,53 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
 }
 
 /**
+ * THE COPY — one home-workspace template, as a draft for a NEW row in a link
+ * CONTAINER ("Use in this channel", `docs/specs/home-agents-tab.plan.md` §3 and
+ * Samuel's ruling Q2, 2026-08-26).
+ *
+ * ⚠ WHY A COPY AT ALL, since a "share across workspaces" flag sounds simpler: a
+ * scope-C template CANNOT LAUNCH INTO A CONTAINER. `getTemplateById` is
+ * workspace-filtered and `/resolve` passes the LAUNCH workspace, so the id 404s —
+ * a same-workspace trigger, not a permission anyone lacks, and no grant table
+ * could fix it (INVARIANTS §5A). This is CLIENT-COMPOSED over the EXISTING POST:
+ * no new route, no new service, no server change.
+ *
+ * 🔒 **THE ATTACHED KNOWLEDGE BASES ARE DROPPED, NOT CARRIED.** A home-workspace
+ * KB id is not in the container, and the attach gate ("a KB the CALLER can
+ * currently read", §5A) would 404 it — so carrying the ids turns a copy into a
+ * failed write. ⚠ **AND THERE IS NO NAME-MATCH RE-ATTACH.** Resolving "Fundraise
+ * memos" here against a same-named base in the container would be a SECOND,
+ * WEAKER ATTACH GATE — one that resolves by string where the server resolves by
+ * id and readability — and the first time two bases share a name it attaches the
+ * wrong one silently. The drop is stated to the operator in the confirm step.
+ *
+ * ⚠ **IT IS A SNAPSHOT THAT DIVERGES.** No FK, no back-pointer, no sync: the two
+ * rows are strangers the moment this returns, and editing the original does not
+ * reach the copy. That is the same culture as `channel_sessions.template_name` —
+ * A DENORMALIZED SNAPSHOT, NOT AN FK, AND NOTHING MAY "FIX" THAT LATER. A future
+ * `copiedFrom` column would make the container row point at a workspace its
+ * members cannot read.
+ *
+ * ⚠ **`visibility` IS FORCED TO `private`, NEVER CARRIED.** A home template that
+ * happened to be `workspace`-visible would otherwise land SHARED WITH THE PEER on
+ * a gesture whose whole word is "use" — publishing into a shared container is a
+ * decision the operator makes afterwards, in the editor, deliberately.
+ *
+ * ⚠ **THE NAME IS CARRIED UNCHANGED — NO "(copy)" SUFFIX.** Templates have NO
+ * name uniqueness, deliberately (there is no unique index and no 409 on the
+ * route), so a suffix would be dodging a constraint that does not exist and
+ * renaming the operator's agent to do it.
+ */
+export function containerCopyDraft(template: AgentTemplate): TemplateDraft {
+  return {
+    ...draftFromTemplate(template),
+    visibility: "private",
+    teamIds: [],
+    knowledgeBaseIds: [],
+  };
+}
+
+/**
  * Custom fields worth sending: a row whose KEY is blank carries nothing, and the
  * editor's add-row starts blank — so an operator who clicked "Add field" and
  * changed their mind must not get an empty pair written to their template.

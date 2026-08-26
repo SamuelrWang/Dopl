@@ -89,6 +89,7 @@ export function PrivateAgentSection({
   unavailable,
   pending,
   onOpen,
+  cardActionFor,
 }: {
   section: TemplateSectionDef;
   templates: ReadonlyArray<AgentTemplate>;
@@ -103,6 +104,10 @@ export function PrivateAgentSection({
    *  container on "in this channel", the caller's own workspace on "across all
    *  channels". A row is always edited where it lives (plan §4.5). */
   onOpen: (template: AgentTemplate) => void;
+  /** ONE second control per row. Scope C's rows carry "Use in this channel"
+   *  (the COPY, plan §3); scope B's carry nothing, because a row already in this
+   *  container has nothing to copy itself into. */
+  cardActionFor?: (template: AgentTemplate) => ReactNode;
 }) {
   return (
     <TemplatePanel
@@ -123,6 +128,7 @@ export function PrivateAgentSection({
           templates={templates}
           emptyLine={section.emptyLine}
           onOpen={onOpen}
+          actionFor={cardActionFor}
         />
       )}
     </TemplatePanel>
