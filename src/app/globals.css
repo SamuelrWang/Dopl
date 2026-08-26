@@ -258,7 +258,7 @@
      record pane is filled with. Deliberately NOT aliases of the neutral
      surface ramp — home is cooler and warmer at once, and folding either end
      into `--bg-*` would repaint every workspace page. */
-  --home-frame: #373e4e;
+  --home-frame: #2f3542;
   --home-panel: #f1f3f5;
   --home-panel-line: #e2ecf0;
   --home-card: #fbfcfc;

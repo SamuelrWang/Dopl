@@ -52,7 +52,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `bg-surface-raised-1/2/3/4`                   | 2–7% black       | hover / active row tints   |
 | `border-border-subtle/default/strong/highlight` | 6/8/12/16% black | hairlines, by emphasis   |
 | `divide-border-subtle`                        | 6% black         | list dividers              |
-| `bg-home-frame`                               | `#373e4e`        | /home ONLY — the dark slab behind shell root + surface + account rail (2026-08-24) |
+| `bg-home-frame`                               | `#2f3542`        | /home ONLY — the dark slab behind shell root + surface + account rail (darkened a notch 2026-08-25) |
 | `bg-home-panel`                               | `#f1f3f5`        | /home ONLY — the base panel (`.page-float` fill) |
 | `border-home-panel-line`                      | `#e2ecf0`        | /home ONLY — the record-pane hairline. ⚠ The header selector's track is `--seg-fill` now, so the token's `bg-` variant has NO consumer (`grep -rn 'bg-home-panel-line' src apps` is empty); only the `border-` utility is live. |
 | `bg-home-card`                                | `#fbfcfc`        | /home ONLY — the record pane's fill |
