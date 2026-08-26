@@ -52,7 +52,7 @@ export interface HomeChannel {
 /** A minted, not-yet-claimed link. Only ever the caller's own. */
 export interface HomePendingLink {
   id: string;
-  /** Full claim URL, e.g. `https://dopl.link/c/<token>`. */
+  /** Full claim URL, e.g. `https://www.usedopl.com/link/<token>` (`src/features/home/server/dto.ts › claimUrl`). */
   url: string;
   label: string | null;
   createdAt: string;

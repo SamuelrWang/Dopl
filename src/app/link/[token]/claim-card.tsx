@@ -11,14 +11,20 @@ import { useEffect, useState } from "react";
  * purpose; the surface that shows it is the account HOME page. Handing over the
  * container's segment would open a workspace the app declines to list.
  *
- * ⚠ NOTHING HERE NAVIGATES THE WEB APP, for the reason `JoinLinkCard` records:
- * the web tree cannot render a workspace at all. The outcome of a claim is a
- * `dopl://` handoff, not a page.
+ * ⚠ REVERSED 2026-08-25 by `docs/specs/guest-web-channel.md` (owner ruling).
+ * This block used to read "NOTHING HERE NAVIGATES THE WEB APP", because the web
+ * tree could not render a workspace at all. It can now: a successful claim ALSO
+ * offers the guest lane at `/c/<workspaceId>`, so a claimer with no desktop app
+ * has somewhere to go. What did NOT change: the dead endings (arrived dead, or a
+ * 410 mid-claim) still navigate nowhere and still show no deep link, and the
+ * card still binds NO router — the web lane is a plain anchor, so the full page
+ * load lands on the Next route's own auth and membership fence.
  */
 
 /** ⚠ `HomeLinkClaimResult` is the authority; only what this card reads is restated. */
 interface ClaimOutcome {
   existing: boolean;
+  channel: { workspaceId: string };
 }
 
 const HOME_DEEP_LINK = "dopl://open/home";
@@ -98,6 +104,7 @@ export function LinkClaimCard({
               ? `You're already connected to ${who}.`
               : `You're connected to ${who}.`
           }
+          workspaceId={outcome.channel?.workspaceId ?? null}
         />
       ) : needsAuth ? (
         <div className="mt-6 flex flex-col gap-3">
@@ -134,8 +141,20 @@ export function LinkClaimCard({
  * protocol launches with no user gesture, silently and per-engagement-state.
  * Same shape as `workspaces/components/desktop-handoff-panel.tsx`, which cannot
  * be reused verbatim — it builds a WORKSPACE deep link, and this one is Home.
+ *
+ * ⚠ AND THE WEB LANE IS ALWAYS ON SCREEN, never a timer: attempting a custom
+ * scheme tells you nothing about whether it landed, so the only honest fallback
+ * is a link the claimer can see the whole time. It is a plain `<a href>` on
+ * purpose — a full page load hands `/c/<id>` to its own server-side fence.
  */
-function HandoffPanel({ heading }: { heading: string }) {
+function HandoffPanel({
+  heading,
+  /** null only if the claim response arrived without one; then there is no lane to offer. */
+  workspaceId,
+}: {
+  heading: string;
+  workspaceId: string | null;
+}) {
   useEffect(() => {
     // Assigning a custom scheme does NOT unload the document, so the card stays
     // on screen whether or not the OS had a handler.
@@ -155,6 +174,18 @@ function HandoffPanel({ heading }: { heading: string }) {
       >
         Open Dopl
       </a>
+      {workspaceId && (
+        <p className="text-caption text-text-tertiary">
+          Or{" "}
+          <a
+            href={`/c/${encodeURIComponent(workspaceId)}`}
+            className="underline underline-offset-2 hover:text-text-secondary"
+          >
+            open this channel in your browser
+          </a>
+          .
+        </p>
+      )}
       <DownloadLine />
     </div>
   );

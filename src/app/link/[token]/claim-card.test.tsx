@@ -6,6 +6,11 @@
  * in a hidden `kind='link'` container the desktop rail filters out, so a handoff
  * naming that container's segment opens a workspace the app declines to list.
  * The only correct target is the account surface, `dopl://open/home`.
+ *
+ * ⚠ SINCE 2026-08-25 (`docs/specs/guest-web-channel.md`) a claim has a SECOND
+ * ending: the web guest lane at `/c/<workspaceId>`, always on screen for the
+ * claimer with no desktop app. Both endings are pinned here, and so is the line
+ * between them: only a SUCCESSFUL claim offers either one.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +22,8 @@ import type { HomeLinkClaimResult } from "@/features/home/types";
 
 const TOKEN = "b".repeat(64);
 const HOME_DEEP_LINK = "dopl://open/home";
+/** The web guest lane, built from the same factory the server payload is typed by. */
+const webLane = (result = claimed(false)) => `/c/${result.channel.workspaceId}`;
 
 let navigated: string | null;
 let realLocation: PropertyDescriptor | undefined;
@@ -88,6 +95,13 @@ function renderCard(
   );
 }
 
+/** Every rendered anchor pointing at the guest lane, whatever its label. */
+function webLaneLinks() {
+  return screen
+    .queryAllByRole("link")
+    .filter((el) => (el.getAttribute("href") ?? "").startsWith("/c/"));
+}
+
 async function clickConnect() {
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: /Connect with/ }));
@@ -129,11 +143,40 @@ describe("ready to claim", () => {
     expect(navigated).toBe(HOME_DEEP_LINK);
   });
 
+  it("also offers the browser lane, at the claimed container's own id", async () => {
+    answer(claimed(false));
+    renderCard();
+    await clickConnect();
+
+    expect(
+      screen
+        .getByRole("link", { name: "open this channel in your browser" })
+        .getAttribute("href")
+    ).toBe(webLane());
+  });
+
   it("says so when the pair already had a container", async () => {
     answer(claimed(true));
     renderCard();
     await clickConnect();
     expect(screen.getByText("You're already connected to Dana.")).toBeDefined();
+  });
+
+  // ⚠ `existing: true` is the SAME ending, so it gets the same two ways in —
+  // a claimer who already had the channel is no likelier to have the app.
+  it("gives an already-connected claimer both paths, not just the deep link", async () => {
+    answer(claimed(true));
+    renderCard();
+    await clickConnect();
+
+    expect(
+      screen.getByRole("link", { name: "Open Dopl" }).getAttribute("href")
+    ).toBe(HOME_DEEP_LINK);
+    expect(
+      screen
+        .getByRole("link", { name: "open this channel in your browser" })
+        .getAttribute("href")
+    ).toBe(webLane(claimed(true)));
   });
 });
 
@@ -145,6 +188,8 @@ describe("dead links", () => {
     ).toBeDefined();
     expect(screen.queryByRole("button", { name: /Connect with/ })).toBeNull();
     expect(screen.queryByRole("link", { name: "Open Dopl" })).toBeNull();
+    // Nothing was claimed, so there is no container to browse to either.
+    expect(webLaneLinks()).toHaveLength(0);
     expect(navigated).toBeNull();
   });
 
@@ -159,6 +204,8 @@ describe("dead links", () => {
     expect(
       screen.getByRole("heading", { name: "This link is no longer available" })
     ).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Open Dopl" })).toBeNull();
+    expect(webLaneLinks()).toHaveLength(0);
     expect(navigated).toBeNull();
   });
 });
@@ -177,7 +224,15 @@ describe("failure", () => {
   });
 });
 
-describe("the claim card may not navigate the retired website", () => {
+/**
+ * ⚠ THIS FENCE NOW GUARDS *HOW* THE CARD NAVIGATES, NOT WHETHER IT MAY. Until
+ * 2026-08-25 it stood for "no web destination exists"; the guest lane is that
+ * destination, and the ruling that added it kept the rule. The lane is reached
+ * by a plain `<a href>`, so the browser performs a full load and `/c/<id>`'s
+ * own server-side auth and membership fence runs. A `router.push` would swap it
+ * in client-side and skip that, so the card still imports no router.
+ */
+describe("the claim card reaches the web by anchor, never by router", () => {
   const source = () =>
     readFileSync(
       path.join(process.cwd(), "src/app/link/[token]/claim-card.tsx"),
