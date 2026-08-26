@@ -13,9 +13,13 @@ import type { AgentTemplate, AgentTemplateListResponse } from "../client/types";
  * what the caller can see, so three scoped requests would be three chances for
  * the panels to disagree about a template that moved between them mid-load.
  *
- * ⚠ ONE READ **PER WORKSPACE**: the cache entry is `[path, workspaceId,
- * undefined]` — no caller passes a `query`, so that tuple is exactly
- * reproducible by `agentTemplateKeys.list().entry({workspaceId})`.
+ * ⚠ ONE READ **PER WORKSPACE**, and a surface may mount TWO of them (the /home
+ * Agents tab reads a channel container and the home workspace side by side).
+ * The cache entry is `[path, workspaceId, undefined]` — no caller passes a
+ * `query`, so that tuple is exactly reproducible, and the writes patch that
+ * ENTRY key rather than the path prefix (`./use-agent-template-writes.ts`,
+ * F-331). **If a `query` variant is ever added on this path, that pairing has
+ * to be revisited on BOTH sides in the same change.**
  *
  * ⚠ `select` IS MODULE-LEVEL. A fresh arrow per render makes TanStack re-run the
  * projection every time and hands every consumer a new array identity, which

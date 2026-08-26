@@ -23,10 +23,23 @@ import type {
  * shared mutation layer (INVARIANTS §8). Never `await write(); await refetch()`:
  * that shape is what this hook exists to close.
  *
- * ⚠ EVERY PATCH IS BY THE PREFIX KEY (`agentTemplateKeys.list().all`). The list
- * is read once per workspace, but a writer cannot know which workspace variants
- * a reader has mounted, and TanStack matches by array prefix — so the prefix is
- * the key that reaches all of them.
+ * 🔴 **EVERY PATCH IS BY THE `entry({workspaceId})` KEY, NEVER THE `.all`
+ * PREFIX — F-331, ✅ RESOLVED, and this comment is what stops a tidy-up putting
+ * the prefix back.** Until 2026-08-26 all three configs patched
+ * the `.all` key, i.e. the one-element PATH key, and TanStack
+ * matches by array PREFIX — so every patch reached EVERY WORKSPACE VARIANT of
+ * this list. That is harmless on a surface that mounts one workspace, and it is
+ * a cross-tenant display bug the moment a surface mounts two: the /home Agents
+ * tab reads a channel CONTAINER and the home workspace side by side.
+ *   - create/update `upsertRow` APPENDS when the id is absent, so a write in one
+ *     workspace materialised that template in the OTHER workspace's list until a
+ *     cold refetch;
+ *   - the entry key is exactly reproducible here because `useAgentTemplates`
+ *     passes `{workspaceId, select}` and no `query` — `[path, workspaceId,
+ *     undefined]`. **Check that before copying this pattern**: a path that also
+ *     has query-param variants needs both axes, and the prefix is the answer for
+ *     the param axis (INVARIANTS §8).
+ * `./use-agent-template-writes.test.ts` is the two-workspace pin.
  *
  * ⚠ CREATE HAS NO OPTIMISTIC ROW, DELIBERATELY. The server mints the id, and a
  * placeholder card would have to invent one; the POST answers with the created
@@ -34,11 +47,14 @@ import type {
  * (INVARIANTS §8). `coldKeys` covers the one case reconcile cannot: a cache
  * entry that still holds nothing (cold start, or the IndexedDB restore window),
  * where a patch has nothing to patch and the new template would never reach the
- * screen.
+ * screen. ⚠ **IT TAKES THE ENTRY KEY FOR THE SAME REASON THE PATCHES DO** — over
+ * the prefix, `coldKeys` asks "does ANY variant of this path hold data", so one
+ * warm workspace beside a cold one answers "warm" and the cold list never
+ * refetches the row that was just created in it.
  *
  * ⚠ DELETE IS HARD AND IS NOT A TOMBSTONE. The row leaves the cache on the
  * click; there is no archived variant of this list to move it into, so a single
- * prefix patch is the whole eviction.
+ * patch is the whole eviction.
  */
 
 /** The list cache as it sits on disk — the RAW response body, not the selection. */
@@ -91,7 +107,7 @@ export function createConfig(
       workspaceId,
     }),
     reconcile: (data) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().all, (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
         upsertRow(cache, data.template)
       ),
     invalidate: coldFallback,
@@ -109,11 +125,11 @@ export function updateConfig(
       workspaceId,
     }),
     optimistic: (draft) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().all, (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
         upsertRow(cache, draft.optimistic)
       ),
     reconcile: (data) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().all, (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
         upsertRow(cache, data.template)
       ),
   };
@@ -129,7 +145,7 @@ export function deleteConfig(
       workspaceId,
     }),
     optimistic: (draft) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().all, (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
         dropRow(cache, draft.templateId)
       ),
   };
@@ -143,10 +159,11 @@ export interface AgentTemplateWrites {
 
 export function useAgentTemplateWrites(workspaceId: string): AgentTemplateWrites {
   const client = useQueryClient();
+  const listEntry = agentTemplateKeys.list().entry({ workspaceId });
   return {
     create: useApiMutationWith(
       agentTemplateRequest,
-      createConfig(workspaceId, () => coldKeys(client, [agentTemplateKeys.list().all]))
+      createConfig(workspaceId, () => coldKeys(client, [listEntry]))
     ),
     update: useApiMutationWith(agentTemplateRequest, updateConfig(workspaceId)),
     remove: useApiMutationWith(agentTemplateRequest, deleteConfig(workspaceId)),

@@ -3504,6 +3504,57 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   Status: **open** (not fixed here: CLAUDE.md's "the CODE looks wrong → file it, change neither
   side", and the file is another wave's lane)
 
+### F-331 — ✅ RESOLVED 2026-08-26 — every agent-template write patched the PATH PREFIX, so a template created in one workspace appeared in another workspace's list
+
+- Location: `src/features/agent-templates/hooks/use-agent-template-writes.ts` — all three configs
+  (`› createConfig`'s `reconcile`, `› updateConfig`'s `optimistic` AND `reconcile`, `› deleteConfig`'s
+  `optimistic`) patched `agentTemplateKeys.list().all`, which is `apiPathKey("/api/agent-templates")`
+  — the ONE-ELEMENT key. TanStack matches by array PREFIX, so each patch landed on **every workspace
+  variant of the list** that any reader had mounted. The hook's own `coldKeys` call carried the same
+  key and the same fault.
+- Found during: **home Agents tab M1, 2026-08-26**, reading the write layer before mounting a second
+  workspace against it.
+- ⚠ **IT WAS CORRECT WHEN IT WAS WRITTEN, AND THAT IS THE FINDING.** INVARIANTS §8's default —
+  "writes patch by the prefix, because the writer does not know which query-param variants a reader
+  mounted" — is right whenever the variant axis is the PARAMS (the channel list is cached twice, with
+  and without `?include=archived`). On this path the variant axis is the **WORKSPACE**, and the
+  default silently answers a question nobody asked: it reaches variants that are not the writer's to
+  touch. The docblock and `client/query-keys.ts` both stated the prefix as a virtue.
+- Severity: **latent until a surface mounts two workspaces of this path, then a cross-workspace
+  display leak.** One-workspace pages (`/:workspaceSegment/agents`, the channel `template-picker`)
+  cannot observe it — every patched variant is the same variant. The /home Agents tab mounts a
+  channel CONTAINER list and the home-workspace list side by side, and there:
+  - **CREATE** — `upsertRow` APPENDS when the id is absent from the cache it is handed, so a template
+    created in the container materialised under "across all channels" until a cold refetch;
+  - **UPDATE is worse than create** — that path patches TWICE (optimistic, then reconcile) and both
+    append, so the other workspace's list grew the row it has no read access to, twice;
+  - **DELETE does not leak, BY ACCIDENT** — `dropRow` filters by ID and ids never repeat across
+    workspaces, so the prefix patch was a no-op next door. **Not a design property; do not rely on
+    it**, and the pin that covers it says so rather than counting itself as evidence.
+  - **`coldKeys` inverted too**: over the prefix it asks "does ANY variant of this path hold data",
+    so one warm workspace beside a cold one answered "warm" for both, and the cold list — whose
+    reconcile had nothing to patch — never refetched the row just created in it. On a link container
+    the cold half is ORDINARY, not exotic: a 403/404 there leaves the entry data-less.
+  - ⚠ **NOTHING CROSSED A SERVER FENCE.** The server filters every read by `canSeeTemplate` (§5A);
+    what leaked was a row the client already held, displayed under the wrong heading. A reader who
+    refetched saw the truth.
+- Resolution, in this change: all four key sites take `agentTemplateKeys.list().entry({workspaceId})`.
+  **The entry key is exactly reproducible on this path and that was verified before relying on it** —
+  `useAgentTemplates` passes `{workspaceId, select}` and NO `query`, so the tuple the read registers
+  is `[path, workspaceId, undefined]` and `entry({workspaceId})` builds exactly that. ⚠ **That
+  premise is the fix's only load-bearing assumption**: adding a `query` variant on this path splits
+  the entry in two and the pairing has to be revisited on BOTH sides in the same change (said in the
+  read hook's docblock as well).
+- Pinned by `hooks/use-agent-template-writes.test.ts` — real `QueryClient`, real hooks, mocked
+  transport, both lists warm, asserting what the OTHER workspace's reader projects.
+  **Mutation-verified, 5 reverts:** all four sites → `.all` = 3 failures; create's `reconcile` alone
+  = 2; `coldKeys` alone = 1; update's two alone = 1; **delete's alone = 0 — the accident above, and
+  it is reported rather than counted.** 0 vacuous.
+- The generalizable half is INVARIANTS §8's new rule: **a surface that mounts two workspaces of one
+  path patches the ENTRY key, not the path prefix.**
+  Status: ✅ **resolved 2026-08-26** — entry KEPT, because the value is the rule and the trap is that
+  the prefix looks like the house style. A tidy-up "restoring consistency" here reopens it.
+
 ### F-332 — ✅ RESOLVED 2026-08-26 — the dev fixture fallback OUTLIVED its migration, and on a link container it would have painted invented agents under a channel that has none
 
 - Location (as filed): `src/features/agent-templates/client/mock.ts` (seven hardcoded `AgentTemplate`
