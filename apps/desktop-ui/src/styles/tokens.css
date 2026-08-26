@@ -268,6 +268,12 @@
      the two cannot drift — and a SCOPED override can wear the same face without
      forking the recipe into a hex (which the design system forbids).
      Added 2026-08-24 for /home's sender pills. */
+  /* THE SEGMENTED FILL — one gray for every switcher in the app, so the page
+     header's tracked selector and the info column's trackless pills cannot
+     drift apart (Samuel, 2026-08-25). `.seg-pill` and `.seg-track` both read
+     it; a consumer may still override the track with a `bg-*` utility. */
+  --seg-fill: #e9eaec;
+
   --raised-light-face: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
   --raised-light-line: #d4d4d4;
   /* The bevel + near drop both faces share; each adds its own far layer. */

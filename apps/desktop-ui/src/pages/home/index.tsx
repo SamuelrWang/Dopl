@@ -10,7 +10,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
-import type { HomeRelationshipsPayload } from "@/features/home/types";
+import type { HomeChannelsPayload } from "@/features/home/types";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import home from "./home.module.css";
 import { useApiQuery } from "#/hooks/use-api-query";
@@ -20,12 +20,14 @@ import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
 import { RelationshipList } from "./relationship-list";
 import { RelationshipRecord } from "./relationship-record";
-import { PendingLinkCard } from "./pending-link-card";
-import { NewLinkPopover } from "./new-link-popover";
+import { PendingLinkCard } from "./link-out-panel";
+import { NewChannelDialog } from "./new-channel-dialog";
 import { HomeSearch } from "./home-search";
 
 import {
-  HOME_RELATIONSHIPS_PATH,
+  HOME_CHANNELS_PATH,
+  channelRowId,
+  hasLinkOut,
   homeRows,
   visibleRows,
   type HomeFilter,
@@ -56,6 +58,7 @@ import {
 export default function HomePage() {
   const navigate = useNavigate();
   const [createWsOpen, setCreateWsOpen] = useState(false);
+  const [newChannelOpen, setNewChannelOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HomeFilter>("all");
@@ -65,16 +68,15 @@ export default function HomePage() {
     { workspaces?: WorkspaceLike[] },
     WorkspaceLike[]
   >("/api/workspaces", { select: selectStandardWorkspaces });
-  const relationshipsQuery =
-    useApiQuery<HomeRelationshipsPayload>(HOME_RELATIONSHIPS_PATH);
+  const channelsQuery = useApiQuery<HomeChannelsPayload>(HOME_CHANNELS_PATH);
   const identity = useQuery({
     queryKey: bootQueryKey(null),
     queryFn: ({ signal }) => fetchBoot(null, signal),
   });
 
   const rows = useMemo(
-    () => (relationshipsQuery.data ? homeRows(relationshipsQuery.data) : []),
-    [relationshipsQuery.data]
+    () => (channelsQuery.data ? homeRows(channelsQuery.data) : []),
+    [channelsQuery.data]
   );
   // ⚠ THE FILTER LIVES HERE, not in the list. The record pane falls back to the
   // first row when nothing is selected, and it has to be the first row the
@@ -84,12 +86,14 @@ export default function HomePage() {
     () => visibleRows(rows, filter, query),
     [rows, filter, query]
   );
-  const linkCount = rows.filter((row) => row.kind === "link").length;
+  // ⚠ COUNTED OVER ALL ROWS AND BY THE FILTER'S OWN PREDICATE — the badge is a
+  // promise about what picking "Links" will show, and an inline copy of the
+  // rule here is how the two come to disagree.
+  const linkCount = rows.filter(hasLinkOut).length;
 
-  const error =
-    relationshipsQuery.error ?? workspacesQuery.error ?? identity.error;
+  const error = channelsQuery.error ?? workspacesQuery.error ?? identity.error;
   const pending =
-    relationshipsQuery.isPending || workspacesQuery.isPending || identity.isPending;
+    channelsQuery.isPending || workspacesQuery.isPending || identity.isPending;
 
   if (pending) {
     return (
@@ -105,7 +109,7 @@ export default function HomePage() {
         <PageError
           error={error ?? new Error("Could not open home")}
           onRetry={() => {
-            void relationshipsQuery.refetch();
+            void channelsQuery.refetch();
             void workspacesQuery.refetch();
             void identity.refetch();
           }}
@@ -142,8 +146,8 @@ export default function HomePage() {
       ) : (
         <EmptyState
           icon={Link2}
-          title="No relationships yet"
-          description="Mint a link and send it to somebody — the channel opens when they claim it."
+          title="No channels yet"
+          description="Create one and launch an agent into it."
         />
       );
     }
@@ -151,11 +155,11 @@ export default function HomePage() {
     return (
       <RelationshipRecord
         key={row.id}
-        relationship={row.relationship}
+        homeChannel={row.channel}
         currentUserId={identity.data.userId}
         onDeleted={() => {
           setSelectedId(null);
-          void relationshipsQuery.refetch();
+          void channelsQuery.refetch();
         }}
       />
     );
@@ -201,11 +205,21 @@ export default function HomePage() {
                 onChange={setTab}
                 variant="track"
                 size="lg"
-                className="bg-home-panel-line"
               />
               <div className="flex items-center gap-2.5">
                 <HomeSearch query={query} onQueryChange={setQuery} />
-                <NewLinkPopover />
+                {/* ⚠ ONE PRIMARY ACTION, AND IT IS "New channel" (Samuel,
+                    2026-08-25). The mint popover was here as an interim while
+                    links were still page-level; it now lives on the channel it
+                    binds to (`person-info-tab.tsx`), because that is the thing
+                    it acts on. Do not put a second black pill back here. */}
+                <button
+                  type="button"
+                  onClick={() => setNewChannelOpen(true)}
+                  className="auth-btn-3d flex h-9 cursor-pointer items-center rounded-full px-[15px] text-small font-semibold text-white"
+                >
+                  New channel
+                </button>
               </div>
             </div>
             {/* ⚠ ONE LAYOUT FOR ALL THREE TABS (Samuel, 2026-08-24). The
@@ -245,6 +259,17 @@ export default function HomePage() {
           </main>
         </div>
       </div>
+
+      {/* ⚠ SELECTING THE NEW ROW IS OPTIMISTIC ABOUT ORDER, NOT ABOUT EXISTENCE.
+          The row arrives with the channels refetch the write invalidates; until
+          it does, `selected` falls back to the first visible row exactly as it
+          always has, then snaps to this id. Nothing renders a channel the
+          server has not confirmed. */}
+      <NewChannelDialog
+        open={newChannelOpen}
+        onOpenChange={setNewChannelOpen}
+        onCreated={(workspaceId) => setSelectedId(channelRowId(workspaceId))}
+      />
 
       <CreateWorkspaceDialogCore
         open={createWsOpen}

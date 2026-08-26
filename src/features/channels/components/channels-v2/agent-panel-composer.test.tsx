@@ -209,6 +209,106 @@ describe("what the panel's composer sends", () => {
     expect(screen.getByRole("alert").textContent).toBe(MESSAGE_AUTH_HELD);
   });
 
+  /**
+   * ⚠ THE WAITING BANNER IS THE ONE REFUSAL WITH A REMEDY (2026-08-25).
+   *
+   * `MESSAGE_AUTH_HELD` said something true and unanswerable for as long as it
+   * existed: this Mac has no Claude Code sign-in, main is HOLDING the agent, and
+   * there was no way in the product to do anything about it — `startSignInFlow`
+   * and `resumeAfterSignIn` both shipped with ZERO callers, so re-posting was
+   * refused with `auth-hold` forever. The button is that missing call.
+   */
+  const SIGN_IN = { name: "Sign in to Claude" };
+
+  /** A bridge whose message op refuses with the auth hold, optionally carrying
+   *  the sign-in op. ⚠ `apiRequest` is the SPA marker `getSpaBridge` keys on. */
+  function heldBridge(signIn?: ReturnType<typeof vi.fn>) {
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: {
+        reopen: vi.fn(),
+        message: vi.fn().mockResolvedValue({ ok: false, reason: "auth-hold" }),
+      },
+      ...(signIn ? { claude: { signIn } } : {}),
+    };
+    return signIn;
+  }
+
+  /** Send once, so the banner is on screen. */
+  async function provokeNotice() {
+    fireEvent.change(screen.getByLabelText("Message a1b2c3d4"), {
+      target: { value: "hi" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    });
+  }
+
+  it("the waiting banner grows a Sign in button when the bridge carries the op", async () => {
+    heldBridge(vi.fn().mockResolvedValue({ ok: true }));
+    mount();
+    await provokeNotice();
+    expect(screen.getByRole("button", SIGN_IN)).toBeTruthy();
+    // ⚠ THE BANNER TEXT IS UNCHANGED, and the button is its SIBLING rather than
+    // its child: the alert's `textContent` is the pinned contract, and a control
+    // nested inside it would rewrite the sentence for every reader.
+    expect(screen.getByRole("alert").textContent).toBe(MESSAGE_AUTH_HELD);
+  });
+
+  it("and NOT on a build without the op — absent, never inert", async () => {
+    // ⚠ THE DETECTION IS ON THE BRIDGE OP (`claude.signIn`), never on the wrapper
+    // exported by `agents-controls.ts` — that one is always a function, so
+    // `typeof` it answers true in a plain browser and paints a button that can
+    // only refuse. This composer shipped that exact bug once, with `messageAgent`.
+    heldBridge();
+    mount();
+    await provokeNotice();
+    expect(screen.queryByRole("button", SIGN_IN)).toBeNull();
+    expect(screen.getByRole("alert").textContent).toBe(MESSAGE_AUTH_HELD);
+  });
+
+  it("clicking it calls the op, and a successful sign-in clears the banner", async () => {
+    // Main resumes every held session before it answers `ok`, so by the time this
+    // lands the agent is live again — leaving the banner up would send the
+    // operator round the sign-in a second time.
+    const signIn = heldBridge(vi.fn().mockResolvedValue({ ok: true }))!;
+    mount();
+    await provokeNotice();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", SIGN_IN));
+    });
+    expect(signIn).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", SIGN_IN)).toBeNull();
+  });
+
+  it("a sign-in that did NOT take leaves the banner exactly where it was", async () => {
+    // A declined dialog and a failed sign-in are one answer, deliberately: the
+    // state the banner describes is still true. A surface that cleared on "I
+    // asked" rather than on "it worked" is how a held agent comes to look ready.
+    heldBridge(vi.fn().mockResolvedValue({ ok: false }));
+    mount();
+    await provokeNotice();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", SIGN_IN));
+    });
+    expect(screen.getByRole("alert").textContent).toBe(MESSAGE_AUTH_HELD);
+    expect(screen.getByRole("button", SIGN_IN)).toBeTruthy();
+  });
+
+  it("an ORDINARY refusal never grows the button — nothing here would fix it", async () => {
+    // `MESSAGE_REFUSED` means the agent is gone, and no sign-in brings it back.
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      sessions: { reopen: vi.fn(), message: vi.fn().mockResolvedValue({ ok: false }) },
+      claude: { signIn: vi.fn() },
+    };
+    mount();
+    await provokeNotice();
+    expect(screen.getByRole("alert").textContent).toBe(MESSAGE_REFUSED);
+    expect(screen.queryByRole("button", SIGN_IN)).toBeNull();
+  });
+
   it("takes a message to an IDLE agent — the first one is what wakes it", async () => {
     // ⚠ Spawn-idle: a launched agent has no turn at all until something arrives.
     // Gating on `working` would make every fresh agent unreachable.

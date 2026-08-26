@@ -1355,6 +1355,8 @@ COMMIT;
 - ✅ **REPRODUCED 2026-08-22 (v1.17.1 cross-lane verification), and the shape is narrower than this entry assumed.** Sample, stated per the rule above: **4 full `npm test` runs at the root, 2 failed** — both on `latest-release.test.ts:316 › "honours an injected clock, so the TTL is testable without a timer stub"`, both `expect(spy).not.toHaveBeenCalled()` with `Number of calls: 1`, i.e. the scheduled refresh fired one tick EARLY. The other two runs were 221 files / 3140 tests clean. **In the same session, 1 isolated run of `npx vitest run src/shared/version/latest-release.test.ts` passed 26/26.**
   - ⚠ **THE ISOLATION RESULT AND THE FULL-SUITE RESULT ARE DIFFERENT MEASUREMENTS, AND THIS ENTRY HAS BEEN CONFLATING THEM.** The withdrawn "1 in 2..3 INCLUDING in isolation" claim was retired on 7 clean ISOLATED runs — but isolation is the condition under which it does not fail. Both halves of F-217 now look like **the same parallel-load shape**, which is what the SPA half was always described as; the module-level cache is a plausible amplifier under contention rather than an independent cause. **Re-measure with the full suite, never in isolation** — an isolated run of this file cannot falsify anything.
   - This wave did not touch the file (`git status` clean for it) and the failure reproduces on the merged tree exactly as described, so it is neither caused nor masked by v1.17.1.
+- ⚠ **OBSERVED AGAIN 2026-08-25 (the outbound-review + right-pane wave), AND THE NAME WAS NOT CAPTURED — which is itself the note.** Sample, stated per the rule above: **~15 full `npm run test` runs at the root over the session, 2 reported `1 failed | 3721 passed`**, then **11 consecutive green**, including a deliberate 7-run capture loop that never reproduced. Both failures landed on runs whose output was piped through `tail`, so the failing spec scrolled past and no name survives. **The rate (~13%) and the "one test, full-suite only, never on demand" shape match this entry's root half**, but nothing here ATTRIBUTES them to it — an unnamed failure attributed by resemblance is how a real second flake gets absorbed into an existing entry and stops being looked for.
+  - **The operational lesson, cheap and worth keeping: never `| tail` a suite run you might need to diagnose.** Redirect to a file and tail the file. This session lost two reproductions to a pipe.
 - Status: open (both halves — the latest-release half now HAS a reproduction under full-suite parallelism, 2/4 on 2026-08-22; mechanism still unexplained)
 
 ## F-218 — The historical agent-attribution READER is gone; the key it protects is now reserved with nothing rendering it (2026-08-18)
@@ -1513,7 +1515,7 @@ COMMIT;
 - **MEASURED, NOT INFERRED.** `launch-panel.tsx` gates its disclosure on `disclosable = isInbound && hasSettings`, and `isInbound` is `request.kind === "inbound"`. The panel has exactly ONE production consumer — `components/channels-v2/thread-consent.tsx › ThreadSendBox` — which always passes an OUTBOUND request (`view-model-requested.ts › pendingOutboundByThread` filters `r.kind === "outbound"`). And `grep -rn 'kind: "inbound"' src apps --glob '!*.test.*'` returns **zero**. So `isInbound` is false in production, always
 - **What therefore never paints:** the requester Avatar branch, "<name>'s agent is asking", the "To launch" chip, the "Launching runs a Claude session on this machine." line, the whole `LaunchSettings` disclosure, `LAUNCH_SETTINGS_HEADING`, "Launch agent" / "Decline", and — through `LaunchSettings` — `components/permission-preset-row.tsx › RequestPermissionRow` and `components/request-folder-row.tsx` in its entirety. What DOES paint is only the outbound send box: Sparkles, "Your agent wants to reply", "To send", Send, Cancel
 - ⚠ **THE DOC-vs-CODE DISAGREEMENT IS THE FINDING.** INVARIANTS §6 says the launch settings are "`components/permission-preset-row.tsx › RequestPermissionRow` … reused verbatim", and §11's two-record table gives THE ARM's "Web surface" as "the request card (`launch-panel.tsx › RequestPermissionRow`)". Neither is reachable. §6 simultaneously and CORRECTLY states the panel has one consumer, `ThreadSendBox` — so the two halves of §6 contradict each other. A third copy of the same claim sits in `components/channels-v2/settings-agent.tsx`'s docblock ("It still renders on the request card")
-- **Where an inbound decision REALLY renders**, and why this went unnoticed: `thread-consent.tsx › ThreadAwaitingStrip`, `channels-v2/transcript.tsx › ThreadCardMessage` and `inbox-pane.tsx › InboxRow` each hand-roll their own Launch agent / Decline buttons. The product works; it is the ARM's controls that have no surface
+- **Where an inbound decision REALLY renders**, and why this went unnoticed: `thread-consent.tsx › ThreadAwaitingStrip`, `channels-v2/transcript.tsx › ThreadCardMessage` and the Inbox pane's `InboxRow` each hand-roll their own Launch agent / Decline buttons. The product works; it is the ARM's controls that have no surface. ⚠ **All three are gone since** — the first two with the inbound retirement (2026-08-22) and the Inbox pane itself on 2026-08-25 (INVARIANTS §6); the anchor was de-linked when its file was deleted, not because the record changed
 - ⚠ **FILED, NOT FIXED, per CLAUDE.md's precedence rule** — because the two available fixes were opposite product decisions and neither was a cleanup: (a) the arm is genuinely dead, so delete it and its store key; (b) the arm is intended and its surface regressed, so re-mount `RequestPermissionRow` on the inbound surfaces that do render
 - **✅ SAMUEL RULED (a), 2026-08-20, AND IT IS EXECUTED.** Deleted: `channelPermissionPresets` and its whole family in `main/channel-prefs.js` (`ARM_TTL_MS`, `armIsLive`, `resolveArm`, `readArmFrom`, `armInto`, `takeArmFrom`, `sweepExpired`, `getAllPresets`, `writeAll`, and the four public arm fns), the two `channels.*PermissionPreset` preload ops and their `channel-dir-ipc.js` handlers, the consumption in `trigger.js › inboundApproved`, both `clearPermissionPreset` teardowns in `trigger-outcomes.js`, `hooks/use-channel-permission-preset.ts`, `components/request-folder-row.tsx`, `permission-preset-row.tsx › RequestPermissionRow`, and `launch-panel.tsx`'s entire inbound half
 - ⚠ **H2 SURVIVES THE ARM AND THAT IS THE POINT OF THE ENTRY.** The rule was never the TTL — it is that a stored posture may only reach a launch a human is approving in that moment, and what enforces it is the **CONSUMER COUNT**, which `test/session-preset-start.test.mjs` has pinned all along. One record remains (`channelLaunchPosture`), read at one call site (`sessions:launch`). **An inbound request now carries no tool posture at all** and starts at `manual` — strictly more restrictive than before
@@ -2365,8 +2367,16 @@ renumbers.
 
 ## F-298 — no per-user mint quota, and the pending-links list filters AFTER its limit (2026-08-23, DEFERRED TO SAMUEL)
 
-- Location: `src/features/home/server/service-writes.ts › mintLink` (no quota check of any kind) and
-  `› service-reads.ts › listMyPendingLinks` against `› repository.ts › listLinksByCreator`.
+- Location: `src/features/home/server/service-writes.ts › mintContainerLink` (no quota check of any
+  kind) and `› service-reads.ts › listMyPendingLinks` against `› repository.ts › listLinksByCreator`.
+  ⚠ **Re-anchored 2026-08-24: `mintLink` is GONE** — the channel-first inversion replaced the unbound
+  mint with a bound one. **Both halves survive the rename and the quota half SHRANK rather than
+  closing:** `channel_links_one_open_per_workspace` (migration `20260824120000`) caps a container at
+  ONE open link, so the unbounded axis is now "how many CHANNELS may one account create", which
+  `POST /api/home/channels` does not bound either. The listing half is untouched — `listLinksByCreator`
+  still limits before `listMyPendingLinks` filters, and it gained an `IS NULL` narrowing in SQL (which
+  moved one filter to the right side of the limit, and left the expiry/exhaustion pair on the wrong
+  one).
 - Found during: the home-channels security review.
 - Severity: **question** (product) plus one **measured listing defect**.
 - **The quota half.** `mintLink` inserts unconditionally. Nothing bounds how many live links one
@@ -2383,16 +2393,32 @@ renumbers.
 
 ## F-299 — a claim reveals both parties' email addresses immediately, with no accept step (2026-08-23, DEFERRED TO SAMUEL)
 
-- Location: `src/features/home/server/service-reads.ts › hydrateRelationships` →
-  `src/features/home/types.ts › HomePeer` (`email`), returned by `GET /api/home/relationships` and
-  directly in `POST …/claim`'s `HomeLinkClaimResult`.
+- Location: `src/features/home/server/service-reads.ts › hydrateChannels` →
+  `src/features/home/types.ts › HomePeer` (`email`), returned by `GET /api/home/channels` and
+  directly in `POST …/claim`'s `HomeLinkClaimResult`. ⚠ **Re-anchored 2026-08-24** (`hydrateRelationships`
+  → `hydrateChannels`, `/api/home/relationships` → `/api/home/channels`): the rename does not touch the
+  exposure, and the peer being NULLABLE now does not either — a claim still fills it in one unilateral
+  step.
 - Found during: the home-channels security review.
 - Severity: **question** (product). Not a leak — every field is a workspace peer's ordinary profile
   data, and the two parties ARE co-members of a workspace the instant the claim lands.
 - **What makes it worth a decision anyway: the claim is UNILATERAL.** Opening a URL and signing in is
   the whole of it. The creator does not approve, is not asked, and learns of the new relationship by
   seeing it appear — **and by then the claimer already has their email address**, carried in the claim
-  response itself. Every other path to co-membership in this product has an accept step
+  response itself.
+- ⚠ **SHARPENED 2026-08-25 BY THE INVERSION, AND IT CUTS BOTH WAYS — RE-ASK SAMUEL RATHER THAN
+  ASSUMING THE OLD ANSWER CARRIES.** Two things changed.
+  **(1) The OWNER now initiates from INSIDE a channel that already exists**, so the exposure is no
+  longer symmetric-at-birth: they press Add-person on a container holding *their own transcript*, and
+  what they receive back for it is the claimer's email — a stranger's address in exchange for an
+  invitation they extended. That is a materially different consent question from two people meeting at
+  a link, and it is the direction that got easier to do by accident.
+  **(2) The CLAIMER joins a room with history.** The bound claim inserts them into a channel whose
+  transcript predates them — `addMember` grants the ordinary channel read — so a claim now discloses
+  the owner's prior conversation with their agents, not just an email. **Neither half is a leak** (both
+  parties are co-members the instant it lands, and the pre-auth surface `getLinkPublicInfo` is still a
+  display name and three booleans) — but "no accept step" was ruled on when a claim created an empty
+  room, and it now fills in an occupied one. Every other path to co-membership in this product has an accept step
   (`workspace_invitations`, join links land on a page that names what you are joining). A public
   "here is my Dopl" link deliberately does not, which is the feature and also the exposure.
 - ⚠ **The PRE-auth surface is correctly narrow and should not be confused with this**: `getLinkPublicInfo`
@@ -2432,3 +2458,551 @@ renumbers.
 - ⚠ **Do NOT "fix" this by filtering `GET /api/workspaces`** — INVARIANTS §4A states why, and the
   failure mode is silent.
 - Proposed resolution: defer (scale-triggered) — Status: **open**
+
+---
+
+## The 2026-08-24 ADVERSARIAL-TEST WAVE — F-301 through F-303
+
+A live two-agent test on **v1.19.0** ("Next Test 3"). **Every refusal fence held** — the hard-deny set,
+the Axis-A/Axis-B split, the cross-channel classification and the outbound gate all behaved. What the
+run produced instead is one CLASSIFICATION defect (F-301, Samuel ruled it) and two TEACHING defects
+(F-302, F-303) — the class this repo has classified as **major** since F-274 and F-291, because a line
+an agent reads at decision time steers the next call.
+
+⚠ **Id note, the sixth time in six days:** `F-301`–`F-303` were taken after re-reading this file fresh
+(`grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' | sort -n | tail -1`
+→ **F-300**). If a concurrent wave also claimed any of these, the earlier claim wins.
+
+## F-301 — `create_thread` was auto-DENIED on every windowless session, in every posture (2026-08-24, RESOLVED)
+
+- Location: `dopl-desktop-app/main/session-profiles.js › grantDecision` (the Axis-B channel branch) and
+  `dopl-desktop-app/main/session-windowless.js › claimGate`.
+- Found during: the live two-agent run. **Verbatim, as the agent saw it:** *"This tool needs a permission
+  prompt and this session has no surface to show one on, so the call was refused automatically."*
+- Severity: **major.** Not a missing convenience — a **hard unreachability**, and of the one op the tool's
+  own protocol paragraph says to start with (*"open a thread with `create_thread`"*).
+- **The mechanism.** The Axis-B branch classified exactly three shapes onto the own-channel lane —
+  `isOwnChannelPost`, `OWN_CHANNEL_READ_OPS`, `OWN_CHANNEL_MARKER_OPS`. `create_thread` was in none, so it
+  fell through to the **Axis-A** gate, which returns `gate`; and a windowless session answers a gate with
+  `setImmediate(() => decide(rid, 'deny'))`. **No value of either axis reached it** — `bypass` could not,
+  because Axis A may never answer a message op, and `auto_both` could not, because the op was not on the
+  lane. The operator had no setting.
+- **✅ RESOLVED — SAMUEL'S RULING, 2026-08-24: `create_thread` is OWN-CHANNEL-OUTBOUND.** It rides the same
+  Axis-B outbound lane as `post` / `milestone`: auto-send honors it, ask-posture routes it to the outbound
+  consent gate exactly like a post, and the private-turn withdrawal applies identically (it was inherited
+  with no call-site change, because `privateTurnMessageMode` transforms the AXIS). Same channel-by-ID
+  scope, so a slug still classifies cross-channel — the safe failure. `open` / `invite` /
+  `set_thread_mode` / `list` did not move.
+- ⚠ **IT IS THE FIRST OP ADMITTED ON A DIFFERENT ARGUMENT, and that is written down where the list lives.**
+  `milestone` earned the lane by SAYING LESS than the post beside it; a thread open says MORE — it is a
+  post with a title on it. It earns the lane on the other argument: outbound CONTENT into this session's
+  own channel, addressed to a member of that same channel. **The bar it still clears is the one that keeps
+  `close_thread` out: it settles no shared state, because a thread has none.**
+- **§2 SPLIT, because the file could not hold the argument:** `session-profiles.js` measured **496** of the
+  500-line cap, so the two op lists, their union and the three predicates moved to
+  `dopl-desktop-app/main/session-own-outbound.js` (105 lines), re-exported so no caller moved and injected
+  into the two source-extraction harnesses like `isKnowledgeReadCall`. `session-io.js` was at **exactly
+  500** and is net-unchanged at 500: its payload branch now asks
+  `session-outbound-tag.js › outboundConsentShape`. ⚠ **That predicate is deliberately NOT
+  `isOutboundPost`** — that one also forces the thread tag, and a thread OPEN has no thread to tag.
+- **Pinned tests updated with the ruling recorded** (`test/session-channel-read.test.mjs`: `create_thread`
+  left `ALWAYS_GATED` for a new `THREAD_OPENS` constant, with the incident in the comment above it) and
+  extended: the four postures, the slug and cross-channel failures, every tool mode, the op-scoped grant,
+  the new `auto-outbound-thread-open` diag code, the `outbound_gate` payload, and — `test/session-windowless-deny.test.mjs`
+  § 3 — the consent row a HELD one raises, seq-keyed and seq-less.
+- ⚠ **ONE KNOWN ROUGH EDGE, DELIBERATELY LEFT.** `session-windowless.js › bridgeOutbound` labels every row
+  `Reply from your agent in "<channel>"`, which a thread open is not. The BYTES shown are the ones that
+  will be sent, so nothing is misrepresented; only the row's summary line is generic. Fixing it needs the
+  op on the payload, and `session-io.js` is at the cap — it belongs to a wave that splits that file.
+- Proposed resolution: **shipped in this change** — Status: **resolved**
+
+## F-302 — the zero-tag diagnostic proposed the WRONG REPAIR for the one cause both agents hit (2026-08-24, RESOLVED)
+
+- Location: `packages/mcp-server/src/tools/channel-post-guidance.ts › tagOutcomeNote` (the count-0 branch).
+- Found during: the same run. **Both agents hit it independently**, which is what makes it a defect in the
+  copy rather than a mistake by one model.
+- Severity: **major as a teaching defect** (the F-274 / F-291 class).
+- **The mechanism.** Mentions resolve against the channel's HUMAN roster, so an **agent id** can never
+  resolve — while `@<agentid>` in a body is a real, working, DIFFERENT mechanism: the WAKE the
+  `launch_agent` bullet teaches. The four-cause copy therefore reported a **correct action** as a probable
+  misspelling and sent the agent to `op="members"` to check a name that could not be on that list. ⚠ **A
+  diagnostic that proposes the wrong repair is worse than one that says nothing** — it spends a turn.
+- **✅ RESOLVED.** A fifth cause was added, and the header count with it. ⚠ **It carries NO roster remedy on
+  purpose:** the remedy sentence still enumerates (2), (3) and (4) by number, and pointing this one at the
+  member list is exactly the wrong turn. The copy also says the wake **worked** (it "starts no inbox
+  entry", not "failed") — the same discipline as the 2026-08-22 self-tag removal, which deleted a cause
+  that talked agents out of the escalation that works.
+- **§2 SPLIT to make room:** `channel-post-guidance.test.ts` measured **494**, so the zero-tag describe
+  moved to `channel-zero-tag.test.ts`. Subject seam, not arithmetic — the remainder drives `opPost` /
+  `opCreateThread` through stub clients; the new file asserts the COPY of one pure string builder.
+- Proposed resolution: **shipped in this change** — Status: **resolved**
+
+## F-303 — three param describes made claims that were wrong, over-scoped, or unreachable (2026-08-24, RESOLVED)
+
+- Location: `packages/mcp-server/src/tools/channel-schema.ts` (`client_msg_id`, `title`, `since`) and
+  `channel-description.ts` (the `"get_thread"` bullet).
+- Found during: the same run.
+- Severity: **major as a teaching defect** for the first; **minor** for the rest.
+- **(a) `client_msg_id` STATED THE WEAKER OF TWO IDEMPOTENCY SCOPES FOR BOTH ROUTES, and the weaker one is
+  wrong in the direction that costs a duplicate.** ⚠ **This is a code-versus-brief correction, recorded
+  because the brief asked for the simpler sentence.** The wave's instruction was to state idempotency as
+  PER-AUTHOR outright. **Measured instead:** `channel_messages` is unique on
+  `(channel_id, client_msg_id, author_user_id)`
+  (`20260822120000_channel_messages_author_scoped_idempotency.sql`) — per-author, as briefed — but
+  `channel_tasks` is still `(channel_id, client_msg_id)` (`20260729032037_channel_tasks_client_msg_id.sql`,
+  and INVARIANTS §5 already said so), i.e. **channel-wide whoever sent it**. So a colliding key on a thread
+  open returns **another member's thread with your body posted nowhere**
+  (`src/features/channels/server/service-tasks.ts › convergeOnThread` posts nothing for a non-creator).
+  The describe now states both scopes, split by op. **Nothing in the tree was wrong; the one sentence
+  covering two routes was.**
+- **(b) `title` PROMISED PRECEDENCE IT DOES NOT HAVE.** *"A longer title is rejected here, before the call
+  is made"* claims the bound is the first thing anything checks. A desktop agent session decides
+  `create_thread` at its own permission gate before zod runs — and before F-301 that decision was an
+  auto-deny, so the agent got a permission answer where the copy promised a title answer. Softened to
+  *"when the call is permitted to run, the bound is checked before anything goes on the wire"*, which is
+  true under both orderings.
+- **(c) `get_thread` NEVER SAID WHAT IT RETURNS.** The bullet listed rendered fields, then spent its last
+  sentence on the lifecycle state it does NOT report — so an agent looking for "how do I read this thread"
+  called the op that names the thread it wants. It now says **METADATA ONLY, NO MESSAGE BODIES**, and names
+  `op="read"` with `thread=<id>`, in the op bullet AND on the `thread` param (§10: a capability taught only
+  in the description is taught weakly).
+- **(d) `since` DID NOT MEET THE NO-CURSOR RULE.** A thread-scoped read refuses to offer a cursor and says
+  so — **in the RESULT**, which is read after the filtered page is already in context and its per-message
+  seqs look reusable. The rule now also sits on the param the agent is filling in when it decides what
+  `since` to pass; `channel-thread-scope.test.ts` joins the two ends so deleting either fails.
+- Proposed resolution: **shipped in this change** — Status: **resolved**
+
+---
+
+## The 2026-08-24 CHANNEL-FIRST INVERSION — F-304
+
+⚠ **Id note, the seventh time in seven days:** `F-304` was taken after re-reading this file fresh
+(`grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' | sort -n | tail -1`
+→ **F-303**). If a concurrent wave also claimed it, the earlier claim wins.
+
+## F-304 — every migration in the recent wave APPLIED UNDER A VERSION THAT IS NOT ITS FILENAME (2026-08-24)
+
+- Location: `supabase/migrations/*.sql` filenames vs. the `supabase_migrations.schema_migrations`
+  `version` column. Re-derive, never quote: `supabase migration list` (or MCP `list_migrations`)
+  against `ls supabase/migrations`.
+- Found during: the channel-first inversion, while measuring whether `20260823150000_home_link_channels`
+  had applied. **It had — under version `20260823205007`.**
+- Severity: **major.** Not a data defect; a **navigation** defect, and this repo navigates by filename.
+- **What was measured, 2026-08-24.** Every file in the recent wave is present in history under its
+  NAME and a DIFFERENT version. Four worked examples: `20260822150000_channel_sessions_telemetry` →
+  `20260823091543`; `20260822170000_overview_time_range_indexes` → `20260823091749`;
+  `20260823150000_home_link_channels` → `20260823205007`; `20260823160000_default_workspace_kind_guard`
+  → `20260823205026`. The re-stamp is systematic, not a one-off, and it preserves ORDER — the versions
+  sort the same way the filenames do, which is why nothing has broken.
+- ⚠ **WHY IT MATTERS ANYWAY, AND IT IS NOT AESTHETIC.** Roughly ninety places in this tree — INVARIANTS
+  §4A and §12, half a dozen migration headers, `workspaces/types.ts`, `home/server/*` docblocks — cite a
+  migration BY FILENAME as the authority for a claim. **The one command an agent runs to check such a
+  claim is `supabase migration list`, and that command prints VERSIONS.** So the natural verification of
+  "is `20260823150000` applied?" returns a list that does not contain `20260823150000`, and the honest
+  reading of that is "no". **This tree's own docs were wrong in exactly that direction for a day**: both
+  file headers said "⚠️ WRITTEN, NOT APPLIED" and INVARIANTS §12 repeated it, while the schema had
+  carried the column since the previous evening. Corrected in this pass, in all three places.
+- **This is §12's own doctrine biting the layer under it.** "Migration-list-is-claims" warns that the
+  history table cannot notice that the files do not build a database; the mirror image is that the
+  FILES cannot notice the history table renamed them. `supabase migration list` compares NAMES, so it
+  still reports "in sync" — correctly — and the disagreement is invisible from both ends.
+- ✅ **REPRODUCED, DELIBERATELY, IN THE SAME PASS.** `20260824120000_home_channel_containers.sql` was
+  applied through MCP `apply_migration` and landed as version **`20260825063725`** under the name
+  `home_channel_containers`. So the re-stamp is not historical damage to be cleaned up once — **it is
+  what this project does to every migration, now, including the one that documents it.** Any future
+  file will do the same.
+- **Cause is therefore narrowed but not established, and this entry does not guess further.** The stamp
+  is wall-clock at APPLY time rather than the filename prefix; whether that is `db push`, the MCP tool,
+  or a project setting is untested.
+- ⚠ **Do NOT mass-rename the files to match.** The filenames are the anchors ~90 doc and code references
+  resolve against, `check-doc-refs.mjs` included; renaming would break every one of them to fix a
+  cosmetic mismatch, and would risk re-applying migrations under their new names. **The fix, if one is
+  wanted, is at the reader's end** — state in §12 that history versions are RE-STAMPED and that the NAME
+  is what matches, which this pass did.
+- ⚠ **THE STALE-HEADER SET IS LARGER THAN THIS PASS FIXED, AND HERE IS WHERE IT IS.** Corrected in this
+  pass: `20260823150000_home_link_channels.sql`, `20260823160000_default_workspace_kind_guard.sql`,
+  `20260822170000_overview_time_range_indexes.sql`, INVARIANTS §4/§4A/§9/§12, and two `src/**` docblocks
+  (`workspaces/server/authz.ts`, `shared/auth/with-workspace-auth.ts`). **Still claiming "⚠️ WRITTEN, NOT
+  APPLIED" while measurably applied** — the agent-templates wave, which this pass did not own:
+  `20260822150000_channel_sessions_telemetry.sql`, `20260822160000_channel_launch_directives.sql`,
+  `20260822200000_agent_templates.sql`, `20260823130000_channel_sessions_template_name.sql`,
+  `20260823140000_channel_launch_directives_template.sql`, plus `docs/AGENT-TEMPLATES-SPEC.md` (three
+  places). **INVARIANTS §12's agent-templates bullet IS corrected**, so the doc that agents read first is
+  right and the file headers behind it are not — re-measure before trusting either.
+  ⚠ Untouched and NOT part of this: `20260808120000`, `20260810100000`, `20260810110000`,
+  `20260810120000`, `20260810140000`, `20260822140000` — those say unapplied and were not re-measured here.
+- Proposed resolution: **doc-side mitigation shipped** (§12 now says the name is the join key, and the
+  new migration's header repeats it). The re-stamp cause and the remaining stale headers are
+  **open** — Status: **open**
+
+---
+
+## The 2026-08-25 BOUND-CLAIM WAVE — F-305 through F-308
+
+⚠ **Id note, the eighth time in eight days:** `F-305`–`F-308` were taken after re-reading this file
+fresh (`grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' | sort -n |
+tail -1` → **F-304**). If a concurrent wave also claimed any of these, the earlier claim wins.
+
+F-305 through F-307 are debt the bound claim CREATED and accepted. **F-308 is different: it was found
+by running the desktop suite and it predates this wave entirely** — recorded here because that is
+where it surfaced, not because this wave caused it.
+
+## F-305 — the bound claim's two membership inserts have no transaction, only a hand-rolled compensator (2026-08-25)
+
+- Location: `src/features/home/server/service-claim-bound.ts › claimBoundLink`, steps 5–7.
+- Found during: writing the bound claim.
+- Severity: **major** — it is a correctness gap on the one write that admits a person to a private room.
+- **The shape.** A successful claim is four writes with no shared transaction: `insertContainerMember`
+  (workspace), `addMember` (channel), `insertClaim` (audit), `markLinkRevoked`. **Supabase-js gives no
+  client-side transaction**, so this is a saga with ONE hand-rolled compensating action —
+  `deleteContainerMember` — covering exactly one failure edge.
+- ⚠ **THE UNBOUND PATH COULD ROLL BACK AND THIS ONE STRUCTURALLY CANNOT**, which is the interesting
+  half. `claimUnboundLink` MINTED the container, so `deleteWorkspace` is a real undo. `claimBoundLink`
+  was HANDED a container that holds somebody else's transcript, so its strongest available undo is to
+  remove the member row it just added — and there is no undo at all for the steps after it.
+- **The uncovered edges, stated so nobody assumes the compensator is complete:**
+  - `insertClaim` throws (rather than returning `false`) → the claimer is in the workspace AND the
+    channel, with no `channel_link_claims` row. Provenance is lost; the relationship works.
+  - `markLinkRevoked` fails → the seat is taken but the chip still reads "invite out", and the
+    one-open-per-container unique index stays occupied. **Cosmetic plus a blocked re-mint.**
+  - `deleteContainerMember` itself fails during compensation → a workspace member who is not a channel
+    member. `hydrateChannels` still renders it; they see a channel they cannot read.
+- **Why it shipped anyway:** every uncovered edge leaves the claimer with MORE access than intended in
+  no case and LESS in some — the failure direction is toward a broken-looking card, never toward a
+  stranger reading a transcript. The cap trigger holds regardless.
+- **The shape of a fix:** one `SECURITY DEFINER` RPC doing all four writes in a single statement, the
+  way `consume_channel_link` already does for the use guard. That is the precedent to follow, and it is
+  a migration plus a repository function, not a service refactor.
+- Proposed resolution: fix-later (RPC) — Status: **open**
+
+## F-306 — `LINK_CONTAINER_FULL` is stated in three places across the SQL/TS boundary with nothing joining them (2026-08-25)
+
+- Location: `supabase/migrations/20260824120000_home_channel_containers.sql`
+  (`enforce_link_container_member_cap`'s `RAISE EXCEPTION`),
+  `src/features/home/server/service-writes.ts › mintContainerLink` (the pre-check),
+  `src/features/home/server/service-claim-bound.ts › isContainerFullRaise` (the MESSAGE-PREFIX match
+  that maps the trigger's raise back to a 409).
+- Found during: writing the bound claim.
+- Severity: **moderate**, and it is a **§14 pin-rule** case rather than a bug today.
+- **The coupling is a STRING, and it is load-bearing in the matching direction.** The trigger raises
+  `check_violation` — and so does every other CHECK on `workspace_members` — so the SQLSTATE alone
+  cannot identify it and `isContainerFullRaise` matches on `message.includes("LINK_CONTAINER_FULL")`.
+  **Rewording the RAISE would turn a 409 into a 500** with nothing failing in between: no typechecker
+  crosses the SQL/TS boundary, and the suite mocks the repository, so the trigger's real text is never
+  exercised by any test.
+- ⚠ **A shared constant does NOT close this**, which is why this is a finding and not a refactor: a TS
+  constant cannot be interpolated into an applied migration, and the migration is history. The
+  realistic pins are (a) a test asserting the migration FILE contains the literal the matcher looks
+  for, or (b) a `DO $$` probe in a future migration. **(a) is cheap and would have caught the rewording
+  case outright.**
+- Proposed resolution: fix-now-cheap (option (a)) — Status: **open**
+
+## F-307 — `listContainerPeers` takes the first other member and is silently wrong above two (2026-08-25)
+
+- Location: `src/features/home/server/repository-containers.ts › listContainerPeers` —
+  `if (!out.has(row.workspace_id)) out.set(...)`, i.e. **first row wins, with no ordering**.
+- Found during: writing the bound claim, while checking what a third member would do.
+- Severity: **question** now, **major** the day the cap moves.
+- **Today it cannot fire.** The cap trigger holds a container at two active members, so there is
+  exactly one "other" and the pick is unambiguous. **The correctness of this read is borrowed entirely
+  from a constraint stated somewhere else** — which is the finding.
+- ⚠ **THE FAILURE MODE IS THE BAD ONE: silent and non-deterministic.** With three members the query
+  returns two candidate rows in whatever order PostgREST hands back, and `HomeChannel.peer` becomes
+  whichever arrived first — so the same channel can render as a different person between two loads,
+  with no error anywhere. There is no `ORDER BY` to make it even stably wrong.
+- **N-party home channels are the obvious next ask** (MVP is explicitly "0 or 1 peer"), and removing
+  the cap is a one-line trigger change that would land this bug across the whole home page. **Whoever
+  raises the cap owns this read**: `peer` has to become a list, or the DTO has to say which member it
+  means.
+- Proposed resolution: needs-user-decision (product: N-party) — Status: **open**
+
+## F-308 — the update-required screen's button CSS drifted from `kit.css`, and the desktop suite has been RED (2026-08-25, PRE-EXISTING)
+
+- Location: `dopl-desktop-app/renderer/update-required.html` (`button.secondary`) vs
+  `apps/desktop-ui/src/styles/kit.css` (`.auth-btn-3d-light`); the assertion is
+  `dopl-desktop-app/test/update-required-screen.test.mjs › "THE BUTTONS ARE THE DESIGN SYSTEM'S, not a
+  look-alike"`.
+- Found during: running `cd dopl-desktop-app && npm test` for the bound-claim wave.
+- Severity: **major** — not the CSS, the **RED GATE**. `npm test` in that tree is one of the five
+  suites (§14), and a suite that is already failing cannot report the next regression.
+- ⚠ **NOT CAUSED BY THIS WAVE, AND THAT IS MEASURED RATHER THAN ASSERTED.** The test reads exactly four
+  inputs — `main/index.js`, `main/shell-mode.js`, `renderer/update-required.html`, and
+  `apps/desktop-ui/src/styles/kit.css` — and **`git status --porcelain` reports every one of them
+  clean** in the working tree this was found in. The failure is on committed content.
+- **The mechanism, and it is the drift the test was written to catch working correctly.** The page
+  cannot import the kit (local file, `default-src 'none'`), so it carries the recipe as literal CSS and
+  the test diffs the two copies declaration-by-declaration. **`kit.css` was TOKENIZED** — it now reads
+  `background: var(--raised-light-face)`, `border: 1px solid var(--raised-light-line)`,
+  `box-shadow: var(--raised-light-shadow)` — while the page still carries the pre-token literals
+  (`linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%)`, `#d4d4d4`, a four-part shadow). Textual
+  equality was the whole mechanism, so tokenizing one side broke it. Candidate commits: `d13818c7`,
+  `b493e7f3`.
+- ⚠ **DELIBERATELY NOT FIXED HERE.** The repair is a DESIGN-SYSTEM decision (declare the three
+  `--raised-light-*` variables locally in the page with values taken from `globals.css`, then use
+  `var()` so the copies diff again) and it belongs to the owner of the tokenization wave. **Guessing
+  the values would change how a blocking screen looks, in a lane this wave does not own.** Fixing the
+  TEST instead would delete the only thing watching a copy that has already drifted once.
+- Proposed resolution: fix-now, design-system owner — Status: **open**
+
+## F-309 — Q6's auth recovery was DETECTED, SURFACED and NEVER CALLABLE: two complete functions with zero production callers (2026-08-25) — ✅ RESOLVED 2026-08-25
+
+- Location: `dopl-desktop-app/main/claude-auth.js › startSignInFlow` and
+  `dopl-desktop-app/main/session-auth.js › resumeAfterSignIn`, against the surface that told the
+  operator to use them (`src/features/channels/components/channels-v2/agent-composer.tsx ›
+  MESSAGE_AUTH_HELD`).
+- Found during: a read-only investigation of "my agent says it is waiting for me to sign in and
+  signing in changes nothing".
+- Severity: **major** — a dead end presented as an action. On a Mac whose Claude Code credential is
+  missing or expired, EVERY agent is unreachable and the product's own copy names a remedy the
+  product has no way to run.
+- **THE SHAPE, and it is worth naming because nothing in the tree could have caught it.** Every
+  DETECTING part of Q6 shipped and worked: `session-auth.js › holdIfNoCredential` preflights a
+  windowless launch and HOLDS it rather than burning the session, `session-query.js` turns an
+  auth-shaped mid-session failure or the CLI's own `/login` bubble into the same hold, and the
+  composer renders "Your agent is waiting for you to sign in to Claude Code." Every REMEDYING part
+  shipped too — `startSignInFlow` (native dialog → `claude setup-token` under a pty against the
+  bundled binary, Terminal as tier 1) and `resumeAfterSignIn` (idempotent, three layered defences,
+  its own cases in `test/session-auth-recovery.test.mjs`). **Neither had a single production
+  caller.** `session-auth.js` even `require`d `claude-auth` and never used it. So re-posting into a
+  held agent was refused `auth-hold` forever and no dialog could ever appear.
+- ⚠ **THE LESSON IS NOT "ADD A CALLER". It is that a UNIT-TESTED FUNCTION AND A WIRED FEATURE ARE
+  DIFFERENT CLAIMS, and this tree's gates only ever measured the first.** Both halves were green
+  throughout; `test/preload-parity.test.mjs` could not fire because the pin fails on ADD and REMOVE
+  and there was no op to add or remove; `main-exports-defined.test.mjs` proves an export exists,
+  not that anything reaches it. **The nearest existing precedent is F-261** (a refusal shape that
+  existed and was unreachable on the one lane an operator reaches by clicking) and it is the same
+  class one step further out: there, the branch was ordered wrong; here, the call was never
+  written. **What can be pinned is the WIRE** — that the op exists, that it is bound, that it drives
+  the flow exactly once, that success is measured from the CREDENTIAL rather than reported by the
+  flow, and that the sessions this Mac holds are the ones released.
+- **Resolved by WIRING ONLY — neither function was rewritten**, which was the standing constraint:
+  `main/claude-signin-op.js` (new, the body), `session-ipc-ops.js › claude:signIn` (the
+  `appWindowOnly` surface), `renderer/app-preload.js › claude.signIn`, `spa-bridge.ts ›
+  SpaBridgeSurface.claude`, `channels-v2/claude-signin.ts` (the web detector + wrapper), and the
+  button on the waiting banner in `channels-v2/agent-composer.tsx`. The fan-out
+  (`session-auth.js › resumeHeldSessions`) is the one new behaviour and it only chooses WHICH
+  sessions get the existing per-session resume. INVARIANTS §11's preload-inventory bullet carries
+  the contract.
+- **Tests:** `dopl-desktop-app/test/claude-signin-recovery.test.mjs` (the fan-out block sliced and
+  driven; the op's flow → `forget` → re-probe → fan-out ORDER; success measured from the credential;
+  the bundled-binary-first resolution; a refused sender reaching no flow **and no require**), plus
+  the op's row in `test/channel-ipc-sender.test.mjs › OPS`, its entry in
+  `test/preload-parity.test.mjs › APP_OPS`, and the banner's button cases in
+  `src/features/channels/components/channels-v2/agent-panel-composer.test.tsx`.
+- ⚠ **ONE RESIDUAL, DELIBERATELY LEFT OPEN.** The composer's waiting banner is LOCAL state raised by
+  a refused send, so the button is reachable only after the operator has tried to post. A held agent
+  that the operator has not yet messaged shows nothing to act on — the Agents-tab card has no
+  auth-hold affordance. Not in this wave's scope; the transport now exists for whichever surface
+  wants it.
+- Proposed resolution: **done** — Status: **resolved 2026-08-25** (residual above is a separate,
+  surface-side question)
+
+## F-310 — the outbound review card joins a consent row to a narration frame by the DRAFT'S BODY, because nothing on either side carries an id the other has (2026-08-25)
+
+- Location: `src/features/channels/components/channels-v2/agent-stream-model.ts › postEcho` and its
+  use inside `› buildAgentStream`, against `dopl-desktop-app/main/session-windowless.js ›
+  bridgeOutbound` and `dopl-desktop-app/main/session-narration.js › entryFor`.
+- Found during: building the inline Pending / Post card that replaced the consent Inbox (Samuel's
+  2026-08-25 ruling, INVARIANTS §6).
+- Severity: **low**, and the entry exists for the SHAPE rather than for a live defect — see the
+  bound below.
+- **WHY THERE IS NO ID TO JOIN ON, measured rather than assumed.** The `post` narration frame is
+  pushed from the SDK's `tool_use` block (`session-io.js › sdkRenderEvents`), which is strictly
+  BEFORE `bridgeOutbound` creates the `channel_consent_requests` row — so at frame time there is no
+  row id to carry. Symmetrically, the row carries `(channel_id, message_seq)` and **nothing that
+  names an agent**: `message_seq` is the TRIGGERING message's, which is why
+  `view-model-requested.ts › pendingOutboundByThread` can place a draft on a THREAD and no read
+  anywhere can place one on an AGENT. The card is per-agent (the narration ring belongs to one
+  session), so neither existing key reaches it.
+- **What the join actually is:** both sides through one normalizer — whitespace collapsed, trimmed,
+  sliced at the same 1000 chars `main/session-narration.js › POST_CAP` already applied to the frame
+  — then an equality on the resulting string, first row wins.
+- ⚠ **THE BOUND IS TIGHTER THAN "MATCH BY TEXT" SOUNDS, which is why this is filed and not fixed.**
+  The frame is ALREADY agent-scoped, so the only collision available is between two drafts of ONE
+  operator whose bodies are identical to the character — and approving either row sends the same
+  bytes to the same channel. The failure mode is "the Post button decided the other identical
+  draft", which is indistinguishable from the intended outcome.
+- **Where it does degrade:** a draft longer than `POST_CAP` is compared on its first 1000
+  characters, so two long drafts sharing a 1000-char prefix are one key. Same argument as above
+  bounds the harm, but the ceiling is worth knowing before anyone widens this join to a lane where
+  the two sides are NOT the same operator's.
+- **The fix, when taken:** give the row an agent identity. `bridgeOutbound` holds `s.taskId` and
+  `s.agentId` at create time and the table has no column for either; a nullable `agent_id` (plus the
+  session's own `client_msg_id` stamp, which `agents-model.ts › parseAgentPostStamp` already parses
+  off posted messages) would make the card's read an exact one and would also let a future surface
+  answer "which of my agents is waiting on me" without reading any text at all.
+- Status: open
+
+## F-311 — the agent view's Sent lane cannot see a THREADLESS post: `agentSentMessages` filters on a `taskId` a channel-level post does not carry (2026-08-25)
+
+- Location: `src/features/channels/components/channels-v2/agent-panel.tsx › agentSentMessages`
+  (`m.metadata.taskId !== taskId` → excluded), against what `dopl-desktop-app/main/channel-post.js`
+  actually stamps on a post made to a channel rather than to a thread.
+- Found during: diagnosing the held-draft card rendering "Not sent" over a post that had
+  demonstrably been delivered (Samuel, live).
+- Severity: **medium** — it silently shortens the one lane on that surface that is a server fact.
+- ⚠ **MEASURED, NOT INFERRED.** The delivered row (`channel_messages` in channel
+  `1c44bbdf-1965-4bea-af60-5e9e5aedaf57`, 2026-08-25 16:14:30Z) carries
+  `metadata = {intent, runtime, summary, session_id}` — **no `taskId`** — with
+  `session_id = "<channelId>::<agentId>"`. The session that posted it HAS a `taskId` (the channel
+  id, for a threadless session), so the filter compares a present value against an absent one and
+  drops every such row. Re-measure, never quote:
+  `SELECT metadata FROM channel_messages WHERE channel_id = '<id>' AND author_kind = 'agent';`
+- **What it costs:** on a solo `/home` container — where posts are channel-level by construction —
+  the agent panel's and the agent window's Sent lane is EMPTY no matter how much the agent has
+  posted. The narration echo covers it while the session lives, so it reads as working; once the
+  ring rolls past `NARRATION_MAX`, or on a window opened after the fact, the lane is simply short.
+- ⚠ **THE CARD NO LONGER DEPENDS ON THIS** and that is why this is filed rather than fixed here:
+  `agent-stream-model.ts` takes a separate unfiltered `delivered` input for its landing check, so
+  the "Not sent" defect is closed either way. **Do not "simplify" that second input away** — it
+  exists precisely because this filter cannot answer the question.
+- **The fix, when taken:** either stamp `taskId` on a threadless post (it equals the channel id for
+  such a session, so the column would be honest), or widen `agentSentMessages` to accept
+  `metadata.session_id`'s `<channel>::<agent>` form. ⚠ The second is the safer one — F-251's rule
+  is that the lane must not show a SIBLING agent's posts, and `session_id` names the instance
+  exactly, where a channel-wide fallback would not.
+- Status: open
+
+## F-312 — the outbound decision has no doorbell: delivery waits on a poll, and the operator watches the gap (2026-08-25)
+
+- Location: `dopl-desktop-app/main/session-windowless.js › watchRow` (the `sleep(POLL_MS)` loop),
+  against `src/app/api/channels/consent/[id]/route.ts`'s PATCH.
+- Found during: Samuel's live session — ~15s from pressing **Post** to the message appearing.
+- Severity: **low**, and cosmetic in the strict sense: nothing is lost, the post always lands. It is
+  filed because the WAIT is the whole of what an operator experiences after the one click the
+  outbound gate exists for.
+- **Why it is a poll at all, and the reason is good:** first-answer-wins. The row may be decided by
+  this machine's notification or by the web PATCH, and the row's status is the only truth
+  (INVARIANTS §6 — decisions are CAS'd server-side). A local promise would be wrong.
+- **What this wave DID do**, because it needed no new plumbing: `POLL_MS` 10s → 3s, with the
+  request-rate ceiling stated at the constant. That is a smaller gap, not a closed one — and the
+  loop still sleeps BEFORE its first poll, so the floor is one interval.
+- ⚠ **THE DOORBELL IS ALREADY HALF-BUILT, WHICH IS THE TEMPTING PART AND THE TRAP.**
+  `channel_consent_requests` is in `ui-sync.js › SYNC_TABLES`, so main's realtime client already
+  receives the UPDATE frame. Two things stop it being a two-line change: (1) that client watches
+  the ONE workspace the renderer is viewing, last-writer-wins — a session in any other workspace
+  hears nothing, so the poll can never be removed, only raced; (2) **an event is a DOORBELL, never
+  content** (INVARIANTS §7), so the frame may only trigger an immediate re-poll, never be read for
+  the status. A correct version is "wake the loop early", not "learn the decision".
+- **The fix, when taken:** a wake channel from `ui-sync.js` into the windowless watcher keyed on
+  row id, with the poll left in place as the floor. Measure the workspace-watch question first —
+  if the answer is that main can only ever hear one workspace, this buys the common case and
+  nothing else, which may still be worth it.
+- Status: open
+
+## F-313 — ONE outbound consent row is shared by N sibling agents, so one Send releases N unreviewed bodies (2026-08-25)
+
+- Location: `dopl-desktop-app/main/session-windowless.js › bridgeOutbound` (the seq de-dupe branch),
+  against `consent-service.ts › findConsentByTrigger`.
+- Severity: **high — consent integrity.** This is the one control that stands between an agent and
+  the channel, and the operator reviews one body while approving several.
+- Found during: a live six-agent channel, from `listener.log` plus the row table. Not inferred.
+- **The mechanism.** `createConsentRequest` de-dupes on `(channel, messageSeq)` and returns the
+  EXISTING row rather than failing. The guard that follows re-creates seq-less only when the row is
+  already DECIDED or is in **this session's own** `s.watchedOutboundRows`. A SIBLING session's
+  pending row is neither — so agent B adopts agent A's row, and `watchRow` polls it. On approval
+  both sessions see `allowed` and each calls `decide(rid, 'allow-once')`, so **each posts its own
+  bytes** — and only A's text was ever shown to the operator.
+- **The evidence.** Three sessions logged `windowless outbound gated row ef871075` (`81f7034b`
+  twice, `f5e574ac` once) — one row id across different sessions — while
+  `channel_consent_requests` held exactly ONE pending row for that channel, whose `proposed_reply`
+  was a single agent's line. Three agents, three different drafts, one reviewable body.
+- ⚠ **The de-dupe itself is correct and must stay.** It exists so a retried post does not open a
+  second card. What is wrong is the OWNERSHIP test: `watchedOutboundRows` is per session, so it
+  cannot see that another session already owns the row.
+- **The fix, when taken:** make the adoption test global rather than per-session — a pending row
+  already being watched by ANY live session is not this session's to adopt, so re-create seq-less
+  (the path the code already has for the other two cases). The registry is the natural home; the
+  set is small and dies with the sessions.
+- Status: open
+
+## F-314 — nothing observes a FAILED dopl MCP tool call: the delivery lane can be broken and no surface says so (2026-08-25)
+
+- Location: `dopl-desktop-app/main/session-io.js › sdkRenderEvents` (where `ok: !b.is_error` is
+  computed) and `dopl-desktop-app/main/session-query.js › consume` (the raw SDK stream loop).
+- Severity: medium — no data loss, but the failure is invisible to the operator AND to the agent's
+  supervisor, so the only symptom is tokens.
+- **Measured absence, not a suspicion.** `is_error` is read in exactly one place and has exactly
+  two consumers, neither of which is a health signal: the reducer's `tool_result` branch uses it
+  only to un-count an optimistic own-channel post (F3's ledger), and `session-narration.js` stores
+  it for display. `session-metrics.js` counts context and tokens and has no error counter;
+  `session-effects.js` has no tool_result handling at all. There is no session status meaning "the
+  dopl lane is broken" — the vocabulary is `working|idle|ended` / the six `detail` keys / the seven
+  phases, and none of them can express it.
+- **Why it matters here specifically.** `dopl_channel` is the session's DELIVERY PATH. If it starts
+  failing — an expired device token, an origin the entry no longer reaches (see the CLI-entry
+  repair landed the same day), a server 5xx — the agent sees a tool error, retries on its own
+  judgement, and burns context indefinitely while every surface reports a healthy working session.
+- ⚠ **This was investigated as the cause of the 2026-08-25 incident and was NOT it** — the posts
+  were gating on consent, not failing — so this is filed on its merits rather than as a
+  regression. The nearest existing precedent for the shape is `session-auth-detect.js ›
+  authFailureText`, which does exactly this for the Claude CLI's own sign-in.
+- **The fix, when taken:** count CONSECUTIVE dopl-tool failures on the session, reset on any
+  success, and past a small threshold park the session with a visible reason rather than letting it
+  retry. `session-query.js › consume` is the better seam (it is the only place the unmapped SDK
+  message is visible, and `sessionAuth.holdIfAuthMessage` is the existing precedent for a
+  stream-level health hook); `sdkRenderEvents` is the cheaper one, since `is_error` is already read
+  there and `session-summary.js › liveSummary` already carries `detail`/`toolLabel` to the card.
+- Status: open
+
+## F-315 — a room of sibling agents sustains its own conversation: the stated LOOP BRAKE does not cover same-machine fan-out (2026-08-25)
+
+- Location: `dopl-desktop-app/main/session-dispatch.js` (the sibling fan-out) against the LAW block
+  in `packages/mcp-server/src/tools/channel-description.ts`.
+- Severity: medium, and it is a **cost** bug rather than a correctness one.
+- **The disagreement.** The tool description states the brake absolutely: *an agent-authored
+  unaddressed message starts nobody.* On this machine, a sibling agent's post IS fed to every other
+  live agent on the thread — deliberately, per the fan-out ruling ("how two of my agents
+  coordinate"), and the docblock says so in as many words. Both are defensible; together they mean
+  the brake holds BETWEEN members and not WITHIN one operator's own room.
+- **The evidence.** Six agents launched into one channel with "post one line" goals produced
+  `seq` 738 → 751 in about two and a half minutes with no human input after the opening message,
+  each post waking the others, and the exchange was still running when it was measured. One agent
+  had reached ~190k context.
+- ⚠ **Not a bug in either piece of code.** Every post was allowed by a posture the operator set,
+  and every feed was the ruled behaviour. What is missing is any BOUND: nothing counts
+  agent-to-agent turns in a room with no human in it.
+- **The fix, when taken:** this is a product question for Samuel before it is a code one. The
+  cheapest bound that does not break the coordination case is a consecutive agent-authored-turn
+  counter per session, reset by any human-authored or addressed message, that parks the session
+  when it trips — the same shape as the idle bound, over turns rather than time.
+- Status: open
+
+---
+
+## F-316 — the channels page's "Thread activity" is still a fixture; /home's is wired, and the two now share only the pixels (2026-08-25)
+
+- Location: `src/features/channels/components/channels-v2/info-tab.tsx` (fed from
+  `› fixtures.ts › HARDCODED_THREAD_ACTIVITY`) against
+  `apps/desktop-ui/src/pages/home/person-thread-activity.tsx` (fed from
+  `GET /api/workspaces/[workspaceSlug]/overview-series?metric=messages&channelId=`).
+- Found during: Samuel's 2026-08-25 ruling to bring the channels page's thread-activity UI into
+  /home's Info tab — and REWRITTEN the same day after his correction, which is the useful half of
+  this entry.
+- Severity: **medium** — nothing on screen is wrong, and one of the two is a claim nobody measured.
+- **WHAT CHANGED, AND WHY THE FIRST READING WAS WRONG.** This entry was first filed against a
+  DIFFERENT resolution: /home had substituted a plain thread LIST for the heatmap, on the grounds
+  that the heatmap has no backing data. Samuel's ruling is the other branch — keep the PICTURE and
+  make it true — and it turned out to be cheap: `channel_messages` carries `channel_id`, the
+  overview series already counted per UTC day, and narrowing it was a query parameter plus a
+  visibility fence. ⚠ **The lesson is the one the first pass missed: "no backing data yet" is a
+  claim with a shelf life, and nobody had re-asked it since 2026-08-18.** The marker was honest
+  when written and had quietly become a reason not to look.
+- **WHAT IS LEFT.** The SQUARES and the shade ramp are now one recipe
+  (`channels-v2/thread-activity.tsx › ActivityCells` / `› ACTIVITY_SHADE`), so the two strips cannot
+  look different. What differs is the DATA: /home quantises a real counted series; the channels page
+  still maps `HARDCODED_THREAD_ACTIVITY`'s invented levels.
+- **Why it was not fixed in the same change — a COST, not a difficulty.** The channels page would
+  need the series threaded down through `channel-surface-data.ts` → `channel-surface.tsx` →
+  `info-panel.tsx` → `info-tab.tsx` (mechanical), and would then pay **31 counted bins on every
+  channel selection** in a workspace. On /home that cost lands on a channel the operator opened
+  deliberately and is cached per channel; on the workspace page it lands on every click through a
+  channel tree. **That is a product/perf decision for Samuel, not a side effect to take silently.**
+- **When taken, the shape is already decided:** mount `workspaces/hooks/use-overview-series.ts ›
+  useOverviewSeries` in `channel-surface-data.ts` keyed on the open channel, pass `bins` down, and
+  swap `ActivityCells` for `ThreadActivityStrip`. Delete `HARDCODED_THREAD_ACTIVITY` from
+  `fixtures.ts` in the same change — a fixture with no caller is the next agent's furniture.
+- ⚠ **Do not resolve this by deleting the marker.** The fixture is legitimate as FURNITURE
+  (INVARIANTS §5, *"Design furniture stays HARDCODED… never render zeros from missing backing
+  data"*) right up until somebody wires it; what this entry tracks is the one surface still on it.
+- Status: open

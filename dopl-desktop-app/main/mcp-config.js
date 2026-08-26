@@ -25,7 +25,7 @@ const Store = require('electron-store');
 
 const auth = require('./auth');
 const spawner = require('./session-spawner');
-const { mcpEntryConfirmedAbsent, removeMcpEntry, addMcpEntry } = require('./mcp-cli-add');
+const { probeMcpEntry, removeMcpEntry, addMcpEntry } = require('./mcp-cli-add');
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
 const { MCP_URL, MCP_DEVICE_TOKEN_PATH } = require('./config');
@@ -393,16 +393,49 @@ async function ensureMcpConfigInner() {
     }
     writeSpawnConfig(token);
 
-    const absent = await mcpEntryConfirmedAbsent(bin);
-    if (!absent) {
-      if (lastMintWasFresh) {
+    const probe = await probeMcpEntry(bin);
+    if (probe.state === 'unknown') {
+      // The CLI did not answer. Adding risks a duplicate and rewriting risks clobbering an
+      // entry we cannot see, so this is the one branch that still touches nothing.
+      diag('mcp-config: dopl entry unknown (cli did not answer) — leaving alone');
+      return;
+    }
+    if (probe.state === 'present') {
+      // ⚠ ORIGIN DRIFT IS A REPAIR CASE, NOT A "LEAVE ALONE" CASE (2026-08-25). Until this
+      // branch existed, ANY existing entry was preserved and the ONLY thing that could refresh
+      // one was a fresh mint. So an entry written while this app pointed at one origin survived
+      // every later boot against a DIFFERENT one, and manual `claude` runs kept calling a dead
+      // endpoint forever. Measured on this machine the day it was fixed: the app booted with
+      // DOPL_APP_URL=http://localhost:3001 while the entry still read
+      // `URL: http://localhost:3000/api/mcp`, and `claude mcp get dopl` reported
+      // `✘ Failed to connect — ConnectionRefused`. The log line for it was, in as many words,
+      // "dopl entry present/unknown — leaving alone".
+      //
+      // ⚠ THE SDK SESSION PATH WAS NEVER AFFECTED and that is why this hid for so long:
+      // `sdk-loader.js › buildMcpServers` builds its entry in memory off the compiled-in
+      // MCP_URL, and `writeSpawnConfig` above repairs the headless spawn file by WHOLE-body
+      // comparison. This CLI entry was the one Dopl MCP surface with no origin repair at all.
+      //
+      // ⚠ WHAT THIS MAY STOMP, STATED RATHER THAN HIDDEN. F-085's argument for never touching an
+      // existing entry is that it may be one the OPERATOR hand-wrote with their own credential,
+      // and from outside we cannot tell. That argument still holds for a MATCHING url — which is
+      // why the equal case is left alone — but it cannot survive a mismatch: an entry naming a
+      // Dopl MCP endpoint this app is not talking to is broken for the operator either way, and
+      // a broken entry preserved out of politeness is worse than a working one they can re-point
+      // by relaunching against the origin they meant.
+      const drifted = probe.url && probe.url !== MCP_URL;
+      if (lastMintWasFresh || drifted) {
         // A fresh mint revoked the token the global entry carries — refresh it so manual
-        // `claude` runs do not 401 until the next mint cycle.
+        // `claude` runs do not 401 until the next mint cycle. A drifted url is the same repair.
         const removed = await removeMcpEntry(bin);
         const readded = removed && (await addMcpEntry(bin, token));
-        diag('mcp-config: dopl entry refreshed after mint', readded ? 'ok' : 'FAILED');
+        // ⚠ The REASON, never the urls: `probe.url` is read off the operator's own config and
+        // MCP_URL is ours. Neither is a credential, but this file's rule is that nothing parsed
+        // out of that stdout is echoed, so the log says WHICH repair ran and stops there.
+        diag('mcp-config: dopl entry refreshed', drifted ? '(origin drift)' : '(fresh mint)',
+          readded ? 'ok' : 'FAILED');
       } else {
-        diag('mcp-config: dopl entry present/unknown — leaving alone');
+        diag('mcp-config: dopl entry present and on the current origin — leaving alone');
       }
       return;
     }

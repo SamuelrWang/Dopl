@@ -288,7 +288,13 @@ test("the IPC surface registers exactly the two posture ops", () => {
 test("round trip: set then get returns the stored pair", async () => {
   const { handlers, event } = bootIpc();
   const set = await handlers["channels:setLaunchPosture"](event, { channelId: CH_A, preset: OK });
-  assert.deepEqual(set, { ok: true });
+  // ⚠ `applied` JOINED THIS SHAPE ON 2026-08-25 — how many ALREADY-RUNNING sessions took the new
+  // pair (Samuel: "permission settings must apply to running sessions"; the fan-out and its own
+  // cases are in test/channel-posture-live.test.mjs). It is ADDITIVE: `ok` is unmoved and a caller
+  // that does not read the count is unaffected. Zero here is the assertion that matters — this
+  // harness binds no session engine, and the fan-out is best-effort BY DESIGN, so a settings write
+  // must still succeed cleanly with nothing to apply it to rather than throwing through.
+  assert.deepEqual(set, { ok: true, applied: 0 });
   assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(OK));
 });
 

@@ -41,15 +41,25 @@ vi.mock("@/features/workspaces/server/service-overview", async () => {
     typeof import("@/features/workspaces/server/service-overview")
   >("@/features/workspaces/server/service-overview");
   // ⚠ `parseSeriesMetric` is the thing under test here — keep the REAL one.
-  return { ...actual, getWorkspaceOverviewSeries: vi.fn() };
+  return {
+    ...actual,
+    getWorkspaceOverviewSeries: vi.fn(),
+    isChannelVisibleTo: vi.fn(),
+  };
 });
 
 import { GET } from "./route";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
-import { getWorkspaceOverviewSeries } from "@/features/workspaces/server/service-overview";
+import {
+  getWorkspaceOverviewSeries,
+  isChannelVisibleTo,
+} from "@/features/workspaces/server/service-overview";
 
 const mockResolve = vi.mocked(resolveApiWorkspace);
 const mockSeries = vi.mocked(getWorkspaceOverviewSeries);
+const mockVisible = vi.mocked(isChannelVisibleTo);
+
+const CHANNEL_ID = "22222222-2222-4222-8222-222222222222";
 
 const WORKSPACE: Workspace = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -89,6 +99,7 @@ beforeEach(() => {
   state.sessionUser = { id: "user-1" };
   mockResolve.mockResolvedValue(WORKSPACE);
   mockSeries.mockResolvedValue(SERIES);
+  mockVisible.mockResolvedValue(true);
 });
 
 describe("GET /api/workspaces/[workspaceSlug]/overview-series", () => {
@@ -98,7 +109,7 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-series", () => {
     const body = (await res.json()) as WorkspaceOverviewSeries;
     expect(body.metric).toBe("messages");
     expect(body.days).toHaveLength(31);
-    expect(mockSeries).toHaveBeenCalledWith(WORKSPACE.id, "messages");
+    expect(mockSeries).toHaveBeenCalledWith(WORKSPACE.id, "messages", null);
   });
 
   it("serves all three metrics off ONE route — a query param, not three routes", async () => {
@@ -106,7 +117,7 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-series", () => {
       mockSeries.mockResolvedValue({ ...SERIES, metric });
       const res = await GET(getReq(`?metric=${metric}`), routeCtx());
       expect(res.status).toBe(200);
-      expect(mockSeries).toHaveBeenLastCalledWith(WORKSPACE.id, metric);
+      expect(mockSeries).toHaveBeenLastCalledWith(WORKSPACE.id, metric, null);
     }
   });
 
@@ -149,5 +160,73 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-series", () => {
     const res = await GET(getReq(), routeCtx());
     expect(res.status).toBe(401);
     expect(mockResolve).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `channelId` — the narrowing view (2026-08-25).
+ *
+ * ⚠ THE FENCE IS THE WHOLE SUBJECT. These counts run as SERVICE ROLE, so RLS is
+ * not a backstop (INVARIANTS §2) and workspace membership is not enough: a
+ * member of a workspace is not a reader of every PRIVATE channel in it. Without
+ * the visibility check this route reports, day by day, how busy a room the
+ * caller cannot open was.
+ */
+describe("?channelId= — the narrowing view and its fence", () => {
+  it("passes a VISIBLE channel through to the series", async () => {
+    const res = await GET(
+      getReq(`?metric=messages&channelId=${CHANNEL_ID}`),
+      routeCtx()
+    );
+    expect(res.status).toBe(200);
+    expect(mockVisible).toHaveBeenCalledWith(WORKSPACE.id, "user-1", CHANNEL_ID);
+    expect(mockSeries).toHaveBeenCalledWith(WORKSPACE.id, "messages", CHANNEL_ID);
+  });
+
+  it("404s a channel the caller cannot see, and COUNTS NOTHING", async () => {
+    mockVisible.mockResolvedValue(false);
+    const res = await GET(
+      getReq(`?metric=messages&channelId=${CHANNEL_ID}`),
+      routeCtx()
+    );
+    expect(res.status).toBe(404);
+    // ⚠ The refusal has to land BEFORE the read, not merely instead of the
+    // answer: a service-role count that ran and was then discarded is still a
+    // query somebody's private room paid for.
+    expect(mockSeries).not.toHaveBeenCalled();
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("CHANNEL_NOT_FOUND");
+  });
+
+  it("⚠ 404, NOT 403 — 'cannot see' and 'does not exist' answer identically", async () => {
+    mockVisible.mockResolvedValue(false);
+    const hidden = await GET(
+      getReq(`?metric=messages&channelId=${CHANNEL_ID}`),
+      routeCtx()
+    );
+    mockResolve.mockResolvedValue(null);
+    const stranger = await GET(
+      getReq(`?metric=messages&channelId=${CHANNEL_ID}`),
+      routeCtx()
+    );
+    expect(hidden.status).toBe(stranger.status);
+    expect(hidden.status).toBe(404);
+  });
+
+  it("does NOT pay the visibility read when no channel was asked for", async () => {
+    await GET(getReq("?metric=messages"), routeCtx());
+    expect(mockVisible).not.toHaveBeenCalled();
+  });
+
+  it("fences BEFORE the metric is validated — a 400 must not confirm a channel", async () => {
+    // Same ordering rule the workspace resolution follows one line up: a
+    // validation error that fires first would tell a caller their channelId
+    // was real.
+    mockVisible.mockResolvedValue(false);
+    const res = await GET(
+      getReq(`?metric=messages&channelId=${CHANNEL_ID}`),
+      routeCtx()
+    );
+    expect(res.status).toBe(404);
   });
 });

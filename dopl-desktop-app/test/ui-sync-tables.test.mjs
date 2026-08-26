@@ -397,3 +397,35 @@ test("the dropped tables are gone from the schema, the feed, and the tree", () =
       + "in the SAME change or the feature 500s on its first query");
   }
 });
+
+// ── THE HOME-CHANNEL LINK TABLES ───────────────────────────────────────────
+// A NEVER-PUBLISHED pair, which is a different claim from every pin above:
+// `STILL_READ_BY` asserts a table LEFT the publication, and the drop test
+// asserts a table left the schema. These two were born outside the feed
+// (20260823150000 / 20260824120000 both assert their own absence from
+// supabase_realtime in a `DO $$` block) and must stay there.
+//
+// WHY THEY HAVE NO FEED, stated so nobody "fixes" it: the home surface REFETCHES
+// on write. The pending-invite chip rides `GET /api/home/channels` as each
+// channel's `linkOut`, and every mutation that can move it — mint, revoke,
+// claim — is a request the client already awaits, so it invalidates the read it
+// just changed. Publishing the table would buy WAL decode plus a per-subscription
+// RLS evaluation on every write and deliver a signal nothing is waiting for.
+//
+// ⚠ AND THE TABLES ARE UNBINDABLE ANYWAY: this feed's own contract (top of file)
+// is that every bound name is workspace-scoped, and `channel_links.workspace_id`
+// is NULLABLE by design — NULL is the legacy unbound link. A row with no
+// workspace could not be routed to a window even if it were published.
+const NEVER_PUBLISHED = Object.freeze(["channel_links", "channel_link_claims"]);
+
+test("the home-channel link tables are never published and never bound", () => {
+  for (const t of NEVER_PUBLISHED) {
+    assert.ok(createBody(t), `${t} has no CREATE TABLE — this pin measures nothing`);
+    assert.ok(!PUB.added.has(t),
+      `${t} was ADDed to supabase_realtime — the home surface refetches on write, so a `
+      + "feed here is pure write amplification; drop the ADD or delete this pin with a reason");
+    assert.ok(!SYNC_TABLES.includes(t), `${t} is bound by main but is not published — the `
+      + "binding is refused and ONE refused binding refuses the WHOLE channel");
+    assert.ok(!LISTENER_BOUND.includes(t), `${t} is bound by realtime.js but is not published`);
+  }
+});

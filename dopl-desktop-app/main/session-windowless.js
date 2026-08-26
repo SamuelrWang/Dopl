@@ -17,7 +17,7 @@
 //   ANY OTHER GATED TOOL — denied. A gate means "ask a human", there is no surface to ask
 //              on, and the headless lane this shape replaces had the same answer.
 //
-// ⚠ THE BRIDGE POLLS THE ROW (10s, stops with the session or the resolution) rather than
+// ⚠ THE BRIDGE POLLS THE ROW (stops with the session or the resolution) rather than
 // subscribing: first-answer-wins means the web PATCH may decide it, and the row's status is
 // the only truth (INVARIANTS §6 — decisions are CAS'd on the server row).
 
@@ -26,7 +26,30 @@ const targeting = require('./targeting');
 const channelPost = require('./channel-post'); // notifyLocal: the denial notice, local-only
 const { diag } = require('./diag');
 
-const POLL_MS = 10_000;
+// ⚠ 3s SINCE 2026-08-25, DOWN FROM 10s, AND THE COST IS STATED RATHER THAN HIDDEN.
+// Samuel measured ~15s from pressing Post to the message appearing — almost all of it this
+// sleep, because the loop sleeps BEFORE its first poll, so a decision made at t=0 could not be
+// seen until t=10s. The gap is not a rendering problem and the card cannot paper over it: until
+// the row is delivered the honest face is "Pending" (`agent-stream-model.ts`), so the only real
+// fix is to ask sooner.
+//
+// ⚠ WHAT IT COSTS, MEASURED THE ONLY WAY THAT MATTERS — the ceiling. One request per interval
+// per WAITING post, and a post only waits while a human has not answered: at
+// `MAX_CONCURRENT_SESSIONS` posts all waiting at once that is ~2 req/s from one machine, against
+// ~0.6 before. Bounded by the session and by the human, and it stops dead on the first terminal
+// status.
+//
+// ⚠ NOT A LADDER, DELIBERATELY. An adaptive cadence that decays would optimise the case where
+// the operator answers instantly and punish the one where they come back to it later — which is
+// the case the 24h TTL exists for. `consent-cadence.js` was that idea and was deleted with the
+// inbound watcher (INVARIANTS §6); this does not resurrect it.
+//
+// ⚠ THE REAL FIX IS A DOORBELL, NOT A SHORTER SLEEP, and it is filed rather than guessed at:
+// REFACTOR-FINDINGS F-312. `channel_consent_requests` is already in `ui-sync.js › SYNC_TABLES`,
+// so main HEARS the decision — but that feed watches the ONE workspace the renderer is viewing
+// (last-writer-wins) and an event there is a DOORBELL, never content (INVARIANTS §7), so wiring
+// it to this loop is new cross-module plumbing with its own correctness questions.
+const POLL_MS = 3_000;
 
 // ── THE CONCURRENCY CEILING FOR THIS LANE ────────────────────────────────────
 // ⚠ THE NAME MOVED HERE ON 2026-08-20, AND THE NUMBER DID NOT CHANGE. `MAX_CONCURRENT_SESSIONS`

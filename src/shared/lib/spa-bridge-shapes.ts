@@ -69,6 +69,19 @@ export interface DesktopSessionSummary {
    * value the desktop files as `channel_sessions.name`.
    */
   name: string;
+  /**
+   * WHAT THE OPERATOR CALLS THIS AGENT (2026-08-25, Samuel's rename ruling) — their own words,
+   * stored on THEIR machine (`main/agent-names.js`, keyed by `agentId`) and projected here.
+   *
+   * ⚠ NULL IS THE ORDINARY ANSWER, not a gap: most agents are never renamed and the display
+   * falls back to the canonical `Agent #<id>` (`agents-model.ts › agentDisplayName`).
+   * ⚠ IT NAMES, IT NEVER ADDRESSES. `@<agentId>` and every session op still take the id, so a
+   * rename can never re-point a running instruction.
+   * ⚠ LOCAL TO THE MACHINE THAT RAN IT. `session-state-push.js › reportRow` picks its columns
+   * by name, so this never reaches `channel_sessions` — a PEER's card shows what their own
+   * machine reports. ⚠ Optional: an older main omits it.
+   */
+  displayName?: string | null;
   state: "working" | "idle" | "ended";
   /**
    * WHAT IT IS DOING RIGHT NOW, one step finer than the pill (2026-08-20).
@@ -337,4 +350,21 @@ export interface DesktopNarrationEntry {
    * lengths.
    */
   text?: string;
+  /**
+   * ⚠ ON `post` ONLY — **this post has NOT left the machine** (2026-08-25, Samuel's
+   * outbound-review ruling). The outbound consent gate is holding it and a human has to press
+   * Post before it goes (INVARIANTS §6). `session-io.js › sdkRenderEvents` stamps it from
+   * `willGatePost` at the moment the agent CALLS the tool, which is long before any row settles.
+   *
+   * ⚠ **ABSENT MEANS "NOT GATED", NOT "UNKNOWN"** — every main that predates this field emits a
+   * `post` frame only for a post it was free to send, so an older build reads correctly as
+   * `undefined`. A renderer must therefore treat `pending !== true` as SENT, never as a third
+   * state.
+   *
+   * ⚠ IT IS NOT A STATUS AND IT NEVER CLEARS. The ring entry is written once and main does not
+   * revisit it, so a frame stays `pending` after the operator posts — the SERVER's record is what
+   * says it landed (`agent-stream-model.ts` dedupes a pending frame against the real transcript
+   * row, exactly as it does an ordinary echo).
+   */
+  pending?: boolean;
 }

@@ -17,7 +17,13 @@ export interface WorkspaceRow {
   public_id: string;
   description: string | null;
   icon_url: string | null;
-  /** Absent until migration 20260823150000 is applied — see `WORKSPACE_COLS`. */
+  /**
+   * ⚠ STILL OPTIONAL after `20260823150000` applied (2026-08-24). The column is
+   * `NOT NULL DEFAULT 'standard'`, so every row PostgREST returns now carries
+   * it — but the type stays optional because absent must keep reading as
+   * standard (`types.ts › isStandardWorkspace`), and every fixture in the
+   * suites builds a row without it.
+   */
   kind?: WorkspaceKind;
   created_at: string;
   updated_at: string;

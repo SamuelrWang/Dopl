@@ -254,15 +254,24 @@ export interface DayWindow {
  */
 export async function countMessagesInWindow(
   workspaceId: string,
-  win: DayWindow
+  win: DayWindow,
+  channelId: string | null = null
 ): Promise<number> {
-  const { count, error } = await supabaseAdmin()
+  let query = supabaseAdmin()
     .from("channel_messages")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
     .eq("kind", "message")
     .gte("created_at", win.startIso)
     .lt("created_at", win.endIso);
+  // ⚠ NARROWED, NEVER RE-FENCED. `channelId` reaches here only after the route
+  // has proved the caller may SEE that channel against
+  // `listVisibleChannelRefs` — this clause is a SCOPE, and the `workspace_id`
+  // equality above stays the fence (§2: service role bypasses RLS, so the
+  // caller-supplied id must never be the only thing standing between a reader
+  // and a count).
+  if (channelId) query = query.eq("channel_id", channelId);
+  const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
 }
@@ -293,17 +302,21 @@ export async function countMcpCallsInWindow(
   return count ?? 0;
 }
 
-/** Count threads opened in one day window. */
+/** Count threads opened in one day window. `channelId` narrows exactly as
+ *  {@link countMessagesInWindow}'s does, under the same proved-visible rule. */
 export async function countThreadsInWindow(
   workspaceId: string,
-  win: DayWindow
+  win: DayWindow,
+  channelId: string | null = null
 ): Promise<number> {
-  const { count, error } = await supabaseAdmin()
+  let query = supabaseAdmin()
     .from("channel_tasks")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
     .gte("created_at", win.startIso)
     .lt("created_at", win.endIso);
+  if (channelId) query = query.eq("channel_id", channelId);
+  const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
 }

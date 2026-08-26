@@ -44,7 +44,7 @@ import { CHANNEL_ID, ME } from "./test-fixtures";
 const TASK = "t-1";
 const WS = "ws-1";
 
-const { live, refetchMessages } = vi.hoisted(() => ({
+const { live, refetchMessages, refetchPending, consentMutate } = vi.hoisted(() => ({
   live: vi.fn<
     (opts: {
       workspaceId: string;
@@ -53,6 +53,8 @@ const { live, refetchMessages } = vi.hoisted(() => ({
     }) => { gate: object }
   >(() => ({ gate: {} })),
   refetchMessages: vi.fn(),
+  refetchPending: vi.fn(),
+  consentMutate: vi.fn(),
 }));
 
 // The transcript read is a real hook; this suite is about the window's own lanes.
@@ -67,6 +69,19 @@ vi.mock("../../hooks/use-channel-messages", () => ({
 // The realtime registration is asserted, not exercised — `live.ts` owns the
 // subscription and has its own coverage.
 vi.mock("./live", () => ({ useChannelsV2Live: live }));
+
+// ⚠ THE WINDOW READS AND WRITES CONSENT SINCE 2026-08-25 (Samuel's outbound-review
+// ruling): the work stream's held-draft card is decidable here. Both are real
+// hooks over TanStack + the API, and this suite mounts with no QueryClient — the
+// card's own behaviour is `agent-stream.test.tsx`'s, over the pure model.
+vi.mock("../../hooks/use-consent-inbox", () => ({
+  useConsentInbox: () => ({ requests: [], outbound: [], refetch: refetchPending }),
+}));
+vi.mock("../../hooks/use-channel-preference-writes", () => ({
+  useChannelPreferenceWrites: () => ({
+    consent: { mutate: consentMutate, pending: false },
+  }),
+}));
 
 function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
@@ -448,6 +463,19 @@ describe("the window is a LIVE surface", () => {
       live.mock.calls.at(-1)?.[0].refetchAll();
     });
     expect(refetchMessages).toHaveBeenCalledTimes(1);
+  });
+
+  // ⚠ AND THE PENDING DRAFTS WITH IT (2026-08-25). The held-draft card is the
+  // outbound review surface now, so a bell that refreshed the transcript but not
+  // the consent rows would leave a Post button pointing at a row that is gone.
+  it("refetches the PENDING drafts on the same bell — the card is the review surface", async () => {
+    installBridge({ sessions: [summary()] });
+    await mount();
+    refetchPending.mockClear();
+    act(() => {
+      live.mock.calls.at(-1)?.[0].refetchAll();
+    });
+    expect(refetchPending).toHaveBeenCalledTimes(1);
   });
 
   // ⚠ Deliberately a no-op, not an oversight: this window holds no roster and no

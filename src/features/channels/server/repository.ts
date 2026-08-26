@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import type { ChannelInfoCardInput } from "../info-card";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
 import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
 import { visibleChannelsOr } from "./repository-visibility";
@@ -197,6 +198,9 @@ type ChannelPatch = Partial<{
   topic: string;
   visibility: string;
   archived_at: string | null;
+  /** The curated Main-info card, already validated by
+   *  `info-card.ts › ChannelInfoCardSchema` at the route boundary. */
+  info_card: ChannelInfoCardInput;
 }>;
 
 export async function updateChannel(

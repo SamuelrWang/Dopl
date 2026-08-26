@@ -24,12 +24,14 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
+import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { Role } from "@/features/workspaces/types";
 import { channelDisplayName } from "../../lib/channel-display";
 import { ChannelsV2SettingsSlot } from "./settings-slot";
 import { ChannelsV2MessagePane } from "./message-pane";
 import { ChannelsV2InfoPanel } from "./info-panel";
 import { PopOutThreadButton } from "./pop-out";
+import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import type { ChannelSurfaceData } from "./channel-surface-data";
 import type { ChannelsV2Selection } from "./use-channels-v2-selection";
@@ -40,10 +42,29 @@ import type { Channel, ChannelMention } from "../../types";
  *  desktop `kit.css` copy). */
 const INFO_SLIDE_MS = 200;
 
+/**
+ * What this surface hands an injected Info tab.
+ *
+ * ⚠ IT CARRIES THE GATE AND THAT IS WHY THE SLOT IS A FUNCTION (2026-08-25).
+ * The person card became WRITE-BEARING when the Main-info rows became
+ * removable, and INVARIANTS §7/§8 allow exactly ONE `useRefetchGate` per live
+ * surface — this one's. A slot handed a finished `ReactNode` could only mint a
+ * second gate, which coordinates with nothing: the doorbell's refetch would
+ * land mid-write and repaint the row the operator just deleted. Same reason
+ * `settings-slot.tsx` is passed `gate={gate}` twenty lines below.
+ */
+export interface ChannelInfoTabContext {
+  /** THE surface's refetch gate — hand it to every write the tab makes. */
+  gate: MutationGate;
+}
+
 export interface ChannelSurfaceSlots {
   /**
    * REPLACES the Info tab's body in CHANNEL view — an account-level 1:1 shows a
    * person card where a workspace channel shows its metadata and roster.
+   *
+   * ⚠ A RENDER FUNCTION, not a node — see {@link ChannelInfoTabContext}. It is
+   * called during this surface's render, like `Crossfade`'s own children.
    *
    * ⚠ THE TAB ROW IS NOT A SLOT and never becomes one: Info / Threads N /
    * Agents N / Settings is the column's design, and a host that could delete a
@@ -54,7 +75,7 @@ export interface ChannelSurfaceSlots {
    * so Info renders the THREAD's facts; a person card there would answer a
    * question the reader did not ask.
    */
-  infoTab?: ReactNode;
+  infoTab?: (ctx: ChannelInfoTabContext) => ReactNode;
 }
 
 export interface ChannelSurfaceCapabilities {
@@ -221,6 +242,21 @@ export function ChannelSurface({
             />
           ) : null
         }
+        // ⚠ MY OWN agents mid-turn, off the SAME bridge feed this surface
+        // already reads (`data.agentSessions` — no new read, no poll). Rendered
+        // in CHANNEL view as well as thread view, and scoped by `ownAgentsFor`
+        // so it always tracks the composer's own target: a channel-level
+        // composer shows every agent in the channel, a thread-scoped one shows
+        // that thread's. `null` sessions ("could not ask") render nothing.
+        agentActivity={
+          <AgentActivityRows
+            agents={ownAgentsWorking(
+              agentSessions,
+              channel.id,
+              openThread?.id ?? null
+            )}
+          />
+        }
         // "Anthony's agent is working…", off the peer projection the Agents tab
         // already polls. Thread view only — the row is about ONE exchange.
         peerActivity={
@@ -286,7 +322,9 @@ export function ChannelSurface({
           mentionsLoading={data.mentionsLoading}
           onOpenMention={openMention}
           onMarkAllMentionsRead={markAllMentionsRead}
-          infoTab={slots?.infoTab}
+          // ⚠ CALLED, not passed. The tab is a render function so it can be
+          // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
+          infoTab={slots?.infoTab?.({ gate })}
           // THE SETTINGS TAB (Samuel, 2026-08-19). This cluster hung off the
           // pane HEADER until then; the header keeps only the info toggle.
           // ⚠ THREAD-SCOPED WHILE A THREAD IS OPEN (2026-08-21) — the branch

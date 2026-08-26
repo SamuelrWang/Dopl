@@ -151,8 +151,16 @@ export function useChannelPreferenceWrites({
    * the Inbox's inbound rows all fired this mutation against an INBOUND row;
    * that lane is retired. The mutation itself is unchanged and is NOT
    * kind-scoped — the wire shape is the server's, `"allow"` / `"deny"` are the
-   * same two values, and the two surfaces left (`ThreadSendBox`, `InboxRow`)
-   * only ever hand it an outbound id because that is all their callers read.
+   * same two values, and its callers only ever hand it an outbound id because
+   * that is all any of them read.
+   *
+   * ⚠ THE SURFACES MOVED AGAIN ON 2026-08-25 (Samuel — INVARIANTS §6). The Inbox
+   * pane is DELETED; the mutation's callers are now `thread-consent.tsx ›
+   * ThreadSendBox` (Send / Cancel, on the thread) and the work stream's held-draft
+   * card (`channels-v2/agent-stream.tsx › SentToChannelBox`), which sends `"allow"`
+   * ONLY — Samuel's ruling gives that card one button. **`"deny"` is deliberately
+   * still on this mutation and on the route**: the send box is the surviving
+   * Cancel, and the desktop cancels its own row when a park closes the tool call.
    */
   const consent = useApiMutationWith<
     ConsentDraft,

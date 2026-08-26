@@ -206,6 +206,25 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.invoke('orchestrator:setLaunchEnabled', { enabled: enabled === true }),
   },
 
+  // ── ⚠ SIGN IN TO CLAUDE CODE, FROM INSIDE THE APP (2026-08-25) ───────────────────────────
+  //
+  // THE ONE ENTRY INTO THE RECOVERY FLOW. A session runs on THIS MAC's Claude Code credential —
+  // separate from the Dopl login and from the Claude app — and when it is missing or expired the
+  // engine HOLDS the session (`main/session-auth.js`) instead of burning it. Everything needed
+  // to un-hold one existed and had no caller; this is the call.
+  //
+  // ⚠ ITS OWN NAMESPACE, NOT A MEMBER OF `sessions`, because it takes no session and no channel:
+  // one operator, one Mac, one credential. It is FEATURE-PROBED by the SPA (the button is absent
+  // on an older main and in a plain browser, never inert).
+  //
+  // ⚠ NO CREDENTIAL CROSSES THIS BRIDGE IN EITHER DIRECTION, and nothing is typed into a Dopl
+  // surface: main opens the OAuth page in the SYSTEM BROWSER and collects the pasted code in its
+  // own local window (`main/claude-auth.js`). The answer is `{ ok }` — whether this Mac can run a
+  // session now — and carries no token, no path and no reason string.
+  claude: {
+    signIn: () => ipcRenderer.invoke('claude:signIn'),
+  },
+
   // `reopen` — the session card's "Open thread" button, on the sender-bound handler in
   // `main/session-ipc-ops.js` (`sessions:reopen`, which requires an app-owned window's TOP
   // frame). ⚠ It said "the SAME op renderer/preload.js exposes" until 2026-08-20: that preload
@@ -348,6 +367,15 @@ contextBridge.exposeInMainWorld('dopl', {
         axis: asMode(axis),
         mode: asMode(mode),
         agentId: asId(agentId),
+      }),
+
+    // ⚠ WHAT THE OPERATOR CALLS THIS AGENT (2026-08-25). Display only: nothing resolves an
+    // agent by it, and an EMPTY string clears the name rather than storing one. Main answers
+    // with its OWN stored value, so a refused name reverts instead of painting.
+    rename: (agentId, name) =>
+      ipcRenderer.invoke('sessions:rename', {
+        agentId: asId(agentId),
+        name: typeof name === 'string' ? name : '',
       }),
 
     // ⚠ THE LIVE MODEL SWITCH (2026-08-22, Samuel's model-selection ruling). It takes the ID

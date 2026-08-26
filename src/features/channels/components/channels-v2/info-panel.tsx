@@ -257,7 +257,7 @@ export function ChannelsV2InfoPanel({
   return (
     <aside
       aria-label="Channel info"
-      className="flex w-[340px] shrink-0 flex-col border-l border-border-default"
+      className="flex w-[380px] shrink-0 flex-col border-l border-border-default"
     >
       <div className="flex h-[56px] shrink-0 items-center border-b border-border-default px-3">
         <SegmentedControl
@@ -267,6 +267,10 @@ export function ChannelsV2InfoPanel({
           }))}
           value={activeTab}
           onChange={setTab}
+          // ⚠ THE 36px CONTROL SCALE (Samuel, 2026-08-25) — the same height as the page
+          // header's buttons, so a switcher does not read as a smaller class of control than
+          // the things beside it.
+          size="lg"
         />
       </div>
 

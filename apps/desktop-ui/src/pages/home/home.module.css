@@ -74,14 +74,14 @@
   box-shadow: var(--raised-light-shadow);
 }
 
-/* THE INFO TOGGLE is a circle here, matching the header's collapsed search pill
-   (Samuel, 2026-08-24). Shape and size only — the glyph swap (`PanelRight`) and
-   the column's slide are in the shared surface and land everywhere.
-   ⚠ Keyed on the LABEL, which is stable and pinned by three tests
-   (`pop-out.test.tsx`, `thread-window.test.tsx`); the icon changed, the label
-   deliberately did not. If it ever does, this degrades to the square face. */
-.frame :global(button[aria-label="Channel info"]) {
-  width: 32px;
-  height: 32px;
-  border-radius: 9999px;
-}
+/* ⚠ THE INFO TOGGLE'S CIRCLE STOOD HERE AND IS DELETED (Samuel, 2026-08-25:
+   *"remove the button UI entirely — naked icon, no circle, no fill, no
+   border"*). It was a 32px round face keyed on `button[aria-label="Channel
+   info"]`, matching the header's collapsed search pill.
+
+   The control is now `bits.tsx › IconButton`'s `bare` variant, which paints
+   NOTHING in either state and keeps the 32px hit area this rule gave it — so
+   the face is the same on /home and on the workspace channels page, and there
+   is no per-page override to keep in step with the shared component. **Do not
+   re-add a shape rule here**: a label-keyed override of a shared control is how
+   the two surfaces drifted in the first place. */

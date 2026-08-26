@@ -16,28 +16,16 @@
 //
 //
 // ── ENDED SESSIONS: THE RETENTION RULE ───────────────────────────────────────────────
-// ⚠ THE RETENTION RULE, REWRITTEN 2026-08-20 (F-234, Samuel's ruling). It USED to read: a
-// pill survives exactly as long as its WINDOW does, and no longer — `settle` destroyed the
-// window on every end but ABANDONMENT, so the abandoned session was the only one with
-// something left to open and the only one whose pill stayed.
+// ⚠ THE RETENTION RULE, AS IT STANDS (Samuel, 2026-08-22). EVERY end is retained — not only
+// the abandonment — the record is DURABLE (`agent-history.js`; it survives a restart), and the
+// bound is SEVEN DAYS from `endedAt` rather than a count. `MAX_ENDED` and `endedKept` are
+// DELETED; see `retainedEnded` below.
 //
-// EVERY SESSION IS WINDOWLESS since the F-228 retirement, so `s.win` is null on all of them
-// and that predicate answered FALSE for every end: nothing was ever retained, and an agent
-// that finished left the Agents tab instantly with no record it had run. The rule was
-// written for exactly the case it had stopped covering — "an end nobody watched happen must
-// not make a run vanish".
-//
-// SO RETENTION WAS MADE UNCONDITIONAL, on the caller's flag alone, BOUNDED BY `MAX_ENDED` (12).
-// A TIME bound was refused at the time — the question the window check answered ("did anything
-// ever have this on screen") has no answer without a window, and a TTL would have invented one.
-//
-// ⚠ AND ON 2026-08-22 SAMUEL RULED THE TIME BOUND IN, WHICH SUPERSEDES BOTH HALVES ABOVE.
-// EVERY end is retained (not only the abandonment), the record is DURABLE (`agent-history.js`
-// — it survives a restart, which the in-memory set never did), and the bound is SEVEN DAYS
-// from `endedAt` rather than a count of 12. The count bound was the honest answer while the
-// set lived in memory; once the history is on disk it can be swept on the clock, which is what
-// "the window stays viewable for a week" actually asks for. `MAX_ENDED` and `endedKept` are
-// DELETED — see `retainedEnded` below.
+// ⚠ THE THREE SUPERSEDED VERSIONS OF THIS RULE (the window-lifetime predicate that answered
+// FALSE for every end once sessions went windowless — F-234 — and the unconditional count bound
+// that replaced it) are CHANGE-NARRATIVE and live in ENGINEERING.md's 2026-08-22 stratum, per
+// the repo's standing doc rule: current state here, history there, never both. They were moved
+// out on 2026-08-25 when this file hit the §2 cap.
 //
 // ⚠ A RETAINED PILL IS A TOMBSTONE, NOT A HANDLE, AND THAT IS UNCHANGED AND NOW LOAD-BEARING.
 // An ended agent is gone from the engine's registry, so every wake path (`feedLiveSession`'s
@@ -45,9 +33,10 @@
 // nothing and refuses. What the card opens is a READ-ONLY history, never a session. The channel
 // transcript is still the shared record, and nothing here ever touches it.
 
-// ⚠ The module's only three dependencies, all ABOVE the sentinel: everything from there to
+// ⚠ The module's only four dependencies, all ABOVE the sentinel: everything from there to
 // `module.exports` is import-free, so test/session-summary.test.mjs evaluates the real code
-// verbatim with these injected.
+// verbatim with these injected. (`displayNameFor` joined 2026-08-25, STUBBED in the harness —
+// it opens an electron-store on require.)
 // ⚠ `pickAgentName` LEFT THIS LIST ON 2026-08-21. The stone-name pool is deleted in both trees;
 // a pill's name is the session's own `agentId`, minted at spawn by `main/agent-id.js`, so there
 // is nothing left to pick and no ledger to pick it out of. See `nameOf` below.
@@ -64,6 +53,9 @@ const { metricOrNull, metrics } = require('./session-metrics');
 // only what it CALLS. Read the mapping from `main/session-pill.js`.
 const { PILL_ENDED, pillState, listeningState } = require('./session-pill');
 const { noteEvent, detailFor } = require('./session-detail');
+// ⚠ WHAT THE OPERATOR CALLS AN AGENT (2026-08-25) — read HERE, not in the renderer: one
+// projection, one answer. The reasoning is `agent-names.js`'s own header.
+const { displayNameFor } = require('./agent-names');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
@@ -132,6 +124,9 @@ function liveSummary(s, name) {
     // string today and a reader that needs to address something must not have to know that.
     agentId: name,
     name: name,
+    // ⚠ NULL is the ordinary answer (never renamed) and not a gap — the card falls back to
+    // `Agent #<id>`. Rides BESIDE `agentId`/`name`, which stay the ADDRESS. See `agent-names.js`.
+    displayName: displayNameFor(name),
     state: pill,
     // ⚠ BESIDE THE PILL, NEVER INSTEAD OF IT (the rule `detail` follows): it refines `idle` into
     // "Waiting" (feeds) vs "Idle" (relaunches), and adds nothing under `working` / `ended`.
@@ -179,6 +174,9 @@ function endedSummary(e, name) {
     taskId: String((e && e.taskId) || ''),
     agentId: name, // frozen with the rest of the identity — see `noteEnded`
     name: name,
+    // ⚠ READ LIVE, NOT FROZEN, unlike the metrics: renaming while reading back a finished run
+    // is normal, and a frozen copy would show the old name on the card just retitled.
+    displayName: displayNameFor(name),
     state: PILL_ENDED,
     listening: false, // terminal; stated rather than omitted so every row carries the field
     // ⚠ WHEN IT ENDED, so the card can say so and the operator can tell a run that finished a

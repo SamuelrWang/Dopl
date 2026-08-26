@@ -29,13 +29,25 @@
 import { useEffect, useRef, useState } from "react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
-import type { ChannelMessage } from "../../types";
+import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 import type { AgentNarrationEntry } from "./use-agent-narration";
+import { TAB_ACTION } from "./bits";
 import {
   buildAgentStream,
   shortToolName,
   type StreamItem,
 } from "./agent-stream-model";
+
+/**
+ * WHAT THE BANNER SAYS BEFORE A POST HAS LEFT THE MACHINE, and what it says when
+ * it never will (Samuel, 2026-08-25). ⚠ Exported for the tests: "Pending" and
+ * "Posted to channel" over the same box are opposite claims about whether the
+ * counterparty has read something, which is the failure this card was built to
+ * stop.
+ */
+export const POST_PENDING_LABEL = "Pending";
+export const POST_NOT_SENT_LABEL = "Not sent";
+export const POST_ACTION_LABEL = "Post";
 
 /** What "this build cannot show the work" says, as opposed to "it has done
  *  nothing yet". ⚠ Exported for the tests: the two absences are the pair this
@@ -56,6 +68,10 @@ export function AgentStream({
   entries,
   supported,
   sent,
+  delivered,
+  pending,
+  onPost,
+  postBusy = false,
   threadTitle,
   className,
 }: {
@@ -64,13 +80,51 @@ export function AgentStream({
   /** Whether this build can show the lane at all. */
   supported: boolean;
   /** What this agent POSTED, off the channel transcript — the authoritative
-   *  record of the one lane that is public. */
+   *  record of the one lane that is public. Agent-scoped (F-251). */
   sent: readonly ChannelMessage[];
+  /**
+   * THE WHOLE CHANNEL TRANSCRIPT, unfiltered — what a held draft's words are
+   * checked against to learn whether they went out (2026-08-25). ⚠ NOT a
+   * substitute for {@link sent}: this one may not be attributed to any agent,
+   * which is exactly why it can answer a question the agent-scoped lane cannot.
+   */
+  delivered?: readonly ChannelMessage[];
+  /**
+   * The viewer's PENDING outbound consent rows — what turns a held draft's card
+   * into a decidable one (Samuel, 2026-08-25). ⚠ Omitted renders every held
+   * draft as {@link POST_NOT_SENT_LABEL}, which is the honest answer for a host
+   * that cannot read them.
+   */
+  pending?: readonly ChannelConsentRequest[];
+  /** Approve one held draft — the CAS'd `PATCH /consent/[id]` (INVARIANTS §6).
+   *  ⚠ Absent renders no button at all, never a disabled one. */
+  onPost?: (requestId: string) => void;
+  /** A decision is in flight — the double-submit guard, not a capability. */
+  postBusy?: boolean;
   threadTitle?: string | null;
   className?: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const items = buildAgentStream({ entries, sent, threadTitle });
+  /**
+   * ⚠ A `useState` SET OF PRESSED CARDS STOOD HERE AND IS DELETED (2026-08-25).
+   * It existed to stop the card flashing "Not sent" in the gap between a Post
+   * and the desktop's poll delivering it — and it could not do that job: local
+   * state does not survive a remount, does not see a Post pressed on the OTHER
+   * agent surface, and is not what made the claim wrong anyway. **The model
+   * answers from server facts now** (`agent-stream-model.ts`): the words landing
+   * in the channel is what retires a held card, and only a row past its own TTL
+   * earns the failed face.
+   */
+  const items = buildAgentStream({
+    entries,
+    sent,
+    // ⚠ THE LANDING CHECK IS CHANNEL-WIDE, THE RENDERING IS AGENT-SCOPED — see
+    // the model's docblock. `sent` is filtered on `metadata.taskId`, which a
+    // threadless post does not carry, so it cannot answer "did this land".
+    delivered,
+    pending,
+    threadTitle,
+  });
   // Follow the stream. Simpler than the transcript's stick-to-bottom rules on
   // purpose: this is a log, not a conversation with a reading position to
   // protect, and it grows from the bottom.
@@ -96,7 +150,12 @@ export function AgentStream({
       ) : (
         <ol className="flex flex-col gap-2.5">
           {items.map((item) => (
-            <StreamRow key={item.key} item={item} />
+            <StreamRow
+              key={item.key}
+              item={item}
+              onPost={onPost}
+              postBusy={postBusy}
+            />
           ))}
         </ol>
       )}
@@ -111,11 +170,28 @@ export function AgentStream({
   );
 }
 
-function StreamRow({ item }: { item: StreamItem }) {
+function StreamRow({
+  item,
+  onPost,
+  postBusy,
+}: {
+  item: StreamItem;
+  onPost?: (requestId: string) => void;
+  postBusy?: boolean;
+}) {
   if (item.lane === "sent") {
     return (
       <li>
-        <SentToChannelBox text={item.text} to={item.to} at={item.at} />
+        <SentToChannelBox
+          text={item.text}
+          to={item.to}
+          at={item.at}
+          pending={item.pending}
+          requestId={item.requestId}
+          expired={item.expired}
+          onPost={onPost}
+          busy={postBusy}
+        />
       </li>
     );
   }
@@ -156,25 +232,79 @@ function StreamRow({ item }: { item: StreamItem }) {
  *   - **The label says where it went** ("Sent to <thread>" / "Posted to channel",
  *     v1 › `outboundLabel`), and the timestamp rides in the banner's trailing tag.
  *
- * ⚠ WHAT WAS DROPPED, deliberately: `.outbound-pending` and `.is-not-sent`, the
- * whole DECISION half of that node. v1 painted the box before the operator
- * answered the outbound gate, so it needed a pending face and a "Not sent" face.
- * **This surface only ever renders posts that ALREADY EXIST in the transcript**,
- * so there is no undecided state to draw — and a pending face with nothing that
- * can reach it is exactly the dead affordance F-212 was earned on.
+ * ── ⚠ v1'S PENDING FACE IS BACK, AND SO IS THE DECISION (Samuel, 2026-08-25) ──
+ *
+ * This docblock used to say `.outbound-pending` / `.is-not-sent` were dropped
+ * "deliberately", because "this surface only ever renders posts that ALREADY
+ * EXIST in the transcript". **That was never true and the box had been lying
+ * since it shipped.** The work stream's `post` frame is pushed the moment the
+ * agent CALLS the tool — before the outbound consent gate has been answered, and
+ * whether or not it ever will be — so a held draft was painted "Posted to
+ * channel" over words the counterparty had not seen and might never see.
+ *
+ * ⚠ THE CARD IS NOW THE REVIEW SURFACE, AND IT IS THE ONLY ONE. The separate
+ * consent INBOX is deleted (INVARIANTS §6): a solo /home channel never had a way
+ * to reach it, so a pending post there dead-ended forever. The gate is unchanged
+ * — the post still queues as a `channel_consent_requests` row and still needs a
+ * human — the review just happens where the operator is already looking.
+ *
+ * ⚠ ONE BUTTON, AND IT IS "Post" (Samuel's ruling, in those words). There is no
+ * Deny here and one must not be added: the only other exit is the row's own 24h
+ * expiry, and an expired draft renders as {@link POST_NOT_SENT_LABEL} with
+ * nothing to press, which is the truth rather than a second verb.
+ *
+ * ⚠ **{@link POST_NOT_SENT_LABEL} IS THE NARROWEST FACE HERE, NOT THE FALLBACK
+ * (corrected 2026-08-25 — Samuel saw it over a post that had DEMONSTRABLY been
+ * delivered).** It requires a real consent row past its own TTL. Everything else
+ * this card cannot explain — a Post whose delivery is still in flight, a row
+ * decided on another surface, a body-join that missed — reads as
+ * {@link POST_PENDING_LABEL} with no button, because "I do not know yet" and "it
+ * failed" are different facts and only one of them makes an operator re-send.
  */
 export function SentToChannelBox({
   text,
   to,
   at,
+  pending = false,
+  requestId,
+  expired = false,
+  onPost,
+  busy = false,
 }: {
   text: string;
   to?: string | null;
   /** Epoch ms. `0` means the stamp was unreadable — the tag drops rather than
    *  printing an epoch date at somebody. */
   at?: number;
+  /** This post has NOT gone out — the outbound gate is holding it. */
+  pending?: boolean;
+  /** The consent row the button decides; `null` = nothing decidable matched. */
+  requestId?: string | null;
+  /**
+   * This draft's row is past its TTL and nothing will ever post it.
+   *
+   * ⚠ IT IS A SEPARATE FLAG FROM `!requestId` ON PURPOSE, and that separation IS
+   * the 2026-08-25 fix. The card used to read "no row matched" as failure, which
+   * is also true of the seconds between a Post and the desktop's poll delivering
+   * it — so an operator who had just approved a reply was told it was not sent,
+   * the one wrong direction (they send it again). **Absence is unknown; only a
+   * dead row is failure.**
+   */
+  expired?: boolean;
+  onPost?: (requestId: string) => void;
+  busy?: boolean;
 }) {
-  const label = to ? `Sent to ${to}` : "Posted to channel";
+  // ⚠ THE FACES ARE ORDERED BY WHAT THEY CLAIM, strongest claim last. Only the
+  // final one asserts the counterparty has it, and it is reachable ONLY once the
+  // words are in the channel (`agent-stream-model.ts` clears `pending` then).
+  const canPost = pending && !!requestId && !!onPost && !expired;
+  const label = pending
+    ? expired
+      ? POST_NOT_SENT_LABEL
+      : POST_PENDING_LABEL
+    : to
+      ? `Sent to ${to}`
+      : "Posted to channel";
   const stamp = at ? formatChannelTimestamp(new Date(at).toISOString()) : "";
   return (
     <div className="min-w-0 overflow-hidden rounded-[12px] border border-border-active bg-card-surface-subtle">
@@ -191,6 +321,23 @@ export function SentToChannelBox({
       <p className="wrap-anywhere whitespace-pre-wrap px-3 py-[9px] text-caption leading-normal text-text-primary">
         {text}
       </p>
+      {/* ⚠ THE ACTION IS ON THE LAST ROW, RIGHT-ALIGNED — the position every card
+          in this tree keeps (`bits.tsx › CARD_BUTTON`), so the eye finds the same
+          control in the same corner. `TAB_ACTION`'s geometry: a 36px dark pill.
+          ⚠ NO LABEL, NO EXPLAINER, NO SECOND VERB beside it (Samuel's minimal-UI
+          ruling) — the banner already said Pending. */}
+      {canPost && (
+        <div className="flex justify-end px-3 pb-2.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onPost?.(requestId as string)}
+            className={cn(TAB_ACTION, "disabled:opacity-60")}
+          >
+            {POST_ACTION_LABEL}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

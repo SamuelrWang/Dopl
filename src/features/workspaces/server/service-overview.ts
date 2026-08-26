@@ -79,6 +79,34 @@ export function parseSeriesMetric(raw: string | null): OverviewSeriesMetric {
   return found;
 }
 
+/**
+ * MAY THIS CALLER SEE THIS CHANNEL? — the gate in front of a channel-scoped
+ * series (2026-08-25).
+ *
+ * ⚠ IT DOES NOT RE-DERIVE THE PREDICATE. `listVisibleChannelRefs` is built from
+ * `channels/server/repository-visibility.ts › visibleChannelsOr`, the one
+ * statement `listChannels` also builds from, so this route and the channels
+ * page can never disagree about what "visible" means — the same argument the
+ * activity feed's fence makes one function up.
+ *
+ * ⚠ IT LIVES IN THE SERVICE, not in the route, because the route may not talk
+ * to a repository (§2). It answers a BOOLEAN rather than throwing so the caller
+ * owns the status code — and the caller answers 404, never 403, so a private
+ * channel's existence is not confirmed to somebody who cannot read it.
+ *
+ * ⚠ Archived channels are OUT, because that read excludes them. A series for an
+ * archived channel therefore 404s rather than answering — fail-closed, and the
+ * strip has no archived surface to render on anyway.
+ */
+export async function isChannelVisibleTo(
+  workspaceId: string,
+  userId: string,
+  channelId: string
+): Promise<boolean> {
+  const visible = await listVisibleChannelRefs(workspaceId, userId);
+  return visible.some((ref) => ref.id === channelId);
+}
+
 function utcDayStart(at: Date): Date {
   return new Date(
     Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate())
@@ -112,17 +140,41 @@ export function seriesWindows(now: Date): DayWindow[] {
 export async function getWorkspaceOverviewSeries(
   workspaceId: string,
   metric: OverviewSeriesMetric,
+  /**
+   * Narrow every bin to ONE channel (2026-08-25, the Info tab's activity
+   * strip). ⚠ THE CALLER MUST HAVE PROVED VISIBILITY FIRST — the route does it
+   * against `repository-overview.ts › listVisibleChannelRefs`, the channels
+   * feature's one visibility statement. Nothing here re-checks it, and nothing
+   * here may be handed a raw query parameter.
+   */
+  channelId: string | null = null,
   now: Date = new Date()
 ): Promise<WorkspaceOverviewSeries> {
-  const counter =
-    metric === "messages"
-      ? countMessagesInWindow
-      : metric === "mcp"
-        ? countMcpCallsInWindow
-        : countThreadsInWindow;
+  // ⚠ REFUSED, NOT IGNORED. `mcp_tool_calls` has no `channel_id` column, so a
+  // channel-scoped MCP series is a question the schema cannot answer — and a
+  // silently workspace-wide answer under a channel-scoped label is exactly the
+  // fabrication this whole section exists to prevent (§9's "never a silent
+  // fall-through"). The route surfaces this as a 400.
+  if (channelId !== null && metric === "mcp") {
+    throw new HttpError(
+      400,
+      "CHANNEL_SCOPE_UNSUPPORTED",
+      "The mcp metric cannot be scoped to a channel: MCP calls are not recorded per channel."
+    );
+  }
   const windows = seriesWindows(now);
+  // ⚠ Branched rather than dispatched through a shared `counter` variable: the
+  // mcp counter takes no `channelId`, and a lookup table would let a third
+  // argument be dropped on the floor with nothing saying so. The guard above
+  // makes that unreachable; this makes it unwritable.
   const counts = await Promise.all(
-    windows.map((win) => counter(workspaceId, win))
+    windows.map((win) =>
+      metric === "messages"
+        ? countMessagesInWindow(workspaceId, win, channelId)
+        : metric === "threads"
+          ? countThreadsInWindow(workspaceId, win, channelId)
+          : countMcpCallsInWindow(workspaceId, win)
+    )
   );
   const days: OverviewSeriesPoint[] = windows.map((win, i) => ({
     date: win.date,

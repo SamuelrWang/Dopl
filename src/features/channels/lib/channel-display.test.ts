@@ -4,6 +4,7 @@ import {
   channelDisplayName,
   channelDisplayPeerPerson,
 } from "./channel-display";
+import { EMPTY_INFO_CARD } from "../info-card";
 import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
 
 const ME = "me";
@@ -34,6 +35,7 @@ function chan(over: Partial<Channel> = {}): Channel {
     myAgentToolProfile: "full",
     myFavoritedAt: null,
     onlineMemberCount: 0,
+    infoCard: EMPTY_INFO_CARD,
     ...over,
   };
 }

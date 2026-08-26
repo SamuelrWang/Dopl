@@ -471,7 +471,7 @@ function SettingName({ children }: { children: ReactNode }) {
 // CONTROL, and there is now no recipe here to hang a third sentence off.
 
 /**
- * A named setting with its control on the right. The 340px panel is why the
+ * A named setting with its control on the right. The 380px panel (2026-08-25) is why the
  * control sits beside the name rather than under it: a `SelectMenu` pill is
  * ~120px and the name ~80px, so one line holds both and the column stays
  * scannable.

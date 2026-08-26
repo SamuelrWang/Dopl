@@ -8,7 +8,6 @@ import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switc
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
-import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { JoinRequestNoticesCore } from "@/features/workspaces/components/join-request-notices-core";
 import { ConnectAgentBanner } from "@/features/onboarding/components/connect-agent-banner";
@@ -50,24 +49,15 @@ export function AppShellLayout() {
   const { workspace, segment, role, isPending, error, refetch, needsRedirect } =
     useWorkspaceRoute();
 
-  // Shares the channels page's exact cache key — zero extra requests when both
-  // are mounted; self-disables on a falsy id. NO POLL INTERVAL, deliberately
-  // (F-201, resolved 2026-08-19): the badge is live over the ui-sync bridge —
-  // `useConsentInbox` runs `useConsentRealtime`, and `channel_consent_requests`
-  // is in `main/ui-sync.js › SYNC_TABLES` — so an interval here would be the
-  // workspace-wide background poll on every page that
-  // `CONSENT_INBOX_POLL_MS`'s own docblock forbids. The channels page keeps
-  // its interval as the realtime BACKSTOP; an always-mounted badge does not
-  // get one.
-  //
-  // ⚠ OUTBOUND ONLY (Samuel, 2026-08-22). The badge counted BOTH directions of
-  // the consent inbox while an INBOUND ask was something the operator answered;
-  // that lane is retired — the transcript card's Decline / Launch agent pair,
-  // the thread's awaiting strip and the Inbox pane's inbound rows are all
-  // deleted. A nav badge is a claim that something is ACTIONABLE, and an inbound
-  // row now leads to no surface that can act on it. Same slice the channels
-  // page's own sidebar badge takes.
-  const { outbound: consentRequests } = useConsentInbox(workspace?.id);
+  // ⚠ THE CHANNELS NAV BADGE AND ITS `useConsentInbox` READ STOOD HERE AND ARE
+  // DELETED (Samuel, 2026-08-25). The count was a claim that something was
+  // ACTIONABLE somewhere else — the consent Inbox — and that pane is gone: the
+  // outbound review is the work stream's own card
+  // (`agent-stream.tsx › SentToChannelBox`), reachable on a solo /home channel
+  // that this shell does not even wrap. **The shell no longer reads consent at
+  // all**, so it no longer mounts a workspace-wide realtime subscription on
+  // every page of the app. Do not re-add a badge for a surface that does not
+  // exist; the GATE itself is untouched (INVARIANTS §6).
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Seeded to the gear's section: Escape-then-reopen must not flash the wrong pane.
@@ -129,10 +119,6 @@ export function AppShellLayout() {
           <AppSidebarCore
             workspaceSegment={segment}
             activeSection={activeSectionFromPath(location.pathname)}
-            // The badge counts drafts this operator's own agent is holding for
-            // their Send, which arrive over the consent realtime signal
-            // (bridge-fed here).
-            consentCount={consentRequests.length}
             onOpenSettings={openSettings}
             Link={RouterLink}
             brand={

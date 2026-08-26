@@ -1,6 +1,10 @@
 -- `ensure_default_workspace` — KIND GUARD for home channels (2026-08-23).
 --
--- ⚠️ WRITTEN, NOT APPLIED (Samuel's standing gate on this directory).
+-- ✅ APPLIED. ⚠ THIS HEADER SAID "WRITTEN, NOT APPLIED" FOR A DAY AFTER IT WAS
+-- LIVE — corrected 2026-08-24. Deploy state is a measurement: re-derive with
+-- `supabase migration list` (or the MCP `list_migrations`), and JOIN ON THE
+-- NAME — this file applied under version `20260823205026`, not its filename
+-- prefix (INVARIANTS §12, REFACTOR-FINDINGS F-304).
 --
 -- ── WHAT CHANGES ───────────────────────────────────────────────────────────
 -- One thing: the SELECT that picks an existing default now considers only

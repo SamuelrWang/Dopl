@@ -14,6 +14,7 @@ import type {
   ThreadOutcome,
   ThreadStatus,
 } from "../types";
+import { parseInfoCard } from "../info-card";
 
 /**
  * DB row shapes for the channels tables. Hand-written because
@@ -35,6 +36,21 @@ export type ChannelRow = {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * The curated Main-info card (`20260825120000_channel_info_card.sql`).
+   *
+   * ⚠ TYPED `unknown`, NOT `ChannelInfoCard`, and that is the whole discipline:
+   * this is a row shape, and the database's only promise is a bounded JSON
+   * OBJECT. Narrowing it here would let every reader treat stored bytes as
+   * validated ones. {@link mapChannelRow} runs it through `parseInfoCard`,
+   * which is where it becomes a card.
+   *
+   * ⚠ OPTIONAL, because a row read by a server whose migration has not landed
+   * has no such key — and because the hand-written row types in this file are
+   * cast from PostgREST results, so a missing column is `undefined` rather than
+   * a type error.
+   */
+  info_card?: unknown;
 };
 
 export type ChannelTaskRow = {
@@ -197,6 +213,11 @@ export function mapChannelRow(
     myAgentToolProfile: state.agentToolProfile,
     myFavoritedAt: state.favoritedAt,
     onlineMemberCount: state.onlineMemberCount,
+    // ⚠ PARSED, NEVER CAST. `parseInfoCard` never throws: an older shape, a
+    // hand-edited row or a built-in key retired since it was written all
+    // degrade to the card as shipped, because the facts under the card are
+    // still there and a channel that cannot render is the worse answer.
+    infoCard: parseInfoCard(row.info_card),
   };
 }
 

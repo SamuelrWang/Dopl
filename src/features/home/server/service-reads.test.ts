@@ -1,7 +1,8 @@
 /**
- * `service-reads.ts` — the three things a renderer would otherwise have to
- * trust: the relationships payload shape (peer, segment, channel, truncated
- * preview), the pending-link filter, and the PRE-AUTH claim-page payload, whose
+ * `service-reads.ts` — the four things a renderer would otherwise have to
+ * trust: the channels payload shape (name, peer-or-null, segment, channel,
+ * truncated preview, the bound link riding as `linkOut`), which containers are
+ * DROPPED, the pending-link filter, and the PRE-AUTH claim-page payload, whose
  * whole contract is what it does NOT carry.
  */
 
@@ -11,8 +12,9 @@ import { HttpError } from "@/shared/lib/http-error";
 vi.mock("./repository", () => ({
   listLinkContainers: vi.fn(),
   listLinksByCreator: vi.fn(),
+  listLinksByWorkspaces: vi.fn(),
   listContainerPeers: vi.fn(),
-  listContainerDirectChannels: vi.fn(),
+  listContainerChannels: vi.fn(),
   listLastMessages: vi.fn(),
   findLinkByToken: vi.fn(),
 }));
@@ -21,7 +23,7 @@ vi.mock("@/features/workspaces/server/repository", () => ({
 }));
 
 import {
-  getHomeRelationships,
+  getHomeChannels,
   getLinkPublicInfo,
   listMyPendingLinks,
 } from "./service-reads";
@@ -42,6 +44,7 @@ function linkRow(patch: Partial<ChannelLinkRow> = {}): ChannelLinkRow {
   return {
     id: "link-1",
     creator_user_id: ME,
+    workspace_id: null,
     token: "tok_abc",
     label: null,
     expires_at: null,
@@ -57,8 +60,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocked.listLinkContainers.mockResolvedValue([]);
   mocked.listLinksByCreator.mockResolvedValue([]);
+  mocked.listLinksByWorkspaces.mockResolvedValue(new Map());
   mocked.listContainerPeers.mockResolvedValue(new Map());
-  mocked.listContainerDirectChannels.mockResolvedValue(new Map());
+  mocked.listContainerChannels.mockResolvedValue(new Map());
   mocked.listLastMessages.mockResolvedValue(new Map());
   mocked.findLinkByToken.mockResolvedValue(null);
   mockProfiles.mockResolvedValue(new Map());
@@ -71,12 +75,12 @@ const CONTAINER = {
   created_at: "2026-08-20T00:00:00.000Z",
 };
 
-describe("getHomeRelationships", () => {
+describe("getHomeChannels", () => {
   beforeEach(() => {
     mocked.listLinkContainers.mockResolvedValue([CONTAINER]);
     mocked.listContainerPeers.mockResolvedValue(new Map([[WS, PEER]]));
-    mocked.listContainerDirectChannels.mockResolvedValue(
-      new Map([[WS, CHANNEL]])
+    mocked.listContainerChannels.mockResolvedValue(
+      new Map([[WS, { id: CHANNEL, name: "Ada & Grace" }]])
     );
     mockProfiles.mockResolvedValue(
       new Map([
@@ -92,24 +96,77 @@ describe("getHomeRelationships", () => {
     );
   });
 
-  it("addresses the container the way the channels client APIs do", async () => {
-    const payload = await getHomeRelationships(ME);
-    expect(payload.relationships).toEqual([
+  it("is keyed `channels`, and addresses the container the way the channels client APIs do", async () => {
+    const payload = await getHomeChannels(ME);
+    expect(Object.keys(payload).sort()).toEqual(["channels", "pendingLinks"]);
+    expect(payload.channels).toEqual([
       {
         workspaceId: WS,
         workspaceSegment: "ada-grace-abc123def456",
         channelId: CHANNEL,
+        name: "Ada & Grace",
         peer: {
           userId: PEER,
           displayName: "Grace",
           email: "grace@x.dev",
           avatarUrl: "https://x.dev/g.png",
         },
-        connectedAt: "2026-08-20T00:00:00.000Z",
+        createdAt: "2026-08-20T00:00:00.000Z",
         lastMessageAt: null,
         lastMessagePreview: null,
+        linkOut: null,
       },
     ]);
+  });
+
+  it("RENDERS a solo channel with peer: null — a channel with nobody in it is finished, not broken", async () => {
+    mocked.listContainerPeers.mockResolvedValue(new Map());
+    mocked.listContainerChannels.mockResolvedValue(
+      new Map([[WS, { id: CHANNEL, name: "Fundraise" }]])
+    );
+
+    const [row] = (await getHomeChannels(ME)).channels;
+
+    expect(row.peer).toBeNull();
+    // ⚠ The NAME is what the row has to render itself with when there is no
+    // person to name it after.
+    expect(row.name).toBe("Fundraise");
+  });
+
+  it("still DROPS a container with no channel — there is nothing to open", async () => {
+    mocked.listContainerChannels.mockResolvedValue(new Map());
+    expect((await getHomeChannels(ME)).channels).toEqual([]);
+  });
+
+  it("rides the open BOUND link on its own channel as `linkOut`, never as a row", async () => {
+    mocked.listLinksByWorkspaces.mockResolvedValue(
+      new Map([[WS, linkRow({ id: "bound-1", workspace_id: WS, max_uses: 1 })]])
+    );
+
+    const payload = await getHomeChannels(ME);
+
+    expect(payload.channels[0].linkOut?.id).toBe("bound-1");
+    expect(payload.channels[0].linkOut?.url).toMatch(/\/link\/tok_abc$/);
+    // The chip is the ONLY place it appears — a second row would show one
+    // invitation twice.
+    expect(payload.pendingLinks).toEqual([]);
+  });
+
+  it("shows no chip for a bound link the claim gate would 410", async () => {
+    mocked.listLinksByWorkspaces.mockResolvedValue(
+      new Map([
+        [WS, linkRow({ workspace_id: WS, max_uses: 1, use_count: 1 })],
+      ])
+    );
+    expect((await getHomeChannels(ME)).channels[0].linkOut).toBeNull();
+  });
+
+  it("folds the chip read into the EXISTING fan — no extra round-trip tier", async () => {
+    await getHomeChannels(ME);
+    // Same tier as peers + channels: all three see the same container ids.
+    expect(mocked.listLinksByWorkspaces).toHaveBeenCalledWith([WS], 200);
+    expect(mocked.listContainerPeers).toHaveBeenCalledWith([WS], ME);
+    expect(mocked.listContainerChannels).toHaveBeenCalledWith([WS]);
   });
 
   it("truncates the preview server-side and collapses whitespace", async () => {
@@ -121,25 +178,10 @@ describe("getHomeRelationships", () => {
         ],
       ])
     );
-    const [row] = (await getHomeRelationships(ME)).relationships;
+    const [row] = (await getHomeChannels(ME)).channels;
     expect(row.lastMessagePreview).toHaveLength(PREVIEW_CHARS);
     expect(row.lastMessagePreview?.endsWith("…")).toBe(true);
     expect(row.lastMessageAt).toBe("2026-08-22T10:00:00.000Z");
-  });
-
-  it("resolves the peer from the caller's own membership rows", async () => {
-    await getHomeRelationships(ME);
-    expect(mocked.listContainerPeers).toHaveBeenCalledWith([WS], ME);
-  });
-
-  it("drops a container with no peer rather than rendering half a card", async () => {
-    mocked.listContainerPeers.mockResolvedValue(new Map());
-    expect((await getHomeRelationships(ME)).relationships).toEqual([]);
-  });
-
-  it("drops a container with no direct channel — there is nothing to open", async () => {
-    mocked.listContainerDirectChannels.mockResolvedValue(new Map());
-    expect((await getHomeRelationships(ME)).relationships).toEqual([]);
   });
 });
 
@@ -197,6 +239,23 @@ describe("getLinkPublicInfo", () => {
     expect(serialized).not.toContain("ada@x.dev");
     expect(serialized).not.toContain(ME);
     expect(serialized).not.toContain("a.png");
+  });
+
+  it("does NOT leak the channel a BOUND token names", async () => {
+    // ⚠ The holder of the URL has no account yet. The name of a private channel
+    // is not a fact a URL should hand out — so the payload did not grow one
+    // when links became bound.
+    mocked.findLinkByToken.mockResolvedValue(
+      linkRow({ workspace_id: WS, max_uses: 1 })
+    );
+    const info = await getLinkPublicInfo("tok_abc");
+    expect(Object.keys(info).sort()).toEqual([
+      "creatorDisplayName",
+      "exhausted",
+      "expired",
+      "revoked",
+    ]);
+    expect(JSON.stringify(info)).not.toContain(WS);
   });
 
   it("does NOT fall back to the email when the creator has no display name", async () => {

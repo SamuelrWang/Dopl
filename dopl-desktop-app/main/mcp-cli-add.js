@@ -28,23 +28,40 @@ function cliOpts(bin) {
   return { timeout: CLI_TIMEOUT_MS, env: spawner.cliEnv(bin), windowsHide: true };
 }
 
-// Confirmed-absent only when `claude mcp get dopl` exits 1 (or says so). Any
-// ambiguity (timeout, spawn error) returns false → we do NOT add, so we never
-// create a duplicate entry.
-function mcpEntryConfirmedAbsent(bin) {
+// ⚠ THE URL LINE ONLY, AND NEVER THE HEADER LINES. `claude mcp get dopl` prints the
+// entry's `Authorization: Bearer …` back out, so this parser must take the ONE field
+// it needs and the rest of that stdout must never reach a diag, a log or a return
+// value. The regex is anchored to a `URL:` label at the start of a line for that
+// reason — a looser scan over the whole blob can match inside a header value.
+function parseEntryUrl(stdout) {
+  const m = /^\s*URL:\s*(\S+)\s*$/m.exec(String(stdout || ''));
+  return m ? m[1] : '';
+}
+
+// WHAT THE OPERATOR'S CLI CONFIG SAYS ABOUT `dopl`, in the three answers the caller
+// can act on differently:
+//   { state: 'absent'  }            confirmed absent → safe to add, no duplicate risk
+//   { state: 'present', url }       an entry exists; `url` is '' when unparseable
+//   { state: 'unknown' }            timeout / spawn error → touch NOTHING
+//
+// ⚠ 'unknown' AND 'present' ARE DELIBERATELY DIFFERENT ANSWERS NOW. They were one
+// boolean (`mcpEntryConfirmedAbsent`) until 2026-08-25, which is what made the stale
+// entry below unfixable: a probe that cannot distinguish "an entry exists and it
+// points somewhere else" from "the CLI did not answer" has to leave both alone.
+function probeMcpEntry(bin) {
   return new Promise((resolve) => {
     execFile(bin, ['mcp', 'get', 'dopl'], cliOpts(bin), (err, stdout) => {
       if (!err) {
-        resolve(false); // present
+        resolve({ state: 'present', url: parseEntryUrl(stdout) });
         return;
       }
       const out = String(stdout || '') + ' ' + String((err && err.message) || '');
       if (err.code === 1 || /No MCP server named/i.test(out)) {
-        resolve(true); // confirmed absent
+        resolve({ state: 'absent', url: '' });
         return;
       }
       diag('mcp-config: get ambiguous —', err.code || (err && err.message));
-      resolve(false); // unknown → don't add (avoid dupes)
+      resolve({ state: 'unknown', url: '' }); // unknown → don't add (avoid dupes)
     });
   });
 }
@@ -70,4 +87,4 @@ function addMcpEntry(bin, token) {
   });
 }
 
-module.exports = { mcpEntryConfirmedAbsent, removeMcpEntry, addMcpEntry };
+module.exports = { probeMcpEntry, parseEntryUrl, removeMcpEntry, addMcpEntry };

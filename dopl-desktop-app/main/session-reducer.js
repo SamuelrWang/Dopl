@@ -14,7 +14,7 @@
 // here at module scope, ABOVE the sentinel, so inside the block below they are free vars —
 // which is what lets test/_reducer-block.mjs prepend those modules' blocks and evaluate the set
 // with no `require` in scope, exactly as before the splits.
-const { gatePhase, endedEmit, endEffects, modesEmit, parkEffects, terminalBody } = require('./session-effects');
+const { gatePhase, gateActivity, endedEmit, endEffects, modesEmit, parkEffects, terminalBody } = require('./session-effects');
 const {
   DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, TOOL_MODES, MESSAGE_MODES,
   coerceMode, initialSessionState, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
@@ -145,14 +145,14 @@ function sessionReducer(state, event) {
   // Item 2: the agent SENT a message to the peer (op=post into its own channel, per
   // session-io.isOutboundPost). It flows THROUGH the reducer so it records `postedThisTurn`.
   if (type === 'outbound_post') {
+    const act = gateActivity(state, 'working'); // ⚠ 2026-08-25: a HELD gate outranks "working"
     const effects = [{ type: 'emit', payload: event.payload }];
-    if (state.activity !== 'working') {
-      effects.push({ type: 'emit', payload: { type: 'status', phase: state.phase, activity: 'working' } });
+    if (state.activity !== act) {
+      effects.push({ type: 'emit', payload: { type: 'status', phase: state.phase, activity: act } });
     }
-    // FIX F3: remember WHICH post this was, so a deny/failure can un-count it below.
-    const id = event.payload && event.payload.toolUseId;
+    const id = event.payload && event.payload.toolUseId; // FIX F3: WHICH post, so a deny un-counts it
     const posted = id ? addUnique(state.postedToolUseIds, id) : state.postedToolUseIds;
-    return { state: clone(state, { postedThisTurn: true, activity: 'working', postedToolUseIds: posted }), effects: effects };
+    return { state: clone(state, { postedThisTurn: true, activity: act, postedToolUseIds: posted }), effects: effects };
   }
 
   if (type === 'permission_request') {

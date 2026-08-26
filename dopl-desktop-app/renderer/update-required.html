@@ -35,7 +35,21 @@
     kit.css rather than trusting this comment.
   -->
   <style>
-    :root { color-scheme: light; }
+    :root {
+      color-scheme: light;
+      /* kit.css `--raised-light-*` — the raised-light face, as parts. Copied
+         here for the same reason every recipe on this page is: the window is a
+         local file with NO network and cannot import the kit. `.auth-btn-3d-light`
+         is built from these upstream (2026-08-25), so the copy has to be too or
+         `test/update-required-screen.test.mjs` diffs the two and fails. */
+      --raised-light-face: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+      --raised-light-line: #d4d4d4;
+      --raised-light-bevel:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+        0 2px 3px rgba(0, 0, 0, 0.08);
+      --raised-light-shadow: var(--raised-light-bevel), 0 6px 14px rgba(0, 0, 0, 0.06);
+    }
     html, body {
       margin: 0; height: 100%;
       background: #ffffff; color: #181818;
@@ -121,13 +135,9 @@
     /* kit.css .auth-btn-3d-light — raised secondary: same volume, white face. */
     button.secondary {
       color: #181818;
-      background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
-      border: 1px solid #d4d4d4;
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.9),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.06),
-        0 2px 3px rgba(0, 0, 0, 0.08),
-        0 6px 14px rgba(0, 0, 0, 0.06);
+      background: var(--raised-light-face);
+      border: 1px solid var(--raised-light-line);
+      box-shadow: var(--raised-light-shadow);
       transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
     }
     button.secondary:hover:not(:disabled) {

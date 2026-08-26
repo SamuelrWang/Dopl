@@ -148,6 +148,29 @@ const APP_OPS = [
   // pinned would assert a bridge to nowhere.
   "channels.setAutoSend",
   "channels.setLaunchPosture",
+  // ⚠ ONE JOINED HERE ON 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth
+  // recovery flow. The pin failed on the ADD, which is the review this comment records:
+  //   • The main-process handler EXISTS and was checked first — `main/session-ipc-ops.js`
+  //     registers `claude:signIn` under the same `appWindowOnly()` sender binding as every op
+  //     above, delegating to `main/claude-signin-op.js › signIn`. It takes NO PAYLOAD: the
+  //     subject is the MACHINE, so there is no id to UUID-gate and the sender binding is the
+  //     ONLY guard — the third op in this family with that shape, after the two
+  //     `orchestratorLaunch` members, and enumerated in `channel-ipc-sender.test.mjs` for it.
+  //   • ⚠ IT EXISTS BECAUSE THE DETECTION HAD NO REMEDY. `session-auth.js` has HELD sessions on
+  //     a missing Claude Code credential since Q6 and the channels surface has said so out loud,
+  //     but `claude-auth.js › startSignInFlow` and `session-auth.js › resumeAfterSignIn` had
+  //     ZERO production callers — so re-posting into a held agent was refused with `auth-hold`
+  //     forever and no dialog could ever appear. This is exactly the failure THIS FILE exists to
+  //     catch, arrived at from the other end: the bridge op was never written at all.
+  //   • NO CREDENTIAL CROSSES IT IN EITHER DIRECTION. Main opens the OAuth page in the SYSTEM
+  //     BROWSER and collects the pasted code in its own local window (`main/claude-auth.js`);
+  //     nothing is typed into a Dopl surface and the answer is a bare `{ ok }` — no token, no
+  //     path, no reason string a probe could read.
+  //   • IT STARTS NO TURN AND GRANTS NOTHING. On success it RELEASES sessions this machine is
+  //     already holding, each of them the operator's own and contained by the profile and
+  //     posture it launched under. The failure direction of a forged call is a native dialog
+  //     the operator did not ask for, which they cancel.
+  "claude.signIn",
   "getAuthState",
   "onAuthState",
   "onNavigate",
@@ -262,6 +285,16 @@ const APP_OPS = [
   "sessions.onSummaries",
   "sessions.openAgentWindow",
   "sessions.pause",
+  // ⚠ JOINED 2026-08-25: `sessions.rename` — what the operator calls one agent. DISPLAY ONLY:
+  //     the main-process handler EXISTS and was checked before this list was edited —
+  //     `main/session-ipc-ops.js` registers `sessions:rename` under the same `appWindowOnly()`
+  //     sender binding as every op above, gates `agentId` through `agent-id.js › isAgentId`,
+  //     and stores the string in `main/agent-names.js` keyed by that address.
+  //   • It moves no session, starts no turn and grants nothing; it cannot wake anything,
+  //     because the registry is never consulted.
+  //   • NOTHING RESOLVES AN AGENT BY IT. `@<agentId>` and every op still address the id, so a
+  //     rename can never re-point a running instruction.
+  "sessions.rename",
   "sessions.reopen",
   // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.setMode`, the agent view's LIVE permission
   // controls. The pin failed on the ADD, which is the review this comment records:

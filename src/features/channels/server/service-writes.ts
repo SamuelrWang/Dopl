@@ -227,6 +227,22 @@ async function ensureDirectMember(
   });
 }
 
+/**
+ * THE FOUR HEADER FIELDS `updateChannel` REQUIRES `canManageChannel` FOR.
+ *
+ * ⚠ IT IS A LIST OF WHAT IS MANAGED, NOT A LIST OF WHAT EXISTS — read it that
+ * way and a fifth field added to `ChannelUpdateSchema` without a decision here
+ * would be silently ungated. {@link updateChannel} therefore derives the loose
+ * set by SUBTRACTION (`infoCard` and nothing else), so a new field lands in the
+ * MANAGED half by default and the compiler carries the choice.
+ */
+const MANAGED_CHANNEL_FIELDS = [
+  "name",
+  "topic",
+  "visibility",
+  "archived",
+] as const satisfies ReadonlyArray<keyof ChannelUpdateInput>;
+
 export async function updateChannel(
   ctx: ChannelContext,
   ref: string,
@@ -234,8 +250,28 @@ export async function updateChannel(
 ): Promise<Channel> {
   const patch = stripNulDeep(rawPatch);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!canManageChannel(ctx, membership)) {
-    throw new ChannelForbiddenError("manage this channel");
+
+  // ⚠ TWO GATES ON ONE VERB, AND THE STRICTER ONE IS STILL THE DEFAULT
+  // (2026-08-25). The header — name, topic, visibility, archived — stays
+  // MANAGE-gated exactly as it was; nothing about it moved.
+  //
+  // `infoCard` is gated on MEMBERSHIP, and the reason is INVARIANTS §4A's own,
+  // in Samuel's words: a home channel is "a relationship, not a tenancy" —
+  // which is why ANY member of a container may mint its link rather than the
+  // owner only. The card is that relationship's shared scratch surface: the
+  // operator curates their side of a two-person channel, and a peer who cannot
+  // correct their own phone number on a card ABOUT THEM is the failure. It
+  // changes no visibility, no roster, no lifecycle and no fact — only what the
+  // Info tab shows (`info-card.ts`).
+  //
+  // ⚠ A NON-MEMBER OF A PUBLIC CHANNEL IS STILL REFUSED. `loadVisibleChannel`
+  // hands back `membership: null` for a public channel a workspace member can
+  // merely SEE, and reading a room is not joining it.
+  const managed = MANAGED_CHANNEL_FIELDS.some((f) => patch[f] !== undefined);
+  if (managed ? !canManageChannel(ctx, membership) : membership === null) {
+    throw new ChannelForbiddenError(
+      managed ? "manage this channel" : "edit this channel's info card"
+    );
   }
   // ⚠ A DM is always private (DB CHECK) — reject the visibility change here for
   // a clean 400 instead of a raw CHECK-constraint 500.
@@ -250,6 +286,10 @@ export async function updateChannel(
   if (patch.archived !== undefined) {
     dbPatch.archived_at = patch.archived ? new Date().toISOString() : null;
   }
+  // ⚠ WHOLE-CARD REPLACE, never a merge. The client read this card, edited it
+  // and is sending it back — merging server-side would make "remove the last
+  // custom row" unexpressible, since an empty `rows` would read as "no opinion".
+  if (patch.infoCard !== undefined) dbPatch.info_card = patch.infoCard;
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);
   return getChannel(ctx, channel.id);

@@ -76,16 +76,12 @@ export interface AppSidebarCoreProps {
   workspaceSegment: string;
   /** `activeSectionFromPath(currentPath)`; null on non-nav routes. */
   activeSection: NavSection | null;
-  /** Pending consents badged on Channels; 0 hides the badge. */
-  /**
-   * Drafts this operator's own agent is holding for their Send.
-   *
-   * ⚠ OUTBOUND-ONLY SINCE 2026-08-22 (Samuel — the inbound consent retirement),
-   * which is why the copy below no longer says "approval": there is nothing left
-   * to approve. The CALLER slices it (`use-consent-inbox.ts › outbound`); this
-   * component renders whatever number it is handed.
-   */
-  consentCount: number;
+  // ⚠ `consentCount` STOOD HERE AND IS DELETED (Samuel, 2026-08-25). It badged
+  // the Channels row with the drafts this operator's agent was holding, and it
+  // pointed at the consent Inbox — a pane that no longer exists. The outbound
+  // review is the work stream's own card (`agent-stream.tsx ›
+  // SentToChannelBox`); a badge in the app nav would be a claim about a
+  // destination there is no longer any way to reach.
   onOpenSettings: (section: SettingsSection) => void;
   /** Workspace switcher — injected because it routes. */
   brand: ReactNode;
@@ -100,7 +96,6 @@ export interface AppSidebarCoreProps {
 export function AppSidebarCore({
   workspaceSegment,
   activeSection,
-  consentCount,
   onOpenSettings,
   brand,
   Link,
@@ -123,16 +118,6 @@ export function AppSidebarCore({
           >
             <Icon size={20} strokeWidth={1.8} />
             {label}
-            {section === "channels" && consentCount > 0 && (
-              <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-warning px-1 text-micro font-semibold text-accent-on">
-                <span aria-hidden>{consentCount}</span>
-                <span className="sr-only">
-                  {consentCount === 1
-                    ? "1 message waiting to send"
-                    : `${consentCount} messages waiting to send`}
-                </span>
-              </span>
-            )}
           </Link>
         ))}
       </nav>

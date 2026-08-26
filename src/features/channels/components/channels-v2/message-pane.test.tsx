@@ -373,3 +373,42 @@ describe("the peer-activity slot", () => {
     expect(container.querySelector('[data-testid="peer-activity"]')).toBeNull();
   });
 });
+
+/**
+ * THE RIGHT-PANE TOGGLE HAS NO BUTTON (Samuel, 2026-08-25: *"remove the button
+ * UI entirely — naked icon, no circle, no fill, no border"*).
+ *
+ * ⚠ THE PRESSED STATE IS THE ONE THAT FAILS QUIETLY, and it is the state the
+ * operator spends most of their time in: `.raised-tab` is a FILL, so a "bare"
+ * control that still raised when open would grow a button face on open and
+ * nothing about the resting look would say so. What replaced a /home-scoped
+ * 32px circle must not come back as an app-wide 28px square.
+ */
+describe("the right-pane toggle wears no button face", () => {
+  const toggle = () => screen.getByRole("button", { name: "Channel info" });
+
+  it("paints nothing CLOSED — no radius, no surface, no border", () => {
+    mount({ infoOpen: false });
+    expect(toggle().className).not.toMatch(/rounded-|bg-|border|raised-tab/);
+  });
+
+  it("paints nothing OPEN either — the colour shift is the whole affordance", () => {
+    mount({ infoOpen: true });
+    expect(toggle().className).not.toMatch(/rounded-|bg-|raised-tab/);
+    expect(toggle().className).toMatch(/text-text-primary/);
+  });
+
+  it("keeps the state on `aria-pressed`, so nothing is lost but paint", () => {
+    mount({ infoOpen: true });
+    expect(toggle().getAttribute("aria-pressed")).toBe("true");
+    cleanup();
+    mount({ infoOpen: false });
+    expect(toggle().getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("keeps a 32px hit area — removing the surface must not shrink the target", () => {
+    mount();
+    expect(toggle().className).toMatch(/\bh-8\b/);
+    expect(toggle().className).toMatch(/\bw-8\b/);
+  });
+});

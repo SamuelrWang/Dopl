@@ -54,7 +54,9 @@
 import { useState } from "react";
 import { SendButton } from "@/shared/ui/send-button";
 import { cn } from "@/shared/lib/utils";
+import { TAB_ACTION } from "./bits";
 import { canMessageAgent, messageAgent } from "./agents-controls";
+import { canSignInToClaude, signInToClaude } from "./claude-signin";
 
 /** What a refused 1:1 message says. ⚠ Exported for the tests — a swallowed
  *  refusal and a sent message are indistinguishable on screen, which is the
@@ -76,6 +78,23 @@ export const MESSAGE_AUTH_HELD =
  */
 export function useCanMessageAgent(): boolean {
   const [can] = useState(() => canMessageAgent());
+  return can;
+}
+
+/**
+ * CAN THIS BUILD ANSWER THE WAITING BANNER — the same read, one op along.
+ *
+ * ⚠ IT IS A SEPARATE CAPABILITY FROM {@link useCanMessageAgent} and must stay
+ * one. Every desktop with the 1:1 composer has `sessions.message`; only a build
+ * carrying `claude.signIn` can DO anything about an auth hold, and that set is
+ * strictly smaller. Reading one for the other paints a button on exactly the
+ * builds where it cannot work — the `canOpenAgentWindow` mistake, in the one
+ * place where the surface's whole promise is "this is fixable from here".
+ * ⚠ LAZY STATE, like its twin: the bridge is a window global, and a render-time
+ * read makes the server render and the first client render disagree.
+ */
+export function useCanSignInToClaude(): boolean {
+  const [can] = useState(() => canSignInToClaude());
   return can;
 }
 
@@ -103,7 +122,9 @@ export function AgentComposer({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const canSend = useCanMessageAgent();
+  const canSignIn = useCanSignInToClaude();
   if (!canSend) return null;
 
   // ⚠ DEAD IS DEAD — no input, at all. The one thing still owed is the verdict on
@@ -136,6 +157,25 @@ export function AgentComposer({
         setNotice(res.reason === "auth-hold" ? MESSAGE_AUTH_HELD : MESSAGE_REFUSED);
       })
       .finally(() => setBusy(false));
+  };
+
+  // ⚠ THE ONE ACTION THAT CLEARS ITS OWN NOTICE, because it is the only one that
+  // fixes the thing the notice is about. Main resumes every held session before
+  // it answers `ok` (`session-auth.js › resumeHeldSessions`), so by the time this
+  // lands the agent is live again and the banner is stale — leaving it up would
+  // send the operator round the sign-in a second time.
+  // ⚠ AND ONLY ON `ok`. A declined dialog or a sign-in that did not finish leaves
+  // the banner exactly where it was: the state it describes is still true, and a
+  // surface that clears on "I asked" rather than on "it worked" is how a held
+  // agent comes to look ready.
+  const signIn = () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    void signInToClaude()
+      .then((res) => {
+        if (res.ok) setNotice(null);
+      })
+      .finally(() => setSigningIn(false));
   };
 
   const label = name ? `Message ${name}` : "Message this agent";
@@ -184,11 +224,40 @@ export function AgentComposer({
       </div>
       {/* ⚠ `role="alert"`, not `status`: it appears only AFTER the operator
           pressed Send, and it is the one thing on this surface that says the
-          message did not land. Same role the launch refusals wear. */}
+          message did not land. Same role the launch refusals wear.
+          ⚠ THE BUTTON IS THE ALERT'S SIBLING, NEVER ITS CHILD. The alert's TEXT
+          is the pinned contract (`MESSAGE_AUTH_HELD` / `MESSAGE_REFUSED`, read
+          verbatim by this composer's suites), and a control nested inside it
+          would silently rewrite `textContent` for every reader — screen readers
+          included, which would announce the label as part of the sentence. */}
       {notice && (
-        <p role="alert" className="mt-1.5 text-caption text-danger">
-          {notice}
-        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-caption text-danger">
+            {notice}
+          </p>
+          {/* ⚠ THE ONE REFUSAL WITH A REMEDY, so it is the only one that grows a
+              button. `MESSAGE_REFUSED` means the agent is gone and nothing here
+              brings it back; `MESSAGE_AUTH_HELD` means this MAC is signed out,
+              which is a thing the operator can fix without leaving the surface.
+              ⚠ RENDERED ONLY WHEN THE BRIDGE OP EXISTS ({@link
+              useCanSignInToClaude} detects `claude.signIn` itself, never the
+              wrapper) — on an older main and in a plain browser the banner reads
+              exactly as it did, with no button that could only refuse. That is
+              this file's oldest rule and it earned it once already.
+              ⚠ `TAB_ACTION`, THE SHARED DARK PILL, not a local recipe: it is the
+              same 36px object as "New thread" and "Launch agent", which is what
+              makes it read as the surface's one action rather than as chrome. */}
+          {notice === MESSAGE_AUTH_HELD && canSignIn && (
+            <button
+              type="button"
+              onClick={signIn}
+              disabled={signingIn}
+              className={TAB_ACTION}
+            >
+              Sign in to Claude
+            </button>
+          )}
+        </div>
       )}
       {/* ⚠ SAYS WHAT THIS LANE IS, once, because it is the surface's one
           genuinely surprising property: an input under a transcript normally

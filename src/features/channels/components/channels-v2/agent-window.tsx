@@ -36,7 +36,10 @@ import { UsageMeter } from "@/shared/ui/usage-meter";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { CONSENT_INBOX_POLL_MS } from "../../constants";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
+import { useConsentInbox } from "../../hooks/use-consent-inbox";
+import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { useChannelsV2Live } from "./live";
 import { agentSentMessages } from "./agent-panel";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
@@ -129,6 +132,17 @@ export function ChannelsV2AgentWindow({
     channelId,
     workspaceId
   );
+  // ⚠ THE WINDOW READS CONSENT ITSELF, and that is not a fork of the page's read
+  // (2026-08-25). This is a different React tree in a different BrowserWindow —
+  // it inherits no provider state — so the same hook mounts here exactly as the
+  // narration and session feeds do. Workspace-wide with the same realtime
+  // BACKSTOP poll the channels surface uses; the join is on the draft's own body
+  // (`agent-stream-model.ts`), so a wider read costs nothing in precision.
+  const { outbound: pendingPosts, refetch: refetchPending } = useConsentInbox(
+    workspaceId,
+    undefined,
+    CONSENT_INBOX_POLL_MS
+  );
 
   // ⚠ THIS WINDOW REGISTERS FOR THE DOORBELL (2026-08-20). It did not until then,
   // and the failure had no error shape: the narration and posture lanes are
@@ -139,17 +153,24 @@ export function ChannelsV2AgentWindow({
   // hears it (INVARIANTS §7). This is the third registered live surface in
   // channels, after the page core and the pop-out thread window.
   //
-  // ⚠ MESSAGES ONLY, and that is the whole diet. There is no roster, no thread
-  // list and no consent read here — nothing to refetch and no presence dot to
-  // keep fresh — so `refetchMembers` is deliberately a no-op rather than a
-  // read this surface would then have to justify owning.
-  // ⚠ The `gate` is not taken: this window has no server WRITE. Its composer
-  // reaches `sessions.message` over the bridge, which posts nothing.
-  useChannelsV2Live({
+  // ⚠ MESSAGES AND CONSENT, and that is the whole diet. There is no roster and
+  // no thread list here — nothing to refetch and no presence dot to keep fresh —
+  // so `refetchMembers` is deliberately a no-op rather than a read this surface
+  // would then have to justify owning.
+  // ⚠ THE `gate` IS TAKEN NOW (2026-08-25). This window HAS a server write: the
+  // held-draft card's Post is the CAS'd `PATCH /consent/[id]`, and a write that
+  // skips the coordinator lets a coalesced refetch land mid-flight (INVARIANTS
+  // §7/§8). Its composer still reaches `sessions.message` over the bridge, which
+  // posts nothing and needs no gate.
+  const { gate } = useChannelsV2Live({
     workspaceId,
-    refetchAll: () => void refetchMessages(),
+    refetchAll: () => {
+      void refetchMessages();
+      void refetchPending();
+    },
     refetchMembers: () => {},
   });
+  const { consent } = useChannelPreferenceWrites({ workspaceId, gate });
 
   // ⚠ THE INSTANCE IS THE FOURTH ARGUMENT (2026-08-22, F-251) — without it this
   // window's Sent lane shows every sibling agent's posts on the same thread as
@@ -193,6 +214,16 @@ export function ChannelsV2AgentWindow({
         entries={entries}
         supported={supported}
         sent={sent}
+        // ⚠ THE HELD-DRAFT CARD IS DECIDABLE HERE TOO (Samuel, 2026-08-25). The
+        // window and the slide-out panel share one stream, so they must share
+        // the one review surface as well — a card that could only be posted from
+        // the panel would be a second rule for the same box.
+        // ⚠ THE UNFILTERED TRANSCRIPT — the landing check cannot use `sent`,
+        // which is agent-scoped on a key a threadless post does not have.
+        delivered={messages}
+        pending={pendingPosts}
+        onPost={(id) => consent.mutate({ id, decision: "allow" })}
+        postBusy={consent.pending}
         threadTitle={agent?.threadTitle}
         className="px-4"
       />

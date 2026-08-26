@@ -16,15 +16,20 @@ import {
 } from "./dto";
 
 /**
- * ⚠ `*`, deliberately, and it is the ONLY safe spelling right now: `kind`
- * (migration 20260823150000) is WRITTEN-NOT-APPLIED, and naming a nonexistent
- * column in a PostgREST select is a 42703 error, not a null. `*` returns `kind`
- * once the migration lands and simply omits it before, so kind-awareness costs
- * nothing today. `mapWorkspaceRow` whitelists the fields, so the star never
- * widens the DTO. Same reason NO query filters on `kind` — every kind filter in
- * this feature runs in CODE, through `isStandardWorkspace`.
+ * ⚠ EXPLICIT AGAIN (2026-08-24), and the star it replaces was a DATED EXPIRY
+ * rather than a lapse: `kind` shipped in `20260823150000_home_link_channels`,
+ * naming a nonexistent column in a PostgREST select is a 42703 ERROR rather
+ * than a null, so `*` was the only safe spelling while that migration was
+ * unapplied. It has applied — the measurement is `supabase migration list` /
+ * MCP `list_migrations`, where the NAME matches and the version is re-stamped
+ * (INVARIANTS §12) — so the expiry is discharged here and §9's list-reads-select-
+ * columns rule holds again with nothing carved out of it.
+ *
+ * ⚠ NO query filters on `kind` even now: every kind filter in this feature runs
+ * in CODE, through `isStandardWorkspace`, so there is one predicate to read.
  */
-const WORKSPACE_COLS = "*";
+const WORKSPACE_COLS =
+  "id, owner_id, name, slug, public_id, description, icon_url, kind, created_at, updated_at";
 const MEMBER_COLS =
   "workspace_id, user_id, role, status, joined_at, invited_by, invited_at, last_seen_at";
 

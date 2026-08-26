@@ -16,7 +16,7 @@
  * renders the three columns.
  */
 
-import type { ChannelMessage } from "../../types";
+import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { Channel } from "../../types";
 import { ChannelsV2AgentPanel } from "./agent-panel";
@@ -26,6 +26,9 @@ export function ChannelsV2Overlays({
   openAgent,
   agentSessions,
   messages,
+  pendingPosts,
+  onPostPending,
+  postBusy,
   currentUserId,
   workspaceId,
   workspaceSlug,
@@ -41,6 +44,11 @@ export function ChannelsV2Overlays({
   agentSessions: readonly DesktopSessionSummary[] | null;
   /** The OPEN channel's transcript — the agent panel's Sent lane reads it. */
   messages: readonly ChannelMessage[];
+  /** The viewer's PENDING outbound drafts — the Sent lane's held cards decide
+   *  them in place (Samuel, 2026-08-25). Handed down like everything here. */
+  pendingPosts: readonly ChannelConsentRequest[];
+  onPostPending: (requestId: string) => void;
+  postBusy: boolean;
   currentUserId: string;
   workspaceId: string;
   workspaceSlug: string;
@@ -61,6 +69,9 @@ export function ChannelsV2Overlays({
         openAgent={openAgent}
         sessions={agentSessions}
         messages={messages}
+        pendingPosts={pendingPosts}
+        onPostPending={onPostPending}
+        postBusy={postBusy}
         currentUserId={currentUserId}
         workspaceSlug={workspaceSlug}
         onClose={onCloseAgent}

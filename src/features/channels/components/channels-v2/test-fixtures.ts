@@ -7,6 +7,7 @@
  * than drifting silently in three.
  */
 
+import { EMPTY_INFO_CARD } from "../../info-card";
 import type {
   Channel,
   ChannelMember,
@@ -46,6 +47,7 @@ export function channel(over: Partial<Channel> = {}): Channel {
      *  section must be absent in, and the one a bookmark toggle starts from. */
     myFavoritedAt: null,
     onlineMemberCount: 1,
+    infoCard: EMPTY_INFO_CARD,
     ...over,
   };
 }

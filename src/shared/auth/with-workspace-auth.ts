@@ -33,7 +33,8 @@ export interface WorkspaceAuthContext {
   /**
    * `link` = a hidden home-channel container, which has no plan of its own.
    * FREE — the resolver already read the row. Absent = "standard" (the column
-   * is written-not-applied); read it through
+   * applied 2026-08-24, but the default outlives it: a narrowed projection or an
+   * older row carries none); read it through
    * `features/workspaces/types.ts › isStandardWorkspace`, never by hand. Routing
    * / billing hint, NEVER an authz signal — membership is what grants access.
    */

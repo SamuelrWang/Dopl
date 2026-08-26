@@ -82,18 +82,20 @@ export function agentDisplayId(session: {
 }
 
 /**
- * THE SAME AGENT, SAID IN FULL: `Agent #<id>` (Samuel, 2026-08-24) — what the
- * transcript pill already renders (`attribution-pill.tsx › attributionName`),
- * now on the Agents tab's cards, so one agent reads the same in both places.
- * ⚠ The `#` is LITERAL and belongs to the id, not a separator; one text node,
- * for the reason that pill gives.
- * ⚠ A LEGACY `name` IS NOT AN ID and gets no prefix — an older main emits a
- * handle and no id, and `Agent #flint` would assert a shape it never minted.
+ * THE SAME AGENT, SAID IN FULL: `Agent #<id>` (Samuel, 2026-08-24) — what the transcript pill
+ * renders (`attribution-pill.tsx › attributionName`), so one agent reads the same in both.
+ * ⚠ The `#` is LITERAL and belongs to the id, not a separator; one text node.
+ * ⚠ A LEGACY `name` IS NOT AN ID and gets no prefix: `Agent #flint` asserts a shape no main minted.
+ * ⚠ PRECEDENCE, 2026-08-25: operator's OWN name, then `Agent #<id>`, then the legacy handle —
+ * where both are reported the ID wins, since a pool handle was re-issued after its session left.
  */
 export function agentDisplayName(session: {
   agentId?: string | null;
   name?: string | null;
+  displayName?: string | null;
 }): string {
+  const own = typeof session.displayName === "string" ? session.displayName.trim() : "";
+  if (own) return own;
   const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
   return id ? `Agent #${id}` : agentDisplayId(session);
 }

@@ -10,7 +10,6 @@ import { ChannelsSkeleton } from "../channels-skeleton";
 import { ChannelsOnboardingCore } from "../channels-onboarding-core";
 import { ChannelsV2Overlays } from "./overlays";
 import { ChannelsV2Sidebar } from "./sidebar";
-import { ChannelsV2InboxPane } from "./inbox-pane";
 import { ChannelSurface } from "./channel-surface";
 import { useChannelSurfaceData } from "./channel-surface-data";
 import type { Channel } from "../../types";
@@ -56,16 +55,24 @@ export interface ChannelsV2CoreProps {
 
 /**
  * Channels v2 root — the three-column shell (channel tree · transcript ·
- * channel info) over the REAL channels reads, plus a FOURTH center-column
- * destination — the Inbox (`inbox-pane.tsx`), behind the sidebar's Inbox nav
- * row. **THIS IS THE SHIPPING CHANNELS PAGE** since the cutover (wiring plan
+ * channel info) over the REAL channels reads.
+ *
+ * ⚠ THERE IS NO FOURTH CENTER-COLUMN DESTINATION ANY MORE (Samuel, 2026-08-25).
+ * `inbox-pane.tsx` — the consent Inbox, behind the sidebar's Inbox nav row — is
+ * DELETED, along with that row, its badge and the selection's `inboxOpen`. The
+ * outbound review it existed for moved INTO the work stream's own card
+ * (`agent-stream.tsx › SentToChannelBox`), where a solo /home channel can reach
+ * it too; the GATE is untouched (INVARIANTS §6). Do not reintroduce a takeover
+ * pane for it — a second review surface is a second vocabulary for one decision.
+ *
+ * **THIS IS THE SHIPPING CHANNELS PAGE** since the cutover (wiring plan
  * Phase 12, 2026-08-18): `channels-view-core.tsx` and the two-pane surface
  * under it are DELETED, and `/:workspaceSegment/channels` mounts this tree.
  *
  * ⚠ EVERYTHING RIGHT OF THE TREE IS `channel-surface.tsx` NOW (2026-08-23), and
  * its state is `channel-surface-data.ts`. What is left HERE is the part that is
  * about the WORKSPACE rather than about one channel: the channel LIST, the tree,
- * the Inbox takeover, the first-run explainer and the create dialogs. The move
+ * the first-run explainer and the create dialogs. The move
  * was a lift — same DOM, same order, same hooks in the same order — because the
  * second host of that surface (`channel-surface-standalone.tsx`, one fixed
  * channel with no tree) must not be a second implementation of it.
@@ -73,8 +80,9 @@ export interface ChannelsV2CoreProps {
  * ⚠ NOT READ-ONLY ANY MORE (it was, through Phase 2). FIVE write families land
  * from this tree (INVARIANTS §7), all through the existing write layer, none a
  * new endpoint: the composer's send / request fan-out (Phase 3), the Tags
- * inbox's mark-read (Phase 6), the Inbox pane's OUTBOUND send decision (Phase 8;
- * its inbound half retired 2026-08-22), the channel-management writes the CUTOVER
+ * inbox's mark-read (Phase 6), the OUTBOUND send decision (Phase 8; its inbound
+ * half retired 2026-08-22, and its Inbox pane deleted 2026-08-25 — the decision
+ * is the work stream's card), the channel-management writes the CUTOVER
  * added (create / invite / visibility / archive / delete / leave / tool profile —
  * TRUST went with that same retirement), which arrived WHOLESALE
  * from the deleted page and live in `channel-manage.tsx`, and the header
@@ -111,10 +119,13 @@ export interface ChannelsV2CoreProps {
  * NEVER CONTENT: the signal triggers a filtered refetch, no payload is merged,
  * so RLS and the service filters stay authoritative.
  *   ⚠ THE COORDINATOR IS MOUNTED ABOVE THE CHANNEL BRANCH and always has been:
- *   the Inbox takeover and the empty-workspace explainer both render with no
- *   channel open, and the channel list has to keep hearing the doorbell through
- *   them. That is why `useChannelSurfaceData` is called HERE rather than inside
- *   the surface it feeds.
+ *   the empty-workspace explainer renders with no channel open, and the channel
+ *   list has to keep hearing the doorbell through it.
+ *   That is why `useChannelSurfaceData` is called HERE rather than inside the
+ *   surface it feeds.
+ *   ⚠ THE INBOX TAKEOVER WAS THE SECOND SUCH STATE AND IS DELETED (2026-08-25);
+ *   the mount point does NOT move back down for that — the explainer branch
+ *   still needs it, and so would the next no-channel state.
  */
 export function ChannelsV2Core({
   workspaceId,
@@ -193,22 +204,12 @@ export function ChannelsV2Core({
         openThreadId={data.openThread?.id ?? null}
         onSelectChannel={sel.selectChannel}
         onOpenThread={sel.openThread}
-        consentCount={data.requests.length}
-        inboxOpen={sel.inboxOpen}
-        onOpenInbox={sel.openInbox}
         canCreate={canCreate}
         onCreateChannel={() => sel.setCreateOpen(true)}
         onCreateDirect={() => sel.setDirectOpen(true)}
       />
 
-      {sel.inboxOpen ? (
-        <ChannelsV2InboxPane
-          requests={data.requests}
-          onDecide={(id, decision) => data.consent.mutate({ id, decision })}
-          busy={data.consentBusy}
-          onOpen={sel.selectChannel}
-        />
-      ) : channel ? (
+      {channel ? (
         // ⚠ A FRAGMENT of the same two panes this file used to render inline, so
         // the DOM this page emits did not move when the surface was extracted.
         <ChannelSurface
@@ -238,6 +239,12 @@ export function ChannelsV2Core({
         openAgent={sel.openAgent}
         agentSessions={data.agentSessions}
         messages={data.messages}
+        // ⚠ THE OUTBOUND REVIEW IS THE CARD NOW (Samuel, 2026-08-25) — the Inbox
+        // pane this page used to take over the center column with is DELETED, so
+        // these rows have exactly one surface and it is inside the work stream.
+        pendingPosts={data.requests}
+        onPostPending={(id) => data.decideOutbound(id, "allow")}
+        postBusy={data.consentBusy}
         currentUserId={currentUserId}
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}

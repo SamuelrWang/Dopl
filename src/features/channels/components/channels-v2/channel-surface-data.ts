@@ -21,9 +21,10 @@
  * into.
  *
  * ⚠ IT TAKES A `channel` THAT MAY BE `null`, because the workspace page mounts it
- * above its own channel branch: the Inbox takeover and the first-run explainer
- * both render with no channel open, and the coordinator has to stay registered
- * through them or the tree stops hearing the doorbell.
+ * above its own channel branch: the first-run explainer renders with no channel
+ * open, and the coordinator has to stay registered through it or the tree stops
+ * hearing the doorbell. (The Inbox takeover was the other such state and is
+ * deleted — 2026-08-25, Samuel; INVARIANTS §6.)
  */
 
 import { CONSENT_INBOX_POLL_MS } from "../../constants";

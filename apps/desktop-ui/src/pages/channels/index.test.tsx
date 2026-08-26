@@ -1,16 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
 import ChannelsPage from "#/pages/channels";
 import { SEGMENT } from "#/test-utils/bridge";
-import type {
-  Channel,
-  ChannelConsentRequest,
-  ChannelMember,
-  ChannelMessage,
-} from "@/features/channels/types";
 
 /**
  * Channels page smoke test, AFTER THE CUTOVER (wiring plan Phase 12,
@@ -27,11 +21,10 @@ import type {
  *    doorbell silent;
  *  - the `:channelId` route selects that channel (the desktop notification's
  *    landing route — `main/shell-mode.js › CHANNELS_PAGE` builds it);
- *  - the consent decision is IN THE INBOX and not in the transcript. That moved
- *    with the surface: the old page rendered a launch panel at the end of the
- *    scroller, the new one puts it behind the sidebar's Inbox row with a badge
- *    (F-214 is the gap that leaves in the channel view). The WRITE is unchanged
- *    — the same `PATCH /consent/[id]` with the same `"allow"`.
+ *  - **there is no consent INBOX** (Samuel, 2026-08-25): row, badge and takeover
+ *    deleted, the review moved to the work stream's card, and the draft stays
+ *    decidable from the THREAD. The WRITE is unchanged through all of it — the
+ *    same `PATCH /consent/[id]` with the same `"allow"`.
  *  - the channel-management controls the cutover carried over are REACHABLE.
  *    They were the old header's, and orphaning them was the demolition's one
  *    real risk.
@@ -68,156 +61,23 @@ vi.mock("@/shared/supabase/browser", () => {
   };
 });
 
-const CHANNEL_ID = "ch-1";
-const OTHER_ID = "ch-2";
+import {
+  CHANNEL_ID,
+  CONSENT,
+  MEMBERS,
+  MESSAGES,
+  OTHER,
+  OTHER_ID,
+  THREAD,
+  THREAD_ID,
+  baseChannel,
+} from "./channels-test-fixtures";
 
 /** ⚠ Fresh per test: realtime registry shares one channel per workspace id
  *  across mounts (module singleton + teardown grace window), so a reused id
  *  hands the second test the first test's already-connected entry. */
 let workspaceId = "";
 let workspaceSeq = 0;
-
-const baseChannel: Channel = {
-  id: CHANNEL_ID,
-  workspaceId: "",
-  slug: "migration",
-  name: "migration",
-  topic: "Desktop port",
-  visibility: "private",
-  isDirect: false,
-  directPeer: null,
-  createdBy: "u-1",
-  archivedAt: null,
-  createdAt: "2026-08-01T10:00:00.000Z",
-  updatedAt: "2026-08-01T10:00:00.000Z",
-  memberCount: 2,
-  lastMessageAt: "2026-08-01T12:00:00.000Z",
-  role: "owner",
-  isMember: true,
-  lastReadAt: null,
-  unread: false,
-  myNotifyScope: "all",
-  myAgentToolProfile: "full",
-  myFavoritedAt: null,
-  onlineMemberCount: 1,
-};
-
-const OTHER: Channel = {
-  ...baseChannel,
-  id: OTHER_ID,
-  slug: "brand",
-  name: "brand",
-  topic: "Brand work",
-};
-
-const MESSAGES: ChannelMessage[] = [
-  {
-    id: "m-1",
-    seq: 1,
-    channelId: CHANNEL_ID,
-    authorUserId: "u-2",
-    authorKind: "user",
-    kind: "message",
-    body: "Can your agent take the channels port?",
-    metadata: { taskId: "t-1" },
-    clientMsgId: null,
-    createdAt: "2026-08-01T11:59:00.000Z",
-    authorName: "Ada",
-    authorAvatarUrl: null,
-  },
-  {
-    id: "m-2",
-    seq: 2,
-    channelId: CHANNEL_ID,
-    authorUserId: "u-1",
-    authorKind: "agent",
-    kind: "message",
-    body: "Picked it up, wiring the client queries now.",
-    metadata: {},
-    clientMsgId: null,
-    createdAt: "2026-08-01T12:00:00.000Z",
-    authorName: "Sam",
-    authorAvatarUrl: null,
-  },
-];
-
-const MEMBERS: ChannelMember[] = [
-  {
-    channelId: CHANNEL_ID,
-    userId: "u-1",
-    role: "owner",
-    lastReadAt: null,
-    notifyScope: "all",
-    agentToolProfile: "full",
-    favoritedAt: null,
-    agentOnline: true,
-    lastSeenAt: "2026-08-01T12:00:00.000Z",
-    addedBy: null,
-    joinedAt: "2026-08-01T10:00:00.000Z",
-    displayName: "Sam",
-    email: "sam@example.com",
-    avatarUrl: null,
-  },
-  {
-    channelId: CHANNEL_ID,
-    userId: "u-2",
-    role: "member",
-    lastReadAt: null,
-    notifyScope: null,
-    agentToolProfile: null,
-    favoritedAt: null,
-    agentOnline: false,
-    lastSeenAt: null,
-    addedBy: "u-1",
-    joinedAt: "2026-08-01T10:05:00.000Z",
-    displayName: "Ada",
-    email: "ada@example.com",
-    avatarUrl: null,
-  },
-];
-
-/** ONE thread on the primary channel — the pop-out's landing needs something real
- *  to select, and the `?thread=` case below is the whole reason it is here. */
-const THREAD_ID = "t-1";
-const THREAD = {
-  id: THREAD_ID,
-  channelId: CHANNEL_ID,
-  workspaceId: "",
-  title: "Ship the release",
-  status: "open",
-  outcome: null,
-  mode: "collab",
-  createdBy: "u-1",
-  targetUserId: null,
-  createdAt: "2026-08-01T11:00:00.000Z",
-  updatedAt: "2026-08-01T11:00:00.000Z",
-  closedAt: null,
-  outcomeSummary: null,
-  lastActivityAt: "2026-08-01T12:00:00.000Z",
-};
-
-/** ⚠ AN OUTBOUND DRAFT NOW (2026-08-22). It was `kind: "inbound"` — a teammate's
- *  agent asking to run here — and that whole lane is deleted. What is left to
- *  decide is the operator's OWN agent's reply, waiting on their Send. */
-const CONSENT: ChannelConsentRequest = {
-  id: "cr-1",
-  channelId: CHANNEL_ID,
-  workspaceId: "",
-  operatorUserId: "u-1",
-  requesterUserId: null,
-  kind: "outbound",
-  messageSeq: 1,
-  summary: "Reply about the channels port",
-  bodyPreview: "",
-  proposedReply: "Yes — starting on the client queries now.",
-  status: "pending",
-  decidedBy: null,
-  decidedAt: null,
-  createdAt: "2026-08-01T12:01:00.000Z",
-  expiresAt: null,
-  requesterName: null,
-  requesterAvatarUrl: null,
-};
 
 interface FetchCall {
   url: string;
@@ -402,13 +262,11 @@ describe("channels page", () => {
   });
 
   /**
-   * THE SURVIVING DECISION END TO END, and the RETIRED one pinned as an ABSENCE
-   * (Samuel, 2026-08-22 — the inbound consent retirement).
+   * THE SURVIVING DECISION END TO END, and the RETIRED ones pinned as ABSENCES
+   * (2026-08-22's inbound retirement, and 2026-08-25's Inbox deletion).
    *
-   * ⚠ THE ABSENCE HALF IS WHY THIS TEST IS STILL HERE. The inbound lane was
-   * reachable from three surfaces, each optional-prop shaped, so re-adding any
-   * one would compile and render — and would offer the operator a decision no
-   * server route can take.
+   * ⚠ THE ABSENCES ARE WHY THIS TEST IS STILL HERE: each retired surface was
+   * optional-prop shaped, so re-adding one would compile and render.
    */
   it("decides an OUTBOUND draft, and offers no inbound decision anywhere", async () => {
     renderPage();
@@ -416,21 +274,25 @@ describe("channels page", () => {
 
     // ⚠ NOTHING ON THE TRANSCRIPT ASKS FOR AN ANSWER: the card's inline pair and
     // the thread strip are deleted, "Requested" has no derivation left, and a
-    // Decline exists on no surface in this product.
+    // Decline exists on no surface. ⚠ AND NO INBOX EITHER — row, badge and
+    // takeover deleted; the review is `agent-stream.tsx › SentToChannelBox`.
     expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
     expect(screen.queryByText("Requested")).toBeNull();
     expect(screen.queryByText(/awaiting your answer/i)).toBeNull();
     expect(screen.queryByText(/'s agent is asking/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Inbox/ })).toBeNull();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Inbox/ }));
-
-    // ONE lane, ONE verb pair — the inbound row's Decline / Launch agent is gone.
-    await screen.findByText("Your agent wants to reply");
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    // The GATE and the WRITE are untouched — the draft is still decidable from
+    // its THREAD, over the same CAS'd route. ⚠ SCOPED TO THE SEND BOX: the
+    // composer has a Send of its own, and a page-wide query would find it.
+    cleanup();
+    renderPage(CHANNEL_ID, THREAD_ID);
+    const heading = await screen.findByText("Your agent wants to reply");
+    const box = heading.parentElement!.parentElement!;
     expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Launch agent" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(within(box).getByRole("button", { name: "Send" }));
     await waitFor(() =>
       expect(requestsTo("/api/channels/consent/cr-1", "PATCH")).toHaveLength(1)
     );
@@ -438,9 +300,9 @@ describe("channels page", () => {
     expect(patch.body).toEqual({ decision: "allow" });
     expect(patch.headers["x-workspace-id"]).toBe(workspaceId);
 
-    // The inbox holds only `pending` rows, so a decided one leaves it.
+    // The read holds only `pending` rows, so a decided one leaves the surface.
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument()
+      expect(screen.queryByText("Your agent wants to reply")).not.toBeInTheDocument()
     );
   });
 

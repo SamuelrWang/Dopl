@@ -1,12 +1,18 @@
 /**
  * Home surface contracts — account-level (cross-org) channels.
  *
- * A relationship is a claimed link: a hidden `kind='link'` workspace holding
- * exactly one direct channel between the two people. A pending link is the
- * minted-but-unclaimed invite. `GET /api/home/relationships` returns both.
+ * ⚠ INVERTED 2026-08-24 (Samuel's ruling). A home channel is no longer BORN of
+ * a claim: "New channel" mints a hidden `kind='link'` container with ONE member
+ * and one private, non-direct channel inside it, and the operator talks to their
+ * own agents there. Adding a person is a SEPARATE, LATER act — a link BOUND to
+ * that container, whose claim inserts the peer as its second member. So a
+ * channel has a PEER or it does not, and both are finished states.
+ *
+ * `GET /api/home/channels` returns the channels plus the caller's still-open
+ * LEGACY unbound links; a BOUND link rides on its own channel as `linkOut`.
  */
 
-/** The other person in a relationship, resolved from their profile. */
+/** The other person in a channel, resolved from their profile. */
 export interface HomePeer {
   userId: string;
   displayName: string | null;
@@ -14,19 +20,33 @@ export interface HomePeer {
   avatarUrl: string | null;
 }
 
-/** One claimed relationship — addresses the container like any workspace. */
-export interface HomeRelationship {
+/** One home channel — addresses its container like any workspace. */
+export interface HomeChannel {
   /** The `kind='link'` container workspace. */
   workspaceId: string;
   /** `{slug}-{publicId}` — what the channels client APIs address by. */
   workspaceSegment: string;
-  /** The single direct channel inside the container. */
+  /** The single channel inside the container. */
   channelId: string;
-  peer: HomePeer;
-  connectedAt: string;
+  /** The CHANNEL's own name — what a solo channel is called, since there is no
+   *  peer to name it after. */
+  name: string;
+  /**
+   * ⚠ NULLABLE, and null is not a defect. A solo channel has no second member
+   * until somebody claims its link; a card with no face is the correct
+   * rendering of "just you", not a half-built one.
+   */
+  peer: HomePeer | null;
+  createdAt: string;
   lastMessageAt: string | null;
   /** Pre-truncated server-side; null when the channel is empty. */
   lastMessagePreview: string | null;
+  /**
+   * The open BOUND link, when this channel has an invitation out. Rendered as a
+   * chip ON this channel's row — a pending peer is a STATE of the channel, not
+   * a second row beside it.
+   */
+  linkOut: HomePendingLink | null;
 }
 
 /** A minted, not-yet-claimed link. Only ever the caller's own. */
@@ -43,10 +63,22 @@ export interface HomePendingLink {
   revokedAt: string | null;
 }
 
-/** Payload of `GET /api/home/relationships`. */
-export interface HomeRelationshipsPayload {
-  relationships: HomeRelationship[];
+/**
+ * Payload of `GET /api/home/channels`.
+ *
+ * ⚠ `pendingLinks` IS THE LEGACY TAIL ONLY — unbound links, which have no
+ * channel to hang off and so must be rows of their own. A BOUND link is never
+ * here; it is its channel's `linkOut`. Two lists would show one invitation
+ * twice.
+ */
+export interface HomeChannelsPayload {
+  channels: HomeChannel[];
   pendingLinks: HomePendingLink[];
+}
+
+/** Payload of `POST /api/home/channels`. */
+export interface HomeChannelCreateResult {
+  channel: HomeChannel;
 }
 
 /** Payload of `POST /api/home/links` and rows of `GET /api/home/links`. */
@@ -57,6 +89,10 @@ export interface HomeLinkMintResult {
 /**
  * Public metadata a claim page may show before auth — never the token owner's
  * identity beyond a display name.
+ *
+ * ⚠ IT DOES NOT CARRY THE CHANNEL'S NAME, and must not grow one: the holder of
+ * a URL is unauthenticated by definition, and the name of a private channel is
+ * not a fact a URL should hand out.
  */
 export interface HomeLinkPublicInfo {
   creatorDisplayName: string | null;
@@ -67,7 +103,14 @@ export interface HomeLinkPublicInfo {
 
 /** Payload of `POST /api/home/links/[token]/claim`. */
 export interface HomeLinkClaimResult {
-  relationship: HomeRelationship;
+  channel: HomeChannel;
   /** True when the pair already had a container and it was reused. */
   existing: boolean;
+  /**
+   * TRUE when the link named its container and the claim JOINED it; FALSE when
+   * the link was a legacy unbound one and the claim MINTED the container. The
+   * two outcomes look identical in the payload and are entirely different
+   * writes, so the answer says which happened.
+   */
+  bound: boolean;
 }

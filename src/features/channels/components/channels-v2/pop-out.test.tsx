@@ -153,16 +153,29 @@ describe("the header slot", () => {
     expect(popOut.nextElementSibling).toBe(info);
   });
 
-  it("wears the SAME face as the info toggle, glyph size included", () => {
+  it("matches the info toggle's GLYPH SIZE, and deliberately not its face", () => {
     // A 14px glyph in a 15px button reads as a smaller control beside it, which
-    // is exactly what it looked like while it lived beside the crumb.
+    // is exactly what it looked like while it lived beside the crumb. THAT is
+    // the parity this case was written for and it still holds.
+    //
+    // ⚠ THE FACE PARITY IS BROKEN ON PURPOSE (Samuel, 2026-08-25): the info
+    // toggle is `bits.tsx › IconButton`'s `bare` variant — no circle, no fill,
+    // no border, resting or pressed — while the pop-out keeps the header's
+    // chrome face. Asserted as a DIFFERENCE rather than deleted, because
+    // "restore the shared face" is the one-line change that would silently put
+    // a button back around a control Samuel asked to have none.
     withBridge(vi.fn(async () => ({ ok: true })));
     renderPane(THREAD);
     const popOut = screen.getByRole("button", { name: POP_OUT_THREAD_LABEL });
     const info = screen.getByRole("button", { name: "Channel info" });
-    expect(popOut.className).toBe(info.className);
     const size = (el: Element) => el.querySelector("svg")?.getAttribute("width");
     expect(size(popOut)).toBe(size(info));
+    expect(popOut.className).not.toBe(info.className);
+    // The toggle paints nothing: no radius, no resting or hover surface, and no
+    // `.raised-tab` on the pressed state.
+    expect(info.className).not.toMatch(/rounded-|bg-|raised-tab/);
+    // …and the pop-out beside it still does.
+    expect(popOut.className).toMatch(/rounded-\[7px\]/);
   });
 
   it("leaves NOTHING else on the right of the header", () => {

@@ -30,11 +30,19 @@ interface Props {
  * assumed — `grep -rn 'kind: "inbound"' src apps --glob '!*.test.*'` returned
  * zero, which is what F-233 records.
  *
- * ⚠ AN INBOUND DECISION IS STILL MADE, JUST NOT HERE. `thread-consent.tsx ›
- * ThreadAwaitingStrip`, `channels-v2/transcript.tsx › ThreadCardMessage` and
- * `channels-v2/inbox-pane.tsx › InboxRow` each render their own Launch agent /
- * Decline against the same consent row. The product was never broken; the ARM's
- * two controls were, and they went with it.
+ * ⚠ THAT PARAGRAPH'S SUCCESSOR — "an inbound decision is still made, just not
+ * here", naming `thread-consent.tsx › ThreadAwaitingStrip`, `channels-v2/
+ * transcript.tsx › ThreadCardMessage` and the Inbox pane's `InboxRow` — IS
+ * ITSELF EXPIRED. There is no inbound decision anywhere (2026-08-22), and the
+ * Inbox pane is deleted (2026-08-25, INVARIANTS §6).
+ *
+ * ⚠ THIS PANEL IS THE THREAD VIEW'S SEND BOX AND NOTHING ELSE, and it is now the
+ * only surface in the product carrying a **Cancel**. The work stream's held-draft
+ * card (`channels-v2/agent-stream.tsx › SentToChannelBox`) is the other outbound
+ * review surface and it has ONE button, Post — Samuel's ruling. **Do not add a
+ * Cancel there, and do not remove this one**: a draft whose `message_seq` places
+ * it on a thread is reachable here even after its agent's session (and its
+ * narration ring) is gone.
  *
  * ⚠ WHAT WENT WITH THE ARM, so nobody restores half of it: `LAUNCH_SETTINGS_HEADING`
  * ("For the next request you allow" — the only thing left saying the arm was an

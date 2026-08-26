@@ -18,6 +18,12 @@
  * reads says `thread`; mapping happens in `client/api.ts` and `server/dto.ts`.
  */
 
+// ⚠ THE ONE TYPE THIS FILE IMPORTS RATHER THAN DECLARES. The info card's shape
+// and its zod schema are ONE statement (`./info-card.ts`) because the route, the
+// DTO and the SPA all need the same answer; re-declaring the type here would be
+// the second copy that drifts.
+import type { ChannelInfoCard } from "./info-card";
+
 /** Private = members only. Public = any workspace member can read/join. */
 export type ChannelVisibility = "private" | "public";
 
@@ -247,6 +253,22 @@ export type Channel = {
   myFavoritedAt: string | null;
   /** Members whose agent heartbeat is within PRESENCE_ONLINE_WINDOW_MS. */
   onlineMemberCount: number;
+  /**
+   * The Info tab's CURATED Main-info card — which built-in rows were removed
+   * and which custom `label: value` rows were added (2026-08-25).
+   *
+   * ⚠ SHARED, NOT CALLER-RELATIVE. Unlike `myFavoritedAt` / `role` /
+   * `lastReadAt` above, this is a property of the CHANNEL: both sides of a home
+   * channel see the same card, and either member may edit it. If it ever needs
+   * to be per-person it becomes a `channel_members` column and a `my*` name —
+   * do not quietly reinterpret this one.
+   *
+   * ⚠ NEVER `null`. The column is `NOT NULL DEFAULT '{}'` and the DTO parses
+   * defensively, so an unreadable stored value arrives as the card as shipped
+   * (`info-card.ts › parseInfoCard`). A renderer never has to ask whether the
+   * card loaded.
+   */
+  infoCard: ChannelInfoCard;
 };
 
 export type ChannelMessage = {

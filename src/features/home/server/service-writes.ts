@@ -12,21 +12,31 @@ import {
 } from "@/features/workspaces/server/repository";
 import { slugifyWorkspaceName } from "@/features/workspaces/slug";
 import type {
+  HomeChannelCreateResult,
   HomeLinkClaimResult,
   HomeLinkMintResult,
-  HomeRelationship,
 } from "../types";
-import { isClaimable, mapLinkRow, type LinkContainerRow } from "./dto";
+import {
+  isClaimable,
+  mapLinkRow,
+  type ChannelLinkRow,
+  type LinkContainerRow,
+} from "./dto";
 import * as repo from "./repository";
-import type { HomeLinkMintInput } from "../schema";
-import { hydrateRelationships } from "./service-reads";
+import type { HomeChannelCreateInput, HomeLinkMintInput } from "../schema";
+import { claimBoundLink } from "./service-claim-bound";
+import { hydrateOneChannel } from "./service-reads";
 
 /**
- * Write side of home channels: mint, revoke, claim.
+ * Write side of home channels: create a channel, mint the link that adds a
+ * person to one, revoke, claim.
  *
- * THE CLAIM IS THE WHOLE FEATURE, and it is five steps in a fixed order:
- * validate → dedup the pair → spend one use → mint the container → record the
- * claim. Reordering any of them is a bug (see `claimLink`).
+ * ⚠ THE MODEL INVERTED 2026-08-24. Creating a channel and gaining a peer are
+ * now two separate acts: `createHomeChannel` mints a SOLO container the operator
+ * works in alone, and `mintContainerLink` binds an invitation to a container
+ * that already exists. `claimLink` is the FRONT DOOR for both claim shapes: it
+ * judges the token, then dispatches on `link.workspace_id` — the legacy unbound
+ * branch stays here, the bound one is `service-claim-bound.ts`.
  */
 
 /**
@@ -40,21 +50,123 @@ function generateToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-export async function mintLink(
+/**
+ * 23505. ⚠ Read locally rather than imported from the channels feature: this is
+ * one PostgREST error code, and reaching across a feature boundary for it would
+ * make the home surface depend on a channels internal to spell a constant.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string } | null)?.code === "23505";
+}
+
+/**
+ * "New channel" — a container with ONE member and one private channel in it.
+ *
+ * ⚠ THE CHANNEL IS PRIVATE AND NOT DIRECT. `direct: true` would ask
+ * `createDirectChannel` for a self-DM (refused) and would bind the channel to a
+ * peer that does not exist yet; the whole point of the inversion is that a home
+ * channel is usable with nobody else in it, as the place the operator's own
+ * agents work. When a person is added later they JOIN this channel — the
+ * transcript that is already there is the relationship's history.
+ *
+ * ⚠ NOT `sessionOnly` at the route, so an agent token may call this — the same
+ * posture `POST /api/workspaces` takes (Samuel's ruling, 2026-08-24). Creating a
+ * container mints nothing an agent could use to reach a human; the link that
+ * does is `mintContainerLink`, and that one is session-gated.
+ */
+export async function createHomeChannel(
   userId: string,
+  input: HomeChannelCreateInput
+): Promise<HomeChannelCreateResult> {
+  const container = await repo.insertSoloContainer({
+    ownerUserId: userId,
+    name: input.name,
+    slug: slugifyWorkspaceName(input.name),
+  });
+
+  // ⚠ THE CHANNELS SERVICE, not a second copy of it: slug collision handling,
+  // the owner member row and the visibility default all live in
+  // `createChannel`. The context is built for the CREATOR — they own the
+  // container, so they own its channel.
+  try {
+    await createChannel(
+      buildChannelContext({
+        userId,
+        workspaceId: container.id,
+        role: "owner",
+      }),
+      { name: input.name, visibility: "private" }
+    );
+  } catch (err) {
+    // ⚠ Roll the container back. A container with no channel is a BRICK:
+    // `hydrateChannels` drops it, so the operator never sees it, and it still
+    // counts as a workspace everywhere that enumerates memberships.
+    await deleteWorkspace(container.id);
+    throw err;
+  }
+  return { channel: await hydrateOneChannel(container, userId) };
+}
+
+/**
+ * Mint the ADD-A-PERSON link for a container that already exists.
+ *
+ * ⚠ ANY MEMBER MAY MINT IT, not the owner only (Samuel's ruling, 2026-08-24).
+ * A home channel is a relationship, not a tenancy — the second person is as
+ * entitled to hand it to somebody as the first. The cap, not the role, is what
+ * bounds the outcome.
+ *
+ * The order is the correctness argument:
+ *  1. `findMemberContainer` is the FENCE. A non-member — or a standard
+ *     workspace — reads as absent, so this 404s and never 403s (no oracle).
+ *  2. FULL is judged BEFORE anything is inserted. A container with two active
+ *     members has no seat to invite into, and minting a link that is guaranteed
+ *     to be refused at claim time is worse than refusing here.
+ *  3. An OPEN link is RETURNED, not replaced — the `getOrCreateJoinLink`
+ *     precedent. Pressing "Add person" twice must hand back one URL; rotating
+ *     silently would kill a link already pasted into an email.
+ *  4. The insert can still lose a race, and `channel_links_one_open_per_workspace`
+ *     is what makes that CONVERGE: a 23505 means somebody else's mint won, so
+ *     re-read and return theirs.
+ *
+ * `maxUses: 1` always. A bound link fills the container's one free seat, so a
+ * second use has nowhere to go — single-use is the shape, not a default.
+ */
+export async function mintContainerLink(
+  userId: string,
+  workspaceId: string,
   input: HomeLinkMintInput
 ): Promise<HomeLinkMintResult> {
-  const row = await repo.insertLink({
-    creatorUserId: userId,
-    token: generateToken(),
-    label: input.label ?? null,
-    expiresAt: input.expiresAt ?? null,
-    // ⚠ NOT `?? null`: the schema already resolved absent → 1, and re-defaulting
-    // here would turn an explicit multi-use `null` back into… itself, while
-    // hiding where the real default lives.
-    maxUses: input.maxUses,
-  });
-  return { link: mapLinkRow(row) };
+  const container = await repo.findMemberContainer(workspaceId, userId);
+  if (!container) {
+    throw new HttpError(404, "CHANNEL_NOT_FOUND", "This channel is not available");
+  }
+  if ((await repo.countActiveContainerMembers(workspaceId)) >= 2) {
+    throw new HttpError(
+      409,
+      "LINK_CONTAINER_FULL",
+      "This channel already has somebody in it"
+    );
+  }
+
+  const open = await repo.findOpenLinkForWorkspace(workspaceId);
+  if (open) return { link: mapLinkRow(open) };
+
+  try {
+    const row = await repo.insertLink({
+      creatorUserId: userId,
+      token: generateToken(),
+      label: input.label ?? null,
+      expiresAt: input.expiresAt ?? null,
+      maxUses: 1,
+      workspaceId,
+    });
+    return { link: mapLinkRow(row) };
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const winner = await repo.findOpenLinkForWorkspace(workspaceId);
+    if (!winner) throw err;
+    return { link: mapLinkRow(winner) };
+  }
 }
 
 /**
@@ -80,15 +192,56 @@ function shortName(profile: ProfileSummary | undefined): string {
 }
 
 /**
- * Claim a link: the pair get a hidden container workspace holding one direct
- * channel, and address it thereafter like any other workspace.
+ * THE FRONT DOOR for every claim, and the ONE place the two branches are told
+ * apart.
+ *
+ * ⚠ THE PROLOGUE IS SHARED AND THE BODIES ARE NOT. Unknown token 404 (never an
+ * oracle) and a dead link 410 are properties of the TOKEN, so they are judged
+ * once, here, before anything knows which shape of claim this is. Everything
+ * after depends on what the link is bound to:
+ *
+ *  - `workspace_id === null` → the LEGACY UNBOUND branch below, which MINTS a
+ *    container for the pair.
+ *  - otherwise → `service-claim-bound.ts › claimBoundLink`, which JOINS the
+ *    container the link names.
+ *
+ * Their rollback stories are opposites — one may delete the workspace it just
+ * created, the other must never delete the workspace it was handed — which is
+ * why they are two functions and not one with a flag.
+ */
+export async function claimLink(
+  token: string,
+  userId: string
+): Promise<HomeLinkClaimResult> {
+  const link = await repo.findLinkByToken(token);
+  if (!link) {
+    throw new HttpError(404, "LINK_NOT_FOUND", "This link is not valid");
+  }
+  if (!isClaimable(link)) {
+    throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
+  }
+  if (link.workspace_id !== null) {
+    return claimBoundLink(link, userId);
+  }
+  return claimUnboundLink(link, userId);
+}
+
+/**
+ * The LEGACY UNBOUND branch — a token minted before the 2026-08-24 inversion,
+ * with no container behind it, whose claim mints one for the pair.
+ *
+ * ⚠ NOT DEAD CODE. Measured 2026-08-24 against the live project, open claimable
+ * tokens exist with `workspace_id IS NULL`; those URLs are in somebody's chat
+ * history. Nothing can PRODUCE another one — `HomeLinkMintSchema` requires a
+ * `workspaceId` — so this branch only ever shrinks, and it may not be deleted
+ * until that count reaches zero.
  *
  * ⚠ THE ORDER IS THE CORRECTNESS ARGUMENT.
- *  1. Validate. Unknown token 404 (never an oracle), dead link 410, own link
- *     400 — a self-claim would ask `createDirectChannel` for a self-DM.
+ *  1. Own link → 400: a self-claim would ask `createDirectChannel` for a
+ *     self-DM. (The token's own validity was judged by `claimLink`.)
  *  2. Dedup the PAIR before spending anything. A second open of the same link
- *     between the same two people is a no-op that returns the existing
- *     relationship, and it must not burn a use to do it.
+ *     between the same two people is a no-op that returns the existing channel,
+ *     and it must not burn a use to do it.
  *  3. Spend one use ATOMICALLY (`consumeLinkUse`). This is the only thing
  *     standing between a single-use link and two claimers, so it happens before
  *     any row is created and its `false` is a 410, not a retry — after ONE
@@ -103,17 +256,10 @@ function shortName(profile: ProfileSummary | undefined): string {
  *     containers — the loser drops the container it just made and re-reads the
  *     winner's.
  */
-export async function claimLink(
-  token: string,
+async function claimUnboundLink(
+  link: ChannelLinkRow,
   userId: string
 ): Promise<HomeLinkClaimResult> {
-  const link = await repo.findLinkByToken(token);
-  if (!link) {
-    throw new HttpError(404, "LINK_NOT_FOUND", "This link is not valid");
-  }
-  if (!isClaimable(link)) {
-    throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
-  }
   const creatorId = link.creator_user_id;
   if (creatorId === userId) {
     throw new HttpError(400, "LINK_SELF_CLAIM", "You cannot claim your own link");
@@ -121,17 +267,19 @@ export async function claimLink(
 
   const existing = await repo.findPairContainer(creatorId, userId);
   if (existing) {
-    return { relationship: await one(existing, userId), existing: true };
+    return { channel: await hydrateOneChannel(existing, userId), existing: true, bound: false };
   }
 
   if (!(await repo.consumeLinkUse(link.id))) {
     // ⚠ ONE re-read, and NOT of the link row (`consumeLinkUse` forbids that) —
     // of the PAIR. Two tabs of the SAME account opening a single-use link race
     // past the dedup above together; one wins the use and the other reads
-    // exhausted. The loser is looking at a relationship that now exists, so
+    // exhausted. The loser is looking at a channel that now exists, so
     // answering 410 would 410 the claimer on their own successful claim.
     const winner = await repo.findPairContainer(creatorId, userId);
-    if (winner) return { relationship: await one(winner, userId), existing: true };
+    if (winner) {
+      return { channel: await hydrateOneChannel(winner, userId), existing: true, bound: false };
+    }
     throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
   }
 
@@ -145,12 +293,12 @@ export async function claimLink(
     await deleteWorkspace(container.id);
     const winner = await repo.findPairContainer(creatorId, userId);
     if (!winner) throw new HttpError(409, "LINK_CLAIM_RACE", "Try again");
-    return { relationship: await one(winner, userId), existing: true };
+    return { channel: await hydrateOneChannel(winner, userId), existing: true, bound: false };
   }
-  return { relationship: await one(container, userId), existing: false };
+  return { channel: await hydrateOneChannel(container, userId), existing: false, bound: false };
 }
 
-/** The container plus its one direct channel. */
+/** The container plus its one direct channel — the legacy unbound shape. */
 async function createContainer(
   creatorId: string,
   claimerId: string
@@ -179,23 +327,12 @@ async function createContainer(
     );
   } catch (err) {
     // ⚠ Roll the container back, exactly as the `insertClaim` loser does. A
-    // container with no direct channel is a BRICK: `hydrateRelationships` drops
-    // it, so neither side ever sees it, and `findPairContainer` still finds it —
-    // which would dedup every future claim between this pair onto a relationship
-    // that can never render.
+    // container with no channel is a BRICK: `hydrateChannels` drops it, so
+    // neither side ever sees it, and `findPairContainer` still finds it — which
+    // would dedup every future claim between this pair onto a channel that can
+    // never render.
     await deleteWorkspace(container.id);
     throw err;
   }
   return container;
-}
-
-async function one(
-  container: LinkContainerRow,
-  viewerId: string
-): Promise<HomeRelationship> {
-  const [relationship] = await hydrateRelationships([container], viewerId);
-  if (!relationship) {
-    throw new HttpError(500, "RELATIONSHIP_INCOMPLETE", "Relationship is missing its channel");
-  }
-  return relationship;
 }

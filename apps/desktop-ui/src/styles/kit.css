@@ -174,12 +174,17 @@
 }
 
 /* Resting face of one option in a TRACKLESS segmented row (SegmentedControl).
-   ⚠ Hairline is a ring, not a border, so swapping active pill to .raised-tab
-   never shifts layout. */
+   ⚠ Hairline is a ring, not a border, so swapping the active pill to
+   `.raised-tab` never shifts layout.
+   ⚠ AND THE RING IS **INSET**, matching `.raised-tab`'s (Samuel, 2026-08-25).
+   An OUTSET `0 0 0 1px` paints one pixel beyond the box on every side, so an
+   unselected pill measured 2px wider and taller than the selected one beside
+   it — the selected face looked shrunken. Both rings paint inside the same box
+   now, and neither takes layout space. */
 .seg-pill {
-  background: #e9eaec;
+  background: var(--seg-fill);
   border-radius: 9999px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
 /* Raised active tab face. Must stay ONE elevation with `.auth-btn-3d-light`:
@@ -544,8 +549,14 @@
    pane, and a transform would slide it over the transcript instead of giving
    the transcript the space back.
 
-   ⚠ THE PANEL INSIDE KEEPS ITS OWN `w-[340px] shrink-0`, so it does not reflow
+   ⚠ THE PANEL INSIDE KEEPS ITS OWN `w-[380px] shrink-0`, so it does not reflow
    while the shell narrows — the shell clips it, the content never squashes.
+
+   ⚠ 380px SINCE 2026-08-25 (Samuel), AND THE NUMBER IS A MATCH, NOT A TASTE.
+   The agent panel (`channels-v2/agent-panel.tsx`) is `w-[380px]`, absolutely
+   positioned against the same right edge, so at 340 the divider JUMPED 40px
+   left the moment an agent view opened over the info column. Both dividers now
+   land on the same x. **Change one and change the other**, or the jump is back.
 
    ⚠ The host UNMOUNTS the panel one transition after close; the shell itself is
    always rendered, or an opening slide would have no 0-width start state.
@@ -563,7 +574,7 @@
   transition: width 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .channel-info-slide[data-open="true"] {
-  width: 340px;
+  width: 380px;
 }
 
 /* THE CONTENT SWAP — fade out, replace, fade in. Driven by
@@ -586,6 +597,11 @@
    `.concave-track`: this one is flat, and its fill is a token utility the
    consumer passes (utility layer > components layer), so the value here is a
    fallback, not the design. Active option composes `.raised-tab` as always.
+   ⚠ ITS FILL IS `--seg-fill`, THE SAME GRAY THE TRACKLESS PILLS WEAR (Samuel,
+   2026-08-25): /home's header selector and the channel info column's switcher
+   are one control at two scales, and they read one variable so they cannot
+   drift. A consumer's `bg-*` utility still outranks it where a surface really
+   does want its own.
    ⚠ The 3px pad is load-bearing at `size="lg"`: 30px options + 3 + 3 = the
    36px control height the header's other controls are cut to. It does NOT
    scale with the options — below 3px the track stops reading as a track. */
@@ -595,7 +611,7 @@
   gap: 3px;
   padding: 3px;
   border-radius: 9999px;
-  background: #e9eaec;
+  background: var(--seg-fill);
 }
 
 } /* @layer components */

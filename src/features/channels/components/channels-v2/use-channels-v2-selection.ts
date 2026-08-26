@@ -5,8 +5,15 @@
  * `channels-v2-core.tsx`, split out at the 500-line cap (§1) on the seam that
  * file's siblings already use: `use-inline-consent.ts` took the consent
  * decisions, `use-agents-panel.ts` the peer poll and the launch, `derivations.ts`
- * the row math. This takes the eight pieces of "which surface am I looking at",
- * and nothing else.
+ * the row math. This takes the pieces of "which surface am I looking at", and
+ * nothing else.
+ *
+ * ⚠ `inboxOpen` / `openInbox` STOOD HERE AND ARE DELETED (Samuel, 2026-08-25).
+ * The consent Inbox was a CENTER-COLUMN TAKEOVER, which is why it needed
+ * selection state at all; `inbox-pane.tsx`, the sidebar row that opened it and
+ * the nav badge that counted it are all gone, and the outbound review lives in
+ * the work stream's card (`agent-stream.tsx`). **Nothing here has a third state
+ * any more** — the center column is a channel or the first-run explainer.
  *
  * ⚠ IT IS STATE PLUS ONE RENDER-TIME ADJUSTMENT, and the adjustment is why this
  * is a hook rather than a reducer file: `initialChannelId` is re-applied DURING
@@ -15,11 +22,12 @@
  * hook runs in that pass; an effect does not, and
  * `react-hooks/set-state-in-effect` is an ERROR in this tree.
  *
- * ⚠ THE THREE COMPOSITE ACTIONS ARE THE POINT, not a convenience. `selectChannel`
- * and `openThread` each move two or three pieces at once, and the page had four
- * hand-written copies of those combinations — one of which (the Inbox row's
- * `onOpen`) is a different surface reaching the same conclusion. A copy that
- * forgets `setInboxOpen(false)` navigates to a channel nobody can see.
+ * ⚠ THE COMPOSITE ACTIONS ARE STILL THE POINT, not a convenience. `selectChannel`
+ * and `openThread` each move more than one piece at once, and the page had four
+ * hand-written copies of those combinations. ⚠ Each was ALSO clearing the Inbox
+ * takeover until 2026-08-25 — that clause is deleted with the takeover, not
+ * forgotten, and re-adding a surface these actions have to close means re-adding
+ * the state they close it with.
  */
 
 import { useCallback, useState } from "react";
@@ -32,8 +40,6 @@ export interface ChannelsV2Selection {
   requestedThreadId: string | null;
   /** `agentsModel › agentKey` of the open agent view, or `null`. */
   openAgent: string | null;
-  /** The Inbox has taken over the CENTER column — a nav destination, not an overlay. */
-  inboxOpen: boolean;
   infoOpen: boolean;
   scrollTarget: ScrollTarget | null;
   /**
@@ -50,11 +56,10 @@ export interface ChannelsV2Selection {
   setInfoOpen: (open: boolean) => void;
   setCreateOpen: (open: boolean) => void;
   setDirectOpen: (open: boolean) => void;
-  /** Land on a channel: clears the thread and leaves the Inbox. */
+  /** Land on a channel: clears the thread. */
   selectChannel: (id: string | null) => void;
-  /** Open a thread in the current channel, leaving the Inbox. */
+  /** Open a thread in the current channel. */
   openThread: (id: string | null) => void;
-  openInbox: () => void;
   toggleInfo: () => void;
   /** Ask the composer to open its new-thread panel. */
   requestNewThread: () => void;
@@ -76,7 +81,6 @@ export function useChannelsV2Selection({
     initialThreadId
   );
   const [openAgent, setOpenAgent] = useState<string | null>(null);
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   const [newThreadSignal, setNewThreadSignal] = useState(0);
@@ -103,22 +107,18 @@ export function useChannelsV2Selection({
       // so this stays the clear it always was; a pop-out landing names one, and
       // re-routing to a different channel must not silently drop it.
       setRequestedThreadId(initialThreadId);
-      setInboxOpen(false);
     }
   }
 
   const selectChannel = useCallback((id: string | null) => {
     setSelectedId(id);
     setRequestedThreadId(null);
-    setInboxOpen(false);
   }, []);
 
-  const openThread = useCallback((id: string | null) => {
-    setRequestedThreadId(id);
-    setInboxOpen(false);
-  }, []);
-
-  const openInbox = useCallback(() => setInboxOpen(true), []);
+  const openThread = useCallback(
+    (id: string | null) => setRequestedThreadId(id),
+    []
+  );
   const requestNewThread = useCallback(
     () => setNewThreadSignal((n) => n + 1),
     []
@@ -141,7 +141,6 @@ export function useChannelsV2Selection({
     selectedId,
     requestedThreadId,
     openAgent,
-    inboxOpen,
     infoOpen,
     scrollTarget,
     newThreadSignal,
@@ -153,7 +152,6 @@ export function useChannelsV2Selection({
     setDirectOpen,
     selectChannel,
     openThread,
-    openInbox,
     toggleInfo,
     requestNewThread,
     jumpToMessage,

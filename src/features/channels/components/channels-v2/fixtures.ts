@@ -31,7 +31,6 @@
 import {
   Bookmark,
   FileText,
-  Inbox,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -47,11 +46,9 @@ export interface NavRowSpec {
 /**
  * HARDCODED — no backing data yet (Samuel 2026-08-18).
  *
- * ⚠ The INBOX row is NOT in this list. It is the consent inbox
- * (a second-round ruling in the port's intent doc, deleted at the cutover —
- * INVARIANTS §7) and its badge is a real count off
- * `use-consent-inbox`, so the sidebar renders it separately rather than letting
- * it ride along with three rows that stand for nothing.
+ * ⚠ THE INBOX ROW WAS NOT IN THIS LIST BECAUSE IT WAS REAL, AND IT IS NOW
+ * DELETED (Samuel, 2026-08-25 — see below). What is left here stands for
+ * nothing, every row of it, which is the whole reason the two were separate.
  */
 export const HARDCODED_NAV_ROWS: NavRowSpec[] = [
   { id: "assistant", label: "Assistant", icon: Sparkles, isNew: true },
@@ -59,13 +56,11 @@ export const HARDCODED_NAV_ROWS: NavRowSpec[] = [
   { id: "saved", label: "Saved items", icon: Bookmark },
 ];
 
-/** The Inbox nav row's identity, kept beside its siblings so the section reads
- *  as one list in code the way it does on screen. */
-export const INBOX_NAV_ROW: NavRowSpec = {
-  id: "inbox",
-  label: "Inbox",
-  icon: Inbox,
-};
+// ⚠ `INBOX_NAV_ROW` STOOD HERE AND IS DELETED (Samuel, 2026-08-25). It was the
+// one WIRED row in the sidebar's nav — the consent Inbox — and both the row and
+// the pane behind it are gone: the outbound review is the work stream's card
+// (`agent-stream.tsx › SentToChannelBox`), which a solo /home channel can reach
+// and this nav never was.
 
 /**
  * HARDCODED — no backing data yet (Samuel 2026-08-18).

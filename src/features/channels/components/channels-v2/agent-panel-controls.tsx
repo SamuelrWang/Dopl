@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * THE AGENT VIEW'S CONTROL STRIP — Pause · End · Open agent.
+ * THE AGENT VIEW'S CONTROL STRIP — Pause · End · Open window.
  *
  * ⚠ SPLIT OUT OF `agent-panel.tsx` ON 2026-08-22, when the 1:1 composer landed in
  * that panel and pushed it to 517 lines against the 500-line cap (INVARIANTS §1).
@@ -140,7 +140,7 @@ export function AgentControls({
   };
 
   /**
-   * "Open agent" — the window showing this agent from the inside
+   * "Open window" — the window showing this agent from the inside
    * (`agent-window.tsx`). It ALWAYS opens now; the only refusals left are the
    * ones every window-minting op has (a full budget, a blocking version floor,
    * an unusable id), and they share one shape by design so a caller cannot tell
@@ -182,7 +182,13 @@ export function AgentControls({
         {canOpen && (
           <ControlButton
             icon={PanelTop}
-            label="Open agent"
+            // ⚠ "Open agent" UNTIL 2026-08-25 (Samuel). It became "Open agent" on
+            // 2026-08-20 (F-212) to stop a window reading as a runtime property
+            // of the agent — but the panel it sits in IS the agent, so the verb
+            // named the thing the operator was already looking at. What the
+            // button opens is a WINDOW. ⚠ Two tests key on this string
+            // (`agents-tab.test.tsx`, `agents-detail.test.tsx`); both updated.
+            label="Open window"
             title="Watch what this agent is doing, and message it directly."
             onClick={reveal}
           />
@@ -216,7 +222,10 @@ function ControlButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="btn-light flex items-center gap-1.5 rounded-[8px] px-2 py-1 text-caption font-medium text-text-primary disabled:cursor-not-allowed disabled:text-text-disabled"
+      // ⚠ FULLY ROUNDED (Samuel, 2026-08-25) — `rounded-full`, not the `[8px]`
+      // rectangle these wore. Size, padding and glyphs are untouched; only the
+      // corner changed, so the strip keeps its measured geometry.
+      className="btn-light flex items-center gap-1.5 rounded-full px-2 py-1 text-caption font-medium text-text-primary disabled:cursor-not-allowed disabled:text-text-disabled"
     >
       <Icon size={13} aria-hidden />
       {label}

@@ -25,13 +25,19 @@ export const PRESENCE_TABLES = ["agent_presence"] as const;
  * The poll only earns its keep when the socket is broken, so 30s: worst case it
  * covers is a reconnect. 120 req/h from an idle focused tab, not 900 at 4s.
  *
- * ⚠ Passed ONLY by the channels page's consent inbox —
- * `components/channels-v2/channels-v2-core.tsx` calling `useConsentInbox`.
- * (This anchor read `channels-view` until the Phase 12 cutover deleted that
- * page, 2026-08-18.) The
- * always-mounted sidebar badge stays realtime-only — an interval there is a
- * workspace-wide background poll on every page. TanStack's default
- * `refetchIntervalInBackground: false` pauses this while the tab is hidden.
+ * ⚠ Passed by the surfaces that RENDER a pending draft, and by nothing else:
+ * `components/channels-v2/channel-surface-data.ts` (both hosts of the per-channel
+ * surface) and `components/channels-v2/agent-window.tsx` (its own BrowserWindow,
+ * which inherits no provider state). (This anchor read `channels-view` until the
+ * Phase 12 cutover deleted that page, 2026-08-18, and `channels-v2-core.tsx`
+ * until the surface extraction on 2026-08-23.)
+ *
+ * ⚠ THE ALWAYS-MOUNTED NAV BADGE THAT THIS SENTENCE EXEMPTED IS DELETED (Samuel,
+ * 2026-08-25 — INVARIANTS §6): the app shell reads no consent at all now, so
+ * there is no longer a page in the app that would poll the workspace in the
+ * background. The rule survives the badge — an interval belongs to a surface
+ * that can act on the rows. TanStack's default `refetchIntervalInBackground:
+ * false` pauses this while the tab is hidden.
  */
 export const CONSENT_INBOX_POLL_MS = 30_000;
 
@@ -120,7 +126,9 @@ export const THREAD_MODE_LABELS: Record<ThreadMode, string> = {
  * (INVARIANTS §6; the decision moved inline), and no consent surface has said
  * "Allow" since the affirmative became **Launch agent** on all three of them
  * (`thread-consent.tsx › ThreadAwaitingStrip`, `channels-v2/transcript.tsx ›
- * ThreadCardMessage`, `channels-v2/inbox-pane.tsx › InboxRow`).
+ * ThreadCardMessage`, and the Inbox pane's `InboxRow`). ⚠ All three of THOSE
+ * are deleted too — the first two with the inbound retirement, the Inbox pane
+ * on 2026-08-25 — so the sentence is kept as history, not as a census.
  */
 export const AGENT_TOOL_PROFILE_LABELS: Record<AgentToolProfile, string> = {
   full: "Full access",
@@ -177,7 +185,7 @@ export const CHANNEL_THREAD_LIST_LIMIT = 200;
  * back AT the ceiling counts as CLIPPED.
  *
  * ⚠ Deliberately a QUARTER of {@link MAX_MESSAGE_LIMIT}: the transcript page is
- * the surface a human scrolls, and this one is a 340px accordion nobody pages
+ * the surface a human scrolls, and this one is a 380px accordion nobody pages
  * through. Raising it buys rows nothing renders well.
  */
 export const CHANNEL_MENTION_LIST_LIMIT = 50;

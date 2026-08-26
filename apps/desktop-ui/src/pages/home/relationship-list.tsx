@@ -1,12 +1,18 @@
+import { Bot } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { peerLabel, type HomeFilter, type HomeRow } from "./home-rows";
+import { channelTitle, hasLinkOut, type HomeFilter, type HomeRow } from "./home-rows";
 
 /**
- * Home's left pane — the RELATIONSHIP list. Deliberately not the workspace
- * channels tree: one flat list of people, filterable, no sections to manage.
+ * Home's left pane — the CHANNEL list. Deliberately not the workspace channels
+ * tree: one flat list, filterable, no sections to manage.
+ *
+ * ⚠ THE COMPONENT AND FILE ARE STILL NAMED `relationship*` (2026-08-24). The
+ * server rename landed first and the client redesign is a separate wave; a
+ * rename here would be churn in files that wave rewrites. What DID change is
+ * only what the rows read.
  *
  * ⚠ IT RENDERS `rows`, IT DOES NOT FILTER THEM. The page owns the filter state
  * and the filtered set, because the RECORD PANE resolves its selection from the
@@ -82,15 +88,24 @@ function RelationshipRow({
   onSelect: () => void;
 }) {
   const pending = row.kind === "link";
+  /** No peer and not a link: the operator and their agents, nobody else. */
+  const solo = row.kind === "channel" && row.channel.peer === null;
+  /** ⚠ THE CHIP IS THE SAME FACT ON BOTH ROW KINDS — an invitation is out. A
+   *  bound link says it about the channel it rides on; a legacy unbound one is
+   *  the whole row. One predicate, so the chip and the Links badge agree. */
+  const linkOut = hasLinkOut(row);
   const name =
-    row.kind === "relationship" ? peerLabel(row.relationship) : (row.link.label ?? "Link");
+    row.kind === "channel" ? channelTitle(row.channel) : (row.link.label ?? "Link");
+  // ⚠ A SOLO channel's subline is the STATIC words "Just you" (Samuel's ruling,
+  // 2026-08-24) — not an agent or thread count. A count here would be a second
+  // read per row for a line nobody acts on.
   const subline =
-    row.kind === "relationship"
-      ? (row.relationship.peer.email ?? "")
+    row.kind === "channel"
+      ? (row.channel.peer ? (row.channel.peer.email ?? "") : "Just you")
       : row.link.url;
   const lastLine =
-    row.kind === "relationship"
-      ? (row.relationship.lastMessagePreview ?? "No messages yet")
+    row.kind === "channel"
+      ? (row.channel.lastMessagePreview ?? "No messages yet")
       : "Not yet claimed";
 
   return (
@@ -115,20 +130,38 @@ function RelationshipRow({
         selected && "selected-ring"
       )}
     >
-      <Avatar
-        person={
-          row.kind === "relationship"
-            ? {
-                userId: row.relationship.peer.userId,
-                email: row.relationship.peer.email,
-                displayName: row.relationship.peer.displayName,
-                avatarUrl: row.relationship.peer.avatarUrl,
-              }
-            : { userId: row.id, email: null, displayName: name, avatarUrl: null }
-        }
-        size="sm"
-        className={cn(pending && "opacity-55")}
-      />
+      {/* ⚠ A SOLO CHANNEL GETS A GLYPH, NOT A FACE (Samuel, 2026-08-24). It has
+          no second member, and initials generated from the CHANNEL's name read
+          as a person who does not exist — the one thing this list must never
+          invent. An unclaimed LINK keeps the faceless avatar: somebody is
+          coming, they just have not arrived.
+          ⚠ `w-8 h-8` matches `Avatar size="sm"` exactly, or rows with and
+          without a peer sit at two heights. */}
+      {solo ? (
+        <span
+          aria-hidden
+          className="btn-light flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary"
+        >
+          <Bot size={15} />
+        </span>
+      ) : (
+        <Avatar
+          person={
+            row.kind === "channel" && row.channel.peer
+              ? {
+                  userId: row.channel.peer.userId,
+                  email: row.channel.peer.email,
+                  displayName: row.channel.peer.displayName,
+                  avatarUrl: row.channel.peer.avatarUrl,
+                }
+              : // An unclaimed link has no face yet — the row id keys the
+                // fallback so the generated colour is stable.
+                { userId: row.id, email: null, displayName: name, avatarUrl: null }
+          }
+          size="sm"
+          className={cn(pending && "opacity-55")}
+        />
+      )}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           <span
@@ -147,7 +180,7 @@ function RelationshipRow({
           {subline}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5">
-          {pending && (
+          {linkOut && (
             <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 text-micro font-medium text-text-secondary">
               Link out
             </span>

@@ -37,6 +37,13 @@ const { metricOrNull, metrics } = req(join(MAIN, "session-metrics.js"));
 // projection carrying the detail, not about re-testing the table that derives it —
 // `session-detail.test.mjs` owns that. Injecting a stub here would let the two drift.
 const { noteEvent, detailFor } = req(join(MAIN, "session-detail.js"));
+// ⚠ THE NAME STORE IS STUBBED, NOT LOADED (2026-08-25). `main/agent-names.js` opens an
+// electron-store on require, which a source-extraction harness has no business doing — and what
+// these tests assert about `displayName` is that the projection CARRIES it, never where it was
+// read from. The stub answers null (the ordinary case: nobody renamed this agent); a test that
+// wants a name overrides `names.value`.
+export const names = { value: null };
+const displayNameFor = () => names.value;
 // ⚠ THE STATE MAPPING MOVED OUT ON 2026-08-22 (`main/session-pill.js`) — see that file's header
 // for the seam. Injected REAL, like every dependency here: these cases are about the PROJECTION
 // carrying the pill, not about re-testing the table that derives one. The names are MERGED into
@@ -89,6 +96,7 @@ export function load() {
     "metrics",
     "noteEvent",
     "detailFor",
+    "displayNameFor",
     "PILL_STATES",
     "ACTIVITY_PILL",
     "PILL_ENDED",
@@ -98,7 +106,7 @@ export function load() {
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
-    metricOrNull, metrics, noteEvent, detailFor,
+    metricOrNull, metrics, noteEvent, detailFor, displayNameFor,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" "))
   );

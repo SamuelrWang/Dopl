@@ -79,7 +79,8 @@ function line(value, cap) {
  *   private         the agent's answer to a PRIVATE turn (2026-08-22). Never in the channel.
  *   tool            a tool call, WITH ITS NAME — the half F-212's entry called out by name
  *   result          how that call came back (ok / failed), summarized
- *   post            the agent SENT a message into the channel or thread
+ *   post            the agent SENT a message into the channel or thread — or is WAITING to
+ *                   (`pending: true`, 2026-08-25): the outbound consent gate is holding it.
  *   status          a phase/activity move worth a line (a park, a gate, an end)
  *
  * ⚠ `tool_result` CARRIES NO `name` — the SDK gives it a `toolUseId` and nothing else — so
@@ -156,7 +157,18 @@ function entryFor(event, now) {
     // MAX_CONCURRENT_SESSIONS — 200 posts x 2000 chars x 6 sessions is a megabyte of IPC per
     // flush. The TRANSCRIPT is the record and the UI dedupes this against it, so the echo only
     // has to be good enough to read while it arrives.
-    return { at: now, kind: 'post', lane: 'channel', text: line(p.text, POST_CAP) };
+    const entry = { at: now, kind: 'post', lane: 'channel', text: line(p.text, POST_CAP) };
+    // ⚠ THE GATE RIDES THE FRAME (2026-08-25, Samuel's outbound-review ruling). `session-io.js ›
+    // sdkRenderEvents` stamps `pending` on this payload when `willGatePost` says the post will be
+    // held for the operator's Send, and this lane USED TO DROP IT — so the work stream painted a
+    // "Posted to channel" box the moment the agent CALLED the tool, for a message that had not
+    // left the machine and might never. The card is the review surface now, and it cannot say
+    // PENDING over a frame that does not carry the fact.
+    // ⚠ ONLY AN EXPLICIT `true` COUNTS, matching every other read of this flag on this path
+    // (`session-io.js`'s own comment: the renderer is fail-SUSPICIOUS). Absent means "not gated",
+    // which is the shape every existing build emits and must keep rendering as a plain post.
+    if (p.pending === true) entry.pending = true;
+    return entry;
   }
   // A status line is worth a narration entry only when it says something a WATCHER would
   // want: the pill already carries the live state, so this is for the transitions that
@@ -166,6 +178,17 @@ function entryFor(event, now) {
   if (type === 'end') return { at: now, kind: 'status', text: 'Ended by you' };
   if (type === 'inactive') return { at: now, kind: 'status', text: 'Ended — inactive' };
   if (type === 'permission_request') {
+    // ⚠ AN OUTBOUND POST GATE GETS NO LINE OF ITS OWN (2026-08-25). The gate that holds a
+    // channel post raises `payload.type === 'outbound_gate'` (`session-io.js`), and the `post`
+    // frame beside it ALREADY carries `pending: true` — the work stream's card is the review
+    // surface now (INVARIANTS §6), and it says "Pending" in the operator's own words. A second
+    // line saying "Waiting for permission" was a duplicate on the way in and, because this ring
+    // is APPEND-ONLY and never revisited, a LIE on the way out: it sat under a delivered post
+    // forever. Samuel saw exactly that. Fewer frames is the fix; a "no longer waiting" frame
+    // would be one more thing to keep in step with the card.
+    // ⚠ THE DOCK'S TOOL GATE STILL SPEAKS. It has no card, so this line is the only thing that
+    // explains that silence — which is what a `status` entry is for.
+    if (p.type === 'outbound_gate') return null;
     return { at: now, kind: 'status', text: 'Waiting for permission' };
   }
   return null;

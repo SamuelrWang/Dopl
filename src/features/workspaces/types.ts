@@ -38,9 +38,9 @@ export interface InvitationStatus {
 }
 
 /**
- * "standard" = a real user-facing workspace. "link" = a hidden two-member
- * container minted when a home channel link is claimed — never shown in the
- * rail/switcher, never a default-resolution candidate, bills to each side's
+ * "standard" = a real user-facing workspace. "link" = a hidden home-channel
+ * container holding ONE or TWO members and exactly one channel — never shown in
+ * the rail/switcher, never a default-resolution candidate, bills to each side's
  * own plan.
  */
 export type WorkspaceKind = "standard" | "link";
@@ -49,16 +49,24 @@ export type WorkspaceKind = "standard" | "link";
  * THE shared kind predicate — every UI list, navigation menu, membership count
  * and implicit default-resolution site filters through this and nothing else.
  *
- * ⚠ Absent `kind` reads as "standard": the column (migration 20260823150000) is
- * written-not-applied, so rows read today carry no kind and must behave exactly
- * as they do now.
+ * ⚠ POSITIVE FORM, and that is the point: `=== "standard"`, never `!== "link"`.
+ * The negative spelling admits every kind that has not been invented yet — the
+ * NEXT kind added to the union would be silently standard in the rail, in the
+ * switcher, in `list_workspaces` and in default resolution, with no error
+ * anywhere. A listing predicate must let a value IN, not merely fail to keep
+ * one out.
+ *
+ * ⚠ Absent `kind` still reads as "standard". The column applied on 2026-08-24
+ * (`20260823150000`) and is `NOT NULL DEFAULT 'standard'`, so live rows carry
+ * it — but the default is what an older server, a narrowed projection or a test
+ * fixture omits, and that must keep behaving exactly as it does now.
  *
  * ⚠ NOT an authz check. Explicit addressing of a link workspace (by id, slug,
  * segment or `workspace=`) stays allowed — that is how a home channel is
  * reached.
  */
 export function isStandardWorkspace(workspace: { kind?: WorkspaceKind }): boolean {
-  return (workspace.kind ?? "standard") !== "link";
+  return (workspace.kind ?? "standard") === "standard";
 }
 
 export interface Workspace {

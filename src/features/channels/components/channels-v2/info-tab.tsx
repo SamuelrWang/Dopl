@@ -28,7 +28,6 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
-import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { cn } from "@/shared/lib/utils";
 import { formatShortDate } from "@/shared/lib/format-time";
 import {
@@ -37,27 +36,18 @@ import {
   MetaRow,
   MetaRowDivider,
   PanelHeading,
-  RolePill,
   StatusPill,
 } from "./bits";
+import { MemberRoster } from "./member-roster";
+import { ActivityCells } from "./thread-activity";
 import { MentionsList } from "./mentions-list";
 import {
   HARDCODED_LINKED_THREADS,
   HARDCODED_THREAD_ACTIVITY,
 } from "./fixtures";
-import { isPresent, memberPerson, type AuthorIndex } from "./view-model";
+import { memberPerson, type AuthorIndex } from "./view-model";
 import { memberLabel } from "../../lib/channel-display";
 import type { Channel, ChannelMember, ChannelMention } from "../../types";
-
-/** Heatmap shades, low → high. Opacity steps on the success token: the palette
- *  carries one green, so density is expressed as strength, not as hue. */
-const ACTIVITY_SHADE = [
-  "bg-success/10",
-  "bg-success/25",
-  "bg-success/45",
-  "bg-success/70",
-  "bg-success",
-] as const;
 
 export function InfoTab({
   channel,
@@ -92,8 +82,6 @@ export function InfoTab({
   const unreadCount = mentions.filter((m) => !m.read).length;
 
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
-  const online = members.filter((m) => isPresent(m));
-  const offline = members.filter((m) => !isPresent(m));
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
@@ -196,22 +184,19 @@ export function InfoTab({
       </div>
 
       <PanelHeading title="Thread activity" />
-      {/* HARDCODED — no backing data yet (Samuel 2026-08-18). The
-          `channel_tasks_activity` view carries ONE timestamp per thread, not a
-          per-slice histogram; rendering zeros would assert quiet weeks nobody
-          measured. */}
-      <div
-        role="img"
-        aria-label="Thread activity over the last 24 slices"
-        className="flex flex-wrap gap-1 px-3.5 pt-1"
-      >
-        {HARDCODED_THREAD_ACTIVITY.map((level, i) => (
-          <span
-            key={i}
-            className={cn("h-3.5 w-3.5 rounded-[4px]", ACTIVITY_SHADE[level])}
-          />
-        ))}
-      </div>
+      {/* ⚠ STILL HARDCODED HERE, AND THE ACCOUNT SURFACE'S IS NOT (F-316,
+          2026-08-25). /home feeds the identical squares from a real
+          channel-scoped daily series; this page would need that read threaded
+          down through `channel-surface-data.ts` and would pay 31 counted bins
+          on every channel selection, which is a cost nobody has asked for yet.
+          ⚠ The SQUARES are now `thread-activity.tsx › ActivityCells` and the
+          ramp is its `ACTIVITY_SHADE`, so the two strips cannot look different
+          while only one of them is wired. What is fixture here is the LEVELS
+          and nothing else. */}
+      <ActivityCells
+        levels={HARDCODED_THREAD_ACTIVITY}
+        label="Thread activity over the last 24 slices"
+      />
 
       <PanelHeading
         title="Members"
@@ -224,61 +209,10 @@ export function InfoTab({
           </>
         }
       />
-      <div className="flex flex-col gap-px px-2">
-        {online.map((member) => (
-          <MemberRow key={member.userId} member={member} online />
-        ))}
-        {offline.length > 0 && (
-          <p className="px-2 pb-1 pt-3 text-label font-semibold uppercase tracking-wide text-text-muted">
-            Offline
-          </p>
-        )}
-        {offline.map((member) => (
-          <MemberRow key={member.userId} member={member} online={false} />
-        ))}
-        {members.length === 0 && (
-          <p className="px-2 py-2 text-caption text-text-muted">
-            No members in this channel.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * One roster row. Presence is `AvatarWithPresence`'s ring — the kit's recipe,
- * never a standalone dot — and the boolean is CLIENT-SIDE arithmetic over
- * `lastSeenAt` (INVARIANTS §7), so a stale roster reads OFFLINE rather than
- * falsely online.
- *
- * The subline is the member's email, not a job title: the model has no such
- * field, and the chip beside it states the one role a channel roster actually
- * carries (INVARIANTS §5).
- */
-function MemberRow({ member, online }: { member: ChannelMember; online: boolean }) {
-  return (
-    <div
-      className={cn(
-        "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2",
-        !online && "opacity-60"
-      )}
-    >
-      <AvatarWithPresence
-        person={memberPerson(member)}
-        online={online}
-        size="sm"
-        title={online ? "Agent listening" : "Agent offline"}
-      />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-semibold text-text-primary">
-          {member.displayName ?? member.email ?? "Member"}
-        </span>
-        {member.email && (
-          <span className="truncate text-caption text-text-muted">{member.email}</span>
-        )}
-      </span>
-      <RolePill owner={member.role === "owner"} />
+      {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — the same
+          component /home's Info tab renders. It was module-private here, which
+          is how the account surface came to have a roster of its own. */}
+      <MemberRoster members={members} emptyLine />
     </div>
   );
 }

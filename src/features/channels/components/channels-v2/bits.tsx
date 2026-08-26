@@ -19,6 +19,16 @@ import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucid
 import { CHIP } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 
+/**
+ * ⚠ `IconButton` LIVES IN `./icon-button.tsx` SINCE 2026-08-25 (the §1 split at
+ * the `bare` variant) and is RE-EXPORTED here so every `from "./bits"` importer
+ * is unchanged. Import it from either; there is one definition.
+ * ⚠ IMPORTED AS WELL AS RE-EXPORTED: `MetaRow`'s remove affordance is one, and
+ * `export { … } from` binds no local name.
+ */
+import { IconButton } from "./icon-button";
+export { IconButton };
+
 // ⚠ `MESSAGE_CARD` STOOD HERE AND IS DELETED (2026-08-20). Its one caller was the
 // posted agent-thread card, which moved to a dark-shell face on 2026-08-19 and
 // said so in its own docblock — leaving a "one caller" constant with none.
@@ -209,72 +219,6 @@ export function NewPill() {
   );
 }
 
-/**
- * Quiet square icon button — the one chrome affordance in every header, and
- * (with `active`) the one TOGGLE face.
- *
- * `active` wears `.raised-tab`, the app-wide selected face. Its resting hover
- * tint is on the NOT-active branch on purpose: `.raised-tab` supplies the fill
- * from `@layer components`, so an unconditional `hover:bg-*` from the utility
- * layer would flatten the gradient the moment the cursor crossed it
- * (docs/DESIGN-SYSTEM.md § `.raised-tab`).
- */
-export function IconButton({
-  icon: Icon,
-  label,
-  size = 15,
-  active,
-  filled,
-  disabled,
-  onClick,
-  className,
-}: {
-  icon: LucideIcon;
-  label: string;
-  size?: number;
-  /** Omit for a plain button; pass a boolean to make it a toggle. */
-  active?: boolean;
-  /**
-   * FILL the glyph. Separate from `active` on purpose: `active` is a CHROME
-   * state (this control's surface is raised), `filled` is a claim about the
-   * THING the glyph stands for — a filled bookmark reads as saved. The outline
-   * is always drawn, so the glyph does not change size between states, which is
-   * the same rule the knowledge card's bookmark follows
-   * (`knowledge-v2/home/base-card.tsx`).
-   */
-  filled?: boolean;
-  /**
-   * ⚠ IN FLIGHT, not "not allowed" (2026-08-21, the composer's New Agent icon).
-   * A control this surface cannot offer at all is not RENDERED — that is the
-   * feature-detection rule the whole bridge family follows, and a permanently
-   * greyed glyph is indistinguishable from a broken one. This is for the moment
-   * between a click and its answer.
-   */
-  disabled?: boolean;
-  onClick?: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] transition-colors",
-        active
-          ? "raised-tab text-text-primary"
-          : "text-text-secondary hover:bg-surface-raised-1 hover:text-text-primary",
-        disabled && "cursor-not-allowed opacity-50",
-        className
-      )}
-    >
-      <Icon size={size} fill={filled ? "currentColor" : "none"} />
-    </button>
-  );
-}
 
 /**
  * One addressed agent in the composer's new-thread panel: a raised chip on an
@@ -422,19 +366,56 @@ export function MetaRow({
   icon: Icon,
   label,
   className,
+  onRemove,
   children,
 }: {
   icon: LucideIcon;
   label: string;
   className?: string;
+  /**
+   * REMOVE THIS ROW FROM THE CARD (Samuel, 2026-08-25). Omit for a fixed row —
+   * absent means no ×, which is what every existing caller gets.
+   *
+   * ⚠ IT REMOVES THE ROW, NOT THE FACT. The email is still on the profile; what
+   * the operator changed is what this card shows (`info-card.ts`). Word the
+   * surrounding copy that way — an × that reads as "delete this person's email"
+   * is a promise the write does not keep.
+   */
+  onRemove?: () => void;
   children: ReactNode;
 }) {
   return (
-    <div className={cn("flex h-9 items-center gap-2 rounded-[8px] px-2", className)}>
+    <div
+      className={cn(
+        "group/meta flex h-9 items-center gap-2 rounded-[8px] px-2",
+        className
+      )}
+    >
       <Icon size={14} className="shrink-0 text-text-muted" />
       <span className="text-small text-text-secondary">{label}</span>
       <span className="flex-1" />
-      <span className="flex items-center gap-1.5">{children}</span>
+      <span className="flex min-w-0 items-center gap-1.5">{children}</span>
+      {onRemove && (
+        // ⚠ HOVER-ONLY, AND ITS SPACE IS NOT RESERVED. A permanent × on every
+        // metadata row turns a card the reader GLANCES at into a form; the row
+        // is the content, and the control is the exception. `opacity`, not
+        // `hidden`, so nothing reflows when the cursor arrives.
+        // ⚠ `focus-visible:opacity-100` is the keyboard half and it is not
+        // optional: a control reachable by Tab that stays invisible while
+        // focused is a trap, not a minimal affordance.
+        <span className="shrink-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover/meta:opacity-100">
+          <IconButton
+            icon={X}
+            label={`Remove ${label} from this card`}
+            // `bare` = the naked-glyph idiom (the pane header's PanelRight
+            // toggle), never a button face on a metadata row.
+            bare
+            size={13}
+            className="-mr-1 h-6 w-6"
+            onClick={onRemove}
+          />
+        </span>
+      )}
     </div>
   );
 }

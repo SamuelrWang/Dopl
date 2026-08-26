@@ -1,19 +1,28 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
+import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import {
   USER_ID,
-  WORKSPACE,
-  bootBody,
   bridgeCalls,
   failure,
   installBridge,
-  noContent,
   ok,
-  renderWithProviders,
 } from "#/test-utils/bridge";
-import type { HomeRelationshipsPayload } from "@/features/home/types";
-import HomePage from "./index";
+import type { HomeChannelsPayload } from "@/features/home/types";
+import {
+  CHANNEL,
+  CHANNEL_ID,
+  HOME,
+  LINK_OUT,
+  LINK_SEGMENT,
+  LINK_WORKSPACE_ID,
+  SEVEN_DAYS_MS,
+  SOLO_CHANNEL,
+  failing,
+  renderHome,
+  routes,
+  withHome,
+} from "./home-test-harness";
 
 /**
  * Home page smoke test — the ACCOUNT surface on real reads.
@@ -40,7 +49,13 @@ vi.mock(
       channel: { id: string };
       currentUserId: string;
       capabilities?: { memberManagement?: boolean };
-      slots?: { infoTab?: React.ReactNode };
+      slots?: {
+        // ⚠ A RENDER FUNCTION since 2026-08-25, taking the surface's own
+        // refetch gate — the person card writes now (`channel-surface.tsx ›
+        // ChannelInfoTabContext`). The stub supplies an inert one: this suite
+        // owns that Home MOUNTS the slot, not what the gate coordinates.
+        infoTab?: (ctx: { gate: { begin: () => void; end: () => void } }) => React.ReactNode;
+      };
     }) => (
       <div
         data-testid="channel-surface"
@@ -50,131 +65,11 @@ vi.mock(
         data-user={props.currentUserId}
         data-member-management={String(props.capabilities?.memberManagement)}
       >
-        {props.slots?.infoTab}
+        {props.slots?.infoTab?.({ gate: { begin: () => {}, end: () => {} } })}
       </div>
     ),
   })
 );
-
-const LINK_WORKSPACE_ID = "ws-link-1";
-const LINK_SEGMENT = "link-priya-aa11bb";
-const CHANNEL_ID = "chan-1";
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
-const RELATIONSHIPS: HomeRelationshipsPayload = {
-  relationships: [
-    {
-      workspaceId: LINK_WORKSPACE_ID,
-      workspaceSegment: LINK_SEGMENT,
-      channelId: CHANNEL_ID,
-      peer: {
-        userId: "user-2",
-        displayName: "Priya Shah",
-        email: "priya@shahco.tax",
-        avatarUrl: null,
-      },
-      connectedAt: "2026-07-12T10:00:00.000Z",
-      lastMessageAt: "2026-08-22T14:19:00.000Z",
-      lastMessagePreview: "Three renewals over $1k before October",
-    },
-  ],
-  pendingLinks: [
-    {
-      id: "link-1",
-      url: "https://dopl.link/c/x7Kd92mQ",
-      label: null,
-      createdAt: "2026-08-19T09:00:00.000Z",
-      expiresAt: "2026-08-28T09:00:00.000Z",
-      maxUses: 1,
-      useCount: 0,
-      revokedAt: null,
-    },
-  ],
-};
-
-const CHANNEL = {
-  id: CHANNEL_ID,
-  workspaceId: LINK_WORKSPACE_ID,
-  slug: "priya-shah",
-  name: "Priya Shah",
-  topic: "",
-  visibility: "private",
-  isDirect: true,
-  directPeer: { userId: "user-2", displayName: "Priya Shah", avatarUrl: null },
-  createdBy: USER_ID,
-  archivedAt: null,
-  createdAt: "2026-07-12T10:00:00.000Z",
-  updatedAt: "2026-08-22T14:19:00.000Z",
-  memberCount: 2,
-  lastMessageAt: "2026-08-22T14:19:00.000Z",
-  role: "owner",
-  isMember: true,
-  lastReadAt: null,
-  unread: false,
-  myNotifyScope: null,
-  myAgentToolProfile: null,
-  myFavoritedAt: null,
-  onlineMemberCount: 1,
-};
-
-/** ⚠ Carries a `kind: "link"` CONTAINER beside the real workspace on purpose:
- *  `GET /api/workspaces` is unfiltered, and the rail must drop it. */
-const WORKSPACES = {
-  workspaces: [
-    { ...WORKSPACE, role: "owner" },
-    {
-      ...WORKSPACE,
-      id: LINK_WORKSPACE_ID,
-      name: "Priya Shah",
-      slug: "link-priya",
-      publicId: "aa11bb",
-      kind: "link",
-      role: "member",
-    },
-  ],
-};
-
-function routes(
-  path: string,
-  opts: BridgeRequestOpts
-): Promise<BridgeResponse> | null {
-  const bare = path.split("?")[0];
-  if (bare === "/api/boot") return Promise.resolve(ok(bootBody()));
-  if (bare === "/api/workspaces") return Promise.resolve(ok(WORKSPACES));
-  if (bare === "/api/home/relationships") {
-    return Promise.resolve(ok(RELATIONSHIPS));
-  }
-  if (bare === "/api/home/links") {
-    return Promise.resolve(
-      ok({ link: { ...RELATIONSHIPS.pendingLinks[0], id: "link-2" } })
-    );
-  }
-  if (bare.startsWith("/api/home/links/") && opts.method === "DELETE") {
-    return Promise.resolve(noContent());
-  }
-  if (bare === "/api/channels") {
-    return Promise.resolve(ok({ channels: [CHANNEL] }));
-  }
-  return null;
-}
-
-function renderHome() {
-  return renderWithProviders(
-    [
-      { path: "/home", element: <HomePage /> },
-      { path: "/:workspaceSegment", element: <p>Workspace page</p> },
-    ],
-    ["/home"]
-  );
-}
-
-/** Answer everything normally except one path, which fails. */
-function failing(target: string, response: BridgeResponse) {
-  return (path: string, opts: BridgeRequestOpts = {}) =>
-    path.split("?")[0] === target
-      ? Promise.resolve(response)
-      : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)));
-}
 
 describe("home page", () => {
   beforeEach(() => {
@@ -243,7 +138,7 @@ describe("home page", () => {
     expect(surface).toHaveAttribute("data-user", USER_ID);
     expect(surface).toHaveAttribute("data-member-management", "false");
     // The person card is the INFO slot, not the channel's own metadata tab.
-    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Last activity")).toBeInTheDocument();
 
     // The channels read is addressed to the CONTAINER, over the workspace header.
@@ -287,10 +182,16 @@ describe("home page", () => {
   });
 
   it("mints a link with the picked window as an absolute future instant", async () => {
+    // ⚠ FROM THE CHANNEL'S OWN Info tab (2026-08-25), not the page header: the
+    // act belongs to the container it binds to, and a solo channel is the only
+    // state with a free seat to offer.
+    apiRequest.mockImplementation(
+      withHome({ channels: [SOLO_CHANNEL], pendingLinks: [] })
+    );
     renderHome();
-    await screen.findByRole("tab", { name: "Chat", selected: true });
+    await screen.findByTestId("channel-surface");
 
-    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add person" }));
     const before = Date.now();
     fireEvent.click(screen.getByRole("button", { name: "Create link" }));
 
@@ -299,10 +200,18 @@ describe("home page", () => {
         (c) => c.path === "/api/home/links" && c.opts.method === "POST"
       );
       expect(mint).toBeDefined();
-      const body = mint?.opts.body as { expiresAt: string; maxUses: number };
-      // The picker's default: 7 days, single use. The WINDOW is relative; what
-      // leaves is an instant, because that is what the route validates.
-      expect(body.maxUses).toBe(1);
+      const body = mint?.opts.body as {
+        expiresAt: string;
+        workspaceId: string;
+        maxUses?: number;
+      };
+      // ⚠ THE LINK IS BOUND to the selected channel's container — an unbound
+      // mint is not a thing any more, and `maxUses` is not a field the client
+      // may send: a bound link fills the one free seat by construction.
+      expect(body.workspaceId).toBe(LINK_WORKSPACE_ID);
+      expect(body.maxUses).toBeUndefined();
+      // The picker's default: 7 days. The WINDOW is relative; what leaves is an
+      // instant, because that is what the route validates.
       const delta = Date.parse(body.expiresAt) - before;
       expect(delta).toBeGreaterThan(SEVEN_DAYS_MS - 5_000);
       expect(delta).toBeLessThan(SEVEN_DAYS_MS + 5_000);
@@ -325,16 +234,167 @@ describe("home page", () => {
     await waitFor(() =>
       expect(
         bridgeCalls(apiRequest).filter(
-          (c) => c.path === "/api/home/relationships"
+          (c) => c.path === "/api/home/channels"
         ).length
       ).toBeGreaterThan(1)
     );
   });
 
+  it("renders a SOLO channel by its own name, subtitled 'Just you'", async () => {
+    // ⚠ A channel with nobody in it is the NORMAL first state after the
+    // 2026-08-24 inversion, not a half-built row: it is titled by the CHANNEL,
+    // because there is no person to title it after, and its subline is the
+    // static words — never an agent or thread count (Samuel's ruling).
+    const solo: HomeChannelsPayload = {
+      channels: [
+        {
+          ...HOME.channels[0],
+          name: "Q3 Fundraise",
+          peer: null,
+          lastMessageAt: null,
+          lastMessagePreview: null,
+        },
+      ],
+      pendingLinks: [],
+    };
+    apiRequest.mockImplementation(
+      (path: string, opts: BridgeRequestOpts = {}) =>
+        path.split("?")[0] === "/api/home/channels"
+          ? Promise.resolve(ok(solo))
+          : (routes(path, opts) ??
+            Promise.reject(new Error(`unexpected: ${path}`)))
+    );
+
+    renderHome();
+    await screen.findByRole("tab", { name: "Chat", selected: true });
+
+    expect(screen.getAllByText("Q3 Fundraise").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Just you").length).toBeGreaterThan(0);
+    expect(screen.queryByText("priya@shahco.tax")).not.toBeInTheDocument();
+
+    // ⚠ AND THE INFO TAB IS THE CHANNEL'S CARD, not a person's with the fields
+    // blanked: an "Email —" row on a channel with nobody in it implies a member
+    // who is not there. What survives is what the channel itself knows.
+    // ⚠ Awaited FIRST — the absence below means nothing until the slot is on
+    // screen, and an unmounted panel would pass it for free.
+    await screen.findByTestId("channel-surface");
+    expect(screen.queryByText("Email")).not.toBeInTheDocument();
+    expect(screen.getByText("Created")).toBeInTheDocument();
+    expect(screen.getByText("Last activity")).toBeInTheDocument();
+  });
+
+  it("creates a channel from the header and lands on the new row", async () => {
+    // ⚠ THE WHOLE POINT OF THE INVERSION: a channel exists BEFORE anybody else
+    // is in it, so creating one is a name and nothing more — no invitee, no
+    // second field — and the operator is dropped straight into it.
+    const created = {
+      ...HOME.channels[0],
+      workspaceId: "ws-link-new",
+      workspaceSegment: "link-q3-cc22dd",
+      channelId: "chan-new",
+      name: "Q3 Fundraise",
+      peer: null,
+      lastMessageAt: null,
+      lastMessagePreview: null,
+    };
+    let channels = [...HOME.channels];
+    apiRequest.mockImplementation(
+      (path: string, opts: BridgeRequestOpts = {}) => {
+        const bare = path.split("?")[0];
+        if (bare === "/api/home/channels" && opts.method === "POST") {
+          channels = [created, ...channels];
+          return Promise.resolve(ok({ channel: created }));
+        }
+        if (bare === "/api/home/channels") {
+          return Promise.resolve(ok({ channels, pendingLinks: [] }));
+        }
+        if (bare === "/api/channels") {
+          return Promise.resolve(
+            ok({ channels: [CHANNEL, { ...CHANNEL, id: "chan-new" }] })
+          );
+        }
+        return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
+      }
+    );
+
+    renderHome();
+    await screen.findByRole("tab", { name: "Chat", selected: true });
+    fireEvent.click(screen.getByRole("button", { name: "New channel" }));
+
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "  Q3 Fundraise  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      const post = bridgeCalls(apiRequest).find(
+        (c) => c.path === "/api/home/channels" && c.opts.method === "POST"
+      );
+      // TRIMMED, because the server trims and would otherwise store the spaces
+      // this field's own schema refuses to count toward its 1..80.
+      expect(post?.opts.body).toEqual({ name: "Q3 Fundraise" });
+    });
+
+    // The new row is SELECTED — the surface remounts on its container.
+    await waitFor(() =>
+      expect(screen.getByTestId("channel-surface")).toHaveAttribute(
+        "data-workspace",
+        "ws-link-new"
+      )
+    );
+  });
+
+  it("wears the Link out chip and offers Revoke where Add person was", async () => {
+    // ⚠ ONE SECTION, TWO STATES. An invitation already out IS the answer to
+    // "add a person" — offering the act again would mint a second link for a
+    // container with one free seat, which the server refuses.
+    apiRequest.mockImplementation(
+      withHome({
+        channels: [{ ...SOLO_CHANNEL, linkOut: LINK_OUT }],
+        pendingLinks: [],
+      })
+    );
+    renderHome();
+    await screen.findByTestId("channel-surface");
+
+    // TWICE, and both are load-bearing: the chip names it on the ROW, where you
+    // scan for it, and the section heading names it INSIDE the channel, where
+    // you act on it.
+    expect(screen.getAllByText("Link out")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Add person" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() => {
+      const revoke = bridgeCalls(apiRequest).find(
+        (c) => c.path === `/api/home/links/${LINK_OUT.id}`
+      );
+      expect(revoke?.opts.method).toBe("DELETE");
+    });
+    // Revoking re-reads the channels; the chip clears with the payload, never
+    // by a cache edit here.
+    await waitFor(() =>
+      expect(
+        bridgeCalls(apiRequest).filter((c) => c.path === "/api/home/channels")
+          .length
+      ).toBeGreaterThan(1)
+    );
+  });
+
+  it("keeps ONE primary action in the header, and no Add person on a full channel", async () => {
+    // The default fixture's channel already has a peer: the container is full,
+    // so there is no seat to offer and no control that could only 409.
+    renderHome();
+    await screen.findByTestId("channel-surface");
+
+    expect(screen.getAllByRole("button", { name: "New channel" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Add person" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+  });
+
   it("routes a 401 to the signed-out screen, not an error card", async () => {
     apiRequest.mockImplementation(
       failing(
-        "/api/home/relationships",
+        "/api/home/channels",
         failure(401, "UNAUTHORIZED", "Not signed in")
       )
     );
@@ -347,7 +407,7 @@ describe("home page", () => {
 
   it("surfaces a failed read as the shared page error", async () => {
     apiRequest.mockImplementation(
-      failing("/api/home/relationships", failure(404, "NOT_FOUND", "Home blew up"))
+      failing("/api/home/channels", failure(404, "NOT_FOUND", "Home blew up"))
     );
 
     renderHome();

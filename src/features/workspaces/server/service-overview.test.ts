@@ -112,7 +112,7 @@ describe("getWorkspaceOverviewSeries", () => {
     mocked.countMessagesInWindow.mockResolvedValue(0);
     mocked.countMessagesInWindow.mockResolvedValueOnce(4);
 
-    const series = await getWorkspaceOverviewSeries(WORKSPACE, "messages", NOW);
+    const series = await getWorkspaceOverviewSeries(WORKSPACE, "messages", null, NOW);
 
     expect(series.metric).toBe("messages");
     expect(series.days).toHaveLength(OVERVIEW_SERIES_DAYS);
@@ -125,7 +125,7 @@ describe("getWorkspaceOverviewSeries", () => {
   });
 
   it("routes each metric to its own counter and to no other", async () => {
-    await getWorkspaceOverviewSeries(WORKSPACE, "mcp", NOW);
+    await getWorkspaceOverviewSeries(WORKSPACE, "mcp", null, NOW);
     expect(mocked.countMcpCallsInWindow).toHaveBeenCalledTimes(
       OVERVIEW_SERIES_DAYS
     );
@@ -134,11 +134,55 @@ describe("getWorkspaceOverviewSeries", () => {
 
     vi.clearAllMocks();
     mocked.countThreadsInWindow.mockResolvedValue(1);
-    const threads = await getWorkspaceOverviewSeries(WORKSPACE, "threads", NOW);
+    const threads = await getWorkspaceOverviewSeries(WORKSPACE, "threads", null, NOW);
     expect(mocked.countThreadsInWindow).toHaveBeenCalledTimes(
       OVERVIEW_SERIES_DAYS
     );
     expect(threads.days.every((d) => d.count === 1)).toBe(true);
+  });
+
+  /**
+   * The channel-scoped view (2026-08-25). ⚠ The VISIBILITY fence is the route's
+   * (`overview-series/route.test.ts`); what these pin is that the scope
+   * actually reaches the counters, and that the one metric which cannot carry
+   * it is REFUSED rather than silently answered workspace-wide.
+   */
+  it("hands the channel scope to every bin of a scopeable metric", async () => {
+    mocked.countMessagesInWindow.mockResolvedValue(0);
+    await getWorkspaceOverviewSeries(WORKSPACE, "messages", "chan-1", NOW);
+    expect(mocked.countMessagesInWindow).toHaveBeenCalledTimes(
+      OVERVIEW_SERIES_DAYS
+    );
+    // Every bin, not just the first — a scope applied to one window and
+    // dropped from the rest draws a real number beside 30 wrong ones.
+    for (const call of mocked.countMessagesInWindow.mock.calls) {
+      expect(call[2]).toBe("chan-1");
+    }
+
+    vi.clearAllMocks();
+    mocked.countThreadsInWindow.mockResolvedValue(0);
+    await getWorkspaceOverviewSeries(WORKSPACE, "threads", "chan-1", NOW);
+    for (const call of mocked.countThreadsInWindow.mock.calls) {
+      expect(call[2]).toBe("chan-1");
+    }
+  });
+
+  it("passes NULL through when unscoped — the workspace-wide series is unchanged", async () => {
+    mocked.countMessagesInWindow.mockResolvedValue(0);
+    await getWorkspaceOverviewSeries(WORKSPACE, "messages", null, NOW);
+    for (const call of mocked.countMessagesInWindow.mock.calls) {
+      expect(call[2]).toBeNull();
+    }
+  });
+
+  it("⚠ REFUSES a channel-scoped `mcp` series rather than answering workspace-wide", async () => {
+    // `mcp_tool_calls` has no `channel_id`, so the question has no answer in
+    // this schema. Answering it with the workspace's number under a
+    // channel-scoped label is the fabrication §9 forbids.
+    await expect(
+      getWorkspaceOverviewSeries(WORKSPACE, "mcp", "chan-1", NOW)
+    ).rejects.toMatchObject({ status: 400, code: "CHANNEL_SCOPE_UNSUPPORTED" });
+    expect(mocked.countMcpCallsInWindow).not.toHaveBeenCalled();
   });
 });
 

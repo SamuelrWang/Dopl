@@ -22,6 +22,7 @@
  */
 
 import { Bot, CornerDownRight } from "lucide-react";
+import { AgentName } from "./agent-rename";
 import { Avatar } from "@/shared/ui/avatar";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
@@ -189,16 +190,17 @@ export function AgentCard({
   ].filter(Boolean);
 
   return (
-    <div className={cn(PANEL_CARD, viewing && "border-border-highlight")}>
+    // `group/card` is the pencil's hover scope — see `AgentName`.
+    <div className={cn(PANEL_CARD, "group/card", viewing && "border-border-highlight")}>
       <div className="flex items-center gap-2">
         {owner ? (
           <Avatar person={memberPerson(owner)} size="xs" />
         ) : (
           <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
         )}
-        <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-          {agentDisplayName(agent)}
-        </span>
+        {/* ⚠ THE OWN card renames; the PEER cards above do not and must not. A colleague's
+            agent is named on THEIR machine, and this write reaches only this one. */}
+        <AgentName agentId={agent.agentId} name={agentDisplayName(agent)} />
         {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22), it
             does not join it: "Ended" beside a dot reading "Ended" is one fact
             said twice. ⚠ MY OWN cards get the finer sentence; the peer cards
@@ -221,7 +223,7 @@ export function AgentCard({
         {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
               (2026-08-22). It rides the existing detail line rather than earning
               chrome of its own — minimal copy (INVARIANTS §5), and a fourth pill
-              on a 340px card is clutter. Absent renders NOTHING: a main that does
+              on a 380px card is clutter. Absent renders NOTHING: a main that does
               not report a model has said nothing about what this agent is running,
               and "Default" would be this build claiming to know
               (`agents-model.ts › agentRunningModel`). */}

@@ -20,7 +20,7 @@
  *
  * The label stays "Tags" (the reference design's word); the content is every
  * message that @-tags the viewer. An accordion inside the Info tab, not a
- * popover — the panel is 340px and a floating card would cover the rows it
+ * popover — the panel is 380px (2026-08-25) and a floating card would cover the rows it
  * answers to.
  */
 

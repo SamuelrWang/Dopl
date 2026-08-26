@@ -61,7 +61,15 @@ export function SegmentedControl<K extends string>({
     size === "lg"
       ? tracked
         ? "h-[30px] px-[15px] text-small"
-        : "h-9 px-[15px] text-small"
+        // ⚠ TRACKLESS `lg` TAKES THE TIGHTER SIDE PAD, and it is a width budget rather than a
+        // taste: this form is the channel info column's Info / Threads N / Agents N / Settings
+        // row, four options with two count badges inside 380px minus the header's padding
+        // (the column was 340px when this was measured; 2026-08-25 widened it, so the
+        // budget has HEADROOM now and the value is unchanged — 12px is also the ramp's
+        // own "compact buttons" step, which is the reason it stays rather than the fit).
+        // At 15px a side they overflow; at 12px they fit with room. The height — the 36px every
+        // control on these surfaces shares — is what Samuel asked to match, and it is unchanged.
+        : "h-9 px-3 text-small"
       : "h-[27px] px-3 text-caption";
   return (
     <div

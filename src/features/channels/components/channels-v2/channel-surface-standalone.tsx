@@ -18,7 +18,8 @@
  * eight pieces of "which surface am I looking at"; here the channel is FIXED, so
  * the ones this surface moves are the open thread, the info toggle, the open
  * agent and the scroll signal. Nothing routes: the tree's channel pick, the
- * Inbox takeover and the create dialogs have no host here.
+ * create dialogs have no host here. (The Inbox takeover is deleted outright —
+ * 2026-08-25, Samuel; the outbound review is the work stream's card.)
  *
  * ⚠ NOTHING FROM THE APP SHELL. No workspace-access context, no router, no
  * layout provider — every fact arrives as a prop, exactly as it does on the
@@ -116,6 +117,14 @@ export function StandaloneChannelSurface({
         openAgent={sel.openAgent}
         sessions={data.agentSessions}
         messages={data.messages}
+        // ⚠ THE POINT OF THE INLINE CARD, ON THIS HOST ESPECIALLY (Samuel,
+        // 2026-08-25). A solo /home channel has no tree and never had the
+        // consent Inbox beside it, so before the card a draft its agent held
+        // could not be posted from ANYWHERE. The rows are the surface's own
+        // read — no second fetch.
+        pendingPosts={data.requests}
+        onPostPending={(id) => data.decideOutbound(id, "allow")}
+        postBusy={data.consentBusy}
         currentUserId={currentUserId}
         workspaceSlug={workspaceSlug}
         onClose={() => sel.setOpenAgent(null)}

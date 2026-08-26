@@ -19,37 +19,36 @@ const EXPIRY: ReadonlyArray<{ value: LinkExpiryKey; label: string }> = [
   { value: "never", label: "No expiry" },
 ];
 
-const USES = [
-  { value: "single", label: "Single use" },
-  { value: "multi", label: "Multi use" },
-] as const;
-
-type UsesKey = (typeof USES)[number]["value"];
-
 /**
- * Mint-a-link — Home's one primary action. The link IS the invite: copy it,
- * send it anywhere; the relationship opens when it is claimed.
+ * ADD A PERSON to a channel that already exists. The link IS the invite: copy
+ * it, send it anywhere; they join THIS channel when they claim it.
  *
- * ⚠ The trigger reads "Invite" (Samuel, 2026-08-24) — it names the OUTCOME,
- * not the mechanism, and matches the workspace overview's CTA face. The
- * popover behind it is unchanged.
+ * ⚠ IT LIVES ON THE CHANNEL, NOT IN THE PAGE HEADER (Samuel, 2026-08-25). A
+ * link is BOUND to its container, so the act belongs to the channel it acts on
+ * — its Info tab — and `workspaceId` is required rather than nullable because
+ * the only render site is a channel's own panel. The header's one primary
+ * action is "New channel".
+ *
+ * ⚠ RENDERED ONLY FOR A SOLO CHANNEL. A container holds two people, so one that
+ * already has a peer has no seat to offer and the mint would 409 — the caller
+ * gates on `peer === null` (`person-info-tab.tsx`), and no disabled state is
+ * kept here for a case that cannot be reached.
+ *
+ * ⚠ THE "USES" PICKER IS GONE, not disabled: a bound link fills the channel's
+ * one free seat, so the server pins `maxUses: 1` and a multi-use choice names
+ * an outcome the schema no longer has a field for.
  *
  * ⚠ `expiresAt` is computed HERE, as an absolute ISO instant, because that is
  * what the route validates (`schema.ts` refuses a past one). The picker's
  * windows are relative; the server never sees "7 days".
  */
-export function NewLinkPopover() {
+export function AddPersonPopover({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [expiry, setExpiry] = useState<LinkExpiryKey>("7d");
-  const [uses, setUses] = useState<UsesKey>("single");
   const [url, setUrl] = useState<string | null>(null);
   const mint = useMintHomeLink(setUrl);
 
-  const create = () =>
-    mint.mutate({
-      expiresAt: expiresAtFrom(expiry),
-      maxUses: uses === "single" ? 1 : null,
-    });
+  const create = () => mint.mutate({ workspaceId, expiresAt: expiresAtFrom(expiry) });
 
   const close = () => {
     setOpen(false);
@@ -65,9 +64,9 @@ export function NewLinkPopover() {
         onClick={() => (open ? close() : setOpen(true))}
         className="auth-btn-3d flex h-9 cursor-pointer items-center rounded-full px-[15px] text-small font-semibold text-white"
       >
-        Invite
+        Add person
       </button>
-      <Popover open={open} onClose={close} align="right" className="w-[300px]">
+      <Popover open={open} onClose={close} align="left" className="w-[300px]">
         <div className="px-2.5 pb-2.5 pt-2">
           {url && (
             <div
@@ -80,20 +79,12 @@ export function NewLinkPopover() {
               <CopyButton text={url} label="Copy link" />
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <SelectMenu
-              ariaLabel="Link expiry"
-              value={expiry}
-              options={EXPIRY}
-              onChange={setExpiry}
-            />
-            <SelectMenu
-              ariaLabel="Link uses"
-              value={uses}
-              options={USES}
-              onChange={setUses}
-            />
-          </div>
+          <SelectMenu
+            ariaLabel="Link expiry"
+            value={expiry}
+            options={EXPIRY}
+            onChange={setExpiry}
+          />
           {mint.error ? (
             <p className="mt-2 text-caption text-danger" role="alert">
               {errorMessage(mint.error)}

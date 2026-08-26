@@ -69,7 +69,7 @@ import { SearchField } from "@/shared/ui/search-field";
 import { IconButton, NewPill, SectionHeader } from "./bits";
 import { NavRow } from "./sidebar-rows";
 import { ChannelBranch } from "./sidebar-branch";
-import { HARDCODED_NAV_ROWS, INBOX_NAV_ROW } from "./fixtures";
+import { HARDCODED_NAV_ROWS } from "./fixtures";
 import {
   channelDisplayName,
   channelDisplayPeerPerson,
@@ -88,20 +88,6 @@ export interface ChannelsV2SidebarProps {
   openThreadId: string | null;
   onSelectChannel: (id: string) => void;
   onOpenThread: (id: string) => void;
-  /**
-   * Drafts this operator's own agent is holding for their Send — a REAL count,
-   * so the Inbox row gets a badge.
-   *
-   * ⚠ OUTBOUND-ONLY SINCE 2026-08-22 (Samuel — the inbound consent retirement).
-   * It counted BOTH directions of the consent inbox while an inbound ask was
-   * something the operator answered; with that lane deleted, an inbound row is
-   * not a thing this page can act on, and a badge is a claim that something is
-   * actionable. The caller slices it — `use-consent-inbox.ts › outbound`.
-   */
-  consentCount: number;
-  /** The center pane is showing the inbox, so the Inbox row is the selected one. */
-  inboxOpen: boolean;
-  onOpenInbox: () => void;
   /** `member` or better — below it the server refuses a create (both `+` hide). */
   canCreate: boolean;
   /** The Channels section's `+` — opens `create-channel-dialog.tsx`. */
@@ -128,9 +114,6 @@ export function ChannelsV2Sidebar({
   openThreadId,
   onSelectChannel,
   onOpenThread,
-  consentCount,
-  inboxOpen,
-  onOpenInbox,
   canCreate,
   onCreateChannel,
   onCreateDirect,
@@ -174,8 +157,9 @@ export function ChannelsV2Sidebar({
   }, [query, members, currentUserId]);
 
   // A thread the tree cannot show leaves the channel row selected rather than
-  // selecting nothing at all. ⚠ The INBOX outranks both: selection mirrors the
-  // center pane, and with the inbox open the pane is showing neither.
+  // selecting nothing at all. ⚠ THE INBOX USED TO OUTRANK BOTH and is deleted
+  // (Samuel, 2026-08-25): the center pane can no longer be showing neither, so
+  // there is no third state for this selection to mirror.
   const threadSelected =
     openThreadId !== null && threads.some((t) => t.id === openThreadId);
 
@@ -206,9 +190,9 @@ export function ChannelsV2Sidebar({
       channel={channel}
       label={name(channel)}
       person={channelDisplayPeerPerson(channel, members, currentUserId)}
-      selected={channel.id === selectedChannelId && !threadSelected && !inboxOpen}
+      selected={channel.id === selectedChannelId && !threadSelected}
       threads={channel.id === selectedChannelId ? threads : []}
-      openThreadId={inboxOpen ? null : openThreadId}
+      openThreadId={openThreadId}
       collapsed={threadsCollapsed.has(channel.id)}
       onToggleThreads={toggleThreads}
       onSelectChannel={onSelectChannel}
@@ -257,20 +241,13 @@ export function ChannelsV2Sidebar({
               trailing={isNew ? <NewPill /> : undefined}
             />
           ))}
-          {/* WIRED: the consent inbox lives in this row (a second-round ruling
-              in the port's intent doc, deleted at the cutover — INVARIANTS §7),
-              its badge is the real pending count, and since Phase 8 the row
-              OPENS the inbox — the center column lists every draft waiting on
-              this viewer's Send.
-              ⚠ OUTBOUND-ONLY since 2026-08-22: the inbound half of that pane is
-              deleted, so both the badge and the list count one lane. */}
-          <NavRow
-            label={INBOX_NAV_ROW.label}
-            icon={INBOX_NAV_ROW.icon}
-            badge={consentCount > 0 ? consentCount : undefined}
-            active={inboxOpen}
-            onClick={onOpenInbox}
-          />
+          {/* ⚠ THE INBOX ROW STOOD HERE AND IS DELETED (Samuel, 2026-08-25). It
+              was the ONLY wired row in this nav — its badge counted the pending
+              outbound drafts and clicking it took the center column over with
+              `inbox-pane.tsx`. Both are gone: the outbound review is the work
+              stream's own card now (`agent-stream.tsx › SentToChannelBox`), and
+              a solo /home channel — which never had this nav at all — can reach
+              it. Do not re-add a row for a pane that does not exist. */}
         </nav>
 
         {/* ⚠ THE WHOLE SECTION IS ABSENT WITH NO FAVOURITES — header included.

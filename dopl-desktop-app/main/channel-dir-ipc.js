@@ -76,6 +76,63 @@ const channelPrefs = require('./channel-prefs');
 const sessionIpcOps = require('./session-ipc-ops');
 const { diag } = require('./diag');
 
+// ── THE POSTURE APPLIES TO THE ROOM, NOT JUST TO THE NEXT SPAWN ──────────────────────────────
+//
+// Samuel, 2026-08-25, after hitting it twice in one session: "PERMISSION SETTINGS MUST APPLY TO
+// RUNNING SESSIONS." The operator opened a channel to Tools=Bypass / Messages=auto_both while six
+// windowless agents were already working in it. The three spawned AFTERWARDS posted freely; the
+// three spawned BEFORE went on gating every post against the posture they had launched under,
+// each one bridging to a consent row and holding — for minutes, while the Settings tab displayed
+// the new pair. The room ignored the setting, and nothing said so.
+//
+// THE MECHANISM IT WAS MISSING, AND WHY IT IS THIS SHORT: main ALREADY has a correct live-apply
+// op. `session-reopen.js › setModeByTask` moves ONE running session's axes through the reducer's
+// own `set_tool_mode` / `set_message_mode`, and `session-io.js › grantArgs` reads both axes off
+// `s.state` at CALL time — so a mode changed mid-turn applies to the very next gate decision.
+// What did not exist was a FAN-OUT: `channels:setLaunchPosture` wrote the durable record and
+// stopped. So this is a loop over that op, not a second implementation of it — which matters,
+// because that op is where the windowless message FLOOR (F-236) and the reducer's fail-closed
+// coercion live, and a second writer to the same two fields is how two readers come to disagree
+// about one posture.
+//
+// ⚠ IT ADDS NO AUTHORITY. `sessions:setMode` already exposes exactly this to exactly this sender
+// (an app-window top frame — the operator, on their own machine, on their own agents), and the
+// security argument is unchanged and lives with the code that acts on it (`session-reopen.js ›
+// setModeByTask`): it widens SUPERVISION — is the operator asked? — never CONTAINMENT. The tool
+// PROFILE is checked first, `SESSION_HARD_DENY` is unconditional, and `bypass` is a positive
+// allow-list, so no posture reaching here can widen what an agent can touch.
+//
+// ⚠ ADDRESSED PER AGENT, NEVER PER THREAD. `listLiveSessions` yields one row per SLOT and
+// `setModeByTask` resolves an exact `agentId`; passing only (channel, thread) would take the
+// OLDEST agent on the thread and silently skip its N-1 siblings — which in the incident above is
+// most of the room. Multiplayer is the normal case here, not the edge one.
+//
+// ⚠ BEST-EFFORT, AND THE DURABLE WRITE HAS ALREADY LANDED. A session that settles between the
+// listing and the dispatch answers `{ok:false}` and is simply not counted; a throw from the
+// engine (a mid-wave build, a harness with no engine bound) must never turn a successful setting
+// write into a failed one. Returns HOW MANY live sessions took the new pair, so the caller can
+// tell the operator what actually moved.
+function applyPostureToLive(channelId, preset) {
+  if (!preset || !preset.tools || !preset.messages) return 0;
+  let applied = 0;
+  try {
+    const engine = require('./session-engine');
+    if (typeof engine.listLiveSessions !== 'function' || typeof engine.setModeByTask !== 'function') return 0;
+    for (const row of engine.listLiveSessions()) {
+      if (!row || row.channelId !== channelId) continue;
+      const target = { channelId: channelId, taskId: row.taskId || '', agentId: row.agentId || '' };
+      const tools = engine.setModeByTask(Object.assign({ axis: 'tools', mode: preset.tools }, target));
+      const messages = engine.setModeByTask(Object.assign({ axis: 'messages', mode: preset.messages }, target));
+      if ((tools && tools.ok) || (messages && messages.ok)) applied += 1;
+    }
+  } catch (err) {
+    diag('channel-dir ipc: live posture fan-out failed', err && err.message);
+    return applied;
+  }
+  if (applied) diag('channel-dir ipc: posture applied to', applied, 'live session(s)', String(channelId).slice(0, 8));
+  return applied;
+}
+
 // `opts.onChanged()` (optional) lets index.js refresh the tray so the menu-bar
 // "Channel folders" submenu and the in-app control never drift after a set/clear.
 // `opts.getSenderIds()` returns the LIVE set of app-owned `webContents` ids
@@ -147,7 +204,13 @@ function register(opts = {}) {
   ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
-    return channelPrefs.setLaunchPosture(p.channelId, p.preset);
+    const res = channelPrefs.setLaunchPosture(p.channelId, p.preset);
+    if (!res || res.ok !== true) return res || { ok: false };
+    // ⚠ AND IT APPLIES TO THE AGENTS ALREADY RUNNING (2026-08-25, Samuel's ruling: "permission
+    // settings must apply to running sessions"). See `applyPostureToLive` below for the whole
+    // argument. ADDITIVE on the wire — `applied` is a new field beside the existing
+    // `{ok, preset}`, so a renderer that does not read it is unaffected.
+    return Object.assign({}, res, { applied: applyPostureToLive(p.channelId, res.preset) });
   }));
 
   // AUTO-SEND (2026-08-20) — the durable per-channel send posture (channel-prefs.js

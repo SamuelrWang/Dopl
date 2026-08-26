@@ -1,7 +1,17 @@
 -- HOME CHANNELS — account-level 1:1 channels between two people, carried by a
 -- hidden `kind='link'` container workspace (Samuel's ruling, 2026-08-23).
 --
--- ⚠️ WRITTEN, NOT APPLIED (Samuel's standing gate on this directory).
+-- ✅ APPLIED. ⚠ THIS HEADER SAID "WRITTEN, NOT APPLIED" FOR A DAY AFTER IT WAS
+-- LIVE — corrected 2026-08-24. Deploy state is a measurement: re-derive with
+-- `supabase migration list` (or the MCP `list_migrations`), and JOIN ON THE
+-- NAME — this file applied under version `20260823205007`, not its filename
+-- prefix, which is what made the stale claim look verified (INVARIANTS §12,
+-- REFACTOR-FINDINGS F-304).
+--
+-- ⚠ SUPERSEDED IN PART by `20260824120000_home_channel_containers.sql`: a
+-- container is minted by "New channel" with ONE member now, and the claim path
+-- below is the LEGACY UNBOUND branch. It is still live — open unbound tokens
+-- exist — so nothing here was rolled back.
 --
 -- ── WHAT IT IS ─────────────────────────────────────────────────────────────
 -- One person mints a LINK. Whoever opens it and signs in CLAIMS it, and the

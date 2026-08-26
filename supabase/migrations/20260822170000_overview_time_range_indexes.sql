@@ -1,7 +1,10 @@
 -- OVERVIEW TIME-RANGE INDEXES — two composite indexes, no schema change, no
 -- new object anything depends on.
 --
--- ⚠️ WRITTEN, NOT APPLIED (Samuel's standing gate on this directory).
+-- ✅ APPLIED. ⚠ This header said "WRITTEN, NOT APPLIED" after it was live —
+-- corrected 2026-08-24. Re-derive with `supabase migration list` / MCP
+-- `list_migrations` and JOIN ON THE NAME: this file applied under version
+-- `20260823091749`, not its filename prefix (INVARIANTS §12, F-304).
 --
 -- ── WHY ────────────────────────────────────────────────────────────────────
 -- The desktop Overview page asks two shapes of question that did not exist

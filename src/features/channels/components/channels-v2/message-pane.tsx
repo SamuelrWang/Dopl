@@ -123,6 +123,7 @@ export function ChannelsV2MessagePane({
   gate,
   newAgent,
   popOut,
+  agentActivity,
   peerActivity,
   chrome = "page",
   onToggleInfo = NOOP,
@@ -181,6 +182,9 @@ export function ChannelsV2MessagePane({
    * what you are about to type, below the send box so it never separates a
    * decision from the draft it is about.
    */
+  /** MY agents mid-turn on this surface — `agent-activity.tsx`. Sits ABOVE the
+   *  peer row: the operator's own machine is the nearer fact. */
+  agentActivity?: ReactNode;
   peerActivity?: ReactNode;
   /** Which header this pane wears — see the file docblock. */
   chrome?: "page" | "window";
@@ -320,6 +324,13 @@ export function ChannelsV2MessagePane({
         busy={outboundBusy}
         onDecide={onDecideOutbound}
       />
+      {/* ⚠ TWO ACTIVITY LANES, MINE FIRST. `agentActivity` is this machine's own
+          agents (`agent-activity.tsx`), `peerActivity` is everybody else's
+          (`peer-activity.tsx`) — separate slots because they read different
+          facts with opposite failure modes, and because mine renders in CHANNEL
+          view as well while the peer row is thread-only. Both render nothing
+          when nothing is working; neither reserves a blank band. */}
+      {agentActivity}
       {peerActivity}
       <ChannelsV2Composer
         newThreadSignal={newThreadSignal}
@@ -427,10 +438,17 @@ function PaneHeader({
           and closes the column to its right, and `PanelRight` says that; the
           circle-i said "read about this channel", which is one tab of four
           inside it. **The LABEL stays "Channel info"** — three tests address
-          this button by that name, and it is still what the column is. */}
+          this button by that name, and it is still what the column is.
+          ⚠ AND IT WEARS NO BUTTON AT ALL (Samuel, 2026-08-25): `bare`, so no
+          circle, no fill, no border, resting OR pressed — the glyph's colour is
+          the whole affordance. **This replaced a /home-scoped 32px CIRCLE**
+          (`pages/home/home.module.css`, keyed on this exact label), which is
+          deleted: one control with one face on both surfaces, rather than a
+          shared component and a per-page override of it. */}
       <IconButton
         icon={PanelRight}
         label="Channel info"
+        bare
         active={infoOpen}
         onClick={onToggleInfo}
       />

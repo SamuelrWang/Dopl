@@ -8,11 +8,18 @@ import type { HomePendingLink } from "../types";
  */
 
 export const CHANNEL_LINK_COLS =
-  "id, creator_user_id, token, label, expires_at, max_uses, use_count, revoked_at, created_at";
+  "id, creator_user_id, workspace_id, token, label, expires_at, max_uses, use_count, revoked_at, created_at";
 
 export interface ChannelLinkRow {
   id: string;
   creator_user_id: string;
+  /**
+   * ⚠ THE INVERSION, in one column (migration 20260824120000). `null` = a legacy
+   * UNBOUND link: claiming it MINTS a container. Non-null = a BOUND link:
+   * claiming it JOINS that container. Both branches are live — open unbound
+   * tokens exist in the wild.
+   */
+  workspace_id: string | null;
   token: string;
   label: string | null;
   expires_at: string | null;

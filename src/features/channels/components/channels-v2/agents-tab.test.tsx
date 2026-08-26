@@ -355,7 +355,9 @@ describe("the agent view's control strip — one gate per capability", () => {
       />
     );
 
-  // ⚠ "Open window" became "Open agent" on 2026-08-20 (F-212): a window is a VIEW,
+  // ⚠ "Open window" became "Open agent" on 2026-08-20 (F-212) and is "Open
+  // window" again since 2026-08-25 (Samuel) — the panel IS the agent, so the
+  // verb named what the operator was already looking at. The ORIGINAL note: a window is a VIEW,
   // not a runtime property, so the noun is what the operator is asking for.
   it("offers OPEN AGENT on a main that has reopen and neither stop verb", () => {
     (window as { dopl?: unknown }).dopl = {
@@ -363,7 +365,7 @@ describe("the agent view's control strip — one gate per capability", () => {
       sessions: { reopen: vi.fn() },
     };
     mountPanel();
-    expect(screen.getByRole("button", { name: "Open agent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open window" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
     expect(screen.queryByRole("button", { name: "End" })).toBeNull();
   });

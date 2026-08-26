@@ -28,7 +28,7 @@
  */
 
 import type { AgentNarrationEntry } from "./use-agent-narration";
-import type { ChannelMessage } from "../../types";
+import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 
 /**
  * THE LANES A STREAM ROW CAN BE IN.
@@ -108,6 +108,91 @@ export interface StreamItem {
   ok?: boolean;
   /** `sent` rows only — where it went, for the box's banner. */
   to?: string | null;
+  /**
+   * `sent` rows only — **this post has not gone out yet.** The outbound consent
+   * gate is holding it and the card is the review surface (Samuel, 2026-08-25).
+   * ⚠ Never set on a row built from a TRANSCRIPT message: that row exists on the
+   * server, which is the definition of sent.
+   */
+  pending?: boolean;
+  /**
+   * `pending` rows only — the `channel_consent_requests` row the Post button
+   * decides, or `null` when nothing decidable matches this draft.
+   *
+   * ⚠ **`null` IS "NOTHING TO PRESS", NOT "IT NEVER WENT" (corrected 2026-08-25).**
+   * It covers the 15s between a Post and the desktop's poll delivering it, a row
+   * denied on another surface, and a body-join that missed — none of which is a
+   * failure the card may assert. Only {@link StreamItem.expired} says that.
+   */
+  requestId?: string | null;
+  /**
+   * `pending` rows only — this draft's own row is PAST ITS TTL, so nothing will
+   * ever post it. The one condition under which the card may say "Not sent".
+   *
+   * ⚠ **IT IS COMPUTED HERE BECAUSE THE SERVER DOES NOT SWEEP.** INVARIANTS §6:
+   * expiry is LAZY and `listConsentRequests` is deliberately unswept, so an
+   * elapsed row is still returned with `status: "pending"`. Trusting that status
+   * would put a live Post button on a row the decide route will refuse.
+   */
+  expired?: boolean;
+}
+
+/**
+ * THE ONE NORMALIZATION BOTH SIDES OF THE PENDING JOIN GO THROUGH.
+ *
+ * ⚠ IT MIRRORS `main/session-narration.js › line(value, POST_CAP)` DELIBERATELY,
+ * because that is what the frame's text has already been through: whitespace
+ * collapsed to single spaces, trimmed, sliced at 1000. The consent row's
+ * `proposedReply` is the SAME body untouched (`session-windowless.js ›
+ * bridgeOutbound` posts `body` verbatim), so putting both through this is the
+ * only way an equality can be true at all.
+ *
+ * ⚠ **THE JOIN IS ON THE BODY BECAUSE THERE IS NO ID TO JOIN ON.** A consent row
+ * carries `(channel, message_seq)` and nothing that names an AGENT — the row is
+ * created by `bridgeOutbound` long after the frame was pushed, and the frame is
+ * per-SESSION with no row id in it. The frame is already agent-scoped (the ring
+ * belongs to one session), so the only ambiguity this can produce is between two
+ * of one operator's drafts whose bodies are identical to the character — in which
+ * case either row approves the same bytes.
+ */
+export function postEcho(text: string | null | undefined): string {
+  return String(text ?? "").replace(/\s+/g, " ").trim().slice(0, POST_CAP);
+}
+
+/** `main/session-narration.js › POST_CAP`. ⚠ A COPY OF A WIRE CONSTANT, and it
+ *  only has to be an UPPER bound: main slicing shorter than this leaves both
+ *  sides of the join untouched by the slice. */
+const POST_CAP = 1000;
+
+/** Is this frame a post the outbound gate is still holding? ⚠ Read defensively —
+ *  `pending` is main's to widen, and absent means SENT (`spa-bridge-shapes.ts`). */
+function framePending(entry: AgentNarrationEntry): boolean {
+  return (entry as AgentNarrationEntry & { pending?: unknown }).pending === true;
+}
+
+/**
+ * IS THIS DRAFT'S ROW PAST ITS OWN TTL — the ONLY thing that earns the "Not
+ * sent" face.
+ *
+ * ⚠ THE CLIENT HAS TO DO THIS ARITHMETIC BECAUSE THE SERVER DOES NOT SWEEP
+ * (INVARIANTS §6: expiry is LAZY, no cron, and `listConsentRequests` is
+ * deliberately unswept so it can serve as the audit trail). An elapsed row comes
+ * back `status: "pending"` — the same shape as a live one — so a card that
+ * trusted the status would offer a Post the decide route is going to refuse.
+ *
+ * ⚠ NO ROW IS NOT AN EXPIRED ROW. `null` returns `false`: the draft may be in
+ * the 15-second gap between an approval and the desktop poll that delivers it,
+ * and calling that "Not sent" is the exact defect this function was added with.
+ * ⚠ A row with NO `expiresAt` never expires here — absent is unknown, and
+ * unknown must not read as elapsed.
+ */
+function isExpired(
+  request: ChannelConsentRequest | null,
+  now: number
+): boolean {
+  if (!request?.expiresAt) return false;
+  const at = new Date(request.expiresAt).getTime();
+  return Number.isFinite(at) && at <= now;
 }
 
 /** ISO → epoch ms, or 0 for an unparseable stamp. ⚠ 0 SORTS FIRST rather than
@@ -138,31 +223,128 @@ function epoch(iso: string): number {
  * ⚠ STABLE SORT, BY TIME ONLY. Frames and messages interleave, and within one
  * timestamp the input order is the desktop's own — re-ordering it would be this
  * file claiming to know better than the machine that watched it happen.
+ *
+ * ── THE PENDING LANE (2026-08-25, Samuel's outbound-review ruling) ────────────
+ *
+ * ⚠ A GATED POST HAS NO TRANSCRIPT ROW BY CONSTRUCTION, so the blanket
+ * "drop every `sent` frame once the transcript has anything" rule above would
+ * DELETE the one row the operator has to act on. A pending frame is therefore
+ * retired by its OWN text landing in the transcript — which is exactly the event
+ * that means it was sent — and by nothing else.
+ *
+ * ⚠ THE FRAME NEVER CLEARS ITSELF. Main writes the ring entry once and does not
+ * revisit it (`spa-bridge-shapes.ts › DesktopNarrationEntry.pending`), so after
+ * the operator presses Post the frame still says pending; the SERVER's transcript
+ * row is what retires it. That asymmetry is why the dedupe below is per-text
+ * rather than per-lane.
+ *
+ * ── ⚠ THE `delivered` INPUT, AND THE BUG THAT BOUGHT IT (2026-08-25) ──────────
+ *
+ * A draft Samuel approved was DELIVERED — `channel_messages` row at 16:14:30Z,
+ * consent row `allowed` at 16:14:15Z — and this stream still painted it
+ * **"Not sent"**. Two mistakes compounded:
+ *
+ *   1. **The landing check read the AGENT-FILTERED lane.** `sent` comes from
+ *      `agent-panel.tsx › agentSentMessages`, which requires
+ *      `m.metadata.taskId === taskId`. **A channel-level post carries no
+ *      `taskId`** — the measured row's metadata was
+ *      `{intent, runtime, summary, session_id}` and nothing else — so the
+ *      delivered row was filtered out before the join could see it, on every
+ *      threadless post there is. The join itself was never wrong: the stored
+ *      `proposed_reply` and the delivered `body` were byte-identical at 95
+ *      chars. **So the landing check now reads `delivered`, the WHOLE channel
+ *      transcript**, and only the RENDERING of a posted row stays agent-scoped.
+ *   2. **Absence was read as failure.** "No pending row matched" was rendered as
+ *      "Not sent", which is also true of the 15 seconds between a Post and the
+ *      desktop's poll delivering it. **Absence is now UNKNOWN**; only a row past
+ *      its own TTL earns the failed face.
+ *
+ * ⚠ NOTHING HERE IS LOCAL STATE ANY MORE, deliberately. An earlier cut tracked
+ * pressed cards in a `useState` Set keyed on the stream key; that could not
+ * survive a remount and could not see a Post pressed on the OTHER surface. Every
+ * input below is a server fact.
  */
 export function buildAgentStream({
   entries,
   sent,
+  delivered,
+  pending = [],
   threadTitle,
+  now = Date.now(),
 }: {
   entries: readonly AgentNarrationEntry[] | null;
   sent: readonly ChannelMessage[];
+  /**
+   * THE WHOLE CHANNEL TRANSCRIPT — the landing check's evidence, and NOT the
+   * same thing as {@link sent}.
+   *
+   * ⚠ IT IS UNFILTERED ON PURPOSE. `sent` is agent-scoped so one agent's box
+   * never shows a sibling's words (F-251); this answers a different question —
+   * *did these bytes reach the channel at all* — and the agent filter is
+   * actively wrong for it, because a threadless post carries no `taskId` to be
+   * filtered ON. Defaults to `sent` so a caller that has not threaded it yet
+   * behaves exactly as before.
+   */
+  delivered?: readonly ChannelMessage[];
+  /**
+   * The viewer's PENDING outbound consent rows (`use-consent-inbox.ts ›
+   * outbound`). ⚠ Workspace-wide as it arrives, and deliberately not narrowed
+   * here: the join is on the draft's own body, which is a stronger key than any
+   * scope this function could apply.
+   */
+  pending?: readonly ChannelConsentRequest[];
   /** Where a post went, for the sent box's banner. */
   threadTitle?: string | null;
+  /** Injectable clock — the TTL comparison below is the only reader. */
+  now?: number;
 }): StreamItem[] {
   const hasTranscript = sent.length > 0;
+  const posted = new Set(sent.map((m) => postEcho(m.body)));
+  const landed = new Set((delivered ?? sent).map((m) => postEcho(m.body)));
+  const pendingByBody = new Map<string, ChannelConsentRequest>();
+  for (const request of pending) {
+    const body = postEcho(request.proposedReply);
+    // FIRST wins, matching `view-model-requested.ts › joinRequestsToThreads`: the
+    // oldest identical draft is the one that has been waiting.
+    if (body && !pendingByBody.has(body)) pendingByBody.set(body, request);
+  }
   const items: StreamItem[] = [];
+  // ⚠ TRACKED HERE, NOT DERIVED FROM `items` — a frame that has LANDED carries no
+  // `pending` on its item, so a settled ring is indistinguishable from an old
+  // main's ring by the output alone. That is precisely the state Samuel's stale
+  // gate note was sitting in.
+  let sawGateStamp = false;
 
   (entries ?? []).forEach((entry, i) => {
     const lane = frameLane(entry);
-    if (lane === "sent" && hasTranscript) return;
+    const text = entry.text ?? "";
+    const echo = postEcho(text);
+    if (lane === "sent" && framePending(entry)) sawGateStamp = true;
+    // ⚠ HELD ONLY UNTIL ITS WORDS LAND. A frame whose body is in the channel
+    // went out, whoever approved it and however many times this component has
+    // remounted since — that is the fact that outranks every consent row.
+    const held = lane === "sent" && framePending(entry) && !landed.has(echo);
+    // Landed AND attributable to this agent: the real transcript row renders it,
+    // so the echo drops rather than doubling.
+    if (lane === "sent" && !held && posted.has(echo)) return;
+    // ⚠ A FORMERLY-HELD FRAME IS NOT DROPPED BY `hasTranscript`. Its row exists
+    // but `agentSentMessages` could not attribute it (no `taskId` on a threadless
+    // post), so dropping it would delete the operator's only view of a post they
+    // just authorized. It renders as the ordinary POSTED face instead.
+    const wasHeld = lane === "sent" && framePending(entry);
+    if (lane === "sent" && !held && !wasHeld && hasTranscript) return;
+    const request = held ? (pendingByBody.get(echo) ?? null) : null;
     items.push({
       key: `f:${entry.at}:${i}`,
       lane,
       at: typeof entry.at === "number" && Number.isFinite(entry.at) ? entry.at : 0,
-      text: entry.text ?? "",
+      text,
       tool: entry.tool,
       ok: entry.ok,
       to: lane === "sent" ? (threadTitle ?? null) : undefined,
+      ...(held
+        ? { pending: true, requestId: request?.id ?? null, expired: isExpired(request, now) }
+        : {}),
     });
   });
 
@@ -176,10 +358,43 @@ export function buildAgentStream({
     });
   }
 
-  return items
+  return dropSettledGateNotes(items, sawGateStamp)
     .map((item, i) => ({ item, i }))
     .sort((a, b) => a.item.at - b.item.at || a.i - b.i)
     .map(({ item }) => item);
+}
+
+/** What `main/session-narration.js › entryFor` emits for a gate it is waiting on.
+ *  ⚠ A COPY OF WIRE COPY, matched exactly — a near-match here would silently stop
+ *  dropping the line the day main rewords it, which fails in the safe direction
+ *  (the note stays) rather than by hiding something. */
+const GATE_NOTE = "Waiting for permission";
+
+/**
+ * DROP A GATE NOTE THE GATE HAS ALREADY OUTLIVED (2026-08-25).
+ *
+ * ⚠ THE RING IS APPEND-ONLY, WHICH IS WHY THIS IS THE READER'S JOB. Main writes
+ * "Waiting for permission" when a gate opens and never revisits the entry, so the
+ * line sat under a post that had long since been delivered — Samuel saw exactly
+ * that, below a card the same wave had already fixed. **`session-narration.js`
+ * now emits no note at all for an OUTBOUND post gate** (the card says Pending in
+ * the operator's own words); this covers the rings that were already written,
+ * and the older mains that keep writing them.
+ *
+ * ⚠ IT ONLY FIRES ON A RING THAT PROVES ITS OWN MAIN STAMPS `pending`. Without
+ * that guard a build whose frames carry no gate flag would have every gate note
+ * dropped — and on such a build the note is the ONLY thing that explains the
+ * silence. So: this ring held a post at some point, and nothing is held now.
+ */
+function dropSettledGateNotes(
+  items: StreamItem[],
+  sawGateStamp: boolean
+): StreamItem[] {
+  if (!sawGateStamp) return items;
+  if (items.some((item) => item.pending === true)) return items;
+  return items.filter(
+    (item) => !(item.lane === "note" && item.text === GATE_NOTE)
+  );
 }
 
 /** `mcp__dopl__dopl_channel` → `dopl_channel`. ⚠ The segment after the LAST `__`,

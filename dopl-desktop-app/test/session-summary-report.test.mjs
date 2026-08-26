@@ -81,7 +81,13 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // ⚠ `endedAt` joined 2026-08-22 and is LOCAL-only for the same reason: it is the 7-day
     // retention clock the OPERATOR's own cards render from, and `reportRow` picks the server
     // columns by name so it never reaches `channel_sessions`.
-    "agentId", "channelId", "channelName", "contextUsed", "contextWindow", "detail", "endedAt",
+    // ⚠ `displayName` joined 2026-08-25 (Samuel's rename ruling) and is LOCAL-only for exactly
+    // the reason `detail` is: `reportRow` picks the server columns BY NAME, so what the
+    // operator calls an agent never reaches `channel_sessions` — whose `name` CHECK
+    // (`^[a-z][a-z0-9-]{1,30}$`) would refuse a human name anyway. A peer's card still shows
+    // what THEIR machine reports.
+    "agentId", "channelId", "channelName", "contextUsed", "contextWindow", "detail",
+    "displayName", "endedAt",
     "lastActivityAt", "listening", "messageMode",
     // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same
     // terms as `detail` / `toolMode` / `messageMode`: `session-state-push.js › reportRow` picks

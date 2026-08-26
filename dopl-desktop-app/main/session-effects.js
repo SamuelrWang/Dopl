@@ -16,6 +16,35 @@ function gatePhase(state, phase) {
   return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
 }
 
+// ⚠ THE SAME RULE FOR `activity`, AND IT WAS MISSING (2026-08-25). `gatePhase` above protects the
+// PHASE from being clobbered while an inbound card waits, and nothing protected the ACTIVITY from
+// being clobbered while a PERMISSION is held.
+//
+// THE DEFECT IT CLOSES, measured on a live channel of six windowless agents. A windowless
+// `dopl_channel op=post` that gates bridges to a consent row and HOLDS — `session-windowless.js ›
+// bridgeOutbound` polls that row for as long as the operator takes, which in the incident was
+// minutes. The reducer's `permission_request` branch correctly parks the session at
+// `activity: 'awaiting_permission'`, which `session-detail.js › detailFor` renders as the honest
+// "Waiting on you". But the `outbound_post` branch then wrote `activity: 'working'`
+// UNCONDITIONALLY — so the agent's NEXT post (a fresh turn, fed by the channel fan-out while the
+// FIRST post was still undecided) flipped the card back to "Sending a message" with the consent
+// row still sitting there pending. The operator sees an agent that looks busy and is in fact
+// stopped, waiting on them, with no surface saying so. That is the exact complaint this was found
+// under: "stuck working · thinking, burning tokens, nothing lands".
+//
+// ⚠ IT IS A DISPLAY TRUTH RULE, NOT A GATE. Nothing here decides anything, holds anything or
+// resolves anything — the permission is already held by `pendingPermissions` and the decision
+// still comes from the consent row. This only stops the session CLAIMING to be doing work it is
+// blocked from doing.
+//
+// ⚠ WIDEN-ONLY IN ONE DIRECTION, deliberately: it can hold `awaiting_permission`, never invent it.
+// A state with nothing pending returns the caller's value untouched, so every path that legitimately
+// resumes work is unaffected.
+function gateActivity(state, activity) {
+  const pending = state && state.pendingPermissions;
+  return pending && pending.length > 0 ? 'awaiting_permission' : activity;
+}
+
 // The effect set shared by every end (operator End, turn/cost cap): abort the query, tell the
 // renderer, settle the record. ⚠ Leaves the channel TASK untouched — no task_finished, and
 // since thread closing was removed (wiring plan Phase 4, 2026-08-18) there is no other end that
@@ -199,6 +228,7 @@ function parkEffects(state, opts) {
 
 module.exports = {
   gatePhase,
+  gateActivity, // 2026-08-25: a HELD permission outranks "working" on the ACTIVITY, as the gate does on the phase
   terminalBody, // 2026-08-22: a terminal post's body says what its metadata already knows
   TERMINAL_BODIES,
   endedEmit,

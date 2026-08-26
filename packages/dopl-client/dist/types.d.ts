@@ -61,9 +61,9 @@ export interface ListResult {
     offset: number;
 }
 /**
- * "standard" = a real user-facing workspace. "link" = a hidden two-member
- * container minted when a home channel link is claimed — never shown in the
- * rail/switcher, never a default-resolution candidate, bills to each side's
+ * "standard" = a real user-facing workspace. "link" = a hidden home-channel
+ * container holding ONE or TWO members and exactly one channel — never shown in
+ * the rail/switcher, never a default-resolution candidate, bills to each side's
  * own plan.
  *
  * ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › WorkspaceKind`,
@@ -83,7 +83,16 @@ export interface WorkspaceSummary {
     createdAt: string;
     updatedAt: string;
 }
-/** Shared kind predicate — every LISTING filters through this, no resolution does. */
+/**
+ * Shared kind predicate — every LISTING filters through this, no resolution does.
+ *
+ * ⚠ POSITIVE FORM (`=== "standard"`, never `!== "link"`), for the reason the
+ * server twin spells out: the negative spelling would admit every kind added to
+ * the union later, silently, into the one place this predicate exists to keep
+ * kinds out of. ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts ›
+ * isStandardWorkspace` — F-295 is the standing entry on this duplication; edit
+ * that one and copy it down.
+ */
 export declare function isStandardWorkspace(workspace: {
     kind?: WorkspaceKind;
 }): boolean;

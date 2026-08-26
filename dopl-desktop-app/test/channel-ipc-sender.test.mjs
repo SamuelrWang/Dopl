@@ -201,6 +201,19 @@ const OPS = [
   // binding and UUID gate as every op here, which is what this list asserts by COUNT as well
   // as by name.
   ["agents:forgetThread", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ JOINED 2026-08-25: the IN-APP CLAUDE CODE SIGN-IN — the ONE entry into the auth recovery
+  // flow (`main/claude-signin-op.js`). It is the THIRD op in this census whose subject is the
+  // MACHINE rather than a channel, after the two `orchestrator:*LaunchEnabled` members: it takes
+  // no payload at all, so there is no id-shaped rejection for the refusal to be indistinguishable
+  // FROM, and THE SENDER BINDING IS THE ONLY GUARD ON IT. That is why it is named here and listed
+  // in NO_BAD_PAYLOAD below rather than quietly passing the shared loop.
+  // ⚠ IT STARTS NO TURN AND GRANTS NOTHING. It drives an OAuth flow the operator completes in
+  // their own browser — no credential is typed into a Dopl surface and none crosses the bridge —
+  // and then RELEASES sessions this machine already holds, each the operator's own and contained
+  // by the profile and posture it launched under. The failure direction of a forged call is a
+  // native dialog the operator did not ask for, which they cancel; the assertion that matters is
+  // the one below, that a refused call reaches no flow at all.
+  ["claude:signIn", undefined, { ok: false }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
   // ⚠ TWO JOINED HERE 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the
   // operator's OWN agent. They are STOP verbs — `interrupt` (the session window's pause
@@ -213,6 +226,12 @@ const OPS = [
   // ⚠ JOINED 2026-08-20: the Agents tab's launch — the one START verb, own-thread
   // only, UUID-gated on BOTH ids, posture owned by main (see preload-parity).
   ["sessions:launch", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ JOINED 2026-08-25 (Samuel's rename ruling): what the operator CALLS one agent. Like
+  // `approveTemplate` its subject is not a channel, so it carries the fourth tuple slot with
+  // its own bad payload — there is no `channelId` to probe with. It moves no session, starts
+  // nothing and grants nothing; it writes a DISPLAY string keyed by the instance address, and
+  // nothing resolves an agent by it.
+  ["sessions:rename", { agentId: "abcdefgh", name: "Research" }, { ok: false }, { agentId: "" }],
   // ⚠ JOINED 2026-08-22 (OQ-3, agent templates): the machine-local FIRST-USE APPROVAL of
   // ANOTHER member's template. It is the SECOND op in this file whose subject is not a
   // channel, so it is the second one with no `channelId` to probe with — hence the FOURTH
@@ -336,7 +355,10 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // which is the failure Phase 10 exists to prevent. `setLaunchPosture` is the worst case
     // now, so it is the one driven positively here.
     assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH), PRESET, which);
-    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }), { ok: true }, which);
+    // ⚠ `applied` (2026-08-25) is the live fan-out's count — see test/channel-posture-live.test.mjs.
+    // This harness binds no session engine, so a bound sender's write succeeds with nothing to
+    // apply it to; what is being driven HERE is the sender binding, not the fan-out.
+    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }), { ok: true, applied: 0 }, which);
     assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
     await ipc.handlers["channels:chooseFolder"](sender, CH);
     assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);
@@ -353,7 +375,17 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
 // refusal to be indistinguishable FROM, and the sender binding is the ONLY guard on them —
 // which is the point of naming them, not an exemption from scrutiny. The bad-SENDER half of the
 // loop below still runs for both, and it is the half that matters for these two.
-const NO_BAD_PAYLOAD = new Set(["orchestrator:getLaunchEnabled", "orchestrator:setLaunchEnabled"]);
+// ⚠ AND `claude:signIn` JOINED THEM ON 2026-08-25 for the same structural reason: its subject is
+// the MACHINE's Claude Code credential, so it takes no argument whatsoever. There is nothing to
+// corrupt, and corrupting a key it does not read would have driven a VALID call through the
+// bad-payload arm — which for THIS op means popping a real native dialog inside the suite. The
+// bad-SENDER half of the loop still runs for it, and the case below proves a refused call reaches
+// no sign-in flow at all.
+const NO_BAD_PAYLOAD = new Set([
+  "orchestrator:getLaunchEnabled",
+  "orchestrator:setLaunchEnabled",
+  "claude:signIn",
+]);
 
 test("a refusal is INDISTINGUISHABLE from a bad-payload rejection", async () => {
   // The refusal shape deliberately matches what a non-UUID id already returns, so a

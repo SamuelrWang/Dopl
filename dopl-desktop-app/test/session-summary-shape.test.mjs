@@ -62,6 +62,18 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       taskId: "task-1",
       agentId: "a1b2c3d4",
       name: "a1b2c3d4",
+      // ⚠ WIDENED 2026-08-25 BY ONE FIELD, `displayName` (Samuel's rename ruling). The pin
+      // failed on the ADD, which is the review this comment records:
+      //   • NULL IS THE ORDINARY ANSWER and this fixture's: most agents are never renamed,
+      //     and the card falls back to the canonical `Agent #<id>`. A blank standing in for
+      //     the name would be worse than the address (INVARIANTS §11).
+      //   • IT RIDES BESIDE `agentId`/`name` AND REPLACES NEITHER. Those two are the
+      //     ADDRESS — `@<agentId>`, every session op's third coordinate — and nothing
+      //     resolves an agent by this string, so a rename cannot re-point anything.
+      //   • LOCAL-ONLY, by the property `detail` and the posture pair already rely on:
+      //     `session-state-push.js › reportRow` picks its columns BY NAME, so it never
+      //     reaches `channel_sessions` (whose `name` CHECK would refuse a human name anyway).
+      displayName: null,
       listening: true,
       endedAt: null,
       state: "working",

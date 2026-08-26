@@ -260,7 +260,7 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
  * called meaningless, correctly: a window is a VIEW, not a runtime property.
  * There is no refusal path left to word; there is a window.
  */
-describe("Open agent always opens the agent view", () => {
+describe("Open window always opens the agent view", () => {
   const AGENT = { channelId: CHANNEL_ID, taskId: "t-1" };
   const SEGMENT = "acme-a1b2";
 
@@ -336,7 +336,7 @@ describe("the panel's button reaches it", () => {
         onClose={() => {}}
       />
     );
-    screen.getByRole("button", { name: "Open agent" }).click();
+    screen.getByRole("button", { name: "Open window" }).click();
     expect(openWin).toHaveBeenCalledWith("acme-a1b2", CHANNEL_ID, "t-1", undefined);
   });
 

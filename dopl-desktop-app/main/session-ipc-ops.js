@@ -33,7 +33,10 @@
 //   sessions:narration       reads my own agent's work ring, for that window's first paint
 //   sessions:pause           interrupts the turn my agent is running on a thread
 //   sessions:end             ends my agent on a thread — terminal, and never the thread
+//   sessions:rename          what the operator calls one agent — display only, never an address
 //   agents:forgetThread      drops every LOCAL trace of a deleted thread's ended agents
+//   claude:signIn            ⚠ signs THIS MAC in to Claude Code, then releases every held
+//                            session — the ONE entry into the recovery flow
 //   threads:openWindow       (Phase 10) opens a pop-out window on ONE thread
 //
 // ⚠ SENDER BINDING IS THE SAME RULE, WRITTEN THE SAME WAY. Two checks, because one is not
@@ -364,6 +367,58 @@ function register(opts = {}) {
   };
   ipcMain.handle('sessions:pause', appWindowOnly('sessions:pause', { ok: false }, control('pause')));
   ipcMain.handle('sessions:end', appWindowOnly('sessions:end', { ok: false }, control('end')));
+
+  // WHAT THE OPERATOR CALLS THIS AGENT (2026-08-25, Samuel's ruling). Store is
+  // `main/agent-names.js`, keyed by the INSTANCE ADDRESS.
+  //
+  // ⚠ IT IS THE ONLY OP HERE THAT TAKES NO CHANNEL, and that is the point: a name belongs to
+  // an agent, not to where it is working. It moves no session, starts no turn, grants nothing
+  // and cannot wake anything — the registry is not even consulted.
+  //
+  // ⚠ IT NAMES, IT NEVER ADDRESSES. `@<agentId>` and every other op still resolve against the
+  // id; if a display name could address a session, a rename would silently re-point a running
+  // instruction.
+  //
+  // ⚠ AN EMPTY NAME CLEARS, which is how the operator goes back to `Agent #<id>` — a separate
+  // op for "unname" would be a second way to say the same thing.
+  //
+  // ⚠ THE ANSWER IS MAIN'S OWN STORED VALUE, never an echo: a refused name (too long, control
+  // or bidi characters) comes back `{ ok: false }` so the field can revert rather than paint a
+  // name this machine did not take. Same rule `setMode` / `setModel` follow.
+  ipcMain.handle('sessions:rename', appWindowOnly('sessions:rename', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    const agentId = asAgentId(p.agentId);
+    if (!agentId) return { ok: false };
+    const names = require('./agent-names');
+    if (typeof p.name === 'string' && p.name.trim() === '') {
+      names.clear(agentId);
+      return { ok: true, displayName: null };
+    }
+    const stored = names.rename(agentId, p.name);
+    if (stored === null) return { ok: false, reason: 'bad-name' };
+    return { ok: true, displayName: stored };
+  }));
+
+  // ⚠ SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the recovery flow.
+  //
+  // ⚠ THE BODY LIVES IN `main/claude-signin-op.js` (a §1 split, the `session-launch-op.js`
+  // precedent); that file's header carries the whole argument, including why success is
+  // RE-PROBED rather than reported and why the single-flight stays in `claude-auth.js`. The
+  // wrapper is written LITERALLY at the site like every op here, because
+  // `test/channel-ipc-sender.test.mjs`'s structural belt reads that shape.
+  //
+  // ⚠ IT TAKES NO PAYLOAD, and that is the third op in this family whose subject is the MACHINE
+  // rather than a channel (`orchestrator:get/setLaunchEnabled` are the others). There is no id
+  // to UUID-gate, so the SENDER BINDING IS THE ONLY GUARD — which is why it is enumerated in
+  // that suite rather than waved through.
+  // ⚠ IT STARTS NO TURN AND GRANTS NOTHING. It drives an OAuth flow the operator completes in
+  // their own browser (no credential is ever typed into a Dopl surface) and then RELEASES
+  // sessions this machine already holds — every one of which is the operator's own, contained by
+  // the profile and posture it launched under. The failure direction of a forged call is a
+  // native dialog the operator did not ask for, which they cancel.
+  ipcMain.handle('claude:signIn', appWindowOnly('claude:signIn', { ok: false }, () => (
+    require('./claude-signin-op').signIn()
+  )));
 
   // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). The thread view's
   // "Open as new window" button — a SECOND window on the SAME SPA bundle, landing on the

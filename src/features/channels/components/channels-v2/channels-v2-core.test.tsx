@@ -17,9 +17,12 @@ import { channel, member, ME, WS } from "./test-fixtures";
  *
  *   • it SELECTS, on mount and on change (a second notification arrives with
  *     the page already mounted, so a mount-only read is a dead notification);
- *   • it does not LOCK — the operator's own click still wins afterwards;
- *   • it takes the Inbox takeover down, or the notification lands the operator
- *     on a pane that is not the channel they were sent to.
+ *   • it does not LOCK — the operator's own click still wins afterwards.
+ *
+ * ⚠ A THIRD BULLET STOOD HERE — "it takes the Inbox takeover down" — and is
+ * deleted with the takeover (Samuel, 2026-08-25). The center column has no
+ * third state to be landed behind any more; the outbound review is the work
+ * stream's card. See the refusal at the end of this describe.
  *
  * Every data hook and every child pane is mocked: the assertions are about the
  * selection the core computes, and a real transcript/composer tree would couple
@@ -108,16 +111,13 @@ vi.mock("./sidebar", () => ({
   ChannelsV2Sidebar: ({
     selectedChannelId,
     onSelectChannel,
-    onOpenInbox,
   }: {
     selectedChannelId: string | null;
     onSelectChannel: (id: string) => void;
-    onOpenInbox: () => void;
   }) => (
     <div>
       <span data-testid="selected">{selectedChannelId ?? "none"}</span>
       <button onClick={() => onSelectChannel(CH_B)}>pick brand</button>
-      <button onClick={onOpenInbox}>open inbox</button>
     </div>
   ),
 }));
@@ -137,9 +137,6 @@ vi.mock("./message-pane", () => ({
 }));
 vi.mock("./info-panel", () => ({ ChannelsV2InfoPanel: () => null }));
 vi.mock("./agent-panel", () => ({ ChannelsV2AgentPanel: () => null }));
-vi.mock("./inbox-pane", () => ({
-  ChannelsV2InboxPane: () => <div data-testid="pane">inbox</div>,
-}));
 // The channel-management cluster arrived at the cutover (wiring plan Phase 12)
 // and drags three write hooks, two dialogs and a Supabase-backed auth read in
 // with it. It has nothing to say about which channel is open, which is the only
@@ -220,14 +217,15 @@ describe("ChannelsV2Core — the channel a caller names", () => {
     expect(open()).toBe(CH_B);
   });
 
-  it("takes the Inbox takeover down, so the channel is what is on screen", () => {
-    // The Inbox is a center-column takeover (Phase 8). Landing "on the channel"
-    // has to mean the channel is VISIBLE, not merely selected behind the Inbox.
-    const { rerender } = renderCore(CH_A);
-    fireEvent.click(screen.getByText("open inbox"));
-    expect(open()).toBe("inbox");
-    rerender(core(CH_B));
-    expect(open()).toBe(CH_B);
+  // ⚠ THE INBOX TAKEOVER IS DELETED (Samuel, 2026-08-25) — this stood here as
+  // "takes the Inbox takeover down, so the channel is what is on screen". What
+  // replaces it is the refusal: the tree offers no way to put anything but a
+  // channel (or the first-run explainer) in the center column, so a notification
+  // can no longer land behind a pane.
+  it("has NO Inbox takeover to land behind — the center column is the channel", () => {
+    renderCore(CH_A);
+    expect(screen.queryByText("open inbox")).toBeNull();
+    expect(open()).toBe(CH_A);
   });
 
   it("naming nothing again selects nothing — it does not reset the pick", () => {

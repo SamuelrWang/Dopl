@@ -50,9 +50,6 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsV2Sideb
     openThreadId: null,
     onSelectChannel: vi.fn(),
     onOpenThread: vi.fn(),
-    consentCount: 0,
-    inboxOpen: false,
-    onOpenInbox: vi.fn(),
     canCreate: true,
     onCreateChannel: vi.fn(),
     onCreateDirect: vi.fn(),
@@ -105,29 +102,17 @@ describe("channels-v2 sidebar", () => {
     expect(within(row("Front-end")).queryByText(/^\d+$/)).toBeNull();
   });
 
-  // ⚠ THE COUNT IS OUTBOUND-ONLY since 2026-08-22 (Samuel — the inbound consent
-  // retirement); the CALLER slices it. This component renders the number it is
-  // handed and asserts only that a zero is not a badge.
-  it("badges the Inbox row only when a real pending count exists", () => {
-    renderSidebar({ consentCount: 0 });
-    expect(within(row("Inbox")).queryByText("0")).toBeNull();
-    cleanup();
-    renderSidebar({ consentCount: 3 });
-    expect(within(row("Inbox")).getByText("3")).not.toBeNull();
-  });
-
-  it("opens the inbox from the Inbox row, and the row wears the selection", () => {
-    // Phase 8: the badge finally has somewhere to go — the row is a nav
-    // destination for the center column, so it follows the selection rule.
-    const props = renderSidebar({ consentCount: 2 });
-    fireEvent.click(row("Inbox"));
-    expect(props.onOpenInbox).toHaveBeenCalledTimes(1);
-    expect(row("Inbox").hasAttribute("aria-current")).toBe(false);
-    cleanup();
-    renderSidebar({ inboxOpen: true });
-    expect(row("Inbox").getAttribute("aria-current")).toBe("true");
-    // …and nothing else is selected, because the pane is showing neither.
-    expect(row("Website").hasAttribute("aria-current")).toBe(false);
+  // ⚠ THE INBOX ROW AND ITS BADGE ARE DELETED (Samuel, 2026-08-25). Two tests
+  // stood here — one asserting the badge only rendered for a real count, one
+  // asserting the row opened the pane and wore the selection — and both are gone
+  // with the pane. What replaces them is the refusal below: the outbound review
+  // is the work stream's card (`agent-stream.tsx`), and a nav row pointing at a
+  // destination that no longer exists is the dead affordance F-212 was earned on.
+  it("has NO Inbox row: the consent inbox is deleted, not hidden", () => {
+    renderSidebar();
+    const list = screen.getByRole("complementary", { name: "Channels" });
+    expect(within(list).queryByRole("button", { name: "Inbox" })).toBeNull();
+    expect(within(list).queryByText("Inbox")).toBeNull();
   });
 
   it("selection mirrors the center pane: an open thread outranks its channel", () => {

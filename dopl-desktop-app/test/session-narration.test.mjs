@@ -95,6 +95,54 @@ test("KINDS: the five an agent-window row can render, and nothing else", () => {
   }
 });
 
+// 2026-08-25 (Samuel's outbound-review ruling) — the gate is a FACT ABOUT THE FRAME, and the
+// work stream's card is the review surface. A post that is still waiting on the operator's
+// Send must not arrive looking like one that left the machine.
+test("KINDS: a GATED post carries pending:true, and an ungated one carries no flag at all", () => {
+  const gated = m.entryFor(
+    { type: "outbound_post", payload: { text: "draft", pending: true, ownChannel: true } },
+    NOW
+  );
+  assert.equal(gated.kind, "post");
+  assert.equal(gated.lane, "channel");
+  assert.equal(gated.pending, true);
+
+  const plain = m.entryFor({ type: "outbound_post", payload: { text: "sent it" } }, NOW);
+  assert.equal("pending" in plain, false, "an ungated post must be byte-identical to before");
+});
+
+test("KINDS: only an EXPLICIT true gates — a truthy string never reads as pending", () => {
+  // Fail-suspicious, the same way `session-io.js` reads `ownChannel`: anything but `true`
+  // is "not gated", so a malformed payload can never paint a Post button over a sent post.
+  for (const pending of ["true", 1, {}, null, undefined]) {
+    const entry = m.entryFor({ type: "outbound_post", payload: { text: "x", pending } }, NOW);
+    assert.equal("pending" in entry, false, String(pending));
+  }
+});
+
+// 2026-08-25 — THE GATE NOTE AND THE CARD ARE THE SAME EVENT, so only one of them speaks.
+// Samuel saw "Waiting for permission" sitting under a post that had already been delivered:
+// this ring is append-only, so a transient line written here is permanent.
+test("KINDS: an OUTBOUND post gate emits NO status line — the card carries it", () => {
+  const entry = m.entryFor(
+    { type: "permission_request", payload: { type: "outbound_gate", requestId: "r1" } },
+    NOW
+  );
+  assert.equal(entry, null);
+});
+
+test("KINDS: the DOCK's tool gate still speaks — it has no card to say it", () => {
+  const entry = m.entryFor(
+    { type: "permission_request", payload: { type: "permission_request", name: "Bash" } },
+    NOW
+  );
+  assert.equal(entry.kind, "status");
+  assert.equal(entry.text, "Waiting for permission");
+  // ⚠ A payload-less gate is NOT an outbound one — it keeps the line rather than
+  // going silent on a shape this branch does not recognise.
+  assert.equal(m.entryFor({ type: "permission_request" }, NOW).text, "Waiting for permission");
+});
+
 test("KINDS: the RAW tool name rides, because the RENDERER shortens it", () => {
   // ⚠ ONE shortener, at render, shared with the pill's `detail` — two would name the same
   // call two different ways on one screen (F-139's rule about the client's server segment).

@@ -14,46 +14,18 @@ import type {
   MessageIntent,
   ThreadMode,
 } from "./types";
-
-/**
- * Removed multiplayer params (`docs/CHANNELS-ROLLBACK-PLAN.md` §1).
- *
- * ⚠ `z.never()`, not deletion: zod STRIPS unknown keys, so a plain delete makes
- * an old client's `to_agent` post succeed and address nobody — the invisible
- * delivery failure the addressing contract exists to prevent. Present → 400
- * naming the replacement; absent → field never appears.
- *
- * Delete once no build in the field still sends them.
- */
-function removedParam(message: string) {
-  return z.never({ error: message }).optional();
-}
-
-const REMOVED_TO_AGENT =
-  "Agent addressing was removed. Address a PERSON with `toUserId`, or leave the message unaddressed.";
-const REMOVED_AUTHOR_AGENT =
-  "Named-agent authorship was removed. A message is its human author's; there is no agent identity to post as.";
-const REMOVED_PARTICIPANTS =
-  "Breakout-room participants were removed. A thread is between its creator and the member in `toUserId`.";
-const REMOVED_THREAD_CLOSE =
-  "Threads no longer close; pause or end the agent instead.";
-
-/**
- * {@link removedParam}, at the OP level: a retired arm of a discriminated union
- * that parses far enough to say what replaced it, then always fails.
- *
- * ⚠ **DELETING THE ARM IS NOT THE SAME THING.** `z.discriminatedUnion` answers
- * an unrecognized discriminator with `invalid_union` / "No matching
- * discriminator", message **"Invalid input"** — so an installed desktop asking
- * to close a thread was told its body was malformed, with no hint that the
- * CONCEPT is gone. The refusal is a `custom` issue at the ROOT path, which
- * `shared/api/parse-json.ts` promotes into `error.message` for a form route and
- * carries in `details` for everyone else. Delete the arm outright once no build
- * in the field still sends the op.
- */
-function removedOp(op: string, message: string) {
-  return z.object({ op: z.literal(op) }).refine(() => false, { error: message });
-}
+// ⚠ THE RETIRED PARAMETERS LIVE IN THEIR OWN MODULE (§1 split, 2026-08-25) —
+// they are the one block here scheduled to STOP existing, and that file carries
+// the delete-me clock. Nothing about their behaviour moved.
+import {
+  REMOVED_AUTHOR_AGENT,
+  REMOVED_PARTICIPANTS,
+  REMOVED_THREAD_CLOSE,
+  REMOVED_TO_AGENT,
+  removedOp,
+  removedParam,
+} from "./schema-removed-params";
+import { ChannelInfoCardSchema } from "./info-card";
 
 /** ⚠ ANNOTATED `z.ZodType<ChannelVisibility>` (2026-08-20) so TS-side drift BREAKS THE
  * BUILD. This set is declared twice — the union in `types.ts` and this enum —
@@ -128,6 +100,14 @@ export type ChannelCreateInput = z.infer<typeof ChannelCreateSchema>;
 /**
  * Update a channel header. `archived` toggles the archive state
  * (stamps / clears `archived_at`). At least one field is required.
+ *
+ * ⚠ `infoCard` IS NOT A HEADER FIELD AND DOES NOT WEAR THE HEADER'S GATE
+ * (2026-08-25). The other four are MANAGE writes — name, topic, who can see the
+ * room, whether it is archived — and `service-writes.ts › updateChannel` keeps
+ * requiring `canManageChannel` for every one of them. The info card is the
+ * channel's own shared scratch surface, so it is gated on MEMBERSHIP instead;
+ * the argument, and why that is not a widening of the header, is in that
+ * function's docblock. The SHAPE is stated once in `./info-card.ts`.
  */
 export const ChannelUpdateSchema = z
   .object({
@@ -135,6 +115,7 @@ export const ChannelUpdateSchema = z
     topic: ChannelTopicSchema.optional(),
     visibility: VisibilitySchema.optional(),
     archived: z.boolean().optional(),
+    infoCard: ChannelInfoCardSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;

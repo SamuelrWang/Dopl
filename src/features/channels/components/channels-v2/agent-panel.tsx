@@ -39,7 +39,7 @@
  *
  * ⚠ AND THE COMPOSER STILL DOES NOT BELONG HERE. The old rule — an inert input
  * looks exactly like every input that does send, so render none — is why this
- * panel shipped without one. It has an "Open agent" button instead, which is an
+ * panel shipped without one. It has an "Open window" button instead, which is an
  * affordance that keeps its promise.
  *
  * ⚠ PAUSE / END ARE OWN-AGENTS-ONLY. See `agents-controls.ts › useAgentControls`
@@ -64,7 +64,7 @@ import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import type { ChannelMessage } from "../../types";
+import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 import { IconButton } from "./bits";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
@@ -147,6 +147,9 @@ export function ChannelsV2AgentPanel({
   openAgent,
   sessions,
   messages,
+  pendingPosts,
+  onPostPending,
+  postBusy,
   currentUserId,
   workspaceSlug = "",
   onClose,
@@ -157,6 +160,15 @@ export function ChannelsV2AgentPanel({
   sessions: readonly DesktopSessionSummary[] | null;
   /** The open channel's transcript — the source of the Sent lane. */
   messages: readonly ChannelMessage[];
+  /**
+   * The viewer's PENDING outbound consent rows — what makes a held draft's card
+   * decidable in place (Samuel, 2026-08-25). The host already reads them
+   * (`channel-surface-data.ts › requests`); this panel never fetches.
+   */
+  pendingPosts?: readonly ChannelConsentRequest[];
+  /** Approve one held draft — the host's CAS'd consent mutation. */
+  onPostPending?: (requestId: string) => void;
+  postBusy?: boolean;
   currentUserId: string;
   /** The workspace SEGMENT, for the agent window's router path (2026-08-20).
    *  ⚠ Main holds the workspace UUID and a route needs the slug, so it can only
@@ -198,6 +210,11 @@ export function ChannelsV2AgentPanel({
       aria-label="Agent view"
       inert={!open}
       className={cn(
+        // ⚠ `w-[380px]` IS PAIRED WITH `.channel-info-slide`'s open width
+        // (globals.css + the desktop `kit.css` copy) — Samuel, 2026-08-25. This
+        // panel is absolutely positioned against the SAME right edge as the
+        // info column, so a mismatch makes the divider jump sideways the moment
+        // an agent view opens. **Change one and change the other.**
         "bento absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col rounded-none border-y-0 border-r-0",
         "transition-transform duration-200 ease-out motion-reduce:transition-none",
         open ? "translate-x-0" : "pointer-events-none translate-x-full"
@@ -231,6 +248,14 @@ export function ChannelsV2AgentPanel({
               currentUserId,
               agent.agentId
             )}
+            // ⚠ THE UNFILTERED TRANSCRIPT, BESIDE THE FILTERED ONE (2026-08-25).
+            // `agentSentMessages` requires `metadata.taskId`, which a threadless
+            // post does not carry — so it cannot answer "did this draft land",
+            // and a held card went on saying "Not sent" over a delivered post.
+            delivered={messages}
+            pending={pendingPosts}
+            onPost={onPostPending}
+            postBusy={postBusy}
             threadTitle={agent.threadTitle}
             className="px-3.5"
           />

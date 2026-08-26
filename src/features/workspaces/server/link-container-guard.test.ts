@@ -1,7 +1,13 @@
 /**
- * THE TWO-PERSON MODEL IS SERVER-SIDE — one case per member-ADD path that a
- * `kind='link'` home-channel container must refuse, and one proving a standard
- * workspace is untouched by the same code.
+ * THE CAP IS SERVER-SIDE — one case per WORKSPACE-level member-ADD path that a
+ * `kind='link'` home-channel container must refuse, one proving a standard
+ * workspace is untouched by the same code, and one proving the ONE admitted add
+ * (the bound claim) deliberately does NOT come through here.
+ *
+ * ⚠ `LINK_CONTAINER_CLOSED`, renamed from `LINK_CONTAINER_IMMUTABLE` on
+ * 2026-08-25: a container's roster DOES change now — it gains its second member
+ * on a bound claim — so "immutable" was a false name for a rule that is really
+ * "closed to every path but one".
  *
  * ⚠ `authz.ts` is NOT mocked: the guard under test lives there, and mocking it
  * would assert only that these files call a name. The repository is, so `kind`
@@ -12,6 +18,8 @@
  * never take a member at any price.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { HttpError } from "@/shared/lib/http-error";
 import type { Workspace, WorkspaceKind } from "../types";
@@ -149,18 +157,47 @@ describe("member-add paths refuse a kind='link' container", () => {
       resolveJoinRequest(WS, CALLER, "req-1", { kind: "approve", role: "member" })],
   ];
 
-  it.each(paths)("%s → 403 LINK_CONTAINER_IMMUTABLE", async (_name, run) => {
+  it.each(paths)("%s → 403 LINK_CONTAINER_CLOSED", async (_name, run) => {
     primeWorkspace("link");
     // `requestJoin` enters through the link row, not the workspace id.
     answers["workspace_join_links"] = { workspace_id: WS, created_by: null };
 
     const err = await refusal(run);
     expect(err.status).toBe(403);
-    expect(err.code).toBe("LINK_CONTAINER_IMMUTABLE");
+    expect(err.code).toBe("LINK_CONTAINER_CLOSED");
     // Before the seat gate: a container is refused on principle, not on price.
     expect(assertCanAddMember).not.toHaveBeenCalled();
   });
 
+});
+
+describe("the BOUND CLAIM is the one admitted add, and it bypasses this guard", () => {
+  /**
+   * ⚠ THE ASSERTION IS AN ABSENCE, and it is the point of the whole rename.
+   * `claimBoundLink` writes the member row itself, having proved possession of a
+   * single-use token bound to that exact container — so it must NOT call
+   * `assertMemberAddable*`, which would refuse the one add the product exists
+   * to perform. A future "tidy-up" that routes every member write through the
+   * shared guard would silently brick Add-person, and this reads the SOURCE
+   * because a mock could not tell the difference.
+   */
+  const CLAIM_SRC = readFileSync(
+    join(import.meta.dirname, "..", "..", "home", "server", "service-claim-bound.ts"),
+    "utf8"
+  );
+
+  it("does not route through assertMemberAddable / assertMemberAddableById", () => {
+    expect(CLAIM_SRC).not.toMatch(/assertMemberAddable/);
+    // It really is the module that adds the member — otherwise the absence above
+    // would be measuring a file that does nothing.
+    expect(CLAIM_SRC).toMatch(/insertContainerMember/);
+  });
+
+  it("leans on the DATABASE for the cap instead", () => {
+    // The guard it skips is a service-layer refusal; the fence it cannot skip is
+    // the trigger, so the module has to handle that RAISE.
+    expect(CLAIM_SRC).toMatch(/LINK_CONTAINER_FULL/);
+  });
 });
 
 describe("standard workspaces are unaffected", () => {

@@ -281,6 +281,42 @@ async function resumeAfterSignIn(s) {
 
 // ─── END SESSION-AUTH-HOLD ───────────────────────────────────────────────────
 
+// ─── BEGIN AUTH-RESUME-FAN-OUT (injectable; unit-tested via source extraction) ─
+// EVERY SESSION THIS MAC IS HOLDING, RELEASED ONCE — the fan-out half of the in-app sign-in
+// (`main/claude-signin-op.js`, its ONE caller). The per-session behaviour is `resumeAfterSignIn`
+// above and is UNCHANGED; this only decides WHICH sessions get one.
+//
+// ⚠ IT SITS OUTSIDE THE BLOCK ABOVE ON PURPOSE. That block is sliced and evaluated with a fixed
+// injection set (`test/_auth-hold-harness.mjs`) that hands it no registry; this reads
+// `deps.sessions` — bound by the engine at load since Q6 and, until this wire landed, never used
+// here. Its own sentinels, so it is drivable on the same terms without widening that harness.
+//
+// ⚠ IT DOES NOT PROBE. The credential question is answered ONCE by the caller before it gets
+// here; a per-session re-probe is five filesystem reads for one decision and can disagree with
+// itself mid-loop.
+// ⚠ THE LIST IS TAKEN FIRST, then walked. `resumeAfterSignIn` mutates the sessions it releases
+// (and `steer` can wake one), and iterating the live Map while that happens is how a held
+// session comes to be skipped.
+// ⚠ SEQUENTIAL, AND EACH ONE IS CAUGHT ALONE. A resume awaits `getSdk()` and starts a query; one
+// machine-level failure must not strand the sessions queued behind it in the hold forever.
+async function resumeHeldSessions() {
+  const registry = deps && deps.sessions;
+  if (!registry) return 0;
+  const held = [];
+  for (const s of registry.values()) {
+    if (s && !s.settled && s.authHold) held.push(s);
+  }
+  for (const s of held) {
+    try {
+      await resumeAfterSignIn(s);
+    } catch (err) {
+      diag('session-auth: resume after sign-in failed', err && err.message);
+    }
+  }
+  return held.length;
+}
+// ─── END AUTH-RESUME-FAN-OUT ─────────────────────────────────────────────────
+
 module.exports = {
   bind,
   credentialState,
@@ -290,4 +326,5 @@ module.exports = {
   holdIfAuthFailure,
   holdIfAuthMessage,
   resumeAfterSignIn, // H1: exported for the idempotency test
+  resumeHeldSessions, // the in-app sign-in's fan-out (main/claude-signin-op.js)
 };

@@ -1,17 +1,20 @@
 import "server-only";
-import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import {
-  CHANNEL_LINK_COLS,
-  LINK_CONTAINER_COLS,
-  type ChannelLinkRow,
-  type LinkContainerRow,
-} from "./dto";
+import { CHANNEL_LINK_COLS, type ChannelLinkRow } from "./dto";
 
 /**
- * Data access for home channels: the link table, and the `kind='link'`
- * container workspaces a claim mints. Every read selects COLUMNS and carries a
- * limit (§9); nothing here authorizes anything.
+ * Data access for the LINK half of home channels: `channel_links` and
+ * `channel_link_claims`. Every read selects COLUMNS and carries a limit (§9);
+ * nothing here authorizes anything.
+ *
+ * ⚠ THE CONTAINER HALF LIVES IN `repository-containers.ts` and is RE-EXPORTED
+ * from the bottom of this file (2026-08-24). The split is one file per reason to
+ * change (INVARIANTS §1); the re-export is why `import * as repo from
+ * "./repository"` and the suites' `vi.mock("./repository")` did not have to move.
+ *
+ * ⚠ `workspace_id` IS THE INVERSION, in one column: NULL = a legacy UNBOUND
+ * link whose claim mints its own container, non-NULL = a BOUND link whose claim
+ * joins the container it names (migration 20260824120000).
  */
 
 /* ------------------------------- links -------------------------------- */
@@ -22,6 +25,8 @@ export async function insertLink(args: {
   label: string | null;
   expiresAt: string | null;
   maxUses: number | null;
+  /** null = legacy UNBOUND link. Non-null binds the claim to that container. */
+  workspaceId: string | null;
 }): Promise<ChannelLinkRow> {
   const { data, error } = await supabaseAdmin()
     .from("channel_links")
@@ -31,6 +36,7 @@ export async function insertLink(args: {
       label: args.label,
       expires_at: args.expiresAt,
       max_uses: args.maxUses,
+      workspace_id: args.workspaceId,
     })
     .select(CHANNEL_LINK_COLS)
     .single();
@@ -38,8 +44,15 @@ export async function insertLink(args: {
   return data as ChannelLinkRow;
 }
 
-/** The caller's un-revoked links, newest first. Expiry/exhaustion are judged in
- *  the service, by the same predicate the claim path uses. */
+/**
+ * The caller's un-revoked UNBOUND links, newest first. Expiry/exhaustion are
+ * judged in the service, by the same predicate the claim path uses.
+ *
+ * ⚠ `workspace_id IS NULL` IS IN THE QUERY, NOT ABOVE IT. Bound links are
+ * rendered as a chip ON their channel's row, never as a list row of their own —
+ * and this read carries a ceiling, so filtering after it would drop unbound
+ * links that sit past the cap behind bound ones (the shape F-298 already names).
+ */
 export async function listLinksByCreator(
   creatorUserId: string,
   limit: number
@@ -48,11 +61,64 @@ export async function listLinksByCreator(
     .from("channel_links")
     .select(CHANNEL_LINK_COLS)
     .eq("creator_user_id", creatorUserId)
+    .is("workspace_id", null)
     .is("revoked_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as ChannelLinkRow[];
+}
+
+/**
+ * The container's one open link, if it has one.
+ *
+ * ⚠ THE PREDICATE MATCHES `channel_links_one_open_per_workspace` EXACTLY —
+ * `workspace_id = $1 AND revoked_at IS NULL`, and nothing else. The service
+ * reads this first and, on a 23505 from a concurrent mint, reads it AGAIN to
+ * find the winner; a narrower predicate here would make that second read come
+ * back empty and turn a converged race into a 500.
+ */
+export async function findOpenLinkForWorkspace(
+  workspaceId: string
+): Promise<ChannelLinkRow | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("channel_links")
+    .select(CHANNEL_LINK_COLS)
+    .eq("workspace_id", workspaceId)
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChannelLinkRow | null) ?? null;
+}
+
+/**
+ * `workspaceId` → its open bound link. THE CHIP READ: one bounded query for a
+ * whole page of channels, folded into the existing peers+channels tier so the
+ * home payload does not grow a round trip.
+ *
+ * Backed by `channel_links_workspace_idx` (20260824120000). At most one row per
+ * workspace exists by unique index, so `limit` is a safety ceiling rather than a
+ * page — the first row per workspace wins, like every other map read here.
+ */
+export async function listLinksByWorkspaces(
+  workspaceIds: string[],
+  limit: number
+): Promise<Map<string, ChannelLinkRow>> {
+  const out = new Map<string, ChannelLinkRow>();
+  if (workspaceIds.length === 0) return out;
+  const { data, error } = await supabaseAdmin()
+    .from("channel_links")
+    .select(CHANNEL_LINK_COLS)
+    .in("workspace_id", workspaceIds)
+    .is("revoked_at", null)
+    .limit(limit);
+  if (error) throw error;
+  for (const row of (data ?? []) as ChannelLinkRow[]) {
+    if (row.workspace_id && !out.has(row.workspace_id)) {
+      out.set(row.workspace_id, row);
+    }
+  }
+  return out;
 }
 
 export async function findLinkByToken(
@@ -135,233 +201,10 @@ export async function insertClaim(args: {
 
 /* ----------------------------- containers ----------------------------- */
 
-/** The caller's link containers, newest first. */
-export async function listLinkContainers(
-  userId: string,
-  limit: number
-): Promise<LinkContainerRow[]> {
-  const { data, error } = await supabaseAdmin()
-    .from("workspace_members")
-    .select(`workspace:workspaces!inner(${LINK_CONTAINER_COLS}, kind)`)
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .eq("workspace.kind", "link")
-    .limit(limit);
-  if (error) throw error;
-  // ⚠ Sorted here, not in the query: ordering an EMBEDDED column is the one
-  // thing `listWorkspacesForUser` also does client-side, and the ceiling is a
-  // safety limit rather than a page.
-  return flattenWorkspaces(data).sort((a, b) =>
-    a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0
-  );
-}
-
 /**
- * The pair's existing container, if any.
- *
- * ⚠ ONE query with BOTH memberships joined in, never a dedup over the listed
- * page: `listLinkContainers` is capped, so intersecting its results would miss
- * a pair whose container sits past the cap and mint a SECOND container for a
- * pair that already has one. Two aliased `!inner` embeds of the same table AND
- * together, so the filter is "A is a member and B is a member" evaluated in the
- * database over every row.
- *
- * A link container always has exactly two members, so that IS "members are
- * exactly {A, B}". `.limit(1)` keeps it bounded — a pair has at most one.
+ * ⚠ RE-EXPORT, NOT A RE-IMPLEMENTATION. `repository-containers.ts` owns these;
+ * this line is what keeps `repo.listLinkContainers(...)` resolving for every
+ * existing caller and every `vi.mock("./repository")` factory after the split.
+ * Import from either module — they are the same bindings.
  */
-export async function findPairContainer(
-  userIdA: string,
-  userIdB: string
-): Promise<LinkContainerRow | null> {
-  const { data, error } = await supabaseAdmin()
-    .from("workspaces")
-    .select(
-      `${LINK_CONTAINER_COLS}, a:workspace_members!inner(user_id), b:workspace_members!inner(user_id)`
-    )
-    .eq("kind", "link")
-    .eq("a.user_id", userIdA)
-    .eq("a.status", "active")
-    .eq("b.user_id", userIdB)
-    .eq("b.status", "active")
-    .limit(1);
-  if (error) throw error;
-  const row = (data ?? [])[0] as (LinkContainerRow & Record<string, unknown>) | undefined;
-  if (!row) return null;
-  return {
-    id: row.id,
-    slug: row.slug,
-    public_id: row.public_id,
-    created_at: row.created_at,
-  };
-}
-
-/**
- * Mint the container. Creator owns it (and the workspace row's `owner_id`);
- * the claimer joins as `admin` so neither side is a guest in their own
- * relationship, and only the creator can delete it.
- *
- * ⚠ Rolls the workspace back if either member insert fails, exactly as
- * `workspaces/server/repository.ts › insertWorkspaceWithOwnerMembership` does —
- * an orphan container is unreachable and invisible, so nothing would ever find
- * it to clean it up.
- */
-export async function insertLinkContainer(args: {
-  creatorUserId: string;
-  claimerUserId: string;
-  name: string;
-  slug: string;
-}): Promise<LinkContainerRow> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workspaces")
-    .insert({
-      owner_id: args.creatorUserId,
-      name: args.name,
-      slug: args.slug,
-      public_id: generatePublicId(),
-      kind: "link",
-    })
-    .select(LINK_CONTAINER_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to create container");
-  const container = data as LinkContainerRow;
-
-  const joinedAt = new Date().toISOString();
-  const { error: memberError } = await db.from("workspace_members").insert([
-    {
-      workspace_id: container.id,
-      user_id: args.creatorUserId,
-      role: "owner",
-      status: "active",
-      joined_at: joinedAt,
-    },
-    {
-      workspace_id: container.id,
-      user_id: args.claimerUserId,
-      role: "admin",
-      status: "active",
-      invited_by: args.creatorUserId,
-      invited_at: joinedAt,
-      joined_at: joinedAt,
-    },
-  ]);
-  if (memberError) {
-    await db.from("workspaces").delete().eq("id", container.id);
-    throw memberError;
-  }
-  return container;
-}
-
-/** `workspaceId` → the OTHER member's user id. */
-export async function listContainerPeers(
-  workspaceIds: string[],
-  viewerId: string
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (workspaceIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin()
-    .from("workspace_members")
-    .select("workspace_id, user_id")
-    .in("workspace_id", workspaceIds)
-    .neq("user_id", viewerId)
-    .eq("status", "active");
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    workspace_id: string;
-    user_id: string;
-  }>) {
-    if (!out.has(row.workspace_id)) out.set(row.workspace_id, row.user_id);
-  }
-  return out;
-}
-
-/**
- * `workspaceId` → its direct channel id. ⚠ NOT filtered on `deleted_at`: a DM
- * soft-delete is the close half of close/reopen (channels §5), so a hidden
- * channel is still the relationship's channel and the desktop revives it on the
- * next open. Filtering here would drop the whole relationship off the page.
- */
-export async function listContainerDirectChannels(
-  workspaceIds: string[]
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (workspaceIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin()
-    .from("channels")
-    .select("id, workspace_id")
-    .in("workspace_id", workspaceIds)
-    .eq("is_direct", true);
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{ id: string; workspace_id: string }>) {
-    if (!out.has(row.workspace_id)) out.set(row.workspace_id, row.id);
-  }
-  return out;
-}
-
-export interface LastMessage {
-  at: string;
-  body: string;
-}
-
-/**
- * `channelId` → its newest message. Two reads: the bounded
- * `channels_last_message` RPC picks the winning `seq` per channel (it is
- * workspace-agnostic and service-role only), then ONE bounded read over the
- * (channel, seq) CROSS PRODUCT, keyed back down here — a preview must not cost
- * a transcript scan. ⚠ The `.in(channel).in(seq)` pair over-fetches on purpose:
- * PostgREST has no row-tuple filter, so the query asks for every combination
- * and `byPair` discards the ones that were not asked for.
- */
-export async function listLastMessages(
-  channelIds: string[]
-): Promise<Map<string, LastMessage>> {
-  const out = new Map<string, LastMessage>();
-  if (channelIds.length === 0) return out;
-  const db = supabaseAdmin();
-  const { data, error } = await db.rpc("channels_last_message", {
-    p_channel_ids: channelIds,
-  });
-  if (error) throw error;
-  const heads = (data ?? []) as Array<{
-    channel_id: string;
-    last_seq: number;
-    last_at: string;
-  }>;
-  if (heads.length === 0) return out;
-
-  const { data: bodies, error: bodyError } = await db
-    .from("channel_messages")
-    .select("channel_id, seq, body")
-    .in("channel_id", heads.map((h) => h.channel_id))
-    .in("seq", heads.map((h) => h.last_seq));
-  if (bodyError) throw bodyError;
-
-  const byPair = new Map<string, string>();
-  for (const row of (bodies ?? []) as Array<{
-    channel_id: string;
-    seq: number;
-    body: string;
-  }>) {
-    byPair.set(`${row.channel_id}:${row.seq}`, row.body);
-  }
-  for (const head of heads) {
-    out.set(head.channel_id, {
-      at: head.last_at,
-      body: byPair.get(`${head.channel_id}:${head.last_seq}`) ?? "",
-    });
-  }
-  return out;
-}
-
-/** ⚠ Supabase types a 1:1 embed as an array; flatten through `unknown`. */
-function flattenWorkspaces(data: unknown): LinkContainerRow[] {
-  const rows = (data ?? []) as Array<{
-    workspace: LinkContainerRow | LinkContainerRow[] | null;
-  }>;
-  const out: LinkContainerRow[] = [];
-  for (const row of rows) {
-    const ws = Array.isArray(row.workspace) ? row.workspace[0] : row.workspace;
-    if (ws) out.push(ws);
-  }
-  return out;
-}
+export * from "./repository-containers";

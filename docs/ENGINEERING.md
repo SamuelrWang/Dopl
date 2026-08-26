@@ -3061,6 +3061,34 @@ window's.
    fail-closed guard is a good default and a terrible diagnostic: when a wiring bug and a correct
    refusal produce the same value, only a test that drives the WIRING can tell them apart.**
 
+## 2026-08-22 — What an ended agent leaves behind: three rules, in order
+
+Moved out of `dopl-desktop-app/main/session-summary.js` on 2026-08-25, when that file hit the
+§2 cap and the rule it states became the only part worth keeping in the source. The CURRENT
+rule is in that file and in INVARIANTS §12; this is what it replaced and why.
+
+1. **A pill survives exactly as long as its WINDOW does.** `settle` destroyed the window on
+   every end but ABANDONMENT, so the abandoned session was the only one with anything left to
+   open and the only one whose pill stayed.
+2. **That predicate quietly stopped answering.** Every session went windowless with the F-228
+   retirement, so `s.win` was null on all of them and the check answered FALSE for every end:
+   nothing was ever retained, and an agent that finished left the Agents tab instantly with no
+   record it had run (F-234). The rule was still written for exactly the case it had stopped
+   covering — "an end nobody watched happen must not make a run vanish".
+3. **So retention was made unconditional, bounded by a COUNT** (`MAX_ENDED`, 12). A time bound
+   was refused at the time, and the reasoning was sound while the set lived in memory: the
+   question the window check had answered ("did anything ever have this on screen") has no
+   answer without a window, and a TTL would have invented one.
+
+**Samuel ruled the time bound in on 2026-08-22, which supersedes both halves.** Once the history
+is on DISK (`agent-history.js`) it can be swept on the clock, which is what "the window stays
+viewable for a week" actually asks for — so the bound is seven days from `endedAt`, every end is
+retained, and `MAX_ENDED` / `endedKept` are deleted. The count bound was the honest answer to a
+question the durable store no longer asks.
+
+⚠ A retained pill is a TOMBSTONE, not a handle — that part is unchanged and is stated where it
+binds, in `session-summary.js`.
+
 ## 2026-08-22 — Inbound consent is retired, and two parsers stop disagreeing
 
 Samuel's post-incident rulings, after a four-agent investigation of a live multiplayer test.
@@ -3294,3 +3322,327 @@ and a pinned host has no tree — so it did not move into the shared hook. It ar
 host leaves unset. **The rule the seam encodes: a doorbell's SHARED consequences go in the shared
 hook; a doorbell's host-specific consequences arrive as a prop.** Splitting on "what is on screen"
 instead would have put the coordinator on the wrong side of the line.
+
+---
+
+## 2026-08-24 — The channel-first inversion, and the field that was deleted rather than defaulted
+
+Samuel's ruling, one day after the home-channels wave shipped. Current state is INVARIANTS §4A, §9
+and §12; what is here is only the argument.
+
+### What inverted, and why the day-old design was wrong
+
+The 2026-08-23 model had one entry point: mint a link, wait for somebody to claim it, and the CLAIM
+minted the container plus a direct channel. Two people were required for anything to exist at all.
+
+**The thing that broke it is that a home channel's first user is an AGENT, not a person.** The account
+surface is where the operator's own agents work — that is the point of it being account-level rather
+than inside a workspace — and under the old model there was nowhere to put one until a second HUMAN
+had accepted an invitation. The product's primary use had a stranger as a precondition.
+
+So creation and company were separated: **"New channel" mints a SOLO container** (one member, one
+private NON-DIRECT channel), and adding a person is a later, optional act — a link **bound** to a
+container that already exists. Three consequences fell out of that and each is a rule now:
+
+1. **The channel cannot be `direct: true`.** A direct channel is keyed on a peer, and `createDirectChannel`
+   refuses a self-target outright. Private-and-non-direct is what "a channel of one" spells.
+2. **`peer` became nullable, and a peer-less container stopped being a defect.** The old
+   `hydrateRelationships` dropped a container missing EITHER its peer or its channel; the new
+   `hydrateChannels` drops only the channel case. **The distinction is which absence is a finished
+   state**: no channel means nothing to open (the bug the create/claim rollbacks exist to prevent), no
+   peer means nobody has arrived yet (the normal first day of every channel).
+3. **A pending invitation became a STATE, not a row.** With a container to hang off, the open link is
+   `HomeChannel.linkOut` — a chip on the channel's own row. It stays a row only in the legacy unbound
+   case, which has no channel to hang off. Two lists would show one invitation twice.
+
+### Why the legacy unbound branch was KEPT, at ~25 lines of cost
+
+Because the measurement said so. Against the live project on 2026-08-24: `channel_links` held 2 rows,
+both open and claimable, both `workspace_id IS NULL`, with 0 claims. **Those URLs are in somebody's
+chat history**, and a claim that 500s is a worse outcome than a branch that is one day obsolete. So
+NULL keeps its old meaning — mint a container — and non-NULL means join the named one. One column,
+two branches, and nothing can produce another unbound link because the mint schema now requires a
+`workspaceId`.
+
+### Why `maxUses` was DELETED and not defaulted
+
+This field had a story worth keeping, which is exactly why deleting it needed one.
+
+`HomeLinkMintSchema.maxUses` was `.nullable().default(1)` rather than `.nullish()`, because **absent
+and null had to mean different things**: absent = "the caller said nothing", taking the safe
+single-use default; an explicit `null` = "multi-use, I meant it". Folding the two together made an
+omitted field mint a link anybody could keep claiming — a forwarded URL handed the relationship to
+everybody who ever saw it, silently, while the desktop's own picker still read "Single use". The
+distinction bought a whole test file.
+
+The inversion did not weaken that argument; it made the question unaskable. **A bound link fills the
+container's ONE free seat**, so a second use has nowhere to go — the cap answers what the field was
+asking. The service pins `maxUses: 1` by construction and the field is gone from the schema, so a
+client cannot ask for otherwise and the absent-vs-null trap cannot be re-entered.
+
+**The general rule: when a constraint moves into the data model, the option that used to express it
+should be DELETED, not defaulted.** A defaulted option is a control that appears to do something.
+
+### Why the cap is a trigger and the convergence is an index
+
+Both are the same argument twice: a service-layer check is a TOCTOU under concurrency.
+
+- **Two claims of two different bound links for one container** each read "one member" and both insert.
+  `enforce_link_container_member_cap` takes `FOR UPDATE` on the parent `workspaces` row before counting
+  — the same serialization point, and the same lock-ordering reasoning, as `enforce_last_active_owner`
+  (20260720184806). The service pre-check survives, but only for the ERROR MESSAGE; the trigger is the
+  guarantee.
+- **Two "Add person" presses** produce two live tokens for one seat, and whichever is claimed second is
+  refused a link the app handed out. `channel_links_one_open_per_workspace` makes the loser 23505 and
+  re-read the winner's row — the `getOrCreateJoinLink` pattern, which is also why an existing open link
+  is RETURNED rather than rotated: rotating kills a URL already pasted into an email.
+
+### Why `POST /api/home/channels` is not `sessionOnly` and `POST /api/home/links` is
+
+The two routes look like the same class and are not. Creating a container mints nothing that reaches
+another human — it is a place for the caller's own agents, which is the case for letting an agent
+token create one, matching `POST /api/workspaces`. Minting the link is the opposite: the artifact IS
+an account-entry credential aimed at a person. **The line is not "is it a write", it is "does the
+output reach somebody else".**
+
+And any MEMBER may mint it, not the owner only: a home channel is a relationship, not a tenancy, so
+the second person is as entitled to hand it on as the first. **The CAP bounds the outcome, so the ROLE
+does not have to.**
+
+---
+
+## 2026-08-25 — The bound claim, and reversing a one-day-old rule on purpose
+
+Current state is INVARIANTS §4A, §7 and §13; what is here is only the argument.
+
+### Why the two claim branches are two functions
+
+`claimLink` could have taken a flag. It does not, and the reason is not tidiness — it is that the two
+branches have **opposite rollback stories**, and one of them is destructive.
+
+The unbound branch MINTS the container, so `deleteWorkspace` is a legitimate undo: nothing existed
+before this request and nothing survives it. The bound branch is HANDED a container that already holds
+the owner's transcript, so the same undo would let **a stranger's failed claim delete somebody's
+channel**. A single function with a `bound` flag would put both rollbacks behind one signature, and the
+destructive one would be the branch you get by forgetting to check.
+
+So the shared part is exactly what is genuinely shared: the PROLOGUE. Unknown token 404 and dead link
+410 are properties of the *token*, judged once before anything knows which shape this is. Everything
+after depends on `workspace_id`, and lives in its own module. Same argument
+`channels/server/service-await-workspace.ts` makes about the workspace-wide hold — different fences,
+own module — and it is now the second time that reasoning has paid.
+
+### Why the claim writes the workspace row before the channel row
+
+Ordering falls out of what each write means if the next one fails.
+
+Workspace-member-first leaves, on failure, a member of a container who is not in its channel: they see
+a card they cannot open. Channel-first would leave a **channel member who is not a workspace member** —
+which contradicts `addMember`'s own precondition (`isActiveWorkspaceMember`), so the write would be
+refused anyway, and if it somehow were not, it would be a row every workspace-keyed fence in the system
+disagrees about. **Order the writes so the intermediate state is one the fences already understand.**
+
+The compensation goes the other way for the same reason: delete the member row, never the container.
+That asymmetry is F-305, filed rather than hidden — the honest fix is one `SECURITY DEFINER` RPC doing
+all four writes in a statement, the way `consume_channel_link` already does for the use guard.
+
+### Why the context is built for the container OWNER
+
+`addMember` fences on the caller's channel membership. At step 6 the claimer is, by construction, not a
+member of anything yet — a context built for them would be refused by the gate that exists to stop
+exactly this. So the write acts as the OWNER, which is also the truth of what is happening: the owner
+extended an invitation, and the token is the proof it was extended to this person. The unbound branch
+builds the CREATOR's context for the identical reason.
+
+### Why the link is revoked on success
+
+It is single-use and already exhausted, so revoking changes no security property. It changes two other
+things. The chip reads `revoked_at IS NULL`, so an exhausted-but-unrevoked link keeps rendering "invite
+out" over a seat that is filled; and `channel_links_one_open_per_workspace` is partial on the same
+predicate, so leaving it unrevoked **blocks the next invitation** if that member later leaves. The
+revoke is what makes the container reusable.
+
+### Reversing the immutability rule one day after writing it
+
+On 2026-08-23 the rule was: a link container's roster is *"exactly the pair the claim minted,
+forever"*, refused as `LINK_CONTAINER_IMMUTABLE`. On 2026-08-24 the inversion made a container start
+with ONE member. The rule was not weakened — **its premise was deleted**. "Immutable" was shorthand for
+*the roster is complete at birth*, which was true only while the sole way to get a container was a
+two-person claim.
+
+What was worth keeping is the HARM, not the RULE. The harm is a third party reading a private
+transcript; "frozen" was one way to prevent it, and a **cap** is another that also permits the product.
+So the guard became at-most-two rather than never-any, every workspace-level path keeps its refusal,
+and one path is admitted: the bound claim, which carries a single-use token bound to that exact
+container.
+
+**The rename is the reversal made visible.** `LINK_CONTAINER_CLOSED` says what is true — closed to
+every path but one — where `LINK_CONTAINER_IMMUTABLE` asserted a property the code no longer has. A
+stale name is worse than a missing one: it is read with confidence.
+
+Two things guard the bypass from being "tidied up". The DATABASE holds the cap now
+(`enforce_link_container_member_cap`), so an admitted path cannot exceed it either — the service checks
+are a friendlier sentence in front of a real fence. And the bypass is pinned as an **absence**:
+`link-container-guard.test.ts` reads the claim module's source and asserts it names no
+`assertMemberAddable`, because a future refactor routing every member write through the shared guard
+would silently brick Add-person and no mock could tell the difference.
+
+### The force-update that could not be armed from the repo
+
+`/api/home/relationships` was deleted, so old desktop builds render a broken home page, and Samuel
+ruled force-update. The obvious move — bump the minimum version — **does nothing**, and finding out why
+is worth writing down.
+
+`main/version-gate.js` holds no minimum at all; it is the imperative shell and obeys whatever
+`/api/version` returns. The floor lives server-side, and `resolveDesktopFloor` carries an **anti-brick
+clamp**: a floor above the newest PUBLISHED build is refused and *no floor at all* is served. So
+committing a floor for an unreleased version does not gate anybody — **it silently disarms the gate**,
+which is strictly worse than leaving it alone, because it looks done.
+
+**A forced upgrade is therefore a deploy step, not a code change**: publish the release, confirm the
+feed serves it, then raise the floor (env var, or both code defaults together in the release commit).
+The clamp is not in the way of the feature — it is the feature, working. The general rule:
+**when a guard refuses your change, check whether it is refusing the change or refusing the ORDER.**
+
+---
+
+## 2026-08-25 — The info card: a display preference that had to be a column, and a gate that moved DOWN one level
+
+Samuel's ruling on /home's Info tab was small on its face — put a hover-only × on each Main-info row,
+and a discreet way to add a custom `label: value` row — and every interesting decision in it was
+about where the answer LIVES.
+
+### Why the removal is not a delete
+
+The first thing to settle was what an × on the Email row MEANS. It cannot mean "clear this person's
+email": the address is on their profile, on the roster, and in the card's own header subline two
+inches above the row being removed. So the stored fact is `hidden: ["email"]` — a list of built-in
+rows the CARD stopped showing — and the type carries that sentence in its docblock, because the
+tempting future refactor is exactly the wrong one. A reader who "finishes the job" by nulling
+something turns a display preference into data loss on somebody else's record.
+
+The same reasoning made `hidden` a **closed set** rather than free strings. An open one becomes a
+junk drawer that outlives the rows it names, and nothing ever tells you a key went dead. Adding a
+built-in row is now an edit in two places — the renderer and `info-card.ts` — which is the point: a
+row with no key cannot be removed, and a key with no row is dead weight you can see.
+
+### Why a column on the hottest table in the schema
+
+The obvious objections to `channels.info_card` are both real. `repository.ts › listChannels` reads
+that table with `select("*")` (INVARIANTS §9's known non-conformer), and `› touchChannel` UPDATEs it
+on **every message post**, so an unbounded JSONB there would make a list read scale with the size of
+a workspace and widen the WAL new-tuple image of the hottest write we have.
+
+A side table answers both and costs a second read, a second write lane, a second RLS statement and a
+second fence — for a field that is 1:1 with a row already in hand on every path that needs it. The
+cheaper answer was to remove the premise: `channels_info_card_check` bounds the column at **4 KiB**
+and a JSON object, and the application caps (12 rows × 40/200 chars) sit far inside that. The
+constraint is not decoration; it is the argument for the column's location, written where the
+database can enforce it.
+
+That leaves the classic three-statements problem — TypeScript caps, a zod schema, and a SQL CHECK no
+TypeScript can reach. `info-card.test.ts` computes the largest card the schema will accept and holds
+its byte length against the floor, so widening a cap past the constraint goes red in the suite
+instead of arriving as an opaque 500 in production.
+
+### The gate moved down a level, and that is the part to remember
+
+`PATCH /api/channels/[channelId]` already had a field-level rule: `SESSION_ONLY_FIELDS = ["visibility"]`,
+which asks *may an OAUTH TOKEN do this at all*. The info card needed a different question — *may this
+MEMBER do this* — and the two are orthogonal. Caller-type belongs in the route, where the token is;
+role belongs in the service, where membership is. They are now in those two places and INVARIANTS §3
+says so, because reading them as one rule is how a future field gets the wrong one.
+
+Making the card member-writable rather than owner-writable was not a convenience call. It follows
+§4A's ruling verbatim: a home channel is *"a relationship, not a tenancy"*, which is why ANY member
+of a container may mint its link rather than the owner only. A peer who cannot correct their own
+phone number on a card about them is the failure that ruling exists to prevent.
+
+What makes it safe to loosen is the DIRECTION of the derivation. The loose set is computed by
+SUBTRACTION from `MANAGED_CHANNEL_FIELDS`, so a fifth field added to `ChannelUpdateSchema` is
+manage-gated by default and a future loose one is a conscious edit to a named constant. A mixed
+patch takes the stricter gate — a member cannot smuggle a rename in beside a card — and that case is
+the one the suite drives hardest, because it is the one a "simplification" would break silently.
+
+### The slot became a function because the card learned to write
+
+`ChannelSurfaceSlots.infoTab` was a `ReactNode`, and that was fine while the person card only read.
+The moment it wrote, it needed the surface's `useRefetchGate` gate — INVARIANTS §7/§8 allow exactly
+one per live surface — and a finished node cannot be handed one. A slot that minted its own would
+coordinate with nothing: the realtime doorbell's refetch lands mid-write and repaints the row the
+operator just deleted, which is a bug that looks like a flaky UI and is actually an architecture
+rule being ignored. The test pins the gate's **identity**, not its shape, because a shape assertion
+passes against exactly the gate that must not exist.
+
+### What was NOT copied, and why that is the finding
+
+The workspace channels page has a section titled "Thread activity". It is twenty-four coloured
+squares from `fixtures.ts`, marked hardcoded at its render site since 2026-08-18 for a good reason:
+`channel_tasks_activity` carries one timestamp per thread, not a histogram, and zeros would assert
+quiet weeks nobody measured. "Bring that UI over" therefore had two readings, and the fixture
+reading would have put invented density about a real relationship on the operator's own surface.
+
+/home rendered a plain thread list instead — and **Samuel sent it back the same day.** The ruling was
+never "pick the honest one of the two things on screen"; it was keep the PICTURE and make it true.
+
+That correction is the more useful entry, because the first pass had reasoned its way to a defensible
+wrong answer. *"HARDCODED — no backing data yet"* was written on 2026-08-18 and was true then. Nobody
+had re-asked it since, and by 2026-08-25 it was cheap to falsify: `channel_messages` carries
+`channel_id`, `service-overview.ts` already counted one bin per UTC day, and the whole gap was a
+narrowing query parameter. **A "no data yet" marker is a claim with a shelf life. It ages into a
+reason not to look.**
+
+Two things fell out of wiring it that were not obvious going in. First, `channelId` on that route is a
+**fence, not a filter**: those counts run as service role, so RLS is not a backstop, and workspace
+membership does not make you a reader of every private channel in the workspace — unfenced, the route
+reports day by day how busy a room you cannot open was. It answers 404 rather than 403, so a private
+channel's existence is not confirmed either. Second, `metric=mcp` had to be **refused** rather than
+answered: `mcp_tool_calls` has no channel column, and a workspace-wide number under a channel-scoped
+label is the same fabrication in a subtler costume than the fixture was.
+
+And the quantiser turned out to carry the honesty, not the data source. A bare row of squares has no
+axis and no legend, so it means whatever its ramp means: relative to the busiest day in the window
+(there is no workspace-independent "busy" — four messages is a lot for a two-person relationship), a
+measured zero drawn as an EMPTY WELL rather than the palest green (the palest green and "nothing
+happened" must not be the same pixel), one message never rounding down into that well, and nothing at
+all rendered while the read is in flight — because an empty well is a *measured* zero, so a full row
+of them during loading states a month of quiet nobody counted.
+
+What is left is one surface: the channels page still maps the fixture, because wiring it costs 31
+counted bins on **every channel selection** in a workspace rather than on a home channel opened
+deliberately. That is a cost decision for Samuel, filed as **F-316**, and the squares are shared
+already so the two cannot drift on anything but their numbers.
+
+### The roster, and why "reuse it" has to mean the object and not the idea
+
+The same round produced a second correction with the same root: *"I don't know why you're making it
+different."* /home's Members section had a smaller avatar, no email subline and its own row height —
+not because anybody chose those, but because `MemberRow` was module-private in `info-tab.tsx` and
+writing a local one looked cheaper than exporting it. It is never cheaper. A roster is one object,
+and two of them drift on exactly the axes a reviewer notices first.
+
+The fix exported the **partition along with the row**. Reusing only `MemberRow` would have left the
+two surfaces free to disagree about ORDER — online first, then an `Offline` rule — which is the half
+a reader actually reads, and the half a second implementation gets wrong silently. The move was kept
+pure on purpose, down to preserving an `Offline` heading condition that looks odd on a two-person
+container: a tidy-up during a move is how a move becomes a redesign nobody reviewed.
+
+Two things did NOT come across, and the reason is the same rule pointing the other way. The channels
+page's Members heading carries `Add member` and `Filter members` icon buttons with **no `onClick`**.
+Copying a dead control onto a second surface does not match the page; it doubles the dead control —
+and on a link container "add member" names an operation the two-member cap forbids outright.
+
+### The field that was absent from a cache nobody had upgraded
+
+The info card also produced the wave's one genuine crash risk, and it is worth stating as a standing
+rule because nothing lints it. The query cache is IndexedDB-persisted with a 24h `gcTime`, so the
+first paint after an update reads rows written by the **previous bundle** — which have no `infoCard`
+key at all. `channel.infoCard.hidden` throws, and the pane goes blank for a field that is decoration
+over facts still on screen. The wire type is non-optional and correct; the cache is a different
+moment, and the type has nothing to say about it.
+
+The fix is `?? EMPTY_INFO_CARD` **at the read**, spelled inline. An accessor function stood there for
+one round and was deleted: the wire type is non-optional, so the helper is the only place the
+optionality is visible, and a rule that lives inside a function nobody has to call is a rule the next
+read forgets. The test is a fixture with the key **deleted** — not `null`, not `{}`, both of which
+pass a `??` while proving nothing about the shape that actually ships.

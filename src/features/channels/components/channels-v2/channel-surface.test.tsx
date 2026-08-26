@@ -182,11 +182,36 @@ describe("StandaloneChannelSurface — the host's two knobs", () => {
   });
 
   it("REPLACES the Info tab's body with the slot, keeping the tab row", () => {
-    mount({ slots: { infoTab: <p>Diana Taylor, since March</p> } });
+    mount({ slots: { infoTab: () => <p>Diana Taylor, since March</p> } });
     expect(screen.getByText("Diana Taylor, since March")).toBeTruthy();
     // The channel's own body is GONE, not merely pushed below the card.
     expect(screen.queryByText("Main info")).toBeNull();
     expect(screen.getByRole("tab", { name: /^Info/ })).toBeTruthy();
+  });
+
+  // ⚠ THE SLOT IS HANDED **THIS SURFACE'S** GATE, never left to mint one
+  // (2026-08-25). The person card writes — removable Main-info rows — and
+  // INVARIANTS §7/§8 allow one `useRefetchGate` per live surface; a second one
+  // coordinates with nothing, so the doorbell's refetch lands mid-write and
+  // repaints the row the operator just deleted. Asserting the gate ARRIVES is
+  // the only thing that can catch that regression: a slot that quietly stopped
+  // receiving it renders identically.
+  it("hands the Info-tab slot the surface's own refetch gate", () => {
+    let seen: unknown = null;
+    mount({
+      slots: {
+        infoTab: (ctx) => {
+          seen = ctx.gate;
+          return <p>slot</p>;
+        },
+      },
+    });
+    // ⚠ IDENTITY, not shape. A shape assertion would pass against a gate the
+    // slot minted for itself, which is precisely the bug — so this pins that
+    // the object handed over is the one `live.ts` returned to THIS surface.
+    const fromLive = live.mock.results.at(-1)?.value.gate;
+    expect(fromLive).toBeTruthy();
+    expect(seen).toBe(fromLive);
   });
 
   // ⚠ `await` ON THE TAB BODY throughout this block: the info column's body
