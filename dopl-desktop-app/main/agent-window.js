@@ -191,6 +191,34 @@ function openAgentWindow(target) {
   return { ok: true };
 }
 
+/**
+ * CLOSE the window showing one agent, if there is one (2026-08-25, the DELETE lane).
+ *
+ * ⚠ IT IS NOT A SECOND `openAgentWindow` BRANCH AND IT IS NOT RENDERER-REACHABLE. Nothing on
+ * the bridge closes a window: the operator closes their own windows, and a renderer that could
+ * shut another app window is a nuisance primitive with no feature behind it. The ONE caller is
+ * `main/session-delete-op.js`, where the agent the window is a view OF has just been destroyed
+ * — leaving it open would leave a live composer and a live narration subscription pointed at
+ * an address that resolves to nothing.
+ *
+ * ⚠ IT ANSWERS "was one open", never a handle. Best effort by construction: a window that
+ * refuses to close must not fail a deletion that has already happened.
+ */
+function closeAgentWindow(target) {
+  const t = target || {};
+  const key = agentWindowKey(t.channelId, t.taskId, t.agentId);
+  sweep();
+  const win = openWindows.get(key);
+  if (!win) return false;
+  openWindows.delete(key);
+  try {
+    win.close();
+  } catch (err) {
+    diag('agent-window: could not close a deleted agent\'s window —', (err && err.message) || String(err));
+  }
+  return true;
+}
+
 /** Live agent-window count. Diagnostics and tests; nothing renderer-reachable reads it. */
 function count() {
   return sweep().size;
@@ -198,6 +226,7 @@ function count() {
 
 module.exports = {
   openAgentWindow,
+  closeAgentWindow,
   count,
   MAX_AGENT_WINDOWS,
   AGENT_WINDOW_PAGE,

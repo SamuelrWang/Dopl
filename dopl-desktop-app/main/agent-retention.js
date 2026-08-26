@@ -29,6 +29,11 @@
 // so there is no fourth self-pruning store to account for.
 // ⚠ `ownPostIds` / `ownPostSeq` live ON the session object and die with it at `settle`; they
 // are never persisted, so there is nothing to sweep.
+// ⚠ `agent-names.js › agentNames` IS KEYED BY `agentId`, NOT BY SESSION KEY, and is therefore
+// not on this list — it has no `endedAt` and no expiry (a name is not a run), so its whole bound
+// is `MAX_NAMES`. It is destroyed by the DELETE lane instead, which holds the agent id:
+// `main/session-delete-op.js` clears it beside this pass. A key-shaped cleaner here would be a
+// second, wrong answer to "what is this store keyed by".
 //
 // ⚠ CHANNEL MESSAGES ARE NOT ON THIS LIST AND NEVER WILL BE. What the agent POSTED is
 // `channel_messages` on the server: the shared record, owned by the channel, read by both
@@ -96,6 +101,23 @@ function sweepNow(now) {
 }
 
 /**
+ * THE EXPLICIT REMOVAL, SHARED BY BOTH DELIBERATE CASCADES — the thread delete and the
+ * single-agent delete. It runs the SAME cleaner list `sweepNow` does, so an EXPLICIT removal can
+ * never clean fewer stores than the clock does: two lists is how the orphan this file exists to
+ * prevent comes back through the door nobody was watching.
+ * ⚠ Each cleaner is independently guarded, for `sweepNow`'s reason.
+ */
+function forgetKeys(keys) {
+  if (!keys.length) return keys;
+  try { agentHistory.forget(keys); } catch (_err) { /* best effort */ }
+  for (const fn of [deps.clearRecord, deps.releaseEnded, deps.forgetNotice]) {
+    if (typeof fn !== 'function') continue;
+    try { fn(keys); } catch (_err) { /* one store must not stop the others */ }
+  }
+  return keys;
+}
+
+/**
  * FORGET these keys NOW, whatever their age — the thread-delete cascade's entry point. A
  * deleted thread takes its agents' local history with it, which is the same statement
  * `deleteSessionStatesForThread` makes on the server.
@@ -105,13 +127,25 @@ function forgetThread(channelId, taskId) {
   let keys = [];
   try { keys = agentHistory.keysForThread(prefix); }
   catch (_err) { return []; }
-  if (!keys.length) return [];
-  try { agentHistory.forget(keys); } catch (_err) { /* best effort */ }
-  for (const fn of [deps.clearRecord, deps.releaseEnded, deps.forgetNotice]) {
-    if (typeof fn !== 'function') continue;
-    try { fn(keys); } catch (_err) { /* one store must not stop the others */ }
-  }
-  return keys;
+  return forgetKeys(keys);
+}
+
+/**
+ * FORGET ONE AGENT — the DELETE lane's entry point (2026-08-25, Samuel's ruling).
+ *
+ * ⚠ IT IS `forgetThread` AT A NARROWER SCOPE AND DELIBERATELY NOT A SECOND SWEEP. The list of
+ * per-agent stores is this file's whole reason to exist; a delete that cleaned its own four of
+ * five would be the leak with a comforting name, one card at a time.
+ * ⚠ THE KEY IS EXACT — `session-store.js › slotKey`, all three segments. Never a prefix: a
+ * prefix scoped to `<channel>:<thread>:` is the THREAD cascade, and reaching a sibling agent
+ * from a single card's trash icon is the one mistake this lane cannot make quietly.
+ * ⚠ IT DELETES A LOCAL VIEW, NEVER A CONVERSATION. Everything the agent POSTED is
+ * `channel_messages` on the server (this file's header; INVARIANTS §11).
+ */
+function forgetAgent(key) {
+  const k = String(key || '');
+  if (!k) return [];
+  return forgetKeys([k]);
 }
 
 /**
@@ -130,4 +164,4 @@ function stop() {
   if (timer) { clearInterval(timer); timer = null; }
 }
 
-module.exports = { SWEEP_INTERVAL_MS, bind, sweepNow, forgetThread, start, stop };
+module.exports = { SWEEP_INTERVAL_MS, bind, sweepNow, forgetThread, forgetAgent, start, stop };

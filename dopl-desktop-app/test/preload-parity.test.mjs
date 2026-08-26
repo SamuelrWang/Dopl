@@ -220,6 +220,29 @@ const APP_OPS = [
   //     would let a credential-holding agent pre-approve itself across the whole fleet, which
   //     is the escalation `orchestratorLaunchEnabled` exists to not have either.
   "sessions.approveTemplate",
+  // ⚠ ONE JOINED HERE ON 2026-08-25 (Samuel's delete ruling): `sessions.delete`, the Agents-tab
+  // card's trash icon. The pin failed on the ADD, which is the review this comment records:
+  //   • The main-process handler EXISTS and was checked before this list was edited —
+  //     `main/session-ipc-ops.js` registers `sessions:delete` under the same `appWindowOnly()`
+  //     sender binding as every op above, UUID-gates `channelId`, and delegates to
+  //     `main/session-delete-op.js › deleteAgent`, which re-validates the payload because the
+  //     split moved the code and not the boundary.
+  //   • IT IS A STOP VERB PLUS A LOCAL ERASE, AND IT WIDENS NOTHING. It cannot start a query,
+  //     wake a parked shell, grant a tool or post anything. A live session is ended through the
+  //     SAME reducer event `sessions:end` dispatches — one stop path, never two — and then the
+  //     LOCAL stores keyed to that agent are dropped. The failure direction of a forged call is
+  //     an agent that stops and a local card that disappears.
+  //   • ⚠ **IT REACHES NO `channel_messages`.** Everything the agent posted is the SERVER's
+  //     shared record and is unreachable from main at all; the transcript keeps every message
+  //     and keeps attributing it to `Agent #<id>`, because the id rides the message rather than
+  //     any table this op can touch. The only server-visible effect is the one `end` already
+  //     has: the session projects as `ended`.
+  //   • ⚠ `agentId` IS REQUIRED, uniquely on this namespace. Every other op resolves an omitted
+  //     id to the OLDEST live agent on the thread; for a DESTRUCTIVE verb that is a DIFFERENT
+  //     agent than the card that was clicked, and nothing would report the substitution.
+  //   • Own agents only, structurally: the registry and the local stores hold nothing but this
+  //     operator's own agents on this machine.
+  "sessions.delete",
   // ⚠ TWO OPS JOINED HERE ON 2026-08-18 (wiring plan Phase 5): `sessions.pause` and
   // `sessions.end`, the Agents tab's controls on the operator's OWN agent. The pin failed on
   // the ADD, which is the review this comment records:

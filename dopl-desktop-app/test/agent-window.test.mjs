@@ -35,7 +35,9 @@ const SRC = readFileSync(join(MAIN, "agent-window.js"), "utf8");
 // point — the two windows must not drift.
 
 function mkFakeWindow(options) {
-  const calls = { show: 0, focus: 0, restore: 0, on: [] };
+  // `close` joined 2026-08-25 with the DELETE lane: the window onto a deleted agent is shut by
+  // main, and a fake with no `close` would make that assertion pass through a swallowed throw.
+  const calls = { show: 0, focus: 0, restore: 0, close: 0, on: [] };
   const win = {
     options,
     destroyed: false,
@@ -47,6 +49,7 @@ function mkFakeWindow(options) {
     restore: () => { calls.restore += 1; win.minimized = false; },
     show: () => { calls.show += 1; },
     focus: () => { calls.focus += 1; },
+    close: () => { calls.close += 1; win.destroyed = true; },
     once: (evt, fn) => { if (evt === "ready-to-show") fn(); },
     loadURL: (u) => { win.loaded = u; },
     loadFile: (f, o) => { win.loaded = `${f}#${o && o.hash}`; },
@@ -229,6 +232,46 @@ test("BUDGET: a CLOSED window frees its slot", () => {
   assert.equal(api.count(), 1);
   created[0].destroyed = true;
   assert.equal(api.count(), 0, "the sweep must collect it even without a 'closed' event");
+});
+
+// ── 3A. CLOSING ONE (2026-08-25, the DELETE lane) ────────────────────────────────────
+
+test("CLOSE: the window onto a DELETED agent is shut and its slot freed", () => {
+  // ⚠ A window left open onto a deleted agent is a live composer and a live narration
+  // subscription pointed at an address that now resolves to nothing.
+  const { api, created } = load();
+  api.openAgentWindow(TARGET);
+  assert.equal(api.closeAgentWindow(TARGET), true);
+  assert.equal(created[0].calls.close, 1);
+  assert.equal(api.count(), 0, "the budget gets its slot back immediately, not on the next sweep");
+});
+
+test("CLOSE: it is keyed on the AGENT and cannot reach a sibling's window", () => {
+  // The thread is shared; the window is not. Closing the wrong one from a card's trash icon is
+  // the mistake this lane must not make quietly.
+  const { api, created } = load();
+  api.openAgentWindow(TARGET);
+  api.openAgentWindow({ ...TARGET, agentId: "z9y8x7w6" });
+  assert.equal(api.closeAgentWindow({ ...TARGET, agentId: "z9y8x7w6" }), true);
+  assert.equal(created[0].calls.close, 0, "the first agent's window is untouched");
+  assert.equal(created[1].calls.close, 1);
+});
+
+test("CLOSE: an agent with no window open answers FALSE and does nothing", () => {
+  // The ordinary case — most deletions are of agents nobody opened a window on.
+  const { api, created } = load();
+  assert.equal(api.closeAgentWindow(TARGET), false);
+  assert.deepEqual(created, []);
+});
+
+test("CLOSE: it is NOT renderer-reachable — no bridge op closes a window", () => {
+  // ⚠ Nothing on the bridge closes another app window: the operator closes their own, and a
+  // renderer-driven close is a nuisance primitive with no feature behind it. Its ONE caller is
+  // main's own delete lane.
+  const OPS = readFileSync(join(HERE, "..", "main", "session-ipc-ops.js"), "utf8");
+  assert.equal(OPS.includes("closeAgentWindow"), false, "no IPC op may name it");
+  const DELETE_OP = readFileSync(join(HERE, "..", "main", "session-delete-op.js"), "utf8");
+  assert.match(DELETE_OP, /closeAgentWindow\(/, "and the delete lane is the caller that does");
 });
 
 test("SHARED, NOT COPIED: it takes the SPA's own webPreferences and navigation lock", () => {

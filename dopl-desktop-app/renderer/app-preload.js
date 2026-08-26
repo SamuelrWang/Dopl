@@ -338,6 +338,20 @@ contextBridge.exposeInMainWorld('dopl', {
         agentId: asId(agentId),
       }),
 
+    // ⚠ DELETE THE AGENT (2026-08-25) — `end` plus an ERASE. A live session stops through the
+    // SAME reducer event `end` dispatches (one stop path, never two), then every LOCAL trace goes.
+    // ⚠ IT DELETES A LOCAL VIEW, NEVER A CONVERSATION: what the agent POSTED is `channel_messages`
+    // on the SERVER, and the transcript keeps attributing it to `Agent #<id>` from the message.
+    // ⚠ `agentId` IS REQUIRED here and optional above — an omitted id resolves to the OLDEST live
+    // agent on the thread, which for a DESTRUCTIVE verb is not the card that was clicked.
+    // Full argument: `main/session-delete-op.js` and `test/preload-parity.test.mjs`.
+    delete: (channelId, taskId, agentId) =>
+      ipcRenderer.invoke('sessions:delete', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+        agentId: asId(agentId),
+      }),
+
     // ── THE AGENT WINDOW (2026-08-20, F-212's closure) ─────────────────────────────
     // `openAgentWindow` ASKS MAIN for a second window on this same bundle, showing ONE of
     // the operator's own agents. Like `threads.openWindow` it gets NO handle back — main

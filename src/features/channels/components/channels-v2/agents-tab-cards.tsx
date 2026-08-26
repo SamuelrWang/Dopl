@@ -23,6 +23,7 @@
 
 import { Bot, CornerDownRight } from "lucide-react";
 import { AgentName } from "./agent-rename";
+import { AgentDeleteButton } from "./agent-delete";
 import { Avatar } from "@/shared/ui/avatar";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
@@ -259,6 +260,17 @@ export function AgentCard({
             ? "Tokens spent: not measured yet"
             : `Tokens spent: ${formatTokens(tokensSpent)}`}
         </span>
+        {/* ⚠ DELETE SITS LEFT OF OPEN, ON EVERY OWN CARD — running, idle and
+            retained-ended alike (Samuel, 2026-08-25). A card the operator can
+            see is a card they can be rid of, and an ended agent is exactly the
+            one they most often want gone. It is a NAKED GLYPH revealed by this
+            card's hover (`agent-delete.tsx`), not a second button face: a
+            permanent trash beside every agent is a destructive control the eye
+            has to keep declining.
+            ⚠ THE PEER CARDS ABOVE HAVE NONE AND MUST NOT. A colleague's agent
+            runs on THEIR machine; this op reaches only local stores, so a trash
+            icon there would be a control over nothing. */}
+        <AgentDeleteButton agent={agent} />
         <button
           type="button"
           onClick={onOpen}

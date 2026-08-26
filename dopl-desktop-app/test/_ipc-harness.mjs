@@ -34,6 +34,13 @@ export const OPS_SRC = M("session-ipc-ops.js");
 // lazy handles (engine, prefs, targeting, listener, model, template-resolve) are the
 // harness's; a payload that is refused at the boundary never reaches one.
 export const LAUNCH_OP_SRC = M("session-launch-op.js");
+// ⚠ THE DELETE BODY IS REAL FOR THE SAME REASON (2026-08-25). `sessions:delete` validates its
+// payload inside `main/session-delete-op.js` — the split moved the code, not the boundary — so a
+// stub here would make the "a refusal is INDISTINGUISHABLE from a bad-payload rejection" arm
+// assert a shape the shipped code does not produce. Its module-scope requires are the guards,
+// the id predicate and `diag`; everything destructive is required LAZILY, after both gates, so a
+// payload refused at the boundary never reaches a store.
+export const DELETE_OP_SRC = M("session-delete-op.js");
 // ⚠ BOTH SOURCES, BECAUSE THE FILE SPLIT AND THE BINDING DID NOT (2026-08-20, F-226). Every
 // structural assertion reads the CONCATENATION: an op that dodges the wrapper fails the belt
 // whichever half it was added to, which is the property the split must not cost.
@@ -130,6 +137,7 @@ export function bootIpc({ blocked = false } = {}) {
     // agent id shape main really refuses.
     if (id === "./agent-id") return realAgentId;
     if (id === "./session-launch-op") return launchOpModule;
+    if (id === "./session-delete-op") return deleteOpModule;
     // The MACHINE-LOCAL template approval store. `approveTemplate` records and answers true;
     // `isTemplateApproved` answers false, which is the default-deny state a fresh Mac is in.
     if (id === "./channel-prefs") {
@@ -145,6 +153,7 @@ export function bootIpc({ blocked = false } = {}) {
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
   const launchOpModule = evalModule(LAUNCH_OP_SRC, stubRequire);
+  const deleteOpModule = evalModule(DELETE_OP_SRC, stubRequire);
   const opsModule = evalModule(OPS_SRC, stubRequire);
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);

@@ -362,6 +362,34 @@ export interface SpaBridgeSurface {
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
     /**
+     * DELETE THE AGENT (2026-08-25, Samuel's ruling) — the Agents-tab card's trash icon.
+     *
+     * ⚠ IT IS `end` PLUS AN ERASE, AND THE STOP HALF IS THE SAME ONE. A live session is
+     * ended through the reducer event `end` dispatches, reaching the same teardown — one
+     * stop path, never two (INVARIANTS §11). Then every LOCAL trace goes: the frozen
+     * narration history, the durable record, the resume map, the retained ended card, the
+     * queued-notice guard, the display name, and any window open onto it. `ended: true`
+     * says this call is what stopped a session that was still running.
+     *
+     * ⚠ **DELETION IS LOCAL. THE CHANNEL RECORD IS IMMUTABLE BY IT.** Everything the agent
+     * POSTED stays in the channel, attributed exactly as before — the id rides the MESSAGE
+     * (`channels-v2/agents-model.ts › parseAgentPostStamp`, off `client_msg_id`), never a
+     * local table, so a deleted agent's messages keep reading `Agent #<id>`. The only
+     * server-side effect is the one `end` already has: the session projects as `ended`.
+     *
+     * ⚠ `agentId` IS REQUIRED, uniquely on this namespace. Everywhere else an omitted id
+     * resolves to the OLDEST live agent on the thread; for a DESTRUCTIVE verb that is a
+     * DIFFERENT agent than the card that was clicked, and nothing would report the swap.
+     * ⚠ `reason: "no-agent"` means the address named nothing this machine can find.
+     * ⚠ Feature-detect it — an older main has no handler, and the trash must be ABSENT
+     * rather than inert.
+     */
+    delete?(
+      channelId: string,
+      taskId: string,
+      agentId: string
+    ): Promise<{ ok: boolean; reason?: string; ended?: boolean }>;
+    /**
      * RECORD THIS MACHINE'S FIRST-USE APPROVAL of another member's agent template
      * (2026-08-22, OQ-3). Call it after the operator has read that template's instructions
      * in the approval sheet, then relaunch.

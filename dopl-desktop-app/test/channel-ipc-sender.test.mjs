@@ -223,6 +223,11 @@ const OPS = [
   // reason this list is asserted by COUNT as well as by name.
   ["sessions:pause", { channelId: CH, taskId: "t1" }, { ok: false }],
   ["sessions:end", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ JOINED 2026-08-25 (Samuel's delete ruling): `sessions:end` PLUS A LOCAL ERASE — a live
+  // agent stops through the SAME reducer event (one stop path, never two) and then every local
+  // store keyed to it is dropped. It starts no query, grants no tool, posts nothing, and reaches
+  // no `channel_messages`. Same binding + UUID gate; the review is in `preload-parity`.
+  ["sessions:delete", { channelId: CH, taskId: "t1", agentId: "abcdefgh" }, { ok: false }],
   // ⚠ JOINED 2026-08-20: the Agents tab's launch — the one START verb, own-thread
   // only, UUID-gated on BOTH ids, posture owned by main (see preload-parity).
   ["sessions:launch", { channelId: CH, taskId: "t1" }, { ok: false }],

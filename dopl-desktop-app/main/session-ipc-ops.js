@@ -33,6 +33,8 @@
 //   sessions:narration       reads my own agent's work ring, for that window's first paint
 //   sessions:pause           interrupts the turn my agent is running on a thread
 //   sessions:end             ends my agent on a thread — terminal, and never the thread
+//   sessions:delete          ⚠ ends it if live, then DESTROYS every LOCAL trace of it — never
+//                            a channel message, which is the server's
 //   sessions:rename          what the operator calls one agent — display only, never an address
 //   agents:forgetThread      drops every LOCAL trace of a deleted thread's ended agents
 //   claude:signIn            ⚠ signs THIS MAC in to Claude Code, then releases every held
@@ -367,6 +369,25 @@ function register(opts = {}) {
   };
   ipcMain.handle('sessions:pause', appWindowOnly('sessions:pause', { ok: false }, control('pause')));
   ipcMain.handle('sessions:end', appWindowOnly('sessions:end', { ok: false }, control('end')));
+
+  // DELETE MY OWN AGENT (2026-08-25, Samuel's ruling) — the Agents-tab card's trash icon.
+  //
+  // ⚠ THE BODY LIVES IN `main/session-delete-op.js` SINCE IT LANDED (a §1 split; that file's
+  // header carries the whole argument, including why END-THEN-PURGE is an ORDER rather than a
+  // preference and why the `agentId` is required here and optional everywhere else). What stays
+  // HERE is the IPC SURFACE: the op name, the sender binding written literally at the site, and
+  // the refusal shape.
+  //
+  // ⚠ IT IS A STOP VERB PLUS A LOCAL ERASE, AND IT WIDENS NOTHING. It cannot start a query, wake
+  // a parked shell, grant a tool or post on the operator's behalf; the failure direction of a
+  // forged call is an agent that stops and a local card that disappears. Own-agents-only for
+  // `sessions:end`'s reason — the registry holds nothing but this operator's own sessions.
+  // ⚠ ⚠ AND IT REACHES NO `channel_messages`. Everything the agent said stays in the channel,
+  // attributed exactly as before (the id rides the message). This deletes a LOCAL VIEW, never a
+  // conversation — the same sentence `agents:forgetThread` above carries, at one agent's scope.
+  ipcMain.handle('sessions:delete', appWindowOnly('sessions:delete', { ok: false }, (_event, payload) => (
+    require('./session-delete-op').deleteAgent(payload)
+  )));
 
   // WHAT THE OPERATOR CALLS THIS AGENT (2026-08-25, Samuel's ruling). Store is
   // `main/agent-names.js`, keyed by the INSTANCE ADDRESS.

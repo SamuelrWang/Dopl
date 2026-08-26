@@ -273,6 +273,49 @@ test("CASCADE: the prefix is thread-scoped and cannot reach a neighbouring threa
   assert.equal(asked[1], `${CH}::`, "a CHANNEL-level agent's own scope, not every thread");
 });
 
+// ── 5A. THE SINGLE-AGENT DELETE (2026-08-25, Samuel's ruling) ────────────────
+
+test("DELETE: forgetting ONE agent runs the SAME cleaner list the clock does", () => {
+  // ⚠ THE ORPHAN GUARD AGAIN, FROM THE OTHER DOOR. An explicit delete that cleaned its own
+  // subset of the stores would be this file's "slow leak with a comforting name", arriving one
+  // card at a time instead of on a timer — so `forgetAgent` shares `forgetKeys` with the sweep
+  // and the cascade rather than restating the list.
+  const forgotten = [];
+  const seen = [];
+  const r = retention({ sweep: () => [], forget: (k) => forgotten.push(k), keysForThread: () => [] });
+  r.bind({ clearRecord: (k) => seen.push(k), releaseEnded: (k) => seen.push(k), forgetNotice: (k) => seen.push(k) });
+  const key = `${CH}:t-1:a1b2c3d4`;
+  assert.deepEqual(r.forgetAgent(key), [key]);
+  assert.deepEqual(forgotten, [[key]]);
+  assert.deepEqual(seen, [[key], [key], [key]], "every store hears about it, not just the history");
+});
+
+test("DELETE: the key is EXACT — one agent, never its siblings on the thread", () => {
+  // ⚠ A `<channel>:<thread>:` prefix is the THREAD cascade. Reaching a sibling agent from one
+  // card's trash icon is the mistake this lane cannot make quietly, so the key is passed whole
+  // and `keysForThread` is never consulted.
+  let prefixAsked = 0;
+  const forgotten = [];
+  const r = retention({
+    sweep: () => [],
+    forget: (k) => forgotten.push(k),
+    keysForThread: () => { prefixAsked += 1; return ["someone-elses-key"]; },
+  });
+  r.bind({});
+  r.forgetAgent(`${CH}:t-1:a1b2c3d4`);
+  assert.equal(prefixAsked, 0, "a delete never scans the thread");
+  assert.deepEqual(forgotten, [[`${CH}:t-1:a1b2c3d4`]]);
+});
+
+test("DELETE: an empty key is a no-op rather than a wildcard", () => {
+  const forgotten = [];
+  const r = retention({ sweep: () => [], forget: (k) => forgotten.push(k), keysForThread: () => [] });
+  r.bind({});
+  assert.deepEqual(r.forgetAgent(""), []);
+  assert.deepEqual(r.forgetAgent(null), []);
+  assert.deepEqual(forgotten, []);
+});
+
 // ── 6. THE TIMER ─────────────────────────────────────────────────────────────
 
 test("TIMER: it sweeps ONCE at start, then daily, and never stacks", () => {
