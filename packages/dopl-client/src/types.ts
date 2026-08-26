@@ -108,7 +108,9 @@ export interface WorkspaceListItem extends WorkspaceSummary {
 }
 
 // Mirrors the DB enum on `workspace_members.role`.
-export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
+// ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › Role`; kept in sync by
+// `scripts/check-role-drift.ts`. `guest` is the link-granted floor role.
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer" | "guest";
 
 export interface ResolvedWorkspace {
   workspace: WorkspaceSummary;

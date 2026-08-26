@@ -216,3 +216,6 @@ jobs:
 
       - name: Diff knowledge types between server and SDK
         run: npx tsx scripts/check-knowledge-type-drift.ts
+
+      - name: Diff workspace role set across server, SDK and MCP
+        run: npx tsx scripts/check-role-drift.ts

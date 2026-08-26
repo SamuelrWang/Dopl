@@ -75,6 +75,8 @@ const ROLE_STYLE: Record<MemberRole, string> = {
   admin: "bg-bg-inset border-border-strong text-text-primary",
   member: "bg-surface-raised-2 border-border-default text-text-secondary",
   viewer: "border-dashed border-border-strong text-text-tertiary bg-transparent",
+  // Guest is the floor tier (link-granted, chat-only) — the most subdued chip.
+  guest: "border-dashed border-border-default text-text-tertiary bg-transparent",
 };
 
 export function RolePill({ role }: { role: MemberRole }) {

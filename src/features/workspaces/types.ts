@@ -1,5 +1,11 @@
-export type Role = "owner" | "admin" | "member" | "viewer";
+export type Role = "owner" | "admin" | "member" | "viewer" | "guest";
 
+/**
+ * ⚠ `guest` is a LINK-granted role, never an invitation role — a workspace admin
+ * cannot invite somebody in as a guest, and the Add-person picker on a home
+ * channel mints a link at guest, it does not create a membership directly. So
+ * `InvitedRole` deliberately excludes it.
+ */
 export type InvitedRole = "admin" | "member" | "viewer";
 
 export type MembershipStatus = "pending" | "active" | "revoked";
@@ -175,13 +181,22 @@ export interface WorkspaceMembership {
 
 /**
  * Ranking `withWorkspaceAuth({ minRole })` gates on.
- * Higher = more privileges: owner > admin > member > viewer.
+ * Higher = more privileges: owner > admin > member > viewer > guest.
+ *
+ * ⚠ `guest` is the NEW FLOOR (rank 0) below `viewer`. `meetsMinRole` is pure
+ * `>=`, so every existing gate keeps its relative semantics — a `guest` clears
+ * only `minRole:"guest"` routes and is rejected by the `withWorkspaceAuth`
+ * default (`viewer`), which INVERTS the blast radius: guests reach only the few
+ * channel routes explicitly re-admitted (INVARIANTS §4A, §2B). The
+ * `Record<Role, number>` typing forces the `guest` key here and is the
+ * compile-time net that proves every role map covers it.
  */
 export const ROLE_RANK: Record<Role, number> = {
-  viewer: 0,
-  member: 1,
-  admin: 2,
-  owner: 3,
+  guest: 0,
+  viewer: 1,
+  member: 2,
+  admin: 3,
+  owner: 4,
 };
 
 export function meetsMinRole(actual: Role, min: Role): boolean {

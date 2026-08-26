@@ -70,7 +70,10 @@ export interface WorkspaceAuthContext {
 
 interface Options {
   /** Min membership role. Default "viewer". "member" for writes, "admin" for
-   *  invitations/settings, "owner" for delete. */
+   *  invitations/settings, "owner" for delete. "guest" is the FLOOR below viewer
+   *  (INVARIANTS §4A): only routes explicitly set to "guest" admit a guest — the
+   *  "viewer" default REJECTS one, so every workspace-scoped route fails closed
+   *  against guests unless it opts in. */
   minRole?: Role;
   /**
    * Opt-in for GET download routes (`<a download>` can't send headers): let

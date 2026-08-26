@@ -27,6 +27,7 @@ const ROLE_COPY: Record<MemberRole, string> = {
   admin: "Full access, manage members + workspace",
   member: "Use everything: knowledge bases, skills, ontology",
   viewer: "Read-only access",
+  guest: "Chat only, in this one channel — no workspace access",
 };
 
 export function MemberFacts({

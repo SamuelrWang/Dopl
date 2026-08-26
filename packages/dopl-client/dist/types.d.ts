@@ -103,7 +103,7 @@ export declare function isStandardWorkspace(workspace: {
 export interface WorkspaceListItem extends WorkspaceSummary {
     role: WorkspaceRole;
 }
-export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer" | "guest";
 export interface ResolvedWorkspace {
     workspace: WorkspaceSummary;
     role: WorkspaceRole;

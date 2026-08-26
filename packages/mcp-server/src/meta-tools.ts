@@ -43,7 +43,7 @@ export function registerWorkspaceMetaTools(
 
   registerMetaTool(
     "list_workspaces",
-    "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.",
+    "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.",
     {},
     async () => {
       const list = await directory.getWorkspaceList();

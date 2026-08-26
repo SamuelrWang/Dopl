@@ -26,7 +26,7 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
     function callerBlock() {
         return [...(0, identity_js_1.sessionLines)(caller), (0, identity_js_1.callerStatusLine)(caller).trim(), ""];
     }
-    registerMetaTool("list_workspaces", "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.", {}, async () => {
+    registerMetaTool("list_workspaces", "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.", {}, async () => {
         const list = await directory.getWorkspaceList();
         if (list.length === 0) {
             return {

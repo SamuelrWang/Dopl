@@ -48,7 +48,12 @@ exports.UNNAMED_MEMBER = "`(unnamed member)`";
  */
 exports.CONTACT_POINTER = `To contact a member or their agent: dopl_channel (op="list" for your channels, op="open" for a DM). It is deferred in some clients, so load it with ToolSearch if it is not in your tool list.`;
 // ─── Formatting helpers ─────────────────────────────────────────────
-const ROLE_ORDER = { owner: 0, admin: 1, member: 2, viewer: 3 };
+// ⚠ REVERSED ranking (lower number = higher privilege) — this drives roster SORT
+// order, so the owner prints first. `guest` is the lowest-privilege role and
+// prints last (4). Do NOT confuse with `src/features/workspaces/types.ts ›
+// ROLE_RANK`, whose scale is inverted (higher = more privilege). Kept in the
+// role SET in sync with `Role` / `WorkspaceRole` by `scripts/check-role-drift.ts`.
+const ROLE_ORDER = { owner: 0, admin: 1, member: 2, viewer: 3, guest: 4 };
 function sortByRole(members) {
     return [...members].sort((a, b) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) ||
         (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));

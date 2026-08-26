@@ -43,7 +43,12 @@ export const CONTACT_POINTER = `To contact a member or their agent: dopl_channel
 
 // ─── Formatting helpers ─────────────────────────────────────────────
 
-const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, member: 2, viewer: 3 };
+// ⚠ REVERSED ranking (lower number = higher privilege) — this drives roster SORT
+// order, so the owner prints first. `guest` is the lowest-privilege role and
+// prints last (4). Do NOT confuse with `src/features/workspaces/types.ts ›
+// ROLE_RANK`, whose scale is inverted (higher = more privilege). Kept in the
+// role SET in sync with `Role` / `WorkspaceRole` by `scripts/check-role-drift.ts`.
+const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, member: 2, viewer: 3, guest: 4 };
 
 export function sortByRole(members: WorkspaceMember[]): WorkspaceMember[] {
   return [...members].sort(
