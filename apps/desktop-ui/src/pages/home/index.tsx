@@ -170,6 +170,22 @@ export default function HomePage() {
     // shell surface and the account rail — with the base panel floating on it.
     // `!` because the module fills are the same one-class specificity and
     // stylesheet order between module CSS and utilities is not guaranteed.
+    //
+    // ⚠ THE PANEL BUTTS FLUSH-LEFT AGAINST THE RAIL ON /home (Samuel, twice:
+    // "rail glyphs look off-centre"). MEASURED cause: the account rail's tiles
+    // are perfectly centred in the 54px rail (tile [7,47], rail [0,54]) — but
+    // on /home the surface's 8px left margin AND `.page-float`'s 8px left margin
+    // are BOTH painted this same home-frame ink, so the panel's left edge lands
+    // at x=70 and the eye reads the dark column as 0..70. A rail-centred tile
+    // then shows 7px on its left and 23px on its right — the "shifted left" look
+    // that TWO glyph resizes could never touch, because resizing never moves the
+    // tile within the rail. `!ml-0` on the surface and the panel (below) zero
+    // those two dark left margins so the light panel starts at the rail's right
+    // edge (x=54): the visible dark column becomes the 54px rail, and the tiles'
+    // 7px/7px gutters read centred. The panel keeps its top/right/bottom float —
+    // the rail is simply the slab's left frame, so there is no left gap to float
+    // over. Workspace shell is unaffected: there `.surface` is the LIGHT
+    // `--shell-surface`, so the rail's right edge is already visible at 54px.
     <div className={cn(shell.root, "!bg-home-frame")}>
       <div className={shell.body}>
         <AccountRail
@@ -179,14 +195,16 @@ export default function HomePage() {
           onNavigate={(path) => navigate(path)}
           onCreateWorkspace={() => setCreateWsOpen(true)}
         />
-        <div className={cn(shell.surface, "!bg-home-frame")}>
+        <div className={cn(shell.surface, "!bg-home-frame", "!ml-0")}>
           {/* Layered panels: the BASE panel (`bg-home-panel`) carries the
               header + relationship list; the record floats on it as a raised
               card. The bg utility outranks `.page-float`'s own fill (utility
               layer > kit layer) — the float keeps radius/margins/shadow. */}
           <main
             className={cn(
-              "page-float flex flex-1 flex-col overflow-hidden bg-home-panel",
+              // `!ml-0`: flush-left against the rail — see the frame docblock
+              // above. `!` beats `.page-float`'s own non-important margin.
+              "page-float !ml-0 flex flex-1 flex-col overflow-hidden bg-home-panel",
               home.page
             )}
           >
