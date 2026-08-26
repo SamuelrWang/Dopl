@@ -1,6 +1,6 @@
 /**
  * THE VISIBILITY MATRIX, as a property over the whole grid rather than a
- * handful of examples: 3 visibilities × 5 caller kinds, every cell asserted.
+ * handful of examples: 3 visibilities × 7 caller kinds, every cell asserted.
  *
  * ⚠ WHY A GRID AND NOT CASES. `canSeeTemplate` is six ordered arms, and the
  * bugs this class of function actually ships are ORDER bugs — an admin arm
@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { meetsMinRole } from "@/features/workspaces/types";
 import type { AgentTemplate, AgentTemplateContext } from "../types";
 
 vi.mock("./repository", () => ({
@@ -97,6 +98,36 @@ const CALLERS = {
     c: ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1" }),
     teamsOf: [] as string[],
   },
+  /**
+   * 🔒 THE CONTAINER-SESSION CHILD CREDENTIAL (F-333, ruled 2026-08-27) — the
+   * row this grid was missing, and the reason arm 2 could not stay keyed on the
+   * lock. It carries the SAME `apiKeyWorkspaceId` as `workspaceKey` above and
+   * the OPPOSITE answer on every private row, because it is one human's session
+   * rather than a credential shared between humans. Everything
+   * `containerCopyDraft` makes is `private`, so without this row every "Use in
+   * this channel" copy is invisible to the agent it was made for.
+   */
+  containerSession: {
+    c: ctx({
+      userId: CREATOR,
+      apiKeyWorkspaceId: "ws-1",
+      apiKeyWorkspaceLockKind: "container_session",
+    }),
+    teamsOf: [] as string[],
+  },
+  /**
+   * ⚠ AND THE PEER'S container session, which is what proves the widening is
+   * per-PERSON and not per-credential-kind: same lock, same kind, different
+   * user id — and the operator's private template stays hidden from it.
+   */
+  containerSessionPeer: {
+    c: ctx({
+      userId: OUTSIDER,
+      apiKeyWorkspaceId: "ws-1",
+      apiKeyWorkspaceLockKind: "container_session",
+    }),
+    teamsOf: [] as string[],
+  },
 } as const;
 
 type CallerName = keyof typeof CALLERS;
@@ -119,8 +150,14 @@ const EXPECTED: Record<
     // administers SHARING, which is not a read of a teammate's private row.
     admin: false,
     // The key IS the creator by user id, and still gets nothing — that is the
-    // whole of M-10.
+    // whole of M-10, and it survives F-333 unchanged: what distinguishes this
+    // row from `containerSession` below is the lock's KIND, never the lock.
     workspaceKey: false,
+    // 🔒 F-333: the operator's own session reads the operator's own private
+    // template — including every "Use in this channel" copy.
+    containerSession: true,
+    // 🔒 …and the PEER's session does not.
+    containerSessionPeer: false,
   },
   team: {
     creator: true,
@@ -128,6 +165,10 @@ const EXPECTED: Record<
     nonTeamMember: false,
     admin: true,
     workspaceKey: false,
+    // Creator arm, same as `creator`.
+    containerSession: true,
+    // No shared team, not the creator, not an admin.
+    containerSessionPeer: false,
   },
   workspace: {
     creator: true,
@@ -137,10 +178,12 @@ const EXPECTED: Record<
     // The only cell where a workspace-scoped key sees anything: a row every
     // member can see is not one person's content.
     workspaceKey: true,
+    containerSession: true,
+    containerSessionPeer: true,
   },
 };
 
-describe("canSeeTemplate — 3 visibilities × 5 callers, every cell", () => {
+describe("canSeeTemplate — 3 visibilities × 7 callers, every cell", () => {
   for (const visibility of ["private", "team", "workspace"] as const) {
     for (const callerName of Object.keys(CALLERS) as CallerName[]) {
       const expected = EXPECTED[visibility][callerName];
@@ -172,6 +215,25 @@ describe("canSeeTemplate — 3 visibilities × 5 callers, every cell", () => {
       });
     }
   }
+});
+
+/**
+ * 🔒 F-333 CLAIMS THERE IS NO GUEST EXPOSURE TO WEIGH, AND THAT CLAIM IS A
+ * COMPOSITION OF TWO FACTS THAT LIVE IN DIFFERENT FILES — so it is asserted
+ * here rather than trusted. (1) `withWorkspaceAuth`'s floor is `viewer` and no
+ * agent-templates route lowers it (`app/api/agent-templates/route.test.ts ›
+ * "reads at VIEWER — the default, so no options are passed"` asserts the
+ * options object is undefined, i.e. the default; `POST`/`PATCH`/`DELETE` raise it to `member`), and
+ * `POST /api/channels/launch-directives` — the agent-token lane that resolves a
+ * template BY NAME — keeps the same default. (2) `guest` ranks BELOW `viewer`.
+ * Together: a guest never reaches a template surface at all, so widening
+ * `canSeeTemplate` for a container session cannot expose one to a guest.
+ */
+describe("the guest floor — why F-333 has no guest arm", () => {
+  it("guest does not clear the viewer floor every template route sits at", () => {
+    expect(meetsMinRole("guest", "viewer")).toBe(false);
+    expect(meetsMinRole("viewer", "viewer")).toBe(true);
+  });
 });
 
 describe("cross-workspace isolation", () => {

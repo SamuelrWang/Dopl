@@ -35,6 +35,16 @@ export interface ChannelContext {
    * membership rows, not per-person visibility.
    */
   apiKeyWorkspaceId?: string | null;
+  /**
+   * `mcp_tokens.workspace_lock_kind`, carried for the SAME single reader and
+   * for the same reason (2026-08-27, F-333). ⚠ Without it
+   * `resolveTemplateForDirective` hands `canSeeTemplate` a lock with no kind,
+   * which reads as a SHARED credential — so a launch directive naming the
+   * operator's OWN private template answers `AGENT_TEMPLATE_NOT_FOUND` from
+   * the operator's own session. Never read it directly; the reader is
+   * `shared/auth/credential-audience.ts › isSharedCredential`.
+   */
+  apiKeyWorkspaceLockKind?: string | null;
   /** Which Dopl runtime the request speaks for: `desktop-session` (spawned
    *  session), `desktop-ui` (operator typing in the app), undefined for
    *  everything else. ⚠ Server-resolved from `X-Dopl-Runtime` and bounded by the
@@ -59,6 +69,7 @@ export interface AuthLike {
   /** ⚠ See {@link ChannelContext.apiKeyWorkspaceId} — the M-10 fence, and the
    *  one field on this context whose ABSENCE widens rather than narrows. */
   apiKeyWorkspaceId?: string | null;
+  apiKeyWorkspaceLockKind?: string | null;
   runtime?: string | null;
   appVersion?: string | null;
   sessionId?: string | null;
@@ -76,6 +87,10 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     // 2. That is why `WorkspaceAuthContext` always sets it explicitly and why
     // this line exists at all rather than the field being left off the context.
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
+    // ⚠ `?? null` here reads as "a SHARED credential" at `isSharedCredential`,
+    // i.e. the RESTRICTIVE answer, matching every other field on this context —
+    // unlike the line above it, which reads backwards.
+    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
     // ⚠ Re-narrowed rather than trusted: a second check through the SAME
     // predicate means no other construction path can widen what counts as a
     // desktop runtime — no ctx off an agent token can claim `desktop-ui`.

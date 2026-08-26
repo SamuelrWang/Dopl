@@ -3676,7 +3676,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   the RULE (a fallback keyed on "the fetch failed" becomes a liar the moment failure becomes normal),
   and a future tidy-up that re-adds review fixtures needs to meet it.
 
-### F-333 — ⚠ SAMUEL'S DECISION NEEDED — after B1, an agent in a shared container can see ONLY `workspace`-visibility templates, so every "Use in this channel" copy is invisible to it
+### F-333 — ✅ RESOLVED 2026-08-27 — after B1, an agent in a shared container could see ONLY `workspace`-visibility templates, so every "Use in this channel" copy was invisible to it
 
 - **This id was RESERVED by the plan (`docs/specs/home-agents-tab.plan.md` §5 and §7) and was never
   filed.** It is filed now with the thing it was reserved to decide, which turned out to have an
@@ -3720,20 +3720,49 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   agent that cannot see a template it arguably should, never a peer seeing one they should not. It
   is filed as a DECISION rather than a bug because both readings are defensible and only Samuel can
   pick.
-- ⚠ **THE OPEN DECISION, TWO OPTIONS, NEITHER TAKEN HERE:**
-  - **(A) Accept it.** An agent uses `workspace`-shared templates only; the private shelves are the
-    operator's, for the operator's own launches. Costs nothing, ships today, and is consistent with
-    the ceiling's whole argument (a locked session sees what the container shares, not what one
-    member holds). What it costs is the copy's usefulness to an orchestrator.
-  - **(B) Make the copy's visibility a CHOICE rather than a constant.** `containerCopyDraft`'s forced
-    `private` becomes a two-option control on the confirm step ("private to me" / "shared in this
-    channel"), so the operator decides, per copy, whether their agents can reach it. ⚠ **This is a
-    real security control and must not be defaulted to shared** — the forced `private` is what stops
-    "use" from meaning "publish", and the default must stay `private` whichever way this goes.
-  Status: **open — Samuel's decision.** Both the constant and the ceiling stay exactly as they are
-  until he rules. ⚠ **Do NOT "fix" this by relaxing `canSeeTemplate`'s locked arm** — that arm is the
-  ceiling, and widening it to reach private rows would hand a locked session the operator's whole
-  private shelf, which is a strictly worse trade than the one this entry describes.
+- ⚠ **THE OPEN DECISION WAS TWO OPTIONS AND SAMUEL RULED FOR NEITHER OF THEM.**
+  - **(A) Accept it.** An agent uses `workspace`-shared templates only. Costs nothing, and is
+    consistent with the ceiling's argument. What it costs is the copy's usefulness to an
+    orchestrator — i.e. the feature.
+  - **(B) Make the copy's visibility a CHOICE.** `containerCopyDraft`'s forced `private` becomes a
+    two-option control, defaulting to `private`.
+  - **THE RULING (2026-08-27) IS THAT THE PREMISE WAS WRONG.** Both options accept that a
+    container-locked credential is a thing that must not read private rows, and argue about what to
+    do around it. It is not that thing. **The forced `private` is CORRECT and stays a constant** —
+    "use" must never publish into a room the peer is standing in — and what changed is arm 2.
+- ✅ **RESOLUTION, IN THIS CHANGE (one change with F-336, as that entry's last line demanded).**
+  `canSeeTemplate` arm 2 now asks `shared/auth/credential-audience.ts › isSharedCredential` instead
+  of `ctx.apiKeyWorkspaceId`. A **shared** credential — one with no single human behind it — keeps
+  the refusal verbatim; a **container-session** credential carries the operator's user id, so arm 3
+  (creator) answers for it. The discriminator is the new `mcp_tokens.workspace_lock_kind` column
+  (§12), written only by `mcp-container-token.ts › issueContainerToken`, and **an unstated kind reads
+  as SHARED**, so nothing widens by omission.
+  - **The AGENT lane needed a second edit or the fix would have been half-applied:**
+    `channels/server/service-launch.ts › resolveTemplateForDirective` carries
+    `apiKeyWorkspaceLockKind` alongside `apiKeyWorkspaceId`, or
+    `POST /api/channels/launch-directives` still answers `AGENT_TEMPLATE_NOT_FOUND` for the
+    operator's own private template. Pinned in `channels/server/service-launch-template.test.ts`.
+  - **Write side moved with the read side, and the reason is that its own comment cited the read.**
+    `agent-templates/server/service-writes.ts`'s create default and its F-289 update fence both read
+    `isSharedCredential` now: the justification for forcing a key to `workspace` was *"it cannot read
+    a private row back"*, which stopped being true of a container session the moment `canSeeTemplate`
+    changed. Leaving them keyed on the lock would have had the operator's agent PUBLISH its templates
+    into the peer's room — the exact thing `containerCopyDraft` exists to prevent.
+  - **No peer exposure, and it is pinned as a grid rather than argued.**
+    `server/service-visibility.test.ts` went from 3 × 5 to 3 × 7: the two new caller rows are the
+    OPERATOR's container session (private → visible) and the PEER's container session (same lock,
+    same kind, different user id → private stays hidden). ⚠ The `workspaceKey` row is unchanged in
+    every cell — that is the M-10 rule surviving intact.
+  - **The guest claim was CHECKED, not trusted.** F-333 asserted guests cannot reach templates at
+    all. Verified: every `/api/agent-templates` route and `POST /api/channels/launch-directives` sits
+    at `withWorkspaceAuth`'s `viewer` default (writes at `member`), and `guest` ranks below `viewer`
+    in `workspaces/types.ts › ROLE_RANK`. Both halves are now asserted —
+    `app/api/agent-templates/route.test.ts` for the floor, and a `meetsMinRole` case in
+    `service-visibility.test.ts › the guest floor — why F-333 has no guest arm` for the rank.
+  Status: ✅ **resolved 2026-08-27** — the entry is KEPT because the finding is the RULE: **a
+  credential's WORKSPACE lock is not an answer to a VISIBILITY question, and a predicate that reads
+  one as the other will look correct in every review until a producer appears.** F-336 is the same
+  rule found from the knowledge side on the same day.
 
 ### F-334 — sharing a template BEYOND one channel has no mechanism, and the widening is a five-part change nobody has costed
 
@@ -3804,7 +3833,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   Status: **open** (not fixed here: it is a wire-surface widening with its own `dist/` rebuild, and
   this milestone's lane is the audience ceiling — CLAUDE.md's "file it, change neither side")
 
-### F-336 — ⚠ SAMUEL'S RULING NEEDED — the container lock overshoots the audience ceiling, and RULING 2's remedy does not work
+### F-336 — ✅ RESOLVED 2026-08-27 — the container lock overshot the audience ceiling, and RULING 2's remedy did not work
 
 - **Found by the adversarial review of the HOME KNOWLEDGE PANELS wave, 2026-08-26.** Filed rather
   than fixed, on instruction and on principle: **this is a request to WIDEN A FENCE, and a fence is
@@ -3833,44 +3862,72 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 - INVARIANTS §10's ceiling bullet no longer states the remedy as fact.
 - **`canSeeBase` IS UNCHANGED.**
 
-**THE TWO OPTIONS, AND THE BLAST RADIUS OF EACH. This is the decision.**
+**THE TWO OPTIONS AS FILED, AND WHY SAMUEL RULED FOR A THIRD SHAPE.**
 
-- **Option A — B1 exempts `agent_only`-granted private bases from `canSeeBase`.** RULING 2 works as
-  written; the operator grants a private base into the channel and their own agent reads it.
-  ⚠ **Blast radius: `canSeeBase` is the M-10 predicate and it is not knowledge's alone.** The same
-  rule is restated in chats, skills and `agent-templates/server/service-shared.ts ›
-  canSeeTemplate`/`canSeeBaseRow`, and INVARIANTS §4 records that they *"all start biting for these
-  tokens together"*. Exempting knowledge alone splits a rule that is currently one sentence in five
-  places; exempting all five widens M-10 for every workspace-scoped credential, including any future
-  one that really IS shared between humans — which is the case M-10 was written for. **The narrow
-  form is: exempt ONLY when `apiKeyWorkspaceId` came from a CONTAINER token AND a grant row exists
-  — i.e. teach `canSeeBase` the difference between a shared service credential and a per-session
-  child credential, which today it cannot see.** That is a new column or a new context field, not a
-  one-line predicate change.
-- **Option B — withdraw RULING 2 and its copy.** Nothing in the code changes; the rule becomes *a
-  private base in a shared container is yours alone, full stop, and `agent_only` is for `public`
-  bases*. ⚠ **Blast radius: the `agent_only` LEVEL loses most of its purpose.** Its stated reason to
-  exist is "the operator's own agents may reach it, no human peer sees it" — for a `public` base
-  that is still a real distinction from `visible`, but the case the level was designed around (my
-  private notes, reachable by my agent, invisible to the person I am talking to) becomes
-  unexpressible. The UI keeps a three-state control whose middle state is a narrower thing than its
-  label suggests.
+- **Option A — B1 exempts `agent_only`-granted private bases from `canSeeBase`.** ⚠ Blast radius:
+  the same rule is restated in chats, skills and agent-templates, so exempting knowledge alone splits
+  one sentence across five files, and exempting all five widens M-10 for **every** workspace-scoped
+  credential — including a future one that really IS shared between humans, which is the case M-10
+  was written for. **The narrow form was named in this entry and is what shipped: exempt only when
+  the credential is a per-session CHILD credential rather than a shared service credential — "a new
+  column or a new context field, not a one-line predicate change".**
+- **Option B — withdraw RULING 2 and its copy.** ⚠ Blast radius: the `agent_only` LEVEL loses most of
+  its purpose; the case it was designed around becomes unexpressible.
+- ✅ **THE RULING (Samuel, 2026-08-27): "implement option B for F-336 AND F-333"**, meaning the
+  narrow form above, applied to both predicates in one change. **AND THE FRAMING WAS SHARPENED IN THE
+  RULING ITSELF, WHICH IS THE PART WORTH KEEPING:** layer A owns *which base within the workspace*;
+  B1 owns *which workspace*. B1's implementation refused by **visibility**, which is layer A's axis.
+  **A locked credential is a WORKSPACE fence, not a visibility fence** — so this was never a fence
+  widening, it was a fence that had been reading the wrong column.
 
-**⚠ THE SAME DEFECT HAS A SECOND INSTANCE, IN THE CONCURRENT AGENTS WAVE'S LANE — CHECKED, AND IT IS
-NOT A BLOCKER.** `agent-templates/server/service-shared.ts › canSeeTemplate` has the identical
-second arm (`if (ctx.apiKeyWorkspaceId) return false`), so a locked session sees only
-`visibility='workspace'` templates. The launch path DOES depend on it:
-`channels/server/service-launch.ts › resolveTemplateForDirective` carries `apiKeyWorkspaceId`
-deliberately, so `POST /api/channels/launch-directives` — an agent-token surface by design —
-answers `AGENT_TEMPLATE_NOT_FOUND` for a PRIVATE template from a locked session.
-**Measured, and this is why it is not a cross-wave blocker: the OPERATOR's launch does not use that
-route.** The /home Agents pane launches over the desktop bridge (`sessions:launch` →
-`main/template-resolve.js`), which rides `api.js › apiFetch` — **cookie-authed as the operator, no
-lock** — and its own module header says so in as many words. So the operator can launch a private
-template from a shared container today; an AGENT launching one by name cannot. Whichever way F-336
-is ruled should be applied to both predicates in one change, or they drift.
+✅ **RESOLUTION, IN THIS CHANGE.**
 
-  Status: **open — needs Samuel's ruling.** Do not widen `canSeeBase` without it.
+- **New column `mcp_tokens.workspace_lock_kind`** (migration `mcp_token_workspace_lock_kind`,
+  §12) — WHAT KIND of lock, never WHICH workspace. `mcp-container-token.ts › issueContainerToken`
+  stamps `'container_session'`; a CHECK closes the value set; a second CHECK forbids a kind without a
+  lock. **NULL = kind not stated = SHARED**, so the fail-closed direction is the default and a shared
+  workspace credential reintroduced later inherits the NARROW rule without anyone remembering to.
+- **New predicate `shared/auth/credential-audience.ts › isSharedCredential`** — the ONE question the
+  visibility gates may ask: *does this credential stand for nobody in particular?* Read path:
+  `mcp-access-token.ts › validateAccessToken` → `apiKeyWorkspaceLockKind` on both wrapper families →
+  each feature's context.
+- ⚠ **`validateAccessToken` AND THE TOKEN PRIMITIVES MOVED OUT OF `mcp-oauth.ts` INTO
+  `shared/auth/mcp-access-token.ts`.** That file was at 497 lines with an authorization field to add,
+  and §1's rule for that is *split, do not squeeze* — the split is by responsibility (issuing
+  credentials vs. reading one back), not by line count. `mcp-oauth.ts` re-exports the moved symbols,
+  so every importer and every `vi.mock("@/shared/auth/mcp-oauth")` resolves them unchanged.
+- **THE MIRROR AUDIT — all five sites plus the write fences, and the treatment of each.** F-336 said
+  splitting a rule that is one sentence in five places is how it drifts, so every site moved:
+  | Site | Treatment |
+  |---|---|
+  | `knowledge/server/service-shared.ts › canSeeBase` | arm 2 → `isSharedCredential` |
+  | `chats/server/service-shared.ts › canSeeChat` (+ `grantsForRows`, `requireOwnChat`) | same, all three arms |
+  | `skills/server/service-shared.ts › canSeeSkill` (+ `grantsForSkills`) | same |
+  | `agent-templates/server/service-shared.ts › canSeeTemplate` (+ `shareCtxForTemplates`) | same (F-333) |
+  | `agent-templates/server/service-shared.ts › canSeeBaseRow` (+ `resolveVisibleKnowledgeBases`) | same — it is the hand-mirror of `canSeeBase` and its own docblock says it is "the copy that will not notice" |
+  | the `fromWorkspaceKey` branches — `knowledge/server/service-base-writes.ts` (create + update), `skills/server/service-writes.ts`, `agent-templates/server/service-writes.ts` (create + the F-289 update fence) | **same predicate, and NOT optional.** Their stated justification is *"such a credential cannot read a private row back, so it may not create one"* — a measurement that expired for a container session the moment the read side changed. Leaving them keyed on the lock would default the operator's agent to creating **public/`workspace`** rows in a container the peer is standing in, i.e. publish-by-default in the one place that must not. |
+  | the WORKSPACE gates — `with-workspace-auth.ts`'s 403, `workspaces/server/segment.ts › withinKeyLock`, `shared/auth/mcp-transport-pin.ts`, `POST /api/boot`'s provisioning refusal | **UNCHANGED, deliberately.** They read `apiKeyWorkspaceId` and that is the axis they own. Pinned: a CONTAINER-SESSION lock still 403s a contradicting target. |
+  | `with-mcp-transport-auth.ts` | **UNCHANGED, deliberately, and this is the one place the two auth families legitimately differ.** It builds no feature context — it forwards the raw credential to the loopback, which re-authenticates through `with-auth.ts` and reads the kind there, once. Its use of `apiKeyWorkspaceId` is the workspace PIN. A second copy of an authorization input with no reader is a liability. |
+- **THE THREE-WAY PIN** (`knowledge/server/service-container-credential.test.ts`) — three refusals,
+  three DIFFERENT fences, one 404: a PRIVATE base granted `agent_only` on the container's channel is
+  **readable** by the operator's agent; the same base UNGRANTED is refused by **layer A** (and the
+  test asserts the grant read HAPPENED, so it cannot pass for the wrong reason); a base in ANOTHER
+  workspace is refused by the **workspace** check before the grant read is reached. A fourth case
+  pins that a SHARED credential is still refused its own granted private base.
+- ⚠ **ONE PRE-EXISTING VACUOUS PIN WAS FOUND AND CLOSED, AND IT IS THE lesson of this change.**
+  `mcp-oauth-device-token.test.ts › carries the CONTAINER LOCK when the row has one` stayed GREEN
+  with `workspace_id` deleted from the `select(...)`: the row mock answers the whole row whatever is
+  projected, so a dropped column is invisible to it — while against real PostgREST it makes every
+  locked credential read as UNLOCKED. Measured, not assumed (the mutation run is in the report).
+  **The projection string is now asserted directly**, for both columns.
+- **UI copy and docs reversed to the true rule.** `pages/home/knowledge-panels.tsx`'s scope-B caption
+  goes back to an "until" (*"Yours alone until you give your agent access."*), and
+  `kb-channel-grants-section.tsx`'s docblock records that `Agent only` reaches a private base again,
+  keeping the day it did not as the record. INVARIANTS §4, §5A, §10 and §12 restate the rule.
+  Status: ✅ **resolved 2026-08-27** — the entry is KEPT because the finding is the RULE, not the
+  line: **a WORKSPACE fence used as a VISIBILITY fence looks correct in every review until a producer
+  appears, and then it fails silently in the CLOSED direction — which is the direction nobody gets
+  paged for.** The `agent_only` grant switch was decoration for a day and every gate was green.
 
 ### F-337 — `check-doc-refs` class (e) ships with a 457-key baseline, i.e. 457 citations a reader will follow to nothing
 

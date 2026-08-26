@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import {
   deleteGrantsForResource,
@@ -23,9 +24,14 @@ export interface ChatContext {
   /** Null when auth didn't resolve one → treated as non-admin, so
    *  team-scoped chats require a grant. */
   role: Role | null;
-  /** Set for workspace-scoped API keys (shared credential). ⚠ Private chats
-   *  are hidden entirely from these callers. */
+  /** Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* only — not
+   *  the visibility answer (F-336). */
   apiKeyWorkspaceId: string | null;
+  /** `mcp_tokens.workspace_lock_kind`. ⚠ Read only via
+   *  `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
+   *  SHARED. Private chats are hidden entirely from a SHARED credential — one
+   *  with no single human behind it — never from a container SESSION. */
+  apiKeyWorkspaceLockKind: string | null;
 }
 
 export interface AuthLike {
@@ -34,6 +40,7 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
+  apiKeyWorkspaceLockKind?: string | null;
 }
 
 export function buildChatContext(auth: AuthLike): ChatContext {
@@ -43,6 +50,7 @@ export function buildChatContext(auth: AuthLike): ChatContext {
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
+    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
   };
 }
 
@@ -94,7 +102,7 @@ export async function grantsForRows(
   if (teamScoped.length === 0) return EMPTY_GRANTS;
   const needsMembership = teamScoped.some((r) => r.owner_id !== ctx.userId);
   const [myTeams, grants] = await Promise.all([
-    needsMembership && !ctx.apiKeyWorkspaceId
+    needsMembership && !isSharedCredential(ctx)
       ? listTeamIdsForUser(ctx.workspaceId, ctx.userId)
       : Promise.resolve([]),
     listGrantsForResources(
@@ -114,13 +122,19 @@ export async function grantsForRows(
  * Visibility filter:
  *   - public + workspace mode: always
  *   - public + teams mode: owner, workspace admins, or a granted team's
- *     members. Never via a workspace-scoped API key (shared credential).
- *   - private via session / personal credential: owner-only
- *   - private via workspace-scoped API key: never
+ *     members. Never via a SHARED credential.
+ *   - private via a credential with a person behind it: owner-only
+ *   - private via a SHARED credential: never
+ *
+ * ⚠ ARM 2 IS `isSharedCredential`, NOT THE WORKSPACE LOCK — the mirror of
+ * `knowledge/server/service-shared.ts › canSeeBase`, moved with it on
+ * 2026-08-27 (F-336). A container-session credential is one human's session, so
+ * it reads that human's own private transcripts; a credential that may be
+ * shared between humans still reads none.
  */
 export function canSeeChat(ctx: ChatContext, chat: ChatRow, grants: GrantCtx): boolean {
   if (chat.visibility === "public" && chat.access_mode !== "teams") return true;
-  if (ctx.apiKeyWorkspaceId) return false;
+  if (isSharedCredential(ctx)) return false;
   if (chat.owner_id === ctx.userId) return true;
   if (chat.visibility !== "public") return false;
   if (ctx.role !== null && meetsMinRole(ctx.role, "admin")) return true;
@@ -150,7 +164,7 @@ export async function requireOwnChat(
   if (!chat) throw new ChatNotFoundError(chatId);
   const grants = await grantsForRows(ctx, [chat]);
   if (!canSeeChat(ctx, chat, grants)) throw new ChatNotFoundError(chatId);
-  if (chat.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
+  if (chat.owner_id !== ctx.userId || isSharedCredential(ctx)) {
     throw new ChatForbiddenError(action);
   }
   return chat;

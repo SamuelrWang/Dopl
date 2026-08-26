@@ -27,6 +27,16 @@ export interface WorkspaceAuthContext {
    * accounts), so a teammate's private content must not leak through them.
    */
   apiKeyWorkspaceId?: string | null;
+  /**
+   * 🔒 WHAT KIND of lock the credential carries (`mcp_tokens.workspace_lock_kind`),
+   * never WHICH workspace — the two axes the M-10 predicates used to conflate
+   * (F-336/F-333, 2026-08-27). ⚠ Read it ONLY through `credential-audience.ts ›
+   * isSharedCredential`; absent/unknown reads as a SHARED credential, which is
+   * the pre-fix refusal. The 403 below reads `apiKeyWorkspaceId` and is
+   * untouched by this field — a container session is fenced to one workspace
+   * exactly as before.
+   */
+  apiKeyWorkspaceLockKind?: string | null;
   workspaceId: string;
   workspaceSlug: string;
   workspacePublicId: string;
@@ -184,6 +194,7 @@ export function withWorkspaceAuth(
         userId: ctx.userId,
         agentTokenId: ctx.agentTokenId,
         apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
+        apiKeyWorkspaceLockKind: ctx.apiKeyWorkspaceLockKind ?? null,
         workspaceId: workspace.id,
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,

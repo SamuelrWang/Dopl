@@ -27,15 +27,19 @@ import type {
  * INCLUDED). They are the same three the grant table stores as two levels plus
  * absence, so this control is the table's shape and not a translation of it.
  *
- * 🔒 ⚠ `Agent only` DOES NOT CURRENTLY REACH A `visibility='private'` BASE, and
- * the sentence above is written as if it did (2026-08-26). Under a
- * container-locked credential (layer B1) `knowledge/server/service-shared.ts ›
- * canSeeBase` answers false for every non-public base, and `getBaseById` applies
- * it BEFORE the audience ceiling — so the grant row is never consulted and the
- * agent 404s whatever this control says. It works as described for a `public`
- * base. **Samuel's ruling is pending (REFACTOR-FINDINGS F-336)** — either the
- * fence exempts `agent_only`-granted private bases, or plan RULING 2 is
- * withdrawn. Do not "fix" this by widening `canSeeBase`.
+ * 🔒 ✅ `Agent only` REACHES A `visibility='private'` BASE AGAIN, SO THE
+ * SENTENCE ABOVE IS TRUE OF EVERY BASE (F-336 resolved 2026-08-27, Samuel's
+ * ruling). ⚠ IT WAS FALSE FOR A DAY AND THIS PARAGRAPH IS KEPT AS THE RECORD:
+ * `knowledge/server/service-shared.ts › canSeeBase` answered false for every
+ * non-public base under a container-locked credential, and `getBaseById`
+ * applies it BEFORE the audience ceiling, so the grant row was never consulted
+ * and the agent 404'd whatever this control said. The fix was NOT to widen the
+ * lock — it was to stop reading a WORKSPACE fence as a VISIBILITY one: the gate
+ * now asks `shared/auth/credential-audience.ts › isSharedCredential`, so a
+ * container SESSION (one human's, narrowed) reads what that human reads and a
+ * credential shared between humans still reads no private row at all.
+ * ⚠ `Agent only` is still bounded by layer A: it grants into THIS channel, and
+ * an agent elsewhere in the container reaches nothing new.
  *
  * ⚠ THE CHANNEL LIST COMES OFF THE SERVER, already fenced to the caller's
  * visible channels (`GET …/channel-grants`). It is never assembled from a

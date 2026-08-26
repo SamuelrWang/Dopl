@@ -211,6 +211,11 @@ async function resolveTemplateForDirective(
       // `canSeeTemplate` reads this field; handing it `null` would let such a key
       // resolve the key-owner's private templates by name.
       apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
+      // ⚠ AND ITS KIND, OR ARM 2 REFUSES THE OPERATOR'S OWN SESSION (F-333).
+      // Dropping this line puts `AGENT_TEMPLATE_NOT_FOUND` on every private
+      // template a locked session names — including every "Use in this channel"
+      // copy, which `containerCopyDraft` forces to `private`.
+      apiKeyWorkspaceLockKind: ctx.apiKeyWorkspaceLockKind ?? null,
     },
     ref
   );

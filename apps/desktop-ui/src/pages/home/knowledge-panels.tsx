@@ -277,19 +277,21 @@ export function HomeKnowledgePanels({
             UI copy): a scope-C base cannot be granted into a channel at all
             (RULING 1), and a scope-B base is invisible to the operator's own
             agent in this channel.
-            🔒 ⚠ THE SCOPE-B LINE STATES THE CURRENT TRUTH, NOT RULING 2'S
-            REMEDY (corrected 2026-08-26). It read "Yours alone UNTIL YOU SHARE
-            IT", promising that granting `agent_only` opens the base to the
-            agent. It does not: `knowledge/server/service-shared.ts › canSeeBase`
-            answers false for ANY non-public base under a container-locked
-            credential (B1), and `getBaseById` runs that gate BEFORE the audience
-            ceiling — so the grant is never consulted. Whether that is the fence
-            overshooting or the ruling being withdrawn is SAMUEL'S CALL
-            (REFACTOR-FINDINGS F-336); until he makes it, the copy may not
-            promise a remedy the code does not implement. */}
+            🔒 ⚠ THE SCOPE-B LINE STATES RULING 2 AGAIN, AND THIS TIME THE CODE
+            IMPLEMENTS IT (F-336 resolved 2026-08-27, Samuel's ruling). Between
+            2026-08-26 and that ruling it read "Yours alone — your agent in this
+            channel can't read these, shared or not", because it could not:
+            `canSeeBase` answered false for ANY non-public base under a
+            container-locked credential and `getBaseById` ran that gate BEFORE
+            the audience ceiling, so the grant row was never consulted. The gate
+            now asks `credential-audience.ts › isSharedCredential` instead of the
+            lock, so granting `agent_only` is the remedy the ruling always said
+            it was. ⚠ THE LINE IS AN "UNTIL", NOT A PROMISE OF PRIVACY: a base
+            with a grant on this channel IS readable by the agent here. Do not
+            shorten it back to "Yours alone." */}
         <p className="px-4 pt-2.5 text-caption text-text-muted">
           {scope === "channel"
-            ? "Yours alone — your agent in this channel can't read these, shared or not."
+            ? "Yours alone until you give your agent access."
             : "Yours alone. To share knowledge in a channel, create it there."}
         </p>
         {scope === "all" && homeWorkspaceId === null ? (

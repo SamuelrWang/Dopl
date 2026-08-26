@@ -5,7 +5,11 @@
  *
  * The chain this suite walks, end to end, is FOUR hops that were never joined
  * before: `mcp_tokens.workspace_id` → `validateAccessToken` → `with-auth.ts`'s
- * `apiKeyWorkspaceId` → the gates that read it. Until 2026-08-26 the third hop
+ * `apiKeyWorkspaceId` → the gates that read it. ⚠ SINCE 2026-08-27 THE ROW
+ * CARRIES A SECOND FIELD ON A SECOND AXIS — `workspace_lock_kind`, which says
+ * WHAT KIND of lock this is and is what the VISIBILITY gates read
+ * (`credential-audience.ts › isSharedCredential`, F-336/F-333). The lock still
+ * answers WHICH WORKSPACE and nothing else. Until 2026-08-26 the third hop
  * did not exist at all (`with-auth.ts` never wrote the field, and the
  * `api_keys` table the whole chain was built for was dropped in
  * `20260609000000`), so INVARIANTS §4 called it "dead scaffolding; preserved".
@@ -27,6 +31,7 @@ const state = vi.hoisted(() => ({
     scopes: string[];
     tokenId: string;
     workspaceId: string | null;
+    workspaceLockKind?: string | null;
   } | null,
   /** Every `.eq/.is/.not/.select/.insert/.update` the minter issued. */
   ops: [] as { fn: string; args: unknown[] }[],
@@ -116,6 +121,17 @@ describe("issueContainerToken", () => {
     await issueContainerToken({ userId: "u-1", workspaceId: "ws-container" });
 
     expect(insertedRow().workspace_id).toBe("ws-container");
+  });
+
+  // 🔒 F-336/F-333. The lock says WHICH WORKSPACE; this says WHAT KIND OF LOCK,
+  // and without it `credential-audience.ts › isSharedCredential` answers TRUE
+  // and the operator's own agent is refused the operator's own private rows —
+  // silently, and in the fail-CLOSED direction, so nothing errors and the only
+  // tell is a 404 on a knowledge base the operator granted.
+  it("🔒 stores the lock's KIND, which is what stops it being read as a SHARED key", async () => {
+    await issueContainerToken({ userId: "u-1", workspaceId: "ws-container" });
+
+    expect(insertedRow().workspace_lock_kind).toBe("container_session");
   });
 
   it("returns the token ONCE and stores only its hash", async () => {
@@ -216,6 +232,9 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
   const echo = withUserAuth(async (_req, ctx) =>
     NextResponse.json({ apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null }),
   );
+  const echoKind = withUserAuth(async (_req, ctx) =>
+    NextResponse.json({ kind: ctx.apiKeyWorkspaceLockKind ?? null }),
+  );
   const req = () =>
     new NextRequest("https://x.test/api/thing", {
       headers: { authorization: "Bearer dopl_at_child" },
@@ -248,18 +267,46 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
 
     expect(await res.json()).toEqual({ apiKeyWorkspaceId: null });
   });
+
+  // 🔒 THE FIFTH HOP (F-336, 2026-08-27). The lock alone cannot answer a
+  // VISIBILITY question; the kind is what the M-10 predicates read. Drop this
+  // forward and every container session reverts to being a shared key.
+  it("forwards the lock's KIND alongside it", async () => {
+    state.token = {
+      userId: "u-1",
+      scopes: ["dopl.read"],
+      tokenId: "t",
+      workspaceId: "ws-container",
+      workspaceLockKind: "container_session",
+    };
+
+    const res = await echoKind(req(), { params: Promise.resolve({}) });
+
+    expect(await res.json()).toEqual({ kind: "container_session" });
+  });
 });
 
 // ─── the enforcement the lock switches on ───────────────────────────────────
 
-describe("🔒 the M-10 gates the lock lights up", () => {
-  function ctx(apiKeyWorkspaceId: string | null): KnowledgeContext {
+/**
+ * ⚠ THIS BLOCK WAS "the M-10 gates the LOCK lights up" AND THAT WAS THE F-336
+ * DEFECT WRITTEN AS A TEST (corrected 2026-08-27, Samuel's ruling). The gates
+ * are lit by the credential being SHARED — having no single human behind it —
+ * and a lock is not evidence of that. What the lock lights up is the WORKSPACE
+ * fence, which is pinned in `with-workspace-auth.test.ts` and is unchanged.
+ */
+describe("🔒 the M-10 gates a SHARED credential lights up", () => {
+  function ctx(
+    apiKeyWorkspaceId: string | null,
+    apiKeyWorkspaceLockKind: string | null = null,
+  ): KnowledgeContext {
     return {
       workspaceId: "ws-container",
       userId: "u-1",
       role: "owner",
       source: "agent",
       apiKeyWorkspaceId,
+      apiKeyWorkspaceLockKind,
     };
   }
   const privateOwn = {
@@ -269,15 +316,25 @@ describe("🔒 the M-10 gates the lock lights up", () => {
   } as KnowledgeBase;
   const shared = { id: "kb-public", visibility: "public" } as KnowledgeBase;
 
-  it("refuses a PRIVATE base under a locked credential — even the caller's OWN", async () => {
-    // The rule the gate encodes: a workspace-scoped credential may be shared
-    // between humans, so it must not read a private draft. A credential that
-    // exists BECAUSE a peer is in the room is exactly that situation.
+  it("refuses a PRIVATE base under a lock with NO stated kind — the shared-key case", async () => {
+    // The rule the gate encodes: a credential that may be shared between humans
+    // must not read one person's private draft. "Locked, kind unknown" is read
+    // as exactly that, which is the fail-closed direction.
     expect(canSeeBase(ctx("ws-container"), privateOwn)).toBe(false);
   });
 
-  it("still allows a SHARED base under the same locked credential", async () => {
+  it("🔒 ALLOWS it under a CONTAINER-SESSION lock — F-336, and the whole ruling", async () => {
+    // Same lock, same workspace, same user id. The kind is the only difference,
+    // and it is the difference between "a credential shared between humans" and
+    // "the operator's own session, narrowed".
+    expect(canSeeBase(ctx("ws-container", "container_session"), privateOwn)).toBe(
+      true,
+    );
+  });
+
+  it("still allows a SHARED base under either lock", async () => {
     expect(canSeeBase(ctx("ws-container"), shared)).toBe(true);
+    expect(canSeeBase(ctx("ws-container", "container_session"), shared)).toBe(true);
   });
 
   it("is unchanged for an UNLOCKED credential — the caller's own private base is visible", async () => {

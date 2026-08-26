@@ -36,6 +36,7 @@ function ctx(role: ChatContext["role"] = "member"): ChatContext {
     source: "user",
     role,
     apiKeyWorkspaceId: null,
+    apiKeyWorkspaceLockKind: null,
   };
 }
 

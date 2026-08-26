@@ -69,6 +69,15 @@ export async function authenticateMcpRequest(
           // honoured on one path and dropped on the other is a fence with a
           // door in it that nothing in either file would mention.
           apiKeyWorkspaceId: tok.workspaceId,
+          // ⚠ `workspaceLockKind` IS DELIBERATELY NOT CARRIED HERE, and this is
+          // the one place the two families legitimately differ (2026-08-27,
+          // F-336). The kind is a VISIBILITY input and this boundary builds no
+          // feature context: it forwards the raw credential to the loopback
+          // DoplClient, which re-authenticates through `with-auth.ts` and reads
+          // the kind there, once. What this file uses `apiKeyWorkspaceId` for is
+          // the WORKSPACE pin (`mcp-transport-pin.ts` / `bootServer`), which the
+          // kind never touches. Adding it here would be a second copy of an
+          // authorization input with no reader.
           scopes: tok.scopes,
           credential_info: tok.credential,
         },

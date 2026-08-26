@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
 import {
   deleteGrantRow,
@@ -45,11 +46,18 @@ export async function createBase(
   // exist yet. Slug unique per workspace keeps MCP `kb_*` slug addressing
   // unambiguous; publicId is the URL routing key.
   //
-  // Visibility default by caller: workspace-scoped API key must be 'public'
-  // (⚠ `canSeeBase` blocks such keys from reading their own private rows back,
-  // so a private one is stranded — explicit 'private' rejected loudly);
-  // session caller / personal key → 'private', owner publishes later.
-  const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
+  // Visibility default by caller: a SHARED credential must be 'public'
+  // (⚠ `canSeeBase` blocks such credentials from reading their own private rows
+  // back, so a private one is stranded — explicit 'private' rejected loudly);
+  // session caller / container session → 'private', owner publishes later.
+  //
+  // ⚠ THE PREDICATE MOVED WITH `canSeeBase` ON 2026-08-27 (F-336) BECAUSE THE
+  // COMMENT ABOVE IS THE WHOLE JUSTIFICATION FOR THE FENCE. A container-session
+  // credential CAN read its own private rows back now, so the stranding it
+  // guards against does not exist for it, and forcing 'public' would have the
+  // operator's agent publish into the room the PEER is standing in — the
+  // opposite of what this branch is for.
+  const fromWorkspaceKey = isSharedCredential(ctx);
   let resolvedVisibility = input.visibility;
   if (fromWorkspaceKey) {
     if (resolvedVisibility === "private") {
@@ -191,9 +199,11 @@ export async function updateBase(
         : (patch.accessMode ?? base.accessMode);
 
     if (targetVisibility === "private") {
-      // Workspace-scoped keys can't read private rows back, so they may not
-      // create this state either.
-      if (ctx.apiKeyWorkspaceId != null) {
+      // SHARED credentials can't read private rows back, so they may not
+      // create this state either. ⚠ Same predicate as `canSeeBase` on purpose
+      // (F-336): the fence is "can this caller read it back?", not "is it
+      // locked?".
+      if (isSharedCredential(ctx)) {
         throw new WorkspaceKeyPrivateVisibilityError();
       }
       dropAllGrants = true;

@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { HttpError } from "@/shared/lib/http-error";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { findMembership } from "@/features/workspaces/server/repository";
@@ -25,6 +26,7 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
+  apiKeyWorkspaceLockKind?: string | null;
 }
 
 export function buildSkillContext(auth: AuthLike): SkillContext {
@@ -34,6 +36,7 @@ export function buildSkillContext(auth: AuthLike): SkillContext {
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
+    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
   };
 }
 
@@ -70,7 +73,7 @@ export async function grantsForSkills(
   if (teamScoped.length === 0) return EMPTY_SKILL_GRANTS;
   const needsMembership = teamScoped.some((s) => s.createdBy !== ctx.userId);
   const [myTeams, grants] = await Promise.all([
-    needsMembership && !ctx.apiKeyWorkspaceId
+    needsMembership && !isSharedCredential(ctx)
       ? listTeamIdsForUser(ctx.workspaceId, ctx.userId)
       : Promise.resolve([]),
     listGrantsForResources(
@@ -90,9 +93,13 @@ export async function grantsForSkills(
  * Three-way visibility filter. Same model as `canSeeChat`:
  *   - public + workspace mode: always
  *   - public + teams mode: owner, workspace admins, or a granted team's
- *     members. Never via a workspace-scoped API key.
- *   - private via session / personal credential: owner-only
- *   - private via workspace-scoped API key: never
+ *     members. Never via a SHARED credential.
+ *   - private via a credential with a person behind it: owner-only
+ *   - private via a SHARED credential: never
+ *
+ * ⚠ ARM 2 IS `isSharedCredential`, NOT THE WORKSPACE LOCK — the mirror of
+ * `knowledge/server/service-shared.ts › canSeeBase`, moved with it on
+ * 2026-08-27 (F-336).
  */
 export function canSeeSkill(
   ctx: SkillContext,
@@ -100,7 +107,7 @@ export function canSeeSkill(
   grants: SkillGrantCtx
 ): boolean {
   if (skill.visibility === "public" && skill.accessMode !== "teams") return true;
-  if (ctx.apiKeyWorkspaceId) return false;
+  if (isSharedCredential(ctx)) return false;
   if (skill.createdBy === ctx.userId) return true;
   if (skill.visibility !== "public") return false;
   if (ctx.role !== null && meetsMinRole(ctx.role, "admin")) return true;

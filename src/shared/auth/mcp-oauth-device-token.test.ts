@@ -250,12 +250,21 @@ describe("revokeDeviceTokens (F-085)", () => {
 
 describe("validateAccessToken vs a revoked row", () => {
   /** Single-row read builder. */
+  /** Every projection string the reader was asked for, in order. ⚠ THE MOCK
+   *  RETURNS THE WHOLE ROW WHATEVER IS SELECTED, so a row-shape assertion can
+   *  never notice a dropped column — that is why the projection itself is
+   *  asserted below rather than inferred from the answer. */
+  const selects: string[] = [];
+
   function makeReader(row: Record<string, unknown> | null) {
     const builder: Record<string, unknown> = {};
     const chain = () => builder;
     Object.assign(builder, {
       from: chain,
-      select: chain,
+      select: (cols?: string) => {
+        if (typeof cols === "string") selects.push(cols);
+        return builder;
+      },
       eq: chain,
       update: chain,
       maybeSingle: async () => ({ data: row, error: null }),
@@ -266,6 +275,10 @@ describe("validateAccessToken vs a revoked row", () => {
   }
 
   const future = new Date(Date.now() + 86_400_000).toISOString();
+
+  beforeEach(() => {
+    selects.length = 0;
+  });
 
   it("a revoked device token is refused even though it has not expired", async () => {
     vi.mocked(supabaseAdmin).mockReturnValue(
@@ -303,6 +316,12 @@ describe("validateAccessToken vs a revoked row", () => {
       // stop doing so the moment anything distinguishes "unlocked" from "the
       // server did not say".
       workspaceId: null,
+      // 🔒 AND ITS KIND, on the same argument (F-336, 2026-08-27). `null` here
+      // means "kind not stated", which `credential-audience.ts ›
+      // isSharedCredential` reads as a SHARED credential — the RESTRICTIVE
+      // answer. An omitted key would read the same today and must not be
+      // allowed to start meaning something else quietly.
+      workspaceLockKind: null,
     });
   });
 
@@ -349,6 +368,60 @@ describe("validateAccessToken vs a revoked row", () => {
     );
     expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
       workspaceId: "ws-container",
+    });
+  });
+
+  /**
+   * 🔒 THE LOCK'S KIND IS READ OFF THE ROW TOO (F-336, 2026-08-27) — the first
+   * hop of the OTHER axis. A projection that drops this column makes every
+   * container session read as a SHARED workspace credential, and the operator's
+   * own agent is refused the operator's own private rows. ⚠ The positive case
+   * needs its own assertion for the reason the bullet above gives: a mutation
+   * hardcoding `workspaceLockKind: null` leaves the null case green.
+   */
+  /**
+   * 🔒 THE PROJECTION IS THE FENCE, AND NOTHING ELSE IN THIS FILE CAN SEE IT.
+   * `makeReader` answers the whole row regardless of what was selected, so
+   * "carries the lock" and "carries the kind" above both stay GREEN if either
+   * column is dropped from the `select(...)` — measured, not assumed (a
+   * mutation removing `workspace_lock_kind` from the SELECT left all 16 tests
+   * passing before this one existed). Against the real PostgREST an unselected
+   * column is simply ABSENT, which makes every locked credential read as
+   * unlocked and every container session read as shared — silently, in opposite
+   * directions. So the projection string is asserted directly.
+   */
+  it("🔒 SELECTS both authorization columns — the one thing the row mock cannot check", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read"],
+        access_expires_at: future,
+        revoked_at: null,
+      }) as never
+    );
+    await validateAccessToken("dopl_at_deadbeef");
+
+    expect(selects[0]).toContain("workspace_id");
+    expect(selects[0]).toContain("workspace_lock_kind");
+  });
+
+  it("carries the lock's KIND when the row has one", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read"],
+        access_expires_at: future,
+        revoked_at: null,
+        client_id: DEVICE_CLIENT_ID,
+        client_name: "Dopl Desktop (container session)",
+        workspace_id: "ws-container",
+        workspace_lock_kind: "container_session",
+      }) as never
+    );
+    expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
+      workspaceLockKind: "container_session",
     });
   });
 

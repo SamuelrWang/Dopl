@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import type {
   AgentTemplate,
   AgentTemplateContext,
@@ -41,10 +42,14 @@ export async function createTemplate(
   input: AgentTemplateCreateInput
 ): Promise<AgentTemplate> {
   // Visibility default depends on the caller, the same rules as `createSkill` /
-  // `createBase`: a workspace-scoped key defaults to `workspace` and may never
-  // own a private row (it can be shared between humans, so "private to the key"
-  // means nothing); everyone else defaults to `private`.
-  const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
+  // `createBase`: a SHARED credential defaults to `workspace` and may never own
+  // a private row (it can be shared between humans, so "private to the
+  // credential" means nothing); everyone else defaults to `private`.
+  // ⚠ `isSharedCredential`, moved with `canSeeTemplate` on 2026-08-27 (F-333):
+  // a container SESSION owns private rows exactly as its operator does, and
+  // defaulting it to `workspace` would publish the operator's agent into the
+  // room the peer is standing in.
+  const fromWorkspaceKey = isSharedCredential(ctx);
   let visibility: TemplateVisibility;
   if (fromWorkspaceKey) {
     if (input.visibility === "private") throw new WorkspaceKeyPrivateTemplateError();
@@ -126,7 +131,12 @@ export async function updateTemplate(
   // ⚠ IT IS `nextVisibility`, NOT `patch.visibility`, ON PURPOSE: the state that
   // matters is the one the row LANDS in, and a key that already owns a private
   // row must not be able to patch its name and keep it.
-  if (nextVisibility === "private" && ctx.apiKeyWorkspaceId != null) {
+  // ⚠ THE SUBJECT NARROWED ON 2026-08-27 (F-333) AND THE FENCE DID NOT MOVE:
+  // it now reads `isSharedCredential`, so it still refuses every credential
+  // with nobody behind it, and no longer refuses the OPERATOR's own container
+  // session — which can read a private row back, so none of the reasoning above
+  // applies to it.
+  if (nextVisibility === "private" && isSharedCredential(ctx)) {
     throw new WorkspaceKeyPrivateTemplateError();
   }
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { slugify } from "@/shared/lib/slug/slugify";
 import { HttpError } from "@/shared/lib/http-error";
@@ -34,10 +35,12 @@ export async function createSkill(
   ctx: SkillContext,
   input: SkillCreateInput
 ): Promise<{ skill: Skill; primaryFile: SkillFile }> {
-  // Visibility default depends on the caller, same rules as createBase:
-  // workspace-scoped keys default public and can't create private;
-  // everyone else defaults private.
-  const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
+  // Visibility default depends on the caller, same rules as createBase: a
+  // SHARED credential defaults public and can't create private; everyone else
+  // defaults private. ⚠ `isSharedCredential`, moved with `canSeeSkill` on
+  // 2026-08-27 (F-336) — the fence is "can this caller read it back?", and a
+  // container SESSION can.
+  const fromWorkspaceKey = isSharedCredential(ctx);
   let resolvedVisibility = input.visibility;
   if (fromWorkspaceKey) {
     if (resolvedVisibility === "private") {

@@ -1,13 +1,17 @@
 import "server-only";
-import { createHash, randomBytes, randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME, describeCredential, type McpCredential } from "./mcp-credential";
+import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME } from "./mcp-credential";
+import { ACCESS_PREFIX, randToken, sha256 } from "./mcp-access-token";
 
 /**
  * Core of Dopl's OAuth 2.1 authorization server for the remote MCP endpoint.
  * ⚠ Lives in shared/auth because `validateAccessToken` is consumed by BOTH auth
  * points (with-mcp-transport-auth.ts and with-auth.ts) and shared/ must not
- * import from features/.
+ * import from features/. ⚠ THAT FUNCTION AND THE TOKEN PRIMITIVES NOW LIVE IN
+ * `mcp-access-token.ts` (2026-08-27, §1: this file was at 497 with an
+ * authorization field to add). They are RE-EXPORTED below, unchanged, so every
+ * importer and every `vi.mock` of this module still resolves them here.
  *
  * Security model:
  *   - Only SHA-256 hashes of codes/tokens stored; plaintext returned once at
@@ -21,7 +25,14 @@ import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME, describeCredential, type McpCrede
 export const MCP_SCOPES = ["dopl.read", "dopl.write"] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 
-export const ACCESS_PREFIX = "dopl_at_";
+export {
+  ACCESS_PREFIX,
+  isOAuthAccessToken,
+  randToken,
+  sha256,
+  validateAccessToken,
+} from "./mcp-access-token";
+
 const REFRESH_PREFIX = "dopl_rt_";
 const CODE_PREFIX = "dopl_ac_";
 const CLIENT_PREFIX = "dopl_client_";
@@ -35,24 +46,6 @@ export const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
 
 // ⚠ Reserved device client + row classifier live in `mcp-credential.ts`. ONE
 // definition — do not restate the client id here.
-
-// Per-instance debounce so a hot token doesn't write last_used_at every request
-// (mirrors touchMcpStatus). At most one write/min/token/instance.
-const lastUsedTouched = new Map<string, number>();
-const LAST_USED_TOUCH_MS = 60_000;
-
-export function sha256(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
-}
-
-export function randToken(prefix: string): string {
-  return prefix + randomBytes(32).toString("hex");
-}
-
-/** Dopl OAuth access token? (`dopl_at_` prefix) */
-export function isOAuthAccessToken(token: string): boolean {
-  return token.startsWith(ACCESS_PREFIX);
-}
 
 /** Constant-time PKCE S256 check: base64url(sha256(verifier)) === challenge. */
 export function verifyPkceS256(verifier: string, challenge: string): boolean {
@@ -324,66 +317,6 @@ export async function revokeDeviceTokens(input: {
   }
 
   return ids.size;
-}
-
-/**
- * Resolve an access token to an identity. Single validation entry point for the
- * MCP transport boundary AND the loopback /api/* guard. Null for non-tokens and
- * unknown/expired/revoked tokens. Touches last_used_at fire-and-forget.
- *
- * ⚠ `credential` is DESCRIPTIVE only — nothing gates on it, and the label inside
- * is caller-supplied text (`mcp-credential.ts`).
- *
- * 🔒 ⚠ `workspaceId` IS THE OPPOSITE: IT IS THE ONE FIELD HERE THAT GATES.
- * Non-null LOCKS this credential to that workspace; `shared/auth/mcp-container-token.ts`
- * mints them and carries the whole argument. ⚠ It must stay in this SELECT —
- * dropping the column makes every locked credential read as UNLOCKED, silently.
- */
-export async function validateAccessToken(
-  token: string,
-): Promise<{
-  userId: string;
-  scopes: string[];
-  tokenId: string;
-  credential: McpCredential;
-  workspaceId: string | null;
-} | null> {
-  if (!isOAuthAccessToken(token)) return null;
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("mcp_tokens")
-    .select(
-      "id, user_id, scopes, access_expires_at, revoked_at, client_id, client_name, workspace_id",
-    )
-    .eq("access_token_hash", sha256(token))
-    .maybeSingle();
-  if (error || !data) return null;
-  if (data.revoked_at) return null;
-  if (new Date(data.access_expires_at).getTime() < Date.now()) return null;
-
-  const now = Date.now();
-  if (now - (lastUsedTouched.get(data.id) ?? 0) > LAST_USED_TOUCH_MS) {
-    lastUsedTouched.set(data.id, now);
-    void db
-      .from("mcp_tokens")
-      .update({ last_used_at: new Date(now).toISOString() })
-      .eq("id", data.id)
-      .then(
-        () => {},
-        () => {},
-      );
-  }
-
-  const credential = describeCredential(data.client_id, data.client_name);
-  return {
-    userId: data.user_id,
-    scopes: data.scopes,
-    tokenId: data.id,
-    credential,
-    // ⚠ `?? null` = "no lock stated". NOT a fail-open: unlocked is the ordinary
-    // case, and the narrowing is only ever ADDED by a deliberate mint.
-    workspaceId: (data as { workspace_id?: string | null }).workspace_id ?? null,
-  };
 }
 
 /** Rotate a refresh token: revoke the presented one, issue a fresh pair. Reuse

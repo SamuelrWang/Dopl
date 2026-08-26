@@ -161,10 +161,10 @@ describe("the template ref — resolved under the CALLER's visibility, before an
   });
 
   it("hands the resolver THIS caller's context, `apiKeyWorkspaceId` included (M-10)", async () => {
-    // ⚠ ARM 2 OF THE MATRIX RIDES ON THAT ONE FIELD. A workspace-scoped API key
-    // may be shared between humans, so it inherits nobody's personal reach —
-    // passing `null` here would let such a key resolve the key owner's PRIVATE
-    // templates by name. `ChannelContext` started carrying the field for this.
+    // ⚠ ARM 2 OF THE MATRIX RIDES ON THAT ONE FIELD. A credential that may be
+    // shared between humans inherits nobody's personal reach — passing `null`
+    // here would let such a credential resolve its owner's PRIVATE templates by
+    // name. `ChannelContext` started carrying the field for this.
     online();
     vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
     await createLaunchDirective(
@@ -178,6 +178,25 @@ describe("the template ref — resolved under the CALLER's visibility, before an
       apiKeyWorkspaceId: WS,
     });
     expect(ref).toBe("X");
+  });
+
+  // 🔒 F-333's OTHER HALF. The lock alone is not the answer — the resolver needs
+  // the lock's KIND too, or `canSeeTemplate`'s arm 2 reads a container session
+  // as a shared credential and `POST /api/channels/launch-directives` answers
+  // AGENT_TEMPLATE_NOT_FOUND for the operator's own private template, which is
+  // every "Use in this channel" copy.
+  it("carries the lock KIND to the resolver as well, or a container session cannot name its own template", async () => {
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
+    await createLaunchDirective(
+      { ...ctx, apiKeyWorkspaceId: WS, apiKeyWorkspaceLockKind: "container_session" },
+      { channel: "general", template: "X" }
+    );
+    const [templateCtx] = vi.mocked(resolveTemplateRef).mock.calls[0];
+    expect(templateCtx).toMatchObject({
+      apiKeyWorkspaceId: WS,
+      apiKeyWorkspaceLockKind: "container_session",
+    });
   });
 
   it("an UNRESOLVABLE ref refuses and files NOTHING", async () => {

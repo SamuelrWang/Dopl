@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type {
   AgentTemplate,
@@ -26,6 +27,7 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
+  apiKeyWorkspaceLockKind?: string | null;
 }
 
 export function buildAgentTemplateContext(
@@ -37,6 +39,7 @@ export function buildAgentTemplateContext(
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
+    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
   };
 }
 
@@ -77,10 +80,12 @@ export async function shareCtxForTemplates(
   const teamScoped = rows.filter((t) => t.visibility === "team");
   if (teamScoped.length === 0) return EMPTY_SHARE_CTX;
   // The caller's own team-scoped rows are visible without a membership lookup,
-  // and a workspace-scoped API key never gets one (it has no person behind it).
+  // and a SHARED credential never gets one (it has no person behind it).
+  // ⚠ `isSharedCredential`, not the lock: a container session HAS a person
+  // behind it, so it resolves teams like the human it acts for (F-336).
   const needsMembership = teamScoped.some((t) => t.createdBy !== ctx.userId);
   const [myTeams, links] = await Promise.all([
-    needsMembership && !ctx.apiKeyWorkspaceId
+    needsMembership && !isSharedCredential(ctx)
       ? repo.listTeamIdsForUser(ctx.workspaceId, ctx.userId)
       : Promise.resolve([]),
     repo.listTeamLinksForTemplates(
@@ -101,10 +106,11 @@ export async function shareCtxForTemplates(
 /**
  * THE VISIBILITY MATRIX. Arms in evaluation order, and the order is
  * load-bearing:
- *   1. `workspace`                      → every member, including API keys.
- *   2. workspace-scoped API key         → NOTHING further (M-10: such a key may
- *                                         be shared between humans, so it never
- *                                         inherits one person's reach).
+ *   1. `workspace`                      → every member, including agents.
+ *   2. a SHARED credential              → NOTHING further (M-10: such a
+ *                                         credential may be shared between
+ *                                         humans, so it never inherits one
+ *                                         person's reach).
  *   3. creator                          → always.
  *   4. `private`                        → nobody else, ADMINS INCLUDED.
  *   5. workspace admin, `team`          → always.
@@ -123,6 +129,21 @@ export async function shareCtxForTemplates(
  * is the record of what it costs when they do not: RLS stayed permissive after
  * the service tightened, and a team-scoped transcript leaked through PostgREST
  * to every member for as long as nobody compared them.
+ *
+ * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT `ctx.apiKeyWorkspaceId` — F-333,
+ * ruled by Samuel and fixed 2026-08-27. The old form made every "Use in this
+ * channel" copy invisible to the agents running in that channel:
+ * `lib/template-draft.ts › containerCopyDraft` FORCES `private` (correctly —
+ * "use" must not publish the operator's agent into a room the peer is standing
+ * in), and layer B1 sets the lock for every read a session in a shared container
+ * makes, so the copy could not be listed, named or resolved by the very agent it
+ * was made for. **A container-session credential is the operator's own session**,
+ * so arm 3 (creator) now answers for it exactly as it answers for the operator
+ * at their keyboard. ⚠ NO PEER EXPOSURE IS OPENED: the peer, and the peer's own
+ * agent, carry the PEER's user id, so arm 3 misses and arm 4 (`private` → nobody
+ * else, admins included) refuses them. Guests never reach a template surface at
+ * all — every `agent-templates` route and `POST /api/channels/launch-directives`
+ * sits at `withWorkspaceAuth`'s `viewer` floor and `guest` ranks below it.
  */
 export function canSeeTemplate(
   ctx: AgentTemplateContext,
@@ -130,7 +151,7 @@ export function canSeeTemplate(
   share: TemplateShareCtx
 ): boolean {
   if (template.visibility === "workspace") return true;
-  if (ctx.apiKeyWorkspaceId) return false;
+  if (isSharedCredential(ctx)) return false;
   if (template.createdBy !== null && template.createdBy === ctx.userId) {
     return true;
   }
@@ -168,7 +189,9 @@ export function withSharingSet(
  * `knowledge/server/service-shared.ts › canSeeBase` + `assertBaseVisible`:
  *   public + workspace mode  → any member
  *   public + teams mode      → creator, workspace admin, or a granted team
- *   private                  → creator only, and NEVER via a workspace key
+ *   private                  → creator only, and NEVER via a SHARED credential
+ *                              (`isSharedCredential`, moved with `canSeeBase`
+ *                              on 2026-08-27 — F-336)
  *
  * ⚠ IF THAT FILE'S RULE CHANGES, THIS ONE IS THE COPY THAT WILL NOT NOTICE.
  * The failure direction is over-permissive (attaching a KB the caller lost
@@ -190,13 +213,13 @@ export function canSeeBaseRow(
   myTeamIds: Set<string>
 ): boolean {
   if (base.visibility === "private") {
-    if (ctx.apiKeyWorkspaceId) return false;
+    if (isSharedCredential(ctx)) return false;
     return base.createdBy !== null && base.createdBy === ctx.userId;
   }
   if (base.accessMode !== "teams") return true;
   if (base.createdBy !== null && base.createdBy === ctx.userId) return true;
   if (isWorkspaceAdmin(ctx)) return true;
-  if (ctx.apiKeyWorkspaceId) return false;
+  if (isSharedCredential(ctx)) return false;
   const granted = grantedTeamsByBase.get(base.id) ?? [];
   return granted.some((teamId) => myTeamIds.has(teamId));
 }
@@ -222,7 +245,7 @@ export async function resolveVisibleKnowledgeBases(
   );
   const needsTeams =
     teamScoped.length > 0 &&
-    !ctx.apiKeyWorkspaceId &&
+    !isSharedCredential(ctx) &&
     !isWorkspaceAdmin(ctx) &&
     teamScoped.some((b) => b.createdBy !== ctx.userId);
   const [grants, myTeams] = await Promise.all([

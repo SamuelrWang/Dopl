@@ -27,6 +27,7 @@ const ctx: ChatContext = {
   source: "agent",
   role: "member",
   apiKeyWorkspaceId: null,
+    apiKeyWorkspaceLockKind: null,
 };
 
 function chatRow(overrides: Partial<ChatRowWithCount> = {}): ChatRowWithCount {

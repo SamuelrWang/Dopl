@@ -113,14 +113,16 @@ async function runAndLog5xx(
  * spawned into a SHARED link container, and this line is what makes the lock
  * reach `with-workspace-auth`'s 403.
  *
- * ⚠ SO THE M-10 GATES THAT READ IT ARE NO LONGER DEAD EITHER, and there are
- * more of them than this file: `knowledge/server/service-shared.ts › canSeeBase`
- * (private bases are invisible to a workspace-scoped key), the same predicate in
- * chats, skills and agent-templates, and the `fromWorkspaceKey` branches in the
- * knowledge and skill write services. They all start biting for these tokens
- * together. That is intended — a credential a PEER's presence caused to exist
- * should not be able to read its operator's private drafts — but it is a
- * behaviour change on every one of those paths, not just on workspace targeting.
+ * 🔒 ⚠ AND `apiKeyWorkspaceLockKind` RIDES BESIDE IT, BECAUSE THE LOCK ANSWERS
+ * TWO QUESTIONS AND ONLY ONE OF THEM IS THIS FILE'S (2026-08-27, F-336/F-333).
+ * WHICH WORKSPACE is the lock; WHICH ROWS WITHIN IT is visibility. The M-10
+ * gates — `knowledge/server/service-shared.ts › canSeeBase`, the same predicate
+ * in chats, skills and agent-templates, and the `fromWorkspaceKey` branches in
+ * the three write services — read the SECOND question off
+ * `credential-audience.ts › isSharedCredential`, never off the lock directly. A
+ * container-session credential is one human's session and reads what that human
+ * reads; a lock with any other kind (or none) keeps the original refusal, so a
+ * shared workspace key reintroduced later inherits the NARROW rule by default.
  */
 export function withUserAuth(
   handler: (
@@ -133,6 +135,10 @@ export function withUserAuth(
       // (`agent_write_enabled`, canvas-edit).
       agentTokenId?: string;
       apiKeyWorkspaceId?: string | null;
+      /** `mcp_tokens.workspace_lock_kind` — WHAT KIND of lock, never WHICH
+       *  workspace. ⚠ Read only through `credential-audience.ts ›
+       *  isSharedCredential`; absent reads as a shared credential. */
+      apiKeyWorkspaceLockKind?: string | null;
       params?: Record<string, string>;
     }
   ) => Promise<Response | NextResponse>,
@@ -249,6 +255,11 @@ export function withUserAuth(
               agentTokenId: tok.tokenId,
               // 🔒 THE CONTAINER LOCK. `null` for every ordinary credential.
               apiKeyWorkspaceId: tok.workspaceId,
+              // 🔒 …AND ITS KIND. Dropping this line is silent and fails CLOSED:
+              // every container session reverts to being read as a shared
+              // workspace key, and the operator's agent 404s on the operator's
+              // own private rows (F-336).
+              apiKeyWorkspaceLockKind: tok.workspaceLockKind,
               params: resolvedParams,
             }),
           {

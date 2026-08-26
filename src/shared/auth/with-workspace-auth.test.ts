@@ -19,6 +19,7 @@ import type {
 
 const state = vi.hoisted(() => ({
   apiKeyWorkspaceId: null as string | null,
+  apiKeyWorkspaceLockKind: null as string | null,
   // Forwarding harness: `token` set → OAuth-bearer branch (re-enacting the
   // sessionOnly + write-scope gates from the forwarded `options`); else session.
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
@@ -64,12 +65,14 @@ vi.mock("./with-auth", () => ({
           userId: state.token.userId,
           agentTokenId: state.token.tokenId,
           apiKeyWorkspaceId: state.apiKeyWorkspaceId,
+          apiKeyWorkspaceLockKind: state.apiKeyWorkspaceLockKind,
           params: rc?.params,
         });
       }
       return handler(req, {
         userId: state.sessionUser?.id ?? "user-1",
         apiKeyWorkspaceId: state.apiKeyWorkspaceId,
+        apiKeyWorkspaceLockKind: state.apiKeyWorkspaceLockKind,
         params: rc?.params,
       });
     },
@@ -174,6 +177,7 @@ function writeReq(
 beforeEach(() => {
   vi.clearAllMocks();
   state.apiKeyWorkspaceId = null;
+  state.apiKeyWorkspaceLockKind = null;
   state.token = null;
   state.sessionUser = { id: "user-1" };
 });
@@ -227,7 +231,7 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
   });
 });
 
-describe("API-key workspace lock (scaffolding, preserved)", () => {
+describe("the credential workspace lock (LIVE since Home Knowledge Panels M5)", () => {
   it("uses the key's workspace when no header is sent", async () => {
     state.apiKeyWorkspaceId = UUID_A;
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
@@ -240,6 +244,39 @@ describe("API-key workspace lock (scaffolding, preserved)", () => {
     const res = await echo(req("/api/x", { "x-workspace-id": UUID_B }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("API_KEY_WORKSPACE_MISMATCH");
+  });
+
+  // 🔒 F-336's ruling widened VISIBILITY inside the locked workspace and must
+  // not have widened the WORKSPACE axis by a millimetre. A container-session
+  // credential is the kind that now reads its operator's private rows — the
+  // home workspace is still 403, which is B1's actual job.
+  it("STILL 403s a contradicting target when the lock is a CONTAINER SESSION", async () => {
+    state.apiKeyWorkspaceId = UUID_A;
+    state.apiKeyWorkspaceLockKind = "container_session";
+    const res = await echo(req("/api/x", { "x-workspace-id": UUID_B }), { params: Promise.resolve({}) });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("API_KEY_WORKSPACE_MISMATCH");
+  });
+
+  it("forwards the lock KIND onto the context, so the M-10 predicates can read it", async () => {
+    state.apiKeyWorkspaceId = UUID_A;
+    state.apiKeyWorkspaceLockKind = "container_session";
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const echoKind = withWorkspaceAuth(async (_req, ctx) =>
+      NextResponse.json({ kind: ctx.apiKeyWorkspaceLockKind ?? null })
+    );
+    const res = await echoKind(req("/api/x"), { params: Promise.resolve({}) });
+    expect(await res.json()).toEqual({ kind: "container_session" });
+  });
+
+  it("an UNSTATED kind arrives as null — which every predicate reads as SHARED", async () => {
+    state.apiKeyWorkspaceId = UUID_A;
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const echoKind = withWorkspaceAuth(async (_req, ctx) =>
+      NextResponse.json({ kind: ctx.apiKeyWorkspaceLockKind ?? null })
+    );
+    const res = await echoKind(req("/api/x"), { params: Promise.resolve({}) });
+    expect(await res.json()).toEqual({ kind: null });
   });
 });
 

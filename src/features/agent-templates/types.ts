@@ -121,9 +121,18 @@ export interface AgentTemplateContext {
    *  non-admin, so team-scoped templates require a linked team. */
   role: Role | null;
   /**
-   * Non-null only for workspace-scoped API-key requests. Such a key may be
-   * shared between humans (CI runners, service accounts), so it is given NO
-   * private visibility — M-10, same rule as `canSeeSkill` / `canSeeBase`.
+   * Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* ONLY — it is
+   * NOT the visibility answer, which is the F-333/F-336 defect (fixed
+   * 2026-08-27). See {@link AgentTemplateContext.apiKeyWorkspaceLockKind}.
    */
   apiKeyWorkspaceId?: string | null;
+  /**
+   * `mcp_tokens.workspace_lock_kind`. ⚠ Read ONLY through
+   * `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
+   * a SHARED credential. A credential that may be shared between humans (CI
+   * runners, service accounts) gets NO private visibility — M-10, same rule as
+   * `canSeeSkill` / `canSeeBase`. A container-SESSION credential is one human's
+   * session and is not that.
+   */
+  apiKeyWorkspaceLockKind?: string | null;
 }

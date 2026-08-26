@@ -5,6 +5,7 @@ import {
   randToken,
   sha256,
 } from "@/shared/auth/mcp-oauth";
+import { CONTAINER_SESSION_LOCK } from "@/shared/auth/credential-audience";
 import {
   DEVICE_CLIENT_ID,
   DEVICE_CLIENT_NAME,
@@ -47,15 +48,22 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * input to this module that widens anything; the worst a misuse achieves is a
  * credential that can do less than the one the caller already holds.
  *
- * ⚠ IT LIGHTS UP THE M-10 GATES TOO, AND THAT IS INTENDED BUT IS A REAL
- * BEHAVIOUR CHANGE. `apiKeyWorkspaceId` being non-null makes
- * `knowledge/server/service-shared.ts › canSeeBase` refuse PRIVATE bases
- * outright — even ones the caller created — and the equivalent predicates in
- * chats, skills and agent-templates do the same. The rule those gates encode is
- * "a workspace-scoped key may be shared between humans, so it must not read a
- * private draft", and a credential that exists BECAUSE a peer is in the room is
- * exactly that situation. Layer A reaches the same conclusion from the grant
- * table; this reaches it from the credential, and they agree.
+ * 🔒 ⚠ IT LIT UP THE M-10 VISIBILITY GATES TOO UNTIL 2026-08-27, AND THAT WAS
+ * THE DEFECT F-336/F-333 RECORD. This paragraph used to argue that a credential
+ * existing BECAUSE a peer is in the room is "a key shared between humans", so
+ * `knowledge/server/service-shared.ts › canSeeBase` and its four siblings were
+ * right to refuse it every PRIVATE row — the caller's own included. **It is not
+ * that kind of credential.** It is minted for ONE session, carries the
+ * OPERATOR's user id and the operator's own proved membership, and is then
+ * narrowed; a shared workspace key stands for nobody in particular. Reading the
+ * lock as a VISIBILITY answer hid the operator's notes from the operator's own
+ * agent AND made the `agent_only` grant unreachable — the visibility gate 404'd
+ * before layer A's grant row was ever consulted, so RULING 2's remedy could not
+ * fire. `workspace_lock_kind` is the fix: this row says which kind it is, and
+ * `credential-audience.ts › isSharedCredential` is the one predicate that reads
+ * it. **The workspace lock itself is untouched** — B1 is still the fence, still
+ * 403s a contradicting target in both auth families, and layer A still refuses
+ * every base the operator did not grant into the container.
  *
  * ⚠ LIVES HERE RATHER THAN IN `mcp-oauth.ts` for the reason
  * `features/playground/server/token.ts` gives: that file sits against the
@@ -154,6 +162,12 @@ export async function issueContainerToken(input: {
       client_name: CONTAINER_CLIENT_NAME,
       // 🔒 THE LOCK. Everything else on this row is an ordinary device token.
       workspace_id: input.workspaceId,
+      // 🔒 AND WHAT KIND OF LOCK IT IS — the field that stops the WORKSPACE
+      // fence from being read as a VISIBILITY fence (`credential-audience.ts`,
+      // F-336/F-333). Without it this row reads as a SHARED workspace
+      // credential and the operator's own agent 404s on the operator's own
+      // private rows, grant or no grant.
+      workspace_lock_kind: CONTAINER_SESSION_LOCK,
     })
     .select("id")
     .single();

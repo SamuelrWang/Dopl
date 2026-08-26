@@ -1,4 +1,5 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { slugify } from "@/shared/lib/slug/slugify";
 import type { Role } from "@/features/workspaces/types";
 import {
@@ -31,6 +32,7 @@ export interface AuthLike {
   role: Role;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
+  apiKeyWorkspaceLockKind?: string | null;
   sessionId?: string | null;
 }
 
@@ -53,6 +55,7 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
     role: auth.role,
     source: auth.agentTokenId ? "agent" : "user",
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
+    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
     sessionId: auth.sessionId ?? null,
   };
 }
@@ -60,14 +63,33 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
 // ─── Visibility gates ───────────────────────────────────────────────
 
 /**
- * M-10 visibility. Public → always; private via session/personal key →
- * owner-only; private via workspace-scoped key → NEVER (shared between humans).
- * Used as row filter (`listBases`) AND 404 gate (`getBaseById` /
- * `getBaseBySlug` / `getBaseByPublicId`).
+ * M-10 visibility. Public → always; private → owner-only; private via a SHARED
+ * credential → NEVER. Used as row filter (`listBases`) AND 404 gate
+ * (`getBaseById` / `getBaseBySlug` / `getBaseByPublicId`).
+ *
+ * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT "IS THERE A WORKSPACE LOCK?", AND
+ * THE DIFFERENCE IS F-336 (fixed 2026-08-27, Samuel's ruling). This line read
+ * `if (ctx.apiKeyWorkspaceId) return false`, which turned layer B1's WORKSPACE
+ * fence into a VISIBILITY fence: a container-locked session — the operator's own
+ * agent, on the operator's own user id — was refused every non-public base
+ * **before** `service-audience.ts`'s grant fence was ever consulted, so a
+ * private base granted `agent_only` into the channel was still a 404 and the
+ * grant switch was decoration. The two layers own different axes: **B1 decides
+ * WHICH WORKSPACE, layer A decides WHICH BASE WITHIN IT.** This predicate owns
+ * neither — it decides whether a credential stands for a person.
+ *
+ * ⚠ NOTHING HERE WIDENS THE CONTAINER. `getBaseById`/`getBaseBySlug`/`listBases`
+ * still run `resolveAgentAudience` after this, so an agent in a shared container
+ * reaches an ungranted base — private or public — exactly never.
+ *
+ * ⚠ MIRRORED, NOT IMPORTED, IN FOUR PLACES: `chats › canSeeChat`,
+ * `skills › canSeeSkill`, `agent-templates › canSeeTemplate` and
+ * `agent-templates › canSeeBaseRow`. All five moved together in this change;
+ * splitting them is how the rule drifts.
  */
 export function canSeeBase(ctx: KnowledgeContext, base: KnowledgeBase): boolean {
   if (base.visibility === "public") return true;
-  if (ctx.apiKeyWorkspaceId) return false;
+  if (isSharedCredential(ctx)) return false;
   return base.createdBy === ctx.userId;
 }
 

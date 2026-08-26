@@ -171,10 +171,16 @@ export interface SkillContext {
    *  as non-admin, so team-scoped skills require a grant. Mirrors
    *  `ChatContext.role`. */
   role: Role | null;
-  /** Non-null only for workspace-scoped API-key requests. Service layer
-   *  gives these callers no private visibility. Same semantics as
+  /** Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* only, never
+   *  the visibility answer. Same semantics as
    *  `KnowledgeContext.apiKeyWorkspaceId`. */
   apiKeyWorkspaceId?: string | null;
+  /** `mcp_tokens.workspace_lock_kind`. ⚠ Read only via
+   *  `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
+   *  SHARED. The service layer gives a SHARED credential no private
+   *  visibility. Same semantics as
+   *  `KnowledgeContext.apiKeyWorkspaceLockKind` (F-336). */
+  apiKeyWorkspaceLockKind?: string | null;
 }
 
 export type { SourceProvider };
