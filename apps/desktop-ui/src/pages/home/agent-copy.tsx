@@ -130,12 +130,25 @@ export function CopyToChannelDialog({
  * ⚠ THE KB LINE IS CONDITIONAL ON THERE BEING SOMETHING TO DROP, and it NAMES
  * the count. On a template with no attachments the sentence would be a rule
  * about nothing — three words of chrome for a fact the operator cannot act on.
+ *
+ * ⚠ `?? NO_BASES` ON A SIBLING FIELD OF A CACHE-PERSISTED PAYLOAD (INVARIANTS
+ * §8). `source` is a row out of the template list's cache entry, so it can be a
+ * payload written by an OLDER build of this app; a bare
+ * `source.knowledgeBases.length` throws inside the render of a dialog that is
+ * already open, which blanks the surface rather than showing a sentence. The
+ * field predates this wave, so this is not a new stale-field hazard — it is the
+ * exact spelling the rule forbids, in the position where it costs most.
  */
+
+/** Shared frozen empty list — never a fresh `[]`, which would be a new identity
+ *  on every render of a dialog that re-renders on every keystroke behind it. */
+const NO_BASES: ReadonlyArray<{ id: string; name: string }> = Object.freeze([]);
+
 function describe(source: AgentTemplate, error: string | null): string {
   const lines = [
     "This makes a private copy here. It's a snapshot — later edits to the original won't reach it.",
   ];
-  const attached = source.knowledgeBases.length;
+  const attached = (source.knowledgeBases ?? NO_BASES).length;
   if (attached > 0) {
     lines.push(
       `Its ${attached} attached knowledge ${attached === 1 ? "base stays" : "bases stay"} behind — they live in your own workspace, not in this channel.`

@@ -35,8 +35,8 @@ import { useTeams } from "@/features/members/hooks/use-teams";
  * {@link ContainerTemplateEditor} must not — "don't fetch teams for a container"
  * is a rule you cannot express with a conditional `useTeams(…)` call. Split into
  * two components it is not a rule at all, it is the shape of the file, and
- * `agent-authoring.test.tsx › asks for no teams when it is writing into the
- * container` pins it from the wire.
+ * `agent-authoring.test.tsx › offers TWO visibility scopes in a container, and
+ * asks for no teams` pins it from the wire.
  *
  * ⚠ WHY A CONTAINER HAS NO TEAMS TO ASK FOR: a `kind='link'` container holds ONE
  * OR TWO members and no team rows (INVARIANTS §4A), so `team` is a DEAD

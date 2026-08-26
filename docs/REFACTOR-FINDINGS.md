@@ -3663,6 +3663,65 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   the RULE (a fallback keyed on "the fetch failed" becomes a liar the moment failure becomes normal),
   and a future tidy-up that re-adds review fixtures needs to meet it.
 
+### F-333 — ⚠ SAMUEL'S DECISION NEEDED — after B1, an agent in a shared container can see ONLY `workspace`-visibility templates, so every "Use in this channel" copy is invisible to it
+
+- **This id was RESERVED by the plan (`docs/specs/home-agents-tab.plan.md` §5 and §7) and was never
+  filed.** It is filed now with the thing it was reserved to decide, which turned out to have an
+  answer: the audience ceiling's B1 does reach templates, and it reaches them in a direction nobody
+  costed. **Nothing here is a behaviour change. This entry states the interaction and asks.**
+- Location: `src/features/agent-templates/server/service-shared.ts › canSeeTemplate` against
+  `src/features/agent-templates/lib/template-draft.ts › containerCopyDraft`, with
+  `› buildAgentTemplateContext` as the join.
+- **The trace, in four hops, each re-derivable:**
+  1. `canSeeTemplate` reads, in order: `visibility === "workspace"` → **true**; then
+     `if (ctx.apiKeyWorkspaceId) return false`. So a caller on a workspace-locked credential sees
+     workspace-visible templates and **nothing else** — not its own, not the operator's.
+     `buildAgentTemplateContext` fills that field from `auth.apiKeyWorkspaceId`.
+  2. Before the audience ceiling, `apiKeyWorkspaceId` had **no producer** — §4 records that it was
+     dead scaffolding for months, so the locked arm was unreachable and this branch had never fired.
+  3. **B1 is the producer** (`mcp_tokens.workspace_id` → `validateAccessToken` → `apiKeyWorkspaceId`,
+     INVARIANTS §4/§10/§12). Every desktop-spawned session in a container that has a peer now runs on
+     one, so the locked arm fires for the operator's OWN agent.
+  4. `containerCopyDraft` **forces `visibility: "private"`** — deliberately, and correctly: "use"
+     must never publish the operator's agent into a room the peer is standing in (§5A).
+- **The consequence, stated plainly: every template the /home Agents face's "Use in this channel"
+  creates is invisible to the agents running in that channel**, as is every scope-B template. A
+  locked session cannot list one, cannot name one, and cannot resolve one. The copy exists so a home
+  agent can be used in a channel; post-B1 the only templates an agent in that channel can actually
+  see are the ones deliberately SHARED with the peer.
+- 🔒 **WHAT IS *NOT* BROKEN, AND THIS IS THE HALF THAT MATTERS FOR THE RELEASE.** The OPERATOR's own
+  launch is untouched. `dopl-desktop-app/main/template-resolve.js` rides `main/api.js › apiFetch`,
+  which is **COOKIE-authed** (`auth.getAuthCookie()`), not MCP-token-authed — so `apiKeyWorkspaceId`
+  is null on that path and `canSeeTemplate`'s locked arm is never reached. The /home Chat face's
+  `TemplateLaunchPicker` → `sessions:launch` → `/resolve` lane is a cookie lane end to end, and a
+  private container template launches from it exactly as M4 shipped it. **The copy works for the
+  person who made it. It does not work for an agent asked to pick its own identity.**
+- ⚠ **THE PLAN'S OWN JUSTIFICATION FOR SKIPPING THIS IS NOW FALSE, AND HAS BEEN CORRECTED IN PLACE**
+  (`docs/specs/home-agents-tab.plan.md` §5): *"an orchestrator listing the operator's own private
+  templates runs on the OPERATOR's credential = operator's own reach, not a peer leak."* That was
+  true when it was written and B1 is exactly what unmade it — a container-locked credential is no
+  longer the operator's reach, and `canSeeTemplate` reads it as "an agent: shared templates only".
+  The sentence is a worked example of the class CLAUDE.md keeps re-learning: a justification is a
+  measurement, and it expires when the thing it measured moves.
+- **Severity: not a leak in either direction.** The ceiling errs CLOSED, so the failure mode is an
+  agent that cannot see a template it arguably should, never a peer seeing one they should not. It
+  is filed as a DECISION rather than a bug because both readings are defensible and only Samuel can
+  pick.
+- ⚠ **THE OPEN DECISION, TWO OPTIONS, NEITHER TAKEN HERE:**
+  - **(A) Accept it.** An agent uses `workspace`-shared templates only; the private shelves are the
+    operator's, for the operator's own launches. Costs nothing, ships today, and is consistent with
+    the ceiling's whole argument (a locked session sees what the container shares, not what one
+    member holds). What it costs is the copy's usefulness to an orchestrator.
+  - **(B) Make the copy's visibility a CHOICE rather than a constant.** `containerCopyDraft`'s forced
+    `private` becomes a two-option control on the confirm step ("private to me" / "shared in this
+    channel"), so the operator decides, per copy, whether their agents can reach it. ⚠ **This is a
+    real security control and must not be defaulted to shared** — the forced `private` is what stops
+    "use" from meaning "publish", and the default must stay `private` whichever way this goes.
+  Status: **open — Samuel's decision.** Both the constant and the ceiling stay exactly as they are
+  until he rules. ⚠ **Do NOT "fix" this by relaxing `canSeeTemplate`'s locked arm** — that arm is the
+  ceiling, and widening it to reach private rows would hand a locked session the operator's whole
+  private shelf, which is a strictly worse trade than the one this entry describes.
+
 ### F-334 — sharing a template BEYOND one channel has no mechanism, and the widening is a five-part change nobody has costed
 
 - Location: `src/features/agent-templates/**` against
@@ -3792,3 +3851,75 @@ is ruled should be applied to both predicates in one change, or they drift.
   its live guidance) or means those strata need a different citation convention is a real decision
   and is not made here.
   Status: **open** — shrink the baseline doc by doc; never append to it.
+
+### F-338 — ✅ RESOLVED 2026-08-26 — the /home Agents pane was ONE React instance across every channel, so a create could land in the WRONG container and SUCCEED
+
+- ⚠ **Id note:** taken as the next free number after re-reading this file fresh (F-337 was the
+  highest, and F-335/336/337 are a concurrent wave's). If that wave also claimed 338, renumber this
+  one — the earlier claim wins.
+- Location: `apps/desktop-ui/src/pages/home/index.tsx › renderPane` against
+  `src/shared/ui/crossfade.tsx › Crossfade`.
+- **The mechanism.** `Crossfade` renders `{children(shownToken)}` **with no key** — deliberately, it
+  is a fade wrapper and not a router. `renderPane` returned `<HomeAgentPanels …>` at the same
+  position for every `agents:<rowId>` token, so React reconciled ONE INSTANCE across a channel
+  switch: props moved, `useState` did not. `scope`, `editing: EditorTarget | null` and
+  `copying: AgentTemplate | null` all survived.
+- 🔴 **Why that was a HIGH and not a cosmetic bug: the survivors name a WORKSPACE by PROP.**
+  `ContainerTemplateEditor workspaceId={channel.workspaceId}` and
+  `CopyToChannelDialog containerWorkspaceId={channel.workspaceId}` silently retarget at the NEW
+  container while the operator is looking at a dialog they opened on the OLD one.
+  - **CREATE lands in the wrong relationship's container and SUCCEEDS** — the caller is a member of
+    both, so there is no 404, no rollback, and nothing on screen that says where the row went.
+  - **COPY** puts the operator's home agent into a channel they were not looking at.
+  - **EDIT/DELETE** 404 (the id belongs to the other workspace) — but the optimistic `upsertRow`
+    APPENDS the foreign row into the new container's list first, so the failure is preceded by a
+    visible lie.
+- ⚠ **AND THE SWITCH NEED NOT BE A CLICK.** `selected` is
+  `visible.find(...) ?? visible[0] ?? null`, so the pane moves whenever the selected row leaves
+  `visible` — a roster change, an archive, or the peer-joins teardown (RULING 5). The operator can
+  be holding a dialog over a container they never chose.
+- Found during: the adversarial review of the HOME AGENTS TAB wave, 2026-08-26.
+- ⚠ **THE EXISTING PIN WAS BLIND, AND THAT IS THE LESSON.**
+  `agent-panels.test.tsx › the pane token` asserts on rendered DATA and stayed GREEN through the
+  whole bug: data is a prop and props move. **A pane's identity cannot be read off the DOM** — the
+  honest pin is on SURVIVING STATE, because state can only survive if the instance did.
+- Resolution, in this change: `key={shown}` on the pane, and a test that opens the copy confirm on
+  channel A, switches to channel B, and asserts the dialog is GONE and the scope pill is back at its
+  default (`› TEARS THE PANE DOWN on a channel switch`). Mutation-verified: removing the key turns
+  that one test red and leaves the old data test green.
+  ⚠ **The /home KNOWLEDGE pane had the same defect and was fixed independently in the same file, in
+  the same wave** — one class, two faces, found by two reviews. Neither face was keyed because
+  `paneToken` had *looked* like the fix; **a token is about the ANIMATION, a key is about the
+  INSTANCE**, and a pane holding per-channel state owes itself both.
+  Status: ✅ **resolved 2026-08-26** — the entry is KEPT because the finding is the RULE, not the
+  line: **any face rendered through `Crossfade` that holds state about what it is showing must be
+  keyed by its token.** A fourth /home face will need it on the day it is written.
+
+### F-339 — ✅ RESOLVED 2026-08-26 — a failed scope-C read on the /home Agents pane was silent, blank, AND trapped the scope pill
+
+- ⚠ **Id note:** see F-338's; same read, same race.
+- Location: `apps/desktop-ui/src/pages/home/agent-panels.tsx` — `containerList.error` was read,
+  `homeList.error` was not — against `agent-panel-cards.tsx › PrivateAgentSection`.
+- **The mechanism, and it compounds.** `useAgentTemplates` reports `resolved: query.data !== undefined`,
+  so a FAILED read is unresolved **forever**. `scopePending` was `!homeList.resolved`, so:
+  1. the section body rendered a bare `<div className="h-10" />` — no sentence, no error, no retry;
+  2. the scope pill was wrapped in `pendingRow(true)` = `pointer-events-none`, so **the operator
+     could not switch back to "in this channel"**. The only escape was changing tab or channel.
+- ⚠ **It contradicted M0's own argument.** F-332 deleted the dev fixture fallback precisely because
+  *"on a link CONTAINER a 403/404 is a NORMAL answer"* — and then this face treated that normal
+  answer as a state with no words for it. It also breaks §5A's UNKNOWN-is-not-EMPTY in the direction
+  nobody watches for: not "an unmeasured list stated as empty", but **a measured failure stated as
+  nothing at all**, while holding the control that undoes it.
+- Found during: the adversarial review of the HOME AGENTS TAB wave, 2026-08-26.
+- Resolution, in this change: `scopeFailed` is derived from `homeList.error` and **outranks**
+  `scopePending`, so a settled-with-error read is never pending; `PrivateAgentSection` gains a
+  `failure: {message, onRetry} | null` state that prints the server's own wording
+  (`agentTemplateErrorMessage`) beside a "Try again"; and the pill stays LIVE. Three tests
+  (`agent-panels.test.tsx › a failed scope-C read`), one of which operates the pill and comes back
+  rather than merely asserting the attribute is absent. Mutation-verified: dropping `scopeFailed`
+  turns all three red.
+- ⚠ **The generalizable half, for any surface with a `resolved`-style flag:** `resolved` answers
+  "did data arrive", which is **not** "did this settle". Error is a THIRD state and it must be
+  modelled, or it inherits whatever the pending branch does — and a pending branch is allowed to
+  disable controls, which is how a missing error state becomes a trap rather than a blank.
+  Status: ✅ **resolved 2026-08-26** — kept for the rule above.

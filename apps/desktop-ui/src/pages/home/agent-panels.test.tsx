@@ -217,34 +217,37 @@ describe("empty scopes", () => {
   });
 });
 
+/** Two channels, the second answering with its OWN template — so a pane
+ *  rendering the wrong channel is visible as DATA, not merely as a token. */
+function twoChannels() {
+  const second = {
+    ...HOME.channels[0],
+    workspaceId: OTHER_WS,
+    workspaceSegment: "link-dana-bb22",
+    channelId: "chan-2",
+    name: "Dana Ruiz",
+    peer: null,
+    linkOut: null,
+  };
+  const two: HomeChannelsPayload = {
+    channels: [HOME.channels[0], second],
+    pendingLinks: [],
+  };
+  apiRequest.mockImplementation(
+    (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
+      const bare = path.split("?")[0];
+      if (bare === "/api/home/channels") return Promise.resolve(ok(two));
+      if (bare === "/api/agent-templates" && opts.workspaceId === OTHER_WS) {
+        return Promise.resolve(ok({ templates: [DANA_TEMPLATE] }));
+      }
+      return defaultRoutes(path, opts);
+    }
+  );
+}
+
 describe("the pane token", () => {
   it("crossfades on a channel switch and never swaps data under a frozen token", async () => {
-    const second = {
-      ...HOME.channels[0],
-      workspaceId: OTHER_WS,
-      workspaceSegment: "link-dana-bb22",
-      channelId: "chan-2",
-      name: "Dana Ruiz",
-      peer: null,
-      linkOut: null,
-    };
-    const two: HomeChannelsPayload = {
-      channels: [HOME.channels[0], second],
-      pendingLinks: [],
-    };
-    apiRequest.mockImplementation(
-      (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
-        const bare = path.split("?")[0];
-        if (bare === "/api/home/channels") return Promise.resolve(ok(two));
-        if (bare === "/api/agent-templates" && opts.workspaceId === OTHER_WS) {
-          // The SECOND channel's container answers with its own template — so a
-          // pane rendering the wrong channel is visible as DATA, not merely as
-          // a token.
-          return Promise.resolve(ok({ templates: [DANA_TEMPLATE] }));
-        }
-        return defaultRoutes(path, opts);
-      }
-    );
+    twoChannels();
 
     const { view } = renderHome();
     await openAgents();
@@ -266,6 +269,128 @@ describe("the pane token", () => {
     await waitFor(() =>
       expect(screen.queryByText("Renewal chaser")).not.toBeInTheDocument()
     );
+  });
+
+  /**
+   * 🔒 THE TOKEN IS NOT THE KEY, AND THIS IS WHY THE PIN ABOVE WAS NOT ENOUGH
+   * (F-338). That test asserts on rendered DATA and stayed green through the
+   * whole bug: `Crossfade` renders `{children(shownToken)}` with NO key, and
+   * every `agents:<rowId>` token returns `<HomeAgentPanels>` at the SAME
+   * position — so React reconciled ONE INSTANCE across the switch. Data is a
+   * prop and props move; the panel's own `useState` did not.
+   *
+   * ⚠ THESE ASSERT ON THE INSTANCE, NOT ON WHAT IS PAINTED. There is no way to
+   * read a component's identity from the DOM, and there does not need to be:
+   * state can only survive a switch if the instance did, so a reset `scope` and
+   * a torn-down dialog ARE the identity claim. What made it a HIGH rather than
+   * a cosmetic bug is what the survivors point at — `ContainerTemplateEditor`
+   * and `CopyToChannelDialog` take the target workspace as a PROP, so a dialog
+   * held open across the switch silently retargets at the NEW container and its
+   * write SUCCEEDS there: no 404, no rollback, the wrong relationship.
+   */
+  it("TEARS THE PANE DOWN on a channel switch — no held state retargets", async () => {
+    twoChannels();
+    renderHome();
+    await openAgents();
+    await screen.findByText("Renewal chaser");
+
+    // Two pieces of held state: the pill is off its default, and a copy confirm
+    // is open holding channel ONE's container id.
+    await chooseScope("across all channels");
+    await screen.findByText("Fundraise analyst");
+    fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
+    await screen.findByRole("button", { name: "Make a copy" });
+
+    fireEvent.click(screen.getByText("Dana Ruiz"));
+    await screen.findByText("Dana's assistant");
+
+    // The dialog went with the pane it belonged to. Held across the switch it
+    // would still be open — now addressing Dana's container.
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Make a copy" })).toBeNull()
+    );
+    // …and the pill is back at its default, which is the same fact said twice:
+    // a fresh instance, not a re-render.
+    expect(
+      screen.getByLabelText("Which private agents").textContent
+    ).toContain("in this channel");
+    expect(screen.queryByText("Fundraise analyst")).not.toBeInTheDocument();
+  });
+});
+
+describe("a failed scope-C read", () => {
+  /** The home workspace's template list refuses; everything else answers. */
+  function refuseHomeTemplates() {
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/agent-templates" && opts.workspaceId === WORKSPACE_ID
+        ? Promise.resolve({
+            status: 403,
+            statusText: "Forbidden",
+            hasBody: true,
+            body: { error: { code: "FORBIDDEN", message: "You can't read that." } },
+          })
+        : defaultRoutes(path, opts)
+    );
+  }
+
+  it("says so, and NEVER leaves the pill inert on a settled answer", async () => {
+    // 🔒 THE TRAP THIS PINS. `resolved` is `data !== undefined`, so a failed
+    // read is unresolved FOREVER — read as "pending" the section painted a bare
+    // spacer with no sentence AND the pill stayed `pendingRow(true)` =
+    // `pointer-events-none`, so the operator could not get back to the scope
+    // that works. Changing tab or channel was the only escape.
+    refuseHomeTemplates();
+    renderHome();
+    await openAgents();
+    await screen.findByText("Scratch agent");
+
+    await chooseScope("across all channels");
+
+    // The answer is SAID. M0's own argument is that a 403 here is an ORDINARY
+    // answer; an ordinary answer that renders as blank is a lie by omission.
+    expect(await screen.findByText("You can't read that.")).toBeInTheDocument();
+    // It is not the pending state and it is not the empty sentence.
+    expect(
+      screen.queryByText("You have no private agents in your own workspace.")
+    ).not.toBeInTheDocument();
+
+    // 🔒 AND THE WAY BACK IS LIVE. Not merely "the attribute is absent" — the
+    // pill is actually operated, and the container's own shelf comes back.
+    const pill = screen.getByLabelText("Which private agents");
+    expect(pill.closest("[data-pending]")).toBeNull();
+    await chooseScope("in this channel");
+    expect(await screen.findByText("Scratch agent")).toBeInTheDocument();
+  });
+
+  it("offers the retry, and the retry re-asks", async () => {
+    refuseHomeTemplates();
+    renderHome();
+    await openAgents();
+    await screen.findByText("Scratch agent");
+    await chooseScope("across all channels");
+    await screen.findByText("You can't read that.");
+
+    const before = templateCalls(WORKSPACE_ID).length;
+    apiRequest.mockImplementation(defaultRoutes);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
+    expect(templateCalls(WORKSPACE_ID).length).toBeGreaterThan(before);
+  });
+
+  it("leaves the CONTAINER's own section standing — one section failed, not the pane", async () => {
+    // A whole-pane `PageError` for a scope-C failure would take away the shared
+    // section AND the pill that leaves the failing scope, which is the trap
+    // above with better manners.
+    refuseHomeTemplates();
+    renderHome();
+    await openAgents();
+    await screen.findByText("Scratch agent");
+    await chooseScope("across all channels");
+    await screen.findByText("You can't read that.");
+
+    expect(screen.getByText("Renewal chaser")).toBeInTheDocument();
+    expect(screen.getByText("Priya's intake bot")).toBeInTheDocument();
   });
 });
 

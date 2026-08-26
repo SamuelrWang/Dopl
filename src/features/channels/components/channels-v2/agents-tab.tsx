@@ -29,6 +29,20 @@
  * ⚠ COPY RULE (INVARIANTS §5): inside one member's window there is exactly ONE
  * session, so it never needs a qualifier. Nothing here writes "agent session"
  * or "channel session" — the noun on this surface is the AGENT.
+ *
+ * ⚠ "AGENTS" NAMES TWO DIFFERENT SURFACES AND BOTH NAMES STAY (Samuel's ruling
+ * Q6, 2026-08-26; INVARIANTS §5A). THIS tab is the RUNNING SESSIONS — what is
+ * live on this machine, right now, in this channel; it is EPHEMERAL and it is
+ * per-operator. The /home **Agents** face (`apps/desktop-ui/src/pages/home/
+ * agent-panels.tsx`) is the other one: TEMPLATE IDENTITIES — durable, authored,
+ * launchable later — and it deliberately has no launch control precisely so
+ * that this side stays the only place an agent starts. The one thing both
+ * surfaces DO share is `agent-templates/components/template-picker.tsx ›
+ * TemplateLaunchPicker` below, which reads the same container template list the
+ * /home face authors into: that is the join, and it is why the collision is
+ * confusing rather than harmless. **A rename needs Samuel's word** — §5's noun
+ * rule has tests behind it — so the collision is RECORDED on both faces rather
+ * than resolved.
  */
 
 import { useMemo } from "react";

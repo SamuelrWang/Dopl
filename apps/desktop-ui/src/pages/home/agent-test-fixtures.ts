@@ -2,7 +2,12 @@ import { fireEvent, screen } from "@testing-library/react";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, USER_ID, WORKSPACE_ID, bridgeCalls, ok } from "#/test-utils/bridge";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
-import { LINK_WORKSPACE_ID, routes } from "./home-test-harness";
+import {
+  CONTAINER_BASES,
+  KB_SHARED,
+  LINK_WORKSPACE_ID,
+  routes,
+} from "./home-test-harness";
 
 /**
  * THE /home AGENTS FIXTURES AND THEIR ROUTING TABLE — shared by
@@ -169,7 +174,39 @@ export function agentTemplates(
 
 const ALL = [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM, T_HOME];
 
-/** Every path the /home Agents face opens, and the harness for the rest. */
+/**
+ * A base ONLY the CHANNEL-SCOPED read carries. `GET /api/knowledge/bases?channelId=`
+ * folds in `channelGrants` and is a different cache entry from the plain
+ * workspace read (INVARIANTS §9) — but until 2026-08-26 this table stripped the
+ * query before dispatching, so both reads got the same body and
+ * `agent-authoring.test.tsx › attaches the TARGET workspace's knowledge bases`
+ * pinned NOTHING about which entry the attach picker uses. This row is what
+ * makes the two answers distinguishable: the attach picker must never show it.
+ */
+export const CHANNEL_ONLY_BASE = "Granted into this channel";
+
+/** `GET /api/knowledge/bases?channelId=` — the Knowledge pane's entry. */
+function channelScopedBases(): Promise<BridgeResponse> {
+  return Promise.resolve(
+    ok({
+      ...CONTAINER_BASES,
+      bases: [
+        ...CONTAINER_BASES.bases,
+        { ...KB_SHARED, id: "kb-granted-1", name: CHANNEL_ONLY_BASE },
+      ],
+    })
+  );
+}
+
+/**
+ * Every path the /home Agents face opens, and the harness for the rest.
+ *
+ * ⚠ QUERY-AWARE ON ONE PATH, DELIBERATELY. Everything else is matched on the
+ * BARE path — `x-workspace-id` rides `opts`, not the url — but the base list is
+ * the one read where the QUERY names a different cache entry with a different
+ * body, so a table that strips it hands the picker an answer it should not be
+ * able to see and calls it a pass.
+ */
 export function agentRoutes(
   path: string,
   opts: BridgeRequestOpts = {}
@@ -180,6 +217,13 @@ export function agentRoutes(
   // mount must never reach it, and `agent-authoring.test.tsx` asserts on the
   // absence of this very call.
   if (bare === TEAMS_PATH) return Promise.resolve(ok({ teams: [] }));
+  if (
+    bare === "/api/knowledge/bases" &&
+    path.includes("channelId=") &&
+    opts.workspaceId !== WORKSPACE_ID
+  ) {
+    return channelScopedBases();
+  }
   return routes(bare, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
 }
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Bot, Plus } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { pendingRow } from "@/shared/ui/pending";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
@@ -160,8 +161,23 @@ export function HomeAgentPanels({
   }
 
   const scopeUnavailable = scope === "all" && homeWorkspaceId === null;
+  // ⚠ A FAILED SCOPE-C READ IS A SETTLED ANSWER, NOT A PENDING ONE, AND THE
+  // DIFFERENCE IS THE WHOLE OF F-339. `resolved` is
+  // `data !== undefined`, so a 403/404/500 leaves it FALSE FOREVER — read as
+  // "still pending" that painted a blank body with no sentence AND held the
+  // pill in `pendingRow(true)` = `pointer-events-none`, so the operator could
+  // not switch back to "in this channel". The only escape was leaving the tab.
+  // M0's own argument is that a 403/404 on this face is an ORDINARY answer
+  // (`use-agent-templates.ts`): an ordinary answer must be SAID, and it must
+  // never take the control that undoes it (§5A: UNKNOWN is not EMPTY, and it is
+  // not a trap either).
+  const scopeFailed =
+    scope === "all" && homeWorkspaceId !== null && homeList.error != null;
   const scopePending =
-    scope === "all" && homeWorkspaceId !== null && !homeList.resolved;
+    scope === "all" &&
+    homeWorkspaceId !== null &&
+    !homeList.resolved &&
+    !scopeFailed;
 
   // ⚠ WHICH WORKSPACE A NEW AGENT WOULD LAND IN — `null` = nowhere, which is
   // the "not onboarded yet" case and disables the button rather than writing
@@ -190,6 +206,22 @@ export function HomeAgentPanels({
         caption={CAPTIONS[scope]}
         unavailable={scopeUnavailable ? SCOPE_UNAVAILABLE : null}
         pending={scopePending}
+        // ⚠ THE SECTION'S OWN FAILURE, NOT THE PANE'S. The container read gets
+        // `PageError` over the whole pane because without it there is no pane;
+        // the home read is ONE SECTION's body, and blanking the pane for it
+        // would take away the shared section and the pill that leaves this
+        // scope. Sentence + retry, in place.
+        failure={
+          scopeFailed
+            ? {
+                message: agentTemplateErrorMessage(
+                  homeList.error,
+                  "Couldn't load your own agents."
+                ),
+                onRetry: () => homeList.refetch(),
+              }
+            : null
+        }
         // ⚠ EDITED WHERE IT LIVES. A scope-C row is a HOME-workspace row, so its
         // editor addresses the home workspace — the same id its PATCH and its
         // cache entry take (F-331). Reading one list and writing another is

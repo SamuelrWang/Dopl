@@ -4,7 +4,9 @@ import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, bootBody, bridgeCalls, installBridge } from "#/test-utils/bridge";
 import { LINK_WORKSPACE_ID, renderHome } from "./home-test-harness";
 import {
+  CHANNEL_ONLY_BASE,
   TEAMS_PATH,
+  T_HOME,
   agentRoutes,
   chooseScope,
   openAgents,
@@ -189,7 +191,7 @@ describe("what the editor is allowed to ask for", () => {
     );
   });
 
-  it("attaches the TARGET workspace's knowledge bases, not the other one's", async () => {
+  it("attaches the TARGET workspace's knowledge bases, off the PLAIN key", async () => {
     renderHome();
     await openAgents();
     await screen.findByText("Scratch agent");
@@ -201,6 +203,23 @@ describe("what the editor is allowed to ask for", () => {
     fireEvent.click(screen.getByRole("button", { name: "Attach" }));
     expect(await screen.findByRole("menuitem", { name: "Call notes" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "Fundraise memos" })).toBeNull();
+
+    // 🔒 PLAIN KEY vs `?channelId=`, AND THIS HALF WAS BLIND UNTIL 2026-08-26.
+    // `agent-test-fixtures.ts › agentRoutes` used to strip the query before
+    // dispatching, so both entries answered with one body and the two
+    // assertions above passed whichever entry the editor read. The fixture is
+    // query-aware now and carries a row ONLY the channel-scoped answer has.
+    expect(screen.queryByRole("menuitem", { name: CHANNEL_ONLY_BASE })).toBeNull();
+    // …and the same claim from the wire, which is where it is unambiguous: not
+    // one base read this editor made carried the query at all.
+    // ⚠ `opts.method` is "GET", never undefined — `api-client.ts › apiRequest`
+    // sends `opts.method ?? "GET"` over the bridge, so a filter on `undefined`
+    // matches nothing and passes vacuously.
+    const baseReads = bridgeCalls(apiRequest).filter(
+      (c) => c.path.startsWith("/api/knowledge/bases") && c.opts.method === "GET"
+    );
+    expect(baseReads.length).toBeGreaterThan(0);
+    expect(baseReads.filter((c) => c.path.includes("channelId="))).toHaveLength(0);
   });
 });
 
@@ -318,7 +337,7 @@ describe("use in this channel", () => {
     expect(createCall()).toBeUndefined();
   });
 
-  it("lands the copy in the CHANNEL's list and points the pill at it", async () => {
+  it("lands the copy in the CHANNEL's list, and NOT in the home shelf (F-331)", async () => {
     await openCopyConfirm();
     fireEvent.click(screen.getByRole("button", { name: "Make a copy" }));
 
@@ -331,9 +350,57 @@ describe("use in this channel", () => {
       )
     );
     expect(screen.getByText("Scratch agent")).toBeInTheDocument();
-    // Two rows now read "Fundraise analyst" nowhere: the container copy is here,
-    // and the home original is behind the pill.
     expect(screen.getAllByText("Fundraise analyst")).toHaveLength(1);
+
+    // 🔒 …AND THE OTHER SHELF IS UNCHANGED, WHICH IS THE HALF THAT WAS MISSING.
+    // The count above is measured while the HOME section is unrendered (the
+    // pill just moved), so it reads 1 whether or not the write patched the home
+    // entry too — it was labelled an F-331 pin and pinned nothing. Go BACK and
+    // count there. ⚠ Counted by the COPY CONTROL, not by the name: the copy
+    // carries the original's name unchanged (deliberately, no "(copy)" suffix),
+    // so two identical names is exactly the state a name-count cannot see. Over
+    // the one-element PATH prefix the created container row would be appended to
+    // the warmed home entry as well, and this shelf would carry two cards.
+    await chooseScope("across all channels");
+    expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Use in this channel" })
+    ).toHaveLength(1);
+    expect(screen.getAllByText("Fundraise analyst")).toHaveLength(1);
+  });
+
+  it("still renders the confirm step when the cached row predates `knowledgeBases`", async () => {
+    // ⚠ §8's STALE-CACHE RULE, on a payload this pane reads out of a CACHE
+    // ENTRY rather than off a fresh response: the row can have been written by
+    // an older build of the app. `source.knowledgeBases.length` with no
+    // fallback throws inside the render of an already-open dialog, which blanks
+    // the surface instead of showing a sentence — the worst place for it.
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) => {
+      if (path.split("?")[0] === "/api/agent-templates" && opts.workspaceId === WORKSPACE_ID) {
+        const stale = { ...T_HOME } as Partial<typeof T_HOME>;
+        delete stale.knowledgeBases;
+        return Promise.resolve({
+          status: 200,
+          statusText: "OK",
+          hasBody: true,
+          body: { templates: [stale] },
+        });
+      }
+      return agentRoutes(path, opts);
+    });
+    renderHome();
+    await openAgents();
+    await screen.findByText("Scratch agent");
+    await chooseScope("across all channels");
+    await screen.findByText("Fundraise analyst");
+
+    fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
+    // The dialog opens and the snapshot sentence is there; the KB line is
+    // correctly absent, because a payload with no field carries no attachments
+    // to warn about.
+    expect(await screen.findByRole("button", { name: "Make a copy" })).toBeTruthy();
+    expect(document.body.textContent).toContain("snapshot");
+    expect(document.body.textContent).not.toContain("stays behind");
   });
 
   it("offers no copy control on a row already IN this channel", async () => {

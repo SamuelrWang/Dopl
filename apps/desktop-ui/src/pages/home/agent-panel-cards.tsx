@@ -73,13 +73,21 @@ export function SharedAgentSection({
  * Sections B and C — the caller's own private identities, at whichever range
  * the pill names.
  *
- * ⚠ THE BODY HAS FOUR STATES AND ONLY ONE OF THEM MAY STATE AN EMPTINESS.
- * `unavailable` (there is no home workspace to look in), `pending` (the scope
- * the pill just named has not answered), the empty LINE, and the grid. Rendered
- * against an unresolved read, `section.emptyLine` is an assertion about a list
- * nobody has seen — the same false-sentence trap `knowledge-panels.tsx` gates
- * each of its sections against separately, because the home read moves
- * independently of the container one.
+ * ⚠ THE BODY HAS FIVE STATES AND ONLY ONE OF THEM MAY STATE AN EMPTINESS.
+ * `unavailable` (there is no home workspace to look in), `failure` (the scope
+ * the pill named ANSWERED, and the answer was an error), `pending` (it has not
+ * answered yet), the empty LINE, and the grid. Rendered against an unresolved
+ * read, `section.emptyLine` is an assertion about a list nobody has seen — the
+ * same false-sentence trap `knowledge-panels.tsx` gates each of its sections
+ * against separately, because the home read moves independently of the
+ * container one.
+ *
+ * ⚠ `failure` IS A SETTLED STATE AND MUST OUTRANK `pending` (F-339). The read
+ * hook's `resolved` is `data !== undefined`, so a failed read is unresolved
+ * FOREVER; a body that only knew `pending` painted a blank spacer with no
+ * sentence while the caller held the scope pill inert, and the operator could
+ * not get back to the scope that works. A failed read SAYS SO and offers the
+ * retry — it never silently occupies the section.
  */
 export function PrivateAgentSection({
   section,
@@ -87,6 +95,7 @@ export function PrivateAgentSection({
   caption,
   action,
   unavailable,
+  failure,
   pending,
   onOpen,
   cardActionFor,
@@ -99,6 +108,9 @@ export function PrivateAgentSection({
   action: ReactNode;
   /** The named scope has nowhere to look — a SENTENCE, not an empty list. */
   unavailable: string | null;
+  /** The named scope ANSWERED WITH AN ERROR — the server's own wording plus the
+   *  way to ask again. `null` when the read did not fail. */
+  failure: { message: string; onRetry: () => void } | null;
   pending: boolean;
   /** Opens the editor against the workspace the CURRENT SCOPE names — the
    *  container on "in this channel", the caller's own workspace on "across all
@@ -118,6 +130,20 @@ export function PrivateAgentSection({
     >
       {unavailable !== null ? (
         <p className="px-1 pb-1 text-caption text-text-muted">{unavailable}</p>
+      ) : failure !== null ? (
+        // ⚠ THE SERVER'S OWN WORDING, AND A WAY TO ASK AGAIN. Not `PageError`:
+        // that is a whole-pane state, and this failure is one section of a pane
+        // whose other section loaded fine.
+        <div className="flex flex-wrap items-center gap-2 px-1 pb-1">
+          <p className="text-caption text-text-muted">{failure.message}</p>
+          <button
+            type="button"
+            onClick={failure.onRetry}
+            className="btn-light h-6 rounded-full px-2.5 text-caption font-medium"
+          >
+            Try again
+          </button>
+        </div>
       ) : pending ? (
         // Bare while the other workspace's list is in flight — the dimmed pill
         // above already says the scope has not landed, and a second sentence

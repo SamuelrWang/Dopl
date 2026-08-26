@@ -163,6 +163,23 @@ export default function HomePage() {
       const shownRow = rowFor(shown.slice(AGENTS_PANE.length));
       return (
         <HomeAgentPanels
+          // 🔒 KEYED BY THE TOKEN — one token, one instance, and it was NOT so
+          // until 2026-08-26 (F-338). `Crossfade` renders `{children(shownToken)}`
+          // with no key of its own and every `agents:<rowId>` token returns this
+          // element at the SAME position, so React reconciled ONE instance across
+          // a channel switch and the panel's held state (`scope`, `editing`,
+          // `copying`) survived while `channel.workspaceId` moved underneath it.
+          // That is not a stale render: the editor and the copy dialog take the
+          // target workspace as a PROP, so a create composed against the old row
+          // POSTed into the NEW container and SUCCEEDED — no 404, no rollback,
+          // the wrong relationship's container. ⚠ AND THE SWITCH NEED NOT BE A
+          // CLICK: `selected` falls back to `visible[0]` whenever the selected
+          // row leaves `visible` (a roster change, an archive, the peer-joins
+          // teardown), so the held row can move with nobody touching the list.
+          // ⚠ THE KEY IS THE TOKEN, NOT THE ROW: keying a face by the same value
+          // its parent swaps on is the whole statement — one token, one
+          // instance — and it stays true for a face keyed by more than a row id.
+          key={shown}
           channel={shownRow?.kind === "channel" ? shownRow.channel : null}
           // ⚠ SAME BOOT QUERY AS KNOWLEDGE'S SCOPE C — the home workspace is
           // `POST /api/boot`'s no-segment answer, so the second template list
@@ -179,6 +196,7 @@ export default function HomePage() {
     if (shown.startsWith(KNOWLEDGE_PANE)) {
       const shownRow = rowFor(shown.slice(KNOWLEDGE_PANE.length));
       return (
+        <HomeKnowledgePanels
           // 🔒 KEYED BY THE ROW, exactly as the chat branch below is, and it was
           // NOT until 2026-08-26. `paneToken` fixes the CROSSFADE; it does not
           // remount, so React reconciled channel B's panels onto channel A's
@@ -191,7 +209,6 @@ export default function HomePage() {
           // this is the same fix on the /home side. A pane holding per-channel
           // state owes itself a key — the token is about the animation.
           key={shownRow?.id ?? EMPTY_PANE}
-        <HomeKnowledgePanels
           channel={shownRow?.kind === "channel" ? shownRow.channel : null}
           // ⚠ ALREADY IN THIS PAGE'S BOOT QUERY — the home workspace is
           // `POST /api/boot`'s no-segment answer, so scope C costs no second
