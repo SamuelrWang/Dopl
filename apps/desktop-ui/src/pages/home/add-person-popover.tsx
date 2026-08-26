@@ -19,6 +19,15 @@ const EXPIRY: ReadonlyArray<{ value: LinkExpiryKey; label: string }> = [
   { value: "never", label: "No expiry" },
 ];
 
+/** The role the link GRANTS at claim. Default `guest` (chat only); `member` is
+ *  the full-channel grant. Viewer is schema-valid but deliberately not offered
+ *  (Samuel's ruling) — the two ends of the range are the choice worth making. */
+type GrantRole = "guest" | "member";
+const ROLE: ReadonlyArray<{ value: GrantRole; label: string }> = [
+  { value: "guest", label: "Guest — chat only" },
+  { value: "member", label: "Member — full channel" },
+];
+
 /**
  * ADD A PERSON to a channel that already exists. The link IS the invite: copy
  * it, send it anywhere; they join THIS channel when they claim it.
@@ -45,10 +54,16 @@ const EXPIRY: ReadonlyArray<{ value: LinkExpiryKey; label: string }> = [
 export function AddPersonPopover({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [expiry, setExpiry] = useState<LinkExpiryKey>("7d");
+  const [role, setRole] = useState<GrantRole>("guest");
   const [url, setUrl] = useState<string | null>(null);
   const mint = useMintHomeLink(setUrl);
 
-  const create = () => mint.mutate({ workspaceId, expiresAt: expiresAtFrom(expiry) });
+  const create = () =>
+    mint.mutate({
+      workspaceId,
+      grantedRole: role,
+      expiresAt: expiresAtFrom(expiry),
+    });
 
   const close = () => {
     setOpen(false);
@@ -79,6 +94,13 @@ export function AddPersonPopover({ workspaceId }: { workspaceId: string }) {
               <CopyButton text={url} label="Copy link" />
             </div>
           )}
+          <SelectMenu
+            ariaLabel="Access level"
+            value={role}
+            options={ROLE}
+            onChange={setRole}
+          />
+          <div className="h-2" />
           <SelectMenu
             ariaLabel="Link expiry"
             value={expiry}

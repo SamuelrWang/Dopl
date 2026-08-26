@@ -45,6 +45,7 @@ function member(over: Partial<ChannelMember> & { userId: string }): ChannelMembe
   return {
     channelId: "c1",
     role: "member",
+    workspaceRole: null,
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: null,

@@ -23,6 +23,7 @@
 // DTO and the SPA all need the same answer; re-declaring the type here would be
 // the second copy that drifts.
 import type { ChannelInfoCard } from "./info-card";
+import type { Role } from "@/features/workspaces/types";
 
 /** Private = members only. Public = any workspace member can read/join. */
 export type ChannelVisibility = "private" | "public";
@@ -337,6 +338,15 @@ export type ChannelMember = {
   channelId: string;
   userId: string;
   role: ChannelRole;
+  /**
+   * The member's WORKSPACE-level role, surfaced so the roster can show a "Guest"
+   * pill (2026-08-25) — the channel `role` above is only ever `owner`/`member`, so
+   * a link-claimed guest reads `member` there. ⚠ `null` when not resolved: the
+   * roster read (`listChannelMembers`) fills it, but the member-mutation ECHOes
+   * (`addMember` / favorite-toggle) omit it, and a STALE cached payload predating
+   * this field also lacks it. A renderer treats null/absent as "not a guest".
+   */
+  workspaceRole: Role | null;
   lastReadAt: string | null;
   /** ⛔ Dead since F-170 — nothing sets or reads it. Still scrubbed to null on
    *  non-self rows by `mapMemberRow`. See `NotifyScope`. */

@@ -57,6 +57,7 @@ export function member(over: Partial<ChannelMember> = {}): ChannelMember {
     channelId: CHANNEL_ID,
     userId: ME,
     role: "owner",
+    workspaceRole: null,
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: "full",

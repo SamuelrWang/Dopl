@@ -61,7 +61,10 @@ export function MemberRow({
           <span className="truncate text-caption text-text-muted">{member.email}</span>
         )}
       </span>
-      <RolePill owner={member.role === "owner"} />
+      <RolePill
+        owner={member.role === "owner"}
+        guest={member.workspaceRole === "guest"}
+      />
     </div>
   );
 }

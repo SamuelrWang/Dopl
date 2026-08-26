@@ -18,9 +18,36 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { Mail } from "lucide-react";
-import { MetaRow } from "./bits";
+import { MetaRow, RolePill } from "./bits";
 
 afterEach(cleanup);
+
+describe("RolePill — the Guest tell (M3)", () => {
+  it("labels Owner / Member from the channel role", () => {
+    render(<RolePill owner />);
+    expect(screen.getByText("Owner")).toBeTruthy();
+    cleanup();
+    render(<RolePill owner={false} />);
+    expect(screen.getByText("Member")).toBeTruthy();
+  });
+
+  it("shows Guest — the WORKSPACE tell — over the channel role (a guest reads member)", () => {
+    // A link-claimed guest's channel role is `member` (owner=false); the pill
+    // must still say Guest, which is the whole point of surfacing workspaceRole.
+    render(<RolePill owner={false} guest />);
+    expect(screen.getByText("Guest")).toBeTruthy();
+    expect(screen.queryByText("Member")).toBeNull();
+  });
+
+  it("treats guest=undefined (a stale payload with no workspaceRole) as NOT a guest", () => {
+    // ⚠ STALE-CACHE: a member.workspaceRole absent from a cached payload arrives
+    // here as `guest={undefined}`. It must render the plain role, never crash or
+    // flash Guest.
+    render(<RolePill owner={false} guest={undefined} />);
+    expect(screen.getByText("Member")).toBeTruthy();
+    expect(screen.queryByText("Guest")).toBeNull();
+  });
+});
 
 describe("MetaRow remove affordance", () => {
   it("renders the × at the bare 32px hit area — never a shrunk 24px", () => {

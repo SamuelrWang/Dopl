@@ -23,6 +23,7 @@ import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
+import * as workspaceRepo from "@/features/workspaces/server/repository";
 import type { MemberPresence } from "./dto";
 import {
   loadVisibleChannel,
@@ -173,9 +174,14 @@ export async function listChannelMembers(
 ): Promise<ChannelMember[]> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repo.listMembers(channel.id);
-  const [profiles, presence] = await Promise.all([
-    profilesById(rows.map((r) => r.user_id)),
+  const memberIds = rows.map((r) => r.user_id);
+  const [profiles, presence, workspaceRoles] = await Promise.all([
+    profilesById(memberIds),
     collab.presenceForWorkspace(ctx.workspaceId),
+    // ⚠ WORKSPACE role, for the "Guest" pill — the channel row's role is only
+    // owner/member. Bounded to the roster's own ids (§9), never the whole
+    // workspace. A member with no workspace row maps to null → "not a guest".
+    workspaceRepo.listMemberRolesByUserIds(ctx.workspaceId, memberIds),
   ]);
   // ⚠ Private-preference scrub (notify_scope + agent_tool_profile only on the
   // caller's own row) is enforced inside `mapMemberRow` — pass the viewer and it
@@ -184,6 +190,7 @@ export async function listChannelMembers(
     mapMemberRow(row, profiles.get(row.user_id), {
       viewerUserId: ctx.userId,
       presence: presence.get(row.user_id),
+      workspaceRole: workspaceRoles.get(row.user_id) ?? null,
     })
   );
 }

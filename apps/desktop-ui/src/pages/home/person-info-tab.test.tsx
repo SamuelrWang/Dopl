@@ -291,6 +291,41 @@ describe("Members", () => {
     expect(within(roster).getByText("Member")).toBeInTheDocument();
   });
 
+  it("shows a Guest pill for a peer who claimed a guest link (channel role is member)", async () => {
+    // ⚠ M3. A link-claimed guest reads channel role `member` (§4A), so without
+    // the workspaceRole tell the operator could not see whom they invited as a
+    // guest. The pill reads Guest, not Member.
+    const guestRoster = {
+      members: [
+        MEMBERS.members[0],
+        { ...MEMBERS.members[1], workspaceRole: "guest" as const },
+      ],
+    };
+    serve(HOME, guestRoster);
+    renderHome();
+    await screen.findByTestId("channel-surface");
+    const roster = await screen.findByTestId("channel-members");
+    expect(within(roster).getByText("Owner")).toBeInTheDocument();
+    expect(within(roster).getByText("Guest")).toBeInTheDocument();
+  });
+
+  it("STALE CACHE: a roster row with no workspaceRole shows the plain role, never Guest", async () => {
+    // ⚠ A cached members payload minted before M3 carries no workspaceRole. The
+    // row must fall back to its channel role, never crash or flash Guest.
+    const stale = MEMBERS.members.map((m) => {
+      const clone: Partial<typeof m> = { ...m };
+      delete clone.workspaceRole;
+      return clone;
+    });
+    serve(HOME, { members: stale } as typeof MEMBERS);
+    renderHome();
+    await screen.findByTestId("channel-surface");
+    const roster = await screen.findByTestId("channel-members");
+    expect(within(roster).getByText("Owner")).toBeInTheDocument();
+    expect(within(roster).getByText("Member")).toBeInTheDocument();
+    expect(within(roster).queryByText("Guest")).toBeNull();
+  });
+
   it("renders the operator ALONE on a solo channel — never an empty state", async () => {
     serve(SOLO_HOME, SOLO_MEMBERS);
     renderHome();

@@ -18,11 +18,13 @@ vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-collab");
 vi.mock("./repository-tasks");
+vi.mock("@/features/workspaces/server/repository");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
+import * as workspaceRepo from "@/features/workspaces/server/repository";
 import {
   getChannelTask,
   listChannelMembers,
@@ -94,6 +96,8 @@ beforeEach(() => {
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   // Presence hydration: no one online by default.
   vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map());
+  // Workspace-role hydration for the roster's Guest pill: none by default.
+  vi.mocked(workspaceRepo.listMemberRolesByUserIds).mockResolvedValue(new Map());
 });
 
 describe("listChannelMembers — notify_scope privacy", () => {
@@ -114,6 +118,36 @@ describe("listChannelMembers — notify_scope privacy", () => {
     expect(theirs?.agentToolProfile).toBeNull();
     // Other roster fields for the teammate are still present.
     expect(theirs?.role).toBe("member");
+  });
+
+  it("surfaces each member's WORKSPACE role for the Guest pill (channel role is only owner/member)", async () => {
+    vi.mocked(repo.listMembers).mockResolvedValue([
+      memberRow(USER, "all"), // channel role owner
+      memberRow(OTHER, "all"), // channel role member — but a workspace GUEST
+    ]);
+    vi.mocked(workspaceRepo.listMemberRolesByUserIds).mockResolvedValue(
+      new Map([
+        [USER, "owner"],
+        [OTHER, "guest"],
+      ])
+    );
+
+    const members = await listChannelMembers(ctx, "general");
+
+    expect(members.find((m) => m.userId === OTHER)?.workspaceRole).toBe("guest");
+    expect(members.find((m) => m.userId === USER)?.workspaceRole).toBe("owner");
+    // Bounded to exactly the roster's ids (§9), never the whole workspace.
+    expect(workspaceRepo.listMemberRolesByUserIds).toHaveBeenCalledWith(WS, [
+      USER,
+      OTHER,
+    ]);
+  });
+
+  it("maps a member with no workspace-role row to null — not a guest", async () => {
+    vi.mocked(repo.listMembers).mockResolvedValue([memberRow(OTHER, "all")]);
+    // Default mock returns an empty map — the field must be null, never undefined.
+    const members = await listChannelMembers(ctx, "general");
+    expect(members[0].workspaceRole).toBeNull();
   });
 
   it("exposes presence (agentOnline / lastSeenAt) for every member", async () => {

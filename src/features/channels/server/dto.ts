@@ -14,6 +14,7 @@ import type {
   ThreadOutcome,
   ThreadStatus,
 } from "../types";
+import type { Role } from "@/features/workspaces/types";
 import { parseInfoCard } from "../info-card";
 
 /**
@@ -171,6 +172,13 @@ export interface MapMemberOptions {
    */
   viewerUserId: string;
   presence?: MemberPresence;
+  /**
+   * The member's WORKSPACE role, for the roster's "Guest" pill. ⚠ Optional: only
+   * the roster read resolves it (the member-mutation echoes don't), so it maps to
+   * `workspaceRole: null` when absent — a fail-safe the renderer reads as "not a
+   * guest". Never inferred from the channel `role`, which has no `guest`.
+   */
+  workspaceRole?: Role | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -281,6 +289,7 @@ export function mapMemberRow(
     channelId: row.channel_id,
     userId: row.user_id,
     role: row.role as ChannelRole,
+    workspaceRole: opts.workspaceRole ?? null,
     lastReadAt: row.last_read_at,
     notifyScope: isSelf ? ((row.notify_scope as NotifyScope) ?? "all") : null,
     agentToolProfile: isSelf

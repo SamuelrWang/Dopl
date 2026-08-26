@@ -462,18 +462,26 @@ export function PanelHeading({
  * such field. What a channel roster actually carries is `ChannelRole` — owner
  * or member (INVARIANTS §5) — so that is what the chip states. Tints come from
  * the palette's usable identity colours; the token set has no more.
+ *
+ * ⚠ `guest` is the WORKSPACE-level tell, not a channel role — a link-claimed
+ * guest reads `member` at the channel (§4A), so the operator would otherwise not
+ * see whom they invited as a guest. It takes precedence over owner/member (a
+ * guest is never a channel owner) and reads muted, the least-privileged look.
  */
-export function RolePill({ owner }: { owner: boolean }) {
+export function RolePill({ owner, guest }: { owner: boolean; guest?: boolean }) {
+  const label = guest ? "Guest" : owner ? "Owner" : "Member";
   return (
     <span
       className={cn(
         "shrink-0 rounded-full border px-2 py-px text-micro font-medium",
-        owner
-          ? "border-link/25 bg-link/10 text-link"
-          : "border-border-strong bg-bg-inset text-text-secondary"
+        guest
+          ? "border-border-strong bg-bg-inset text-text-muted"
+          : owner
+            ? "border-link/25 bg-link/10 text-link"
+            : "border-border-strong bg-bg-inset text-text-secondary"
       )}
     >
-      {owner ? "Owner" : "Member"}
+      {label}
     </span>
   );
 }

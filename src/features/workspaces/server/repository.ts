@@ -238,6 +238,31 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMembers
   return ((data ?? []) as WorkspaceMemberRow[]).map(mapMemberRow);
 }
 
+/**
+ * `userId` → their WORKSPACE role, for a bounded set of users in one workspace.
+ * Used by the channel roster to render a member's workspace-level standing (the
+ * "Guest" pill, 2026-08-25) — the channel_members row only carries the
+ * channel-scoped role (`owner`/`member`), never `guest`. ⚠ Bounded by the caller's
+ * user-id list (§9): never the whole workspace. Absent/empty input → empty map.
+ */
+export async function listMemberRolesByUserIds(
+  workspaceId: string,
+  userIds: string[]
+): Promise<Map<string, Role>> {
+  const out = new Map<string, Role>();
+  if (userIds.length === 0) return out;
+  const { data, error } = await supabaseAdmin()
+    .from("workspace_members")
+    .select("user_id, role")
+    .eq("workspace_id", workspaceId)
+    .in("user_id", userIds);
+  if (error) throw error;
+  for (const row of (data ?? []) as Array<{ user_id: string; role: Role }>) {
+    out.set(row.user_id, row.role);
+  }
+  return out;
+}
+
 export interface CreateWorkspaceArgs {
   ownerId: string;
   name: string;
