@@ -4074,6 +4074,115 @@ rows are all of CI", which it never claimed and which was not true.
 
 ---
 
+## 2026-08-26 — The audience ceiling: what a fence is, and why three of the four layers are not one
+
+Home Knowledge Panels M5. The question was small and the answer was not: *an agent is working in a
+channel a peer just joined — which of the operator's knowledge can it still read?*
+
+**The threat model is what makes this hard, and it was written down before any code.** A
+desktop-spawned agent holds the operator's 90-day device token ON DISK, and the `full` tool profile
+has `Bash`. So the agent can issue any HTTP request the operator could. That single fact disqualifies
+most of the obvious designs: a header cannot be the fence (`X-Workspace-Id`, `X-Dopl-Runtime` and
+`X-Dopl-Session-Id` are all documented non-authorization signals precisely because anything holding
+the credential can set them); a prompt cannot be the fence; and a client-side permission gate cannot
+be the fence, because the call it refuses can be made another way.
+
+**So the wave shipped FOUR layers and insisted, in every module header and every commit message, on
+saying which two were fences and which two were not.** That insistence is the durable part of this
+entry. It is very easy to ship a tripwire, watch it work in a demo, and describe it as containment;
+the demo is indistinguishable. What makes the distinction real is asking *what does an agent with
+Bash do next*, and writing the answer down beside the code rather than in a review comment.
+
+- **Layer A (fence).** The audience is resolved server-side from DB facts only — workspace kind,
+  active member count, the container's channel ids, the grant rows — and applied at the four
+  foundational knowledge lookups. Nothing an agent can type reaches it. It also only ever CLOSES:
+  three of its four branches are the pre-existing behaviour verbatim, which is what makes it safe to
+  put on the hot path of every knowledge page load.
+- **Layer B1 (fence).** The credential itself is locked to one workspace. This is the only layer that
+  binds what the agent SHELLS OUT TO, because a subprocess can only present the token it was given.
+- **Layers B3 and B2 (tripwires).** The MCP directory lock narrows one connection's view; the
+  desktop belt narrows one machine's gate. Both are worth having — a well-behaved agent is stopped
+  early, and the operator gets a named refusal — and neither contains anything.
+
+**The B1 archaeology is the most useful thing here.** INVARIANTS §4 had described
+`apiKeyWorkspaceId` as *"dead scaffolding today; preserved, not advertised"* since the `api_keys`
+table was dropped. That was too kind by a wide margin. The enforcement half was intact and correct —
+the 403, the override, and roughly twenty M-10 visibility gates across knowledge, chats, skills and
+agent-templates — but the PRODUCER was missing at **three** separate layers: `with-auth.ts` never
+wrote the field in any of its three auth branches, `with-mcp-transport-auth.ts` passed a hardcoded
+`null`, and no column existed to read. Every one of those gates had been taking its
+session-caller branch unconditionally for months. **A doc that says "preserved" invites you to check
+one call site; a doc that says "unreachable" makes you check the chain.** The wave added the column,
+the projection and the two forwards, and the whole chain lit up at once.
+
+**Which is itself the lesson worth keeping about reviving dead code: it does not come back alone.**
+Turning `apiKeyWorkspaceId` on did not only change workspace targeting — it changed what a locked
+credential can see of PRIVATE knowledge, in four features, because every one of those gates keys on
+the same field. That is correct here (a credential that exists because a peer walked into the room
+should not read the operator's private drafts) but it was a consequence to find deliberately, not
+one to discover in production. The rule the wave applied: **before reviving a preserved field,
+grep for every reader and decide about each one, in the same change.**
+
+**Two smaller decisions, both of which went the opposite way from the reflex.**
+
+*The stale-field default is INVERTED, in three places.* §8's standing rule is that a field absent
+from a cached payload falls back to the safe reading, and the reflex safe reading is the permissive
+one (an absent `workspaceRole` reads as "not a guest"; an absent `grantedRole` reads as the DB
+default). Here `memberCount` absent must read as **NOT SOLO**, i.e. narrowed — because the permissive
+fallback would silently unlock every container for exactly the release window in which a desktop
+build runs against a server predating the field, which is the window a fence is most likely to be
+tested in. The three sites say so in the same words on purpose.
+
+*A floor was NOT lowered.* The first draft of the mint route set `minRole: "guest"` so a guest peer's
+desktop could lock its own sessions — a reasonable instinct that would have made the route the
+twentieth entry in the guest-allowed set, a named and pinned contract. It was wrong for a structural
+reason rather than a policy one: the guest tier IS the web lane, so no guest reaches a desktop that
+spawns sessions, and a peer who runs one was claimed at `member`. **Lowering a security-critical
+floor for a caller class that cannot arrive is a widening with no beneficiary** — and the test that
+caught it was the pinned set, doing exactly its job.
+
+**Finally, the carryover invariant, which is the one sentence to keep if the rest is forgotten: THE
+CEILING BOUNDS FUTURE READS, NEVER CONTEXT ALREADY IN THE WINDOW.** A solo channel that gains a peer
+tightens at the next tool call — but a session that was running a second ago is still holding
+whatever it already read, and nothing can retract that. The consequence is Samuel's ruling 5: the
+container's live sessions END. It ends rather than parks partly because `settle` is the one stop
+path, and partly for a reason that only appears once you have B1: a session that started SOLO is
+running on an UNLOCKED credential, and was right to be. Ending it is how the fence arrives.
+
+**TWO SHAPE DECISIONS THAT THE FOUR-LAYER TABLE DOES NOT EXPLAIN ON ITS OWN.**
+
+*The ceiling is a property of the CONTAINER, not of a header, and the difference is what a forged
+value can buy.* The reflex design is a session header — the caller says which channel it is working
+in, and the server bounds knowledge to that channel's grants. It is wrong for a reason that survives
+any amount of hardening: the audience the ceiling exists to bound is **the set of humans who can see
+what the agent says**, and that set is a fact about the container's roster and its channels, not
+about anything the caller knows or asserts. Layer A therefore computes the SET of the container's
+channels from DB rows before it reads any header at all — which also makes it **F-327-proof**,
+because nothing in this repo enforces one channel per container and a design keyed to "the channel"
+would be silently wrong the day a second one appears. `X-Dopl-Session-Id` still gets to speak, and
+exactly one power is safe to give it: **narrowing an already-fenced set to one of its own members.**
+Every id it can name was in the set already, selecting one only REMOVES grants, and the worst a
+forged value achieves is fencing the forger out. ⚠ **The tempting "improvement" — resolving the named
+channel against the database — is the one change that must never be made**, because it converts the
+header from a filter into an ADDRESSING input, and an addressing input is exactly the authorization
+signal a header may not be.
+
+*The credential lock outranks the header pin, and the route had it backwards.* `/api/mcp` read
+`headerPin ?? apiKeyWorkspaceId` — correct for the whole period the field had no producer, and wrong
+the instant B1 gave it one, because it let a client-supplied `X-Workspace-Id` outrank the
+credential's own lock and decide both the workspace directory and B3's `lockedTo`. **A pin the caller
+types and a lock the caller was issued are not two spellings of the same thing**: the lock rides the
+credential, so it binds the process AND its children and cannot be re-typed by anything holding the
+token; the header binds a request the same token can send again without it. `resolveTransportWorkspaceId`
+now asks the lock first, and a CONTRADICTING header is IGNORED at the boot rather than 403'd — this
+is the transport boot, not a content route, and the loopback that follows carries the locked
+credential, so `withWorkspaceAuth` still answers `API_KEY_WORKSPACE_MISMATCH`. **One refusal, in the
+layer that owns the rows.** The general form: when two signals name a workspace, rank them by *who
+could have produced this value*, never by which one the code happened to read first.
+
+
+---
+
 ## HOME KNOWLEDGE PANELS — the adversarial-review pass (2026-08-26)
 
 An adversarial review of this wave returned **"not releasable"** over twelve findings. What follows
@@ -4145,3 +4254,83 @@ widened overnight by the agent that found the gap.** What was done instead: the 
 INVARIANTS now state the current truth rather than promising a remedy the code does not implement,
 and the two options are filed with their blast radius for Samuel to choose between. *Correcting the
 claim is always in scope; widening the fence is not.*
+
+---
+
+## 2026-08-26 — The /home Agents tab: why a template shares by `visibility` and a knowledge base does not
+
+Home Agents Tab, M0–M4, shipped alongside Home Knowledge Panels. The two waves touched the same
+surface, asked what looks like the same question — *how does this thing get shared into a channel?* —
+and answered it with two different mechanisms on purpose. **That asymmetry is the whole of this
+entry, because the reflex is to unify them and the unification is wrong.**
+
+**COUNT THE CONSUMERS, AND COUNT THE AUDIENCES THEY ANSWER TO.**
+
+A knowledge base has **TWO** consumers with **DIFFERENT** audiences. The AGENT reads it over MCP, on
+a credential; the HUMAN reads it over the UI, as a member or as a guest. Those two populations are
+not the same set and the operator genuinely wants to address them separately — *my agent may read
+these notes, the person I am talking to may not* is a coherent, common request, and it is exactly
+what `channel_resource_grants.level ∈ {agent_only, visible}` exists to express. A single boolean over
+one axis cannot say it. **The grant is a `(kb, channel)` ROW because the thing being decided is a
+relationship between two objects, and a relationship needs somewhere to live.** It also carries
+`guest_write`, which is a third fact about that same pair.
+
+An agent template has **ONE** consumer: `main`, at spawn. Nothing else resolves a template — not the
+guest lane (Q3: guests see nothing, and §5A refuses even a `hasTemplate` boolean as an existence
+oracle), not a human reader, not an export. So `agent_only` **has no referent** for a template: there
+is no second audience to hold it back from. And inside a `kind='link'` container the remaining axis
+collapses cleanly — a container has no teams, so `visibility` is exactly `private` (me) or
+`workspace` (me and the one other person here). **The axis the feature needs already exists as a
+column, and the container makes it total.**
+
+**SO THE ARGUMENT FOR A GRANT TABLE HERE IS AN ARGUMENT FOR WRITING A FACT A THIRD TIME.** §5A already
+records that the visibility matrix is written TWICE — `agent-templates/server/service-shared.ts ›
+canSeeTemplate` and the `agent_templates_member_select` RLS policy — and records what a drift between
+those two cost. A `channel_resource_grants` row would be the third copy, bought to express a scope the
+/home surface does not need. **The real gap is a MULTI-CHANNEL STANDARD workspace**, where `workspace`
+means every member and there is no way to say "this channel's people only" — and that gap is filed as
+F-334 with its five parts enumerated, precisely so nobody re-derives them under time pressure and
+ships three of them.
+
+**THE GENERAL RULE, WHICH IS THE PART WORTH KEEPING: pick the sharing mechanism from the number of
+DISTINCT AUDIENCES the resource answers to, not from how much the two features look alike on screen.**
+One audience is a column. Two audiences that must be addressed separately is a row. The /home face
+renders both mechanisms side by side under one selector, which is the strongest possible argument for
+unifying them and still not a reason to.
+
+**THE COROLLARY THAT BIT IMMEDIATELY.** Cross-container reuse is a **COPY** (`lib/template-draft.ts ›
+containerCopyDraft`), because `getTemplateById` is workspace-filtered and the same-workspace trigger
+means a home-workspace template can never be GRANTED into a container's channel — the mechanism the
+knowledge wave used is structurally unavailable here, which is the same asymmetry from the other side.
+The copy forces `visibility: "private"`, deliberately: "use this here" must never quietly mean
+"publish my agent into a room the peer is standing in". ⚠ **And that forced constant is what B1 then
+made expensive** — a container-locked session sees `workspace`-visibility templates and nothing else,
+so **every copy the face creates is invisible to the agents running in that channel**. Nothing was
+changed for it; the trade and its two options are **F-333**, for Samuel. It is a clean worked example
+of the class this repo keeps re-learning: the plan's justification for skipping the question
+(*"an orchestrator listing the operator's own private templates runs on the OPERATOR's credential"*)
+was TRUE when written, and B1 is exactly what unmade it. **A justification is a measurement, and it
+expires when the thing it measured moves.**
+
+**TWO SMALLER THINGS THIS WAVE PAID FOR.**
+
+*A cache key that is a PATH is not a key for a two-workspace surface.* All three template writes
+patched `agentTemplateKeys.list().all` — `["/api/agent-templates"]` — and TanStack matches by prefix,
+so every workspace variant was patched by every write. Harmless for a one-workspace page and broken
+the moment this tab mounts the container list and the home list together: a container-created template
+appeared under "across all channels" until a cold refetch. **The defect was invisible while the
+surface had one list, which is why it shipped**; the fix is the `entry({workspaceId})` key in all
+three writes, `coldKeys` kept on create, and a two-list render test that goes red when the key is
+reverted (F-331).
+
+*And the dev fixture outlived the migration it was standing in for.* A client/mock.ts module and an
+isMockFallback branch in `src/features/agent-templates/hooks/use-agent-templates.ts` — **both DELETED
+in M0, so both are written here without a code span on purpose: a citation is a claim that a path
+resolves, and these two deliberately no longer do** — painted two fabricated templates whenever a
+read errored with no data. On the workspace page that was a dev convenience. On a link container it was a
+CORRECTNESS bug, because **a 403/404 there is a NORMAL answer** — a guest opening the tab, a roster
+change, a stale header — so a dev build would paint invented agents under a channel that has none.
+Deleted in M0 (F-332). ⚠ The same sentence came back to bite the same face from the other direction
+hours later: F-339's failed scope-C read rendered as *nothing at all*, which is the identical mistake
+with the fixture removed. **"A failed read is a normal answer here" obliges you to give it words, not
+just to stop lying about it.**

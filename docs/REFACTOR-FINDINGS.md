@@ -3305,7 +3305,20 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   latent oddity (orphaned, guest-invisible KB accreting inside a two-person container).
 - Proposed resolution: **defer, per Samuel's Q5.** If the product later wants home-channel agents to
   never author container KB at all, that is a separate `sdk-loader.js` tool-pinning change, not a
-  server fence. Status: **deferred (accepted for MVP)**
+  server fence.
+- ✅ **THE READ DIRECTION IS NOW CLOSED, AND THE RESIDUAL IS AUTHORING ALONE (Home Knowledge Panels
+  M5, 2026-08-26).** This entry recorded an ASYMMETRY whose read half was closed only by the guest's
+  role floor. `knowledge/server/service-audience.ts › resolveAgentAudience` closes it from the other
+  side and for a different caller: the OPERATOR'S OWN AGENT, in a container with a peer, now reaches
+  only the bases GRANTED into that container's channels — so container-scoped knowledge is no longer
+  reachable by the agent that could author it, unless the operator shared it. ⚠ **The authoring half
+  is UNCHANGED and is what stays open**: nothing stops the agent CREATING a base in the container,
+  and a base it creates is (correctly) not granted into anything, so it is invisible to the guest
+  AND, from the next tool call, to the agent that made it. **That is a sharper version of the same
+  oddity, not a resolution of it** — an agent can now write a base it will not be able to read back,
+  which is a worse ergonomic than the one filed here and a better security posture.
+  Status: **open, NARROWED** (read direction closed by the audience ceiling; authoring deferred per
+  Samuel's Q5)
 
 ### F-324 — ✅ RESOLVED 2026-08-26 — a REAL guest was RLS-denied on realtime channel reads, and the mitigation this entry claimed DID NOT EXIST
 
@@ -3475,6 +3488,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Proposed resolution: **Samuel's, when he specifies the guardrail.** Until then the honest position
   is the one INVARIANTS §4A now states — the payer is settled, the limit is not.
   Status: **open, awaiting the guardrail spec**
+
 ### F-329 — 🔴 REOPENED 2026-08-26 — B1 is a strong tripwire, not the fence this entry declared it
 
 - **This id was RESERVED by the plan (`docs/specs/home-knowledge-panels.plan.md` §4.4) for a
@@ -3529,7 +3543,6 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
        that understands paths for shell tools, or not having an unlocked long-lived credential on
        the machine at all.
   Status: **open** (residual #3; residuals 1 and 2 are by-design limits, stated in INVARIANTS §10)
-
 
 ### F-330 — `canEdit` FALLS OPEN wherever `MyAccessProvider` is absent, and no host outside the knowledge page mounts one
 
@@ -3760,6 +3773,36 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
      today (a template has ONE consumer: main, at spawn).
 - Severity: **feature gap, not a bug.** Nothing is broken; a scope simply cannot be expressed.
   Status: **open** — build it when a standard workspace needs per-channel template sharing, and
+  build all five parts in one change.
+
+### F-335 — the workspace list-item type is hand-mirrored across server and SDK, and `iconUrl` has been drifted the whole time
+
+- Location: `src/features/workspaces/types.ts › Workspace` (+ `› WorkspaceWithRole`) against
+  `packages/dopl-client/src/types.ts › WorkspaceSummary` (+ `› WorkspaceListItem`) and its committed
+  mirror `packages/dopl-client/dist/types.d.ts`. `GET /api/workspaces` maps rows through
+  `workspaces/server/dto.ts › mapWorkspaceRow`, which emits **`iconUrl` on every row**; the SDK type
+  has never declared it. So the wire has carried a field the SDK cannot see since before either
+  drift gate existed.
+- Found during: **home knowledge panels M5, 2026-08-26**, adding `memberCount` for the MCP directory
+  lock (plan §4.4 B3). The plan's own note — *"hand-mirrored … neither drift gate covers it"* — was
+  correct, and measuring it turned up the older asymmetry underneath.
+- Severity: **latent, not live.** `iconUrl` is extra on the wire, not missing from it, so nothing
+  reads `undefined` where a value was expected; the SDK's consumers simply cannot use the field.
+  The reason it is filed rather than shrugged at is the CLASS: two hand-mirrored type declarations
+  with no gate between them, feeding a boot-time decision about how much of a workspace directory an
+  agent is shown.
+- What SHIPPED with this finding: `scripts/check-role-drift.ts › checkWorkspaceMirror` — a second
+  family in the same CI step, comparing the field NAME sets across all three declarations, with
+  `WORKSPACE_MIRROR_ALLOWED_DRIFT` carrying exactly one recorded entry (`iconUrl`). **New drift now
+  fails CI; the existing drift is visible and cannot silently grow.** The gate was verified to bite
+  by deleting `memberCount` from the SDK type and watching it exit 1.
+- ⚠ **The allowed-drift list may only ever SHRINK.** Adding to it to make a red build green is the
+  move this entry exists to make expensive.
+- Proposed resolution: add `iconUrl: string | null` to `WorkspaceSummary`, rebuild
+  `@dopl/client` so the tracked `dist/` mirror moves with it, and delete the entry from
+  `WORKSPACE_MIRROR_ALLOWED_DRIFT` in the same change.
+  Status: **open** (not fixed here: it is a wire-surface widening with its own `dist/` rebuild, and
+  this milestone's lane is the audience ceiling — CLAUDE.md's "file it, change neither side")
 
 ### F-336 — ⚠ SAMUEL'S RULING NEEDED — the container lock overshoots the audience ceiling, and RULING 2's remedy does not work
 
@@ -3923,3 +3966,85 @@ is ruled should be applied to both predicates in one change, or they drift.
   modelled, or it inherits whatever the pending branch does — and a pending branch is allowed to
   disable controls, which is how a missing error state becomes a trap rather than a blank.
   Status: ✅ **resolved 2026-08-26** — kept for the rule above.
+
+### F-340 — ⚠ SAMUEL'S RULING NEEDED — the channel info column's tab row is FIVE tabs on a width budget measured for four, and the residual SCROLLS
+
+- ⚠ **Id note:** taken after re-reading this file fresh at the M7 doc pass (F-339 was the highest).
+  **This finding was OWED BY M4 of the knowledge wave and could not be filed there** — this file was
+  dirty with two lanes' uncommitted hunks — so the plan carried it in an `M7 HANDOFF` block and it
+  is filed here. Nothing about the code changed between M4 and this entry.
+- Location: `src/features/channels/components/channels-v2/info-panel.tsx › tabsFor` and the tab-row
+  `div` beneath it, against `src/shared/ui/segmented-control.tsx` and `docs/DESIGN-SYSTEM.md`'s
+  `SegmentedControl` row.
+- **The budget is a MEASUREMENT, not a taste, which is what makes this a ruling rather than a nit.**
+  DESIGN-SYSTEM records why the trackless `lg` form takes a **12px** side pad and not 15px: the info
+  column's **four** options **with two count badges overflowed at 15px** when the column was 340px
+  wide. The column has been **380px since 2026-08-25** (matched to `channels-v2/agent-panel.tsx`'s
+  `w-[380px]`, itself a Samuel ruling), so the four now leave roughly **55px** spare — and
+  **"Knowledge" wants about 90.** Five tabs do not fit, and no arrangement of the current scale makes
+  them fit.
+- **What M4 did, and deliberately did not do.** The row TIGHTENS only while the fifth tab is present
+  (`gap-1` on the control, and the header drops `px-3` → `px-2`), and the residual **SCROLLS**
+  (`overflow-x-auto`) rather than clipping. Neither touches the shared primitive: a `SegmentedControl`
+  change would have re-scaled every scope/filter row in the app, which was out of M4's lane. **A tab
+  pushed past the edge with no way to reach it is the failure; a 6px discreet scrollbar is not.**
+- 🔴 ⚠ **DO NOT RESOLVE THIS BY SHORTENING THE LABEL.** "Knowledge" is what the product calls the
+  thing on every other surface (the /home face, the panel heading, the grant control). **A tab named
+  something else because it fits is a worse answer than a tab that scrolls** — it makes the noun
+  disagree with itself across three faces, which is the class of defect §5A's Agents-means-two-things
+  bullet already records the cost of.
+- **THE OPTIONS, so the ruling is a pick and not a design session:**
+  - **(A) Keep it as shipped.** Five tabs, tightened, scrolling. Costs nothing; the fifth tab is
+    reachable but not always visible, and a sixth would make that worse.
+  - **(B) Drop the row to `size="sm"`** when a fifth tab is present. Buys the width outright.
+    ⚠ Blast radius: it breaks Samuel's 2026-08-25 **36px control-scale ruling** for this row — *"a
+    switcher does not read as a smaller class of control than the things beside it"* — and the row
+    would then change height as a capability flips, which is visible.
+  - **(C) Drop the COUNT BADGES on a five-tab row.** Threads and Agents carry them; they are the
+    reason the four were tight at four. ⚠ Blast radius: the badge is the only unread/liveness signal
+    on the collapsed column.
+  - **(D) Widen the column past 380px.** ⚠ Blast radius: 380 is a MATCH, not a taste — `agent-panel.tsx`
+    is absolutely positioned against the same right edge, so this is a two-file change and the
+    divider jumps if only one moves.
+- Severity: **cosmetic, with a reachability caveat.** Nothing is unreachable and nothing is
+  mis-stated; a tab may be off-screen until scrolled to.
+  Status: **open — Samuel's ruling.** Ship as (A) meanwhile; the code comment above the row says the
+  same thing so a reader does not "fix" it by renaming the tab.
+
+### F-341 — the live-agent posture strip has no equivalent of M6's warning, and it reaches the same combination by a different road
+
+- ⚠ **Id note:** taken in the same M7 pass as F-340. **Flagged by M6 of the knowledge wave and out
+  of its §6 scope**; carried in the plan's `M7 HANDOFF` block and filed here. **Nothing was built
+  for it** — this entry is a question, not a defect report.
+- Location: `src/features/channels/components/channels-v2/agent-posture.tsx › PostureControls`
+  against `› posture-warning.tsx` (which M6 wired into `› channel-manage.tsx`, i.e. the **Settings
+  tab** alone).
+- **What M6 shipped.** A `ConfirmDialog` fired on the TRANSITION INTO one combination — Messages at
+  `auto_both`, the channel tool profile at `full`, **and a peer on the roster** — because whatever
+  the agent's unrestricted tools produce then reaches that person with no review in between. It
+  guards the **DURABLE** per-channel posture, which governs the NEXT spawn.
+- **What this entry is about.** `PostureControls` renders the SAME TWO AXES on a **RUNNING** session
+  and writes them over the desktop bridge (`agents-controls.ts › canSetAgentMode` → main's reducer
+  state, read per call by `dopl-desktop-app/main/session-io.js › grantArgs`). Its own docblock says
+  so in as many words: *"THEY ARE NOT THE SETTINGS TAB'S POSTURE … this moves ONE live session and
+  stores nothing."* **So an operator can reach the warned-about combination on a live agent, in a
+  room with a peer in it, and see no warning at all** — and on this surface it applies from the very
+  next gate decision rather than the next launch, which is sooner.
+- ⚠ **THE TWO SURFACES ARE NOT SYMMETRIC AND THAT IS WHY THIS IS A DECISION.** M6's predicate reads
+  the DURABLE tool profile off `channel-manage.tsx`'s data; the live strip's tool axis is the
+  SESSION's `agent.toolMode` off the pushed summary, which the durable record does not have to match
+  (a session can have been launched under a different profile, or moved since). A copy of the
+  predicate here would be a **second** statement of it over a different input — the two-readers-one-
+  fact defect this repo keeps paying for — so the shape matters more than the decision to do it.
+- **THE OPTIONS:**
+  - **(A) Leave it.** The live strip is a per-session, non-persisted decision the operator is making
+    with the agent in front of them, and M6's argument (a durable setting is picked once and
+    forgotten) does not obviously transfer.
+  - **(B) Extend the warning**, taking the roster from data the agent view already holds and the tool
+    axis from `agent.toolMode`, with `posture-warning.tsx`'s predicate **imported, never re-typed**.
+  - **(C) Refuse the combination on a live session** rather than warning. ⚠ Rejected shape as filed:
+    the live axes are floored in MAIN (`session-profiles.js › floorWindowlessMessage`) and INVARIANTS
+    §11 records why a renderer list must never become the enforcement.
+- Severity: **gap in a warning, not in a fence.** Nothing here grants anything — both axes were
+  already settable on a live session before M6 existed, and M6 narrowed no path.
+  Status: **open — Samuel may want the warning there too** (M6's own flag). Filed, not built.

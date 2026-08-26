@@ -58,7 +58,7 @@ INVARIANTS §5A (the /home face: three scopes on visibility, two-workspace read,
 - M2 The pane: paneToken + renderPane; agent-panels + cards; two reads, lazy C, pill, 3 empty sentences, authorship markers, two-option filter, sweep extension. Checkpoint: live vs mock; rapid switch no flash; team row dropped.
 - M3 Authoring: editor per scope (teams=[], target KB list, create-follows-pill). Checkpoint: create in container AND home from one surface, right list/workspace.
 - M4 "Use in this channel" copy (§3): client-composed, KBs dropped w/ one line, forced private, snapshot sentence. Checkpoint: copy a home template, launch from Chat picker, ROLE block names it.
-- M5 Docs/findings/KB sync.
+- ✅ **M5** Docs/findings/KB sync — **DONE 2026-08-26**, jointly with the knowledge wave's M7 (one commit; the two lanes' doc hunks were interleaved and could not be split). ENGINEERING gained the *why a template shares by `visibility` and a knowledge base does not* stratum (count the AUDIENCES, not the resemblance) plus the copy/cache/fixture lessons; INVARIANTS §5/§5A carry the /home face; F-331/F-332/F-338/F-339 resolved, F-333/F-334 open with options stated; `node scripts/check-doc-refs.mjs` green; `Dopl Development` KB synced in the same entry as the knowledge wave.
 Sequencing: M1←M0; M2←M1; M3←M2; M4←M3; M5 last. Independent of the knowledge wave's M4/M5 (touches none of service-bases/factory/session-profiles/guest lane).
 
 ## 10. Open questions remaining for Samuel (beyond the 6 ruled above)
