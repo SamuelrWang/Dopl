@@ -175,6 +175,12 @@ export function ChannelsV2ManageActions({
               profile={toolProfile}
               onSetToolProfile={handleSetToolProfile}
               toolProfileBusy={prefs.toolProfile.pending}
+              // ⚠ THE ROSTER THIS SURFACE ALREADY HOLDS — no read of its own.
+              // It is the posture warning's third conjunct: `auto_both` + `full`
+              // only warns when somebody ELSE is here to receive
+              // (`posture-warning.tsx`).
+              roster={members}
+              currentUserId={currentUserId}
             />
           ) : null
         }

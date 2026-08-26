@@ -61,9 +61,16 @@
  * meanings live on in the docblocks below, which are for DEVELOPERS. Do not read
  * a deleted sentence as a changed behaviour, and do not put one back on the
  * surface to "restore" a rule.
+ *
+ * ⚠ AND THE ONE WARNING THIS TAB OWES IS A DIALOG, NOT AN EXCEPTION TO THAT RULE
+ * (Samuel, 2026-08-26). `auto_both` + `full` + a peer on the roster is the one
+ * combination worth stopping a human over, and it is `posture-warning.tsx` — a
+ * `ConfirmDialog` fired at the MOMENT OF SETTING, on the TRANSITION INTO the
+ * combination, naming who receives. It is not a standing banner and must never
+ * become one; both writes below route through {@link usePostureWarning}, because
+ * either axis can be the flip.
  */
 
-import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
@@ -88,7 +95,14 @@ import {
   AGENT_MODEL_OPTIONS,
 } from "../../lib/agent-models";
 import { PanelHeading } from "./bits";
-import type { AgentToolProfile } from "../../types";
+import { usePostureWarning } from "./posture-warning";
+import {
+  GroupLabel,
+  LAUNCH_POSTURE_HEADING,
+  SettingName,
+  SettingRow,
+} from "./settings-agent-rows";
+import type { AgentToolProfile, ChannelMember } from "../../types";
 
 /**
  * WHAT EACH TOOL PROFILE MEANS. ⚠ Source of truth is
@@ -150,6 +164,18 @@ export interface ChannelAgentSettingsProps {
   onSetToolProfile: (profile: AgentToolProfile) => void;
   /** True while the tool-profile write is in flight. */
   toolProfileBusy: boolean;
+  /**
+   * The channel roster and the caller — the posture warning's third conjunct
+   * (`posture-warning.tsx › warrantsPostureWarning`). Read off the roster the
+   * host already holds; this surface opens NO read of its own.
+   *
+   * ⚠ OPTIONAL, AND ABSENT MEANS "THIS MOUNT CANNOT SAY WHO IS HERE" — which
+   * warns about nothing, deliberately. A warning naming a peer who might be the
+   * operator themselves is what teaches people to click the dialog away. The one
+   * production mount (`channel-manage.tsx`) always passes both.
+   */
+  roster?: readonly ChannelMember[];
+  currentUserId?: string | null;
 }
 
 /**
@@ -170,6 +196,8 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
       profile={props.profile}
       onSetToolProfile={props.onSetToolProfile}
       toolProfileBusy={props.toolProfileBusy}
+      roster={props.roster}
+      currentUserId={props.currentUserId}
       posture={launchPosture.bridge ? launchPosture.posture : null}
       postureBusy={launchPosture.busy}
       onChangePosture={(patch) => void launchPosture.update(patch)}
@@ -225,6 +253,10 @@ export interface ChannelAgentSettingsViewProps {
    *  is the DURABLE containment control, so a second pick landing on top of an
    *  unsettled one is the case worth refusing. */
   toolProfileBusy: boolean;
+  /** The posture warning's third conjunct — see `ChannelAgentSettingsProps`,
+   *  which states why both are optional and what an absent one means. */
+  roster?: readonly ChannelMember[];
+  currentUserId?: string | null;
   /** The DURABLE launch posture, or null outside the desktop shell (subsection
    *  absent). ⚠ NOT the arm — `use-channel-launch-posture.ts` says why they are
    *  two records with two consumers. */
@@ -268,6 +300,8 @@ export function ChannelAgentSettingsView({
   profile,
   onSetToolProfile,
   toolProfileBusy,
+  roster = EMPTY_ROSTER,
+  currentUserId = null,
   posture,
   postureBusy,
   onChangePosture,
@@ -276,6 +310,19 @@ export function ChannelAgentSettingsView({
   autoSend = null,
   orchestrator = null,
 }: ChannelAgentSettingsViewProps) {
+  // ⚠ BOTH WRITES GO THROUGH THE WARNING, never around it — either axis can be
+  // the flip into `auto_both` + `full` + a peer. `posture-warning.tsx` holds the
+  // predicate, the copy and the dialog, and commits the ORIGINAL write on
+  // confirm; cancel writes nothing at all.
+  const warning = usePostureWarning({
+    messageMode: posture?.messages ?? null,
+    toolProfile: profile,
+    roster,
+    currentUserId,
+    commitPosture: onChangePosture,
+    commitToolProfile: onSetToolProfile,
+  });
+
   return (
     <>
       <PanelHeading title="Agent" />
@@ -311,7 +358,7 @@ export function ChannelAgentSettingsView({
               <SelectMenu<ToolMode>
                 value={posture.tools}
                 options={TOOL_OPTIONS}
-                onChange={(tools) => onChangePosture({ tools })}
+                onChange={(tools) => warning.changePosture({ tools })}
                 ariaLabel="Permissions for agents you launch"
                 disabled={postureBusy}
               />
@@ -320,7 +367,7 @@ export function ChannelAgentSettingsView({
               <SelectMenu<MessageMode>
                 value={posture.messages}
                 options={MESSAGE_OPTIONS}
-                onChange={(messages) => onChangePosture({ messages })}
+                onChange={(messages) => warning.changePosture({ messages })}
                 ariaLabel="Sends for agents you launch"
                 disabled={postureBusy}
               />
@@ -352,7 +399,7 @@ export function ChannelAgentSettingsView({
                   value={posture.model ?? AGENT_MODEL_DEFAULT}
                   options={AGENT_MODEL_OPTIONS}
                   onChange={(model) =>
-                    onChangePosture({ model: model || null })
+                    warning.changePosture({ model: model || null })
                   }
                   ariaLabel="Model for agents you launch"
                   disabled={postureBusy}
@@ -382,7 +429,7 @@ export function ChannelAgentSettingsView({
                 aria-checked={selected}
                 disabled={toolProfileBusy}
                 onClick={() => {
-                  if (!selected) onSetToolProfile(option.value);
+                  if (!selected) warning.setToolProfile(option.value);
                 }}
                 className={cn(
                   "flex w-full items-start gap-2 rounded-[10px] border px-2.5 py-2 text-left transition-colors disabled:opacity-60",
@@ -431,64 +478,19 @@ export function ChannelAgentSettingsView({
           />
         )}
       </div>
+      {warning.dialog}
     </>
   );
 }
 
-/**
- * The heading over the launch posture. ⚠ IT NAMES THE ACT, NOT A TIME WINDOW.
- * The deleted arm's heading ("For the next request you allow") was doing the whole
- * job of saying "this is single-use" and could not carry it; this pair really is
- * durable, so the honest sentence is the one that says WHICH launches it governs
- * — the ones the operator starts. It must never read "for every session": an
- * inbound request a peer triggered carries no tool posture and starts at manual/ask.
- */
-const LAUNCH_POSTURE_HEADING = "When you launch an agent";
+/** ⚠ Module-level, so an unpassed roster is the SAME array every render rather
+ *  than a fresh identity the warning would have to re-derive from. */
+const EMPTY_ROSTER: readonly ChannelMember[] = [];
 
-/** The sub-heading that separates each group. ⚠ Every group on this tab is
- *  DURABLE — nothing single-use is left anywhere in the product — so the headings
- *  say what each one GOVERNS rather than how long it lasts. A heading naming a
- *  time window is the regression (`use-channel-launch-posture.ts`). */
-function GroupLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="pt-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">
-      {children}
-    </p>
-  );
-}
-
-/** A setting's NAME — primary ink, because it is the thing being set. */
-function SettingName({ children }: { children: ReactNode }) {
-  return (
-    <p className="pt-1.5 text-body font-medium text-text-primary">{children}</p>
-  );
-}
-
-// ⚠ `Note` STOOD HERE AND IS DELETED (2026-08-22). It was the tab's one
-// secondary-line recipe and its only two callers were trust's SCOPE hint and the
-// empty-roster line, both of which went with the "Always allow" section. The
-// minimal-copy ruling (INVARIANTS §5) stands: a row on this tab is a NAME + a
-// CONTROL, and there is now no recipe here to hang a third sentence off.
-
-/**
- * A named setting with its control on the right. The 380px panel (2026-08-25) is why the
- * control sits beside the name rather than under it: a `SelectMenu` pill is
- * ~120px and the name ~80px, so one line holds both and the column stays
- * scannable.
- */
-function SettingRow({
-  name,
-  children,
-}: {
-  name: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex min-h-[32px] items-center gap-2">
-      <span className="shrink-0 text-body font-medium text-text-primary">
-        {name}
-      </span>
-      <span className="flex min-w-0 flex-1 justify-end">{children}</span>
-    </div>
-  );
-}
+// ⚠ `LAUNCH_POSTURE_HEADING`, `GroupLabel`, `SettingName`, `SettingRow` AND THE
+// `Note` TOMBSTONE MOVED TO `settings-agent-rows.tsx` ON 2026-08-26 — a PURE
+// move, no recipe and no string changed. This file was at the 500-line cap and
+// the posture warning had to land in it
+// (INVARIANTS §1); the row vocabulary is the part with the fewest reasons to
+// change, so it is the part that left. `settings-desktop-rows.tsx` still takes
+// two of them as props, unchanged.
