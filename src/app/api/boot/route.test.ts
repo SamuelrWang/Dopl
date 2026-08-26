@@ -72,7 +72,7 @@ describe("POST /api/boot", () => {
   it("answers the whole launch in one payload for the no-segment mode", async () => {
     mockBoot.mockResolvedValue(bootState());
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({
@@ -89,14 +89,14 @@ describe("POST /api/boot", () => {
   it("passes a requested segment through to the fail-closed resolver", async () => {
     mockBoot.mockResolvedValue(bootState());
 
-    await POST(postReq({ segment: SEGMENT }));
+    await POST(postReq({ segment: SEGMENT }), { params: Promise.resolve({}) });
     expect(mockBoot).toHaveBeenCalledWith("user-1", SEGMENT);
   });
 
   it("404s a segment that does not resolve — never a default workspace", async () => {
     mockBoot.mockResolvedValue(null);
 
-    const res = await POST(postReq({ segment: "someone-elses-ws" }));
+    const res = await POST(postReq({ segment: "someone-elses-ws" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("WORKSPACE_NOT_FOUND");
@@ -113,7 +113,7 @@ describe("POST /api/boot", () => {
       })
     );
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { isOnboarded: boolean; workspace: unknown };
     expect(body.isOnboarded).toBe(false);
@@ -124,20 +124,20 @@ describe("POST /api/boot", () => {
     state.sessionUser = { id: "user-42" };
     mockBoot.mockResolvedValue(bootState());
 
-    await POST(postReq({ segment: SEGMENT }));
+    await POST(postReq({ segment: SEGMENT }), { params: Promise.resolve({}) });
     expect(mockBoot).toHaveBeenCalledWith("user-42", SEGMENT);
   });
 
   it("401s an unauthenticated caller and resolves nothing", async () => {
     state.sessionUser = null;
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(mockBoot).not.toHaveBeenCalled();
   });
 
   it("400s a malformed segment rather than resolving a coerced one", async () => {
-    const res = await POST(postReq({ segment: 42 }));
+    const res = await POST(postReq({ segment: 42 }), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockBoot).not.toHaveBeenCalled();
   });
@@ -145,7 +145,7 @@ describe("POST /api/boot", () => {
   it("never lets a CDN cache the per-caller payload", async () => {
     mockBoot.mockResolvedValue(bootState());
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
   });
 });

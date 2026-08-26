@@ -88,7 +88,7 @@ beforeEach(() => {
 
 describe("GET /api/agent-templates", () => {
   it("returns `{ templates }` with each row carrying its VISIBILITY", async () => {
-    const res = await GET(req("GET"));
+    const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     // The client groups on this field; a payload without it forces a second
@@ -97,14 +97,14 @@ describe("GET /api/agent-templates", () => {
   });
 
   it("reads at VIEWER — the default, so no options are passed", async () => {
-    await GET(req("GET"));
+    await GET(req("GET"), { params: Promise.resolve({}) });
     expect(wrapperOptions[0]).toBeUndefined();
   });
 });
 
 describe("POST /api/agent-templates", () => {
   it("creates and answers 201 with `{ template }`", async () => {
-    const res = await POST(req("POST", { name: "Researcher" }));
+    const res = await POST(req("POST", { name: "Researcher" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ template: TEMPLATE });
     expect(mockCreate).toHaveBeenCalledWith(
@@ -114,17 +114,17 @@ describe("POST /api/agent-templates", () => {
   });
 
   it("writes require `member`", async () => {
-    await POST(req("POST", { name: "R" }));
+    await POST(req("POST", { name: "R" }), { params: Promise.resolve({}) });
     expect(wrapperOptions.at(-1)).toMatchObject({ minRole: "member" });
   });
 
   it("is NOT sessionOnly — an orchestrator agent authoring a template is the feature", async () => {
-    await POST(req("POST", { name: "R" }));
+    await POST(req("POST", { name: "R" }), { params: Promise.resolve({}) });
     expect(wrapperOptions.at(-1)).not.toHaveProperty("sessionOnly");
   });
 
   it("400s on a body the schema refuses, with the zod issues in `details`", async () => {
-    const res = await POST(req("POST", { name: "" }));
+    const res = await POST(req("POST", { name: "" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     const body = await res.json();
     // ⚠ NESTED envelope — `{ error: { code, message, details? } }`, what
@@ -139,7 +139,7 @@ describe("POST /api/agent-templates", () => {
       "@/features/agent-templates/server/errors"
     );
     mockCreate.mockRejectedValue(new TemplateKnowledgeBaseNotFoundError(["kb-x"]));
-    const res = await POST(req("POST", { name: "R" }));
+    const res = await POST(req("POST", { name: "R" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("KNOWLEDGE_BASE_NOT_FOUND");

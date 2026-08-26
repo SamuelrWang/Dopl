@@ -161,7 +161,7 @@ describe("write-scope gate — read-only OAuth token", () => {
     async (method) => {
       state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "t1" };
       const handler = handlerSpy();
-      const res = await withUserAuth(handler)(bearerReq(method));
+      const res = await withUserAuth(handler)(bearerReq(method), { params: Promise.resolve({}) });
       expect(res.status).toBe(403);
       const body = await res.json();
       expect(body.error.code).toBe("WRITE_SCOPE_REQUIRED");
@@ -174,14 +174,14 @@ describe("write-scope gate — read-only OAuth token", () => {
   it("GET → handler runs (reads are always allowed)", async () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "t1" };
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(bearerReq("GET"));
+    const res = await withUserAuth(handler)(bearerReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
   });
 
   it("empty scopes + POST → 403 (fail-closed, mirrors server.ts)", async () => {
     state.token = { userId: "u1", scopes: [], tokenId: "t1" };
-    const res = await withUserAuth(handlerSpy())(bearerReq("POST"));
+    const res = await withUserAuth(handlerSpy())(bearerReq("POST"), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("WRITE_SCOPE_REQUIRED");
   });
@@ -192,7 +192,7 @@ describe("write-scope gate — read-only OAuth token", () => {
       scopes: undefined as unknown as string[],
       tokenId: "t1",
     };
-    const res = await withUserAuth(handlerSpy())(bearerReq("POST"));
+    const res = await withUserAuth(handlerSpy())(bearerReq("POST"), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("WRITE_SCOPE_REQUIRED");
   });
@@ -206,7 +206,7 @@ describe("write-scope gate — dopl.write OAuth token", () => {
       tokenId: "t1",
     };
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(bearerReq(method));
+    const res = await withUserAuth(handler)(bearerReq(method), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
   });
@@ -218,7 +218,7 @@ describe("write-scope gate — session (cookie) caller is never restricted", () 
     async (method) => {
       state.sessionUser = { id: "web-user" };
       const handler = handlerSpy();
-      const res = await withUserAuth(handler)(sessionReq(method));
+      const res = await withUserAuth(handler)(sessionReq(method), { params: Promise.resolve({}) });
       expect(res.status).toBe(200);
       expect(handler).toHaveBeenCalledOnce();
       const ctx = handler.mock.calls[0][1];
@@ -233,7 +233,7 @@ describe("writeScopeExempt — the MCP liveness ping", () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "t1" };
     const handler = handlerSpy();
     const res = await withUserAuth(handler, { writeScopeExempt: true })(
-      bearerReq("POST")
+      bearerReq("POST"), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
@@ -247,7 +247,7 @@ describe("sessionOnly gate — destructive admin surface", () => {
       state.token = { userId: "u1", scopes: scopes as string[], tokenId: "t1" };
       const handler = handlerSpy();
       const res = await withUserAuth(handler, { sessionOnly: true })(
-        bearerReq("DELETE")
+        bearerReq("DELETE"), { params: Promise.resolve({}) }
       );
       expect(res.status).toBe(403);
       expect((await res.json()).error.code).toBe("SESSION_REQUIRED");
@@ -259,7 +259,7 @@ describe("sessionOnly gate — destructive admin surface", () => {
     state.sessionUser = { id: "web-user" };
     const handler = handlerSpy();
     const res = await withUserAuth(handler, { sessionOnly: true })(
-      sessionReq("DELETE")
+      sessionReq("DELETE"), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
@@ -272,7 +272,7 @@ describe("sessionOnly gate — destructive admin surface", () => {
       tokenId: "t1",
     };
     const res = await withUserAuth(handlerSpy(), { sessionOnly: true })(
-      bearerReq("POST")
+      bearerReq("POST"), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("SESSION_REQUIRED");
@@ -286,7 +286,7 @@ describe("sessionOnly gate — destructive admin surface", () => {
 describe("session branch resolves the caller locally (Q11)", () => {
   it("a session request makes ZERO network getUser() calls", async () => {
     state.sessionUser = { id: "web-user" };
-    const res = await withUserAuth(handlerSpy())(sessionReq("GET"));
+    const res = await withUserAuth(handlerSpy())(sessionReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(state.calls.getClaims).toBe(1);
     expect(state.calls.getUser).toBe(0);
@@ -295,14 +295,14 @@ describe("session branch resolves the caller locally (Q11)", () => {
   it("100 consecutive authenticated API calls cost 0 GoTrue round-trips", async () => {
     state.sessionUser = { id: "web-user" };
     const wrapped = withUserAuth(handlerSpy());
-    for (let i = 0; i < 100; i++) await wrapped(sessionReq("GET"));
+    for (let i = 0; i < 100; i++) await wrapped(sessionReq("GET"), { params: Promise.resolve({}) });
     expect(state.calls.getUser).toBe(0);
   });
 
   it("the handler gets claims.sub as the user id", async () => {
     state.sessionUser = { id: "11111111-1111-1111-1111-111111111111" };
     const handler = handlerSpy();
-    await withUserAuth(handler)(sessionReq("POST"));
+    await withUserAuth(handler)(sessionReq("POST"), { params: Promise.resolve({}) });
     expect(handler.mock.calls[0][1].userId).toBe(
       "11111111-1111-1111-1111-111111111111"
     );
@@ -311,7 +311,7 @@ describe("session branch resolves the caller locally (Q11)", () => {
   it("no session → 401, handler never runs", async () => {
     state.sessionUser = null;
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(sessionReq("GET"));
+    const res = await withUserAuth(handler)(sessionReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(handler).not.toHaveBeenCalled();
   });
@@ -322,7 +322,7 @@ describe("session branch resolves the caller locally (Q11)", () => {
     state.sessionUser = { id: "web-user" };
     state.claimsThrows = new Error("JWT has expired");
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(sessionReq("GET"));
+    const res = await withUserAuth(handler)(sessionReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(handler).not.toHaveBeenCalled();
   });
@@ -330,7 +330,7 @@ describe("session branch resolves the caller locally (Q11)", () => {
   it("a token with no exp claim (also a throw) → 401", async () => {
     state.sessionUser = { id: "web-user" };
     state.claimsThrows = new Error("Missing exp claim");
-    const res = await withUserAuth(handlerSpy())(sessionReq("POST"));
+    const res = await withUserAuth(handlerSpy())(sessionReq("POST"), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
   });
 
@@ -338,7 +338,7 @@ describe("session branch resolves the caller locally (Q11)", () => {
     state.sessionUser = { id: "web-user" }; // a sub is present but unverifiable
     state.claimsError = new Error("Invalid JWT signature");
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(sessionReq("GET"));
+    const res = await withUserAuth(handler)(sessionReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(handler).not.toHaveBeenCalled();
     expect(state.calls.getUser).toBe(0);
@@ -346,7 +346,7 @@ describe("session branch resolves the caller locally (Q11)", () => {
 
   it("an OAuth bearer still short-circuits before the session branch", async () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "t1" };
-    const res = await withUserAuth(handlerSpy())(bearerReq("GET"));
+    const res = await withUserAuth(handlerSpy())(bearerReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(state.calls.getClaims).toBe(0);
     expect(state.calls.getUser).toBe(0);
@@ -361,7 +361,7 @@ describe("MCP read op is not falsely blocked", () => {
   it("read-only token + GET loopback (shape of an MCP read op) → handler runs", async () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "t1" };
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(bearerReq("GET"));
+    const res = await withUserAuth(handler)(bearerReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
   });
@@ -377,7 +377,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
   it("valid JWT reaches the handler with session semantics", async () => {
     state.jwtUser = { id: "user-jwt" };
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(jwtReq("GET"));
+    const res = await withUserAuth(handler)(jwtReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const ctx = handler.mock.calls[0][1];
     expect(ctx.userId).toBe("user-jwt");
@@ -389,7 +389,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
     state.jwtUser = { id: "user-jwt" };
     for (const method of WRITE_METHODS) {
       const handler = handlerSpy();
-      const res = await withUserAuth(handler)(jwtReq(method));
+      const res = await withUserAuth(handler)(jwtReq(method), { params: Promise.resolve({}) });
       expect(res.status).toBe(200);
     }
   });
@@ -397,7 +397,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
   it("is admitted by sessionOnly routes (unlike every OAuth token)", async () => {
     state.jwtUser = { id: "user-jwt" };
     const handler = handlerSpy();
-    const res = await withUserAuth(handler, { sessionOnly: true })(jwtReq("POST"));
+    const res = await withUserAuth(handler, { sessionOnly: true })(jwtReq("POST"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
   });
 
@@ -405,7 +405,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
     state.jwtUser = null; // getClaims throws (expired)
     state.sessionUser = { id: "cookie-user" }; // a valid cookie session exists…
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(jwtReq("GET"));
+    const res = await withUserAuth(handler)(jwtReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(401); // …but a presented bearer must stand alone
     expect(handler).not.toHaveBeenCalled();
     expect(state.calls.getClaims).toBe(0); // cookie path untouched
@@ -427,7 +427,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
         new NextRequest("http://localhost/api/x", {
           method: "GET",
           headers: { authorization: `Bearer ${token}` },
-        })
+        }), { params: Promise.resolve({}) }
       );
       expect(res.status).toBe(401);
       expect(handler).not.toHaveBeenCalled();
@@ -439,7 +439,7 @@ describe("bearer Supabase JWT (desktop SPA)", () => {
     state.jwtUser = { id: "user-jwt" }; // would succeed if misrouted
     state.token = null; // OAuth validation fails
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(bearerReq("GET"));
+    const res = await withUserAuth(handler)(bearerReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(state.calls_jwtGetClaims).toEqual([]); // JWT verifier never consulted
   });

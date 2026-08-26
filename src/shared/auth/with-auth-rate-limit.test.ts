@@ -105,7 +105,7 @@ describe("OAuth-bearer rate limit", () => {
   it("within the limit → handler runs, keyed on mcp:<tokenId> at the shared 600 ceiling", async () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "tok-1" };
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(bearerReq("GET"));
+    const res = await withUserAuth(handler)(bearerReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(handler).toHaveBeenCalledOnce();
     expect(state.rateLimitCalls).toEqual([
@@ -117,7 +117,7 @@ describe("OAuth-bearer rate limit", () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "tok-1" };
     state.rateLimitWithin = false;
     const handler = handlerSpy();
-    const res = await withUserAuth(handler)(bearerReq("GET"));
+    const res = await withUserAuth(handler)(bearerReq("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(429);
     expect((await res.json()).error.code).toBe("RATE_LIMITED");
     expect(res.headers.get("Retry-After")).toBe("60");
@@ -127,7 +127,7 @@ describe("OAuth-bearer rate limit", () => {
   it("is enforced BEFORE the write-scope gate (read-only write over-limit → 429, not 403)", async () => {
     state.token = { userId: "u1", scopes: ["dopl.read"], tokenId: "tok-1" };
     state.rateLimitWithin = false;
-    const res = await withUserAuth(handlerSpy())(bearerReq("POST"));
+    const res = await withUserAuth(handlerSpy())(bearerReq("POST"), { params: Promise.resolve({}) });
     expect(res.status).toBe(429);
     expect((await res.json()).error.code).toBe("RATE_LIMITED");
   });
@@ -136,7 +136,7 @@ describe("OAuth-bearer rate limit", () => {
     state.token = { userId: "u1", scopes: ["dopl.read", "dopl.write"], tokenId: "tok-1" };
     state.rateLimitWithin = false;
     const res = await withUserAuth(handlerSpy(), { sessionOnly: true })(
-      bearerReq("DELETE")
+      bearerReq("DELETE"), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(429);
   });
@@ -145,7 +145,7 @@ describe("OAuth-bearer rate limit", () => {
     state.sessionUser = { id: "web-user" };
     state.rateLimitWithin = false; // would 429 a bearer
     for (const method of ["GET", ...WRITE_METHODS]) {
-      const res = await withUserAuth(handlerSpy())(sessionReq(method));
+      const res = await withUserAuth(handlerSpy())(sessionReq(method), { params: Promise.resolve({}) });
       expect(res.status).toBe(200);
     }
     expect(state.rateLimitCalls).toEqual([]);
@@ -154,7 +154,7 @@ describe("OAuth-bearer rate limit", () => {
   it("a Supabase-JWT SESSION caller is NEVER rate-limited", async () => {
     state.jwtUser = { id: "user-jwt" };
     state.rateLimitWithin = false;
-    const res = await withUserAuth(handlerSpy())(jwtReq("POST"));
+    const res = await withUserAuth(handlerSpy())(jwtReq("POST"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(state.rateLimitCalls).toEqual([]);
   });

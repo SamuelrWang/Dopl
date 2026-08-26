@@ -66,11 +66,11 @@ const post = (body: unknown) =>
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-    })
+    }), { params: Promise.resolve({}) }
   );
 
 const get = (query = "") =>
-  GET(new NextRequest(`https://dopl.test/api/channels/sessions${query}`));
+  GET(new NextRequest(`https://dopl.test/api/channels/sessions${query}`), { params: Promise.resolve({}) });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -176,7 +176,7 @@ describe("POST — the write", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{not json",
-      })
+      }), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(400);
     expect(reportSessionStates).not.toHaveBeenCalled();

@@ -56,7 +56,7 @@ describe("POST /api/ontology/objects — free-cap denial", () => {
   it("maps EntitlementError to a 403 over_free_cap envelope", async () => {
     mockCreate.mockRejectedValue(new EntitlementError("ws-1"));
 
-    const res = await POST(postRequest(VALID_BODY));
+    const res = await POST(postRequest(VALID_BODY), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
 
     const body = await res.json();
@@ -77,7 +77,7 @@ describe("POST /api/ontology/objects — free-cap denial", () => {
       childIds: [],
     });
 
-    const res = await POST(postRequest(VALID_BODY));
+    const res = await POST(postRequest(VALID_BODY), { params: Promise.resolve({}) });
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.object.id).toBe("obj-1");

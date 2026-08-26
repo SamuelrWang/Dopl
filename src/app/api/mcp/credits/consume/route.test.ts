@@ -75,7 +75,7 @@ beforeEach(() => {
 
 describe("POST /api/mcp/credits/consume", () => {
   it("spends one credit against the free allowance and reports what is left", async () => {
-    const res = await POST(request());
+    const res = await POST(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ allowed: true, used: 1, limit: 500, remaining: 499 });
@@ -93,7 +93,7 @@ describe("POST /api/mcp/credits/consume", () => {
     );
     mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: true, used: 7 });
 
-    const body = await (await POST(request())).json();
+    const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
     expect(body).toMatchObject({ allowed: true, limit: 10_000, remaining: 9_993 });
   });
 
@@ -105,7 +105,7 @@ describe("POST /api/mcp/credits/consume", () => {
     );
     mockRepo.countActiveMembers.mockResolvedValue(2);
 
-    const body = await (await POST(request())).json();
+    const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
     expect(body.limit).toBe(500);
     expect(mockRepo.consumeWorkspaceCredits).toHaveBeenCalledWith(
       "ws-1",
@@ -125,7 +125,7 @@ describe("POST /api/mcp/credits/consume", () => {
       })
     );
 
-    const body = await (await POST(request())).json();
+    const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
     expect(body.periodStart).toBe("2099-01-10T00:00:00.000Z");
     expect(mockRepo.consumeWorkspaceCredits).toHaveBeenCalledWith(
       "ws-1",
@@ -138,7 +138,7 @@ describe("POST /api/mcp/credits/consume", () => {
   it("refuses when the counter is exhausted, still 200, and names the upgrade url", async () => {
     mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: false, used: 500 });
 
-    const res = await POST(request());
+    const res = await POST(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ allowed: false, used: 500, limit: 500, remaining: 0 });
@@ -149,7 +149,7 @@ describe("POST /api/mcp/credits/consume", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     mockRepo.consumeWorkspaceCredits.mockRejectedValue(new Error("connection reset"));
 
-    const res = await POST(request());
+    const res = await POST(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.allowed).toBe(true);
@@ -163,7 +163,7 @@ describe("POST /api/mcp/credits/consume", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     mockRepo.getWorkspaceBilling.mockRejectedValue(new Error("db down"));
 
-    const body = await (await POST(request())).json();
+    const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
     expect(body.allowed).toBe(true);
     expect(body.degraded).toBe(true);
     error.mockRestore();

@@ -126,7 +126,7 @@ beforeEach(() => {
 describe("hot path makes zero network calls", () => {
   const paths = [
     "/canvas", // authed page
-    "/pricing", // public page — see the matcher note in section 6
+    "/pricing", // public page — see the matcher note in `proxy-matcher.test.ts`
     "/api/workspaces/me", // api route
     "/login",
     "/",
@@ -298,7 +298,7 @@ describe("pages", () => {
   // STATIC card the root layout names, and the guarantee it needs — reachable with no
   // session — is now structural instead of branch-shaped: the matcher excludes it by
   // extension, so the middleware never runs and there is no code path that could bounce
-  // it. Proven in section 6 against the real exported matcher.
+  // it. Proven in `proxy-matcher.test.ts` against the real exported matcher.
   it("a signed-out request to a would-be OG route is no longer special-cased", async () => {
     // Nothing serves this path any more, so the honest answer is the ordinary
     // signed-out one. Kept as a test so the dead branch cannot be reintroduced
@@ -442,5 +442,47 @@ describe("a thrown verification error is fail-closed, never a 500", () => {
     expect((await proxy(req("/pricing"))).status).toBe(200);
     expect((await proxy(req("/"))).status).toBe(200);
     expect((await proxy(req("/auth/callback?code=x"))).status).toBe(200);
+  });
+});
+
+// ── 6. The one-character PUBLIC_ROUTES fence: `/api/home/link/` vs `…/links` ──
+
+/**
+ * INVARIANTS §3 AND §4A BOTH SAY "proxy.test.ts pins the set". Measured
+ * 2026-08-25 (guest-web-channel M4): no test anywhere asserted this split, so
+ * the doc was a promise rather than a description. This is the pin that makes
+ * it true.
+ *
+ * `PUBLIC_ROUTES` matches with `pathname.startsWith`, so an entry is an
+ * UNANCHORED BYTE PREFIX and not a path segment. `/api/home/link/` — SINGULAR —
+ * is public because the person holding a claim link has, by definition, no
+ * account, and its pre-auth `…/info` lookup is narrowed server-side to a display
+ * name and three booleans (`home/server/service-reads.ts › getLinkPublicInfo`);
+ * the CLAIM under the same prefix is still `withUserAuth`. `/api/home/links` —
+ * PLURAL — is the creator's own mint/list/revoke and stays gated.
+ *
+ * ⚠ THE TRAILING SLASH IS THE ENTIRE FENCE. Drop that one character and
+ * `/api/home/link` prefixes `/api/home/links`, publishing the mint surface with
+ * no error, no type change and nothing else in the tree noticing. Both
+ * directions are mutation-verified: removing the slash reddens the plural rows,
+ * removing the entry reddens the singular one.
+ */
+describe("PUBLIC_ROUTES singular/plural split (§4A)", () => {
+  it("signed-out /api/home/link/{token}/info passes through", async () => {
+    const res = await proxy(req("/api/home/link/tok_x/info"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("signed-out /api/home/links gets the 401 JSON (it is an /api path)", async () => {
+    const res = await proxy(req("/api/home/links"));
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({
+      error: "Authentication required",
+    });
+  });
+
+  it("…and so does the per-link revoke nested under it", async () => {
+    expect((await proxy(req("/api/home/links/link_1"))).status).toBe(401);
   });
 });

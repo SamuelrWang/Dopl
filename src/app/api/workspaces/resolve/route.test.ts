@@ -77,7 +77,7 @@ describe("GET /api/workspaces/resolve", () => {
       role: "owner",
     });
 
-    const res = await GET(getReq(`?segment=${CANONICAL}`));
+    const res = await GET(getReq(`?segment=${CANONICAL}`), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       workspace: WORKSPACE,
@@ -95,7 +95,7 @@ describe("GET /api/workspaces/resolve", () => {
       role: "owner",
     });
 
-    const res = await GET(getReq("?segment=acme"));
+    const res = await GET(getReq("?segment=acme"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { canonical: string; needsRedirect: boolean };
     expect(body.needsRedirect).toBe(true);
@@ -111,7 +111,7 @@ describe("GET /api/workspaces/resolve", () => {
       role: "owner",
     });
 
-    await GET(getReq(`?segment=${CANONICAL}`));
+    await GET(getReq(`?segment=${CANONICAL}`), { params: Promise.resolve({}) });
     expect(mockResolve).toHaveBeenCalledWith(CANONICAL, "user-42");
   });
 
@@ -123,21 +123,21 @@ describe("GET /api/workspaces/resolve", () => {
       role: "owner",
     });
 
-    await GET(getReq(`?segment=%20${CANONICAL}%20`));
+    await GET(getReq(`?segment=%20${CANONICAL}%20`), { params: Promise.resolve({}) });
     expect(mockResolve).toHaveBeenCalledWith(CANONICAL, "user-1");
   });
 
   it("404s a miss — non-member and nonexistent are indistinguishable", async () => {
     mockResolve.mockResolvedValue(null);
 
-    const res = await GET(getReq("?segment=someone-elses-workspace"));
+    const res = await GET(getReq("?segment=someone-elses-workspace"), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("WORKSPACE_NOT_FOUND");
   });
 
   it("400s a missing segment param rather than resolving an empty string", async () => {
-    const res = await GET(getReq(""));
+    const res = await GET(getReq(""), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockResolve).not.toHaveBeenCalled();
     const body = (await res.json()) as { error: { code: string } };
@@ -145,7 +145,7 @@ describe("GET /api/workspaces/resolve", () => {
   });
 
   it("400s a blank segment param too", async () => {
-    const res = await GET(getReq("?segment=%20%20"));
+    const res = await GET(getReq("?segment=%20%20"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockResolve).not.toHaveBeenCalled();
   });
@@ -154,7 +154,7 @@ describe("GET /api/workspaces/resolve", () => {
     // A 404 would render "workspace not found" for a transient DB fault.
     mockResolve.mockRejectedValue(new Error("db down"));
 
-    const res = await GET(getReq(`?segment=${CANONICAL}`));
+    const res = await GET(getReq(`?segment=${CANONICAL}`), { params: Promise.resolve({}) });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("INTERNAL_ERROR");
@@ -168,14 +168,14 @@ describe("GET /api/workspaces/resolve", () => {
       role: "owner",
     });
 
-    const res = await GET(getReq(`?segment=${CANONICAL}`));
+    const res = await GET(getReq(`?segment=${CANONICAL}`), { params: Promise.resolve({}) });
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
   });
 
   it("401s an unauthenticated caller and resolves nothing", async () => {
     state.sessionUser = null;
 
-    const res = await GET(getReq(`?segment=${CANONICAL}`));
+    const res = await GET(getReq(`?segment=${CANONICAL}`), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(mockResolve).not.toHaveBeenCalled();
   });

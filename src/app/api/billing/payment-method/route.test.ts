@@ -124,7 +124,7 @@ describe("which method is reported", () => {
       invoice_settings: { default_payment_method: card("4242") },
     };
     stripeCalls.cards = [card("1111")];
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.paymentMethod).toEqual({
       brand: "visa",
       last4: "4242",
@@ -137,13 +137,13 @@ describe("which method is reported", () => {
   it("falls back to the attached card when no default is set", async () => {
     // Normal after an embedded checkout: card attached, `default_payment_method` never written.
     stripeCalls.cards = [card("1111")];
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.paymentMethod.last4).toBe("1111");
     expect(stripeCalls.listedFor).toBe("cus_123");
   });
 
   it("answers null for a customer with no card at all", async () => {
-    expect((await (await GET(request())).json()).paymentMethod).toBeNull();
+    expect((await (await GET(request(), { params: Promise.resolve({}) })).json()).paymentMethod).toBeNull();
   });
 
   it("answers null for a non-card default (SEPA, bank debit)", async () => {
@@ -153,7 +153,7 @@ describe("which method is reported", () => {
         default_payment_method: { id: "pm_sepa", object: "payment_method" },
       },
     };
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.paymentMethod).toBeNull();
   });
 });
@@ -161,7 +161,7 @@ describe("which method is reported", () => {
 describe("when there is no Stripe account", () => {
   it("answers null — never 500 — for a workspace that never subscribed", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(null);
-    const res = await GET(request());
+    const res = await GET(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).paymentMethod).toBeNull();
   });
@@ -169,7 +169,7 @@ describe("when there is no Stripe account", () => {
   it("answers null with no Stripe key configured", async () => {
     // Preview/test environments have no key; the pane renders its empty state.
     vi.stubEnv("STRIPE_SECRET_KEY", "");
-    const res = await GET(request());
+    const res = await GET(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).paymentMethod).toBeNull();
   });

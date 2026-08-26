@@ -27,6 +27,29 @@ export interface UserAuthOptions {
   sessionOnly?: boolean;
 }
 
+/**
+ * Second argument Next passes to an exported route method, and the ONLY shape
+ * its type checker accepts there.
+ *
+ * ⚠ BOTH the parameter AND `params` must be REQUIRED. Next generates, per route
+ * it compiles, `.next/dev/types/app/api/**\/route.ts` containing
+ * `type RouteContext = { params: Promise<SegmentParams> }` and asserts
+ * `SecondArg<HANDLER>` extends it (`ParamCheck<RouteContext>`), and tsconfig
+ * includes `.next/dev/types/**\/*.ts`. `SecondArg` is inferred from the
+ * parameter tuple, so an OPTIONAL param (incl. one with a default value —
+ * a default does not make a parameter required in the function type) yields
+ * `... | undefined` and fails; an optional `params?` fails too, because
+ * `Promise<…> | undefined` is not assignable to `Promise<SegmentParams>`.
+ * Pinned by `route-context-signature.test.ts`, which mirrors the generated
+ * checker (a test cannot import from `.next/`).
+ *
+ * Runtime is unaffected: Next always calls with a context object, and the
+ * wrapper still reads `params` defensively.
+ */
+export interface RouteContextArg {
+  params: Promise<Record<string, string>>;
+}
+
 /** HTTP methods that are reads for the purposes of the write-scope gate. */
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -100,7 +123,7 @@ export function withUserAuth(
 ) {
   return async (
     request: NextRequest,
-    routeContext?: { params?: Promise<Record<string, string>> }
+    routeContext: RouteContextArg
   ): Promise<Response | NextResponse> => {
     const resolvedParams = routeContext?.params ? await routeContext.params : undefined;
     const authHeader = request.headers.get("authorization");

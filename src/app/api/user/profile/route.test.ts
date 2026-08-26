@@ -76,7 +76,7 @@ function writtenFields(): Record<string, unknown> {
 }
 
 async function expectRejected(body: unknown): Promise<string> {
-  const res = await PATCH(patchReq(body));
+  const res = await PATCH(patchReq(body), { params: Promise.resolve({}) });
   expect(res.status).toBe(400);
   expect(state.update).not.toHaveBeenCalled();
   const json = (await res.json()) as { error: { code: string; message: string } };
@@ -121,7 +121,7 @@ describe("display_name — the forged-line vector (Q1-D)", () => {
   it("a LEADING U+FEFF is trimmed away rather than rejected, and never stored", async () => {
     // ⚠ JS `.trim()` treats U+FEFF as whitespace but NOT U+200B — two different paths, same
     // outcome: nothing invisible reaches the column.
-    const res = await PATCH(patchReq({ display_name: "\uFEFFSam" }));
+    const res = await PATCH(patchReq({ display_name: "\uFEFFSam" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ display_name: "Sam" });
   });
@@ -138,7 +138,7 @@ describe("display_name — length and blankness", () => {
   });
 
   it("accepts exactly 80 characters", async () => {
-    const res = await PATCH(patchReq({ display_name: "a".repeat(80) }));
+    const res = await PATCH(patchReq({ display_name: "a".repeat(80) }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ display_name: "a".repeat(80) });
   });
@@ -158,19 +158,19 @@ describe("display_name — length and blankness", () => {
 
 describe("display_name — what must keep working", () => {
   it("trims before writing, so padding cannot smuggle leading structure", async () => {
-    const res = await PATCH(patchReq({ display_name: "   Sam Wang   " }));
+    const res = await PATCH(patchReq({ display_name: "   Sam Wang   " }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ display_name: "Sam Wang" });
   });
 
   it("accepts an ordinary non-ASCII name — the charset rule bans structure, not humans", async () => {
-    const res = await PATCH(patchReq({ display_name: "José Muñoz-O'Brien 李" }));
+    const res = await PATCH(patchReq({ display_name: "José Muñoz-O'Brien 李" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ display_name: "José Muñoz-O'Brien 李" });
   });
 
   it("`null` still clears the name — the settings form's blank-input path", async () => {
-    const res = await PATCH(patchReq({ display_name: null }));
+    const res = await PATCH(patchReq({ display_name: null }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ display_name: null });
   });
@@ -184,20 +184,20 @@ describe("the field allow-list survived the rewrite", () => {
         subscription_tier: "power",
         id: "someone-else",
         email: "attacker@x.com",
-      })
+      }), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ display_name: "Sam" });
   });
 
   it("omitted fields are not written as NULL", async () => {
-    const res = await PATCH(patchReq({ bio: "hi" }));
+    const res = await PATCH(patchReq({ bio: "hi" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(writtenFields()).toEqual({ bio: "hi" });
   });
 
   it("still stamps updated_at", async () => {
-    await PATCH(patchReq({ display_name: "Sam" }));
+    await PATCH(patchReq({ display_name: "Sam" }), { params: Promise.resolve({}) });
     const payload = state.update!.mock.calls[0][0] as Record<string, unknown>;
     expect(typeof payload.updated_at).toBe("string");
   });
@@ -214,7 +214,7 @@ describe("the field allow-list survived the rewrite", () => {
 describe("auth still gates the route", () => {
   it("an unauthenticated caller is 401 and writes nothing", async () => {
     state.sessionUser = null;
-    const res = await PATCH(patchReq({ display_name: "Sam" }));
+    const res = await PATCH(patchReq({ display_name: "Sam" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(state.update).not.toHaveBeenCalled();
   });
@@ -225,7 +225,7 @@ describe("auth still gates the route", () => {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: "{not json",
-      })
+      }), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("INVALID_JSON");

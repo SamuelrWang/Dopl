@@ -93,25 +93,25 @@ beforeEach(() => {
 
 describe("internal (`_`-prefixed) calls are not analytics", () => {
   it("does NOT log the per-tool-call credit spend", async () => {
-    const res = await echo(agentReq("_mcp_credits_consume"));
+    const res = await echo(agentReq("_mcp_credits_consume"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(logged).not.toHaveBeenCalled();
   });
 
   it("does NOT log the liveness ping either", async () => {
-    await echo(agentReq("_mcp_status_ping"));
+    await echo(agentReq("_mcp_status_ping"), { params: Promise.resolve({}) });
     expect(logged).not.toHaveBeenCalled();
   });
 
   it("the call itself still succeeds — this skips the log, not the request", async () => {
-    const res = await echo(agentReq("_mcp_credits_consume"));
+    const res = await echo(agentReq("_mcp_credits_consume"), { params: Promise.resolve({}) });
     expect(await res.json()).toEqual({ workspaceId: UUID_A });
   });
 });
 
 describe("real tool calls are still instrumented", () => {
   it("logs a write, split into tool + op", async () => {
-    await echo(agentReq("kb_write_file"));
+    await echo(agentReq("kb_write_file"), { params: Promise.resolve({}) });
     expect(logged).toHaveBeenCalledWith({
       workspaceId: UUID_A,
       userId: "user-1",
@@ -122,14 +122,14 @@ describe("real tool calls are still instrumented", () => {
   });
 
   it("logs a read with isWrite false", async () => {
-    await echo(agentReq("kb_read_file", "GET"));
+    await echo(agentReq("kb_read_file", "GET"), { params: Promise.resolve({}) });
     expect(logged).toHaveBeenCalledWith(
       expect.objectContaining({ tool: "kb", op: "read_file", isWrite: false })
     );
   });
 
   it("a separator-less name keeps the whole name as the tool", async () => {
-    await echo(agentReq("ping"));
+    await echo(agentReq("ping"), { params: Promise.resolve({}) });
     expect(logged).toHaveBeenCalledWith(
       expect.objectContaining({ tool: "ping", op: "" })
     );
@@ -139,12 +139,12 @@ describe("real tool calls are still instrumented", () => {
 describe("what is never instrumented", () => {
   it("a session (cookie) caller — no agent token, no log", async () => {
     state.token = { userId: "user-1" };
-    await echo(agentReq("kb_write_file"));
+    await echo(agentReq("kb_write_file"), { params: Promise.resolve({}) });
     expect(logged).not.toHaveBeenCalled();
   });
 
   it("an agent request with no `X-MCP-Tool` header at all", async () => {
-    await echo(agentReq());
+    await echo(agentReq(), { params: Promise.resolve({}) });
     expect(logged).not.toHaveBeenCalled();
   });
 });

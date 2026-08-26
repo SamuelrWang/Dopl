@@ -102,7 +102,7 @@ describe("who may read the invoices", () => {
 
 describe("what Stripe is asked for", () => {
   it("asks for THIS workspace's customer, one page deep", async () => {
-    await GET(request());
+    await GET(request(), { params: Promise.resolve({}) });
     expect(stripeCalls.listParams).toEqual({
       customer: "cus_123",
       limit: INVOICE_PAGE_SIZE,
@@ -124,7 +124,7 @@ describe("what crosses the wire", () => {
         hosted_invoice_url: "https://invoice.stripe.com/i/1",
       },
     ];
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.invoices[0]).toEqual({
       id: "in_1",
       number: "DOPL-0001",
@@ -150,7 +150,7 @@ describe("what crosses the wire", () => {
         status: "open",
       },
     ];
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.invoices[0]).toMatchObject({
       number: null,
       hostedInvoiceUrl: null,
@@ -162,7 +162,7 @@ describe("what crosses the wire", () => {
 describe("when there is no Stripe account", () => {
   it("answers [] for a workspace that never subscribed", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(null);
-    const res = await GET(request());
+    const res = await GET(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).invoices).toEqual([]);
     // A missing customer is not a lookup.
@@ -171,7 +171,7 @@ describe("when there is no Stripe account", () => {
 
   it("answers [] with no Stripe key configured", async () => {
     vi.stubEnv("STRIPE_SECRET_KEY", "");
-    const res = await GET(request());
+    const res = await GET(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).invoices).toEqual([]);
     expect(stripeCalls.listParams).toBeNull();

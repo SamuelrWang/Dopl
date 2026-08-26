@@ -94,7 +94,7 @@ function ws(id: string, kind?: string) {
 
 async function run(): Promise<{ status: number; body: Record<string, unknown> }> {
   const res = await DELETE(
-    new NextRequest("http://localhost/api/user/delete", { method: "DELETE" })
+    new NextRequest("http://localhost/api/user/delete", { method: "DELETE" }), { params: Promise.resolve({}) }
   );
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }

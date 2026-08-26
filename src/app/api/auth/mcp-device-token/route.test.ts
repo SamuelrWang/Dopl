@@ -93,7 +93,7 @@ beforeEach(() => {
 describe("DELETE (revoke) — caller-type gate", () => {
   it("a cookie SESSION caller is admitted and the revoke runs for THAT user", async () => {
     state.sessionUser = { id: "user-9" };
-    const res = await DELETE(sessionReq("DELETE", { label: "Dopl Desktop CLI (mbp)" }));
+    const res = await DELETE(sessionReq("DELETE", { label: "Dopl Desktop CLI (mbp)" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, revoked: 1 });
     expect(revokeDeviceTokens).toHaveBeenCalledWith({
@@ -107,7 +107,7 @@ describe("DELETE (revoke) — caller-type gate", () => {
 
   it("a FULL-WRITE agent bearer is REFUSED 403 SESSION_REQUIRED, handler never runs", async () => {
     state.token = WRITE_TOKEN;
-    const res = await DELETE(bearerReq("DELETE", { label: "Dopl Desktop CLI (mbp)" }));
+    const res = await DELETE(bearerReq("DELETE", { label: "Dopl Desktop CLI (mbp)" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("SESSION_REQUIRED");
     expect(revokeDeviceTokens).not.toHaveBeenCalled();
@@ -115,14 +115,14 @@ describe("DELETE (revoke) — caller-type gate", () => {
 
   it("a read-only bearer is refused too — the gate is caller TYPE, not scope", async () => {
     state.token = { userId: "agent-user", scopes: ["dopl.read"], tokenId: "tok-ro" };
-    const res = await DELETE(bearerReq("DELETE", { label: "L" }));
+    const res = await DELETE(bearerReq("DELETE", { label: "L" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("SESSION_REQUIRED");
     expect(revokeDeviceTokens).not.toHaveBeenCalled();
   });
 
   it("an unauthenticated caller gets 401 and revokes nothing", async () => {
-    const res = await DELETE(sessionReq("DELETE", { label: "L" }));
+    const res = await DELETE(sessionReq("DELETE", { label: "L" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(revokeDeviceTokens).not.toHaveBeenCalled();
   });
@@ -130,7 +130,7 @@ describe("DELETE (revoke) — caller-type gate", () => {
   it("a bogus bearer (no session either) is 401, not a fall-through to the cookie branch", async () => {
     state.token = null;
     state.sessionUser = { id: "user-9" }; // a live session exists…
-    const res = await DELETE(bearerReq("DELETE", { label: "L" })); // …but a header was sent
+    const res = await DELETE(bearerReq("DELETE", { label: "L" }), { params: Promise.resolve({}) }); // …but a header was sent
     expect(res.status).toBe(401);
     expect(revokeDeviceTokens).not.toHaveBeenCalled();
   });
@@ -139,13 +139,13 @@ describe("DELETE (revoke) — caller-type gate", () => {
 describe("POST (mint) — the same gate, pinned alongside it", () => {
   it("a cookie session mints; an agent bearer is refused 403", async () => {
     state.sessionUser = { id: "user-9" };
-    expect((await POST(sessionReq("POST", { label: "L" }))).status).toBe(200);
+    expect((await POST(sessionReq("POST", { label: "L" }), { params: Promise.resolve({}) })).status).toBe(200);
     expect(issueDeviceToken).toHaveBeenCalledTimes(1);
 
     vi.clearAllMocks();
     state.sessionUser = null;
     state.token = WRITE_TOKEN;
-    const res = await POST(bearerReq("POST", { label: "L" }));
+    const res = await POST(bearerReq("POST", { label: "L" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect(issueDeviceToken).not.toHaveBeenCalled();
   });
@@ -160,7 +160,7 @@ describe("DELETE — selectors", () => {
 
   it("revokes by token id", async () => {
     const id = "11111111-1111-4111-8111-111111111111";
-    const res = await DELETE(sessionReq("DELETE", { tokenId: id }));
+    const res = await DELETE(sessionReq("DELETE", { tokenId: id }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(revokeDeviceTokens).toHaveBeenCalledWith({
       userId: "user-9",
@@ -171,21 +171,21 @@ describe("DELETE — selectors", () => {
 
   it("an EMPTY body is 400, never an accidental revoke-everything", async () => {
     for (const req of [sessionReq("DELETE"), sessionReq("DELETE", {})]) {
-      const res = await DELETE(req);
+      const res = await DELETE(req, { params: Promise.resolve({}) });
       expect(res.status).toBe(400);
     }
     expect(revokeDeviceTokens).not.toHaveBeenCalled();
   });
 
   it("a malformed selector is 400 (non-uuid id, empty label)", async () => {
-    expect((await DELETE(sessionReq("DELETE", { tokenId: "not-a-uuid" }))).status).toBe(400);
-    expect((await DELETE(sessionReq("DELETE", { label: "   " }))).status).toBe(400);
+    expect((await DELETE(sessionReq("DELETE", { tokenId: "not-a-uuid" }), { params: Promise.resolve({}) })).status).toBe(400);
+    expect((await DELETE(sessionReq("DELETE", { label: "   " }), { params: Promise.resolve({}) })).status).toBe(400);
     expect(revokeDeviceTokens).not.toHaveBeenCalled();
   });
 
   it("IDEMPOTENT: revoking something already gone is a quiet 200 with revoked: 0", async () => {
     vi.mocked(revokeDeviceTokens).mockResolvedValueOnce(0);
-    const res = await DELETE(sessionReq("DELETE", { label: "already-gone" }));
+    const res = await DELETE(sessionReq("DELETE", { label: "already-gone" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, revoked: 0 });
   });

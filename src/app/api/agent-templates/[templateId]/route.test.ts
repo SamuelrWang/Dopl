@@ -123,7 +123,7 @@ describe("the per-method gate", () => {
 
 describe("GET", () => {
   it("returns `{ template }`", async () => {
-    const res = await GET(req("GET"));
+    const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ template: TEMPLATE });
     expect(mockGet).toHaveBeenCalledWith(
@@ -134,7 +134,7 @@ describe("GET", () => {
 
   it("400s on a non-UUID id BEFORE the service is reached", async () => {
     params = { templateId: "researcher" };
-    const res = await GET(req("GET"));
+    const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockGet).not.toHaveBeenCalled();
   });
@@ -144,7 +144,7 @@ describe("GET", () => {
       "@/features/agent-templates/server/errors"
     );
     mockGet.mockRejectedValue(new AgentTemplateNotFoundError(ID));
-    const res = await GET(req("GET"));
+    const res = await GET(req("GET"), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
     expect((await res.json()).error.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
   });
@@ -152,7 +152,7 @@ describe("GET", () => {
 
 describe("PATCH", () => {
   it("passes the parsed patch through and answers `{ template }`", async () => {
-    const res = await PATCH(req("PATCH", { name: "Renamed" }));
+    const res = await PATCH(req("PATCH", { name: "Renamed" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "ws-1" }),
@@ -162,7 +162,7 @@ describe("PATCH", () => {
   });
 
   it("400s an EMPTY patch rather than firing a no-op write", async () => {
-    const res = await PATCH(req("PATCH", {}));
+    const res = await PATCH(req("PATCH", {}), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockUpdate).not.toHaveBeenCalled();
   });
@@ -172,7 +172,7 @@ describe("PATCH", () => {
       "@/features/agent-templates/server/errors"
     );
     mockUpdate.mockRejectedValue(new TemplateWriteForbiddenError("edit"));
-    const res = await PATCH(req("PATCH", { name: "X" }));
+    const res = await PATCH(req("PATCH", { name: "X" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("RESOURCE_ACCESS_DENIED");
   });
@@ -180,7 +180,7 @@ describe("PATCH", () => {
 
 describe("DELETE", () => {
   it("answers 204 with NO body", async () => {
-    const res = await DELETE(req("DELETE"));
+    const res = await DELETE(req("DELETE"), { params: Promise.resolve({}) });
     expect(res.status).toBe(204);
     expect(await res.text()).toBe("");
     expect(mockDelete).toHaveBeenCalledWith(

@@ -87,7 +87,7 @@ beforeEach(() => {
 
 describe("GET /api/knowledge/bases", () => {
   it("returns the bases untouched alongside both folded maps", async () => {
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       bases: VISIBLE,
@@ -100,7 +100,7 @@ describe("GET /api/knowledge/bases", () => {
 
   it("carries the per-base storage cap ONCE, not per card", async () => {
     // N bars against ONE limit — asking per card would be N+1.
-    await GET(getReq());
+    await GET(getReq(), { params: Promise.resolve({}) });
     expect(mockStorageLimit).toHaveBeenCalledTimes(1);
     expect(mockStorageLimit).toHaveBeenCalledWith("ws-1");
   });
@@ -110,7 +110,7 @@ describe("GET /api/knowledge/bases", () => {
     // cap nobody enforces.
     mockStorageLimit.mockRejectedValue(new Error("billing down"));
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.kbStorageLimit).toBeNull();
@@ -119,7 +119,7 @@ describe("GET /api/knowledge/bases", () => {
 
   it("looks both maps up for exactly the bases it is about to return", async () => {
     // ⚠ Not the unfiltered set: a base hidden by the private/teams gate must not leak.
-    await GET(getReq());
+    await GET(getReq(), { params: Promise.resolve({}) });
     const ctx = { workspaceId: "ws-1", userId: "user-1" };
     expect(mockOwnerNames).toHaveBeenCalledWith(ctx, VISIBLE);
     expect(mockBaseStats).toHaveBeenCalledWith(ctx, VISIBLE);
@@ -131,7 +131,7 @@ describe("GET /api/knowledge/bases", () => {
     // Counters cosmetic, list is not — `kb_list_bases` over MCP rides this route.
     mockBaseStats.mockRejectedValue(new Error("entries table down"));
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.bases).toHaveLength(2);
@@ -147,7 +147,7 @@ describe("GET /api/knowledge/bases", () => {
       "kb-1": { entryCount: 0, lastEntryUpdatedAt: null, storageBytes: 0 },
     });
 
-    const body = (await (await GET(getReq())).json()) as Record<string, unknown>;
+    const body = (await (await GET(getReq(), { params: Promise.resolve({}) })).json()) as Record<string, unknown>;
     expect(body.ownerNames).toEqual({});
     expect("ownerNames" in body).toBe(true);
     // A base with no entries is a ZEROED entry, never a missing key (which means "unknown").
@@ -163,7 +163,7 @@ describe("GET /api/knowledge/bases", () => {
 
     mockStarred.mockResolvedValue([]);
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       bases: [],
@@ -178,7 +178,7 @@ describe("GET /api/knowledge/bases", () => {
     // Degraded value is REAL here: unknown and unstarred render identically.
     mockStarred.mockRejectedValue(new Error("stars table down"));
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.bases).toHaveLength(2);
@@ -188,7 +188,7 @@ describe("GET /api/knowledge/bases", () => {
   it("keeps the stars OFF the base rows — the SDK type must not widen", async () => {
     // ⚠ Sibling key: a per-user fact on `KnowledgeBase` would ride every MCP `kb_*` payload and
     // break `scripts/check-knowledge-type-drift.ts`.
-    const body = (await (await GET(getReq())).json()) as {
+    const body = (await (await GET(getReq(), { params: Promise.resolve({}) })).json()) as {
       bases: Array<Record<string, unknown>>;
       starredBaseIds: string[];
     };
@@ -202,7 +202,7 @@ describe("GET /api/knowledge/bases", () => {
   it("maps a service failure through the knowledge error envelope, not a raw throw", async () => {
     mockListBases.mockRejectedValue(new Error("db down"));
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBeTruthy();

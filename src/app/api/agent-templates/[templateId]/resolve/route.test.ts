@@ -101,7 +101,7 @@ beforeEach(() => {
 
 describe("the launch payload", () => {
   it("is EXACTLY {name, instructions, model, fields, knowledgeBases, authoredByCaller} — flat, no envelope", async () => {
-    const res = await GET(req());
+    const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     // ⚠ Unwrapped on purpose. The record endpoints answer `{ template }`; this
@@ -118,7 +118,7 @@ describe("the launch payload", () => {
   });
 
   it("carries NO id, visibility, ownership or timestamps", async () => {
-    const body = await GET(req()).then((r) => r.json());
+    const body = await GET(req(), { params: Promise.resolve({}) }).then((r) => r.json());
     // ⚠ `createdBy` STAYS ON THIS LIST even though `authoredByCaller` is derived
     // from it. The boolean is the whole point: a raw creator id in a launch
     // payload is ownership information the launcher has no use for, and the
@@ -149,7 +149,7 @@ describe("the launch payload", () => {
       knowledgeBases: [],
       authoredByCaller: false,
     });
-    const body = await GET(req()).then((r) => r.json());
+    const body = await GET(req(), { params: Promise.resolve({}) }).then((r) => r.json());
     expect(body).toEqual({
       name: "Bare",
       instructions: null,
@@ -163,12 +163,12 @@ describe("the launch payload", () => {
 
 describe("gating", () => {
   it("reads at VIEWER and is NOT sessionOnly — the desktop presents a device token", async () => {
-    await GET(req());
+    await GET(req(), { params: Promise.resolve({}) });
     expect(wrapperOptions[0]).toBeUndefined();
   });
 
   it("resolves for an AGENT-credential caller (source 'agent')", async () => {
-    await GET(req());
+    await GET(req(), { params: Promise.resolve({}) });
     expect(mockResolve).toHaveBeenCalledWith(
       expect.objectContaining({ source: "agent", workspaceId: "ws-1" }),
       ID
@@ -180,14 +180,14 @@ describe("gating", () => {
       "@/features/agent-templates/server/errors"
     );
     mockResolve.mockRejectedValue(new AgentTemplateNotFoundError(ID));
-    const res = await GET(req());
+    const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(404);
     expect((await res.json()).error.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
   });
 
   it("400s a non-UUID id before reaching the service", async () => {
     params = { templateId: "../../etc/passwd" };
-    const res = await GET(req());
+    const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockResolve).not.toHaveBeenCalled();
   });

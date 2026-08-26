@@ -68,7 +68,7 @@ beforeEach(() => {
 describe("GET /api/billing/status — credits", () => {
   it("carries a credits meter on a FREE workspace", async () => {
     mockRepo.getWorkspaceCreditsUsed.mockResolvedValue(42);
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.credits).toMatchObject({ used: 42, limit: 500, remaining: 458 });
     expect(body.credits.periodStart).toMatch(/^\d{4}-\d{2}-01T00:00:00\.000Z$/);
   });
@@ -77,7 +77,7 @@ describe("GET /api/billing/status — credits", () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "team", status: "active", seatCount: 4 })
     );
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.plan).toBe("team");
     expect(body.credits).toMatchObject({ used: 0, limit: 25_000, remaining: 25_000 });
   });
@@ -87,7 +87,7 @@ describe("GET /api/billing/status — credits", () => {
       billing({ plan: "solo", status: "active" })
     );
     mockRepo.countActiveMembers.mockResolvedValue(2);
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.credits.limit).toBe(500);
   });
 
@@ -100,7 +100,7 @@ describe("GET /api/billing/status — credits", () => {
         currentPeriodEnd: "2099-04-04T00:00:00.000Z",
       })
     );
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(mockRepo.getWorkspaceCreditsUsed).toHaveBeenCalledWith(
       "ws-1",
       "2099-03-04T00:00:00.000Z"
@@ -110,20 +110,20 @@ describe("GET /api/billing/status — credits", () => {
 
   it("never reports negative remaining, even if usage overshot the limit", async () => {
     mockRepo.getWorkspaceCreditsUsed.mockResolvedValue(600);
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.credits.remaining).toBe(0);
   });
 
   it("surfaces cancelAtPeriodEnd, defaulting to false with no billing row", async () => {
-    expect((await (await GET(request())).json()).cancelAtPeriodEnd).toBe(false);
+    expect((await (await GET(request(), { params: Promise.resolve({}) })).json()).cancelAtPeriodEnd).toBe(false);
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "team", status: "active", cancelAtPeriodEnd: true })
     );
-    expect((await (await GET(request())).json()).cancelAtPeriodEnd).toBe(true);
+    expect((await (await GET(request(), { params: Promise.resolve({}) })).json()).cancelAtPeriodEnd).toBe(true);
   });
 
   it("keeps the pre-existing entitlement fields on the payload", async () => {
-    const body = await (await GET(request())).json();
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body).toMatchObject({
       plan: "free",
       status: "free",

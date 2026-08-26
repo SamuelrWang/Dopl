@@ -159,3 +159,111 @@ Notes, not blockers: billing on link containers is §4A-provisional ("re-ask bef
 next billing change touches this path") — this feature makes no billing change; guests
 run no agent and burn nothing. `/auth/callback` provisions a standard workspace for any
 brand-new guest (`ensureDefaultWorkspace`) — existing behavior, unchanged here.
+
+## M4 leak review (2026-08-25)
+
+**What a guest actually receives, endpoint by endpoint, in a 2-member `kind='link'`
+container.** Every claim below was read out of the tree on 2026-08-25. The
+authoritative call list is `channel-surface-data.ts › useChannelSurfaceData` (seven
+reads plus the write families), the host's own `use-channels.ts › useChannels`, and
+the realtime subscription. **Verdict up front: NO exposure was found outside the
+already-accepted R4 / R6 / R7 set.** Two corrections to how R4 was WORDED are in the
+R4 note below — the accepted risk is both narrower in one place (the mint is capped)
+and wider in another (hard delete, not just rename) than the ruling text said.
+
+Common fence for every `/api/channels/**` row: `with-workspace-auth.ts ›
+withWorkspaceAuth` resolves `X-Workspace-Id` fail-closed and refuses a workspace the
+caller has no active membership in, so a guest can only ever address their own
+container (or their own auto-provisioned standard workspace, which is theirs).
+
+| Endpoint | Fence | What a guest gets | Verdict |
+|---|---|---|---|
+| `GET /api/channels` | `service-reads.ts › listChannels` → `repository.ts › listChannels`: `workspace_id = ctx.workspaceId` **and** (member-of **or** public) | The one channel in the container | OK — container-scoped twice over |
+| `GET …/{id}/messages` | `service-shared.ts › loadVisibleChannel` | Full transcript, `authorName` per `dto.ts › mapMessageRow` | OK — the transcript is the product; see R7 for the name fallback |
+| `GET …/{id}/members` | `loadVisibleChannel` | Both member rows incl. peer `email`, `displayName`, `avatarUrl`, presence; own-only fields (`notifyScope`, `agentToolProfile`, `favoritedAt`) nulled for the peer by `dto.ts › mapMemberRow` | Accepted (R7 / F-299) for `email`; the per-member preference scrub holds |
+| `GET …/{id}/tasks` | `loadVisibleChannel` | Thread rows for this channel only; `CHANNEL_TASK_ACTIVITY_COLS` deliberately omits `client_msg_id` | OK |
+| `GET …/{id}/mentions` | `service-mentions.ts › listMyChannelMentions` — `ctx.userId` is passed to the repo and is **not a request parameter** | Only mentions of the guest, with their own read state | OK — own-scoped by construction |
+| `GET /api/channels/consent` | `consent-service.ts › listConsentRequests` → `repository-collab.ts › listConsentRequests`: `.eq("operator_user_id", …).eq("workspace_id", …)` | Only rows where the guest IS the operator — empty in practice, since a guest runs no agent | OK — own-scoped **and** container-scoped |
+| `GET …/{id}/sessions` | `session-state-service.ts › listChannelSessions` + `loadVisibleChannel` | Coarse peer projection only: `name`, `state`, narrowed `detail`, `channelName`, `threadTitle`, `updatedAt`, `userId` | OK — see the two-mapper note |
+| Launch directives | `service-launch.ts › createLaunchDirective` — `operator_user_id` **is always `ctx.userId`** and no schema on the path accepts an operator id | Nothing: the guest surface has no client caller for `/api/channels/launch-directives/**` (grep, 2026-08-25) | OK — unreachable AND own-scoped |
+| Realtime | `shared-channel-registry.ts`, `filter: workspace_id=eq.<container>`, plus the guest's own JWT under RLS | Nothing: the `postgres_changes` handler takes no payload argument and only calls `fire(entry)` — a doorbell, per INVARIANTS §7 | OK — no content on the wire this code path reads |
+| Desktop sessions | `use-desktop-sessions.ts › useDesktopSessions` — bridge only | `null` ("could not ask") in a browser; no HTTP | OK |
+| `/c/{id}` page payload | `page.tsx › GuestChannelPage` → `service-reads.ts › getHomeChannel` (`findMemberContainer`, `null` → `notFound()`) | The `HomeChannel` DTO, serialized into the RSC payload for `guest-channel.tsx › GuestChannel` — including `peer.email` | Accepted (R7) — see the note; this is F-299's **second** door and it is the page itself, not an API call |
+
+### The two-mapper split (sessions) — verified, holds
+
+`session-state-service.ts › listChannelSessions` maps every row through
+`collab-dto.ts › mapPeerSessionStateRow`, which names only the coarse fields; the
+seven operator-only telemetry columns plus `template_name` exist solely in
+`collab-dto.ts › mapOwnSessionStateRow`, which is reachable only from
+`listSessionStates` (repository-fenced on `ctx.userId`) and the await route. The
+peer read is `select("*")`, so the wide row IS in memory — the mapper is the whole
+fence, and TypeScript's two return types are what keep a peer surface from taking
+the rich one. `detail` is not passed through either: `narrowSessionDetail` collapses
+anything outside the closed six-key vocabulary. **No operator-only column can reach
+the guest on this path.**
+
+### Accepted, restated concretely
+
+- **R7 — email, three doors, all confirmed live.** (1) `dto.ts › mapMemberRow`
+  emits `email: profile?.email ?? null` for every roster row, peer included.
+  (2) `service-reads.ts › getHomeChannel` puts `peer.email` in the page's own RSC
+  payload — the guest's browser holds it even though `GuestChannel` renders no
+  email. (3) `dto.ts › mapMessageRow` falls back `display_name || email` for
+  `authorName`, so an operator with no display name is addressed by email in the
+  transcript. Accepted for MVP; F-299 owns the reversal.
+- **R6 — IndexedDB.** `query-provider.tsx › QueryProvider` wraps the whole Next
+  tree in `PersistQueryClientProvider` with `idb-persister.ts › createIdbPersister`,
+  so the operator's transcript, roster and threads sit in the guest's browser for
+  `QUERY_CACHE_MAX_AGE_MS` (24h) after the tab closes. The only wipe is the
+  `SIGNED_OUT` handler (`client.clear()` + `persister.removeClient()`); a guest who
+  simply closes the tab keeps the snapshot. Accepted.
+- **R4 — the claimer is a workspace `admin`, and the UI narrowing is cosmetic.**
+  `repository-containers.ts › insertContainerMember` writes `role: "admin"`, so
+  `service-shared.ts › canManageChannel` returns true for a guest via
+  `isWorkspaceAdmin`, regardless of the omitted `role` prop. Concretely, a guest
+  who calls the API directly (cookie session — `sessionOnly` gates do not bite a
+  human) succeeds at: **`PATCH /api/channels/{id}`** for all four managed fields
+  (`service-writes.ts › updateChannel` — rename, topic, `visibility`, `archived`);
+  **`DELETE /api/channels/{id}`**, which for a non-direct channel is a **HARD**
+  delete; **`DELETE …/tasks/{taskId}`** for ANY thread, not only their own
+  (`service-tasks-delete.ts › assertMayDeleteThread` returns on `canManageChannel`);
+  and `POST|DELETE …/{id}/members`.
+  ⚠ **Two corrections to the ruling's wording.** (a) "minting a further link" is
+  NOT reachable while the relationship is intact: `service-writes.ts ›
+  mintContainerLink` 409s `LINK_CONTAINER_FULL` at two active members, so the cap
+  denies it rather than the role permitting it — it becomes available only if the
+  container drops back to one member, which is the same power the survivor has by
+  design (INVARIANTS §4A). (b) The ruling said "rename/archive"; the set actually
+  includes **hard channel delete and cascading thread delete**, which is the
+  destructive end of the range and is what makes "the operator can delete it" the
+  mitigation rather than the remedy. Still accepted for MVP — two people who chose
+  each other — but the leak review should state the true blast radius.
+
+### `/api/home/channels` and `/api/workspaces` — page discipline, not a server fence
+
+Neither is called from the guest tree: `grep` over `src/app/c/**` finds one client
+read (`useChannels`) and no `fetch` at all, and the page's own container read is a
+direct service call (`getHomeChannel`), not HTTP. Both endpoints nevertheless
+**answer a guest**, scoped to their own memberships:
+`service-reads.ts › getHomeChannels` (`withUserAuth`, "the fence is the caller's own
+membership rows") returns the guest's containers, and `service.ts ›
+listMyWorkspacesWithRole` is **deliberately unfiltered** — it returns every
+workspace the guest belongs to, `kind='link'` included, because the desktop
+listener fans over it. In both cases a guest learns only about containers and
+workspaces they are already a member of, so there is nothing to fence server-side;
+what keeps the guest lane one-channel-shaped is that **the page never asks**. If a
+future edit bootstraps the guest surface off the home list instead of off
+`getHomeChannel`, that discipline is what breaks — nothing in the server would
+notice. Related: `dto.ts › mapLinkRow` emits `url: claimUrl(row.token)`, so a
+`HomeChannel.linkOut` is a live claim credential; it is `null` for a full container
+(single-use link, already consumed; the cap blocks a replacement), so no token
+reaches a guest today.
+
+### PUBLIC_ROUTES re-check
+
+`/c/` is absent from `shared/auth/public-routes.ts › PUBLIC_ROUTES` — gated by
+omission, pinned in `src/proxy.test.ts`. The `/api/home/link/` (public, singular)
+vs `/api/home/links` (gated, plural) split INVARIANTS §3/§4A claimed was pinned
+was NOT (finding #5); it is now, in `src/proxy.test.ts` section 6, mutation-verified
+in both directions.

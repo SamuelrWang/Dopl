@@ -69,7 +69,7 @@ describe("POST /api/workspaces/ensure-default", () => {
   it("returns the workspace plus the canonical routing segment", async () => {
     mockEnsure.mockResolvedValue(WORKSPACE);
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       workspace: WORKSPACE,
@@ -86,7 +86,7 @@ describe("POST /api/workspaces/ensure-default", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId: "someone-else" }),
-      })
+      }), { params: Promise.resolve({}) }
     );
     expect(mockEnsure).toHaveBeenCalledWith("user-42");
   });
@@ -95,8 +95,8 @@ describe("POST /api/workspaces/ensure-default", () => {
     // A second workspace per launch would fork the account.
     mockEnsure.mockResolvedValue(WORKSPACE);
 
-    const first = await (await POST(postReq())).json();
-    const second = await (await POST(postReq())).json();
+    const first = await (await POST(postReq(), { params: Promise.resolve({}) })).json();
+    const second = await (await POST(postReq(), { params: Promise.resolve({}) })).json();
     expect(second).toEqual(first);
     // Provisioning is the service's single converging call.
     expect(mockEnsure).toHaveBeenCalledTimes(2);
@@ -106,14 +106,14 @@ describe("POST /api/workspaces/ensure-default", () => {
   it("answers 200, never 201 — the caller must not read it as 'newly created'", async () => {
     mockEnsure.mockResolvedValue(WORKSPACE);
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
   });
 
   it("surfaces a provisioning failure as a 500 envelope, not a half-answer", async () => {
     mockEnsure.mockRejectedValue(new Error("insert failed"));
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("INTERNAL_ERROR");
@@ -122,7 +122,7 @@ describe("POST /api/workspaces/ensure-default", () => {
   it("401s an unauthenticated caller and provisions nothing", async () => {
     state.sessionUser = null;
 
-    const res = await POST(postReq());
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(mockEnsure).not.toHaveBeenCalled();
   });

@@ -60,7 +60,7 @@ describe("GET /api/user/onboarding-state", () => {
   it("reports a finished onboarding as { isOnboarded: true }", async () => {
     mockStatus.mockResolvedValue({ onboarded: true, surveyCompleted: true });
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ isOnboarded: true, surveyCompleted: true });
   });
@@ -68,7 +68,7 @@ describe("GET /api/user/onboarding-state", () => {
   it("reports an unfinished onboarding as { isOnboarded: false }", async () => {
     mockStatus.mockResolvedValue({ onboarded: false, surveyCompleted: false });
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ isOnboarded: false, surveyCompleted: false });
   });
@@ -77,7 +77,7 @@ describe("GET /api/user/onboarding-state", () => {
     state.sessionUser = { id: "user-42" };
     mockStatus.mockResolvedValue({ onboarded: true, surveyCompleted: true });
 
-    await GET(getReq());
+    await GET(getReq(), { params: Promise.resolve({}) });
     expect(mockStatus).toHaveBeenCalledWith("user-42");
   });
 
@@ -85,7 +85,7 @@ describe("GET /api/user/onboarding-state", () => {
     // Degrading open silently skips onboarding for every new user.
     mockStatus.mockRejectedValue(new Error("db down"));
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("INTERNAL_ERROR");
@@ -94,7 +94,7 @@ describe("GET /api/user/onboarding-state", () => {
   it("401s an unauthenticated caller without asking the service", async () => {
     state.sessionUser = null;
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
     expect(mockIsOnboarded).not.toHaveBeenCalled();
   });

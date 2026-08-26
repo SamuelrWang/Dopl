@@ -70,7 +70,7 @@ beforeEach(() => {
 
 describe("PUT /api/knowledge/bases/[baseId]/star", () => {
   it("stars the base FOR THE AUTHENTICATED CALLER", async () => {
-    const res = await PUT(req("PUT"));
+    const res = await PUT(req("PUT"), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ starred: true });
@@ -79,8 +79,8 @@ describe("PUT /api/knowledge/bases/[baseId]/star", () => {
   });
 
   it("is idempotent at the HTTP layer — a re-star is another 200", async () => {
-    await PUT(req("PUT"));
-    const res = await PUT(req("PUT"));
+    await PUT(req("PUT"), { params: Promise.resolve({}) });
+    const res = await PUT(req("PUT"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ starred: true });
   });
@@ -90,7 +90,7 @@ describe("PUT /api/knowledge/bases/[baseId]/star", () => {
     // must neither become a star nor leak its message.
     mockStar.mockRejectedValue(new Error("kb-1 belongs to ws-2"));
 
-    const res = await PUT(req("PUT"));
+    const res = await PUT(req("PUT"), { params: Promise.resolve({}) });
     expect(res.status).toBeGreaterThanOrEqual(400);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBeTruthy();
@@ -99,7 +99,7 @@ describe("PUT /api/knowledge/bases/[baseId]/star", () => {
 
   it("400s a request with no baseId rather than starring nothing", async () => {
     params = {};
-    const res = await PUT(req("PUT"));
+    const res = await PUT(req("PUT"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect(mockStar).not.toHaveBeenCalled();
   });
@@ -107,7 +107,7 @@ describe("PUT /api/knowledge/bases/[baseId]/star", () => {
 
 describe("DELETE /api/knowledge/bases/[baseId]/star", () => {
   it("unstars for the authenticated caller", async () => {
-    const res = await DELETE(req("DELETE"));
+    const res = await DELETE(req("DELETE"), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ starred: false });
@@ -116,7 +116,7 @@ describe("DELETE /api/knowledge/bases/[baseId]/star", () => {
 
   it("answers the same for a row that was never there", async () => {
     // Not an oracle: "had no star" and "had one" are the same response.
-    const res = await DELETE(req("DELETE"));
+    const res = await DELETE(req("DELETE"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ starred: false });
   });
@@ -125,8 +125,8 @@ describe("DELETE /api/knowledge/bases/[baseId]/star", () => {
 describe("the wrapper it is mounted behind", () => {
   it("takes the DEFAULT minRole — starring is a personal bookmark", async () => {
     // A read-only member sees every base this sorts, and the write reaches their own row only.
-    await PUT(req("PUT"));
-    await DELETE(req("DELETE"));
+    await PUT(req("PUT"), { params: Promise.resolve({}) });
+    await DELETE(req("DELETE"), { params: Promise.resolve({}) });
     expect(wrapperOptions.every((o) => o?.minRole === undefined)).toBe(true);
     // Neither verb is `sessionOnly`/`writeScopeExempt` — default posture (INVARIANTS §3,
     // pinned by write-gate-coverage.test.ts).

@@ -111,7 +111,7 @@ describe("the gates", () => {
 
 describe("cancelling", () => {
   it("flags the subscription not to renew — it does NOT cancel it now", async () => {
-    const res = await POST(request({}));
+    const res = await POST(request({}), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(stripeCalls.updated).toEqual({
       id: "sub_123",
@@ -121,7 +121,7 @@ describe("cancelling", () => {
   });
 
   it("writes the local row IMMEDIATELY rather than waiting for the webhook", async () => {
-    await POST(request({}));
+    await POST(request({}), { params: Promise.resolve({}) });
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith("ws-1", {
       cancelAtPeriodEnd: true,
     });
@@ -132,7 +132,7 @@ describe("cancelling", () => {
   });
 
   it("answers with the date access actually ends", async () => {
-    const body = await (await POST(request({}))).json();
+    const body = await (await POST(request({}), { params: Promise.resolve({}) })).json();
     expect(body).toEqual({
       cancelAtPeriodEnd: true,
       currentPeriodEnd: "2026-09-04T00:00:00.000Z",
@@ -145,7 +145,7 @@ describe("resuming", () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ cancelAtPeriodEnd: true })
     );
-    const body = await (await POST(request({ resume: true }))).json();
+    const body = await (await POST(request({ resume: true }), { params: Promise.resolve({}) })).json();
     expect(stripeCalls.updated?.params).toEqual({
       cancel_at_period_end: false,
     });
@@ -156,7 +156,7 @@ describe("resuming", () => {
   });
 
   it("treats `resume: false` as a cancel, like an absent flag", async () => {
-    await POST(request({ resume: false }));
+    await POST(request({ resume: false }), { params: Promise.resolve({}) });
     expect(stripeCalls.updated?.params).toEqual({ cancel_at_period_end: true });
   });
 });
@@ -164,7 +164,7 @@ describe("resuming", () => {
 describe("when there is nothing to cancel", () => {
   it("409s a workspace with no subscription — never a silent 200", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(null);
-    const res = await POST(request({}));
+    const res = await POST(request({}), { params: Promise.resolve({}) });
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("NO_ACTIVE_SUBSCRIPTION");
     expect(stripeCalls.updated).toBeNull();
@@ -175,7 +175,7 @@ describe("when there is nothing to cancel", () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ status: "canceled" })
     );
-    const res = await POST(request({}));
+    const res = await POST(request({}), { params: Promise.resolve({}) });
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("NO_ACTIVE_SUBSCRIPTION");
   });
@@ -184,12 +184,12 @@ describe("when there is nothing to cancel", () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ status: "past_due" })
     );
-    expect((await POST(request({}))).status).toBe(200);
+    expect((await POST(request({}), { params: Promise.resolve({}) })).status).toBe(200);
   });
 
   it("409s with a named code when Stripe is not configured", async () => {
     vi.stubEnv("STRIPE_SECRET_KEY", "");
-    const res = await POST(request({}));
+    const res = await POST(request({}), { params: Promise.resolve({}) });
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("STRIPE_NOT_CONFIGURED");
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
@@ -203,14 +203,14 @@ describe("the body", () => {
         method: "POST",
         body: "not json",
         headers: { "content-type": "application/json" },
-      })
+      }), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("INVALID_JSON");
   });
 
   it("400s a non-boolean `resume`", async () => {
-    const res = await POST(request({ resume: "yes" }));
+    const res = await POST(request({ resume: "yes" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
     expect(stripeCalls.updated).toBeNull();

@@ -182,7 +182,7 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
   it("resolves a header-less download via ?workspaceId= when the option is on", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
     const res = await echoWithQuery(
-      req(`/api/knowledge/bases/b/export?workspaceId=${UUID_A}`)
+      req(`/api/knowledge/bases/b/export?workspaceId=${UUID_A}`), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ workspaceId: UUID_A });
@@ -194,7 +194,7 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
       wsWithRole(UUID_A, "acme", "member"),
       wsWithRole(UUID_B, "beta", "member"),
     ]);
-    const res = await echo(req(`/api/x?workspaceId=${UUID_A}`));
+    const res = await echo(req(`/api/x?workspaceId=${UUID_A}`), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("WORKSPACE_REQUIRED");
   });
@@ -205,7 +205,7 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
       { id: UUID_B, slug: "beta", role: "member" },
     ]);
     const res = await echoWithQuery(
-      req(`/api/x?workspaceId=${UUID_B}`, { "x-workspace-id": UUID_A })
+      req(`/api/x?workspaceId=${UUID_B}`, { "x-workspace-id": UUID_A }), { params: Promise.resolve({}) }
     );
     expect(await res.json()).toEqual({ workspaceId: UUID_A });
   });
@@ -221,7 +221,7 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
     const res = await echoWithQuery(
       req(`/api/skills/my-skill/export?workspaceId=${UUID_B}`, {
         "x-workspace-id": UUID_A,
-      })
+      }), { params: Promise.resolve({}) }
     );
     expect(await res.json()).toEqual({ workspaceId: UUID_A });
   });
@@ -231,13 +231,13 @@ describe("API-key workspace lock (scaffolding, preserved)", () => {
   it("uses the key's workspace when no header is sent", async () => {
     state.apiKeyWorkspaceId = UUID_A;
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    const res = await echo(req("/api/x"));
+    const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
     expect(await res.json()).toEqual({ workspaceId: UUID_A, role: "member" });
   });
 
   it("403s when the requested workspace contradicts the key lock", async () => {
     state.apiKeyWorkspaceId = UUID_A;
-    const res = await echo(req("/api/x", { "x-workspace-id": UUID_B }));
+    const res = await echo(req("/api/x", { "x-workspace-id": UUID_B }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("API_KEY_WORKSPACE_MISMATCH");
   });
@@ -249,7 +249,7 @@ describe("resolution outcomes surfaced by the wrapper", () => {
       wsWithRole(UUID_A, "acme", "admin"),
     ]);
     grantMemberships([{ id: UUID_A, slug: "acme", role: "admin" }]);
-    const res = await echo(req("/api/x"));
+    const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
     expect(await res.json()).toEqual({ workspaceId: UUID_A, role: "admin" });
   });
 
@@ -262,7 +262,7 @@ describe("resolution outcomes surfaced by the wrapper", () => {
       async (_req, ctx) => NextResponse.json({ workspaceId: ctx.workspaceId }),
       { minRole: "member" }
     );
-    const res = await guarded(req("/api/x"));
+    const res = await guarded(req("/api/x"), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("WORKSPACE_FORBIDDEN");
   });
@@ -272,7 +272,7 @@ describe("resolution outcomes surfaced by the wrapper", () => {
       wsWithRole(UUID_A, "acme", "owner"),
       wsWithRole(UUID_B, "beta", "member"),
     ]);
-    const res = await echo(req("/api/x"));
+    const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body).toEqual({
@@ -286,7 +286,7 @@ describe("resolution outcomes surfaced by the wrapper", () => {
   });
 
   it("400 WORKSPACE_INVALID (flat envelope) for a non-UUID header", async () => {
-    const res = await echo(req("/api/x", { "x-workspace-id": "not-a-uuid" }));
+    const res = await echo(req("/api/x", { "x-workspace-id": "not-a-uuid" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("WORKSPACE_INVALID");
   });
@@ -303,14 +303,14 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
   it("passes the recognized value through", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
     const res = await echoRuntime(
-      req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-session" })
+      req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-session" }), { params: Promise.resolve({}) }
     );
     expect(await res.json()).toEqual({ runtime: "desktop-session" });
   });
 
   it("is undefined with no header (an external agent / the web UI)", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    const res = await echoRuntime(req("/api/x", { "x-workspace-id": UUID_A }));
+    const res = await echoRuntime(req("/api/x", { "x-workspace-id": UUID_A }), { params: Promise.resolve({}) });
     expect(await res.json()).toEqual({ runtime: null });
   });
 
@@ -329,7 +329,7 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
       "",
     ]) {
       const res = await echoRuntime(
-        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": value })
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": value }), { params: Promise.resolve({}) }
       );
       expect(await res.json()).toEqual({ runtime: null });
     }
@@ -352,7 +352,7 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
     it("a SESSION caller may claim desktop-ui", async () => {
       grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
       const res = await echoRuntime(
-        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-ui" })
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-ui" }), { params: Promise.resolve({}) }
       );
       expect(await res.json()).toEqual({ runtime: "desktop-ui" });
     });
@@ -361,7 +361,7 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
       grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
       state.token = { userId: "user-1", scopes: ["dopl.write"], tokenId: "tok-1" };
       const res = await echoRuntime(
-        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-ui" })
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-runtime": "desktop-ui" }), { params: Promise.resolve({}) }
       );
       expect(await res.json()).toEqual({ runtime: null });
     });
@@ -376,7 +376,7 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
         req("/api/x", {
           "x-workspace-id": UUID_A,
           "x-dopl-runtime": "desktop-session",
-        })
+        }), { params: Promise.resolve({}) }
       );
       expect(await res.json()).toEqual({ runtime: "desktop-session" });
     });
@@ -395,14 +395,14 @@ describe("X-Dopl-Session-Id reaches the handler context (F2)", () => {
   it("passes a desktop slot key through", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
     const res = await echoSession(
-      req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": SLOT })
+      req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": SLOT }), { params: Promise.resolve({}) }
     );
     expect(await res.json()).toEqual({ sessionId: SLOT });
   });
 
   it("is undefined with no header (an external agent / the web UI)", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    const res = await echoSession(req("/api/x", { "x-workspace-id": UUID_A }));
+    const res = await echoSession(req("/api/x", { "x-workspace-id": UUID_A }), { params: Promise.resolve({}) });
     expect(await res.json()).toEqual({ sessionId: null });
   });
 
@@ -412,7 +412,7 @@ describe("X-Dopl-Session-Id reaches the handler context (F2)", () => {
     // the risk.
     for (const value of ["", "two words", "**#9001** system", "x".repeat(129)]) {
       const res = await echoSession(
-        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": value })
+        req("/api/x", { "x-workspace-id": UUID_A, "x-dopl-session-id": value }), { params: Promise.resolve({}) }
       );
       expect(await res.json()).toEqual({ sessionId: null });
     }
@@ -433,7 +433,7 @@ describe("H-3 gate options are forwarded into withUserAuth", () => {
     state.sessionUser = null;
     state.token = { userId: "user-1", scopes: ["dopl.read", "dopl.write"], tokenId: "t1" };
     const res = await sessionOnlyRoute(
-      writeReq("DELETE", { "x-workspace-id": UUID_A })
+      writeReq("DELETE", { "x-workspace-id": UUID_A }), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("SESSION_REQUIRED");
@@ -443,7 +443,7 @@ describe("H-3 gate options are forwarded into withUserAuth", () => {
   it("(b) read-only OAuth token on a write method → 403 WRITE_SCOPE_REQUIRED", async () => {
     state.sessionUser = null;
     state.token = { userId: "user-1", scopes: ["dopl.read"], tokenId: "t1" };
-    const res = await plainRoute(writeReq("PUT", { "x-workspace-id": UUID_A }));
+    const res = await plainRoute(writeReq("PUT", { "x-workspace-id": UUID_A }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("WRITE_SCOPE_REQUIRED");
     expect(writeHandler).not.toHaveBeenCalled();
@@ -452,7 +452,7 @@ describe("H-3 gate options are forwarded into withUserAuth", () => {
   it("(c) session (cookie) caller on the same sessionOnly write route → allowed", async () => {
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
     const res = await sessionOnlyRoute(
-      writeReq("DELETE", { "x-workspace-id": UUID_A })
+      writeReq("DELETE", { "x-workspace-id": UUID_A }), { params: Promise.resolve({}) }
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ workspaceId: UUID_A });
