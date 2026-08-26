@@ -3958,3 +3958,116 @@ is gone — not that ownership drifted. `owner_id` has no such guard and no writ
 through a departure. **Where two columns encode the same fact, bill against the one a trigger
 defends**, and do not add the other as a fallback: a fallback is a second thing to drift, and it
 would fire exactly in the case the first one is telling you something.
+
+---
+
+## 2026-08-26 — The second adversarial pass: four pins that were not pins, and one default that could not tell a pick from a silence
+
+Current state: INVARIANTS §4A (the route-count correction, the mint-reuse semantics), §14 (the fifth
+non-suite gate). This section is only the argument.
+
+The guest-role wave was reviewed twice. The first review found live holes; the second found **no
+live hole and six things that were shaped wrong** — which is the more interesting report, because
+every one of them was a fence that already worked and a pin that would not have noticed if it
+stopped.
+
+### A pure helper is not a call site, and "mutation-verified" has to be re-run after the refactor
+
+`guest-public-channel-fence.test.ts` carried a header saying *"dropping the `includePublic` argument
+at either call site turns the guest cases red"*. It did not: the file drove the PURE
+`visibleChannelsOr`, and neither of the two places that PASS `includePublic` was exercised at all.
+Deleting `includePublic: mayReadPublicChannels(ctx)` from `service-reads.ts › listChannels` left the
+entire suite green — i.e. a guest's `GET /api/channels` would have re-included public container
+channels, and `toChannelDto` carries the LAST MESSAGE plus member/online counts, so the regression
+was a transcript preview of a room they were never added to.
+
+The mutation claim was almost certainly true of an earlier draft. **A mutation count is a
+measurement, and a refactor invalidates it exactly like it invalidates a line number.** State the
+count with the date, and re-run it when the code under it moves. (§14 already says an assertion is
+not verified until reverting the code turns it red; what this adds is that the verification EXPIRES.)
+
+A second, quieter lesson: the argument's absence and its `false` value are different bugs. The
+repository's own default is `true`, so an argument that stops being passed reads as the WIDE answer —
+which is why the pin asserts the key is PRESENT, not merely that it is false.
+
+### A count in a comment rots faster than a comment
+
+Three places stated how many guest-floored routes compose `loadVisibleChannel`: §4A said "seven of
+the fourteen", `service-shared.ts` said "twelve", and the truth was **eleven**. None of the three was
+ever right at the same time as the others. The number is load-bearing prose — it is the sentence that
+tells a reader how much a lowered floor buys — and it is derivable in one walk. It now carries the
+derivation and the date, and names the three routes that do NOT compose it, because a reader who
+disagrees with a count needs to know what to check rather than being told to recount.
+
+### A fence with three doors and one lock
+
+The first pass floored `resolveApiWorkspaceAccess` and wrote the header *"the fix is at the resolver,
+not at five routes"*. That was true of the wrapper and false of the LOOKUP: `getBootState`,
+`GET /api/workspaces/resolve` and `src/app/billing/[segment]/page.tsx` all call the root segment
+resolver directly, so the family was fail-closed at one door and unfloored at three. The scan that
+was supposed to catch the next drift (`guest-route-floor.test.ts` set C) matches on the string
+`resolveApiWorkspace`, and none of the three contains it.
+
+**A guard placed on a wrapper is a guard on the callers who happen to use that wrapper.** The floor
+moved down onto `resolveWorkspaceSegmentForUser`, which all four share, and the raw cached resolver
+is now module-private so a fifth caller cannot reach it without choosing a floor.
+
+Nothing leaked, and the reason is worth recording because it is not a reason: boot's `myAccess` was
+`null` for a guest because `defaultLevelForRole("guest")` is `null` — an ACCESS-LEVEL TABLE was
+standing in for an auth check, one edit away from enumerating every teams-mode resource id to a link
+claimer. The projection now states its own `viewer` floor, so the twin `my-access` route and boot
+refuse for the same reason rather than by coincidence.
+
+### The exemption was the right answer, and had to be written down as one
+
+The tempting fix was to floor boot too. That would have been a live break: the SPA's two pop-out
+windows live outside `AppShellLayout` and pay `POST /api/boot` themselves, so a guest popping a
+thread out of their home channel routes the CONTAINER's segment through it. A `viewer` floor answers
+404 and the window renders "Workspace not found" — §4A's own rule (*the surface must not issue a
+request it will get 403 on*), which is the bug M1 shipped when it lowered the wrong mentions verb.
+
+So boot opts down explicitly, at a named constant, with the measurement in its docblock. **An
+accidental exemption and a decided one look identical in the code and are opposites in review** — the
+difference is entirely whether somebody can find the sentence that says why.
+
+### A schema default that erased the difference between a choice and a silence
+
+M3 added a role picker and the reuse branch learned to compare `granted_role`. `HomeLinkMintSchema`
+defaulted `grantedRole` to `"guest"` — fail-closed, obviously correct in isolation — and the
+combination was a rotation: a client that omitted the field (a pre-M2 build, or anything not the
+popover) pressing "Add person" against an open **member** link took the mismatch branch, revoked the
+operator's outstanding invitation, minted a guest one, answered 200 and said nothing. Before the
+picker existed, the identical request returned the member link verbatim.
+
+**A `.default()` is a decision made where the information needed to make it does not exist.** The
+parser cannot see the difference between "the operator picked Guest" and "nobody said anything", and
+the service needs that difference: absent means *reuse whatever is open*, present-and-different means
+*the operator's pick beats a URL they may already have pasted*. The fail-closed default did not go
+away — it moved to the FRESH-mint path, where it governs what a new link grants and not what an old
+one is compared against.
+
+### Two parsers that read history and passed
+
+`guest-realtime-rls.test.ts` took the FIRST `CREATE POLICY … ON <table>` in a migration and abandoned
+the file if that one was not `FOR SELECT` — so a future migration writing an INSERT policy above its
+SELECT policy would send the test back to an older file and assert a stale definition. And
+`workspaceFloor` matched only `export const <M> = withWorkspaceAuth(`, so `export { h as GET }`
+answered `null` — *"no workspace floor here"* — rather than tripping `<unparsed>`, because there is
+no `export const GET =` to test for; its belt compared FILE NAMES, so a second guest-floored method
+in an already-listed file was invisible to every set at once, and it counted `minRole: "guest"`
+inside COMMENTS.
+
+Neither shape exists in the tree today, which is exactly why both survived. **A source-reading test
+has two failure modes and only one of them is red**: it can fail to find the thing, or it can find
+the WRONG thing and assert against it happily. The second is indistinguishable from success, so every
+"take the first match" needs to justify itself against "take the last", and every "I could not parse
+this" needs an answer that is not the same as "there is nothing here".
+
+### A gate nobody listed
+
+`scripts/check-role-drift.ts` has been a CI step since guest-role M0 — added by the same commit that
+introduced the `guest` role — and appeared in neither §14's table nor CLAUDE.md's "four non-suite
+gates", both of which are what an agent reads to know what green means. The wave that created the
+role shipped the guard for it and told no doc. **A gate that CI runs and no doc names is a gate that
+will be deleted by somebody tidying up**, and §14's "CI runs every row above" quietly reads as "these
+rows are all of CI", which it never claimed and which was not true.

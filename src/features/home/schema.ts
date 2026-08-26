@@ -44,17 +44,28 @@ export type HomeChannelCreateInput = z.infer<typeof HomeChannelCreateSchema>;
  * validation failure, not a link: the caller gets a URL that 410s on its first
  * open and no error to explain it.
  *
- * ⚠ `grantedRole` is the role the CLAIMER lands at, and it DEFAULTS to `guest`
- * (migration 20260825150000; closes F-319). The enum is the DB CHECK's ceiling —
- * `member` is the top a link can confer, `admin`/`owner`-via-link being
- * unrepresentable — and the default means a body that says nothing confers the
- * FLOOR, fail-closed. The service adds a grant-above-self guard on top: a minter
- * cannot hand out a role above their own (`mintContainerLink`).
+ * ⚠ `grantedRole` is the role the CLAIMER lands at (migration 20260825150000;
+ * closes F-319). The enum is the DB CHECK's ceiling — `member` is the top a link
+ * can confer, `admin`/`owner`-via-link being unrepresentable — and the service
+ * adds a grant-above-self guard on top: a minter cannot hand out a role above
+ * their own (`mintContainerLink`).
+ *
+ * 🔒 ⚠ IT IS `optional()` AND **NOT** `default("guest")`, AND THE DIFFERENCE IS
+ * A ROTATION (2026-08-26). Under `.default("guest")` the parser could not tell
+ * "the operator picked Guest" from "the field is absent" — so a pre-M2 client,
+ * or any body omitting it, pressing "Add person" against an open **member** link
+ * took the M3 mismatch branch: the operator's outstanding invitation was
+ * REVOKED, a guest link minted in its place, 200, no signal. Before M3 that same
+ * request returned the member link verbatim. **ABSENT now means "reuse whatever
+ * is open"** — the pre-M3 semantics, restored — and only a body that STATES a
+ * role can revoke one. The FRESH-mint default is still `guest` and still lives
+ * in the service (`mintContainerLink › roleToMint`), where it fails closed;
+ * moving it here is what conflated the two cases.
  */
 export const HomeLinkMintSchema = z.object({
   workspaceId: z.string().uuid(),
   label: z.string().trim().min(1).max(80).nullish(),
-  grantedRole: z.enum(["guest", "viewer", "member"]).default("guest"),
+  grantedRole: z.enum(["guest", "viewer", "member"]).optional(),
   expiresAt: z
     .string()
     .datetime({ offset: true })

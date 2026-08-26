@@ -67,10 +67,10 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and four non-suite gates** — the full table is
+**Five suites, TWO lints, TWO typechecks, and FIVE non-suite gates** — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
-The four that are routinely forgotten, because none of them is a test suite:
+The five that are routinely forgotten, because none of them is a test suite:
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
    vitest run does not typecheck. `npm run typecheck` alone does not cover it.
@@ -78,6 +78,11 @@ The four that are routinely forgotten, because none of them is a test suite:
    (`globalIgnores` excludes `scripts/**`).
 3. the `size-check` CI job — the 500-line cap over `packages/`, an inline `find`/`awk` in ci.yml.
 4. `npx tsx scripts/check-knowledge-type-drift.ts` — knowledge types, server vs SDK.
+5. `npx tsx scripts/check-role-drift.ts` — the workspace ROLE SET across server, SDK and MCP.
+   ⚠ **This list said "four" and omitted it until 2026-08-26**, though it has been the second step
+   of CI's `type-drift` job since guest-role M0 (`080b7b48`) — i.e. the wave that introduced the
+   `guest` role shipped the gate that guards the role set and told no doc about it. **Re-derive
+   this list rather than trusting it: `grep -n 'run:' .github/workflows/ci.yml`.**
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new

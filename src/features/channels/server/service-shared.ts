@@ -148,12 +148,19 @@ async function resolveChannelRef(
  * being created inside a `kind='link'` container — `createChannel` never reads
  * `workspace.kind`, `POST /api/channels` is `member`+ (the container's owner
  * clears it), the MCP `dopl_channel(op="open")` schema offers `visibility` and
- * no DB constraint exists. The twelve guest-floored routes compose
- * `loadVisibleChannel`, so before this fence an operator opening a second,
- * public channel in their container silently handed the guest its header, its
- * whole transcript, its thread list, its roster and a long-poll on it. A lowered
- * floor plus an inherited public arm is exactly how a narrow grant becomes a
- * cross-channel read.
+ * no DB constraint exists. ELEVEN of the fourteen guest-floored CHANNEL routes
+ * compose `loadVisibleChannel` — measured 2026-08-26; the three that do not are
+ * `channels/route.ts` GET, `channels/await/route.ts` GET and
+ * `channels/presence/route.ts` POST, none of which takes a channel ref. ⚠ This
+ * comment has now been wrong twice ("twelve", and elsewhere "seven"), so
+ * RE-DERIVE rather than quote: walk each pair in `guest-route-floor.test.ts ›
+ * GUEST_ALLOWED` to the service function its route calls, and check that
+ * function against `grep -rn loadVisibleChannel src/features/channels/server`.
+ * Before this fence an operator opening a second, public channel in their
+ * container silently handed the guest its header, its whole transcript, its
+ * thread list, its roster and a long-poll on it. A lowered floor plus an
+ * inherited public arm is exactly how a narrow grant becomes a cross-channel
+ * read.
  *
  * ⚠ IT MIRRORS THE DATABASE, WHICH IS WHY IT IS SPELLED THIS WAY.
  * `20260826120000_guest_channel_realtime_rls.sql`'s guest arm requires

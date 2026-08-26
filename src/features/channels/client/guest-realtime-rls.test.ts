@@ -48,19 +48,45 @@ const FILES = readdirSync(MIGRATIONS)
   .sort();
 
 /**
- * The LAST `CREATE POLICY` for `<table>` on SELECT, as raw SQL. Last wins, for
- * the same reason `check-role-drift.ts` reads the last `CREATE OR REPLACE`:
- * an earlier definition is history, not state.
+ * The LAST `CREATE POLICY … FOR SELECT` on `<table>` WITHIN one migration's SQL,
+ * or `null` if that file defines none.
+ *
+ * ⚠ **IT SCANS EVERY POLICY IN THE FILE, AND THE FIRST CUT TOOK ONLY THE FIRST
+ * ONE (corrected 2026-08-26).** The old body ran a single non-global `exec`,
+ * kept the FIRST `CREATE POLICY … ON <table> …;`, and abandoned the whole file
+ * when that one was not `FOR SELECT` — so a future migration that defines an
+ * INSERT (or UPDATE, or DELETE) policy on `channels` ABOVE its SELECT policy
+ * would make this file skip past the live definition and assert against a stale
+ * one from an older migration. **That is a test that reads HISTORY and passes.**
+ * `matchAll` + LAST wins is the same rule `check-role-drift.ts` uses on
+ * `CREATE OR REPLACE`, applied at both levels: last file that defines one, last
+ * SELECT policy inside it.
+ *
+ * ⚠ PURE ON PURPOSE — it takes SQL TEXT rather than a filename, so the
+ * ordering rule can be driven against a synthetic migration (§14: a regex over
+ * source is not a behavioural assertion unless you drive the function).
+ */
+export function selectPolicyIn(sql: string, table: string): string | null {
+  const re = new RegExp(
+    `CREATE\\s+POLICY\\s+\\w+\\s+ON\\s+(?:public\\.)?${table}\\b[\\s\\S]*?;`,
+    "gi"
+  );
+  let last: string | null = null;
+  for (const m of sql.matchAll(re)) {
+    if (/FOR\s+SELECT/i.test(m[0])) last = m[0];
+  }
+  return last;
+}
+
+/**
+ * The LAST `CREATE POLICY` for `<table>` on SELECT across the whole migration
+ * tree, as raw SQL. Last wins, for the same reason `check-role-drift.ts` reads
+ * the last `CREATE OR REPLACE`: an earlier definition is history, not state.
  */
 function latestSelectPolicy(table: string): string | null {
   for (const file of [...FILES].reverse()) {
-    const sql = readFileSync(join(MIGRATIONS, file), "utf8");
-    const re = new RegExp(
-      `CREATE\\s+POLICY\\s+\\w+\\s+ON\\s+(?:public\\.)?${table}\\b[\\s\\S]*?;`,
-      "i"
-    );
-    const m = re.exec(sql);
-    if (m && /FOR\s+SELECT/i.test(m[0])) return m[0];
+    const found = selectPolicyIn(readFileSync(join(MIGRATIONS, file), "utf8"), table);
+    if (found) return found;
   }
   return null;
 }
@@ -136,5 +162,52 @@ describe("guest realtime — the subscribed tables admit a guest", () => {
     expect(SUBSCRIBED).not.toContain("channel_consent_requests");
     const policy = latestSelectPolicy("channel_consent_requests") ?? "";
     expect(policy).not.toMatch(/'guest'/);
+  });
+});
+
+describe("selectPolicyIn — the reader takes the LAST SELECT policy, not the first policy", () => {
+  // ⚠ THE SHAPE THIS GUARDS AGAINST DOES NOT EXIST IN THE TREE TODAY, which is
+  // exactly why it is driven against synthetic SQL: the day a migration writes
+  // an INSERT policy above its SELECT policy, the old reader silently fell back
+  // to an OLDER migration's definition and asserted against history.
+  const NON_SELECT_FIRST = `
+    CREATE POLICY channels_insert ON public.channels
+      FOR INSERT WITH CHECK (is_current_workspace_member(workspace_id,'member'));
+    CREATE POLICY channels_select ON public.channels
+      FOR SELECT USING (is_current_workspace_member(workspace_id,'guest'));
+  `;
+
+  it("finds the SELECT policy even when a non-SELECT one is written first", () => {
+    const found = selectPolicyIn(NON_SELECT_FIRST, "channels");
+    expect(found).toMatch(/FOR SELECT/);
+    expect(found).toMatch(/'guest'/);
+  });
+
+  it("takes the LAST SELECT policy when a file redefines one", () => {
+    const redefined = `
+      CREATE POLICY channels_select ON public.channels
+        FOR SELECT USING (is_current_workspace_member(workspace_id,'viewer'));
+      CREATE POLICY channels_select ON public.channels
+        FOR SELECT USING (is_current_workspace_member(workspace_id,'guest'));
+    `;
+    expect(selectPolicyIn(redefined, "channels")).toMatch(/'guest'/);
+  });
+
+  it("answers NULL for a file with no SELECT policy on that table (so the scan keeps walking back)", () => {
+    expect(selectPolicyIn(NON_SELECT_FIRST, "channel_messages")).toBeNull();
+    expect(
+      selectPolicyIn(
+        `CREATE POLICY channels_insert ON public.channels FOR INSERT WITH CHECK (true);`,
+        "channels"
+      )
+    ).toBeNull();
+  });
+
+  it("does not confuse a table with a same-prefixed sibling", () => {
+    // `\\b` after the table name: `channel_members` must not match a policy on
+    // `channel_member_reads`.
+    const sql = `CREATE POLICY x ON public.channel_members_archive
+      FOR SELECT USING (true);`;
+    expect(selectPolicyIn(sql, "channel_members")).toBeNull();
   });
 });

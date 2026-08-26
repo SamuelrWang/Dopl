@@ -23,9 +23,37 @@
  * for an explicit opt-down; this file drives the resolver itself, because §14's
  * rule is that a pin on the callers is not a pin on the fence.
  *
- * ⚠ MUTATION-VERIFY: deleting the `meetsMinRole` line in
- * `resolveApiWorkspaceAccess` turns the guest cases red and leaves every other
- * role green.
+ * 🔒 ⚠ AND THE FIRST PASS FLOORED ONE DOOR OF THREE (corrected 2026-08-26).
+ * `resolveApiWorkspaceAccess` was NOT the only way into this lookup: three call
+ * sites reached the un-floored root resolver directly —
+ *   - `getBootState` (`POST /api/boot`), which then runs `myAccessFor` →
+ *     `listEffectiveAccess` → `toMyAccessPayload`, the SAME projection
+ *     `my-access/route.ts` documents as *"shared with POST /api/boot … they must
+ *     not drift"*;
+ *   - `GET /api/workspaces/resolve`;
+ *   - `src/app/billing/[segment]/page.tsx`.
+ * Set C could not see it (none of them names `resolveApiWorkspace`) and this
+ * file did not drive `getBootState`. **Nothing live leaked** — a guest's
+ * `myAccess` was already `null` because `defaultLevelForRole("guest")` is
+ * `null`, and the `Workspace` record is by-contract guest-reachable through the
+ * unfiltered `GET /api/workspaces` (§4A) — so this is a SHAPE fix, and the
+ * accident that covered it was one edit to an access-level table wide.
+ *
+ * THE FLOOR THEREFORE MOVED DOWN to `resolveWorkspaceSegmentForUser`, which all
+ * four share, and TWO DECISIONS ARE PINNED BELOW rather than inherited:
+ *   1. **BOOT IS AN EXPLICIT `guest` EXEMPTION** — the SPA's two pop-out windows
+ *      (`/:workspaceSegment/thread-window|agent-window/:channelId`) pay this read
+ *      themselves, and a guest popping a thread out of their home channel routes
+ *      the CONTAINER's segment. A `viewer` floor answers 404 and the window
+ *      renders "Workspace not found" — §4A's *the surface must not issue a
+ *      request it will get 403 on*, which is the bug M1 shipped.
+ *   2. **`myAccess` KEEPS THE `viewer` FLOOR ANYWAY**, stated at
+ *      `MY_ACCESS_MIN_ROLE`, so the exemption covers workspace IDENTITY and
+ *      never the capability inventory its twin route refuses.
+ *
+ * ⚠ MUTATION-VERIFY (measured 2026-08-26 — 3 reverts, 3 failures, 0 vacuous):
+ * deleting the `meetsMinRole` line in `resolveWorkspaceSegmentForUser`; changing
+ * `BOOT_MIN_ROLE` to `"viewer"`; deleting the `MY_ACCESS_MIN_ROLE` guard.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -49,10 +77,14 @@ vi.mock("@/features/teams/server/access", () => ({
 }));
 
 import {
+  getBootState,
   resolveApiWorkspace,
   resolveApiWorkspaceAccess,
+  resolveWorkspaceSegmentForUser,
 } from "./segment";
 import { findWorkspaceForMemberByPublicId, findWorkspaceForMember } from "./service";
+import { getOnboardingStatus } from "@/features/onboarding/server/service";
+import { listEffectiveAccess, toMyAccessPayload } from "@/features/teams/server/access";
 
 const USER = "22222222-2222-4222-8222-222222222222";
 
@@ -131,5 +163,92 @@ describe("resolveApiWorkspaceAccess — the inverted viewer default", () => {
   it("still answers NULL for a non-member, ahead of any role question", async () => {
     vi.mocked(findWorkspaceForMemberByPublicId).mockResolvedValue(null as never);
     expect(await resolveApiWorkspaceAccess(SEGMENT, USER)).toBeNull();
+  });
+});
+
+describe("resolveWorkspaceSegmentForUser — the floor is on the ROOT, not on one wrapper", () => {
+  // The three direct callers (`GET /api/workspaces/resolve`,
+  // `billing/[segment]/page.tsx`, `getBootState`) all reach THIS function. Two
+  // of them pass no options and must therefore be fail-closed.
+
+  it("REFUSES a guest by default — the door `/api/workspaces/resolve` and the billing page use", async () => {
+    memberAt("guest");
+    expect(await resolveWorkspaceSegmentForUser(SEGMENT, USER)).toBeNull();
+  });
+
+  it.each(["viewer", "member", "admin", "owner"] as const)(
+    "resolves for a %s and still carries the redirect facts",
+    async (role) => {
+      memberAt(role);
+      const resolved = await resolveWorkspaceSegmentForUser(SEGMENT, USER);
+      expect(resolved?.role).toBe(role);
+      expect(resolved?.canonical).toBe(SEGMENT);
+      expect(resolved?.needsRedirect).toBe(false);
+    }
+  );
+
+  it("honours an explicit opt-down — the door BOOT uses", async () => {
+    memberAt("guest");
+    expect(
+      (await resolveWorkspaceSegmentForUser(SEGMENT, USER, { minRole: "guest" }))?.role
+    ).toBe("guest");
+  });
+
+  it("honours an explicit floor above the default", async () => {
+    memberAt("member");
+    expect(
+      await resolveWorkspaceSegmentForUser(SEGMENT, USER, { minRole: "admin" })
+    ).toBeNull();
+  });
+});
+
+describe("getBootState — the EXEMPTION is explicit, and it stops at identity", () => {
+  beforeEach(() => {
+    vi.mocked(getOnboardingStatus).mockResolvedValue({
+      onboarded: true,
+      surveyCompleted: true,
+    } as never);
+    // If the floor below ever stops holding, THIS is what a guest would get.
+    vi.mocked(listEffectiveAccess).mockResolvedValue({
+      defaultLevel: "view",
+      isAdmin: false,
+      teamsModeResources: [{ resourceType: "knowledge_base", resourceId: "kb-1", level: "view" }],
+    } as never);
+    vi.mocked(toMyAccessPayload).mockImplementation(((r: unknown) => r) as never);
+  });
+
+  it("a GUEST still BOOTS — the pop-out windows resolve their container segment", async () => {
+    // ⚠ A `viewer` floor here renders "Workspace not found" in the thread and
+    // agent windows for a guest in the desktop app. The exemption is the point.
+    memberAt("guest");
+    const state = await getBootState(USER, SEGMENT);
+    expect(state?.workspace?.id).toBe(WORKSPACE.id);
+    expect(state?.role).toBe("guest");
+    expect(state?.segment).toBe(SEGMENT);
+  });
+
+  it("…and gets NO myAccess, for a STATED reason rather than an accident", async () => {
+    // The twin route (`GET …/my-access`) refuses a guest outright; boot must not
+    // answer the same projection. `listEffectiveAccess` is mocked to a NON-empty
+    // matrix above precisely so a pass cannot come from the real function's
+    // `defaultLevelForRole("guest") === null` short-circuit.
+    memberAt("guest");
+    const state = await getBootState(USER, SEGMENT);
+    expect(state?.myAccess).toBeNull();
+    expect(listEffectiveAccess).not.toHaveBeenCalled();
+  });
+
+  it.each(["viewer", "member", "admin", "owner"] as const)(
+    "a %s still gets the matrix (the floor is a floor, not a removal)",
+    async (role) => {
+      memberAt(role);
+      const state = await getBootState(USER, SEGMENT);
+      expect(state?.myAccess).not.toBeNull();
+    }
+  );
+
+  it("a non-member is still NULL → the route's 404, exemption or not", async () => {
+    vi.mocked(findWorkspaceForMemberByPublicId).mockResolvedValue(null as never);
+    expect(await getBootState(USER, SEGMENT)).toBeNull();
   });
 });

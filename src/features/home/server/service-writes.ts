@@ -11,7 +11,7 @@ import {
   listProfileSummaries,
   type ProfileSummary,
 } from "@/features/workspaces/server/repository";
-import { meetsMinRole } from "@/features/workspaces/types";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { slugifyWorkspaceName } from "@/features/workspaces/slug";
 import type {
   HomeChannelCreateResult,
@@ -132,17 +132,30 @@ export async function createHomeChannel(
  *     `linkOut` (so no Revoke button) — the channel is permanently un-invitable.
  *     So judge `isClaimable` on the row: claimable → hand it back; dead →
  *     REVOKE it (freeing the index) and fall through to mint fresh.
- *     ⚠ **AND "CLAIMABLE" IS NOT ENOUGH EITHER — THE GRANT HAS TO MATCH
- *     (2026-08-26).** M3 put a ROLE PICKER on that button and the reuse branch
- *     returned the open row VERBATIM, without comparing `granted_role`. The
- *     popover renders "Create another", so reuse is the NORMAL second click:
- *     an operator picking "Member — full channel" over an open GUEST link got a
- *     200 carrying the guest link back, and the peer landed as a guest. **And
- *     the reverse — picking Guest over an open MEMBER link — pointed the same
- *     silence at PRIVILEGE.** So a claimable link whose grant differs is
- *     REVOKED and re-minted, reusing the dead-link path: the operator's explicit
- *     choice wins over a URL they may have pasted somewhere, because the
- *     alternative is a link that grants something they did not choose.
+ *     ⚠ **AND "CLAIMABLE" IS NOT ENOUGH EITHER — AN EXPLICITLY REQUESTED GRANT
+ *     HAS TO MATCH (2026-08-26).** M3 put a ROLE PICKER on that button and the
+ *     reuse branch returned the open row VERBATIM, without comparing
+ *     `granted_role`. The popover renders "Create another", so reuse is the
+ *     NORMAL second click: an operator picking "Member — full channel" over an
+ *     open GUEST link got a 200 carrying the guest link back, and the peer
+ *     landed as a guest. **And the reverse — picking Guest over an open MEMBER
+ *     link — pointed the same silence at PRIVILEGE.** So a claimable link whose
+ *     requested grant differs is REVOKED and re-minted, reusing the dead-link
+ *     path: the operator's explicit choice wins over a URL they may have pasted
+ *     somewhere, because the alternative is a link that grants something they
+ *     did not choose.
+ *     🔒 ⚠ **"REQUESTED" IS THE LOAD-BEARING WORD, AND THE FIRST CUT DID NOT
+ *     HAVE IT (2026-08-26, second pass).** `grantedRole` used to carry
+ *     `.default("guest")` in the schema, so an ABSENT field was indistinguishable
+ *     from a chosen `guest` — and a pre-M2 client (or any body omitting it)
+ *     pressing "Add person" against an open **member** link therefore took this
+ *     mismatch branch: it revoked the operator's outstanding invitation, minted a
+ *     guest one, answered 200, and said nothing. That is a silent ROTATION and a
+ *     silent DOWNGRADE of a URL already in somebody's inbox. The field is
+ *     `optional()` now: **absent = "reuse whatever is open"** (the pre-M3
+ *     semantics), and only an explicit pick can revoke. A FRESH mint with no pick
+ *     still lands at `guest` — the fail-closed default now lives HERE, at
+ *     `roleToMint`, where it applies to minting and not to matching.
  *  4. The insert can still lose a race, and `channel_links_one_open_per_workspace`
  *     is what makes that CONVERGE: a 23505 means somebody else's mint won, so
  *     re-read and return theirs.
@@ -167,6 +180,14 @@ export async function mintContainerLink(
     throw new HttpError(404, "CHANNEL_NOT_FOUND", "This channel is not available");
   }
 
+  // ⚠ TWO VALUES, NOT ONE, AND THAT IS THE WHOLE FIX. `requestedRole` is what
+  // the body ASKED FOR — `null` when it said nothing — and it is the only thing
+  // the reuse branch is allowed to compare against. `roleToMint` is what a FRESH
+  // link gets, fail-closed at the floor. Collapsing them (a schema `.default()`)
+  // makes "absent" revoke somebody's open invitation.
+  const requestedRole = input.grantedRole ?? null;
+  const roleToMint: Role = requestedRole ?? "guest";
+
   // ⚠ Grant-above-self, BEFORE the insert. `findMemberContainer` already proved
   // active membership of this link container; read the minter's ROLE in it (the
   // fence returns the container, not the role) and refuse a grant above it.
@@ -186,7 +207,7 @@ export async function mintContainerLink(
       "You cannot add somebody to this channel"
     );
   }
-  if (!meetsMinRole(minter.role, input.grantedRole)) {
+  if (!meetsMinRole(minter.role, roleToMint)) {
     throw new HttpError(
       403,
       "GRANT_ABOVE_SELF",
@@ -204,20 +225,26 @@ export async function mintContainerLink(
 
   const open = await repo.findOpenLinkForWorkspace(workspaceId);
   if (open) {
-    // ⚠ TWO CONDITIONS, ONE BRANCH. A link is handed back only if it is still
-    // CLAIMABLE *and* grants what was just asked for; either miss takes the
-    // revoke-and-remint path below. See gate 3 in the docblock — the second
-    // condition is the role picker's, and without it the picker no-ops.
-    if (isClaimable(open) && open.granted_role === input.grantedRole) {
+    // ⚠ TWO CONDITIONS, ONE BRANCH. A link is handed back if it is still
+    // CLAIMABLE *and* nothing contradicts it — either the body asked for no
+    // particular role (`requestedRole === null` → reuse whatever is open, the
+    // pre-M3 semantics) or it asked for exactly what this link grants. Any other
+    // combination takes the revoke-and-remint path below. See gate 3: the
+    // second condition is the role picker's, and without it the picker no-ops —
+    // but reading an ABSENT field as a pick is how a silent rotation happens.
+    if (
+      isClaimable(open) &&
+      (requestedRole === null || open.granted_role === requestedRole)
+    ) {
       return { link: mapLinkRow(open) };
     }
-    // ⚠ Un-revoked but DEAD (expired/exhausted), or alive but granting the WRONG
-    // role. Returning a dead one would hand out a URL that 410s at claim, and
-    // leaving it un-revoked bricks the channel — the one-open index blocks a
-    // replacement and hydrateChannels hides the Revoke button. Returning a
-    // mismatched one silently overrides the operator's pick. Revoke it (scoped
-    // to its OWN creator, since any member may mint and the link may be the
-    // other member's) then mint fresh below.
+    // ⚠ Un-revoked but DEAD (expired/exhausted), or alive but granting a role
+    // the caller EXPLICITLY did not ask for. Returning a dead one would hand out
+    // a URL that 410s at claim, and leaving it un-revoked bricks the channel —
+    // the one-open index blocks a replacement and hydrateChannels hides the
+    // Revoke button. Returning a mismatched one silently overrides the
+    // operator's pick. Revoke it (scoped to its OWN creator, since any member
+    // may mint and the link may be the other member's) then mint fresh below.
     await repo.markLinkRevoked(open.id, open.creator_user_id);
   }
 
@@ -229,7 +256,7 @@ export async function mintContainerLink(
       expiresAt: input.expiresAt ?? null,
       maxUses: 1,
       workspaceId,
-      grantedRole: input.grantedRole,
+      grantedRole: roleToMint,
     });
     return { link: mapLinkRow(row) };
   } catch (err) {

@@ -134,9 +134,17 @@ describe("F-319 — admin-via-link is unrepresentable at the mint boundary", () 
     }
   });
 
-  it("defaults an omitted grantedRole to guest — the fail-closed floor", () => {
+  it("leaves an omitted grantedRole UNDEFINED — the schema does not decide it", () => {
+    // ⚠ THIS ASSERTED `"guest"` UNTIL 2026-08-26, and the `.default("guest")`
+    // behind it was a live bug: it made "the operator picked Guest"
+    // indistinguishable from "the field is absent", so an old client's mint
+    // silently REVOKED and DOWNGRADED an open `member` link. Absent now means
+    // "reuse whatever is open"; the fail-closed FRESH-mint default moved to
+    // `service-writes.ts › mintContainerLink › roleToMint`, which the mint suite
+    // drives. The floor did not go away — it stopped being stated where it could
+    // not tell a pick from a silence.
     const parsed = HomeLinkMintSchema.parse({ workspaceId: WS });
-    expect(parsed.grantedRole).toBe("guest");
+    expect(parsed.grantedRole).toBeUndefined();
   });
 
   it("accepts the three grantable roles", () => {

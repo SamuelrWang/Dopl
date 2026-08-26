@@ -9,9 +9,14 @@
  * inside a `kind='link'` container — `createChannel` never reads
  * `workspace.kind`, `POST /api/channels` is `member`+ (the container's owner
  * clears it), `dopl_channel(op="open")` exposes `visibility`, and no DB
- * constraint exists. Seven of the fourteen guest-floored routes compose
- * `loadVisibleChannel`, so an operator opening a second, public channel silently
- * handed the guest its header, transcript, thread list, roster and a long-poll.
+ * constraint exists. ELEVEN of the fourteen guest-floored channel routes compose
+ * `loadVisibleChannel` (measured 2026-08-26 — the three that do not are
+ * `channels/route.ts` GET, `channels/await/route.ts` GET and
+ * `channels/presence/route.ts` POST, none of which takes a channel ref;
+ * re-derive by walking each route in `guest-route-floor.test.ts ›
+ * GUEST_ALLOWED` to the service function it calls). So an operator opening a
+ * second, public channel silently handed the guest its header, transcript,
+ * thread list, roster and a long-poll.
  *
  * THREE HALVES OF ONE RULE, all pinned here because they must not drift apart:
  *   1. `service-shared.ts › loadVisibleChannel` — the single-ref read.
@@ -22,9 +27,25 @@
  * (`20260826120000_guest_channel_realtime_rls.sql`'s guest arm requires
  * `is_channel_member` and drops the public disjunct).
  *
- * ⚠ MUTATION-VERIFY: reverting `mayReadPublicChannels` to `true`, or dropping
- * the `includePublic` argument at either call site, turns the guest cases red
- * while every viewer case stays green — which is the shape of the claim.
+ * ⚠ THE LIST HALF WAS AN UNPINNED PIN UNTIL 2026-08-26, AND THIS HEADER SAID
+ * OTHERWISE. Only the PURE helper `visibleChannelsOr` was driven; neither of the
+ * two `includePublic` CALL SITES was, and the sole `listChannels` test
+ * (`service-reads.test.ts`) runs at role `member` and never inspects the opts.
+ * **Deleting `includePublic: mayReadPublicChannels(ctx)` from
+ * `service-reads.ts › listChannels` left the whole suite green** — i.e. a
+ * guest's `GET /api/channels` re-included public container channels, and
+ * `toChannelDto` carries `lasts` (the last message) plus member/online counts:
+ * a transcript preview of a room they were never added to. Both call sites are
+ * now DRIVEN below.
+ *
+ * ⚠ MUTATION-VERIFY, MEASURED 2026-08-26 — 3 reverts, 3 failures, 0 vacuous:
+ *   - `mayReadPublicChannels` → `true`                       : 6 red
+ *   - drop `includePublic:` in `service-reads.ts ›listChannels`: 6 red
+ *   - drop `opts` in `repository.ts › listChannels`'s
+ *     `visibleChannelsOr(opts.memberChannelIds, opts)`        : 2 red
+ * ⚠ Note the SECOND one reddens the viewer cases too, and that is correct rather
+ * than sloppy: an ABSENT argument is not `false`, it is the repository's wide
+ * default, so "the opts object still carries the key" is part of the claim.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -35,7 +56,15 @@ vi.mock("./repository", () => ({
   findMembership: vi.fn(),
   findChannelAccess: vi.fn(),
   hasMembership: vi.fn(),
+  // The LIST half's collaborators — `listChannels` is DRIVEN below.
+  listMyMemberships: vi.fn(),
+  listChannels: vi.fn(),
+  memberCounts: vi.fn(),
+  fetchProfiles: vi.fn(),
 }));
+vi.mock("./repository-messages");
+vi.mock("./repository-collab");
+vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import {
   loadVisibleChannel,
@@ -43,9 +72,12 @@ import {
   type ChannelContext,
 } from "./service-shared";
 import { visibleChannelsOr } from "./repository-visibility";
-import { revalidateAwaitAccess } from "./service-reads";
+import { listChannels, revalidateAwaitAccess } from "./service-reads";
 import { ChannelNotFoundError } from "./errors";
 import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
+import * as collab from "./repository-collab";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Role } from "@/features/workspaces/types";
 import type { ChannelRow } from "./dto";
 
@@ -150,6 +182,100 @@ describe("visibleChannelsOr — the LIST read", () => {
     // the plain channel list. `null` is "this caller may see nothing", which the
     // callers turn into an empty list without running a query.
     expect(visibleChannelsOr([], { includePublic: false })).toBeNull();
+  });
+});
+
+describe("listChannels — CALL SITE 1, the service, driven for real", () => {
+  // ⚠ NOT a pin on `visibleChannelsOr`; that helper is pure and was already
+  // covered. This drives `service-reads.ts › listChannels` and reads the opts
+  // the repository was actually handed — the argument whose deletion left the
+  // entire suite green.
+  beforeEach(() => {
+    vi.mocked(repo.listMyMemberships).mockResolvedValue([]);
+    vi.mocked(repo.listChannels).mockResolvedValue([]);
+    vi.mocked(repo.memberCounts).mockResolvedValue(new Map());
+    vi.mocked(repoMessages.lastMessages).mockResolvedValue(new Map());
+    vi.mocked(collab.channelMemberUserIds).mockResolvedValue(new Map());
+    vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map());
+  });
+
+  it("hands the repository includePublic:FALSE for a guest", async () => {
+    await listChannels(ctx("guest"), false);
+    expect(vi.mocked(repo.listChannels).mock.calls[0]?.[1]).toMatchObject({
+      includePublic: false,
+    });
+  });
+
+  it.each(["viewer", "member", "admin", "owner"] as const)(
+    "hands it includePublic:TRUE for a %s (unchanged)",
+    async (role) => {
+      await listChannels(ctx(role), false);
+      expect(vi.mocked(repo.listChannels).mock.calls[0]?.[1]).toMatchObject({
+        includePublic: true,
+      });
+    }
+  );
+
+  it("states the argument EXPLICITLY — absent is not the same as false", async () => {
+    // The repository's own default is `true` (§5's rule for everybody above the
+    // floor), so an argument that stops being passed reads as the WIDE answer.
+    // Assert presence, not just value.
+    await listChannels(ctx("guest"), false);
+    const opts = vi.mocked(repo.listChannels).mock.calls[0]?.[1] as unknown as
+      | Record<string, unknown>
+      | undefined;
+    expect(opts !== undefined && "includePublic" in opts).toBe(true);
+  });
+});
+
+describe("repository.listChannels — CALL SITE 2, the opts pass-through", () => {
+  /** Chainable, thenable Supabase-builder stub (the sibling repository suites'
+   *  shape), so the real `.from().select().eq().is().or().order()` chain runs. */
+  function makeAdmin() {
+    const calls: Array<{ op: string; args: unknown[] }> = [];
+    const builder: Record<string, unknown> = {};
+    const rec = (op: string, args: unknown[]) => {
+      calls.push({ op, args });
+      return builder;
+    };
+    for (const op of ["from", "select", "eq", "is", "or", "order"]) {
+      builder[op] = (...args: unknown[]) => rec(op, args);
+    }
+    builder.then = (
+      resolve: (v: { data: unknown[]; error: null }) => unknown
+    ) => resolve({ data: [], error: null });
+    return { calls, client: builder };
+  }
+
+  async function realListChannels(includePublic: boolean, ids: string[]) {
+    const { calls, client } = makeAdmin();
+    vi.mocked(supabaseAdmin).mockReturnValue(client as never);
+    const real = await vi.importActual<typeof import("./repository")>(
+      "./repository"
+    );
+    await real.listChannels(WS, {
+      memberChannelIds: ids,
+      includeArchived: false,
+      includePublic,
+    });
+    return calls.find((c) => c.op === "or")?.args[0] ?? null;
+  }
+
+  it("a guest's predicate is MEMBERSHIP ONLY — the public term never reaches PostgREST", async () => {
+    expect(await realListChannels(false, ["a"])).toBe("id.in.(a)");
+  });
+
+  it("everybody else keeps the public term (unchanged)", async () => {
+    expect(await realListChannels(true, ["a"])).toBe(
+      "visibility.eq.public,id.in.(a)"
+    );
+  });
+
+  it("a guest with NO memberships never runs a query at all", async () => {
+    // `visibleChannelsOr` answers `null` and the repository returns [] — a
+    // no-term `or()` would be a PostgREST syntax error, i.e. a 500 on the
+    // plain channel list rather than an empty one.
+    expect(await realListChannels(false, [])).toBeNull();
   });
 });
 

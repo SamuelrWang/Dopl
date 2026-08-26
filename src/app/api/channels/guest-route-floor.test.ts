@@ -25,11 +25,18 @@
  *   A. Every route in the guest-allowed set is at `minRole: "guest"`.
  *   B. NO route anywhere under `src/app/api` is at `minRole: "guest"` unless it
  *      is in that set — checked TWICE, once through the parser and once through
- *      a dumb whole-file text sweep, because the parser is the thing that was
- *      wrong before.
+ *      a dumb comment-stripped text sweep, because the parser is the thing that
+ *      was wrong before.
  *   C. NO route in the `withUserAuth` + `resolveApiWorkspace` family opts below
  *      `viewer`.
- *   D. THE PARSER ITSELF is pinned against eight hand-measured floors.
+ *   D. THE PARSER ITSELF is pinned against hand-measured floors and against the
+ *      export shapes it must not read as ABSENT.
+ *
+ * ⚠ THE PARSER MOVED OUT ON 2026-08-26 — it is `shared/auth/route-floor-parser.ts`,
+ * beside the `withWorkspaceAuth` it parses. This file hit the 500-line cap (§1)
+ * while the parser was growing the branches set D now pins, and a file that
+ * cannot be corrected is worse than one that is an import away. No route imports
+ * the parser; its only consumer is this suite.
  *
  * ⚠ THE WORKSPACE FLOOR IS A TRIPWIRE, NOT THE TRUE GATE. The real gate on each
  * of these is the channel-membership fence in the service layer
@@ -44,6 +51,12 @@
  * removes it from the discovered set → set A fails on that entry AND set B's
  * equality fails. Adding `guest` to any other route fails set B (both halves).
  * Breaking the parser fails set D. 15 entries.
+ * MEASURED 2026-08-26 — 4 reverts, 4 failures, 0 vacuous: parser loses the
+ * re-export branch (4 red); loses the function-declaration branch (1 red); stops
+ * stripping comments (1 red); B2 back to comparing FILE NAMES while a SECOND
+ * guest floor is added to an already-listed file (`…/members/route.ts` POST) —
+ * the count sweep goes red, and the old file-name sweep stayed GREEN on that
+ * exact tree (12 files either way), which is the gap it closed.
  *
  * ⚠ FOURTEEN OF THE FIFTEEN ARE CHANNEL ROUTES; THE FIFTEENTH IS A METER
  * (2026-08-26). `mcp/credits/consume` sits at `guest` so a guest's tool calls
@@ -57,114 +70,17 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
+import {
+  DEFAULT_FLOOR,
+  DYNAMIC,
+  METHODS,
+  UNPARSED,
+  stripComments,
+  workspaceFloor,
+} from "@/shared/auth/route-floor-parser";
 
 const API_ROOT = join(import.meta.dirname, "..");
 const CHANNELS_REL = "channels";
-
-const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-
-/** The wrapper default, shared by both families. */
-const DEFAULT_FLOOR = "viewer";
-/** `minRole` is present but is not a string LITERAL — never silently "viewer". */
-const DYNAMIC = "<dynamic>";
-/** The method is exported and the file uses the wrapper, but the assignment did
- *  not parse — never silently "not wrapped". */
-const UNPARSED = "<unparsed>";
-
-/**
- * ⚠ THE PARENTHESIS SCANNER, AND IT REPLACED A `src.indexOf(");")` (2026-08-26).
- *
- * The old parser sliced the wrapper's arguments at the FIRST `");"` in the file
- * after the call. That is correct only for the `withWorkspaceAuth(handleGet, {…})`
- * shape; for the INLINE-ARROW shape — `withWorkspaceAuth(async (req, ctx) => {
- * … }, { minRole })` — the first `");"` lands inside the handler BODY, on the
- * first `NextResponse.json(…);` or `requireChannelId(auth.params);` it contains,
- * so the options object was never in the slice and every such route parsed as
- * the `viewer` default.
- *
- * ⚠ MEASURED, NOT THEORISED: EIGHT (route, method) pairs disagreed on
- * 2026-08-26 — the six billing routes (actual `admin`) and the two skills POSTs
- * (actual `member`) — all of which the old parser read as `viewer`. The
- * consequence was not cosmetic: setting `billing/invoices` to `minRole:"guest"`
- * left BOTH set A and set B GREEN, i.e. a guest could have been given the
- * operator's Stripe invoice history with this suite passing. Set D pins those
- * eight so a future parser bug is caught by DATA rather than by luck.
- *
- * It skips string literals, template literals and comments, because parens
- * inside `ChannelForbiddenError("post to this channel")` are not structure.
- * A run that reaches EOF without closing THROWS — a parse failure must be loud.
- */
-function balancedArgs(src: string, from: number): string {
-  let depth = 1;
-  let i = from;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "'" || c === '"' || c === "`") {
-      const quote = c;
-      i += 1;
-      while (i < src.length) {
-        if (src[i] === "\\") i += 2;
-        else if (src[i] === quote) break;
-        else i += 1;
-      }
-      i += 1;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "/") {
-      const nl = src.indexOf("\n", i);
-      i = nl === -1 ? src.length : nl + 1;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      const end = src.indexOf("*/", i + 2);
-      i = end === -1 ? src.length : end + 2;
-      continue;
-    }
-    if (c === "(" || c === "{" || c === "[") depth += 1;
-    else if (c === ")" || c === "}" || c === "]") {
-      depth -= 1;
-      if (depth === 0) return src.slice(from, i);
-    }
-    i += 1;
-  }
-  throw new Error("unbalanced wrapper call — the route source did not parse");
-}
-
-/** Read a `minRole` out of a wrapper's argument text. */
-function minRoleIn(args: string): string {
-  // Take the LAST occurrence: the options object is the trailing argument, and
-  // a handler body that happens to contain the word would come first.
-  const idx = args.lastIndexOf("minRole");
-  if (idx === -1) return DEFAULT_FLOOR;
-  const tail = args.slice(idx);
-  const literal = /^minRole\s*:\s*"(\w+)"/.exec(tail);
-  if (literal) return literal[1];
-  // ⚠ `{ minRole }` shorthand, `minRole: SOME_CONST`, a ternary — anything the
-  // parser cannot READ is reported as such. The old parser's `minRole:\s*"(\w+)"`
-  // simply failed to match and fell through to "viewer", which is the same class
-  // of silent wrong answer the `");"` slice produced.
-  return DYNAMIC;
-}
-
-/**
- * The effective workspace `minRole` a `withWorkspaceAuth`-wrapped method runs
- * at: the explicit `minRole: "X"` in its options object, or `"viewer"` (the
- * wrapper default) when none is given. `null` = the method is not exported here,
- * or is not wrapped by `withWorkspaceAuth` (e.g. a `withUserAuth` route) — such
- * a method has no workspace floor to place at `guest`.
- */
-export function workspaceFloor(src: string, method: string): string | null {
-  const call = new RegExp(
-    `export\\s+const\\s+${method}\\s*=\\s*withWorkspaceAuth\\s*\\(`
-  ).exec(src);
-  if (call) return minRoleIn(balancedArgs(src, call.index + call[0].length));
-  // Exported, and this file DOES use the wrapper, but not in the shape above —
-  // an assign-then-export, or a local helper composing it. Say so rather than
-  // answering `null`, which reads as "no workspace floor here".
-  const exported = new RegExp(`export\\s+const\\s+${method}\\s*=`).test(src);
-  if (exported && src.includes("withWorkspaceAuth")) return UNPARSED;
-  return null;
-}
 
 /** Every `route.ts` under `src/app/api`, as paths relative to that root. */
 function allRouteFiles(): string[] {
@@ -282,15 +198,32 @@ describe("guest route floor — the guest-allowed set is exactly what runs at mi
     expect([...found].sort()).toEqual([...ALLOWED_KEYS].sort());
   });
 
-  it("B2: a DUMB text sweep for minRole:\"guest\" names the same FILES", () => {
+  it("B2: a DUMB text sweep counts one guest floor per allowed METHOD, per file", () => {
     // ⚠ THE BELT FOR THE PARSER ITSELF. Set B is only as good as `workspaceFloor`,
-    // and `workspaceFloor` is exactly what was broken. This half needs no parser:
-    // any file whose text contains the guest floor must be a file the set names,
-    // and every file the set names must contain it.
-    const swept = SOURCES.filter(([, src]) => /minRole:\s*"guest"/.test(src))
-      .map(([rel]) => rel)
-      .sort();
-    const expected = [...new Set(GUEST_ALLOWED.map(([f]) => f))].sort();
+    // and `workspaceFloor` is exactly what was broken. This half needs no parser.
+    //
+    // ⚠ IT COMPARED FILE NAMES UNTIL 2026-08-26, AND THAT LEFT A HOLE THE SAME
+    // SIZE AS THE PARSER'S: a SECOND method given a guest floor in a file the
+    // set ALREADY names was invisible to it — the file was expected, so an extra
+    // floor inside it changed nothing. Counting the occurrences is the cheapest
+    // thing a parser-free sweep can do that has the (file, METHOD) dimension:
+    // one floored method spells the floor once.
+    //
+    // ⚠ AND IT WAS COMMENT-BLIND: `channels/route.ts`'s own docblock contains
+    // the literal `minRole: "guest"`, so prose counted as a floor. Stripped now.
+    const swept = SOURCES.map(
+      ([rel, src]) =>
+        [rel, (stripComments(src).match(/minRole:\s*"guest"/g) ?? []).length] as const
+    )
+      .filter(([, n]) => n > 0)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    const counts = new Map<string, number>();
+    for (const [file] of GUEST_ALLOWED) {
+      counts.set(file, (counts.get(file) ?? 0) + 1);
+    }
+    const expected = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+
     expect(swept).toEqual(expected);
   });
 
@@ -330,6 +263,76 @@ describe("D: the parser is pinned against hand-measured floors", () => {
     expect(() =>
       workspaceFloor(`export const GET = withWorkspaceAuth(handleGet`, "GET")
     ).toThrow(/did not parse/);
+  });
+
+  // ⚠ SYNTHETIC ON PURPOSE: none of these shapes exists in `src/app/api` today
+  // (AST-verified 2026-08-26), which is why real sources cannot pin them — and
+  // is how the gap survived.
+  const WRAPPER = `import { withWorkspaceAuth } from "@/shared/auth/with-auth";`;
+
+  it.each([
+    // [label, source, method, expected]
+    [
+      "export { h as GET } follows the alias to the binding's floor",
+      `${WRAPPER}
+       const handleGet = withWorkspaceAuth(async () => null, { minRole: "guest" });
+       export { handleGet as GET };`,
+      "GET",
+      "guest",
+    ],
+    [
+      "…and to a floor ABOVE the default just the same",
+      `${WRAPPER}
+       const handlePost = withWorkspaceAuth(async () => null, { minRole: "admin" });
+       export { handlePost as POST };`,
+      "POST",
+      "admin",
+    ],
+    [
+      "a followed re-export with no options is the wrapper DEFAULT, not absent",
+      `${WRAPPER}
+       const h = withWorkspaceAuth(async () => null);
+       export { h as PATCH };`,
+      "PATCH",
+      DEFAULT_FLOOR,
+    ],
+    [
+      "a re-export from ANOTHER module is <unparsed>, never null",
+      `${WRAPPER}
+       export { GET } from "./elsewhere";`,
+      "GET",
+      UNPARSED,
+    ],
+    [
+      "an exported FUNCTION DECLARATION is <unparsed>, never null",
+      `${WRAPPER}
+       const inner = withWorkspaceAuth(async () => null, { minRole: "guest" });
+       export async function GET(req: Request) { return inner(req); }`,
+      "GET",
+      UNPARSED,
+    ],
+    [
+      "a floor that appears only in a COMMENT is not a floor, even INSIDE the options object",
+      // ⚠ The comment sits AFTER the real key, so `minRoleIn`'s `lastIndexOf`
+      // lands on the prose — this is the case a comment-blind parser reads as
+      // `guest`. `channels/route.ts`'s own docblock is the real-world version.
+      `${WRAPPER}
+       export const POST = withWorkspaceAuth(async () => null, {
+         minRole: "member",
+         // TODO(2026-08-26): consider minRole: "guest" — see §4A.
+       });`,
+      "POST",
+      "member",
+    ],
+  ])("%s", (_label, src, method, expected) => {
+    expect(workspaceFloor(src, method)).toBe(expected);
+  });
+
+  it("a method nobody exports still has no floor, whatever the file contains", () => {
+    const src = `${WRAPPER}
+      const handleGet = withWorkspaceAuth(async () => null, { minRole: "guest" });
+      export { handleGet as GET };`;
+    expect(workspaceFloor(src, "DELETE")).toBeNull();
   });
 });
 

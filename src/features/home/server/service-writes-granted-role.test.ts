@@ -8,7 +8,14 @@
  *  - THE MINT FLOOR (2026-08-26): a minter must be `member`+, so a surviving
  *    GUEST cannot invite a third party into the operator's transcript;
  *  - THE ROLE-PICKER FIX (2026-08-26): an OPEN link is reused only when it
- *    grants what was asked for, and revoked-and-reminted when it does not.
+ *    grants what was EXPLICITLY asked for, and revoked-and-reminted when it does
+ *    not — with an ABSENT `grantedRole` meaning "reuse whatever is open" rather
+ *    than "guest", because a schema `.default()` there rotated and DOWNGRADED an
+ *    open member link for any client that omitted the field.
+ *
+ * ⚠ MUTATION-VERIFY (measured 2026-08-26 — 2 reverts, 2 failures, 0 vacuous):
+ * putting `.default("guest")` back on `HomeLinkMintSchema.grantedRole`; dropping
+ * the `requestedRole === null ||` disjunct in `mintContainerLink`'s reuse gate.
  *
  * Split from `service-writes.test.ts` to keep that file under the 500-line cap.
  */
@@ -225,6 +232,57 @@ describe("mintContainerLink — an OPEN link is reused only when the GRANT MATCH
     });
 
     expect(mocked.markLinkRevoked).toHaveBeenCalledWith("already", CREATOR);
+    expect(result.link.grantedRole).toBe("guest");
+  });
+
+  it("REUSES an open MEMBER link when the body states NO role — absent is not a pick", async () => {
+    // 🔒 THE ROTATION THIS PINS (2026-08-26, second pass). `grantedRole` carried
+    // `.default("guest")` in the schema, so an omitted field parsed as a CHOSEN
+    // guest and took the mismatch branch above: a pre-M2 client (or any body
+    // without the field) pressing "Add person" against an open MEMBER link
+    // revoked the operator's outstanding invitation, minted a guest one, and
+    // answered 200 with no signal — a silent rotation AND a silent downgrade of
+    // a URL that may already be in somebody's inbox. Before M3 the same request
+    // returned the member link verbatim, which is what it does again.
+    mocked.findOpenLinkForWorkspace.mockResolvedValue(openLink("member"));
+
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+
+    expect(result.link.id).toBe("already");
+    expect(result.link.grantedRole).toBe("member");
+    expect(mocked.markLinkRevoked).not.toHaveBeenCalled();
+    expect(mocked.insertLink).not.toHaveBeenCalled();
+  });
+
+  it.each(["guest", "viewer", "member"] as const)(
+    "reuses an open %s link on a role-less body — reuse-whatever-is-open, at every grant",
+    async (role) => {
+      mocked.findOpenLinkForWorkspace.mockResolvedValue(openLink(role));
+      const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+      expect(result.link.id).toBe("already");
+      expect(result.link.grantedRole).toBe(role);
+    }
+  );
+
+  it("still REVOKES a DEAD link on a role-less body — the brick guard is untouched", async () => {
+    // "Absent = reuse" is about the GRANT comparison only. An expired
+    // un-revoked row still matches `channel_links_one_open_per_workspace` and
+    // still has to be revoked, or the channel is permanently un-invitable.
+    mocked.findOpenLinkForWorkspace.mockResolvedValue({
+      ...openLink("member"),
+      expires_at: "2020-01-01T00:00:00.000Z",
+    });
+
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+
+    expect(mocked.markLinkRevoked).toHaveBeenCalledWith("already", CREATOR);
+    expect(result.link.id).toBe("fresh");
+  });
+
+  it("a role-less FRESH mint still lands at guest — the fail-closed default moved, it did not go", async () => {
+    mocked.findOpenLinkForWorkspace.mockResolvedValue(null);
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+    expect(mocked.insertLink.mock.calls[0][0].grantedRole).toBe("guest");
     expect(result.link.grantedRole).toBe("guest");
   });
 
