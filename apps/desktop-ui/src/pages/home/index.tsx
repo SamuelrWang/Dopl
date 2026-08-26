@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Bot, Link2, Search } from "lucide-react";
+import { Bot, Link2, Search } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { isStandardWorkspace } from "@/features/workspaces/types";
@@ -23,6 +23,7 @@ import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { NewChannelDialog } from "./new-channel-dialog";
 import { HomeSearch } from "./home-search";
+import { HomeKnowledgePanels } from "./knowledge-panels";
 
 import {
   HOME_CHANNELS_PATH,
@@ -46,9 +47,11 @@ import {
  * place anybody navigates to.
  *
  * ⚠ THE PAGE HAS THREE FACES (Samuel's wireframe, 2026-08-24) — the header's
- * selector replaces the old "Home" title. Only Chat is built; Knowledge and
- * Agents are `EmptyState` placeholders, so the selector ships ahead of the
- * surfaces it selects. It is LOCAL state, not a route: nothing links to them.
+ * selector replaces the old "Home" title. Chat and Knowledge are built
+ * (Knowledge since 2026-08-26, `docs/specs/home-knowledge-panels.plan.md` M3);
+ * Agents is still an `EmptyState` placeholder, so the selector still ships
+ * ahead of one surface it selects. It is LOCAL state, not a route: nothing
+ * links to them.
  *
  * ⚠ THE CALLER'S ID COMES FROM `POST /api/boot`, on the SAME cache key the boot
  * page seeds (`bootQueryKey(null)`) — so arriving here from the rail costs no
@@ -121,19 +124,48 @@ export default function HomePage() {
   const selected =
     visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
 
-  const paneToken = tab === "chat" ? (selected?.id ?? EMPTY_PANE) : tab;
+  // 🔒 KNOWLEDGE IS KEYED BY THE ROW, NOT BY THE TAB (2026-08-26). Chat always
+  // was; Knowledge had to become so the moment it started rendering a CHANNEL's
+  // bases. Keyed by the bare tab name, switching channels leaves the token
+  // frozen at `"knowledge"` — the crossfade never fires and the pane swaps one
+  // channel's knowledge for another's UNDER a token that says nothing changed,
+  // which is the 150ms wrong-channel flash. Agents is still a placeholder and
+  // has no row to key on.
+  const paneToken =
+    tab === "knowledge"
+      ? `${KNOWLEDGE_PANE}${selected?.id ?? EMPTY_PANE}`
+      : tab === "agents"
+        ? tab
+        : (selected?.id ?? EMPTY_PANE);
 
   /** What the pane shows for one token. ⚠ PURE IN `shown`, because the crossfade
    *  renders the PREVIOUS token for a beat after the selection moves — reading
    *  `selected` here instead would swap the content before the fade. */
   const renderPane = (shown: string) => {
-    if (shown === "knowledge" || shown === "agents") {
-      // Knowledge and Agents are PLACEHOLDERS — the selector ships ahead of
-      // the surfaces it selects.
+    if (shown === "agents") {
+      // Agents is still a PLACEHOLDER — the selector ships ahead of the surface
+      // it selects.
+      return <EmptyState icon={Bot} title="Nothing here yet" />;
+    }
+    if (shown.startsWith(KNOWLEDGE_PANE)) {
+      // ⚠ The ROW IS READ HERE, off `shown`, exactly as the chat branch reads
+      // it — that is what makes the pane pure in the token and lets the
+      // outgoing channel's panels finish their fade against their own data.
+      const shownRow =
+        visible.find(
+          (candidate) => candidate.id === shown.slice(KNOWLEDGE_PANE.length)
+        ) ?? null;
       return (
-        <EmptyState
-          icon={shown === "knowledge" ? BookOpen : Bot}
-          title="Nothing here yet"
+        <HomeKnowledgePanels
+          channel={shownRow?.kind === "channel" ? shownRow.channel : null}
+          // ⚠ ALREADY IN THIS PAGE'S BOOT QUERY — the home workspace is
+          // `POST /api/boot`'s no-segment answer, so scope C costs no second
+          // identity read. NULL until the caller is onboarded; the panel says
+          // so rather than fetching a workspace that does not exist.
+          homeWorkspaceId={identity.data.workspace?.id ?? null}
+          homeWorkspaceSegment={identity.data.segment}
+          homeRole={identity.data.role}
+          currentUserId={identity.data.userId}
         />
       );
     }
@@ -265,10 +297,10 @@ export default function HomePage() {
               >
                 {/* ⚠ THE TOKEN, NOT THE CONTENT, is what crosses the fade —
                     the pane renders whatever `shown` names, which lags the
-                    selection by one fade-out. Chat is keyed by conversation,
-                    the other tabs by themselves, so both kinds of swap
-                    crossfade and a live message in the open transcript does
-                    not. */}
+                    selection by one fade-out. Chat AND Knowledge are keyed by
+                    conversation (Knowledge under its own prefix), the
+                    placeholder tab by itself — so every swap crossfades and a
+                    live message in the open transcript does not. */}
                 <Crossfade token={paneToken} className="flex min-w-0 flex-1">
                   {(shown) => renderPane(shown)}
                 </Crossfade>
@@ -305,7 +337,13 @@ export default function HomePage() {
  *  other pane content — and it can never collide with a row id. */
 const EMPTY_PANE = "empty";
 
-/** The account surface's three faces. Only "chat" is built (2026-08-24). */
+/** Knowledge tokens are `knowledge:<rowId>`. ⚠ The separator matters: row ids
+ *  are `rel:`/`link:`-prefixed (`home-rows.ts`), so no chat token can ever be
+ *  mistaken for a knowledge one and `slice` recovers the row id exactly. */
+const KNOWLEDGE_PANE = "knowledge:";
+
+/** The account surface's three faces. "agents" is still a placeholder
+ *  (2026-08-26). */
 type HomeTab = "chat" | "knowledge" | "agents";
 
 const HOME_TABS = [

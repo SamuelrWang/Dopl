@@ -3472,3 +3472,34 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Proposed resolution: **Samuel's, when he specifies the guardrail.** Until then the honest position
   is the one INVARIANTS §4A now states — the payer is settled, the limit is not.
   Status: **open, awaiting the guardrail spec**
+
+### F-330 — `canEdit` FALLS OPEN wherever `MyAccessProvider` is absent, and no host outside the knowledge page mounts one
+
+- Location: `src/features/knowledge/components/knowledge-v2/use-knowledge-v2-trees.ts › canEdit` —
+  `access.resolve(...)` returns `null` both while the fetch is pending AND when there is no provider
+  at all (`members/hooks/use-my-access.tsx › useMyAccessContext` falls back to `NO_OP_RESULT`, whose
+  `resolve` is `() => null`), and `canEdit` maps `null → true`. The comment above it explains the
+  PENDING case only ("owners/admins never see a flash of disabled affordances"); the PROVIDERLESS
+  case reads identically and is not a flash — it is permanent. `knowledge-v2.tsx` feeds that one
+  boolean to `ListPanel.canEdit` and `DetailPanel.canEditBase`, i.e. every tree CRUD affordance and
+  the inline meta fields.
+- Found during: **home knowledge panels M3, 2026-08-26** — the plan (§5.3) asked for this to be
+  verified before the /home mount shipped without a provider.
+- Severity: **client-side only, and NOT reachable-to-harm from the two hosts that exist today.**
+  The server is the gate (`service-shared.ts`'s gates run on every write), so the failure is a
+  control the caller can press and a 403 they then see, never an unauthorised write. On
+  `pages/knowledge/index.tsx` a provider IS mounted. On `pages/home/knowledge-base-view.tsx` it
+  deliberately is not, and it could not help if it were: a link container carries no team grants, so
+  `my-access` there resolves to the plain role default (`edit` for member and up), and the one role
+  it would refuse — `guest` — cannot reach the panel at all, because `GET /api/knowledge/bases`
+  answers guests with `defaultLevelForRole("guest") === null` before a base is ever listed.
+- ⚠ **The shape is the finding, not the current blast radius.** The default is OPEN, it is spelled
+  as a `null` coalesce three call-frames from the affordance it unlocks, and the next host to mount
+  this tree gets it silently. A third host with a real teams-mode workspace and no provider would
+  show `read`-level members every edit control in the tree.
+- Proposed resolution: split the two nulls — have `useMyAccessContext` report PROVIDERLESS
+  distinctly from PENDING (a `configured: boolean`, or a provider-required throw), and let `canEdit`
+  keep falling open only for the pending case. Do NOT simply flip the default to closed: that
+  reintroduces the disabled-affordance flash the comment exists to prevent.
+  Status: **open** (not fixed here: CLAUDE.md's "the CODE looks wrong → file it, change neither
+  side", and the file is another wave's lane)

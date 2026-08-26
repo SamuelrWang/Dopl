@@ -74,6 +74,55 @@
   box-shadow: var(--raised-light-shadow);
 }
 
+/* ── The Knowledge tab's card grid ────────────────────────────────────────
+   ⚠ WHY THE `--kv-*` LINE EXISTS. `knowledge-v2/home/base-card.tsx` is REUSED
+   verbatim here (never forked), and its `.card` recipe reads knowledge-v2's
+   `--kv-*` aliases — which that module binds on `.shell`, a wrapper this pane
+   does not mount. An unresolved `var()` makes the whole declaration invalid, so
+   a card mounted outside `.shell` loses its border and hue. These are the SAME
+   aliases onto the SAME global tokens (`knowledge-v2.module.css › .shell`);
+   nothing is hardcoded and nothing is a second value that could drift.
+
+   ⚠ TWO COLUMNS, NOT THREE. The knowledge PAGE grid is three across a full
+   page; this one lives in /home's record pane, which is the panel minus the
+   290px conversation column. Row height is the page grid's 244px, for the
+   reason stated there: card size independent of description length. */
+.kbCards {
+  --kv-panel: var(--panel-surface);
+  --kv-border: var(--border-default);
+  --kv-border-strong: var(--border-strong);
+  --kv-text: var(--text-primary);
+  --kv-text-2: var(--text-secondary);
+  --kv-text-3: var(--text-muted);
+  --kv-accent: var(--text-primary);
+  --kv-row-hover: var(--surface-raised-1);
+  --kv-row-active: var(--surface-raised-3);
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 244px;
+  gap: 14px;
+}
+@media (max-width: 1080px) {
+  .kbCards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* One grid cell: an optional caption pill ABOVE the card, card takes the rest.
+   The badge cannot go INSIDE the card — `BaseCard` takes no slot and forking it
+   is forbidden — and the card's own head corner is already the scope pill's. */
+.kbCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+.kbCell > article {
+  flex: 1;
+  min-height: 0;
+}
+
 /* ⚠ THE INFO TOGGLE'S CIRCLE STOOD HERE AND IS DELETED (Samuel, 2026-08-25:
    *"remove the button UI entirely — naked icon, no circle, no fill, no
    border"*). It was a 32px round face keyed on `button[aria-label="Channel

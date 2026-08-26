@@ -2,11 +2,14 @@ import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import {
   USER_ID,
   WORKSPACE,
+  WORKSPACE_ID,
   bootBody,
   noContent,
   ok,
   renderWithProviders,
 } from "#/test-utils/bridge";
+import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
+import type { KnowledgeBase } from "@/features/knowledge/types";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
 import type {
   Channel,
@@ -205,11 +208,127 @@ export const WORKSPACES: { workspaces: WorkspaceWithRole[] } = {
   ],
 };
 
+// ─── Knowledge (the /home Knowledge tab, plan M3) ────────────────────────
+
+/** One base, typed so a rename of any `KnowledgeBase` field breaks the fixture
+ *  at compile time rather than leaving the panels' suite green against a shape
+ *  the endpoint stopped sending. */
+function base(over: Partial<KnowledgeBase> & { id: string; name: string }): KnowledgeBase {
+  return {
+    workspaceId: LINK_WORKSPACE_ID,
+    slug: over.name.toLowerCase().replace(/\s+/g, "-"),
+    publicId: over.id.slice(-6),
+    description: null,
+    agentWriteEnabled: false,
+    visibility: "public",
+    accessMode: "workspace",
+    createdBy: USER_ID,
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-20T10:00:00.000Z",
+    deletedAt: null,
+    ...over,
+  };
+}
+
+/** Scope A, `visible` — the peer sees this one in the channel. ⚠ Created by the
+ *  PEER, so the card's owner label is a real lookup rather than "You". */
+export const KB_SHARED = base({ id: "kb-shared-1", name: "Renewals", createdBy: "user-2" });
+/** Scope A, `agent_only` — reachable by the agent, invisible to the peer. */
+export const KB_AGENT = base({ id: "kb-agent-1", name: "Pricing rules" });
+/** Scope B — private, mine, in the container, NO grant row. */
+export const KB_PRIVATE = base({
+  id: "kb-private-1",
+  name: "Call notes",
+  visibility: "private",
+});
+/** ⚠ Private but SOMEBODY ELSE'S: scope B must drop it. A container base the
+ *  caller cannot have created is the case a `createdBy` filter typo passes. */
+export const KB_PRIVATE_PEER = base({
+  id: "kb-private-2",
+  name: "Priya's drafts",
+  visibility: "private",
+  createdBy: "user-2",
+});
+/** ⚠ NEITHER SCOPE. Mine and ungranted, but PUBLIC to the container — so it is
+ *  not shared into the channel and it is not private either. Without a base in
+ *  this state, dropping scope B's `visibility` test changes nothing visible. */
+export const KB_PUBLIC_UNGRANTED = base({
+  id: "kb-public-1",
+  name: "Team playbook",
+});
+/** Scope C — private, mine, in the HOME workspace (a different container). */
+export const KB_HOME = base({
+  id: "kb-home-1",
+  name: "Fundraise memos",
+  workspaceId: WORKSPACE_ID,
+  visibility: "private",
+});
+
+/** `GET /api/knowledge/bases?channelId=` for the link container. */
+export const CONTAINER_BASES: KnowledgeBaseList = {
+  bases: [KB_SHARED, KB_AGENT, KB_PRIVATE, KB_PRIVATE_PEER, KB_PUBLIC_UNGRANTED],
+  ownerNames: { "user-2": "Priya Shah" },
+  baseStats: {},
+  kbStorageLimit: null,
+  starredBaseIds: [],
+  channelGrants: {
+    [KB_SHARED.id]: { level: "visible", guestWrite: false },
+    [KB_AGENT.id]: { level: "agent_only", guestWrite: false },
+  },
+};
+
+/** `GET /api/knowledge/bases` for the caller's HOME workspace — no channel, so
+ *  the route sends no `channelGrants` key at all (INVARIANTS §9). */
+export const HOME_BASES: KnowledgeBaseList = {
+  bases: [KB_HOME],
+  ownerNames: {},
+  baseStats: {},
+  kbStorageLimit: null,
+  starredBaseIds: [],
+  channelGrants: {},
+};
+
+/**
+ * The base list, routed by WHICH WORKSPACE was asked for — `x-workspace-id` is
+ * an `opts` field over the bridge, not part of the path, so a suite that
+ * matched on the path alone would serve the container's bases to the home
+ * scope and pass while the two scopes were wired to one workspace.
+ */
+export function knowledgeBases(
+  opts: BridgeRequestOpts
+): Promise<BridgeResponse> {
+  if (opts.method === "POST") {
+    const body = (opts.body ?? {}) as { name?: string; visibility?: string };
+    return Promise.resolve(
+      ok({
+        base: base({
+          id: "kb-new-1",
+          name: body.name ?? "Untitled",
+          workspaceId: opts.workspaceId ?? LINK_WORKSPACE_ID,
+          visibility: body.visibility === "private" ? "private" : "public",
+        }),
+      })
+    );
+  }
+  return Promise.resolve(
+    ok(opts.workspaceId === WORKSPACE_ID ? HOME_BASES : CONTAINER_BASES)
+  );
+}
+
+/** Any base's tree. The panels resolve one BEFORE mounting the detail view
+ *  (`knowledge-base-view.tsx`), so a suite that opens a base must answer this
+ *  or the pane sits on its skeleton forever. */
+const EMPTY_TREE_PATH = /^\/api\/knowledge\/bases\/[^/]+\/tree$/;
+
 export function routes(
   path: string,
   opts: BridgeRequestOpts
 ): Promise<BridgeResponse> | null {
   const bare = path.split("?")[0];
+  if (bare === "/api/knowledge/bases") return knowledgeBases(opts);
+  if (EMPTY_TREE_PATH.test(bare)) {
+    return Promise.resolve(ok({ base: KB_PRIVATE, folders: [], entries: [] }));
+  }
   if (bare === "/api/boot") return Promise.resolve(ok(bootBody()));
   if (bare === "/api/workspaces") return Promise.resolve(ok(WORKSPACES));
   if (bare === "/api/home/channels") {
