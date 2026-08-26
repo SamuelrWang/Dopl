@@ -3646,3 +3646,41 @@ one round and was deleted: the wire type is non-optional, so the helper is the o
 optionality is visible, and a rule that lives inside a function nobody has to call is a rule the next
 read forgets. The test is a fixture with the key **deleted** — not `null`, not `{}`, both of which
 pass a `??` while proving nothing about the shape that actually ships.
+
+---
+
+## 2026-08-25 — The guest web channel: reversing a fence that was written against this exact feature
+
+Current state: INVARIANTS §4A (the guest web lane). This section is only the argument.
+
+The claim card carried two guardrails aimed at one thing. Its docblock said **"nothing here navigates
+the web app"**, and `claim-card.test.tsx` pinned it as *"binds no router at all"*. Both were correct
+when written, and both were written against a PREMISE rather than against a risk: the web tree could
+not render a workspace at all, so any navigation out of the claim card led somewhere that did not
+exist. The owner ruling behind `docs/specs/guest-web-channel.md` deleted the premise — there is a web
+surface now — and a guardrail whose premise is gone is not a guardrail. It is a sentence that
+outranks a ruling.
+
+### The re-scope is the part worth keeping, not the reversal
+
+A fence with an expired premise usually gets deleted, and deleting this one would have been wrong,
+because the assertion had quietly accumulated a SECOND meaning nobody wrote down. By the time the
+ruling arrived, *"binds no router"* was doing three jobs: no navigation off an ending that arrived
+DEAD, no navigation off a mid-claim 410, and no client-side route push out of a page whose entire job
+is to hand a session to a server-side fence. **Only the first job's premise expired.**
+
+So the fence moved from WHETHER to HOW. The card still binds no router: the web lane is a plain
+`<a href>`, so a successful claim pays a full page load and arrives at the new route's own three-gate
+fence — auth, then the id guard, then membership — rather than landing client-side inside a shell
+that already trusts it. The two dead paths keep their absence assertions verbatim, because those
+were never about this feature. And the docblock now NAMES the reversal and its date instead of
+stating the old rule, on the same reasoning as the `LINK_CONTAINER_IMMUTABLE` rename one day earlier:
+**an old name or an old rule asserting a property the code no longer has is worse than none**, and
+the next reader's question is not "may I navigate" but "why does this look inconsistent".
+
+**The rule the episode buys: when a ruling reverses a guardrail, count the guardrail's jobs before
+deleting it.** A test written for one reason and holding for three is the normal condition of an old
+assertion, and the three are never listed anywhere — the original reason is the only one in the
+comment. The cheap check is to state each job out loud and ask which one the ruling actually
+addressed; here it was one of three. Then replace the assertion with one that still fails for the
+other two, which is a different exercise from weakening it until it passes.

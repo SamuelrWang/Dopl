@@ -65,6 +65,37 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
 - **F-074 — deleted-unlisted.** It was a real entry (the token/kit hand-copies: `apps/desktop-ui/src/styles/tokens.css` and `kit.css` against `src/app/globals.css`) and it went out in the 2026-08-08 big prune **without appearing on any of that pass's three lists**. ⚠ **It was not resolved.** Five live references still name it — both SPA style files, `apps/desktop-ui/CONVENTIONS.md`, `docs/ENGINEERING.md`, `docs/migration-research/packages-and-build.md` — and the hand-copies they warn about are all still on disk. The id is recorded so it stops dangling; **the debt itself now has no entry, and whoever next touches the kit should file it under a NEW id rather than resurrect this one.**
 - **F-076 — never-assigned.** It has never been a heading in this file at any commit (checked with `git rev-list --all`). It appears exactly once in the whole repo, in `docs/ENGINEERING.md`'s v1.9 bullet — *"Stop (F-076)"* — written by `834584e`, which allocated the number in prose and never filed the entry. Same class as F-160–F-162: **a gap, not a deletion, and never to be reused.**
 
+**The 2026-08-25 GUEST-WEB-CHANNEL wave (`docs/specs/guest-web-channel.md`; commits `8fcf03f6`,
+`1360437e`, `c0342007`, `7164f4f3`, `0eac6cf9`).** **F-317 through F-320 assigned** — the desktop
+`WEB_ONLY_ROOTS` set that omits `link`, the three skeleton composites that announce nothing, the
+measured extent of ruling R4 (the guest is a workspace admin and can HARD-delete), and the windowless
+orchestrator that cannot launch a visible agent. **F-209 is RESOLVED and KEPT IN PLACE** (the
+`/authenticate` sign-in work was uncommitted when the entry was written and is committed as
+`dbc34aef`; INVARIANTS §3's bullet is rewritten to the tree, dated) — kept rather than deleted
+because two of its lessons are not made anywhere else, on the F-301 / F-309 precedent.
+
+⚠ **FIVE ITEMS THE WAVE FIXED WERE NEVER GIVEN IDS, DELIBERATELY, AND ARE RECORDED HERE INSTEAD.**
+All five were found and closed inside the same wave, so an id would have been allocated and retired
+in one breath — the F-178 precedent (*"a finding that already has an owner does not need a number"*),
+pointed at time rather than at ownership. What they were, and what closed each: (1) the claim-card
+test stubbed the key renamed on 2026-08-24 (`relationship` → `channel`) — moved onto a typed
+`HomeLinkClaimResult` factory, M2 `c0342007`, and the rename was only ever catchable by `tsc`;
+(2) `features/home/types.ts`'s claim-URL doc comment said `/c/<token>` where the route is
+`/link/{token}` — corrected M3 `7164f4f3`, and note the irony that `/c/` has since become a real
+route meaning something else; (3) the retirement KEEP test omitted `/link/tok_x` though `link` is
+reserved — backfilled M1 `1360437e` in `src/proxy-retirement-keep.test.ts` alongside the new `/c/`
+rows; (4) INVARIANTS §3/§4A claimed `proxy.test.ts` pinned the `/api/home/link/` (public, singular)
+vs `/api/home/links` (gated, plural) split and **no such test existed** — the pin was ADDED in M4a
+`0eac6cf9` (`src/proxy.test.ts` section 6, mutation-verified both directions), so the doc became true
+rather than being softened; (5) the root typecheck was RED on any machine whose dev server had served
+API traffic, because `withUserAuth`'s returned handler declared an OPTIONAL second parameter that
+Next's generated `ParamCheck<RouteContext>` files reject — fixed in M4a by making it a required
+`src/shared/auth/with-auth.ts › RouteContextArg` (31 generated-file errors → 0), pinned by the new
+type-level `src/shared/auth/route-context-signature.test.ts`. ⚠ **(5) is the one worth re-reading:
+the gate was environment-dependent — green in CI, which has no `.next/`, and red exactly on the
+machine running the mandated always-on dev stack. A gate that is red only where the work happens is
+a gate people learn to ignore**, which is the same cost F-209's addendum measured from the other end.
+
 ## Status legend
 
 - **open** — not yet addressed
@@ -1258,7 +1289,7 @@ COMMIT;
 - **MEASURED CAUSE (2026-08-18, merge pass): the playground is UNTRACKED WORK IN THE MAIN CHECKOUT** — `git status` there shows `src/app/playground/`, `src/app/api/playground/`, `src/features/playground/` and `src/app/api/cron/playground-reaper/` all as `??`. Same class as F-209: the doc was committed ahead of the code. Resolves when that work lands; §10's bullet is correct-but-early
 - Status: open (awaiting Samuel — only he can say which side is stale)
 
-## F-209 — INVARIANTS §3 describes an `/authenticate` sign-in page and a loop-counted route set this tree does not have (2026-08-18)
+## F-209 — INVARIANTS §3 describes an `/authenticate` sign-in page and a loop-counted route set this tree does not have (2026-08-18) — ✅ RESOLVED 2026-08-25
 
 - Found during: Phase 4 of `docs/CHANNELS-V2-WIRING-PLAN.md`, while getting `node scripts/check-doc-refs.mjs` to a state where the phase's own doc edits could be checked
 - **How it surfaced, and why that matters:** its dead symbol anchor — the §3 bullet named a `LOOP_COUNTED_AUTH_ROUTES` constant in `src/shared/auth/auth-routes.ts`, which holds no such symbol — was the **one pre-existing failure of that gate** — red at the phase's base commit and unrelated to anything in it. A single standing failure makes a gate useless for the next change, because "1 failure" and "1 failure plus mine" read the same at a glance
@@ -1270,7 +1301,28 @@ COMMIT;
 - **What this pass DID do** (the minimum that makes the gate mean something again): the §3 bullet now opens with the measurement, quotes its own former claim as a claim, states what IS true of this tree, and carries no dead symbol anchor. The rule it protects — *never add a `redirect("/signup")`, because it puts an uncounted path at one end of a possible cycle* — is true either way and is stated unconditionally
 - **What resolving it needs:** confirmation of which side is stale. If `/authenticate` was reverted, the paragraph is rewritten around the two-route form. If it is coming, the bullet says so with a date and stops describing it in the present tense
 - **MEASURED CAUSE (2026-08-18, found independently by the Phase 6 pass): the sign-in rework is UNCOMMITTED WORK IN THE MAIN CHECKOUT, not a fiction and not a landed change.** `git status` in the main tree shows `src/app/login/page.tsx` and `src/app/signup/page.tsx` DELETED and the `features/auth` screen files modified, none of it committed — so every worktree branched off the last commit sees the OLD two-route shape while §3 already describes the NEW one. **The doc is ahead of the commit, not ahead of the product.** The fix is a SEQUENCING fix: land the `/authenticate` change (the gate stays green on its own), or back §3's paragraph out until it lands. What is genuinely wrong is that a doc describing uncommitted code was committed. Re-measure with `git status` in the main checkout; do not quote this
-- Status: open (owned by the uncommitted sign-in work in the main checkout, not by this branch)
+- **✅ RESOLVED 2026-08-25 — THE SIDE THAT WAS STALE WAS THE COMMIT, AND IT LANDED.** The entry's own
+  resolution condition was *"confirmation of which side is stale"*, and the MEASURED CAUSE bullet
+  above had already named it: the sign-in rework was uncommitted work in the main checkout. It is
+  committed — `dbc34aef` *"feat(auth): single /authenticate page under the (auth) route group"*. Read
+  out of the tree on 2026-08-25, all three of the symbols this entry says are absent are present:
+  `src/app/(auth)/authenticate/page.tsx` exists, `src/shared/auth/auth-routes.ts › AUTH_ENTRY_ROUTES`
+  is `["/login", "/signup", "/authenticate"]`, and `› LOOP_COUNTED_AUTH_ROUTES` exists and is
+  consumed by `src/proxy.ts` through `› isLoopCountedAuthRoute`. `/login` and `/signup` are
+  redirectors (`redirect("/authenticate" …)` via `(auth)/forward-query.ts › forwardQuery`), and
+  `PUBLIC_ROUTES` publishes all three by SPREADING `AUTH_ENTRY_ROUTES`. **§3's bullet is rewritten to
+  the tree as it now is, dated** — so the paragraph the entry preserved as "the claim" is the
+  paragraph that is now true.
+- ⚠ **THE SECURITY-SHAPED HALF WAS ANSWERED, NOT SIDESTEPPED**, because the addendum said resolving
+  this means saying which out loud: the breaker genuinely does count both paths, under the name the
+  doc always used, so the anchor is REPOINTED rather than the doc softened. §3's unconditional rule —
+  *never add a `redirect("/signup")`* — is unchanged and still stated unconditionally.
+- **KEPT IN PLACE RATHER THAN DELETED**, against this file's usual convention (F-301 / F-309 are the
+  precedent). The two addendum lessons are not made anywhere else and are not about `/authenticate`:
+  that a docs-shaped fix and a security-shaped fix can wear the same diff, and that **a red gate which
+  predates a change trains the next agent to skip the gate** — this one was classified as somebody
+  else's problem by two separate phases before either recorded it.
+- Status: **resolved** (the doc was ahead of the commit; the commit landed)
 
 ## F-211 — Mentions are per-channel and unbackfilled, so a tag you have not clicked into is invisible (2026-08-18)
 
@@ -3006,3 +3058,156 @@ where it surfaced, not because this wave caused it.
   (INVARIANTS §5, *"Design furniture stays HARDCODED… never render zeros from missing backing
   data"*) right up until somebody wires it; what this entry tracks is the one surface still on it.
 - Status: open
+
+---
+
+## The 2026-08-25 GUEST-WEB-CHANNEL wave — F-317 through F-320
+
+The feature is `docs/specs/guest-web-channel.md` (owner ruling: an external person with no desktop
+talks to Samuel's agent through one web link), built over five commits — `8fcf03f6` spec/M0,
+`1360437e` M1, `c0342007` M2, `7164f4f3` M3, `0eac6cf9` M4a. **Four entries, and only one of them
+comes from the feature's own code**: F-317 and F-318 are pre-existing asymmetries the build walked
+into, F-319 is the measured extent of a ruling that was granted against a narrower description, and
+F-320 is a product gap in the ORCHESTRATION of the wave rather than in the wave.
+
+⚠ **Id note.** `grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' |
+sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-run it; do not quote it.
+
+## F-317 — `WEB_ONLY_ROOTS` lists `join` and `invite` but not `link`, so `dopl://open/link/…` would parse as a workspace (2026-08-25)
+
+- Location: `dopl-desktop-app/main/deep-link-target.js › WEB_ONLY_ROOTS`
+- Found during: the guest-web-channel M4 doc pass, reading the reserved-name lists `/c/` had to join
+  (`config/index.ts › RESERVED_WORKSPACE_SLUGS`, `website-retirement.ts › RESERVED_TOP_LEVEL`) and
+  checking whether the desktop's own list agreed with them.
+- Severity: **smell** — nothing is broken today; the asymmetry is what is filed.
+- **Measured 2026-08-25.** The set holds `login`, `pricing`, `canvas`, `terms`, `privacy`, `join`,
+  `invite`, `admin`, `oauth`, `auth`, `api`, `download` — and `link` is in none of them; `grep -n
+  "link" dopl-desktop-app/main/deep-link-target.js` finds no other mention either. `/link/{token}`
+  is the claim page and is the same class as `/join/{token}` and `/invite/{token}`, both listed.
+  INVARIANTS §4A already states the rule out loud: `link` is reserved *"for the same reason `join`
+  and `invite` are"*.
+- **What it would do if a producer existed.** `dopl://open/link/tok_x` parses `link` as a WORKSPACE
+  segment and opens the app on a resolve that cannot succeed — exactly the failure the set's own
+  docblock says it exists to prevent (*"without this, `/login` parses as a workspace named 'login'"*).
+- ⚠ **NO KNOWN PRODUCER, WHICH IS WHY IT IS FILED AND NOT FIXED IN A DOC PASS.** Nothing in this repo
+  mints a `dopl://open/link/…`: the claim page's desktop handoff is `claim-card.tsx › HOME_DEEP_LINK`
+  = `dopl://open/home`, and §4A gives the reason (a relationship lives in a container the rail filters
+  out, so handing over its segment opens a workspace the app declines to list). So this is a list that
+  no longer matches the rule it states, not a live break — and it is the shape that bites the day
+  somebody adds the producer, because the failure is a wrong workspace rather than an error.
+- Proposed resolution: one line in the set carrying the same reason `join`/`invite` do, plus a row in
+  the desktop's deep-link coverage. Status: **open**
+
+## F-318 — three skeleton composites announce NOTHING, and the fix landed at one of the two call sites (2026-08-25)
+
+- Location: `src/shared/ui/skeleton.tsx › DetailPaneSkeleton`, `› DetailDocSkeleton`,
+  `› TranscriptSkeleton`. The loading state that pays for it is
+  `apps/desktop-ui/src/pages/home/relationship-record.tsx › RelationshipRecord`.
+- Found during: guest-web-channel M4, correcting DESIGN-SYSTEM.md's skeleton row against the file.
+- Severity: **medium** — accessibility, on the desktop's primary agent surface.
+- **Measured 2026-08-25** (`grep -n 'role="status"\|aria-busy\|sr-only' src/shared/ui/skeleton.tsx`):
+  exactly TWO composites carry the trio — `› TwoPaneListSkeleton` and `› PageShellSkeleton`. The
+  other three carry none of it.
+- **Why that is SILENCE and not merely a missing label.** The shimmer is decorative and
+  `aria-hidden`, so a composite with no `role="status"` and no `sr-only` text contributes nothing to
+  the accessibility tree at all: a screen-reader user gets no signal that a load is in flight, and
+  none when it ends. The visual user sees a shimmer; the other user sees an empty pane that never
+  says anything.
+- **The live gap is the DESKTOP mount.** `relationship-record.tsx` returns
+  `<DetailPaneSkeleton><TranscriptSkeleton/></DetailPaneSkeleton>` with nothing around it.
+- ⚠ **THE GUEST WEB MOUNT HAS THE SAME SHAPE AND DOES NOT HAVE THE BUG**, which is the finding's real
+  content: `src/app/c/[workspaceId]/guest-channel.tsx › GuestChannel` wraps the identical pair in its
+  own `role="status"` / `aria-busy` / `sr-only` div, with a comment reasoning that the composite is
+  page-level. **A rule applied at one of two call sites is a rule that now lives nowhere** — the next
+  host copies whichever one it reads.
+- ⚠ **Do not resolve it by wrapping the other call site too.** A per-caller wrapper is the shape that
+  produced the asymmetry. The composites are page-level enough to carry the trio themselves, and
+  `TwoPaneListSkeleton` / `PageShellSkeleton` are the precedent for how (a `label` prop defaulting to
+  `"Loading"`), after which the guest page's local wrapper is deleted rather than duplicated.
+- **DESIGN-SYSTEM.md was the wrong side of this and was corrected in the same pass.** Its row claimed
+  *"Every one carries `role="status"` + `aria-busy` + an `sr-only` label"* — true of the two it was
+  written for, never of the other three. Per CLAUDE.md's precedence rule the doc was fixed and the
+  code left alone; this entry is the code half.
+- Proposed resolution: move the trio onto the three composites (or one shared internal wrapper).
+  Status: **open**
+
+## F-319 — the link-container claimer is a workspace ADMIN, so HARD delete of the channel and of any thread is reachable server-side (2026-08-25, FOR SAMUEL'S RE-RULE)
+
+- Location: `src/features/home/server/repository-containers.ts › insertContainerMember` (the row it
+  writes), `src/features/channels/server/service-shared.ts › canManageChannel`,
+  `src/features/channels/server/service-writes.ts › deleteChannel`,
+  `src/features/channels/server/service-tasks-delete.ts › assertMayDeleteThread`.
+- Found during: the M4 leak review, written into `docs/specs/guest-web-channel.plan.md` §*M4 leak
+  review (2026-08-25)*, which walked every guest-reachable endpoint. **That review found no exposure
+  outside the accepted set — this entry is about the WORDING of the acceptance, not a new hole.**
+- Severity: **question** — accepted for MVP, filed because the acceptance was granted against a
+  narrower description than what the code does.
+- **What was ruled.** R4 (Samuel, 2026-08-25): *accept for MVP + document*, on a two-person
+  trust argument, with the operator's ability to delete the channel as the mitigation. The ruling
+  text named **rename/archive**, thread delete/close, and minting a further link.
+- **What the code permits, measured 2026-08-25.** The bound claim inserts the claimer with
+  `role: "admin"`, so `canManageChannel` returns true through `isWorkspaceAdmin` regardless of what
+  any UI passes. A guest with a cookie session calling the API directly (`sessionOnly` gates do not
+  bite a human) succeeds at:
+  - `PATCH /api/channels/{id}` for all four managed header fields (`updateChannel`);
+  - **`DELETE /api/channels/{id}`, which for a NON-DIRECT channel is a HARD delete** —
+    `deleteChannel` branches `is_direct ? softDeleteChannel : hardDeleteChannel`, and a container
+    minted by "New channel" holds a PRIVATE NON-DIRECT channel (§4A), so it takes the hard arm;
+  - **`DELETE …/tasks/{taskId}` for ANY thread, not only their own** — `assertMayDeleteThread`
+    returns on `canManageChannel`;
+  - `POST|DELETE …/{id}/members`.
+- **One correction the other way, so the record is not simply "wider than stated".** *Minting a
+  further link* is NOT reachable while the relationship is intact: `service-writes.ts ›
+  mintContainerLink` 409s `LINK_CONTAINER_FULL` at two active members. **The CAP denies it, not the
+  role** — it becomes available only if the container drops back to one member, which is the
+  survivor's power by design (§4A).
+- ⚠ **THE UI NARROWING IS COSMETIC AND MUST NOT BE READ AS THE FENCE.** The guest mount omits the
+  `role` prop (least-privilege default) and passes `memberManagement: false` / `selfManagement: false`,
+  so none of this is on screen. The screen is not the boundary; the role is, and the role says admin.
+- **Why this is a finding rather than a line in the leak review.** The mitigation the ruling rested on
+  — *the operator can delete the channel* — reads differently once the same act is available to the
+  guest FIRST, and permanently (ENGINEERING §7, **DELETES ARE PERMANENT**; messages, members and
+  threads cascade). Samuel ruled on rename/archive; the destructive end of the range was measured
+  afterwards, and an acceptance is only as good as the description it was given.
+- **The two branches if it is re-ruled:** claim as `member` instead of `admin` (blast radius is §4A —
+  every other container power is role-shaped, though "any member may mint the link" is already ruled
+  role-free), or keep `admin` and fence the DELETE arm on the container's owner specifically.
+- Status: **open — awaiting Samuel.** Accepted for MVP in the meantime; do not narrow the claim role
+  without the ruling.
+
+## F-320 — a WINDOWLESS orchestrator cannot launch a VISIBLE agent: `launch_agent` needs a prompt, and there is neither a surface nor a queue (2026-08-25)
+
+- Location: `dopl-desktop-app/main/session-permissions.js › AUTO_DENY_MESSAGE` (the sentence),
+  `dopl-desktop-app/main/session-windowless.js › claimGate` (the branch), and the lane lists that
+  would have to admit the op — `dopl-desktop-app/main/session-own-outbound.js ›
+  OWN_CHANNEL_OUTBOUND_OPS` and `dopl-desktop-app/main/session-profiles.js › OWN_CHANNEL_READ_OPS`.
+- Found during: **this feature's own orchestration, 2026-08-25.** A windowless desktop-run
+  orchestrator session (`runtime=desktop-session`, no window surface) tried to put its workers in
+  visible windows and could not.
+- Severity: **major** (product) — an operator's explicit, stated intent has no path at all, and the
+  refusal is worded to stop the agent retrying, so it fails quietly and permanently.
+- **Verbatim, as the orchestrator received it:** *"This tool needs a permission prompt and this
+  session has no surface to show one on, so the call was refused automatically."*
+- **The mechanism is F-301's, one op over.** `dopl_channel(op="launch_agent")` is on no own-channel
+  lane, so it falls through to the Axis-A gate, and a windowless session answers a gate with `deny`.
+  No value of either axis reaches it: `bypass` cannot, because Axis A may never answer a message op;
+  `auto_both` cannot, because the op is not on the lane.
+- ⚠ **AND F-301'S FIX IS NOT AVAILABLE HERE, WHICH IS THE WHOLE REASON THIS IS A SEPARATE ENTRY.**
+  `create_thread` was admitted to the outbound lane by ruling, on the argument that it is own-channel
+  outbound CONTENT. `launch_agent` is not content — it starts a PROCESS on the operator's machine,
+  which is the exact thing INVARIANTS §11 gives its own separate consent (the local desktop toggle,
+  Samuel 2026-08-22). Reclassifying it onto the outbound lane would hand every windowless agent an
+  unprompted launch, which inverts that ruling rather than extending it.
+- **So the gap is a MISSING LANE, not a misclassification.** The refusal is synchronous and terminal;
+  nothing files the REQUEST for the operator to decide later — which is striking, because the feature
+  it is refusing already works that way one level down (`channel_launch_directives` is a mailbox the
+  operator's machine claims and decides, §11).
+- **What an operator has today, and both are workarounds.** Widen the session's tool posture by hand
+  from the agent view (the deny message itself says so), or fall back to in-session subagents — which
+  run invisibly inside the orchestrator and are precisely what the operator was trying not to get.
+- **Where a fix would live:** §11's desktop-session rules plus the launch-directive machinery. Every
+  piece exists (a directive row, an operator decision, a seven-word refusal vocabulary); what is
+  missing is a way for a SURFACELESS session's gate to become an operator's pending decision instead
+  of an immediate deny.
+- Proposed resolution: Samuel's call — a queued consent for gated ops on windowless sessions, or an
+  explicit per-session "may launch" posture set at launch time. Status: **open**
