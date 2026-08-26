@@ -45,6 +45,14 @@ const GATE_REASONS = [
   //                             `dopl_channel` is hard-denied on no profile at all — reporting
   //                             the bound as a profile deny would send an operator to a deny
   //                             list that does not contain it.
+  'container-audience', //       2026-08-26 (plan §4.4 B2): this session runs in a SHARED link
+  //                             container and the call named a DIFFERENT workspace. Its own code
+  //                             for the same reason `launch-depth-capped` has one — the tool is
+  //                             on no deny list, so `hard-denied` would send the operator to a
+  //                             setting that has nothing to do with it. ⚠ The refusal is about
+  //                             WHICH WORKSPACE, and this is the only code that says so. ⚠ IT
+  //                             NAMES A TRIPWIRE: Bash can issue the same call as plain HTTP and
+  //                             never reach this gate — see `session-audience.js`.
   // allow / preapproved (carried for the diag line, so "never landed" and "landed but not
   // covered" are distinguishable in the field without a source read)
   'profile-preapproved', //      shadowed via allowedTools; never actually reaches canUseTool
@@ -134,6 +142,19 @@ function makeGateReason(deps) {
     // is on no profile's deny list). Asked in this order so a hard-denied name can never be
     // narrated as a depth cap, which would be a bound the operator could not find.
     if (decision === 'deny') {
+      // ⚠ 2026-08-26: `deny` HAS THREE CAUSES NOW, AND THE ORDER MIRRORS `grantDecision`'S — which
+      // is this whole function's standing discipline, and which the first draft of this branch got
+      // WRONG. It asked the audience question first, so a HARD-DENIED admin tool that also named
+      // another workspace was narrated `container-audience`: both facts true, but the gate refused
+      // it at step 1 for a reason that has nothing to do with workspaces, and an operator sent to
+      // the audience story would go looking for a roster instead of a profile.
+      // ⚠ THE HARD DENY IS ASKED WITH THE GATE'S OWN `buildSessionToolConfig`, injected like every
+      // other predicate here — the explainer must not grow a second copy of the deny list.
+      const cfg = d.buildSessionToolConfig ? d.buildSessionToolConfig(a.profile) : null;
+      const hardDenied = !!cfg && cfg.disallowedTools.indexOf(d.canonicalDoplName(a.toolName)) !== -1;
+      if (!hardDenied && d.containerOnlyDenies && d.containerOnlyDenies(a, d.isDoplTool)) {
+        return 'container-audience';
+      }
       return channel && d.isOwnMachineLaunch(a.input, a.channelId) ? 'launch-depth-capped' : 'hard-denied';
     }
     if (decision === 'preapproved') return 'profile-preapproved';
@@ -170,4 +191,27 @@ function makeGateReason(deps) {
   };
 }
 
-module.exports = { GATE_REASONS, makeGateReason };
+/**
+ * `{ decision, reason }` — the verdict plus a `GATE_REASONS` code, or `null` for a verdict
+ * nothing can honestly explain.
+ *
+ * ⚠ IT MOVED HERE FROM `session-profiles.js` ON 2026-08-26, under the hard 500-line cap that file
+ * was sitting exactly on (§1). The seam is the one that file's own comment already named:
+ * MAKING a verdict and EXPLAINING one change on different clocks, and the explainer was already
+ * built outside the extracted profile table so an explanation could never move a gate.
+ *
+ * ⚠ IT TAKES `grantDecision` AS AN ARGUMENT RATHER THAN REQUIRING IT, and that is what keeps the
+ * two modules acyclic: `session-profiles.js` requires this file, so this file must not require it
+ * back. Same injection idiom `makeGateReason` already uses for its predicates, and the same
+ * guarantee — the explainer is handed the gate's OWN function, so it can never explain a verdict
+ * some second copy of the rules produced.
+ */
+function makeGrantDetail(grantDecision, predicates) {
+  const gateReason = makeGateReason(predicates);
+  return function grantDecisionDetail(args) {
+    const decision = grantDecision(args);
+    return { decision, reason: gateReason(args, decision) };
+  };
+}
+
+module.exports = { GATE_REASONS, makeGateReason, makeGrantDetail };

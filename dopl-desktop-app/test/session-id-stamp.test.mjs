@@ -280,7 +280,11 @@ test("buildSdkOptions stamps the assembled mcpServers with store.slotKey(s)", ()
   assert.match(opts, /withSessionStamp\(options\.mcpServers, store\.slotKey\(s\)\);/);
   // The builder literal two other suites source-scan is untouched, and the stamp is
   // applied AFTER it — stamping a not-yet-built object would be a silent no-op.
-  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId\),/);
+  // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child
+  // credential for a session spawned into a SHARED link container, '' for every other
+  // session. It is pinned INTO this literal rather than beside it because dropping the
+  // argument silently reverts every locked session to the operator's device token.
+  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   assert.ok(
     orderOf(opts, "mcpServers: buildMcpServers(", "withSessionStamp(", "buildSdkOptions"),
     "the entry must exist before it can be stamped"

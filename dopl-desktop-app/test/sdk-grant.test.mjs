@@ -56,6 +56,7 @@ const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
 // same precedent — `launch_agent` asks for a PROCESS rather than sending CONTENT, so it is its own
 // lane (both axes + a launch-depth bound) and not a fourth member of the outbound list.
 const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
+const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
@@ -64,6 +65,9 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
+  // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
+  // a fake would let the harness agree with itself while the shipped gate did something else.
+  "containerOnlyDenies", "isDoplToolName",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
@@ -71,7 +75,8 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   KB_OPS.isKnowledgeReadCall,
   OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
-  LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict);
+  LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
+  AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });
@@ -342,7 +347,11 @@ test("buildSdkOptions passes the SESSION's workspace, so every session query is 
   const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
   const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("async function startQuery("));
   assert.ok(opts.length > 0, "buildSdkOptions slice not found in session-query.js");
-  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId\),/);
+  // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child
+  // credential for a session spawned into a SHARED link container, '' for every other
+  // session. It is pinned INTO this literal rather than beside it because dropping the
+  // argument silently reverts every locked session to the operator's device token.
+  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   // A parked resume and a recreated shell assemble options through this SAME function
   // (session-park calls deps.buildSdkOptions), so they are pinned by construction.
   assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, getSdk, buildSdkOptions/);

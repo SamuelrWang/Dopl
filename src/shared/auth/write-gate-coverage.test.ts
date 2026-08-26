@@ -133,6 +133,12 @@ describe("H-3 write-gate coverage", () => {
         // AGENT LISTING AND EDITING TEMPLATES IS THE FEATURE. Narrowing this
         // route to `sessionOnly` wholesale would gate the thing it exists for.
         "agent-templates/[templateId]/route.ts",
+        // POST mints a CONTAINER-LOCKED child credential, DELETE revokes one
+        // (2026-08-26, plan §4.4 B1). Sharper than its sibling below, because
+        // the credential in question IS the audience ceiling's fence: a bearer
+        // that could reach POST would ask for a lock on somewhere else, and one
+        // that could reach DELETE would kill its own lock and re-run unlocked.
+        "auth/mcp-container-token/route.ts",
         // POST mints a 90-day device token, DELETE revokes one — an agent must
         // never bootstrap a fresh credential for itself, nor kill the one its
         // siblings depend on.

@@ -89,4 +89,14 @@ function canonicalDoplName(toolName) {
   return DOPL_SHORT_NAMES.indexOf(short) === -1 ? n : DOPL_TOOL_PREFIX + short;
 }
 
-module.exports = { mcpShortName, canonicalDoplName, DOPL_SHORT_NAMES, DOPL_TOOL_PREFIX };
+// IS THIS ONE OF OURS? — derived from `canonicalDoplName` rather than re-deriving the prefix
+// rule, so the two can never disagree about which names the Dopl vocabulary covers. A name the
+// canonicalizer rewrote, or one that already arrived canonical, is a Dopl tool; everything else
+// is a third party's and this predicate says so.
+// ⚠ Added 2026-08-26 for the audience belt (`session-audience.js`), which must not read a
+// `workspace` argument off a tool whose `workspace` means something else entirely.
+function isDoplToolName(toolName) {
+  return canonicalDoplName(toolName).indexOf(DOPL_TOOL_PREFIX) === 0;
+}
+
+module.exports = { mcpShortName, canonicalDoplName, isDoplToolName, DOPL_SHORT_NAMES, DOPL_TOOL_PREFIX };

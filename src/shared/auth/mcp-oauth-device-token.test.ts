@@ -295,6 +295,14 @@ describe("validateAccessToken vs a revoked row", () => {
       scopes: ["dopl.read", "dopl.write"],
       tokenId: "tok-1",
       credential: { kind: "oauth-app", label: null },
+      // 🔒 THE CONTAINER LOCK, and `null` is the answer for every ordinary
+      // credential (plan §4.4 B1, 2026-08-26). A row with no `workspace_id`
+      // must report the ABSENCE explicitly rather than omitting the key —
+      // `with-auth.ts` forwards this field verbatim as `apiKeyWorkspaceId`, and
+      // an omitted key and a null one read identically there today but would
+      // stop doing so the moment anything distinguishes "unlocked" from "the
+      // server did not say".
+      workspaceId: null,
     });
   });
 
@@ -313,6 +321,34 @@ describe("validateAccessToken vs a revoked row", () => {
     );
     expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
       credential: { kind: "device", label: "Dopl Desktop CLI (mbp.local)" },
+    });
+  });
+
+  /**
+   * 🔒 THE CONTAINER LOCK IS READ OFF THE ROW (2026-08-26, plan §4.4 B1). This is the FIRST hop
+   * of the fence — `with-auth.ts` forwards it as `apiKeyWorkspaceId` and
+   * `with-workspace-auth.ts` 403s a contradicting target — so a projection that drops the column
+   * makes every locked credential read as UNLOCKED, silently and everywhere at once.
+   *
+   * ⚠ THE POSITIVE CASE NEEDED ITS OWN ASSERTION. The `null` case is pinned above, and a
+   * mutation hardcoding `workspaceId: null` left that one green: "answers null for an unlocked
+   * row" is true of a function that answers null for EVERY row.
+   */
+  it("carries the CONTAINER LOCK when the row has one", async () => {
+    vi.mocked(supabaseAdmin).mockReturnValue(
+      makeReader({
+        id: "tok-1",
+        user_id: "user-9",
+        scopes: ["dopl.read"],
+        access_expires_at: future,
+        revoked_at: null,
+        client_id: DEVICE_CLIENT_ID,
+        client_name: "Dopl Desktop (container session)",
+        workspace_id: "ws-container",
+      }) as never
+    );
+    expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
+      workspaceId: "ws-container",
     });
   });
 

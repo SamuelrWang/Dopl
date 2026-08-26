@@ -93,6 +93,7 @@ const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
 // `launchLaneVerdict` off the module head, so they are injected here like everything else, and
 // the REAL implementations, so the block stays pinned to what ships.
 const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
+const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   isChannelTool } = new Function(
@@ -102,6 +103,9 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
+  // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
+  // a fake would let the harness agree with itself while the shipped gate did something else.
+  "containerOnlyDenies", "isDoplToolName",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool };`
@@ -110,7 +114,8 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   KB_OPS.isKnowledgeReadCall,
   OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
-  LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict);
+  LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
+  AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName);
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";

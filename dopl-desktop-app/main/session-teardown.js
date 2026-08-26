@@ -26,6 +26,7 @@ const sessionMetrics = require('./session-metrics'); // ...and what it cost, fro
 const sessionNarration = require('./session-narration');
 const sessionSummary = require('./session-summary');
 const { diag } = require('./diag');
+const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
 
 let deps = null;
 
@@ -67,6 +68,17 @@ function settle(s, outcome, keepWindow) {
   deps.denyPendingPermissions(s, 'Session ended');
   try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
   try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
+  // 🔒 GIVE THE CONTAINER CREDENTIAL BACK (plan §4.4 B1). This session's child token is locked to
+  // one workspace and exists only for this session; the row stays valid until its 24h TTL
+  // otherwise, and a live credential nobody is using is a credential somebody can use.
+  // ⚠ NOT AWAITED, AND THAT IS THE SAME DISCIPLINE THE `agentHistory.record` BLOCK BELOW STATES:
+  // `settle` is the ONE teardown every terminal reaches and a network call must never hold it
+  // open — the abort above has already stopped the child, so nothing is racing this. The helper
+  // never throws, clears the stamp synchronously even when the request fails, and the TTL is the
+  // backstop when it does. ⚠ PARK DELIBERATELY DOES NOT DO THIS: `resumeParked` re-enters
+  // `buildSdkOptions` on the SAME object, and a released credential would come back as a session
+  // that 401s on its first tool call with nothing to say why.
+  try { void sessionCredential.releaseContainerCredential(s, diag); } catch (_) { /* best effort */ }
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   store.saveRecord(deps.baseRecord(s)); // FIX #9: full record persists cap counters for a rehydrate
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);

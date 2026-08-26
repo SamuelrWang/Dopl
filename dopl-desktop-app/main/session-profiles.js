@@ -23,10 +23,11 @@
 // below and inject the tool-profiles constants, normalizeProfile, shaKey and the two
 // mcp-tool-names normalizers as parameters.
 
-const { makeGateReason, GATE_REASONS } = require('./session-gate-reason');
+const { makeGrantDetail, GATE_REASONS } = require('./session-gate-reason');
+const { containerOnlyDenies } = require('./session-audience'); // §2 SPLIT 2026-08-26: B2's belt
 const { makeGrantKeyFor, POST_GRANT, postFieldsOk } = require('./session-grant-keys');
 // Client-agnostic tool-name normalizer the whole table matches through.
-const { mcpShortName, canonicalDoplName } = require('./mcp-tool-names');
+const { mcpShortName, canonicalDoplName, isDoplToolName } = require('./mcp-tool-names');
 // OP-SCOPED KNOWLEDGE READS (2026-08-22, OQ-1). Injected into the extracted table by the two
 // harness tests, like `normalizeProfile`. The whole argument lives in that module's header.
 const { isKnowledgeReadCall } = require('./knowledge-ops');
@@ -402,6 +403,9 @@ function grantDecision(args) {
   //    not a deny list. Not openable by a task grant nor by `bypass` — which is why `bypass`
   //    is not permissionMode:bypass.
   if (cfg.disallowedTools.indexOf(name) !== -1) return 'deny';
+  // 1.5 THE AUDIENCE BELT (plan §4.4 B2) — ahead of the channel branch AND of `preApproved`,
+  //     which SHADOWS its tools past canUseTool entirely. ⚠ A TRIPWIRE; `session-audience.js`.
+  if (containerOnlyDenies(a, isDoplToolName)) return 'deny';
   // 2. ⚠ THE INVARIANT — a message op branches to AXIS B here and NEVER reaches Axis A below.
   //    No tool posture, `bypass` included, can send a message.
   if (isChannelTool(a.toolName)) {
@@ -450,7 +454,7 @@ function grantDecision(args) {
 // ⚠ Built OUTSIDE the extracted table so the block stays self-contained and grantDecision's
 // shape/ordering is byte-unchanged: an explanation must not be able to move a gate. Handed THIS
 // table's own predicates, so the explainer can never classify differently from the gate.
-const gateReason = makeGateReason({
+const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
@@ -458,13 +462,10 @@ const gateReason = makeGateReason({
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
   toolModeAllows, isKnowledgeReadCall,
+  // 2026-08-26 (B2): the SAME predicate the gate denies on, so the explainer cannot disagree
+  // with it about which refusal an operator is looking at.
+  containerOnlyDenies, isDoplTool: isDoplToolName, buildSessionToolConfig,
 });
-// { decision, reason } — reason is a GATE_REASONS code, or null for a verdict nothing can
-// honestly explain.
-function grantDecisionDetail(args) {
-  const decision = grantDecision(args);
-  return { decision, reason: gateReason(args, decision) };
-}
 
 module.exports = {
   buildSessionToolConfig, grantDecision, shortDoplName, isOwnChannelPost,

@@ -22,6 +22,7 @@ const sessionWindowless = require('./session-windowless');
 const { Notification } = require('electron');
 const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const { diag } = require('./diag');
+const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
 
 // ─── BEGIN SESSION-PARK-PURE (injectable; unit-tested via source extraction) ──────
 
@@ -127,6 +128,13 @@ async function startResumedConsumer(s) {
     return;
   }
   try {
+    // 🔒 THE CONTAINER LOCK (plan §4.4 B1) — the SECOND of the two query-start sites; the first
+    // is `session-query.js › startQuery`, whose comment carries the argument for why there are
+    // two. A resumed session almost always carries its stamp already (park keeps the credential
+    // on purpose: `resumeParked` works on the SAME object, and a released one would come back as
+    // a session that 401s on its first tool call). The case this site exists for is a WOKEN
+    // SPAWN-IDLE SHELL, which was registered without ever starting a query and so has none.
+    await sessionCredential.ensureContainerCredential(s, diag);
     const q = sdk.query({ prompt: s.pushIterator, options: deps.buildSdkOptions(s) });
     s.query = q;
     s.resuming = false;

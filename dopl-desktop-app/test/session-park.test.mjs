@@ -119,11 +119,16 @@ function harness(over = {}) {
   };
   const api = new Function(
     "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
-    "sessionWindowless", "diag",
+    "sessionWindowless", "diag", "sessionCredential",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
   )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
-    sessionWindowless, diag);
+    sessionWindowless, diag,
+    // 🔒 THE CONTAINER LOCK (plan §4.4 B1). Stubbed to a no-op mint: this harness is about the
+    // RESUME path, and the credential's own behaviour is pinned in
+    // `session-audience-ceiling.test.mjs`. What matters here is that the resume still assembles
+    // its options through the shared `buildSdkOptions` afterwards.
+    { ensureContainerCredential: async () => null, sessionBearer: () => "" });
   api.bind(deps);
   return { ...api, deps, sessions, calls, cfg, store };
 }

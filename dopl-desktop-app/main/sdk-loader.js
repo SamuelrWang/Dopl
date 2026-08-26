@@ -115,8 +115,17 @@ function buildSecretPathDenyRules() {
 // pin must match an existing membership, and a per-call `workspace=` still wins. ⚠ UUID only,
 // never a slug — two prod workspaces can share a slug. Omitted when there is no session
 // workspace.
-function buildMcpServers(doplToolsPolicy, workspaceId) {
-  const token = doplBearer();
+// 🔒 CONTAINER LOCK (plan §4.4 B1): `bearerOverride`, when present, REPLACES the device token
+// for this session — a child credential locked to one workspace, minted by
+// `session-credential.js` at spawn and revoked at settle. Everything else about the entry is
+// identical, and that is the point: the lock is not a header or a flag the agent could rewrite,
+// it is which credential the session was handed. `X-Workspace-Id` below stays a HINT that grants
+// nothing; the locked token is what REFUSES another workspace, server-side, in
+// `with-workspace-auth.ts`. An empty/absent override falls back to the device token, so every
+// unlocked session is byte-for-byte unchanged.
+function buildMcpServers(doplToolsPolicy, workspaceId, bearerOverride) {
+  const override = typeof bearerOverride === 'string' ? bearerOverride.trim() : '';
+  const token = override || doplBearer();
   if (!token) return {};
   const server = {
     type: 'http',

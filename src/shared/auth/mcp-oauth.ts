@@ -333,15 +333,28 @@ export async function revokeDeviceTokens(input: {
  *
  * ⚠ `credential` is DESCRIPTIVE only — nothing gates on it, and the label inside
  * is caller-supplied text (`mcp-credential.ts`).
+ *
+ * 🔒 ⚠ `workspaceId` IS THE OPPOSITE: IT IS THE ONE FIELD HERE THAT GATES.
+ * Non-null LOCKS this credential to that workspace; `shared/auth/mcp-container-token.ts`
+ * mints them and carries the whole argument. ⚠ It must stay in this SELECT —
+ * dropping the column makes every locked credential read as UNLOCKED, silently.
  */
 export async function validateAccessToken(
   token: string,
-): Promise<{ userId: string; scopes: string[]; tokenId: string; credential: McpCredential } | null> {
+): Promise<{
+  userId: string;
+  scopes: string[];
+  tokenId: string;
+  credential: McpCredential;
+  workspaceId: string | null;
+} | null> {
   if (!isOAuthAccessToken(token)) return null;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("mcp_tokens")
-    .select("id, user_id, scopes, access_expires_at, revoked_at, client_id, client_name")
+    .select(
+      "id, user_id, scopes, access_expires_at, revoked_at, client_id, client_name, workspace_id",
+    )
     .eq("access_token_hash", sha256(token))
     .maybeSingle();
   if (error || !data) return null;
@@ -362,7 +375,15 @@ export async function validateAccessToken(
   }
 
   const credential = describeCredential(data.client_id, data.client_name);
-  return { userId: data.user_id, scopes: data.scopes, tokenId: data.id, credential };
+  return {
+    userId: data.user_id,
+    scopes: data.scopes,
+    tokenId: data.id,
+    credential,
+    // ⚠ `?? null` = "no lock stated". NOT a fail-open: unlocked is the ordinary
+    // case, and the narrowing is only ever ADDED by a deliberate mint.
+    workspaceId: (data as { workspace_id?: string | null }).workspace_id ?? null,
+  };
 }
 
 /** Rotate a refresh token: revoke the presented one, issue a fresh pair. Reuse

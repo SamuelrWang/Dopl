@@ -192,7 +192,8 @@ function assembled(s) {
   const fake = new Function(
     "buildSessionToolConfig", "channelDirs", "buildSecretPathDenyRules", "buildMcpServers",
     "sessionAuth", "buildScrubbedEnv", "sessionOutbound", "io", "deps", "diag",
-    "withSessionStamp", "store", "resolveClaudeExecutable", "sessionModel", src
+    "withSessionStamp", "store", "resolveClaudeExecutable", "sessionModel",
+    "sessionCredential", src
   )(
     () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }),
     { sessionSpawnDir: () => "/tmp" },
@@ -207,7 +208,11 @@ function assembled(s) {
     () => {},
     { slotKey: () => "c1:t1" },
     () => null,
-    require("../main/session-model.js")
+    require("../main/session-model.js"),
+    // 🔒 THE CONTAINER LOCK (plan §4.4 B1) — an UNLOCKED session, which is what every assertion
+    // in this file is about. `buildSdkOptions` passes this bearer to `buildMcpServers` as a
+    // third argument; '' means "use the device token", i.e. the pre-ceiling behaviour.
+    { sessionBearer: () => "" }
   );
   return fake(s);
 }

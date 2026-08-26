@@ -316,6 +316,23 @@ describe("D: the parser is pinned against hand-measured floors", () => {
     ).toThrow(/did not parse/);
   });
 
+  it("a MIXED-wrapper file reads each method's OWN wrapper (2026-08-26)", () => {
+    // `auth/mcp-container-token/route.ts` is the tree's only one: POST resolves
+    // a workspace, DELETE must survive that workspace being deleted, so the two
+    // methods take different wrappers. Before this, DELETE answered `<unparsed>`
+    // because the FILE contained `withWorkspaceAuth` somewhere.
+    // ⚠ The `null` half is the load-bearing one, and it is safe for exactly one
+    // reason: a `withUserAuth` method has no workspace floor to place at guest.
+    const src = `
+      import { withUserAuth } from "@/shared/auth/with-auth";
+      import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+      export const POST = withWorkspaceAuth(async () => {}, { minRole: "admin" });
+      export const DELETE = withUserAuth(async () => {}, { sessionOnly: true });
+    `;
+    expect(workspaceFloor(src, "POST")).toBe("admin");
+    expect(workspaceFloor(src, "DELETE")).toBeNull();
+  });
+
   // ⚠ SYNTHETIC ON PURPOSE: none of these shapes exists in `src/app/api` today
   // (AST-verified 2026-08-26), which is why real sources cannot pin them — and
   // is how the gap survived.

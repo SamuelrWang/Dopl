@@ -23,6 +23,7 @@ const channelDirs = require('./channel-dirs');
 const sessionAuth = require('./session-auth');
 const sessionOutbound = require('./session-outbound');
 const sessionModel = require('./session-model'); // the frozen model enum + the context meter
+const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
 const { buildSessionToolConfig } = require('./session-profiles');
 const { resolveClaudeExecutable, buildMcpServers, withSessionStamp, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
 
@@ -43,7 +44,15 @@ function buildSdkOptions(s) {
     disallowedTools: cfg.disallowedTools.concat(buildSecretPathDenyRules()),
     // v2.x: buildMcpServers PINS this session's workspace (X-Workspace-Id), so a call that omits
     // `workspace=` auto-targets instead of being refused; a per-call `workspace=` still wins.
-    mcpServers: buildMcpServers(cfg.doplToolsPolicy, s.workspaceId),
+    // 🔒 CONTAINER LOCK (plan §4.4 B1): `sessionBearer(s)` is the child credential
+    // `session-credential.js` stamped on this session at spawn when its workspace is a SHARED
+    // link container, and '' for every other session. It REPLACES the device token, so a locked
+    // session — and anything it shells out to, which inherits the same credential — is refused
+    // every other workspace server-side. The `X-Workspace-Id` pin below it stays a hint that
+    // grants nothing; this is the part that actually refuses.
+    // ⚠ Read HERE rather than minted here: this function is synchronous and is re-entered by
+    // every spawn shape, park/resume included, so the credential must already be on `s`.
+    mcpServers: buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
     settingSources: [], // ALWAYS — the global allow-list can never shadow a gate
     permissionMode: 'default', // FIX M2: pin — bypass/acceptEdits/dontAsk short-circuit canUseTool
     // FIX M2: strip permission-mode env knobs, keep auth (sdk-loader). Q6: withStoredCredential adds
@@ -101,6 +110,17 @@ async function startQuery(s, sdk) {
   // sign-in button. Superseding FIRST makes a relaunch idempotent at this layer, whatever
   // the caller does; a cold launch is unaffected (abortInFlight is a no-op there).
   abortInFlight(s);
+  // 🔒 THE CONTAINER LOCK (plan §4.4 B1), minted before the options are assembled because
+  // `buildSdkOptions` is SYNCHRONOUS and reads the stamp off `s`.
+  // ⚠ THERE ARE EXACTLY TWO CALL SITES AND THAT IS NOT AN OVERSIGHT — this one and
+  // `session-park.js › startResumedConsumer`. They are the two places a query STARTS: a woken
+  // SPAWN-IDLE shell never passes through here (`startSession` returns before `startQuery`, and
+  // `wakeEffects` fires `resumeQuery` -> `resumeParked`), so a single site here would leave every
+  // woken shell on the unlocked device token. The call is IDEMPOTENT per session — an already
+  // stamped session mints nothing — so the pair is safe and a resume of a live session is free.
+  // ⚠ `session-audience-ceiling.test.mjs` pins BOTH sites by source scan: deleting either one
+  // is silent otherwise, and the half it deletes is a whole spawn shape.
+  await sessionCredential.ensureContainerCredential(s, diag);
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
   const q = sdk.query({ prompt: s.pushIterator, options: buildSdkOptions(s) });

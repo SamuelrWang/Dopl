@@ -62,7 +62,13 @@ export async function authenticateMcpRequest(
         auth: {
           credential: key,
           userId: tok.userId,
-          apiKeyWorkspaceId: null,
+          // 🔒 THE CONTAINER LOCK, and this line was a hardcoded `null` until
+          // 2026-08-26 because no credential could carry one (plan §4.4 B1;
+          // `with-auth.ts`'s docblock has the history). It must move with its
+          // sibling: the two auth families reach the same services, and a lock
+          // honoured on one path and dropped on the other is a fence with a
+          // door in it that nothing in either file would mention.
+          apiKeyWorkspaceId: tok.workspaceId,
           scopes: tok.scopes,
           credential_info: tok.credential,
         },

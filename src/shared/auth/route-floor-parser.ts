@@ -214,6 +214,32 @@ export function workspaceFloor(src: string, method: string): string | null {
     return code.includes("withWorkspaceAuth") ? UNPARSED : null;
   }
 
+  // ⚠ A MIXED-WRAPPER FILE: this METHOD is visibly `withUserAuth`, in a file
+  // whose OTHER method uses `withWorkspaceAuth`. Answer `null` — "no workspace
+  // floor here" — which is the literal truth about this method.
+  //
+  // ⚠ ADDED 2026-08-26, and it is the one branch in this file that makes the
+  // parser answer LESS rather than more. That direction deserves the argument:
+  // it cannot make anything look open that is not, because it fires ONLY on an
+  // explicit `= withUserAuth(` for the very method being asked about, and a
+  // `withUserAuth` route genuinely has no workspace `minRole` to place at
+  // `guest`. What it removes is a FALSE ALARM, not a check — before it, the
+  // fall-through below read the file's OTHER export's wrapper and cried
+  // `<unparsed>`.
+  //
+  // The file that produced it is `auth/mcp-container-token/route.ts` (plan §4.4
+  // B1): POST resolves a workspace so it takes `withWorkspaceAuth`, while DELETE
+  // must keep working when that workspace has been DELETED out from under a live
+  // session, so it takes `withUserAuth`. Measured 2026-08-26, it is the only
+  // mixed-wrapper route file in the tree — re-derive rather than trusting that:
+  //   for f in $(find src/app/api -name route.ts); do grep -q withWorkspaceAuth
+  //   "$f" && grep -qE 'export const (GET|POST|PUT|PATCH|DELETE) = withUserAuth'
+  //   "$f" && echo "$f"; done
+  const userAuthed = new RegExp(
+    `export\\s+const\\s+${method}\\s*=\\s*withUserAuth\\s*\\(`
+  ).test(code);
+  if (userAuthed) return null;
+
   // Exported, and this file DOES use the wrapper, but not in a shape above —
   // an assign-then-export, a function declaration, or a local helper composing
   // it. Say so rather than answering `null`, which reads as "no workspace floor

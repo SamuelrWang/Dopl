@@ -136,7 +136,7 @@ function grantArgs(s, toolName, input) {
   return {
     profile: s.profile,
     toolName: toolName,
-    input: input,
+    input: input, workspaceId: s.workspaceId, audience: s.audience || null, // B2's belt (plan §4.4): the audience is STAMPED AT SPAWN by session-credential.js, off the roster this machine already reads, and is null for every unlocked session
     channelId: s.channelId, launchDepth: s.launchDepth, // ...and F-320's RECURSION BOUND, stamped at spawn: ABSENT READS AS THE CAP (session-own-launch.js), so no lane opens it by forgetting to pass one
     allowForTask: st.allowForTask || [],
     // AXIS A — never consulted for a dopl_channel call. ⚠ FLOORED AT `auto` ON A WINDOWLESS

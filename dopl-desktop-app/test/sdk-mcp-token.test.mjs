@@ -67,7 +67,14 @@ test("C1: buildMcpServers reads NO file at all — the whole loader is fs-free",
   assert.ok(!/require\('fs'\)/.test(LOADER), "sdk-loader must not require fs");
   assert.ok(!/mcp-spawn\.json/.test(MCP_BLOCK), "no spawn-config path in the builder");
   assert.ok(!/readFileSync/.test(LOADER), "no file read on the session path");
-  assert.match(MCP_BLOCK, /const token = doplBearer\(\);/, "the token comes from the safeStorage accessor");
+  // 🔒 THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) widened this line: a session spawned into a
+  // SHARED link container presents a CHILD credential locked to that workspace, and every other
+  // session falls back to the device token exactly as before. What this assertion still pins is
+  // the property it always pinned — **the fallback is the safeStorage accessor, never a file** —
+  // and the override rides in as an ARGUMENT from `buildSdkOptions`, so it cannot be a disk read
+  // either. `session-audience-ceiling.test.mjs` pins the override's own behaviour.
+  assert.match(MCP_BLOCK, /const token = override \|\| doplBearer\(\);/, "the fallback is the safeStorage accessor");
+  assert.match(MCP_BLOCK, /const override = typeof bearerOverride === 'string'/, "the lock arrives as an argument, never off disk");
 });
 
 test("C1: no token (pre-sign-in) yields NO server entry, exactly as a missing file did", () => {

@@ -100,10 +100,27 @@ async function runAndLog5xx(
 /**
  * Injects the authenticated user's ID into the handler.
  *
- * - OAuth-token (remote MCP): token's user_id. `apiKeyWorkspaceId` always
- *   undefined — OAuth callers target a workspace via `x-workspace-id` header
- *   or the per-call `workspace=` arg.
+ * - OAuth-token (remote MCP): token's user_id, and — since 2026-08-26 — the
+ *   token's own `workspace_id` as `apiKeyWorkspaceId`.
  * - Session: user.id from the Supabase session.
+ *
+ * 🔒 ⚠ `apiKeyWorkspaceId` HAS A PRODUCER AGAIN, AND THIS IS IT. This docblock
+ * used to say it was *"always undefined"*, and it was: the `api_keys` table it
+ * was written for was dropped by `20260609000000_drop_api_key_auth.sql` and
+ * INVARIANTS §4 recorded the whole chain as "dead scaffolding; preserved". What
+ * revived it is the CONTAINER-LOCKED CHILD CREDENTIAL (plan §4.4 B1): the
+ * desktop mints a token carrying `mcp_tokens.workspace_id` for a session
+ * spawned into a SHARED link container, and this line is what makes the lock
+ * reach `with-workspace-auth`'s 403.
+ *
+ * ⚠ SO THE M-10 GATES THAT READ IT ARE NO LONGER DEAD EITHER, and there are
+ * more of them than this file: `knowledge/server/service-shared.ts › canSeeBase`
+ * (private bases are invisible to a workspace-scoped key), the same predicate in
+ * chats, skills and agent-templates, and the `fromWorkspaceKey` branches in the
+ * knowledge and skill write services. They all start biting for these tokens
+ * together. That is intended — a credential a PEER's presence caused to exist
+ * should not be able to read its operator's private drafts — but it is a
+ * behaviour change on every one of those paths, not just on workspace targeting.
  */
 export function withUserAuth(
   handler: (
@@ -230,6 +247,8 @@ export function withUserAuth(
             handler(request, {
               userId: tok.userId,
               agentTokenId: tok.tokenId,
+              // 🔒 THE CONTAINER LOCK. `null` for every ordinary credential.
+              apiKeyWorkspaceId: tok.workspaceId,
               params: resolvedParams,
             }),
           {
