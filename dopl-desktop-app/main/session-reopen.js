@@ -111,6 +111,10 @@ function listLiveSessions() {
       sessionId: s.sessionId,
       key: s.key,
       channelId: s.channelId || null,
+      // ⚠ ADDED 2026-08-26 for RULING 5 (`session-park-on-claim.js`), which has to select the
+      // sessions belonging to ONE container and had no other way to ask. The projection rule is
+      // unchanged: a field, not a handle.
+      workspaceId: s.workspaceId || null,
       taskId: s.taskId || '',
       // 2026-08-21: with N agents per thread, (channel, thread) no longer identifies a row.
       agentId: s.agentId || null,

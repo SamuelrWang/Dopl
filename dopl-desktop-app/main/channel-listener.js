@@ -32,7 +32,7 @@ const targeting = require('./targeting');
 // Per-message dispatch (⚠ the three session-window routes are GONE, classify, and the three
 // verdict outcomes) lives in listener-messages.js — extracted at the 500-line cap.
 const messages = require('./listener-messages');
-const sessionEngine = require('./session-engine');
+const sessionEngine = require('./session-engine'); const parkOnClaim = require('./session-park-on-claim'); // ...and RULING 5 (plan §4.5)
 const realtime = require('./realtime');
 const heal = require('./listener-heal');
 const { LISTENER, REALTIME } = require('./config');
@@ -266,7 +266,7 @@ async function reconcileInner() {
   // FIX S8: the EMPTY set too. `if (wsIds.length)` kept the last non-empty set forever for
   // an operator who left every workspace, so shouldReapplyWorkspaces re-subscribed push to
   // them every 5 minutes in perpetuity. A successful enumeration of nothing is an ANSWER.
-  lastGoodWorkspaceIds = wsIds; // the want=0 repair source above
+  lastGoodWorkspaceIds = wsIds; parkOnClaim.noteWorkspaces(workspaces, diag); // ...and RULING 5: a container that gained a PEER stops its live sessions
   presence.setWorkspaces(wsIds);
   // Push: refresh the WS JWT (else ~1h expiry silently kills push) + resubscribe.
   if (REALTIME.ENABLED) { realtime.refreshAuth(); realtime.setWorkspaces(wsIds); }
