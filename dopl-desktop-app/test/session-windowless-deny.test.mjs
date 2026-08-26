@@ -37,21 +37,32 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-windowless.js"), "utf8");
 
-function load() {
+function load(consentOver = {}) {
   const notices = [];
   const diags = [];
+  // ⚠ RECORDED, not just stubbed (2026-08-24): the create_thread ruling put a SECOND op on the
+  // outbound lane, so what the bridge WRITES onto the consent row is now a thing two shapes
+  // share and a thing a test can watch drift.
+  const rows = [];
+  const consent = {
+    createConsentRequest: async (workspaceId, row) => { rows.push({ workspaceId, ...row }); return null; },
+    notifyOutbound: () => {},
+    submitDecision: async () => {},
+    pollStatus: async () => null,
+    ...consentOver,
+  };
   const stubRequire = (id) => {
     if (id === "./channel-post") {
       return { notifyLocal: (title, body) => notices.push({ title, body }) };
     }
-    if (id === "./consent") return { createConsentRequest: async () => null, notifyOutbound: () => {}, submitDecision: async () => {}, pollStatus: async () => null };
+    if (id === "./consent") return consent;
     if (id === "./targeting") return { openChannelForEntry: () => {} };
     if (id === "./diag") return { diag: (...p) => diags.push(p.join(" ")) };
     throw new Error(`unexpected require: ${id}`);
   };
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);
-  return { ...mod.exports, notices, diags };
+  return { ...mod.exports, notices, diags, rows };
 }
 
 /** A windowless session with one pending permission, as the engine holds it. */
@@ -260,4 +271,61 @@ test("the OUTBOUND gate is still exempt from all of this — it has a real decis
   }
   assert.deepEqual(m.notices, [], "it bridges to a consent row; it was never a denial");
   assert.equal(s.notifiedDenials, undefined, "and it does not even touch the denial memory");
+});
+
+// ── 3. THE ROW A HELD CREATE_THREAD RAISES (2026-08-24, Samuel's ruling) ────────────
+//
+// ⚠ THE RULING IS ONLY REAL IF THE BRIDGE TOLERATES THE NEW HOLD. `create_thread` now rides the
+// Axis-B outbound lane, so an ask-posture gate reaches `session-io.js` as an `outbound_gate` and
+// lands HERE. `bridgeOutbound` keys the row on `s.lastInboundSeq` and reads `payload.text` — it
+// never looks at the op — so a thread open must produce the SAME decidable row a post does. If
+// it did not, the ruling would have replaced an auto-deny with a row nobody can answer, which is
+// strictly worse: a denied call at least tells the agent to stop.
+
+test("BRIDGE: a held create_thread raises the same decidable outbound row a post does", async () => {
+  const m = load();
+  const s = session({ lastInboundSeq: 412 });
+  const held = { type: "outbound_gate", requestId: "req-1", text: "Can you take the listener work?" };
+  assert.equal(m.claimGate(s, held, () => {}), true, "claimed — never denied");
+  await new Promise((r) => setImmediate(r));
+  assert.equal(m.rows.length, 1, "exactly one row, as for a post");
+  assert.deepEqual(m.rows[0], {
+    workspaceId: "ws-1",
+    channelId: "chan-1",
+    kind: "outbound",
+    // ⚠ THE SEQ JOIN IS WHAT PUTS THE SEND BOX ON THE THREAD (view-model-requested's
+    // pendingOutboundByThread). A thread open held on a session that has taken an inbound turn
+    // must carry it exactly as a reply does, or the operator can only answer from the Inbox.
+    messageSeq: 412,
+    summary: 'Reply from your agent in "Website"',
+    bodyPreview: held.text,
+    proposedReply: held.text,
+  });
+  assert.deepEqual(m.notices, [], "and it is not a denial, so it raises no denial notice");
+});
+
+test("BRIDGE: with no inbound turn yet, the row is seq-less and STILL decidable", async () => {
+  // ⚠ THE COMMON SHAPE FOR A THREAD OPEN, and the reason this case is pinned separately: the op
+  // an agent uses to START an exchange usually runs BEFORE any peer message exists, so
+  // `lastInboundSeq` is absent where a reply's never is. A NULL seq is unconstrained (§6) and
+  // the row stays answerable from the notification and the Inbox list.
+  const m = load();
+  const s = session();
+  m.claimGate(s, { type: "outbound_gate", requestId: "req-1", text: "the request" }, () => {});
+  await new Promise((r) => setImmediate(r));
+  assert.equal(m.rows.length, 1);
+  assert.equal(m.rows[0].messageSeq, undefined, "absent, not zero — zero is a real seq");
+  assert.equal(m.rows[0].kind, "outbound");
+});
+
+test("BRIDGE: a row that cannot be created FAILS CLOSED — the open is denied, loudly", async () => {
+  // Unchanged by the ruling and re-pinned under it: no row means no surface can ever approve
+  // this, and a hold nobody can answer is the failure the whole bridge exists to avoid.
+  const m = load({ createConsentRequest: async () => null });
+  const s = session();
+  const decisions = [];
+  m.claimGate(s, { type: "outbound_gate", requestId: "req-1", text: "x" }, (rid, d) => decisions.push([rid, d]));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(decisions, [["req-1", "deny"]]);
+  assert.ok(m.diags.some((d) => d.includes("consent row create failed")));
 });

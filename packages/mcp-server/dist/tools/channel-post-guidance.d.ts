@@ -63,7 +63,7 @@ export declare function resolvedMentionCount(message: ChannelMessage): number;
  * resolves to nobody, and without this the agent believes it escalated.
  *
  * ⚠ THE ZERO BRANCH NAMES THE CAUSES IT ACTUALLY HAS, and it under-promises at
- * the end. Four things make the server resolve an `@…` to nobody, and this
+ * the end. Five things make the server resolve an `@…` to nobody, and this
  * package can distinguish none of them — it cannot see the roster and cannot see
  * the body's markdown structure the way the write path does:
  *   1. THE HANDLE IS IN CODE. A backticked or fenced `@handle` is quoted text
@@ -76,6 +76,17 @@ export declare function resolvedMentionCount(message: ChannelMessage): number;
  *      workspace member who is not in the room resolves to nobody.
  *   4. AMBIGUITY FAILS CLOSED. A handle two members both answer to resolves to
  *      neither rather than being guessed.
+ *   5. THE HANDLE WAS AN AGENT ID (2026-08-24). Mentions resolve against the
+ *      channel's HUMAN roster (`lib/mentions.ts` over `listChannelMembers`), so
+ *      an agent id matches nothing and never can. ⚠ IT IS ADDED BECAUSE BOTH
+ *      SIDES OF A LIVE TWO-AGENT TEST HIT IT INDEPENDENTLY, and the copy above
+ *      sent them to `op="members"` to check a spelling that was never going to
+ *      be on that list. `@<agentid>` in a body is the WAKE the `launch_agent`
+ *      bullet teaches — a real, working, DIFFERENT mechanism — so this cause is
+ *      the one where the agent did the right thing and read the wrong report.
+ *      ⚠ It carries NO roster remedy on purpose: the remedy sentence names
+ *      (2), (3) and (4), and pointing this one at the member list is exactly
+ *      the wrong turn that made it worth naming.
  *
  * ⚠ SELF-TAGGING IS NO LONGER A CAUSE, and the removal is the point. The server
  * used to drop the AUTHOR unconditionally, so an agent tagging its own operator

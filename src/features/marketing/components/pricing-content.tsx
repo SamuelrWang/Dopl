@@ -153,7 +153,10 @@ export function PricingContent() {
       <div className="lp-pricing-head">
         <h1 className="lp-pricing-title">Pricing</h1>
         <p className="lp-pricing-sub">
-          Start free. Go Pro for $5.99, or bring your team at $7.99 a seat.
+          Download the app to get started for free.
+        </p>
+        <p className="lp-pricing-sub">
+          No credit card required. No commitments, cancel anytime.
         </p>
       </div>
 

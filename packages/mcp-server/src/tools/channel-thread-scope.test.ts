@@ -148,6 +148,29 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(text).not.toMatch(/op="await"[^)]*thread/);
   });
 
+  it("the `since` PARAM PROSE teaches the same rule, so the two meet where an agent looks", async () => {
+    // ⚠ A JOIN, not a second prose pin (2026-08-24). The no-cursor rule lived
+    // ONLY in this result line, which an agent reads AFTER it has already taken
+    // a thread-scoped page — and by then the cheapest-looking next move is to
+    // reuse the seqs it can see on the message lines. The rule now also sits on
+    // the param the agent is filling in when it decides what `since` to pass.
+    // If either end is deleted, the other becomes a lonely claim; this fails.
+    const { CHANNEL_INPUT_SHAPE } = await import("./channel-schema");
+    const since = CHANNEL_INPUT_SHAPE.since.description ?? "";
+    expect(since).toContain("THREAD-SCOPED read");
+    expect(since).toContain("offers NO cursor at all");
+    expect(since).toContain("UNSCOPED read");
+
+    const text = (
+      await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
+    ).content[0].text;
+    expect(text).toContain("NO CURSOR FROM THIS READ");
+    // ⚠ …and the param must not invent a REMEDY the result does not offer. Both
+    // ends say the same thing: drop the filter and read the channel unscoped.
+    expect(text).toContain("drop `thread`");
+    expect(since).toContain("drop `thread`");
+  });
+
   it("costs no extra round-trip — the channel head is never fetched", async () => {
     // With no number to offer there is no extra read: one call, one query.
     const readChannelMessages = vi.fn<ReadSpy>();

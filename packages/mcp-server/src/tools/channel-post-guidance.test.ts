@@ -455,40 +455,11 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
 });
 
 /**
- * THE ZERO-TAG DIAGNOSTIC, after the self-tag rule changed (2026-08-22).
- * The copy blamed spelling and an old server; the causes it actually has are
- * code, spelling, non-membership and contested handles — and self-tagging
- * stopped being one of them.
+ * ⚠ THE ZERO-TAG DIAGNOSTIC MOVED TO `channel-zero-tag.test.ts` (2026-08-24).
+ * This file measured 494 of the 500-line cap and the fifth zero-tag cause —
+ * "you tagged an agent id", which both sides of a live two-agent test hit —
+ * needed its own case with the incident attached. The seam is real rather than
+ * arithmetic: everything left here drives `opPost` / `opCreateThread` and
+ * asserts what a WRITE leaves in the agent's context; that file asserts the
+ * COPY of one exported string builder and imports nothing else.
  */
-describe("the zero-tag line names the causes it actually has", () => {
-  const zero = () => tagOutcomeNote("chan-1", 0);
-
-  it("leads with CODE — the cause an agent hits without noticing", () => {
-    expect(zero()).toContain("THE HANDLE WAS IN CODE");
-    expect(zero()).toContain("working as intended");
-  });
-
-  it("still names spelling, and now names the two the roster explains", () => {
-    expect(zero()).toContain("SPELLING");
-    expect(zero()).toContain("THEY ARE NOT IN THIS CHANNEL");
-    expect(zero()).toContain("TWO MEMBERS ANSWER TO IT");
-    expect(zero()).toContain('op="members"');
-  });
-
-  it("does NOT tell an agent it may have tagged itself", () => {
-    // ⚠ An agent's tag at its OWN operator is now KEPT (the escalation path,
-    // `server/service-writes-metadata-mentions.ts`). Naming it as a cause here
-    // would talk the agent out of the one thing that works.
-    expect(zero().toLowerCase()).not.toContain("yourself");
-    expect(zero().toLowerCase()).not.toContain("your own");
-  });
-
-  it("keeps the old-server caveat, and keeps it LAST", () => {
-    // INVARIANTS §13: an old server that stamps nothing is indistinguishable
-    // from here, so the line may not assert a delivery failure it cannot prove.
-    expect(zero()).toContain("looks identical from here");
-    expect(zero().indexOf("looks identical from here")).toBeGreaterThan(
-      zero().indexOf("THE HANDLE WAS IN CODE"),
-    );
-  });
-});

@@ -43,6 +43,11 @@ const GATE_REASONS = [
   'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
   'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
   //                             sibling `propose_close` went with thread closing, Phase 4)
+  'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
+  //                             own-channel `create_thread`. ITS OWN CODE, for the reason the
+  //                             marker has one: the question an audit asks is "what left this
+  //                             machine with no click?", and "the agent opened an exchange with
+  //                             a member" is not the same answer as "the agent logged a step".
   'tool-mode', //                AXIS A: the current toolMode covers this tool
   'knowledge-read-op', //        2026-08-22 (OQ-1): an OP-SCOPED `dopl_kb` READ. Axis A does NOT
   //                             cover the tool (it is a write tool), the CALL is a read, and
@@ -72,16 +77,20 @@ function makeGateReason(deps) {
     // 'channel-op-approval-required' ("message approval covers this channel's messages, not
     // this operation") became FALSE for it the moment the axis started covering it. (Its
     // sibling `propose_close` was on this branch until thread closing, Phase 4, 2026-08-18.)
-    if (d.isOwnChannelMarker(a.input, a.channelId)) return 'message-approval-required';
+    // ⚠ AND `create_thread` JOINED IT ON 2026-08-24 (Samuel's ruling) — `isOwnChannelOutbound`
+    // is the union, so the GATE code is shared even though the ALLOW codes are not. It stops on
+    // the same fact ("your outbound setting is not auto"), and the operator's fix is identical.
+    if (d.isOwnChannelOutbound(a.input, a.channelId)) return 'message-approval-required';
     const op = a.input && a.input.op;
     // A SLUG lands here too, and that is the single most confusing gate in the product: the
     // agent addressed its own channel by name, isOwnChannelPost compares against the ID, and the
     // safe classification is "another channel". The renderer's copy names the fix (use the id).
-    // M4: a marker op that got past isOwnChannelMarker named ANOTHER channel — most often the
-    // session's own channel written as a SLUG. It shares the post code deliberately: the fact
-    // and the operator's fix are identical ("address your own channel by id"), and a code the
-    // operator cannot act on differently is a code that should not exist.
-    if (op === 'post' || (d.OWN_CHANNEL_MARKER_OPS || []).indexOf(op) !== -1) return 'cross-channel-post';
+    // M4: an OUTBOUND op that got past isOwnChannelOutbound named ANOTHER channel — most often
+    // the session's own channel written as a SLUG. It shares the post code deliberately: the
+    // fact and the operator's fix are identical ("address your own channel by id"), and a code
+    // the operator cannot act on differently is a code that should not exist. (2026-08-24: the
+    // list this reads is the UNION, so a slug-addressed `create_thread` lands here too.)
+    if (op === 'post' || (d.OWN_CHANNEL_OUTBOUND_OPS || []).indexOf(op) !== -1) return 'cross-channel-post';
     // M3: a READ op that got here named a channel this session is not bound to (or a slug),
     // which is a DIFFERENT fact from "reads are never auto-run" and now says so.
     if ((d.OWN_CHANNEL_READ_OPS || []).indexOf(op) !== -1) return 'cross-channel-read';
@@ -120,6 +129,10 @@ function makeGateReason(deps) {
       // M4: a marker keeps its OWN code on the allow side, where the gate codes were merged.
       // The question this line answers in an audit is "what left this machine with no click?",
       // and "the agent proposed a close" is not the same answer as "the agent sent a message".
+      // ⚠ 2026-08-24: `create_thread` rides the same lane and takes the SAME treatment — its
+      // own code, asked FIRST because the two op sets are disjoint and neither may absorb the
+      // other's audit line.
+      if (d.isOwnChannelThreadOpen(a.input, a.channelId)) return 'auto-outbound-thread-open';
       if (d.isOwnChannelMarker(a.input, a.channelId)) return 'auto-outbound-marker';
       return 'auto-outbound';
     }

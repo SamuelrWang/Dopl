@@ -159,6 +159,13 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="post": optional JSON object of structured fields for task_* events (e.g. {taskId, durationMs, refs}).',
     ),
+  // ⚠ THE TWO ROUTES DEDUPE OVER DIFFERENT KEYS, AND THE DESCRIBE SAYS SO —
+  // `channel_messages` is unique on `(channel_id, client_msg_id, author_user_id)`
+  // (`20260822120000_channel_messages_author_scoped_idempotency.sql`) while
+  // `channel_tasks` is unique on `(channel_id, client_msg_id)`
+  // (`20260729032037_channel_tasks_client_msg_id.sql`, still the live index).
+  // One sentence covering both would have to be the WEAKER of the two, and the
+  // weaker one is wrong in the direction that costs a duplicate.
   client_msg_id: z
     .string()
     // ⚠ `.min(1)` mirrors the route — a blank idempotency key is not a key, and
@@ -167,8 +174,17 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="post" / op="create_thread": optional idempotency key — re-sending the same op with the same id will not create a duplicate (a repeat create_thread returns the already-created thread instead of opening a second). Use it whenever a retry is possible; any stable string of your own is fine.',
+      'op="post" / op="create_thread": optional idempotency key. For op="post" the dedupe is PER-AUTHOR: re-sending the same op with the same id FROM THE SAME ACCOUNT will not create a duplicate, and two different members may use the same id — both messages post, and neither suppresses the other. For op="create_thread" it is wider: the id is unique per CHANNEL whoever sent it, so a repeat returns the already-created thread instead of opening a second, and a key another member already used in this channel hands you back THEIR thread with your body posted nowhere. Use it whenever a retry is possible; any stable string of your own is fine, and one you namespaced to yourself is safest.',
     ),
+  // ⚠ THE PROMISE IS ABOUT ORDER *WITHIN* THE CALL, NOT ABOUT PRECEDENCE OVER
+  // EVERYTHING ELSE (softened 2026-08-24). It read "rejected here, before the
+  // call is made", which claimed this bound is the FIRST thing anything checks.
+  // It is not: a desktop agent session runs `create_thread` through its own
+  // permission gate first (`dopl-desktop-app/main/session-profiles.js ›
+  // grantDecision`), so a held or refused call never reaches zod at all and the
+  // agent gets a permission answer where the copy promised a title answer. What
+  // IS true, and is all this can honestly say, is that once the call is allowed
+  // to run the bound is enforced client-side before anything crosses the wire.
   title: z
     .string()
     .trim()
@@ -178,7 +194,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="create_thread" (required): the thread title (1-200 chars) — a short header for the exchange. A longer title is rejected here, before the call is made; shorten it rather than retrying.',
+      'op="create_thread" (required): the thread title (1-200 chars) — a short header for the exchange, not a description. When the call is permitted to run, the bound is checked before anything goes on the wire, so an over-length title costs nothing and nothing is sent — shorten it rather than resending it unchanged.',
     ),
   mode: z
     .enum(["interactive", "autonomous"])
@@ -196,7 +212,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel).',
+      'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). ⚠ For get_thread this returns the thread\'s METADATA ONLY — title, mode, the two parties, timestamps — and NO message bodies; to read what was said, use op="read" with thread=<id>. op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel).',
     ),
   // ⚠ `outcome` ("completed" | "failed") was a param here, required by
   // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
@@ -209,7 +225,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .min(0)
     .optional()
     .describe(
-      'op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is workspace-global, which is what lets ONE cursor cover every channel at once when you omit `channel`.',
+      'op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is workspace-global, which is what lets ONE cursor cover every channel at once when you omit `channel`. ⚠ WHERE TO GET ONE, because there is a page that deliberately will not give you one: a THREAD-SCOPED read (op="read" with `thread`) offers NO cursor at all and says so — it filtered other exchanges out, and `await` is channel-wide with a strict "greater than", so a seq taken off that page would permanently skip every message the filter hid. Establish the cursor from an UNSCOPED read (drop `thread`) and carry that page\'s highest seq.',
     ),
   goal: z
     .string()

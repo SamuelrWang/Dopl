@@ -79,18 +79,31 @@ const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
 // `dopl_channel`, reading `isKnowledgeReadCall` off the module head. Injected like
 // makeGrantKeyFor, and the REAL implementation, so the block stays pinned to what ships.
 const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
+// 2026-08-24 (Samuel's create_thread ruling): the OWN-CHANNEL OUTBOUND OPS BESIDE THE POST were
+// §2-SPLIT into main/session-own-outbound.js — session-profiles.js measured 496 of the 500-line
+// cap and could not carry the ruling's argument beside the list it admits to. The block reads
+// them off the module head, so they are injected here exactly like `isKnowledgeReadCall`, and
+// the REAL implementations, so the block stays pinned to what ships.
+// ⚠ `isOwnChannelMarker` / `OWN_CHANNEL_MARKER_OPS` are RE-EXPORTED from the injected module
+// rather than returned out of the block, which is why the destructure below shrank.
+const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
-  isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = new Function(
+  isChannelTool } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
+  "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
+  "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
-            isChannelTool, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS };`
+            isChannelTool };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
-  KB_OPS.isKnowledgeReadCall);
+  KB_OPS.isKnowledgeReadCall,
+  OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
+  OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound);
+const { isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";
 // The work tools that were live-gated under `full` even when the rest of DENIED_BUILTINS was

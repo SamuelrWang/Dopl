@@ -37,7 +37,7 @@
 // dependency-free (session-profiles only, which is crypto + tool-profiles) so the truth table
 // drives the real shipped code instead of a slice.
 
-const { isOwnChannelPost, isChannelTool } = require('./session-profiles');
+const { isOwnChannelPost, isChannelTool, isOwnChannelThreadOpen } = require('./session-profiles');
 
 // ─── BEGIN SESSION-IO-PURE (pure; unit-tested via source extraction) ──────────
 //
@@ -53,6 +53,31 @@ function isOutboundPost(name, input, sessionChannelId) {
   return isChannelTool(name) && isOwnChannelPost(input, sessionChannelId);
 }
 // ─── END SESSION-IO-PURE ──────────────────────────────────────────────────────
+
+// ── THE OUTBOUND CONSENT SHAPE (2026-08-24, Samuel's create_thread ruling) ────
+//
+// WHICH GATED `dopl_channel` CALLS RAISE THE OUTBOUND PAYLOAD (`outbound_gate`) INSTEAD OF THE
+// DOCK'S `permission_request`. On a WINDOWLESS session that choice is the whole decision:
+// `session-windowless.js › claimGate` BRIDGES an `outbound_gate` to a consent row plus a
+// notification, and DENIES a `permission_request` outright because there is no surface to ask
+// on. So the payload is the difference between "the operator is shown the bytes and may Send"
+// and the live-observed refusal this ruling was written for — "this session has no surface to
+// show one on, so the call was refused automatically."
+//
+// ⚠ IT IS DELIBERATELY NOT `isOutboundPost`, AND THE TWO MUST NOT BE MERGED. `isOutboundPost`
+// also gates the FORCED THREAD TAG and the per-instance post stamp below, and neither applies
+// to a thread OPEN: there is no thread yet to tag it with, and `create_thread` carries its own
+// `client_msg_id` semantics. This predicate answers a RENDER/BRIDGE question; that one answers
+// a REWRITE question, and one is not the other.
+//
+// ⚠ THE MEMBERSHIP IS THE GATE'S OWN, not a second list: `isOwnChannelThreadOpen` is
+// `session-own-outbound.js`'s, re-exported through session-profiles, so a call that
+// `grantDecision` classified onto the Axis-B outbound lane is exactly the call that reaches the
+// outbound surface. A slug-addressed one is cross-channel to both, which is the safe failure.
+function outboundConsentShape(name, input, sessionChannelId) {
+  return isOutboundPost(name, input, sessionChannelId)
+    || (isChannelTool(name) && isOwnChannelThreadOpen(input, sessionChannelId));
+}
 
 // ─── BEGIN OUTBOUND-THREAD-TAG (pure; unit-tested via source extraction) ──────
 //
@@ -174,6 +199,7 @@ function wrapAllow(resolve, tag) {
 
 module.exports = {
   isOutboundPost,
+  outboundConsentShape, // 2026-08-24: …plus an own-channel create_thread — the OUTBOUND payload's predicate
   suppliedThreadId,
   threadTagFor,
   nextOwnPostId, // 2026-08-21: the per-instance stamp the fan-out self-filter reads

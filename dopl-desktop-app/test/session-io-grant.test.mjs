@@ -142,6 +142,64 @@ test("D2/L3: an own-channel post DISPATCHES a permission_request, rendered as it
   assert.equal((await p).behavior, "deny", "a DENY on a post stops the message leaving the machine");
 });
 
+// ── 2026-08-24 (Samuel's ruling): an own-channel create_thread takes the OUTBOUND payload ──
+//
+// ⚠ THE PAYLOAD IS THE DECISION, NOT THE DECORATION, and that is why this is pinned at the
+// bridge rather than at the classifier. `session-windowless.js › claimGate` BRIDGES an
+// `outbound_gate` to a consent row plus a notification, and DENIES a `permission_request`
+// outright — there is no surface to ask on. A gated thread open that dispatched the dock shape
+// would therefore be auto-refused, which is the live v1.19.0 defect this ruling closes.
+
+test("THREAD OPEN: a gated own-channel create_thread raises the OUTBOUND payload, not the dock", async () => {
+  const s = mkSession(); // messageMode `ask` — the posture that holds it for the operator
+  const rec = recorder();
+  const open = { op: "create_thread", title: "Wire the listener", body: "the request", to: "bob@x.com" };
+  const p = io.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, open, { requestId: "r40", toolUseID: "t40" });
+  assert.equal(rec.events.length, 1, "the thread open reaches the gate");
+  assert.equal(rec.events[0].type, "permission_request", "the POLICY path is the same reducer event");
+  // ⚠ `to` IS THE CALL'S OWN ADDRESSEE, through the SAME withPostSurface the post path uses, so
+  // the operator is shown who the exchange would be opened with — not the session's assumed peer.
+  assert.deepEqual(rec.events[0].payload, {
+    type: "outbound_gate", requestId: "r40", toolUseId: "t40", ownChannel: true,
+    text: open.body, to: "bob@x.com", addressed: true, gateReason: "message-approval-required",
+  });
+  assert.ok(!("channel" in rec.events[0].payload), "still a boolean destination, never a channel id");
+  s.pendingPermissions.get("r40")({ behavior: "deny" });
+  assert.equal((await p).behavior, "deny", "and a DENY still stops it");
+});
+
+test("THREAD OPEN: auto_outbound sends it with NO dispatch; a SLUG falls back to the dock", async () => {
+  const auto = mkSession({ messageMode: "auto_outbound" });
+  const recA = recorder();
+  const open = { op: "create_thread", title: "T", body: "x", to: "bob@x.com" };
+  assert.deepEqual(await io.makeCanUseTool(auto, recA.dispatch)(CHANNEL_TOOL, open, { requestId: "r41" }),
+    { behavior: "allow" }, "the operator's auto-send posture honors a thread open");
+  assert.equal(recA.events.length, 0, "…with no card, exactly like a post");
+  // ⚠ A SLUG IS ANOTHER CHANNEL to the gate, so it must ALSO be another channel to the surface:
+  // an `outbound_gate` claims `ownChannel: true`, and a payload that lied here would bridge a
+  // cross-channel open to the own-channel consent row.
+  const slug = mkSession({ messageMode: "auto_outbound" });
+  const recB = recorder();
+  io.makeCanUseTool(slug, recB.dispatch)(CHANNEL_TOOL, { ...open, channel: "my-slug" }, { requestId: "r42" });
+  assert.equal(recB.events[0].payload.type, "permission_request", "not an own-channel outbound card");
+  assert.equal(recB.events[0].payload.gateReason, "cross-channel-post");
+  for (const id of [...slug.pendingPermissions.keys()]) slug.pendingPermissions.get(id)({ behavior: "deny" });
+});
+
+test("THREAD OPEN: it is NOT given the forced thread tag — there is no thread to tag it with", async () => {
+  // ⚠ `outboundConsentShape` and `isOutboundPost` are deliberately different predicates
+  // (session-outbound-tag.js). Merging them would inject `thread: <taskId>` into a call whose
+  // whole purpose is to MINT a thread id, and `updatedInput` on an allow is main rewriting what
+  // the operator approved.
+  const s = mkSession({ messageMode: "auto_outbound" });
+  s.taskId = "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
+  const rec = recorder();
+  const verdict = await io.makeCanUseTool(s, rec.dispatch)(
+    CHANNEL_TOOL, { op: "create_thread", title: "T", body: "x", to: "bob@x.com" }, { requestId: "r43" });
+  assert.deepEqual(verdict, { behavior: "allow" }, "no updatedInput rides a thread open");
+  assert.equal(io.isOutboundPost(CHANNEL_TOOL, { op: "create_thread" }, s.channelId), false);
+});
+
 test("D2/L3: a CROSS-channel post still uses the DOCK payload (the exfil shape FIX #9 marks)", async () => {
   const s = mkSession();
   const rec = recorder();

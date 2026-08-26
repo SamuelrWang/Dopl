@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
@@ -121,5 +122,28 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
     const text = err.content.map((c) => ("text" in c ? c.text : "")).join("\n");
     expect(text).toContain("you belong to 2 workspaces");
     expect(text).not.toContain("link-a");
+  });
+});
+
+describe("isStandardWorkspace — the predicate itself", () => {
+  /**
+   * ⚠ HAND-MIRRORED FROM THE SERVER (`src/features/workspaces/types.ts`), which
+   * is F-295's standing entry. This block is the SDK-side half of a test that
+   * exists on both sides on purpose: a predicate copied into two packages drifts
+   * in exactly one of them, and the only thing that notices is a test in each.
+   */
+  it("standard is standard, absent reads standard, link is not", () => {
+    expect(isStandardWorkspace({ kind: "standard" })).toBe(true);
+    expect(isStandardWorkspace({})).toBe(true);
+    expect(isStandardWorkspace({ kind: "link" })).toBe(false);
+  });
+
+  it("is POSITIVE — a kind nobody has heard of is NOT standard", () => {
+    // `!== "link"` would answer TRUE here, and the next kind added to the union
+    // would be silently listable in `list_workspaces` and auto-targetable at
+    // boot, with no error anywhere. A newer server sending an unknown kind is
+    // exactly the case the SDK copy has to survive.
+    const future = { kind: "vault" as unknown as "standard" | "link" };
+    expect(isStandardWorkspace(future)).toBe(false);
   });
 });

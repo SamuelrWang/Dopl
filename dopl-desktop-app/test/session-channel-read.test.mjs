@@ -55,9 +55,21 @@ const READS = profiles.OWN_CHANNEL_READ_OPS;
 // `summon_agent`, `rename_agent`, `set_agent_status`, `disengage_agent`) are gone with the
 // tool's own enum (channels rollback §1), and naming ops the tool does not publish would make
 // this table read as coverage it does not have.
-const ALWAYS_GATED = ["open", "invite", "create_thread", "set_thread_mode", "list"];
+// ⚠ REQUIREMENT CHANGE, 2026-08-24 (SAMUEL'S RULING): `create_thread` LEFT THIS SET. It is the
+// second op to move onto the OUTBOUND half and the first admitted on an argument other than
+// "it says less than the post beside it" — it is a post with a TITLE on it, opening the exchange
+// the tool's own protocol tells an agent to open FIRST. WHAT IT COST TO LEAVE IT HERE, observed
+// live on v1.19.0 in a two-agent test: unclassified, it fell through to the AXIS-A gate, and a
+// WINDOWLESS session answers a gate with `deny` — so the op every thread starts with was
+// auto-refused with "this session has no surface to show one on", in EVERY posture, with nothing
+// the operator could set to change it. The bar it still clears is the one that keeps
+// `close_thread` out: a thread OPEN settles no shared state, because a thread has none.
+const ALWAYS_GATED = ["open", "invite", "set_thread_mode", "list"];
 // M4: the op that moved, kept as its own name so every test below can say which is which.
 const MARKERS = ["milestone"];
+// 2026-08-24: and the op that moved next, kept separate from MARKERS for the same reason — the
+// two are admitted on different arguments and carry different gate-diag ALLOW codes.
+const THREAD_OPENS = ["create_thread"];
 
 // ── the read set ──────────────────────────────────────────────────────────────────
 
@@ -70,14 +82,21 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
   assert.deepEqual(READS,
     ["read", "await", "list_threads", "get_thread", "members", "read_sessions"]);
-  for (const op of ALWAYS_GATED.concat(MARKERS)) {
+  for (const op of ALWAYS_GATED.concat(MARKERS, THREAD_OPENS)) {
     assert.ok(!READS.includes(op), `${op} must never be classified as a read`);
   }
   assert.ok(!READS.includes("post"), "a post is the OUTBOUND half's business");
   // M4: and the marker set is disjoint from the read set in the other direction too — a
   // marker WRITES, so it can never be reached by the inbound half of the axis.
   assert.deepEqual(profiles.OWN_CHANNEL_MARKER_OPS, MARKERS);
-  for (const op of MARKERS) assert.ok(!READS.includes(op), `${op} is outbound, not a read`);
+  // 2026-08-24: the thread-open set is its own list, and the UNION is what the gate asks about.
+  // Asserted as three separate constants, because a single merged list is how "a marker earns
+  // this lane by saying less" would quietly come to cover an op that says more.
+  assert.deepEqual(profiles.OWN_CHANNEL_THREAD_OPS, THREAD_OPENS);
+  assert.deepEqual(profiles.OWN_CHANNEL_OUTBOUND_OPS, MARKERS.concat(THREAD_OPENS));
+  for (const op of MARKERS.concat(THREAD_OPENS)) {
+    assert.ok(!READS.includes(op), `${op} is outbound, not a read`);
+  }
 });
 
 test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATES under ask", () => {
@@ -174,6 +193,82 @@ test("M4: a CROSS-channel marker keeps gating, and no TOOL posture can ever answ
   }
 });
 
+// ── 2026-08-24 (Samuel's ruling): create_thread rides the SAME outbound half ───────
+//
+// ⚠ THE DEFECT IT CLOSES IS A DENY, NOT A CLICK. `create_thread` was unclassified, so it fell
+// through to the AXIS-A gate — and `session-windowless.js › claimGate` answers a
+// `permission_request` on a surface-less session with `setImmediate(() => decide(rid, 'deny'))`.
+// A live two-agent test on v1.19.0 got the verbatim refusal "This tool needs a permission prompt
+// and this session has no surface to show one on, so the call was refused automatically" for the
+// one op the tool's own protocol says to start with. No posture on either axis could reach it.
+
+test("THREAD OPEN: an own-channel create_thread is ALLOWED under auto_outbound / auto_both", () => {
+  for (const op of THREAD_OPENS) {
+    for (const channel of [undefined, CH]) { // absent means this session's own channel, as for a post
+      const input = { op, channel, title: "Wire the listener", body: "the request", to: "bob@x.com" };
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_both" }), "allow", `${op} @ auto_both`);
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_outbound" }), "allow", `${op} @ auto_outbound`);
+      // It puts CONTENT into the channel and ADDRESSES a member, so the INBOUND half does not
+      // answer it — "send my replies for me" is the only posture that covers what LEAVES.
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "auto_inbound" }), "gate", `${op} @ auto_inbound`);
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: "ask" }), "gate", `${op} @ ask`);
+    }
+  }
+});
+
+test("THREAD OPEN: a CROSS-channel or SLUG-addressed create_thread keeps gating, in every posture", () => {
+  // ⚠ THE SAFE FAILURE IS UNCHANGED AND IS THE WHOLE CONTAINMENT ARGUMENT: the lane is scoped
+  // to THIS session's channel by ID, so opening a thread in another room — the shape that would
+  // let a counterparty's text steer an exchange into a channel the operator never bound this
+  // session to — still costs a decision. A slug is another channel, exactly as for a post.
+  for (const op of THREAD_OPENS) {
+    for (const channel of ["OTHER", "my-slug", "other-id"]) {
+      const away = { op, channel, title: "T", body: "x", to: "evil@x" };
+      for (const messageMode of profiles.MESSAGE_MODES) {
+        assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: away, messageMode }), "gate",
+          `${op} -> ${channel} @ ${messageMode}`);
+      }
+    }
+    // THE INVARIANT: Axis A never answers a message operation, thread opens included.
+    for (const toolMode of profiles.TOOL_MODES) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, title: "T", body: "x", to: "b@x" }, toolMode }),
+        "gate", `toolMode=${toolMode} must not answer ${op}`);
+    }
+  }
+});
+
+test("THREAD OPEN: the gate diag tells the two outbound allows apart, and shares the gate code", () => {
+  // ⚠ ITS OWN ALLOW CODE. The question an audit asks is "what left this machine with no click?",
+  // and "the agent opened an exchange with a member" is not the same answer as "the agent logged
+  // a step" — merging them would make a thread open unfindable in listener.log.
+  const open = { op: "create_thread", channel: CH, title: "T", body: "x", to: "bob@x.com" };
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: open, messageMode: "auto_both" }),
+    { decision: "allow", reason: "auto-outbound-thread-open" });
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "milestone", channel: CH, thread: "T1", body: "x" }, messageMode: "auto_both" }),
+    { decision: "allow", reason: "auto-outbound-marker" }, "the marker keeps its own");
+  // …and the GATE codes ARE shared, deliberately: the fact that stopped it and the operator's
+  // fix are identical to a post's, and a code nobody can act on differently should not exist.
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: open, messageMode: "ask" }),
+    { decision: "gate", reason: "message-approval-required" });
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { ...open, channel: "my-slug" }, messageMode: "auto_both" }),
+    { decision: "gate", reason: "cross-channel-post" }, "a slug says 'address your own channel by id'");
+  // ⚠ AND `invite` / `open` DID NOT COME WITH IT — the ops that change who is in the room keep
+  // the code that says message approval does not cover them.
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "invite" }, messageMode: "auto_both" }),
+    { decision: "gate", reason: "channel-op-approval-required" });
+});
+
+test("THREAD OPEN: a create_thread grant stays OP-SCOPED — it authorizes no other op", () => {
+  // FIX F2 is untouched by the lane change: the KEY covers the shape the operator saw, so a
+  // "Allow for this task" taken on a thread open cannot open a DM or post a body.
+  const openKey = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "create_thread" }, CH);
+  const held = { toolName: DOPL_CHANNEL_TOOL, allowForTask: [openKey] };
+  assert.equal(decide({ ...held, input: { op: "create_thread" } }), "allow");
+  assert.equal(decide({ ...held, input: { op: "post", body: "hi" } }), "gate");
+  assert.equal(decide({ ...held, input: { op: "open", direct: true } }), "gate");
+  assert.equal(decide({ ...held, input: { op: "invite" } }), "gate");
+});
+
 test("M4: isOwnChannelMarker scopes by channel exactly as isOwnChannelPost does", () => {
   assert.equal(profiles.isOwnChannelMarker({ op: "milestone" }, CH), true);
   assert.equal(profiles.isOwnChannelMarker({ op: "milestone", channel: CH }, CH), true);
@@ -186,6 +281,26 @@ test("M4: isOwnChannelMarker scopes by channel exactly as isOwnChannelPost does"
   assert.equal(profiles.isOwnChannelMarker({}, CH), false);
   assert.equal(profiles.isOwnChannelMarker(undefined, CH), false);
   assert.equal(profiles.isOwnChannelMarker({ op: 7 }, CH), false, "a non-string op is not an op");
+  // 2026-08-24: the marker predicate did NOT widen to take create_thread — the two are
+  // separate lists behind one scope rule, and only the UNION answers the gate.
+  assert.equal(profiles.isOwnChannelMarker({ op: "create_thread", channel: CH }, CH), false);
+});
+
+test("THREAD OPEN: isOwnChannelThreadOpen scopes by channel exactly as isOwnChannelMarker does", () => {
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: "create_thread" }, CH), true);
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: "create_thread", channel: CH }, CH), true);
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: "create_thread", channel: "" }, CH), true);
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: "create_thread", channel: "OTHER" }, CH), false);
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: "milestone", channel: CH }, CH), false, "the marker has its own");
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: "post", channel: CH }, CH), false);
+  // ⚠ The ops that settle or reshape shared state never joined, and must not be talked in by
+  // "create_thread got in": `open` mints a ROOM, `invite` changes who is in one.
+  for (const op of ["open", "invite", "set_thread_mode", "close_thread", "propose_close"]) {
+    assert.equal(profiles.isOwnChannelOutbound({ op, channel: CH }, CH), false, op);
+  }
+  assert.equal(profiles.isOwnChannelThreadOpen({}, CH), false);
+  assert.equal(profiles.isOwnChannelThreadOpen(undefined, CH), false);
+  assert.equal(profiles.isOwnChannelThreadOpen({ op: 7 }, CH), false, "a non-string op is not an op");
 });
 
 test("M3: THE INVARIANT holds in both directions — no tool posture reads, no read runs a tool", () => {
@@ -317,6 +432,16 @@ test("CHANNEL AGENT: pull access does NOT widen the write half", () => {
     "gate",
     "auto_inbound is the READ half and never sends"
   );
+  // ⚠ 2026-08-24: `create_thread` LEFT `ALWAYS_GATED` and did NOT join the pull lane — it is an
+  // OUTBOUND op, so the windowless floor (`auto_inbound`) does not reach it and a supervisor
+  // reading threads still cannot open one without the operator's outbound posture.
+  for (const op of THREAD_OPENS) {
+    assert.equal(
+      decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, thread: THREAD, title: "T", body: "x", to: "b@x" }, messageMode: "auto_inbound" }),
+      "gate",
+      `${op} answers to the OUTBOUND half alone`
+    );
+  }
   for (const op of ALWAYS_GATED) {
     assert.equal(
       decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel: CH, thread: THREAD }, messageMode: "auto_both" }),

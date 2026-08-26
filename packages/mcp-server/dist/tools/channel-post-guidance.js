@@ -86,7 +86,7 @@ function resolvedMentionCount(message) {
  * resolves to nobody, and without this the agent believes it escalated.
  *
  * ⚠ THE ZERO BRANCH NAMES THE CAUSES IT ACTUALLY HAS, and it under-promises at
- * the end. Four things make the server resolve an `@…` to nobody, and this
+ * the end. Five things make the server resolve an `@…` to nobody, and this
  * package can distinguish none of them — it cannot see the roster and cannot see
  * the body's markdown structure the way the write path does:
  *   1. THE HANDLE IS IN CODE. A backticked or fenced `@handle` is quoted text
@@ -99,6 +99,17 @@ function resolvedMentionCount(message) {
  *      workspace member who is not in the room resolves to nobody.
  *   4. AMBIGUITY FAILS CLOSED. A handle two members both answer to resolves to
  *      neither rather than being guessed.
+ *   5. THE HANDLE WAS AN AGENT ID (2026-08-24). Mentions resolve against the
+ *      channel's HUMAN roster (`lib/mentions.ts` over `listChannelMembers`), so
+ *      an agent id matches nothing and never can. ⚠ IT IS ADDED BECAUSE BOTH
+ *      SIDES OF A LIVE TWO-AGENT TEST HIT IT INDEPENDENTLY, and the copy above
+ *      sent them to `op="members"` to check a spelling that was never going to
+ *      be on that list. `@<agentid>` in a body is the WAKE the `launch_agent`
+ *      bullet teaches — a real, working, DIFFERENT mechanism — so this cause is
+ *      the one where the agent did the right thing and read the wrong report.
+ *      ⚠ It carries NO roster remedy on purpose: the remedy sentence names
+ *      (2), (3) and (4), and pointing this one at the member list is exactly
+ *      the wrong turn that made it worth naming.
  *
  * ⚠ SELF-TAGGING IS NO LONGER A CAUSE, and the removal is the point. The server
  * used to drop the AUTHOR unconditionally, so an agent tagging its own operator
@@ -117,7 +128,7 @@ function tagOutcomeNote(channelId, count) {
     if (count > 0) {
         return `TAGGED ${count} ${count === 1 ? "person" : "people"} — the server resolved that many readers out of your body and stamped them on the message, so it is in their Tags inbox, which is where an operator looks instead of reading every message.`;
     }
-    return `YOUR \`@\` TAG RESOLVED TO NOBODY — the message was posted, but no reader was stamped on it, so no one's Tags inbox has it. FOUR THINGS DO THIS. (1) THE HANDLE WAS IN CODE: a handle inside backticks or a fenced block is quoted text and tags nobody — if you were writing ABOUT tagging, that is what happened, and it is working as intended. Write the handle as plain prose when you mean it as a tag. (2) SPELLING: a handle is the person's display name or the local part of their email, lowercased, either whole with the spaces squeezed out or just its first word, and the match is EXACT, so \`@dia\` for Diana names nobody. (3) THEY ARE NOT IN THIS CHANNEL: tags resolve against this channel's roster only, so a workspace member who is not a member here cannot be tagged into it. (4) TWO MEMBERS ANSWER TO IT: a contested handle resolves to neither rather than being guessed — use the longer form (their full name with the spaces squeezed out). For (2), (3) and (4), check dopl_channel(op="members", channel="${channelId}") and re-post with the handle spelled as it is listed there; if they are not on that list, they cannot be reached from this channel at all. (A server that does not resolve tags at all looks identical from here, so if the handle is plain prose and matches the roster, this is not yours to fix.)`;
+    return `YOUR \`@\` TAG RESOLVED TO NOBODY — the message was posted, but no reader was stamped on it, so no one's Tags inbox has it. FIVE THINGS DO THIS. (1) THE HANDLE WAS IN CODE: a handle inside backticks or a fenced block is quoted text and tags nobody — if you were writing ABOUT tagging, that is what happened, and it is working as intended. Write the handle as plain prose when you mean it as a tag. (2) SPELLING: a handle is the person's display name or the local part of their email, lowercased, either whole with the spaces squeezed out or just its first word, and the match is EXACT, so \`@dia\` for Diana names nobody. (3) THEY ARE NOT IN THIS CHANNEL: tags resolve against this channel's roster only, so a workspace member who is not a member here cannot be tagged into it. (4) TWO MEMBERS ANSWER TO IT: a contested handle resolves to neither rather than being guessed — use the longer form (their full name with the spaces squeezed out). (5) YOU TAGGED AN AGENT ID: tags resolve against the human roster only — an agent id can never be tagged. Writing \`@<agentid>\` in a body is a WAKE for that agent's machine, not a tag, and it starts no inbox entry. For (2), (3) and (4), check dopl_channel(op="members", channel="${channelId}") and re-post with the handle spelled as it is listed there; if they are not on that list, they cannot be reached from this channel at all. (A server that does not resolve tags at all looks identical from here, so if the handle is plain prose and matches the roster, this is not yours to fix.)`;
 }
 /**
  * The standing line under a post that landed in the MAIN ROOM. States the

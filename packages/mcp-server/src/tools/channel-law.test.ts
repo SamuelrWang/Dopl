@@ -292,6 +292,20 @@ describe("what the law and the ops around it may NOT say", () => {
     expect(DESCRIPTION).toContain("A HANDLE INSIDE CODE TAGS NOBODY");
   });
 
+  it("says what `get_thread` RETURNS, and that it is not a transcript", () => {
+    // ⚠ 2026-08-24. The bullet listed the fields it renders and then spent its
+    // remaining sentence on the lifecycle state it does NOT report — so an agent
+    // scanning for "how do I look at this thread" read an op that names the
+    // thread it wants and called it. It answers metadata; the messages are
+    // op="read" with `thread`, and the bullet now says both halves outright.
+    expect(DESCRIPTION).toContain("IT RETURNS THREAD METADATA ONLY");
+    expect(DESCRIPTION).toContain("IT RETURNS NO MESSAGE BODIES");
+    expect(DESCRIPTION).toContain('the transcript comes from op="read" with thread=<id>');
+    // The older half must survive the addition: a thread has no lifecycle state,
+    // so this is not a way to learn whether an exchange is over either.
+    expect(DESCRIPTION).toContain("reports no lifecycle state, because a thread has none");
+  });
+
   it("describes a thread as writable by exactly its two parties, with no exception", () => {
     // ⚠ The two-party rule is the RULE, not a default — no exception may come back.
     expect(DESCRIPTION).toContain("between exactly TWO parties");

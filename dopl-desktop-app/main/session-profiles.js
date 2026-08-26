@@ -30,6 +30,14 @@ const { mcpShortName, canonicalDoplName } = require('./mcp-tool-names');
 // OP-SCOPED KNOWLEDGE READS (2026-08-22, OQ-1). Injected into the extracted table by the two
 // harness tests, like `normalizeProfile`. The whole argument lives in that module's header.
 const { isKnowledgeReadCall } = require('./knowledge-ops');
+// THE OWN-CHANNEL OUTBOUND OPS BESIDE THE POST — `milestone`, and `create_thread` since
+// Samuel's ruling of 2026-08-24. §2 SPLIT out of this file (it measured 496 of the 500-line cap
+// and could no longer carry the ruling's argument beside the list it admits to). Re-exported
+// below, and injected into the extracted table by the two harness tests like the two above.
+const {
+  OWN_CHANNEL_MARKER_OPS, OWN_CHANNEL_THREAD_OPS, OWN_CHANNEL_OUTBOUND_OPS,
+  isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
+} = require('./session-own-outbound');
 const {
   READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, UNIVERSAL_HARD_DENY,
   // Retired tools: denied everywhere, so unregistering cannot loosen a hard-deny.
@@ -203,28 +211,11 @@ function isOwnChannelRead(input, sessionChannelId) {
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
 }
 
-// OWN-CHANNEL MARKERS (Axis B outbound). STRICTLY LESS POWERFUL than the own-channel `post`
-// that `auto_outbound` already auto-allows, into the same channel from the same session:
-//   milestone      one-line marker, addresses nobody, no deliverable; prompt-framing INSTRUCTS
-//                  the agent to log them.
-// ⚠ `propose_close` WAS THE OTHER MEMBER and is gone with thread closing (wiring plan Phase 4,
-// 2026-08-18) — the op left the MCP enum entirely. The rule that admitted it is what to keep:
-// a marker earns the outbound half by SAYING LESS than the post already auto-allowed beside
-// it. Anything that settles shared state never qualified — `close_thread` was deliberately
-// never on this list for exactly that reason. ⚠ Dropping a name from this ALLOW list makes the
-// op gate, which is the safe direction; nothing here is a deny list.
-const OWN_CHANNEL_MARKER_OPS = ['milestone'];
-
-// Outbound twin of isOwnChannelRead, SAME footing as isOwnChannelPost: scoped by CHANNEL only.
-// The THREAD is deliberately not scoped — the gate gets channelId, not taskId; a wrong thread
-// id costs a confirm prompt inside a channel the operator is already bound to (F-139).
-function isOwnChannelMarker(input, sessionChannelId) {
-  const i = input || {};
-  if (OWN_CHANNEL_MARKER_OPS.indexOf(i.op) === -1) return false;
-  const target = i.channel;
-  if (target == null || target === '') return true;
-  return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
-}
+// ⚠ THE OWN-CHANNEL OUTBOUND OPS BESIDE THE POST live in `session-own-outbound.js` (§2 SPLIT,
+// 2026-08-24): the two op lists, their union, and the three predicates over it. They are the
+// OUTBOUND twin of `isOwnChannelRead` above and share its footing exactly — scoped by CHANNEL
+// only, by ID, a slug classifying as another channel. ⚠ Read that module before adding a third
+// op: the bar an op has to clear to earn this lane is written there, not here.
 
 // The accept_edits set (contract A2). Named HERE because Axis A and the grant key both read it.
 const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit'];
@@ -422,8 +413,11 @@ function grantDecision(args) {
     // auto_outbound / auto_both: ONLY an own-channel post — everything else is the exfil
     // surface and gates.
     if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
-    // Own-channel thread markers, same outbound half (OWN_CHANNEL_MARKER_OPS).
-    if (autoOutboundMode(a.messageMode) && isOwnChannelMarker(a.input, a.channelId)) return 'allow';
+    // Own-channel MARKERS and THREAD OPENS, same outbound half (OWN_CHANNEL_OUTBOUND_OPS —
+    // `milestone`, and `create_thread` since Samuel's ruling of 2026-08-24). Both are outbound
+    // CONTENT into this session's own channel, which is what the outbound half consents to; a
+    // slug-addressed one classifies cross-channel and gates, exactly like a post.
+    if (autoOutboundMode(a.messageMode) && isOwnChannelOutbound(a.input, a.channelId)) return 'allow';
     // Own-channel READ follows the INBOUND half: a read sends nothing, it brings the peer's
     // words into context unseen — what auto_inbound consents to. `auto_outbound` alone does
     // NOT cover it.
@@ -455,7 +449,8 @@ function grantDecision(args) {
 const gateReason = makeGateReason({
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
-  canonicalDoplName, isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS,
+  canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
+  OWN_CHANNEL_OUTBOUND_OPS,
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
   toolModeAllows, isKnowledgeReadCall,
@@ -470,7 +465,11 @@ function grantDecisionDetail(args) {
 module.exports = {
   buildSessionToolConfig, grantDecision, shortDoplName, isOwnChannelPost,
   isOwnChannelRead, OWN_CHANNEL_READ_OPS, // own-channel READ set, Axis B inbound half
-  isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, // own-channel MARKER set, Axis B outbound half
+  // Axis B's OUTBOUND half beside the post — re-exported from session-own-outbound.js (§2
+  // SPLIT, 2026-08-24), so `require('./session-profiles')` still answers for all of it.
+  isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, // the `milestone` half (M4, 2026-08-05)
+  isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_OPS, // `create_thread` (Samuel's ruling, 2026-08-24)
+  isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS, // the union grantDecision's Axis-B branch asks
   isKnowledgeReadCall, // 2026-08-22 (OQ-1): re-exported from knowledge-ops, the op-scoped kb read
   DOPL_READ_REFERENCE, // the member the knowledge branch asks "where does a Dopl read resolve?"
   mcpShortName, canonicalDoplName, // re-exported from mcp-tool-names

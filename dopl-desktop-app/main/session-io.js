@@ -11,10 +11,10 @@
 const crypto = require('crypto');
 const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool, mcpShortName, floorWindowlessTool } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
-// The own-channel-post classifier (`isOutboundPost`) and the FORCED thread tag live in
-// session-outbound-tag.js (§2 cap). isOutboundPost is re-exported below, so no caller changed.
+// The own-channel-post classifier (`isOutboundPost`), the OUTBOUND CONSENT SHAPE and the FORCED
+// thread tag live in session-outbound-tag.js (§2 cap). Both are re-exported below, no caller moved.
 const outboundTag = require('./session-outbound-tag');
-const { isOutboundPost } = outboundTag;
+const { isOutboundPost, outboundConsentShape } = outboundTag;
 // The turn-TEXT assembly (fences, the channel-history seed, the gate-exclusion
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
@@ -371,8 +371,8 @@ function makeCanUseTool(s, dispatch, log) {
       // surface comes from the input the decision covers, not the separately streamed copy. It
       // doubles as the RE-CREATE path (FIX F5): a gate whose stream-time artifact never landed
       // still paints a card, so a post can never gate invisibly. `to` is a display NAME and
-      // ownChannel a boolean — never another channel's id (§H-9).
-      const payload = isOutboundPost(name, input, s.channelId)
+      // ownChannel a boolean — never another channel's id (§H-9). ⚠ AN OWN-CHANNEL `create_thread` TAKES IT TOO SINCE 2026-08-24 (Samuel's ruling) — `session-outbound-tag.js › outboundConsentShape` argues why, and on a windowless session that payload is the difference between a consent row and an auto-deny.
+      const payload = outboundConsentShape(name, input, s.channelId)
         ? withPostSurface({
           type: 'outbound_gate',
           requestId,
