@@ -3685,7 +3685,13 @@ comment. The cheap check is to state each job out loud and ask which one the rul
 addressed; here it was one of three. Then replace the assertion with one that still fails for the
 other two, which is a different exercise from weakening it until it passes.
 
-## 2026-08-26 — The guest role: why below viewer, and why the LINK carries the grant
+## 2026-08-25 — The guest role: why below viewer, and why the LINK carries the grant
+
+⚠ **THIS STRATUM WAS HEADED `2026-08-26` UNTIL 2026-08-26 AND THE DATE WAS WRONG** — the whole
+guest-role wave (M0–M4, commits `080b7b48`…`096f6427`) landed on **2026-08-25**. A stratum date is
+what an agent uses to decide which of two rules is newer, so a heading a day ahead of its own commits
+makes this section outrank corrections that actually came later. Corrected in place; the 2026-08-26
+stratum below is the real one.
 
 Current state: INVARIANTS §4A (the guest tier and link-carried role), §12 (both migrations),
 REFACTOR-FINDINGS F-319 (RESOLVED). This section is only the argument.
@@ -3706,8 +3712,10 @@ default. Put the guest AT viewer and the default admits it to all of them, and t
 feature becomes an enumeration problem — you must find and lower every route the guest must NOT reach,
 and the one you miss is a silent OPEN. Put the guest BELOW viewer and the default REJECTS it
 everywhere, and the enumeration inverts: you find and lower the few routes the guest MUST reach (the
-twelve channel floors, §2B), and the one you miss is a guest over-blocked — a UX bug that shows up the
-first time a guest opens the app, not a hole that shows up when someone goes looking. **The floor rank
+channel floors, §2B — twelve at M1, **fourteen** after the 2026-08-26 correction), and the one you miss is a guest over-blocked — a UX bug that shows up the
+first time a guest opens the app, not a hole that shows up when someone goes looking. ⚠ **The next
+stratum is what that costs when the enumeration is done carelessly: FOUR of them were missed, three
+were 403s on the guest's own surface, and the fourth was silent.** **The floor rank
 turns the default from fail-open to fail-closed.** The `Record<Role, number>` typing on `ROLE_RANK` is
 the compile-time half of the same posture: it forces every role map in the tree to name the new key,
 so no gate silently omits it.
@@ -3729,9 +3737,14 @@ in two inboxes could grant different things depending on when each is opened. Bi
 the `channel_links` row makes the grant immutable and legible: the token IS the offer, role included.
 
 Three properties fell out of that placement, each fail-closed:
-- **DEFAULT `'guest'`** on the column backfilled every link already minted (measured: 3 live rows) to
-  the floor. A link that predates the feature grants the least privilege, not the most — the opposite
-  of what a nullable column read as "unset → admin" would have done.
+- **DEFAULT `'guest'`** on the column backfilled every link already minted to the floor. A link that
+  predates the feature grants the least privilege, not the most — the opposite of what a nullable
+  column read as "unset → admin" would have done. ⚠ **THE MEASUREMENT UNDER THIS CLAIM WAS THINNER
+  THAN IT READ, re-measured 2026-08-26: 3 rows TOTAL, only 2 of them open, and BOTH open ones
+  UNBOUND** (`workspace_id IS NULL`) — the single bound link had already been revoked. The unbound
+  claim path never reads `granted_role`, so **the backfill touched zero live claimable links.** The
+  argument for the default is unchanged and is about the NEXT link; what is corrected is the
+  impression that it retro-fenced anything. "Measured: 3 live rows" was a count with no predicate.
 - **CHECK `(guest,viewer,member)`** makes `admin`/`owner`-via-link UNREPRESENTABLE at the database.
   The hole F-319 measured cannot be reintroduced by a mint bug, a hand-written insert, or a future
   schema edit, because the row that would carry it cannot be stored.
@@ -3750,3 +3763,126 @@ patch is a missing tier.** Claiming as `member` and fencing DELETE are both repa
 too high"; the actual defect was "there is no role low enough". A capability the product needs
 (chat-only) that no role expresses is not a permissions bug to be patched at each call site — it is a
 tier to be added once, placed at the fail-closed end of the default so the enumeration works FOR you.
+
+---
+
+## 2026-08-26 — The guest lane was broken FOR THE GUEST, and every miss was on the same axis
+
+Current state: INVARIANTS §4A (the two wrapper families, the fourteen floors, the public-channel
+fence), §7 (the realtime guest arm), §12 (`20260826120000`). REFACTOR-FINDINGS F-324 (RESOLVED),
+F-325/F-326/F-327 (open). This section is only the argument.
+
+Two independent adversarial reviews, then a third, agreed the guest-role wave's *security* boundary
+was sound: escalation is closed, the twelve lowered routes keep their channel fence, F-319 is
+genuinely dead. What all three found instead is that the lane **did not work for the guest it was
+built for** — no live updates at all, and three reads that 403 on every mount, two of them on a poll
+loop. The interesting thing is not that four things were missed; it is that all four were missed the
+SAME WAY.
+
+### One question was asked once, and the answer was generalized
+
+The wave asked, correctly and early: *does a guest's channel read run under RLS or as service role?*
+It measured the answer — service role, `channels/server/repository.ts` bypasses RLS — and wrote it
+into `20260825140000`'s header as *"No channel_members-based RLS arm is required."* That sentence is
+true of the READ PATH it was reasoning about and false of the SURFACE, because the surface has a
+second door: `getSupabaseBrowser()`'s `postgres_changes` binding, which is a USER client. **The
+question was "do the reads run under RLS", and the answer was pasted over "does anything run under
+RLS".**
+
+The tell is that the finding filed at the time (F-324) *named the exact fix* — a `channel_members`
+arm — and deferred it behind a mitigation nobody checked: *"the guest web lane gets its live updates
+from the `GET …/await` long-poll."* One grep disproves that; `/await` has no browser caller at all.
+So a real, shipped breakage was recorded as a deferred smell, on the strength of a sentence in a
+finding. **This file's own rule — a comment asserting where a filter lives is not evidence the filter
+exists — applies to findings, and this is the first time it bit one.**
+
+### The route floor was enumerated from the ROUTES, not from the SURFACE
+
+M1 derived the guest-allowed set by reading route files and reasoning about what a guest should be
+allowed to do. It is a defensible way to build a list and it cannot find a fourth kind of mistake:
+what the surface ACTUALLY CALLS. `channel-surface-data.ts › useChannelSurfaceData` mounts for every
+host, guest lane included, and issues three reads outside the set — the mention inbox on every mount,
+the consent inbox every 30 s, peer agent sessions every 30 s. Three 403s, two of them forever, none
+of them visible as anything but a network tab.
+
+And the enumeration had a *labelling* error underneath it that no test could catch, because the test
+was written from the same belief: the M1 comment lowered `POST …/mentions` "so a guest may
+@-mention", when POST is `markMentionsRead`, GET is the inbox, and **@-mentioning is not that route
+at all** — mentions are parsed out of message text by the messages POST, which was already lowered.
+So Q2 was satisfied twice over by accident, the verb that mattered stayed closed, and the comment,
+the pin test's comment table and INVARIANTS §4A all repeated the same wrong sentence. **Three copies
+of one belief is not three confirmations.**
+
+**The rule: a capability tier is enumerated from the SURFACE's call graph, not from the route tree.**
+The route tree tells you what exists; only the surface tells you what is asked for. The corollary
+landed in the code as a third answer beside "lower it" and "leave it": the consent inbox is **not
+mounted** for a viewer who runs no agent. A capability that hides a control while its read keeps
+firing is half a capability.
+
+### The pin test's parser was the same class of bug as the thing it was pinning
+
+`guest-route-floor.test.ts` sliced a wrapper's arguments at the first `");"` in the file. Correct for
+`withWorkspaceAuth(handleGet, {…})`; for the inline-arrow form the first `");"` is inside the handler
+BODY, so the options object never entered the slice and the route parsed as the `viewer` default.
+Eight (route, method) pairs disagreed with reality — six billing routes actually `admin`, two skills
+POSTs actually `member`. The proof of what that cost: setting `billing/invoices` to `minRole:"guest"`
+left **both** set A and set B green. The suite that existed to make "did we miss a route?" a red test
+would have let a guest read the operator's Stripe invoices.
+
+The fix is a paren-balanced scan, but the durable part is what was added beside it: a **parser
+regression set** pinning those eight hand-measured floors, a **dumb whole-file text sweep** for
+`minRole:"guest"` cross-checked against the allowlist, and a rule that an unreadable floor
+(`{ minRole }` shorthand, a non-literal, an unmatched export shape) is reported as `<dynamic>` /
+`<unparsed>` rather than falling through to the default. **A parser that fails to `viewer` fails
+OPEN, and this one had no way to say "I could not read this".**
+
+### The second wrapper family, and a doc that outranked the code
+
+§4A rested the whole guest story on *"`withWorkspaceAuth` defaults to viewer, so everything rejects a
+guest by default"*. That is one wrapper. Nineteen routes under `/api/workspaces` use `withUserAuth` +
+`resolveApiWorkspace`, which proved membership EXISTENCE, read the role, and never compared it — so a
+guest reached the full member roster with every email on it, both overview reads, the workspace
+record and `my-access`. §4A explicitly named Overview and Members as rejecting guests. The blast
+radius was bounded (a guest's only workspace is their two-person container) and that is luck, not
+design; nothing stopped the next route added there from admitting one.
+
+**The fix went at the RESOLVER, not at the five routes**, and that is the whole lesson: the five were
+symptoms of a family with no default. Giving `resolveApiWorkspace` the same inverted `viewer` default
+makes the second family fail-closed like the first, so the twentieth route inherits it. `null` maps
+to each caller's existing 404, so "not a member", "not enough role" and "does not exist" stay one
+answer and no route grew an error shape.
+
+### A lowered floor plus an inherited "public" arm
+
+`loadVisibleChannel` admitted any workspace member to a `visibility='public'` channel without a
+`channel_members` row — right, when the floor was `viewer` and "public" meant "any tenant". Nothing
+stops a public channel existing inside a link container (F-327), and seven of the fourteen
+guest-floored routes compose that function. So the guest floor and the public arm compose into a
+cross-channel read: header, transcript, thread list, roster, long-poll.
+
+The fix says a guest has no tenancy and therefore no public arm — in **four** places that must agree:
+the single-ref read, the LIST predicate, the await re-check one tick later, and the RLS guest arm.
+Writing the same rule four times is the cost of a system where the fence is expressed in two
+languages; the mitigation is that all four are cross-referenced to each other by name, and the
+service-side and DB-side statements were written in the same change deliberately so a reader can
+find the disagreement.
+
+### And the small ones, which share a shape too
+
+`members-render.ts › defaultLevel` was `role === "viewer" ? "read" : "edit"`, so a guest rendered as
+**"edit"** — the inverse of the truth and the most privileged value in the enum.
+`access-levels.ts › defaultLevelForRole` was `if (owner|admin|member) return "edit"; return "read"`,
+so a guest fell into the viewer arm. Both are open `else` branches over a closed set. The plan's
+stated compile-time net was *"`Record<Role, number>` forces the key"* — and it does, for `ROLE_RANK`,
+and reaches nothing else. **A default branch is where a new enum member goes to be silently wrong**,
+and the two rewrites are both to `Record<Role, …>` for exactly that reason.
+
+`check-role-drift.ts` guarded the role SET across three source declarations and could see none of
+this: not the committed `dist/` mirrors that `main` actually imports (hand-edited during the wave),
+not the SQL `CASE` that governs every RLS policy, and not role-CONSUMING maps at all. It covers nine
+declarations now. **A gate that checks a list of names cannot check a decision made per name.**
+
+**The rule the episode buys, in one line: a new tier is not done when nothing it must not reach
+admits it — it is done when everything it MUST reach answers, and the only witness to that is the
+surface's own call graph.** Every one of these was on the same axis: someone reasoned correctly about
+one door and generalized to "the door".

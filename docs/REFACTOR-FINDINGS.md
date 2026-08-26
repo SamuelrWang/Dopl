@@ -3304,27 +3304,114 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   never author container KB at all, that is a separate `sdk-loader.js` tool-pinning change, not a
   server fence. Status: **deferred (accepted for MVP)**
 
-### F-324 — a REAL guest is RLS-denied on direct/realtime channel reads (guest ranks below viewer)
+### F-324 — ✅ RESOLVED 2026-08-26 — a REAL guest was RLS-denied on realtime channel reads, and the mitigation this entry claimed DID NOT EXIST
 
-- Location: the channel-table SELECT policies (`channels_member_select`,
-  `channel_messages_member_select`, `channel_tasks_member_select`, `channel_members_member_select`,
-  … — all gate on `is_current_workspace_member(workspace_id, 'viewer')`), measured against the live
-  project 2026-08-25; `public.is_workspace_member` now ranks `guest` at -1, below `viewer`'s 0
-  (migration `20260825140000_guest_role.sql`).
+- Location: the channel-family SELECT policies (`channels_member_select`,
+  `channel_messages_member_select`, `channel_members_member_select`,
+  `agent_presence_member_select`, `channel_tasks_member_select` — all gated on
+  `is_current_workspace_member(workspace_id, 'viewer')`), measured against the live project
+  2026-08-25 and again 2026-08-26; `public.is_workspace_member` ranks `guest` at -1, below
+  `viewer`'s 0 (migration `20260825140000_guest_role.sql`).
 - Found during: **guest-role M0/M1 RLS verification, 2026-08-25** (the plan's §1.3 critical
-  question).
-- Severity: **smell / live-but-not-a-blocker** — NOT a functional blocker today: every
-  guest-reachable channel READ through the §2B API routes runs on the SERVICE-ROLE admin client
-  (`src/features/channels/server/repository.ts`, RLS-BYPASSING by its own docblock), so these
-  policies are never consulted on that path — which is why **no `channel_members`-based RLS arm was
-  added**. ⚠ **Real guests NOW EXIST (M2 landed 2026-08-25)**: the bound claim inserts
-  `role = channel_links.granted_role` (default `guest`), so `role='guest'` rows are live. The
-  residual is therefore now REAL rather than hypothetical — any DIRECT user-client read or REALTIME
-  subscription (which DO run under RLS) filters a guest out at the `'viewer'` floor. The guest web
-  lane gets its live updates from the `GET …/await` long-poll (service-role, in the §2B set), so it
-  degrades gracefully rather than breaking — but a future realtime subscription for the guest surface
-  would silently receive nothing.
-- Proposed resolution: **defer to M2/M5.** If the guest web lane ever subscribes to channel realtime,
-  the fix is a `channel_members`-based arm on those SELECT policies (channel RLS keys on
-  `channel_members`, its own enum `('owner','member')`) so a guest who is a channel member passes
-  even though its workspace role is below viewer. Status: **deferred**
+  question). **Re-measured and CORRECTED 2026-08-26** by two independent adversarial reviews.
+- ⚠ **THIS ENTRY WAS WRONG ABOUT THE SEVERITY, AND IT WAS WRONG BY ASSERTING A MITIGATION NOBODY
+  CHECKED.** It said *"the guest web lane gets its live updates from the `GET …/await` long-poll
+  (service-role, in the §2B set), so it degrades gracefully rather than breaking"*. **That
+  long-poll has NO BROWSER CALLER.** `grep -rn "/await" src apps packages --include=*.ts
+  --include=*.tsx` finds it only in `packages/dopl-client/src/channel.ts` and the desktop. The
+  guest lane's actual live loop is `GuestChannel` → `StandaloneChannelSurface` →
+  `channel-surface-data.ts › useChannelSurfaceData` → `channels-v2/live.ts › useChannelsV2Live` →
+  `channels/client/realtime.ts` → `shared-channel-registry.ts` → `getSupabaseBrowser()` — a USER
+  client, so RLS applies and a guest received **zero** events. **A guest never saw a reply without
+  reloading the page.** Severity was not "smell"; it was a broken lane, and it was a REGRESSION the
+  guest-role wave introduced (pre-M0 the claimer was an `admin`, which cleared the viewer floor).
+  ⚠ **The lesson is this file's own standing rule, applied to itself: a comment asserting where a
+  fallback lives is not evidence the fallback exists.** One grep would have settled it.
+- Resolution: **migration `20260826120000_guest_channel_realtime_rls.sql`** (applied as history
+  version `20260826070906`, name `guest_channel_realtime_rls` — F-304's re-stamp again; join on the
+  NAME). It adds a `channel_members`-based arm to the SELECT policies of the four tables the web
+  client actually subscribes to (`channels`, `channel_members`, `channel_messages`,
+  `agent_presence`), exactly the fix this entry proposed. Two properties were verified rather than
+  reasoned about, by behavioural probe inside a rolled-back transaction: a guest sees its own
+  private channel / messages / roster / presence and NOT a public channel it is not a member of
+  (`1,0,1,0,2,1,0`), and a `viewer` non-member still sees the public channel and not the private one
+  (`1,0,1,0,1`) — i.e. **nothing changed for any role above the floor**. Pinned from the tree by
+  `src/features/channels/client/guest-realtime-rls.test.ts`, which asserts the invariant that
+  matters — *a table this client SUBSCRIBES to has a guest arm* — in both directions, so adding a
+  fifth entry to `CHANNEL_TABLES` without an arm goes red. Status: **RESOLVED**
+- Residual, deliberately NOT fixed: `channel_tasks`, `channel_task_participants`,
+  `channel_sessions`, `channel_mention_reads`, `channel_consent_requests`, `channel_agents` and
+  `channel_launch_directives` keep the plain `'viewer'` floor. None has a guest-side subscriber and
+  none is read on the guest's API path (all service-role). A policy arm with no reader is the same
+  speculative cost §12 refuses for an index with no statement.
+
+### F-325 — a guest's MCP tool calls run UNMETERED by construction, and the failure is a log line
+
+- Location: `src/app/api/mcp/credits/consume/route.ts` — `withWorkspaceAuth(…, { writeScopeExempt:
+  true })` with **no `minRole`**, so it sits at the wrapper's `viewer` default and a guest-scoped
+  call 403s. `packages/mcp-server/src/registrar.ts › createCreditedRunner › charge` catches any
+  throw and returns `null` ("⚠ FAIL OPEN on anything that is not an honest out-of-credits"). Net:
+  every tool call a guest-credentialed agent makes against the container is free, and the only
+  trace is one `[credits] consume call failed` per call.
+- Found during: **the guest-role review wave, 2026-08-26** (third adversarial review).
+- Severity: **smell, bounded today** — reaching it takes a guest who has connected an OAuth agent
+  token and addressed `workspace=<container>`, which nothing in the guest web lane does. And the
+  posture it lands in is one §4A already documents: a container has no plan, and a caller with no
+  billable standard workspace **runs unmetered, fail-OPEN, by ruling**.
+- ⚠ **NOT FIXED, AND THE REASON IS AN INSTRUCTION RATHER THAN A JUDGEMENT.** INVARIANTS §4A's
+  billing bullet is marked **PROVISIONAL — "wiring now, hash out later" (Samuel, 2026-08-23)** and
+  carries **"DO NOT BUILD ON THIS WITHOUT ASKING"** plus **"Re-ask Samuel before the next billing
+  change touches this path."** Lowering this route to `minRole: "guest"` (so guest usage meters
+  against the guest's OWN oldest-owned standard workspace, per `credits-service.ts ›
+  resolveBillingWorkspaceId`) is a one-line change and is the obvious fix — but it IS a billing
+  change on that path, and the invariant says to ask first.
+- Proposed resolution: **Samuel's ruling.** Either (a) lower the floor to `guest` so a guest meters
+  like anybody else, or (b) leave it and accept that a guest's agent is free, in which case the
+  registrar's log line should say so deliberately rather than reporting a 403 as a transient blip.
+  Status: **open, awaiting a ruling**
+
+### F-326 — the mentions service is the one guest-floored write with NO channel-membership fence
+
+- Location: `src/features/channels/server/service-mentions.ts` — both `listMyChannelMentions` and
+  `markMentionsRead` destructure `{ channel }` out of `loadVisibleChannel` and never look at
+  `membership`. Contrast `service-writes.ts › postMessage` and `service-tasks-fanout.ts ›
+  createTaskFanOut`, which both `throw new ChannelForbiddenError(...)` on `!membership`.
+- Found during: **the guest-role review wave, 2026-08-26**, while tracing which of the fourteen
+  guest-floored routes compose the public-channel arm.
+- Severity: **smell, and NOT a guest issue any more** — `service-shared.ts ›
+  mayReadPublicChannels` (2026-08-26) removes the `visibility='public'` arm for a guest entirely,
+  so a guest can no longer reach a channel it is not a member of by any route. What remains is the
+  ORIGINAL asymmetry, for `viewer`+: a workspace member who merely *sees* a public channel may read
+  and mark-read their own mentions in it without joining. Own-scoped by `ctx.userId` throughout, so
+  nothing crosses between users.
+- ⚠ **What it really costs is a TEST GAP:** `app/api/channels/guest-route-floor.test.ts`'s closing
+  assertion pins the membership fence on `service-writes.ts` and `service-tasks-fanout.ts` and does
+  not cover `service-mentions.ts` — so if the mentions route's own scoping ever loosened, the floor
+  would silently become the gate.
+- Proposed resolution: decide whether reading your own mentions in a public room you never joined
+  is a capability (probably yes — you were tagged) or an oversight; if the former, say so in the
+  service docblock so the asymmetry is deliberate, and extend the floor test's fence assertion to
+  name all three modules either way. Status: **open**
+
+### F-327 — nothing enforces "a link container holds exactly ONE channel", nor that its channel is private
+
+- Location: `src/features/workspaces/types.ts` describes a `kind='link'` container as holding
+  exactly one channel; INVARIANTS §4A says the same. **No layer enforces either half.**
+  `channels/server/service-writes.ts › createChannel` never reads `workspace.kind` (`grep -rn
+  "isStandardWorkspace" src/features/channels/` → zero hits); `POST /api/channels` is `minRole:
+  "member"` and the container's owner clears it; the MCP `dopl_channel(op="open")` schema exposes
+  `visibility: "private" | "public"` and `workspace-directory.ts › resolveWorkspaceRef`
+  deliberately does not filter containers; and neither `20260823150000_home_link_channels.sql` nor
+  `20260824120000_home_channel_containers.sql` constrains channel count or visibility.
+  `authz.ts › assertMemberAddable` guards WORKSPACE member-add only and is never called from a
+  channel-creation path.
+- Found during: **the guest-role review wave, 2026-08-26.**
+- Severity: **doc-vs-code disagreement (CLAUDE.md's third case: file it, change neither side).**
+  The security consequence it used to have is closed — a guest no longer inherits the public arm
+  (`service-shared.ts › mayReadPublicChannels`) and the RLS guest arm requires real channel
+  membership — so a second channel in a container is now invisible to the guest either way. What is
+  left is that two docs assert a property the system does not have, and `home/types.ts ›
+  HomeChannel` resolves "the single channel inside the container" as if it did.
+- Proposed resolution: either enforce it (a `kind='link'` guard in `createChannel`, or a partial
+  unique index) or rewrite both doc claims to "the container's FIRST channel is the one the home
+  surface renders". Do not do half. Status: **open**
