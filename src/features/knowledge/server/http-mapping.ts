@@ -2,6 +2,7 @@ import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   AgentWriteDisabledError,
+  ChannelGrantInvalidError,
   EntryNotFoundError,
   FolderCycleError,
   FolderNotFoundError,
@@ -60,6 +61,10 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   }
   if (err instanceof ScopeChangeForbiddenError) {
     return new HttpError(403, "SCOPE_CHANGE_FORBIDDEN", err.message);
+  }
+  // The grant trigger's RAISE, already stripped of the two workspace ids.
+  if (err instanceof ChannelGrantInvalidError) {
+    return new HttpError(400, "CHANNEL_GRANT_INVALID", err.message);
   }
   return null;
 }

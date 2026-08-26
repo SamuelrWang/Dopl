@@ -72,6 +72,28 @@ export class WorkspaceKeyPrivateVisibilityError extends Error {
   }
 }
 
+/**
+ * The `enforce_channel_resource_grant()` trigger refused a (KB, channel) grant
+ * — the KB, the channel and the grant row must all name the SAME workspace.
+ * → 400.
+ *
+ * ⚠ IT IS A BACKSTOP THAT SHOULD BE UNREACHABLE, AND IT IS TRANSLATED ANYWAY.
+ * The route fences the channel (`isChannelVisibleTo`) and the base
+ * (`getBaseById`) against the caller's own workspace before the write, so a
+ * mismatch means one of those fences moved. A raw `P0001` would surface as a
+ * 500 and read as an outage; a 4xx says "refused", which is what happened.
+ * ⚠ The trigger's own message is NOT forwarded — it names both workspace ids.
+ */
+export class ChannelGrantInvalidError extends Error {
+  readonly code = "CHANNEL_GRANT_INVALID";
+  constructor() {
+    super(
+      "A knowledge base can only be shared into channels in the same workspace."
+    );
+    this.name = "ChannelGrantInvalidError";
+  }
+}
+
 /** Non-admin granting a team they don't belong to. → 403. */
 export class TeamScopeForbiddenError extends Error {
   readonly code = "TEAM_SCOPE_FORBIDDEN";

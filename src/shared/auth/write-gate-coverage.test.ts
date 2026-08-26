@@ -175,6 +175,18 @@ describe("H-3 write-gate coverage", () => {
         // which is a workspace membership. GET on the links file stays ungated
         // (`sessionOnly` is per-method), so an agent can still read the
         // caller's own pending links.
+        // PUT sets a (knowledge base, channel) GRANT (2026-08-26, Home
+        // Knowledge Panels M1). Taken straight off `home/links` below: that
+        // route is gated because minting a claim link HANDS CONTENT TO A
+        // PERSON, and a grant at `visible` is the same line crossed from the
+        // other side — it puts a whole knowledge base in front of every member
+        // of a channel, GUESTS INCLUDED, and `guestWrite` additionally hands
+        // that person a pen. A `full`-profile session has Bash, can read the
+        // 90-day device token off disk, and would otherwise be one HTTP call
+        // from widening its own operator's audience. ⚠ Per-METHOD: the GET on
+        // that file stays ungated — reading which channels a base already
+        // reaches decides nothing.
+        "knowledge/bases/[baseId]/channel-grants/route.ts",
         "home/link/[token]/claim/route.ts",
         "home/links/[linkId]/route.ts",
         "home/links/route.ts",

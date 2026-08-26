@@ -86,6 +86,26 @@ export const KbTeamGrantSchema = z.object({
 export type KbTeamGrantInput = z.infer<typeof KbTeamGrantSchema>;
 
 /**
+ * One (KB, channel) grant write — `PUT /api/knowledge/bases/[baseId]/channel-grants`.
+ *
+ * ⚠ `level: "none"` is the DELETE, spelled. Storage has no `'none'` (absence of
+ * a row is "not shared"), so this enum is wider than `ChannelGrantLevel` by
+ * exactly one wire-only value; the service collapses it.
+ *
+ * ⚠ `guestWrite` DEFAULTS TO FALSE, and the default is the safety property, not
+ * ergonomics: an omitted flag must never inherit whatever the previous grant
+ * carried. A caller raising `agent_only` → `visible` without naming
+ * `guestWrite` gets a read-only guest audience. The service additionally FORCES
+ * it false at `agent_only`, where no human is in the audience at all.
+ */
+export const ChannelGrantWriteSchema = z.object({
+  channelId: z.string().uuid(),
+  level: z.enum(["none", "agent_only", "visible"]),
+  guestWrite: z.boolean().optional().default(false),
+});
+export type ChannelGrantWriteInput = z.infer<typeof ChannelGrantWriteSchema>;
+
+/**
  * Shared refinement: teams mode can't be private, and grants only make
  * sense in teams mode. `requireGrants` (create) additionally demands at
  * least one grant — updates may send an empty set (deliberate "owner +

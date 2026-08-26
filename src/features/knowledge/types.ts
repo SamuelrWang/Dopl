@@ -86,6 +86,32 @@ export interface ChannelResourceGrant {
   guestWrite: boolean;
 }
 
+/**
+ * What a WRITER may ask for (M1) — the two stored levels plus the third state
+ * spelled out.
+ *
+ * ⚠ `"none"` EXISTS ON THE WIRE AND NOWHERE ELSE. Storage has no such value
+ * (the CHECK admits `agent_only`/`visible` only); the service turns it into a
+ * DELETE. A caller cannot say "not shared" by omitting a field, so the write is
+ * a full statement of the desired end state and a retry is idempotent — the
+ * `PUT`/`DELETE` star argument (`bases/[baseId]/star/route.ts`), reached by a
+ * different road because here the third state is the interesting one.
+ */
+export type ChannelGrantLevelInput = ChannelGrantLevel | "none";
+
+/**
+ * One channel the grants section may offer, as the settings read projects it.
+ * ⚠ The list is built SERVER-side from the caller's visible channels — never a
+ * client-side workspace channel list, which would put unreadable rooms' names
+ * on the wire.
+ */
+export interface ChannelGrantChannelRef {
+  id: string;
+  name: string;
+  /** DMs are channels the caller belongs to; the row labels them as such. */
+  isDirect: boolean;
+}
+
 export interface KnowledgeFolder {
   id: string;
   workspaceId: string;

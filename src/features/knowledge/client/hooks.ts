@@ -105,7 +105,7 @@ export function useKnowledgeBaseList(
   // Workspace id in the key so switching workspaces re-fetches. Sentinel
   // fallback keeps the hook firing with no id (sole-workspace caller
   // auto-targets; multi-workspace fails closed as WORKSPACE_REQUIRED).
-  const key = `bases:${workspaceId ?? "default"}`;
+  const key = knowledgeBasesCacheSegment(workspaceId);
   return useKnowledgeQuery<KnowledgeBaseList>(
     key,
     () => fetchBaseList(workspaceId),
@@ -115,9 +115,28 @@ export function useKnowledgeBaseList(
   );
 }
 
+/**
+ * The base list's cache SEGMENT (the second element of its `["knowledge", …]`
+ * key), for the workspace-wide list or for ONE channel's scope-A view of it.
+ *
+ * ⚠ THE CHANNEL-SCOPED SEGMENT IS A DIFFERENT ENTRY, NOT THE SAME ONE WITH AN
+ * EXTRA KEY. `?channelId=` changes the RESPONSE (it folds in `channelGrants`),
+ * so the two must not share a cache entry or an unscoped refetch would blank
+ * the grants the scoped reader is rendering. Minted here so every reader and
+ * writer of either list agrees; a suffix beyond this one is prefix-matched by
+ * the grant write's cache patch (`hooks-channel-grants.ts`).
+ */
+export function knowledgeBasesCacheSegment(
+  workspaceId?: string,
+  channelId?: string
+): string {
+  const ws = `bases:${workspaceId ?? "default"}`;
+  return channelId ? `${ws}:channel:${channelId}` : ws;
+}
+
 /** Cache key shared by every reader and writer of the base list. */
-export function knowledgeBasesQueryKey(workspaceId?: string) {
-  return ["knowledge", `bases:${workspaceId ?? "default"}`] as const;
+export function knowledgeBasesQueryKey(workspaceId?: string, channelId?: string) {
+  return ["knowledge", knowledgeBasesCacheSegment(workspaceId, channelId)] as const;
 }
 
 /**

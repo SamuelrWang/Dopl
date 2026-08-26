@@ -9,6 +9,7 @@
  */
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
+  ChannelGrantChannelRef,
   ChannelResourceGrant,
   KnowledgeBase,
   KnowledgeBaseStats,
@@ -16,6 +17,7 @@ import type {
   KnowledgeEntry,
 } from "@/features/knowledge/types";
 import type {
+  ChannelGrantWriteInput,
   KnowledgeBaseCreateInput,
   KnowledgeBaseUpdateInput,
   KnowledgeFolderCreateInput,
@@ -145,6 +147,60 @@ export async function setBaseStar(
     method: starred ? "PUT" : "DELETE",
     workspaceId,
   });
+}
+
+// ─── Channel grants (scope-A sharing) ───────────────────────────────
+
+/** `GET /api/knowledge/bases/{baseId}/channel-grants` — the settings section's
+ *  read. `channels` is the caller's SERVER-fenced visible list; `grants` is
+ *  keyed by channel id and a channel with no grant is ABSENT from it. */
+export interface ChannelGrantSettings {
+  /** Creator or workspace admin+. False renders the read-only summary. */
+  canManage: boolean;
+  channels: ChannelGrantChannelRef[];
+  grants: Record<string, ChannelResourceGrant>;
+}
+
+export async function fetchChannelGrants(
+  baseId: string,
+  workspaceId?: string
+): Promise<ChannelGrantSettings> {
+  const data = await request<{
+    canManage?: boolean;
+    channels?: ChannelGrantChannelRef[];
+    grants?: Record<string, ChannelResourceGrant>;
+  }>(`/api/knowledge/bases/${baseId}/channel-grants`, { workspaceId });
+  return {
+    // ⚠ §8 stale-cache / old-server read: every field falls back to the
+    // CLOSED value. An unknown `canManage` renders read-only, an unknown
+    // channel list renders nothing — never an editor over invented rows.
+    canManage: data.canManage ?? false,
+    channels: data.channels ?? [],
+    grants: data.grants ?? {},
+  };
+}
+
+/**
+ * Set ONE (KB, channel) grant. `level: "none"` un-shares; the response's
+ * `grant` is `null` for it, which the cache patch reads as "remove the key".
+ *
+ * ⚠ ONE IDEMPOTENT PUT STATING THE END STATE, not a toggle — a retry after an
+ * ambiguous failure cannot land the opposite of what the operator chose.
+ */
+export async function setChannelGrant(
+  baseId: string,
+  body: ChannelGrantWriteInput,
+  workspaceId?: string
+): Promise<ChannelResourceGrant | null> {
+  const data = await request<{
+    channelId: string;
+    grant: ChannelResourceGrant | null;
+  }>(`/api/knowledge/bases/${baseId}/channel-grants`, {
+    method: "PUT",
+    body,
+    workspaceId,
+  });
+  return data.grant;
 }
 
 export async function fetchBases(workspaceId?: string): Promise<KnowledgeBase[]> {

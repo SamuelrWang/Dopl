@@ -18,7 +18,12 @@ vi.mock("@/shared/api/api-client", () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-import { fetchBaseList, EMPTY_GRANTS } from "./api";
+import {
+  fetchBaseList,
+  fetchChannelGrants,
+  setChannelGrant,
+  EMPTY_GRANTS,
+} from "./api";
 
 const FULL = {
   bases: [{ id: "kb-1" }, { id: "kb-2" }],
@@ -69,5 +74,76 @@ describe("fetchBaseList › channelGrants", () => {
     expect(out.channelGrants).toEqual({});
     // The rest of the payload is unharmed.
     expect(out.bases).toHaveLength(2);
+  });
+});
+
+describe("fetchChannelGrants — the settings read (M1)", () => {
+  it("passes the three keys through", async () => {
+    apiRequest.mockResolvedValue({
+      canManage: true,
+      channels: [{ id: "chan-1", name: "engineering", isDirect: false }],
+      grants: { "chan-1": { level: "visible", guestWrite: true } },
+    });
+
+    expect(await fetchChannelGrants("kb-1", "ws-1")).toEqual({
+      canManage: true,
+      channels: [{ id: "chan-1", name: "engineering", isDirect: false }],
+      grants: { "chan-1": { level: "visible", guestWrite: true } },
+    });
+    expect(apiRequest).toHaveBeenLastCalledWith(
+      "/api/knowledge/bases/kb-1/channel-grants",
+      { workspaceId: "ws-1" }
+    );
+  });
+
+  it("STALE CACHE / OLD SERVER: every deleted key falls back CLOSED", async () => {
+    // Keys deleted, not nulled — a payload written before this route existed
+    // does not carry them. ⚠ The fallback direction is the property: an unknown
+    // `canManage` must render the READ-ONLY summary, never an editor over an
+    // invented channel list.
+    apiRequest.mockResolvedValue({});
+
+    expect(await fetchChannelGrants("kb-1")).toEqual({
+      canManage: false,
+      channels: [],
+      grants: {},
+    });
+  });
+});
+
+describe("setChannelGrant — the write (M1)", () => {
+  it("PUTs the end state and returns the STORED grant", async () => {
+    apiRequest.mockResolvedValue({
+      channelId: "chan-1",
+      grant: { level: "agent_only", guestWrite: false },
+    });
+
+    const out = await setChannelGrant(
+      "kb-1",
+      { channelId: "chan-1", level: "agent_only", guestWrite: true },
+      "ws-1"
+    );
+
+    // The server normalised `guestWrite` away; the client believes the answer.
+    expect(out).toEqual({ level: "agent_only", guestWrite: false });
+    expect(apiRequest).toHaveBeenLastCalledWith(
+      "/api/knowledge/bases/kb-1/channel-grants",
+      {
+        method: "PUT",
+        body: { channelId: "chan-1", level: "agent_only", guestWrite: true },
+        workspaceId: "ws-1",
+      }
+    );
+  });
+
+  it("returns null for `none` — the cache patch reads that as 'remove the key'", async () => {
+    apiRequest.mockResolvedValue({ channelId: "chan-1", grant: null });
+    expect(
+      await setChannelGrant(
+        "kb-1",
+        { channelId: "chan-1", level: "none", guestWrite: false },
+        "ws-1"
+      )
+    ).toBeNull();
   });
 });

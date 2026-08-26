@@ -20,12 +20,40 @@ vi.mock("@/shared/supabase/admin", () => ({
 
 vi.mock("./repository-channel-grants", () => ({
   listChannelKnowledgeGrants: vi.fn(),
+  listChannelGrantsForBase: vi.fn(),
+  upsertChannelKnowledgeGrant: vi.fn(),
+  deleteChannelKnowledgeGrant: vi.fn(),
 }));
 
-import { listChannelKnowledgeGrants } from "./repository-channel-grants";
-import { getChannelGrantMap } from "./service-channel-grants";
+import {
+  deleteChannelKnowledgeGrant,
+  listChannelGrantsForBase,
+  listChannelKnowledgeGrants,
+  upsertChannelKnowledgeGrant,
+} from "./repository-channel-grants";
+import {
+  BASE_GRANT_LIMIT,
+  canManageChannelGrants,
+  getBaseGrantMap,
+  getChannelGrantMap,
+  setChannelKnowledgeGrant,
+} from "./service-channel-grants";
+import { ChannelGrantInvalidError, ScopeChangeForbiddenError } from "./errors";
+import type { KnowledgeBase, KnowledgeContext } from "../types";
 
 const mockList = vi.mocked(listChannelKnowledgeGrants);
+const mockListForBase = vi.mocked(listChannelGrantsForBase);
+const mockUpsert = vi.mocked(upsertChannelKnowledgeGrant);
+const mockDelete = vi.mocked(deleteChannelKnowledgeGrant);
+
+const OWNER: KnowledgeContext = {
+  workspaceId: "ws-1",
+  userId: "user-1",
+  role: "member",
+  source: "user",
+  apiKeyWorkspaceId: null,
+};
+const BASE = { id: "kb-1", createdBy: "user-1" } as KnowledgeBase;
 
 function row(resourceId: string, level: "agent_only" | "visible", guestWrite: boolean) {
   return {
@@ -89,5 +117,209 @@ describe("getChannelGrantMap", () => {
     expect(src).not.toMatch(
       /canSeeBase\(|assertBaseVisible\(|requireEffectiveAccess\(/
     );
+  });
+});
+
+describe("getBaseGrantMap — the inverse read (one base, many channels)", () => {
+  it("keys by CHANNEL id and bounds the read", async () => {
+    mockListForBase.mockResolvedValue([
+      {
+        channel_id: "chan-1",
+        resource_type: "knowledge_base",
+        resource_id: "kb-1",
+        workspace_id: "ws-1",
+        level: "visible" as const,
+        guest_write: true,
+        created_by: null,
+        created_at: "2026-08-27T00:00:00Z",
+        updated_at: "2026-08-27T00:00:00Z",
+      },
+    ]);
+
+    expect(await getBaseGrantMap("ws-1", "kb-1")).toEqual({
+      "chan-1": { level: "visible", guestWrite: true },
+    });
+    // ⚠ PostgREST truncates an un-limited select SILENTLY; the ceiling is passed.
+    expect(mockListForBase).toHaveBeenCalledWith(
+      { __marker: "admin-client" },
+      "ws-1",
+      "kb-1",
+      BASE_GRANT_LIMIT
+    );
+  });
+});
+
+describe("canManageChannelGrants", () => {
+  it("admits the creator and a workspace admin, and nobody else", () => {
+    expect(canManageChannelGrants(OWNER, BASE)).toBe(true);
+    // A member with `edit` on the CONTENT still may not change the AUDIENCE.
+    expect(
+      canManageChannelGrants({ ...OWNER, userId: "user-2" }, BASE)
+    ).toBe(false);
+    expect(
+      canManageChannelGrants({ ...OWNER, userId: "user-2", role: "admin" }, BASE)
+    ).toBe(true);
+    expect(
+      canManageChannelGrants({ ...OWNER, userId: "user-2", role: "owner" }, BASE)
+    ).toBe(true);
+    expect(
+      canManageChannelGrants({ ...OWNER, userId: "user-2", role: "viewer" }, BASE)
+    ).toBe(false);
+  });
+});
+
+describe("setChannelKnowledgeGrant — the three-state write", () => {
+  function row(level: "agent_only" | "visible", guestWrite: boolean) {
+    return {
+      channel_id: "chan-1",
+      resource_type: "knowledge_base",
+      resource_id: "kb-1",
+      workspace_id: "ws-1",
+      level,
+      guest_write: guestWrite,
+      created_by: "user-1",
+      created_at: "2026-08-27T00:00:00Z",
+      updated_at: "2026-08-27T00:00:00Z",
+    };
+  }
+
+  it("refuses a caller who may not manage sharing, BEFORE any write", async () => {
+    await expect(
+      setChannelKnowledgeGrant({ ...OWNER, userId: "user-2" }, BASE, {
+        channelId: "chan-1",
+        level: "visible",
+        guestWrite: true,
+      })
+    ).rejects.toBeInstanceOf(ScopeChangeForbiddenError);
+    expect(mockUpsert).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("DELETES the row for `none` and returns null — absence is the third state", async () => {
+    mockDelete.mockResolvedValue(undefined);
+
+    const result = await setChannelKnowledgeGrant(OWNER, BASE, {
+      channelId: "chan-1",
+      level: "none",
+      guestWrite: false,
+    });
+
+    expect(result).toBeNull();
+    expect(mockUpsert).not.toHaveBeenCalled();
+    // Workspace-filtered: the PK alone would let a mis-routed call cross tenants.
+    expect(mockDelete).toHaveBeenCalledWith(
+      { __marker: "admin-client" },
+      "ws-1",
+      "chan-1",
+      "kb-1"
+    );
+  });
+
+  it("upserts `visible` with the requested guestWrite and the acting user", async () => {
+    mockUpsert.mockResolvedValue(row("visible", true));
+
+    const result = await setChannelKnowledgeGrant(OWNER, BASE, {
+      channelId: "chan-1",
+      level: "visible",
+      guestWrite: true,
+    });
+
+    expect(result).toEqual({ level: "visible", guestWrite: true });
+    expect(mockUpsert).toHaveBeenCalledWith(
+      { __marker: "admin-client" },
+      {
+        workspaceId: "ws-1",
+        channelId: "chan-1",
+        baseId: "kb-1",
+        level: "visible",
+        guestWrite: true,
+        // ⚠ Off the CONTEXT, never the request.
+        createdBy: "user-1",
+      }
+    );
+  });
+
+  it("FORCES guestWrite false at agent_only — that level has no human audience", async () => {
+    mockUpsert.mockResolvedValue(row("agent_only", false));
+
+    await setChannelKnowledgeGrant(OWNER, BASE, {
+      channelId: "chan-1",
+      level: "agent_only",
+      guestWrite: true,
+    });
+
+    // A stored `true` here would be a latent permission that comes back ON with
+    // the audience the moment somebody raises the level to `visible`.
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ level: "agent_only", guestWrite: false })
+    );
+  });
+
+  it("returns the STORED row, not the requested one", async () => {
+    // The server normalises; the client patches its cache from this answer.
+    mockUpsert.mockResolvedValue(row("agent_only", false));
+    expect(
+      await setChannelKnowledgeGrant(OWNER, BASE, {
+        channelId: "chan-1",
+        level: "agent_only",
+        guestWrite: true,
+      })
+    ).toEqual({ level: "agent_only", guestWrite: false });
+  });
+
+  it("translates the trigger's P0001 RAISE into ChannelGrantInvalidError", async () => {
+    mockUpsert.mockRejectedValue({
+      code: "P0001",
+      message:
+        "channel_resource_grants: resource workspace mismatch (grant=ws-1, resource=ws-2)",
+    });
+
+    const err = await setChannelKnowledgeGrant(OWNER, BASE, {
+      channelId: "chan-1",
+      level: "visible",
+      guestWrite: false,
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ChannelGrantInvalidError);
+    // ⚠ The raw message names both workspace ids — it must not survive.
+    expect((err as Error).message).not.toContain("ws-2");
+  });
+
+  it("translates a 23503 FK violation the same way — refused, not broken", async () => {
+    mockUpsert.mockRejectedValue({ code: "23503", message: "insert violates fk" });
+    await expect(
+      setChannelKnowledgeGrant(OWNER, BASE, {
+        channelId: "chan-1",
+        level: "visible",
+        guestWrite: false,
+      })
+    ).rejects.toBeInstanceOf(ChannelGrantInvalidError);
+  });
+
+  it("RE-THROWS an unrelated P0001 rather than relabelling it a grant refusal", async () => {
+    // A bare code match would hand the user a confident 400 explaining a
+    // cross-workspace grant that never happened.
+    const other = { code: "P0001", message: "some other trigger blew up" };
+    mockUpsert.mockRejectedValue(other);
+    const err = await setChannelKnowledgeGrant(OWNER, BASE, {
+      channelId: "chan-1",
+      level: "visible",
+      guestWrite: false,
+    }).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(ChannelGrantInvalidError);
+    expect(err).toBe(other);
+  });
+
+  it("re-throws a plain database error untouched", async () => {
+    const boom = new Error("connection reset");
+    mockUpsert.mockRejectedValue(boom);
+    await expect(
+      setChannelKnowledgeGrant(OWNER, BASE, {
+        channelId: "chan-1",
+        level: "visible",
+        guestWrite: false,
+      })
+    ).rejects.toBe(boom);
   });
 });

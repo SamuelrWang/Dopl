@@ -16,6 +16,7 @@ import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import type { KnowledgeRouting } from "./knowledge-v2/routing";
 import { AgentWriteToggle } from "./agent-write-toggle";
 import { DeleteBaseConfirm } from "./delete-base-confirm";
+import { KbChannelGrantsSection } from "./kb-channel-grants-section";
 import { KbSharingSection } from "./kb-sharing-section";
 
 interface Props {
@@ -35,9 +36,16 @@ interface Props {
  * Settings form for a single knowledge base. Sections:
  *   1. General — name, description.
  *   2. Sharing — private / teams / workspace scope + team grants.
- *   3. Agent access — the agent-write toggle.
- *   4. Advanced — slug edit (folded behind a disclosure).
- *   5. Danger zone — permanently delete the KB (confirmed).
+ *   3. Channels — per-channel (scope-A) grants + guest write.
+ *   4. Agent access — the agent-write toggle.
+ *   5. Advanced — slug edit (folded behind a disclosure).
+ *   6. Danger zone — permanently delete the KB (confirmed).
+ *
+ * ⚠ SHARING AND CHANNELS ARE TWO DIFFERENT AUDIENCES, kept as two sections on
+ * purpose. Sharing answers "which WORKSPACE MEMBERS see this" (visibility +
+ * teams, on the base row); Channels answers "which CHANNELS — and therefore
+ * which guests and which agents — reach it" (grant rows, per channel). Folding
+ * them together would imply one is a level of the other.
  */
 export function BaseSettingsForm({
   workspaceId,
@@ -175,6 +183,12 @@ export function BaseSettingsForm({
           role={role}
           routing={routing}
         />
+      </Section>
+
+      {/* Channels — scope-A grants: None / Agent only / Visible per channel,
+          with the guest-write pen inside the row that can hand one over. */}
+      <Section title="Channels">
+        <KbChannelGrantsSection baseId={base.id} workspaceId={workspaceId} />
       </Section>
 
       {/* Folder descriptions: agent-facing summaries streamed into MCP
