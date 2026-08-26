@@ -112,7 +112,13 @@ expected near-zero code. Work items:
    test exists (doc/code disagreement; the pin gets ADDED in M4, doc then true).
 6. INVARIANTS §3 F-209 bullet stale: `/authenticate`, three `AUTH_ENTRY_ROUTES`, and
    `LOOP_COUNTED_AUTH_ROUTES` all exist in the tree today.
-7. Root typecheck is RED with a running dev server (measured 2026-08-25): tsconfig
+7. DESIGN-SYSTEM.md overstates skeleton a11y (measured 2026-08-25): it claims every
+   skeleton carries `role="status"` + `aria-busy` + `sr-only`; only the two page-level
+   composites in `src/shared/ui/skeleton.tsx` do. `DetailPaneSkeleton`,
+   `DetailDocSkeleton`, `TranscriptSkeleton` carry none, so `relationship-record.tsx`'s
+   loading state is announced as silence. Doc is the wrong side (fix doc; desktop
+   loading-state gap is a finding).
+8. Root typecheck is RED with a running dev server (measured 2026-08-25): tsconfig
    includes `.next/dev/types/**/*.ts`; Next lazily generates `ParamCheck<RouteContext>`
    files per route hit in dev, and the `withUserAuth`/`withWorkspaceAuth` returned
    handlers declare `routeContext?: {...}` (optional second param), which is not
@@ -143,7 +149,7 @@ expected near-zero code. Work items:
   flagged; the web surface makes it more reachable (no install needed). Confirm
   accepted for MVP, or scrub `email` from guest-reachable DTOs (blast radius: desktop
   shows email today).
-- **R8** Root typecheck red locally (finding #7 above): fix the wrapper signature
+- **R8** Root typecheck red locally (finding #8 above): fix the wrapper signature
   (make the returned handler's second param `RouteContext`-compatible — touches the
   auth wrapper every route composes) in this feature's M4, or file the finding and
   leave it? Recommend: fix in M4 with its own mutation-verified test, since M1 adds

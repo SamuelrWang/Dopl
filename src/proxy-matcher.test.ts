@@ -149,6 +149,8 @@ describe("the API split", () => {
 //   /admin/*                auth-gated.
 //   /download               PUBLIC_ROUTE, but a real route handler, not a static file.
 //   /invite/*, /join/*      PUBLIC_ROUTES whose pages branch on session state.
+//   /c/{workspaceId}        auth-gated guest channel page — NOT a PUBLIC_ROUTE, so
+//                           the gate is the only thing bouncing a signed-out guest.
 //   /oauth/authorize        PUBLIC_ROUTE running its own getUser + login bounce.
 //   /auth/*                 the callback and the desktop sign-in bridge.
 //   /canvas, /{segment}/*   historical URLs the retirement map answers for.
@@ -165,6 +167,7 @@ describe("everything that must still reach the gate", () => {
     "/download",
     "/invite/tok_x",
     "/join/tok_x",
+    "/c/6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
     "/oauth/authorize",
     "/auth/callback",
     "/auth/desktop-start",

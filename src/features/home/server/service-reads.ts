@@ -118,6 +118,35 @@ export async function hydrateOneChannel(
 }
 
 /**
+ * ONE home channel, for a host that already knows WHICH container it wants —
+ * the guest web route `/c/{workspaceId}` (spec: `docs/specs/guest-web-channel.md`).
+ *
+ * ⚠ IT IS THE FENCE PLUS THE HYDRATION, AND NOTHING ELSE. The authz is
+ * `findMemberContainer`'s (repository-containers.ts): active membership of a
+ * `kind='link'` container, ABSENT rather than forbidden, and it refuses a
+ * STANDARD workspace the caller genuinely belongs to. So `null` here means
+ * three different things on purpose — not a container, not a member, not a link
+ * container — and the page answers all three with `notFound()`. Any branch that
+ * told them apart would make the URL an existence oracle for container ids.
+ *
+ * ⚠ NOT A FILTER OVER `getHomeChannels`. That read is capped
+ * (`HOME_CHANNEL_LIMIT`), so scanning its page for one id would 404 a channel
+ * the caller really has once they hold more than the cap.
+ *
+ * ⚠ A CONTAINER WITH NO CHANNEL STILL THROWS 500 — `hydrateOneChannel` owns
+ * that decision for every write path already, and a guest route is not the
+ * place to invent a quieter answer for a half-built container.
+ */
+export async function getHomeChannel(
+  userId: string,
+  workspaceId: string
+): Promise<HomeChannel | null> {
+  const container = await repo.findMemberContainer(workspaceId, userId);
+  if (!container) return null;
+  return hydrateOneChannel(container, userId);
+}
+
+/**
  * The caller's still-usable LEGACY UNBOUND links.
  *
  * ⚠ BOUND LINKS ARE NOT HERE — the repository filters `workspace_id IS NULL` in

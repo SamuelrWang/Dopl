@@ -7,6 +7,12 @@ import { FlushGrid } from "@/shared/design";
 // ⚠ Top-level routes that are NOT a workspace slug. Anything absent from this
 // set is treated as a workspace route, where the (app) group AppShell owns all
 // chrome and this legacy shell renders nothing.
+//
+// ⚠ `/c/{workspaceId}` — the guest web channel (2026-08-25) — is DELIBERATELY
+// ABSENT, not an oversight. Listing it would dress the page in the centred
+// `FlushGrid` container, which is wrong for a full-viewport surface; the guest
+// page draws its own root and overrides the `#2c3640` body paint itself, so the
+// bare app-shell-classed render this set's ABSENCE produces is what it wants.
 const NON_WORKSPACE_ROOTS = new Set([
   "admin",
   "auth",

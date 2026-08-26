@@ -79,6 +79,11 @@ const RESERVED_TOP_LEVEL = new Set([
   // The one auth page; `/login` + `/signup` 307 to it (kept below).
   "authenticate",
   "billing",
+  // `/c/{workspaceId}` — the guest web channel surface (2026-08-25). KEEP by
+  // accident otherwise (a container UUID is never an `APP_PAGES` name, so the
+  // two-segment rule below happens to miss it); named explicitly so it's a
+  // rule, and so a child segment that ever collides can't retire the route.
+  "c",
   "download",
   "favicon.ico",
   "get-started",

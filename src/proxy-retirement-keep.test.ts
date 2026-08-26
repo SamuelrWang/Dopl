@@ -59,6 +59,8 @@ import {
 
 const ORIGIN = "https://app.usedopl.com";
 const SEGMENT = "acme-ab12cd34ef56";
+/** A link-container id, the shape `/c/{workspaceId}` actually carries. */
+const CONTAINER = "6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d";
 
 function req(path: string, headers?: Record<string, string>) {
   return new NextRequest(new URL(path, ORIGIN), headers ? { headers } : undefined);
@@ -99,6 +101,14 @@ const KEEP = [
   "/admin/health",
   "/invite/tok_x",
   "/join/tok_x",
+  // The home-channel claim page. `link` has been in `RESERVED_TOP_LEVEL` since
+  // 2026-08-23 and its immunity went UNASSERTED here — backfilled with the
+  // guest-channel row below, which is the same class of entry route.
+  "/link/tok_x",
+  // The guest web channel surface (2026-08-25) — the destination a claimer
+  // without the desktop app lands on. Retiring it would send every guest to the
+  // download page, which is the one thing this lane exists to avoid.
+  `/c/${CONTAINER}`,
   "/auth/callback?code=abc",
   "/auth/desktop-start?provider=github&state=n1",
   "/auth/desktop-handoff?state=n1",
@@ -138,6 +148,9 @@ describe("the KEEP list is untouched with the flag ON", () => {
     "/download",
     "/join/tok_x",
     "/invite/tok_x",
+    // A claimer has no account by definition — serving this one signed OUT is
+    // the entire point of the link (`PUBLIC_ROUTES › "/link/"`).
+    "/link/tok_x",
     "/auth/callback?code=abc",
     "/auth/desktop-start?provider=google&state=n1",
     "/auth/desktop-handoff?state=n1",
@@ -167,6 +180,29 @@ describe("the KEEP list is untouched with the flag ON", () => {
     // must not change which of the two things happens to them.
     const raw = (await proxy(req("/get-started"))).headers.get("location");
     expect(raw).toBe(`${ORIGIN}/login?redirectTo=%2Fget-started`);
+  });
+
+  it("the top-level KEEPs are a RULE, not an accident", () => {
+    // ⚠ THE KEEP ROWS ABOVE PASS WITH OR WITHOUT THE RESERVATION, which is the
+    // gap this closes. `/link/{token}` and `/c/{workspaceId}` are two-segment
+    // paths whose SECOND part is not an `APP_PAGES` name, so the map answers
+    // `null` for them by falling off the end of every rule: delete either name
+    // from `RESERVED_TOP_LEVEL` and every assertion above still passes.
+    //
+    // `RESERVED_TOP_LEVEL` is what makes those KEEPs structural, and a COLLIDING
+    // child segment is the only shape that can prove it. Real traffic never
+    // produces these (claim tokens and container UUIDs are not called
+    // "knowledge"), so these are not URLs — they are the rule stated in the one
+    // form that fails when the rule is gone. Same argument the `signup` entry
+    // carries in its own comment.
+    for (const path of [
+      "/link/knowledge",
+      "/link/settings",
+      "/c/knowledge",
+      "/c/settings",
+    ]) {
+      expect(mapVerdict(path), path).toBeNull();
+    }
   });
 
   it("mixed-case canonicalization still runs BEFORE the retirement", async () => {

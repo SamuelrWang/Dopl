@@ -28,6 +28,11 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "authenticate",
   "browse",
   "build",
+  // Guest web channel (2026-08-25): `/c/{workspaceId}` is a top-level route.
+  // A workspace slugged "c" would carry its legacy URLs at `/c/{page}`, where
+  // the new route's dynamic segment answers first — the same silent shadowing
+  // that reserves "link", "join" and "invite" below.
+  "c",
   "canvas",
   "connect",
   "design",

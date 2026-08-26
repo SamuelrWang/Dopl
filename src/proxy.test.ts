@@ -91,6 +91,8 @@ vi.mock("@supabase/ssr", () => ({
 import { proxy } from "./proxy";
 
 const ORIGIN = "https://app.usedopl.com";
+/** A link-container id, the shape `/c/{workspaceId}` actually carries. */
+const CONTAINER = "6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d";
 
 function req(path: string, init?: { headers?: Record<string, string> }) {
   return new NextRequest(new URL(path, ORIGIN), { headers: init?.headers });
@@ -213,6 +215,21 @@ describe("pages", () => {
     const res = await proxy(req("/knowledge/abc"));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
+  });
+
+  // THE GUEST WEB CHANNEL IS GATED BY OMISSION (2026-08-25). `/c/{workspaceId}`
+  // is nowhere in `PUBLIC_ROUTES`, so this ordinary signed-out bounce IS the
+  // whole gate — and the bounce is also the flow: the guest arrives from the
+  // claim page, signs in, and `/login` + `/auth/callback` return them to the
+  // channel via the validated `redirectTo`. This pins BOTH halves, so a later
+  // "/c" entry in `PUBLIC_ROUTES` cannot quietly make a member-fenced page
+  // reachable with no session (§3: those entries match by PREFIX).
+  it("a signed-out /c/{workspaceId} bounces to /login naming the channel", async () => {
+    const res = await proxy(req(`/c/${CONTAINER}`));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      `${ORIGIN}/login?redirectTo=%2Fc%2F${CONTAINER}`
+    );
   });
 
   it("/canvas gets NO redirectTo param (it is the default landing)", async () => {

@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
 
 vi.mock("./repository", () => ({
+  findMemberContainer: vi.fn(),
   listLinkContainers: vi.fn(),
   listLinksByCreator: vi.fn(),
   listLinksByWorkspaces: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("@/features/workspaces/server/repository", () => ({
 }));
 
 import {
+  getHomeChannel,
   getHomeChannels,
   getLinkPublicInfo,
   listMyPendingLinks,
@@ -58,6 +60,7 @@ function linkRow(patch: Partial<ChannelLinkRow> = {}): ChannelLinkRow {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocked.findMemberContainer.mockResolvedValue(null);
   mocked.listLinkContainers.mockResolvedValue([]);
   mocked.listLinksByCreator.mockResolvedValue([]);
   mocked.listLinksByWorkspaces.mockResolvedValue(new Map());
@@ -182,6 +185,47 @@ describe("getHomeChannels", () => {
     expect(row.lastMessagePreview).toHaveLength(PREVIEW_CHARS);
     expect(row.lastMessagePreview?.endsWith("…")).toBe(true);
     expect(row.lastMessageAt).toBe("2026-08-22T10:00:00.000Z");
+  });
+});
+
+describe("getHomeChannel", () => {
+  beforeEach(() => {
+    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, PEER]]));
+    mocked.listContainerChannels.mockResolvedValue(
+      new Map([[WS, { id: CHANNEL, name: "Ada & Grace" }]])
+    );
+  });
+
+  it("hands a MEMBER of a link container the same shape the page reads", async () => {
+    mocked.findMemberContainer.mockResolvedValue(CONTAINER);
+
+    const channel = await getHomeChannel(ME, WS);
+
+    expect(channel).toMatchObject({
+      workspaceId: WS,
+      workspaceSegment: "ada-grace-abc123def456",
+      channelId: CHANNEL,
+      name: "Ada & Grace",
+    });
+    // The fence takes the container id and the CALLER — never a slug, never a
+    // list scan, so it cannot 404 a channel that sits past `HOME_CHANNEL_LIMIT`.
+    expect(mocked.findMemberContainer).toHaveBeenCalledWith(WS, ME);
+    expect(mocked.listLinkContainers).not.toHaveBeenCalled();
+  });
+
+  it("answers NULL for a non-member — absent, never forbidden", async () => {
+    mocked.findMemberContainer.mockResolvedValue(null);
+    expect(await getHomeChannel(ME, WS)).toBeNull();
+  });
+
+  it("answers the SAME null for a STANDARD workspace the caller belongs to", async () => {
+    // ⚠ The two cases must be indistinguishable from outside: the guest route
+    // renders `notFound()` for both, so a container id is not an existence
+    // oracle and a standard workspace gets no second, chrome-less door.
+    mocked.findMemberContainer.mockResolvedValue(null);
+    expect(await getHomeChannel(ME, "44444444-4444-4444-8444-444444444abc")).toBeNull();
+    // Nothing was hydrated — the fence is the first read, not a post-filter.
+    expect(mocked.listContainerChannels).not.toHaveBeenCalled();
   });
 });
 
