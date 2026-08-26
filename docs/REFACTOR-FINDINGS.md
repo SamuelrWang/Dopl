@@ -3358,17 +3358,46 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   token and addressed `workspace=<container>`, which nothing in the guest web lane does. And the
   posture it lands in is one §4A already documents: a container has no plan, and a caller with no
   billable standard workspace **runs unmetered, fail-OPEN, by ruling**.
-- ⚠ **NOT FIXED, AND THE REASON IS AN INSTRUCTION RATHER THAN A JUDGEMENT.** INVARIANTS §4A's
-  billing bullet is marked **PROVISIONAL — "wiring now, hash out later" (Samuel, 2026-08-23)** and
-  carries **"DO NOT BUILD ON THIS WITHOUT ASKING"** plus **"Re-ask Samuel before the next billing
-  change touches this path."** Lowering this route to `minRole: "guest"` (so guest usage meters
-  against the guest's OWN oldest-owned standard workspace, per `credits-service.ts ›
-  resolveBillingWorkspaceId`) is a one-line change and is the obvious fix — but it IS a billing
-  change on that path, and the invariant says to ask first.
-- Proposed resolution: **Samuel's ruling.** Either (a) lower the floor to `guest` so a guest meters
-  like anybody else, or (b) leave it and accept that a guest's agent is free, in which case the
-  registrar's log line should say so deliberately rather than reporting a 403 as a transient blip.
-  Status: **open, awaiting a ruling**
+- ⚠ **IT WAS NOT FIXED ON DISCOVERY, AND THE REASON WAS AN INSTRUCTION RATHER THAN A JUDGEMENT.**
+  INVARIANTS §4A's billing bullet was marked **PROVISIONAL — "wiring now, hash out later" (Samuel,
+  2026-08-23)** and carried **"Re-ask Samuel before the next billing change touches this path."**
+- ✅ **RESOLVED 2026-08-26 — SAMUEL RULED: "charge MCP calls from a guest to the user."** The burn
+  lands on **the OPERATOR**: the container's OWNER, whoever made the call. Guardrail/limit settings
+  are explicitly deferred; this change was only about metering to the right party.
+- ⚠ **THE ONE-LINE FIX WOULD HAVE BILLED THE WRONG PERSON, AND SILENTLY.** `credits-service.ts ›
+  resolveBillingWorkspaceId` rerouted a container's burn to **the CALLER's** own oldest-owned
+  standard workspace, so lowering the floor alone would have charged **the guest** (or, far more
+  often, nobody — a guest typically owns no standard workspace, which is the `unmetered()` branch).
+  **The floor and the payer are ONE fix; either half alone is a different bug.**
+- **WHAT SHIPPED (four parts, plus a fence the ruling implied):**
+  1. `credits-service.ts › resolveBillingTarget` (new; `resolveBillingWorkspaceId` kept as the
+     narrow accessor) resolves the container's **active owner** via
+     `workspaces/server/repository.ts › findActiveOwnerUserId` — the `workspace_members` row at
+     `role='owner'`, **not `workspaces.owner_id`**, because H-5's trigger
+     (`20260720184806_workspace_last_active_owner_guard.sql`) guarantees that row exists — then
+     `findDefaultWorkspaceForUser(OWNER)`. It returns `{workspaceId, payerUserId, reason?}`.
+  2. `POST /api/mcp/credits/consume` is `minRole: "guest"` — the **fifteenth and only non-channel**
+     entry in the guest-allowed set. It is a METER, not a capability: no data, no write, and the
+     only effect of success is that a counter goes up. **Raising it back re-opens the free lane.**
+  3. **No-billing-workspace → FAIL OPEN, LOGGED.** Refusing would brick a relationship on the
+     strength of the other party's billing. `consumeMcpCredits` `console.warn`s the container, the
+     caller, the payer and an `UnmeteredReason` before returning `unmetered()`. **Never silent** —
+     silence was indistinguishable from the bug.
+  4. `registrar.ts › charge` keeps its transport fail-open, and `credits.test.ts` now pins that a
+     **degraded-but-allowed 200 proceeds and logs NOTHING there** — so a log line at that layer
+     means an unexplained failure again, rather than the normal guest path.
+  5. 🔒 **The METER is narrowed to the PAYER** (`status-service.ts`). `GET /api/billing/status` is
+     at the plain `viewer` default and carries plan, member count, seat count, object cap and
+     `objectsUsed` — so handing a peer the owner's target would have printed the operator's private
+     standard workspace inside the relationship. A non-payer gets the unmetered/`degraded` posture.
+- Tests: `billing/server/credits-link-reroute.test.ts` (rewritten — the guest and the owner are
+  deliberately DIFFERENT users who BOTH own a standard workspace, so "picked the caller's" and
+  "picked the owner's" are two different ids rather than one id and a null),
+  `app/api/mcp/credits/consume/route-guest-floor.test.ts` (the real wrapper end to end; a sibling
+  of `route.test.ts`, which mocks `withWorkspaceAuth` away and could not see a floor),
+  `channels/guest-route-floor.test.ts` (15 entries), `packages/mcp-server/src/credits.test.ts`.
+  Mutation-verified: 5 reverts → 11 / 8 / 1 / 3 / 1 failures, 0 vacuous. Status: **RESOLVED**
+- **What is still open is the LIMIT, not the payer — F-328.**
 
 ### F-326 — the mentions service is the one guest-floored write with NO channel-membership fence
 
@@ -3415,3 +3444,31 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Proposed resolution: either enforce it (a `kind='link'` guard in `createChannel`, or a partial
   unique index) or rewrite both doc claims to "the container's FIRST channel is the one the home
   surface renders". Do not do half. Status: **open**
+
+### F-328 — a guest can spend the operator's credits, and the credit ledger cannot express a per-guest limit
+
+- Location: `src/features/billing/server/workspace-billing.ts › consumeWorkspaceCredits` /
+  `› getWorkspaceCreditsUsed`, over `workspace_credit_usage` — a
+  `(workspace_id, period_start, used)` **aggregate**, moved by the atomic `consume_workspace_credits`
+  upsert-CAS. **There is no user dimension anywhere in it.**
+- Found during: **closing F-325, 2026-08-26** — Samuel's ruling ("charge MCP calls from a guest to
+  the user") makes a guest's tool calls land on the CONTAINER OWNER's counter, and he noted
+  guardrail/limit settings come later. This is the shape of what "later" has to work with.
+- Severity: **a named gap, not a defect.** Nothing is mis-metered; the bound today is the plan's own
+  credit ceiling plus `withUserAuth`'s rate limiting. What is absent is any way to say "this guest
+  may spend N of my credits", or to answer "how much of last month did the guest spend" from the
+  ledger — the counter that moved records only that it moved.
+- ⚠ **PER-CALLER ATTRIBUTION DOES EXIST, AT A DIFFERENT GRANULARITY, AND IT IS NOT THE LEDGER.**
+  `features/analytics/server/mcp-tool-calls.ts › logMcpToolCall` writes one `mcp_tool_calls` row per
+  workspace-scoped call carrying `workspace_id` (**the container**, not the payer) and `user_id`
+  (**the guest**). **It fires per LOOPBACK request, and one tool call makes 0..N of them**
+  (INVARIANTS §10) — so it can rank and attribute, but it is NOT a credit count and must never be
+  presented as one. `_`-prefixed internal calls (`_mcp_credits_consume` itself) are excluded.
+- ⚠ **NO SCHEMA WAS ADDED, DELIBERATELY.** A `user_id` on the usage row is not a cheap field: it
+  changes the CAS key, so the "limit" the RPC compares against stops being the workspace's, and
+  every existing counter row becomes ambiguous. That is a design with a product question in front of
+  it (is a guest's allowance a slice of the operator's, or its own budget?), and §12's rule against
+  building a structure with no statement behind it applies.
+- Proposed resolution: **Samuel's, when he specifies the guardrail.** Until then the honest position
+  is the one INVARIANTS §4A now states — the payer is settled, the limit is not.
+  Status: **open, awaiting the guardrail spec**

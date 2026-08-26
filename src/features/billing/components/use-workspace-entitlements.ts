@@ -31,8 +31,9 @@ export interface WorkspaceCreditsStatus {
   periodStart: string;
   periodEnd: string;
   /** Present only when the zeroes were NOT measured — a link container whose
-   *  caller has no billing workspace runs unmetered
-   *  (`server/credits-service.ts › unmetered`). */
+   *  OWNER has no billing workspace runs unmetered, and so does the reading a
+   *  NON-PAYER peer gets (`server/credits-service.ts › unmetered`,
+   *  `server/status-service.ts`). */
   degraded?: true;
 }
 

@@ -15,14 +15,27 @@ import {
  * only caller. `writeScopeExempt: true` because a READ-ONLY session still consumes — the cost is
  * the tool call, not the write — and gating on `dopl.write` makes read-only agents free.
  *
+ * 🔒 ⚠ `minRole: "guest"` — THE ONE NON-CHANNEL ENTRY IN THE GUEST-ALLOWED SET, AND IT IS A
+ * METER, NOT A CAPABILITY (2026-08-26, Samuel: "charge MCP calls from a guest to the user";
+ * closes F-325). At the wrapper's `viewer` default this route 403'd every guest-scoped call, and
+ * `packages/mcp-server/src/registrar.ts › createCreditedRunner › charge` fails OPEN on any throw —
+ * so a 403 was not a refusal, it was a FREE TOOL CALL plus a log line. Lowering the floor grants a
+ * guest nothing except the ability to be BILLED: the only effect of a successful call is that
+ * somebody's counter goes UP, and by `credits-service.ts › resolveBillingTarget` that somebody is
+ * the container's OWNER. **Raising this floor back does not close anything — it re-opens the free
+ * lane.** Pinned by `app/api/channels/guest-route-floor.test.ts` (set A/B) and, behaviourally,
+ * by `route-guest-floor.test.ts` beside this file — which drives the REAL wrapper, where
+ * `route.test.ts` mocks it away to reach the plan arithmetic.
+ *
  * `allowed: false` answers 200, not 402: the MCP layer owns the refusal wording and renders it as
  * a tool result, and it already has to read `allowed`.
  */
 export const POST = withWorkspaceAuth(
   async (_request, { workspaceId, workspaceKind, userId }) => {
     try {
-      // ⚠ A `kind='link'` home-channel container has no plan; the caller's own
-      // billing workspace pays (`credits-service.ts › resolveBillingWorkspaceId`).
+      // ⚠ A `kind='link'` home-channel container has no plan; the container
+      // OWNER's billing workspace pays, whoever made the call
+      // (`credits-service.ts › resolveBillingTarget`, INVARIANTS §4A).
       return NextResponse.json(
         await consumeMcpCredits(workspaceId, { userId, workspaceKind })
       );
@@ -40,7 +53,7 @@ export const POST = withWorkspaceAuth(
       return NextResponse.json(failOpen());
     }
   },
-  { writeScopeExempt: true }
+  { writeScopeExempt: true, minRole: "guest" }
 );
 
 /** Degraded answer. `allowed: true` is load-bearing; counters are zeroed and `degraded` says so,

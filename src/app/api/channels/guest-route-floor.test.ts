@@ -43,7 +43,15 @@
  * "guest" }` off an allowed GET, or raise an allowed POST back to `"member"`)
  * removes it from the discovered set → set A fails on that entry AND set B's
  * equality fails. Adding `guest` to any other route fails set B (both halves).
- * Breaking the parser fails set D. 14 entries.
+ * Breaking the parser fails set D. 15 entries.
+ *
+ * ⚠ FOURTEEN OF THE FIFTEEN ARE CHANNEL ROUTES; THE FIFTEENTH IS A METER
+ * (2026-08-26). `mcp/credits/consume` sits at `guest` so a guest's tool calls
+ * are BILLED — the registrar fails open on the 403 the `viewer` default
+ * produced, so that floor made guest traffic free rather than refusing it
+ * (F-325). It grants no data and no write; the entry lives here because this
+ * file's contract is "nothing anywhere is at `guest` unless it is listed", and
+ * that contract is worth more than the list staying channel-only.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -220,6 +228,16 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // for every guest — and seeing that the operator's agent is working is the
   // guest lane's whole proposition. READ ONLY; launching stays closed.
   [`${CHANNELS_REL}/[channelId]/sessions/route.ts`, "GET"],
+  // ⚠ THE ONE NON-CHANNEL ENTRY, AND IT IS A METER RATHER THAN A CAPABILITY
+  // (2026-08-26, Samuel: "charge MCP calls from a guest to the user"; closes
+  // F-325). At the `viewer` default this 403'd every guest-scoped consume call,
+  // and `packages/mcp-server/src/registrar.ts › charge` fails OPEN on a throw —
+  // so the floor was not refusing guest traffic, it was making it FREE. The only
+  // thing a successful call does is put a credit on somebody's counter, and
+  // `billing/server/credits-service.ts › resolveBillingTarget` sends a
+  // container's burn to the container's OWNER. Raising it back re-opens the free
+  // lane; it closes nothing.
+  ["mcp/credits/consume/route.ts", "POST"],
 ];
 
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
@@ -248,8 +266,8 @@ const KNOWN_FLOORS: ReadonlyArray<readonly [string, string, string]> = [
 ];
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 14 entries (pins the size against a silent add/drop)", () => {
-    expect(ALLOWED_KEYS.size).toBe(14);
+  it("has 15 entries (pins the size against a silent add/drop)", () => {
+    expect(ALLOWED_KEYS.size).toBe(15);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {

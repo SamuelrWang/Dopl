@@ -235,6 +235,39 @@ export async function findMembership(
   return data ? mapMemberRow(data as WorkspaceMemberRow) : null;
 }
 
+/**
+ * The workspace's ACTIVE OWNER — the `workspace_members` row at `role='owner'`,
+ * not `workspaces.owner_id`. Used by the link-container billing reroute
+ * (`billing/server/credits-service.ts › resolveBillingTarget`, §4A) to find the
+ * OPERATOR who pays for a burn inside a container.
+ *
+ * ⚠ MEMBERSHIP IS THE SOURCE, AND THAT IS THE POINT: `workspaces.owner_id` is a
+ * column nothing keeps in step with departures, while an active owner ROW is a
+ * DB guarantee — `20260720184806_workspace_last_active_owner_guard.sql` (H-5)
+ * RAISEs on the delete/demote that would leave a workspace with zero. So `null`
+ * here means the workspace is gone, never that ownership merely drifted. Do NOT
+ * add an `owner_id` fallback: a second mechanism is a second thing to drift.
+ *
+ * ⚠ NOT AN AUTHZ READ. It answers "who pays", never "who may". Ordered oldest
+ * first so a workspace that somehow carries two owners answers deterministically
+ * rather than by PostgREST's row order.
+ */
+export async function findActiveOwnerUserId(
+  workspaceId: string
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("workspace_members")
+    .select("user_id")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "active")
+    .eq("role", "owner")
+    .order("joined_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { user_id: string } | null)?.user_id ?? null;
+}
+
 export async function listMembers(workspaceId: string): Promise<WorkspaceMembership[]> {
   const db = supabaseAdmin();
   const { data, error } = await db

@@ -3768,9 +3768,10 @@ tier to be added once, placed at the fail-closed end of the default so the enume
 
 ## 2026-08-26 — The guest lane was broken FOR THE GUEST, and every miss was on the same axis
 
-Current state: INVARIANTS §4A (the two wrapper families, the fourteen floors, the public-channel
+Current state: INVARIANTS §4A (the two wrapper families, the FIFTEEN floors, the public-channel
 fence), §7 (the realtime guest arm), §12 (`20260826120000`). REFACTOR-FINDINGS F-324 (RESOLVED),
-F-325/F-326/F-327 (open). This section is only the argument.
+**F-325 (RESOLVED same day — see the next section; the fifteenth floor is its fix)**, F-326/F-327
+(open). This section is only the argument.
 
 Two independent adversarial reviews, then a third, agreed the guest-role wave's *security* boundary
 was sound: escalation is closed, the twelve lowered routes keep their channel fence, F-319 is
@@ -3886,3 +3887,74 @@ declarations now. **A gate that checks a list of names cannot check a decision m
 admits it — it is done when everything it MUST reach answers, and the only witness to that is the
 surface's own call graph.** Every one of these was on the same axis: someone reasoned correctly about
 one door and generalized to "the door".
+
+---
+
+## 2026-08-26 — Charging the operator: a fail-open that was swallowing an auth refusal
+
+Current state: INVARIANTS §4A (the billing bullet, no longer PROVISIONAL about WHO pays; the
+fifteenth guest floor), §10 (the registrar's fail-open, narrowed). REFACTOR-FINDINGS F-325
+(RESOLVED), F-328 (open). This section is only the argument.
+
+Samuel's ruling was one sentence — *"charge MCP calls from a guest to the user"* — and the finding it
+closed had already named the one-line patch: lower `POST /api/mcp/credits/consume` from the wrapper's
+`viewer` default to `guest`. **That patch would have shipped the ruling's opposite.**
+
+### The two halves were in different files and only one of them was in the finding
+
+`credits-service.ts › resolveBillingWorkspaceId` rerouted a container's burn to
+`findDefaultWorkspaceForUser(caller.userId)` — **the CALLER's** own oldest-owned standard workspace.
+That was written in 2026-08-23 under a different ruling ("each side spends their own allowance"),
+when the only caller anybody pictured was one of two peers with a workspace each. Lowering the floor
+alone would therefore have metered a guest against **the guest's** plan, or — since a guest typically
+owns no standard workspace at all — against nothing, via the `unmetered()` branch, which is where the
+free usage would have quietly reappeared wearing a different mechanism.
+
+**The finding was right about the symptom and its proposed fix was right about one file.** The rule:
+*when a finding proposes a floor change, ask what the thing behind the floor does with the caller it
+is about to admit.* A floor decides WHO ARRIVES; it never decides what happens next, and the two are
+routinely written by different people on different days under different rulings.
+
+### An auth refusal is not a transport failure, and the catch could not tell
+
+`registrar.ts › charge` fails open on any throw, with a comment explaining exactly why: *"refusing on
+a transient loopback blip bricks every agent."* That reasoning is sound and stays. What it did not
+anticipate is that a **403** — a deliberate, permanent, correctly-computed refusal — arrives at that
+`catch` in the same shape as a dropped connection. So the system's most emphatic "no" became its most
+permissive "yes", **once per tool call, for an entire caller class, for as long as the floor stood.**
+
+The tell was there and was read as noise: one `[credits] consume call failed` per call. A log line
+that fires on *every* call of a supported path is not a warning, it is a background hum.
+
+**The rule: a fail-open must be able to say what it failed on.** The distinction that matters is not
+throw-vs-return, it is *transient* vs *decided*. Where the layers cannot be told apart at the seam,
+put the decision where it CAN be — which is what shipped: an unbillable container now answers **200
+`degraded: true`**, the service logs the reason with the container, the caller and the payer, and the
+registrar logs **nothing**. A line at the registrar means an unexplained failure again.
+
+### The ruling implied a fence it did not mention
+
+"Charge the owner" is a statement about a counter. But `resolveBillingWorkspaceId` had a second
+caller — `status-service.ts`, which uses it to decide which workspace's **entitlements** to report:
+plan, member count, seat count, object cap, `objectsUsed`. Honouring the ruling there would have
+printed the operator's private standard workspace to any peer who could reach `GET
+/api/billing/status` with the container id, and that route sits at the plain `viewer` default, which a
+`member`-granted claimer clears (and a legacy unbound claimer clears at `admin`).
+
+So the resolver was split by QUESTION rather than by caller: `resolveBillingTarget` answers "whose
+counter moves, and whose allowance is that" (`{workspaceId, payerUserId}`), and the meter reports it
+**only to the payer**. **A routing rule and a disclosure rule looked like one function because they
+had the same answer while the payer was always the caller.** They stopped having the same answer the
+moment the ruling landed, and nothing about the ruling said so out loud.
+
+### Ownership had two representations and only one of them is guaranteed
+
+`workspaces.owner_id` and the `workspace_members` row at `role='owner'` are both written by
+`insertSoloContainer` / `insertLinkContainer`, so on the happy path they agree and either would have
+worked. The membership row was chosen because **the database keeps it true**: H-5's trigger
+(`20260720184806_workspace_last_active_owner_guard.sql`) RAISEs on the delete or demote that would
+leave a workspace with zero active owners, so `null` from `findActiveOwnerUserId` means the workspace
+is gone — not that ownership drifted. `owner_id` has no such guard and no writer that maintains it
+through a departure. **Where two columns encode the same fact, bill against the one a trigger
+defends**, and do not add the other as a fallback: a fallback is a second thing to drift, and it
+would fire exactly in the case the first one is telling you something.

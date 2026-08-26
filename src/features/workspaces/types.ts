@@ -46,8 +46,10 @@ export interface InvitationStatus {
 /**
  * "standard" = a real user-facing workspace. "link" = a hidden home-channel
  * container holding ONE or TWO members and exactly one channel — never shown in
- * the rail/switcher, never a default-resolution candidate, bills to each side's
- * own plan.
+ * the rail/switcher, never a default-resolution candidate, and **bills to the
+ * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
+ * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
+ * side's own plan until then).
  */
 export type WorkspaceKind = "standard" | "link";
 

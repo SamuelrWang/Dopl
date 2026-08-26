@@ -1,5 +1,8 @@
 import "server-only";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+import {
+  findActiveOwnerUserId,
+  findDefaultWorkspaceForUser,
+} from "@/features/workspaces/server/repository";
 import {
   isStandardWorkspace,
   type WorkspaceKind,
@@ -38,27 +41,84 @@ export interface CreditCaller {
   workspaceKind?: WorkspaceKind;
 }
 
+/** Why a burn found no counter to move. Never silent — `consumeMcpCredits` logs it. */
+export type UnmeteredReason =
+  | "container-has-no-active-owner"
+  | "container-owner-has-no-billing-workspace";
+
+/** Which counter a burn moves, and whose allowance that is. */
+export interface BillingTarget {
+  /** The workspace whose counter moves. `null` → nothing to charge. */
+  workspaceId: string | null;
+  /**
+   * The user whose allowance is being spent, when the payer is a PERSON rather
+   * than the addressed workspace itself. `null` on the standard path (a tenant
+   * pays for itself) and whenever the container has no resolvable owner.
+   */
+  payerUserId: string | null;
+  /** Set iff `workspaceId` is null. */
+  reason?: UnmeteredReason;
+}
+
 /**
  * Which workspace's counter a charge aimed at `workspaceId` actually lands on.
- * Standard workspace → itself. `null` → nothing to charge; run unmetered.
+ * Standard workspace → itself. `null` workspaceId → nothing to charge.
  *
- * PROVISIONAL (Samuel, 2026-08-23: "bill workspace plans separately; MCP burns
- * bill each side's own plan; wiring now, hash out later"). A `link` container is
- * a two-member relationship, not a tenant, and has no plan — so the burn is
- * charged to the CALLER's own billing workspace: their oldest-owned STANDARD
- * workspace. Each side of a home channel therefore spends their own allowance.
- * `findDefaultWorkspaceForUser` is sanctioned here — its third sanctioned use,
- * alongside signup-bootstrap and the billing grandfather (INVARIANTS §4).
+ * 🔒 **A CONTAINER'S BURN IS CHARGED TO THE OPERATOR — THE CONTAINER'S OWNER —
+ * WHOEVER MADE THE CALL (Samuel, 2026-08-26: "charge MCP calls from a guest to
+ * the user").** A `link` container is a relationship, not a tenant, and has no
+ * plan; the person who minted the link is the one who invited the traffic, so
+ * the guest's (or any peer's) tool calls land on the OWNER's oldest-owned
+ * STANDARD workspace. `findDefaultWorkspaceForUser` is sanctioned here — its
+ * third sanctioned use, alongside signup-bootstrap and the billing grandfather
+ * (INVARIANTS §4).
+ *
+ * ⚠ THIS REPLACES "each side spends their own allowance" (the 2026-08-23
+ * PROVISIONAL wiring). That version resolved `findDefaultWorkspaceForUser(
+ * caller.userId)` — the CALLER's own workspace — which for a guest was either
+ * their unrelated workspace or nothing at all, and in practice was nothing:
+ * the route floor 403'd every guest and the registrar failed open, so guest
+ * traffic was free (F-325). Owner-resolution is the half that makes the lowered
+ * floor mean something; reverting it silently re-bills the wrong party.
+ *
+ * ⚠ FOR THE OWNER'S OWN CALLS IN THEIR OWN SOLO CONTAINER — the overwhelmingly
+ * common case — the answer is byte-identical to the old one: owner === caller.
+ *
+ * ⚠ COSTS ONE EXTRA ROUND TRIP on the container path only (owner, then the
+ * owner's default workspace). The standard path still asks nothing.
  */
+export async function resolveBillingTarget(
+  workspaceId: string,
+  caller?: CreditCaller
+): Promise<BillingTarget> {
+  if (!caller || isStandardWorkspace({ kind: caller.workspaceKind })) {
+    return { workspaceId, payerUserId: null };
+  }
+  const ownerUserId = await findActiveOwnerUserId(workspaceId);
+  if (!ownerUserId) {
+    return {
+      workspaceId: null,
+      payerUserId: null,
+      reason: "container-has-no-active-owner",
+    };
+  }
+  const owned = await findDefaultWorkspaceForUser(ownerUserId);
+  return owned
+    ? { workspaceId: owned.id, payerUserId: ownerUserId }
+    : {
+        workspaceId: null,
+        payerUserId: ownerUserId,
+        reason: "container-owner-has-no-billing-workspace",
+      };
+}
+
+/** The charge target alone. Kept as the narrow accessor for callers that do not
+ *  need to know WHOSE allowance moved — the meter does (`status-service.ts`). */
 export async function resolveBillingWorkspaceId(
   workspaceId: string,
   caller?: CreditCaller
 ): Promise<string | null> {
-  if (!caller || isStandardWorkspace({ kind: caller.workspaceKind })) {
-    return workspaceId;
-  }
-  const owned = await findDefaultWorkspaceForUser(caller.userId);
-  return owned?.id ?? null;
+  return (await resolveBillingTarget(workspaceId, caller)).workspaceId;
 }
 
 /** What a workspace's credit meter says right now. */
@@ -134,14 +194,29 @@ export async function summarizeCredits(
  * then the RPC. Do NOT reintroduce `getWorkspaceEntitlements` here — it fans
  * out to a `COUNT(*)` over `ontology_objects` for a cap this path never
  * consults, plus a second `workspace_billing` read. This runs once per MCP
- * tool call.
+ * tool call. (A `link` container adds the owner + default-workspace reads on
+ * top; the standard path is unchanged.)
  */
 export async function consumeMcpCredits(
   workspaceId: string,
   caller?: CreditCaller
 ): Promise<CreditConsumeResult> {
-  const target = await resolveBillingWorkspaceId(workspaceId, caller);
-  if (!target) return unmetered();
+  const resolved = await resolveBillingTarget(workspaceId, caller);
+  const target = resolved.workspaceId;
+  if (!target) {
+    // ⚠ FAIL OPEN, BUT NEVER SILENTLY. Unmetered usage is a decision (below),
+    // and a decision with no trace is indistinguishable from the 403-and-swallow
+    // this path replaced (F-325). One line names the container, the caller, the
+    // payer we found (or did not) and WHY nothing was charged.
+    console.warn(
+      `[credits] unmetered MCP burn in workspace ${workspaceId} by user ${
+        caller?.userId ?? "unknown"
+      }: ${resolved.reason ?? "unresolved"} (payer ${
+        resolved.payerUserId ?? "none"
+      })`
+    );
+    return unmetered();
+  }
   const [billing, memberCount] = await Promise.all([
     getWorkspaceBilling(target),
     countActiveMembers(target),
@@ -166,10 +241,16 @@ export async function consumeMcpCredits(
 }
 
 /**
- * A burn with no counter to charge: a link container whose caller owns no
- * standard workspace. ⚠ FAIL OPEN, matching `POST /api/mcp/credits/consume`'s
- * posture — an unbillable caller in a home channel must not be bricked. Zeroed
- * counters, because nothing was measured.
+ * A burn with no counter to charge: a link container whose OWNER owns no
+ * standard workspace (or, unreachably, one with no active owner row).
+ *
+ * ⚠ FAIL OPEN, AND IT IS A RULING RATHER THAN AN OVERSIGHT (Samuel, 2026-08-26,
+ * on lowering the consume floor): refusing would brick a relationship on the
+ * strength of the OTHER party's billing — a guest doing legitimate work in a
+ * channel they were invited into would see "out of credits" for a plan that is
+ * not theirs and that they cannot buy. The honesty requirement is that it is
+ * LOGGED, not silent: `consumeMcpCredits` warns with the reason before
+ * returning this. Zeroed counters, because nothing was measured.
  *
  * ⚠ `degraded: true` IS THE SAME STAMP THE ROUTE'S `failOpen()` PUTS ON ITS
  * OWN ZEROES, and it must be: both answers are "allowed, and these numbers mean
