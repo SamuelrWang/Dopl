@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LinkClaimCard } from "./claim-card";
+import type { HomeLinkClaimResult } from "@/features/home/types";
 
 const TOKEN = "b".repeat(64);
 const HOME_DEEP_LINK = "dopl://open/home";
@@ -40,6 +41,30 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   if (realLocation) Object.defineProperty(window, "location", realLocation);
+});
+
+/**
+ * A CLAIM RESPONSE, IN THE SHAPE THE SERVER REALLY SENDS. ⚠ The stub here said
+ * `{ relationship: {}, existing }` until 2026-08-25 — the key was renamed
+ * `relationship` → `channel` on 2026-08-24 and nothing went red, because a
+ * hand-written literal answers to no type. TYPING IT is the fix: the next
+ * rename fails to COMPILE here rather than passing against a payload the
+ * endpoint stopped sending.
+ */
+const claimed = (existing: boolean): HomeLinkClaimResult => ({
+  channel: {
+    workspaceId: "55555555-5555-4555-8555-555555555555",
+    workspaceSegment: "dana-abc123def456",
+    channelId: "66666666-6666-4666-8666-666666666666",
+    name: "Dana",
+    peer: null,
+    createdAt: "2026-08-25T00:00:00.000Z",
+    lastMessageAt: null,
+    lastMessagePreview: null,
+    linkOut: null,
+  },
+  existing,
+  bound: true,
 });
 
 function answer(body: unknown, ok = true) {
@@ -93,7 +118,7 @@ describe("ready to claim", () => {
   });
 
   it("claims, then hands off to the desktop HOME surface", async () => {
-    answer({ relationship: {}, existing: false });
+    answer(claimed(false));
     renderCard();
     await clickConnect();
 
@@ -105,7 +130,7 @@ describe("ready to claim", () => {
   });
 
   it("says so when the pair already had a container", async () => {
-    answer({ relationship: {}, existing: true });
+    answer(claimed(true));
     renderCard();
     await clickConnect();
     expect(screen.getByText("You're already connected to Dana.")).toBeDefined();

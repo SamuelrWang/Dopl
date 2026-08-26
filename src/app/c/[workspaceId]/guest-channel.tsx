@@ -12,6 +12,15 @@
  * a realtime subscription); saying so at the mount is what keeps a server pass
  * from ever running code that assumes a browser.
  *
+ * ⚠ BOTH CAPABILITY FLAGS ARE OFF, AND THE SECOND ONE IS THE GUEST'S OWN STORY
+ * (rulings R2/R3, 2026-08-25). `memberManagement: false` is the container's
+ * fixed two-person roster, the same answer the desktop's home surface gives.
+ * `selfManagement: false` is this lane alone: a guest runs NO agent, so the
+ * tool profile would govern a session that does not exist, and "Leave channel"
+ * is a one-way exit from their only Dopl surface — the link that admitted them
+ * was revoked at claim, so there is no way back in. ONE flag covers both
+ * because it is one story; see `channel-surface.tsx › ChannelSurfaceCapabilities`.
+ *
  * ⚠ NO `role` PROP, DELIBERATELY (ruling R4, 2026-08-25). The claimer really is
  * a workspace `admin` (§4A), so the SERVER would permit rename/archive and
  * minting a further link; omitting `role` takes the surface's least-privileged
@@ -114,7 +123,7 @@ export function GuestChannel({
           workspaceSlug={homeChannel.workspaceSegment}
           channel={channel}
           currentUserId={currentUserId}
-          capabilities={{ memberManagement: false }}
+          capabilities={{ memberManagement: false, selfManagement: false }}
           onDeleted={onDeleted}
         />
       )}

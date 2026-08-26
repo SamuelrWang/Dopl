@@ -48,7 +48,13 @@ vi.mock("./composer", () => ({
     <div data-testid="composer" data-new-thread={String(newThreadSignal ?? 0)} />
   ),
 }));
-vi.mock("./settings-agent", () => ({ ChannelAgentSettings: () => null }));
+// ⚠ NOT `() => null` any more (2026-08-25): `selfManagement` decides whether
+// this block is MOUNTED AT ALL, and a mock that renders nothing cannot tell the
+// two answers apart. It stays inert — the real one has its own suite
+// (`settings-tab.test.tsx`); what is under test here is the threading.
+vi.mock("./settings-agent", () => ({
+  ChannelAgentSettings: () => <div data-testid="agent-settings" />,
+}));
 // The invite half's two dialogs. Both open reads of their own on mount, and the
 // `memberManagement` case below is about whether they are MOUNTED at all — which
 // a stub still answers, because it is the same element either way.
@@ -272,5 +278,60 @@ describe("StandaloneChannelSurface — the host's two knobs", () => {
     mount();
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
     expect(await screen.findByText(/^Delete /)).toBeTruthy();
+  });
+});
+
+/**
+ * `selfManagement` — THE VIEWER'S OWN STAKE, where `memberManagement` above is
+ * the CONTAINER's roster (Samuel, rulings R2/R3, 2026-08-25).
+ *
+ * ⚠ ONE FLAG, TWO CONTROLS, AND THAT IS WHY BOTH ARE ASSERTED IN THE SAME PAIR
+ * OF CASES. The guest lane (`app/c/[workspaceId]`) is one story — a person with
+ * no Dopl desktop whose whole application is this channel — so "Leave channel"
+ * and the agent block go together or the flag was minted twice. The two live
+ * two files apart (`settings-tab.tsx` and `channel-manage.tsx`), which is
+ * exactly how one of them comes back alone.
+ *
+ * The channel is a plain MEMBER's, because the owner has no leave row to lose.
+ */
+describe("StandaloneChannelSurface — the viewer's own stake", () => {
+  const asMember = { channel: channel({ role: "member" }) };
+
+  it("offers the leave row AND the agent block by default", async () => {
+    mount(asMember);
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    // The anchor: awaiting a row from THIS tab is what makes the absences in
+    // the next case absences rather than an unfinished crossfade.
+    expect(await screen.findByText("Add members")).toBeTruthy();
+    expect(screen.getByText("Leave channel")).toBeTruthy();
+    expect(screen.getByTestId("agent-settings")).toBeTruthy();
+  });
+
+  it("hides BOTH under selfManagement: false, and touches nothing else", async () => {
+    mount({ ...asMember, capabilities: { selfManagement: false } });
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    // ⚠ The roster half is a SEPARATE flag and is still on — this is the
+    // assertion that catches the two being fused back together.
+    expect(await screen.findByText("Add members")).toBeTruthy();
+    // Leaving is one-way out of the guest's only surface (the link was revoked
+    // at claim), and the tool profile governs a session they never run.
+    expect(screen.queryByText("Leave channel")).toBeNull();
+    expect(screen.queryByTestId("agent-settings")).toBeNull();
+  });
+
+  it("the guest preset's empty Settings tab speaks to a MEMBER, not a joiner", async () => {
+    // Both flags off is the guest lane whole. The tab falls to its empty
+    // state, and the description must not tell a member to "join" — that
+    // sentence belongs to a non-member browsing a public channel.
+    mount({
+      ...asMember,
+      capabilities: { memberManagement: false, selfManagement: false },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    expect(await screen.findByText("Nothing to manage")).toBeTruthy();
+    expect(
+      screen.getByText("This channel has no settings for you to change.")
+    ).toBeTruthy();
+    expect(screen.queryByText(/Join this channel/)).toBeNull();
   });
 });

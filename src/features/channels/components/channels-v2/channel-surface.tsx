@@ -87,6 +87,26 @@ export interface ChannelSurfaceCapabilities {
    * one channel would strand the container it lives in.
    */
   memberManagement?: boolean;
+  /**
+   * Whether the VIEWER'S OWN STAKE in this channel — the membership row they
+   * hold and the agent they run in it — is theirs to manage HERE. Default
+   * `true` — every desktop mount. `false` hides the "Leave channel" row AND the
+   * whole `ChannelAgentSettings` block.
+   *
+   * ⚠ ONE FLAG, TWO CONTROLS, BECAUSE THERE IS ONE STORY (Samuel, ruling
+   * R2/R3, 2026-08-25). The GUEST LANE (`src/app/c/[workspaceId]`) is a person
+   * with no Dopl desktop whose entire application is this channel: they run no
+   * agent, so a tool profile governs a session that does not exist, and leaving
+   * is a one-way exit from the only surface they have — the link that brought
+   * them was revoked at claim. Two flags would let a future host turn one half
+   * off and ship the other half's dead control with nothing saying so.
+   *
+   * ⚠ IT IS ABOUT THE VIEWER, WHERE `memberManagement` IS ABOUT THE CONTAINER.
+   * The desktop's own home surface passes `memberManagement: false` (a fixed
+   * two-person roster) and leaves this one alone: the operator absolutely does
+   * manage their own agent there.
+   */
+  selfManagement?: boolean;
 }
 
 export interface ChannelSurfaceProps {
@@ -341,6 +361,7 @@ export function ChannelSurface({
               agentSessions={agentSessions}
               gate={gate}
               memberManagement={capabilities?.memberManagement}
+              selfManagement={capabilities?.selfManagement}
               onDeselect={() => {
                 sel.selectChannel(null);
                 onDeselect?.();

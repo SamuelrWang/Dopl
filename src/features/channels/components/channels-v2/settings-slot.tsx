@@ -41,6 +41,7 @@ export function ChannelsV2SettingsSlot({
   agentSessions,
   gate,
   memberManagement,
+  selfManagement,
   onDeselect,
   onExitThread,
   onRosterChanged,
@@ -59,6 +60,11 @@ export function ChannelsV2SettingsSlot({
    *  ChannelSurfaceCapabilities`. Undefined is the channels page's answer (yes);
    *  a fixed two-person container passes `false` and loses the invite half. */
   memberManagement?: boolean;
+  /** Whether the VIEWER's own membership row and agent are theirs to manage
+   *  here — `channel-surface.tsx › ChannelSurfaceCapabilities`. Undefined is
+   *  every desktop mount's answer (yes); the guest lane passes `false` and
+   *  loses "Leave channel" and the agent block (ruling R2/R3, 2026-08-25). */
+  selfManagement?: boolean;
   /** A deleted CHANNEL must not stay selected. */
   onDeselect: () => void;
   /** A deleted THREAD must not stay selected — back to channel view. */
@@ -94,6 +100,7 @@ export function ChannelsV2SettingsSlot({
       members={members}
       gate={gate}
       memberManagement={memberManagement}
+      selfManagement={selfManagement}
       onDeselect={onDeselect}
       onRosterChanged={onRosterChanged}
     />

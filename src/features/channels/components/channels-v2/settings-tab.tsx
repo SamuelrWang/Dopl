@@ -75,6 +75,17 @@ export interface ChannelsV2SettingsTabProps {
    * to remove; see `canDelete` below.
    */
   memberManagement?: boolean;
+  /**
+   * Whether the viewer manages their OWN stake in this channel — the
+   * membership row they hold (Leave) and the agent they run in it
+   * (`ChannelAgentSettings`, gated in `channel-manage.tsx`). Default `true`.
+   * `false` is the guest lane (`/c/{workspaceId}`, ruling R2/R3 2026-08-25):
+   * a guest's only surface IS this channel, so leaving is one-way with no way
+   * back (the link was revoked at claim), and the tool profile governs an
+   * agent session a guest never runs. NO DEAD ROWS, and no irreversible ones
+   * either.
+   */
+  selfManagement?: boolean;
   onInvite: () => void;
   onToggleVisibility: () => void;
   onToggleArchive: () => void;
@@ -93,6 +104,7 @@ export function ChannelsV2SettingsTab({
   canManage,
   agent,
   memberManagement = true,
+  selfManagement = true,
   onInvite,
   onToggleVisibility,
   onToggleArchive,
@@ -107,7 +119,8 @@ export function ChannelsV2SettingsTab({
   // one of the pair's two membership rows, which the server refuses because THAT
   // is what destroys the conversation permanently. Both DM participants get the
   // reversible "Delete conversation" instead.
-  const canLeave = channel.isMember && !canManage && !channel.isDirect;
+  const canLeave =
+    selfManagement && channel.isMember && !canManage && !channel.isDirect;
   // ⚠ `memberManagement: false` KILLS DELETE TOO, not just invite. In a fixed
   // two-person container the channel IS the relationship: deleting it leaves a
   // container whose relationship can no longer be rendered by either side, and
@@ -119,11 +132,20 @@ export function ChannelsV2SettingsTab({
   const hasActions = canInvite || canToggleVisibility || canManage || canDelete || canLeave;
 
   if (!agent && !hasActions) {
+    // ⚠ TWO AUDIENCES REACH THIS EMPTY STATE and only one of them can join: a
+    // non-member browsing a public channel, and a MEMBER whose host turned the
+    // management capabilities off (the guest lane, ruling R2/R3 2026-08-25).
+    // Telling a member to "join" is a false sentence, so the description
+    // branches on the one fact that separates them.
     return (
       <EmptyState
         icon={Settings2}
         title="Nothing to manage"
-        description="Join this channel to change how your agent answers in it."
+        description={
+          channel.isMember
+            ? "This channel has no settings for you to change."
+            : "Join this channel to change how your agent answers in it."
+        }
       />
     );
   }

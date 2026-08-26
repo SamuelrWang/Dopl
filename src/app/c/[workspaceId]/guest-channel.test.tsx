@@ -87,7 +87,22 @@ describe("the mount", () => {
       workspaceSlug: "ada-grace-abc123def456",
       channel: ROW,
       currentUserId: USER,
-      capabilities: { memberManagement: false },
+    });
+  });
+
+  /**
+   * ⚠ BOTH FLAGS, ASSERTED WHOLE — `toEqual`, never `toMatchObject`. A partial
+   * match stays green when a flag is DROPPED from the object, which is the
+   * regression itself: the control comes back on the guest's surface and
+   * nothing anywhere errors. `memberManagement` is the container's fixed
+   * two-person roster; `selfManagement` is rulings R2/R3 (2026-08-25) — a guest
+   * runs no agent, and leaving is a one-way exit from their only Dopl surface.
+   */
+  it("turns BOTH capability flags off — the roster AND the guest's own stake", async () => {
+    await mount();
+    expect(mocks.surfaceProps?.capabilities).toEqual({
+      memberManagement: false,
+      selfManagement: false,
     });
   });
 

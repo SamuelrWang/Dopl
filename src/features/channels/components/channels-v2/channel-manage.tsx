@@ -79,6 +79,14 @@ export interface ChannelsV2ManageProps {
    * must not mount a surface for doing it.
    */
   memberManagement?: boolean;
+  /**
+   * Whether the VIEWER'S OWN STAKE here is theirs to manage (`channel-surface.tsx
+   * › ChannelSurfaceCapabilities`). Default `true` — every desktop mount.
+   * `false` drops the agent block entirely AND the leave row below it: the
+   * guest lane runs no agent and has nowhere to leave to (ruling R2/R3,
+   * 2026-08-25).
+   */
+  selfManagement?: boolean;
   /** A deleted channel must not stay selected. */
   onDeselect: () => void;
   /** Membership changed under the invite dialog — refetch list + roster. */
@@ -104,6 +112,7 @@ export function ChannelsV2ManageActions({
   members,
   gate,
   memberManagement = true,
+  selfManagement = true,
   onDeselect,
   onRosterChanged,
 }: ChannelsV2ManageProps) {
@@ -149,11 +158,18 @@ export function ChannelsV2ManageActions({
         channel={channel}
         canManage={canManage}
         memberManagement={memberManagement}
+        selfManagement={selfManagement}
         // The agent half, INLINE (2026-08-19 ruling — see the file docblock).
         // A non-member has no agent settings of their own here, and passing
         // nothing is what gives them the tab's empty state.
+        //
+        // ⚠ AND A MEMBER WHO RUNS NO AGENT GETS THE SAME NOTHING
+        // (`selfManagement: false` — ruling R2/R3, 2026-08-25). The block is
+        // not bridge-gated, so a browser guest would otherwise be handed a
+        // containment control over a session no machine of theirs will ever
+        // run: a setting that reads as a promise and governs nothing.
         agent={
-          channel.isMember ? (
+          selfManagement && channel.isMember ? (
             <ChannelAgentSettings
               channelId={channel.id}
               profile={toolProfile}
