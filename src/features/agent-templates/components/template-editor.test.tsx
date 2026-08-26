@@ -14,7 +14,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { AgentTemplate } from "../client/types";
 import { draftToCreateBody, type TemplateDraft } from "../lib/template-draft";
@@ -249,10 +249,32 @@ describe("no concave surfaces", () => {
     });
   }
 
-  const FILES = UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir)));
+  /**
+   * ⚠ THE SWEEP REACHES ACROSS TREES, AND IT HAS TO (2026-08-26, Q4 of
+   * `docs/specs/home-agents-tab.plan.md`). The /home Agents face lives in the
+   * SPA — a separate vitest project — but it renders THIS feature's panels and
+   * cards, so a `SectionBox` there breaks the same ruling. This is a
+   * `readFileSync` over SOURCE, not an import: the root project runs with
+   * `process.cwd()` at the repo root, so the files resolve with no module
+   * graph, no alias and no second config. **A mirrored sweep in the SPA suite
+   * was the alternative and is worse** — two lists of forbidden recipes drift,
+   * and the one that matters is whichever the author did not open.
+   */
+  const HOME_FILES = ["agent-panels.tsx", "agent-panel-cards.tsx"].map((name) =>
+    path.join(process.cwd(), "apps", "desktop-ui", "src", "pages", "home", name)
+  );
+
+  const FILES = [...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))), ...HOME_FILES];
 
   it("finds source files to check (a silent empty sweep would pass forever)", () => {
     expect(FILES.length).toBeGreaterThan(5);
+  });
+
+  // ⚠ A renamed /home file would otherwise leave `readFileSync` throwing inside
+  // `it.each` — which reads as a broken suite, not as an unswept file. This
+  // says which it is.
+  it.each(HOME_FILES)("%s is where the sweep expects it", (file) => {
+    expect(existsSync(file)).toBe(true);
   });
 
   it.each(FILES)("%s wears no pressed-in recipe", (file) => {

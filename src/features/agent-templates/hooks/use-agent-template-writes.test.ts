@@ -140,7 +140,7 @@ async function warm() {
   return view;
 }
 
-const names = (list: AgentTemplate[]) => list.map((t) => t.name);
+const names = (list: readonly AgentTemplate[]) => list.map((t) => t.name);
 
 beforeEach(() => {
   rows[WS_CONTAINER] = [template("tpl-c1", WS_CONTAINER, "Channel Auditor")];

@@ -37,21 +37,63 @@ import type { AgentTemplate, AgentTemplateListResponse } from "../client/types";
 
 const selectTemplates = (body: AgentTemplateListResponse) => body.templates ?? [];
 
+/** Shared frozen empty list. ⚠ NOT a fresh `[]` per render: every consumer
+ *  `useMemo`s a grouping over `templates`, and a new array identity each render
+ *  re-runs all of them (and re-renders every grid) while a read is in flight. */
+const EMPTY_TEMPLATES: readonly AgentTemplate[] = Object.freeze([]);
+
+export interface UseAgentTemplatesOptions {
+  /**
+   * Pause the read. Defaults to TRUE — a surface that mounts this hook usually
+   * means to fetch. The /home Agents face passes `false` for the home-workspace
+   * list until the scope pill asks for it, so a reader who never opens the
+   * dropdown pays for one workspace, not two.
+   */
+  enabled?: boolean;
+}
+
 export interface UseAgentTemplatesResult {
-  templates: AgentTemplate[];
+  /** ⚠ `readonly`, so the shared empty fallback below cannot be sorted or
+   *  spliced by a consumer into every other consumer's list. */
+  templates: readonly AgentTemplate[];
   loading: boolean;
+  /**
+   * Has this read ANSWERED? ⚠ `templates.length === 0` cannot tell you: a
+   * disabled, in-flight or failed read is also empty, and a surface that states
+   * "there is nothing here" against one is asserting something nobody has
+   * measured (INVARIANTS §11). Gate every empty sentence on THIS.
+   *
+   * ⚠ NOT `!loading` either — TanStack reports a DISABLED query as `pending`
+   * forever, so `loading` is false only after data lands and stays true for a
+   * scope nobody has asked for.
+   */
+  resolved: boolean;
   error: unknown;
   refetch: () => void;
 }
 
-export function useAgentTemplates(workspaceId: string): UseAgentTemplatesResult {
+/**
+ * @param workspaceId Which workspace's templates. ⚠ `null` = THERE IS NO
+ *   WORKSPACE TO ASK (no channel selected; a caller who is not onboarded yet, so
+ *   `POST /api/boot` answered `workspace: null`). The read is disabled and
+ *   `resolved` stays false — the surface must say "unavailable", never "empty".
+ */
+export function useAgentTemplates(
+  workspaceId: string | null,
+  opts: UseAgentTemplatesOptions = {}
+): UseAgentTemplatesResult {
   const query = useApiQuery<AgentTemplateListResponse, AgentTemplate[]>(
     agentTemplateKeys.list().path,
-    { workspaceId, select: selectTemplates }
+    {
+      workspaceId: workspaceId ?? undefined,
+      select: selectTemplates,
+      enabled: workspaceId !== null && (opts.enabled ?? true),
+    }
   );
   return {
-    templates: query.data ?? [],
+    templates: query.data ?? EMPTY_TEMPLATES,
     loading: query.isPending,
+    resolved: query.data !== undefined,
     error: query.error,
     refetch: query.refetch,
   };

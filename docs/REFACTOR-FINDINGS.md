@@ -3594,3 +3594,32 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   Status: ✅ **resolved 2026-08-26** — the entry is KEPT rather than deleted because the finding is
   the RULE (a fallback keyed on "the fetch failed" becomes a liar the moment failure becomes normal),
   and a future tidy-up that re-adds review fixtures needs to meet it.
+
+### F-334 — sharing a template BEYOND one channel has no mechanism, and the widening is a five-part change nobody has costed
+
+- Location: `src/features/agent-templates/**` against `supabase/migrations/20260823160000_channel_resource_grants.sql`
+  (the knowledge feature's `channel_resource_grants` table) and
+  `src/features/channels/server/service-grants.ts`.
+- What is true today (2026-08-26, Home Agents Tab M2): a template is shared by its `visibility`
+  column alone. Inside a `kind='link'` CONTAINER that is complete — the container holds one channel
+  and one or two members, so `workspace` means "the other person here" and `private` means "me"
+  (INVARIANTS §5A, Samuel's ruling Q1). **The gap is a MULTI-CHANNEL STANDARD workspace**, where
+  `workspace` means every member and there is no way to say "this channel's people only".
+- Why it was NOT built with the /home face: a `channel_resource_grants` row for templates would be a
+  THIRD copy of the visibility matrix (§5A already keeps two — `service-shared.ts › canSeeTemplate`
+  and the `agent_templates_member_select` policy — and records what a drift between two of them
+  cost). Adding a third to buy a scope the /home surface does not need is the wrong trade at this
+  size.
+- ⚠ **The exact widening, so it is not re-derived under time pressure:**
+  1. the `resource_type` CHECK on `channel_resource_grants` gains `'agent_template'`;
+  2. the enforce-trigger gains a branch that resolves the resource against `agent_templates`;
+  3. an **AFTER DELETE GC trigger on `agent_templates`** — templates are HARD-deleted with no
+     tombstone and the grant id is polymorphic, so nothing cascades. This is the same gap
+     `20260807130000` was written to fix for another resource; do not assume a FK will cover it;
+  4. `ChannelGrantLevel` / `ChannelResourceGrant` move to `src/shared/` types (or are hand-mirrored,
+     which is F-335's class of defect and should be avoided);
+  5. `agent_only` needs a MEANING for a template or must be refused at the API — it has no referent
+     today (a template has ONE consumer: main, at spawn).
+- Severity: **feature gap, not a bug.** Nothing is broken; a scope simply cannot be expressed.
+  Status: **open** — build it when a standard workspace needs per-channel template sharing, and
+  build all five parts in one change.

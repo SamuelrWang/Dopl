@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Link2, Search } from "lucide-react";
+import { Link2, Search } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { isStandardWorkspace } from "@/features/workspaces/types";
@@ -24,6 +24,7 @@ import { PendingLinkCard } from "./link-out-panel";
 import { NewChannelDialog } from "./new-channel-dialog";
 import { HomeSearch } from "./home-search";
 import { HomeKnowledgePanels } from "./knowledge-panels";
+import { HomeAgentPanels } from "./agent-panels";
 
 import {
   HOME_CHANNELS_PATH,
@@ -46,12 +47,16 @@ import {
  * `isStandardWorkspace`. A container is a relationship's plumbing; it is not a
  * place anybody navigates to.
  *
- * ⚠ THE PAGE HAS THREE FACES (Samuel's wireframe, 2026-08-24) — the header's
- * selector replaces the old "Home" title. Chat and Knowledge are built
- * (Knowledge since 2026-08-26, `docs/specs/home-knowledge-panels.plan.md` M3);
- * Agents is still an `EmptyState` placeholder, so the selector still ships
- * ahead of one surface it selects. It is LOCAL state, not a route: nothing
- * links to them.
+ * ⚠ THE PAGE HAS THREE FACES (Samuel's wireframe, 2026-08-24) AND ALL THREE ARE
+ * BUILT — the header's selector replaces the old "Home" title. Chat, Knowledge
+ * (2026-08-26, `docs/specs/home-knowledge-panels.plan.md` M3) and Agents
+ * (2026-08-26, `docs/specs/home-agents-tab.plan.md` M2). It is LOCAL state, not
+ * a route: nothing links to them.
+ *
+ * ⚠ "AGENTS" HERE MEANS TEMPLATE IDENTITIES, not running sessions — the channel
+ * info column has its own **Agents** tab and that one lists live sessions. Both
+ * names stay (Samuel's ruling Q6, 2026-08-26); see `agent-panels.tsx` and
+ * INVARIANTS §5A.
  *
  * ⚠ THE CALLER'S ID COMES FROM `POST /api/boot`, on the SAME cache key the boot
  * page seeds (`bootQueryKey(null)`) — so arriving here from the rail costs no
@@ -124,37 +129,51 @@ export default function HomePage() {
   const selected =
     visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
 
-  // 🔒 KNOWLEDGE IS KEYED BY THE ROW, NOT BY THE TAB (2026-08-26). Chat always
-  // was; Knowledge had to become so the moment it started rendering a CHANNEL's
-  // bases. Keyed by the bare tab name, switching channels leaves the token
-  // frozen at `"knowledge"` — the crossfade never fires and the pane swaps one
-  // channel's knowledge for another's UNDER a token that says nothing changed,
-  // which is the 150ms wrong-channel flash. Agents is still a placeholder and
-  // has no row to key on.
+  // 🔒 EVERY FACE THAT RENDERS A CHANNEL IS KEYED BY THE ROW, NOT BY THE TAB
+  // (2026-08-26). Chat always was; Knowledge and then Agents had to become so
+  // the moment they started rendering a CHANNEL's contents. Keyed by the bare
+  // tab name, switching channels leaves the token frozen at `"knowledge"` /
+  // `"agents"` — the crossfade never fires and the pane swaps one channel's
+  // bases (or templates) for another's UNDER a token that says nothing changed,
+  // which is the 150ms wrong-channel flash.
   const paneToken =
     tab === "knowledge"
       ? `${KNOWLEDGE_PANE}${selected?.id ?? EMPTY_PANE}`
       : tab === "agents"
-        ? tab
+        ? `${AGENTS_PANE}${selected?.id ?? EMPTY_PANE}`
         : (selected?.id ?? EMPTY_PANE);
+
+  /** The row a pane token names, or `null`. ⚠ READ OUT OF THE TOKEN, never out
+   *  of `selected` — that is what makes the pane pure in `shown` and lets the
+   *  outgoing channel's panels finish their fade against their own data. */
+  const rowFor = (id: string) =>
+    visible.find((candidate) => candidate.id === id) ?? null;
 
   /** What the pane shows for one token. ⚠ PURE IN `shown`, because the crossfade
    *  renders the PREVIOUS token for a beat after the selection moves — reading
-   *  `selected` here instead would swap the content before the fade. */
+   *  `selected` here instead would swap the content before the fade.
+   *
+   *  ⚠ FIXED BRANCH ORDER, PREFIXED FACES FIRST. The two prefixes are disjoint
+   *  and neither can be a row id (see their docblocks), so no token is claimed
+   *  twice; the order is fixed anyway so that adding a fourth face is a
+   *  one-line insertion above the bare-row fallback rather than a re-reading of
+   *  which branch wins. */
   const renderPane = (shown: string) => {
-    if (shown === "agents") {
-      // Agents is still a PLACEHOLDER — the selector ships ahead of the surface
-      // it selects.
-      return <EmptyState icon={Bot} title="Nothing here yet" />;
+    if (shown.startsWith(AGENTS_PANE)) {
+      const shownRow = rowFor(shown.slice(AGENTS_PANE.length));
+      return (
+        <HomeAgentPanels
+          channel={shownRow?.kind === "channel" ? shownRow.channel : null}
+          // ⚠ SAME BOOT QUERY AS KNOWLEDGE'S SCOPE C — the home workspace is
+          // `POST /api/boot`'s no-segment answer, so the second template list
+          // costs no extra identity read. NULL until the caller is onboarded.
+          homeWorkspaceId={identity.data.workspace?.id ?? null}
+          currentUserId={identity.data.userId}
+        />
+      );
     }
     if (shown.startsWith(KNOWLEDGE_PANE)) {
-      // ⚠ The ROW IS READ HERE, off `shown`, exactly as the chat branch reads
-      // it — that is what makes the pane pure in the token and lets the
-      // outgoing channel's panels finish their fade against their own data.
-      const shownRow =
-        visible.find(
-          (candidate) => candidate.id === shown.slice(KNOWLEDGE_PANE.length)
-        ) ?? null;
+      const shownRow = rowFor(shown.slice(KNOWLEDGE_PANE.length));
       return (
         <HomeKnowledgePanels
           channel={shownRow?.kind === "channel" ? shownRow.channel : null}
@@ -169,7 +188,7 @@ export default function HomePage() {
         />
       );
     }
-    const row = visible.find((candidate) => candidate.id === shown) ?? null;
+    const row = rowFor(shown);
     if (row === null) {
       // ⚠ Two reasons for an empty pane, and they are not the same sentence:
       // nothing to show, or nothing MATCHING to show.
@@ -297,10 +316,10 @@ export default function HomePage() {
               >
                 {/* ⚠ THE TOKEN, NOT THE CONTENT, is what crosses the fade —
                     the pane renders whatever `shown` names, which lags the
-                    selection by one fade-out. Chat AND Knowledge are keyed by
-                    conversation (Knowledge under its own prefix), the
-                    placeholder tab by itself — so every swap crossfades and a
-                    live message in the open transcript does not. */}
+                    selection by one fade-out. ALL THREE faces are keyed by
+                    conversation (Knowledge and Agents under their own
+                    prefixes) — so every swap crossfades and a live message in
+                    the open transcript does not. */}
                 <Crossfade token={paneToken} className="flex min-w-0 flex-1">
                   {(shown) => renderPane(shown)}
                 </Crossfade>
@@ -342,8 +361,15 @@ const EMPTY_PANE = "empty";
  *  mistaken for a knowledge one and `slice` recovers the row id exactly. */
 const KNOWLEDGE_PANE = "knowledge:";
 
-/** The account surface's three faces. "agents" is still a placeholder
- *  (2026-08-26). */
+/** Agents tokens are `agents:<rowId>`. ⚠ Same argument as `KNOWLEDGE_PANE` —
+ *  row ids are `rel:`/`link:`-prefixed, so a chat token can never wear this
+ *  prefix — plus one more: neither face's prefix is a prefix OF the other, so
+ *  the `startsWith` branches in `renderPane` cannot claim each other's tokens. */
+const AGENTS_PANE = "agents:";
+
+/** The account surface's three faces, all built (2026-08-26).
+ *  ⚠ `"agents"` here is the TEMPLATE face — the channel info column's Agents
+ *  tab is a different surface listing live sessions (INVARIANTS §5A). */
 type HomeTab = "chat" | "knowledge" | "agents";
 
 const HOME_TABS = [
