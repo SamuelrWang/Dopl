@@ -18,6 +18,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { AgentTemplate } from "../client/types";
 import { draftToCreateBody, type TemplateDraft } from "../lib/template-draft";
+import { SECTIONS_CONTAINER } from "../lib/visibility";
 import { TemplateEditor } from "./template-editor";
 
 const TEAMS = [
@@ -117,6 +118,33 @@ describe("what the editor renders", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "A template with that name already exists."
     );
+  });
+});
+
+describe("the visibility scopes the mount offers", () => {
+  it("is the workspace's three by default, in `SECTIONS` order", async () => {
+    await open();
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Private", "Team", "Public"]);
+  });
+
+  it("is TWO inside a link container, and neither is called Public", async () => {
+    // ⚠ A container has no teams (INVARIANTS §4A), so `team` there is a scope
+    // that can never resolve to anybody — and `workspace` means "the other
+    // person in this relationship", not "everyone in your company".
+    await open({ sections: SECTIONS_CONTAINER });
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Shared in this channel", "Private"]);
+  });
+
+  it("takes its LABELS from `lib/visibility.ts`, never from a literal here", async () => {
+    // The point of the prop is that the container's headings and the pane's
+    // headings are one array. A component hand-typing "Shared in this channel"
+    // would pass every assertion above and drift on the first rename.
+    await open({ sections: SECTIONS_CONTAINER });
+    for (const section of SECTIONS_CONTAINER) {
+      expect(screen.getByRole("tab", { name: section.label })).toBeTruthy();
+    }
   });
 });
 
@@ -260,7 +288,11 @@ describe("no concave surfaces", () => {
    * was the alternative and is worse** — two lists of forbidden recipes drift,
    * and the one that matters is whichever the author did not open.
    */
-  const HOME_FILES = ["agent-panels.tsx", "agent-panel-cards.tsx"].map((name) =>
+  const HOME_FILES = [
+    "agent-panels.tsx",
+    "agent-panel-cards.tsx",
+    "agent-editor.tsx",
+  ].map((name) =>
     path.join(process.cwd(), "apps", "desktop-ui", "src", "pages", "home", name)
   );
 

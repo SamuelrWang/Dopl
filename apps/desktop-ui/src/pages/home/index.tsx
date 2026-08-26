@@ -167,7 +167,11 @@ export default function HomePage() {
           // ⚠ SAME BOOT QUERY AS KNOWLEDGE'S SCOPE C — the home workspace is
           // `POST /api/boot`'s no-segment answer, so the second template list
           // costs no extra identity read. NULL until the caller is onboarded.
+          // ⚠ The SEGMENT rides it too and the home-workspace editor needs it
+          // (its teams read is keyed by the segment, not the id); boot's `role`
+          // does NOT go to this face — nothing on it is role-gated.
           homeWorkspaceId={identity.data.workspace?.id ?? null}
+          homeWorkspaceSegment={identity.data.segment}
           currentUserId={identity.data.userId}
         />
       );

@@ -1,17 +1,17 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
-import {
-  USER_ID,
-  WORKSPACE_ID,
-  bootBody,
-  bridgeCalls,
-  installBridge,
-  ok,
-} from "#/test-utils/bridge";
-import type { AgentTemplate } from "@/features/agent-templates/client/types";
+import { WORKSPACE_ID, bootBody, installBridge, ok } from "#/test-utils/bridge";
 import type { HomeChannelsPayload } from "@/features/home/types";
-import { HOME, LINK_WORKSPACE_ID, renderHome, routes } from "./home-test-harness";
+import { HOME, LINK_WORKSPACE_ID, renderHome } from "./home-test-harness";
+import {
+  DANA_TEMPLATE,
+  OTHER_WS,
+  agentRoutes,
+  chooseScope,
+  openAgents,
+  templateCalls as calls,
+} from "./agent-test-fixtures";
 
 /**
  * /home → AGENTS, END TO END THROUGH THE REAL PAGE (plan M2, §1–§4).
@@ -30,9 +30,10 @@ import { HOME, LINK_WORKSPACE_ID, renderHome, routes } from "./home-test-harness
  * second thing on this page called "Agents" (the info column's live-session
  * tab, Q6), so the header selector is unambiguous.
  *
- * ⚠ THE TEMPLATE ROUTE IS CHAINED IN FRONT OF THE HARNESS, not added to it:
- * `/api/agent-templates` is this face's read alone, and the harness answers
- * every other path the page opens with.
+ * ⚠ THE FIXTURES AND THE ROUTING TABLE ARE IN `agent-test-fixtures.ts`, shared
+ * with `agent-authoring.test.tsx` — one `T_HOME`, because this face's whole
+ * hazard is two workspaces being mistaken for each other (F-331) and two copies
+ * of the fixtures is how two suites come to disagree about which is which.
  *
  * ⚠ THE NO-CONCAVE SWEEP IS NOT MIRRORED HERE, and it did not need to be. The
  * SPA is a separate vitest project, but the sweep is a `readFileSync` over
@@ -58,27 +59,9 @@ beforeEach(() => {
   installBridge({ apiRequest });
 });
 
-/** Open the Agents face through the header's `SegmentedControl` — the same
- *  control the operator clicks, so nothing here bypasses the pane token. */
-async function openAgents(): Promise<void> {
-  await screen.findByTestId("channel-surface");
-  fireEvent.click(screen.getByText("Agents"));
-}
-
-/** Point the private section at the home workspace. */
-async function chooseScope(label: string): Promise<void> {
-  fireEvent.click(screen.getByLabelText("Which private agents"));
-  fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(label) }));
-}
-
 /** The template-list calls, split by which workspace they addressed. */
-function templateCalls(workspaceId: string | undefined) {
-  return bridgeCalls(apiRequest).filter(
-    (c) =>
-      c.path.split("?")[0] === "/api/agent-templates" &&
-      c.opts.workspaceId === workspaceId
-  );
-}
+const templateCalls = (workspaceId: string | undefined) =>
+  calls(apiRequest, workspaceId);
 
 describe("the three scopes", () => {
   it("splits the container's templates into shared and private-here", async () => {
@@ -307,106 +290,4 @@ describe("what this pane deliberately leaves out", () => {
   });
 });
 
-const OTHER_WS = "ws-link-2";
-
-/** One template, typed so a rename of any `AgentTemplate` field breaks the
- *  fixture at compile time rather than leaving this suite green against a shape
- *  the endpoint stopped sending. */
-function template(
-  over: Partial<AgentTemplate> & { id: string; name: string }
-): AgentTemplate {
-  return {
-    workspaceId: LINK_WORKSPACE_ID,
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: USER_ID,
-    createdAt: "2026-08-01T10:00:00.000Z",
-    updatedAt: "2026-08-20T10:00:00.000Z",
-    ...over,
-  };
-}
-
-/** Scope A, mine — shared into the channel, no authorship marker. */
-const T_SHARED = template({
-  id: "tpl-shared-1",
-  name: "Renewal chaser",
-  visibility: "workspace",
-});
-/** ⚠ Scope A, the PEER's. A member-granted claimer can create templates in the
- *  container (Q5), so this is the row the marker exists for. */
-const T_SHARED_PEER = template({
-  id: "tpl-shared-2",
-  name: "Priya's intake bot",
-  visibility: "workspace",
-  createdBy: "user-2",
-});
-/** Scope B — private, mine, in the container. */
-const T_PRIVATE = template({ id: "tpl-private-1", name: "Scratch agent" });
-/** ⚠ Private but SOMEBODY ELSE'S. The server would not send it; the client
- *  filter is a second fence and this is what pins it. */
-const T_PRIVATE_PEER = template({
-  id: "tpl-private-2",
-  name: "Priya's drafts bot",
-  createdBy: "user-2",
-});
-/** ⚠ NEITHER SECTION. `team` has no referent in a container, so it must be
- *  DROPPED — without a row in this state, deleting the grouping's unknown-value
- *  guard changes nothing visible. */
-const T_TEAM = template({
-  id: "tpl-team-1",
-  name: "Team ops bot",
-  visibility: "team",
-  teamIds: ["team-1"],
-});
-/** Scope C — private, mine, in the caller's HOME workspace. */
-const T_HOME = template({
-  id: "tpl-home-1",
-  name: "Fundraise analyst",
-  workspaceId: WORKSPACE_ID,
-});
-/** …and a `team` row over there too, so the drop is pinned on both reads. */
-const T_HOME_TEAM = template({
-  id: "tpl-home-2",
-  name: "Team ops bot",
-  workspaceId: WORKSPACE_ID,
-  visibility: "team",
-  teamIds: ["team-9"],
-});
-const DANA_TEMPLATE = template({
-  id: "tpl-dana-1",
-  name: "Dana's assistant",
-  workspaceId: OTHER_WS,
-  visibility: "workspace",
-});
-
-/**
- * `GET /api/agent-templates`, routed by WHICH WORKSPACE was asked for.
- *
- * ⚠ `x-workspace-id` is an `opts` field over the bridge, not part of the path —
- * both scopes hit the SAME url, so a suite matching on the path alone would
- * serve the container's templates to the home scope and pass while the two
- * scopes were wired to one workspace (which is precisely F-331's shape).
- */
-function agentTemplates(opts: BridgeRequestOpts): Promise<BridgeResponse> {
-  return Promise.resolve(
-    ok({
-      templates:
-        opts.workspaceId === WORKSPACE_ID
-          ? [T_HOME, T_HOME_TEAM]
-          : [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM],
-    })
-  );
-}
-
-function defaultRoutes(
-  path: string,
-  opts: BridgeRequestOpts = {}
-): Promise<BridgeResponse> {
-  if (path.split("?")[0] === "/api/agent-templates") return agentTemplates(opts);
-  return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
-}
+const defaultRoutes = agentRoutes;

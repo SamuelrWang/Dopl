@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 // ⚠ Deep import, NOT the `settings-modal` barrel: the barrel re-exports
 // SettingsModal, whose section tree reaches `next/navigation`, and any `next/*`
@@ -19,7 +19,7 @@ import {
   isDraftSavable,
   type TemplateDraft,
 } from "../lib/template-draft";
-import { SECTIONS } from "../lib/visibility";
+import { SECTIONS, type TemplateSectionDef } from "../lib/visibility";
 import {
   ChipMultiSelect,
   CustomFieldRows,
@@ -47,12 +47,18 @@ import {
  *
  * ⚠ NO LAUNCH CONTROL. Choosing a template AT LAUNCH is a later phase; this page
  * is where templates are authored and nothing else.
+ *
+ * ⚠ THE VISIBILITY CONTROL IS DERIVED FROM A SECTION ARRAY THE CALLER NAMES, and
+ * inside a link CONTAINER that array has TWO entries (2026-08-26,
+ * `docs/specs/home-agents-tab.plan.md` §4.5). A container has no teams (§4A), so
+ * `team` there is a scope that can never resolve to anybody — offering it would
+ * be this editor inviting a grant nothing could hold. **The labels still come
+ * from `../lib/visibility.ts`, never from a literal here**: the container's
+ * shared scope reads "Shared in this channel", never "Public", and two arrays in
+ * one module cannot drift the way two components hand-typing headings can.
+ * ⚠ THE TEAM-CLEARING BRANCH BELOW STAYS EITHER WAY — it guards the WORKSPACE
+ * page, where `team` is live, and a container mount simply never reaches it.
  */
-
-const VISIBILITY_OPTIONS = SECTIONS.map((s) => ({
-  key: s.visibility,
-  label: s.label,
-}));
 
 export interface TemplateEditorProps {
   open: boolean;
@@ -62,6 +68,12 @@ export interface TemplateEditorProps {
   template: AgentTemplate | null;
   teams: ReadonlyArray<PickerOption>;
   knowledgeBases: ReadonlyArray<PickerOption>;
+  /**
+   * Which visibility scopes this mount offers, IN ORDER. Defaults to the
+   * workspace page's three (`SECTIONS`); the /home Agents face's container mount
+   * passes `SECTIONS_CONTAINER`, which is two.
+   */
+  sections?: ReadonlyArray<TemplateSectionDef>;
   saving: boolean;
   deleting: boolean;
   /** Server's own wording for the last failed write; `null` clears the line. */
@@ -77,6 +89,7 @@ export function TemplateEditor({
   template,
   teams,
   knowledgeBases,
+  sections = SECTIONS,
   saving,
   deleting,
   error,
@@ -84,6 +97,10 @@ export function TemplateEditor({
   onSave,
   onDelete,
 }: TemplateEditorProps) {
+  const visibilityOptions = useMemo(
+    () => sections.map((s) => ({ key: s.visibility, label: s.label })),
+    [sections]
+  );
   // ⚠ DRAFT RESET IS DERIVED FROM `session` DURING RENDER, not from an effect —
   // an effect paints one frame of the PREVIOUS template's values into the new
   // modal, and set-state in an effect body is the cascading render the lint rule
@@ -148,7 +165,7 @@ export function TemplateEditor({
 
         <Field label="Visibility">
           <SegmentedControl
-            options={VISIBILITY_OPTIONS}
+            options={visibilityOptions}
             value={draft.visibility}
             onChange={(next: TemplateVisibility) =>
               // ⚠ Leaving the Team scope CLEARS the teams. A stale grant behind

@@ -43,10 +43,19 @@ export function SharedAgentSection({
   section,
   templates,
   markerFor,
+  onOpen,
 }: {
   section: TemplateSectionDef;
   templates: ReadonlyArray<AgentTemplate>;
   markerFor: (template: AgentTemplate) => string | null;
+  /** Opens the editor against THIS CHANNEL'S CONTAINER — every row here is a
+   *  container row, whatever the scope pill below is showing.
+   *  ⚠ Openable even on a row the marker says the PEER wrote: the write floor
+   *  is the server's (POST/PATCH are member+, §5A), and a client that hid the
+   *  control would be a second, weaker copy of that rule — one that disagrees
+   *  the day the floor moves. The marker is what tells the operator whose
+   *  instructions they are reading. */
+  onOpen: (template: AgentTemplate) => void;
 }) {
   return (
     <TemplatePanel id="home-agents-shared" label={section.label}>
@@ -54,6 +63,7 @@ export function SharedAgentSection({
         templates={templates}
         emptyLine={section.emptyLine}
         markerFor={markerFor}
+        onOpen={onOpen}
       />
     </TemplatePanel>
   );
@@ -78,15 +88,21 @@ export function PrivateAgentSection({
   action,
   unavailable,
   pending,
+  onOpen,
 }: {
   section: TemplateSectionDef;
   templates: ReadonlyArray<AgentTemplate>;
   caption: string;
-  /** The scope pill, wearing `pendingRow` while its scope is in flight. */
+  /** The create button and the scope pill; the pill wears `pendingRow` while
+   *  its scope is in flight. */
   action: ReactNode;
   /** The named scope has nowhere to look — a SENTENCE, not an empty list. */
   unavailable: string | null;
   pending: boolean;
+  /** Opens the editor against the workspace the CURRENT SCOPE names — the
+   *  container on "in this channel", the caller's own workspace on "across all
+   *  channels". A row is always edited where it lives (plan §4.5). */
+  onOpen: (template: AgentTemplate) => void;
 }) {
   return (
     <TemplatePanel
@@ -103,7 +119,11 @@ export function PrivateAgentSection({
         // here would be a third thing to read for one fact.
         <div className="h-10" />
       ) : (
-        <TemplateGrid templates={templates} emptyLine={section.emptyLine} />
+        <TemplateGrid
+          templates={templates}
+          emptyLine={section.emptyLine}
+          onOpen={onOpen}
+        />
       )}
     </TemplatePanel>
   );

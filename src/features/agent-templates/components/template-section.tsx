@@ -151,10 +151,11 @@ export function TemplateSection({
  * three words of chrome per card saying nothing.
  *
  * ⚠ THE WHOLE CARD IS THE AFFORDANCE — WHEN THERE IS ONE. `onOpen` absent
- * renders a plain `div`, not a dead `button`: on the /home face the editor
- * arrives a milestone later (`home-agents-tab.plan.md` M3), and a card that
- * looks pressable and does nothing is worse than one that does not invite the
- * press. There is no kebab, no per-card delete, and **no launch control** —
+ * renders a plain `div`, not a dead `button`: a card that looks pressable and
+ * does nothing is worse than one that does not invite the press. Both surfaces
+ * pass one now (the /home face gained its editor in `home-agents-tab.plan.md`
+ * M3), so the branch is kept for the next surface that lists templates it
+ * cannot author. There is no kebab, no per-card delete, and **no launch control** —
  * launch-time SELECTION belongs to the Chat face's picker and must not grow a
  * beachhead here (§5A: a second launch surface fights `resolve`'s singularity).
  *
