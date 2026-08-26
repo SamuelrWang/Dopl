@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useKnowledgeTree } from "@/features/knowledge/client/hooks";
+import {
+  invalidateKnowledgeBaseLists,
+  useKnowledgeTree,
+} from "@/features/knowledge/client/hooks";
 import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
+import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { KnowledgeV2PreviewCore } from "@/features/knowledge/components/knowledge-v2/landing-preview-core";
 import type {
   KnowledgeRouting,
@@ -29,13 +33,28 @@ import { PageError, PageLoading } from "#/components/page-states";
  * without its tree therefore never loads one — the detail pane would sit empty
  * forever, with no error and no spinner.
  *
- * ⚠ NO `MyAccessProvider` (plan §5.3). Against a link container the provider
- * cannot change the answer: containers carry no team grants, so `my-access`
- * resolves to the plain role default, and a caller it would refuse (a guest)
- * has already been refused by `GET /api/knowledge/bases` and has no base to
- * open. `canEdit` consequently FALLS OPEN here — see
- * `use-knowledge-v2-trees.ts › canEdit`, REFACTOR-FINDINGS F-330. The server
- * is the gate; nothing on this surface relies on the client's answer.
+ * 🔒 ⚠ `MyAccessProvider` IS MOUNTED, AND ITS SEGMENT IS THE CALLER'S TO CHOOSE
+ * (corrected 2026-08-26). This said "NO `MyAccessProvider` (plan §5.3)" and
+ * justified it with an argument about link CONTAINERS — true of containers,
+ * FALSE of this component, because **this same view mounts for the HOME
+ * workspace too** (`knowledge-panels.tsx › homeTarget`, scope C). That is an
+ * ordinary standard workspace which CAN be teams-mode, and `list.bases` handed
+ * in is the WHOLE base list, not the private subset the pane offered — so the
+ * grid behind the detail pane renders team-visible bases and `canEdit` fell OPEN
+ * on every one of them. F-330's *"not reachable-to-harm from the two hosts that
+ * exist today"* did not survive this host, and the finding is re-scoped
+ * accordingly rather than quietly narrowed.
+ *
+ * ⚠ `accessSegment` IS `null` FOR A CONTAINER, ON PURPOSE, and that is not the
+ * same claim: a container carries no team grants, so `my-access` there answers
+ * the plain role default and the request would buy nothing; a caller it would
+ * refuse (a guest) never reaches a base to open, because
+ * `GET /api/knowledge/bases` refuses them first. So `canEdit` still falls open
+ * on the CONTAINER mount — the server is the gate there and this is a
+ * one-person-plus-peer surface. **The shape defect is still F-330's**
+ * (`use-knowledge-v2-trees.ts › canEdit` maps PROVIDERLESS and PENDING to the
+ * same `null`); this change removes the one host where it was reachable, it does
+ * not fix the default.
  *
  * ⚠ `kbTeams` is deliberately UNDEFINED and no teams query is mounted: a link
  * container has no teams, and the home-workspace mount would only spend a
@@ -46,6 +65,7 @@ export function HomeKnowledgeBaseView({
   base,
   workspaceId,
   workspaceSegment,
+  accessSegment,
   currentUserId,
   role,
   list,
@@ -55,6 +75,11 @@ export function HomeKnowledgeBaseView({
   /** The BASE's own workspace — container or home, never the other one. */
   workspaceId: string;
   workspaceSegment: string;
+  /** Segment to resolve `my-access` against, or `null` to mount the provider
+   *  inert. ⚠ A link CONTAINER passes `null` (no teams there, nothing to
+   *  resolve); a STANDARD workspace passes its segment, because it can be
+   *  teams-mode and `canEdit` would otherwise fall open. See the docblock. */
+  accessSegment: string | null;
   currentUserId: string;
   /** Caller's role in `workspaceId` (container: owner; home: boot's role). */
   role: Role;
@@ -91,15 +116,15 @@ export function HomeKnowledgeBaseView({
 
   const routing = useMemo<KnowledgeRouting>(
     () => ({
-      // ⚠ THE PREFIX, NOT AN EXACT KEY. The panels read the CHANNEL-SCOPED
-      // entry (`["knowledge", "bases:<ws>", "channel:<id>"]`) and this view's
-      // own controller reads the plain one; TanStack matches per element, so
-      // the two-element prefix reaches both and an exact key would silently
-      // refresh only one of them (INVARIANTS §8).
+      // ⚠ EVERY BASE-LIST VARIANT FOR THIS WORKSPACE, AND A PREFIX IS NOT THAT
+      // (corrected 2026-08-26). The panels read the CHANNEL-SCOPED entry and
+      // this view's own controller reads the plain one; the channel variant is a
+      // STRING extension of the segment (`"bases:W:channel:C"`), so the
+      // two-element prefix this used to pass matched the plain entry ALONE and
+      // a rename here never reached the grid behind it. `invalidateKnowledgeBaseLists`
+      // owns that predicate — see its docblock (INVARIANTS §8).
       refreshServerData: () => {
-        void queryClient.invalidateQueries({
-          queryKey: ["knowledge", `bases:${workspaceId}`],
-        });
+        invalidateKnowledgeBaseLists(queryClient, workspaceId);
       },
       // A base switch here is LOCAL STATE, not a navigation: there is no route
       // to move to. `null` arrives from the list pane's crumb and from
@@ -126,21 +151,23 @@ export function HomeKnowledgeBaseView({
   };
 
   return (
-    <KnowledgeV2PreviewCore
-      workspaceSegment={workspaceSegment}
-      workspaceId={workspaceId}
-      bases={list.bases}
-      ownerNames={list.ownerNames}
-      baseStats={list.baseStats}
-      kbStorageLimit={list.kbStorageLimit}
-      currentUserId={currentUserId}
-      role={role}
-      kbTeams={undefined}
-      initialSelection={{ kind: "base", base }}
-      initialTrees={initialTrees}
-      routing={routing}
-      urlSync={urlSync}
-    />
+    <MyAccessProvider workspaceSegment={accessSegment}>
+      <KnowledgeV2PreviewCore
+        workspaceSegment={workspaceSegment}
+        workspaceId={workspaceId}
+        bases={list.bases}
+        ownerNames={list.ownerNames}
+        baseStats={list.baseStats}
+        kbStorageLimit={list.kbStorageLimit}
+        currentUserId={currentUserId}
+        role={role}
+        kbTeams={undefined}
+        initialSelection={{ kind: "base", base }}
+        initialTrees={initialTrees}
+        routing={routing}
+        urlSync={urlSync}
+      />
+    </MyAccessProvider>
   );
 }
 

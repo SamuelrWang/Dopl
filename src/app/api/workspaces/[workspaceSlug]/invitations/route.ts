@@ -11,18 +11,20 @@ import {
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
 /** GET — pending invitations. Admin+, enforced inside `listWorkspaceInvitations`. */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -37,13 +39,13 @@ export const GET = withUserAuth(
 /** POST — create an invitation. Admin+, enforced inside `createInvitation`. Returns the row
  *  INCLUDING the magic-link token; the inviter copies the URL until email send is wired. */
 export const POST = withUserAuth(
-  async (request: NextRequest, { userId, params }: Ctx) => {
+  async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

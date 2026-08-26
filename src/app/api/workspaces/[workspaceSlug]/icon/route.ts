@@ -15,6 +15,8 @@ import {
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -24,13 +26,13 @@ function errorResponse(err: unknown): NextResponse {
 
 /** POST — upload a workspace icon (multipart `file`). Admin+. ⚠ Role is gated BEFORE storage is
  *  touched so a non-admin cannot burn an upload. */
-export const POST = withUserAuth(async (request: NextRequest, { userId, params }: Ctx) => {
+export const POST = withUserAuth(async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
     if (!workspaceSlug) {
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -52,13 +54,13 @@ export const POST = withUserAuth(async (request: NextRequest, { userId, params }
 
 /** DELETE — clear the workspace icon. Admin+ (enforced by `updateWorkspaceIcon`), then purges
  *  storage. */
-export const DELETE = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
+export const DELETE = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
     if (!workspaceSlug) {
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

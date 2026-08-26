@@ -15,19 +15,21 @@ const RoleUpdateSchema = z.object({
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
 /** PATCH — change a member's role. Admin+; last-owner protection inside `updateMemberRole`. */
 export const PATCH = withUserAuth(
-  async (request: NextRequest, { userId, params }: Ctx) => {
+  async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       const targetUserId = params?.userId;
       if (!workspaceSlug || !targetUserId) {
         return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -44,14 +46,14 @@ export const PATCH = withUserAuth(
 
 /** DELETE — remove a member. Admin+; cannot remove the last owner. */
 export const DELETE = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       const targetUserId = params?.userId;
       if (!workspaceSlug || !targetUserId) {
         return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

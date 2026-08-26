@@ -83,14 +83,19 @@ describe("POST /api/boot", () => {
       myAccess: { defaultLevel: "edit", overrides: [] },
     });
     // No body = launch mode, not a validation failure.
-    expect(mockBoot).toHaveBeenCalledWith("user-1", null);
+    // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26). It is
+    // `undefined` for a session caller, and it must be PASSED rather than
+    // omitted: the no-segment mode NAMES a workspace the caller did not, which
+    // is the one thing a lock exists to stop, and `getBootState` cannot refuse a
+    // credential nobody handed it.
+    expect(mockBoot).toHaveBeenCalledWith("user-1", null, undefined);
   });
 
   it("passes a requested segment through to the fail-closed resolver", async () => {
     mockBoot.mockResolvedValue(bootState());
 
     await POST(postReq({ segment: SEGMENT }), { params: Promise.resolve({}) });
-    expect(mockBoot).toHaveBeenCalledWith("user-1", SEGMENT);
+    expect(mockBoot).toHaveBeenCalledWith("user-1", SEGMENT, undefined);
   });
 
   it("404s a segment that does not resolve — never a default workspace", async () => {
@@ -125,7 +130,7 @@ describe("POST /api/boot", () => {
     mockBoot.mockResolvedValue(bootState());
 
     await POST(postReq({ segment: SEGMENT }), { params: Promise.resolve({}) });
-    expect(mockBoot).toHaveBeenCalledWith("user-42", SEGMENT);
+    expect(mockBoot).toHaveBeenCalledWith("user-42", SEGMENT, undefined);
   });
 
   it("401s an unauthenticated caller and resolves nothing", async () => {

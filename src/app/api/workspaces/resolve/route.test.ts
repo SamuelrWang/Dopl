@@ -112,7 +112,12 @@ describe("GET /api/workspaces/resolve", () => {
     });
 
     await GET(getReq(`?segment=${CANONICAL}`), { params: Promise.resolve({}) });
-    expect(mockResolve).toHaveBeenCalledWith(CANONICAL, "user-42");
+    // 🔒 The opts object carries the CONTAINER LOCK, threaded from the
+    // credential (2026-08-26). This route is a segment→workspace oracle, so it
+    // must get the same 404 the rest of the family gives a locked caller.
+    expect(mockResolve).toHaveBeenCalledWith(CANONICAL, "user-42", {
+      apiKeyWorkspaceId: undefined,
+    });
   });
 
   it("trims surrounding whitespace before resolving", async () => {
@@ -124,7 +129,9 @@ describe("GET /api/workspaces/resolve", () => {
     });
 
     await GET(getReq(`?segment=%20${CANONICAL}%20`), { params: Promise.resolve({}) });
-    expect(mockResolve).toHaveBeenCalledWith(CANONICAL, "user-1");
+    expect(mockResolve).toHaveBeenCalledWith(CANONICAL, "user-1", {
+      apiKeyWorkspaceId: undefined,
+    });
   });
 
   it("404s a miss — non-member and nonexistent are indistinguishable", async () => {

@@ -13,8 +13,11 @@ export const dynamic = "force-dynamic";
  * to `canonical`.
  * ⚠ 404 when nothing resolves — membership-scoped, so a non-member gets the same 404 as a
  * nonexistent workspace. Visibility must not be an oracle.
+ * 🔒 ⚠ AND `apiKeyWorkspaceId` IS THREADED (2026-08-26): this route is a segment→workspace
+ * ORACLE, so a container-locked credential must get the same 404 here that it gets everywhere
+ * else in the family. The comparison itself lives once, in `resolveWorkspaceSegmentForUser`.
  */
-export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
+export const GET = withUserAuth(async (request: NextRequest, { userId, apiKeyWorkspaceId }) => {
   try {
     const segment = request.nextUrl.searchParams.get("segment")?.trim();
     if (!segment) {
@@ -29,7 +32,9 @@ export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
       );
     }
 
-    const resolved = await resolveWorkspaceSegmentForUser(segment, userId);
+    const resolved = await resolveWorkspaceSegmentForUser(segment, userId, {
+      apiKeyWorkspaceId,
+    });
     if (!resolved) {
       return NextResponse.json(
         {

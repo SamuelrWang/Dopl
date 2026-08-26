@@ -13,6 +13,8 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -20,7 +22,7 @@ interface Ctx {
  *  membership-by-slug across workspaces the caller belongs to.
  *  ⚠ `viewer`+ since 2026-08-26 — `resolveApiWorkspace`'s inverted default
  *  (`segment.ts › ApiWorkspaceOpts`). A `guest` gets the non-member 404. */
-export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
+export const GET = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
     if (!workspaceSlug) {
@@ -28,7 +30,7 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
     }
 
     // Owner-side lookup is the fast path; membership lookup joins through workspace_members.
-    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -40,13 +42,13 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
 });
 
 /** PATCH — rename / edit description. Admin+; `renameWorkspace` enforces the gate. */
-export const PATCH = withUserAuth(async (request: NextRequest, { userId, params }: Ctx) => {
+export const PATCH = withUserAuth(async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
     if (!workspaceSlug) {
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -62,13 +64,13 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
 });
 
 /** DELETE — owner-only. Cascades clusters / panels / memberships / invitations via FK. */
-export const DELETE = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
+export const DELETE = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;
     if (!workspaceSlug) {
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

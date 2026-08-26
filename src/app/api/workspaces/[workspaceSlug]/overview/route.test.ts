@@ -105,7 +105,12 @@ describe("GET /api/workspaces/[workspaceSlug]/overview", () => {
 
   it("passes the RESOLVED workspace AND the caller — activity is viewer-fenced", async () => {
     await GET(getReq(), routeCtx());
-    expect(mockResolve).toHaveBeenCalledWith(SEGMENT, "user-1");
+    // 🔒 …and the third argument is the CONTAINER LOCK, threaded from the
+    // credential (2026-08-26). Every route in this family passes it; the scan in
+    // `workspaces/server/api-workspace-floor.test.ts` is what holds that.
+    expect(mockResolve).toHaveBeenCalledWith(SEGMENT, "user-1", {
+      apiKeyWorkspaceId: undefined,
+    });
     expect(mockOverview).toHaveBeenCalledWith(WORKSPACE.id, "user-1");
   });
 

@@ -12,14 +12,16 @@ import {
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
 /** GET — a team's grants. Any active member. */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace || !params?.teamId) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -33,9 +35,9 @@ export const GET = withUserAuth(
 
 /** PUT — set or remove one grant; `level: null` removes. Admin+. */
 export const PUT = withUserAuth(
-  async (request: NextRequest, { userId, params }: Ctx) => {
+  async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace || !params?.teamId) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

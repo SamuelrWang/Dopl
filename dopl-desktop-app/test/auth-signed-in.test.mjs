@@ -412,6 +412,11 @@ test("…but a MISSING blob is still rebuilt even with no readable exp anywhere"
 // Sign-out cleared the Supabase blob and the cookie jar and stopped, leaving a 90-day
 // dopl.read+dopl.write bearer live in electron-store AND in userData/mcp-spawn.json — full
 // API access to the account that had just signed out, sitting on the disk.
+// ⚠ S3 (2026-08-26) retired the SECOND of those copies at its source: nothing writes
+// userData/mcp-spawn.json any more, and `mcp-config.js › removeSpawnConfig` deletes it on every
+// signed-in launch. The `rmSync` pinned below is now a BELT, not the only teardown — it still
+// has to hold, because a machine that signs out before its next signed-in launch never runs
+// that migration.
 
 test("signOut clears the device token as well as the blob and the jar", () => {
   const fn = fnOf(STATE, "signOut");
@@ -426,7 +431,7 @@ test("clearDeviceToken removes BOTH on-disk copies and the in-memory one", () =>
   const fn = fnOf(MCP, "clearDeviceToken");
   assert.match(fn, /store\.delete\(DT_KEY\)/, "the safeStorage-encrypted key");
   assert.match(fn, /store\.delete\(DT_KEY_PLAIN\)/, "…and the plaintext fallback key");
-  assert.match(fn, /fs\.rmSync\(spawnConfigPath\(\)/, "…and mcp-spawn.json, whose bearer the CLI reads");
+  assert.match(fn, /fs\.rmSync\(spawnConfigPath\(\)/, "…and mcp-spawn.json, if an older build left one");
   assert.match(fn, /spawnToken = ''/, "…and the memoized copy buildMcpServers injects");
   assert.match(MCP, /clearDeviceToken, \/\/ S2/, "exported for auth-state.signOut");
 });

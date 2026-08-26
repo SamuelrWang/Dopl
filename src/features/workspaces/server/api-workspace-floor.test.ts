@@ -51,11 +51,37 @@
  *      `MY_ACCESS_MIN_ROLE`, so the exemption covers workspace IDENTITY and
  *      never the capability inventory its twin route refuses.
  *
- * ⚠ MUTATION-VERIFY (measured 2026-08-26 — 3 reverts, 3 failures, 0 vacuous):
- * deleting the `meetsMinRole` line in `resolveWorkspaceSegmentForUser`; changing
- * `BOOT_MIN_ROLE` to `"viewer"`; deleting the `MY_ACCESS_MIN_ROLE` guard.
+ * 🔒 ⚠ THE SECOND DIMENSION IS THE CONTAINER LOCK, AND IT WAS ENFORCED IN ONE OF
+ * THE TWO FAMILIES (added 2026-08-26). `with-workspace-auth.ts` 403s a
+ * workspace-scoped credential that names another workspace, and
+ * `mcp-container-token.ts` claimed of it that *"that credential cannot name
+ * another workspace"*. THIS FILE'S FAMILY HAD ZERO REFERENCES TO
+ * `apiKeyWorkspaceId`, so the claim was true of one wrapper and false of the
+ * other. The reachable walk was:
+ *   1. `POST /api/boot` with NO segment — the provisioning branch answers
+ *      `ensureDefaultWorkspace`, i.e. the operator's HOME workspace id AND its
+ *      canonical `{slug}-{publicId}` segment, to any valid credential;
+ *   2. that segment into any of the 19 `resolveApiWorkspace` route files —
+ *      access-matrix, members-with-emails, overview, overview-series, teams,
+ *      invitations, join-link, my-access, member activity.
+ * The lock now lives ONCE, beside the role floor, in
+ * `resolveWorkspaceSegmentForUser`; boot's no-segment mode refuses a locked
+ * caller outright; and the CALLER SCAN below is what stops the next route added
+ * to this family from forgetting to thread it.
+ *
+ * ⚠ MUTATION-VERIFY (role floor, measured 2026-08-26 — 3 reverts, 3 failures,
+ * 0 vacuous): deleting the `meetsMinRole` line in
+ * `resolveWorkspaceSegmentForUser`; changing `BOOT_MIN_ROLE` to `"viewer"`;
+ * deleting the `MY_ACCESS_MIN_ROLE` guard.
+ * ⚠ MUTATION-VERIFY (container lock, measured 2026-08-26 — 3 reverts,
+ * 3 failures, 0 vacuous): deleting the `withinKeyLock` line in
+ * `resolveWorkspaceSegmentForUser`; deleting the `apiKeyWorkspaceId?.trim()`
+ * refusal in `getBootState`'s provisioning branch; dropping
+ * `{ apiKeyWorkspaceId }` from one route's `resolveApiWorkspace` call.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Role, Workspace } from "../types";
 
@@ -82,7 +108,12 @@ import {
   resolveApiWorkspaceAccess,
   resolveWorkspaceSegmentForUser,
 } from "./segment";
-import { findWorkspaceForMemberByPublicId, findWorkspaceForMember } from "./service";
+import {
+  findWorkspaceForMemberByPublicId,
+  findWorkspaceForMember,
+  ensureDefaultWorkspace,
+  resolveMembershipOrThrow,
+} from "./service";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
 import { listEffectiveAccess, toMyAccessPayload } from "@/features/teams/server/access";
 
@@ -250,5 +281,175 @@ describe("getBootState — the EXEMPTION is explicit, and it stops at identity",
   it("a non-member is still NULL → the route's 404, exemption or not", async () => {
     vi.mocked(findWorkspaceForMemberByPublicId).mockResolvedValue(null as never);
     expect(await getBootState(USER, SEGMENT)).toBeNull();
+  });
+});
+
+describe("🔒 the CONTAINER LOCK — the second dimension, and it lives on the resolver", () => {
+  it("a locked credential is REFUSED a workspace that is not its own", async () => {
+    memberAt("owner");
+    expect(
+      await resolveWorkspaceSegmentForUser(SEGMENT, USER, {
+        apiKeyWorkspaceId: "44444444-4444-4444-8444-444444444444",
+      })
+    ).toBeNull();
+  });
+
+  it("…and the refusal is `null` → the caller's plain 404, not a new error shape", async () => {
+    // Every caller in this family already maps `null` to "Workspace not found",
+    // which is what a NON-MEMBER gets — so the lock cannot be used to learn that
+    // the workspace exists. Asserted through both wrappers, since both must map
+    // it the same way.
+    memberAt("owner");
+    const opts = { apiKeyWorkspaceId: "44444444-4444-4444-8444-444444444444" };
+    expect(await resolveApiWorkspace(SEGMENT, USER, opts)).toBeNull();
+    expect(await resolveApiWorkspaceAccess(SEGMENT, USER, opts)).toBeNull();
+  });
+
+  it("the lock's OWN workspace still resolves — it narrows, it does not close", async () => {
+    memberAt("owner");
+    const resolved = await resolveWorkspaceSegmentForUser(SEGMENT, USER, {
+      apiKeyWorkspaceId: WORKSPACE.id,
+    });
+    expect(resolved?.workspace.id).toBe(WORKSPACE.id);
+  });
+
+  it("an UNLOCKED caller is untouched — null, undefined and blank all mean 'no lock'", async () => {
+    // ⚠ Blank-after-trim reads as NO lock, mirroring `with-workspace-auth.ts`'s
+    // trim. A storage artefact must not 404 every request a session makes.
+    memberAt("viewer");
+    for (const apiKeyWorkspaceId of [null, undefined, "   "]) {
+      expect(
+        (await resolveWorkspaceSegmentForUser(SEGMENT, USER, { apiKeyWorkspaceId }))
+          ?.workspace.id
+      ).toBe(WORKSPACE.id);
+    }
+  });
+
+  it("the lock is compared TRIMMED, so a padded column value is not a spurious 404", async () => {
+    memberAt("owner");
+    expect(
+      (await resolveWorkspaceSegmentForUser(SEGMENT, USER, {
+        apiKeyWorkspaceId: ` ${WORKSPACE.id} `,
+      }))?.workspace.id
+    ).toBe(WORKSPACE.id);
+  });
+
+  it("the lock beats the ROLE — an owner of the other workspace is still refused", async () => {
+    // Ordering matters: the lock runs first precisely so "I am an owner there"
+    // is never an argument against it.
+    memberAt("owner");
+    expect(
+      await resolveWorkspaceSegmentForUser(SEGMENT, USER, {
+        minRole: "guest",
+        apiKeyWorkspaceId: "44444444-4444-4444-8444-444444444444",
+      })
+    ).toBeNull();
+  });
+});
+
+describe("🔒 getBootState — the no-segment PROVISIONING mode is closed to a locked credential", () => {
+  beforeEach(() => {
+    vi.mocked(getOnboardingStatus).mockResolvedValue({
+      onboarded: true,
+      surveyCompleted: true,
+    } as never);
+    vi.mocked(ensureDefaultWorkspace).mockResolvedValue(WORKSPACE as never);
+    vi.mocked(resolveMembershipOrThrow).mockResolvedValue({
+      membership: { role: "owner" },
+    } as never);
+  });
+
+  it("a locked caller gets NULL rather than the operator's home workspace", async () => {
+    // THE WALK THIS CLOSES: no segment → home workspace id + canonical segment →
+    // 19 routes. The refusal lands before onboarding is even read.
+    expect(
+      await getBootState(USER, null, "44444444-4444-4444-8444-444444444444")
+    ).toBeNull();
+    expect(ensureDefaultWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("an UNLOCKED caller still provisions — the cold-launch path is untouched", async () => {
+    const state = await getBootState(USER, null);
+    expect(state?.workspace?.id).toBe(WORKSPACE.id);
+    expect(ensureDefaultWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("SEGMENT mode with a locked credential naming ANOTHER workspace is 404, not the record", async () => {
+    memberAt("owner");
+    expect(
+      await getBootState(USER, SEGMENT, "44444444-4444-4444-8444-444444444444")
+    ).toBeNull();
+  });
+
+  it("SEGMENT mode still answers for the LOCKED workspace itself", async () => {
+    memberAt("guest");
+    const state = await getBootState(USER, SEGMENT, WORKSPACE.id);
+    expect(state?.workspace?.id).toBe(WORKSPACE.id);
+  });
+});
+
+describe("🔒 the CALLER SCAN — every route in the family threads the lock", () => {
+  /**
+   * ⚠ A PIN ON THE FENCE IS NOT A PIN ON ITS CALLERS, AND HERE BOTH ARE NEEDED
+   * (§14). The lock cannot have a fail-closed DEFAULT — the resolver has no way
+   * to see a credential nobody handed it, and an ambient it could read would
+   * answer "no lock" on a scope miss, i.e. fail OPEN. So the resolver holds the
+   * comparison and this scan holds the threading. Reverting either is red.
+   */
+  const API_ROOT = join(import.meta.dirname, "..", "..", "..", "app", "api");
+
+  function walk(dir: string, into: Array<[string, string]>): Array<[string, string]> {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, into);
+      else if (entry.name === "route.ts") into.push([full, readFileSync(full, "utf8")]);
+    }
+    return into;
+  }
+
+  /** Route files that resolve a workspace through THIS family. */
+  const FAMILY = walk(API_ROOT, []).filter(([, src]) =>
+    /resolveApiWorkspace(Access)?\s*\(|resolveWorkspaceSegmentForUser\s*\(|getBootState\s*\(/.test(
+      src
+    )
+  );
+
+  it("finds the family (a rename that empties this list must not pass silently)", () => {
+    // ⚠ MEASURED 2026-08-26: 21 route files (19 `resolveApiWorkspace`, plus
+    // `workspaces/resolve` and `boot`). Re-derive, never quote:
+    //   grep -rln "resolveApiWorkspace\|resolveWorkspaceSegmentForUser\|getBootState" src/app/api
+    expect(FAMILY.length).toBeGreaterThanOrEqual(18);
+  });
+
+  it("EVERY one of them names apiKeyWorkspaceId", () => {
+    const silent = FAMILY.filter(([, src]) => !/apiKeyWorkspaceId/.test(src)).map(
+      ([f]) => f.slice(f.indexOf("src/"))
+    );
+    expect(silent).toEqual([]);
+  });
+
+  it("every RESOLVE CALL in them passes it — naming the field is not threading it", () => {
+    const unthreaded: string[] = [];
+    for (const [file, src] of FAMILY) {
+      const calls = src.match(
+        /(?:resolveApiWorkspace(?:Access)?|resolveWorkspaceSegmentForUser|getBootState)\s*\([\s\S]*?\)\s*;/g
+      );
+      for (const call of calls ?? []) {
+        if (!/apiKeyWorkspaceId/.test(call)) {
+          unthreaded.push(`${file.slice(file.indexOf("src/"))}: ${call.slice(0, 60)}`);
+        }
+      }
+    }
+    expect(unthreaded).toEqual([]);
+  });
+
+  it("the resolver itself still HOLDS the comparison (read the fence, not its callers)", () => {
+    const segment = readFileSync(join(import.meta.dirname, "segment.ts"), "utf8");
+    expect(segment).toMatch(
+      /if \(!withinKeyLock\(resolved\.workspace\.id, opts\.apiKeyWorkspaceId\)\) return null;/
+    );
+    // …and boot's provisioning branch holds its own, because that branch never
+    // reaches the resolver at all.
+    expect(segment).toMatch(/if \(apiKeyWorkspaceId\?\.trim\(\)\) return null;/);
   });
 });

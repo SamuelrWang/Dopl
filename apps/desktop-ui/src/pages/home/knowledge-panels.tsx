@@ -7,7 +7,10 @@ import { SectionBox } from "@/shared/ui/section-box";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { pendingRow } from "@/shared/ui/pending";
 import { EMPTY_GRANTS, fetchBaseList } from "@/features/knowledge/client/api";
-import { knowledgeBasesQueryKey } from "@/features/knowledge/client/hooks";
+import {
+  invalidateKnowledgeBaseLists,
+  knowledgeBasesQueryKey,
+} from "@/features/knowledge/client/hooks";
 import { CreateBaseDialog } from "@/features/knowledge/components/create-base-dialog";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import type { HomeChannel } from "@/features/home/types";
@@ -45,9 +48,15 @@ import home from "./home.module.css";
  * (`channelGrants`, INVARIANTS §9) that the UNSCOPED read does not send, and
  * `HomeKnowledgeBaseView`'s controller mounts the unscoped read against the
  * same workspace. On one key the two fetchers would take turns and a refetch
- * driven by the detail view would blank the Shared section. The key is the
- * plain one plus a third element, so the `["knowledge", "bases:<ws>"]` PREFIX
- * that every knowledge writer invalidates still reaches both (§8).
+ * driven by the detail view would blank the Shared section.
+ * ⚠ THE KEY IS `knowledgeBasesQueryKey(ws, channelId)` AND NOTHING ELSE
+ * (corrected 2026-08-26). It used to be the plain key plus a third ARRAY
+ * element, under the belief that the `["knowledge", "bases:<ws>"]` prefix would
+ * still reach it — which it did, and which is exactly why the GRANT WRITE
+ * (matching `key[1]` against the STRING-extended segment) reached nothing this
+ * pane had mounted. One minter now decides the shape, and
+ * `invalidateKnowledgeBaseLists` holds the predicate that reaches both variants
+ * (§8).
  *
  * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
  * pane. It never moves the conversation column and it never goes full-width.
@@ -151,10 +160,24 @@ export function HomeKnowledgePanels({
     workspaceId: channel.workspaceId,
     segment: channel.workspaceSegment,
     role: "owner",
+    // ⚠ NO `my-access` READ AGAINST A CONTAINER: it has no teams, so the answer
+    // is the plain role default and the request buys nothing. See
+    // `knowledge-base-view.tsx`'s docblock for what that costs and why it is
+    // acceptable HERE and not on the home mount.
+    accessSegment: null,
   };
   const homeTarget: MountTarget | null =
     homeWorkspaceId && homeWorkspaceSegment && homeRole
-      ? { workspaceId: homeWorkspaceId, segment: homeWorkspaceSegment, role: homeRole }
+      ? {
+          workspaceId: homeWorkspaceId,
+          segment: homeWorkspaceSegment,
+          role: homeRole,
+          // 🔒 THE HOME WORKSPACE IS A REAL STANDARD WORKSPACE and can be
+          // teams-mode, and the mount is handed the WHOLE base list — so
+          // without this the grid behind the detail pane shows every edit
+          // control on team-visible bases the caller only has `view` on (F-330).
+          accessSegment: homeWorkspaceSegment,
+        }
       : null;
   const createTarget = scope === "channel" ? containerTarget : homeTarget;
 
@@ -168,6 +191,7 @@ export function HomeKnowledgePanels({
           base={openBase.base}
           workspaceId={target.workspaceId}
           workspaceSegment={target.segment}
+          accessSegment={target.accessSegment}
           currentUserId={currentUserId}
           role={target.role}
           list={list}
@@ -250,12 +274,22 @@ export function HomeKnowledgePanels({
         }
       >
         {/* ⚠ ONE CAPTION LINE, and it is the RULING, not an explainer (minimal
-            UI copy): a scope-B base is invisible to the operator's OWN agent in
-            this channel until it is granted (plan RULING 2), and a scope-C base
-            cannot be granted into a channel at all (RULING 1). */}
+            UI copy): a scope-C base cannot be granted into a channel at all
+            (RULING 1), and a scope-B base is invisible to the operator's own
+            agent in this channel.
+            🔒 ⚠ THE SCOPE-B LINE STATES THE CURRENT TRUTH, NOT RULING 2'S
+            REMEDY (corrected 2026-08-26). It read "Yours alone UNTIL YOU SHARE
+            IT", promising that granting `agent_only` opens the base to the
+            agent. It does not: `knowledge/server/service-shared.ts › canSeeBase`
+            answers false for ANY non-public base under a container-locked
+            credential (B1), and `getBaseById` runs that gate BEFORE the audience
+            ceiling — so the grant is never consulted. Whether that is the fence
+            overshooting or the ruling being withdrawn is SAMUEL'S CALL
+            (REFACTOR-FINDINGS F-336); until he makes it, the copy may not
+            promise a remedy the code does not implement. */}
         <p className="px-4 pt-2.5 text-caption text-text-muted">
           {scope === "channel"
-            ? "Yours alone until you share it — your agent here can't read these either."
+            ? "Yours alone — your agent in this channel can't read these, shared or not."
             : "Yours alone. To share knowledge in a channel, create it there."}
         </p>
         {scope === "all" && homeWorkspaceId === null ? (
@@ -300,15 +334,15 @@ export function HomeKnowledgePanels({
           currentUserId={currentUserId}
           role={createTarget.role}
           routing={{
-            // ⚠ THE PREFIX. `create-base-dialog.tsx` seeds the PLAIN key
-            // (`seedKnowledgeBase`) and this pane reads the channel-scoped one,
-            // so without the two-element prefix a base created here would not
-            // appear until the next cold read (§8: a key off by one element is
-            // a silent no-op).
+            // ⚠ BOTH VARIANTS, AND A PREFIX REACHES ONLY ONE (corrected
+            // 2026-08-26). `create-base-dialog.tsx` seeds the PLAIN key
+            // (`seedKnowledgeBase`) and this pane reads the CHANNEL-SCOPED one,
+            // whose segment is a STRING extension — so the plain key matched
+            // itself and nothing else, and a base created here did not appear
+            // until the next cold read (§8: a key off by one element is a silent
+            // no-op). `invalidateKnowledgeBaseLists` holds the one predicate.
             refreshServerData: () => {
-              void queryClient.invalidateQueries({
-                queryKey: knowledgeBasesQueryKey(createTarget.workspaceId),
-              });
+              invalidateKnowledgeBaseLists(queryClient, createTarget.workspaceId);
             },
             goToBase: (next) => {
               if (next) goToBase(next, scope);
@@ -338,6 +372,9 @@ interface MountTarget {
   workspaceId: string;
   segment: string;
   role: Role;
+  /** Segment for the `my-access` read, or `null` for a workspace where the
+   *  answer cannot differ from the role default (a link container). */
+  accessSegment: string | null;
 }
 
 const SCOPE_OPTIONS: ReadonlyArray<SelectMenuOption<PrivateScope>> = [

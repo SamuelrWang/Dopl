@@ -179,6 +179,18 @@ export default function HomePage() {
     if (shown.startsWith(KNOWLEDGE_PANE)) {
       const shownRow = rowFor(shown.slice(KNOWLEDGE_PANE.length));
       return (
+          // 🔒 KEYED BY THE ROW, exactly as the chat branch below is, and it was
+          // NOT until 2026-08-26. `paneToken` fixes the CROSSFADE; it does not
+          // remount, so React reconciled channel B's panels onto channel A's
+          // component instance and the pane's own `useState` survived the
+          // switch. `openBase` is the sharp one: a base opened in channel A
+          // stayed open across the switch and was then mounted against channel
+          // B's `workspaceId`, i.e. a 404 error pane over a base that exists.
+          // `scope` survived too, which is merely wrong rather than broken.
+          // ⚠ `knowledge-tab.tsx` had already solved this on the CHANNEL side;
+          // this is the same fix on the /home side. A pane holding per-channel
+          // state owes itself a key — the token is about the animation.
+          key={shownRow?.id ?? EMPTY_PANE}
         <HomeKnowledgePanels
           channel={shownRow?.kind === "channel" ? shownRow.channel : null}
           // ⚠ ALREADY IN THIS PAGE'S BOOT QUERY — the home workspace is

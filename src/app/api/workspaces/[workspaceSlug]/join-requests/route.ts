@@ -6,14 +6,16 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
 /** GET — pending approval queue. Admin+. */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

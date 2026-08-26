@@ -17,6 +17,8 @@ import {
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -31,9 +33,9 @@ interface Ctx {
  * hiding rows client-side would put them in the payload, which is the leak this
  * endpoint exists to prevent. Shape `{ events: ActivityEventRow[] }`.
  */
-export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
+export const GET = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
-    const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+    const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

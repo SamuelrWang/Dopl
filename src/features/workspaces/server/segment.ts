@@ -32,6 +32,21 @@ export interface ApiWorkspaceOpts {
    *  inverted default `withWorkspaceAuth` carries, so `guest` is refused unless
    *  a caller says otherwise. */
   minRole?: Role;
+  /**
+   * 🔒 THE CONTAINER LOCK, THREADED FROM THE CREDENTIAL (2026-08-26). The
+   * caller's `withUserAuth` `apiKeyWorkspaceId` — the workspace a
+   * workspace-scoped MCP token is locked to, `null`/undefined for a session or
+   * an unlocked token. A locked credential may resolve ONLY that workspace;
+   * anything else answers `null` → 404.
+   *
+   * ⚠ IT IS PASSED, NOT READ, and that is not a preference. There is no
+   * request-scoped ambient the resolver could consult, and an ambient that
+   * silently answered "no lock" on a scope miss would fail OPEN — which is the
+   * one direction a lock may never fail. The cost is that every caller must
+   * thread it, and `api-workspace-floor.test.ts` set D SCANS the family so an
+   * omission cannot be silent.
+   */
+  apiKeyWorkspaceId?: string | null;
 }
 
 /**
@@ -114,6 +129,17 @@ const resolveSegmentUnfloored = cache(
  * and unfloored at the others. Nothing live leaked (see `getBootState`), and a
  * fence with three doors and one lock is a bug whether or not anybody walked
  * through it.
+ *
+ * 🔒 ⚠ AND THE CONTAINER LOCK MOVED HERE ON 2026-08-26 FOR THE SAME REASON.
+ * `with-workspace-auth.ts` 403s a locked credential that names another
+ * workspace, and `mcp-container-token.ts`'s docblock said of it *"that
+ * credential cannot name another workspace"* — true of ONE wrapper. THIS FILE
+ * HAD ZERO REFERENCES TO `apiKeyWorkspaceId`, so a container-locked token could
+ * `POST /api/boot` with no segment to learn the operator's HOME workspace id and
+ * canonical segment, then walk the 19 `withUserAuth` + `resolveApiWorkspace`
+ * route files under `/api/workspaces/[workspaceSlug]/**` — access-matrix,
+ * members-with-emails, overview, teams, invitations, my-access, activity. The
+ * lock is now stated ONCE, here, exactly as the role floor is.
  */
 export async function resolveWorkspaceSegmentForUser(
   segment: string,
@@ -122,11 +148,35 @@ export async function resolveWorkspaceSegmentForUser(
 ): Promise<ResolvedWorkspaceSegment | null> {
   const resolved = await resolveSegmentUnfloored(segment, userId);
   if (!resolved) return null;
+  // 🔒 ⚠ ONE STATEMENT OF THE LOCK, and it runs BEFORE the role floor because it
+  // is the stricter of the two: a locked credential naming another workspace is
+  // refused whatever its holder's role there happens to be.
+  if (!withinKeyLock(resolved.workspace.id, opts.apiKeyWorkspaceId)) return null;
   // ⚠ ONE STATEMENT OF THE FLOOR, for both families. `guest-route-floor.test.ts`
   // set C reads this exact line — §14's "a pin on the callers is not a pin on
   // the fence".
   if (!meetsMinRole(resolved.role, opts.minRole ?? "viewer")) return null;
   return resolved;
+}
+
+/**
+ * 🔒 May a caller presenting this credential reach this workspace at all?
+ *
+ * `null` / `undefined` = NO lock (session cookie, or a user-scoped token) → yes,
+ * behaviour unchanged. A non-empty lock admits exactly ONE workspace id.
+ *
+ * ⚠ TRIMMED BEFORE THE COMPARE, mirroring `with-workspace-auth.ts`'s trim, so
+ * the two doors cannot disagree about a whitespace-padded column value. A lock
+ * that is blank AFTER trimming reads as "no lock" rather than as a workspace
+ * whose id is the empty string — the same reading the other door takes, and the
+ * only one that cannot 404 every request a storage artefact touches.
+ */
+function withinKeyLock(
+  workspaceId: string,
+  apiKeyWorkspaceId: string | null | undefined
+): boolean {
+  const lock = apiKeyWorkspaceId?.trim();
+  return !lock || lock === workspaceId;
 }
 
 /**
@@ -255,16 +305,37 @@ export interface BootState {
  */
 const BOOT_MIN_ROLE: Role = "guest";
 
-/** `null` = the requested segment did not resolve; the route 404s. */
+/**
+ * `null` = the requested segment did not resolve; the route 404s.
+ *
+ * 🔒 ⚠ `apiKeyWorkspaceId` IS THE CONTAINER LOCK, AND THE NO-SEGMENT MODE IS THE
+ * REASON IT HAD TO REACH THIS FUNCTION (2026-08-26). The provisioning branch
+ * answers `ensureDefaultWorkspace` — the operator's oldest OWNED standard
+ * workspace — to anything holding a valid credential. For a container-locked
+ * child token that is the FIRST MOVE out of the container: it learns the home
+ * workspace's id AND its canonical `{slug}-{publicId}` segment, which is exactly
+ * the argument the 19 `resolveApiWorkspace` routes take. So a locked caller is
+ * refused the provisioning mode OUTRIGHT (`null` → the route's plain 404), and
+ * the segment mode is fenced by the resolver's own lock, stated once there.
+ *
+ * ⚠ REFUSED, NOT REDIRECTED TO THE LOCKED WORKSPACE. Answering the container
+ * instead would be inventing a behaviour for a caller that has no business here
+ * — boot is the SPA's launch read and the SPA presents a session cookie, which
+ * carries no lock and is untouched by this.
+ */
 export async function getBootState(
   userId: string,
-  segment: string | null
+  segment: string | null,
+  apiKeyWorkspaceId?: string | null
 ): Promise<BootState | null> {
   if (segment) {
     // Independent of the workspace read, so it rides along free.
     const [status, resolved] = await Promise.all([
       getOnboardingStatus(userId),
-      resolveWorkspaceSegmentForUser(segment, userId, { minRole: BOOT_MIN_ROLE }),
+      resolveWorkspaceSegmentForUser(segment, userId, {
+        minRole: BOOT_MIN_ROLE,
+        apiKeyWorkspaceId,
+      }),
     ]);
     if (!resolved) return null;
     return {
@@ -278,6 +349,11 @@ export async function getBootState(
       myAccess: await myAccessFor(resolved.workspace.id, userId, resolved.role),
     };
   }
+
+  // 🔒 THE PROVISIONING MODE IS CLOSED TO A LOCKED CREDENTIAL. Before onboarding
+  // is even consulted: this branch's whole job is to NAME a workspace the caller
+  // did not name, and a lock exists precisely to stop that.
+  if (apiKeyWorkspaceId?.trim()) return null;
 
   const status = await getOnboardingStatus(userId);
   if (!status.onboarded) {

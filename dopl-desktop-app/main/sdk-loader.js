@@ -55,12 +55,16 @@ function resolveClaudeExecutable() {
   }
 }
 
-// ⚠ THE DEVICE TOKEN STAYS OFF DISK ON THE SDK PATH. `Read` is PRE-APPROVED on all three
-// session profiles, so the SDK SHADOWS it and the call never reaches canUseTool — a plaintext
-// bearer in userData/mcp-spawn.json is liftable with ZERO operator clicks. The bearer comes
-// from mcp-config's safeStorage-held cache straight into the in-memory object. The file
-// survives ONLY for the CLI path (session-spawner's --mcp-config, manual `claude` runs), and
-// buildSecretPathDenyRules below keeps the pre-approved read tools out of it.
+// ⚠ THE DEVICE TOKEN STAYS OFF DISK, FULL STOP. `Read` is PRE-APPROVED on all three session
+// profiles, so the SDK SHADOWS it and the call never reaches canUseTool — a plaintext bearer in
+// userData/mcp-spawn.json was liftable with ZERO operator clicks. The bearer comes from
+// mcp-config's safeStorage-held cache straight into the in-memory object.
+// ⚠ THAT FILE IS GONE (2026-08-26): `mcp-config.js › removeSpawnConfig` deletes it on every
+// signed-in launch and nothing writes it, so it no longer "survives for the CLI path" — the
+// headless spawner that read it was deleted 2026-08-20, and manual `claude` runs use the CLI's
+// own user-scope entry. buildSecretPathDenyRules below still fences userData for the encrypted
+// electron-store, but it is no longer the thing standing between an agent and this credential —
+// see removeSpawnConfig for why a `Bash` rule could never have been that thing.
 function doplBearer() {
   // ⚠ Lazy require: mcp-config pulls in auth/session-spawner, and an unwired harness (or a
   // pre-sign-in launch) must read as "no token", never throw into a launch.
@@ -71,20 +75,26 @@ function doplBearer() {
   }
 }
 
-// ⚠ ONE DEFINITION of the per-server call timeout: mcp-config owns the number (it writes the
-// same key into the spawn-config file) and derives it from the server's await budget. Never
-// restate the literal here. Lazy like doplBearer, and only reached after it proved mcp-config
-// loads.
+// ⚠ ONE DEFINITION of the per-server call timeout: mcp-config owns the number and derives it
+// from the server's await budget. Never restate the literal here — the entry below is the only
+// Dopl MCP entry this process builds, and it drifted once already by restating it. Lazy like
+// doplBearer, and only reached after it proved mcp-config loads.
 function clientTimeoutMs() {
   return require('./mcp-config').MCP_CLIENT_TIMEOUT_MS;
 }
 
 // ⚠ Tool-BOUND half of the same fix. A pre-approved tool never reaches grantDecision, so this
 // deny must ride options.disallowedTools (the SDK's rule layer). Fences the two credential
-// directories: userData (mcp-spawn.json + the safeStorage-encrypted electron-store) and
-// ~/.claude* (CLI config + keychain-adjacent state). Rules are gitignore-style: an absolute
-// path takes the `//` filesystem-root prefix, `~/` is home. Applied to EVERY profile, because
-// every profile pre-approves the local reads. `Read` is load-bearing; Grep/Glob are belt.
+// directories: userData (the safeStorage-encrypted electron-store; mcp-spawn.json USED to live
+// here and no longer exists) and ~/.claude* (CLI config + keychain-adjacent state). Rules are
+// gitignore-style: an absolute path takes the `//` filesystem-root prefix, `~/` is home. Applied
+// to EVERY profile, because every profile pre-approves the local reads. `Read` is load-bearing;
+// Grep/Glob are belt.
+// ⚠ THE LIST IS PATH-TOOLS ONLY, AND `Bash` CANNOT JOIN IT — not an oversight. Claude Code's
+// `Bash` rules match COMMAND STRINGS (`Bash(npm run build)`, `Bash(git *)`), so a generated
+// `Bash(//Users/…/**)` would match no command and deny nothing while reading as coverage. The
+// answer for a secret Bash can reach is to not put the secret on disk; see
+// `mcp-config.js › removeSpawnConfig`.
 const SECRET_TOOLS = ['Read', 'Grep', 'Glob'];
 const SECRET_HOME_PATHS = ['~/.claude*', '~/.claude/**'];
 function buildSecretPathDenyRules() {
@@ -190,9 +200,11 @@ function buildMcpServers(doplToolsPolicy, workspaceId, bearerOverride) {
 // and stamps the reserved key ONLY from this header — same discipline as X-Dopl-Runtime.
 //
 // ⚠ SEPARATE FUNCTION on purpose: buildMcpServers answers "what MCP server does this app
-// offer" — the same answer for every spawn, which mcp-config.js writes ONCE into the shared
-// spawn config the headless `--mcp-config` path reads, where a per-session value cannot live.
-// This answers "which run is calling", knowable only on the in-memory SDK path.
+// offer" — the same answer for every spawn, and for years that answer was ALSO serialized into a
+// shared on-disk spawn config where a per-session value could not have been correct for the
+// sessions that later read it. (That file is gone — `mcp-config.js › removeSpawnConfig` — but
+// the seam it forced is the right one and stays.) This answers "which run is calling", knowable
+// only on the in-memory SDK path.
 //
 // ⚠ A LABEL, NOT A LOCK: nothing granted, nothing enforced, no session count limited. An absent
 // or malformed slot stamps NOTHING. SHAPE mirrors the server's own

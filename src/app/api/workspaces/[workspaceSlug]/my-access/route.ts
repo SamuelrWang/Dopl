@@ -9,6 +9,8 @@ import {
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -27,7 +29,7 @@ interface Ctx {
  * because the resolver answers 404 first.
  */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
@@ -43,7 +45,7 @@ export const GET = withUserAuth(
       }
       // ⚠ ROLE THREADED, not re-read: the segment resolve already fetched this membership, so
       // passing its `role` skips an identical `findMembership` per request.
-      const resolved = await resolveApiWorkspaceAccess(workspaceSlug, userId);
+      const resolved = await resolveApiWorkspaceAccess(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!resolved) {
         return NextResponse.json(
           {

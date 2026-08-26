@@ -21,8 +21,10 @@
 //
 // ⚠ WHAT WAS **NOT** BROKEN, because it is the reason this hid: the SDK SESSION path never reads
 // this entry. `sdk-loader.js › buildMcpServers` builds its entry in memory off the compiled-in
-// MCP_URL every spawn, and `writeSpawnConfig` repairs the headless spawn file by whole-body
-// comparison. This was the one Dopl MCP surface with no origin repair at all.
+// MCP_URL every spawn. (A third surface, the on-disk spawn config, self-healed by whole-body
+// comparison; S3 deleted it outright — `mcp-config.js › removeSpawnConfig`, 2026-08-26, which
+// is why the ensure sequence below now reads `removeSpawnConfig` where it read
+// `writeSpawnConfig`.) This was the one Dopl MCP surface with no origin repair at all.
 //
 // THE FIX, in two parts, both pinned below:
 //   • `mcp-cli-add.js › probeMcpEntry` answers THREE states, not a boolean — 'absent' /
@@ -81,7 +83,7 @@ function runEnsure(opts) {
       lastMintWasFresh = FRESH;
       return TOKEN;
     };
-    const writeSpawnConfig = (t) => { CALLS.push(["writeSpawnConfig", t]); return true; };
+    const removeSpawnConfig = () => { CALLS.push(["removeSpawnConfig"]); return true; };
     const probeMcpEntry = async () => { CALLS.push(["probe"]); return PROBE; };
     const removeMcpEntry = async () => { CALLS.push(["remove"]); return REMOVE_OK; };
     const addMcpEntry = async (b, t) => { CALLS.push(["add", t]); return ADD_OK; };
@@ -114,7 +116,7 @@ const UNKNOWN = { state: "unknown", url: "" };
 
 test("an entry on ANOTHER origin is re-pointed at the current one, with no fresh mint", async () => {
   const r = await runEnsure({ probe: present(STALE), fresh: false });
-  assert.deepEqual(r.names, ["mint", "writeSpawnConfig", "probe", "remove", "add"],
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "probe", "remove", "add"],
     "the drifted entry must be removed and re-added");
   assert.equal(r.calls.find((c) => c[0] === "add")[1], "tok-abc",
     "and re-added carrying the token this boot resolved");
@@ -136,7 +138,7 @@ test("an entry ALREADY on the current origin is left alone (F-085 still holds)",
   // entry may be one the OPERATOR hand-wrote with their own credential, and from outside we
   // cannot tell. A matching url gives us no reason to touch it, so we do not.
   const r = await runEnsure({ probe: present(OURS), fresh: false });
-  assert.deepEqual(r.names, ["mint", "writeSpawnConfig", "probe"], "no remove, no add");
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "probe"], "no remove, no add");
   assert.ok(r.diags.some((d) => /leaving alone/.test(d)));
 });
 
@@ -144,18 +146,18 @@ test("a FRESH MINT still refreshes a matching entry — the pre-existing reason"
   // A fresh mint revoked the bearer the entry carries, so it must be re-written even though the
   // url is right. This branch predates the origin rule and is not replaced by it.
   const r = await runEnsure({ probe: present(OURS), fresh: true });
-  assert.deepEqual(r.names, ["mint", "writeSpawnConfig", "probe", "remove", "add"]);
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "probe", "remove", "add"]);
   assert.ok(r.diags.some((d) => /fresh mint/.test(d)));
 });
 
 test("a confirmed-ABSENT entry is added, never removed first", async () => {
   const r = await runEnsure({ probe: ABSENT });
-  assert.deepEqual(r.names, ["mint", "writeSpawnConfig", "probe", "add"]);
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "probe", "add"]);
 });
 
 test("an UNKNOWN probe touches NOTHING — no add (dupes) and no remove (blind clobber)", async () => {
   const r = await runEnsure({ probe: UNKNOWN, fresh: true });
-  assert.deepEqual(r.names, ["mint", "writeSpawnConfig", "probe"],
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "probe"],
     "even a fresh mint must not act on an answer the CLI did not give");
   assert.ok(r.diags.some((d) => /unknown/.test(d)));
 });
@@ -164,7 +166,7 @@ test("a present entry with an UNPARSEABLE url is not treated as drifted", async 
   // '' means "we could not read it", not "it is wrong". Guessing here would remove an entry on
   // the strength of a parser miss — the blind-clobber case again, in a different coat.
   const r = await runEnsure({ probe: present(""), fresh: false });
-  assert.deepEqual(r.names, ["mint", "writeSpawnConfig", "probe"]);
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "probe"]);
 });
 
 // ── 3. THE EARLIER GATES ARE UNCHANGED ───────────────────────────────────────

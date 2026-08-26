@@ -4071,3 +4071,77 @@ gates", both of which are what an agent reads to know what green means. The wave
 role shipped the guard for it and told no doc. **A gate that CI runs and no doc names is a gate that
 will be deleted by somebody tidying up**, and §14's "CI runs every row above" quietly reads as "these
 rows are all of CI", which it never claimed and which was not true.
+
+---
+
+## HOME KNOWLEDGE PANELS — the adversarial-review pass (2026-08-26)
+
+An adversarial review of this wave returned **"not releasable"** over twelve findings. What follows
+is the rationale worth keeping; the current rules are in INVARIANTS §3, §4, §8, §9, §10, §12, §14,
+and the debt is F-329 (reopened), F-330 (re-scoped), F-334, F-336 and F-337.
+
+**The wave's dominant failure mode was a claim that was true of ONE thing and written as if it were
+true of a class.** Four of the five HIGH findings are the same sentence in different clothes.
+
+- *"Fencing here fences the surface"* (`knowledge/server/service-bases.ts`) — true of every read
+  that COMPOSES `getBaseById`, and `getEntry` did not. So `GET /api/knowledge/entries/[entryId]`,
+  at the viewer default, handed any workspace viewer the body of an entry inside a private base:
+  the service-role route strictly wider than the RLS policy behind it. ⚠ **The evidence was already
+  in the tree**: `export.ts › buildEntryFile` had bolted on its own `getBaseById` beside the comment
+  *"getEntry only checks workspace — gate on base visibility too"*. One caller had worked it out and
+  fixed itself instead of the door, and nobody generalised. **A gate one caller has to remember is
+  not a gate.**
+- *"That credential cannot name another workspace"* (`shared/auth/mcp-container-token.ts`) — true of
+  `withWorkspaceAuth`, and the repo has TWO auth families. The other one had zero references to
+  `apiKeyWorkspaceId`. **A property that holds in one wrapper is not a property of the credential.**
+- *"The SERVICE is the true gate"* (`20260827120000_channel_resource_grants.sql`) — true of the API
+  and false of the DATABASE, because PostgREST is a second door opened with the user's own JWT. The
+  write policy sat at `member` while the service gate was creator-or-admin, and a container peer can
+  BE a `member` — so the party the audience ceiling bounds could write the rows the ceiling is
+  computed from. **A belt set below the gate is not a belt.**
+- *"The lock rides the credential, so it binds the process AND anything it shells out to"* (F-329) —
+  true only if the locked credential is the only one reachable. An UNLOCKED 90-day device token sat
+  in plaintext at `userData/mcp-spawn.json`, fenced from `Read`/`Grep`/`Glob` and not from `Bash`.
+
+**On that last one, the shape of the fix is the lesson.** The obvious move — add `Bash` to
+`SECRET_TOOLS` — is theatre: Claude Code `Bash(...)` rules match COMMAND patterns, not path globs,
+so the rule would match nothing and read as coverage. F-080's own proposed fix shape had the same
+defect and would have been implemented next round. **The real fix was to notice the file had no
+reader**: the headless `claude -p` executor that consumed it was deleted 2026-08-20, so the honest
+answer was to stop writing a credential to disk rather than to build a fence around it. When a fence
+is hard to build, ask what it is guarding and whether that needs to exist.
+
+**Two findings were about tests that could not fail.**
+
+- The grant write patched a cache key no reader mounted (reader array-extended, writer
+  string-extended), and the suite was green **because it seeded the WRITER's shape**. *A test that
+  mints its own key proves the patcher works and says nothing about whether anybody is listening.*
+  Every assertion now starts from the function the PANE calls.
+- The §8 stale-cache fixture deleted a key from a ROUTE response — but `fetchBaseList` normalises
+  every sibling key on the wire, so that fixture can only ever exercise a pre-deploy SERVER. The
+  stale-CACHE payload never passes through today's fetcher at all. *Two fallbacks, two tests; the
+  route-level one had been standing in for a shape it cannot reach.*
+
+**Three findings were numbers wrong under today's date stamp** — a `sessionOnly` count that said 26
+where the command answered 27, an ordinal that said "fifteenth" beside its own "nineteenth", and a
+gate count that fixed an undercount by double-counting the desktop typecheck. **A stamped number
+that was never run is worse than an unstamped one, because it buys the next reader's trust.** The
+gate-count line has now been wrong twice in one day in opposite directions, both times from counting
+a prose list instead of the workflow.
+
+**And one finding was that the gate meant to catch all of this could not.** `check-doc-refs`
+required a `:LINE` or a `›` on anything it checked — so a plain backticked path, **the citation form
+CLAUDE.md's standing rule 2 prescribes**, was the one form nothing existence-checked. Closing it
+turned up 613 dead references. It ships as a RATCHET with a dated baseline (F-337) rather than as a
+red gate, because a gate that lands red is a gate that gets switched off — but a baselined reference
+is unchecked debt, not a passing citation.
+
+**One thing was deliberately NOT fixed, and the restraint is the point (F-336).** Layer B1's
+credential lock makes `canSeeBase` refuse every non-public base, and `getBaseById` applies that
+BEFORE the audience ceiling — so a private base in a shared container is invisible to the operator's
+own agent *whether or not it carries the `agent_only` grant Samuel's RULING 2 names as the remedy*.
+The fix is a fence WIDENING across five mirrored copies of the M-10 predicate, and **a fence is not
+widened overnight by the agent that found the gap.** What was done instead: the UI copy and
+INVARIANTS now state the current truth rather than promising a remedy the code does not implement,
+and the two options are filed with their blast radius for Samuel to choose between. *Correcting the
+claim is always in scope; widening the fence is not.*

@@ -10,6 +10,8 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -50,7 +52,7 @@ interface Ctx {
  * "cannot see" and "does not exist" stay indistinguishable.
  */
 export const GET = withUserAuth(
-  async (request: NextRequest, { userId, params }: Ctx) => {
+  async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
@@ -64,7 +66,7 @@ export const GET = withUserAuth(
           { status: 400 }
         );
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json(
           {

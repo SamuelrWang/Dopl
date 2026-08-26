@@ -9,6 +9,8 @@ import { computeEffectiveAccess } from "@/features/teams/effective-access";
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -18,9 +20,9 @@ interface Ctx {
  * Admins+ for anyone; regular members only for themselves. Shape `{ rows: EffectiveAccessRow[] }`.
  */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

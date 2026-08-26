@@ -34,13 +34,26 @@ export function BaseCell({
   onOpen: (base: KnowledgeBase) => void;
   onToggleStar: StarToggle;
 }) {
+  // 🔒 ⚠ §8 STALE-CACHE, AND `?.` DOES NOT COVER IT. `list?.ownerNames[…]` guards
+  // `list`, NOT the sibling KEY — a payload cached by a bundle that predates a
+  // field arrives as a live object whose `ownerNames` / `baseStats` /
+  // `starredBaseIds` is `undefined`, and indexing or `.includes()` on that
+  // THROWS, blanking the whole pane. That is §8's named failure, and every one
+  // of these keys is younger than some cache entry in the wild
+  // (`starredBaseIds` arrived with `20260812075637_knowledge_base_stars`,
+  // `channelGrants` with this wave). `fetchBaseList` normalises on the WIRE;
+  // nothing normalises on the way OUT of the cache, which is the path that
+  // matters here. So the fallback is spelled per key, inline, at the read.
+  const ownerNames = list?.ownerNames ?? EMPTY_OWNER_NAMES;
+  const baseStats = list?.baseStats ?? EMPTY_BASE_STATS;
+  const starredBaseIds = list?.starredBaseIds ?? EMPTY_STARRED;
   // Same three-way answer `knowledge-home.tsx › ownerLabelFor` gives: own and
   // ownerless bases read "You", a peer's base reads their resolved name, and a
   // degraded name lookup reads neutrally rather than claiming the caller wrote
   // it. Scope A can carry a base the PEER created; B and C never can.
   const ownerLabel =
     base.createdBy && base.createdBy !== currentUserId
-      ? (list?.ownerNames[base.createdBy] ?? "Someone else")
+      ? (ownerNames[base.createdBy] ?? "Someone else")
       : "You";
   return (
     <div className={home.kbCell}>
@@ -54,16 +67,26 @@ export function BaseCell({
       )}
       <BaseCard
         base={base}
-        stats={list?.baseStats[base.id]}
+        stats={baseStats[base.id]}
         storageLimit={list?.kbStorageLimit}
         ownerLabel={ownerLabel}
-        starred={list?.starredBaseIds.includes(base.id) ?? false}
+        starred={starredBaseIds.includes(base.id)}
         onOpen={onOpen}
         onToggleStar={(baseId, starred) => onToggleStar({ baseId, starred })}
       />
     </div>
   );
 }
+
+/** Frozen module-level empties, so a degraded read does not mint a new object
+ *  per render and re-run every downstream memo. ⚠ MISSING is UNKNOWN, and each
+ *  of these renders as the honest unknown: no name (→ "Someone else"), no stats
+ *  line, not starred. */
+const EMPTY_OWNER_NAMES: Readonly<Record<string, string>> = Object.freeze({});
+const EMPTY_BASE_STATS: Readonly<
+  Record<string, KnowledgeBaseList["baseStats"][string]>
+> = Object.freeze({});
+const EMPTY_STARRED: readonly string[] = Object.freeze([]);
 
 /** A section body with nothing in it. ⚠ Only ever rendered against a RESOLVED
  *  read — see the loading gates in `knowledge-panels.tsx`. */
@@ -125,14 +148,30 @@ type StarVars = { baseId: string; starred: boolean };
 export type StarToggle = (vars: StarVars) => void;
 
 /**
- * The channel-scoped base list's key — the plain key plus one element, so a
- * writer's `["knowledge", "bases:<ws>"]` prefix still reaches it (§8).
- * ⚠ Built from `knowledgeBasesQueryKey` rather than retyped, so the two can
- * never disagree about the first two elements.
+ * The channel-scoped base list's key.
+ *
+ * 🔒 ⚠ IT IS `knowledgeBasesQueryKey(ws, channelId)` AND NOTHING ELSE, AND IT
+ * WAS A DIFFERENT SHAPE UNTIL 2026-08-26. This built an ARRAY-EXTENDED key —
+ * `[...knowledgeBasesQueryKey(ws), \`channel:${id}\`]`, i.e.
+ * `["knowledge", "bases:W", "channel:C"]` — while the grant WRITE patches by
+ * matching `key[1]` against the STRING-EXTENDED segment
+ * `knowledgeBasesCacheSegment(ws, channelId)` = `"bases:W:channel:C"`
+ * (`hooks-channel-grants.ts › patchChannelGrantInCache`). On this key `key[1]`
+ * is `"bases:W"`, so the patch matched NOTHING THE PANE HAD MOUNTED: granting a
+ * base from the settings modal left it in the wrong section until a cold
+ * refetch. The suite did not catch it because it seeded the WRITER's shape,
+ * which no surface ever mounts — **a test that builds its own key proves the
+ * patcher works and says nothing about whether anybody is listening.**
+ *
+ * ⚠ SO THE MINTER IS SHARED, not mirrored. `knowledgeBasesQueryKey` is the one
+ * place either shape can be decided, and the writer's prefix match
+ * (`segment === target || segment.startsWith(\`${target}:\`)`) still reaches any
+ * surface that extends the SEGMENT further. This wrapper survives only as the
+ * NAME the pane reads by; it adds nothing.
  */
 export function channelBasesQueryKey(
   workspaceId: string | undefined,
   channelId: string | undefined
 ) {
-  return [...knowledgeBasesQueryKey(workspaceId), `channel:${channelId}`] as const;
+  return knowledgeBasesQueryKey(workspaceId, channelId);
 }

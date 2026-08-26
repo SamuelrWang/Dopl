@@ -6,10 +6,17 @@
 //                     surface and every handler is bound to that window's own top frame), so
 //                     the stamp cannot ride a request the renderer did not originate and a new
 //                     call site cannot forget it.
-//   `desktop-session` a session the app SPAWNED — `main/sdk-loader.js` (SDK) and
-//                     `main/mcp-config.js` (headless CLI). Pinned as a literal by
+//   `desktop-session` a session the app SPAWNED — `main/sdk-loader.js`, and ONLY that file as
+//                     of S3 (2026-08-26). `main/mcp-config.js` used to carry the literal too,
+//                     for the headless `--mcp-config` spawn path; that path's executor died on
+//                     2026-08-20 and its credential file was deleted by
+//                     `mcp-config.js › removeSpawnConfig`. Pinned as a literal by
 //                     `test/sdk-grant.test.mjs`, which is the sibling this file was written to
 //                     match.
+//   ⚠ THE CLI ENTRY IS DELIBERATELY UNSTAMPED. `mcp-cli-add.js › addMcpEntry` sends
+//   `Authorization` and nothing else, and it never sent the runtime header — a manual `claude`
+//   run in the operator's own terminal is NOT a session this app spawned, and claiming
+//   `desktop-session` for it would be the exact confusion the stamp exists to remove.
 //
 // F-145 — WHY THIS FILE EXISTS. These pins lived in `test/operator-typed-request.test.mjs`,
 // whose subject is the requester-open PREDICATE's truth table, and that file sat at EXACTLY
@@ -64,18 +71,29 @@ test("…and those two literals are the ones the SERVER reads (the join has no s
     "main claims a runtime value narrowRuntime does not recognize — every stamp would be dropped");
 });
 
-test("the SESSION stamp's literal matches the server's too, from both spawn paths", () => {
+test("the SESSION stamp's literal matches the server's too, on the one spawn path left", () => {
   // `sdk-grant.test.mjs` already pins the SDK path's literal; what it cannot see is whether the
-  // server still recognizes that string, and it does not cover the headless CLI path at all.
+  // server still recognizes that string.
   const serverSession = /export const DESKTOP_SESSION_RUNTIME = "([^"]+)";/.exec(SHARED);
   assert.ok(serverSession, "the server's constant moved — this join needs re-pinning");
-  for (const file of ["sdk-loader.js", "mcp-config.js"]) {
+  for (const file of ["sdk-loader.js"]) {
     const src = M(file);
     const hit = /'X-Dopl-Runtime': '([^']+)',/.exec(src);
     assert.ok(hit, `${file} no longer sends the runtime header at all`);
     assert.equal(hit[1], serverSession[1],
       `${file} claims a runtime value narrowRuntime does not recognize`);
   }
+});
+
+test("the CLI-entry lane sends NO runtime stamp, and that is the intended state", () => {
+  // Stated as an assertion rather than left as an absence someone 'fixes'. If a future round
+  // decides a manual `claude` run should be stamped, that is a product decision about what
+  // `desktop-session` MEANS — not a missing header to paste in.
+  const cliAdd = M("mcp-cli-add.js");
+  assert.ok(!/X-Dopl-Runtime/.test(cliAdd), "addMcpEntry stamps nothing");
+  assert.match(cliAdd, /'--header', `Authorization: Bearer \$\{token\}`,/, "…just the bearer");
+  assert.ok(!/X-Dopl-Runtime/.test(M("mcp-config.js")),
+    "and mcp-config holds no runtime literal now that the spawn-config file is gone");
 });
 
 test("the LISTENER and SESSION-POST lanes are deliberately NOT stamped desktop-ui", () => {

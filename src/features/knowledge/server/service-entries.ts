@@ -14,6 +14,7 @@ import {
 } from "./errors";
 import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
+import { audienceAdmits, resolveAgentAudience } from "./service-audience";
 import {
   assertAgentCanDelete,
   assertBaseWritable,
@@ -45,6 +46,35 @@ export async function listEntries(
   });
 }
 
+/**
+ * One entry by id.
+ *
+ * 🔒 IT CHASES THE ENTRY UP TO ITS BASE AND RE-ASKS THE BASE'S OWN QUESTION
+ * (2026-08-26). This used to check `assertSameWorkspace` and nothing else, and
+ * that was a hole with three tenants: (1) `GET /api/knowledge/entries/[entryId]`
+ * runs at the viewer default, so ANY workspace viewer could pull the body of an
+ * entry in a `visibility='private'` base they cannot see — the service-role
+ * route was strictly WIDER than the RLS policy behind it, which correctly
+ * requires `public OR created_by = auth.uid()`; (2) the M-10 tightening (a
+ * workspace-scoped key never sees a private base) was bypassed; (3) the AUDIENCE
+ * CEILING was bypassed, so a locked agent credential could read an ungranted
+ * base's entries one id at a time. ⚠ **Entry ids are obtainable** — ontology
+ * attributes of `kind:"knowledge"` ship raw entry-id arrays and `dopl_ontology`
+ * is an auto-allowed read tool — so "you need the id" was never the fence.
+ *
+ * ⚠ `export.ts › buildEntryFile` had ALREADY worked this out for itself and
+ * added its own `getBaseById` beside the comment *"getEntry only checks
+ * workspace — gate on base visibility too"*. That call is now redundant rather
+ * than load-bearing, and it is deliberately left in place as belt: a second
+ * `getBaseById` on a row already in hand is one memoized lookup, and deleting it
+ * would remove the evidence that this file's gate is what closed it.
+ *
+ * ⚠ A refusal is `EntryNotFoundError`, NOT the base's error — "this entry does
+ * not exist", "its base is invisible to you" and "its base is outside your
+ * audience" are ONE answer, the same 404-not-403 rule `service-bases.ts`
+ * applies one level up. Leaking `KNOWLEDGE_BASE_NOT_FOUND` here would tell a
+ * caller that the id it guessed was a real entry in a base it may not see.
+ */
 export async function getEntry(
   ctx: KnowledgeContext,
   id: string
@@ -52,7 +82,24 @@ export async function getEntry(
   const entry = await repo.findEntryById(id, false);
   if (!entry) throw new EntryNotFoundError(id);
   assertSameWorkspace(entry.workspaceId, ctx.workspaceId, `entry ${id}`);
+  await assertEntryBaseReadable(ctx, entry, id);
   return entry;
+}
+
+/** `getBaseById`'s two gates (visibility + audience ceiling), re-answered as a
+ *  404 about the ENTRY. Composed rather than restated so a new gate added to the
+ *  foundational lookup reaches entry reads for free. */
+async function assertEntryBaseReadable(
+  ctx: KnowledgeContext,
+  entry: KnowledgeEntry,
+  id: string
+): Promise<void> {
+  try {
+    await getBaseById(ctx, entry.knowledgeBaseId);
+  } catch (err) {
+    if (err instanceof KnowledgeBaseNotFoundError) throw new EntryNotFoundError(id);
+    throw err;
+  }
 }
 
 export interface KnowledgeEntryRef {
@@ -65,9 +112,16 @@ export interface KnowledgeEntryRef {
 /**
  * Names for a set of entry ids (`GET /api/knowledge/entries?ids=`).
  * ⚠ Applies the SAME base-visibility gating as `listBases` — `canSeeBase` for
- * M-10 + api-key scope, `filterTeamVisibleBases` for teams. Entries under an
- * unreadable base are silently DROPPED, never leaked; unknown /
- * cross-workspace / trashed ids simply don't resolve.
+ * M-10 + api-key scope, `filterTeamVisibleBases` for teams, AND the agent
+ * AUDIENCE CEILING. Entries under an unreadable base are silently DROPPED, never
+ * leaked; unknown / cross-workspace / trashed ids simply don't resolve.
+ *
+ * 🔒 THE CEILING HALF WAS MISSING UNTIL 2026-08-26, and this route is the one
+ * that makes entry ids cheap: ontology attributes of `kind:"knowledge"` ship raw
+ * entry-id arrays, so an agent under the ceiling could resolve 100 ids per
+ * request against bases that were never granted into its container. It is the
+ * `listBases` filter verbatim — `resolveAgentAudience` once for the request,
+ * `audienceAdmits` per base — so the two lists cannot answer differently.
  */
 export async function resolveEntryRefs(
   ctx: KnowledgeContext,
@@ -79,10 +133,13 @@ export async function resolveEntryRefs(
   if (entries.length === 0) return [];
   const baseIds = [...new Set(entries.map((e) => e.knowledgeBaseId))];
   const bases = await repo.listBasesByIds(ctx.workspaceId, baseIds);
-  const readable = await filterTeamVisibleBases(
-    ctx,
-    bases.filter((b) => b.deletedAt === null && canSeeBase(ctx, b))
-  );
+  const audience = await resolveAgentAudience(ctx);
+  const readable = (
+    await filterTeamVisibleBases(
+      ctx,
+      bases.filter((b) => b.deletedAt === null && canSeeBase(ctx, b))
+    )
+  ).filter((b) => audienceAdmits(audience, b.id));
   const nameByBaseId = new Map(readable.map((b) => [b.id, b.name]));
   return entries.flatMap((e) => {
     const baseName = nameByBaseId.get(e.knowledgeBaseId);

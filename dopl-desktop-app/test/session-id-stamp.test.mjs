@@ -296,9 +296,12 @@ test("buildSdkOptions stamps the assembled mcpServers with store.slotKey(s)", ()
 
 test("the per-session stamp NEVER reaches the shared, on-disk spawn config", () => {
   // The seam this split exists for. buildMcpServers answers "what MCP server does this
-  // app offer" — the same answer for every spawn — and mcp-config.js writes that same
-  // shape ONCE into userData/mcp-spawn.json for the headless `--mcp-config` path, where a
-  // per-session value could not be correct for the sessions that later read it. Only the
+  // app offer" — the same answer for every spawn — and mcp-config.js used to write that
+  // same shape ONCE into userData/mcp-spawn.json for the headless `--mcp-config` path,
+  // where a per-session value could not be correct for the sessions that later read it.
+  // ⚠ S3 (2026-08-26) DELETED that file and its writer (`mcp-config.js › removeSpawnConfig`),
+  // so these assertions no longer guard a live shared artifact — they guard the SEAM, which
+  // is still the right one and is the thing a future author would collapse. Only the
   // in-memory SDK path knows which run is calling, so only it stamps.
   assert.ok(!/Session-Id/.test(fnOf(LOADER, "buildMcpServers")), "the shared builder does not stamp");
   assert.ok(!/Session-Id/i.test(CONFIG), "and the spawn-config file has no session header at all");

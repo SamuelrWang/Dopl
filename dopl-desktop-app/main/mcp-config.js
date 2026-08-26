@@ -1,7 +1,7 @@
 // Dopl MCP auto-config for the Claude CLI. On a signed-in startup (and after a fresh sign-in):
 //   1. Mint (or reuse) a long-lived device token from POST /api/auth/mcp-device-token.
-//   2. Write userData/mcp-spawn.json (mode 600) carrying it, passed as `--mcp-config <path>` on
-//      every spawn, so a responding agent has Dopl regardless of the CLI's global config.
+//   2. DELETE userData/mcp-spawn.json if it is there. Nothing writes that file any more and
+//      nothing in this app reads it — see `removeSpawnConfig` below for the whole argument.
 //   3. Ensure a user-scope `dopl` entry exists in the CLI's own config (`claude mcp add …`),
 //      NEVER churning an existing one.
 //
@@ -9,14 +9,14 @@
 // That file is the OPERATOR's — it holds their `oauthAccount` block — and `timeout` also LOWERS
 // the hard tool-call ceiling (~27.8h -> the value) for their own terminal `claude` sessions.
 // /api/mcp streams (c2f6a7e), so a long `op=await` hold is no longer 60s of silence. The fix
-// belongs only on entries we own: the spawn-config file below and sdk-loader's in-memory
-// server, both inside this process.
+// belongs only on the entry we own: sdk-loader's in-memory server, inside this process.
 //
-// ⚠ The token value NEVER hits logs/diag. Stored safeStorage-encrypted, written into the
-// spawn-config file (600), and passed as a `claude mcp add` header argv.
+// ⚠ The token value NEVER hits logs/diag, and as of 2026-08-26 it never hits a file THIS APP
+// WRITES either. It is stored safeStorage-encrypted and passed as a `claude mcp add` header
+// argv (mcp-cli-add.js), where the CLI — not this process — owns whatever it persists.
 // ⚠ The safeStorage cache is the ONLY source the SESSION path uses: `deviceTokenForSpawn()`
-// hands sdk-loader.buildMcpServers the bearer in memory, so an SDK session never needs the
-// file. Steps 2/3 exist for the CLI path alone (headless spawns + manual `claude` runs).
+// hands sdk-loader.buildMcpServers the bearer in memory. Step 3 is now the ONLY step that
+// serves the CLI path (manual `claude` runs); there is no headless spawn path left to serve.
 
 const fs = require('fs');
 const path = require('path');
@@ -34,9 +34,11 @@ const store = new Store();
 const DT_KEY = 'mcpDeviceToken'; // safeStorage-encrypted base64(JSON{token,expiresAt})
 const DT_KEY_PLAIN = 'mcpDeviceTokenPlain';
 const REUSE_MARGIN_MS = 7 * 24 * 60 * 60 * 1000; // re-mint when <7d remain
-// ⚠ THE ONE DEFINITION of the per-server call abort every Dopl MCP entry this app writes must
-// carry — feeds the spawn-config file below AND sdk-loader's in-memory entry, which imports it
-// rather than restating it.
+// ⚠ THE ONE DEFINITION of the per-server call abort every Dopl MCP entry this app builds must
+// carry. sdk-loader's in-memory entry is the only such entry left, and it IMPORTS this constant
+// rather than restating it — restating is exactly how the two drifted the last time (a stale
+// copy of this number against a server cap that had moved). ⚠ The old literal must not reappear
+// in EITHER module, prose included; mcp-client-timeout.test.mjs bans it by value.
 // ⚠ DO NOT HAND-TUNE. Arithmetic over packages/mcp-server/src/tools/channel-await-budget.ts:
 //   AWAIT_HOLD_CAP_MS 230_000    the LONGEST hold a caller can get via explicit `timeout_ms`
 //                                (the 215_000 DEFAULT is not the bound that matters)
@@ -78,66 +80,50 @@ function withTimeout(promise, ms) {
   });
 }
 
-// ── Spawn-config file (used via --mcp-config on every spawn) ─────────────────
+// ── Spawn-config file: NOT WRITTEN ANY MORE, AND REMOVED ON SIGHT ────────────
+// ⚠ `spawnConfigPath` STAYS even though nothing writes it: `clearDeviceToken` below still rm's
+// it at sign-out (pinned by test/auth-signed-in.test.mjs), which is the belt under the migration
+// for a machine that signs out before it ever launches signed-in again.
 function spawnConfigPath() {
   return path.join(app.getPath('userData'), 'mcp-spawn.json');
 }
 
-// ⚠ The EXACT bytes this file must contain for a given token. Serialized once and compared
-// WHOLE, so every field is repaired, not just the bearer.
-// ⚠ The CLI path carries `X-Dopl-Runtime: desktop-session` too: a headless spawn IS a session
-// this app owns, but it reaches MCP through this file rather than sdk-loader's in-memory entry,
-// so without the header the server reads it as EXTERNAL and the two spawn paths disagree about
-// the same machine. Routing hint only (src/shared/auth/runtime-header.ts) — grants nothing.
-function spawnConfigBody(token) {
-  return JSON.stringify({
-    mcpServers: {
-      dopl: {
-        type: 'http',
-        url: MCP_URL,
-        // ⚠ Without this the client aborts any call at 60s — before the ~2min backgrounding
-        // mark that makes op="await" a wake primitive. See the constant for the derivation.
-        timeout: MCP_CLIENT_TIMEOUT_MS,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'X-Dopl-Runtime': 'desktop-session',
-        },
-      },
-    },
-  });
-}
-
-function currentSpawnBody() {
+// ⚠ THIS APP NO LONGER WRITES A BEARER TO DISK, AND THIS FUNCTION IS THE MIGRATION THAT MAKES
+// THAT TRUE OF MACHINES THAT ALREADY HAVE ONE. Until 2026-08-26, `writeSpawnConfig(token)` wrote
+// the operator's UNLOCKED 90-day `dopl.read`+`dopl.write` device token here in PLAINTEXT (mode
+// 600) on every signed-in launch. Merely stopping the write would have left every installed
+// machine holding that credential on disk for up to 90 more days, so the ensure path DELETES the
+// file instead: the token sheds on the next signed-in launch, without a sign-out.
+//
+// ⚠ WHY DELETED RATHER THAN FENCED — the fence that looked available is not one. sdk-loader's
+// `buildSecretPathDenyRules` denies userData to SECRET_TOOLS = Read/Grep/Glob; `Bash` is NOT on
+// that list, so one `cat` of this path lifted the credential. ADDING `'Bash'` WOULD BE THEATRE:
+// Claude Code permission rules for `Bash` match COMMAND STRINGS, not filesystem path globs.
+// Every `Bash(...)` literal in the bundled runtime is a command pattern — `Bash(npm run build)`,
+// `Bash(git *)`, `Bash(rm -rf *)`, `Bash(prefix:*)` — and never a path, so a generated
+// `Bash(//Users/…/**)` rule matches no command any session runs and denies NOTHING while reading
+// to the next author as coverage. A deny rule that cannot fire is worse than no rule at all.
+// (`Bash` is in session-profiles.ESCALATION_TOOLS, so the read only ever PROMPTED the operator —
+// a tripwire, not a fence — and at the `bypass` posture not even that.) A file that does not
+// exist needs no rule.
+//
+// ⚠ NOTHING IN THE APP READS IT. No production code passes `--mcp-config <spawnConfigPath()>`:
+// the headless executor that did was deleted with `session-spawner.runForChannel` (2026-08-20,
+// see that file's header), the SDK path takes the bearer IN MEMORY from `deviceTokenForSpawn()`,
+// and manual `claude` runs are served by step 3's user-scope entry via `mcp-cli-add.js`. Verify:
+//   grep -rn "spawnConfigPath\|mcp-spawn\|--mcp-config" dopl-desktop-app \
+//     --include="*.js" --include="*.mjs" | grep -v node_modules
+// The only remaining reader anywhere is the out-of-band live-test helper `test/live/creds.js`,
+// which prefers `$DOPL_TOKEN` and treats an unreadable file as a clean skip, not a failure.
+//
+// `rmSync` with `force` is already a no-op on a missing file, so the common (post-migration)
+// case is silent and costs one syscall.
+function removeSpawnConfig() {
   try {
-    return fs.readFileSync(spawnConfigPath(), 'utf8');
-  } catch (_) {
-    return '';
-  }
-}
-
-// Rewrite whenever the CONTENT differs.
-// ⚠ The chmod runs on EVERY call, not only on a rewrite: `writeFileSync`'s mode applies only at
-// creation, and the unchanged-content fast path returns before it. A file left at 644 by an
-// older build or a restore/copy would otherwise stay world-readable for the 90-day token's
-// whole lifetime.
-// ⚠ The fast path compares the WHOLE serialized config, not the token alone. Comparing only
-// headers.Authorization lets a local process rewrite `url` to its own endpoint and keep the
-// file declared correct forever — handing that endpoint the bearer and every tool call.
-function writeSpawnConfig(token) {
-  try {
-    fs.chmodSync(spawnConfigPath(), 0o600);
-  } catch (_) {
-    /* not created yet — the write below sets the mode */
-  }
-  const body = spawnConfigBody(token);
-  if (currentSpawnBody() === body) return true;
-  try {
-    fs.writeFileSync(spawnConfigPath(), body, { mode: 0o600 });
-    fs.chmodSync(spawnConfigPath(), 0o600);
-    diag('mcp-config: wrote spawn config (600)');
+    fs.rmSync(spawnConfigPath(), { force: true });
     return true;
   } catch (err) {
-    diag('mcp-config: spawn config write failed', err && err.message);
+    diag('mcp-config: spawn config removal failed', err && err.message);
     return false;
   }
 }
@@ -175,11 +161,13 @@ function loadDeviceToken() {
   return null;
 }
 
-// ⚠ THE SDK PATH'S BEARER, never a file read. Parsing the token out of mcp-spawn.json puts a
-// 90-day dopl.read+dopl.write credential in plaintext under a path every profile's PRE-APPROVED
-// (therefore gate-bypassing) Read tool can open. This reads the safeStorage cache instead:
-// decrypted on demand, memoized for the process life, never logged. '' when nothing usable
-// (pre-sign-in), which hands the session an empty mcpServers object.
+// ⚠ THE SDK PATH'S BEARER, never a file read — AND THE ONLY PLACE THE BEARER IS SPELLED, now
+// that no file holds it. Landing a 90-day dopl.read+dopl.write credential in plaintext anywhere
+// under userData is what the removed spawn-config write did: every profile PRE-APPROVES `Read`
+// (so it never reaches the gate) and `Bash` reaches it through a rule layer that cannot express
+// a path at all. This reads the safeStorage cache instead: decrypted on demand, memoized for the
+// process life, never logged. '' when nothing usable (pre-sign-in), which hands the session an
+// empty mcpServers object.
 let spawnToken = '';
 function deviceTokenForSpawn() {
   if (spawnToken) return spawnToken;
@@ -191,9 +179,11 @@ function deviceTokenForSpawn() {
 
 // ⚠ SIGN-OUT TEARDOWN FOR THE MCP CREDENTIAL — LOCAL HALF ONLY. Without it, sign-out clears the
 // Supabase blob and the cookie jar and leaves a 90-day dopl.read+dopl.write device token live
-// in electron-store (DT_KEY / DT_KEY_PLAIN) and in userData/mcp-spawn.json — full API access to
-// the account that just signed out, for anything that can read the app's data dir, the next
-// operator on this machine included.
+// in electron-store (DT_KEY / DT_KEY_PLAIN) — full API access to the account that just signed
+// out, for anything that can read the app's data dir, the next operator on this machine
+// included. ⚠ The `rmSync` below is now a BELT: nothing writes userData/mcp-spawn.json any more
+// (see `removeSpawnConfig`), and it stays because a machine that signs out before its next
+// signed-in launch would otherwise never run that migration.
 // ⚠ PAIR WITH revokeDeviceToken() below, which kills the token SERVER-side. Deleting our copies
 // does not invalidate the credential: anything that already read it keeps full API access until
 // the token expires. signOut() runs the revoke FIRST, then this.
@@ -391,7 +381,9 @@ async function ensureMcpConfigInner() {
       diag('mcp-config: skip (no device token)');
       return;
     }
-    writeSpawnConfig(token);
+    // ⚠ A REMOVAL, not a write. This is where an already-installed machine sheds the plaintext
+    // 90-day bearer an older build left in userData/mcp-spawn.json.
+    removeSpawnConfig();
 
     const probe = await probeMcpEntry(bin);
     if (probe.state === 'unknown') {
@@ -413,8 +405,9 @@ async function ensureMcpConfigInner() {
       //
       // ⚠ THE SDK SESSION PATH WAS NEVER AFFECTED and that is why this hid for so long:
       // `sdk-loader.js › buildMcpServers` builds its entry in memory off the compiled-in
-      // MCP_URL, and `writeSpawnConfig` above repairs the headless spawn file by WHOLE-body
-      // comparison. This CLI entry was the one Dopl MCP surface with no origin repair at all.
+      // MCP_URL. (A third surface, the spawn-config FILE, self-healed by whole-body comparison;
+      // it is gone — see `removeSpawnConfig`.) This CLI entry is now the ONE Dopl MCP surface
+      // that lives outside this process, and origin repair is the only thing that keeps it live.
       //
       // ⚠ WHAT THIS MAY STOMP, STATED RATHER THAN HIDDEN. F-085's argument for never touching an
       // existing entry is that it may be one the OPERATOR hand-wrote with their own credential,
@@ -452,6 +445,5 @@ module.exports = {
   deviceTokenForSpawn, // the SDK path's bearer, from safeStorage — never off disk
   clearDeviceToken, // S2: sign-out teardown, LOCAL (auth-state.signOut)
   revokeDeviceToken, // F-085: sign-out teardown, SERVER-side (auth-state.signOut)
-  spawnConfigBody, // the exact bytes writeSpawnConfig compares against
   MCP_CLIENT_TIMEOUT_MS, // Q9: ONE definition — sdk-loader reads it from here
 };

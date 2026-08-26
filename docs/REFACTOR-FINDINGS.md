@@ -443,7 +443,10 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Found during: contract v2.9 Tier 1 fixes C1-C7 (2026-07-30)
 - Severity: smell (the shipped fixes close the primary paths)
 - Description: all four residuals re-verified 2026-08-08.
-  - **(i) STILL OPEN — the HEADLESS/CLI spawn path keeps the plaintext `mcp-spawn.json`.** `main/mcp-config.js:107-140` still writes `Authorization: Bearer ${token}` at mode 600 only, and `main/tool-profiles.js:252-266` `buildRestrictionArgs` returns `[]` for `full` (`:254`) and emits no path-deny for any profile. So a headless spawn's pre-approved `Read` can open it. **Fix shape: thread `extraDenyRules` (the same rules `sdk-loader.buildSecretPathDenyRules()` builds) into `buildRestrictionArgs` + `writeScopedSettings`, and emit `--disallowedTools` for `full` too.**
+  - **(i) ✅ RESOLVED 2026-08-26 — the plaintext `mcp-spawn.json` is no longer written, and the file is DELETED on the next signed-in launch.** It said: the headless/CLI spawn path wrote `Authorization: Bearer ${token}` at mode 600 only, `tool-profiles.js › buildRestrictionArgs` returned `[]` for `full` and emitted no path-deny for any profile, so a headless spawn's pre-approved `Read` could open it.
+    - ⚠ **AND ITS PROPOSED FIX SHAPE WAS WRONG — recorded because the next round would otherwise implement it.** It read *"thread `extraDenyRules` … into `buildRestrictionArgs` + `writeScopedSettings`, and emit `--disallowedTools` for `full` too"*. That closes the `Read` door and **not the `Bash` one**, which is the door that matters: Claude Code `Bash(...)` permission rules match COMMAND patterns, never path globs, so no deny rule of that family can fence a path against a shell. **A deny rule that cannot fire is worse than none, because it reads as coverage.**
+    - **What was done instead:** stop writing the file. Nothing in the app had read it since `session-spawner.js › runForChannel` — the headless `claude -p` executor — was deleted 2026-08-20; the SDK path takes the bearer in memory from `mcp-config.js › deviceTokenForSpawn` (safeStorage) and manual `claude` runs are served by the user-scope CLI entry `ensureMcpConfig` adds. `removeSpawnConfig()` runs where the write used to, so existing installs shed the token. Mutation-verified in `dopl-desktop-app/test/sdk-mcp-token.test.mjs` (9 mutations).
+    - ⚠ **Residuals (iii) and (iv) below are the same CLASS and are still open**, and F-329 residual #3 is the audience-ceiling consequence of it.
   - **(ii) PARTIAL — the rules now NAME Grep/Glob but enforcement is still unproven.** `main/sdk-loader.js:104` `SECRET_TOOLS = ['Read','Grep','Glob']`, applied at `:117`; the docblock at `:101-103` still concedes "an unrecognized rule is a harmless no-op on this CLI". SDK path only (`main/session-query.js:43`), not the CLI/headless spawn.
   - **(iii) STILL OPEN — a permissive tool mode can read the credential dirs via the shell.** `Bash` is in `SESSION_GATED_WORK_TOOLS` (`main/session-profiles.js:94`), so under `full` + `bypass` (`BYPASS_TOOLS` at `:348`) it auto-runs, and the deny rules cover only Read/Grep/Glob.
   - **(iv) STILL OPEN — safeStorage-unavailable fallback.** `main/mcp-config.js:47` `DT_KEY_PLAIN`, written unencrypted at `:193`, read at `:207`.
@@ -701,11 +704,11 @@ COMMIT;
 - Status: open (residual (c))
 
 ### F-113: One agent handle, several concurrent sessions — the stamp names a SLOT, not a run
-- Location: `dopl-desktop-app/main/mcp-config.js:122-138` (`spawnConfigBody`), `:117-121`, `:163-176` (`writeSpawnConfig`)
+- Location: `dopl-desktop-app/main/sdk-loader.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
 - Found during: the 2026-08-01 two-agent live run
 - Severity: smell (the wire-identity gap itself is closed)
 - **Rewritten down to the residuals 2026-08-08; both re-verified, and the rollback did not touch either — the stamp is server-side and slot-keyed.**
-  - **(a) Only the SDK session path stamps.** `spawnConfigBody(token)` is ONE shared serialization for every headless `--mcp-config` spawn — the only header beyond the bearer is the constant `'X-Dopl-Runtime': 'desktop-session'` (`:134`) — and `writeSpawnConfig` byte-compares, so every headless spawn shares the file. Those posts stamp nothing, which is the correct degradation, not a gap. **Not fixed because a per-spawn stamp means a per-spawn config FILE** — a new surface with its own lifetime and permissions, not a guard.
+  - **(a) ⛔ MOOT SINCE 2026-08-26 — there is no headless spawn path left to stamp.** It said: the shared spawn-config serialization carried a constant `'X-Dopl-Runtime': 'desktop-session'` and byte-compared, so every headless spawn shared one file and stamped no per-session id — the correct degradation, not a gap, and not fixed because a per-spawn stamp would mean a per-spawn config FILE. The headless `claude -p` executor was deleted 2026-08-20 and the file itself 2026-08-26, so the SDK session path is the only one that reaches MCP and it stamps per session. **Kept as history because the ARGUMENT is still the live one:** a per-spawn credential file is a new surface with its own lifetime and permissions, not a guard.
   - **(c) The stamp names a SLOT, not a run.** Two sequential sessions in the same slot stamp the same value. That is what the incident needed (it distinguishes CONCURRENT slots) but it is not a run id; do not read it as one.
 - **The discipline to preserve:** `session_id` is a stamp, not a lock — always stripped from caller metadata, re-stamped only from `X-Dopl-Session-Id`, absent header ⇒ NO KEY, and **it is a hint, never an authorization signal** (any device-token holder can send it; nothing gates on it). Enforcing one live session per agent id was rejected: it breaks the legitimate three-slot design and does nothing for an external CLI passing `as_agent`.
 - Status: open (residuals)
@@ -3472,6 +3475,61 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Proposed resolution: **Samuel's, when he specifies the guardrail.** Until then the honest position
   is the one INVARIANTS §4A now states — the payer is settled, the limit is not.
   Status: **open, awaiting the guardrail spec**
+### F-329 — 🔴 REOPENED 2026-08-26 — B1 is a strong tripwire, not the fence this entry declared it
+
+- **This id was RESERVED by the plan (`docs/specs/home-knowledge-panels.plan.md` §4.4) for a
+  finding that was never filed**, because Samuel funded B1 in the same wave (RULING 4: *"build the
+  container-locked per-session credential (the real fence), not just A+B3"*). It is recorded here
+  rather than left dangling: the plan, INVARIANTS §10 and `packages/mcp-server/src/factory.ts` all
+  cite the number, and an id with no entry is exactly what `check-doc-refs` exists to catch.
+- What it WOULD have said: the MCP directory lock (B3) narrows `getWorkspaceList()` and
+  `resolveWorkspaceRef` for one connection, and the desktop belt (B2) narrows one machine's
+  permission gate. **Neither contains anything.** A spawned agent holds the operator's 90-day
+  device token on disk and a `full` profile has `Bash`, so it can open a SECOND, unpinned MCP
+  connection, or issue the loopback HTTP itself, and pass through neither object. Re-derive the
+  measurement rather than quoting it: `grep -n DEVICE_TOKEN_TTL_S src/shared/auth/mcp-oauth.ts`
+  (90 days), and `main/tool-profiles.js › SESSION_HARD_DENY` for what `full` does NOT deny.
+- **What SHIPPED instead:** `mcp_tokens.workspace_id` (migration `mcp_token_workspace_lock`,
+  INVARIANTS §12) → `validateAccessToken` → `apiKeyWorkspaceId` → `withWorkspaceAuth`'s 403. The
+  lock rides the CREDENTIAL, so it binds the agent's process AND anything that process shells out
+  to, which is the property no header and no client-side gate can have.
+- ⚠ **WHAT IS STILL OPEN.** Three residuals, and the third is why this entry was reopened.
+  1. A session whose B1 mint FAILED — the desktop fails OPEN and logs, because a credential endpoint
+     being down must not stop the operator's agent.
+  2. Anything using the device token OUTSIDE a desktop-spawned session, which the ceiling never
+     claimed to cover.
+  3. 🔴 **RESIDUAL #3, ADDED 2026-08-26 BY THE ADVERSARIAL REVIEW — AND IT IS THE ONE THAT
+     DISPROVES THIS ENTRY'S OWN CLOSING SENTENCE.** The paragraph above says the lock *"binds the
+     agent's process AND anything that process shells out to"*. It binds them only if the LOCKED
+     credential is the only one they can reach. `dopl-desktop-app/main/mcp-config.js ›
+     writeSpawnConfig` wrote the operator's **UNLOCKED 90-day device token in plaintext** to
+     `userData/mcp-spawn.json` on every signed-in launch, and
+     `main/sdk-loader.js › buildSecretPathDenyRules` denied that path only for
+     `SECRET_TOOLS = ['Read','Grep','Glob']` — **`Bash` is not on that list**, and `full`'s deny set
+     does not cover it. One `cat` and the session holds an unlocked credential: B1 voided for the
+     rest of the session, and layer A with it (the audience ceiling only fires on
+     `apiKeyWorkspaceId`).
+     - **The mitigation that IS real, stated so it is not overclaimed either:** `Bash` is in
+       `session-profiles.js › ESCALATION_TOOLS`, so the read GATES at every posture except
+       `bypass`. That makes B1 a **strong tripwire** — the operator sees a prompt — not the fence
+       this entry declared. `Bash` cannot be added to `SECRET_TOOLS`: Claude Code `Bash(...)` rules
+       match COMMAND patterns, not path globs, so `Bash(//Users/.../**)` denies nothing. **A deny
+       rule that cannot fire is worse than none, because it reads as coverage.**
+     - ✅ **PARTIALLY CLOSED IN THE SAME CHANGE, at the only layer where it closes:** the file is no
+       longer written at all, and `removeSpawnConfig()` DELETES it on the next signed-in launch so
+       existing installs shed the plaintext token. Nothing in the app had read it since
+       `session-spawner.js › runForChannel` — the headless `claude -p` executor — was deleted
+       2026-08-20; the SDK path takes the bearer in memory from `deviceTokenForSpawn()`
+       (safeStorage) and manual `claude` runs are served by `ensureMcpConfig`'s CLI entry.
+       Mutation-verified by `dopl-desktop-app/test/sdk-mcp-token.test.mjs`.
+     - 🔴 **WHY IT STAYS OPEN ANYWAY:** the safeStorage-encrypted store is still on disk under the
+       same `userData` directory, and the deny rules that fence it are still `Read`/`Grep`/`Glob`.
+       Bash can still reach the directory; it now has to do more than `cat` one file. **The class is
+       not closed, only the cheapest instance of it.** Closing the class means either a deny layer
+       that understands paths for shell tools, or not having an unlocked long-lived credential on
+       the machine at all.
+  Status: **open** (residual #3; residuals 1 and 2 are by-design limits, stated in INVARIANTS §10)
+
 
 ### F-330 — `canEdit` FALLS OPEN wherever `MyAccessProvider` is absent, and no host outside the knowledge page mounts one
 
@@ -3485,18 +3543,28 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   the inline meta fields.
 - Found during: **home knowledge panels M3, 2026-08-26** — the plan (§5.3) asked for this to be
   verified before the /home mount shipped without a provider.
-- Severity: **client-side only, and NOT reachable-to-harm from the two hosts that exist today.**
-  The server is the gate (`service-shared.ts`'s gates run on every write), so the failure is a
-  control the caller can press and a 403 they then see, never an unauthorised write. On
-  `pages/knowledge/index.tsx` a provider IS mounted. On `pages/home/knowledge-base-view.tsx` it
-  deliberately is not, and it could not help if it were: a link container carries no team grants, so
-  `my-access` there resolves to the plain role default (`edit` for member and up), and the one role
-  it would refuse — `guest` — cannot reach the panel at all, because `GET /api/knowledge/bases`
-  answers guests with `defaultLevelForRole("guest") === null` before a base is ever listed.
-- ⚠ **The shape is the finding, not the current blast radius.** The default is OPEN, it is spelled
-  as a `null` coalesce three call-frames from the affordance it unlocks, and the next host to mount
-  this tree gets it silently. A third host with a real teams-mode workspace and no provider would
-  show `read`-level members every edit control in the tree.
+- Severity: **client-side only** — the server is the gate (`service-shared.ts`'s gates run on every
+  write), so the failure is a control the caller can press and a 403 they then see, never an
+  unauthorised write.
+- 🔴 ⚠ **THE EXCULPATION THIS ENTRY SHIPPED WITH WAS FALSE, AND THE ADVERSARIAL REVIEW CAUGHT IT
+  (re-scoped 2026-08-26).** It read *"NOT reachable-to-harm from the two hosts that exist today"*
+  and argued it from link CONTAINERS: no team grants there, so `my-access` resolves to the role
+  default, and the one role it would refuse (`guest`) never reaches a base. **Every word of that is
+  true of containers and none of it is true of the second target the same component mounts for.**
+  `pages/home/knowledge-base-view.tsx` mounts for BOTH `containerTarget` and `homeTarget`, and
+  `homeTarget` is the caller's HOME workspace — an ordinary standard workspace that CAN be
+  teams-mode. It is handed `list.bases`, the WHOLE base list rather than the private subset the pane
+  offered, so the grid behind the detail pane rendered team-visible bases with every edit control
+  live for a member holding only `view`. **The finding's own "third host with a real teams-mode
+  workspace and no provider" was already the second host.**
+- ✅ **THAT HOST IS CLOSED (2026-08-26), AND THE SHAPE IS NOT.** `HomeKnowledgeBaseView` now takes an
+  `accessSegment` and mounts `MyAccessProvider` with it: the HOME target passes its segment, the
+  CONTAINER target passes `null` (where the original argument really does hold — no teams, and a
+  guest cannot reach a base to open). The default is still OPEN, still spelled as a `null` coalesce
+  three call-frames from the affordance it unlocks, and the next host still gets it silently.
+- ⚠ **The shape is the finding, and it has now been demonstrated once rather than hypothesised.**
+  Mounting a provider per call site is a mitigation the NEXT host also has to remember; the defect
+  is that forgetting is silent and open.
 - Proposed resolution: split the two nulls — have `useMyAccessContext` report PROVIDERLESS
   distinctly from PENDING (a `configured: boolean`, or a provider-required throw), and let `canEdit`
   keep falling open only for the pending case. Do NOT simply flip the default to closed: that
@@ -3597,9 +3665,20 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 
 ### F-334 — sharing a template BEYOND one channel has no mechanism, and the widening is a five-part change nobody has costed
 
-- Location: `src/features/agent-templates/**` against `supabase/migrations/20260823160000_channel_resource_grants.sql`
-  (the knowledge feature's `channel_resource_grants` table) and
-  `src/features/channels/server/service-grants.ts`.
+- Location: `src/features/agent-templates/**` against
+  `supabase/migrations/20260827120000_channel_resource_grants.sql` (the knowledge feature's
+  `channel_resource_grants` table) and `src/features/knowledge/server/service-channel-grants.ts`.
+- ⚠ **BOTH CITATIONS ABOVE WERE WRONG AND BOTH PASSED EVERY GATE (corrected 2026-08-26).** The
+  migration named carried version `20260823160000`, which is really the default-workspace-kind
+  guard — a DIFFERENT migration — so a reader following it would have found a workspace-kind guard
+  and concluded the grants table did not exist. The service named was service-grants.ts under
+  src/features/channels/server/, which **has never existed in this repo**; the grant service is
+  `src/features/knowledge/server/service-channel-grants.ts`. ⚠ Both wrong names are written WITHOUT
+  a code span on purpose — a citation is a claim that a path resolves, and these are the record of
+  two that did not. Neither was checkable: `check-doc-refs`
+  required a `:LINE` or a `›` anchor, so a plain backticked path — **the citation form CLAUDE.md's
+  standing rule 2 actually prescribes** — was the one form nothing existence-checked. That hole is
+  now class (e) of the checker, and these two are its first catch.
 - What is true today (2026-08-26, Home Agents Tab M2): a template is shared by its `visibility`
   column alone. Inside a `kind='link'` CONTAINER that is complete — the container holds one channel
   and one or two members, so `workspace` means "the other person here" and `private` means "me"
@@ -3622,4 +3701,94 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
      today (a template has ONE consumer: main, at spawn).
 - Severity: **feature gap, not a bug.** Nothing is broken; a scope simply cannot be expressed.
   Status: **open** — build it when a standard workspace needs per-channel template sharing, and
-  build all five parts in one change.
+
+### F-336 — ⚠ SAMUEL'S RULING NEEDED — the container lock overshoots the audience ceiling, and RULING 2's remedy does not work
+
+- **Found by the adversarial review of the HOME KNOWLEDGE PANELS wave, 2026-08-26.** Filed rather
+  than fixed, on instruction and on principle: **this is a request to WIDEN A FENCE, and a fence is
+  not widened overnight by the agent that found the gap.**
+- Location: `src/features/knowledge/server/service-shared.ts › canSeeBase` +
+  `src/features/knowledge/server/service-bases.ts › getBaseById`.
+
+**What is true today, measured against the tree:**
+
+1. `getBaseById` runs `assertBaseVisible` (→ `canSeeBase`) **BEFORE** `assertWithinAudience`.
+2. `canSeeBase` is `if (base.visibility !== "public" && ctx.apiKeyWorkspaceId) return false`.
+3. A session spawned into a shared container holds a container-locked credential (layer B1), so
+   `apiKeyWorkspaceId` is set for every read it makes.
+
+⇒ **A scope-B base (private, in the container) is invisible to the operator's own agent there
+WHETHER OR NOT it is granted `agent_only`.** The grant row is never consulted, because the
+visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says granting
+`agent_only` is exactly the remedy, and the /home UI copy was about to say so.
+
+**What was done in the meantime, and deliberately nothing more:**
+
+- The UI copy now states the CURRENT truth — `pages/home/knowledge-panels.tsx`'s scope-B caption
+  reads *"Yours alone — your agent in this channel can't read these, shared or not"*, replacing
+  *"Yours alone UNTIL YOU SHARE IT"*. `kb-channel-grants-section.tsx`'s docblock says the same of
+  its `Agent only` state, which does work for a `public` base.
+- INVARIANTS §10's ceiling bullet no longer states the remedy as fact.
+- **`canSeeBase` IS UNCHANGED.**
+
+**THE TWO OPTIONS, AND THE BLAST RADIUS OF EACH. This is the decision.**
+
+- **Option A — B1 exempts `agent_only`-granted private bases from `canSeeBase`.** RULING 2 works as
+  written; the operator grants a private base into the channel and their own agent reads it.
+  ⚠ **Blast radius: `canSeeBase` is the M-10 predicate and it is not knowledge's alone.** The same
+  rule is restated in chats, skills and `agent-templates/server/service-shared.ts ›
+  canSeeTemplate`/`canSeeBaseRow`, and INVARIANTS §4 records that they *"all start biting for these
+  tokens together"*. Exempting knowledge alone splits a rule that is currently one sentence in five
+  places; exempting all five widens M-10 for every workspace-scoped credential, including any future
+  one that really IS shared between humans — which is the case M-10 was written for. **The narrow
+  form is: exempt ONLY when `apiKeyWorkspaceId` came from a CONTAINER token AND a grant row exists
+  — i.e. teach `canSeeBase` the difference between a shared service credential and a per-session
+  child credential, which today it cannot see.** That is a new column or a new context field, not a
+  one-line predicate change.
+- **Option B — withdraw RULING 2 and its copy.** Nothing in the code changes; the rule becomes *a
+  private base in a shared container is yours alone, full stop, and `agent_only` is for `public`
+  bases*. ⚠ **Blast radius: the `agent_only` LEVEL loses most of its purpose.** Its stated reason to
+  exist is "the operator's own agents may reach it, no human peer sees it" — for a `public` base
+  that is still a real distinction from `visible`, but the case the level was designed around (my
+  private notes, reachable by my agent, invisible to the person I am talking to) becomes
+  unexpressible. The UI keeps a three-state control whose middle state is a narrower thing than its
+  label suggests.
+
+**⚠ THE SAME DEFECT HAS A SECOND INSTANCE, IN THE CONCURRENT AGENTS WAVE'S LANE — CHECKED, AND IT IS
+NOT A BLOCKER.** `agent-templates/server/service-shared.ts › canSeeTemplate` has the identical
+second arm (`if (ctx.apiKeyWorkspaceId) return false`), so a locked session sees only
+`visibility='workspace'` templates. The launch path DOES depend on it:
+`channels/server/service-launch.ts › resolveTemplateForDirective` carries `apiKeyWorkspaceId`
+deliberately, so `POST /api/channels/launch-directives` — an agent-token surface by design —
+answers `AGENT_TEMPLATE_NOT_FOUND` for a PRIVATE template from a locked session.
+**Measured, and this is why it is not a cross-wave blocker: the OPERATOR's launch does not use that
+route.** The /home Agents pane launches over the desktop bridge (`sessions:launch` →
+`main/template-resolve.js`), which rides `api.js › apiFetch` — **cookie-authed as the operator, no
+lock** — and its own module header says so in as many words. So the operator can launch a private
+template from a shared container today; an AGENT launching one by name cannot. Whichever way F-336
+is ruled should be applied to both predicates in one change, or they drift.
+
+  Status: **open — needs Samuel's ruling.** Do not widen `canSeeBase` without it.
+
+### F-337 — `check-doc-refs` class (e) ships with a 457-key baseline, i.e. 457 citations a reader will follow to nothing
+
+- Found while closing the class-(e) hole (see F-334): `scripts/check-doc-refs.mjs` required a
+  `:LINE` or a `›` on any reference it checked, so a **plain backticked path** — the citation form
+  CLAUDE.md's standing rule 2 prescribes — was never existence-checked. Adding the class turned up
+  **613 dead plain-path references across 15 docs (measured 2026-08-26; 459 unique doc+path pairs)**,
+  dominated by `docs/ENGINEERING.md` (284), `REFACTOR-FINDINGS.md` (108) and `INVARIANTS.md` (66).
+  Re-derive, never quote: `node scripts/check-doc-refs.mjs`.
+- **Why it is a baseline and not a fix:** repointing 613 citations is not one wave's work, and a
+  gate that lands red is a gate that gets switched off. `scripts/doc-refs-plain-path-baseline.json`
+  records the pairs as of that measurement, so the check **RATCHETS**: a NEW dead plain path fails
+  CI, an old one is recorded debt. The baseline only ever shrinks — the script prints entries that
+  no longer reproduce and tells the reader to delete them, and it is a hard error (exit 2) if the
+  file is missing, so an empty baseline cannot silently pass everything.
+- ⚠ **STATE THE CEILING: a baselined reference is UNCHECKED DEBT, not a passing citation.** A green
+  run means "no new dead plain paths"; it does not mean the docs' paths are good.
+- **A large share of ENGINEERING.md's are arguably correct in place** — it is dated
+  stratum-by-stratum archaeology and a stratum describing a deletion is SUPPOSED to name the deleted
+  file. Whether that makes it a `DATED_CAPTURES` entry (which would exempt it wholesale, including
+  its live guidance) or means those strata need a different citation convention is a real decision
+  and is not made here.
+  Status: **open** — shrink the baseline doc by doc; never append to it.

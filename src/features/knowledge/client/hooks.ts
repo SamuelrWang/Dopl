@@ -140,6 +140,42 @@ export function knowledgeBasesQueryKey(workspaceId?: string, channelId?: string)
 }
 
 /**
+ * Invalidate EVERY base-list entry for one workspace — the unscoped list and
+ * each `?channelId=` variant beside it.
+ *
+ * 🔒 ⚠ A PREFIX WILL NOT DO IT, AND THAT IS THE WHOLE REASON THIS EXISTS.
+ * TanStack matches a query key ELEMENT BY ELEMENT, and the channel variant is a
+ * STRING extension of the segment (`"bases:W:channel:C"`), not an extra array
+ * element — so `["knowledge", "bases:W"]` matches the unscoped entry and NOTHING
+ * ELSE. Two call sites (`pages/home/knowledge-base-view.tsx` and
+ * `pages/knowledge/index.tsx`) wrote that prefix with a comment claiming it
+ * reached both, which was true only while the /home pane mounted an
+ * ARRAY-extended key — the same mismatch that made the grant write a silent
+ * no-op (`hooks-channel-grants.ts`). ONE shape, and one helper that knows it.
+ *
+ * ⚠ Matched by PREDICATE on the segment, deliberately mirroring
+ * `patchChannelGrantInCache`'s `segment === target || startsWith(target + ":")`.
+ * A blunter `invalidateQueries({ queryKey: ["knowledge"] })` would also drop
+ * every TREE and ENTRY entry in the cache, re-fetching the open base's whole
+ * tree on a rename.
+ */
+export function invalidateKnowledgeBaseLists(
+  queryClient: QueryClient,
+  workspaceId?: string
+): void {
+  const target = knowledgeBasesCacheSegment(workspaceId);
+  void queryClient.invalidateQueries({
+    predicate: (query) => {
+      const segment = query.queryKey[1];
+      if (query.queryKey[0] !== "knowledge" || typeof segment !== "string") {
+        return false;
+      }
+      return segment === target || segment.startsWith(`${target}:`);
+    },
+  });
+}
+
+/**
  * Upsert one base into the cached list, synchronously.
  *
  * ⚠ Call BEFORE navigating to a just-created/renamed base. The controller

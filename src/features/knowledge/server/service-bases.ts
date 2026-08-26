@@ -23,10 +23,23 @@ import { seedWorkspace } from "./service-seed";
  * 🔒 THEY ARE ALSO WHERE THE AGENT AUDIENCE CEILING IS APPLIED
  * (`service-audience.ts`, plan §4.2). Every other knowledge read — trees,
  * entries, folders, stars, search, export — composes one of the lookups in this
- * file, so fencing here fences the surface. ⚠ A NEW foundational lookup that
- * reaches `repository-bases.ts` directly instead of composing one of these owes
- * itself the same two lines; that is the regression to watch for, and
- * `service-audience.test.ts` pins the three that exist by driving them.
+ * file, so fencing here fences the surface.
+ *
+ * ⚠ THAT LAST SENTENCE WAS FALSE WHEN IT WAS WRITTEN, AND SAYING SO IS THE
+ * POINT (corrected 2026-08-26). `service-entries.ts › getEntry` did NOT compose
+ * one of these — it checked `assertSameWorkspace` alone — so
+ * `GET /api/knowledge/entries/[entryId]` (viewer default) read the body of any
+ * entry in any private base, bypassing BOTH the ceiling and M-10, and
+ * `resolveEntryRefs` applied `canSeeBase` without the ceiling. `export.ts ›
+ * buildEntryFile` had already noticed half of it and bolted its own `getBaseById`
+ * on. Both are fixed AT THE ENTRY SERVICE, so the claim above is now true —
+ * but it is a claim about every OTHER module, and this file cannot enforce it.
+ *
+ * ⚠ A NEW foundational lookup that reaches `repository-bases.ts` directly
+ * instead of composing one of these owes itself the same two lines; that is the
+ * regression to watch for, and it is the one that ALREADY HAPPENED ONCE.
+ * `service-audience.test.ts` pins the lookups that exist by driving them, and
+ * pins the entry lane the same way.
  */
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;

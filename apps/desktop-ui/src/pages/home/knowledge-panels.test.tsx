@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import {
+  SEGMENT,
   USER_ID,
   WORKSPACE_ID,
   bootBody,
@@ -237,9 +238,68 @@ describe("the pane token", () => {
       expect(screen.queryByText("Renewals")).not.toBeInTheDocument()
     );
   });
+
+  it("🔒 an OPEN base does not survive a channel switch", async () => {
+    // 🔒 THE PANE IS KEYED BY THE ROW (index.tsx), and it was not until
+    // 2026-08-26. `paneToken` fixes the CROSSFADE and does not remount, so React
+    // reconciled channel B's props onto channel A's instance and the pane's own
+    // `useState` survived: `openBase` stayed set, and the base was then mounted
+    // against channel B's `workspaceId` — a 404 error pane over a base that
+    // exists. `knowledge-tab.tsx` had already solved this on the channel side.
+    const second = { ...HOME.channels[0], workspaceId: OTHER_WS, workspaceSegment: "link-dana-bb22", channelId: OTHER_CHANNEL, name: "Dana Ruiz", peer: null, linkOut: null };
+    const two: HomeChannelsPayload = {
+      channels: [HOME.channels[0], second],
+      pendingLinks: [],
+    };
+    apiRequest.mockImplementation(
+      (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
+        const bare = path.split("?")[0];
+        if (bare === "/api/home/channels") return Promise.resolve(ok(two));
+        if (bare === "/api/knowledge/bases") {
+          return opts.workspaceId === OTHER_WS
+            ? Promise.resolve(ok({ ...empty(), bases: [OTHER_BASE] }))
+            : knowledgeBases(opts);
+        }
+        return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
+      }
+    );
+
+    renderHome();
+    await openKnowledge();
+
+    // Open channel A's base. The section header disappears with the grid, which
+    // is how the detail view announces itself without depending on its chrome.
+    fireEvent.click(await screen.findByText("Call notes"));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Shared in this channel")
+      ).not.toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByText("Dana Ruiz"));
+
+    // 🔒 THE PIN: channel B renders its LIST, not channel A's open base.
+    expect(await screen.findByText("Dana's shelf")).toBeInTheDocument();
+    expect(screen.getByText("Shared in this channel")).toBeInTheDocument();
+    // …and no error pane, which is what the cross-workspace mount produced.
+    expect(screen.queryByText(/Something went wrong/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("§8 stale cache", () => {
+  /**
+   * ⚠ WHAT THIS BLOCK CAN AND CANNOT REACH, stated because the difference is
+   * exactly one function. Every read here goes through `client/api.ts ›
+   * fetchBaseList`, which NORMALISES the whole payload on the wire
+   * (`ownerNames ?? {}`, `baseStats ?? {}`, `starredBaseIds ?? []`,
+   * `channelGrants ?? EMPTY_GRANTS`). So a route fixture with a key deleted
+   * pins the WIRE fallback — a pre-deploy SERVER — and can never reach the
+   * CACHE fallback, because a payload cached by an older BUNDLE never passes
+   * through today's `fetchBaseList` at all. **The cache half is pinned where
+   * the cache is read**: `knowledge-panel-cards.test.tsx` renders `BaseCell`
+   * against the key-deleted object directly. Both halves are needed; neither
+   * covers the other.
+   */
   it("renders a payload written before channelGrants existed", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) => {
@@ -295,6 +355,52 @@ describe("§8 stale cache", () => {
           c.path.startsWith("/api/knowledge/bases") && c.opts.workspaceId === undefined
       )
     ).toHaveLength(0);
+  });
+});
+
+describe("🔒 the my-access provider — F-330's blast radius, per mount target", () => {
+  /**
+   * `HomeKnowledgeBaseView` mounts for BOTH targets, and `canEdit` FALLS OPEN
+   * with no `MyAccessProvider` (`use-knowledge-v2-trees.ts › canEdit` maps a
+   * `null` resolve to `true`, F-330). F-330 shipped saying that was
+   * unreachable-to-harm from "the two hosts that exist today" and argued it from
+   * link CONTAINERS — where it holds. **The HOME-workspace mount is the second
+   * host and it is a real standard workspace that can be teams-mode**, handed
+   * the WHOLE base list rather than the private subset the pane offered. So the
+   * home target resolves `my-access` and the container target does not.
+   *
+   * ⚠ MUTATION-VERIFIED: setting `homeTarget.accessSegment` to `null` (or
+   * dropping the provider) turns the first assertion red.
+   */
+  const myAccessCalls = () =>
+    bridgeCalls(apiRequest).filter((c) => c.path.endsWith("/my-access"));
+
+  it("🔒 the HOME-workspace mount resolves my-access against its own segment", async () => {
+    renderHome();
+    await openKnowledge();
+    await screen.findByText("Call notes");
+    await chooseScope("across all channels");
+
+    fireEvent.click(await screen.findByText("Fundraise memos"));
+
+    await waitFor(() => expect(myAccessCalls().length).toBeGreaterThan(0));
+    expect(myAccessCalls()[0].path).toContain(SEGMENT);
+  });
+
+  it("the CONTAINER mount asks for nothing — a container has no teams to resolve", async () => {
+    // ⚠ Asserted as an ABSENCE after the base is on screen, so it cannot pass
+    // by the read simply not having happened yet.
+    renderHome();
+    await openKnowledge();
+
+    fireEvent.click(await screen.findByText("Call notes"));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Shared in this channel")
+      ).not.toBeInTheDocument()
+    );
+
+    expect(myAccessCalls()).toHaveLength(0);
   });
 });
 

@@ -8,6 +8,8 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
@@ -21,13 +23,13 @@ interface Ctx {
  *  could not. The floor is the resolver's new inverted default (`segment.ts ›
  *  ApiWorkspaceOpts`); a guest now gets the same 404 a non-member does. */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!workspace) {
         return NextResponse.json(
           { error: "Workspace not found" },

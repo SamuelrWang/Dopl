@@ -8,14 +8,16 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
 interface Ctx {
   userId: string;
+  /** The credential's container lock, threaded into the resolver (§4). */
+  apiKeyWorkspaceId?: string | null;
   params?: Record<string, string>;
 }
 
 /** GET — team detail. Any active member. */
 export const GET = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace || !params?.teamId) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -29,9 +31,9 @@ export const GET = withUserAuth(
 
 /** PATCH — rename / recolor. Admin+. */
 export const PATCH = withUserAuth(
-  async (request: NextRequest, { userId, params }: Ctx) => {
+  async (request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace || !params?.teamId) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -46,9 +48,9 @@ export const PATCH = withUserAuth(
 
 /** DELETE — delete team. Admin+. */
 export const DELETE = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+  async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
-      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId);
+      const workspace = await resolveApiWorkspace(params?.workspaceSlug ?? "", userId, { apiKeyWorkspaceId });
       if (!workspace || !params?.teamId) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

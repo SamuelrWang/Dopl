@@ -98,11 +98,13 @@ test("it clears the client's own 60s floor, or setting the key changes nothing",
 
 // ── ONE definition ───────────────────────────────────────────────────────────
 
-test("both entries this app owns read the SAME constant — no second literal", () => {
-  // The spawn-config file (CLI path) and sdk-loader's in-memory server (session
-  // path) are the same client talking to the same endpoint. They drifted because
-  // each restated the number.
-  assert.match(CONFIG, /timeout: MCP_CLIENT_TIMEOUT_MS,/);
+test("the ONE entry this app owns reads the constant — no second literal", () => {
+  // There were two: the spawn-config FILE (CLI path) and sdk-loader's in-memory server
+  // (session path), the same client talking to the same endpoint, and they drifted because
+  // each restated the number. S3 (2026-08-26) deleted the file and its body-builder, so
+  // mcp-config now DEFINES and EXPORTS the constant without consuming it, and sdk-loader is
+  // the only consumer. What still has to hold is that no literal reappears downstream.
+  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS = [\d_]+;/, "mcp-config still owns the number");
   assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "exported for sdk-loader");
   assert.match(LOADER, /timeout: clientTimeoutMs\(\),/);
   assert.match(

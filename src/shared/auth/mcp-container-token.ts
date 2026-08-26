@@ -23,8 +23,23 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * likes. That is why the MCP directory lock (B3) and the desktop grant gate
  * (B2) are TRIPWIRES — they narrow one path each. A lock on the TOKEN ROW is
  * different in kind: whatever the agent does, and whatever it shells out to, all
- * of it can only present the credential it was handed, and that credential
- * cannot name another workspace. **The fence rides the credential.**
+ * of it can only present the credential it was handed. **The fence rides the
+ * credential.**
+ *
+ * ⚠ THAT SENTENCE ENDED *"and that credential cannot name another workspace"*
+ * UNTIL 2026-08-26, AND IT WAS TRUE OF ONE OF THE TWO AUTH FAMILIES. The lock is
+ * enforced by `with-workspace-auth.ts` (403 `API_KEY_WORKSPACE_MISMATCH`); the
+ * OTHER family — `withUserAuth` + `workspaces/server/segment.ts ›
+ * resolveApiWorkspace` — had ZERO references to `apiKeyWorkspaceId`, so a locked
+ * credential could `POST /api/boot` with no segment to learn the operator's home
+ * workspace id and canonical segment, then reach the 19 route files under
+ * `/api/workspaces/[workspaceSlug]/**`. The comparison now lives in
+ * `resolveWorkspaceSegmentForUser` as well, beside the role floor the guest wave
+ * put there for the same reason, and
+ * `workspaces/server/api-workspace-floor.test.ts` scans the family so a route
+ * that forgets to thread it cannot ship quietly. **A property that holds in one
+ * wrapper is not a property of the credential** — that is the general lesson,
+ * and it is why this paragraph stays after the fix.
  *
  * ⚠ A CHILD CREDENTIAL IS NEVER MORE THAN ITS PARENT. It is minted for the
  * CALLER's own user id, under the caller's own membership, with the same scopes

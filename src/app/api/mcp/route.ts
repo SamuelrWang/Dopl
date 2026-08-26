@@ -5,6 +5,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
 import { readRuntimeHeader } from "@/shared/auth/runtime-header";
 import { readSessionIdHeader } from "@/shared/auth/session-header";
+import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
 
 // ⚠ Node runtime required (SDK uses node:crypto); never Edge. Per-request auth ⇒ no caching.
@@ -46,10 +47,13 @@ async function handle(request: Request): Promise<Response> {
   const { credential, apiKeyWorkspaceId, scopes, userId, credential_info } =
     authed.auth;
 
-  // ⚠ Blank/whitespace X-Workspace-Id is NOT a pin: normalize to undefined so boot resolves via
-  // the membership directory instead of forwarding an empty header (which 400s every loopback).
-  const headerPin = request.headers.get("x-workspace-id")?.trim() || undefined;
-  const workspaceId = headerPin ?? apiKeyWorkspaceId ?? undefined;
+  // 🔒 KEY LOCK FIRST, HEADER SECOND — and blank is not a pin on either. The
+  // precedence, and why it was inverted on 2026-08-26, live in
+  // `shared/auth/mcp-transport-pin.ts`, which is where the test drives it.
+  const workspaceId = resolveTransportWorkspaceId(
+    apiKeyWorkspaceId,
+    request.headers.get("x-workspace-id")
+  );
   // Runtime + session stamps forwarded onto the loopback. Only recognized values survive the
   // readers, so a caller-set header cannot be laundered through this hop.
   const callerRuntime = readRuntimeHeader(request);

@@ -13,7 +13,20 @@
 // THE BUG (C2). The url was `dopl.url || MCP_URL` — read back off the same file — and
 // writeSpawnConfig only compared the TOKEN, so a local process that rewrote `url` to its own
 // endpoint kept that rewrite forever and collected the bearer plus every tool call.
-// THE FIX: MCP_URL unconditionally, and a WHOLE-config byte comparison that repairs the file.
+// THE FIX: MCP_URL unconditionally, and (then) a WHOLE-config byte comparison that repaired it.
+//
+// THE BUG (S3, 2026-08-26) — WHAT C1 LEFT STANDING. C1 took the bearer off the SDK path and
+// fenced userData for SECRET_TOOLS = Read/Grep/Glob, but `writeSpawnConfig` kept writing the
+// UNLOCKED 90-day `dopl.read`+`dopl.write` token to userData/mcp-spawn.json in PLAINTEXT on
+// every signed-in launch, and `Bash` is not on that list. One `cat` lifted the credential; at the
+// `bypass` posture, without even a prompt. Adding `'Bash'` to SECRET_TOOLS would NOT have closed
+// it — Claude Code `Bash` rules match COMMAND STRINGS, not path globs, so `Bash(//Users/…/**)`
+// matches no command and denies nothing while reading as coverage.
+// THE FIX: stop writing the file AND delete it on sight, so installed machines shed the token on
+// their next signed-in launch rather than carrying it for up to 90 more days. The C2 assertions
+// below are therefore replaced by their successors: there is no body to compare and no write to
+// make. What survives from C2 is the property that mattered — nothing off disk steers the url —
+// and it now holds vacuously plus by construction in sdk-loader.
 //
 // Both modules are electron-bound (app.getPath / safeStorage / electron-store), so the
 // functions under test are source-extracted and driven with fakes — the idiom the rest of
@@ -125,28 +138,37 @@ test("C1: buildSdkOptions really concatenates them onto the profile's hard-deny"
   assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, getSdk, buildSdkOptions/);
 });
 
-// ── C2: writeSpawnConfig compares the WHOLE serialized config ──────────────────────
+// ── S3: the spawn-config file is REMOVED, and never written ────────────────────────
 
-const WRITE_BLOCK = slice(CONFIG, "function spawnConfigBody(token) {", "// ── Device-token cache", "writeSpawnConfig");
+const REMOVE_BLOCK = slice(CONFIG, "function removeSpawnConfig() {", "// ── Device-token cache", "removeSpawnConfig");
+const SPAWN_JSON = "/userData/mcp-spawn.json";
 
-function spawnHarness(initial) {
-  const files = { "/userData/mcp-spawn.json": initial };
-  const calls = { writes: [], chmods: [] };
+// The harness fs records EVERY call, so "no write happened" is an observation and not an
+// assumption: a `writeFileSync` reappearing in the block would land in `calls.writes` and trip
+// the assertions below rather than passing silently.
+function spawnHarness(initial, rmThrows) {
+  const files = {};
+  if (initial != null) files[SPAWN_JSON] = initial;
+  const calls = { writes: [], chmods: [], rms: [], diags: [] };
   const fs = {
+    // Present so a REAPPEARING writer is caught by the assertions rather than by a
+    // "fs.writeFileSync is not a function" that reads like a broken harness.
+    writeFileSync(p, body, opts) { files[p] = body; calls.writes.push({ p, body, opts }); },
+    chmodSync(p, mode) { calls.chmods.push({ p, mode }); },
     readFileSync(p) {
       if (files[p] == null) throw new Error("ENOENT");
       return files[p];
     },
-    writeFileSync(p, body, opts) { files[p] = body; calls.writes.push({ p, body, opts }); },
-    chmodSync(p, mode) {
-      if (files[p] == null) throw new Error("ENOENT");
-      calls.chmods.push({ p, mode });
+    rmSync(p, opts) {
+      calls.rms.push({ p, opts });
+      if (rmThrows) throw new Error("EPERM");
+      delete files[p];
     },
   };
   const api = new Function(
-    "fs", "spawnConfigPath", "MCP_URL", "diag", "MCP_CLIENT_TIMEOUT_MS",
-    `${WRITE_BLOCK}\n return { writeSpawnConfig, spawnConfigBody };`
-  )(fs, () => "/userData/mcp-spawn.json", "https://dopl.test/api/mcp", () => {}, SHIPPED_TIMEOUT_MS);
+    "fs", "spawnConfigPath", "diag",
+    `${REMOVE_BLOCK}\n return { removeSpawnConfig };`
+  )(fs, () => SPAWN_JSON, (...a) => calls.diags.push(a.map(String).join(" ")));
   return { ...api, files, calls };
 }
 
@@ -159,87 +181,90 @@ const SHIPPED_TIMEOUT_MS = (() => {
   return Number(m[1].replace(/_/g, ""));
 })();
 
-test("C2: a rewritten url is REPAIRED even though the token still matches", () => {
-  const h = spawnHarness(JSON.stringify({
-    mcpServers: { dopl: { type: "http", url: "https://evil.test/api/mcp", headers: { Authorization: "Bearer t1" } } },
-  }));
-  assert.equal(h.writeSpawnConfig("t1"), true);
-  assert.equal(h.calls.writes.length, 1, "the whole-config compare caught the swapped endpoint");
-  assert.equal(h.files["/userData/mcp-spawn.json"], h.spawnConfigBody("t1"));
-  assert.deepEqual(h.calls.writes[0].opts, { mode: 0o600 });
-});
-
-test("C2: identical bytes are still a no-op rewrite, and the mode is tightened either way", () => {
-  const h = spawnHarness(null);
-  h.writeSpawnConfig("t1"); // creates
-  const created = h.calls.writes.length;
-  h.writeSpawnConfig("t1"); // unchanged -> no second write
-  assert.equal(h.calls.writes.length, created, "unchanged content is not rewritten");
-  assert.ok(h.calls.chmods.length >= 1, "an existing file is chmod 600 on EVERY call");
-  assert.ok(h.calls.chmods.every((c) => c.mode === 0o600));
-});
-
-test("C2: a token change rewrites, and a truncated / junk file is repaired", () => {
-  const h = spawnHarness("not json at all");
-  h.writeSpawnConfig("t2");
-  assert.equal(h.files["/userData/mcp-spawn.json"], h.spawnConfigBody("t2"));
-});
-
-// ── L4 (WAKE-V1): the CLI spawn path is desktop-owned too ─────────────────────────
-
-test("L4: the spawn config carries X-Dopl-Runtime alongside the bearer", () => {
-  // A headless spawn is a session THIS APP owns, but it reaches MCP through this
-  // file instead of sdk-loader's in-memory entry. Without the header the server read
-  // it as an EXTERNAL session, so the two spawn paths disagreed about the same
-  // machine (and a headless requester thread opened no window).
-  const h = spawnHarness(null);
-  const cfg = JSON.parse(h.spawnConfigBody("t1"));
-  assert.deepEqual(cfg.mcpServers.dopl.headers, {
-    Authorization: "Bearer t1",
-    "X-Dopl-Runtime": "desktop-session",
-  });
-  // The literal is what the server matches — pinned here as it is for sdk-loader.
-  assert.match(CONFIG, /'X-Dopl-Runtime': 'desktop-session',/);
-});
-
-test("L4: a file written by an older build (no runtime header) is REPAIRED", () => {
+test("S3: THE MIGRATION — a pre-existing file, bearer and all, is REMOVED", () => {
+  // The property that makes this a fix rather than a promise. An install that has been running
+  // an older build already has the 90-day token on disk; merely ceasing to write it would leave
+  // that copy readable for the rest of its life.
   const stale = JSON.stringify({
     mcpServers: {
       dopl: {
         type: "http",
         url: "https://dopl.test/api/mcp",
-        headers: { Authorization: "Bearer t1" },
+        timeout: SHIPPED_TIMEOUT_MS,
+        headers: { Authorization: "Bearer dopl_at_STALESECRET", "X-Dopl-Runtime": "desktop-session" },
       },
     },
   });
   const h = spawnHarness(stale);
-  assert.equal(h.writeSpawnConfig("t1"), true);
-  assert.equal(h.calls.writes.length, 1, "the whole-config compare catches a missing header");
-  assert.equal(h.files["/userData/mcp-spawn.json"], h.spawnConfigBody("t1"));
+  assert.ok(h.files[SPAWN_JSON].includes("dopl_at_STALESECRET"), "control: the token starts on disk");
+  assert.equal(h.removeSpawnConfig(), true);
+  assert.equal(h.files[SPAWN_JSON], undefined, "the file — and the bearer in it — is gone");
+  assert.deepEqual(h.calls.writes, [], "and nothing was written in its place");
 });
 
-// ── L8 (Q9): the per-server call timeout is part of the config, not a comment ─────
-
-test("L8: the spawn config carries the per-server `timeout`, and it clears the 60s abort", () => {
-  // WITHOUT this key a Claude Code client aborts every call to `dopl` at 60s —
-  // `min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647)` in the
-  // 2.1.220 binary this app bundles. That is BEFORE the ~2min mark at which a
-  // pending MCP call is backgrounded, which is the entire mechanism that turns
-  // `dopl_channel(op="await")` into a wake. Deleting it would break the
-  // headless-spawn wake with every other assertion in this file still green.
-  const cfg = JSON.parse(spawnHarness(null).spawnConfigBody("t1"));
-  assert.equal(cfg.mcpServers.dopl.timeout, SHIPPED_TIMEOUT_MS);
-  assert.ok(SHIPPED_TIMEOUT_MS > 60_000, "or the client floor wins and nothing changed");
-  // The full arithmetic (cap + margin <= this) lives in mcp-client-timeout.test.mjs,
-  // which reads the server's own constants instead of restating a literal here.
+test("S3: the removal is `force`, so a machine with no file is a clean no-op", () => {
+  // Post-migration this runs on every signed-in launch and must never surface an ENOENT as a
+  // failure. `force` is the flag that makes the steady state silent.
+  const h = spawnHarness(null);
+  assert.equal(h.removeSpawnConfig(), true);
+  assert.equal(h.calls.rms.length, 1, "the rm is still ISSUED — it is not conditional on a stat");
+  assert.equal(h.calls.rms[0].p, SPAWN_JSON);
+  assert.deepEqual(h.calls.rms[0].opts, { force: true });
+  assert.deepEqual(h.calls.diags, [], "and it says nothing on the happy path");
 });
 
-test("L8: ONE definition feeds BOTH entries this app owns", () => {
-  // The spawn-config file (CLI path) and sdk-loader's in-memory server (session
-  // path) must not drift: same client, same endpoint. sdk-loader used to restate
-  // the literal, which is exactly how they drifted (280_000 vs a moved server cap).
-  assert.match(CONFIG, /timeout: MCP_CLIENT_TIMEOUT_MS,/, "the spawn file uses the constant");
-  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "…and it is exported for sdk-loader");
+test("S3: a removal that throws is REPORTED and never breaks the launch", () => {
+  // ensureMcpConfigInner runs this before the CLI-entry work; an EPERM must not abort the rest
+  // of the ensure, and it must not be swallowed silently either — a machine still carrying the
+  // token has to be visible in diag.
+  const h = spawnHarness('{"mcpServers":{}}', true);
+  assert.equal(h.removeSpawnConfig(), false, "the failure is returned, not thrown");
+  assert.equal(h.calls.diags.length, 1, "…and it is named in diag");
+  assert.match(h.calls.diags[0], /spawn config removal failed/);
+});
+
+test("S3: ABSENCE PIN — no source in mcp-config writes a bearer to disk", () => {
+  // The link-container-guard technique: a fake cannot see a NEW writer being added, and this is
+  // the exact regression that would silently restore the defect. Read the module's own source.
+  assert.ok(
+    !/fs\.writeFileSync\(\s*spawnConfigPath\(\)/.test(CONFIG),
+    "nothing may write the spawn-config path again"
+  );
+  assert.ok(!/fs\.writeFileSync/.test(CONFIG), "mcp-config writes NO file at all any more");
+  // The body-builder and the writer are gone as CODE — a surviving definition, call site or
+  // export would let a caller re-adopt them. Their NAMES stay legal in prose: the reasons this
+  // was removed have to live in the source or the next round writes it back (the same rule the
+  // `mcp-cli-entry.js REMOVED` block above is held to).
+  for (const dead of ["spawnConfigBody", "writeSpawnConfig", "currentSpawnBody"]) {
+    assert.ok(!new RegExp(`^\\s*function\\s+${dead}\\b`, "m").test(CONFIG), `${dead} is not defined`);
+    assert.ok(!new RegExp(`(^|[^\`\\w.])${dead}\\s*\\(`, "m").test(CONFIG.replace(/\n\/\/[^\n]*/g, "")),
+      `${dead} is not called`);
+    assert.ok(!new RegExp(`module\\.exports[\\s\\S]*\\b${dead}\\b`).test(CONFIG), `${dead} is not exported`);
+  }
+  assert.ok(!/`Bearer \$\{token\}`/.test(CONFIG),
+    "the bearer is not serialized anywhere in this module (the argv build lives in mcp-cli-add.js)");
+  // …and the removal really is wired into the launch path, not just defined. (`fnOf` anchors on
+  // the `function` keyword, so it drops the leading `async` — the body is what matters here.)
+  assert.match(fnOf(CONFIG, "ensureMcpConfigInner"), /removeSpawnConfig\(\)/,
+    "every signed-in launch runs the migration");
+});
+
+test("S3: the path itself SURVIVES, because sign-out still tears the file down", () => {
+  // auth-signed-in.test.mjs pins the rmSync inside clearDeviceToken; deleting spawnConfigPath as
+  // 'dead' would break the belt for a machine that signs out before its next signed-in launch.
+  assert.match(CONFIG, /function spawnConfigPath\(\) \{/);
+  assert.match(fnOf(CONFIG, "clearDeviceToken"), /fs\.rmSync\(spawnConfigPath\(\), \{ force: true \}\)/);
+  assert.match(CONFIG, /\n {2}spawnConfigPath,/, "…and it is still exported");
+});
+
+// ── L8 (Q9): ONE definition of the per-server call timeout ───────────────────────
+
+test("L8: mcp-config OWNS the number and sdk-loader's entry is the only one that reads it", () => {
+  // sdk-loader used to restate the literal, which is exactly how the two entries drifted
+  // (280_000 vs a moved server cap). There is now only ONE entry — the spawn-config file that
+  // was the second one is deleted — so the rule is simply: the constant lives here, is exported,
+  // and no numeric literal reappears downstream.
+  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "it is exported for sdk-loader");
   assert.match(LOADER, /timeout: clientTimeoutMs\(\),/, "sdk-loader reads it, never a literal");
   assert.match(
     fnOf(LOADER, "clientTimeoutMs"),
@@ -250,6 +275,7 @@ test("L8: ONE definition feeds BOTH entries this app owns", () => {
     !/timeout: \d[\d_]*,/.test(LOADER),
     "no numeric timeout literal may reappear in sdk-loader"
   );
+  assert.ok(SHIPPED_TIMEOUT_MS > 60_000, "or the client's own 60s floor wins and the key is inert");
 });
 
 // ── TASK 4: the operator's own ~/.claude.json is NOT ours to rewrite ──────────
@@ -299,8 +325,11 @@ test("C1: the accessor decrypts once and memoizes; nothing usable reads as ''", 
   }
 });
 
-test("C1: the token is never written to disk in plaintext by the session path", () => {
-  // The only writer left is the CLI-path spawn file; the session path holds it in memory.
+test("C1: the token is never written to disk in plaintext — by ANY path in this app", () => {
+  // This used to read "…by the session path", with the CLI-path spawn file admitted as the one
+  // remaining writer. S3 removed that writer, so the exemption is gone and the claim is total:
+  // the only persistence left is the safeStorage-encrypted electron-store, and the only other
+  // place the bearer is spelled is an execFile argv (mcp-cli-add.js), which is not a file.
   assert.match(CONFIG, /deviceTokenForSpawn/, "the accessor exists");
   assert.ok(!/spawnToken/.test(LOADER), "sdk-loader keeps no copy of its own");
   const io = readFileSync(M("session-outbound.js"), "utf8");

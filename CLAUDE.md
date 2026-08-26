@@ -67,10 +67,15 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and FIVE non-suite gates** — the full table is
+**Five suites, TWO lints, TWO typechecks, and FOUR non-suite gates** — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
-The five that are routinely forgotten, because none of them is a test suite:
+⚠ This said **FIVE** non-suite gates until 2026-08-26, over a table of four. The five it counted
+included the desktop-ui typecheck, **which is one of the TWO typechecks** — a double count. The
+list below is "what gets forgotten", which is a different question from "how many non-suite gates
+there are", and the first item is on it precisely because it is a typecheck nobody remembers to run.
+
+The five things that are routinely forgotten (four non-suite gates, plus the second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
    vitest run does not typecheck. `npm run typecheck` alone does not cover it.
