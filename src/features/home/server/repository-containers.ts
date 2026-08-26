@@ -1,6 +1,7 @@
 import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import type { Role } from "@/features/workspaces/types";
 import { LINK_CONTAINER_COLS, type LinkContainerRow } from "./dto";
 
 /**
@@ -217,9 +218,15 @@ export async function insertLinkContainer(args: {
 /**
  * Add the second member to an existing container — the BOUND claim's one write.
  *
- * `admin`, not `member`: neither side is a guest in their own relationship, and
- * `owner` stays with whoever made the container so only they can delete it.
- * That is the same role split `insertLinkContainer` has always used.
+ * ⚠ THE ROLE IS THE LINK'S `granted_role`, NOT A HARDCODED `admin` (2026-08-25,
+ * M2 — closes F-319). The bound link carries the role the claimer lands at
+ * (default `guest`, ceiling `member`; the DB CHECK makes `admin`/`owner`-via-link
+ * unrepresentable), so the claim is no longer a silent grant of workspace admin.
+ * `owner` still stays with whoever MADE the container, so only they can delete
+ * it. The "neither side is a guest in their own relationship" reasoning now
+ * scopes to a MEMBER-grade link only — a guest link is precisely one where the
+ * claimer is deliberately lower-privileged. The LEGACY unbound path
+ * (`insertLinkContainer`) keeps its hardcoded `admin` on purpose (plan §4.3).
  *
  * ⚠ THE CAP IS THE DATABASE'S, NOT THIS FUNCTION'S. A third active member
  * raises `LINK_CONTAINER_FULL` from the trigger in 20260824120000 — a service
@@ -230,12 +237,13 @@ export async function insertContainerMember(args: {
   workspaceId: string;
   userId: string;
   invitedBy: string;
+  role: Role;
 }): Promise<void> {
   const now = new Date().toISOString();
   const { error } = await supabaseAdmin().from("workspace_members").insert({
     workspace_id: args.workspaceId,
     user_id: args.userId,
-    role: "admin",
+    role: args.role,
     status: "active",
     invited_by: args.invitedBy,
     invited_at: now,

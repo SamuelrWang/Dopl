@@ -119,12 +119,14 @@ export async function claimBoundLink(
       throw new HttpError(410, "LINK_UNAVAILABLE", "This link is no longer available");
     }
 
-    // 5 ─ Workspace membership.
+    // 5 ─ Workspace membership, at the role the LINK grants (M2 — closes F-319).
+    // Default `guest`, ceiling `member`; the claimer is no longer a silent admin.
     try {
       await repo.insertContainerMember({
         workspaceId,
         userId,
         invitedBy: container.ownerId,
+        role: link.granted_role,
       });
     } catch (err) {
       // The trigger is the fence step 3 only approximates; two concurrent claims

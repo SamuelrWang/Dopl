@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import type { Role } from "@/features/workspaces/types";
 import { CHANNEL_LINK_COLS, type ChannelLinkRow } from "./dto";
 
 /**
@@ -27,6 +28,13 @@ export async function insertLink(args: {
   maxUses: number | null;
   /** null = legacy UNBOUND link. Non-null binds the claim to that container. */
   workspaceId: string | null;
+  /**
+   * The role the claimer lands at (migration 20260825150000). The DB CHECK pins
+   * it to `('guest','viewer','member')` and the column DEFAULTs `'guest'`, so a
+   * caller that omits it confers the floor. Only ever set on a BOUND mint —
+   * `mintContainerLink` — never on the legacy unbound path.
+   */
+  grantedRole: Role;
 }): Promise<ChannelLinkRow> {
   const { data, error } = await supabaseAdmin()
     .from("channel_links")
@@ -37,6 +45,7 @@ export async function insertLink(args: {
       expires_at: args.expiresAt,
       max_uses: args.maxUses,
       workspace_id: args.workspaceId,
+      granted_role: args.grantedRole,
     })
     .select(CHANNEL_LINK_COLS)
     .single();

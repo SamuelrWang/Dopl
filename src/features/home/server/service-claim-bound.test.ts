@@ -86,6 +86,7 @@ function boundLink(patch: Partial<ChannelLinkRow> = {}): ChannelLinkRow {
     use_count: 0,
     revoked_at: null,
     created_at: "2026-08-24T00:00:00.000Z",
+    granted_role: "guest",
     ...patch,
   };
 }
@@ -201,14 +202,32 @@ describe("4 — the atomic use guard", () => {
 });
 
 describe("5 — workspace membership", () => {
-  it("stamps the CONTAINER OWNER as the inviter", async () => {
+  it("stamps the CONTAINER OWNER as the inviter, at the link's granted role", async () => {
     await claimBoundLink(boundLink(), CLAIMER);
     expect(mocked.insertContainerMember).toHaveBeenCalledWith({
       workspaceId: WS,
       userId: CLAIMER,
       invitedBy: OWNER,
+      role: "guest",
     });
   });
+
+  it.each([
+    ["guest", "guest"],
+    ["viewer", "viewer"],
+    ["member", "member"],
+  ] as const)(
+    "writes the claimer's role from the LINK's granted_role (%s), never a hardcoded admin — F-319",
+    async (granted, expected) => {
+      // ⚠ THE F-319 FIX, at the write. Before M2 this row was always `admin`;
+      // now it is exactly what the bound link granted. The DB CHECK makes
+      // `admin`/`owner`-via-link unrepresentable, so the ceiling is `member`.
+      await claimBoundLink(boundLink({ granted_role: granted }), CLAIMER);
+      expect(mocked.insertContainerMember).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: CLAIMER, role: expected })
+      );
+    }
+  );
 
   it("maps the member-cap TRIGGER's raise to the same 409 the pre-check gives", async () => {
     // ⚠ The pre-check in step 3 is a friendlier sentence; the trigger is the

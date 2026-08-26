@@ -7,9 +7,11 @@ import {
 } from "@/features/channels/server/service";
 import {
   deleteWorkspace,
+  findMembership,
   listProfileSummaries,
   type ProfileSummary,
 } from "@/features/workspaces/server/repository";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { slugifyWorkspaceName } from "@/features/workspaces/slug";
 import type {
   HomeChannelCreateResult,
@@ -136,6 +138,13 @@ export async function createHomeChannel(
  *
  * `maxUses: 1` always. A bound link fills the container's one free seat, so a
  * second use has nowhere to go — single-use is the shape, not a default.
+ *
+ * ⚠ GRANT-ABOVE-SELF (2026-08-25, M2): the link carries `input.grantedRole` (the
+ * role the claimer lands at, default `guest`) and a minter cannot hand out a role
+ * ABOVE their own — `meetsMinRole(minterRole, grantedRole)` or 403. In a
+ * container the minter is the owner, so this always passes today; the DB CHECK
+ * (`granted_role ∈ {guest,viewer,member}`) is the real ceiling. The guard exists
+ * so the invariant survives a future where a non-owner can mint.
  */
 export async function mintContainerLink(
   userId: string,
@@ -146,6 +155,19 @@ export async function mintContainerLink(
   if (!container) {
     throw new HttpError(404, "CHANNEL_NOT_FOUND", "This channel is not available");
   }
+
+  // ⚠ Grant-above-self, BEFORE the insert. `findMemberContainer` already proved
+  // active membership of this link container; read the minter's ROLE in it (the
+  // fence returns the container, not the role) and refuse a grant above it.
+  const minter = await findMembership(workspaceId, userId);
+  if (!minter || !meetsMinRole(minter.role, input.grantedRole)) {
+    throw new HttpError(
+      403,
+      "GRANT_ABOVE_SELF",
+      "You cannot grant a role above your own"
+    );
+  }
+
   if ((await repo.countActiveContainerMembers(workspaceId)) >= 2) {
     throw new HttpError(
       409,
@@ -173,6 +195,7 @@ export async function mintContainerLink(
       expiresAt: input.expiresAt ?? null,
       maxUses: 1,
       workspaceId,
+      grantedRole: input.grantedRole,
     });
     return { link: mapLinkRow(row) };
   } catch (err) {

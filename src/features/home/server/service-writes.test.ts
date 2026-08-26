@@ -1,15 +1,11 @@
 /**
  * `service-writes.ts` — three gates, in the order each service applies them:
- *
- *  - `createHomeChannel`: one container, one PRIVATE NON-DIRECT channel, and a
- *    workspace rollback if the channel cannot be opened.
- *  - `mintContainerLink`: membership FIRST (404, never 403), FULL before any
- *    insert, an existing open link returned rather than replaced.
- *  - `claimLink` (the LEGACY UNBOUND branch, still live): unknown token 404,
- *    dead link 410, own link 400, pair dedup BEFORE any use is spent, and the
- *    atomic use guard as the only thing between a single-use link and a second
- *    claimer.
- */
+ *  - `createHomeChannel`: one container, one PRIVATE NON-DIRECT channel, rollback
+ *    if the channel cannot be opened.
+ *  - `mintContainerLink`: membership FIRST (404, never 403), FULL before insert,
+ *    an open link returned not replaced. (grantedRole/grant-above-self: split.)
+ *  - `claimLink` (LEGACY UNBOUND, still live): unknown 404, dead 410, own 400,
+ *    pair dedup before spend, atomic use guard. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
@@ -41,6 +37,7 @@ vi.mock("@/features/channels/server/service", () => ({
 vi.mock("@/features/workspaces/server/repository", () => ({
   deleteWorkspace: vi.fn(),
   listProfileSummaries: vi.fn(),
+  findMembership: vi.fn(),
 }));
 
 import {
@@ -56,8 +53,10 @@ import { claimBoundLink } from "./service-claim-bound";
 import { createChannel } from "@/features/channels/server/service";
 import {
   deleteWorkspace,
+  findMembership,
   listProfileSummaries,
 } from "@/features/workspaces/server/repository";
+import type { WorkspaceMembership } from "@/features/workspaces/types";
 
 const CREATOR = "11111111-1111-4111-8111-111111111111";
 const CLAIMER = "22222222-2222-4222-8222-222222222222";
@@ -81,6 +80,7 @@ function linkRow(patch: Partial<ChannelLinkRow> = {}): ChannelLinkRow {
     use_count: 0,
     revoked_at: null,
     created_at: "2026-08-23T00:00:00.000Z",
+    granted_role: "guest",
     ...patch,
   };
 }
@@ -120,6 +120,8 @@ beforeEach(() => {
   mocked.findMemberContainer.mockResolvedValue(CONTAINER);
   mocked.countActiveContainerMembers.mockResolvedValue(1);
   mocked.findOpenLinkForWorkspace.mockResolvedValue(null);
+  // Minter is the container OWNER → grant-above-self passes (pinned separately).
+  vi.mocked(findMembership).mockResolvedValue({ role: "owner" } as WorkspaceMembership);
   mockHydrate.mockResolvedValue(CHANNEL);
   mockProfiles.mockResolvedValue(
     new Map([
@@ -174,7 +176,7 @@ describe("mintContainerLink — the gate", () => {
     // ⚠ 404 rather than 403: a 403 would confirm which container ids exist.
     mocked.findMemberContainer.mockResolvedValue(null);
 
-    await expect(mintContainerLink(CLAIMER, WS, { workspaceId: WS })).rejects.toMatchObject({
+    await expect(mintContainerLink(CLAIMER, WS, { workspaceId: WS, grantedRole: "guest" })).rejects.toMatchObject({
       status: 404,
       code: "CHANNEL_NOT_FOUND",
     });
@@ -186,7 +188,7 @@ describe("mintContainerLink — the gate", () => {
     mocked.countActiveContainerMembers.mockResolvedValue(2);
 
     await expect(
-      mintContainerLink(CREATOR, WS, { workspaceId: WS })
+      mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" })
     ).rejects.toMatchObject({ status: 409, code: "LINK_CONTAINER_FULL" });
     expect(mocked.findOpenLinkForWorkspace).not.toHaveBeenCalled();
     expect(mocked.insertLink).not.toHaveBeenCalled();
@@ -199,7 +201,7 @@ describe("mintContainerLink — the gate", () => {
       linkRow({ id: "already", workspace_id: WS, max_uses: 1 })
     );
 
-    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" });
 
     expect(result.link.id).toBe("already");
     expect(mocked.insertLink).not.toHaveBeenCalled();
@@ -223,7 +225,7 @@ describe("mintContainerLink — the gate", () => {
       linkRow({ id: "fresh", token: args.token, workspace_id: args.workspaceId })
     );
 
-    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" });
 
     expect(mocked.markLinkRevoked).toHaveBeenCalledWith("dead", CREATOR);
     expect(mocked.insertLink).toHaveBeenCalled();
@@ -246,7 +248,7 @@ describe("mintContainerLink — the gate", () => {
       linkRow({ id: "fresh", token: args.token, workspace_id: args.workspaceId })
     );
 
-    await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+    await mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" });
 
     expect(mocked.markLinkRevoked).toHaveBeenCalledWith("dead", CLAIMER);
   });
@@ -264,6 +266,7 @@ describe("mintContainerLink — the gate", () => {
     const result = await mintContainerLink(CREATOR, WS, {
       workspaceId: WS,
       label: "bio",
+      grantedRole: "guest",
     });
 
     const [args] = mocked.insertLink.mock.calls[0];
@@ -283,7 +286,7 @@ describe("mintContainerLink — the gate", () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue(linkRow({ id: "winner", workspace_id: WS, max_uses: 1 }));
 
-    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS });
+    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" });
 
     expect(result.link.id).toBe("winner");
   });
@@ -291,9 +294,10 @@ describe("mintContainerLink — the gate", () => {
   it("rethrows an insert failure that is NOT the unique index", async () => {
     mocked.insertLink.mockRejectedValue({ code: "23503" });
     await expect(
-      mintContainerLink(CREATOR, WS, { workspaceId: WS })
+      mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" })
     ).rejects.toMatchObject({ code: "23503" });
   });
+
 });
 
 describe("revokeLink", () => {

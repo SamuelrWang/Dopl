@@ -1,4 +1,5 @@
 import "server-only";
+import type { Role } from "@/features/workspaces/types";
 import type { HomePendingLink } from "../types";
 
 /**
@@ -8,7 +9,7 @@ import type { HomePendingLink } from "../types";
  */
 
 export const CHANNEL_LINK_COLS =
-  "id, creator_user_id, workspace_id, token, label, expires_at, max_uses, use_count, revoked_at, created_at";
+  "id, creator_user_id, workspace_id, token, label, expires_at, max_uses, use_count, revoked_at, created_at, granted_role";
 
 export interface ChannelLinkRow {
   id: string;
@@ -27,6 +28,17 @@ export interface ChannelLinkRow {
   use_count: number;
   revoked_at: string | null;
   created_at: string;
+  /**
+   * The role a BOUND claim confers on the claimer (migration
+   * 20260825150000_channel_link_granted_role; closes F-319). DB CHECK pins it to
+   * `('guest','viewer','member')` — `admin`/`owner`-via-link is unrepresentable —
+   * and the column DEFAULTs `'guest'`, so an open link with no explicit grant,
+   * and every link minted before this column existed, confers the FLOOR. Typed
+   * `Role` (the superset) because the CHECK is the real ceiling and the value
+   * flows straight into `insertContainerMember`'s `role: Role`. ⚠ The LEGACY
+   * UNBOUND claim never reads this — it keeps its hardcoded `admin` (plan §4.3).
+   */
+  granted_role: Role;
 }
 
 /** The container workspace, and only the columns the payload addresses it by. */

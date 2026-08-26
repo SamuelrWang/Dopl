@@ -43,10 +43,18 @@ export type HomeChannelCreateInput = z.infer<typeof HomeChannelCreateSchema>;
  * ⚠ `expiresAt` must be in the FUTURE. Minting an already-dead link is a
  * validation failure, not a link: the caller gets a URL that 410s on its first
  * open and no error to explain it.
+ *
+ * ⚠ `grantedRole` is the role the CLAIMER lands at, and it DEFAULTS to `guest`
+ * (migration 20260825150000; closes F-319). The enum is the DB CHECK's ceiling —
+ * `member` is the top a link can confer, `admin`/`owner`-via-link being
+ * unrepresentable — and the default means a body that says nothing confers the
+ * FLOOR, fail-closed. The service adds a grant-above-self guard on top: a minter
+ * cannot hand out a role above their own (`mintContainerLink`).
  */
 export const HomeLinkMintSchema = z.object({
   workspaceId: z.string().uuid(),
   label: z.string().trim().min(1).max(80).nullish(),
+  grantedRole: z.enum(["guest", "viewer", "member"]).default("guest"),
   expiresAt: z
     .string()
     .datetime({ offset: true })
