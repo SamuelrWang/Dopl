@@ -37,10 +37,25 @@ function createWorkspaceDirectory(client, options = {}) {
         };
         return result.workspaces;
     }
+    const lockedTo = options.lockedTo ?? null;
     async function getWorkspaceList() {
+        // 🔒 THE LOCK SHORT-CIRCUITS BEFORE THE CACHE IS EVEN READ. A locked session
+        // sees its container and nothing else — including no evidence that anything
+        // else exists. ⚠ It answers `[lockedTo]` rather than filtering the directory
+        // through `isStandardWorkspace`, which would answer `[]`: the agent needs a
+        // name to target, and hiding the room it is standing in helps nobody.
+        if (lockedTo)
+            return [lockedTo];
         return (await getAllWorkspaces()).filter(client_1.isStandardWorkspace);
     }
     async function resolveWorkspaceRef(ref) {
+        // 🔒 THE LOCK ANSWERS BEFORE ANY LOOKUP, so a ref that names another
+        // workspace is refused without a cache refresh — and a refused ref is
+        // indistinguishable from one that names nothing, which is the same
+        // no-oracle discipline the server's own 404 ordering keeps (§4).
+        if (lockedTo) {
+            return ref === lockedTo.id || ref === lockedTo.slug ? lockedTo : null;
+        }
         // ⚠ Resolves against the UNFILTERED directory: `workspace=<link id>` is how
         // an agent acting in a home channel addresses its container, and the
         // container is deliberately absent from every listing.

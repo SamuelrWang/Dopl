@@ -72,8 +72,17 @@ function createServer(client, options = {}) {
     const directory = (0, workspace_directory_js_1.createWorkspaceDirectory)(client, {
         directory: options.directory,
         directoryLoadFailed: options.directoryLoadFailed,
+        lockedTo: options.lockedTo,
     });
-    const listableDirectory = (options.directory ?? []).filter(client_1.isStandardWorkspace);
+    // 🔒 A LOCKED SESSION'S INSTRUCTION TABLE IS EMPTY, and that is the right
+    // answer rather than `[lockedTo]`: the table exists to tell an agent what it
+    // can TARGET with `workspace=`, and a locked session already has that one
+    // workspace as its resolved pin (the briefing says so on the `pin` line
+    // below). Listing the container here would additionally put a link
+    // container in an advertisement, which §4A forbids everywhere else.
+    const listableDirectory = options.lockedTo
+        ? []
+        : (options.directory ?? []).filter(client_1.isStandardWorkspace);
     const server = new mcp_js_1.McpServer({
         name: "dopl",
         // ⚠ Source of truth is package.json via version.ts, so the MCP handshake

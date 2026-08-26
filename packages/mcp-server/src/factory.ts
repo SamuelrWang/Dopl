@@ -138,6 +138,39 @@ export async function bootServer(
     active = listable[0];
     source = "sole membership";
   }
+
+  // 🔒 THE CONTAINER LOCK (plan §4.4 B3). A session pinned to a SHARED link
+  // container — one with a PEER in it — sees and addresses that container
+  // ALONE: no `list_workspaces` entry for the operator's other workspaces, no
+  // `workspace=` that resolves to one, no instruction table naming any.
+  //
+  // ⚠ SHARED, NOT SOLO. A one-member container is the operator's own primary
+  // agent surface and is deliberately untouched, exactly as the audience ceiling
+  // leaves it (`knowledge/server/service-audience.ts`). The lock exists because
+  // somebody ELSE is in the room.
+  //
+  // 🔒 ⚠ `?? 0` AND ZERO IS NOT SOLO — this is §8's stale-field rule applied in
+  // the INVERTED direction, on purpose. `memberCount` is new on the cached
+  // `listWorkspaces` payload; an older server sends none, and the reflex
+  // fallback (treat unknown as the permissive case) would silently unlock every
+  // container across the release window in which a desktop build runs against a
+  // server that predates the field. Unknown = not solo = narrowed.
+  //
+  // ⚠ AND IT IS A TRIPWIRE. Bash can open a second, unpinned MCP connection or
+  // issue the loopback HTTP directly; neither passes through this object. The
+  // fences are the container-locked credential and the server-side audience
+  // ceiling. Do not describe this line as containment.
+  const lockedTo =
+    active && !isStandardWorkspace(active) && (active.memberCount ?? 0) !== 1
+      ? active
+      : null;
+  if (lockedTo) {
+    diag(
+      `[dopl-mcp] directory LOCKED to shared container ${lockedTo.slug} (${
+        lockedTo.memberCount ?? "unknown"
+      } active members)`,
+    );
+  }
   // ⚠ Clear an unresolved constructor pin so loopback calls never carry a bogus
   // X-Workspace-Id.
   client.setWorkspaceId(active ? active.id : null);
@@ -160,6 +193,7 @@ export async function bootServer(
     userId: caller.userId,
     directory,
     directoryLoadFailed,
+    lockedTo,
     workspace: active,
     role: active?.role ?? null,
     workspaceSource: source,

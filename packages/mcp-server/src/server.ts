@@ -80,6 +80,14 @@ export function createServer(
      */
     directoryLoadFailed?: boolean;
     /**
+     * 🔒 The container lock, resolved by `factory.ts › bootServer`. Threaded
+     * verbatim into `createWorkspaceDirectory` (whose option docblock carries
+     * the rule and the tripwire-not-fence caveat) and, separately, into the
+     * INSTRUCTIONS table below — the two must agree, or the briefing advertises
+     * workspaces the tools then refuse.
+     */
+    lockedTo?: WorkspaceListItem | null;
+    /**
      * How `workspace` was chosen at boot — `header pin` (X-Workspace-Id) or
      * `sole membership`. Null when there is no session default. Drives the
      * footer source label.
@@ -125,8 +133,17 @@ export function createServer(
   const directory = createWorkspaceDirectory(client, {
     directory: options.directory,
     directoryLoadFailed: options.directoryLoadFailed,
+    lockedTo: options.lockedTo,
   });
-  const listableDirectory = (options.directory ?? []).filter(isStandardWorkspace);
+  // 🔒 A LOCKED SESSION'S INSTRUCTION TABLE IS EMPTY, and that is the right
+  // answer rather than `[lockedTo]`: the table exists to tell an agent what it
+  // can TARGET with `workspace=`, and a locked session already has that one
+  // workspace as its resolved pin (the briefing says so on the `pin` line
+  // below). Listing the container here would additionally put a link
+  // container in an advertisement, which §4A forbids everywhere else.
+  const listableDirectory = options.lockedTo
+    ? []
+    : (options.directory ?? []).filter(isStandardWorkspace);
 
   const server = new McpServer(
     {

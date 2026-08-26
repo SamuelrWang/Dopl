@@ -98,6 +98,30 @@ export interface Workspace {
  */
 export interface WorkspaceWithRole extends Workspace {
   role: Role;
+  /**
+   * ACTIVE members of this workspace, for the MCP directory lock (plan §4.4 B3).
+   * `bootServer` needs to know whether a link container is SOLO or SHARED before
+   * it decides whether to lock the session's directory to it, and it must know
+   * without a second loopback per workspace.
+   *
+   * 🔒 ⚠ OPTIONAL ON THE WIRE, AND ABSENT MUST FAIL CLOSED — `?? 0`, and ZERO
+   * IS "NOT SOLO", so an older server that sends no count gets the NARROWED
+   * behaviour rather than the open one (§8 stale-cache, inverted). The usual
+   * stale-field instinct is to fall back to the permissive reading; here that
+   * would silently unlock every container against a deployment mismatch, which
+   * is precisely the release window a fence is most likely to be tested in.
+   *
+   * ⚠ IT IS ON THE LIST ITEM, NOT ON `Workspace`. Plan §4.4 named
+   * `WorkspaceSummary` too; that would widen every single-workspace payload in
+   * the product for one consumer that only ever reads the LIST, and every one of
+   * those payloads would then owe the same fail-closed reading. One list, one
+   * count, one place to get it wrong.
+   *
+   * ⚠ NOT AN AUTHORIZATION FIELD. It decides how much of the directory an agent
+   * is SHOWN. The fence is `knowledge/server/service-audience.ts`, server-side,
+   * which re-reads this count from the database itself.
+   */
+  memberCount?: number;
 }
 
 /** Series the overview histogram can plot. Unrecognised values are a 400. */

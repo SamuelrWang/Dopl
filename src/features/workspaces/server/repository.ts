@@ -186,6 +186,12 @@ export async function listWorkspacesForUser(userId: string): Promise<Workspace[]
 /**
  * `listWorkspacesForUser` + the member's role, one query. ⚠ Active memberships
  * only — pending invitations don't count, revoked members excluded.
+ *
+ * ⚠ PLUS ONE bounded fan-out for `memberCount` (§9's rule: one `IN (ids)` query,
+ * never per-row). The MCP directory lock needs to know whether each link
+ * container is SOLO or SHARED at BOOT, and boot may not add a loopback per
+ * workspace ({@link bootServer}'s own comment). See
+ * {@link countActiveMembersByWorkspace} for why a failure there is not fatal.
  */
 export async function listWorkspacesWithRoleForUser(
   userId: string
@@ -206,10 +212,52 @@ export async function listWorkspacesWithRoleForUser(
     const c = Array.isArray(row.workspace) ? row.workspace[0] : row.workspace;
     if (c) out.push({ ...mapWorkspaceRow(c), role: row.role });
   }
+  const counts = await countActiveMembersByWorkspace(
+    db,
+    out.map((w) => w.id)
+  );
+  for (const w of out) {
+    const n = counts.get(w.id);
+    if (n !== undefined) w.memberCount = n;
+  }
   return out.sort(
     (a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
+}
+
+/**
+ * ACTIVE member counts for a bounded set of workspaces, folded in one query.
+ *
+ * ⚠ ROWS, NOT `count: "exact"`. PostgREST has no GROUP BY, so a per-workspace
+ * exact count would be N round trips (`repository-overview.ts ›
+ * countActiveMembers` is that shape, correctly, for ONE workspace). The rows
+ * here are `(workspace_id)` only and the caller's own memberships bound the set,
+ * so the fold is cheap and the read carries no member identity at all.
+ *
+ * ⚠ IT SWALLOWS ITS OWN FAILURE and answers an EMPTY MAP. A workspace with no
+ * entry gets NO `memberCount` key, which every consumer reads as "unknown" and
+ * the directory lock reads as NOT SOLO — narrowed, the fail-closed direction.
+ * Throwing instead would take `GET /api/workspaces` down with it, and that route
+ * is what the desktop's channel listener fans over (§4A): a count nobody can
+ * read must not stop the app from knowing which channels to watch.
+ */
+async function countActiveMembersByWorkspace(
+  db: ReturnType<typeof supabaseAdmin>,
+  workspaceIds: string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (workspaceIds.length === 0) return counts;
+  const { data, error } = await db
+    .from("workspace_members")
+    .select("workspace_id")
+    .in("workspace_id", workspaceIds)
+    .eq("status", "active");
+  if (error) return counts;
+  for (const row of (data ?? []) as { workspace_id: string }[]) {
+    counts.set(row.workspace_id, (counts.get(row.workspace_id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export async function findMembership(

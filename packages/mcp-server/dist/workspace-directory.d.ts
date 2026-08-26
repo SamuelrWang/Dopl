@@ -44,6 +44,30 @@ export interface WorkspaceDirectoryOptions {
      * seeding a bogus empty cache so a later resolution retries.
      */
     directoryLoadFailed?: boolean;
+    /**
+     * 🔒 THE CONTAINER LOCK (plan §4.4 B3). When set, this session may see and
+     * address exactly ONE workspace: this one. `getWorkspaceList()` answers
+     * `[lockedTo]` and `resolveWorkspaceRef` answers `null` for every other ref,
+     * whatever the cache holds.
+     *
+     * Set by `factory.ts › bootServer` when the session's pin resolves to a
+     * `kind='link'` container with MORE THAN ONE active member — i.e. an agent
+     * working in a room a PEER is also in. Its operator's other workspaces are
+     * not that peer's business, and neither is their existence.
+     *
+     * ⚠ IT IS A TRIPWIRE, NOT A FENCE, AND THE DIFFERENCE MUST NOT BE DRESSED
+     * AWAY. It narrows what THIS MCP connection will do. A `full`-profile session
+     * has Bash and the operator's 90-day device token is on disk, so the same
+     * agent can open a SECOND MCP connection with no pin, or issue the loopback
+     * HTTP itself, and this object will never see either. What actually refuses
+     * those is the credential lock (the token is workspace-scoped, so
+     * `with-workspace-auth.ts` 403s a contradicting target) and the audience
+     * ceiling in `knowledge/server/service-audience.ts`, both of which live in the
+     * server that owns the rows. This lock exists so a WELL-BEHAVED agent is never
+     * even shown the door — which is worth having, and is not the same as the door
+     * being locked.
+     */
+    lockedTo?: WorkspaceListItem | null;
 }
 export interface WorkspaceDirectory {
     /**

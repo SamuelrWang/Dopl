@@ -94,6 +94,139 @@ function extractSqlRoleArms(migrationsDir: string): { file: string; roles: strin
   );
 }
 
+/**
+ * Strip block and line comments, so a docblock's `{@link …}` cannot be mistaken
+ * for structure and a commented-out field cannot be mistaken for a real one.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+/**
+ * Pull the declared PROPERTY NAMES of `export interface <Name> { … }`, following
+ * the brace depth rather than matching to the first `}` — these interfaces carry
+ * docblocks full of `{@link …}` and inline object types, and a lazy match
+ * silently truncates the field list, which would make this gate pass by seeing
+ * nothing.
+ */
+function extractInterfaceKeys(source: string, name: string): string[] {
+  const clean = stripComments(source);
+  const start = clean.search(new RegExp(`\\binterface\\s+${name}\\b`));
+  if (start === -1) throw new Error(`could not find \`interface ${name}\``);
+  const open = clean.indexOf("{", start);
+  if (open === -1) throw new Error(`\`interface ${name}\` has no body`);
+  let depth = 0;
+  let end = open;
+  for (let i = open; i < clean.length; i += 1) {
+    if (clean[i] === "{") depth += 1;
+    else if (clean[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  const body = clean.slice(open + 1, end);
+  // Only TOP-LEVEL properties: a nested inline object's keys are not fields of
+  // this interface.
+  const out: string[] = [];
+  let nest = 0;
+  for (const line of body.split("\n")) {
+    if (nest === 0) {
+      const m = /^\s*(\w+)\??\s*:/.exec(line);
+      if (m) out.push(m[1]);
+    }
+    for (const ch of line) {
+      if (ch === "{") nest += 1;
+      else if (ch === "}") nest -= 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * 🔒 THE WORKSPACE LIST-ITEM MIRROR (Home Knowledge Panels M5, 2026-08-26).
+ *
+ * `GET /api/workspaces`'s row type is hand-mirrored across the server and the
+ * SDK — `src/features/workspaces/types.ts › Workspace`+`WorkspaceWithRole`
+ * against `packages/dopl-client/src/types.ts › WorkspaceSummary`+
+ * `WorkspaceListItem` — and until this check existed **NOTHING GUARDED IT.**
+ * `check-role-drift` compared the role SET; `check-knowledge-type-drift` covers
+ * knowledge types; neither looks at this pair. The field that made it matter is
+ * `memberCount`, which the MCP directory lock reads at boot: a server that stops
+ * sending it, or an SDK that stops declaring it, silently changes how much of a
+ * workspace directory an agent is shown, with no error anywhere.
+ *
+ * ⚠ **`iconUrl` IS A REAL, PRE-EXISTING ASYMMETRY AND IS RECORDED, NOT FIXED.**
+ * The server DTO (`workspaces/server/dto.ts › mapWorkspaceRow`) emits it on
+ * every row and the SDK type has never declared it, so the wire has carried a
+ * field the SDK cannot see since before this gate. Widening the SDK type is a
+ * separate change with its own `dist/` rebuild; softening the gate to hide it
+ * would destroy the evidence (CLAUDE.md's rule). **THIS LIST MAY ONLY EVER
+ * SHRINK.** F-335.
+ */
+const WORKSPACE_MIRROR_ALLOWED_DRIFT = ["iconUrl"];
+
+function checkWorkspaceMirror(read: (rel: string) => string): boolean {
+  const serverFields = [
+    ...extractInterfaceKeys(read("src/features/workspaces/types.ts"), "Workspace"),
+    ...extractInterfaceKeys(
+      read("src/features/workspaces/types.ts"),
+      "WorkspaceWithRole"
+    ),
+  ];
+  const mirrors: Array<[string, string[]]> = [
+    [
+      "packages/dopl-client/src/types.ts › WorkspaceSummary + WorkspaceListItem",
+      [
+        ...extractInterfaceKeys(
+          read("packages/dopl-client/src/types.ts"),
+          "WorkspaceSummary"
+        ),
+        ...extractInterfaceKeys(
+          read("packages/dopl-client/src/types.ts"),
+          "WorkspaceListItem"
+        ),
+      ],
+    ],
+    [
+      "packages/dopl-client/dist/types.d.ts › WorkspaceSummary + WorkspaceListItem",
+      [
+        ...extractInterfaceKeys(
+          read("packages/dopl-client/dist/types.d.ts"),
+          "WorkspaceSummary"
+        ),
+        ...extractInterfaceKeys(
+          read("packages/dopl-client/dist/types.d.ts"),
+          "WorkspaceListItem"
+        ),
+      ],
+    ],
+  ];
+
+  const allowed = new Set(WORKSPACE_MIRROR_ALLOWED_DRIFT);
+  const reference = new Set(serverFields);
+  let drift = false;
+  for (const [label, fields] of mirrors) {
+    const set = new Set(fields);
+    const missing = [...reference].filter((f) => !set.has(f) && !allowed.has(f));
+    const extra = [...set].filter((f) => !reference.has(f) && !allowed.has(f));
+    if (missing.length || extra.length) {
+      drift = true;
+      console.error(`[drift] ${label}:`);
+      if (missing.length) console.error(`  missing field(s): ${missing.join(", ")}`);
+      if (extra.length) console.error(`  extra field(s):   ${extra.join(", ")}`);
+    }
+  }
+  if (!drift) {
+    console.log(
+      `✅ Workspace list-item mirror agrees on ${reference.size} field(s); ${allowed.size} recorded asymmetry (${WORKSPACE_MIRROR_ALLOWED_DRIFT.join(", ")}, F-335).`
+    );
+  }
+  return drift;
+}
+
 function main(): void {
   const root = resolve(__dirname, "..");
   const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
@@ -172,6 +305,16 @@ function main(): void {
   console.log(
     `✅ All ${sources.length} role declarations agree on the set: ${[...reference].sort().join(", ")}.`
   );
+
+  // The SECOND family this script guards — see `checkWorkspaceMirror`. It is in
+  // this file rather than a sibling because it reads the same two hand-mirrored
+  // type files for the same reason, and CI runs this step already.
+  if (checkWorkspaceMirror(read)) {
+    console.error(
+      "\n❌ Workspace list-item mirror drift detected. `src/features/workspaces/types.ts` and `packages/dopl-client/src/types.ts` (plus its committed dist/ mirror) are hand-mirrored: change every side in ONE change, and rebuild with `npm run build -w @dopl/client`."
+    );
+    process.exit(1);
+  }
 }
 
 main();

@@ -52,6 +52,30 @@ export interface WorkspaceDirectoryOptions {
    * seeding a bogus empty cache so a later resolution retries.
    */
   directoryLoadFailed?: boolean;
+  /**
+   * 🔒 THE CONTAINER LOCK (plan §4.4 B3). When set, this session may see and
+   * address exactly ONE workspace: this one. `getWorkspaceList()` answers
+   * `[lockedTo]` and `resolveWorkspaceRef` answers `null` for every other ref,
+   * whatever the cache holds.
+   *
+   * Set by `factory.ts › bootServer` when the session's pin resolves to a
+   * `kind='link'` container with MORE THAN ONE active member — i.e. an agent
+   * working in a room a PEER is also in. Its operator's other workspaces are
+   * not that peer's business, and neither is their existence.
+   *
+   * ⚠ IT IS A TRIPWIRE, NOT A FENCE, AND THE DIFFERENCE MUST NOT BE DRESSED
+   * AWAY. It narrows what THIS MCP connection will do. A `full`-profile session
+   * has Bash and the operator's 90-day device token is on disk, so the same
+   * agent can open a SECOND MCP connection with no pin, or issue the loopback
+   * HTTP itself, and this object will never see either. What actually refuses
+   * those is the credential lock (the token is workspace-scoped, so
+   * `with-workspace-auth.ts` 403s a contradicting target) and the audience
+   * ceiling in `knowledge/server/service-audience.ts`, both of which live in the
+   * server that owns the rows. This lock exists so a WELL-BEHAVED agent is never
+   * even shown the door — which is worth having, and is not the same as the door
+   * being locked.
+   */
+  lockedTo?: WorkspaceListItem | null;
 }
 
 export interface WorkspaceDirectory {
@@ -101,13 +125,28 @@ export function createWorkspaceDirectory(
     return result.workspaces;
   }
 
+  const lockedTo = options.lockedTo ?? null;
+
   async function getWorkspaceList(): Promise<WorkspaceListItem[]> {
+    // 🔒 THE LOCK SHORT-CIRCUITS BEFORE THE CACHE IS EVEN READ. A locked session
+    // sees its container and nothing else — including no evidence that anything
+    // else exists. ⚠ It answers `[lockedTo]` rather than filtering the directory
+    // through `isStandardWorkspace`, which would answer `[]`: the agent needs a
+    // name to target, and hiding the room it is standing in helps nobody.
+    if (lockedTo) return [lockedTo];
     return (await getAllWorkspaces()).filter(isStandardWorkspace);
   }
 
   async function resolveWorkspaceRef(
     ref: string,
   ): Promise<WorkspaceListItem | null> {
+    // 🔒 THE LOCK ANSWERS BEFORE ANY LOOKUP, so a ref that names another
+    // workspace is refused without a cache refresh — and a refused ref is
+    // indistinguishable from one that names nothing, which is the same
+    // no-oracle discipline the server's own 404 ordering keeps (§4).
+    if (lockedTo) {
+      return ref === lockedTo.id || ref === lockedTo.slug ? lockedTo : null;
+    }
     // ⚠ Resolves against the UNFILTERED directory: `workspace=<link id>` is how
     // an agent acting in a home channel addresses its container, and the
     // container is deliberately absent from every listing.

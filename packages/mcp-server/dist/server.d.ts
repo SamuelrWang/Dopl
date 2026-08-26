@@ -56,6 +56,14 @@ export declare function createServer(client: DoplClient, options?: {
      */
     directoryLoadFailed?: boolean;
     /**
+     * 🔒 The container lock, resolved by `factory.ts › bootServer`. Threaded
+     * verbatim into `createWorkspaceDirectory` (whose option docblock carries
+     * the rule and the tripwire-not-fence caveat) and, separately, into the
+     * INSTRUCTIONS table below — the two must agree, or the briefing advertises
+     * workspaces the tools then refuse.
+     */
+    lockedTo?: WorkspaceListItem | null;
+    /**
      * How `workspace` was chosen at boot — `header pin` (X-Workspace-Id) or
      * `sole membership`. Null when there is no session default. Drives the
      * footer source label.

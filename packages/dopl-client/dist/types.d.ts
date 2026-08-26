@@ -63,8 +63,10 @@ export interface ListResult {
 /**
  * "standard" = a real user-facing workspace. "link" = a hidden home-channel
  * container holding ONE or TWO members and exactly one channel — never shown in
- * the rail/switcher, never a default-resolution candidate, bills to each side's
- * own plan.
+ * the rail/switcher, never a default-resolution candidate, and **bills to the
+ * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
+ * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
+ * side's own plan until then).
  *
  * ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › WorkspaceKind`,
  * which is the source of this wording. Edit that one and copy it down; the two
@@ -102,6 +104,25 @@ export declare function isStandardWorkspace(workspace: {
  */
 export interface WorkspaceListItem extends WorkspaceSummary {
     role: WorkspaceRole;
+    /**
+     * ACTIVE members of this workspace.
+     *
+     * ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › WorkspaceWithRole`,
+     * and NO DRIFT GATE COVERS IT: `check-role-drift.ts` compares the role SET
+     * (string-literal unions and flat record keys) and `check-knowledge-type-drift`
+     * covers knowledge types. Both halves of this field must move in ONE change.
+     *
+     * 🔒 ⚠ OPTIONAL, AND ABSENT FAILS CLOSED. Read it as `?? 0` and treat ZERO as
+     * "NOT SOLO" — an older server sends no count, and the safe reading of "I do
+     * not know how many people are in this container" is that there is somebody in
+     * it. `workspace-directory.ts › createWorkspaceDirectory` is the consumer, and
+     * `factory.ts › bootServer` is where the `?? 0` lives.
+     *
+     * ⚠ NOT AN AUTHORIZATION FIELD. It decides how much of the directory an agent
+     * is SHOWN — a TRIPWIRE. The fence is server-side
+     * (`knowledge/server/service-audience.ts`), which re-reads this count itself.
+     */
+    memberCount?: number;
 }
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer" | "guest";
 export interface ResolvedWorkspace {

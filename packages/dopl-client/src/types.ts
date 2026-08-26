@@ -107,6 +107,25 @@ export function isStandardWorkspace(workspace: { kind?: WorkspaceKind }): boolea
  */
 export interface WorkspaceListItem extends WorkspaceSummary {
   role: WorkspaceRole;
+  /**
+   * ACTIVE members of this workspace.
+   *
+   * ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › WorkspaceWithRole`,
+   * and NO DRIFT GATE COVERS IT: `check-role-drift.ts` compares the role SET
+   * (string-literal unions and flat record keys) and `check-knowledge-type-drift`
+   * covers knowledge types. Both halves of this field must move in ONE change.
+   *
+   * 🔒 ⚠ OPTIONAL, AND ABSENT FAILS CLOSED. Read it as `?? 0` and treat ZERO as
+   * "NOT SOLO" — an older server sends no count, and the safe reading of "I do
+   * not know how many people are in this container" is that there is somebody in
+   * it. `workspace-directory.ts › createWorkspaceDirectory` is the consumer, and
+   * `factory.ts › bootServer` is where the `?? 0` lives.
+   *
+   * ⚠ NOT AN AUTHORIZATION FIELD. It decides how much of the directory an agent
+   * is SHOWN — a TRIPWIRE. The fence is server-side
+   * (`knowledge/server/service-audience.ts`), which re-reads this count itself.
+   */
+  memberCount?: number;
 }
 
 // Mirrors the DB enum on `workspace_members.role`.
