@@ -3159,7 +3159,23 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Proposed resolution: move the trio onto the three composites (or one shared internal wrapper).
   Status: **open**
 
-## F-319 — the link-container claimer is a workspace ADMIN, so HARD delete of the channel and of any thread is reachable server-side (2026-08-25, FOR SAMUEL'S RE-RULE)
+## F-319 — the link-container claimer is a workspace ADMIN, so HARD delete of the channel and of any thread is reachable server-side (2026-08-25, ✅ RESOLVED 2026-08-25)
+
+- ✅ **RESOLVED (guest-role M0–M2, 2026-08-25).** Samuel re-ruled by building a real capability
+  tier rather than picking either of the two branches this finding offered: a new `guest` role at
+  the FLOOR (rank 0, below `viewer`), a link-carried `channel_links.granted_role` (default `guest`,
+  ceiling `member` — the DB CHECK makes `admin`/`owner`-via-link unrepresentable), and the bound
+  claim writing `role: link.granted_role` instead of hardcoding `admin`
+  (`home/server/service-claim-bound.ts › claimBoundLink` → `repository-containers.ts ›
+  insertContainerMember`). A guest is now BELOW every measured hole: `canManageChannel` is false
+  (not channel owner, not workspace admin), so `DELETE /api/channels/{id}` and
+  `assertMayDeleteThread` refuse; the `withWorkspaceAuth` viewer+ default rejects the workspace
+  routes; `PATCH …/members` refuses. Enforcement is SERVER-side, not the cosmetic UI narrowing this
+  finding measured. Pinned by `home/server/guest-claim-f319-closure.test.ts` and the claim/mint
+  suites. ⚠ **The LEGACY UNBOUND path keeps its hardcoded `admin`** on purpose (in-the-wild links
+  must not silently downgrade). Residuals filed SEPARATELY and still open: **F-323** (agent-authored
+  container KB) and **F-324** (RLS realtime residual, now live). The narrative below is the
+  pre-resolution measurement, kept for the record.
 
 - Location: `src/features/home/server/repository-containers.ts › insertContainerMember` (the row it
   writes), `src/features/channels/server/service-shared.ts › canManageChannel`,
@@ -3200,8 +3216,8 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - **The two branches if it is re-ruled:** claim as `member` instead of `admin` (blast radius is §4A —
   every other container power is role-shaped, though "any member may mint the link" is already ruled
   role-free), or keep `admin` and fence the DELETE arm on the container's owner specifically.
-- Status: **open — awaiting Samuel.** Accepted for MVP in the meantime; do not narrow the claim role
-  without the ruling.
+- Status: ✅ **RESOLVED 2026-08-25** — see the resolution note at the top of this entry. The claim role
+  is now the link's `granted_role` (default `guest`), server-enforced.
 
 ## F-321 — a WINDOWLESS session's gate still cannot become a PENDING operator decision; only an own-channel POST can (2026-08-25)
 
@@ -3297,16 +3313,17 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   (migration `20260825140000_guest_role.sql`).
 - Found during: **guest-role M0/M1 RLS verification, 2026-08-25** (the plan's §1.3 critical
   question).
-- Severity: **smell / not-yet-live** — NOT a functional blocker today, for two reasons:
-  (1) every guest-reachable channel READ through the §2B API routes runs on the SERVICE-ROLE admin
-  client (`src/features/channels/server/repository.ts`, RLS-BYPASSING by its own docblock), so these
+- Severity: **smell / live-but-not-a-blocker** — NOT a functional blocker today: every
+  guest-reachable channel READ through the §2B API routes runs on the SERVICE-ROLE admin client
+  (`src/features/channels/server/repository.ts`, RLS-BYPASSING by its own docblock), so these
   policies are never consulted on that path — which is why **no `channel_members`-based RLS arm was
-  added**; and (2) **no `role='guest'` row exists yet** — the bound claim still inserts the claimer
-  as `admin` until M2 wires `granted_role`. The residual: once M2 makes real guests, any DIRECT
-  user-client read or REALTIME subscription (which DO run under RLS) filters a guest out at the
-  `'viewer'` floor. The guest web lane gets its live updates from the `GET …/await` long-poll
-  (service-role, in the §2B set), so it degrades gracefully rather than breaking — but a future
-  realtime subscription for the guest surface would silently receive nothing.
+  added**. ⚠ **Real guests NOW EXIST (M2 landed 2026-08-25)**: the bound claim inserts
+  `role = channel_links.granted_role` (default `guest`), so `role='guest'` rows are live. The
+  residual is therefore now REAL rather than hypothetical — any DIRECT user-client read or REALTIME
+  subscription (which DO run under RLS) filters a guest out at the `'viewer'` floor. The guest web
+  lane gets its live updates from the `GET …/await` long-poll (service-role, in the §2B set), so it
+  degrades gracefully rather than breaking — but a future realtime subscription for the guest surface
+  would silently receive nothing.
 - Proposed resolution: **defer to M2/M5.** If the guest web lane ever subscribes to channel realtime,
   the fix is a `channel_members`-based arm on those SELECT policies (channel RLS keys on
   `channel_members`, its own enum `('owner','member')`) so a guest who is a channel member passes

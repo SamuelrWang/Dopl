@@ -3684,3 +3684,69 @@ assertion, and the three are never listed anywhere — the original reason is th
 comment. The cheap check is to state each job out loud and ask which one the ruling actually
 addressed; here it was one of three. Then replace the assertion with one that still fails for the
 other two, which is a different exercise from weakening it until it passes.
+
+## 2026-08-26 — The guest role: why below viewer, and why the LINK carries the grant
+
+Current state: INVARIANTS §4A (the guest tier and link-carried role), §12 (both migrations),
+REFACTOR-FINDINGS F-319 (RESOLVED). This section is only the argument.
+
+F-319 measured a hole with a simple shape: the bound claim inserted the claimer as a workspace
+`admin`, so a person invited into one home channel could hard-delete that channel, delete anyone's
+threads, and reach every workspace-scoped route — the UI merely hid the buttons. The finding offered
+two repairs: claim as `member` instead of `admin`, or keep `admin` and fence the DELETE arm on the
+container owner. Both are patches to a symptom. The build did neither and added a real capability
+tier, and the two design choices in that tier are the part worth recording.
+
+### Why `guest` sits BELOW `viewer`, not beside it
+
+The obvious place for a "chat-only" role is next to `viewer` — both are read-ish. It went one rank
+lower, at the FLOOR, for one reason: **`withWorkspaceAuth` defaults `minRole` to `"viewer"`, and a
+default is the blast radius.** Every workspace-scoped route that never states a floor inherits that
+default. Put the guest AT viewer and the default admits it to all of them, and the safety of the
+feature becomes an enumeration problem — you must find and lower every route the guest must NOT reach,
+and the one you miss is a silent OPEN. Put the guest BELOW viewer and the default REJECTS it
+everywhere, and the enumeration inverts: you find and lower the few routes the guest MUST reach (the
+twelve channel floors, §2B), and the one you miss is a guest over-blocked — a UX bug that shows up the
+first time a guest opens the app, not a hole that shows up when someone goes looking. **The floor rank
+turns the default from fail-open to fail-closed.** The `Record<Role, number>` typing on `ROLE_RANK` is
+the compile-time half of the same posture: it forces every role map in the tree to name the new key,
+so no gate silently omits it.
+
+The DB side mirrors it deliberately-loosely: `is_workspace_member` ranks `guest` at `-1` rather than
+re-basing every rank to match the TS scale. The numbers never cross a boundary — only the role NAME
+does — so the two scales may disagree on absolute values as long as the ORDER agrees, and keeping the
+existing viewer/member/admin/owner numbers unchanged meant the blast radius on the SQL side was one
+function body instead of every policy that passes a literal min-role.
+
+### Why the LINK carries the grant, not a global setting
+
+A guest needs a role, and the role had to come from somewhere. The tempting shape is a workspace-level
+or account-level setting — "new people join as guests" — with the claim reading it. That is the wrong
+seam for a credential. **The link is the credential; the grant belongs ON it, decided when it is
+minted, not read from mutable state at claim time.** A global setting is a value someone can change
+between mint and claim, so the role a link confers is not knowable from the link — the same URL sitting
+in two inboxes could grant different things depending on when each is opened. Binding `granted_role` to
+the `channel_links` row makes the grant immutable and legible: the token IS the offer, role included.
+
+Three properties fell out of that placement, each fail-closed:
+- **DEFAULT `'guest'`** on the column backfilled every link already minted (measured: 3 live rows) to
+  the floor. A link that predates the feature grants the least privilege, not the most — the opposite
+  of what a nullable column read as "unset → admin" would have done.
+- **CHECK `(guest,viewer,member)`** makes `admin`/`owner`-via-link UNREPRESENTABLE at the database.
+  The hole F-319 measured cannot be reintroduced by a mint bug, a hand-written insert, or a future
+  schema edit, because the row that would carry it cannot be stored.
+- **A grant-above-self guard** at mint (`meetsMinRole(minterRole, grantedRole)` or 403) caps the grant
+  at the minter's own role. In a container the minter is the owner, so the CHECK is the operative
+  ceiling today — but the guard is the invariant that survives the day a non-owner can mint, which the
+  "any member may mint the link" ruling already half-opened.
+
+The legacy UNBOUND claim was left alone — still hardcoded `admin` — on the same reasoning the whole
+inversion rests on: those tokens are in the wild, and honoring `granted_role` on them would silently
+DOWNGRADE a relationship somebody already established. A fail-closed default is right for a NEW link
+and wrong for an existing one; the two paths diverge because their histories do.
+
+**The rule the episode buys: when a finding offers you two patches, check whether the thing they both
+patch is a missing tier.** Claiming as `member` and fencing DELETE are both repairs to "the role is
+too high"; the actual defect was "there is no role low enough". A capability the product needs
+(chat-only) that no role expresses is not a permissions bug to be patched at each call site — it is a
+tier to be added once, placed at the fail-closed end of the default so the enumeration works FOR you.
