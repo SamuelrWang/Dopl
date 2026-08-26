@@ -66,13 +66,22 @@ export async function listVisibleChannelRefs(
     (memberships ?? []) as Array<{ channel_id: string }>
   ).map((m) => m.channel_id);
 
+  // ⚠ `includePublic` is left at its default here, and that is a decision, not
+  // an oversight: this fence is only ever reached at `viewer`+ (the overview
+  // routes gate at that floor since 2026-08-26), so the guest branch of
+  // `visibleChannelsOr` cannot arise and its `null` is unreachable. Guard it
+  // anyway — an unreachable branch that returns the WRONG answer if it is ever
+  // reached is how a fence stops being one.
+  const visible = visibleChannelsOr(memberChannelIds);
+  if (visible === null) return [];
+
   const { data, error } = await db
     .from("channels")
     .select("id, name")
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
     .is("archived_at", null)
-    .or(visibleChannelsOr(memberChannelIds))
+    .or(visible)
     .order("updated_at", { ascending: false })
     .limit(VISIBLE_CHANNEL_LIMIT);
   if (error) throw error;

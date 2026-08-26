@@ -49,6 +49,9 @@ export async function effectiveResourceAccess(
   if (!meta) return null;
 
   const ceiling = defaultLevelForRole(role);
+  // ⚠ `null` ceiling = the role holds nothing here (a `guest`). Answer "no
+  // access" rather than capping a grant against a level that does not exist.
+  if (ceiling === null) return null;
   if (meta.accessMode === "workspace") return ceiling;
   if (meta.createdBy === userId) return ceiling;
 
@@ -119,6 +122,11 @@ export async function listEffectiveAccess(
   }
 
   const ceiling = defaultLevelForRole(role);
+  // ⚠ Same as above: a role with no default level reaches no shareable
+  // resource at all, which is the `null` this function already uses for "not an
+  // active member". Unreachable in practice since 2026-08-26 — the route is
+  // `viewer`+ — and stated rather than assumed.
+  if (ceiling === null) return null;
   const [scoped, teamIds] = await Promise.all([
     listTeamsModeResources(workspaceId),
     listTeamIdsForUser(workspaceId, userId),

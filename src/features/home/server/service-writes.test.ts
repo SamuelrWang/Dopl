@@ -2,10 +2,14 @@
  * `service-writes.ts` — three gates, in the order each service applies them:
  *  - `createHomeChannel`: one container, one PRIVATE NON-DIRECT channel, rollback
  *    if the channel cannot be opened.
- *  - `mintContainerLink`: membership FIRST (404, never 403), FULL before insert,
- *    an open link returned not replaced. (grantedRole/grant-above-self: split.)
+ *  - `mintContainerLink`: membership FIRST (404, never 403), FULL before insert.
  *  - `claimLink` (LEGACY UNBOUND, still live): unknown 404, dead 410, own 400,
- *    pair dedup before spend, atomic use guard. */
+ *    pair dedup before spend, atomic use guard.
+ * ⚠ THE WHOLE ROLE HALF OF THE MINT LIVES IN
+ * `service-writes-granted-role.test.ts` — the floor (a guest may not mint),
+ * grant-above-self, and the reuse-only-when-the-grant-matches rule. The
+ * same-role reuse case MOVED there on 2026-08-26: it could not tell a matching
+ * grant from an ignored one, which was the bug. This file is at the cap. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
@@ -191,19 +195,6 @@ describe("mintContainerLink — the gate", () => {
       mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" })
     ).rejects.toMatchObject({ status: 409, code: "LINK_CONTAINER_FULL" });
     expect(mocked.findOpenLinkForWorkspace).not.toHaveBeenCalled();
-    expect(mocked.insertLink).not.toHaveBeenCalled();
-  });
-
-  it("returns the EXISTING open link rather than rotating it", async () => {
-    // Pressing "Add person" twice must hand back one URL — rotating would kill
-    // a link already pasted into an email.
-    mocked.findOpenLinkForWorkspace.mockResolvedValue(
-      linkRow({ id: "already", workspace_id: WS, max_uses: 1 })
-    );
-
-    const result = await mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" });
-
-    expect(result.link.id).toBe("already");
     expect(mocked.insertLink).not.toHaveBeenCalled();
   });
 

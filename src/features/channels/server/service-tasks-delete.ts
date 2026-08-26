@@ -48,7 +48,16 @@ import type { ChannelContext } from "./service-shared";
  * ⚠ MEMBERSHIP IS CHECKED FIRST, so a public channel's non-member reader (who
  * CAN read a pair's thread, §5) is refused before any thread row is loaded.
  */
-function assertMayDeleteThread(
+/**
+ * ⚠ EXPORTED SINCE 2026-08-26 SO A TEST CAN DRIVE IT, and that is the whole
+ * reason: `home/server/guest-claim-f319-closure.test.ts` used to RE-IMPLEMENT
+ * this two-line rule inline (`created_by === userId || canManageChannel(...)`)
+ * and assert on its own copy, under a docblock claiming nothing was mocked. A
+ * rewrite of the real function would have left that case green — F-319's
+ * delete-thread hole would have re-opened with its own closure test passing.
+ * §14: a pin that does not drive the real function is not a pin.
+ */
+export function assertMayDeleteThread(
   ctx: ChannelContext,
   task: { created_by: string },
   membership: Parameters<typeof canManageChannel>[1]

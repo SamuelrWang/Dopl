@@ -12,6 +12,7 @@
  * The three holes F-319 measured, and the gate that now closes each for a guest:
  *  - manage / hard-delete the channel → `canManageChannel` (owner OR ws-admin)
  *  - delete other members' threads     → `assertMayDeleteThread` → canManageChannel
+ *    ⚠ CALLED, not re-implemented (corrected 2026-08-26 — see that describe block)
  *  - reach workspace-scoped routes      → the `withWorkspaceAuth` viewer+ floor,
  *    i.e. `meetsMinRole(role, "viewer")`
  * And the ceiling itself: `HomeLinkMintSchema` cannot even REQUEST an admin link.
@@ -20,6 +21,8 @@
 import { describe, it, expect } from "vitest";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { canManageChannel } from "@/features/channels/server/service-shared";
+import { assertMayDeleteThread } from "@/features/channels/server/service-tasks-delete";
+import { TaskForbiddenError } from "@/features/channels/server/errors";
 import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { ChannelMemberRow } from "@/features/channels/server/dto";
 import { HomeLinkMintSchema } from "../schema";
@@ -27,6 +30,7 @@ import { HomeLinkMintSchema } from "../schema";
 const WS = "33333333-3333-4333-8333-333333333333";
 const GUEST_USER = "22222222-2222-4222-8222-222222222222";
 const CHANNEL_ID = "44444444-4444-4444-8444-444444444444";
+const OTHER_USER = "55555555-5555-4555-8555-555555555555";
 
 /** A guest's workspace context — exactly what the claim now produces. */
 function guestCtx(): ChannelContext {
@@ -73,12 +77,43 @@ describe("F-319 — a guest cannot delete another member's thread", () => {
   // `assertMayDeleteThread` = created_by===caller OR canManageChannel. A guest
   // may withdraw their OWN thread (the create-thread ruling) but not clean the
   // room, because canManageChannel is false for them.
-  it("the delete-thread gate reduces to canManageChannel for a thread they did not open", () => {
-    const otherAuthored = { created_by: "someone-else" };
-    const mayDelete =
-      otherAuthored.created_by === GUEST_USER ||
-      canManageChannel(guestCtx(), guestChannelMembership());
-    expect(mayDelete).toBe(false);
+  //
+  // ⚠ THIS CASE USED TO RE-IMPLEMENT THAT RULE INLINE and assert on its own
+  // copy — a FALSE PASS: rewriting the real gate left it green, under a
+  // docblock claiming nothing was mocked. It drives the exported function now
+  // (2026-08-26).
+  it("REFUSES a thread the guest did not open — driving the real gate", () => {
+    expect(() =>
+      assertMayDeleteThread(
+        guestCtx(),
+        { created_by: OTHER_USER },
+        guestChannelMembership()
+      )
+    ).toThrow(TaskForbiddenError);
+  });
+
+  it("ALLOWS the guest to withdraw their OWN thread", () => {
+    // The other half of the same rule — without it the test above would pass
+    // against a gate that refuses everybody, which is not the claim.
+    expect(() =>
+      assertMayDeleteThread(
+        guestCtx(),
+        { created_by: GUEST_USER },
+        guestChannelMembership()
+      )
+    ).not.toThrow();
+  });
+
+  it("would ALLOW the old admin claimer to delete anybody's thread — the regression", () => {
+    // The mutation check, stated as behaviour: flip the workspace role back to
+    // `admin` and the gate re-opens. That is the state F-319 measured.
+    expect(() =>
+      assertMayDeleteThread(
+        { ...guestCtx(), role: "admin" as Role },
+        { created_by: OTHER_USER },
+        guestChannelMembership()
+      )
+    ).not.toThrow();
   });
 });
 

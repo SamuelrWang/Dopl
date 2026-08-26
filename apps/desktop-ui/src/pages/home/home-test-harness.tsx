@@ -66,6 +66,7 @@ export const HOME: HomeChannelsPayload = {
       label: null,
       createdAt: "2026-08-19T09:00:00.000Z",
       expiresAt: "2026-08-28T09:00:00.000Z",
+      grantedRole: "guest",
       maxUses: 1,
       useCount: 0,
       revokedAt: null,
@@ -267,6 +268,9 @@ export const LINK_OUT: NonNullable<
   label: null,
   createdAt: "2026-08-24T09:00:00.000Z",
   expiresAt: "2026-08-31T09:00:00.000Z",
+  // ⚠ `member`, not the default — the fixture that renders "Joins as member" is
+  // the one that would go silent if `mapLinkRow` stopped projecting the field.
+  grantedRole: "member",
   maxUses: 1,
   useCount: 0,
   revokedAt: null,

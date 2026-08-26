@@ -89,6 +89,11 @@ export function StandaloneChannelSurface({
     channel,
     currentUserId,
     openThreadId: sel.requestedThreadId,
+    // ⚠ THE SAME OBJECT THAT REACHES `ChannelSurface` BELOW. A capability that
+    // hides a control while its read keeps firing is half a capability — the
+    // guest lane's `selfManagement: false` has to reach the consent poll, not
+    // only the Settings block it renders. (2026-08-26.)
+    capabilities,
   });
 
   return (

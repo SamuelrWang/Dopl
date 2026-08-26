@@ -132,6 +132,17 @@ export async function createHomeChannel(
  *     `linkOut` (so no Revoke button) — the channel is permanently un-invitable.
  *     So judge `isClaimable` on the row: claimable → hand it back; dead →
  *     REVOKE it (freeing the index) and fall through to mint fresh.
+ *     ⚠ **AND "CLAIMABLE" IS NOT ENOUGH EITHER — THE GRANT HAS TO MATCH
+ *     (2026-08-26).** M3 put a ROLE PICKER on that button and the reuse branch
+ *     returned the open row VERBATIM, without comparing `granted_role`. The
+ *     popover renders "Create another", so reuse is the NORMAL second click:
+ *     an operator picking "Member — full channel" over an open GUEST link got a
+ *     200 carrying the guest link back, and the peer landed as a guest. **And
+ *     the reverse — picking Guest over an open MEMBER link — pointed the same
+ *     silence at PRIVILEGE.** So a claimable link whose grant differs is
+ *     REVOKED and re-minted, reusing the dead-link path: the operator's explicit
+ *     choice wins over a URL they may have pasted somewhere, because the
+ *     alternative is a link that grants something they did not choose.
  *  4. The insert can still lose a race, and `channel_links_one_open_per_workspace`
  *     is what makes that CONVERGE: a 23505 means somebody else's mint won, so
  *     re-read and return theirs.
@@ -160,7 +171,22 @@ export async function mintContainerLink(
   // active membership of this link container; read the minter's ROLE in it (the
   // fence returns the container, not the role) and refuse a grant above it.
   const minter = await findMembership(workspaceId, userId);
-  if (!minter || !meetsMinRole(minter.role, input.grantedRole)) {
+  // 🔒 A GUEST MAY NOT MINT, AND THIS FLOOR IS NOT IMPLIED BY THE GUARD BELOW
+  // (2026-08-26). `meetsMinRole("guest","guest")` is TRUE, so a guest passed
+  // grant-above-self and only the two-member cap stood in the way — and
+  // DEPARTURE-IS-REMOVAL is a standing ruling (§4A), so a container that drops
+  // back to ONE member leaves a surviving GUEST able to invite a third party
+  // into the operator's transcript. "Any MEMBER of a container may mint it"
+  // (Samuel, 2026-08-24) was written when `member` was the floor role; a guest
+  // is a person somebody else let in, not a party to the relationship.
+  if (!minter || !meetsMinRole(minter.role, "member")) {
+    throw new HttpError(
+      403,
+      "LINK_MINT_FORBIDDEN",
+      "You cannot add somebody to this channel"
+    );
+  }
+  if (!meetsMinRole(minter.role, input.grantedRole)) {
     throw new HttpError(
       403,
       "GRANT_ABOVE_SELF",
@@ -178,12 +204,20 @@ export async function mintContainerLink(
 
   const open = await repo.findOpenLinkForWorkspace(workspaceId);
   if (open) {
-    if (isClaimable(open)) return { link: mapLinkRow(open) };
-    // ⚠ Un-revoked but DEAD (expired/exhausted). Returning it would hand out a
-    // URL that 410s at claim, and leaving it un-revoked bricks the channel —
-    // the one-open index blocks a replacement and hydrateChannels hides the
-    // Revoke button. Revoke it (scoped to its OWN creator, since any member may
-    // mint and the dead link may be the other member's) then mint fresh below.
+    // ⚠ TWO CONDITIONS, ONE BRANCH. A link is handed back only if it is still
+    // CLAIMABLE *and* grants what was just asked for; either miss takes the
+    // revoke-and-remint path below. See gate 3 in the docblock — the second
+    // condition is the role picker's, and without it the picker no-ops.
+    if (isClaimable(open) && open.granted_role === input.grantedRole) {
+      return { link: mapLinkRow(open) };
+    }
+    // ⚠ Un-revoked but DEAD (expired/exhausted), or alive but granting the WRONG
+    // role. Returning a dead one would hand out a URL that 410s at claim, and
+    // leaving it un-revoked bricks the channel — the one-open index blocks a
+    // replacement and hydrateChannels hides the Revoke button. Returning a
+    // mismatched one silently overrides the operator's pick. Revoke it (scoped
+    // to its OWN creator, since any member may mint and the link may be the
+    // other member's) then mint fresh below.
     await repo.markLinkRevoked(open.id, open.creator_user_id);
   }
 

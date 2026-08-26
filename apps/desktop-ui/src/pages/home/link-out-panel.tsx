@@ -4,7 +4,7 @@ import { FIELD_WELL } from "@/shared/ui/wells";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import { errorMessage } from "#/components/page-states";
 import type { HomePendingLink } from "@/features/home/types";
-import { displayUrl, linkUsesLabel } from "./home-rows";
+import { displayUrl, linkGrantLabel, linkUsesLabel } from "./home-rows";
 import { useRevokeHomeLink } from "./home-writes";
 
 /**
@@ -47,6 +47,12 @@ export function LinkOutPanel({ link }: { link: HomePendingLink }) {
         </span>
         <span aria-hidden>·</span>
         <span>{linkUsesLabel(link)}</span>
+        <span aria-hidden>·</span>
+        {/* ⚠ A LABEL, NOT AN EXPLAINER (the minimal-copy ruling): three words in
+            the row that already states expiry and uses, not a sentence about
+            what a guest may do. It is the only place an operator can see which
+            grant the open invitation carries. */}
+        <span>{linkGrantLabel(link)}</span>
         <span aria-hidden>·</span>
         <span>Sent {formatChannelTimestamp(link.createdAt)}</span>
       </div>

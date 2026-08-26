@@ -220,6 +220,14 @@ export async function findMembership(
   const { data, error } = await db
     .from("workspace_members")
     .select(MEMBER_COLS)
+    // 🔒 `status='active'` (added 2026-08-26). THIS READ IS AN AUTHZ READ — its
+    // callers compare `.role` against a floor (`service.ts ›
+    // requireWorkspaceRole`, `home/server/service-writes.ts ›
+    // mintContainerLink`) — and without the filter it happily returned a
+    // `revoked` or `pending` row's role, so a removed admin still measured as
+    // one. Every sibling read here gates on status; this one did not, and
+    // nothing in its shape said so.
+    .eq("status", "active")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -254,6 +262,13 @@ export async function listMemberRolesByUserIds(
   const { data, error } = await supabaseAdmin()
     .from("workspace_members")
     .select("user_id, role")
+    // ⚠ `status='active'` (added 2026-08-26) — every sibling read here gates on
+    // it and this one did not. The consumer is the roster's "Guest" pill, so a
+    // departed member's `revoked` row rendered their STALE role: a peer removed
+    // from the container kept whatever pill they had, and a departed guest kept
+    // reading as a guest beside a name that is no longer a member. An absent
+    // entry maps `?? null` → "not a guest", which is the fail-safe answer.
+    .eq("status", "active")
     .eq("workspace_id", workspaceId)
     .in("user_id", userIds);
   if (error) throw error;

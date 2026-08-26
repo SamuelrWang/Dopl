@@ -43,6 +43,12 @@ export function computeEffectiveAccess(args: {
     if (isAdmin) {
       return { ...base(r), level: "edit" as const, viaTeam: null };
     }
+    // ⚠ A role with NO default level (a `guest`) sees no shareable resource at
+    // any level — not even one a team granted, since the grant is capped at the
+    // ceiling and there is none. `null` is this row's own "hidden" value.
+    if (ceiling === null) {
+      return { ...base(r), level: null, viaTeam: null };
+    }
     if (r.accessMode === "workspace") {
       return { ...base(r), level: ceiling, viaTeam: null };
     }

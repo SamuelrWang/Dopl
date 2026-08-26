@@ -95,5 +95,12 @@ export function mapLinkRow(row: ChannelLinkRow): HomePendingLink {
     maxUses: row.max_uses,
     useCount: row.use_count,
     revokedAt: row.revoked_at,
+    // ⚠ PROJECTED SINCE 2026-08-26. It was in `ChannelLinkRow` from M2 and
+    // stopped at this function, so no caller could compare an OPEN link's grant
+    // against the one the operator just picked — which is how the role picker
+    // silently no-op'd on the reuse branch (`service-writes.ts ›
+    // mintContainerLink`). A column read but not mapped is a column nothing can
+    // act on.
+    grantedRole: row.granted_role,
   };
 }

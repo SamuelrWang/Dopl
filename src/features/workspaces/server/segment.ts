@@ -8,7 +8,7 @@ import {
   type MyAccessPayload,
 } from "@/features/teams/server/access";
 import { parseSegment } from "@/shared/lib/url/parse-segment";
-import type { Role, Workspace } from "../types";
+import { meetsMinRole, type Role, type Workspace } from "../types";
 import { workspaceSegment } from "../url";
 import {
   ensureDefaultWorkspace,
@@ -84,16 +84,49 @@ export const resolveWorkspaceSegmentForUser = cache(
 );
 
 /**
- * API-route wrapper: workspace if reachable, else null. ⚠ Does NOT 301 on a
- * stale segment — a 301 on POST degrades to GET, so API clients keep using
- * legacy slugs through the deletion window.
+ * 🔒 THE SECOND WRAPPER FAMILY'S ROLE FLOOR, AND IT IS INVERTED-DEFAULT LIKE THE
+ * FIRST ONE'S (2026-08-26).
+ *
+ * ⚠ WHAT THIS FIXES. INVARIANTS §4A used to rest the whole guest story on
+ * *"`withWorkspaceAuth` defaults `minRole` to viewer, so every workspace-scoped
+ * route rejects a guest by default"*. That covers ONE wrapper. The routes under
+ * `src/app/api/workspaces/**` are `withUserAuth` + these two resolvers, which
+ * proved membership EXISTENCE (`status = 'active'`) and read the role WITHOUT
+ * EVER COMPARING IT — so a guest reached the full member roster (with every
+ * member's email), both overview reads, the workspace record and `my-access`,
+ * all of which §4A explicitly named as rejecting guests. Blast radius was
+ * bounded (a guest's only workspace is their two-person container) and the
+ * SHAPE was not: nothing stopped the next route added here from admitting one.
+ *
+ * ⚠ SO THE DEFAULT IS `"viewer"`, MATCHING `withWorkspaceAuth`. A route that
+ * genuinely wants a guest opts DOWN explicitly, exactly as a channel route does,
+ * and `src/app/api/channels/guest-route-floor.test.ts` scans THIS family too so
+ * an opt-down cannot be silent.
+ *
+ * ⚠ A REFUSAL IS `null` → 404, NOT 403. Every caller already maps `null` to
+ * "Workspace not found", which is the answer a non-member gets — so a guest
+ * cannot use the refusal to learn that the workspace exists, and no route grows
+ * a new error shape.
+ */
+export interface ApiWorkspaceOpts {
+  /** Floor the caller's membership must clear. Default `"viewer"` — the same
+   *  inverted default `withWorkspaceAuth` carries, so `guest` is refused unless
+   *  a route says otherwise. */
+  minRole?: Role;
+}
+
+/**
+ * API-route wrapper: workspace if reachable AT `opts.minRole` (default
+ * `"viewer"`), else null. ⚠ Does NOT 301 on a stale segment — a 301 on POST
+ * degrades to GET, so API clients keep using legacy slugs through the deletion
+ * window.
  */
 export async function resolveApiWorkspace(
   segment: string,
-  userId: string
+  userId: string,
+  opts: ApiWorkspaceOpts = {}
 ): Promise<Workspace | null> {
-  const resolved = await resolveWorkspaceSegmentForUser(segment, userId);
-  return resolved?.workspace ?? null;
+  return (await resolveApiWorkspaceAccess(segment, userId, opts))?.workspace ?? null;
 }
 
 /**
@@ -104,10 +137,12 @@ export async function resolveApiWorkspace(
  */
 export async function resolveApiWorkspaceAccess(
   segment: string,
-  userId: string
+  userId: string,
+  opts: ApiWorkspaceOpts = {}
 ): Promise<{ workspace: Workspace; role: Role } | null> {
   const resolved = await resolveWorkspaceSegmentForUser(segment, userId);
   if (!resolved) return null;
+  if (!meetsMinRole(resolved.role, opts.minRole ?? "viewer")) return null;
   return { workspace: resolved.workspace, role: resolved.role };
 }
 

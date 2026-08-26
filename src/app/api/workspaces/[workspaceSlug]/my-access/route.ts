@@ -18,6 +18,13 @@ interface Ctx {
  * Shape: `{ defaultLevel: "read" | "edit", overrides: { resourceType, resourceId, level }[] }`.
  * `overrides` carries the resolved level on teams-mode resources (max across their teams);
  * resources they cannot see are omitted.
+ *
+ * ⚠ `viewer`+ since 2026-08-26 (`segment.ts › ApiWorkspaceOpts`). `overrides`
+ * ENUMERATES every teams-mode resource id in the workspace, so at membership-
+ * existence a `guest` — who may read no knowledge base, skill or chat at all —
+ * got the inventory of them. The 403 `NOT_A_MEMBER` branch below is unchanged
+ * and still covers a non-active membership; a guest now never reaches it,
+ * because the resolver answers 404 first.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {

@@ -15,11 +15,15 @@ interface Ctx {
  * The histogram is `./overview-series` — a separate route only because its
  * `metric` is a switchable query parameter, not a second view of this resource.
  *
- * Any active member: `resolveApiWorkspace` is membership-scoped, so a
- * non-member 404s. ⚠ That 404 must land BEFORE the service runs — every read
- * behind it is service-role and bypasses RLS, so membership is the only fence.
- * Existence is not an oracle: "not a member" and "does not exist" are one
- * answer.
+ * `viewer`+ — ⚠ NOT "any active member", which is what this said until
+ * 2026-08-26. `resolveApiWorkspace` proved membership EXISTENCE and never
+ * compared the role, so a `guest` read workspace-wide message / session /
+ * member / channel counts for the container they were invited into. The floor is
+ * now the resolver's inverted default (`segment.ts › ApiWorkspaceOpts`) and a
+ * guest 404s exactly as a non-member does. ⚠ That 404 must land BEFORE the
+ * service runs — every read behind it is service-role and bypasses RLS, so this
+ * is the only fence. Existence is not an oracle: "not a member", "not enough
+ * role" and "does not exist" are ONE answer.
  *
  * No degradation branch. Unlike the retired `overview-counts` there is no
  * cosmetic side-read to swallow — a failed read here is the page's own data,

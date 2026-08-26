@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ChannelInfoCardInput } from "../info-card";
-import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
+import type { ChannelMemberRow, ChannelRow } from "./dto";
 import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
 import { visibleChannelsOr } from "./repository-visibility";
 
@@ -14,7 +14,8 @@ import { visibleChannelsOr } from "./repository-visibility";
  * `supabaseAdmin()` is untyped and results are cast to `dto.ts`'s row types.
  *
  * Siblings: `repository-messages.ts` (transcript), `repository-tasks.ts`,
- * `repository-collab.ts` (consent + trust + presence).
+ * `repository-collab.ts` (consent + trust + presence),
+ * `repository-workspace.ts` (workspace membership + profiles, re-exported here).
  */
 
 export function pgErrorCode(err: unknown): string | null {
@@ -30,16 +31,21 @@ interface ListOpts {
   /** Channel ids the caller is a member of — private channels join here. */
   memberChannelIds: string[];
   includeArchived: boolean;
+  /** ⚠ `false` for a GUEST (`service-shared.ts › mayReadPublicChannels`). */
+  includePublic?: boolean;
 }
 
 /**
  * Every channel the caller may see: workspace-public plus any private channel
- * they belong to. Soft-deleted always excluded.
+ * they belong to. Soft-deleted always excluded. ⚠ A `null` predicate = may see
+ * NOTHING; PostgREST rejects a no-term `or`, so answer the empty list.
  */
 export async function listChannels(
   workspaceId: string,
   opts: ListOpts
 ): Promise<ChannelRow[]> {
+  const visible = visibleChannelsOr(opts.memberChannelIds, opts);
+  if (visible === null) return [];
   const db = supabaseAdmin();
   let query = db
     .from("channels")
@@ -47,7 +53,7 @@ export async function listChannels(
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null);
   if (!opts.includeArchived) query = query.is("archived_at", null);
-  query = query.or(visibleChannelsOr(opts.memberChannelIds));
+  query = query.or(visible);
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as ChannelRow[];
@@ -469,31 +475,9 @@ export async function updateMemberPrefs(
 }
 
 // ─── Workspace membership + profiles ────────────────────────────────
-
-/** True when the user is an ACTIVE member of the workspace (invitee gate). */
-export async function isActiveWorkspaceMember(
-  workspaceId: string,
-  userId: string
-): Promise<boolean> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workspace_members")
-    .select("user_id")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (error) throw error;
-  return data !== null;
-}
-
-export async function fetchProfiles(userIds: string[]): Promise<ProfileRef[]> {
-  if (userIds.length === 0) return [];
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("profiles")
-    .select("id, email, display_name, avatar_url")
-    .in("id", userIds);
-  if (error) throw error;
-  return (data ?? []) as ProfileRef[];
-}
+// ⚠ EXTRACTED 2026-08-26 to `repository-workspace.ts` — this file hit the cap.
+// Re-exported so `import * as repo from "./repository"` is unchanged (§1).
+export {
+  isActiveWorkspaceMember,
+  fetchProfiles,
+} from "./repository-workspace";

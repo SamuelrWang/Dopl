@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HomeChannel, HomePendingLink } from "@/features/home/types";
-import { hasLinkOut, homeRows, visibleRows } from "./home-rows";
+import { hasLinkOut, homeRows, linkGrantLabel, visibleRows } from "./home-rows";
 
 /**
  * The left pane's row math, tested where it is PURE — no DOM, no bridge.
@@ -18,6 +18,7 @@ const LINK: HomePendingLink = {
   label: null,
   createdAt: "2026-08-19T09:00:00.000Z",
   expiresAt: null,
+  grantedRole: "guest",
   maxUses: 1,
   useCount: 0,
   revokedAt: null,
@@ -85,5 +86,23 @@ describe("the Links filter", () => {
 
   it("leaves the All tab showing everything", () => {
     expect(visibleRows(rows, "all", "")).toHaveLength(3);
+  });
+});
+
+describe("linkGrantLabel — what an open invitation grants", () => {
+  it("names the grant, in three words", () => {
+    expect(linkGrantLabel({ ...LINK, grantedRole: "guest" })).toBe("Joins as guest");
+    expect(linkGrantLabel({ ...LINK, grantedRole: "member" })).toBe("Joins as member");
+  });
+
+  it("reads a STALE CACHE ENTRY as guest — the key DELETED, not null (INVARIANTS §8)", () => {
+    // ⚠ THE KEY IS REMOVED, which is what a payload written by the previous
+    // bundle actually looks like in the IndexedDB-persisted cache (24h
+    // `gcTime`). `null` and `{}` would both satisfy a `??` while proving
+    // nothing about the shape that ships. The wire type is non-optional and is
+    // right; the cache is a different moment.
+    const stale: HomePendingLink = { ...LINK };
+    delete (stale as Partial<HomePendingLink>).grantedRole;
+    expect(linkGrantLabel(stale)).toBe("Joins as guest");
   });
 });

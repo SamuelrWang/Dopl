@@ -18,7 +18,7 @@ const respond_1 = require("./respond");
 const DESCRIPTION = `READ-ONLY view of workspace membership, teams, and access — for answering "who's in this workspace, who's on which team, what can they (or I) touch". You cannot change any of it: roles, teams, and grants are managed by humans in the Dopl web UI; if the user asks for a change, point them there.
 
 The access model, so you can explain it:
-- Roles rank viewer < member < admin < owner. Role default level: viewer → read, others → edit.
+- Roles rank guest < viewer < member < admin < owner. Role default level: guest → none, viewer → read, member/admin/owner → edit. A GUEST is link-granted and reaches ONE channel, nothing else in the workspace — no knowledge base, skill, chat or ontology object at any level.
 - A shareable resource (KNOWLEDGE BASE, SKILL) is either workspace-mode (open to all members at their role default) or teams-mode (visible only to granted teams — plus admins/owners and the resource's creator). Chats, chat folders and ontology objects carry their OWN sharing and are not part of the teams grid.
 - A member's effective level on a teams-mode resource = the highest grant across their teams, capped at their role default. No grant → the resource is invisible to them.
 - Admins and owners always have edit on everything.

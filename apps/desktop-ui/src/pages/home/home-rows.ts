@@ -115,6 +115,26 @@ export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\//, "");
 }
 
+/**
+ * What an OPEN invitation grants its claimer — "Joins as guest" / "Joins as
+ * member" (2026-08-26).
+ *
+ * ⚠ IT EXISTS BECAUSE THE PICKER'S CHOICE WAS INVISIBLE ONCE THE LINK EXISTED.
+ * `mintContainerLink` hands an open link BACK rather than rotating it, so a
+ * second "Add person" click shows an invitation somebody may have picked a
+ * different role for. The server now revokes-and-remints on a mismatch; this is
+ * the half that lets the operator SEE which grant is currently out.
+ *
+ * ⚠ `?? "guest"` INLINE, per INVARIANTS §8: `grantedRole` is a NEW field on an
+ * IndexedDB-persisted payload (24h `gcTime`), so an entry written by the
+ * previous bundle survives the upgrade WITHOUT the key. The wire type is
+ * non-optional and is right; the cache is a different moment. `"guest"` is both
+ * the DB default and the fail-safe reading.
+ */
+export function linkGrantLabel(link: HomePendingLink): string {
+  return `Joins as ${link.grantedRole ?? "guest"}`;
+}
+
 /** "Single use" / "3 of 5 used" / "Multi use". */
 export function linkUsesLabel(link: HomePendingLink): string {
   if (link.maxUses === null) return "Multi use";

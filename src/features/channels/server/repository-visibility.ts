@@ -34,11 +34,25 @@ import "server-only";
  * and deliberately does NOT admit public non-member channels — an await is a
  * wake primitive, and being woken by every public room nobody invited you into
  * is noise. Two different questions; do not unify them.
+ *
+ * ⚠ **`includePublic: false` IS THE GUEST (2026-08-26), AND IT CAN ANSWER
+ * `null`.** A guest has no tenancy — see `service-shared.ts ›
+ * mayReadPublicChannels` for the argument and
+ * `20260826120000_guest_channel_realtime_rls.sql` for the DB half of the same
+ * rule. With the public term gone and no memberships, the predicate has NO
+ * terms, and `or()` / `in.()` with none is a PostgREST SYNTAX ERROR (a 500 on
+ * the plain channel list, the same trap the empty-array branch below exists
+ * for). So the empty case is `null` = "this caller may see nothing", which the
+ * two callers turn into an empty list rather than a query.
  */
-export function visibleChannelsOr(memberChannelIds: string[]): string {
-  const parts = ["visibility.eq.public"];
+export function visibleChannelsOr(
+  memberChannelIds: string[],
+  opts: { includePublic?: boolean } = {}
+): string | null {
+  const parts: string[] = [];
+  if (opts.includePublic ?? true) parts.push("visibility.eq.public");
   if (memberChannelIds.length > 0) {
     parts.push(`id.in.(${memberChannelIds.join(",")})`);
   }
-  return parts.join(",");
+  return parts.length > 0 ? parts.join(",") : null;
 }

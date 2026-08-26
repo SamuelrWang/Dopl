@@ -27,6 +27,7 @@ import * as workspaceRepo from "@/features/workspaces/server/repository";
 import type { MemberPresence } from "./dto";
 import {
   loadVisibleChannel,
+  mayReadPublicChannels,
   profilesById,
   type ChannelContext,
 } from "./service-shared";
@@ -128,6 +129,11 @@ export async function listChannels(
   const rows = await repo.listChannels(ctx.workspaceId, {
     memberChannelIds: [...membershipByChannel.keys()],
     includeArchived,
+    // ⚠ A GUEST GETS NO PUBLIC ARM (2026-08-26) — the list half of the fence
+    // `loadVisibleChannel` applies to a single ref. Without it a public channel
+    // in the container appears in the guest's own channel list, and every
+    // per-channel route then admits it.
+    includePublic: mayReadPublicChannels(ctx),
   });
   const ids = rows.map((r) => r.id);
   const [counts, lasts, memberIds, presence] = await Promise.all([
@@ -282,7 +288,11 @@ export async function revalidateAwaitAccess(
 ): Promise<void> {
   const channel = await repo.findChannelAccess(ctx.workspaceId, channelId);
   if (!channel) throw new ChannelNotFoundError(channelId);
-  if (channel.visibility !== "public") {
+  // ⚠ `mayReadPublicChannels` MIRRORS `loadVisibleChannel`'s gate EXACTLY, and
+  // it has to: this recheck is the SAME question one tick later. A guest gets no
+  // public arm here either, or the entry gate would refuse a channel the hold
+  // would keep streaming.
+  if (channel.visibility !== "public" || !mayReadPublicChannels(ctx)) {
     const isMember = await repo.hasMembership(channelId, ctx.userId);
     if (!isMember) throw new ChannelNotFoundError(channelId);
   }

@@ -25,4 +25,21 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+/**
+ * ⚠ `minRole: "guest"` (2026-08-26). `channel-surface-data.ts ›
+ * useChannelSurfaceData` mounts `useAgentsPanel → useChannelAgentSessions` for
+ * EVERY host of the per-channel surface, guest web lane included, and it POLLS
+ * (`PEER_SESSIONS_POLL_MS`) plus rides the message doorbell — so at the viewer
+ * default this was a 403 on a loop for every guest.
+ *
+ * The floor is LOWERED rather than the mount being suppressed, because seeing
+ * that the operator's agent is working is the guest lane's whole proposition
+ * (§4A: "chat to the operator's agent, run none of your own"). What a guest may
+ * NOT do is unchanged and lives elsewhere: launching is `capabilities.
+ * selfManagement:false` in the UI and `/channels/[channelId]/launch-directives`
+ * at the viewer floor on the server. This route is READ ONLY, the payload is the
+ * state projection alone (name / state / thread / owner) and never transcript,
+ * and its fence is `loadVisibleChannel` — the same one every guest-allowed
+ * channel read already passes.
+ */
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });

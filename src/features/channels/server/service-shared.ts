@@ -136,7 +136,47 @@ async function resolveChannelRef(
 }
 
 /**
- * Resolve a channel the caller may READ. Public = any workspace member;
+ * 🔒 MAY THIS CALLER REACH A CHANNEL ON THE `visibility='public'` ARM ALONE —
+ * that is, WITHOUT a `channel_members` row? (2026-08-26.)
+ *
+ * ⚠ A GUEST MAY NOT, AND THAT IS THE ONE ASYMMETRY IN THE READ MODEL. "Public"
+ * means *any workspace member can see and join*, which is a statement about a
+ * TENANCY. A guest has no tenancy: they were admitted to ONE channel by a
+ * single-use link, and §4A's whole claim is that their reach is that channel.
+ *
+ * WHAT THIS CLOSES, measured: nothing stops a `visibility='public'` channel
+ * being created inside a `kind='link'` container — `createChannel` never reads
+ * `workspace.kind`, `POST /api/channels` is `member`+ (the container's owner
+ * clears it), the MCP `dopl_channel(op="open")` schema offers `visibility` and
+ * no DB constraint exists. The twelve guest-floored routes compose
+ * `loadVisibleChannel`, so before this fence an operator opening a second,
+ * public channel in their container silently handed the guest its header, its
+ * whole transcript, its thread list, its roster and a long-poll on it. A lowered
+ * floor plus an inherited public arm is exactly how a narrow grant becomes a
+ * cross-channel read.
+ *
+ * ⚠ IT MIRRORS THE DATABASE, WHICH IS WHY IT IS SPELLED THIS WAY.
+ * `20260826120000_guest_channel_realtime_rls.sql`'s guest arm requires
+ * `is_channel_member(...)` and deliberately drops the `visibility='public'`
+ * disjunct. Service and RLS now state the SAME rule; a future edit to one that
+ * forgets the other is a disagreement a reader can find.
+ *
+ * ⚠ NOTHING CHANGES FOR ANY OTHER ROLE. `meetsMinRole(role,'viewer')` is true
+ * for viewer/member/admin/owner, so the public arm is exactly what it was.
+ */
+export function mayReadPublicChannels(ctx: ChannelContext): boolean {
+  // ⚠ `null` FAILS CLOSED, the same shape `isWorkspaceAdmin` uses. A null role
+  // means the auth layer resolved none; every guest-reachable route is
+  // `withWorkspaceAuth`-wrapped and therefore always carries one, and every
+  // internal builder passes `role: "owner"` explicitly — so null is the
+  // unexpected case, and the unexpected case must not be the wider one.
+  return ctx.role !== null && meetsMinRole(ctx.role, "viewer");
+}
+
+/**
+ * Resolve a channel the caller may READ. Public = any workspace member at
+ * `viewer` or above (see {@link mayReadPublicChannels} — a guest is fenced to
+ * channels it actually belongs to);
  * ⚠ a private channel reads as NOT-FOUND to a non-member, so its existence never
  * leaks. Returns the row plus membership (null for a public-channel non-member).
  */
@@ -146,7 +186,10 @@ export async function loadVisibleChannel(
 ): Promise<{ channel: ChannelRow; membership: ChannelMemberRow | null }> {
   const channel = await resolveChannelRef(ctx, ref);
   const membership = await repo.findMembership(channel.id, ctx.userId);
-  if (channel.visibility !== "public" && membership === null) {
+  const viaPublic = channel.visibility === "public" && mayReadPublicChannels(ctx);
+  if (!viaPublic && membership === null) {
+    // ⚠ NOT-FOUND, never FORBIDDEN — same answer a private channel gives a
+    // non-member, so a guest cannot use the refusal to enumerate the container.
     throw new ChannelNotFoundError(ref);
   }
   return { channel, membership };

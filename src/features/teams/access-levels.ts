@@ -16,9 +16,40 @@ export type TeamResourceType =
   | "skill";
 export type AccessMode = "workspace" | "teams";
 
-export function defaultLevelForRole(role: Role): AccessLevel {
-  if (role === "owner" || role === "admin" || role === "member") return "edit";
-  return "read";
+/**
+ * The level a ROLE carries on its own, before any team grant.
+ *
+ * ⚠ A `Record<Role, …>`, AND THAT IS THE WHOLE POINT OF THE REWRITE
+ * (2026-08-26). This was `if (owner|admin|member) return "edit"; return "read";`
+ * — an open `else` — so when `guest` was added below `viewer` it fell into the
+ * VIEWER arm and silently resolved to `read`. That made this the ONE place in
+ * the tree where a guest reads as a viewer, and it slipped precisely because
+ * the guest-role plan's compile-time net was *"`Record<Role,number>` forces the
+ * key"*, which reaches `ROLE_RANK` and nothing else. Harmless today only
+ * because every knowledge / skill / chat route is `viewer`+ at the wrapper —
+ * i.e. it was covered by a *different* fence, which is not the same as being
+ * right.
+ *
+ * ⚠ `null` = NO ACCESS AT ALL, the same idiom `EffectiveAccessRow.level` and
+ * `effectiveResourceAccess` already use. It is not "read with nothing to read".
+ * A caller that treats the ceiling as non-null must handle it (both server
+ * call sites now return `null` outright).
+ *
+ * ⚠ The next role added to `Role` will fail to compile HERE until somebody
+ * decides what it may touch, which is the property the `if/else` gave away.
+ */
+const ROLE_DEFAULT_LEVEL: Record<Role, AccessLevel | null> = {
+  owner: "edit",
+  admin: "edit",
+  member: "edit",
+  viewer: "read",
+  // A guest is link-granted, reaches ONE channel, and holds nothing on any
+  // shareable resource (INVARIANTS §4A).
+  guest: null,
+};
+
+export function defaultLevelForRole(role: Role): AccessLevel | null {
+  return ROLE_DEFAULT_LEVEL[role] ?? null;
 }
 
 const RANK: Record<AccessLevel, number> = { read: 0, edit: 1 };

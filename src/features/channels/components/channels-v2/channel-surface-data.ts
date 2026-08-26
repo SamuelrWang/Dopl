@@ -43,6 +43,7 @@ import { useInlineConsent } from "./use-inline-consent";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelsV2Derivations } from "./derivations";
+import type { ChannelSurfaceCapabilities } from "./channel-surface";
 import type {
   Channel,
   ChannelConsentRequest,
@@ -85,6 +86,7 @@ export function useChannelSurfaceData({
   channel,
   currentUserId,
   openThreadId,
+  capabilities,
   onDoorbell,
 }: {
   workspaceId: string;
@@ -93,6 +95,13 @@ export function useChannelSurfaceData({
   currentUserId: string;
   /** The thread the host asked for; resolved against this channel's list. */
   openThreadId: string | null;
+  /**
+   * ⚠ THE SAME OBJECT THE SURFACE RENDERS FROM, BECAUSE A CAPABILITY THAT HIDES
+   * A CONTROL BUT STILL FETCHES ITS DATA IS HALF A CAPABILITY (2026-08-26). The
+   * host passes ONE `capabilities` and it now decides both what renders and what
+   * is READ; see the consent read below for the case that forced it.
+   */
+  capabilities?: ChannelSurfaceCapabilities;
   /**
    * A host read this hook does not own, invalidated on the SAME doorbell.
    * ⚠ The workspace page's channel LIST is the only caller: a second
@@ -132,8 +141,19 @@ export function useChannelSurfaceData({
   // ⚠ `outbound`, NOT `requests` (Samuel, 2026-08-22 — the inbound consent
   // retirement). No surface in this tree can act on an INBOUND row any more, and
   // a badge is a claim that something is actionable.
+  //
+  // 🔒 NOT MOUNTED AT ALL WHEN `selfManagement: false` (2026-08-26). That flag
+  // means THIS VIEWER runs no agent here (`channel-surface.tsx ›
+  // ChannelSurfaceCapabilities`), and an OUTBOUND consent row is a draft the
+  // viewer's OWN agent wrote and is waiting on them to release — so the read can
+  // only ever answer `[]`. On the guest web lane it was worse than useless: the
+  // route is at the `viewer` floor, so this was a **403 every
+  // CONSENT_INBOX_POLL_MS, forever**, plus a `channel_consent_requests`
+  // subscription that (correctly) delivers a guest nothing — §7's "a
+  // subscription that looks like coverage". Passing `null` disables the query
+  // AND the subscription in one place (`use-consent-inbox.ts`).
   const { outbound: requests } = useConsentInbox(
-    workspaceId,
+    (capabilities?.selfManagement ?? true) ? workspaceId : null,
     undefined,
     CONSENT_INBOX_POLL_MS
   );

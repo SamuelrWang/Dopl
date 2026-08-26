@@ -11,8 +11,15 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-/** GET — workspace members, any active member. Rows hydrate email + display name so the UI
- *  renders without a second hop. */
+/** GET — workspace members. Rows hydrate email + display name so the UI renders
+ *  without a second hop.
+ *
+ *  ⚠ `viewer`+, NOT "any active member" (corrected 2026-08-26). This route hands
+ *  out EVERY member's email, display name, avatar and team list, and it sat on
+ *  `resolveApiWorkspace`, which proved membership EXISTENCE only — so a `guest`
+ *  read the whole roster, which is precisely what INVARIANTS §4A claimed it
+ *  could not. The floor is the resolver's new inverted default (`segment.ts ›
+ *  ApiWorkspaceOpts`); a guest now gets the same 404 a non-member does. */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {

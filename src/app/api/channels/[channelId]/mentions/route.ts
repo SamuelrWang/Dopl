@@ -60,9 +60,23 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-// ⚠ POST lowered to `minRole: "guest"` — a guest may `@`-mention (e.g. the
-// operator's agent) in its channel (INVARIANTS §4A, §2B; Samuel's Q2 ruling).
-// The channel-membership fence is the true gate. GET (marking a mention read)
-// stays at the viewer default — it is NOT in the guest-allowed set.
+// ⚠ BOTH VERBS ARE AT `minRole: "guest"`, AND THE M1 COMMENT THAT USED TO SIT
+// HERE HAD THE TWO BACKWARDS (corrected 2026-08-26). It said "POST lowered — a
+// guest may @-mention" and "GET (marking a mention read)". Neither half was
+// true: GET is `listMyChannelMentions` (READ my inbox) and POST is
+// `markMentionsRead` (mark them read), and **@-mentioning is not this route at
+// all** — a mention is parsed out of message TEXT by
+// `channels/server/service-writes-metadata-mentions.ts`, so Samuel's Q2 ruling
+// was already delivered by `POST …/messages`, which is separately guest-floored.
+//
+// The floors that are actually needed, each for its own reason:
+//  - GET: the guest lane's Tags inbox is the guest's own mention list. It is
+//    own-scoped by `ctx.userId` inside the service (see the docblock above —
+//    "MY" is not a parameter), so a guest can only ever read their own rows.
+//    Without this floor `useChannelMentions` 403s on EVERY guest mount.
+//  - POST: marking your own mention read is the read-watermark class — it
+//    decides nothing, mutates no permission and is bounded to the caller's own
+//    rows by the same service scoping.
+// The channel-membership fence is the true gate for both (INVARIANTS §4A/§2B).
+export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

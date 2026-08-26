@@ -44,7 +44,7 @@ export declare function teamChips(teams: WorkspaceMember["teams"]): string;
 /** A shareable resource's member-typed name, as a value. */
 export declare function resourceLabel(name: string | null | undefined): string;
 export declare function statusLabel(m: WorkspaceMember): string;
-export declare function defaultLevel(role: string): "read" | "edit";
+export declare function defaultLevel(role: string): "none" | "read" | "edit";
 export declare function typeLabel(resourceType: string): string;
 export declare function isRetiredResourceType(resourceType: string): boolean;
 /** Drop rows for retired resource types from any resource-shaped list. */

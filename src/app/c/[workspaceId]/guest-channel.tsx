@@ -21,12 +21,22 @@
  * was revoked at claim, so there is no way back in. ONE flag covers both
  * because it is one story; see `channel-surface.tsx › ChannelSurfaceCapabilities`.
  *
- * ⚠ NO `role` PROP, DELIBERATELY (ruling R4, 2026-08-25). The claimer really is
- * a workspace `admin` (§4A), so the SERVER would permit rename/archive and
- * minting a further link; omitting `role` takes the surface's least-privileged
- * default and narrows the UI. It HIDES, it does not deny — accepted for MVP
- * because a link container holds two people who chose each other and the
- * operator can delete it. Do not "fix" this by passing the real role through.
+ * ⚠ NO `role` PROP, AND THE REASON INVERTED (ruling R4 rewritten 2026-08-26 —
+ * guest-role plan §3 named this rewrite and it did not land with the code).
+ * THIS DOCBLOCK USED TO SAY: *"the claimer really is a workspace `admin`, so the
+ * SERVER would permit rename/archive and minting a further link; omitting `role`
+ * … HIDES, it does not deny."* **Every clause of that is now false.** A bound
+ * claim seats the claimer at the link's `granted_role` — default `guest`, DB
+ * CHECK capped at `member` — so the server DENIES: `canManageChannel` is false
+ * (not channel owner, not workspace admin), the hard-delete and thread-delete
+ * paths are closed, `mintContainerLink` refuses below `member`, and every
+ * workspace-scoped route rejects a guest by BOTH wrappers' inverted default.
+ * **The role IS the fence; the UI narrowing is the matching picture.**
+ *
+ * `role` stays UNPASSED because the surface's default (`"member"`) is already
+ * the least-privileged answer this host can give and the real role would only
+ * ever be lower — a host that does not know must not be the one to widen. Do
+ * NOT re-add a reading that the hidden controls are the only fence.
  *
  * ⚠ THIS COMPONENT OWNS ITS OWN HEIGHT AND ITS OWN PAINT (ruling R5). `/c` is
  * deliberately NOT in `layout-shell.tsx › NON_WORKSPACE_ROOTS` — that branch

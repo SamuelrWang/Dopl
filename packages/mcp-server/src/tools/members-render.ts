@@ -93,8 +93,32 @@ export function statusLabel(m: WorkspaceMember): string {
   return m.lastSeenAt ? `active (last seen ${m.lastSeenAt.slice(0, 10)})` : "active";
 }
 
-export function defaultLevel(role: string): "read" | "edit" {
-  return role === "viewer" ? "read" : "edit";
+/**
+ * The access level a ROLE carries by default on a workspace-mode resource.
+ *
+ * ⚠ IT WAS `role === "viewer" ? "read" : "edit"` UNTIL 2026-08-26, WHICH MADE A
+ * GUEST READ AS "edit" — the INVERSE of the truth, and the most privileged
+ * answer in the enum. `guest` is the FLOOR role (below `viewer`) and holds NO
+ * access to any shareable resource: every knowledge / skill / ontology / chat
+ * route is `viewer`+ at the wrapper, and every RLS policy over them passes
+ * `'viewer'`. The bug was a shape bug, not a typo — an `else` branch over an
+ * open string is a default that silently absorbs every role added later.
+ *
+ * ⚠ SO THE SHAPE IS A CLOSED MAP NOW, and `role` stays `string` on purpose: this
+ * value crosses a process boundary from the server's own `Role`, and an
+ * unrecognised one must land on the FLOOR rather than on "edit". Keep the role
+ * SET aligned via `scripts/check-role-drift.ts`, which reads these keys.
+ */
+const DEFAULT_LEVEL: Record<string, "none" | "read" | "edit"> = {
+  owner: "edit",
+  admin: "edit",
+  member: "edit",
+  viewer: "read",
+  guest: "none",
+};
+
+export function defaultLevel(role: string): "none" | "read" | "edit" {
+  return DEFAULT_LEVEL[role] ?? "none";
 }
 
 const TYPE_LABELS: Record<string, string> = {

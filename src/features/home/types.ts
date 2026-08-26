@@ -12,6 +12,8 @@
  * LEGACY unbound links; a BOUND link rides on its own channel as `linkOut`.
  */
 
+import type { Role } from "@/features/workspaces/types";
+
 /** The other person in a channel, resolved from their profile. */
 export interface HomePeer {
   userId: string;
@@ -61,6 +63,21 @@ export interface HomePendingLink {
   maxUses: number | null;
   useCount: number;
   revokedAt: string | null;
+  /**
+   * ⚠ WHAT THIS LINK GRANTS ITS CLAIMER, AND IT IS ON THE PAYLOAD BECAUSE
+   * WITHOUT IT NOTHING DOWNSTREAM COULD TELL (added 2026-08-26). M3 gave the
+   * operator a role picker; `mintContainerLink` RETURNS an open link rather
+   * than replacing it, and until this field existed the returned link's
+   * `granted_role` was invisible — so picking "Member — full channel" over an
+   * open GUEST link answered 200 with the guest link, and the peer landed as a
+   * guest. (It now revokes and re-mints on a mismatch; this field is what lets
+   * the UI SAY what an existing invitation grants.)
+   *
+   * ⚠ STALE-CACHE (§8): a `linkOut` cached before this field existed reads
+   * `undefined`. Every consumer must fall back — the fail-safe reading is the
+   * DB default, `"guest"`.
+   */
+  grantedRole: Role;
 }
 
 /**
