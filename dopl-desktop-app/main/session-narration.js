@@ -16,9 +16,13 @@
 // channel.
 //
 // ⚠ THE RING IS BOUNDED AT THE SOURCE, AND THE BOUND IS MULTIPLICATIVE. Every per-session
-// bound is multiplied by `MAX_CONCURRENT_SESSIONS` (`session-windowless.js`) — INVARIANTS §11
-// says so and this is one of them. 200 entries x ~200 bytes x 4 sessions is well under a
-// megabyte, and the ring dies with the session object (no persistence, no TTL, no sweep).
+// bound is multiplied by `MAX_CONCURRENT_SESSIONS` (`session-windowless.js`, measured 6 on
+// 2026-08-27 — this line said "4") — INVARIANTS §11 says so and this is one of them. The ring
+// dies with the session object (no persistence, no TTL, no sweep).
+// ⚠ THE PER-ENTRY BOUND IS NOT ONE NUMBER, and since 2026-08-27 it is not one ORDER either:
+// captions are `TEXT_CAP` (300), a post is `POST_CAP` (1000), and the agent's own PROSE is
+// `PROSE_CAP` (2000) — read that constant's note for why the prose had to stop being a caption
+// and what the new ceiling costs.
 //
 // ⚠ NOTHING PRIVILEGED CROSSES. Entries carry ALREADY-SUMMARIZED display text: the tool
 // name through the gate's own normalizer, and `inputSummary` — which `session-io.js ›
@@ -57,7 +61,48 @@ const TEXT_CAP = 300;
 const TOOL_CAP = 40;
 // ⚠ A POST IS A MESSAGE, NOT A CAPTION — see the `outbound_post` branch for the arithmetic that
 // picks 1000 rather than the UI's 2000.
+// ⚠ AND DO NOT MOVE IT: `channels-v2/agent-stream-model.ts › POST_CAP` is the SAME 1000 and the
+// held-draft join is character-for-character against it. Changing one silently breaks every
+// pending Post card.
 const POST_CAP = 1000;
+
+/**
+ * THE AGENT'S OWN PROSE IS A MESSAGE, NOT A CAPTION (Samuel, live review 2026-08-27).
+ *
+ * ⚠ THE BUG THIS FIXES, and it was invisible from the renderer. `assistant` / `thinking` / the
+ * operator's own 1:1 text were all bounded by `TEXT_CAP`, so **the string reaching the SPA was
+ * ALREADY 300 chars, mid-word, with no marker**. The work stream's "Show more" raises a DISPLAY
+ * clamp (140 → 2000) over a string that had been cut long before it got there, so expanding a
+ * long line revealed nothing and left the reader looking at "…or I'll pi". Two truncations, one
+ * of them silent — and the silent one was upstream of the control meant to undo it.
+ *
+ * ⚠ 2000 IS THE UI'S OWN CEILING, DELIBERATELY — `channels-v2/agent-stream-log.tsx ›
+ * EXPANDED_CHARS`. Matching it makes the renderer's clip the ONLY truncation an operator can
+ * ever meet, and that one SAYS it clipped (INVARIANTS §9). Main is out of the business of
+ * cutting text nobody is told about.
+ *
+ * ⚠ WHY PROSE AND NOT THE CAPTIONS. `TEXT_CAP` still bounds the tool input/result summaries and
+ * the status lines, and it must: a tool result is a caption ABOUT a payload, `inputSummary` is
+ * already capped at 140 by `session-io.js › summarizeInput`, and `inputFull` — which can carry
+ * an entire file — never enters this ring at all (see the header). Widening those is how the
+ * ring becomes a file cache.
+ *
+ * ⚠ WHY PROSE AND NOT THE POST. `POST_CAP` stays 1000 on its own stated argument: a `post` frame
+ * is a local ECHO covering the seconds before the transcript loads, and **the transcript is the
+ * record** — the UI dedupes the echo against it. The agent's prose has NO second copy anywhere:
+ * this ring is the only place it ever exists, which is exactly why a silent cut there destroys
+ * the only text there is.
+ *
+ * ⚠ THE COST, STATED. The ring is `NARRATION_MAX` (200) deep per session, `flush()` sends the
+ * WHOLE ring for each dirty session, and the per-session ceiling is multiplied by
+ * `session-windowless.js › MAX_CONCURRENT_SESSIONS` (6). So the worst case rises from 200 × 300
+ * = 60k chars to 200 × 2000 = 400k chars per session per flush — and that worst case requires
+ * every one of 200 entries to be a maximal prose block, which cannot happen on a working agent:
+ * tool/result frames are the bulk of any ring and stay at `TEXT_CAP`. The ring is memory-only,
+ * dies with the session, and is never persisted. **If this ever needs tightening, tighten
+ * `NARRATION_MAX` or send a delta instead of the ring — do not re-introduce a silent cut.**
+ */
+const PROSE_CAP = 2000;
 
 /** One line, whitespace collapsed, bounded, or ''. The same discipline as
  *  `session-summary.js › displayText`. */
@@ -108,23 +153,28 @@ function line(value, cap) {
 function entryFor(event, now) {
   const type = event && event.type;
   const p = (event && event.payload) || {};
+  // ⚠ `PROSE_CAP`, NOT `TEXT_CAP` (2026-08-27) — this is the agent SPEAKING, and the ring is the
+  // only copy of it that exists anywhere. See PROSE_CAP's note for the whole argument.
   if (type === 'assistant') {
-    const text = line(p.text, TEXT_CAP);
+    const text = line(p.text, PROSE_CAP);
     return text ? { at: now, kind: 'assistant', text: text } : null;
   }
-  // ⚠ 2026-08-22 — WHAT IT IS THINKING. Bounded by the same `TEXT_CAP` as every other caption:
-  // a reasoning block is model-generated, unbounded by construction, and this feed crosses to a
-  // renderer. The UI collapses it further; main's job is that the IPC frame stays small.
+  // ⚠ 2026-08-22 — WHAT IT IS THINKING. A reasoning block is model-generated and unbounded by
+  // construction, so it IS bounded here — but at `PROSE_CAP` since 2026-08-27, not at the caption
+  // cap: the UI's "Show more" is the control for its length, and a 300-char cut upstream made
+  // that control a no-op. The UI still collapses it by default.
   if (type === 'thinking') {
-    const text = line(p.text, TEXT_CAP);
+    const text = line(p.text, PROSE_CAP);
     return text ? { at: now, kind: 'thinking', text: text } : null;
   }
   // ⚠ THE OPERATOR'S OWN 1:1 MESSAGE (2026-08-22). `rawText` is what they TYPED — the `text` on
   // this event is the FRAMED prompt (`session-seed.js › frameOperatorTurn`), which is an
   // instruction to a model and not a caption for a human. Only the 1:1 lane sets `private`, so
   // an ordinary steer still produces nothing.
+  // ⚠ `PROSE_CAP` here too: what the operator TYPED is a message, and it is the only copy of it
+  // — the 1:1 lane posts nothing to the channel, so nothing else holds these words.
   if (type === 'steer' && event && event.private === true) {
-    const text = line(event.rawText, TEXT_CAP);
+    const text = line(event.rawText, PROSE_CAP);
     return text ? { at: now, kind: 'operator', lane: 'operator', text: text } : null;
   }
   if (type === 'tool_use') {
@@ -326,6 +376,7 @@ module.exports = {
   NARRATION_MAX,
   PUSH_COALESCE_MS,
   entryFor,
+  PROSE_CAP,
   retagPrivate, // 2026-08-22: an `assistant` line inside a private turn is the agent's PRIVATE side
   POST_CAP,
   push,

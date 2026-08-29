@@ -392,6 +392,11 @@ contextBridge.exposeInMainWorld('dopl', {
         name: typeof name === 'string' ? name : '',
       }),
 
+    // ⚠ `rename`'s TWIN (2026-08-27): what the agent is FOR. Same contract; empty clears.
+    describe: (agentId, description) => ipcRenderer.invoke('sessions:describe',
+      { agentId: asId(agentId), description: typeof description === 'string' ? description : '' }),
+    // ⚠ PRESENCE = the SPA's capability gate for the pre-assigned launch id; reserves nothing.
+    mintAgentId: () => ipcRenderer.invoke('sessions:mintAgentId'),
     // ⚠ THE LIVE MODEL SWITCH (2026-08-22, Samuel's model-selection ruling). It takes the ID
     // vocabulary a UI offers (`main/session-model.js › MODEL_IDS`); main coerces against that
     // frozen list and converts to the argv-safe ALIAS, so an unknown string CLEARS the override

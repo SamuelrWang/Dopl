@@ -25,6 +25,28 @@
 // colliding on one id would make `@id` ambiguous, and 26 * 36^7 (~2.0e12) makes that
 // unreachable for the six sessions a machine may hold (MAX_CONCURRENT_SESSIONS).
 //
+// ⚠ A RENDERER MAY NOW ASK FOR ONE BEFORE IT SPAWNS ANYTHING (2026-08-27, Samuel's launch-panel
+// ruling). The composer's launch panel shows the operator the agent's ID while they are still
+// filling the form, so `sessions:mintAgentId` hands out a draw from here, the panel sends it back
+// with the launch, `session-launch-op.js` forwards it and `session-launch.js › launch` honours it
+// (it always has — a resume re-uses its own). Three consequences worth stating here, where the
+// mint lives:
+//
+//   • IT MINTS IN MAIN, NOT IN THE RENDERER, and that is the point of the op. This file owns the
+//     grammar, and `agents-model.ts › AGENT_POST_STAMP_RE` already carries a standing rule
+//     against re-declaring that pattern anywhere. A renderer that minted its own would be a
+//     SECOND statement of the charset, in a tree that ships on another cadence.
+//   • THE OP'S PRESENCE IS THE SPA'S CAPABILITY GATE. A desktop older than the forward does not
+//     expose it, so the SPA feature-detects it (INVARIANTS §11) and falls back to filling the id
+//     in AFTER the launch — never showing an address the agent will not have. It is an op rather
+//     than a boolean flag because `test/preload-parity.test.mjs` only walks functions, so a flag
+//     could be removed without failing the pin that exists to catch exactly that.
+//   • IT RESERVES NOTHING AND CANNOT LEAK. `newAgentId` touches no registry and no store, so an
+//     id the operator never launches simply evaporates — there is nothing to release, on any
+//     path out of the panel including a crash. A COLLISION with a live slot is not new and is not
+//     handled here: `session-launch.js`'s post-await `hasLiveSession(slot)` answers
+//     `skipped: 'busy'`, the refusal the SPA already renders.
+//
 // PURE + electron-free, like `agent-names.js` was, so the truth tables `require` it directly.
 
 const crypto = require('crypto');

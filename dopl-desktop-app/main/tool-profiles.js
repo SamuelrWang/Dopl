@@ -60,6 +60,18 @@ const DOPL_SAFE_TOOLS = [
   'mcp__dopl__dopl_skill',
   'mcp__dopl__dopl_ontology',
   'mcp__dopl__dopl_chats',
+  // AGENT TEMPLATES (2026-08-28, MCP surface v2 wave A). ⚠ SAFE-LIST placement is
+  // by the same rule `dopl_kb` and `dopl_skill` sit here under: it authors rows in
+  // the workspace, which a restricted spawn may already do, and it POSTS NOTHING —
+  // the exfil surface is `dopl_channel`, which stays out (and denied). Authoring a
+  // template starts no agent either: that is `dopl_channel(op="launch_agent")`.
+  'mcp__dopl__dopl_agent',
+  // HOME CHANNELS (2026-08-28, wave B). ⚠ SAFE-LIST placement by the same rule
+  // as `dopl_kb`: it authors rows the caller could author anyway and POSTS
+  // NOTHING. Its one write makes a room the caller is ALONE in — it cannot
+  // invite anybody, because minting the link that reaches a person is
+  // `sessionOnly` and unreachable over MCP for every role and token.
+  'mcp__dopl__dopl_home',
   'mcp__dopl__current_workspace',
   'mcp__dopl__list_workspaces',
 ];
@@ -73,6 +85,7 @@ const DOPL_ADMIN_TOOLS = [
   'mcp__dopl__dopl_skill_admin',
   'mcp__dopl__dopl_ontology_admin',
   'mcp__dopl__dopl_chats_admin',
+  'mcp__dopl__dopl_agent_admin',
 ];
 
 // Dopl tools that NO LONGER EXIST — deleted server-side, registrars, routes and tables.
@@ -80,7 +93,9 @@ const DOPL_ADMIN_TOOLS = [
 // makes it UNCLASSIFIED, which resolves to `gate` — one operator click away from running,
 // instead of immovably denied. The caller is a CLI we do not control and the name is
 // attacker-suppliable, so containment must not depend on the server's current tool list.
-// UNIVERSAL_HARD_DENY = admins + these = 8 (docs/INVARIANTS.md §11 pins the number).
+// UNIVERSAL_HARD_DENY = admins + these = 9 since 2026-08-28 (it was 8 from 2026-08-11, and moved
+// because `dopl_agent_admin` joined the admin half — NOT because anything was retired; this list
+// is unchanged). docs/INVARIANTS.md §11 pins the number.
 // Do NOT shorten this list to tidy up.
 const RETIRED_DOPL_TOOLS = [
   'mcp__dopl__dopl_workflow',

@@ -47,6 +47,8 @@ const DISPATCH = M("session-dispatch.js");
 // a legacy id this file and the shipped minter disagreed about is exactly the class of bug the
 // deleted route existed to fix, and the minter is still the one classify reads.
 const targeting = require("../main/targeting.js");
+const wakeTiers = require("../main/session-wake-tiers.js"); // pure; the REAL tier rule
+const agentHandles = require("../main/agent-handles.js"); // pure; the REAL slug rule
 
 function slice(src, name) {
   const from = src.indexOf(`// ─── BEGIN ${name}`);
@@ -96,12 +98,18 @@ function harness(over = {}) {
   // thread"; `counterpartyFor` is not consulted by this route at all any more.
   const sessionEngine = {
     liveOnThread: () => (cfg.live ? [{ agentId: "a1b2c3d4", ownPostIds: new Set() }] : []),
+    // The tier rule (2026-08-28) counts the CHANNEL's agents; here that is the same one session.
+    agentIdsInChannel: () => (cfg.live ? ["a1b2c3d4"] : []),
     feedInbound: (a) => { calls.feed.push(a); return true; },
   };
+  // ⚠ THE REAL TIER MODULE (pure), A STUB ROUTER (2026-08-28) — the wake rule driven here is the
+  // shipped one; only the model call is faked, and the fixtures below are all RUNNING sessions,
+  // which no tier governs.
   const routes = new Function(
-    "targeting", "sessionEngine", "io", "diag",
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
     `${DISPATCH_BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` }, () => {});
+  )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` },
+    wakeTiers, { claim: async () => "" }, agentHandles, () => {});
 
   const api = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
@@ -149,7 +157,7 @@ test("PREDICATE: my OWN message TRIGGERS nothing, but it does reach my own agent
   const mine = followUp(LEGACY, { authorUserId: ME, authorKind: "user" });
 
   const h = harness({ live: true, counterparty: ME });
-  assert.equal(h.routes.feedLiveSession(dm(), mine, ME), true, "my agents hear me");
+  assert.equal(await h.routes.feedLiveSession(dm(), mine, ME), true, "my agents hear me");
   assert.equal(h.calls.feed.length, 1);
 
   // classify: my own message is 'ignore', full stop — the fail-closed rule at the top of the
@@ -197,11 +205,12 @@ test("PREDICATE: a non-message kind, a null identity and an author-less post fai
   // speaking), the unresolved identity the listener has not supplied yet, and a post with no
   // author. Every one fails toward doing nothing.
   const h = harness({ live: true, counterparty: PEER });
+  // ⚠ AWAITED SINCE 2026-08-28: the route is async (TIER 3's claim/pass pass).
   const feeds = (m, me) => h.routes.feedLiveSession(dm(), m, me);
-  assert.equal(feeds(followUp(LEGACY, { kind: "task_started" }), ME), false, "a lifecycle kind");
-  assert.equal(feeds(followUp(LEGACY), null), false, "identity not resolved yet");
-  assert.equal(feeds(followUp(LEGACY, { authorUserId: null }), ME), false, "an author-less post");
-  assert.equal(feeds(null, ME), false, "and no message at all");
+  assert.equal(await feeds(followUp(LEGACY, { kind: "task_started" }), ME), false, "a lifecycle kind");
+  assert.equal(await feeds(followUp(LEGACY), null), false, "identity not resolved yet");
+  assert.equal(await feeds(followUp(LEGACY, { authorUserId: null }), ME), false, "an author-less post");
+  assert.equal(await feeds(null, ME), false, "and no message at all");
   assert.equal(h.calls.feed.length, 0);
 
   assert.equal(targeting.classify(followUp(LEGACY, { kind: "task_started" }), dm(), ME), "ignore");

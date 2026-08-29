@@ -42,8 +42,11 @@ const { noteEvent, detailFor } = req(join(MAIN, "session-detail.js"));
 // these tests assert about `displayName` is that the projection CARRIES it, never where it was
 // read from. The stub answers null (the ordinary case: nobody renamed this agent); a test that
 // wants a name overrides `names.value`.
-export const names = { value: null };
+export const names = { value: null, description: null };
 const displayNameFor = () => names.value;
+// ⚠ THE SECOND FIELD OFF THE SAME STORE (2026-08-27). Stubbed for the same reason the name is:
+// `agent-names.js` requires `electron-store` at module scope. Override `names.description`.
+const descriptionForAgent = () => names.description;
 // ⚠ THE STATE MAPPING MOVED OUT ON 2026-08-22 (`main/session-pill.js`) — see that file's header
 // for the seam. Injected REAL, like every dependency here: these cases are about the PROJECTION
 // carrying the pill, not about re-testing the table that derives one. The names are MERGED into
@@ -97,6 +100,7 @@ export function load() {
     "noteEvent",
     "detailFor",
     "displayNameFor",
+    "descriptionForAgent",
     "PILL_STATES",
     "ACTIVITY_PILL",
     "PILL_ENDED",
@@ -106,7 +110,7 @@ export function load() {
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
-    metricOrNull, metrics, noteEvent, detailFor, displayNameFor,
+    metricOrNull, metrics, noteEvent, detailFor, displayNameFor, descriptionForAgent,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" "))
   );

@@ -31,86 +31,28 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "session-dispatch.js"), "utf8");
-
-const BEGIN = "// ─── BEGIN SESSION-DISPATCH-PURE";
-const END = "// ─── END SESSION-DISPATCH-PURE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
-assert.notEqual(from, -1, "BEGIN SESSION-DISPATCH-PURE sentinel missing");
-assert.notEqual(to, -1, "END SESSION-DISPATCH-PURE sentinel missing");
-assert.ok(to > from, "session-dispatch sentinels out of order");
-const BLOCK = SRC.slice(from, to);
-
-for (const banned of ["require(", "electron", "fs.", "path.", "child_process", "@anthropic", "process."]) {
-  assert.ok(!BLOCK.includes(banned), `SESSION-DISPATCH-PURE block must not reference ${banned}`);
-}
-
-// ⚠ THE CODE, WITHOUT THE PROSE. The two source-level pins at the foot of this file ask
-// whether a deleted name still EXISTS in this module, and this module's header docblock names
-// all four deleted routes and their window-mode gate on purpose — that record is the point of
-// the docblock. Scanning raw SRC for them would therefore be permanently red against a
-// correct file, which is the failure mode where somebody deletes the pin instead of the code.
-const CODE = SRC.split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n");
-
-const ME = "me-user";
-const PEER = "peer-user";
-const TASK = "11111111-2222-3333-4444-555555555555";
-
-// A fresh harness per test: configurable fakes + recorded calls.
+// ⚠ THE HARNESS, THE SLICED BLOCK AND ITS PURITY PROOF ALL MOVED TO `_wake-dispatch-harness.mjs`
+// ON 2026-08-28 (the §2 500-line cap), because there are TWO truth tables over this ONE route
+// now: this one (the FAN-OUT — who HEARS a message) and `wake-tier-routing.test.mjs` (the WAKE —
+// who STARTS a turn because of it). A copy of the harness in each is two harnesses to keep in
+// step, and the day they drift one table is measuring a route the app does not run.
 //
-// ⚠ THREE INJECTIONS, NOT SEVEN. This used to plumb `settings`, `store` and `notifyLocal` in
-// beside them, for routes (2), (3) and (5). The block binds none of the three any more, and a
-// fake for a dependency the source has dropped is how a harness quietly keeps testing a
-// product that is gone.
-// `agents` is the LIVE ROSTER on the thread — the multiplayer shape. Each entry is a session
-// object as the engine's registry holds one: an `agentId` and the `ownPostIds` Set that lets it
-// recognise its own words coming back off the wire.
-const agent = (id, ownPostIds = []) => ({ agentId: id, ownPostIds: new Set(ownPostIds) });
+// ⚠ THE FIXTURES BELOW ARE ALL RUNNING AGENTS, and that is what keeps this table honest about the
+// fan-out: `agent()` carries neither `awaitingDirective` nor a parked `state`, so every case here
+// drives the NOT-DORMANT path — the one no wake tier governs.
+import {
+  BLOCK, CODE, harness, agent, entry, peerMsg, ME, PEER, TASK, A1, A2,
+} from "./_wake-dispatch-harness.mjs";
 
-function harness(over = {}) {
-  const calls = { feedInbound: [] };
-  const cfg = {
-    agents: [],
-    feedInboundReturn: true,
-    displayName: (id) => `name:${id}`,
-    ...over,
-  };
-  const targeting = {
-    firstClassTaskId: (m) => m.taskId || "",
-  };
-  const sessionEngine = {
-    liveOnThread: () => cfg.agents,
-    feedInbound: (a) => { calls.feedInbound.push(a); return cfg.feedInboundReturn; },
-  };
-  // 2026-08-01: the label a fed message is titled with is the AUTHOR's — a peer's AGENT posts
-  // from the peer's account, so the account's display name is the wrong answer for it. The
-  // resolver is `authorLabel`, INSIDE the sliced block, so it is the real one here rather
-  // than a fake; only the account-name lookup under it is injected.
-  const io = { displayNameFor: (id) => cfg.displayName(id) };
-  const api = new Function(
-    "targeting", "sessionEngine", "io", "diag",
-    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, addressingFor, mayFeed, unwoken };`
-  )(targeting, sessionEngine, io, () => {});
-  return { ...api, calls, cfg };
-}
-
-const A1 = "a1b2c3d4";
-const A2 = "z9y8x7w6";
-
-const entry = { channel: { id: "c1", name: "General" }, workspaceId: "w1" };
-const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, body: "reply body", taskId: TASK, seq: 7, meta: {}, ...over });
+// Referenced by the pins at the foot of this file; the slice + purity proof happen in the harness.
+assert.ok(BLOCK.length > 0, "the SESSION-DISPATCH-PURE block is sliceable");
 
 // ── (1) feedLiveSession — THE FAN-OUT TABLE ──────────────────────────────────
 
-test("feed: EVERY live agent on the thread is fed, and each is told which it is", () => {
+test("feed: EVERY live agent on the thread is fed, and each is told which it is", async () => {
   const h = harness({ agents: [agent(A1), agent(A2)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
+  assert.equal(await h.feedLiveSession(entry, peerMsg(), ME), true);
   assert.equal(h.calls.feedInbound.length, 2, "a thread is a GROUP of my agents, not one");
   assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1, A2]);
   assert.deepEqual(h.calls.feedInbound[0], {
@@ -118,6 +60,10 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
     seq: 7, // the turn's seq — the windowless outbound bridge's thread join
     authorName: `name:${PEER}`,
     addressing: null, // nobody was @-mentioned
+    // ⚠ THE WAKE VERDICT RIDES WITH EVERY FEED SINCE 2026-08-28, and `false` is the ordinary
+    // answer: these two agents are RUNNING, so the fan-out delivered the message without any
+    // wake being involved. `session-gate.js › feedInbound` reads this rather than re-deriving it.
+    wake: false,
   });
 });
 
@@ -126,56 +72,56 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
 // THREAD, so a third member posting INTO the thread does reach my live agents. The fences that
 // remain are the ones that still matter: nothing here mints a session, and the body is fenced
 // as DATA downstream.
-test("feed: the fence is the THREAD, not the counterparty — a third party's post feeds too", () => {
+test("feed: the fence is the THREAD, not the counterparty — a third party's post feeds too", async () => {
   const h = harness({ agents: [agent(A1)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: "third-party" }), ME), true);
+  assert.equal(await h.feedLiveSession(entry, peerMsg({ authorUserId: "third-party" }), ME), true);
   assert.equal(h.calls.feedInbound.length, 1);
   assert.equal(h.calls.feedInbound[0].authorName, "name:third-party");
 });
 
 // ⚠ AND THIS REPLACES "my OWN message fails closed". The operator posting into the thread is
 // how they steer their agents in the open, so their own words are fed like anybody's.
-test("feed: MY OWN post feeds my agents — that is the product, not a leak", () => {
+test("feed: MY OWN post feeds my agents — that is the product, not a leak", async () => {
   const h = harness({ agents: [agent(A1), agent(A2)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: ME }), ME), true);
+  assert.equal(await h.feedLiveSession(entry, peerMsg({ authorUserId: ME }), ME), true);
   assert.equal(h.calls.feedInbound.length, 2);
 });
 
-test("feed: a session is NEVER fed its own post back", () => {
+test("feed: a session is NEVER fed its own post back", async () => {
   // Every agent posts under the operator's own account with authorKind 'agent', so authorship
   // cannot tell three of my agents apart. The per-instance `client_msg_id` can.
   const h = harness({ agents: [agent(A1, ["agent-a1b2c3d4-3"]), agent(A2)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: ME, clientMsgId: "agent-a1b2c3d4-3" }), ME), true);
+  assert.equal(await h.feedLiveSession(entry, peerMsg({ authorUserId: ME, clientMsgId: "agent-a1b2c3d4-3" }), ME), true);
   assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A2], "the author is excluded, the sibling is not");
 });
 
-test("feed: an unstamped post is fed to everyone — a duplicate turn, never a lost one", () => {
+test("feed: an unstamped post is fed to everyone — a duplicate turn, never a lost one", async () => {
   const h = harness({ agents: [agent(A1, ["agent-a1b2c3d4-3"])] });
   for (const clientMsgId of [null, undefined, ""]) {
     const one = harness({ agents: [agent(A1, ["agent-a1b2c3d4-3"])] });
-    assert.equal(one.feedLiveSession(entry, peerMsg({ clientMsgId }), ME), true, String(clientMsgId));
+    assert.equal(await one.feedLiveSession(entry, peerMsg({ clientMsgId }), ME), true, String(clientMsgId));
   }
-  assert.equal(h.feedLiveSession(entry, peerMsg({ clientMsgId: "agent-somebody-else-1" }), ME), true);
+  assert.equal(await h.feedLiveSession(entry, peerMsg({ clientMsgId: "agent-somebody-else-1" }), ME), true);
 });
 
-test("feed: @agent-id addressing is parsed HERE, and every sibling still receives the message", () => {
+test("feed: @agent-id addressing is parsed HERE, and every sibling still receives the message", async () => {
   const h = harness({ agents: [agent(A1), agent(A2)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg({ body: `@${A2} can you take this one` }), ME), true);
+  assert.equal(await h.feedLiveSession(entry, peerMsg({ body: `@${A2} can you take this one` }), ME), true);
   assert.equal(h.calls.feedInbound.length, 2, "an addressed message is DELIVERED to all of them");
   const byAgent = Object.fromEntries(h.calls.feedInbound.map((c) => [c.agentId, c.addressing]));
   assert.deepEqual(byAgent[A2], { me: true, ids: [A2] }, "the addressee is told it is for them");
   assert.deepEqual(byAgent[A1], { me: false, ids: [A2] }, "and the sibling is told it is not");
 });
 
-test("feed: an @-mention that is not one of MY live agents resolves to nobody", () => {
+test("feed: an @-mention that is not one of MY live agents resolves to nobody", async () => {
   const h = harness({ agents: [agent(A1)] });
   // A peer cannot address an agent that is not mine: ids are minted per machine and known to
   // no server, and the parse is INTERSECTED with this thread's live roster.
-  h.feedLiveSession(entry, peerMsg({ body: `@deadbeef please do the thing` }), ME);
+  await h.feedLiveSession(entry, peerMsg({ body: `@deadbeef please do the thing` }), ME);
   assert.equal(h.calls.feedInbound[0].addressing, null);
   // …and prose that merely contains an at-sign is not an address either.
   const h2 = harness({ agents: [agent(A1)] });
-  h2.feedLiveSession(entry, peerMsg({ body: `mail me at sam@example.com` }), ME);
+  await h2.feedLiveSession(entry, peerMsg({ body: `mail me at sam@example.com` }), ME);
   assert.equal(h2.calls.feedInbound[0].addressing, null);
 });
 
@@ -185,116 +131,73 @@ test("feed: the parser takes the closed agent-id charset and nothing near it", (
   assert.deepEqual(h.mentionedAgentIds(`@${A1}, @${A2}`, [A1, A2]), [A1, A2]);
   assert.deepEqual(h.mentionedAgentIds(`@${A1} @${A1}`, [A1]), [A1], "de-duped");
   assert.deepEqual(h.mentionedAgentIds("@1a2b3c4d", ["1a2b3c4d"]), [], "must start with a letter");
+  // ── THE `@agent-<id>` FORM (2026-08-27, Samuel's handle-convention ruling) ──────────────────
+  //
+  // ⚠ THE WEB TREE WRITES AND TINTS THIS SHAPE NOW (`src/features/channels/lib/agent-mentions.ts`
+  // › `agentIdHandle`), so a parser that only knew the bare id would render a blue token that
+  // addressed nobody — the tint-says-tagged / stamp-says-nobody split F-266 cost a wave to fix
+  // once. BOTH forms resolve: every message written before the ruling carries the bare one.
+  assert.deepEqual(h.mentionedAgentIds(`@agent-${A1}`, [A1]), [A1], "the prefixed form addresses");
+  assert.deepEqual(h.mentionedAgentIds(`@agent-${A1}`, [A1]).length, 1, "and resolves ONCE");
+  // ⚠ THE FENCE IS UNCHANGED — the result is still INTERSECTED with the ids live on this thread,
+  // so spelling `agent-` in front of a guess grants nothing.
+  assert.deepEqual(h.mentionedAgentIds(`@agent-deadbeef @deadbeef`, [A1]), []);
+  // ⚠ AND THE PREFIX DOES NOT TURN PROSE INTO AN ADDRESS.
+  assert.deepEqual(h.mentionedAgentIds("@agent-team meets at noon", [A1]), []);
+  assert.deepEqual(h.mentionedAgentIds(`@agent-${A1}x`, [A1]), [], "an id-shaped PREFIX is not an id");
+  assert.deepEqual(h.mentionedAgentIds(`mail me at me@${A1}`, [A1]), [], "not after a word character");
   assert.deepEqual(h.mentionedAgentIds("@a1b2c3d", ["a1b2c3d"]), [], "exactly eight characters");
   assert.deepEqual(h.mentionedAgentIds(`@${A1}extra`, [A1]), [], "and a word boundary is required");
   assert.deepEqual(h.mentionedAgentIds(`@${A1}`, []), [], "an empty roster addresses nobody");
 });
 
-// ── THE SPAWN-IDLE WAKE RULE (2026-08-22, Samuel's ruling) ───────────────────
-//
-// ⚠ THE ONE HOLD-BACK IN THE FAN-OUT, and the fixture above is what makes these cases honest:
-// `agent()` carries NO `awaitingDirective` field, so every case ABOVE this block drives the
-// absent-flag path and pins that the old behaviour is untouched. A woken agent, an agent from a
-// build that predates the flag, and a session object built by any other shape all keep being fed
-// everything on the thread.
+// ⚠ THE TIERED-WAKE TRUTH TABLE LIVES IN `test/wake-tier-routing.test.mjs` (2026-08-28, the §2
+// 500-line cap). It drives THIS route, through the SHARED harness above, for the one session
+// class this file's fixtures deliberately never build: a DORMANT agent. Everything below stays
+// here because it is about the fan-out, which no tier governs.
 
-const idle = (id, ownPostIds = []) => ({ ...agent(id, ownPostIds), awaitingDirective: true });
-
-test("wake: an UNWOKEN spawn-idle agent is fed NOTHING by an unaddressed message", () => {
-  const h = harness({ agents: [idle(A1)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false, "nothing took it");
-  assert.equal(h.calls.feedInbound.length, 0, "and it never reached the gate");
-});
-
-test("wake: an @-mention of ITS OWN id wakes it, from ANY author", () => {
-  // Samuel's ruling names the third case explicitly: the operator tells a PEER "I'm going to
-  // wake another agent, you direct it". A peer can only name an id they were told, and the parse
-  // is intersected with this machine's live ids, so the reach is bounded by what was disclosed.
-  for (const author of [ME, PEER, "third-party"]) {
-    const h = harness({ agents: [idle(A1)] });
-    assert.equal(h.feedLiveSession(entry, peerMsg({ authorUserId: author, body: `@${A1} take this` }), ME), true, author);
-    assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1]);
-    assert.deepEqual(h.calls.feedInbound[0].addressing, { me: true, ids: [A1] });
-  }
-  // …and a PEER'S AGENT is an author like any other (authorKind is framing, never a gate).
-  const byAgent = harness({ agents: [idle(A1)] });
-  assert.equal(byAgent.feedLiveSession(entry, peerMsg({ authorKind: "agent", body: `@${A1} go` }), ME), true);
-});
-
-test("wake: a message addressed to a SIBLING does not wake the idle one", () => {
-  // The sibling is fed (it was named); the unwoken agent is held back even though it received
-  // the same message under the plain fan-out. `addressing.me` is the key, not `addressing`.
-  const h = harness({ agents: [agent(A2), idle(A1)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg({ body: `@${A2} you take it` }), ME), true);
-  assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A2], "only the addressee");
-});
-
-test("wake: the hold-back is PER SESSION — a woken sibling still gets everything", () => {
-  const h = harness({ agents: [agent(A1), idle(A2)] });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), true);
-  assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1],
-    "the live agent is fed, the undirected one is not");
-});
-
-test("wake: `mayFeed` is the rule, and it is `=== true` on both sides", () => {
-  // ⚠ FAIL TOWARD FEEDING. A session object that does not carry the flag — an older shape, a
-  // harness, anything the engine did not build — keeps the plain fan-out, because the failure
-  // this guards is a wasted launch, not a leak.
-  for (const junk of [undefined, null, false, "true", 1, {}]) {
-    assert.equal(h0.mayFeed({ awaitingDirective: junk }, null), true, JSON.stringify(junk));
-  }
-  assert.equal(h0.mayFeed(null, null), true, "no session at all is not a hold-back");
-  assert.equal(h0.mayFeed({ awaitingDirective: true }, null), false);
-  assert.equal(h0.mayFeed({ awaitingDirective: true }, { me: false, ids: [A2] }), false,
-    "somebody else's addressee is not a directive");
-  assert.equal(h0.mayFeed({ awaitingDirective: true }, { me: true, ids: [A1] }), true);
-  // And a truthy-but-wrong `me` must not open it either.
-  assert.equal(h0.mayFeed({ awaitingDirective: true }, { me: "yes", ids: [A1] }), false);
-});
-const h0 = harness();
-
-test("feed: no live session -> false (falls through to classify)", () => {
+test("feed: no live session -> false (falls through to classify)", async () => {
   const h = harness({ agents: [] });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false);
+  assert.equal(await h.feedLiveSession(entry, peerMsg(), ME), false);
   assert.equal(h.calls.feedInbound.length, 0);
 });
 
-test("feed: a non-message kind and a NULL identity still fail closed", () => {
+test("feed: a non-message kind and a NULL identity still fail closed", async () => {
   const h = harness({ agents: [agent(A1)] });
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
   // session at all, so the lifecycle markers and `task_progress` milestones on the wire cannot
   // spend a peer turn each. classify states the same rule for the same reason.
   for (const kind of ["task_started", "task_failed", "task_finished", "task_progress"]) {
-    assert.equal(h.feedLiveSession(entry, peerMsg({ kind }), ME), false, kind);
+    assert.equal(await h.feedLiveSession(entry, peerMsg({ kind }), ME), false, kind);
   }
   // The listener owns identity resolution and passes it in. It no longer EXCLUDES my own posts
   // (that is the fan-out), but a machine that cannot say who it is decides nothing.
   for (const me of [null, undefined, ""]) {
-    assert.equal(h.feedLiveSession(entry, peerMsg(), me), false, `myUserId ${JSON.stringify(me)}`);
+    assert.equal(await h.feedLiveSession(entry, peerMsg(), me), false, `myUserId ${JSON.stringify(me)}`);
   }
-  assert.equal(h.feedLiveSession(entry, null, ME), false, "and no message at all");
+  assert.equal(await h.feedLiveSession(entry, null, ME), false, "and no message at all");
   assert.equal(h.calls.feedInbound.length, 0);
 });
 
-test("feed: the answer is TRUE only when a session really took it", () => {
+test("feed: the answer is TRUE only when a session really took it", async () => {
   const h = harness({ agents: [agent(A1)], feedInboundReturn: false });
-  assert.equal(h.feedLiveSession(entry, peerMsg(), ME), false, "a full queue is not a claim");
+  assert.equal(await h.feedLiveSession(entry, peerMsg(), ME), false, "a full queue is not a claim");
 });
 
 // ── authorLabel — the wrapper a fed turn is titled with ──────────────────────
 // Sliced with the route on purpose (see the source comment): it is the one helper route (1)
 // calls, so a table that drove the route without it would be driving a different function.
 
-test("feed: the wrapper names the AUTHOR, not the account that posted", () => {
+test("feed: the wrapper names the AUTHOR, not the account that posted", async () => {
   // A peer's AGENT posts from the peer's account, so `displayNameFor` alone credits a person
   // for a machine's words. `author_kind` is derived server-side from the caller's credential
   // and is never claimed on the wire.
   const agent = harness({ agents: [{ agentId: A1, ownPostIds: new Set() }] });
-  agent.feedLiveSession(entry, peerMsg({ authorKind: "agent" }), ME);
+  await agent.feedLiveSession(entry, peerMsg({ authorKind: "agent" }), ME);
   assert.equal(agent.calls.feedInbound[0].authorName, `name:${PEER}'s agent`);
 
   const person = harness({ agents: [{ agentId: A1, ownPostIds: new Set() }] });
-  person.feedLiveSession(entry, peerMsg({ authorKind: "user" }), ME);
+  await person.feedLiveSession(entry, peerMsg({ authorKind: "user" }), ME);
   assert.equal(person.calls.feedInbound[0].authorName, `name:${PEER}`);
 
   // …and an account this machine cannot name still says WHAT wrote it rather than nothing.
@@ -323,7 +226,10 @@ test("the module exports ONE route, and nothing that was deleted comes back", ()
   // ⚠ `mayFeed` JOINED THE LIST ON 2026-08-22 (Samuel's SPAWN-IDLE WAKE RULE): the fan-out's one
   // hold-back, exported so its truth table can be driven directly rather than only through the
   // route. It is a ROUTING predicate like the two beside it, not a new route.
-  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, addressingFor, mayFeed \};/);
+  // ⚠ `dormant` AND `wakeCandidates` JOINED THE LIST ON 2026-08-28 (Samuel's TIERED WAKE ruling),
+  // beside `mayFeed`, and for the same reason it joined in 2026-08-22: they are ROUTING
+  // predicates whose truth table has to be drivable directly, not new routes.
+  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, addressingFor, mayFeed, dormant, wakeCandidates \};/);
   for (const gone of [
     "maybeOpenRequesterSession", "maybeSurfaceRequesterReply", "noteRequestLifecycle",
     "maybeReopenAddressedThread", "diagRuntimeGateSkip", "REQUEST_MILESTONES",

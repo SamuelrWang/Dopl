@@ -67,14 +67,90 @@ test("SAFETY: every text field is bounded and single-line", () => {
     { type: "assistant", payload: { text: `first\nsecond\t${long}` } },
     NOW
   );
-  assert.ok(entry.text.length <= 300);
+  // ⚠ PROSE, NOT A CAPTION, SINCE 2026-08-27 — bounded at `PROSE_CAP`, which is the UI's own
+  // expanded ceiling. Still BOUNDED, which is what this case is about.
+  assert.ok(entry.text.length <= m.PROSE_CAP);
   assert.equal(/[\r\n\t]/.test(entry.text), false);
   const tool = m.entryFor(
     { type: "tool_use", payload: { name: long, inputSummary: long } },
     NOW
   );
   assert.ok(tool.tool.length <= 40);
+  // ⚠ THE CAPTIONS DID NOT MOVE, and must not: `inputSummary` is already 140 by the time it gets
+  // here (`session-io.js › summarizeInput`) and `inputFull` never enters the ring at all.
   assert.ok(tool.text.length <= 300);
+  const result = m.entryFor(
+    { type: "tool_result", payload: { toolUseId: "t", ok: true, resultSummary: long } },
+    NOW
+  );
+  assert.equal(result.text.length, 300, "a tool result is a caption ABOUT a payload");
+});
+
+/**
+ * THE AGENT'S PROSE SURVIVES TO THE UI'S OWN CEILING (Samuel, live review 2026-08-27).
+ *
+ * ⚠ THE BUG THIS PINS WAS INVISIBLE FROM THE RENDERER. `assistant` / `thinking` / the operator's
+ * own 1:1 text were capped at 300 HERE, so the SPA's "Show more" — which raises a DISPLAY clamp
+ * from 140 to 2000 — expanded onto a string that had already been cut, mid-word, with no marker.
+ * The reader pressed the control meant to undo the truncation and the text stayed cut.
+ *
+ * ⚠ THE NUMBER IS `agent-stream-log.tsx › EXPANDED_CHARS`, so main is never the one doing a cut
+ * nobody is told about; past it the UI clips AND SAYS SO.
+ */
+/**
+ * ⚠ THE POST CAP HAD NO PIN ON EITHER SIDE UNTIL 2026-08-28, AND IT IS THE ONE CAP A DRIFT
+ * BREAKS SILENTLY. `PROSE_CAP` above is pinned here and `EXPANDED_CHARS` is bracketed by the
+ * SPA's own render tests, but `POST_CAP` was asserted nowhere in this tree — `grep -rn POST_CAP
+ * dopl-desktop-app/test/` returned nothing — and the SPA only brackets it from ABOVE
+ * (`agent-stream-consent.test.tsx` re-slices at a hand-written 1000, which still passes if both
+ * caps drop together).
+ *
+ * ⚠ AND THE DIRECTION THAT BREAKS IS *THIS* SIDE GOING SHORTER. `channels-v2/agent-stream-model.ts
+ * › postEcho` runs the frame text (already cut HERE) and the untruncated server body through one
+ * normalizer and joins them on equality. If this cap drops below the web's, a long post gives the
+ * two chains different prefixes, the join never matches, and the Post card reads **Pending
+ * forever over a message that was delivered**. So this number is the web copy's UPPER bound, and
+ * lowering it is the mutation that must go red here rather than in production.
+ */
+test("POST: the outbound echo cap is the SPA's join constant, character for character", () => {
+  assert.equal(
+    m.POST_CAP,
+    1000,
+    "`channels-v2/agent-stream-model.ts › POST_CAP` joins against this — change both or neither"
+  );
+  // ⚠ AND IT IS THE CAP THE POST BRANCH ACTUALLY APPLIES, not just a constant that agrees with
+  // the SPA while the code uses another one.
+  const entry = m.entryFor(
+    { type: "outbound_post", payload: { text: "z".repeat(5_000) } },
+    NOW
+  );
+  assert.equal(entry.text.length, m.POST_CAP, "a post was not cut at POST_CAP");
+  // ⚠ AND IT IS NOT THE PROSE CAP. The two are different numbers for different reasons (a post
+  // is an ECHO the transcript also holds; prose has no second copy) and collapsing them is the
+  // drift this pins against.
+  assert.notEqual(m.POST_CAP, m.PROSE_CAP);
+});
+
+test("PROSE: the agent's own words reach the UI's ceiling, not the caption cap", () => {
+  const long = "y".repeat(5_000);
+  assert.equal(m.PROSE_CAP, 2000, "the SPA's EXPANDED_CHARS — change both or neither");
+  for (const type of ["assistant", "thinking"]) {
+    const entry = m.entryFor({ type, payload: { text: long } }, NOW);
+    assert.equal(entry.text.length, m.PROSE_CAP, `${type} was cut at the caption cap`);
+  }
+  // What the operator TYPED is a message too, and the 1:1 lane posts nothing — this ring is the
+  // only copy of those words anywhere.
+  const steer = m.entryFor(
+    { type: "steer", private: true, rawText: long, payload: {} },
+    NOW
+  );
+  assert.equal(steer.text.length, m.PROSE_CAP);
+  // ⚠ AND A LINE THAT FITS IS RETURNED WHOLE — no ellipsis, no tail, byte-for-byte.
+  const whole = "the tests are green and I pushed the branch";
+  assert.equal(
+    m.entryFor({ type: "assistant", payload: { text: whole } }, NOW).text,
+    whole
+  );
 });
 
 // ── 2. THE VOCABULARY ────────────────────────────────────────────────────────────────
@@ -301,10 +377,12 @@ test("PUSH: frames are keyed by sessionKey so a window can filter", () => {
 // `thinking` is addressed to nobody. Collapsing any pair makes the view claim something was
 // shared when it was not, or the reverse — which is the whole point of the private turn.
 
-test("THINKING: it rides as its own kind and is bounded like every other caption", () => {
-  const entry = m.entryFor({ type: "thinking", payload: { text: "x".repeat(1000) } }, NOW);
+test("THINKING: it rides as its own kind and is bounded — at the PROSE cap", () => {
+  const entry = m.entryFor({ type: "thinking", payload: { text: "x".repeat(5000) } }, NOW);
   assert.equal(entry.kind, "thinking");
-  assert.equal(entry.text.length, 300, "a reasoning block is unbounded by construction");
+  // ⚠ A reasoning block is unbounded by construction, so it is bounded here — but at the cap the
+  // UI can actually SHOW (2026-08-27). At 300 the SPA's "Show more" revealed nothing.
+  assert.equal(entry.text.length, m.PROSE_CAP, "a reasoning block is unbounded by construction");
   // Nothing to say is nothing to push — the ring is not padded with empty lines.
   assert.equal(m.entryFor({ type: "thinking", payload: { text: "   " } }, NOW), null);
   assert.equal(m.entryFor({ type: "thinking", payload: {} }, NOW), null);

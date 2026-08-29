@@ -49,6 +49,7 @@ function boot(api = {}, opts = {}) {
   const requests = [];
   const stub = (id) => {
     if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
+    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
     if (id === "./diag") return { diag: () => {} };
     if (id === "./session-model") return require(join(MAIN, "session-model.js"));
     if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));

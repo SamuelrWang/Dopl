@@ -108,20 +108,61 @@ function sweep() {
   return openWindows;
 }
 
-// ⚠ 460x640 — TALLER AND NARROWER THAN THE POP-OUT'S 520x600, and the difference is the
-// content, not a preference. A thread window holds a conversation (wide enough for two
+// ⚠ 460x640 ORIGINALLY — TALLER AND NARROWER THAN THE POP-OUT'S 520x600, and the difference is
+// the content, not a preference. A thread window holds a conversation (wide enough for two
 // speakers' bubbles); this holds a NARRATION STREAM, which is one column of short lines
 // and wants vertical room. Default size IS the floor, the rule the DELETED `session-window.js`
 // established: the window opens at its most compact and the operator grows it.
+// ⚠ 640 → 560 HIGH ON 2026-08-29 (Samuel), −80px / 12.5%. **12px of that is MEASURED and the rest
+// is the ruling, and the two must not be confused by whoever reads this next.** The posture row
+// went from `h-9` to `h-6` in the same wave (see the width block below), so the chrome above the
+// stream genuinely lost 12px; the other 68 come out of the stream's own slack because the window
+// opened taller than the narration needed. It stays the TALLER-THAN-WIDE shape the content argues
+// for (560 > 510), which is the part of the original reasoning that has not changed.
+// ⚠ `minHeight` MOVES WITH IT for the same reason `minWidth` does — default size IS the floor.
 // ⚠ `title` is the PRE-PAINT name only — the renderer sets `document.title` to
 // "Dopl — <agent>" once the feed lands, and Electron copies it onto the window. Nothing
 // here disables that, and it must not start to.
+// ⚠ 510 WIDE SINCE 2026-08-29, AND THE NUMBER IS STILL THE POSTURE ROW'S — it is a MEASUREMENT of
+// the controls, never a taste preference, so it moves when and only when they do. The three live
+// controls — Tools, Messages, Model — are one flex row of `SelectMenu` triggers
+// (`channels-v2/agent-posture.tsx`). 460 wrapped that row; 660, then 600, were derived over the
+// `raised` (`h-9`) trigger; 540 was the first pass at the smaller one.
+// ⚠ WHAT CHANGED: the three adopted `select-menu.tsx › TRIGGER_FACE.raisedField` (Samuel,
+// 2026-08-29) — the app's consolidated dropdown size, the one the composer launch panel's
+// Template/Model rows wear. The face is identical (`auth-btn-3d-light`); the BOX shrank, so the row
+// needs less width and the old 600 left a band of empty space to the right of it.
+// ⚠ THE ARITHMETIC, REDONE OVER THE NEW SIZE, so the next adjustment knows what the floor is.
+// A `raisedField` trigger is `px-2` (16) + `gap-1.5` twice (12) + an 11px chevron = 39px of chrome
+// around `prefix` + `label` at `text-small` (12px). The previous derivation's own numbers imply
+// ≈0.526em per glyph for these labels at font-medium, i.e. ≈6.3px/char at 12px. Widest label each
+// control can hold, counting `prefix` + `label`:
+//   Tools    "Tools" + "Ask each time"  = 18ch ≈ 114 + 39 = 153
+//   Messages "Messages" + "Auto accept in" = 22ch ≈ 139 + 39 = 178
+//   Model    "Model" + "Haiku 4.5"      = 14ch ≈  88 + 39 = 127
+// ⚠ THE TOOLS FIGURE IS A CORRECTION: the 600 derivation measured "Accept edits", but
+// `permission-preset-row.tsx › TOOL_OPTIONS` also holds "Ask each time", which is a character wider.
+// Two `gap-2` gaps = 16, the box's own `px-4` = 32. Row ≈ 153+178+127+16+32 = 506px, so 510.
+// ⚠ THE 4px IS BREATHING, NOT SLACK, AND THE DIFFERENCE IS THE POINT (Samuel, 2026-08-29: "only
+// just enough so that they are all on the same line with the same spacing"). 540 carried ~34px for
+// a LONG FREE-FORM MODEL LABEL — `agentModelOptionsFor` appends whatever the agent is actually
+// running, and a dated id is far wider than any of the four picks. That was the window paying, on
+// every normal agent, for an uncommon label: visible dead space to the right of Model.
+// ⚠ THAT CASE IS THE TRIGGER'S JOB NOW. The row is `flex-nowrap` as of the same date, so a long
+// label ELLIPSIZES inside its own pill (`select-menu.tsx`: `min-w-0 max-w-full` on the trigger,
+// `min-w-0 truncate` on the label span) instead of breaking the line. Overflow is handled where the
+// overflow is. **So do not re-add slack here for a label — fix the control if it ever stops
+// truncating**, and do not restore `flex-wrap` there without widening this back: they are one
+// decision in two trees, and `channels-v2/agent-posture.tsx` carries the other half.
+// ⚠ `minWidth` MOVES WITH IT. Default size IS the floor here (the rule the deleted
+// `session-window.js` established), and a floor below the width the content needs would let the
+// operator drag the window back into the wrapped state this number exists to prevent.
 function createAgentWindow(route) {
   const win = new BrowserWindow({
-    width: 460,
-    height: 640,
-    minWidth: 460,
-    minHeight: 640,
+    width: 510,
+    height: 560,
+    minWidth: 510,
+    minHeight: 560,
     title: 'Dopl',
     // --bg-base from the design tokens, so the first paint is not a white flash.
     backgroundColor: '#f5f7fa',

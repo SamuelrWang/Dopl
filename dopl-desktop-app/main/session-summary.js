@@ -55,7 +55,7 @@ const { PILL_ENDED, pillState, listeningState } = require('./session-pill');
 const { noteEvent, detailFor } = require('./session-detail');
 // ⚠ WHAT THE OPERATOR CALLS AN AGENT (2026-08-25) — read HERE, not in the renderer: one
 // projection, one answer. The reasoning is `agent-names.js`'s own header.
-const { displayNameFor } = require('./agent-names');
+const { displayNameFor, descriptionForAgent } = require('./agent-names');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
@@ -127,6 +127,7 @@ function liveSummary(s, name) {
     // ⚠ NULL is the ordinary answer (never renamed) and not a gap — the card falls back to
     // `Agent #<id>`. Rides BESIDE `agentId`/`name`, which stay the ADDRESS. See `agent-names.js`.
     displayName: displayNameFor(name),
+    description: descriptionForAgent(name), // what it is FOR, beside what it is CALLED
     state: pill,
     // ⚠ BESIDE THE PILL, NEVER INSTEAD OF IT (the rule `detail` follows): it refines `idle` into
     // "Waiting" (feeds) vs "Idle" (relaunches), and adds nothing under `working` / `ended`.
@@ -177,6 +178,7 @@ function endedSummary(e, name) {
     // ⚠ READ LIVE, NOT FROZEN, unlike the metrics: renaming while reading back a finished run
     // is normal, and a frozen copy would show the old name on the card just retitled.
     displayName: displayNameFor(name),
+    description: descriptionForAgent(name), // read LIVE beside the name, for the same reason
     state: PILL_ENDED,
     listening: false, // terminal; stated rather than omitted so every row carries the field
     // ⚠ WHEN IT ENDED, so the card can say so and the operator can tell a run that finished a

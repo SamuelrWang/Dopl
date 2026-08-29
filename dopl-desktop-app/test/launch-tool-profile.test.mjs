@@ -106,6 +106,7 @@ function bootLaunch(entries) {
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./ipc-guards") return guards;
+    if (id === "./agent-id") return require(join(MAIN, "agent-id.js"));
     if (id === "./agent-id") return agentId;
     if (id === "./diag") return { diag: () => {} };
     // ⚠ THE REAL REGISTRY AND THE REAL RESOLVER — the two halves of the defect.

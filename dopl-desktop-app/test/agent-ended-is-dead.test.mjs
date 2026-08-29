@@ -33,6 +33,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const require = createRequire(import.meta.url);
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
+// The SHIPPED tier rule (pure; no electron) — see `dispatch()` below.
+const wakeTiers = require(join(MAIN, "session-wake-tiers.js"));
+const agentHandles = require(join(MAIN, "agent-handles.js"));
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const TASK = "11111111-2222-3333-4444-555555555555";
@@ -92,13 +95,19 @@ function dispatch(agents) {
     liveOnThread: () => agents,
     feedInbound: (a) => { fed.push(a); return true; },
   };
+  // ⚠ THE REAL TIER MODULE, A STUB TRIAGE (2026-08-28). `session-wake-tiers.js` is pure, so the
+  // wake rule driven here is the shipped one; only the MODEL CALL is faked, and it never claims —
+  // an ended agent must be unreachable whatever a router would have said about it.
   const api = new Function(
-    "targeting", "sessionEngine", "io", "diag",
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
     `${BLOCK}\n return { feedLiveSession, mentionedAgentIds };`
   )(
     { firstClassTaskId: (m) => m.taskId || "" },
-    engine,
+    Object.assign({ agentIdsInChannel: () => agents.map((a) => a.agentId) }, engine),
     { displayNameFor: (id) => `name:${id}` },
+    wakeTiers,
+    { claim: async () => "" },
+    agentHandles,
     () => {}
   );
   return { ...api, fed };
@@ -109,26 +118,26 @@ const msg = (over = {}) => ({
   kind: "message", authorUserId: "peer", body: "carry on", taskId: TASK, seq: 7, ...over,
 });
 
-test("FEED: an ENDED agent is not fed and not queued — the message simply passes it by", () => {
+test("FEED: an ENDED agent is not fed and not queued — the message simply passes it by", async () => {
   // The engine's read hands back only LIVE sessions, so an ended agent is not in the loop at
   // all. Nothing is dropped on the floor either: a live sibling still takes the turn.
   const only = dispatch([]); // the thread's one agent ended
-  assert.equal(only.feedLiveSession(entry, msg(), ME), false, "nothing took it");
+  assert.equal(await only.feedLiveSession(entry, msg(), ME), false, "nothing took it");
   assert.deepEqual(only.fed, [], "…and nothing was queued for later");
 
   const withSibling = dispatch([{ agentId: "z9y8x7w6", ownPostIds: new Set() }]);
-  assert.equal(withSibling.feedLiveSession(entry, msg(), ME), true);
+  assert.equal(await withSibling.feedLiveSession(entry, msg(), ME), true);
   assert.deepEqual(withSibling.fed.map((f) => f.agentId), ["z9y8x7w6"], "the LIVE one, only");
 });
 
-test("@-MENTION: naming an ended agent's id addresses nobody and wakes nothing", () => {
+test("@-MENTION: naming an ended agent's id addresses nobody and wakes nothing", async () => {
   // ⚠ THE PARSE IS INTERSECTED WITH THE LIVE ROSTER, which is what makes this true rather than
   // a check somebody remembered to write. A dead id is not in the roster, so it resolves to
   // nothing — and the sibling that DOES receive the message is told nobody was addressed, not
   // that it should stand down for an agent that no longer exists.
   const h = dispatch([{ agentId: "z9y8x7w6", ownPostIds: new Set() }]);
   assert.deepEqual(h.mentionedAgentIds(`@${AGENT} please continue`, ["z9y8x7w6"]), []);
-  h.feedLiveSession(entry, msg({ body: `@${AGENT} please continue` }), ME);
+  await h.feedLiveSession(entry, msg({ body: `@${AGENT} please continue` }), ME);
   assert.equal(h.fed.length, 1);
   assert.equal(h.fed[0].addressing, null, "no live agent was addressed");
 });

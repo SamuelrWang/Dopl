@@ -169,6 +169,7 @@ export const launchOp = (() => {
   const mod = { exports: {} };
   const stub = (id) => {
     if (id === "./ipc-guards") return require_(join(MAIN, "ipc-guards.js"));
+    if (id === "./agent-id") return require_(join(MAIN, "agent-id.js"));
     if (id === "./diag") return { diag: () => {} };
     throw new Error(`session-launch-op asked for ${id} at module scope`);
   };

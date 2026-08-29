@@ -86,7 +86,12 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // operator calls an agent never reaches `channel_sessions` — whose `name` CHECK
     // (`^[a-z][a-z0-9-]{1,30}$`) would refuse a human name anyway. A peer's card still shows
     // what THEIR machine reports.
-    "agentId", "channelId", "channelName", "contextUsed", "contextWindow", "detail",
+    "agentId", "channelId", "channelName", "contextUsed", "contextWindow",
+    // ⚠ `description` joined 2026-08-27 (Samuel's launch-panel ruling) and is LOCAL-only on
+    // exactly `displayName`'s terms — same store (`main/agent-names.js`), same machine-local
+    // rule, and `reportRow` picks the server columns BY NAME so it never reaches
+    // `channel_sessions`, which has no column to receive it.
+    "description", "detail",
     "displayName", "endedAt",
     "lastActivityAt", "listening", "messageMode",
     // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same

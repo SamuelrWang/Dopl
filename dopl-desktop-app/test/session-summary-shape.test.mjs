@@ -74,6 +74,17 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       //     `session-state-push.js › reportRow` picks its columns BY NAME, so it never
       //     reaches `channel_sessions` (whose `name` CHECK would refuse a human name anyway).
       displayName: null,
+      // ⚠ WIDENED 2026-08-27 BY ONE FIELD, `description` (Samuel's launch-panel ruling). The
+      // pin failed on the ADD, which is the review this comment records:
+      //   • NULL IS THE ORDINARY ANSWER and this fixture's, exactly as `displayName`'s is: a
+      //     description is optional at launch and most agents carry none, so every reader
+      //     renders its ABSENCE rather than an empty line (INVARIANTS §11).
+      //   • IT RIDES BESIDE `displayName`, OFF THE SAME STORE (`main/agent-names.js`), under
+      //     the same machine-local rule — nothing here reaches the network.
+      //   • IT DOES NOT REACH THE SERVER, by the property this whole block rests on:
+      //     `session-state-push.js › reportRow` picks its columns BY NAME, and `description`
+      //     is not one of them. `session-state-push.test.mjs`'s row-shape case is the belt.
+      description: null,
       listening: true,
       endedAt: null,
       state: "working",

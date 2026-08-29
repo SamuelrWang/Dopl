@@ -21,6 +21,7 @@
 // split moved the code, not the boundary.
 
 const { isUuid } = require('./ipc-guards');
+const { isAgentId } = require('./agent-id');
 const { diag } = require('./diag');
 
 // NEW AGENT ON A THREAD (2026-08-20; SPAWN-IDLE and multi-agent since 2026-08-21). A WINDOWLESS
@@ -162,6 +163,28 @@ async function launchFromButton(payload) {
     // '' is the CHANNEL-LEVEL scope, not a missing value — see the block above.
     taskId: channelLevel ? '' : p.taskId,
     workspaceId,
+    // ── ⚠ THE CALLER'S PRE-ASSIGNED INSTANCE ID (2026-08-27, Samuel's launch-panel ruling) ──
+    //
+    // The composer's launch panel shows the operator the agent's ID *before* it exists, so the
+    // id has to be minted before the spawn — `sessions:mintAgentId` hands one out and the panel
+    // sends it back here. **This field was the ONE gap in that chain:** `session-launch.js ›
+    // launch` has always honoured `a.agentId` (a resume re-uses its own) and the preload
+    // forwards this payload RAW, but THIS function rebuilds the args field by field, so a
+    // caller-supplied id was dropped here and main minted a different one — the panel would
+    // have shown an address the agent never had.
+    //
+    // ⚠ IT IS NOT TRUSTED, IT IS ACCEPTED. `isAgentId` (`main/agent-id.js`, anchored and
+    // exact-length) is the same acceptance test every renderer-supplied id on this bridge gets;
+    // anything else falls through to a fresh mint rather than refusing, which is the same
+    // fail-toward-working direction `launch` itself takes. A renderer cannot invent a SHAPE, and
+    // an id grants nothing — it addresses.
+    //
+    // ⚠ AN ID THAT COLLIDES WITH A LIVE SLOT IS ALREADY HANDLED AND NOT BY THIS LINE:
+    // `launch`'s post-await `hasLiveSession(slot)` answers `skipped: 'busy'`, which the SPA
+    // already renders. Nothing new is reachable here — the panel mints from the same CSPRNG
+    // main does, into the same ~2.0e12 space, against at most MAX_CONCURRENT_SESSIONS live
+    // slots.
+    agentId: isAgentId(p.agentId) ? p.agentId : undefined,
     goal,
     counterpartyId: isUuid(p.counterpartyId) ? p.counterpartyId : null,
     direct: p.direct === true,

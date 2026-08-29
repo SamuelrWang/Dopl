@@ -196,6 +196,14 @@ test("OPEN: the default size IS the floor — it opens compact and the operator 
   const o = created[0].options;
   assert.equal(o.width, o.minWidth);
   assert.equal(o.height, o.minHeight);
+  // ⚠ 560 HIGH SINCE 2026-08-29 (Samuel), down from 640 — 12px of that cut is the posture row
+  // losing `h-9` for `h-6`, the rest is slack the narration stream did not need
+  // (`agent-window.js › createAgentWindow` carries the split). The window stays TALLER THAN WIDE
+  // (560 > 540): it holds one column of short narration lines, which is the original argument for
+  // its shape and the half of it that has not changed. A height BELOW the width would mean that
+  // argument was abandoned, which is a decision, not a tweak.
+  assert.equal(o.height, 560, `the pop-out opened ${o.height} high`);
+  assert.ok(o.height > o.width, "the agent window is a column — taller than it is wide");
 });
 
 test("OPEN: asking again for the SAME agent FRONTS the window rather than duplicating it", () => {
@@ -285,4 +293,48 @@ test("REGISTERED IN MAIN, AT CREATION — never behind an ipcMain handler", () =
   // `test/app-windows.test.mjs` asserts the structural half over the whole tree; this is
   // the local statement of the same rule.
   assert.match(SRC, /appWindows\.register\(win\)/);
+});
+
+// ── THE POSTURE ROW FITS ON ONE LINE (2026-08-27, Samuel) ────────────────────
+//
+// ⚠ WHAT THIS PINS CHANGED ON 2026-08-29, AND THE NEW VERSION IS THE WEAKER CLAIM. It used to pin
+// a SILENT failure: the row was `flex-wrap`, so a window too narrow for the three controls did not
+// clip — it WRAPPED the third onto a second line and the pop-out opened looking like it had two
+// rows of chrome. The row is `flex-nowrap` now (`channels-v2/agent-posture.tsx` carries why), so
+// that failure mode no longer exists: a narrow window ellipsizes a label instead of breaking the
+// line. What is left to protect is the LOOK — three pills, one line, none of them squeezed — and
+// the number below is the row's honest measurement with 4px of breathing, nothing more.
+//
+// ⚠ AND THE FLOOR MOVES WITH THE DEFAULT. Default size IS the floor on this window, so a
+// `minWidth` left behind at the old value would let the operator drag straight back into the
+// wrapped state.
+test("the agent window opens wide enough for Tools / Messages / Model on ONE row", () => {
+  const src = readFileSync(join(MAIN, "agent-window.js"), "utf8");
+  const opts = src.slice(src.indexOf("function createAgentWindow("));
+  const width = Number(/width:\s*(\d+)/.exec(opts)[1]);
+  const minWidth = Number(/minWidth:\s*(\d+)/.exec(opts)[1]);
+  // ⚠ 510 SINCE 2026-08-29 — the row measures ~506 at its widest labels once the three controls
+  // took `select-menu.tsx › raisedField` (`agent-window.js › createAgentWindow` carries the
+  // arithmetic), plus 4px of breathing. 600 → 540 → 510 in one day, each step deleting space
+  // Samuel could SEE to the right of Model.
+  // ⚠ THE 34px THAT WENT WAS A LABEL BUDGET, AND ITS JOB MOVED RATHER THAN VANISHING. It existed
+  // so a long free-form model name could not re-wrap the row; the row is `flex-nowrap` now and the
+  // trigger truncates instead (pinned in `channels-v2/agent-posture.test.tsx`). **Do not restore
+  // slack here for a label** — that is the control's problem and it is solved there.
+  // ⚠ AND DO NOT RAISE IT WITHOUT THE VARIANT MOVING. This width is a measurement of
+  // `channels-v2/agent-posture.tsx`'s trigger size; a bigger number is empty space, not safety.
+  //
+  // ⚠ THESE ARE LOGICAL POINTS, AND A SCREENSHOT IS NOT (measured 2026-08-29). A 540pt window
+  // photographed on a 2× Retina display is ~1080 DEVICE pixels wide, ~1090 with the macOS window
+  // shadow the capture includes — which reads as "the change did not apply" to anyone measuring
+  // the image. It was reported that way once. **Before touching this number over a screenshot,
+  // halve the measurement**: the whole main process contains no geometry mutation at all (no
+  // `setBounds`/`setSize`/`setMinimumSize`/`maximize`, and nothing persists bounds), so what
+  // BrowserWindow is handed here is what the OS gets, and a wrong-looking width is far more
+  // likely to be the ruler than the code.
+  // ⚠ BOUNDED ON BOTH SIDES, unlike every earlier version of this case. A floor alone could not
+  // fail on the thing Samuel actually reported three times — a window WIDER than its content.
+  assert.ok(width >= 510, `the pop-out opened at ${width}, too narrow for the posture row`);
+  assert.ok(width <= 514, `the pop-out opened at ${width} — the row measures ~506; that is dead space`);
+  assert.equal(minWidth, width, "default size is the floor on this window — they move together");
 });

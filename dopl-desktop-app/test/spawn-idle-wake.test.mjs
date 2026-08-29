@@ -17,6 +17,15 @@
 //     agent, you direct it") and is bounded by disclosure: an agent id is minted on this machine,
 //     known to no server, and the parse is intersected with the ids live on this thread.
 //
+// ── ⚠ AMENDED 2026-08-28 (Samuel's TIERED WAKE ruling) ───────────────────────────────────────
+// WHAT THIS FILE STILL PINS: the STAMP, the CLEAR at the one dispatch funnel, and the LAUNCH GOAL
+// — none of which the amendment touches. WHAT MOVED: the wake KEY. A dormant agent now wakes on
+// three tiers (@-mention, a solo-agent room, a triage claim), all of them behind a LOOP FENCE that
+// only HUMAN-authored `message` rows pass — so "FROM ANY AUTHOR" above is REVERSED for the peer's
+// AGENT, which can no longer wake anything on this machine. The tier table lives in
+// `session-wake-tiers.js` and is driven in `test/wake-tiers.test.mjs` + `test/session-dispatch
+// .test.mjs`; the BELT cases below are rewritten to the verdict the tiers hand it.
+//
 // ── AND THE BUG FOUND IN THE SAME PASS ───────────────────────────────────────────────────────
 // The operator's LAUNCH GOAL was DEAD TEXT on this lane. `sessions:launch` composes one ("Join the
 // thread "<title>" as my agent: read it with dopl_channel and carry the work forward") and hands it
@@ -120,9 +129,15 @@ function gate(session) {
 const live = () => ({ settled: false, state: { messageMode: "auto_inbound" } });
 const undirected = () => ({ ...live(), awaitingDirective: true });
 
-test("BELT: the gate refuses an unaddressed message for an undirected agent", () => {
+// ⚠ THE BELT READS THE WAKE VERDICT SINCE 2026-08-28 (Samuel's TIERED WAKE ruling), NOT THE
+// ADDRESSING. It used to read `a.addressing.me`, which was correct while an @-mention was the ONLY
+// thing that could wake a dormant agent. There are THREE wake tiers now — @-mention, a solo-agent
+// room, a triage claim — and two of them carry no addressing at all, so an addressing-shaped belt
+// would have refused exactly the wakes the ruling adds. `session-dispatch.js › feedLiveSession`
+// makes the decision; this reads the boolean, so the belt tracks the rule instead of restating it.
+test("BELT: the gate refuses an unwoken message for an undirected agent", () => {
   const g = gate(undirected());
-  assert.equal(g.feedInbound({ message: "hello everyone", addressing: null }), false);
+  assert.equal(g.feedInbound({ message: "hello everyone", addressing: null, wake: false }), false);
   assert.equal(g.dispatched.length, 0, "nothing was fed");
   // ⚠ AND NOTHING WAS RECORDED EITHER. A refusal here must look like a full queue, not like a
   // GATED message: `io.noteGatedBody` would drop the body out of any later seed, which is the
@@ -130,31 +145,54 @@ test("BELT: the gate refuses an unaddressed message for an undirected agent", ()
   assert.equal(g.queued.length, 0);
 });
 
-test("BELT: an addressed message passes the belt and is dispatched", () => {
+test("BELT: a message the tier rules WOKE passes the belt and is dispatched", () => {
+  // All three tiers arrive here identically, which is the point of passing a verdict: the @-lane
+  // still carries its addressing (as FRAMING), the solo and triage lanes carry none.
+  for (const a of [
+    { message: "@abc12def go", addressing: { me: true, ids: ["abc12def"] }, wake: true },
+    { message: "can you look at this?", addressing: null, wake: true }, // solo room / triage claim
+  ]) {
+    const g = gate(undirected());
+    assert.equal(g.feedInbound(a), true, a.message);
+    assert.equal(g.dispatched.length, 1);
+    assert.equal(g.dispatched[0].type, "inbound_arrived");
+  }
+});
+
+test("BELT: an ADDRESSING alone no longer opens it — the verdict is the only key", () => {
+  // ⚠ THIS IS THE TIGHTENING, AND IT IS THE LOOP FENCE'S LAST MILE. An @-mention written by an
+  // AGENT now answers `wake: false` upstream (`session-wake-tiers.js › wakeEligible`), so a belt
+  // that still honoured `addressing.me` would be the one door the loop could still walk through.
   const g = gate(undirected());
-  assert.equal(g.feedInbound({ message: "@abc12def go", addressing: { me: true, ids: ["abc12def"] } }), true);
-  assert.equal(g.dispatched.length, 1);
-  assert.equal(g.dispatched[0].type, "inbound_arrived");
+  assert.equal(g.feedInbound({ message: "@abc12def go", addressing: { me: true, ids: ["abc12def"] } }), false);
+  assert.equal(g.dispatched.length, 0);
 });
 
 test("BELT: a WOKEN session is untouched by it — the belt is per-session and `=== true`", () => {
   for (const flag of [undefined, false, null, "true", 1]) {
     const g = gate({ ...live(), awaitingDirective: flag });
-    assert.equal(g.feedInbound({ message: "anything", addressing: null }), true, JSON.stringify(flag));
+    assert.equal(g.feedInbound({ message: "anything", addressing: null, wake: false }), true, JSON.stringify(flag));
   }
 });
 
-test("BELT: somebody else's addressee is not a directive", () => {
-  const g = gate(undirected());
-  assert.equal(g.feedInbound({ message: "@z9y8x7w6 go", addressing: { me: false, ids: ["z9y8x7w6"] } }), false);
+test("BELT: a truthy-but-wrong verdict does not open it", () => {
+  for (const truthy of ["yes", 1, {}]) {
+    const g = gate(undirected());
+    assert.equal(g.feedInbound({ message: "x", addressing: null, wake: truthy }), false, JSON.stringify(truthy));
+  }
 });
 
 test("BELT: it is a SECOND fence, not the only one", () => {
   // The primary gate is `session-dispatch.js › mayFeed` (driven in that file's truth table). Both
   // exist because this function is the ENTRY POINT the engine exports, so a second caller must not
   // be able to wake an agent by saying nothing to it.
-  assert.match(GATE, /s\.awaitingDirective === true && !\(a\.addressing && a\.addressing\.me === true\)/);
-  assert.match(read("session-dispatch.js"), /function mayFeed\(s, addressing\)/);
+  // ⚠ THE TWO ARE DELIBERATELY NOT THE SAME WIDTH. The primary gate fences every DORMANT session
+  // (spawn-idle OR idle-parked); this one fences `awaitingDirective` alone, because every other
+  // lane that resumes a parked session — the operator's 1:1 `steer`, an inbound release, the
+  // post-sign-in resume — reaches it through paths that never set `wake`.
+  assert.match(GATE, /s\.awaitingDirective === true && a\.wake !== true/);
+  assert.match(read("session-dispatch.js"), /function mayFeed\(s, wake\)/);
+  assert.match(read("session-dispatch.js"), /function dormant\(s\)/);
 });
 
 // ── 4. THE LAUNCH GOAL REACHES THE WAKE TURN ─────────────────────────────────────────────────

@@ -53,6 +53,8 @@ const LEGACY_SRC = M("legacy-threads.js");
 
 const require = createRequire(import.meta.url);
 const targeting = require("../main/targeting.js"); // dependency-free; the REAL gate
+const wakeTiers = require("../main/session-wake-tiers.js"); // pure; the REAL tier rule
+const agentHandles = require("../main/agent-handles.js"); // pure; the REAL slug rule
 
 // ── STATIC PIN 1: the listener's dispatch ORDER ──────────────────────────────────
 // The mirror below is only meaningful if it matches the real loop. These pin the surviving
@@ -65,7 +67,12 @@ test("the listener runs THE route, and classify still runs LAST", () => {
     assert.notEqual(i, -1, `dispatch site missing from listener-messages.js: ${needle}`);
     return i;
   };
-  const feed = at("if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;");
+  // ⚠ AWAITED SINCE 2026-08-28 (Samuel's TIERED WAKE ruling): TIER 3's claim/pass pass makes the
+  // route asynchronous, and the pin moves with it. The ORDER property this file exists for is
+  // unchanged — the route still runs first and classify still runs LAST — but an `await` that
+  // went missing here would make `feedLiveSession` return a Promise, which is always truthy, and
+  // EVERY message would short-circuit classify. That is why the pin names the exact call.
+  const feed = at("if (await sessionDispatch.feedLiveSession(entry, m, myUserId)) return;");
   const classify = at("const verdict = targeting.classify(m, entry, myUserId);");
   assert.ok(feed < classify, "feedLiveSession runs first, and classify LAST");
   // ⚠ THIS PIN USED TO COMPARE FIVE POSITIONS — three routes plus the chat guard between
@@ -197,16 +204,22 @@ function harness(over = {}) {
   // replaced by the thread itself.
   const sessionEngine = {
     liveOnThread: () => (cfg.live ? [{ agentId: "a1b2c3d4", ownPostIds: new Set() }] : []),
+    // The tier rule counts the CHANNEL's agents; here that is the same one session.
+    agentIdsInChannel: () => (cfg.live ? ["a1b2c3d4"] : []),
     feedInbound: (a) => { calls.feed.push(a); return true; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
   // 2026-08-01: a fed message is titled with its AUTHOR, which is not the same string as the
   // account's display name when an AGENT wrote the post. The resolver (`authorLabel`) lives
   // inside the sliced block, so it needs no injection.
+  // ⚠ THE REAL TIER MODULE (pure), A STUB ROUTER (2026-08-28). This file measures the listener's
+  // dispatch ORDER and the OUTCOME of a message nothing on this machine claims, so the wake rule
+  // must be the shipped one and the model call must not happen. The stub never claims: an
+  // external-requester thread has no dormant agent of mine to wake in the first place.
   const routes = new Function(
-    "targeting", "sessionEngine", "io", "diag",
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
     `${BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, io, () => {});
+  )(targeting, sessionEngine, io, wakeTiers, { claim: async () => "" }, agentHandles, () => {});
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //
@@ -218,7 +231,7 @@ function harness(over = {}) {
   // test/chat-never-starts-a-session.test.mjs owns that contract and evaluates the REAL
   // dispatchMessage source for it.
   async function dispatch(entry, m) {
-    if (routes.feedLiveSession(entry, m, ME)) return "feedLiveSession";
+    if (await routes.feedLiveSession(entry, m, ME)) return "feedLiveSession";
     const verdict = classify(m, entry, ME);
     if (verdict === "trigger") calls.trigger.push(m);
     else if (verdict === "fyi") calls.fyi.push(m);

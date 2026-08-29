@@ -51,7 +51,14 @@ async function dispatchMessage(entry, m, myUserId) {
   // and stays unguarded for the same reason it always was: it feeds a session that is ALREADY
   // RUNNING, which is "seen", not "started". Chat still reaches classify, where an @-tag makes
   // it 'fyi' and an untagged line 'ignore'.
-  if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
+  // ⚠ AWAITED SINCE 2026-08-28 (Samuel's TIERED WAKE ruling). This route was synchronous for its
+  // whole life; TIER 3 gives a multi-agent room's unaddressed message a bounded claim/pass pass
+  // (`session-triage.js`, `TRIAGE_TIMEOUT_MS`) before it can decide who — if anyone — it woke.
+  // ⚠ THE AWAIT HOLDS THIS CHANNEL'S CURSOR, WHICH IS THE POINT: `drainPage` may not step over a
+  // message whose routing has not finished, and `trigger.handleTrigger` below already serialises
+  // a consent POST plus a spawn on the same lane. The triage pass is time-bounded precisely
+  // because it sits here.
+  if (await sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
   const verdict = targeting.classify(m, entry, myUserId);
   diag(
     'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,

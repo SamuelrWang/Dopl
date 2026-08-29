@@ -36,6 +36,7 @@
 //   sessions:delete          ⚠ ends it if live, then DESTROYS every LOCAL trace of it — never
 //                            a channel message, which is the server's
 //   sessions:rename          what the operator calls one agent — display only, never an address
+//   sessions:describe        what it is FOR — rename's twin; sessions:mintAgentId ONE fresh id
 //   agents:forgetThread      drops every LOCAL trace of a deleted thread's ended agents
 //   claude:signIn            ⚠ signs THIS MAC in to Claude Code, then releases every held
 //                            session — the ONE entry into the recovery flow
@@ -55,7 +56,7 @@
 
 const { ipcMain } = require('electron');
 const { isAppWindowSender, isUuid } = require('./ipc-guards');
-const { isAgentId } = require('./agent-id');
+const { isAgentId, newAgentId } = require('./agent-id'); // ⚠ BOTH from the ONE require: `agent-id.js` is pure + electron-free, so it needs none of the lazy-require cycle dodging below.
 const { diag } = require('./diag');
 
 // ⚠ THE THIRD COORDINATE OF EVERY AGENT OP (2026-08-21, Samuel's multiplayer ruling). Ops here
@@ -419,6 +420,26 @@ function register(opts = {}) {
     if (stored === null) return { ok: false, reason: 'bad-name' };
     return { ok: true, displayName: stored };
   }));
+
+  // ⚠ WHAT AN AGENT IS FOR, beside what it is CALLED (2026-08-27, Samuel's launch-panel ruling).
+  // `sessions:rename`'s TWIN — its whole contract above applies verbatim. EMPTY clears; the
+  // answer is MAIN'S OWN stored value. Why a second op: `main/agent-names.js › patched`.
+  ipcMain.handle('sessions:describe', appWindowOnly('sessions:describe', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    const agentId = asAgentId(p.agentId);
+    if (!agentId) return { ok: false };
+    const stored = require('./agent-names').describe(agentId, p.description);
+    if (stored === null) return { ok: false, reason: 'bad-description' };
+    return { ok: true, description: stored || null };
+  }));
+
+  // ⚠ ONE FRESH INSTANCE ID, ASSIGNED TO NOBODY (2026-08-27, Samuel's launch-panel ruling). The
+  // panel shows the operator the ID while they fill the form, so it is minted BEFORE the spawn
+  // and handed to `sessions:launch`, which forwards it (`session-launch-op.js`). ⚠ ITS PRESENCE
+  // IS THE SPA'S CAPABILITY GATE and it reserves nothing — `main/agent-id.js` argues both.
+  ipcMain.handle('sessions:mintAgentId', appWindowOnly('sessions:mintAgentId', { ok: false }, () => (
+    { ok: true, agentId: newAgentId() }
+  )));
 
   // ⚠ SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the recovery flow.
   //

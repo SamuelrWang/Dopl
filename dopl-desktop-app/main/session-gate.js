@@ -128,14 +128,30 @@ function enqueue(s, a) {
 // only there because this function is the ENTRY POINT (`session-engine.feedInbound`) and a second
 // caller must not be able to wake an agent by saying nothing to it. Refusing is the same shape as
 // a full queue: `false`, and the caller falls through.
-// ⚠ IT READS THE VERDICT, NOT THE BODY. `a.addressing` is the parsed @agent-id verdict FOR THIS
-// READER, computed against this machine's live ids; re-parsing here would be a second spelling of
-// the addressing rule, which is how two readers come to disagree about one message.
+// ⚠ IT READS THE VERDICT, NOT THE BODY. `a.wake` is the WAKE decision already made for THIS
+// message and THIS agent by `session-dispatch.js › feedLiveSession`; re-deriving it here would be
+// a second spelling of the wake rule, which is how two readers come to disagree about one message.
+//
+// ⚠ THE VERDICT REPLACED `a.addressing` ON 2026-08-28 (Samuel's TIERED WAKE ruling), and that is a
+// TIGHTENING as well as a rewiring. This line used to read the @-mention verdict directly, which
+// was correct while an @-mention was the ONLY thing that could wake a dormant agent. There are
+// three wake tiers now — @-mention, a solo-agent room, and a triage claim — and two of them carry
+// NO addressing at all, so an `addressing`-shaped belt would have refused exactly the wakes the
+// ruling adds. Reading the boolean instead means the belt tracks the rule automatically, and it
+// closes the one door that was open before: an @-mention from an AGENT no longer passes here,
+// because the loop fence (`session-wake-tiers.js › wakeEligible`) already answered `wake: false`.
+//
+// ⚠ IT STILL FENCES ONLY `awaitingDirective`, NOT EVERY DORMANT SESSION. The PARKED half of the
+// tier gate lives in `session-dispatch.js › mayFeed` alone, deliberately: this function is the
+// engine's ENTRY POINT and every other lane that resumes a parked session (the operator's 1:1
+// `steer`, an inbound release, the post-sign-in resume) reaches a parked session through paths
+// that never set `wake`. Narrowing the entry point would break those; the class that has no other
+// guard is the shell that never ran, and that is the class this belt is for.
 function feedInbound(a) {
   if (!deps || !deps.sessions) return false;
   const s = deps.sessions.get(store.slotKey(a));
   if (!s || s.settled) return false;
-  if (s.awaitingDirective === true && !(a.addressing && a.addressing.me === true)) return false;
+  if (s.awaitingDirective === true && a.wake !== true) return false;
   return enqueue(s, a);
 }
 

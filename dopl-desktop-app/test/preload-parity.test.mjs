@@ -243,6 +243,24 @@ const APP_OPS = [
   //   • Own agents only, structurally: the registry and the local stores hold nothing but this
   //     operator's own agents on this machine.
   "sessions.delete",
+  // ⚠ TWO OPS JOINED HERE ON 2026-08-27 (the composer's launch panel). The pin failed on the
+  // ADD, which is the review this comment records:
+  //   • BOTH main-process handlers EXIST and were checked before this list was edited —
+  //     `main/session-ipc-ops.js` registers `sessions:describe` and `sessions:mintAgentId`
+  //     under the same `appWindowOnly()` sender binding as every op above. A pinned op with no
+  //     handler is a promise the bridge cannot keep; that is the check this rule forces.
+  //   • `sessions.describe` IS `sessions.rename`'S TWIN, field for field: it takes no channel,
+  //     moves no session, starts no turn, grants nothing, and never consults the registry. It
+  //     writes one machine-local string to `main/agent-names.js` — the same store, the same
+  //     `electron-store` record, the same never-server-reachable rule.
+  //   • `sessions.mintAgentId` STARTS NOTHING AND RESERVES NOTHING. It returns eight characters
+  //     from `main/agent-id.js › newAgentId` — a pure CSPRNG draw with no registry entry and
+  //     nothing to release. ⚠ ITS PRESENCE IS ALSO A CAPABILITY GATE: the SPA reads it as "this
+  //     build's `session-launch-op.js` forwards a caller-supplied `agentId`", and falls back to
+  //     filling the id in after launch when it is absent. **Removing it does not merely lose an
+  //     op — it silently re-enables the fallback**, which is exactly the class of disappearance
+  //     this file exists to catch.
+  "sessions.describe",
   // ⚠ TWO OPS JOINED HERE ON 2026-08-18 (wiring plan Phase 5): `sessions.pause` and
   // `sessions.end`, the Agents tab's controls on the operator's OWN agent. The pin failed on
   // the ADD, which is the review this comment records:
@@ -303,6 +321,7 @@ const APP_OPS = [
   //     unbounded by construction — `main/session-narration.js` states what may enter a
   //     ring entry). Read once on mount, then listen, like `summaries`/`onSummaries`.
   "sessions.message",
+  "sessions.mintAgentId",
   "sessions.narration",
   "sessions.onNarration",
   "sessions.onSummaries",

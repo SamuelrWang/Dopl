@@ -132,6 +132,9 @@ export function bootIpc({ blocked = false } = {}) {
     // is the anti-probe gate every op leans on. The split half is built with this SAME stub,
     // so both register into one `handlers` map and both are driven by every case below.
     if (id === "./ipc-guards") return realGuards;
+    // The REAL id predicate, for the reason stated where `realAgentId` is loaded: a
+    // permissive fake would accept ids `session-launch-op.js` refuses.
+    if (id === "./agent-id") return realAgentId;
     // ⚠ THE REAL ID PREDICATE, on `ipc-guards`' terms. `asAgentId` is the third coordinate's
     // boundary clamp (2026-08-21) and a permissive fake would let every op below accept an
     // agent id shape main really refuses.

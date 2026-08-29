@@ -109,10 +109,13 @@ test("H-2: dopl_only must NEVER grant the bare mcp__dopl server prefix", () => {
 });
 
 test("H-2: no admin MCP tool is grantable under any restricted profile", () => {
-  // FOUR since the 2026-08-07 retirement: dopl_cluster_admin / dopl_workflow_admin are
-  // no longer registered by the server, so there is no tool to grant. They did not
-  // simply vanish from the deny path — see RETIRED_DOPL_TOOLS and its own test below.
-  assert.ok(DOPL_ADMIN_TOOLS.length === 4, "expected exactly four admin tools");
+  // FIVE since 2026-08-28, when `dopl_agent_admin` joined (MCP surface v2 wave A). It was
+  // FOUR from the 2026-08-07 retirement: dopl_cluster_admin / dopl_workflow_admin are no
+  // longer registered by the server, so there is no tool to grant. They did not simply
+  // vanish from the deny path — see RETIRED_DOPL_TOOLS and its own test below.
+  // ⚠ The COUNT is the weak half of this test; the loop under it is the strong half, and
+  // "the admin list is exactly the live *_admin tools" is what stops the two drifting.
+  assert.ok(DOPL_ADMIN_TOOLS.length === 5, "expected exactly five admin tools");
   for (const profile of RESTRICTED) {
     const allowed = buildAllowedTools(profile);
     const denied = buildDeniedTools(profile);
@@ -454,7 +457,9 @@ test("the desktop's Dopl tool lists match the MCP server's live surface", () => 
   assert.deepEqual(desktop, live,
     `main/tool-profiles.js has drifted from packages/mcp-server/src (HIDDEN_TOOLS read from ${hiddenDecls[0].file})`);
   // The number ENGINEERING.md §7 states in prose, asserted once.
-  assert.equal(live.length, 14, "the agent surface is documented as 14 tools");
+  // 14 → 16 on 2026-08-28 (`dopl_agent` + `dopl_agent_admin`, wave A), then
+  // 16 → 17 the same day (`dopl_home`, wave B).
+  assert.equal(live.length, 17, "the agent surface is documented as 17 tools");
 });
 
 // RETIRED_DOPL_TOOLS is a SUPERSET of HIDDEN_TOOLS, never an equality.
