@@ -22,6 +22,8 @@
  * `channelBasesQueryKey` turns both halves red. Count in the milestone report.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { QueryClient } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -129,6 +131,71 @@ describe("a grant write reaches the entry the PANE mounted", () => {
     expect(
       client.getQueryData<KnowledgeBaseList>(otherKey)?.channelGrants
     ).toEqual({});
+  });
+});
+
+/**
+ * 🔒 THE /home CARD RESTYLE IS SCOPED BY A DEFAULTED ALIAS, AND BOTH HALVES OF
+ * THAT HAVE TO HOLD (Samuel, 2026-08-28: three cards per row, title not bold and
+ * sized off the channel row).
+ *
+ * ⚠ SOURCE READ, for the reason `agent-templates/components/template-editor.
+ * test.tsx › no concave surfaces` states: jsdom loads no stylesheet and CSS
+ * modules arrive as opaque class names, so the only honest place to pin a CSS
+ * RULING is the declaration text. Paths resolve off `import.meta.url`, not
+ * `process.cwd()` — this suite is run with `--root apps/desktop-ui` and reaches
+ * into the repo-root web tree.
+ *
+ * ⚠ THE SECOND ASSERTION IS THE ONE THAT KEEPS IT /home-ONLY. The card is
+ * `knowledge-v2/home/base-card.tsx`, shared with the workspace knowledge page
+ * and never forked; the restyle is legitimate only while the shared rule keeps
+ * a FALLBACK equal to that page's old value. Drop the fallback and the
+ * workspace grid silently inherits /home's face — which is the exact failure
+ * the alias was chosen to avoid, and it would show up on no /home test at all.
+ */
+describe("the /home card face is a rebind, not a fork", () => {
+  const read = (rel: string) =>
+    readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+  const homeCss = read("./home.module.css");
+  const cardCss = read(
+    "../../../../../src/features/knowledge/components/knowledge-v2/knowledge-v2.module.css"
+  );
+  /** `.kbCards`'s own block — the aliases below must be rebound THERE, not
+   *  loose in the file where they would reach the whole page. */
+  const kbCards = homeCss.slice(
+    homeCss.indexOf(".kbCards {"),
+    homeCss.indexOf("}", homeCss.indexOf(".kbCards {"))
+  );
+
+  it("🔒 /home's grid is THREE columns", () => {
+    expect(kbCards).toMatch(/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  });
+
+  it("🔒 rebinds the card's title and clamp on the GRID, and by token", () => {
+    // ⚠ `var(--text-body)` — the token behind `text-body`, which is what
+    // `relationship-list.tsx`'s channel-row name wears. A literal `12.5px` here
+    // would be the same pixel today and a drift the day the scale moves.
+    expect(kbCards).toContain("--kv-card-title-size: var(--text-body)");
+    expect(kbCards).toMatch(/--kv-card-title-weight:\s*400/);
+    expect(kbCards).toMatch(/--kv-card-desc-lines:\s*2/);
+  });
+
+  it("🔒 the SHARED card keeps the workspace page's values as fallbacks", () => {
+    expect(cardCss).toContain("var(--kv-card-title-size, var(--text-title))");
+    expect(cardCss).toContain("var(--kv-card-title-weight, 600)");
+    // Floor and cap read ONE number, or the row reserves lines it cannot draw.
+    expect(cardCss).toContain("-webkit-line-clamp: var(--kv-card-desc-lines, 3)");
+    expect(cardCss).toContain(
+      "calc(var(--text-caption) * 1.45 * var(--kv-card-desc-lines, 3))"
+    );
+  });
+
+  it("🔒 the workspace page's own grid is untouched — still its own 3 × 244px", () => {
+    // The ruling was /home-scoped. `.cardGrid` is the knowledge PAGE's grid and
+    // no /home change may reach it.
+    expect(cardCss).toMatch(
+      /\.cardGrid \{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)[^}]*grid-auto-rows:\s*244px/
+    );
   });
 });
 

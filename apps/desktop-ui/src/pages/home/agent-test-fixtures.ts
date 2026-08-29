@@ -99,6 +99,18 @@ export const T_HOME = template({
   fields: [{ key: "round", value: "seed" }],
   knowledgeBases: [{ id: "kb-home-1", name: "Fundraise memos" }],
 });
+/**
+ * 🔴 THE WORKSPACE SHELF, IN THE HOME WORKSPACE AND ON PURPOSE (Samuel's ruling
+ * 2026-08-27). Private, the caller's own, in the same workspace as `T_HOME` —
+ * every property the Personal section used to select on. Only `?shelf=home`
+ * separates them, and the router below answers BOTH shelves when the param is
+ * missing. Collapse that branch and the exclusion pin goes vacuous.
+ */
+export const T_HOME_WORKSPACE_SHELF = template({
+  id: "tpl-home-ws-1",
+  name: "Quarterly reporter",
+  workspaceId: WORKSPACE_ID,
+});
 /** …and a `team` row over there too, so the drop is pinned on both reads. */
 export const T_HOME_TEAM = template({
   id: "tpl-home-2",
@@ -162,13 +174,26 @@ export function agentTemplates(
     const source = ALL.find((t) => path.endsWith(t.id)) ?? T_PRIVATE;
     return Promise.resolve(ok({ template: { ...source, ...body } }));
   }
+  if (opts.workspaceId !== WORKSPACE_ID) {
+    return Promise.resolve(
+      ok({
+        templates: [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM],
+      })
+    );
+  }
+  // ⚠ THE SHELF RIDES THE QUERY, so this needs the PATH as well as `opts` —
+  // both shelves of one workspace hit the same url with the same header.
+  // ⚠ ABSENT `shelf` ANSWERS BOTH, mirroring the route: that branch is what a
+  // forgotten param falls into and the only reason the exclusion pins can fail.
+  const shelf = new URLSearchParams(path.split("?")[1] ?? "").get("shelf");
+  if (shelf === "home") {
+    return Promise.resolve(ok({ templates: [T_HOME, T_HOME_TEAM] }));
+  }
+  if (shelf === "workspace") {
+    return Promise.resolve(ok({ templates: [T_HOME_WORKSPACE_SHELF] }));
+  }
   return Promise.resolve(
-    ok({
-      templates:
-        opts.workspaceId === WORKSPACE_ID
-          ? [T_HOME, T_HOME_TEAM]
-          : [T_SHARED, T_SHARED_PEER, T_PRIVATE, T_PRIVATE_PEER, T_TEAM],
-    })
+    ok({ templates: [T_HOME, T_HOME_TEAM, T_HOME_WORKSPACE_SHELF] })
   );
 }
 
@@ -212,7 +237,7 @@ export function agentRoutes(
   opts: BridgeRequestOpts = {}
 ): Promise<BridgeResponse> {
   const bare = path.split("?")[0];
-  if (bare.startsWith("/api/agent-templates")) return agentTemplates(bare, opts);
+  if (bare.startsWith("/api/agent-templates")) return agentTemplates(path, opts);
   // ⚠ Answered so the HOME-workspace editor's teams read resolves. A CONTAINER
   // mount must never reach it, and `agent-authoring.test.tsx` asserts on the
   // absence of this very call.
@@ -238,11 +263,10 @@ export async function openAgents(): Promise<void> {
   fireEvent.click(screen.getByText("Agents"));
 }
 
-/** Point the private section at one of the two shelves. */
-export async function chooseScope(label: string): Promise<void> {
-  fireEvent.click(screen.getByLabelText("Which private agents"));
-  fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(label) }));
-}
+// ⚠ `chooseScope` LIVED HERE AND IS DELETED (2026-08-27). The pane has two
+// sections and no scope pill, so there is nothing to choose; a helper that
+// clicked a control which no longer exists would fail loudly, which is fine —
+// keeping it as a no-op is what would have been dangerous.
 
 /** The template calls, split by which workspace they addressed. */
 export function templateCalls(

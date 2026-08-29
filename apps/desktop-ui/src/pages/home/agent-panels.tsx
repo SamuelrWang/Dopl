@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
-import { Bot, Plus } from "lucide-react";
+import { Bot } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
-import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import { pendingRow } from "@/shared/ui/pending";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
 import {
   SECTIONS_CONTAINER,
@@ -12,7 +10,7 @@ import {
 } from "@/features/agent-templates/lib/visibility";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
 import type { HomeChannel } from "@/features/home/types";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError } from "#/components/page-states";
 import {
   PrivateAgentSection,
   SharedAgentSection,
@@ -23,6 +21,8 @@ import {
   HomeWorkspaceTemplateEditor,
 } from "./agent-editor";
 import { CopyToChannelDialog, UseInThisChannelButton } from "./agent-copy";
+import { CreateButton } from "./panel-buttons";
+import { HomeAgentPanelsSkeleton } from "./home-skeleton";
 
 /**
  * /home → Agents. THE THREE TEMPLATE SCOPES OF ONE CHANNEL (Samuel's rulings,
@@ -96,18 +96,19 @@ export function HomeAgentPanels({
   homeWorkspaceSegment: string | null;
   currentUserId: string;
 }) {
-  const [scope, setScope] = useState<PrivateScope>("channel");
   const [editing, setEditing] = useState<EditorTarget | null>(null);
-  /** The scope-C row waiting on its confirm step (plan §3, M4). */
+  /** The PERSONAL row waiting on its confirm step (plan §3, M4). */
   const [copying, setCopying] = useState<AgentTemplate | null>(null);
 
+  // ⚠ A CONTAINER READ IS UNFILTERED. Shelves exist only in a standard
+  // workspace — `resolveTemplateHomeScope` fences the marker to the caller's
+  // own default one — so `?shelf=` on a container would be a question with one
+  // possible answer.
   const containerList = useAgentTemplates(channel?.workspaceId ?? null);
-  // Scope C is fetched only once it is ASKED FOR — a reader who never opens the
-  // dropdown must not pay for a second workspace's template list. The pill
-  // wears `pendingRow` for exactly that first fetch (INVARIANTS §8 rule 8).
-  const homeList = useAgentTemplates(homeWorkspaceId, {
-    enabled: scope === "all",
-  });
+  // ⚠ NO LONGER LAZY (2026-08-27). It was gated on the scope pill; with the
+  // pill gone Personal is ALWAYS on screen, so a deferred read would just be a
+  // guaranteed second round trip after first paint.
+  const homeList = useAgentTemplates(homeWorkspaceId, { shelf: HOME_SHELF });
 
   const containerGroups = useMemo(
     () => groupByVisibility(containerList.templates),
@@ -118,16 +119,18 @@ export function HomeAgentPanels({
     [homeList.templates]
   );
 
-  // ⚠ `groupByVisibility` DROPS a `team` row rather than filing it under one of
-  // these two. In a container `team` is a DEAD value — there are no teams to
-  // link (§4A) — and a surface that swept it into "Private" or "Shared in this
-  // channel" would be inventing a sharing fact nobody stored (§11).
+  // ⚠ `groupByVisibility` DROPS a `team` row rather than filing it elsewhere. In
+  // a container `team` is a DEAD value — there are no teams to link (§4A) — and
+  // a surface that swept it into "Shared in this channel" would be inventing a
+  // sharing fact nobody stored (§11). ⚠ SINCE 2026-08-27 A CONTAINER `private`
+  // ROW IS DROPPED THE SAME WAY: the section that listed it is gone, and the
+  // editor no longer offers the value (`lib/visibility.ts`).
   const shared = containerGroups.workspace;
-  const privateHere = useMemo(
-    () => containerGroups.private.filter((t) => isMine(t, currentUserId)),
-    [containerGroups.private, currentUserId]
-  );
-  const privateEverywhere = useMemo(
+  // ⚠ THE `isMine` HALF IS NOT REDUNDANT WITH `?shelf=home`. The shelf says
+  // WHICH SHELF; `canSeeTemplate` already drops other people's private rows, but
+  // the home workspace can hold a member's `workspace`-visible template too, and
+  // Personal is the caller's own things. Two questions, both asked.
+  const personal = useMemo(
     () => homeGroups.private.filter((t) => isMine(t, currentUserId)),
     [homeGroups.private, currentUserId]
   );
@@ -157,10 +160,12 @@ export function HomeAgentPanels({
   // waits for the CONTAINER read; the private section waits separately for the
   // HOME one, because only that half of it moved when the pill did.
   if (!containerList.resolved) {
-    return <PageLoading label="Loading agents" />;
+    // ⚠ THIS FACE'S OWN SHAPE — two flat sections over `TemplateGrid`'s
+    // auto-fill card grid — not the shared page ghost.
+    return <HomeAgentPanelsSkeleton label="Loading agents" />;
   }
 
-  const scopeUnavailable = scope === "all" && homeWorkspaceId === null;
+  const scopeUnavailable = homeWorkspaceId === null;
   // ⚠ A FAILED SCOPE-C READ IS A SETTLED ANSWER, NOT A PENDING ONE, AND THE
   // DIFFERENCE IS THE WHOLE OF F-339. `resolved` is
   // `data !== undefined`, so a 403/404/500 leaves it FALSE FOREVER — read as
@@ -171,23 +176,17 @@ export function HomeAgentPanels({
   // (`use-agent-templates.ts`): an ordinary answer must be SAID, and it must
   // never take the control that undoes it (§5A: UNKNOWN is not EMPTY, and it is
   // not a trap either).
-  const scopeFailed =
-    scope === "all" && homeWorkspaceId !== null && homeList.error != null;
+  const scopeFailed = homeWorkspaceId !== null && homeList.error != null;
   const scopePending =
-    scope === "all" &&
-    homeWorkspaceId !== null &&
-    !homeList.resolved &&
-    !scopeFailed;
+    homeWorkspaceId !== null && !homeList.resolved && !scopeFailed;
 
-  // ⚠ WHICH WORKSPACE A NEW AGENT WOULD LAND IN — `null` = nowhere, which is
-  // the "not onboarded yet" case and disables the button rather than writing
-  // into the container the pill is not pointing at.
-  const createTarget: EditorTarget | null =
-    scope === "channel"
-      ? { where: "container", template: null }
-      : homeWorkspaceId !== null && homeWorkspaceSegment !== null
-        ? { where: "home", template: null }
-        : null;
+  // ⚠ WHICH WORKSPACE A NEW PERSONAL AGENT WOULD LAND IN — `null` = nowhere,
+  // which is the "not onboarded yet" case and disables the button rather than
+  // writing into the container the section is not about.
+  const personalCreateTarget: EditorTarget | null =
+    homeWorkspaceId !== null && homeWorkspaceSegment !== null
+      ? { where: "home", template: null }
+      : null;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
@@ -196,21 +195,34 @@ export function HomeAgentPanels({
         templates={shared}
         markerFor={markerFor}
         onOpen={(template) => setEditing({ where: "container", template })}
+        // ⚠ CREATES DIRECTLY AT `visibility: 'workspace'` — there is no grant
+        // table for templates, so "shared into this channel" IS that value, and
+        // `ContainerTemplateEditor` now opens on it because
+        // `SECTIONS_CONTAINER` offers nothing else (`lib/visibility.ts`).
+        // 🔒 SERVER-FENCED ONLY, AND KNOWINGLY: `POST /api/agent-templates` is
+        // `minRole: "member"`, so a GUEST peer is refused with a 403 the editor
+        // surfaces — but this pane cannot tell a member from a guest
+        // (`HomeChannel` carries no viewer role, F-343). Do not guess.
+        action={
+          <CreateButton onClick={() => setEditing({ where: "container", template: null })}>
+            New shared agent
+          </CreateButton>
+        }
       />
 
       <PrivateAgentSection
-        section={
-          scope === "channel" ? SECTIONS_CONTAINER[1] : SECTION_PRIVATE_EVERYWHERE
-        }
-        templates={scope === "channel" ? privateHere : privateEverywhere}
-        caption={CAPTIONS[scope]}
+        section={SECTION_PRIVATE_EVERYWHERE}
+        templates={personal}
+        caption={PERSONAL_CAPTION}
         unavailable={scopeUnavailable ? SCOPE_UNAVAILABLE : null}
         pending={scopePending}
         // ⚠ THE SECTION'S OWN FAILURE, NOT THE PANE'S. The container read gets
         // `PageError` over the whole pane because without it there is no pane;
         // the home read is ONE SECTION's body, and blanking the pane for it
-        // would take away the shared section and the pill that leaves this
-        // scope. Sentence + retry, in place.
+        // would take away the shared section too. Sentence + retry, in place.
+        // 🔒 F-339: a FAILED read is a SETTLED answer, not a pending one —
+        // `resolved` stays false forever on a 403/404/500, so without this the
+        // body sat blank with no sentence. Keep the three states distinct.
         failure={
           scopeFailed
             ? {
@@ -222,51 +234,26 @@ export function HomeAgentPanels({
               }
             : null
         }
-        // ⚠ EDITED WHERE IT LIVES. A scope-C row is a HOME-workspace row, so its
-        // editor addresses the home workspace — the same id its PATCH and its
-        // cache entry take (F-331). Reading one list and writing another is
-        // exactly the cross-workspace bug the entry key exists to prevent.
-        onOpen={(template) =>
-          setEditing({
-            where: scope === "channel" ? "container" : "home",
-            template,
-          })
-        }
-        // ⚠ SCOPE C ONLY. A scope-B row is already in this container; "use it
-        // here" would be a copy of a thing into the place it already is.
-        cardActionFor={
-          scope === "all"
-            ? (template) => (
-                <UseInThisChannelButton
-                  disabled={copying !== null}
-                  onClick={() => setCopying(template)}
-                />
-              )
-            : undefined
-        }
+        // ⚠ EDITED WHERE IT LIVES. A Personal row is a HOME-workspace row, so
+        // its editor addresses the home workspace — the same id its PATCH and
+        // its cache entry take (F-331, now with the SHELF as a second axis).
+        onOpen={(template) => setEditing({ where: "home", template })}
+        // ⚠ EVERY PERSONAL ROW CARRIES IT. It used to be scope-C only because
+        // scope B's rows were already in the container; there is no scope B any
+        // more, so the condition has no second branch to guard against.
+        cardActionFor={(template) => (
+          <UseInThisChannelButton
+            disabled={copying !== null}
+            onClick={() => setCopying(template)}
+          />
+        )}
         action={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-light flex h-6 items-center gap-1 rounded-full px-2.5 text-caption font-medium disabled:opacity-60"
-              disabled={createTarget === null}
-              onClick={() => setEditing(createTarget)}
-            >
-              <Plus size={12} aria-hidden="true" />
-              New agent
-            </button>
-            {/* ⚠ §8 rule 8 — `pendingRow` on the CONTROL, not on a row: it is
-                what stops a second click landing on a scope whose list has not
-                arrived, and it dims the pill to say so. */}
-            <div {...pendingRow(scopePending)}>
-              <SelectMenu<PrivateScope>
-                value={scope}
-                options={SCOPE_OPTIONS}
-                onChange={setScope}
-                ariaLabel="Which private agents"
-              />
-            </div>
-          </div>
+          <CreateButton
+            disabled={personalCreateTarget === null}
+            onClick={() => setEditing(personalCreateTarget)}
+          >
+            New agent
+          </CreateButton>
         }
       />
 
@@ -294,14 +281,11 @@ export function HomeAgentPanels({
           source={copying}
           containerWorkspaceId={channel.workspaceId}
           onClose={() => setCopying(null)}
-          // ⚠ THE PILL FOLLOWS THE COPY HOME. The new row is a CONTAINER row and
-          // the operator is looking at the home shelf, so leaving the scope
-          // where it was would make a successful write look like nothing
-          // happened — and the next thing they want is the row they just made.
-          onCopied={() => {
-            setCopying(null);
-            setScope("channel");
-          }}
+          // ⚠ NOTHING TO SWITCH ANY MORE. This used to point the scope pill
+          // back at the channel so the new row was where the operator was
+          // looking; with both sections on screen at once the copy simply
+          // appears in Shared above, which is the outcome that argument wanted.
+          onCopied={() => setCopying(null)}
         />
       )}
     </div>
@@ -313,8 +297,16 @@ function isMine(template: AgentTemplate, currentUserId: string): boolean {
   return template.createdBy === currentUserId;
 }
 
-/** Which shelf the private section is showing. */
-type PrivateScope = "channel" | "all";
+/**
+ * 🔒 PERSONAL READS ONE SHELF, NOT ONE WORKSPACE (Samuel's ruling 2026-08-27,
+ * `20260901120000_agent_template_home_scoped.sql`) — the sibling of the
+ * Knowledge face's `HOME_SHELF`, and the same trap: `?shelf=home` is a server
+ * `WHERE`, there is no client-side filter to fall back on, and a forgotten
+ * argument WIDENS silently. It is a module constant threaded through the read
+ * and (via `useAgentTemplateWrites`) the cache key, so it cannot be spelled two
+ * ways.
+ */
+const HOME_SHELF = "home" as const;
 
 /**
  * What the editor is open ON.
@@ -330,33 +322,19 @@ interface EditorTarget {
   template: AgentTemplate | null;
 }
 
-const SCOPE_OPTIONS: ReadonlyArray<SelectMenuOption<PrivateScope>> = [
-  {
-    value: "channel",
-    label: "in this channel",
-    description: "Private agents you created inside this channel.",
-  },
-  {
-    value: "all",
-    label: "across all channels",
-    description: "Private agents in your own workspace.",
-  },
-];
-
 /**
- * ONE CAPTION LINE PER SCOPE, and each is a RULING rather than an explainer
- * (minimal UI copy; plan §4.4).
+ * ONE CAPTION LINE, and it is a RULING rather than an explainer (minimal UI
+ * copy; plan §4.4).
  *
- * ⚠ THE SECOND ONE NAMES A CONTROL, AND SINCE M4 THAT CONTROL EXISTS — "Use in
- * this channel" on every scope-C card (`agent-copy.tsx`). A scope-C template
- * CANNOT launch into a container: `getTemplateById` is workspace-filtered and
- * resolve passes the LAUNCH workspace, so the id 404s (plan §0.3). Copying is
- * the answer, and this line is what says so.
+ * ⚠ IT NAMES A CONTROL, AND THAT CONTROL EXISTS — "Use in this channel" on
+ * every Personal card (`agent-copy.tsx`). A home-shelf template CANNOT launch
+ * into a container: `getTemplateById` is workspace-filtered and resolve passes
+ * the LAUNCH workspace, so the id 404s (plan §0.3). Copying is the answer, and
+ * this line is what says so.
  */
-const CAPTIONS: Record<PrivateScope, string> = {
-  channel: "Yours alone until you share it.",
-  all: "Yours alone. Use one here to make a copy in this channel.",
-};
+const PERSONAL_CAPTION =
+  "Yours alone. Use one here to make a shared copy in this channel.";
 
-/** Scope C has nowhere to look — a different sentence from "none here". */
+/** No home workspace yet — a different sentence from "none here". */
 const SCOPE_UNAVAILABLE = "Finish setting up your workspace to keep agents there.";
+

@@ -90,10 +90,45 @@ describe("home page", () => {
     });
   });
 
+  /**
+   * ⚠ THE GATE PAINTS /home's OWN FRAME, NOT A GENERIC PAGE (Samuel,
+   * 2026-08-28: the old ghosts were "way off"). It was `PageLoading` in a bare
+   * `h-screen` box — a 52px bar over a centred `max-w-[960px]` column, a
+   * surface this page has never had — and is `HomePageSkeleton` now: the rail,
+   * the header, the 290px list and the bordered record pane, at the page's own
+   * width var. The width class is the assertion because it is the ONE number
+   * `home.module.css` calls load-bearing in two places.
+   */
   it("holds the shape gate until every read lands", () => {
-    renderHome();
+    const { view } = renderHome();
     expect(screen.getByRole("status")).toHaveTextContent("Opening home");
     expect(screen.queryByText("Priya Shah")).not.toBeInTheDocument();
+
+    const { container } = view;
+    expect(container.querySelector(".w-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
+    expect(container.querySelector(".border-home-panel-line")).not.toBeNull();
+    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+  });
+
+  /**
+   * THE RECORD PANE IS A COLUMN, NOT A FLOATING CARD (Samuel, live review
+   * 2026-08-27 — the shadow seam beside the info column's tab pills).
+   *
+   * ⚠ WHY THIS IS PINNED AS A CLASS AND NOT A LOOK. `.bento` was painting exactly
+   * ONE thing on this element — its two drop shadows — because the utilities
+   * beside it already restate the fill, the border and the radius, and the
+   * utility layer outranks the kit layer. The pane has no top or left margin
+   * (the header selector is aligned to its left edge), so the upward half of an
+   * 18px blur printed a gray band into the gap under the page header. Re-adding
+   * the class is silent: nothing about the pane's geometry would change, and the
+   * band would come straight back.
+   */
+  it("gives the record pane NO drop shadow — the 2px line is its whole boundary", async () => {
+    renderHome();
+    const pane = (await screen.findByTestId("channel-surface")).parentElement
+      ?.parentElement;
+    expect(pane?.className).toMatch(/border-home-panel-line/);
+    expect(pane?.className).not.toMatch(/\bbento\b/);
   });
 
   it("renders claimed relationships and pending links in one list", async () => {
@@ -111,10 +146,18 @@ describe("home page", () => {
     // The pending link is a row of the same list, marked as one.
     expect(screen.getByText("Link out")).toBeInTheDocument();
     expect(screen.getByText("Not yet claimed")).toBeInTheDocument();
-    // "Needs you" has no backend signal and is DELETED, not faked.
-    expect(screen.queryByRole("tab", { name: /Needs you/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /^All/ })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /^Links/ })).toBeInTheDocument();
+    // ⚠ THE LIST COLUMN HAS NO CONTROLS OF ITS OWN (Samuel, 2026-08-27). The
+    // "All | Links" segmented filter above the rows is DELETED — links are no
+    // longer a filterable state — and the rows themselves are untouched: the
+    // link row above is still in this list, still chipped. The only tabs left
+    // on the page are the header's three faces.
+    expect(screen.queryByRole("tab", { name: /^All/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^Links/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Chat",
+      "Knowledge",
+      "Agents",
+    ]);
   });
 
   it("drops link containers from the account rail", async () => {
@@ -183,8 +226,8 @@ describe("home page", () => {
 
   it("mints a link with the picked window as an absolute future instant", async () => {
     // ⚠ FROM THE CHANNEL'S OWN Info tab (2026-08-25), not the page header: the
-    // act belongs to the container it binds to, and a solo channel is the only
-    // state with a free seat to offer.
+    // act belongs to the container it binds to. (A SOLO channel is used here
+    // because it has no open link — the two-state rule, not a capacity one.)
     apiRequest.mockImplementation(
       withHome({ channels: [SOLO_CHANNEL], pendingLinks: [] })
     );
@@ -192,8 +235,12 @@ describe("home page", () => {
     await screen.findByTestId("channel-surface");
 
     fireEvent.click(screen.getByRole("button", { name: "Add person" }));
+    // ⚠ `find`, not `get`: Add person opens a `StandardDialog` since
+    // 2026-08-27 (it was a Popover, which rendered synchronously), and
+    // `ModalShell` mounts a FRAME after `open` flips so it can animate in.
+    const create = await screen.findByRole("button", { name: "Create link" });
     const before = Date.now();
-    fireEvent.click(screen.getByRole("button", { name: "Create link" }));
+    fireEvent.click(create);
 
     await waitFor(() => {
       const mint = bridgeCalls(apiRequest).find(
@@ -207,7 +254,7 @@ describe("home page", () => {
       };
       // ⚠ THE LINK IS BOUND to the selected channel's container — an unbound
       // mint is not a thing any more, and `maxUses` is not a field the client
-      // may send: a bound link fills the one free seat by construction.
+      // may send: a bound link admits ONE named person by construction.
       expect(body.workspaceId).toBe(LINK_WORKSPACE_ID);
       expect(body.maxUses).toBeUndefined();
       // The picker's default: 7 days. The WINDOW is relative; what leaves is an
@@ -250,6 +297,9 @@ describe("home page", () => {
         {
           ...HOME.channels[0],
           name: "Q3 Fundraise",
+          // ⚠ BOTH, or the fixture contradicts itself: `peer` is `peers[0]`, so
+          // a null head over a non-empty list is a payload the server cannot emit.
+          peers: [],
           peer: null,
           lastMessageAt: null,
           lastMessagePreview: null,
@@ -293,6 +343,7 @@ describe("home page", () => {
       workspaceSegment: "link-q3-cc22dd",
       channelId: "chan-new",
       name: "Q3 Fundraise",
+      peers: [],
       peer: null,
       lastMessageAt: null,
       lastMessagePreview: null,
@@ -345,9 +396,10 @@ describe("home page", () => {
   });
 
   it("wears the Link out chip and offers Revoke where Add person was", async () => {
-    // ⚠ ONE SECTION, TWO STATES. An invitation already out IS the answer to
-    // "add a person" — offering the act again would mint a second link for a
-    // container with one free seat, which the server refuses.
+    // ⚠ ONE SECTION, TWO STATES, and this is the rule that SURVIVED the member
+    // cap's retirement. An invitation already out IS the answer to "add a
+    // person": a container may hold at most one OPEN link at a time, so
+    // offering the act again would mint over a URL already sent.
     apiRequest.mockImplementation(
       withHome({
         channels: [{ ...SOLO_CHANNEL, linkOut: LINK_OUT }],
@@ -380,15 +432,20 @@ describe("home page", () => {
     );
   });
 
-  it("keeps ONE primary action in the header, and no Add person on a full channel", async () => {
-    // The default fixture's channel already has a peer: the container is full,
-    // so there is no seat to offer and no control that could only 409.
+  it("keeps ONE primary action in the header, and Add person is not one of them", async () => {
+    // ⚠ THE ASSERTION IS ABOUT PLACEMENT, NOT CAPACITY (rewritten 2026-08-26).
+    // It used to read "no Add person on a FULL channel" over the default
+    // fixture, which already has a peer — and the cap is gone, so that channel
+    // now offers the act like any other. What survives is WHERE: `New channel`
+    // is the page's one primary action, there is no `Invite`, and Add person
+    // exists EXACTLY ONCE — on the selected channel's Info tab, never lifted
+    // into the header beside it.
     renderHome();
     await screen.findByTestId("channel-surface");
 
     expect(screen.getAllByRole("button", { name: "New channel" })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Add person" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Add person" })).toHaveLength(1);
   });
 
   it("routes a 401 to the signed-out screen, not an error card", async () => {

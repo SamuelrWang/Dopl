@@ -1,66 +1,56 @@
 import { Bot } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { channelTitle, hasLinkOut, type HomeFilter, type HomeRow } from "./home-rows";
+import {
+  channelPeople,
+  channelSubline,
+  channelTitle,
+  hasLinkOut,
+  type HomeRow,
+} from "./home-rows";
 
 /**
  * Home's left pane — the CHANNEL list. Deliberately not the workspace channels
- * tree: one flat list, filterable, no sections to manage.
+ * tree: one flat list, no sections to manage.
  *
  * ⚠ THE COMPONENT AND FILE ARE STILL NAMED `relationship*` (2026-08-24). The
  * server rename landed first and the client redesign is a separate wave; a
  * rename here would be churn in files that wave rewrites. What DID change is
  * only what the rows read.
  *
- * ⚠ IT RENDERS `rows`, IT DOES NOT FILTER THEM. The page owns the filter state
- * and the filtered set, because the RECORD PANE resolves its selection from the
- * same set — filtering privately here let the pane fall back to a row the list
+ * ⚠ NO CONTROLS OF ITS OWN SINCE 2026-08-27 (Samuel: the "All | Links"
+ * segmented filter is deleted — links are no longer a filterable state). The
+ * column is the SCROLLER and nothing above it; the only narrowing left is the
+ * header's search field, which the page owns. **Do not put a control strip back
+ * here** — a row with an open invitation still says so on the row, in the "Link
+ * out" chip.
+ *
+ * ⚠ IT RENDERS `rows`, IT DOES NOT NARROW THEM. The page owns the search query
+ * and the narrowed set, because the RECORD PANE resolves its selection from the
+ * same set — narrowing privately here let the pane fall back to a row the list
  * was no longer showing, so typing into search left a stranger's card open.
  */
 export function RelationshipList({
   rows,
-  linkCount,
   selectedId,
   onSelect,
-  filter,
-  onFilterChange,
 }: {
-  /** Already filtered — the page's `visibleRows`. */
+  /** Already narrowed — the page's `visibleRows`. */
   rows: HomeRow[];
-  /** Counted over ALL rows, so the tab's badge does not shrink as you type. */
-  linkCount: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  filter: HomeFilter;
-  onFilterChange: (filter: HomeFilter) => void;
 }) {
-  const visible = rows;
-
   return (
     // ⚠ Width from `home.module.css › .page --home-list-w`, NOT a local 290:
     // the header's selector is indented by the same var so it lands on the
     // record pane's left edge. One number for both.
     <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
-      <div className="flex flex-col gap-2.5 px-4 pb-2.5 pt-1">
-        {/* Same 42px scale as the header's selector and Invite — one control
-            height on this page. */}
-        <SegmentedControl<HomeFilter>
-          options={[
-            { key: "all", label: "All" },
-            { key: "links", label: "Links", count: linkCount },
-          ]}
-          value={filter}
-          onChange={onFilterChange}
-          size="lg"
-        />
-      </div>
-
       {/* Rows are floating cards now — they need a gutter between them, or the
           drop shadows stack into one smudge. */}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1">
-        {visible.map((row) => (
+        {rows.map((row) => (
           <RelationshipRow
             key={row.id}
             row={row}
@@ -68,7 +58,7 @@ export function RelationshipList({
             onSelect={() => onSelect(row.id)}
           />
         ))}
-        {visible.length === 0 && (
+        {rows.length === 0 && (
           <p className="px-3 py-6 text-center text-caption text-text-muted">
             No matches
           </p>
@@ -88,21 +78,20 @@ function RelationshipRow({
   onSelect: () => void;
 }) {
   const pending = row.kind === "link";
-  /** No peer and not a link: the operator and their agents, nobody else. */
-  const solo = row.kind === "channel" && row.channel.peer === null;
+  /** Everybody else in this channel, oldest first — empty on a link row. ⚠ The
+   *  cache-shape rule for `peers` lives in `channelPeople` and nowhere else. */
+  const people = row.kind === "channel" ? channelPeople(row.channel) : [];
+  /** No peers and not a link: the operator and their agents, nobody else. */
+  const solo = row.kind === "channel" && people.length === 0;
   /** ⚠ THE CHIP IS THE SAME FACT ON BOTH ROW KINDS — an invitation is out. A
    *  bound link says it about the channel it rides on; a legacy unbound one is
-   *  the whole row. One predicate, so the chip and the Links badge agree. */
+   *  the whole row. `hasLinkOut` answers for both, and since 2026-08-27 this
+   *  chip is the ONLY place that fact is said on this page. */
   const linkOut = hasLinkOut(row);
   const name =
     row.kind === "channel" ? channelTitle(row.channel) : (row.link.label ?? "Link");
-  // ⚠ A SOLO channel's subline is the STATIC words "Just you" (Samuel's ruling,
-  // 2026-08-24) — not an agent or thread count. A count here would be a second
-  // read per row for a line nobody acts on.
   const subline =
-    row.kind === "channel"
-      ? (row.channel.peer ? (row.channel.peer.email ?? "") : "Just you")
-      : row.link.url;
+    row.kind === "channel" ? channelSubline(row.channel) : row.link.url;
   const lastLine =
     row.kind === "channel"
       ? (row.channel.lastMessagePreview ?? "No messages yet")
@@ -144,19 +133,42 @@ function RelationshipRow({
         >
           <Bot size={15} />
         </span>
+      ) : people.length > 1 ? (
+        // ⚠ TWO OR MORE PEOPLE GET A STACK, AND IT IS THE SHARED PRIMITIVE
+        // (2026-08-26, F-307's fix). `shared/ui/avatar-stack.tsx` already owned
+        // the overlap, the separator ring and the `+N` chip for four other
+        // surfaces; what it lacked was a SIZE, so it gained one rather than this
+        // page growing a fourth copy of a stack. ⚠ `size="sm"` is `Avatar
+        // size="sm"` to the pixel — the branches above and below are the same
+        // 32px box, or a row changes height the moment a second person joins.
+        // ⚠ `max={3}` NOT the primitive's default 4: this row is 290px wide and
+        // the title beside it has to stay readable. `+N` counts the HIDDEN ones.
+        <div className="shrink-0" aria-hidden>
+          <AvatarStack
+            size="sm"
+            max={3}
+            users={people.map((p) => ({
+              userId: p.userId,
+              // ⚠ `AvatarStackUser.displayName` is NON-nullable and feeds both
+              // the initials and the hover title, so the fallback happens HERE.
+              // "Member" rather than "" — an empty string initials to "?" and
+              // titles the face with nothing at all.
+              displayName: p.displayName || p.email || "Member",
+              avatarUrl: p.avatarUrl,
+            }))}
+          />
+        </div>
       ) : (
         <Avatar
           person={
-            row.kind === "channel" && row.channel.peer
-              ? {
-                  userId: row.channel.peer.userId,
-                  email: row.channel.peer.email,
-                  displayName: row.channel.peer.displayName,
-                  avatarUrl: row.channel.peer.avatarUrl,
-                }
-              : // An unclaimed link has no face yet — the row id keys the
-                // fallback so the generated colour is stable.
-                { userId: row.id, email: null, displayName: name, avatarUrl: null }
+            people[0] ?? {
+              // An unclaimed link has no face yet — the row id keys the
+              // fallback so the generated colour is stable.
+              userId: row.id,
+              email: null,
+              displayName: name,
+              avatarUrl: null,
+            }
           }
           size="sm"
           className={cn(pending && "opacity-55")}

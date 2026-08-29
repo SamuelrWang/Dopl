@@ -46,6 +46,22 @@ const BASE_B = {
   createdBy: "user-2",
 };
 
+/**
+ * 🔴 THE OTHER SHELF, AND IT IS IN THIS FIXTURE ON PURPOSE (Samuel's ruling
+ * 2026-08-26). Same workspace, same owner, also private — the ONLY thing that
+ * keeps it off this page is `?shelf=workspace`. A page that forgets the param
+ * gets it, which is what makes `home.test.tsx`'s exclusion pin cost something.
+ * ⚠ Never add it to the workspace rows below.
+ */
+const BASE_HOME_SHELF = {
+  ...BASE_A,
+  id: "base-home",
+  name: "Home shelf notes",
+  slug: "home-shelf-notes",
+  publicId: "hhhhhhhhhhhh",
+  description: "Kept on /home, not here",
+};
+
 const ENTRY_1 = {
   id: "entry-1",
   baseId: "base-b",
@@ -119,10 +135,17 @@ const WORKSPACE = {
   name: "Acme",
 };
 
+/**
+ * ⚠ TAKES THE FULL PATH, QUERY INCLUDED, because `?shelf=` now CHANGES THE
+ * ANSWER and a fake server that matched the bare path would serve both shelves
+ * to every caller — i.e. pass while the separation is broken.
+ */
 function route(path: string) {
+  const [bare, query] = path.split("?");
+  const shelf = new URLSearchParams(query ?? "").get("shelf");
   // ONE read for workspace + role + caller id: `resolve`/`me` stay live, but
   // the boot answer is seeded into their cache entries.
-  if (path === "/api/boot") {
+  if (bare === "/api/boot") {
     return ok({
       isOnboarded: true,
       surveyCompleted: true,
@@ -134,21 +157,32 @@ function route(path: string) {
       myAccess: { defaultLevel: "edit", overrides: [] },
     });
   }
-  if (path.startsWith("/api/workspaces/resolve")) {
+  if (bare.startsWith("/api/workspaces/resolve")) {
     return ok({
       workspace: WORKSPACE,
       canonical: "acme-ab12cd34ef56",
       needsRedirect: false,
     });
   }
-  if (path === "/api/workspaces/me") return ok({ role: "admin", userId: USER_ID });
-  if (path === "/api/knowledge/bases") {
+  if (bare === "/api/workspaces/me") return ok({ role: "admin", userId: USER_ID });
+  if (bare === "/api/knowledge/bases") {
+    // The WORKSPACE shelf — what this page asks for. `created` lands here
+    // because this page's create dialog sends no `homeScoped`.
+    const workspaceShelf = [
+      BASE_A,
+      ...(deletedB ? [] : [renamedB ?? BASE_B]),
+      ...(created ? [created] : []),
+    ];
+    // ⚠ ABSENT `shelf` = BOTH, mirroring the route (`?shelf=` absent means "no
+    // filter"). This branch is the one a forgotten param falls into, and it is
+    // what turns the exclusion pin from a tautology into a measurement.
     return ok({
-      bases: [
-        BASE_A,
-        ...(deletedB ? [] : [renamedB ?? BASE_B]),
-        ...(created ? [created] : []),
-      ],
+      bases:
+        shelf === "workspace"
+          ? workspaceShelf
+          : shelf === "home"
+            ? [BASE_HOME_SHELF]
+            : [...workspaceShelf, BASE_HOME_SHELF],
       ownerNames: { "user-2": "Dana Reed" },
       baseStats: {
         "base-a": { entryCount: 0, lastEntryUpdatedAt: null, storageBytes: 0 },
@@ -173,10 +207,10 @@ function route(path: string) {
       starredBaseIds: [...starred],
     });
   }
-  if (path === "/api/knowledge/bases/base-c/tree") {
+  if (bare === "/api/knowledge/bases/base-c/tree") {
     return ok({ base: created, folders: [], entries: [] });
   }
-  if (path.endsWith("/teams")) {
+  if (bare.endsWith("/teams")) {
     return ok({
       teams: [
         {
@@ -196,7 +230,7 @@ function route(path: string) {
       ],
     });
   }
-  if (path === "/api/knowledge/bases/base-b/tree") {
+  if (bare === "/api/knowledge/bases/base-b/tree") {
     // ⚠ A hard-deleted base's tree is GONE, not merely absent from the list.
     // Serving it would let a stale cache (or an eviction-triggered refetch)
     // repopulate content the delete destroyed, and the test would pass on a
@@ -206,13 +240,13 @@ function route(path: string) {
     }
     return ok({ base: BASE_B, folders: [], entries: [ENTRY_1, ENTRY_2] });
   }
-  if (path === "/api/knowledge/bases/base-a/tree") {
+  if (bare === "/api/knowledge/bases/base-a/tree") {
     return ok({ base: BASE_A, folders: [], entries: [] });
   }
-  if (path === "/api/knowledge/entries/entry-1") return ok({ entry: ENTRY_1 });
-  if (path === "/api/knowledge/entries/entry-2") return ok({ entry: ENTRY_2 });
-  if (path.startsWith("/api/members/my-access")) return ok({ resources: [] });
-  if (path === "/api/user/profile") return ok({ display_name: "Sam", email: "s@x.io" });
+  if (bare === "/api/knowledge/entries/entry-1") return ok({ entry: ENTRY_1 });
+  if (bare === "/api/knowledge/entries/entry-2") return ok({ entry: ENTRY_2 });
+  if (bare.startsWith("/api/members/my-access")) return ok({ resources: [] });
+  if (bare === "/api/user/profile") return ok({ display_name: "Sam", email: "s@x.io" });
   return null;
 }
 
@@ -266,12 +300,20 @@ const apiRequest = vi.fn((path: string, opts?: { method?: string }) => {
       body: { base: NEW_BASE },
     });
   }
-  const answer = route(path.split("?")[0]) ?? route(path);
+  const answer = route(path);
   if (!answer) return Promise.reject(new Error(`unexpected request: ${path}`));
   return Promise.resolve(answer);
 });
 
 export const paths = () => requests.map((r) => r.path);
+
+/**
+ * The base-list request THIS PAGE makes, query and all. ⚠ Assertions match the
+ * FULL path: `?shelf=workspace` is what keeps the /home shelf off this surface
+ * (Samuel's ruling 2026-08-26), so a suite that matched the bare path would go
+ * green with the separation removed.
+ */
+export const WORKSPACE_BASES_PATH = "/api/knowledge/bases?shelf=workspace";
 
 export const SEGMENT = "acme-ab12cd34ef56";
 export const BASE_A_SEG = "product-specs-aaaaaaaaaaaa";

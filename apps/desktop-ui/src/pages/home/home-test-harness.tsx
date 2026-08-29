@@ -16,7 +16,7 @@ import type {
   ChannelMember,
   ChannelThread,
 } from "@/features/channels/types";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { HomeChannelsPayload, HomePeer } from "@/features/home/types";
 import type {
   WorkspaceOverviewSeries,
   WorkspaceWithRole,
@@ -43,18 +43,39 @@ export const LINK_SEGMENT = "link-priya-aa11bb";
 export const CHANNEL_ID = "chan-1";
 export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** The default fixture's one peer. Exported so a multi-peer case extends the
+ *  roster rather than restating it. */
+export const PRIYA: HomePeer = {
+  userId: "user-2",
+  displayName: "Priya Shah",
+  email: "priya@shahco.tax",
+  avatarUrl: null,
+};
+/** Second and third members, for the cap-is-gone cases (2026-08-26). ⚠ Their
+ *  ORDER is the server's (`joined_at ASC`) — the client never re-sorts. */
+export const DANA: HomePeer = {
+  userId: "user-3",
+  displayName: "Dana Ruiz",
+  email: "dana@ruiz.co",
+  avatarUrl: null,
+};
+export const OMAR: HomePeer = {
+  userId: "user-4",
+  displayName: "Omar Idris",
+  email: "omar@idris.dev",
+  avatarUrl: null,
+};
+
 export const HOME: HomeChannelsPayload = {
   channels: [
     {
       workspaceId: LINK_WORKSPACE_ID,
       workspaceSegment: LINK_SEGMENT,
       channelId: CHANNEL_ID,
-      peer: {
-        userId: "user-2",
-        displayName: "Priya Shah",
-        email: "priya@shahco.tax",
-        avatarUrl: null,
-      },
+      // ⚠ `peer` IS `peers[0]` — the server derives it, so a fixture where the
+      // two disagree is a payload the API cannot emit.
+      peers: [PRIYA],
+      peer: PRIYA,
       name: "Priya Shah",
       createdAt: "2026-07-12T10:00:00.000Z",
       lastMessageAt: "2026-08-22T14:19:00.000Z",
@@ -277,8 +298,22 @@ export const CONTAINER_BASES: KnowledgeBaseList = {
   },
 };
 
-/** `GET /api/knowledge/bases` for the caller's HOME workspace — no channel, so
- *  the route sends no `channelGrants` key at all (INVARIANTS §9). */
+/**
+ * 🔴 THE WORKSPACE SHELF — SAMUEL'S BUG, MADE REPEATABLE (ruling 2026-08-26).
+ * Same workspace as `KB_HOME`, private, the caller's own: every property scope C
+ * used to select on. Only `?shelf=home` separates them. Nothing was leaking
+ * across workspaces (measured in production 2026-08-26) — the RANGE was wrong.
+ * ⚠ Never add it to `HOME_BASES`.
+ */
+export const KB_WORKSPACE_SHELF = base({
+  id: "kb-ws-shelf-1",
+  name: "Dopl GTM",
+  workspaceId: WORKSPACE_ID,
+  visibility: "private",
+});
+
+/** `GET /api/knowledge/bases?shelf=home` for the caller's HOME workspace — no
+ *  channel, so the route sends no `channelGrants` key at all (INVARIANTS §9). */
 export const HOME_BASES: KnowledgeBaseList = {
   bases: [KB_HOME],
   ownerNames: {},
@@ -293,9 +328,17 @@ export const HOME_BASES: KnowledgeBaseList = {
  * an `opts` field over the bridge, not part of the path, so a suite that
  * matched on the path alone would serve the container's bases to the home
  * scope and pass while the two scopes were wired to one workspace.
+ *
+ * 🔒 ⚠ AND BY WHICH SHELF (2026-08-26) — hence the PATH argument: `?shelf=` is a
+ * query param, so the workspace axis alone no longer separates scope C from the
+ * workspace Knowledge page, which ask the SAME workspace for different shelves.
+ * ⚠ ABSENT `shelf` ANSWERS BOTH, mirroring the route. That branch is what a
+ * forgotten param falls into and the only reason the exclusion pin can fail —
+ * collapse it into "home" and the pin goes vacuous.
  */
 export function knowledgeBases(
-  opts: BridgeRequestOpts
+  opts: BridgeRequestOpts,
+  path = ""
 ): Promise<BridgeResponse> {
   if (opts.method === "POST") {
     const body = (opts.body ?? {}) as { name?: string; visibility?: string };
@@ -310,8 +353,14 @@ export function knowledgeBases(
       })
     );
   }
+  if (opts.workspaceId !== WORKSPACE_ID) return Promise.resolve(ok(CONTAINER_BASES));
+  const shelf = new URLSearchParams(path.split("?")[1] ?? "").get("shelf");
+  if (shelf === "home") return Promise.resolve(ok(HOME_BASES));
+  if (shelf === "workspace") {
+    return Promise.resolve(ok({ ...HOME_BASES, bases: [KB_WORKSPACE_SHELF] }));
+  }
   return Promise.resolve(
-    ok(opts.workspaceId === WORKSPACE_ID ? HOME_BASES : CONTAINER_BASES)
+    ok({ ...HOME_BASES, bases: [KB_HOME, KB_WORKSPACE_SHELF] })
   );
 }
 
@@ -325,7 +374,7 @@ export function routes(
   opts: BridgeRequestOpts
 ): Promise<BridgeResponse> | null {
   const bare = path.split("?")[0];
-  if (bare === "/api/knowledge/bases") return knowledgeBases(opts);
+  if (bare === "/api/knowledge/bases") return knowledgeBases(opts, path);
   if (EMPTY_TREE_PATH.test(bare)) {
     return Promise.resolve(ok({ base: KB_PRIVATE, folders: [], entries: [] }));
   }
@@ -372,10 +421,38 @@ export function routes(
 export const SOLO_CHANNEL: HomeChannelsPayload["channels"][number] = {
   ...HOME.channels[0],
   name: "Q3 Fundraise",
+  peers: [],
   peer: null,
   lastMessageAt: null,
   lastMessagePreview: null,
 };
+
+/** THREE people in one container — the shape the retired two-member cap made
+ *  unrepresentable (Samuel, 2026-08-26). The avatar stack, the counted title and
+ *  the dropped Email row all key off this. */
+export const CROWDED_CHANNEL: HomeChannelsPayload["channels"][number] = {
+  ...HOME.channels[0],
+  peers: [PRIYA, DANA, OMAR],
+  peer: PRIYA,
+};
+
+/**
+ * 🔒 THE STALE-CACHE SHAPE (INVARIANTS §8) — a payload written by a bundle that
+ * predates `peers`, served from IndexedDB on the FIRST PAINT after the upgrade.
+ * It HAS `peer` and LACKS `peers`, which is why the client's fallback is a
+ * two-field MERGE and not a plain `?? EMPTY_PEERS`: falling back to "nobody"
+ * would paint every one of the operator's channels as solo.
+ *
+ * ⚠ THE CAST IS THE POINT AND IS NOT LAZINESS. The wire type is non-optional and
+ * is RIGHT — the API always sends the key now. `delete` reproduces the only
+ * moment where it is absent, and typing the fixture as `HomeChannel` would make
+ * that moment unrepresentable in the very test written to cover it.
+ */
+export function staleCachedChannel(): HomeChannelsPayload["channels"][number] {
+  const stale: Record<string, unknown> = { ...HOME.channels[0] };
+  delete stale.peers;
+  return stale as unknown as HomeChannelsPayload["channels"][number];
+}
 
 /** An invitation already out on that channel — what the chip and the Link out
  *  section render from. ⚠ A BOUND link is never also a `pendingLinks` row. */

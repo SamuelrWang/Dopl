@@ -4,6 +4,7 @@ import {
   BASE_A_SEG,
   BASE_B_SEG,
   SEGMENT,
+  WORKSPACE_BASES_PATH,
   deferStarWrites,
   installKnowledgeBridge,
   paths,
@@ -45,10 +46,29 @@ describe("knowledge home grid", () => {
     );
     expect(paths().filter((p) => p.includes("/tree"))).toEqual([]);
 
-    expect(paths()).toContain("/api/knowledge/bases");
+    // 🔒 THE SHELF IS ON THE WIRE. `?shelf=workspace` is what excludes bases
+    // created from the /home Knowledge pane, and it is a SERVER filter — so
+    // this asserts the request, not the absence of a card (an absent card also
+    // happens when the fixture forgets to send one).
+    expect(paths()).toContain(WORKSPACE_BASES_PATH);
     expect(paths()).toContain(`/api/workspaces/${SEGMENT}/teams`);
-    // One key: page and controller both read via `useKnowledgeBaseList`.
-    expect(paths().filter((p) => p === "/api/knowledge/bases")).toHaveLength(1);
+    // One key: page and controller both read via `useKnowledgeBaseList`, and
+    // they only share an entry while they agree about the SHELF.
+    expect(paths().filter((p) => p === WORKSPACE_BASES_PATH)).toHaveLength(1);
+  });
+
+  it("leaves the /home SHELF out of the workspace grid", async () => {
+    // 🔒 SAMUEL'S RULING, 2026-08-26 — the two surfaces are two PLACES and the
+    // exclusion runs BOTH ways. `Home shelf notes` is the same workspace, the
+    // same owner and also private; the ONLY thing keeping it off this page is
+    // `?shelf=workspace` (`test-fixtures.tsx › BASE_HOME_SHELF`).
+    renderAt(`/${SEGMENT}/knowledge`);
+    await screen.findByRole("article", { name: "Product specs" });
+
+    expect(screen.queryByRole("article", { name: "Home shelf notes" })).toBeNull();
+    // ⚠ AND THE COUNT, not only the card: a scope pill cut from an over-broad
+    // list is the same leak one render later.
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toContain("All2");
   });
 
   it("filters the grid live, and the scope pills carry per-scope counts", async () => {
@@ -199,7 +219,7 @@ describe("knowledge home stars", () => {
 
     await waitFor(() => {
       expect(
-        paths().filter((p) => p === "/api/knowledge/bases")
+        paths().filter((p) => p === WORKSPACE_BASES_PATH)
       ).toHaveLength(1);
     });
     expect(order()).toEqual(["Sales playbook", "Product specs"]);

@@ -75,14 +75,27 @@ export function RelationshipRecord({
           <PersonInfoTab homeChannel={homeChannel} channel={channel} gate={gate} />
         ),
       }}
-      // A link container holds at most two people — the peer arrives by
-      // claiming its link, never through the channel roster, so "add members"
-      // names an operation that cannot happen here.
-      // ⚠ `knowledge: true` shows the OPERATOR exactly what the guest sees in
-      // this channel — same component, same lane, same `visible`-only list
-      // (M4). The /home Knowledge PANE (`knowledge-panels.tsx`) is the other
-      // half and answers a different question: what could be shared.
-      capabilities={{ memberManagement: false, knowledge: true }}
+      // ⚠ `memberManagement: false` IS NOT A HEADCOUNT — a container takes MORE
+      // THAN TWO people since 2026-08-26. Every member arrives by claiming a
+      // link BOUND to this container, never through the channel roster (§4A:
+      // every workspace-level add answers `LINK_CONTAINER_CLOSED`), so "add
+      // members" names an operation that cannot happen here at ANY size. The
+      // act that CAN happen lives on the Info tab as Add person.
+      // ⚠ NO `knowledge` CAPABILITY — THE FIFTH INFO TAB IS OFF ON THIS SURFACE
+      // (Samuel, 2026-08-27; F-340). It passed `knowledge: true` from M4 to show
+      // the operator exactly what the guest sees, and that cost the info column a
+      // FIFTH tab on a width budget measured for four: the trackless `lg`
+      // `SegmentedControl` leaves ~55px spare at 380px and "Knowledge" wants ~90,
+      // so the row tightened and then SCROLLED.
+      // ⚠ THE OPERATOR LOSES NOTHING HERE, which is the whole reason this is the
+      // side that gives way. The /home Knowledge FACE (`knowledge-panels.tsx`,
+      // the header's own segmented control) is a full surface over the same
+      // bases; the tab was the smaller of two views one click apart.
+      // ⚠ THE GUEST LANE KEEPS ITS TAB (`src/app/c/[workspaceId]/guest-channel.tsx`)
+      // and that asymmetry is deliberate, not an oversight: the tab is the guest's
+      // ONLY way to read a base granted into this channel. Removing it there would
+      // have taken the capability away rather than the duplicate view.
+      capabilities={{ memberManagement: false }}
     />
   );
 }

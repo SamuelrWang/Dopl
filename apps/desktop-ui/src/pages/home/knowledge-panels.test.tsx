@@ -23,7 +23,12 @@ import {
 } from "./home-test-harness";
 
 /**
- * /home → KNOWLEDGE, END TO END THROUGH THE REAL PAGE (plan M3, §5.1–5.3).
+ * /home → KNOWLEDGE, END TO END THROUGH THE REAL PAGE.
+ *
+ * ⚠ TWO SECTIONS, NO PILL (Samuel's ruling 2026-08-27). This file was written
+ * against THREE scopes behind a `SelectMenu`; every assertion that drove that
+ * pill is gone, and the per-channel private scope it selected is gone with it.
+ * The shelf's own suite is `knowledge-panels-shelf.test.tsx`.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, NEVER THE PANEL. Three of the things this file
  * has to prove are properties of the PAGE, not of the component: that the pane
@@ -63,32 +68,36 @@ async function openKnowledge(): Promise<void> {
   fireEvent.click(screen.getByText("Knowledge"));
 }
 
-/** Point the private section at the home workspace. */
-async function chooseScope(label: string): Promise<void> {
-  fireEvent.click(screen.getByLabelText("Which private knowledge bases"));
-  fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(label) }));
-}
-
-describe("the three scopes", () => {
-  it("splits the container's bases into shared and private-here", async () => {
+describe("the two sections", () => {
+  it("fills SHARED from grants alone, and PERSONAL from the home shelf", async () => {
     renderHome();
     await openKnowledge();
 
-    // Scope A: both grant levels, and the peer's name resolved off `ownerNames`.
+    // SHARED: both grant levels, and the peer's name resolved off `ownerNames`.
     expect(await screen.findByText("Renewals")).toBeInTheDocument();
     expect(screen.getByText("Pricing rules")).toBeInTheDocument();
     expect(screen.getByText(/By Priya Shah/)).toBeInTheDocument();
+    // PERSONAL: the home shelf, loaded with no pill to open.
+    expect(await screen.findByText("Fundraise memos")).toBeInTheDocument();
+  });
 
-    // Scope B: mine + private + ungranted. ⚠ The PEER's private base must not
-    // appear — a `createdBy` filter dropped by a typo passes without this.
-    expect(screen.getByText("Call notes")).toBeInTheDocument();
+  it("🔒 shows NO container base that lacks a grant — the removed private scope", async () => {
+    // 🔒 SAMUEL'S RULING, 2026-08-27, AND THIS IS THE CONSEQUENCE HE ACCEPTED.
+    // `Call notes` is private, ungranted, the caller's own, and sits in this
+    // channel's container — it was the whole of the old scope B. With that scope
+    // deleted, **a container base reaches /home only through a channel grant**
+    // (INVARIANTS §5A). It must appear in NEITHER section.
+    // ⚠ The other two are the fixtures that were never in scope B either, kept
+    // so this asserts the RULE and not merely the one row: a PEER's private base
+    // (a `createdBy` filter dropped by a typo), and a base that is mine and
+    // ungranted but PUBLIC to the container.
+    renderHome();
+    await openKnowledge();
+    await screen.findByText("Renewals");
+
+    expect(screen.queryByText("Call notes")).not.toBeInTheDocument();
     expect(screen.queryByText("Priya's drafts")).not.toBeInTheDocument();
-    // ⚠ Mine and ungranted, but PUBLIC to the container: it belongs to neither
-    // section. Scope B is not "everything the grant map didn't claim".
     expect(screen.queryByText("Team playbook")).not.toBeInTheDocument();
-
-    // Scope C's base belongs to another workspace and is not fetched yet.
-    expect(screen.queryByText("Fundraise memos")).not.toBeInTheDocument();
   });
 
   it("badges an agent_only grant and leaves a visible one bare", async () => {
@@ -105,25 +114,24 @@ describe("the three scopes", () => {
     expect(cell?.textContent).not.toContain("Renewals");
   });
 
-  it("swaps to the home workspace when the scope pill moves", async () => {
+  it("asks BOTH reads on first paint, each addressed to its own workspace", async () => {
+    // ⚠ The workspace rides `opts` and the SHELF rides the path — two axes, and
+    // the pane needs both; every read hits `/api/knowledge/bases`.
+    // ⚠ NO LONGER LAZY: the home read was gated on the pill until 2026-08-27.
+    // Personal is always on screen now, so a deferred read would be a
+    // guaranteed second round trip rather than a saving.
     renderHome();
     await openKnowledge();
-    await screen.findByText("Call notes");
+    await screen.findByText("Fundraise memos");
 
-    await chooseScope("across all channels");
-
-    expect(await screen.findByText("Fundraise memos")).toBeInTheDocument();
-    // The container's private base is gone; the SHARED section is untouched by
-    // the pill — it is a different question and a different section.
-    expect(screen.queryByText("Call notes")).not.toBeInTheDocument();
-    expect(screen.getByText("Renewals")).toBeInTheDocument();
-
-    // ⚠ The second read is addressed to the HOME workspace over `opts`, not by
-    // path: both scopes hit `/api/knowledge/bases`.
-    const kb = bridgeCalls(apiRequest).filter((c) =>
-      c.path.startsWith("/api/knowledge/bases")
+    const kb = bridgeCalls(apiRequest).filter(
+      (c) => c.path.split("?")[0] === "/api/knowledge/bases"
     );
-    expect(kb.some((c) => c.opts.workspaceId === WORKSPACE_ID)).toBe(true);
+    expect(
+      kb.some(
+        (c) => c.opts.workspaceId === WORKSPACE_ID && c.path.includes("shelf=home")
+      )
+    ).toBe(true);
     expect(
       kb.some(
         (c) =>
@@ -133,41 +141,7 @@ describe("the three scopes", () => {
     ).toBe(true);
   });
 
-  it("holds the scope pill inert while the scope it named is in flight", async () => {
-    // ⚠ The read is held OPEN — the only way to assert anything about the
-    // window a second click would land in (§8 rule 8).
-    let release = () => {};
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    apiRequest.mockImplementation(
-      async (path: string, opts: BridgeRequestOpts = {}) => {
-        if (
-          path.split("?")[0] === "/api/knowledge/bases" &&
-          opts.workspaceId === WORKSPACE_ID
-        ) {
-          await held;
-        }
-        return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
-      }
-    );
-    renderHome();
-    await openKnowledge();
-    await screen.findByText("Call notes");
-
-    await chooseScope("across all channels");
-
-    const pill = screen.getByLabelText("Which private knowledge bases");
-    await waitFor(() =>
-      expect(pill.closest("[data-pending]")).not.toBeNull()
-    );
-
-    release();
-    await screen.findByText("Fundraise memos");
-    expect(pill.closest("[data-pending]")).toBeNull();
-  });
-
-  it("states each empty scope in its OWN words", async () => {
+  it("states each empty section in its OWN words", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) =>
         path.split("?")[0] === "/api/knowledge/bases"
@@ -177,48 +151,20 @@ describe("the three scopes", () => {
     renderHome();
     await openKnowledge();
 
+    // Two sentences, two states, on screen AT THE SAME TIME — which is the part
+    // the pill made impossible to assert.
     expect(
       await screen.findByText("Nothing is shared into this channel yet.")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("You haven't created a private base in this channel.")
+      await screen.findByText("You haven't created a private base here yet.")
     ).toBeInTheDocument();
-
-    await chooseScope("across all channels");
-    expect(
-      await screen.findByText("You have no private bases in your workspace.")
-    ).toBeInTheDocument();
-    // Three sentences, three states — the container's own emptiness still reads
-    // differently from the workspace's.
-    expect(
-      screen.queryByText("You haven't created a private base in this channel.")
-    ).not.toBeInTheDocument();
   });
 });
 
 describe("the pane token", () => {
   it("crossfades on a channel switch and never swaps data under a frozen token", async () => {
-    const second = { ...HOME.channels[0], workspaceId: OTHER_WS, workspaceSegment: "link-dana-bb22", channelId: OTHER_CHANNEL, name: "Dana Ruiz", peer: null, linkOut: null };
-    const two: HomeChannelsPayload = {
-      channels: [HOME.channels[0], second],
-      pendingLinks: [],
-    };
-    apiRequest.mockImplementation(
-      (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
-        const bare = path.split("?")[0];
-        if (bare === "/api/home/channels") return Promise.resolve(ok(two));
-        if (bare === "/api/knowledge/bases") {
-          // The SECOND channel's container answers with its own base and no
-          // grants — so a pane rendering the wrong channel is visible as data,
-          // not merely as a token.
-          return opts.workspaceId === OTHER_WS
-            ? Promise.resolve(ok({ ...empty(), bases: [OTHER_BASE] }))
-            : knowledgeBases(opts);
-        }
-        return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
-      }
-    );
-
+    installTwoChannels();
     const { view } = renderHome();
     await openKnowledge();
     await screen.findByText("Renewals");
@@ -246,30 +192,15 @@ describe("the pane token", () => {
     // `useState` survived: `openBase` stayed set, and the base was then mounted
     // against channel B's `workspaceId` — a 404 error pane over a base that
     // exists. `knowledge-tab.tsx` had already solved this on the channel side.
-    const second = { ...HOME.channels[0], workspaceId: OTHER_WS, workspaceSegment: "link-dana-bb22", channelId: OTHER_CHANNEL, name: "Dana Ruiz", peer: null, linkOut: null };
-    const two: HomeChannelsPayload = {
-      channels: [HOME.channels[0], second],
-      pendingLinks: [],
-    };
-    apiRequest.mockImplementation(
-      (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
-        const bare = path.split("?")[0];
-        if (bare === "/api/home/channels") return Promise.resolve(ok(two));
-        if (bare === "/api/knowledge/bases") {
-          return opts.workspaceId === OTHER_WS
-            ? Promise.resolve(ok({ ...empty(), bases: [OTHER_BASE] }))
-            : knowledgeBases(opts);
-        }
-        return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
-      }
-    );
-
+    installTwoChannels();
     renderHome();
     await openKnowledge();
 
-    // Open channel A's base. The section header disappears with the grid, which
-    // is how the detail view announces itself without depending on its chrome.
-    fireEvent.click(await screen.findByText("Call notes"));
+    // Open channel A's SHARED base — since 2026-08-27 that is the only kind of
+    // container base this pane offers. The section header disappears with the
+    // grid, which is how the detail view announces itself without depending on
+    // its chrome.
+    fireEvent.click(await screen.findByText("Renewals"));
     await waitFor(() =>
       expect(
         screen.queryByText("Shared in this channel")
@@ -303,7 +234,13 @@ describe("§8 stale cache", () => {
   it("renders a payload written before channelGrants existed", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) => {
-        if (path.split("?")[0] === "/api/knowledge/bases") {
+        // ⚠ THE CONTAINER READ ONLY. Stubbing every base-list call would hand
+        // the container's fixture to the HOME shelf too, and its private rows
+        // would render in Personal — a pass built on the wrong workspace's data.
+        if (
+          path.split("?")[0] === "/api/knowledge/bases" &&
+          opts.workspaceId === LINK_WORKSPACE_ID
+        ) {
           // The key is DELETED from the fixture, not set to null or {} — a
           // stale entry does not carry it at all.
           const stale: Record<string, unknown> = { ...CONTAINER_BASES };
@@ -316,39 +253,40 @@ describe("§8 stale cache", () => {
     renderHome();
     await openKnowledge();
 
-    // Nothing throws, the pane paints, and "no grants" is what it says — the
-    // shared section reads empty while the private one still lists its base.
-    // ⚠ Waited on a base, not on the empty sentence: the pane holds its
-    // skeleton until the read lands, so an assertion on the empty state alone
-    // would pass against a payload that never arrived.
-    expect(await screen.findByText("Call notes")).toBeInTheDocument();
+    // Nothing throws, the pane paints, and "no grants" is what it says.
+    // ⚠ WITH NO GRANTS, EVERY SECTION IS EMPTY — and that is the correct
+    // rendering since 2026-08-27, not a degraded one: this fixture's bases live
+    // in the CONTAINER, and a container base with no grant belongs nowhere on
+    // /home. The pin is that the pane says so instead of throwing.
     expect(
-      screen.getByText("Nothing is shared into this channel yet.")
+      await screen.findByText("Nothing is shared into this channel yet.")
     ).toBeInTheDocument();
     expect(screen.queryByText("Agent only")).not.toBeInTheDocument();
+    expect(screen.queryByText("Call notes")).not.toBeInTheDocument();
   });
 
-  it("offers no home scope, and asks for no home bases, when boot has no workspace", async () => {
+  it("offers no Personal shelf, and asks for no home bases, when boot has no workspace", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) =>
         path === "/api/boot"
           ? Promise.resolve(
               // ⚠ Not onboarded: `POST /api/boot` answers `workspace: null`
-              // (plan §0.1), and scope C has nowhere to look.
+              // (plan §0.1), and the shelf has nowhere to look.
               ok(bootBody({ workspace: null, segment: null, role: null }))
             )
           : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
     );
     renderHome();
     await openKnowledge();
-    await screen.findByText("Call notes");
 
-    await chooseScope("across all channels");
     expect(
       await screen.findByText(
         "Finish setting up your workspace to keep bases here."
       )
     ).toBeInTheDocument();
+    // ⚠ AND NO UNADDRESSED READ. With no home workspace the query is disabled;
+    // a read with no `workspaceId` would auto-target on the server and answer
+    // some other workspace's shelf.
     expect(
       bridgeCalls(apiRequest).filter(
         (c) =>
@@ -378,8 +316,6 @@ describe("🔒 the my-access provider — F-330's blast radius, per mount target
   it("🔒 the HOME-workspace mount resolves my-access against its own segment", async () => {
     renderHome();
     await openKnowledge();
-    await screen.findByText("Call notes");
-    await chooseScope("across all channels");
 
     fireEvent.click(await screen.findByText("Fundraise memos"));
 
@@ -393,7 +329,7 @@ describe("🔒 the my-access provider — F-330's blast radius, per mount target
     renderHome();
     await openKnowledge();
 
-    fireEvent.click(await screen.findByText("Call notes"));
+    fireEvent.click(await screen.findByText("Renewals"));
     await waitFor(() =>
       expect(
         screen.queryByText("Shared in this channel")
@@ -405,25 +341,86 @@ describe("🔒 the my-access provider — F-330's blast radius, per mount target
 });
 
 describe("creating", () => {
-  it("follows the scope dropdown into the workspace it names", async () => {
-    renderHome();
-    await openKnowledge();
-    await screen.findByText("Call notes");
-
-    fireEvent.click(screen.getByRole("button", { name: /New knowledge base/ }));
+  /** Type a name into the open dialog and submit it. */
+  async function submitCreate(name: string): Promise<void> {
     fireEvent.change(await screen.findByPlaceholderText("e.g. Product specs"), {
-      target: { value: "Handover" },
+      target: { value: name },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
+  }
 
-    // RULING 6: "in this channel" is the default scope, so the POST is
-    // addressed to the CONTAINER, never to the caller's own workspace.
+  const lastPost = () =>
+    bridgeCalls(apiRequest).find(
+      (c) =>
+        c.path.split("?")[0] === "/api/knowledge/bases" && c.opts.method === "POST"
+    );
+
+  it("the PERSONAL button writes to the home workspace, on the home shelf", async () => {
+    renderHome();
+    await openKnowledge();
+    await screen.findByText("Fundraise memos");
+
+    fireEvent.click(screen.getByRole("button", { name: /New knowledge base/ }));
+    await submitCreate("Handover");
+
     await waitFor(() => {
-      const post = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/knowledge/bases" && c.opts.method === "POST"
-      );
-      expect(post?.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
+      const post = lastPost();
+      expect(post?.opts.workspaceId).toBe(WORKSPACE_ID);
+      // 🔒 BOTH HALVES. A create that landed unmarked would write into the
+      // workspace shelf this pane no longer reads — a base that vanishes the
+      // moment it is made — and it would look like it worked.
+      expect(post?.opts.body).toMatchObject({ homeScoped: true });
+      expect(post?.opts.body).not.toHaveProperty("shareToChannelId");
     });
+  });
+
+  it("🔒 the SHARED button writes to the CONTAINER and shares in one call", async () => {
+    // 🔒 SAMUEL'S RULING, 2026-08-27. The base and the grant are ONE request —
+    // the server rolls the base back if the grant fails — because a container
+    // base that landed ungranted is invisible on this very surface.
+    renderHome();
+    await openKnowledge();
+    await screen.findByText("Renewals");
+
+    fireEvent.click(screen.getByRole("button", { name: /New shared base/ }));
+    await submitCreate("Handover");
+
+    await waitFor(() => {
+      const post = lastPost();
+      expect(post?.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
+      expect(post?.opts.body).toMatchObject({
+        shareToChannelId: HOME.channels[0].channelId,
+        // ⚠ `private` ON THE WORKSPACE AXIS. The GRANT carries the audience;
+        // private + a `visible` grant is exactly "readable in this channel and
+        // nowhere else". A `public` container base would also be readable by
+        // the peer with no grant at all, which is a different promise.
+        visibility: "private",
+      });
+      expect(post?.opts.body).not.toHaveProperty("homeScoped");
+    });
+  });
+
+  it("asks the audience question ONCE — NEITHER /home dialog has a scope picker", async () => {
+    // ⚠ THE BUTTON IS THE ANSWER, on BOTH branches (Samuel, 2026-08-27). The
+    // shared one has a grant that carries the audience; the personal one is the
+    // caller's own shelf. A workspace-visibility radio under either would offer
+    // a second, contradicting answer — and two of its three options (public,
+    // team) name audiences a home surface does not have.
+    // ⚠ THIS TEST ASSERTED THE OPPOSITE FOR THE PERSONAL BRANCH until that
+    // ruling; the workspace Knowledge page is where the picker still lives, and
+    // `create-base-dialog.tsx › Props.audienceFixed` is the scoping.
+    renderHome();
+    await openKnowledge();
+    await screen.findByText("Renewals");
+
+    fireEvent.click(screen.getByRole("button", { name: /New shared base/ }));
+    await screen.findByPlaceholderText("e.g. Product specs");
+    expect(screen.queryByText("Who can access")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: /New knowledge base/ }));
+    await screen.findByPlaceholderText("e.g. Product specs");
+    expect(screen.queryByText("Who can access")).not.toBeInTheDocument();
   });
 });
 
@@ -439,7 +436,50 @@ const OTHER_BASE = {
   createdBy: USER_ID,
 };
 
-/** A base list with nothing in it — every scope's empty state at once. */
+/**
+ * A second channel in its own container, whose base is GRANTED onto it — so a
+ * pane rendering the wrong channel is visible as DATA, not merely as a token.
+ * ⚠ The grant is load-bearing since 2026-08-27: an ungranted container base
+ * renders nowhere, so without it this fixture would prove nothing.
+ */
+function installTwoChannels(): void {
+  const second = {
+    ...HOME.channels[0],
+    workspaceId: OTHER_WS,
+    workspaceSegment: "link-dana-bb22",
+    channelId: OTHER_CHANNEL,
+    name: "Dana Ruiz",
+    peers: [],
+    peer: null,
+    linkOut: null,
+  };
+  const two: HomeChannelsPayload = {
+    channels: [HOME.channels[0], second],
+    pendingLinks: [],
+  };
+  apiRequest.mockImplementation(
+    (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
+      const bare = path.split("?")[0];
+      if (bare === "/api/home/channels") return Promise.resolve(ok(two));
+      if (bare === "/api/knowledge/bases") {
+        return opts.workspaceId === OTHER_WS
+          ? Promise.resolve(
+              ok({
+                ...empty(),
+                bases: [OTHER_BASE],
+                channelGrants: {
+                  [OTHER_BASE.id]: { level: "visible", guestWrite: false },
+                },
+              })
+            )
+          : knowledgeBases(opts, path);
+      }
+      return routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`));
+    }
+  );
+}
+
+/** A base list with nothing in it — every section's empty state at once. */
 function empty(): KnowledgeBaseList {
   return { ...HOME_BASES, bases: [], ownerNames: {}, channelGrants: {} };
 }

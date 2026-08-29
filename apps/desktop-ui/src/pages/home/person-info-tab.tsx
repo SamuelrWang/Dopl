@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Bot, CalendarDays, Clock3, Mail, type LucideIcon } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
@@ -25,7 +26,7 @@ import {
 } from "@/features/channels/info-card";
 import type { Channel } from "@/features/channels/types";
 import type { HomeChannel } from "@/features/home/types";
-import { channelTitle } from "./home-rows";
+import { channelPeople, channelSubline, channelTitle } from "./home-rows";
 import { PersonMembers } from "./person-members";
 import { PersonThreadActivity } from "./person-thread-activity";
 
@@ -44,7 +45,7 @@ import { PersonThreadActivity } from "./person-thread-activity";
  * saved is worse than an absent one.
  *
  * ⚠ THE CARD IS CURATED AND THE CURATION PERSISTS (Samuel, 2026-08-25). Every
- * Main-info row carries a hover-only ×, and a discreet ghost row at the end of
+ * Channel-info row carries a hover-only ×, and a discreet ghost row at the end of
  * the list adds a custom `label: value` pair. Both edits are stored on
  * `channels.info_card` and written through the PATCH that already writes the
  * channel — see `features/channels/info-card.ts`.
@@ -53,7 +54,7 @@ import { PersonThreadActivity } from "./person-thread-activity";
  *   subline above; what changed is what this card shows. Do not "finish the
  *   job" by nulling anything.
  *
- * ⚠ THE ORDER IS HEADER → MAIN INFO → THREAD ACTIVITY → MEMBERS (+ ADD PERSON)
+ * ⚠ THE ORDER IS HEADER → CHANNEL INFO → THREAD ACTIVITY → MEMBERS (+ ADD PERSON)
  * (Samuel, 2026-08-25 — corrected the same day; the first pass put Members
  * second). Add person moved out of the tab's foot and under the roster it
  * changes, which is what keeps the tab's one ACTION at its end.
@@ -76,7 +77,9 @@ export function PersonInfoTab({
    *  ChannelInfoTabContext`. Never a second one minted here. */
   gate: MutationGate;
 }) {
-  const { peer } = homeChannel;
+  // ⚠ Everybody else in the container, oldest join first. The cache-shape rule
+  // for `peers` lives in `channelPeople` and is enforced from `home-rows.test.ts`.
+  const people = channelPeople(homeChannel);
   const name = channelTitle(homeChannel);
   // ⚠ CACHE-SHAPE FALLBACK: the persisted query cache (IndexedDB) serves
   // channel rows minted before `infoCard` existed, so the field can be absent
@@ -93,8 +96,19 @@ export function PersonInfoTab({
   // times inline. One list means the divider arithmetic below cannot disagree
   // with what is on screen, and adding a fourth built-in row is one entry plus
   // one key in `info-card.ts`.
+  // 🔒 ⚠ THE EMAIL ROW IS A ONE-PERSON ROW AND IS DROPPED ABOVE ONE
+  // (2026-08-26). It was already absent on a SOLO channel, for the reason at the
+  // top of this file — a row answering a question nobody asked, implying a
+  // person who is not there. **A container with three people asks the mirror
+  // question and it has no honest answer**: one address under a header naming
+  // two other members reads as THEIR address, and a card whose whole premise is
+  // curated facts must not print a fact about the wrong person. Every member's
+  // address is one section down, beside their face, in the roster
+  // (`PersonMembers` → `MemberRoster`, name over EMAIL) — so nothing is lost,
+  // it is shown where it can be attributed. ⚠ Do NOT "fix" this by stacking N
+  // Email rows: the card is capped and curated, and the roster IS that list.
   const builtIns: BuiltInRow[] = [
-    ...(peer
+    ...(people.length === 1
       ? [
           {
             key: "email" as const,
@@ -102,7 +116,7 @@ export function PersonInfoTab({
             label: "Email",
             value: (
               <span className="truncate text-body text-text-primary">
-                {peer.email ?? "—"}
+                {people[0].email ?? "—"}
               </span>
             ),
           },
@@ -135,8 +149,23 @@ export function PersonInfoTab({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
       <div className="flex items-center gap-3 px-3.5 pt-4">
-        {peer ? (
-          <Avatar person={peer} size="md" />
+        {people.length > 1 ? (
+          // ⚠ THE SAME STACK AS THE ROW, ONE STEP UP (2026-08-26). `md` is
+          // `Avatar size="md"` to the pixel, so the header does not shift as a
+          // channel grows; `max={4}` is the primitive's default and there is
+          // room for it here where the 290px row only had room for three.
+          <div className="shrink-0" aria-hidden>
+            <AvatarStack
+              size="md"
+              users={people.map((p) => ({
+                userId: p.userId,
+                displayName: p.displayName || p.email || "Member",
+                avatarUrl: p.avatarUrl,
+              }))}
+            />
+          </div>
+        ) : people.length === 1 ? (
+          <Avatar person={people[0]} size="md" />
         ) : (
           // ⚠ `w-10 h-10` is `Avatar size="md"` — same reason the row's glyph
           // matches `sm`: the header must not shift with the peer's presence.
@@ -151,13 +180,26 @@ export function PersonInfoTab({
           <div className="truncate text-title font-semibold text-text-primary">
             {name}
           </div>
+          {/* ⚠ ONE PEER KEEPS ITS ADDRESS; TWO OR MORE GET THE SIZE OF THE ROOM
+              — `channelSubline`'s rule, shared with the list row so the two
+              faces of one channel cannot say different things about it. The
+              "No email on file" nuance is this header's alone: the row leaves
+              that line blank rather than narrating an absence in a list. */}
           <div className="truncate text-caption text-text-muted">
-            {peer ? (peer.email ?? "No email on file") : "Just you"}
+            {people.length === 1
+              ? (people[0].email ?? "No email on file")
+              : channelSubline(homeChannel)}
           </div>
         </div>
       </div>
 
-      <PanelHeading title="Main info" />
+      {/* ⚠ "Channel info", NOT "Main info" (Samuel, live review 2026-08-28). The card is about
+          THIS CHANNEL — its dates, its curated rows — and "Main" named a position on the tab
+          rather than a subject. ⚠ THE STORED SHAPE IS UNTOUCHED: `info-card.ts › hidden` keys and
+          the `channels.info_card` column still say what they said, so this is a label change and
+          not a migration. The workspace channels page's own `channels-v2/info-tab.tsx` keeps its
+          heading — a different tab, not renamed here. */}
+      <PanelHeading title="Channel info" />
       {/* ⚠ THE SECTION WRAPS THE ROWS AND NOT THE HEADING — the add affordance's
           hover is keyed to this element, and a wrapper that included the title
           would reveal the control from a hover that never entered the list. */}
@@ -207,7 +249,7 @@ export function PersonInfoTab({
   );
 }
 
-/** One shipped Main-info row, as data. `key` is what `info-card.ts › hidden`
+/** One shipped Channel-info row, as data. `key` is what `info-card.ts › hidden`
  *  names — a row without one could not be removed. */
 interface BuiltInRow {
   key: ChannelInfoCardBuiltInKey;

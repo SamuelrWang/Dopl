@@ -7,11 +7,12 @@ import type {
   WorkspaceOverviewSeries,
 } from "@/features/workspaces/types";
 import { useWorkspaceRoute } from "#/components/app-shell";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError } from "#/components/page-states";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { ActivityChart } from "./activity-chart";
 import { MemberLoad } from "./member-load";
 import { OverviewHeader } from "./overview-header";
+import { OverviewSkeleton } from "./overview-skeleton";
 import { PeriodStats } from "./period-stats";
 import { RecentActivity } from "./recent-activity";
 import { StatCards } from "./stat-cards";
@@ -28,7 +29,8 @@ import { StatCards } from "./stat-cards";
  *
  * ⚠ Nothing paints until all three have landed. Rendering the stat row against
  * zeroes and letting it jump when the payload arrives was the filed defect;
- * `PageLoading` is the whole first frame instead.
+ * `OverviewSkeleton` — this page's OWN shape, module for module — is the whole
+ * first frame instead.
  *
  * Cold read, deliberately: no `supabase.channel()`, no poll. The provider's 30s
  * `staleTime` is the freshness story for this page.
@@ -41,7 +43,7 @@ export default function OverviewPage() {
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !workspace || !segment) {
-    return <PageLoading label="Loading overview" variant="page" />;
+    return <OverviewSkeleton label="Loading overview" />;
   }
 
   return (
@@ -103,7 +105,7 @@ function OverviewSurface({
     );
   }
   if (!overview.data || !series.data || credits.loading) {
-    return <PageLoading label="Loading overview" variant="page" />;
+    return <OverviewSkeleton label="Loading overview" />;
   }
 
   return (

@@ -61,14 +61,36 @@ const TEMPLATES = [
   },
 ];
 
+/**
+ * 🔴 THE /home SHELF, ANSWERED ONLY WHEN NOBODY NARROWS (Samuel's ruling
+ * 2026-08-27). This page must send `?shelf=workspace` and therefore never see
+ * it; a page that forgot the param falls into the "both" branch below and picks
+ * it up, which is what makes the exclusion pin cost something.
+ */
+const HOME_SHELF_TEMPLATE = {
+  ...TEMPLATES[0],
+  id: "tpl-home-shelf",
+  name: "Kept on /home",
+  visibility: "private" as const,
+};
+
 function agentRoutes(path: string): Promise<BridgeResponse> | null {
-  if (path === "/api/agent-templates") {
-    return Promise.resolve(ok({ templates: TEMPLATES }));
+  const [bare, query] = path.split("?");
+  if (bare === "/api/agent-templates") {
+    const shelf = new URLSearchParams(query ?? "").get("shelf");
+    // ⚠ ABSENT = BOTH, mirroring the route (`?shelf=` absent means no filter).
+    const templates =
+      shelf === "workspace"
+        ? TEMPLATES
+        : shelf === "home"
+          ? [HOME_SHELF_TEMPLATE]
+          : [...TEMPLATES, HOME_SHELF_TEMPLATE];
+    return Promise.resolve(ok({ templates }));
   }
-  if (path === "/api/knowledge/bases") {
+  if (bare === "/api/knowledge/bases") {
     return Promise.resolve(ok({ bases: [{ id: "kb-1", name: "Runbooks" }] }));
   }
-  if (path.endsWith("/teams")) return Promise.resolve(ok({ teams: [] }));
+  if (bare.endsWith("/teams")) return Promise.resolve(ok({ teams: [] }));
   return null;
 }
 
@@ -111,10 +133,27 @@ describe("agents page", () => {
     renderAgents();
     await screen.findByText("Release captain");
 
-    const list = calls().find((c) => c.path === "/api/agent-templates");
+    const list = calls().find(
+      (c) => c.path.split("?")[0] === "/api/agent-templates"
+    );
     expect(list).toBeTruthy();
     expect(list!.opts.workspaceId).toBe(WORKSPACE_ID);
+    // 🔒 AND THE SHELF IS ON THE WIRE. It is what excludes templates created
+    // from the /home Agents pane — a SERVER filter, so this asserts the
+    // request, not the absence of a card (an absent card also happens when the
+    // fixture forgets to send one).
+    expect(list!.path).toContain("shelf=workspace");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("🔒 leaves the /home SHELF out of the workspace page", async () => {
+    // 🔒 SAMUEL'S RULING, 2026-08-27 — the two surfaces are two PLACES and the
+    // exclusion runs BOTH ways. `Kept on /home` is the same workspace, the same
+    // owner and also private; only `?shelf=workspace` keeps it off this page.
+    renderAgents();
+    await screen.findByText("Release captain");
+
+    expect(screen.queryByText("Kept on /home")).toBeNull();
   });
 
   it("opens the editor from the page-level create button", async () => {

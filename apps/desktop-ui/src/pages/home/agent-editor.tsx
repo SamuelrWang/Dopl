@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
-import type { AgentTemplate } from "@/features/agent-templates/client/types";
+import type {
+  AgentTemplate,
+  TemplateShelf,
+  TemplateVisibility,
+} from "@/features/agent-templates/client/types";
 import { TemplateEditor } from "@/features/agent-templates/components/template-editor";
 import type { PickerOption } from "@/features/agent-templates/components/template-editor-rows";
 import { useAgentTemplateWrites } from "@/features/agent-templates/hooks/use-agent-template-writes";
@@ -39,15 +43,21 @@ import { useTeams } from "@/features/members/hooks/use-teams";
  * asks for no teams` pins it from the wire.
  *
  * ⚠ WHY A CONTAINER HAS NO TEAMS TO ASK FOR: a `kind='link'` container holds ONE
- * OR TWO members and no team rows (INVARIANTS §4A), so `team` is a DEAD
- * visibility there — hence `SECTIONS_CONTAINER` (two options) and an empty team
- * list. The home workspace is an ordinary workspace where all three scopes are
- * live, so it gets `SECTIONS` and a real teams read.
- * ⚠ A home-workspace template saved as Team or Public LANDS OUTSIDE THIS PANE's
- * scope C, which lists `private` + mine only. That is correct, not a bug: the
- * row is in the operator's own workspace and its home is that workspace's Agents
- * page (`/:workspaceSegment/agents`). This face never claimed to list the other
- * two scopes of a second workspace.
+ * OR MORE members and no team rows (INVARIANTS §4A), so `team` is a DEAD
+ * visibility there — hence `SECTIONS_CONTAINER` and an empty team list. The home
+ * workspace is an ordinary workspace where all three scopes are live, so it gets
+ * `SECTIONS` and a real teams read.
+ * 🔒 ⚠ `SECTIONS_CONTAINER` IS **ONE** OPTION SINCE 2026-08-27, NOT TWO. The
+ * /home pane lost its per-channel private section, and a container is not
+ * navigable, so a `private` CONTAINER template would be reachable from nowhere —
+ * a write-only row. The array is the control, so trimming the array is what
+ * closes that door; this mount also passes `defaultVisibility="workspace"`,
+ * because `emptyDraft()` starts at `private` and a draft opening on a value the
+ * control cannot show is a form with no visible selection.
+ * ⚠ A home-workspace template saved as Team or Public LANDS OUTSIDE THE PERSONAL
+ * SECTION, which lists `private` + mine + `home_scoped`. That is correct, not a
+ * bug: the row is in the operator's own workspace and its home is that
+ * workspace's Agents page (`/:workspaceSegment/agents`).
  *
  * ⚠ MOUNTED ONLY WHILE OPEN, so `session` is the constant `1`. That prop exists
  * because the workspace page keeps ONE editor mounted and bumps it to reload the
@@ -67,10 +77,15 @@ export interface HomeTemplateEditorProps {
 }
 
 /**
- * Writing into THIS CHANNEL's link container — scope A and scope B.
+ * Writing into THIS CHANNEL's link container — the SHARED section.
  *
  * ⚠ NO `useTeams` CALL IN THIS COMPONENT, and that is the assertion. See the
  * module docblock.
+ *
+ * ⚠ NO `shelf` EITHER. Shelves live only in a standard workspace
+ * (`resolveTemplateHomeScope` fences the marker to the caller's own default
+ * one), so the container's list and its cache entry are the UNFILTERED ones —
+ * and the writes below must address that same entry.
  */
 export function ContainerTemplateEditor({
   workspaceId,
@@ -83,6 +98,7 @@ export function ContainerTemplateEditor({
       template={template}
       teams={NO_TEAMS}
       sections={SECTIONS_CONTAINER}
+      defaultVisibility="workspace"
       onClose={onClose}
     />
   );
@@ -109,6 +125,11 @@ export function HomeWorkspaceTemplateEditor({
       template={template}
       teams={teams ?? NO_TEAMS}
       sections={SECTIONS}
+      // 🔒 THE SHELF THE PERSONAL SECTION READS. It does two things and both
+      // are silent when wrong: it sends `homeScoped: true` so the row lands on
+      // the shelf this pane lists, and it keys the cache entry the optimistic
+      // patch addresses (F-331, with the shelf as a second axis).
+      shelf="home"
       onClose={onClose}
     />
   );
@@ -138,13 +159,19 @@ function TemplateEditorMount({
   template,
   teams,
   sections,
+  defaultVisibility,
+  shelf,
   onClose,
 }: HomeTemplateEditorProps & {
   workspaceId: string;
   teams: ReadonlyArray<PickerOption>;
   sections: ReadonlyArray<TemplateSectionDef>;
+  defaultVisibility?: TemplateVisibility;
+  /** ⚠ Must match the `shelf` the surface's list read was mounted with, or
+   *  every optimistic patch below lands on a key nobody is subscribed to. */
+  shelf?: TemplateShelf;
 }) {
-  const writes = useAgentTemplateWrites(workspaceId);
+  const writes = useAgentTemplateWrites(workspaceId, shelf);
   const baseList = useKnowledgeBaseList(workspaceId);
   const [error, setError] = useState<string | null>(null);
 
@@ -164,7 +191,15 @@ function TemplateEditorMount({
     setError(null);
     try {
       if (!template) {
-        await writes.create.mutateAsync({ body: draftToCreateBody(draft) });
+        await writes.create.mutateAsync({
+          body: {
+            ...draftToCreateBody(draft),
+            // ⚠ ONLY EVER SENT for the home shelf — an unconditional
+            // `homeScoped: shelf === "home"` would put an explicit `false` on
+            // every container create, widening the contract the fence allows.
+            ...(shelf === "home" ? { homeScoped: true } : {}),
+          },
+        });
       } else {
         const body = draftToPatchBody(draft, template);
         // Nothing changed — a PATCH with an empty body is a round trip that can
@@ -198,6 +233,7 @@ function TemplateEditorMount({
     <TemplateEditor
       open
       session={1}
+      defaultVisibility={defaultVisibility}
       template={template}
       teams={teams}
       knowledgeBases={knowledgeBases}

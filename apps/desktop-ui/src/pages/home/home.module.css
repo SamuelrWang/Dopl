@@ -62,16 +62,78 @@
    themselves built from, so this face cannot drift from theirs and no hex is
    hardcoded here (docs/DESIGN-SYSTEM.md forbids that outright).
 
-   ⚠ NON-INTERACTIVE, and that is the point of doing it this way: the pill is a
-   `<span>` naming an author, so it gets the RESTING face and nothing else — no
-   hover lift, no pressed state, no pointer cursor. It looks raised; it is not a
-   button, and nothing here suggests it can be pressed.
+   ⚠ THE RESTING FACE, FOR BOTH ELEMENTS THE PILL CAN BE (updated 2026-08-28). A HUMAN pill
+   is still a `<span>` naming an author and this is the whole of its treatment — no hover
+   lift, no pressed state, no pointer. An AGENT pill is a real `<button>` that opens that
+   agent's pane, and it wears the SAME face by design: the lift and the press are the
+   component's own utilities (`attribution-pill.tsx`, borrowing `.btn-light`'s ±1px motion),
+   never a second recipe here. **Do not fork a hover state into this rule** — it selects both
+   kinds of pill and would put a pressable affordance on the human ones.
 
-   The hook is `attribution-pill.tsx › AttributionPill`'s `data-attribution-pill`. */
+   The hook is `attribution-pill.tsx › AttributionPill`'s `data-attribution-pill`, carried by
+   the `<span>` and the `<button>` alike so this rule cannot miss one. */
 .frame :global([data-attribution-pill]) {
   background: var(--raised-light-face);
   border-color: var(--raised-light-line);
   box-shadow: var(--raised-light-shadow);
+}
+
+/* THE COMPOSER'S PANELS wear the page's own panel gray here (Samuel, 2026-08-26): the recess a
+   panel's header sits in reads as the same surface the "New channel" button stands on, one card
+   out. ⚠ BOTH of them — the new-thread panel and, since 2026-08-27, the new-agent launch panel;
+   they share one attribute so this stays ONE rule.
+
+   ⚠ SCOPED, for the reason at the top of this file. `--home-panel` is one of
+   /home's four account-palette values and is that page's alone
+   (`tokens.css › /home palette`); the shared composer keeps its neutral
+   `bg-bg-inset` on the workspace channels page. The point is the BINDING, not
+   the ~4/255 the two grays differ by today — re-tune the account palette and
+   this panel follows it instead of drifting off it.
+
+   ⚠ FILL ONLY. The concave shadow stack is deliberate and stays
+   (`composer-request-panel.tsx`); only the colour under it is /home's.
+
+   The hook is `composer-request-panel.tsx › PANEL_HOOK` — an attribute, like
+   `[data-attribution-pill]` above, so swapping a utility class in either panel cannot silently
+   drop this. */
+.frame :global([data-composer-panel]) {
+  background-color: var(--home-panel);
+}
+
+/* THE RECORD PANE'S SECTION PANELS — Knowledge's two and Agents' three — wear
+   that SAME panel gray, flat (Samuel, 2026-08-27, over a screenshot of the
+   Knowledge face). Knowledge's sections were `SectionBox`: a header STRIP over
+   a `bg-bg-inset` body with the concave inset shadow, which read as a rectangle
+   pressed INTO the pane. The ruling is a normal flat rectangle — no border
+   line, no inset shadow — filled with the colour the relationship list stands
+   on, with the section heading and the cards sitting DIRECTLY on it. The cards
+   stay raised; raised-on-flat-gray is the point.
+
+   ⚠ ONE RULE FOR BOTH FACES, and that is the ruling, not a shortcut. The two
+   /home tabs reached this from opposite sides — Knowledge from a concave
+   `SectionBox`, Agents from `template-section.tsx`'s flat
+   `bg-card-surface-subtle` card — and two faces that merely LOOK settled today
+   drift the moment one of them is re-tuned. Stating the ground once means a
+   change to it cannot land on one tab only.
+
+   ⚠ SCOPED, for the reason at the top of this file: `--home-panel` is /home's
+   alone, so `TemplatePanel` keeps its neutral flat card face on the WORKSPACE
+   Agents page (`.frame` is applied nowhere else). This is also why
+   `shared/ui/section-panel.tsx` paints nothing of its own — a `tone="home"`
+   prop there would put this palette one autocomplete away from every workspace
+   page.
+
+   ⚠ `border-color`, NOT `border: none` — the background paints under the
+   border box, so a transparent hairline is seamless AND leaves the box model
+   alone; removing the border would move every panel's content by a pixel on
+   /home only.
+
+   The hook is `shared/ui/section-panel.tsx › SectionPanel`'s
+   `data-section-panel` — an attribute, like the two above, so neither face's
+   utility classes can silently drop this. */
+.frame :global([data-section-panel]) {
+  background-color: var(--home-panel);
+  border-color: transparent;
 }
 
 /* ── The Knowledge tab's card grid ────────────────────────────────────────
@@ -83,10 +145,27 @@
    aliases onto the SAME global tokens (`knowledge-v2.module.css › .shell`);
    nothing is hardcoded and nothing is a second value that could drift.
 
-   ⚠ TWO COLUMNS, NOT THREE. The knowledge PAGE grid is three across a full
-   page; this one lives in /home's record pane, which is the panel minus the
-   290px conversation column. Row height is the page grid's 244px, for the
-   reason stated there: card size independent of description length. */
+   ⚠ THREE COLUMNS SINCE 2026-08-28 (Samuel, over a screenshot of this face:
+   *"three cards per row"*). It was TWO — the note here read "two columns, not
+   three", on the reasoning that this grid lives in /home's record pane (the
+   panel minus the conversation column) while the knowledge PAGE grid is three
+   across a full page. The ruling overrides that reasoning: the CARD shrinks to
+   fit instead, via the three rebinds below. The narrow breakpoint still steps
+   down by ONE column, which is what it always did — 2 there now, not 1.
+
+   ⚠ THE CARD'S OWN FACE IS REBOUND HERE, NOT FORKED. `BaseCard` is reused
+   verbatim (`knowledge-panel-cards.tsx`) and its title/description read
+   DEFAULTED aliases in `knowledge-v2.module.css` (`--kv-card-title-size`,
+   `--kv-card-title-weight`, `--kv-card-desc-lines`). Rebinding them on this
+   grid keeps the change /home-scoped by construction: the workspace knowledge
+   page never mounts `.kbCards`, so it keeps the defaults.
+
+   ⚠ ROW HEIGHT IS DERIVED, NOT PICKED. The card's content is fixed-height
+   (card 14+13 padding, title line, 10 gap, then the inset: description row
+   9+9 + clamp, meta row 7+7 + line + meter, foot 7+7 + 26px button). Dropping
+   the title 14px → 12.5px and the clamp 3 lines → 2 takes ~19px off that
+   stack, which is where 244px → 224px comes from. Change a rebind below and
+   this number moves with it. */
 .kbCards {
   --kv-panel: var(--panel-surface);
   --kv-border: var(--border-default);
@@ -98,14 +177,26 @@
   --kv-row-hover: var(--surface-raised-1);
   --kv-row-active: var(--surface-raised-3);
 
+  /* ⚠ THE TITLE IS THE CHANNEL ROW'S TITLE (Samuel, 2026-08-28: *"not bold,
+     font size = the channel name in the left list"*). That row is
+     `relationship-list.tsx › RelationshipRow`'s name span — `truncate text-body
+     font-medium` — so the SIZE is `--text-body`, the token behind `text-body`.
+     The WEIGHT is normal because the ruling said "not bold" in its own clause;
+     the row itself is 500. Do not restate 12.5px here — read the token. */
+  --kv-card-title-size: var(--text-body);
+  --kv-card-title-weight: 400;
+  /* Two description lines, not three: at a third of the pane a card cannot pay
+     for a 3-line floor AND the meta/foot rows inside a shorter row. */
+  --kv-card-desc-lines: 2;
+
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 244px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 224px;
   gap: 14px;
 }
 @media (max-width: 1080px) {
   .kbCards {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

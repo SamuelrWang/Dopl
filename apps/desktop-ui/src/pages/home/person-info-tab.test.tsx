@@ -19,7 +19,7 @@ import {
 
 /**
  * THE HOME INFO TAB, END TO END THROUGH THE REAL PAGE (Samuel's four items,
- * 2026-08-25): removable Main-info rows, the discreet add affordance, the
+ * 2026-08-25): removable Channel-info rows, the discreet add affordance, the
  * Members section with Add person beneath it, and Thread activity.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, NOT THE COMPONENT. The tab renders the card off
@@ -129,7 +129,7 @@ beforeEach(() => {
   serve(HOME);
 });
 
-describe("Main info — removable rows", () => {
+describe("Channel info — removable rows", () => {
   it("the × removes a built-in row OPTIMISTICALLY, and it stays removed across the refetch", async () => {
     // ⚠ THE PATCH IS HELD OPEN. Everything asserted before `release()` happened
     // with the write still in flight, so it can only be the optimistic patch —
@@ -181,7 +181,7 @@ describe("Main info — removable rows", () => {
   });
 });
 
-describe("Main info — the discreet add", () => {
+describe("Channel info — the discreet add", () => {
   it("is present but INVISIBLE until the section is hovered", async () => {
     renderHome();
     await screen.findByTestId("channel-surface");
@@ -339,7 +339,7 @@ describe("Members", () => {
     expect(screen.queryByText(/No members in this channel/i)).toBeNull();
   });
 
-  it("puts Add person UNDER the roster, and only while a seat is free", async () => {
+  it("puts Add person UNDER the roster", async () => {
     serve(SOLO_HOME, SOLO_MEMBERS);
     renderHome();
     await screen.findByTestId("channel-surface");
@@ -353,13 +353,17 @@ describe("Members", () => {
     ).toBeTruthy();
   });
 
-  it("hides Add person once the container is FULL", async () => {
-    // The capacity rule is unchanged by the move: a peer has arrived, the one
-    // free seat is taken, and a mint would 409.
+  it("KEEPS Add person once a peer has arrived — there is no cap", async () => {
+    // 🔒 THE RULING, PINNED (Samuel, 2026-08-26: a home channel takes MORE THAN
+    // TWO people). The default fixture's channel already HAS a peer, and this
+    // used to assert the control was gone. Adding the next person is the same
+    // act as adding the first, so the affordance must survive the first claim.
     renderHome();
     await screen.findByTestId("channel-surface");
     await screen.findByText("Members");
-    expect(screen.queryByRole("button", { name: "Add person" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Add person" })
+    ).toBeInTheDocument();
   });
 
   it("shows the Link out panel instead when an invitation is already out", async () => {
@@ -374,8 +378,10 @@ describe("Members", () => {
     await screen.findByTestId("channel-surface");
     const surface = screen.getByTestId("channel-surface");
     expect(await within(surface).findByText("Link out")).toBeInTheDocument();
-    // ⚠ ONE SECTION, TWO STATES, AND NEVER BOTH — offering the act again beside
-    // a live invitation would mint a second link for one free seat.
+    // ⚠ ONE SECTION, TWO STATES, AND NEVER BOTH — this is the rule the cap's
+    // retirement did NOT take with it. A container may hold at most ONE open
+    // link at a time, so offering the act beside a live invitation would mint
+    // over a URL the operator has already sent.
     expect(
       within(surface).queryByRole("button", { name: "Add person" })
     ).toBeNull();
@@ -438,10 +444,10 @@ describe("Thread activity", () => {
 });
 
 describe("section order", () => {
-  it("is header → Main info → Thread activity → Members", async () => {
+  it("is header → Channel info → Thread activity → Members", async () => {
     renderHome();
     await screen.findByTestId("channel-surface");
-    const main = await screen.findByText("Main info");
+    const main = await screen.findByText("Channel info");
     const activity = screen.getByText("Thread activity");
     const members = screen.getByText("Members");
     // ⚠ Samuel corrected this order on the day it shipped — Members had been
@@ -482,7 +488,7 @@ describe("a cache entry written before the info card existed", () => {
     );
     renderHome();
     await screen.findByTestId("channel-surface");
-    expect(await screen.findByText("Main info")).toBeInTheDocument();
+    expect(await screen.findByText("Channel info")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
     // And the add affordance still works off the empty card.
     expect(screen.getByTestId("info-card-add")).toBeInTheDocument();

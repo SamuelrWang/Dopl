@@ -1,0 +1,24 @@
+/* The ONE thing a per-page skeleton needs that the shimmer kit does not give
+   it. Geometry lives in the skeleton components (by reference to the real
+   page's classes and width vars); this file is the motion opt-out and nothing
+   else.
+
+   ⚠ WHY IT IS HERE AND NOT IN THE ATOM. `src/shared/ui/skeleton.tsx › Skeleton`
+   is the one pulse recipe for BOTH trees (web + desktop) and it paints
+   `animate-pulse`, a Tailwind utility with no reduced-motion variant of its
+   own. Stating the opt-out once, on the surface every desktop skeleton wraps
+   itself in, keeps the atom unforked: a skeleton still composes `Skeleton` for
+   its fill, and gets the opt-out by standing inside `SkeletonSurface`.
+
+   ⚠ `:global()` FOR THE SAME REASON `pages/home/home.module.css` USES IT — the
+   hook (`data-slot="skeleton"`) is emitted by a component in the OTHER package,
+   so it can never be a locally-scoped class here. An attribute, not a utility
+   class name, so a restyle of the atom cannot silently drop this.
+
+   ⚠ CSS MODULE, so `.surface` is scoped: this cannot reach a pulse anywhere
+   else in the app. */
+@media (prefers-reduced-motion: reduce) {
+  .surface :global([data-slot="skeleton"]) {
+    animation: none;
+  }
+}

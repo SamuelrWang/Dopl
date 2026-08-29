@@ -269,6 +269,21 @@ export interface DoplBridge {
        *  Pass `null`, never `""` — that is the legacy "thread never became first-class"
        *  value, which main accepts and scopes identically but which means something else. */
       taskId: string | null;
+      /**
+       * ⚠ THE INSTANCE ID THIS AGENT SHOULD WEAR, pre-assigned by the caller (2026-08-27) so the
+       * composer's launch panel can show the operator an address BEFORE the spawn. Absent is the
+       * ordinary case and main mints its own.
+       *
+       * ⚠ ACCEPTED, NOT TRUSTED: main re-checks `main/agent-id.js › isAgentId` and mints a fresh
+       * one when the shape fails, so a renderer cannot invent an id SHAPE. An id addresses; it
+       * grants nothing.
+       * ⚠ ONLY HONOURED BY A BUILD EXPOSING `sessions.mintAgentId` — an older main accepts this
+       * field and drops it, which is why the SPA's gate is that op's presence and never this
+       * field. The identity ops themselves (`mintAgentId`, `describe`, `rename`) are NOT mirrored
+       * here: the surfaces that call them are REUSED web modules reaching
+       * `@/shared/lib/spa-bridge`, which is where they are declared.
+       */
+      agentId?: string;
       workspaceId?: string;
       channelName?: string;
       threadTitle?: string | null;

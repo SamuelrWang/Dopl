@@ -12,9 +12,10 @@ import type {
   KnowledgeUrlSync,
 } from "@/features/knowledge/components/knowledge-v2/routing";
 import type { BaseTree } from "@/features/knowledge/components/knowledge-v2/types";
-import type { KnowledgeBase } from "@/features/knowledge/types";
+import type { KbShelf, KnowledgeBase } from "@/features/knowledge/types";
 import type { Role } from "@/features/workspaces/types";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError } from "#/components/page-states";
+import { KnowledgeBaseSkeleton } from "#/components/skeletons/knowledge-skeletons";
 
 /**
  * ONE knowledge base, opened from /home's Knowledge panels.
@@ -69,6 +70,7 @@ export function HomeKnowledgeBaseView({
   currentUserId,
   role,
   list,
+  shelf,
   onGoToBase,
 }: {
   base: KnowledgeBase;
@@ -86,6 +88,20 @@ export function HomeKnowledgeBaseView({
   /** The list response the panels already hold, so the grid behind the detail
    *  pane renders from real data instead of a one-base stub. */
   list: KnowledgeBaseList;
+  /**
+   * 🔒 WHICH SHELF `list` CAME FROM (`@/features/knowledge/types.ts › KbShelf`)
+   * — `"home"` for a scope-C mount, `undefined` for a container one (a link
+   * container has no shelves).
+   *
+   * ⚠ IT IS NOT DECORATION: the view below hands `list.bases` to
+   * `KnowledgeV2PreviewCore` as `initialData` for a LIVE query, and that query
+   * keys on the shelf. Omit it on a scope-C mount and the pane seeds a
+   * home-shelf list into the UNFILTERED cache entry, refetches it unfiltered,
+   * and the grid behind the detail quietly fills with the workspace shelf — the
+   * reported bug, re-entering one layer down. The star write patches that same
+   * entry, so it would go silently dead too (§8).
+   */
+  shelf?: KbShelf;
   /** `null` = leave this base (the crumb, and the delete handler). */
   onGoToBase: (next: KnowledgeBase | null) => void;
 }) {
@@ -139,7 +155,10 @@ export function HomeKnowledgeBaseView({
     return <PageError error={tree.error} onRetry={tree.refetch} />;
   }
   if (!tree.data) {
-    return <PageLoading label="Loading knowledge base" variant="two-pane" />;
+    // ⚠ `embedded`, for the same reason the view below takes it: this mount
+    // lives INSIDE /home's record pane, and a `.page-float` here would be a
+    // panel on a panel — the exact defect Samuel ruled on (2026-08-28).
+    return <KnowledgeBaseSkeleton label="Loading knowledge base" embedded />;
   }
 
   const initialTrees: Record<string, BaseTree> = {
@@ -162,6 +181,21 @@ export function HomeKnowledgeBaseView({
         currentUserId={currentUserId}
         role={role}
         kbTeams={undefined}
+        shelf={shelf}
+        // ⚠ /home, so the audience is already decided by the section the
+        // operator came from — no visibility picker in the create dialog
+        // (`@/features/knowledge/components/create-base-dialog.tsx ›
+        // Props.audienceFixed`). It also could not be answered honestly on a
+        // container mount: a link container has no teams (§4A).
+        audienceFixed
+        // 🔒 ⚠ NO SECOND PANEL. This renders inside /home's record pane — the
+        // `border-2 border-home-panel-line bg-home-card` card in
+        // `pages/home/index.tsx` — and the knowledge view's own default is
+        // `.page-float`, THE full-page surface, of which the kit allows one per
+        // page. Without this the opened base was a panel on a panel, which is
+        // the defect Samuel ruled on (2026-08-28). The workspace knowledge page
+        // omits the prop and keeps its float.
+        embedded
         initialSelection={{ kind: "base", base }}
         initialTrees={initialTrees}
         routing={routing}

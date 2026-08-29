@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
 import { useAgentTemplateWrites } from "@/features/agent-templates/hooks/use-agent-template-writes";
@@ -52,14 +53,13 @@ export function UseInThisChannelButton({
   disabled: boolean;
 }) {
   return (
-    <button
-      type="button"
+    <OpenScaleButton
       onClick={onClick}
       disabled={disabled}
-      className="btn-light h-6 rounded-full px-2.5 text-caption font-medium disabled:opacity-60"
+      className="disabled:opacity-60"
     >
       Use in this channel
-    </button>
+    </OpenScaleButton>
   );
 }
 
@@ -146,7 +146,16 @@ const NO_BASES: ReadonlyArray<{ id: string; name: string }> = Object.freeze([]);
 
 function describe(source: AgentTemplate, error: string | null): string {
   const lines = [
-    "This makes a private copy here. It's a snapshot — later edits to the original won't reach it.",
+    // 🔒 ⚠ THE FIRST WORD CHANGED ON 2026-08-27 AND IT IS AN AUDIENCE CHANGE,
+    // SAID OUT LOUD. It read "a private copy here" while the /home pane had a
+    // per-channel PRIVATE section for it to land in. That section is gone and a
+    // container is not navigable, so a private copy would be reachable from
+    // nowhere — `lib/template-draft.ts › containerCopyDraft` now writes
+    // `visibility: "workspace"`, which inside a container means the OTHER PEOPLE
+    // IN THIS RELATIONSHIP. **This sentence is the whole consent step**: the
+    // operator is told who will see it before they press, rather than finding
+    // out from the peer. Do not soften it back to "a copy".
+    "This shares a copy into this channel — everyone here will see it. It's a snapshot: later edits to the original won't reach it.",
   ];
   const attached = (source.knowledgeBases ?? NO_BASES).length;
   if (attached > 0) {

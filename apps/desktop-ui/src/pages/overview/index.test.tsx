@@ -162,11 +162,19 @@ describe("overview page", () => {
   // ⚠ The FIRST frame is the skeleton, never a stat row of zeroes that jumps
   // when the payload lands (the filed defect this wiring closes).
   it("shows the page skeleton before any figure", () => {
-    renderPage();
+    const { container } = renderPage();
 
     expect(screen.getByRole("status")).toHaveTextContent("Loading overview");
     expect(screen.queryByText("Messages today")).not.toBeInTheDocument();
     expect(screen.queryByText("00")).not.toBeInTheDocument();
+
+    // ⚠ AND IT IS THIS PAGE'S SHAPE, module for module (`./overview-skeleton.tsx`).
+    // The shared ghost painted a 52px top bar over a THREE-up card row; the
+    // page is a `max-w-5xl` column with four stat cards and the uneven 48/52
+    // bottom row, so a stat tile landed in a different place than its ghost.
+    expect(container.querySelector(".max-w-5xl")).not.toBeNull();
+    expect(container.querySelector(".grid-cols-4")).not.toBeNull();
+    expect(container.querySelector(".grid-cols-\\[48fr_52fr\\]")).not.toBeNull();
   });
 
   it("renders the header, the four sections and every live figure", async () => {

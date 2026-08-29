@@ -8,7 +8,6 @@ import {
   DANA_TEMPLATE,
   OTHER_WS,
   agentRoutes,
-  chooseScope,
   openAgents,
   templateCalls as calls,
 } from "./agent-test-fixtures";
@@ -63,22 +62,45 @@ beforeEach(() => {
 const templateCalls = (workspaceId: string | undefined) =>
   calls(apiRequest, workspaceId);
 
-describe("the three scopes", () => {
-  it("splits the container's templates into shared and private-here", async () => {
+describe("the two sections", () => {
+  it("fills SHARED from the container, and PERSONAL from the home shelf", async () => {
     renderHome();
     await openAgents();
 
-    // Scope A: the workspace-visible rows, mine and the peer's.
+    // SHARED: the workspace-visible container rows, mine and the peer's.
     expect(await screen.findByText("Renewal chaser")).toBeInTheDocument();
     expect(screen.getByText("Priya's intake bot")).toBeInTheDocument();
+    // PERSONAL: the home shelf, loaded with no pill to open.
+    expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
+  });
 
-    // Scope B: mine + private. ⚠ The PEER's private row must not appear — a
-    // `createdBy` filter dropped by a typo passes without this.
-    expect(screen.getByText("Scratch agent")).toBeInTheDocument();
+  it("🔒 shows NO container template that is not shared — the removed private scope", async () => {
+    // 🔒 SAMUEL'S RULING, 2026-08-27, AND THIS IS THE CONSEQUENCE HE ACCEPTED.
+    // `Scratch agent` is private, the caller's own, and sits in this channel's
+    // container — the whole of the old scope B. With that scope deleted a
+    // container template reaches /home only at `visibility: "workspace"`, and
+    // the container editor no longer offers any other value, so no NEW row can
+    // land here either.
+    // ⚠ The peer's private row rides along so this asserts the RULE and not one
+    // row: a `createdBy` filter dropped by a typo passes without it.
+    renderHome();
+    await openAgents();
+    await screen.findByText("Renewal chaser");
+
+    expect(screen.queryByText("Scratch agent")).not.toBeInTheDocument();
     expect(screen.queryByText("Priya's drafts bot")).not.toBeInTheDocument();
+  });
 
-    // Scope C's template belongs to another workspace and is not fetched yet.
-    expect(screen.queryByText("Fundraise analyst")).not.toBeInTheDocument();
+  it("🔒 shows only the HOME SHELF in Personal, not the rest of that workspace", async () => {
+    // 🔒 `Quarterly reporter` is in the SAME workspace as `Fundraise analyst`,
+    // also private, also the caller's own — only `?shelf=home` separates them,
+    // and the harness answers BOTH shelves when the param is missing
+    // (`agent-test-fixtures.ts › agentTemplates`).
+    renderHome();
+    await openAgents();
+
+    expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
+    expect(screen.queryByText("Quarterly reporter")).not.toBeInTheDocument();
   });
 
   it("marks a template the operator did not write, and leaves their own bare", async () => {
@@ -100,68 +122,31 @@ describe("the three scopes", () => {
     renderHome();
     await openAgents();
     await screen.findByText("Renewal chaser");
+    await screen.findByText("Fundraise analyst");
 
     // ⚠ `team` is a DEAD value in a container (no teams exist there), and the
-    // failure mode this pins is the SILENT one: a grouping that swept it into
-    // Private or Shared would show the operator a sharing scope that resolves
-    // to nobody.
-    expect(screen.queryByText("Team ops bot")).not.toBeInTheDocument();
-    await chooseScope("across all channels");
-    await screen.findByText("Fundraise analyst");
+    // failure mode this pins is the SILENT one: a grouping that swept it into a
+    // section would show the operator a sharing scope that resolves to nobody.
+    // Both reads are on screen at once now, so one assertion covers both.
     expect(screen.queryByText("Team ops bot")).not.toBeInTheDocument();
   });
 
-  it("swaps to the home workspace when the scope pill moves", async () => {
+  it("asks BOTH reads on first paint, each addressed to its own workspace", async () => {
+    // ⚠ NO LONGER LAZY: the home read was gated on the pill until 2026-08-27.
+    // ⚠ The workspace rides `opts` and the SHELF rides the path — two axes, and
+    // Personal needs both.
     renderHome();
     await openAgents();
-    await screen.findByText("Scratch agent");
-
-    // 🔒 SCOPE C IS NOT FETCHED UNTIL THE PILL ASKS. Asserted BEFORE the click,
-    // because after it the call exists and nothing distinguishes lazy from
-    // eager.
-    expect(templateCalls(WORKSPACE_ID)).toHaveLength(0);
-    expect(templateCalls(LINK_WORKSPACE_ID).length).toBeGreaterThan(0);
-
-    await chooseScope("across all channels");
-
-    expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
-    expect(templateCalls(WORKSPACE_ID)).toHaveLength(1);
-    // The container's private row is gone; the SHARED section is untouched by
-    // the pill — it is a different question and a different section.
-    expect(screen.queryByText("Scratch agent")).not.toBeInTheDocument();
-    expect(screen.getByText("Renewal chaser")).toBeInTheDocument();
-  });
-
-  it("holds the scope pill inert while the scope it named is in flight", async () => {
-    // ⚠ The read is held OPEN — the only way to assert anything about the
-    // window a second click would land in (INVARIANTS §8 rule 8).
-    let release = () => {};
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    apiRequest.mockImplementation(
-      async (path: string, opts: BridgeRequestOpts = {}) => {
-        if (
-          path.split("?")[0] === "/api/agent-templates" &&
-          opts.workspaceId === WORKSPACE_ID
-        ) {
-          await held;
-        }
-        return defaultRoutes(path, opts);
-      }
-    );
-    renderHome();
-    await openAgents();
-    await screen.findByText("Scratch agent");
-
-    await chooseScope("across all channels");
-
-    const pill = screen.getByLabelText("Which private agents");
-    await waitFor(() => expect(pill.closest("[data-pending]")).not.toBeNull());
-
-    release();
     await screen.findByText("Fundraise analyst");
-    expect(pill.closest("[data-pending]")).toBeNull();
+
+    const home = templateCalls(WORKSPACE_ID);
+    expect(home.length).toBeGreaterThan(0);
+    expect(home.every((c) => c.path.includes("shelf=home"))).toBe(true);
+    // The container read carries NO shelf — shelves exist only in a standard
+    // workspace, so narrowing a container would be a question with one answer.
+    const container = templateCalls(LINK_WORKSPACE_ID);
+    expect(container.length).toBeGreaterThan(0);
+    expect(container.every((c) => !c.path.includes("shelf="))).toBe(true);
   });
 });
 
@@ -175,25 +160,17 @@ describe("empty scopes", () => {
     renderHome();
     await openAgents();
 
+    // Two sentences, two states, on screen AT THE SAME TIME — which is the part
+    // the pill made impossible to assert.
     expect(
       await screen.findByText("No agent is shared into this channel yet.")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("You haven't created an agent in this channel.")
+      await screen.findByText("You haven't created an agent here yet.")
     ).toBeInTheDocument();
-
-    await chooseScope("across all channels");
-    expect(
-      await screen.findByText("You have no private agents in your own workspace.")
-    ).toBeInTheDocument();
-    // Three sentences, three states — the container's own emptiness still reads
-    // differently from the workspace's.
-    expect(
-      screen.queryByText("You haven't created an agent in this channel.")
-    ).not.toBeInTheDocument();
   });
 
-  it("offers no home scope, and asks for no home templates, when boot has no workspace", async () => {
+  it("offers no Personal shelf, and asks for no home templates, when boot has no workspace", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path === "/api/boot"
         ? Promise.resolve(
@@ -205,14 +182,14 @@ describe("empty scopes", () => {
     );
     renderHome();
     await openAgents();
-    await screen.findByText("Scratch agent");
 
-    await chooseScope("across all channels");
     expect(
       await screen.findByText(
         "Finish setting up your workspace to keep agents there."
       )
     ).toBeInTheDocument();
+    // ⚠ AND NO UNADDRESSED READ. With no home workspace the query is disabled;
+    // a read with no `workspaceId` would auto-target on the server.
     expect(templateCalls(undefined)).toHaveLength(0);
   });
 });
@@ -226,6 +203,7 @@ function twoChannels() {
     workspaceSegment: "link-dana-bb22",
     channelId: "chan-2",
     name: "Dana Ruiz",
+    peers: [],
     peer: null,
     linkOut: null,
   };
@@ -294,9 +272,10 @@ describe("the pane token", () => {
     await openAgents();
     await screen.findByText("Renewal chaser");
 
-    // Two pieces of held state: the pill is off its default, and a copy confirm
-    // is open holding channel ONE's container id.
-    await chooseScope("across all channels");
+    // ⚠ ONE PIECE OF HELD STATE SINCE 2026-08-27, NOT TWO. The scope pill was
+    // the second, and it is gone — which makes the copy dialog the whole of
+    // this pin, and the sharper half anyway: it is the one that holds a
+    // WORKSPACE ID.
     await screen.findByText("Fundraise analyst");
     fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
     await screen.findByRole("button", { name: "Make a copy" });
@@ -305,20 +284,15 @@ describe("the pane token", () => {
     await screen.findByText("Dana's assistant");
 
     // The dialog went with the pane it belonged to. Held across the switch it
-    // would still be open — now addressing Dana's container.
+    // would still be open — now addressing Dana's container, where its write
+    // would SUCCEED.
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Make a copy" })).toBeNull()
     );
-    // …and the pill is back at its default, which is the same fact said twice:
-    // a fresh instance, not a re-render.
-    expect(
-      screen.getByLabelText("Which private agents").textContent
-    ).toContain("in this channel");
-    expect(screen.queryByText("Fundraise analyst")).not.toBeInTheDocument();
   });
 });
 
-describe("a failed scope-C read", () => {
+describe("a failed PERSONAL read", () => {
   /** The home workspace's template list refuses; everything else answers. */
   function refuseHomeTemplates() {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
@@ -333,41 +307,33 @@ describe("a failed scope-C read", () => {
     );
   }
 
-  it("says so, and NEVER leaves the pill inert on a settled answer", async () => {
-    // 🔒 THE TRAP THIS PINS. `resolved` is `data !== undefined`, so a failed
-    // read is unresolved FOREVER — read as "pending" the section painted a bare
-    // spacer with no sentence AND the pill stayed `pendingRow(true)` =
-    // `pointer-events-none`, so the operator could not get back to the scope
-    // that works. Changing tab or channel was the only escape.
+  it("says so — a settled answer is never rendered as pending", async () => {
+    // 🔒 THE TRAP THIS PINS (F-339). `resolved` is `data !== undefined`, so a
+    // failed read is unresolved FOREVER — read as "pending", the section
+    // painted a bare spacer with no sentence at all.
+    // ⚠ THE PILL HALF OF THIS PIN IS GONE WITH THE PILL (2026-08-27). It also
+    // asserted that a settled failure never left `pendingRow(true)` =
+    // `pointer-events-none` on the control that escapes the scope. There is no
+    // such control now — which removes the trap rather than fixing it — but the
+    // SENTENCE half is the part that was about telling the truth, and it stays.
     refuseHomeTemplates();
     renderHome();
     await openAgents();
-    await screen.findByText("Scratch agent");
-
-    await chooseScope("across all channels");
+    await screen.findByText("Renewal chaser");
 
     // The answer is SAID. M0's own argument is that a 403 here is an ORDINARY
     // answer; an ordinary answer that renders as blank is a lie by omission.
     expect(await screen.findByText("You can't read that.")).toBeInTheDocument();
     // It is not the pending state and it is not the empty sentence.
     expect(
-      screen.queryByText("You have no private agents in your own workspace.")
+      screen.queryByText("You haven't created an agent here yet.")
     ).not.toBeInTheDocument();
-
-    // 🔒 AND THE WAY BACK IS LIVE. Not merely "the attribute is absent" — the
-    // pill is actually operated, and the container's own shelf comes back.
-    const pill = screen.getByLabelText("Which private agents");
-    expect(pill.closest("[data-pending]")).toBeNull();
-    await chooseScope("in this channel");
-    expect(await screen.findByText("Scratch agent")).toBeInTheDocument();
   });
 
   it("offers the retry, and the retry re-asks", async () => {
     refuseHomeTemplates();
     renderHome();
     await openAgents();
-    await screen.findByText("Scratch agent");
-    await chooseScope("across all channels");
     await screen.findByText("You can't read that.");
 
     const before = templateCalls(WORKSPACE_ID).length;
@@ -379,14 +345,12 @@ describe("a failed scope-C read", () => {
   });
 
   it("leaves the CONTAINER's own section standing — one section failed, not the pane", async () => {
-    // A whole-pane `PageError` for a scope-C failure would take away the shared
-    // section AND the pill that leaves the failing scope, which is the trap
-    // above with better manners.
+    // A whole-pane `PageError` for a Personal failure would take away the
+    // SHARED section too, which is a working half of the pane thrown away for a
+    // failure in the other half.
     refuseHomeTemplates();
     renderHome();
     await openAgents();
-    await screen.findByText("Scratch agent");
-    await chooseScope("across all channels");
     await screen.findByText("You can't read that.");
 
     expect(screen.getByText("Renewal chaser")).toBeInTheDocument();

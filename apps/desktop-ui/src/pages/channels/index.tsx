@@ -1,8 +1,9 @@
 import { useParams, useSearchParams } from "react-router";
 import { ChannelsV2Core } from "@/features/channels/components/channels-v2/channels-v2-core";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError } from "#/components/page-states";
 import { RouterLink } from "#/components/app-shell";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
+import { ChannelsSkeleton } from "./channels-skeleton";
 
 /**
  * /:workspaceSegment/channels — and `/channels/:channelId`, the SAME page with
@@ -71,7 +72,10 @@ export default function ChannelsPage() {
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) {
-    return <PageLoading label="Loading channels" variant="two-pane" />;
+    // ⚠ THE SURFACE'S OWN TWO COLUMNS — a 260px nav tree over a transcript with
+    // a card composer — not the generic two-pane list ghost, whose 372px list
+    // of avatar rows and 760px document column belong to no page here.
+    return <ChannelsSkeleton label="Loading channels" />;
   }
 
   return (

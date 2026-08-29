@@ -14,7 +14,7 @@ import type { HomeChannelsPayload } from "@/features/home/types";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import home from "./home.module.css";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
+import { PageError, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
@@ -23,16 +23,15 @@ import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { NewChannelDialog } from "./new-channel-dialog";
 import { HomeSearch } from "./home-search";
+import { HomePageSkeleton } from "./home-skeleton";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeAgentPanels } from "./agent-panels";
 
 import {
   HOME_CHANNELS_PATH,
   channelRowId,
-  hasLinkOut,
   homeRows,
   visibleRows,
-  type HomeFilter,
 } from "./home-rows";
 
 /**
@@ -69,7 +68,6 @@ export default function HomePage() {
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<HomeFilter>("all");
   const [tab, setTab] = useState<HomeTab>("chat");
 
   const workspacesQuery = useApiQuery<
@@ -86,30 +84,22 @@ export default function HomePage() {
     () => (channelsQuery.data ? homeRows(channelsQuery.data) : []),
     [channelsQuery.data]
   );
-  // ⚠ THE FILTER LIVES HERE, not in the list. The record pane falls back to the
-  // first row when nothing is selected, and it has to be the first row the
-  // reader can SEE — with the filter private to the list, typing into search
-  // left the pane on a person the list had already dropped.
-  const visible = useMemo(
-    () => visibleRows(rows, filter, query),
-    [rows, filter, query]
-  );
-  // ⚠ COUNTED OVER ALL ROWS AND BY THE FILTER'S OWN PREDICATE — the badge is a
-  // promise about what picking "Links" will show, and an inline copy of the
-  // rule here is how the two come to disagree.
-  const linkCount = rows.filter(hasLinkOut).length;
+  // ⚠ THE NARROWING LIVES HERE, not in the list. The record pane falls back to
+  // the first row when nothing is selected, and it has to be the first row the
+  // reader can SEE — with it private to the list, typing into search left the
+  // pane on a person the list had already dropped.
+  const visible = useMemo(() => visibleRows(rows, query), [rows, query]);
 
   const error = channelsQuery.error ?? workspacesQuery.error ?? identity.error;
   const pending =
     channelsQuery.isPending || workspacesQuery.isPending || identity.isPending;
 
-  if (pending) {
-    return (
-      <div className="flex h-screen w-screen flex-col">
-        <PageLoading label="Opening home" />
-      </div>
-    );
-  }
+  // ⚠ THE PAGE'S OWN FRAME, not the shared page ghost (2026-08-28). This gate
+  // used to render `PageLoading` inside a bare `h-screen` box, which painted a
+  // centred `max-w-[960px]` column under a 52px bar — a surface /home has never
+  // had. `HomePageSkeleton` mirrors what resolves here: the rail, the base
+  // panel's header, the 290px list and the bordered record pane.
+  if (pending) return <HomePageSkeleton label="Opening home" />;
   if (isUnauthorized(error)) return <SignedOutScreen />;
   if (error || !identity.data) {
     return (
@@ -281,9 +271,11 @@ export default function HomePage() {
         />
         <div className={cn(shell.surface, "!bg-home-frame", "!ml-0")}>
           {/* Layered panels: the BASE panel (`bg-home-panel`) carries the
-              header + relationship list; the record floats on it as a raised
-              card. The bg utility outranks `.page-float`'s own fill (utility
-              layer > kit layer) — the float keeps radius/margins/shadow. */}
+              header + relationship list; the record pane sits on it, bounded by
+              the account palette's 2px line rather than by an elevation (Samuel,
+              2026-08-27 — see the pane's own note below). The bg utility outranks
+              `.page-float`'s own fill (utility layer > kit layer) — the float
+              keeps radius/margins/shadow. */}
           <main
             className={cn(
               // `!ml-0`: flush-left against the rail — see the frame docblock
@@ -335,15 +327,34 @@ export default function HomePage() {
             <div className="flex min-h-0 flex-1">
               <RelationshipList
                 rows={visible}
-                linkCount={linkCount}
                 selectedId={selected?.id ?? null}
                 onSelect={setSelectedId}
-                filter={filter}
-                onFilterChange={setFilter}
               />
               <div
                 className={cn(
-                  "bento mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card",
+                  // ⚠ NOT `.bento` ANY MORE (Samuel, live review 2026-08-27 — the shadow seam
+                  // at the top of the record pane, beside the info column's tab pills).
+                  //
+                  // ⚠ THE CLASS WAS PAINTING EXACTLY ONE THING: its shadow. `.bento` supplies
+                  // fill + a 1px `--border-default` hairline + a 14px radius + two drops, and
+                  // the three utilities beside it already restate every one of those except
+                  // the drops (`bg-home-card`, `border-2 border-home-panel-line`,
+                  // `rounded-[14px]` — the utility layer outranks the kit layer). So the only
+                  // live effect it had was `0 1px 2px` + `0 6px 18px` of black.
+                  //
+                  // ⚠ AND IT HAD NOWHERE TO FALL ON TWO SIDES. The pane takes `mb-3 mr-3` and
+                  // NO top or left margin (the header selector is aligned to this pane's left
+                  // edge, so a margin there would break that alignment), so the upward half of
+                  // an 18px blur printed straight into the 12px gap under the page header —
+                  // a gray band running along the pane's top edge, arriving right beside the
+                  // tab pills and the blue border. A drop shadow with no gap to fall into is
+                  // not elevation, it is a smudge.
+                  //
+                  // ⚠ SAME RULING AS THE OTHER TWO SURFACES THIS WAVE (`agent-panel.tsx`,
+                  // `agent-window.tsx`): these panes are COLUMNS of the surface they sit in,
+                  // not cards floating on it. The 2px account-palette border is what says
+                  // where the pane starts.
+                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card",
                   home.frame
                 )}
               >

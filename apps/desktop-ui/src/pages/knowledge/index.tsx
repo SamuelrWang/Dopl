@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { PageError, PageLoading } from "#/components/page-states";
+import { PageError } from "#/components/page-states";
+import {
+  KnowledgeBaseSkeleton,
+  KnowledgeHomeSkeleton,
+} from "#/components/skeletons/knowledge-skeletons";
 import { useWorkspaceAccess, type WorkspaceAccess } from "#/hooks/use-workspace-access";
 import { useKnowledgeUrlSync } from "./use-knowledge-url-sync";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
@@ -17,10 +21,12 @@ import type {
   Selection,
 } from "@/features/knowledge/components/knowledge-v2/types";
 import {
+  invalidateKnowledgeBaseLists,
   useKnowledgeBaseList,
   useKnowledgeEntry,
   useKnowledgeTree,
 } from "@/features/knowledge/client/hooks";
+import type { KbShelf } from "@/features/knowledge/types";
 import { findBaseBySegment, knowledgeBaseSegment } from "@/features/knowledge/url";
 import type { TeamView } from "@/features/teams/types";
 
@@ -43,13 +49,19 @@ import type { TeamView } from "@/features/teams/types";
 export default function KnowledgePage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
   // Skeleton must match the mode it stands in for: no `:kbSlug` = card grid, so
-  // a two-pane ghost would resolve into a shape the user never asked for.
+  // a base-shaped ghost would resolve into a shape the user never asked for.
+  // ⚠ BOTH SHAPES ARE THE REAL VIEW'S OWN CSS MODULE now
+  // (`#/components/skeletons/knowledge-skeletons.tsx`), not the two generic
+  // variants — same `.cardGrid`, same 232px `.rail`, so neither can drift.
   const { kbSlug } = useParams();
-  const variant = kbSlug ? "two-pane" : "page";
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) {
-    return <PageLoading label="Loading knowledge" variant={variant} />;
+    return kbSlug ? (
+      <KnowledgeBaseSkeleton label="Loading knowledge" />
+    ) : (
+      <KnowledgeHomeSkeleton label="Loading knowledge" />
+    );
   }
 
   // ⚠ Knowledge hooks have no `enabled` switch and all need the resolved
@@ -74,7 +86,15 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
     entryId: searchParams.get("entryId"),
   }));
 
-  const baseList = useKnowledgeBaseList(workspaceId);
+  // 🔒 THE WORKSPACE SHELF, AND THE EXCLUSION RUNS BOTH WAYS (Samuel's ruling
+  // 2026-08-26, `20260831120000_knowledge_base_home_scoped.sql`). This page and
+  // /home → Knowledge → "across all channels" are two PLACES over one table; a
+  // shelf that is its own place in one direction only is just a filter. Bases
+  // created from the /home pane do not appear here, and this page's creates do
+  // not appear there.
+  // ⚠ THE SHELF ALSO KEYS THE CACHE ENTRY, so `refreshServerData` below can no
+  // longer name `["knowledge", \`bases:${workspaceId}\`]` by hand.
+  const baseList = useKnowledgeBaseList(workspaceId, { shelf: WORKSPACE_SHELF });
   const bases = baseList.data?.bases;
 
   const teams = useApiQuery<{ teams: TeamView[] }, TeamView[]>(
@@ -133,9 +153,13 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
       // Shared tree's `router.refresh()` sites only ever re-pull `ownerNames`
       // and `kbTeams`; here both are queries, so invalidate those two keys.
       refreshServerData: () => {
-        void queryClient.invalidateQueries({
-          queryKey: ["knowledge", `bases:${workspaceId}`],
-        });
+        // ⚠ WAS A HAND-BUILT KEY (`["knowledge", \`bases:${workspaceId}\`]`),
+        // which matched the UNFILTERED entry and nothing else — the exact
+        // "a prefix will not do it" drift `invalidateKnowledgeBaseLists`'s
+        // docblock was written about, and it became a live no-op the moment
+        // this page moved onto the `:shelf:workspace` variant above. One
+        // minter, one predicate, both shelves.
+        invalidateKnowledgeBaseLists(queryClient, workspaceId);
         void queryClient.invalidateQueries({
           queryKey: [`/api/workspaces/${workspaceSlug}/teams`],
         });
@@ -154,11 +178,10 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
     return <PageError error={baseList.error} onRetry={baseList.refetch} />;
   }
   if (!bases) {
-    return (
-      <PageLoading
-        label="Loading knowledge"
-        variant={deepLink.kbSlug ? "two-pane" : "page"}
-      />
+    return deepLink.kbSlug ? (
+      <KnowledgeBaseSkeleton label="Loading knowledge" />
+    ) : (
+      <KnowledgeHomeSkeleton label="Loading knowledge" />
     );
   }
 
@@ -175,9 +198,9 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
   // is dropped on the floor.
   if (deepLinkBase) {
     if (tree.error) return <PageError error={tree.error} onRetry={tree.refetch} />;
-    if (!tree.data) return <PageLoading label="Loading knowledge base" variant="two-pane" />;
+    if (!tree.data) return <KnowledgeBaseSkeleton label="Loading knowledge base" />;
     if (selectedEntryId && !initialEntry.data && initialEntry.status !== "error") {
-      return <PageLoading label="Loading knowledge base" variant="two-pane" />;
+      return <KnowledgeBaseSkeleton label="Loading knowledge base" />;
     }
   }
 
@@ -215,12 +238,33 @@ function KnowledgeView({ access }: { access: WorkspaceAccess }) {
         initialSelection={initialSelection}
         initialTrees={initialTrees}
         heroImageSrc={knowledgeHero}
+        shelf={WORKSPACE_SHELF}
+        // ⚠ ONE VALUE, THREE CONSUMERS — the controller's live list query, the
+        // star write that patches its entry, and the create dialog's seed. They
+        // are separate props under the hood and every one of them fails
+        // SILENTLY when it disagrees with the others, so they all read this.
         routing={routing}
         urlSync={urlSync}
       />
     </MyAccessProvider>
   );
 }
+
+/**
+ * 🔒 THIS PAGE IS THE WORKSPACE SHELF (Samuel's ruling 2026-08-26;
+ * `20260831120000_knowledge_base_home_scoped.sql` carries the argument).
+ *
+ * A base created from /home → Knowledge → "across all channels" does not appear
+ * here, and one created here does not appear there. The exclusion is the
+ * RULING, both directions — the /home pane is a place, not a saved filter over
+ * this one — and it is applied SERVER-SIDE (`?shelf=workspace` is a `WHERE`),
+ * so the other shelf's rows never reach this renderer at all.
+ *
+ * ⚠ FORGETTING IT WIDENS. There is no client-side fallback filter anywhere in
+ * this chain; an omitted `shelf` means "both", which is the pre-ruling
+ * behaviour and looks exactly like working code.
+ */
+const WORKSPACE_SHELF: KbShelf = "workspace";
 
 /** kbId → the teams holding a grant on it, for the base overview's pills. */
 function foldKbTeams(teams: TeamView[]): Record<string, KbTeamRef[]> {

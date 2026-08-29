@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { X } from "lucide-react";
-// ⚠ Deep import, NEVER the `settings-modal` barrel — the barrel re-exports
-// SettingsModal, whose account pane pulls `next/navigation` into the desktop
-// renderer's import graph. Same rule `create-workspace-dialog-core.tsx` states,
-// and this file is modelled on it.
-import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
-import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
+import { cn } from "@/shared/lib/utils";
+import {
+  DialogActions,
+  DialogField,
+  DIALOG_BTN_PRIMARY,
+  DIALOG_BTN_SECONDARY,
+  StandardDialog,
+} from "@/shared/ui/standard-dialog";
+import { RAISED_INPUT } from "@/shared/ui/wells";
 import { errorMessage } from "#/components/page-states";
 import { useCreateHomeChannel } from "./home-writes";
 
@@ -26,6 +28,10 @@ const NAME_MAX = 80;
  * ⚠ NO EXPLAINER PARAGRAPH, unlike the create-workspace dialog it is modelled
  * on: label + field + Create (Samuel's minimal-copy ruling). What a channel is
  * for is not a question a name field should answer.
+ *
+ * ⚠ CHROME COMES FROM `StandardDialog` (2026-08-27) — width, the centered
+ * uppercase heading, the pillow field face and the fully-rounded footer pair
+ * are the four /home dialogs' shared recipe, not this file's taste.
  */
 export function NewChannelDialog({
   open,
@@ -61,64 +67,47 @@ export function NewChannelDialog({
   };
 
   return (
-    <ModalShell open={open} onClose={close} label="New channel" size="narrow">
-      <button
-        type="button"
-        className={modalStyles.close}
-        onClick={close}
-        aria-label="Close"
-      >
-        <X size={18} />
-      </button>
-      <div className={modalStyles.narrowBody}>
-        <h2 className={modalStyles.narrowTitle}>New channel</h2>
+    <StandardDialog open={open} onClose={close} title="New channel">
+      <DialogField label="Name" htmlFor="new-channel-name">
+        <input
+          id="new-channel-name"
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            submit();
+          }}
+          maxLength={NAME_MAX}
+          autoFocus
+          spellCheck={false}
+          className={cn(RAISED_INPUT, "h-9 px-3")}
+        />
+      </DialogField>
 
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="new-channel-name"
-            className="text-label font-medium uppercase tracking-wider text-text-tertiary"
-          >
-            Name
-          </label>
-          <input
-            id="new-channel-name"
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              submit();
-            }}
-            maxLength={NAME_MAX}
-            autoFocus
-            spellCheck={false}
-            className="h-9 rounded-md border border-border-strong bg-surface-raised-3 px-3 text-body text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-border-highlight"
-          />
-          {/* ⚠ A TERNARY, not `&&`: the hook types `error` as `unknown`, and
-              `unknown && <jsx/>` is `unknown` — not a ReactNode. Same shape
-              `add-person-popover.tsx` uses. */}
-          {create.error ? (
-            <p role="alert" className="text-small text-danger">
-              {errorMessage(create.error)}
-            </p>
-          ) : null}
-        </div>
+      {/* ⚠ A TERNARY, not `&&`: the hook types `error` as `unknown`, and
+          `unknown && <jsx/>` is `unknown` — not a ReactNode. Same shape
+          `add-person-dialog.tsx` uses. */}
+      {create.error ? (
+        <p role="alert" className="text-caption text-danger">
+          {errorMessage(create.error)}
+        </p>
+      ) : null}
 
-        <div className={modalStyles.confirmActions}>
-          <button type="button" className={modalStyles.btnCancel} onClick={close}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={modalStyles.btnConfirm}
-            onClick={submit}
-            disabled={!canCreate}
-          >
-            {create.pending ? "Creating…" : "Create"}
-          </button>
-        </div>
-      </div>
-    </ModalShell>
+      <DialogActions>
+        <button type="button" className={DIALOG_BTN_SECONDARY} onClick={close}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={DIALOG_BTN_PRIMARY}
+          onClick={submit}
+          disabled={!canCreate}
+        >
+          {create.pending ? "Creating…" : "Create"}
+        </button>
+      </DialogActions>
+    </StandardDialog>
   );
 }

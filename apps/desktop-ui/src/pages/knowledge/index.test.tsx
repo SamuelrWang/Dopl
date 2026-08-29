@@ -60,7 +60,18 @@ describe("knowledge base detail", () => {
     await waitFor(() => {
       expect(paths()).toContain("/api/knowledge/bases/base-c/tree");
     });
-    expect(screen.getAllByText("Onboarding")).toHaveLength(2);
+    // ⚠ ASSERTED IN THE CRUMB, NOT BY A COUNT. This read
+    // `getAllByText(…)).toHaveLength(2)` — the two being the rail's own
+    // breadcrumb and the detail pane's header title, back when the surface had
+    // both. The panel has ONE header and ONE crumb since 2026-08-28, so the
+    // count is 1 and always would have been for a reason unrelated to
+    // selection; what the assertion was ever about is that the opened base is
+    // NAMED as the current address.
+    expect(
+      within(screen.getByLabelText("Knowledge base breadcrumb")).getByText(
+        "Onboarding"
+      )
+    ).toBeInTheDocument();
   });
 
   it("keeps the renamed slug in the URL when the selection next changes", async () => {
@@ -105,7 +116,12 @@ describe("knowledge base detail", () => {
     await waitFor(() => {
       expect(paths()).toContain("/api/knowledge/bases/base-b/tree");
     });
-    expect(screen.getAllByText("Sales playbook")).toHaveLength(2);
+    // Same correction as above: the crumb names the base the URL resolved to.
+    expect(
+      within(screen.getByLabelText("Knowledge base breadcrumb")).getByText(
+        "Sales playbook"
+      )
+    ).toBeInTheDocument();
   });
 
   it("resolves a deep link's base and its ?entryId= target", async () => {

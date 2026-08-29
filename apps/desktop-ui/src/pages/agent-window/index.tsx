@@ -72,12 +72,23 @@ export default function AgentWindowPage() {
   );
 }
 
-/** The window ground: the app shell's surface stack with no sidebar in it. */
+/**
+ * The window ground.
+ *
+ * ⚠ `shell.windowSurface`, NOT `shell.surface` (Samuel, 2026-08-27). `.surface` carries the main
+ * window's 8px radius and its margin on all four sides, which inside a pop-out painted a rounded
+ * panel floating on `.root`'s gray — a second background and a second set of corners inside an OS
+ * window that already has its own. The pop-out's viewport IS the panel.
+ *
+ * ⚠ `shell.root` STAYS, and it is not the layer that was showing: it supplies the fixed inset,
+ * the font stack, the box-sizing reset and the overflow clip. It paints the shell gray, which
+ * `windowSurface` now covers edge to edge.
+ */
 function Frame({ children }: { children: React.ReactNode }) {
   return (
     <div className={shell.root}>
       <div className={shell.body}>
-        <div className={shell.surface}>{children}</div>
+        <div className={shell.windowSurface}>{children}</div>
       </div>
     </div>
   );

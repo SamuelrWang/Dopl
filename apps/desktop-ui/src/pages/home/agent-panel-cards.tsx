@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { authorMarker } from "@/features/agent-templates/components/template-picker";
 import {
   TemplateGrid,
@@ -6,7 +7,9 @@ import {
 } from "@/features/agent-templates/components/template-section";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
 import type { TemplateSectionDef } from "@/features/agent-templates/lib/visibility";
+import { EMPTY_PEERS } from "@/features/home/types";
 import type { HomeChannel } from "@/features/home/types";
+import { channelPeople } from "./home-rows";
 
 /**
  * The /home Agents panels' SECTIONS — the two shapes `agent-panels.tsx` stacks,
@@ -44,10 +47,15 @@ export function SharedAgentSection({
   templates,
   markerFor,
   onOpen,
+  action,
 }: {
   section: TemplateSectionDef;
   templates: ReadonlyArray<AgentTemplate>;
   markerFor: (template: AgentTemplate) => string | null;
+  /** Header-right control — the "New shared agent" button (2026-08-27). This
+   *  section gained one when the pane became two sections, each owning its own
+   *  create. */
+  action?: ReactNode;
   /** Opens the editor against THIS CHANNEL'S CONTAINER — every row here is a
    *  container row, whatever the scope pill below is showing.
    *  ⚠ Openable even on a row the marker says the PEER wrote: the write floor
@@ -58,7 +66,7 @@ export function SharedAgentSection({
   onOpen: (template: AgentTemplate) => void;
 }) {
   return (
-    <TemplatePanel id="home-agents-shared" label={section.label}>
+    <TemplatePanel id="home-agents-shared" label={section.label} action={action}>
       <TemplateGrid
         templates={templates}
         emptyLine={section.emptyLine}
@@ -136,13 +144,9 @@ export function PrivateAgentSection({
         // whose other section loaded fine.
         <div className="flex flex-wrap items-center gap-2 px-1 pb-1">
           <p className="text-caption text-text-muted">{failure.message}</p>
-          <button
-            type="button"
-            onClick={failure.onRetry}
-            className="btn-light h-6 rounded-full px-2.5 text-caption font-medium"
-          >
+          <OpenScaleButton onClick={failure.onRetry}>
             Try again
-          </button>
+          </OpenScaleButton>
         </div>
       ) : pending ? (
         // Bare while the other workspace's list is in flight — the dimmed pill
@@ -171,25 +175,38 @@ export function PrivateAgentSection({
  * BEFORE anything runs. An author the roster cannot name still reads
  * `by another member` — dropping the marker would turn UNKNOWN into MINE.
  *
- * ⚠ THE ROSTER COSTS NO REQUEST, AND IT CANNOT: a link container holds ONE OR
- * TWO members (§4A), so `channel.peer` IS the roster minus the caller. A
- * `GET /api/channels/{id}/members` here would be a third read on a pane the
- * plan holds to two (§2), to learn a name this page was already handed.
+ * ⚠ THE ROSTER COSTS NO REQUEST, AND IT CANNOT: `channel.peers` IS the roster
+ * minus the caller, already on the home payload. A `GET /api/channels/{id}/members`
+ * here would be a third read on a pane the plan holds to two (§2), to learn
+ * names this page was already handed.
+ *   ✅ **IT IS EVERY MEMBER SINCE 2026-08-26, not the first one (F-307).** This
+ *   read `channel.peer` on the grounds that a container held one or two members,
+ *   and the cap came off — so in a four-person channel three of the four
+ *   possible authors would have degraded to `by another member` while the
+ *   fourth got a name. **The marker fails SAFE either way** (an unresolvable
+ *   author is never rendered as MINE), so this was a legibility bug rather than
+ *   a security one; it is fixed because a security signal nobody can read is
+ *   one nobody acts on.
  */
 export function useContainerAuthorMarker(
   channel: HomeChannel | null,
   currentUserId: string
 ): (template: AgentTemplate) => string | null {
+  // ⚠ THE DEPENDENCY IS `channel`, NOT THE PEER LIST. `channelPeople` SYNTHESISES
+  // an array on the stale-cache branch, so a fresh reference every render would
+  // bust this memo every render; the channel object itself is the stable thing
+  // the query cache hands back.
   const names = useMemo(() => {
     const map = new Map<string, string>();
     // ⚠ A NAMELESS PEER IS LEFT OUT OF THE MAP, NOT ENTERED BLANK.
     // `HomePeer.displayName` is nullable (a profile that never set one), and
     // `authorMarker` already has the right answer for an unresolvable author —
     // `by another member`. An empty-string entry would render `by ` instead.
-    const peer = channel?.peer;
-    if (peer?.displayName) map.set(peer.userId, peer.displayName);
+    for (const peer of channel ? channelPeople(channel) : EMPTY_PEERS) {
+      if (peer.displayName) map.set(peer.userId, peer.displayName);
+    }
     return map;
-  }, [channel?.peer]);
+  }, [channel]);
   return useMemo(
     () => (template: AgentTemplate) =>
       authorMarker(template, currentUserId, names),
