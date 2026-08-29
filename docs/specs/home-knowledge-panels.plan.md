@@ -1,5 +1,25 @@
 # HOME KNOWLEDGE PANELS — Implementation Plan
 
+> ## ⚠ SUPERSEDED IN PART — 2026-08-27
+>
+> **This plan SHIPPED and is kept as the build record. Its §5.2 UI shape is no longer what the
+> code does**, and the divergence is two rulings deep, so read the plan for the SCHEMA, the GRANT
+> MODEL, the guest lane and the audience ceiling — all still live — and read
+> **`docs/INVARIANTS.md` §5 / §5A for the pane.**
+>
+> 1. **2026-08-26 — scope C is a SHELF, not a workspace.** "Private, across all channels" listed
+>    the caller's whole home-workspace KB shelf. `knowledge_bases.home_scoped`
+>    (`supabase/migrations/20260831120000_knowledge_base_home_scoped.sql`) narrowed it to bases
+>    created FROM that pane, and the workspace Knowledge page excludes them in return.
+> 2. **2026-08-27 — THREE SCOPES BECAME TWO SECTIONS.** The scope `SelectMenu` is deleted, "Private"
+>    is relabelled **"Personal"** (UI copy only — `visibility: 'private'` is unrenamed), and **scope
+>    B (private-in-this-channel) NO LONGER EXISTS**: a container base reaches /home only through a
+>    channel grant. The Shared section gained a create button that writes the base AND its
+>    `visible` grant in one call.
+>
+> ⚠ Every "scope C" / "scope B" reference below is HISTORICAL. Do not implement from them.
+
+
 **Repo:** Dopl · branch `master` · HEAD `9fcdd344` (v1.20.0 armed) · verified against the tree 2026-08-26.
 **Precedent build:** `docs/specs/guest-role.plan.md` (M0–M5 shape, adversarial-pin culture).
 **Depends on / touches:** F-323 (agent-authored container KB — this build resolves its shape), F-327 (one-channel-per-container unenforced — design made robust to it), F-328 (untouched).

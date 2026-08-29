@@ -2750,13 +2750,29 @@ where it surfaced, not because this wave caused it.
   a migration plus a repository function, not a service refactor.
 - Proposed resolution: fix-later (RPC) — Status: **open**
 
-## F-306 — `LINK_CONTAINER_FULL` is stated in three places across the SQL/TS boundary with nothing joining them (2026-08-25)
+## F-306 — ✅ RESOLVED BY DELETION (2026-08-26) — `LINK_CONTAINER_FULL` is stated in three places across the SQL/TS boundary with nothing joining them (2026-08-25)
 
-- Location: `supabase/migrations/20260824120000_home_channel_containers.sql`
-  (`enforce_link_container_member_cap`'s `RAISE EXCEPTION`),
-  `src/features/home/server/service-writes.ts › mintContainerLink` (the pre-check),
-  `src/features/home/server/service-claim-bound.ts › isContainerFullRaise` (the MESSAGE-PREFIX match
-  that maps the trigger's raise back to a 409).
+⛔ **CLOSED, AND NOT BY THE PIN IT ASKED FOR.** Samuel ruled on 2026-08-26 that a home container holds
+MORE THAN TWO members, so the cap the string served has no subject:
+`20260830120000_link_container_multi_member.sql` drops the trigger and its function, `mintContainerLink`
+lost its `>= 2` → 409 gate, and `claimBoundLink` lost both its capacity step and `isContainerFullRaise`.
+**`grep -rn LINK_CONTAINER_FULL src supabase packages apps` returns nothing outside this file and the
+2026-08-24 migration that is now history.** All three sites are gone, so there is nothing left to join.
+⚠ **THE LESSON IS NOT CLOSED AND IS WHY THIS ENTRY IS KEPT IN PLACE:** *a string is a coupling no
+typechecker crosses, and a mocked suite never exercises the real text.* The proposed fix — a test
+asserting the migration FILE contains the literal the matcher looks for — is still the cheap answer the
+next SQL-raise-to-HTTP mapping should ship with. ⚠ **`LINK_CONTAINER_CLOSED` is a DIFFERENT string and
+is untouched**: it is `assertMemberAddable`'s refusal of every workspace-level add, it never counted
+anything, and it remains the fence that keeps the link-claim lane the only door in (INVARIANTS §4A).
+
+- Location (all three HISTORICAL — none of these sites exists as of 2026-08-26; anchors deliberately
+  left un-symboled so the doc-ref checker is not asked to resolve deleted code):
+  `supabase/migrations/20260824120000_home_channel_containers.sql`
+  (`enforce_link_container_member_cap`'s `RAISE EXCEPTION`, superseded by
+  `supabase/migrations/20260830120000_link_container_multi_member.sql`),
+  the pre-check inside `src/features/home/server/service-writes.ts`'s `mintContainerLink`, and the
+  MESSAGE-PREFIX matcher `isContainerFullRaise` in
+  `src/features/home/server/service-claim-bound.ts`, which mapped the trigger's raise back to a 409.
 - Found during: writing the bound claim.
 - Severity: **moderate**, and it is a **§14 pin-rule** case rather than a bug today.
 - **The coupling is a STRING, and it is load-bearing in the matching direction.** The trigger raises
@@ -2770,26 +2786,84 @@ where it surfaced, not because this wave caused it.
   realistic pins are (a) a test asserting the migration FILE contains the literal the matcher looks
   for, or (b) a `DO $$` probe in a future migration. **(a) is cheap and would have caught the rewording
   case outright.**
-- Proposed resolution: fix-now-cheap (option (a)) — Status: **open**
+- Proposed resolution (superseded): fix-now-cheap (option (a)) — Status: **resolved by deletion (2026-08-26)**
 
-## F-307 — `listContainerPeers` takes the first other member and is silently wrong above two (2026-08-25)
+## F-307 — ✅ RESOLVED 2026-08-26 — `listContainerPeers` takes the first other member and is silently wrong above two (2026-08-25)
+
+✅ **CLOSED BY THE ANSWER THE ENTRY CALLED THE REAL ONE, on Samuel's ruling the same day: `peers` IS A
+LIST AND THE ROW DRAWS A STACK.** The entry offered two candidates — a list, or one member with a
+stated ordering rule — and warned that the cheap one *"needs a product call on what the row should say
+at four members"*. Samuel made that call: build the list.
+
+**What shipped, end to end:**
+- `home/server/repository-containers.ts › listContainerPeers` returns `Map<string, string[]>` ordered
+  `joined_at ASC, user_id ASC`. ⚠ **The tiebreaker is half the fix, not decoration** — `joined_at`
+  alone is not a TOTAL order, so two members admitted in the same millisecond (or two legacy rows
+  carrying NULL) would still have flipped between loads, which is the bug itself. `nullsFirst: false`
+  keeps an unstamped legacy row from stealing the head of the list.
+- `home/types.ts › HomeChannel.peers: HomePeer[]` — everybody else, in that order. `peer` **survives as
+  a DERIVED back-compat projection of `peers[0]`**, computed in exactly one place
+  (`service-reads.ts › hydrateChannels`). **Keeping it is a §8 decision, not sentiment:** a cache entry
+  written before this wave HAS `peer` and LACKS `peers`, so a client that only knew the list would fall
+  back to `[]` and paint every channel as SOLO on the first paint after the upgrade — a FALSE sentence,
+  where degrading to one face is merely the old correct one. Its meaning is now STATED ("the member who
+  joined first") rather than "whichever row came back first", which is what made it non-deterministic.
+- **The UI reads the roster, not the head:** `pages/home/home-rows.ts › channelPeople` is the ONE read
+  of `peers` and owns the cache merge; `› channelTitle` counts past two names (`Grace, Priya +2`);
+  `› channelSubline` swaps a single peer's email for `N people`; `relationship-list.tsx` draws
+  `shared/ui/avatar-stack.tsx › AvatarStack` at 2+; the Info tab header does the same one size up.
+  **Search now reaches every member** — it read `peer` alone, so a query naming the fourth person in a
+  channel returned "No matches" over a channel they are in.
+- `AvatarStack` gained a `size` (default `xs`, so its four pre-existing callers are byte-identical)
+  rather than this page forking a fifth stack.
+- ⚠ **THE §8 EXEMPTION IS BOUGHT WITH A PIN, and that is the reusable part.** §8 says spell
+  `?? EMPTY_X` INLINE and not behind an accessor, because a helper nobody must call is a rule the next
+  read forgets. `channelPeople` is an accessor — justified because what it centralises is a two-field
+  MERGE rather than a plain fallback, and two copies of THAT which drift is worse than one forgotten
+  `??`. **The forgetting risk is answered by enforcement instead of repetition:**
+  `home-rows.test.ts` reads the home directory's source and fails if any other file names `.peers`
+  outside a comment. Anyone taking a similar exemption owes the same pin.
+
+⚠ **The bullets below are the finding AS FILED, kept because the diagnosis is the reusable part:** a
+read whose correctness is borrowed from a constraint stated somewhere else is correct until that
+constraint moves, and nothing connects the two.
+
 
 - Location: `src/features/home/server/repository-containers.ts › listContainerPeers` —
   `if (!out.has(row.workspace_id)) out.set(...)`, i.e. **first row wins, with no ordering**.
 - Found during: writing the bound claim, while checking what a third member would do.
-- Severity: **question** now, **major** the day the cap moves.
-- **Today it cannot fire.** The cap trigger holds a container at two active members, so there is
-  exactly one "other" and the pick is unambiguous. **The correctness of this read is borrowed entirely
-  from a constraint stated somewhere else** — which is the finding.
+- Severity: **major** — it was filed as a **question** with the words *"major the day the cap moves"*,
+  and **that day was 2026-08-26**.
+- 🔴 **THE CAP HAS MOVED AND THIS IS NO LONGER HYPOTHETICAL.** Samuel ruled that a home container holds
+  MORE THAN TWO members; `20260830120000_link_container_multi_member.sql` drops the trigger and both
+  service capacity gates are deleted. The prediction in this entry's last bullet — *"removing the cap
+  is a one-line trigger change that would land this bug across the whole home page"* — is what
+  happened, and it is recorded here rather than re-discovered.
+- ⚠ **WHAT IS AND IS NOT AFFECTED, measured 2026-08-26.** `HomeChannel.peer` is a DISPLAY convenience:
+  the face and name on a channel ROW, and the `authorMarker` fallback on a template card (INVARIANTS
+  §5A). **It is not a fence anywhere** — no authz, no visibility, no billing reads it. The **ROSTER**
+  is a separate read (`useChannelMembers` → `listChannelMembers`) and shows every member correctly, so
+  the Info tab is right while the row beside it may name any one of the others.
+- **What it was, and still is.** The cap trigger held a container at two active members, so there was
+  exactly one "other" and the pick was unambiguous. **The correctness of this read was borrowed
+  entirely from a constraint stated somewhere else** — which is the finding, and the borrowing has now
+  come due.
 - ⚠ **THE FAILURE MODE IS THE BAD ONE: silent and non-deterministic.** With three members the query
   returns two candidate rows in whatever order PostgREST hands back, and `HomeChannel.peer` becomes
   whichever arrived first — so the same channel can render as a different person between two loads,
   with no error anywhere. There is no `ORDER BY` to make it even stably wrong.
-- **N-party home channels are the obvious next ask** (MVP is explicitly "0 or 1 peer"), and removing
+- **N-party home channels are the obvious next ask** (MVP was explicitly "0 or 1 peer"), and removing
   the cap is a one-line trigger change that would land this bug across the whole home page. **Whoever
   raises the cap owns this read**: `peer` has to become a list, or the DTO has to say which member it
   means.
-- Proposed resolution: needs-user-decision (product: N-party) — Status: **open**
+- ⚠ **THE CAP-REMOVAL WAVE DELIBERATELY DID NOT TAKE THAT ON**, and says so rather than leaving it
+  implied: Samuel's ruling was about the ROSTER, and re-shaping `HomeChannel.peer` touches the row
+  card, the relationship list, the agent-template authorship marker and the desktop's own reads. **The
+  two candidate answers are unchanged: make `peer` a LIST (`peers`, with the row rendering a stack and
+  a count), or keep one and give it a STATED rule (`ORDER BY joined_at ASC` = "the first person who
+  joined"), which is a one-line repository fix and an honest sentence in the DTO.** The second is the
+  cheap one and needs a product call on what the row should say at four members.
+- Proposed resolution: needs-user-decision (product: what a multi-member row shows) — Status: ✅ **RESOLVED 2026-08-26** (Samuel ruled: `peers` as a list + stacked avatars; see the note at the top of this entry)
 
 ## F-308 — the update-required screen's button CSS drifted from `kit.css`, and the desktop suite has been RED (2026-08-25, PRE-EXISTING)
 
@@ -3208,6 +3282,12 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   mintContainerLink` 409s `LINK_CONTAINER_FULL` at two active members. **The CAP denies it, not the
   role** — it becomes available only if the container drops back to one member, which is the
   survivor's power by design (§4A).
+  - 🔴 **THAT CORRECTION EXPIRED ON 2026-08-26 and is kept only as the 2026-08-25 measurement.** The
+    cap is retired (Samuel: a home container takes MORE THAN TWO people), `LINK_CONTAINER_FULL` is
+    deleted, and **minting a further link IS now reachable with the relationship intact.** What refuses
+    it is the `member`+ mint floor (403 `LINK_MINT_FORBIDDEN`) — so a GUEST-granted claimer still
+    cannot, and a MEMBER-granted one can. This entry's resolution (claim at `granted_role`, default
+    `guest`) is what keeps that narrow.
 - ⚠ **THE UI NARROWING IS COSMETIC AND MUST NOT BE READ AS THE FENCE.** The guest mount omits the
   `role` prop (least-privilege default) and passes `memberManagement: false` / `selfManagement: false`,
   so none of this is on screen. The screen is not the boundary; the role is, and the role says admin.
@@ -4024,7 +4104,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   disable controls, which is how a missing error state becomes a trap rather than a blank.
   Status: ✅ **resolved 2026-08-26** — kept for the rule above.
 
-### F-340 — ⚠ SAMUEL'S RULING NEEDED — the channel info column's tab row is FIVE tabs on a width budget measured for four, and the residual SCROLLS
+### F-340 — ✅ RESOLVED 2026-08-27 — the channel info column's tab row is FIVE tabs on a width budget measured for four, and the residual SCROLLS
 
 - ⚠ **Id note:** taken after re-reading this file fresh at the M7 doc pass (F-339 was the highest).
   **This finding was OWED BY M4 of the knowledge wave and could not be filed there** — this file was
@@ -4063,10 +4143,33 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   - **(D) Widen the column past 380px.** ⚠ Blast radius: 380 is a MATCH, not a taste — `agent-panel.tsx`
     is absolutely positioned against the same right edge, so this is a two-file change and the
     divider jumps if only one moves.
-- Severity: **cosmetic, with a reachability caveat.** Nothing is unreachable and nothing is
-  mis-stated; a tab may be off-screen until scrolled to.
-  Status: **open — Samuel's ruling.** Ship as (A) meanwhile; the code comment above the row says the
-  same thing so a reader does not "fix" it by renaming the tab.
+  - **(E) TAKE THE FIFTH TAB OFF THE DESKTOP HOST.** Not in the original list, and it is what
+    Samuel picked.
+- Severity: **cosmetic, with a reachability caveat.** Nothing was unreachable and nothing was
+  mis-stated; a tab could be off-screen until scrolled to.
+- ✅ **RESOLVED 2026-08-27 BY (E), SAMUEL'S RULING: the DESKTOP host stops passing the capability;
+  the GUEST lane keeps its tab.** `apps/desktop-ui/src/pages/home/relationship-record.tsx` now
+  passes `capabilities={{ memberManagement: false }}`, so the /home info column is back to the
+  FOUR tabs its width budget was measured against and the tightening / scroll residual never
+  engages there.
+  - 🔑 **THE DUPLICATE VIEW GAVE WAY, NOT THE CAPABILITY, AND THAT IS THE WHOLE SHAPE OF THE
+    RULING.** The operator loses nothing: `pages/home/knowledge-panels.tsx` is a FULL Knowledge
+    face on the header's own segmented control, over the same bases, one click away — the tab was
+    the smaller of two views. **The guest has no second surface**: `ChannelKnowledgeTab` has one
+    consumer (`info-panel.tsx`), and `/api/channels/[channelId]/knowledge/**` has no other client
+    caller, so deleting the tab outright would have removed a guest's only access to a base the
+    operator granted them. ⚠ **The asymmetry is therefore deliberate and is pinned in BOTH
+    directions** — `knowledge-tab.test.tsx › the capability, per host` reads each host's source
+    and asserts the guest lane HAS the flag and the /home pane does NOT.
+  - ⚠ **THE FIVE-TAB MACHINERY IS NOT DELETED, and that is not an oversight.** `tabsFor`'s
+    `knowledge` arm, the `gap-1` tightening and the `overflow-x-auto` residual all still fire —
+    the guest lane still renders five tabs, on a column with the same budget. **What is resolved
+    is the DESKTOP column this finding measured**; the guest lane's row remains as (A) shipped it,
+    which is why the code comment above the row stays and still says do not "fix" this by renaming
+    the tab.
+  - ⚠ **(B), (C) and (D) REMAIN THE OPTIONS if the guest lane's row is ever ruled on**, with the
+    blast radii above unchanged. Re-adding `knowledge: true` to the desktop host re-opens this
+    finding and fails the pin named above.
 
 ### F-341 — the live-agent posture strip has no equivalent of M6's warning, and it reaches the same combination by a different road
 
@@ -4105,3 +4208,407 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 - Severity: **gap in a warning, not in a fence.** Nothing here grants anything — both axes were
   already settable on a live session before M6 existed, and M6 narrowed no path.
   Status: **open — Samuel may want the warning there too** (M6's own flag). Filed, not built.
+
+### F-342 — three base-list readers stayed UNFILTERED across the shelf split, and only one of them is obviously right
+
+- ⚠ **Id note:** taken in the home-shelf wave (Samuel's ruling 2026-08-26, migration
+  `20260831120000_knowledge_base_home_scoped.sql`). **Filed, not built** — every item below is a
+  deliberate carve-out, recorded so the next reader does not "fix" one by accident or assume all
+  three were considered together.
+- **The split.** `GET /api/knowledge/bases?shelf=home|workspace` narrows the list to one shelf, and
+  an ABSENT `shelf` means BOTH. Two surfaces now name a shelf (`apps/desktop-ui/src/pages/home/
+  knowledge-panels.tsx › HOME_SHELF`, `apps/desktop-ui/src/pages/knowledge/index.tsx ›
+  WORKSPACE_SHELF`). These three readers do not:
+  1. **MCP `kb_list_bases`** (rides the route with no param). **Right, and it must stay right** — an
+     operator's agent asking "what knowledge is here" should see the operator's whole workspace, not
+     the half that matches whichever UI the question came from.
+  2. **Workspace SEARCH** (`src/features/knowledge/server/search.ts › listBases(ctx)`). **Arguably
+     wrong.** Search launched from the workspace Knowledge page can return hits inside a home-shelf
+     base — a place that page otherwise refuses to show — so the separation holds for browsing and
+     leaks for searching. Left unfiltered because `search.ts` has no surface argument to key off and
+     threading one is a bigger change than this wave; **and because hiding the operator's own
+     content from their own search is a worse failure than the inconsistency.**
+  3. **The /home Agents face's KB picker** (`apps/desktop-ui/src/pages/home/agent-editor.tsx ›
+     useKnowledgeBaseList(workspaceId)`). Deliberate — a template in the home workspace may
+     legitimately reference either shelf. ⚠ **BUT IT WARMS `["knowledge", "bases:<homeWs>"]` WITH
+     BOTH SHELVES, INSIDE THE SAME PAGE AS SCOPE C.** That is a live cache-collision hazard the
+     moment anyone "simplifies" scope C back onto the plain segment: the wide list would already be
+     sitting there and the pane would render it with no request at all. Pinned from the other side
+     in `pages/home/knowledge-panels-shelf.test.tsx › keeps the workspace shelf out even once the
+     DETAIL mount has warmed the unfiltered list`.
+- ⚠ **THE SAME THREE-READER SHAPE NOW EXISTS FOR TEMPLATES (2026-08-27)**, and the answers are the
+  same: MCP and `resolveTemplateForLaunch` ride `listTemplates` unfiltered (**right, and must stay
+  right** — a template the operator keeps on their home shelf must still be launchable), and
+  `components/template-picker.tsx › useAgentTemplates(workspaceId)` is unfiltered too (a picker
+  inside a CONTAINER, where shelves do not exist, so the param would be meaningless there). **There
+  is no template equivalent of item 2** — templates have no search surface — so that half of this
+  finding stays a knowledge-only question.
+- **Also unresolved: there is no way to MOVE a base OR A TEMPLATE between shelves.** `home_scoped` is set at
+  create and never written again; neither `KnowledgeBaseUpdateSchema` nor
+  `AgentTemplateUpdateSchema` accepts it. A base made in the
+  wrong place is re-created or moved by hand in SQL. Nobody asked for a move affordance — recording
+  that the absence is a decision, not an oversight.
+- Severity: **consistency, not access.** No item here shows anybody a base they could not already
+  read; every one of them is the caller's own workspace under their own credential.
+  Status: **open — item 2 is the one worth a ruling.**
+
+### F-343 — /home cannot tell a MEMBER from a GUEST inside a container, so two of its affordances guess
+
+- ⚠ **Id note:** taken in the /home Knowledge restructure (Samuel's ruling 2026-08-27). **Filed, not
+  built.** Nothing here is a fence hole — every path below is refused server-side — but two
+  surfaces make a claim the payload cannot support, and the second one has been wrong since M3.
+- **The gap.** `GET /api/home/channels` (`src/features/home/types.ts › HomeChannel`) carries the
+  container's `workspaceId`, its channel, its peers and its `linkOut`. **It does not carry the
+  CALLER'S OWN ROLE in that container.** A claimed link can land its peer as a `guest` or a
+  `member` (`HomePendingLink.grantedRole`), and both of them see the channel on their /home.
+- **Consequence 1 — the new "New shared base" button** (`pages/home/knowledge-panels.tsx`).
+  `POST /api/knowledge/bases` is `minRole: "member"`, so a GUEST who clicks it gets a 403 that the
+  dialog surfaces as an error. Correct, and ugly: a live button that cannot work. It is shown to
+  both because the pane has nothing to branch on.
+- **Consequence 1b — the /home AGENTS face's "New shared agent" button (2026-08-27)** has exactly
+  the same shape: `POST /api/agent-templates` is `minRole: "member"`, a guest peer gets a 403 the
+  editor surfaces, and the pane has nothing to branch on. One fix closes both.
+- **Consequence 2, older and sharper — `containerTarget.role` IS HARDCODED `"owner"`** in the same
+  file, with the comment *"a home container is the caller's own (plan §5.3)"*. **That sentence is
+  true of the container the caller CREATED and false of every container they JOINED.** It feeds
+  `HomeKnowledgeBaseView`'s `role` prop, i.e. what the base settings modal believes about the
+  viewer. ⚠ The blast radius is bounded by two things and neither is this file: the server floors
+  every write itself, and `accessSegment: null` on that mount means `MyAccessProvider` resolves
+  nothing (F-330's fall-open) — so a guest peer opening a shared base sees edit affordances that
+  the API then refuses. **UI that offers what the server will refuse, not access it grants.**
+- **The fix, when someone wants it.** Add the caller's container role to `HomeChannel` (the
+  hydrate already reads the membership row — `server/service-reads.ts › hydrateChannels`) and
+  branch both sites on it. ⚠ **It is a new key on an INDEXEDDB-PERSISTED payload**, so it owes §8 a
+  spelled-out inline fallback — and the fail-safe direction is genuinely contested here: defaulting
+  to `guest` hides the button from every existing member on the first paint after the upgrade,
+  defaulting to `member` keeps today's behaviour. That trade is why this is filed rather than done
+  in passing.
+- Severity: **misleading affordance, not a widened fence.** Every write named above is refused
+  server-side today.
+  Status: **open.**
+
+### F-344 — the tiered wake governs DORMANT sessions only, so tier 3's "only one agent answers" is not true of RUNNING ones (2026-08-28)
+
+**What was built.** Samuel's tiered-wake ruling (INVARIANTS §11, 2026-08-28) says a multi-agent room
+triages an unaddressed human message and **only a claiming agent spins a real turn**.
+`main/session-dispatch.js › mayFeed` applies that to DORMANT sessions — `awaitingDirective` (a
+spawn-idle shell) or `state.parked` (an idle-parked one).
+
+**The residual.** A session that is RUNNING is not dormant, so it is fed by ruling 4's fan-out
+(2026-08-21: *every message in a thread reaches every live agent on it*) with no tier consulted and
+no triage call spent. In a channel with two agents both mid-conversation, an unaddressed message
+therefore reaches both — which is what the ruling's tier 3 reads as forbidding.
+
+**Why it was left.** Applying triage to running sessions would REVERSE ruling 4, which this build
+was not asked to touch and which `session-dispatch.js`'s header documents as deliberately ungated
+("it claims nothing into existence, and a live session's own existence is the gate"). It would also
+put a Haiku call on the hot path of every message in every busy channel, against a ruling whose cost
+instruction was "cheap and bounded". Narrowing a documented ruling as a side effect of implementing a
+different one is the failure CLAUDE.md's precedence rule exists to prevent, so the scope was chosen,
+written into INVARIANTS §11 and filed here rather than decided inside a filter predicate.
+
+**What would settle it.** A ruling from Samuel on one question: *in a multi-agent room, should an
+unaddressed human message reach a RUNNING agent that did not claim it?* If yes, this entry closes as
+"working as ruled". If no, the change is one predicate — drop the `!dormant(s)` early return from
+`mayFeed` and widen `wakeCandidates` — plus a restatement of ruling 4 in INVARIANTS §11 and a cost
+re-measure, because the triage bill then scales with channel traffic rather than with dormant agents.
+
+**Measured 2026-08-28:** `dopl-desktop-app/main/session-dispatch.js › dormant` /
+`wakeCandidates`; the boundary is pinned in `test/wake-tier-routing.test.mjs § "wake T3: a running
+agent is fed regardless of what triage said"` and `§ "wake FENCE: an agent-authored message still
+FEEDS a RUNNING sibling — ruling 4 survives"`.
+
+### F-345 — the 28px icon-button recipe is hand-written in FIVE more places, and each copy is one file's taste (2026-08-28)
+
+**What was built.** The knowledge base header's download / settings / delete controls were a
+file-private `ICON_BTN` const — a bare 28px square with a hover tint and no face. Samuel's
+2026-08-28 ruling put that header's controls on global components, so they render
+`src/shared/ui/open-scale-button.tsx › OpenScaleIconButton`: the KB card Open button's own pill at
+1:1, sharing `open-scale-button.module.css › .openScale` with the labelled variant so height,
+radius, elevation and ink cannot drift between them.
+
+**The residual.** The knowledge copy was one of SIX declarations of that const; the other five are
+untouched. Re-measure rather than trust the count:
+
+```
+grep -rn "ICON_BTN" src apps | grep -v node_modules
+```
+
+Two are live app surfaces — `src/features/chats/components/list-pane.tsx` and
+`src/features/chats/components/detail-pane.tsx` — and three are playground mock panes
+(`src/features/playground/components/panes/chats-pane.tsx`, `panes/members-pane.tsx`,
+`panes/knowledge-pane.tsx`; the last is a copy of the very surface this wave rebuilt, which is how
+the recipe spread). A SEVENTH statement of the same idea is a real component,
+`src/features/members/components/members-v2/bits.tsx › IconButton`. They are not byte-identical —
+the sizes and hover tints have already drifted — which is the finding, rather than an aesthetic
+complaint about duplication.
+
+**Why it was left.** Standing rule R2 for this wave — do not touch what was not named. Converting
+chats and members is a behavioural change to two surfaces nobody reviewed in this pass, and
+`members-v2/bits.tsx › IconButton` additionally carries a `bare` variant that the /home info toggle
+depends on (`home.module.css`'s deleted circle rule documents that dependency), so a promotion has
+to carry that variant with it rather than replace it.
+
+**What would settle it.** Promote `members-v2/bits.tsx › IconButton` — variants and all — into
+`src/shared/ui/`, then point chats, members and this square at it, keeping `OpenScaleIconButton` as
+the RAISED member of the family and the promoted one as the BARE member. Two faces, one module, no
+per-file string. The playground panes are mock surfaces and can be left or deleted with the rest of
+that tree.
+
+---
+
+### F-346 — `PATCH /api/channels/[channelId]` accepts a RENAME that no surface can ask for (2026-08-28)
+
+**What was measured.** `src/app/api/channels/[channelId]/route.ts` takes `name`, `topic`, `archived`
+and `infoCard`; `PATCH` floors at `minRole: "member"`, only `visibility` is field-level
+session-gated (that file's `SESSION_ONLY_FIELDS`), and `name`/`topic`/`archived` carry an
+ADDITIONAL manage gate in the service (`canManageChannel`, per the route's own docblock). ⚠ So the
+precise claim is **not** "any member can rename" — it is that a rename is reachable by an AGENT
+TOKEN belonging to someone who can manage the channel, over plain HTTP, with **no UI anywhere that
+sends it**. Re-derive rather than trust this sentence:
+
+```
+grep -rn "topic" apps/desktop-ui/src --include=*.tsx | grep -i "patch\|update\|rename"
+grep -rn "infoCard" apps/desktop-ui/src src/features/channels --include=*.ts --include=*.tsx
+```
+
+**Why it is a finding and not a task.** Two halves, and only one of them is debt.
+
+1. **The HOLE.** A route arm with no caller is a contract nothing exercises: its validation, its
+   manage gate and its cache invalidation are all untested by USE, and the first caller — whenever
+   it arrives — finds out whether they work. That is the same shape as an unreachable branch, except
+   that it IS reachable, just not from anything a person can click.
+2. **⚠ THE FIX IS NOT "ADD IT TO MCP", AND SAMUEL RULED SO** (ruling Q12, `docs/specs/
+   mcp-surface-v2.plan.md` §12, 2026-08-28). MCP surface v2 wave A deliberately did NOT add
+   `dopl_channel(op="update")`. Shipping RENAME first on the AGENT surface would mean the operator's
+   only way to undo an agent's rename is to ask an agent — a worse first surface than none. The
+   ruling is `infoCard` only, in wave B, and this entry is the rest of the arm.
+
+**What would settle it.** Either a human affordance for `name`/`topic` on the channel info column
+(the /home relationship record and the workspace channels page are the two candidate homes), or the
+arm's removal from the route's schema. ⚠ **Not both halves at once and not the agent one first** —
+the ordering is the whole ruling.
+
+**⚠ Scope note, so nobody re-files the neighbour.** `infoCard` is NOT part of this finding: it is
+documented as *deliberately* agent-writable and membership-gated, and it **SHIPPED to MCP in wave B**
+(`dopl_channel(op="update")`, 2026-08-28). `archived` likewise has UI. This entry is `name` and
+`topic` alone.
+
+**⚠ RE-MEASURED 2026-08-28 (wave B), AND THE ENTRY GOT NARROWER RATHER THAN CLOSING.** The wave that
+could most easily have "fixed" this by adding a rename op deliberately did not:
+`@dopl/client › ChannelUpdateInput` carries **exactly one key**, and
+`packages/mcp-server/src/tools/channel-info-card.test.ts` asserts the patch this op sends has one
+key — so the two fields are now unreachable from MCP by CONSTRUCTION rather than by discipline. That
+makes the hole safer to leave open and does not make it smaller: the route still accepts a rename
+nothing can ask for.
+
+---
+
+### F-347 — `confirm_token` is REFUSED on the ops that reach `confirmGate` and silently IGNORED on the ops that do not (2026-08-28)
+
+**What was measured.** `packages/mcp-server/src/tools/confirm-token.ts` states the rule in a named
+export: *"⚠ A TOKEN ON A CALL THAT IS NOT IN THE CONFIRM CLASS IS REFUSED, not ignored"*
+(`refuseStrayToken`), on the same argument `registrar.ts › strictInput` makes for unknown arguments —
+a caller echoing a token into a private create has mis-modelled the surface, and silently accepting
+it teaches the wrong shape. **The rule holds only where `confirmGate` is actually called.**
+
+`confirm_token` rides each tool's SHARED op schema, so it is spellable on every op of both tools, and
+`confirmGate` runs on exactly three of them:
+
+```
+grep -n "confirm_token" packages/mcp-server/src/tools/knowledge.ts packages/mcp-server/src/tools/agent.ts
+grep -rn "confirmGate(" packages/mcp-server/src/tools
+```
+
+→ `dopl_kb(op="create_base")`, `dopl_agent(op="create")`, `dopl_agent(op="update")`. Every other op of
+either tool — `dopl_kb`'s eleven others, `dopl_agent(op="list"|"get")` — accepts a token, drops it,
+and answers a normal success.
+
+**Why it is worth a number rather than a fix in passing.** It is the **stated rule losing at the
+paths it was not written at**, which is the shape this repo has paid for twice already (F-336's
+predicate that moved with only one of its readers; the gate hoist that produced
+`gating.ts › opRefusal` being called explicitly on BOTH registration paths rather than folded into
+one wrapper). The blast radius is small — a stray token on a READ misleads nobody and creates
+nothing — which is exactly why it will keep being deferred, and why the entry is here instead.
+
+**⚠ Do not "fix" it by widening `confirmGate` to every op.** The module's own second warning is that
+a confirm on every write trains the agent to skip it, and calling the gate on a read to reach its
+stray-token arm would put a workspace loopback (`resolveConfirmTarget` → `listWorkspaces`) on a hot
+read path — `confirmGate` only skips that lookup when `publishes` is false, so the cost is bounded
+today by the class being small. **What would settle it** is a token check where the op is ROUTED —
+one line in each registrar's `switch`, beside the `missingParams` calls that already live there —
+refusing a token on any op outside the three, with `refuseStrayToken` as the message. That keeps the
+gate's scope unchanged and puts the argument check where every other argument check already is.
+
+**Neighbour, and it is now CLOSED so nobody re-files it:** `shelf` had the same shape on
+`dopl_kb(op="update_base")` — spellable, dropped, 2xx over a shelf move that never happened, while
+its twin `dopl_agent(op="update")` refused it by name and pinned the refusal. `opUpdateBase` now
+refuses it too (`shelf-confirm.test.ts › op=update_base REFUSES a shelf`), and INVARIANTS §10 states
+the rule once for both tools. That one was a WRITE answering success over a no-op, which is why it
+was fixed rather than filed.
+
+---
+
+### F-350 — ✅ RESOLVED 2026-08-28 — the @-picker INSERTED a handle main's wake parser could not read, so tier 1 was dead for every RENAMED agent
+
+**Two waves, one convention, and they never met.** Both shipped green; each is internally correct.
+
+- **Wave A (2026-08-27, the handle convention).** `src/features/channels/lib/agent-mentions.ts`
+  gives an agent TWO handles — its slugged custom name when the operator has renamed it, and
+  `agent-<id>` always — and `› agentMentionHandle` returns the **slug in preference to the id**.
+  `channels-v2/composer-mentions.tsx › mentionSuggestions` inserts exactly that, and
+  `› buildAgentMentionIndex` claims both forms so the transcript TINTS both.
+- **Wave B (2026-08-28, tiered wake).** `dopl-desktop-app/main/session-dispatch.js ›
+  mentionedAgentIds` widened its parse to accept the `agent-` prefix — and **only** the prefix:
+
+  ```js
+  const re = new RegExp('(?<![a-z0-9-])@(?:agent-)?([a-z][a-z0-9]{7})(?![a-z0-9-])', 'g');
+  ```
+
+  It resolves `@<id>` and `@agent-<id>`. It cannot resolve a slugged name, and it has no name
+  store to resolve one against.
+
+**The failure, measured.** An operator renames an agent "Research Bot". The picker offers it and
+inserts `@research-bot` — pinned as correct by `composer-mentions.test.tsx › "offers MY OWN
+AGENTS, by slugged name or `agent-<id>`"`. The transcript tints it. Main's parser returns `[]`, so
+`addressed.length === 0`, so **TIER 1 never fires**. What happens instead depends on the room: a
+solo channel wakes the agent on TIER 2 anyway (right answer, wrong reason), and a multi-agent room
+falls to TIER 3 — a Haiku claim/pass call that may answer nobody, and that answers nobody
+unconditionally on a signed-out Mac, a missing SDK or an 8s timeout. **The operator sees a blue
+token and a silent agent.** This is F-266's class verbatim — tint says tagged, stamp says nobody —
+and `session-dispatch.js`'s own new header claims to have closed it ("**A convention change that
+only moved the renderer would have rendered a blue token this parser ignored**").
+
+**Scale.** It is not an edge case: `channels-v2/use-agent-launch.ts › useAgentLaunch` makes a name
+the ONE required field to launch (`ready: name.trim().length > 0`), so every agent started from the
+launch panel that the operator actually names is affected. Only an agent left at the `Agent #<id>`
+prefill is unaffected — `› launchWithIdentity` deliberately does not write the prefill to the
+store, so it keeps `displayName: null` and the picker falls back to `agent-<id>`.
+
+Verified against the live regex, not from reading:
+
+```
+node -e "const re=new RegExp('(?<![a-z0-9-])@(?:agent-)?([a-z][a-z0-9]{7})(?![a-z0-9-])','g');
+for (const s of ['@agent-k3v7d2mq','@k3v7d2mq','@research-bot'])
+  console.log(s, [...s.matchAll(re)].map(m=>m[1]))"
+```
+→ `@agent-k3v7d2mq [k3v7d2mq]` · `@k3v7d2mq [k3v7d2mq]` · `@research-bot []`
+
+**THE RULING (Samuel, 2026-08-28): THE PARSER LEARNS NAMES.** Of the two candidates below, option 2
+— *"main resolves the slug against its own rename store"* — is the one that shipped, because the
+machine that owns every rename is the only thing that could ever resolve a name to an id, and
+because the alternative would have reversed the 2026-08-27 handle convention and taken a pinned
+fail-closed arm with it.
+
+Rejected, and recorded so it is not re-proposed: **making the picker insert the id form**
+(`agentIdHandle`) is one line, but it reverses *"same convention as the roster's"* and goes red on
+`composer-mentions.test.tsx › "drops an agent whose name is contested — fail closed, as members
+do"` — the id form is unambiguous by construction, so that arm stops being reachable for agents.
+
+**WHAT SHIPPED.**
+
+- **`dopl-desktop-app/main/agent-handles.js`** (new, pure, electron-free like `agent-id.js`) — the
+  slug rule (`agentSlug`), the token strip (`handleOf`), the fail-closed slug index
+  (`buildAgentHandleIndex`), the body scan (`slugMentionedAgentIds`), and the live half
+  (`handleIndexFor`, whose name resolver is INJECTED so the truth tables need no disk).
+- **`main/session-dispatch.js › mentionedAgentIds`** takes a third argument, the slug index, and
+  now has **two doors**: the anchored id regex (unchanged) and the name index. Order is id-first —
+  the framing prints the addressee list, so the exact address sorts ahead of the friendly one.
+  `feedLiveSession` builds the index per message over that thread's live ids.
+- The pure block gained one free var (`agentHandles`), so its **four slicing harnesses** were
+  updated to inject the REAL module — a stub would have let the two trees drift with every table
+  still green.
+
+**CONSTRAINTS, EACH PINNED AND EACH MUTATION-VERIFIED.**
+
+| constraint | pin | mutation that proves it |
+|---|---|---|
+| slug reaches its agent (renamed) | `test/agent-handles.test.mjs › ROUND TRIP: … RENAMED agent` | `break-store-lookup` → 4 red |
+| and unrenamed agents keep the id door | `› ROUND TRIP: … UNRENAMED agent` | same |
+| unknown / unnamed slug wakes nobody | `› FAIL CLOSED: an UNKNOWN slug…`, `› …UNNAMED agent…` | `no-slug-door` → 2 red |
+| **collision → wake NEITHER**, id form survives | `› FAIL CLOSED: two agents renamed the SAME…`, `› …does not cost the agent its ID door` | `ambiguity-first-wins` → 2 red |
+| a throwing store costs recognition, not routing | `› FAIL CLOSED: a name lookup that THROWS…` | `break-store-lookup` |
+| the call site actually opens the door | `› WIRING:` (structural — the degradation is otherwise invisible) | `unwire-call-site` → 1 red |
+| **one rule, two trees** | `src/features/channels/lib/agent-handle-parity.test.ts` slices the desktop pure block and runs it against `mentionSlug` / `mentionHandleOf` over a shared fixture table | `slug-drift` → 5 red in the WEB suite; `drop-f266-chars` → 3 red |
+
+**TINT-PARITY CONSEQUENCE.** A tinted agent mention now also WAKES for named agents — tint and
+routing agree for the first time in this namespace. **Residual, now shared and pinned on both
+sides rather than silent:** a trailing HTML tag followed by punctuation (`@x</b>.`) defeats the
+tag strip in BOTH implementations (`.` breaks the tag regex's `$` anchor, then the punctuation
+class eats the `>`). That is `lib/mentions.ts`'s own documented hazard, not a copy defect, and the
+parity suite asserts the two trees fail it identically.
+
+**ONE THING FOUND ON THE WAY, worth knowing before the next `main/` module lands.**
+`test/main-exports-defined.test.mjs › boundIdentifiers` blanks strings before it looks for
+bindings, and its blanker does not know a REGEX LITERAL from code — so a literal `'`, `"` or
+backtick inside a regex character class opens a "string" that swallows the rest of the file, and
+every function declared below it is reported as exported-but-unbound. Measured on this file's
+first draft. Worked around locally (the three quote characters are written as `\u0027` / `\u0022`
+/ `\u0060` escapes, with a note not to tidy them back) rather than by weakening the sweep, which
+is a real load-time-crash guard. **The scanner gap itself is untouched and will bite the next
+file that needs one of those characters in a character class.**
+
+---
+
+### F-351 — a threadless agent post that was never GATED is dropped from the work stream and filtered out of the Sent lane, so it renders nowhere (2026-08-28)
+
+**Not a wave collision — a carve-out that was written for one arm and needed to cover two.**
+
+`src/features/channels/components/channels-v2/agent-stream-model.ts › buildAgentStream`:
+
+```ts
+const hasTranscript = sent.length > 0;
+…
+if (lane === "sent" && !held && !wasHeld && hasTranscript) return;
+```
+
+The drop is safe when the transcript really does hold a second copy of the post. It does not always.
+`sent` comes from `channels-v2/agent-panel.tsx › agentSentMessages`, which requires
+`m.metadata.taskId === taskId` — and that file's own 2026-08-25 measurement records that **a
+channel-level post carries no `taskId` at all** (it is F-311's subject). So:
+
+1. the agent has ≥1 thread post, making `hasTranscript` true;
+2. it then makes a CHANNEL-LEVEL post;
+3. on a build where `willGatePost` is absent — `dopl-desktop-app/main/session-io.js` documents it as
+   optional and "absent reads as not gating" — `pending` is never stamped, so `held` and `wasHeld`
+   are both false;
+4. the frame is dropped by the line above, and the transcript row that would have replaced it is
+   filtered out of `sent` by the `taskId` test.
+
+Nothing renders it. The 2026-08-25 wave carved out only the held arm — "⚠ A FORMERLY-HELD FRAME IS
+NOT DROPPED BY `hasTranscript`" — and the identical `taskId` argument applies to the never-held arm
+and was not extended to it.
+
+**Why it was left.** The fix is a change to the echo/transcript reconciliation join, and the failure
+mode of getting it wrong is a DOUBLE-rendered post rather than a missing one. Candidates: drop on
+`posted.has(echo)` alone, or make the `hasTranscript` arm `landed`-based so it drops only what the
+transcript demonstrably holds. Either wants its own pin against both directions, and this reviewer
+could not prove no-double-render across the `willGatePost`-absent and `willGatePost`-present builds
+in the same pass. **F-311 is the same `taskId` gap seen from the Sent lane's side; these two should
+be closed together.**
+
+---
+
+### F-352 — the two narration caps are hand-copies across trees, and only three of the four literals are pinned (2026-08-28, PARTLY CLOSED)
+
+Four numbers, two trees, no import possible between them:
+
+| constant | where | pinned? |
+|---|---|---|
+| `PROSE_CAP` = 2000 | `dopl-desktop-app/main/session-narration.js` | ✅ `test/session-narration.test.mjs` asserts the literal |
+| `EXPANDED_CHARS` = 2000 | `channels-v2/agent-stream-log.tsx` | ❌ **only BRACKETED** to `[1997, 5000)` by `agent-stream.test.tsx`'s two body-length cases |
+| `POST_CAP` = 1000 | `dopl-desktop-app/main/session-narration.js` | ✅ **closed 2026-08-28** — `test/session-narration.test.mjs › "POST: the outbound echo cap is the SPA's join constant"`, mutation-verified at 900 |
+| `POST_CAP` = 1000 | `channels-v2/agent-stream-model.ts` | ❌ only bounded from ABOVE — `agent-stream-consent.test.tsx` re-slices at a hand-written 1000, so lowering BOTH caps together still passes |
+
+**What was fixed in this pass.** The desktop `POST_CAP` pin (above), and a comment that stated the
+safe direction **backwards**: `agent-stream-model.ts › POST_CAP` read *"it only has to be an UPPER
+bound: main slicing shorter than this leaves both sides of the join untouched"*. That is the
+FAILING case. `postEcho` joins main's already-cut frame text against the untruncated server body;
+if main's cap is the shorter one, a long post gives the two chains different prefixes, the join
+never matches, and the Post card reads **Pending forever over a message that was delivered**. Main's
+cap is the upper bound on the web's, not the reverse. Corrected in place.
+
+**The residual.** Neither web constant is exported, so no web test can assert either literal —
+`EXPANDED_CHARS` and the web `POST_CAP` are both module-private `const`s. Closing it means
+exporting both and asserting them in a web test mirroring the desktop's two lines. That is a
+module-surface change (`knip.json` governs unused exports) and was left rather than made blind.

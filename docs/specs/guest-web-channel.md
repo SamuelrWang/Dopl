@@ -40,6 +40,13 @@ operator's agent. Friction target: link → Google sign-in → talking, under a 
    agent; the guest's messages wake it per the operator/@-directed rule. Out of scope:
    cloud runtime. The known ceiling (operator machine asleep = no replies) is
    accepted for MVP and documented.
+   - ⚠ **THE @-DIRECTED HALF WAS THE GAP, AND IT IS CLOSED (2026-08-28, Samuel's TIERED WAKE
+     ruling — INVARIANTS §11).** An agent id is minted on the operator's machine and known to no
+     server, which is exactly why a guest could never say one: under the @-only rule the guest's
+     messages woke nothing unless the operator was present to @-mention their own agent, which is
+     the presence this whole lane exists to remove. A guest's message now wakes the channel's ONE
+     agent outright, or wins a claim/pass triage pass in a multi-agent room. The operator-asleep
+     ceiling above is unchanged.
 
 ## Security model (decided)
 - Account REQUIRED at claim (already true — sessionOnly). Google OAuth is the

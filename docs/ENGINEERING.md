@@ -397,7 +397,7 @@ New client data code uses `useApiQuery` (`src/shared/hooks/use-api-query.ts`) ov
 
 **TWO CROSS-FEATURE THINGS WENT WITH IT, and both are worth knowing about.** (1) `src/features/teams/server/invariant.ts` — the workflow↔KB invariant, whose entire subject was workflows: every team that could read a workflow had to be able to read every KB attached to it. Deleting it removed `TeamKbAccessConflictError`, the `TEAM_KB_ACCESS_CONFLICT` 409 (which had no other producer), the `autoGrant` retry flag through the schema/routes/mutation layer, and the `ConflictDialog` the 409 opened — dead the moment nothing could raise it. **A KB narrowing is now unchecked, because there is no dependent resource left to strand.** That also closes F-182 by deletion. (2) `workflow` left `TeamResourceType` and the `RESOURCE_TABLES` polymorphic map, so the map is four types over four tables.
 
-**WHAT DELIBERATELY STAYS, each for a different reason.** `gating.ts › HIDDEN_TOOLS` — now EMPTY, kept as the hide-before-delete seam itself (INVARIANTS §10). `RETIRED_DOPL_TOOLS` in `dopl-desktop-app/main/tool-profiles.js` — all four deleted tool names, because a name dropped from a deny list becomes *unclassified*, which resolves to `gate`; `UNIVERSAL_HARD_DENY` stays 8 (§11). The `"workflow"` entry in BOTH `RETIRED_RESOURCE_TYPES` render filters (`features/teams/access-levels.ts` and `packages/mcp-server/src/tools/members-render.ts`) — the drop migration deliberately leaves `'workflow'` valid in the `team_resource_access.resource_type` CHECK, so a surviving row must still be filtered where the payload enters a surface. `"workflows"` in `website-retirement.ts › APP_PAGES` — the historical URL list, pinned by `proxy-retirement.test.ts`. And the `seed-content.test.ts` guard that no seeded skill, KB entry, ontology object or sample chat teaches workflows.
+**WHAT DELIBERATELY STAYS, each for a different reason.** `gating.ts › HIDDEN_TOOLS` — now EMPTY, kept as the hide-before-delete seam itself (INVARIANTS §10). `RETIRED_DOPL_TOOLS` in `dopl-desktop-app/main/tool-profiles.js` — all four deleted tool names, because a name dropped from a deny list becomes *unclassified*, which resolves to `gate`; `UNIVERSAL_HARD_DENY` stays 8 (§11). ⚠ **CORRECTED 2026-08-28: it is now 9** — `dopl_agent_admin` joined the ADMIN half with MCP surface v2 wave A. The sentence above is still right about what it was arguing (nothing left `RETIRED_DOPL_TOOLS`, which is still those four); only the total moved. The `"workflow"` entry in BOTH `RETIRED_RESOURCE_TYPES` render filters (`features/teams/access-levels.ts` and `packages/mcp-server/src/tools/members-render.ts`) — the drop migration deliberately leaves `'workflow'` valid in the `team_resource_access.resource_type` CHECK, so a surviving row must still be filtered where the payload enters a surface. `"workflows"` in `website-retirement.ts › APP_PAGES` — the historical URL list, pinned by `proxy-retirement.test.ts`. And the `seed-content.test.ts` guard that no seeded skill, KB entry, ontology object or sample chat teaches workflows.
 
 **THE TESTS WERE REWRITTEN DOWN, NEVER DELETED WHOLESALE (§14).** `retirement.test.ts` keeps its four-name `RETIRED` array — it stopped being a gate assertion and became a REGROWTH guard against those names coming back as tools or as routing prose. `delete-block.test.ts` pins `HIDDEN_TOOLS` as empty rather than dropping the check. `meta-gate.test.ts` re-pointed its suppression leg from `HIDDEN_TOOLS` (which can no longer suppress anything) to `READ_ONLY_BLOCKED_TOOLS`, because the same `isSuppressedTool` line reads both — mutation-verified, 2 reverts / 2 failures. `teams/server/repository-resources.test.ts` keeps the skill→workflows dispatch regression guard, which was never about workflows: it is about the map routing each type to its own table. `dopl-desktop-app/test/ui-sync-tables.test.mjs` replaced its un-published pin with a DROPPED pin, and had to build a bare-`DROP TABLE` discriminator to do it honestly — `PUB.dropped` would have passed vacuously, since it also matches the tail of an `ALTER PUBLICATION … DROP TABLE`.
 
@@ -2128,7 +2128,7 @@ Nine audit findings, all on the desktop side. Act on the rules below rather than
 
 **THE DECISION (Samuel's, reversing FIX H2/H3 for this profile).** A `full` channel session SHOULD be able to use the delegation / outbound / persistence / escalation built-ins. Act on this rule, do not re-derive the old split.
 
-**THE RULE.** `session-profiles.SESSION_HARD_DENY` **is** `tool-profiles.UNIVERSAL_HARD_DENY` — literally `UNIVERSAL_HARD_DENY.slice()`, not a copy and not a superset. So under `full`, BOTH lanes hard-deny exactly eight names: the four `dopl_*_admin` tools and the four `RETIRED_DOPL_TOOLS`. Everything else exists and is governed by the operator's permission preset.
+**THE RULE.** `session-profiles.SESSION_HARD_DENY` **is** `tool-profiles.UNIVERSAL_HARD_DENY` — literally `UNIVERSAL_HARD_DENY.slice()`, not a copy and not a superset. So under `full`, BOTH lanes hard-deny exactly eight names: the four `dopl_*_admin` tools and the four `RETIRED_DOPL_TOOLS`. ⚠ **NINE since 2026-08-28** — a FIFTH admin (`dopl_agent_admin`) landed with MCP surface v2 wave A. The RULE is the sentence, not the number; re-derive the count from `tool-profiles.js`. Everything else exists and is governed by the operator's permission preset.
 
 **WHAT CAME OFF the SDK lane's `full` (25 built-ins, all now `gate`):** `Task`, `Agent`, `TaskCreate`, `TaskUpdate`, `TaskStop`, `TaskGet`, `TaskList`, `TaskOutput`, `Artifact`, `SendMessage`, `SendUserMessage`, `PushNotification`, `RemoteTrigger`, `ReportFindings`, `DesignSync`, `CronCreate`, `CronDelete`, `CronList`, `ScheduleWakeup`, `Monitor`, `EnterWorktree`, `ExitWorktree`, `Workflow`, `Skill`, `ToolSearch`.
 
@@ -4334,3 +4334,818 @@ Deleted in M0 (F-332). ⚠ The same sentence came back to bite the same face fro
 hours later: F-339's failed scope-C read rendered as *nothing at all*, which is the identical mistake
 with the fixture removed. **"A failed read is a normal answer here" obliges you to give it words, not
 just to stop lying about it.**
+
+## 2026-08-26 — The home shelf: a bug report that named the wrong defect, and the noun that fixed the right one
+
+Samuel reported, live from the app: `/home` → Knowledge → Private, scope pill on **"across all
+channels"**, showing knowledge bases *"from his OTHER workspaces"* — he named **MedMe** and
+**Dopl GTM**. Read as written, that is a workspace-scoping leak, and this repo has the machinery to
+make one: a header the renderer forgets, an over-broad server read, a cache key that collides across
+workspaces (F-331 is exactly that shape, one table over).
+
+**It was none of those, and the measurement is the point.** The whole chain was walked before
+anything was changed:
+
+- the pane's key and fetch both carried boot's `workspace.id`
+  (`pages/home/knowledge-panels.tsx`), and `client/hooks.ts › knowledgeBasesCacheSegment` puts the
+  workspace id **inside** the segment, so no two workspaces can share an entry;
+- `bootQueryKey(null)` is written only by the no-segment boot — `use-workspace-route.ts ›
+  seedBootAnswer` seeds `bootQueryKey(boot.segment)`, never the launch key, so a routed workspace's
+  answer cannot hydrate `/home`'s identity;
+- the transport sends the header (`dopl-desktop-app/main/ui-bridge.js › sendApiRequest`), and
+  refuses a non-UUID rather than dropping it;
+- the server is `.eq("workspace_id", …)` (`server/repository-bases.ts › listBasesForWorkspace`);
+- and **production said so.** The caller's default standard workspace — oldest owned standard, via
+  `features/workspaces/server/repository.ts › findDefaultWorkspaceForUser`, which is what
+  `getBootState` answers with — is the workspace **MedMe** and **Dopl GTM** actually live in. They
+  were private, they were his, and they were exactly where scope C was defined to look.
+
+So every gate held and the pane did what INVARIANTS said it did. **What was wrong was the RANGE.**
+"Across all channels" is a CHANNEL word; it was delivering a WORKSPACE shelf — bases authored on the
+workspace Knowledge page months earlier that had never been in any channel at all. The pill and the
+list were both correct and they were answering different questions.
+
+**Samuel's ruling: home-only shelf.** Scope C lists only what was created *from that pane*, which
+required the thing the feature never had — a noun for the shelf.
+`20260831120000_knowledge_base_home_scoped.sql` adds `home_scoped`, and the shelf becomes a PLACE:
+the workspace Knowledge page excludes home-scoped bases just as firmly, because a separation that
+runs one way is a saved filter, not a place.
+
+Three decisions worth keeping:
+
+1. **The column is never projected.** It is absent from `KNOWLEDGE_BASE_COLS`, from
+   `KnowledgeBaseRow` and from the `KnowledgeBase` domain type — Postgres filters fine on a column
+   the SELECT omits. That keeps the SDK-mirrored row type from widening
+   (`scripts/check-knowledge-type-drift.ts`), keeps a §8 stale-cache field from existing at all, and
+   removes the temptation to re-implement the fence client-side over a list that was handed over.
+2. **Absent `?shelf=` means BOTH, so forgetting it WIDENS.** That is the wrong default for safety
+   and the right one for compatibility — MCP `kb_list_bases` and workspace search ride the
+   unfiltered path and must keep seeing the operator's whole workspace. The mitigation is that both
+   UI surfaces thread a module constant (`HOME_SHELF`, `WORKSPACE_SHELF`) rather than a literal, and
+   an unrecognised value is a 400 rather than an ignored param — a misspelled `?shelf=hom` must not
+   silently answer wide and look like it worked.
+3. **The create fence REFUSES rather than downgrading.** `server/service-base-writes.ts ›
+   resolveHomeScope` requires a person-standing credential, `private`, and the caller's own default
+   standard workspace, and 403s `HOME_SCOPE_FORBIDDEN` otherwise. Quietly creating on the other
+   shelf would produce a base the surface that created it cannot see — the same class of invisible
+   landing this wave exists to end. ⚠ Its visibility check reads the **resolved** value, not
+   `input.visibility`: the teams branch rewrites it to `public` further up, so a fence on the raw
+   input would let a team-shared base onto a shelf the UI describes as "yours alone".
+
+**And the lesson that outlives the feature: the report named a mechanism, and the mechanism was
+wrong.** Had the chain not been measured first, the "fix" would have been a client-side filter over
+scope C — which would have made the screen right, left the other shelf on the wire in violation of
+§11, and left the actual complaint ("why is my work KB on my home page?") intact for the day someone
+opened devtools. **A user is authoritative about what they SAW. They are not authoritative about
+why, and neither is the agent relaying it.**
+
+## 2026-08-27 — Two sections: deleting a scope, and the create button that had to exist first
+
+The day after the shelf ruling, Samuel cut the /home Knowledge face again: **two sections, no scope
+pill.** "Shared in this channel" stays; "Private" becomes **"Personal"** and always shows the home
+shelf. The middle scope — container bases that were `private`, the caller's own, and ungranted —
+is deleted outright.
+
+**What the pill was actually costing.** Three scopes behind a `SelectMenu` made two different
+questions look like one control's two settings. "Shared in this channel" answers *who else can read
+this*; the private pill answered *where do I keep this*. A reader had to open a dropdown to
+discover that the second answer had two halves, and the halves lived in different WORKSPACES — a
+link container and the caller's own. The 2026-08-26 shelf wave had already established that the
+range a label implies is load-bearing; this ruling applies the same knife one level up.
+
+**The deleted scope's consequence is now a RULE, not a gap: a container base reaches /home only
+through a channel grant.** An ungranted private base in a link container is unreachable from that
+surface. That was checked before it was accepted — the operator's containers hold zero knowledge
+bases (measured 2026-08-26), so nothing live was stranded — and it is the honest shape anyway: a
+private shelf inside somebody-else's-relationship container is a place nobody should be encouraged
+to keep things. The remedy for a row that turns up later is the base's own sharing section.
+
+**The create button is what makes the deletion safe, and it had to be atomic.** With no private
+container scope, a base created in a container and *not* granted is invisible on the surface that
+created it. So "New shared base" is one call: `POST /api/knowledge/bases` with `shareToChannelId`
+writes the base into the channel's container and a `channel_resource_grants` row at `visible`, and
+**hard-deletes the base if the grant fails.** Hard, not soft — a tombstone still owns the slug, so
+the operator's retry would collide with a row they cannot see. It reuses
+`setChannelKnowledgeGrant`, the same service the base's own sharing section calls, rather than
+forking a second write path; and the dialog hides its "Who can access" picker in this mode, because
+the grant already answered that question and two answers on one form is one too many.
+
+**And the second caller opened a hole that a comment had predicted.** `setChannelKnowledgeGrant`
+carried this, verbatim: *"THE SOURCE IS NOT CONSULTED, because the ROUTE is `sessionOnly` and no
+agent token can reach it. If that gate is ever relaxed, this is where an `ctx.source === "agent"`
+refusal belongs."* Wiring create-and-share through `POST /api/knowledge/bases` relaxed exactly that
+gate — that route is not `sessionOnly` and must not become one, because MCP `kb_create_base` rides
+it. **The refusal moved into the service, where both doors pass through.** The PUT keeps its
+`sessionOnly`: the route refuses the CREDENTIAL at the door, the service refuses the ACT, and they
+are not duplicates of one rule.
+
+Two things worth keeping from how this went:
+
+- **A comment that names its own future failure is worth more than a test that pins the present
+  one.** Nothing was broken when that paragraph was written, and no test could have failed; it was
+  a note about what would make it false. It came true eight days later and it was read.
+- **Deleting a scope is a schema question in disguise.** The pill could be removed in an afternoon;
+  what took the thinking was "what becomes unreachable, and is anything sitting there" — a
+  production count, not an opinion. **The measurement is what made the deletion a ruling instead of
+  a regression.**
+
+## 2026-08-27 — Converging the second face: what a copy of a design has to re-decide
+
+The /home Knowledge face had just become two sections over a `home_scoped` shelf. Samuel's next
+ruling was to do the same to the Agents face. That reads like a port, and most of it was — the
+column, the `?shelf=` param, the both-ways exclusion, the create fence and the 400-on-misspelling
+are all the Knowledge wave's shapes with a different table under them. **Three things were not, and
+they are the whole value of writing this down: a copy of a design still has to re-decide everything
+the original decided for reasons that do not transfer.**
+
+**1. `private` means something different on the two axes, so the fence's second condition is not the
+same condition.** Knowledge's home-shelf fence requires `private` as a FLOOR: a KB can be private
+and still reach a channel, through a `(kb, channel)` grant row. A template has no grant table and
+one consumer per row, so `private` is TERMINAL — it IS the entire audience statement. Same word in
+both fences, different force, and the sentence in each file says which.
+
+**2. Deleting the per-channel private section made a stored value unreachable, not merely unlisted.**
+A knowledge base that loses its /home section is still reachable from its own sharing settings. A
+`private` template in a link CONTAINER is not: containers are filtered off the rail by
+`isStandardWorkspace`, so they have no Agents page of their own, and /home was the only surface that
+ever listed them. The moment the section went, `private` in a container became a **write-only
+value** — creatable, never visible. So the fix was not in the pane at all: `SECTIONS_CONTAINER`
+drops to one entry, because that array IS the editor's visibility control, and the container mount
+passes `defaultVisibility="workspace"` so the draft does not open on an option the control cannot
+show.
+
+**3. And that turned an old, correct decision into a wrong one.** `containerCopyDraft` forced
+`private` on "Use in this channel", with a comment that had been right for months: *"use" must not
+silently PUBLISH the operator's agent into a container the peer is standing in.* After the
+restructure that rule produced a copy that lands nowhere — the write succeeds, the dialog closes,
+and nothing appears on any surface. **The choice was between an invisible write and a stated
+audience change**, and the second is the honest one, so the copy is now `visibility: 'workspace'` and
+the confirm dialog names the audience before the button: *"everyone here will see it."* The
+"silently" half of the old argument is the half the fix had to answer, and it is answered where the
+operator is standing rather than by a default they cannot see. The pin that asserted the old
+behaviour was inverted **with its reasoning rewritten in place**, not deleted — a green test whose
+comment still argues for the opposite behaviour is worse than no test.
+
+Two mechanical notes worth keeping:
+
+- **F-331 came back on a new axis, and its own docblock predicted it.** `agentTemplateKeys`'s
+  comment said the write/read pairing had to be revisited in the same change if a `query` variant
+  ever appeared on that path. `?shelf=` is that variant: the reads moved to
+  `[path, ws, {shelf:…}]` while the writes still patched `[path, ws, undefined]` — a silent no-op
+  whose only symptom is a created row that never appears. The shelf is now BOUND INTO the key
+  factory (`list(shelf).entry({workspaceId})`) so neither side can spell it alone.
+- **The backfill was measured, and it was empty.** The operator's default standard workspace holds
+  two templates: one `workspace`-visible (never on the Personal shelf) and one `private` but owned
+  by a different user (never his). **Nothing of his vanished** — which is worth more than the
+  migration's `DEFAULT FALSE`, because the default only guarantees the rows do not move, not that
+  the operator will not notice.
+
+## 2026-08-27 — One dialog, four times: the reference that became a primitive
+
+Samuel pointed at the agent-template editor — "I like this one" — and asked for the other three
+/home dialogs to match it. The interesting part is not that they now match; it is what "match"
+turned out to mean, and what it cost to state it once.
+
+- **Four dialogs were four near-copies, and none of them was wrong on its own.** New knowledge base
+  and New channel wore `settings-modal.module.css`'s `.narrowTitle` / `.confirmActions` /
+  `.btnCancel` / `.btnConfirm`; the editor wore a hand-rolled `p-6` body with its own `h-10
+  rounded-[9px]` buttons; Add person was not a dialog at all but a `Popover` hanging off its
+  trigger. Each was internally consistent. **What they could not do was change together** — the
+  fully-rounded-buttons ruling would have been four edits in three trees, and the next ruling four
+  more. `shared/ui/standard-dialog.tsx` exists so that number is one.
+- **WIDTH IS NOT A PROP, and that is the load-bearing decision.** The temptation with a shared
+  dialog is to parameterise the thing that differs — and width is exactly what differed. Making it
+  a prop would have produced a component that four callers configure four ways, i.e. the four
+  near-copies again with a shared import. A surface that needs its own width is not a standard
+  dialog; it takes its width to the CSS module or it stays outside the set.
+- **The heading is uppercased in CSS, never in the string.** `title` is both the visible heading and
+  `ModalShell`'s `aria-label`. A `.toUpperCase()` in the component would have changed what a screen
+  reader announces and broken every `getByRole("dialog", { name })` across three suites — a styling
+  request quietly rewriting an accessibility contract. `uppercase` is a class.
+- **`SelectMenu` got a variant, not a restyle.** The dropdowns inside these dialogs had to become the
+  raised kit face; the same component sits on a dozen flat settings rows elsewhere. The two faces are
+  ALTERNATIVES rather than layers — `flat`'s `hover:bg-surface-raised-2` would have flattened the
+  raised gradient to a solid tint, the failure DESIGN-SYSTEM already warns about for `.raised-tab` —
+  so each variant carries its whole face, padding and font size included, and a caller's `className`
+  never has to win a same-layer fight with the base.
+- 🔄 **The no-modal-in-modal ruling was reversed, and the reversal is worth more than the rule was.**
+  `template-editor-rows.tsx` argued that a dialog for one key/value pair puts the operator two
+  Escapes from their draft. True, and it was the right call while a field was two inputs. What
+  changed is the FORECAST: a field is about to carry a type, a default and a required flag, and a
+  row that grows four controls wide is a form pretending to be a list. Building the standard dialog
+  now costs one Escape; retrofitting it later costs a redesign of the row, its tests and its docs.
+  **Editing and removing stayed inline** — the dialog is for the pair that does not exist yet.
+- **"Add", not "Add field", on the dialog's confirm.** Two buttons with one accessible name on one
+  screen is ambiguous for the operator and fatal for `getByRole`. The title already names the thing;
+  the button only has to name the verb.
+- **Hiding the /home visibility picker was a scoping decision, not a deletion.** The shared create was
+  already picker-less because its channel grant answers the audience question. The personal one had
+  to become picker-less for a different reason — the button pressed IS the answer — and two of the
+  picker's three options name audiences /home does not have. The two facts got two props
+  (`shareToChannelId`, `audienceFixed`) rather than one inferred condition, because a create that
+  reads its audience off a cache-key hint is the kind of coupling that survives until the hint moves.
+  **The workspace Knowledge page kept the picker**, and that is the point: its create button names no
+  audience, so it is the one surface where the question is still worth asking.
+
+## 2026-08-27 — One ground for two faces: the reversal the doc had already priced
+
+The /home Knowledge sections were `SectionBox` — a `bg-card-surface-subtle` header strip over a
+`bg-bg-inset` body carrying the concave inset shadow. Samuel sent a screenshot: make it a normal flat
+rectangle, no border line, no inset shadow, filled with the colour the channel list stands on, header
+and cards directly on it.
+
+- **The doc had already written the terms of its own reversal.** INVARIANTS §5A ended with "Knowledge
+  reads INSET (`SectionBox`) and Agents reads FLAT under one selector; **a reversal for visual parity
+  is an ENGINEERING.md entry, not a styling choice**." That sentence is the reason this entry exists,
+  and it is worth noticing what it bought: the divergence was *recorded as a divergence*, so when the
+  ruling came the only question left was which direction — not whether anyone had meant it.
+- **Two faces arrived at one rectangle from opposite sides.** Knowledge came down from a concave box;
+  Agents came across from `template-section.tsx`'s flat `bg-card-surface-subtle` card. The shape they
+  now share is `shared/ui/section-panel.tsx › SectionPanel`, and `TemplatePanel` is that component
+  plus a ground — so the workspace Agents page is pixel-unchanged while neither /home face owns a
+  copy of the structure.
+- **`SectionPanel` paints nothing, and that is the scoping decision.** The obvious API was
+  `tone="home"`. It is the wrong one: `--home-panel` is one of four values that are /home's alone,
+  and a shared component able to select them puts that palette one autocomplete away from every
+  workspace page — the exact failure DESIGN-SYSTEM's "never fold them into `--bg-*`" warning is about.
+  The ground is `className`, so a page palette can only be chosen by a file that lives on that page.
+- **The ground is one CSS rule, not a prop at each mount.** `.frame :global([data-section-panel])`
+  repaints every panel in the record pane at once. Two arguments, and the second is the real one:
+  (1) the /home Agents face is `agent-panels.tsx`, which another agent was actively restructuring —
+  an attribute-keyed rule survives that, a prop threaded through their file does not; (2) **two faces
+  that merely look settled today drift the moment one is re-tuned.** Stating the ground once means a
+  change to it cannot land on one tab only, which is the whole content of "Samuel standardizes".
+  The hook is the `[data-composer-panel]` idiom sitting six lines above it in the same file.
+- **`border-color: transparent`, not `border: none`.** The background paints under the border box, so
+  a transparent hairline is seamless *and* leaves the box model alone. Removing the border would have
+  moved every panel's content by a pixel on /home only — a one-page-wide layout shift bought for
+  nothing.
+- **A behaviour was dropped, deliberately: the drag-to-resize grip.** It was furniture of the concave
+  box (`SectionBox` clamps a body height against its scroll height); the Agents face never had one,
+  and a resize handle on a section with no frame is a control gripping air.
+- **The sweep grew in the direction of the ruling.** `template-editor.test.tsx › no concave surfaces`
+  swept four /home files for the Agents face; `knowledge-panels.tsx` joined them, which quietly
+  changes what that sweep MEANS — it is /home's flatness rule now, not one feature's. That is the
+  right direction for a list that only grows: the failure mode of a sweep is a file nobody added, not
+  a file added too eagerly.
+- **What was NOT done.** `knowledge-v2/detail/overview-contents.tsx` renders a `SectionBox` inside
+  this same record pane when a base is opened. The ruling was about the Knowledge face's two
+  sections, and extending it to the detail pane on inference is how a styling request becomes an
+  unreviewed sweep. Recorded in INVARIANTS as a live divergence so the next reader does not have to
+  guess whether anyone looked.
+
+## 2026-08-27 — Three fixes that had each been "done" before: what a pin has to be pinned to
+
+Samuel reviewed the live build and returned three failures that had all been worked before and
+declared finished: the two composers still didn't match, the pop-out still floated on a background,
+and three surfaces still showed raw agent ids. None of the three was a hard problem. All three had
+been *closed against the wrong thing*, and the shape of that error is the same each time.
+
+- **Sharing strings between two hand-built trees is not sharing a component.** The composers had
+  already been "unified" — both files consumed `COMPOSER_INPUT_BORDER` and `COMPOSER_INPUT_PAD`, and a
+  test asserted both consumed them. It was green while the two rows rendered visibly differently side
+  by side, because the channel composer is a multi-row card and the agent composer a single-row pill:
+  the same classes landed at different nesting levels, the send button sat in two different flex
+  contexts, and a `gap` meant for one axis added height on the other. **A constant equalises a value,
+  not a tree.** The fix is `ComposerInputRow` — one component owning the ring, radius, padding, gap,
+  field height and button alignment, with no `className`/`size`/`variant` for a caller to nudge. The
+  pin moved with it: from "both files name the constant" to "both files mount the row **and neither**
+  hand-rolls a `<SendButton>` or re-states `raised-tab`". The second clause is the load-bearing one —
+  the drift that actually happened was a file mounting the shared thing *and building its own beside
+  it*.
+- **A sweep that bans a helper cannot see the site that never called the helper.** The agent-id rule
+  was enforced by banning `agentDisplayId(` across the family, which correctly caught the six known
+  call sites. `bits.tsx › AgentChip` never called it: it took an `agentId` prop of its own and printed
+  it verbatim in a mono span, left over from the 2026-08-22 multiplayer chip that `attribution-pill.tsx`
+  had since replaced. The prop had **no caller**, so nothing rendered wrong and the sweep stayed green
+  over a component that would leak eight machine characters the moment anyone passed them. The ban is
+  now on the two TEXT shapes (`{agentId}` as a JSX child, `${agentId}` in a template) as well as the
+  helper. ⚠ **The first version of that ban was on the PROP and it was wrong** — `agentId` is the third
+  coordinate of every session op, so banning it forbade the wiring the whole feature runs on; it failed
+  immediately on `agent-composer.tsx`, which renders no id at all. **Ban rendering, never holding.**
+
+### 2026-08-28 — the same component, one day later: an inset is not a style, it is what an edge costs
+
+Samuel's next live review of that card asked for four things, and two of them were the same thing seen
+from different sides. *"The text input sits further up and left"* and *"move send to the bottom-right"*
+both came from `ComposerInputRow` having been drawn as **one row that is a box**, then mounted in a
+surface where it is neither.
+
+The inset half is the instructive one. The unification above put padding in `ROW_GEOMETRY` and handed
+it to both modes unconditionally, on the reasoning that a mode owning a padding is how the two trees
+drifted apart the first time. That reasoning was right about the failure and wrong about the boundary:
+the padding is not a preference either mode holds, it is **what a drawn edge costs**, and only `"pill"`
+draws one. In `"bare"` the card is the box and the card had already paid — so the field sat 12px right
+of and 6px below the toolbar icons directly under it, two controls in one card measuring from two
+different origins. `PILL_FACE` now carries `.raised-tab` and the inset together and `ROW_GEOMETRY` is
+the axis, the alignment and the gap. **The test that has to change with it is the interesting part**:
+"geometry is one string" was pinned as a literal, which would have gone red for the right change and
+the wrong one alike; it is now "the shape both modes wear contains no `p-*`", which is the property,
+and the pill's own inset is deliberately outside it.
+
+The arrow half needed no new principle, only the discipline the day before bought: main's card has a
+second row and the submit belongs at the end of it, so main mounts `ComposerSend` — the slot — and
+still never names `<SendButton>`. **What moved is a position; nothing about the face crossed the
+boundary**, which is exactly the distinction the earlier pin — *neither file hand-rolls a
+`<SendButton>`* — was written to hold, and it held without being touched.
+
+Also deleted: the toolbar's 4-arrow "Expand composer" glyph, which had never carried an `onClick` in
+any shipped build — an §5 interaction-completeness violation that survived two passes over this file
+because "it's obviously going to be wired up" reads as pending work rather than as inert chrome. And
+the New Agent comment block, which stood **twice**: the launch-panel change on 2026-08-27 wrote a new
+one above the old and left both, so the file taught the retired behaviour first and the current one
+second. A superseded comment is not inert — it is read.
+- **"Remove the float" is a claim about every layer, and it was checked on one.** The pop-out's paint
+  chain is four layers — `shell.root` (fixed inset-0, shell gray) → `shell.body` (transparent) →
+  `shell.windowSurface` → the window component. Two earlier passes each fixed one layer and stopped:
+  removing `.page-float` from the component left `shell.surface` above it still drawing the main
+  window's 8px radius and four-sided margin. Even after layer 3 was corrected, the component's
+  **"That agent isn't running" branch still wore `.page-float`** — so the one view this window ever
+  renders entirely on its own, the gone-state, kept the old face while the happy path was right. A pin
+  on the loaded path could not have caught it; the case asserts the class appears **nowhere in the
+  file**. **When the bug is "something else is also painting", the assertion has to be over the whole
+  file, not over the path you were looking at.**
+- **Three stale test files were the tell, and they were left behind by the fix itself.** Changing the
+  composer placeholder from `Message <id>` to `Message Agent #<id>` broke sixteen cases across
+  `agent-panel-composer.test.tsx`, `agent-window.test.tsx` and `thread-info-tab.test.tsx` — every one
+  of them addressing the box by the bare token, i.e. **asserting the exact string the ruling forbade.**
+  Worth stating plainly: those tests were not wrong when written; they encoded the old contract
+  faithfully. A ruling that changes what a surface SAYS invalidates every test that quotes it, and the
+  count of those is the honest measure of how many places said it.
+- **The through-line.** Each of these had a green test over a true statement that was not the property
+  anyone cared about: "both files name the constant" (they did), "no component calls the helper" (none
+  did), "the route dropped `.page-float`" (it had). **Ask what the pin would still permit**, and pin
+  that instead. All four new cases here were mutation-verified by reintroducing the exact regression.
+
+## 2026-08-28 — Tiered agent wake: the guest could not say the magic word
+
+The @-mention wake rule (2026-08-22) was safe for exactly the reason it was unusable. An agent id is
+minted on the operator's machine and known to no server, so a peer can only name one they were told —
+which bounds the blast radius to what was disclosed, and simultaneously guarantees that **a guest,
+who was told nothing, can never reach the agent sitting in the room with them.** A guest lands
+through a link, types a question, and the operator's parked or spawn-idle agent hears nothing. The
+only remedy was for the operator to be present and @-mention their own agent, which is the presence
+the guest channel exists to remove.
+
+Samuel's ruling replaces the one key with three tiers: an @-mention still wakes its addressee, a
+channel with exactly ONE agent wakes it on every human message, and a channel with several buys each
+dormant candidate one Haiku-class claim/pass call. Only a claimant spins a real turn.
+
+### The reversal is the expensive half, not the widening
+
+The 2026-08-22 rule said an @-mention wakes "FROM ANY AUTHOR, operator, peer or **peer's agent**",
+and that clause was correct in a world where waking required naming a secret. Tiers 2 and 3 delete
+that premise: they wake on traffic nobody addressed, so the reach stops being one disclosed id and
+becomes whatever is said in the room. Two agents that can wake each other on unaddressed prose is a
+loop with no operator in it and no natural stopping point — so **only a human-authored `message` row
+with an author may wake anything**, and the @-mention lane is narrowed with the other two rather than
+left as the one door a loop could still use.
+
+The distinction that makes this affordable is that **feeding and waking are different acts**. An
+agent-authored message still reaches every RUNNING session on the thread — that is ruling 4's
+fan-out (2026-08-21), how two of the operator's agents coordinate in the open, and it is untouched.
+The fence is only on waking a DORMANT one, which is the single place a turn is conjured out of
+nothing. Stating it that way is what let a fence this strict cost no capability.
+
+### The fence is a property of the message, and it is asked once
+
+`wakeEligible(m)` takes the message and nothing else, is answered once per message, and every tier
+is downstream of it — including the mention branch and including the kill switch. A reader-scoped
+fence would have to be re-asked per candidate and would be re-derivable per candidate, which is how
+two readers come to disagree about one message. It also fails **closed** on every axis, deliberately
+inverting the neighbouring rule: `mayFeed`'s unknown-session case fails toward FEEDING, because the
+failure there is a wasted launch, and this one fails toward silence, because the failure here is an
+agent loop and there is no bound on that. Two fail directions, twenty lines apart, each pointing at
+the failure it is actually about.
+
+### The scope decision, stated rather than discovered
+
+The tier gate governs DORMANT sessions only — a spawn-idle shell that never started a query, or one
+an idle park tore the query down for. A RUNNING session keeps the plain fan-out. That means tier 3
+does not silence a running agent, and a multi-agent room where two agents are mid-conversation still
+feeds both, which is arguably not what "only a claiming agent spins a real turn" says. It is the
+honest reading of a ruling titled *tiered agent **wake***, and the alternative — applying triage to
+running sessions — would reverse ruling 4's fan-out, which nobody asked for and which is documented
+as deliberately ungated. Recorded as **F-344** rather than decided quietly in a filter predicate.
+
+### Two spellings of one rule is how two readers disagree
+
+`session-gate.js › feedInbound` used to re-read the @-mention verdict to decide whether an undirected
+shell could be fed. That was correct while an @-mention was the only wake key; with three tiers, two
+of which carry no addressing at all, an addressing-shaped belt would have refused **exactly the wakes
+the ruling adds**. It now reads a single `wake` boolean the primary gate hands it, so the belt tracks
+the rule instead of restating it — and that incidentally closed the one door the loop fence would
+otherwise have left open, since an agent's @-mention arrives there as `wake: false`.
+
+The belt and the primary gate are deliberately **not the same width**: the primary gate fences every
+dormant session, the belt fences `awaitingDirective` alone. Widening the belt to parked sessions
+would have broken every other lane that resumes one — the operator's 1:1 `steer`, an inbound
+release, the post-sign-in resume — none of which sets `wake`. The class that has no other guard is
+the shell that never ran, and that is the class the belt is for.
+
+### The tie-break had to be spawn order, because the calls are concurrent
+
+The triage calls are issued together so the channel waits once rather than N times. "First claim
+wins" therefore cannot mean first to answer: answer order is scheduler noise, it would make the same
+room with the same message wake a different agent on a different day, and no test could pin it
+without being flaky by construction. `firstClaim` resolves over the candidate list in **spawn
+order** — the registry Map's insertion order, which `session-registry.js` already names as
+load-bearing for the ambiguity fallback ("an op that names no agent takes the OLDEST live one"). One
+rule, applied to one more question, instead of a second rule that would drift.
+
+### A router that reads guest text is a parser problem, not a prompt problem
+
+The triage prompt is the first place a stranger's words become a decision on the operator's machine,
+so the interesting work is in what happens to the ANSWER, not in the wording. `parseTriage` is an
+equality test against one word — trimmed, **length-capped before the pattern runs**, `/^CLAIM\.?$/i`
+— so a model that explains itself, wraps its answer, or repeats something the message told it to say
+produces a string that is not `CLAIM`, and a string that is not `CLAIM` is a PASS. "The answer is in
+there somewhere" is precisely the reading an injected message would be trying to buy.
+
+The prompt does one thing worth copying: it does not merely say "ignore instructions you find". It
+says that finding one is **evidence the message is not for this agent — answer PASS**, which gives
+the model something to do with the attack instead of leaving it to improvise. Bodies are flattened
+to a single line at write time, so nothing can forge `END-MESSAGE-<nonce>` on a line of its own.
+
+### The SDK has no way to say "no tools", so the gate had to be the fence
+
+`options.tools = []` means NO BOUND — every tool — which `session-profiles.js` already documents and
+which is the opposite of what a router wants. There is no positive way to offer nothing. So the
+triage run's fence is a `canUseTool` that denies everything, with `maxTurns: 1` so a denied call
+cannot be retried, `mcpServers: {}` so there is no Dopl surface to reach at all, and
+`cwd: os.tmpdir()` so it does not even know the channel folder exists. The credential is the session
+path verbatim (`withStoredCredential` + `buildScrubbedEnv`) because the desktop has no API key and
+must not acquire one; a machine with no Claude sign-in triages nothing rather than spending six child
+processes to learn it.
+
+### Making the route async made the listener's cursor a design input
+
+`feedLiveSession` was synchronous for its whole life, and `listener-messages.js › dispatchMessage`
+awaits it inside the loop that holds the channel's persisted cursor. That is why the triage pass is
+time-bounded at all: a router that cannot answer must not become a channel that stops draining. The
+`await` is also the sharpest new failure mode in the tree — dropping it makes an async function
+return a Promise, which is always truthy, and **every message would short-circuit classify**. The
+order pin in `wake-external-requester.test.mjs` names the exact call text for that reason.
+
+All eleven of these rules were mutation-verified: agent-authored wake, non-`message` wake,
+authorless wake, the belt reverted to the addressing key, solo-no-wake, solo-collapsed-into-triage,
+`mayFeed` always true, parked dropped from `dormant`, the missing `await`, a substring triage parse,
+and a reversed tie-break. Every one turns the suite red.
+
+## 2026-08-28 — The opened knowledge base: one panel, and what the second one was hiding
+
+Samuel opened a base from /home and returned a screenshot with four words attached: *a mess of
+mismatched components, double-panelled, stray hairlines.* Four separate defects, and only one of
+them was a styling choice.
+
+**The double panel was structural, not cosmetic.** `knowledge-v2.tsx` wraps itself in `.page-float`
+— THE full-page surface, of which the kit allows exactly one per page. That is correct on the
+workspace knowledge page, which IS a page. /home mounts the same component tree inside the record
+pane, a bordered card that already floats on a panel, so the opened base was a card on a card on a
+panel. The fix is a prop (`Props.embedded`), not a scoped CSS override, and the distinction is worth
+keeping: `.frame` can repaint anything inside the record pane, but no repaint turns a nested page
+surface into one surface. A CSS answer would have made the seam invisible while leaving two of them.
+
+**The hairlines were "stray" because they were unreachable.** Every divider in this surface was a
+module rule reading `--kv-border`. /home repaints its pane's dividers by selecting on the Tailwind
+class name — `.frame :global(.border-border-default)` — so a module rule is invisible to it: the
+knowledge dividers stayed neutral gray inside a pane whose every other line is the account palette's
+2px blue. Moving the two structural dividers (the header's bottom, the rail's right) onto utilities
+put both hosts on one mechanism with no per-page fork. The third hairline, a 1px vertical bar fencing
+delete off from settings, was simply deleted: it was a `background`, not a `border`, so nothing could
+ever have reached it, and a control cluster is spaced rather than fenced.
+
+**Two headers is what "two panels" actually looked like.** The rail carried `Knowledge › {base}` and
+the detail pane carried `{base} › {folder} › {file}`, side by side — two `<nav>`s whose own comments
+were about keeping them distinguishable to a screen reader. One panel gets one header and one
+address. That is also what let the base crumb change meaning: it used to select `entries[0]`, because
+the base's own page was a fallback nobody could navigate back to; the info face is the resting state
+now, so the crumb that names the base selects the base.
+
+**The resting state was the real ruling.** Opening a base landed on an overview card; the fix makes
+that the base's INFO page by intent — details, dates, visibility, access, storage — and files fade in
+over it. Using the shared `Crossfade` rather than a local `opacity` transition surfaced the one thing
+a local one would have hidden: the outgoing view is a pure function of the token, and the entry BODY
+belongs to the CURRENT selection, which is already `null` by the time the old face fades. Without a
+latch for the last loaded entry, leaving a file would blink its document into a loading skeleton on
+the way off screen — a face nobody navigated to, for 150ms. That cost is now written into the
+primitive's own row in DESIGN-SYSTEM, because the next caller with per-face data will hit it.
+
+**The divergence closed itself once someone asked.** `overview-contents.tsx`'s `SectionBox` had been
+recorded in INVARIANTS §5A as a live divergence with an instruction not to "finish the job" without
+asking — written on 2026-08-27 by a wave that flattened the Knowledge FACE's two sections one level
+out. It sat for one day. The value of having written it down was not that it prevented a sweep; it is
+that when the ruling did arrive, nobody had to reconstruct whether the inset box was an oversight or a
+decision.
+
+**Two recipes were promoted out of files rather than copied into a new one.** The header's controls
+had been a file-private `ICON_BTN` string, one of six such declarations in `src/`; they are now the
+`OpenScaleButton` family's square. The section ground was two Tailwind utilities typed inline in two
+features; it is `SECTION_PANEL_GROUND`. Neither promotion was in the ruling — but a wave that adds a
+seventh copy of a recipe while restyling the sixth has not done the work, and the five remaining
+copies are filed (F-345) rather than swept, because two of them are live surfaces nobody reviewed
+this pass.
+
+Four mutations verified the pins: dropping `embedded` (two page surfaces), a no-op collapse toggle,
+the removed entry latch, and an inverted face branch. Four reverts, four failures, zero vacuous.
+
+### The same day, live: four things jsdom could not have told me
+
+Samuel opened the rebuilt surface and said *"it's all messed up."* Four defects, and the instructive
+part is that **every one of them was invisible to the entire test suite** — 250 knowledge tests and
+145 page tests, all green, over a pane rendering at half its width with a wrapped button label and a
+field hanging out of its card. jsdom has no layout engine. It will report a panel that fills its host
+and one that fills half of it identically, byte for byte.
+
+**The fill bug was a lesson about what a kit class quietly supplies.** `.page-float` carries
+`flex: 1; min-width: 0` alongside the fill, radius and margins. The view had always composed it, so
+the sizing arrived for free and nothing in the module said so — and the `embedded` mount, added that
+morning to kill the double panel, dropped the float and silently dropped the sizing with it. The
+shell became a content-sized flex item of the record pane's `Crossfade` row: view on the left,
+page-gray on the right, header band stopping mid-pane. **A view that can be mounted without the
+float has to state its own sizing**, which is now a warning on `.page-float`'s own row in
+DESIGN-SYSTEM, because the next embedded mount will be somebody else's.
+
+**The wrapped label was a lesson about how a shared face gets away with a hole.** `OpenScaleButton`
+had four callers and no `white-space: nowrap`. It did not need one: "Open", "New knowledge base" in a
+wide header — every label was one word or had room. The first multi-word label in a 232px rail found
+it instantly. The fix belongs in the shared recipe rather than at the call site for the obvious
+reason, and `flex-shrink: 0` had to go with it, because nowrap alone turns a wrap into a clip.
+
+**And the pins caught themselves being vacuous, which is the part worth writing down.** Geometry can
+only be pinned as a source read, so the new tests read the CSS module and assert the declarations.
+The first mutation run came back GREEN with `flex: 1` deleted from `.shell` — because this repo's
+house style puts long rationale comments inside the rules, and `.shell`'s comment *quotes the
+declaration it is arguing for*: `toContain("flex: 1")` was matching the prose. Three of five
+assertions were vacuous and looked exactly like the two that were not. The helper strips comments
+now. **A source read over a heavily-commented file must read the CODE, not the file** — and the only
+reason anyone knows that here is that INVARIANTS §14 requires stating the mutation count, so the run
+that proved nothing had to be run.
+
+Nine mutations, nine failures, zero vacuous — after the fix. Before it: five run, two red, three
+green-for-nothing.
+
+---
+
+## 2026-08-28 — MCP surface v2, wave A: two axes, one mapping, and a tripwire that had to say so
+
+Samuel ruled all thirteen open questions in `docs/specs/mcp-surface-v2.plan.md` §12 and asked for
+wave A: the `dopl_agent` template family, personal-shelf addressing on `dopl_kb`, the confirm-token
+class, and a templates group on `dopl_search`. The rules are in INVARIANTS §10 and §5A. This is what
+the build had to decide that the spec could not settle in advance.
+
+### Tenancy and shelf are two axes because "personal" is two things
+
+The spec's own §3.1 is the load-bearing correction and it survived contact with the code: a HOME
+CHANNEL is a `kind='link'` WORKSPACE — a tenancy, already addressable as `workspace=<container id>`
+— while the PERSONAL SHELF is the `home_scoped = true` rows inside the caller's own DEFAULT standard
+workspace, which is a `WHERE` over one workspace's rows. Folding them into a single `scope` enum
+would have made "personal" name a workspace in one op and a filter in another.
+
+The practical consequence was a sequencing one. The plan's §10 had M1 (shelves) depending on M0
+(`dopl_home`), on the theory that the container half of the shelf work needed a container handle.
+**It did not, and the reason is §1.2's asymmetry**: `getWorkspaceList` filters containers out but
+`resolveWorkspaceRef` deliberately resolves against the UNFILTERED directory, so a container has
+been addressable all along. M1 and M2 shipped without M0, and the milestone list now says so rather
+than leaving a dependency nobody exercised.
+
+### The mapping is one function because the drift would be silent
+
+`personal` on the tool, `home` on the wire (ruling Q1). The temptation is to spell the mapping at
+each call site — it is a ternary. What makes that expensive is the FAILURE MODE, which the route's
+own `readShelf` already documents: an unrecognised shelf answers the WIDER list. A second mapping
+that drifts does not throw; it quietly folds the workspace shelf back into the personal pane. So
+`tools/shelf.ts › toWireShelf` is the only place either word is translated, and both tools call it.
+
+The same file carries the ASYMMETRY, because that is the other thing an agent gets wrong here:
+absent `shelf` means BOTH shelves on a read and the WORKSPACE shelf on a write. Those are different
+rules for one argument, and an agent that learns the first from `op="list"` will assume it on
+`op="create"`. Writing it once and quoting it into both descriptions is cheaper than discovering
+which tool's prose drifted.
+
+### The shelf label we did NOT ship, and why the honest sentence beat the feature
+
+Spec §6.1 wanted a shelf label on every listed row, via a sibling key on the wire — `home_scoped` is
+deliberately absent from both DTOs so no client can re-implement the fence. Wave A shipped the
+argument and **not** the label, and both list ops now SAY so: rows carry no shelf label, ask for one
+shelf at a time. An unlabelled list that says nothing reads as a list where the label was not needed;
+an unlabelled list that says why is a list an agent can work with. The sibling key is wave B's, and
+it is the one item that could trip `check-knowledge-type-drift`.
+
+### The confirm token: what it buys, and the one direction it may fail
+
+Ruling Q10 (ii) — a dry run returning a preview plus an opaque server-minted token, echoed back to
+act. Three decisions the mechanism forced.
+
+**The class had to be narrow, and the boundary is a CONTAINER, not a visibility.** The obvious
+reading of "audience-changing" is "anything that publishes", but `dopl_kb(op="set_visibility")` has
+published bases workspace-wide with no confirm since long before this wave. Gating a
+workspace-visible CREATE while leaving the identical PUBLISH ungated is theatre, and §7.3's own
+warning is that a confirm on every write trains the agent to skip it. So the class is exactly: a
+template at `visibility: "workspace"` or a base at `visibility: "public"`, inside a `kind='link'`
+container with more than one active member — the room a peer is standing in, which is the argument
+`containerCopyDraft` was reversed over the day before.
+
+**Deciding that needed the workspace the call actually landed in, and the handler is not told.**
+`registrar.ts` strips `workspace=` before the handler and routes through AsyncLocalStorage instead,
+so `confirm-token.ts › resolveConfirmTarget` reads `workspaceContext.getStore()` FIRST and only then
+falls back to the transport's stored id. Reading the stored id alone would ask "is my DEFAULT
+workspace a container" about a call that went somewhere else. It costs one `listWorkspaces` loopback
+on a cold path — only for a write already asking to publish — and `memberCount` is read with
+`bootServer`'s own fail-closed rule: unknown is not solo.
+
+**The store is process-local, and that is stated rather than hidden.** `bootServer` boots once per
+HTTP REQUEST, so there is no session to hang a token store on; it is module state, alive as long as
+the Node process. A token minted in one process is unknown in another — **and unknown REFUSES**. The
+failure mode of a lost store is "preview again", never "the write goes through", which is the only
+direction this may ever fail. The alternative (a keyed digest verifiable anywhere) needs a shared
+secret this package does not have, and would have traded a fail-closed local store for a fail-open
+distributed one.
+
+**And the honest sentence went to the AGENT, not only to the module header.** The spec asked for the
+tripwire-not-fence line in the header, and it is there. But a header is read by people editing the
+file; the preview is read by the thing about to act. So the preview ends with "a step that makes you
+LOOK, not a permission check — if you are not sure your operator wants this shared, ASK THEM". A
+token an agent can mint and spend by itself is worth exactly the looking, and copy that implied
+otherwise would be the mechanism lying about itself.
+
+### Two refusals that are teaching, not plumbing
+
+`op="update"` REFUSES a `shelf` argument rather than dropping it (ruling Q8: no move in v1). A
+silently ignored `shelf` returns a 2xx over a move that never happened — and the caller's next
+sentence to a human is "moved it". The refusal instead says there is no move, that the only path is
+a fresh create on the other shelf, and that **the copy and the original are strangers**.
+
+Likewise a `confirm_token` passed to a call OUTSIDE the class is refused, not ignored. That is
+`strictInput`'s rule one level up: an argument the surface does not honour must not be accepted, or
+the agent's model of the surface is wrong in a way nothing corrects.
+
+### What the parity harness cost, and what it bought
+
+Adding two tools touched six invariant suites — the tool-name pins in `parity.test.ts` and
+`delete-block.test.ts`, `READ_OPS`, the `retirement.test.ts` survivor list and its delete-call table,
+the `tool-scope-claims.test.ts` registrar list and its filtered-op LEDGER. Every one of those is a
+place a new family could have shipped ungated, and each failed loudly rather than silently. The one
+that earned its keep was the LEDGER's `proof` field: `dopl_kb(op="list_bases")` documents a
+visibility filter and proves it with a source read of `client.listKbBases()` — which the shelf
+argument changed to `client.listKbBases({`. The suite went red for a call-shape change rather than a
+behaviour change, which is the ledger doing its job: it noticed that the thing it was pointing at
+had moved, and asked a human whether the claim still held.
+
+### The suite that caught the thing nobody in the brief mentioned
+
+Wave A's brief named `packages/mcp-server` and the docs. The DESKTOP suite went red anyway, and it
+was right to: `dopl-desktop-app/test/tool-profiles.test.mjs` holds `main/tool-profiles.js`'s tool
+lists against the SERVER's live registrations, parsed out of `packages/mcp-server/src`. Two new
+tools meant `dopl_agent` had to join `DOPL_SAFE_TOOLS` and `dopl_agent_admin` `DOPL_ADMIN_TOOLS`,
+and `UNIVERSAL_HARD_DENY` moved **8 → 9**.
+
+⚠ **That number moving for a NEW admin rather than a retirement is worth stating**, because every
+prior sentence about it in this file is about the 2026-08-11 retirement and reads as if the count is
+a property of what was deleted. `RETIRED_DOPL_TOOLS` is unchanged at four. Both dated sentences have
+been corrected in place rather than rewritten.
+
+The placement decision itself was the one judgement call: `dopl_agent` is a WRITE surface, and
+`DOPL_SAFE_TOOLS` is what a restricted spawn gets pre-approved. It goes there under the same rule
+`dopl_kb` and `dopl_skill` already sit under — it authors rows and POSTS NOTHING. The exfil surface
+is `dopl_channel`, which stays out and denied, and authoring a template starts no agent: that is
+`dopl_channel(op="launch_agent")`, on the other side of the same fence.
+
+### Mutation-verified, because a green suite proves nothing on its own
+
+Two mutations, per INVARIANTS §14. `confirmGate`'s publishing branch forced open (`if (true)`) →
+**9 of 20** failures in `shelf-confirm.test.ts`. `shelf.ts › homeShelfForbidden` short-circuited to
+`return null` → **3** failures across `shelf-confirm.test.ts` and `agent-ops.test.ts`. Both restored;
+full suites re-run green afterwards.
+
+---
+
+## 2026-08-28 — MCP surface v2, wave B: the door to a room nothing lists, and paying for N
+
+Wave A shipped the template family, the shelf axis and the confirm token. Wave B is the rest of the
+ruled spec: `dopl_home`, `dopl_search(scope="everywhere")`, the `infoCard` channel write, and the
+shelf sibling key wave A had deferred. Rules in INVARIANTS §10/§11. What follows is what the build
+had to decide.
+
+### A container is addressable and unlistable, and only one of those was a problem
+
+`resolveWorkspaceRef` resolves against the UNFILTERED directory while `getWorkspaceList` filters
+through `isStandardWorkspace`. That asymmetry is deliberate and it means a home channel has always
+been *reachable* — if you already knew its id. Nothing published the id. `dopl_home` is that
+publication and nothing more: its `list_channels` row exists to carry `workspace=<container id>`.
+
+The temptation was to loosen `isStandardWorkspace` instead, which would have been one character and
+four broken consumers — the predicate is a POSITIVE test precisely so a future `kind` cannot leak in
+(F-295), and §4A forbids advertising a container as a workspace anywhere. So the tool answers
+containers as what they are to the operator, and its description says outright that these are not
+workspaces and that `list_workspaces` will not show them.
+
+### The lock had to be readable, because its second consumer is not a workspace list
+
+B3 narrows a container-pinned session to one room. Until this wave every consumer of that fact went
+through `workspace-directory.ts`, which could keep `lockedTo` private. `dopl_home` and the search
+fan-out narrow a list of HOME CHANNELS, which comes from `/api/home/channels` — a `withUserAuth`
+route that answers the whole account and cannot narrow, because the lock is a property of one MCP
+CONNECTION and not of the credential.
+
+So `WorkspaceDirectory` gained `lockedWorkspaceId()`, with exactly one reader:
+`tools/home-scopes.ts › narrowToLock`. **The alternative was each tool restating the rule, and a
+restated fence is the one that drifts.** The pin is in `container-lock.test.ts` and it drives the
+REAL registered tool through `bootServer` — a lock asserted on the helper stays green when a tool
+stops calling the helper, which is the failure mode this suite already exists to catch for
+`list_workspaces`.
+
+Mutation-verified: neutering `narrowToLock` fails exactly the enumeration test and nothing else,
+which is what a targeted pin should look like.
+
+### Charging a meta tool without metering the two that must stay free
+
+`registerMetaTool`'s docblock has said for months that if meta tools were ever metered, the charge
+must be called EXPLICITLY on both paths as `opRefusal` is — never folded into a wrapper only one path
+passes through. Ruling Q2 (b) made that live for exactly one tool.
+
+The shape that satisfies both halves is an OPT-IN `MetaToolOptions.charged`, with the charge written
+in `registerMetaTool`'s own body. A blanket charge there would have metered `current_workspace` and
+`list_workspaces` — which are how a lost agent finds out where it is, and are uncharged by a decision
+the same docblock records.
+
+That left a question the ruling did not answer: **which workspace pays, for a tool that targets
+none?** The session default when there is one; otherwise the first workspace the session may LIST.
+The second clause turns out to be free correctness: under a container lock that list is
+`[container]`, and a container's burn already reroutes to its owner via `resolveBillingTarget`, which
+is the F-325 guest-metering answer arrived at without a second rule. And when there is no listable
+workspace at all, **there is no charge** — fail-open, and said out loud. This tool is user-scoped
+precisely so it works for a caller with no resolved workspace; refusing them to protect the meter
+would break the one path the design exists to serve.
+
+### Per-leg billing forced the fan-out to be sequential
+
+Ruling Q3 (b) is that an `everywhere` search pays per scope. The registrar has already charged once,
+for the resolved workspace, by the time the handler runs — so the handler charges the ADDITIONAL
+legs, and the total equals the scopes searched. **The exemption is matched by ID, not by position**,
+because the resolved workspace is whatever the session pinned and is not always the directory's first
+row; a positional exemption would double-charge it while letting another leg through free.
+
+The consequence is that legs run SEQUENTIALLY. Not for tidiness — the meter has to GATE the work,
+which is the same "charge, then run" ordering `createCreditedRunner` keeps. A fan-out that searched
+first and billed after would spend work it could not charge for, which is precisely what per-leg
+billing was ruled in to prevent. `MAX_SCOPES = 6` follows from that: each leg is four reads and they
+are serialized, so six is the latency budget rather than a taste.
+
+Running OUT of credits mid-fan-out is the interesting case, and it has three requirements that pull
+against each other: do not discard legs already paid for, do not continue unpaid, and do not let the
+answer quietly shorten. So it STOPS, keeps what it has, and names the truncation as "unknown, not
+empty" — with one exception: a fan-out that searched NOTHING answers the credits refusal itself,
+because there are no hits for the refusal to discard.
+
+Mutation-verified: removing the per-leg charge fails 7 of 16 assertions in that suite.
+
+### `op="update"` that sometimes does not update, and why that is the smaller evil
+
+Q12 ruled `infoCard` only. The card is REPLACED WHOLE by the route — a patch language for a small,
+bounded, single-surface object would need an ordering rule, a conflict rule and a second shape to
+test, to buy nothing. But replace-whole makes a blind write DESTRUCTIVE: an agent appending one row
+without knowing the others deletes them.
+
+So the agent needs a read, and there is no channel-detail op to hang one on. The options were a
+second op (more surface to gate, classify, describe and test, past what the ruling asked for) or
+making the write op read when given no card. The second is what shipped, documented on the op rather
+than inferred: **omit `info_card` and you get the current card and no write.** It is classified as a
+WRITE in `WRITE_OPS` regardless — an op that CAN write must be refused wholesale to a read-only
+token, or the read arm becomes the door the write arm walks through.
+
+The fields it cannot send are pinned as an ABSENCE: a test asserts the patch has exactly one key.
+`name`, `topic` and `visibility` are all declared params on `dopl_channel` already (op="open" uses
+them), so a careless widening is one spread away, and the route would accept two of them.
+
+### The sibling key wave A deferred, and the direction its failure has to fail in
+
+§6.1 wanted a shelf label per row. `home_scoped` is deliberately absent from both DTOs so no client
+can re-implement the shelf FENCE from a projected column, and adding it to the SDK-mirrored
+`KnowledgeBase` would trip `check-knowledge-type-drift`. A sibling key is the shipped answer for
+exactly this shape — `starredBaseIds` and `channelGrants` already ride the same response.
+
+Wave A shipped the argument without the label and said so on the result. Wave B shipped the label on
+BOTH surfaces rather than only knowledge, because two list ops disagreeing about whether a shelf is
+knowable is the same confusion the one-mapping rule exists to prevent.
+
+**The whole design is in which direction it degrades.** An absent or failed key leaves every row
+UNLABELLED — which is exactly what both surfaces showed before the key existed. The unsafe direction
+is calling a workspace row "personal", and nothing can produce it: a row is labelled only when the
+key says so, never "workspace" by inference. Both route folds `.catch(() => [])` for the same reason
+the star fold does — the roster is the answer, the label is decoration over it.
+
+### Two 500-line splits, both caused by this wave and both mechanical
+
+`packages/dopl-client/src/channel-types.ts` crossed the cap when the card types landed, and split to
+`info-card-types.ts` — the same seam `launch-types.ts` took when that file hit the cap before, and a
+pure re-export so no consumer moved. `agent-ops.test.ts` crossed it and split by QUESTION rather than
+by op: happy paths and ref resolution stay, the fences and the policy refusals move to
+`agent-fences.test.ts`. Splitting a suite by op would have duplicated the fixtures three ways.
+
+### And the desktop gate again, which is now a habit worth naming
+
+`dopl-desktop-app/test/tool-profiles.test.mjs` parses `packages/mcp-server/src` and holds the
+desktop's tool lists against it. It went red for `dopl_home` exactly as it did for `dopl_agent` a
+wave earlier. **A brief that names `packages/mcp-server` is understating its own blast radius every
+time**, and the reason that is fine is that the gate is louder than the brief.

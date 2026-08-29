@@ -1,5 +1,22 @@
 # HOME AGENTS TAB — Implementation Plan
 
+> ## ⚠ SUPERSEDED IN PART — 2026-08-27
+>
+> **This plan SHIPPED and is kept as the build record. Its three-scope UI shape is no longer what
+> the code does.** Read it for the SCHEMA, the visibility model, the launch/resolve lane and the
+> F-331 cache argument — all still live — and read **`docs/INVARIANTS.md` §5A for the pane.**
+>
+> **THREE SCOPES BECAME TWO SECTIONS** (Samuel's ruling, converging this face on the /home Knowledge
+> one): the scope `SelectMenu` is deleted, "Private" is relabelled **"Personal"** (UI copy only —
+> `visibility: 'private'` is unrenamed), and **scope B (private-in-this-channel) NO LONGER EXISTS**.
+> Personal reads a `home_scoped` shelf
+> (`supabase/migrations/20260901120000_agent_template_home_scoped.sql`) and the workspace Agents page
+> excludes it in return. `SECTIONS_CONTAINER` is now ONE option, and "Use in this channel" copies at
+> `visibility: 'workspace'` rather than `private`.
+>
+> ⚠ Every "scope B" / "scope C" reference below is HISTORICAL. Do not implement from them.
+
+
 **Repo:** Dopl · branch `master` · verified 2026-08-26. Sibling: `home-knowledge-panels.plan.md`.
 The /home Agents tab surfaces AGENT TEMPLATES (the workspace agent-template mechanism) for the home surface. Guests never see this tab (they can't spin up agents) — channel-member-facing only, **floor-gated SERVER-SIDE, and that is the whole gate.**
 

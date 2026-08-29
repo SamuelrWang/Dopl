@@ -234,7 +234,15 @@ the guest on this path.**
   mintContainerLink` 409s `LINK_CONTAINER_FULL` at two active members, so the cap
   denies it rather than the role permitting it — it becomes available only if the
   container drops back to one member, which is the same power the survivor has by
-  design (INVARIANTS §4A). (b) The ruling said "rename/archive"; the set actually
+  design (INVARIANTS §4A).
+  🔴 **(a) IS DEAD AS OF 2026-08-26 and is left standing only as the record of
+  what was measured on 2026-08-25.** Samuel retired the two-member cap (a home
+  channel takes MORE THAN TWO people), so `LINK_CONTAINER_FULL` no longer exists
+  and **minting a further link IS reachable with the relationship intact** — the
+  fence is now the `member`+ mint floor (`LINK_MINT_FORBIDDEN`), which a
+  `member`-granted claimer CLEARS. **Re-rule or re-measure the blast radius
+  against INVARIANTS §4A before quoting this paragraph.**
+  (b) The ruling said "rename/archive"; the set actually
   includes **hard channel delete and cascading thread delete**, which is the
   destructive end of the range and is what makes "the operator can delete it" the
   mitigation rather than the remedy. Still accepted for MVP — two people who chose
