@@ -9,7 +9,7 @@
  * the permission vocabulary moves, not when the wire shape does.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
@@ -83,15 +83,31 @@ const LIVE_MESSAGE_OPTIONS = MESSAGE_OPTIONS.filter((o) => o.value !== "ask");
  *
  * ⚠ NO OPTIMISTIC STAMP. On a refusal the select simply does not move, because it was never
  * moved — there is no rollback to get wrong.
+ *
+ * ⚠ "THE DROPDOWNS VANISHED" IS TWO DIFFERENT ANSWERS, and only one of them was ever a bug
+ * (diagnosed 2026-08-27 over a screenshot of an ENDED agent's window):
+ *   1. **The agent is ended → the row is absent BY DESIGN**, and that gate is original to the
+ *      controls (`3dc7e6a7`). Main answers `no-session`; a select that always refuses is the lie
+ *      this surface has been fixed for twice. Do not "restore" them on an ended agent.
+ *   2. **The BOX went with them** — that half WAS new, and this wave fixed it. The usage readout
+ *      moved inside this box in the same wave, so the posture gate's `return null` silently
+ *      swallowed the context meter too.
+ * A LIVE agent on a build with `sessions.setMode` renders all three, in the window exactly as in
+ * the panel: the pop-out shares this component and `main/agent-window.js` gives it the same
+ * preload, so there is no window-specific feature detection to fail.
  */
 export function PostureControls({
   agent,
   channelId,
   taskId,
+  stats,
 }: {
   agent: DesktopSessionSummary;
   channelId: string;
   taskId: string;
+  /** THE USAGE READOUT, rendered inside this box (Samuel, 2026-08-27) — it had a band of its
+   *  own directly above these dropdowns, two stacked strips about one agent. */
+  stats?: ReactNode;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -103,8 +119,17 @@ export function PostureControls({
   // (`agents-controls.ts › canSetAgentModel` carries the argument).
   const [canModel] = useState(() => canSetAgentModel());
   // An ENDED agent has no posture to change; main answers `no-session` and the honest face
-  // of that is no control, not a control that always refuses.
-  if (!canSet || agent.state === "ended") return null;
+  // of that is no control, not a control that always refuses. ⚠ THIS GATE IS ORIGINAL
+  // (`3dc7e6a7`, the wave that added these controls) and is NOT what to change when the
+  // dropdowns are missing on a LIVE agent — see the module header.
+  const canPosture = canSet && agent.state !== "ended";
+  // ⚠ THE BOX GOES ONLY WHEN IT HOLDS NOTHING (2026-08-27) — the same correction
+  // `agent-panel-controls.tsx › AgentControls` took in this wave, and it is owed for the same
+  // reason. The usage readout moved INSIDE this box (Samuel's one-box ruling); a bare
+  // `return null` on the posture gate then took the STATS with it, so an ended agent's window
+  // lost its context meter as well as its controls — and the numbers have nothing to do with
+  // either the bridge op or the session still running. They are the summary feed's.
+  if (!canPosture && !stats) return null;
 
   // ⚠ MAIN'S VALUE, LIKE BOTH AXES. Absent means this build does not report a
   // running model, and the select then shows Default rather than a guess.
@@ -143,39 +168,73 @@ export function PostureControls({
 
   return (
     <div className="shrink-0 border-b border-border-default px-4 py-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <SelectMenu<ToolMode>
-          value={(agent.toolMode as ToolMode) ?? "manual"}
-          options={TOOL_OPTIONS}
-          onChange={(next) => apply("tools", next)}
-          prefix="Tools"
-          ariaLabel="Tool permissions for this agent"
-          disabled={busy}
-        />
-        <SelectMenu<MessageMode>
-          // ⚠ The FALLBACK stays `auto_inbound`, not `"ask"`: that is the floor a
-          // windowless session actually runs on, and defaulting the display to a
-          // value the list no longer offers would render an empty control.
-          value={(agent.messageMode as MessageMode) ?? "auto_inbound"}
-          options={LIVE_MESSAGE_OPTIONS}
-          onChange={(next) => apply("messages", next)}
-          prefix="Messages"
-          ariaLabel="Message permissions for this agent"
-          disabled={busy}
-        />
-        {/* THE LIVE MODEL (Samuel, 2026-08-22). ⚠ ABSENT, NOT DISABLED, without
-            the op — the rule every control in this family follows. */}
-        {canModel && (
-          <SelectMenu<string>
-            value={model}
-            options={modelOptions}
-            onChange={applyModel}
-            prefix="Model"
-            ariaLabel="Model for this agent"
+      {/* ⚠ THE STANDARDISED RAISED FACE, AT THE CONSOLIDATED SIZE (Samuel, 2026-08-29) —
+          `select-menu.tsx › raisedField`. They were the `flat` inset pill until 2026-08-27, then
+          `raised`, whose `h-9` box read as LARGE pills in the pop-out and pushed the window wider
+          than its content. `raisedField` is the SAME FACE (`auth-btn-3d-light`, so the elevation
+          cannot drift), one size down — it is what the composer launch panel's Template/Model rows
+          already wear, so this row and that one are one dropdown size across the app rather than
+          two. No new size was added for this surface.
+          ⚠ THE WINDOW'S DEFAULT WIDTH IS MEASURED FROM THESE DIMENSIONS —
+          `main/agent-window.js › createAgentWindow` carries the arithmetic and `minWidth` with it.
+          Changing the variant here silently changes what that window needs.
+          ⚠ THE WHOLE ROW IS ABSENT, NEVER DISABLED, on an ended agent or a build with no
+          `sessions.setMode` — the rule every control in this family follows.
+
+          ⚠ `flex-nowrap`, AND IT WAS `flex-wrap` UNTIL 2026-08-29 (Samuel: "only just enough so
+          that they are all on the same line with the same spacing"). THE WRAP WAS THE WHOLE REASON
+          THE WINDOW CARRIED SLACK. A too-long label — the model axis is FREE-FORM, so
+          `agentModelOptionsFor` can append a dated id far wider than any of the four picks — used to
+          push the third control onto a SECOND LINE, silently, and the only defence available was to
+          open the window wide enough that it could not happen. That bought a band of dead space to
+          the right of Model on every normal agent to protect an uncommon label.
+          ⚠ OVERFLOW IS THE TRIGGER'S JOB NOW, NOT THE WINDOW'S. `select-menu.tsx` already gives the
+          trigger `min-w-0 max-w-full` and its label span `min-w-0 truncate` — that contract could
+          never ENGAGE here, because a flex line break is decided on an item's CONTENT width before
+          shrinking is ever considered. In a nowrap row the same three classes finally do what they
+          say: the long label ellipsizes inside its own pill and the row stays one line at any width.
+          ⚠ SO THE WINDOW NUMBER IS NOW THE ROW'S HONEST MEASUREMENT AND NOTHING ELSE. Do not
+          reintroduce `flex-wrap` here without widening `main/agent-window.js` back — they are one
+          decision in two trees. */}
+      {canPosture && (
+        <div className="flex flex-nowrap items-center gap-2">
+          <SelectMenu<ToolMode>
+            value={(agent.toolMode as ToolMode) ?? "manual"}
+            options={TOOL_OPTIONS}
+            onChange={(next) => apply("tools", next)}
+            prefix="Tools"
+            ariaLabel="Tool permissions for this agent"
+            variant="raisedField"
             disabled={busy}
           />
-        )}
-      </div>
+          <SelectMenu<MessageMode>
+            // ⚠ The FALLBACK stays `auto_inbound`, not `"ask"`: that is the floor a
+            // windowless session actually runs on, and defaulting the display to a
+            // value the list no longer offers would render an empty control.
+            value={(agent.messageMode as MessageMode) ?? "auto_inbound"}
+            options={LIVE_MESSAGE_OPTIONS}
+            onChange={(next) => apply("messages", next)}
+            prefix="Messages"
+            ariaLabel="Message permissions for this agent"
+            variant="raisedField"
+            disabled={busy}
+          />
+          {/* THE LIVE MODEL (Samuel, 2026-08-22). ⚠ ABSENT, NOT DISABLED, without
+              the op — the rule every control in this family follows. */}
+          {canModel && (
+            <SelectMenu<string>
+              value={model}
+              options={modelOptions}
+              onChange={applyModel}
+              prefix="Model"
+              ariaLabel="Model for this agent"
+              variant="raisedField"
+              disabled={busy}
+            />
+          )}
+        </div>
+      )}
+      {stats && <div className={canPosture ? "mt-2" : undefined}>{stats}</div>}
       {notice && (
         <p role="status" className="mt-1.5 text-caption text-text-muted">
           {notice}
@@ -186,10 +245,14 @@ export function PostureControls({
           ⚠ IT IS SCOPED TO THE TWO AXES and always has been — those are the ones
           `session-io.js › grantArgs` re-reads at every gate decision. The MODEL's
           timing is main's to report and rides the notice line above, so this
-          sentence must not be widened to cover it. */}
-      <p className="mt-1.5 text-micro text-text-muted">
-        Permissions apply to this agent from its next decision.
-      </p>
+          sentence must not be widened to cover it.
+          ⚠ IT RIDES WITH THE CONTROLS. With the row absent there is no posture to apply, and a
+          sentence about controls that are not there is chrome explaining nothing. */}
+      {canPosture && (
+        <p className="mt-1.5 text-micro text-text-muted">
+          Permissions apply to this agent from its next decision.
+        </p>
+      )}
     </div>
   );
 }

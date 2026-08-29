@@ -26,10 +26,13 @@
  * inert control all over again, one row deep.
  */
 
+import { Bot } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { memberLabel } from "../../lib/channel-display";
 import { buildMentionIndex, insertableHandle } from "../../lib/mentions";
+import { agentMentionHandle, buildAgentMentionIndex } from "../../lib/agent-mentions";
+import { agentDisplayName } from "./agents-model";
 import { memberPerson } from "./view-model";
 import type { ChannelMember } from "../../types";
 
@@ -51,12 +54,18 @@ export function insertMentionHandle(draft: string, handle: string): string {
   );
 }
 
-/** One offered row: the member to SHOW and the handle to INSERT. They are
- *  different strings and conflating them is the whole of F-210. */
-export interface MentionSuggestion {
-  member: ChannelMember;
-  handle: string;
-}
+/**
+ * One offered row: what to SHOW and the handle to INSERT. They are different strings and
+ * conflating them is the whole of F-210.
+ *
+ * ⚠ TWO KINDS SINCE 2026-08-27 (Samuel). A row is a roster MEMBER or one of this machine's own
+ * AGENTS — two namespaces (`lib/mentions.ts` and `lib/agent-mentions.ts`), one picker, because to
+ * the operator "@" means one thing. The `kind` is what the row renders from; nothing downstream
+ * branches on it, because the INSERTED handle already resolves in the right namespace.
+ */
+export type MentionSuggestion =
+  | { kind: "member"; member: ChannelMember; label: string; handle: string }
+  | { kind: "agent"; agentId: string; label: string; handle: string };
 
 /** How many rows the popover offers. A picker is a shortlist; past this the
  *  reader is faster typing the name. */
@@ -68,18 +77,50 @@ const MAX_SUGGESTIONS = 5;
  * against five visible rows would offer `@diana` as unambiguous while a second
  * Diana sat off-screen.
  */
-export function mentionSuggestions(
-  members: readonly ChannelMember[],
-  query: string
-): MentionSuggestion[] {
+export function mentionSuggestions({
+  members,
+  agents = [],
+  currentUserId,
+  query,
+}: {
+  members: readonly ChannelMember[];
+  /** THIS machine's own agents (`AuthorIndex.agents`), or none off-desktop. */
+  agents?: ReadonlyArray<{ agentId: string; displayName: string | null }>;
+  /**
+   * ⚠ DROPPED FROM THE LIST (Samuel, 2026-08-27). You do not tag yourself: the SERVER already
+   * excludes the author from the stamped set (`service-writes-metadata-mentions.ts`), so offering
+   * your own name was offering a token that reaches nobody — an inert row in a picker whose whole
+   * job is that every row lands.
+   */
+  currentUserId: string;
+  query: string;
+}): MentionSuggestion[] {
+  // ⚠ THE INDEX IS BUILT FROM THE WHOLE ROSTER, INCLUDING THE CALLER. Ambiguity is a property of
+  // the ROOM (rule 5): dropping yourself from the index would offer a peer `@sam` as unambiguous
+  // while your own name contested it, and the message would tag nobody.
   const index = buildMentionIndex(members);
   const out: MentionSuggestion[] = [];
   for (const member of members) {
-    if (!memberLabel(member).toLowerCase().includes(query)) continue;
+    if (member.userId === currentUserId) continue;
+    const label = memberLabel(member);
+    if (!label.toLowerCase().includes(query)) continue;
     const handle = insertableHandle(member, index);
     if (handle === null) continue;
-    out.push({ member, handle });
+    out.push({ kind: "member", member, label, handle });
     if (out.length === MAX_SUGGESTIONS) break;
+  }
+  // ⚠ AGENTS AFTER MEMBERS, and sharing the same cap. A person is the commoner intent, and a
+  // picker whose first rows move as an unrelated agent starts is a picker you cannot type through.
+  const agentIndex = buildAgentMentionIndex(agents);
+  for (const agent of agents) {
+    if (out.length >= MAX_SUGGESTIONS) break;
+    const label = agentDisplayName({ agentId: agent.agentId, displayName: agent.displayName });
+    const handle = agentMentionHandle(agent);
+    // ⚠ THE SAME FAIL-CLOSED RULE MEMBERS GET: a handle two agents claim resolves to neither, so
+    // offering it would insert a token that reaches nobody.
+    if (agentIndex.get(handle) !== agent.agentId) continue;
+    if (!label.toLowerCase().includes(query) && !handle.includes(query)) continue;
+    out.push({ kind: "agent", agentId: agent.agentId, label, handle });
   }
   return out;
 }
@@ -108,7 +149,7 @@ export function MentionPopover({
       className="bento absolute bottom-[calc(100%-4px)] left-4 z-10 w-[220px] p-1.5"
     >
       <p className="px-2 pb-1 pt-0.5 text-label font-semibold uppercase tracking-wide text-text-muted">
-        Members
+        Mention
       </p>
       {suggestions.length === 0 ? (
         <p className="px-2 py-1 text-caption text-text-muted">
@@ -117,7 +158,7 @@ export function MentionPopover({
       ) : (
         suggestions.map((suggestion, i) => (
           <button
-            key={suggestion.member.userId}
+            key={suggestion.kind === "member" ? suggestion.member.userId : suggestion.agentId}
             type="button"
             role="option"
             aria-selected={i === active}
@@ -135,12 +176,19 @@ export function MentionPopover({
                 : "text-text-secondary hover:bg-surface-raised-1"
             )}
           >
-            <Avatar
-              person={memberPerson(suggestion.member)}
-              size="xs"
-              className="h-[20px] w-[20px] text-micro"
-            />
-            <span className="truncate">{memberLabel(suggestion.member)}</span>
+            {/* ⚠ AN AGENT HAS NO FACE OF ITS OWN (INVARIANTS §5) — it wears the glyph, where a
+                member wears their avatar. Borrowing the operator's photo for an agent row would
+                make two different things look like one. */}
+            {suggestion.kind === "member" ? (
+              <Avatar
+                person={memberPerson(suggestion.member)}
+                size="xs"
+                className="h-[20px] w-[20px] text-micro"
+              />
+            ) : (
+              <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
+            )}
+            <span className="truncate">{suggestion.label}</span>
           </button>
         ))
       )}

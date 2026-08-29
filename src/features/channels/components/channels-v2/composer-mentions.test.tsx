@@ -115,7 +115,7 @@ describe("selecting a candidate", () => {
     type(body, "hey @di");
     // ⚠ mouseDown, not click: a click steals focus from the textarea first.
     fireEvent.mouseDown(screen.getByRole("option", { name: /Diana Taylor/ }));
-    expect(body.value).toBe("hey @dianataylor ");
+    expect(body.value).toBe("hey @diana-taylor ");
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
@@ -147,7 +147,7 @@ describe("selecting a candidate", () => {
     const body = mount();
     type(body, "hey @di");
     fireEvent.keyDown(body, { key: "Enter" });
-    expect(body.value).toBe("hey @dianataylor ");
+    expect(body.value).toBe("hey @diana-taylor ");
     // ⚠ AND DOES NOT SEND. Posting the half-typed `@di` instead is the
     // behaviour every chat client has trained the reader out of expecting.
     expect(send).not.toHaveBeenCalled();
@@ -157,7 +157,7 @@ describe("selecting a candidate", () => {
     const body = mount();
     type(body, "hey @di");
     fireEvent.keyDown(body, { key: "Tab" });
-    expect(body.value).toBe("hey @dianataylor ");
+    expect(body.value).toBe("hey @diana-taylor ");
   });
 
   it("leaves Shift+Enter alone — that is a line break, picker open or not", () => {
@@ -240,19 +240,45 @@ describe("what the picker inserts RESOLVES", () => {
       member({ userId: "u-a", displayName: "Alex", email: null }),
       member({ userId: "u-b", displayName: "Alex", email: null }),
     ];
-    expect(mentionSuggestions(twins, "ale")).toEqual([]);
+    expect(mentionSuggestions({ members: twins, currentUserId: ME, query: "ale" })).toEqual([]);
   });
 
   it("falls THROUGH a contested handle to one that still lands", () => {
-    // `@diana` is contested by two Dianas; `@dianataylor` is not.
+    // `@diana` is contested by two Dianas; each full name is not.
     const twoDianas = [
       member({ userId: PEER, displayName: "Diana Taylor", email: null }),
       member({ userId: "u-d2", displayName: "Diana Prince", email: null }),
     ];
-    expect(mentionSuggestions(twoDianas, "diana").map((s) => s.handle)).toEqual([
-      "dianataylor",
-      "dianaprince",
+    expect(mentionSuggestions({ members: twoDianas, currentUserId: ME, query: "diana" }).map((s) => s.handle)).toEqual([
+      "diana-taylor",
+      "diana-prince",
     ]);
+  });
+
+  /**
+   * THE HANDLE CONVENTION (Samuel, 2026-08-27): lowercase, spaces to hyphens.
+   *
+   * ⚠ WHAT THE PICKER INSERTS IS THE PRODUCT DECISION; what the RESOLVER accepts is wider, and
+   * these two cases pin both halves. The slug is first in `handlesOf`, which is the only reason
+   * `insertableHandle` returns it — an ordering change would silently move the convention back.
+   */
+  it("inserts the SLUG — `Samuel Wang` is `@samuel-wang`", () => {
+    const roster = [member({ userId: PEER, displayName: "Samuel Wang", email: null })];
+    expect(mentionSuggestions({ members: roster, currentUserId: ME, query: "samuel" }).map((s) => s.handle)).toEqual(["samuel-wang"]);
+    // A one-word name has no whitespace to replace and is unchanged.
+    const oneWord = [member({ userId: PEER, displayName: "Prince", email: null })];
+    expect(mentionSuggestions({ members: oneWord, currentUserId: ME, query: "pri" }).map((s) => s.handle)).toEqual(["prince"]);
+  });
+
+  it("KEEPS resolving the older forms — bodies already written still tag", () => {
+    // ⚠ THE TOKEN IS PLAIN TEXT IN THE BODY; there is no id under it. Dropping the squashed form
+    // would un-tag every `@dianataylor` ever written, which is why the set only grows.
+    const index = buildMentionIndex([
+      member({ userId: PEER, displayName: "Diana Taylor", email: null }),
+    ]);
+    expect(index.get("diana-taylor")).toBe(PEER);
+    expect(index.get("dianataylor")).toBe(PEER);
+    expect(index.get("diana")).toBe(PEER);
   });
 });
 
@@ -269,5 +295,106 @@ describe("the pure helpers", () => {
     expect(insertMentionHandle("@", "sam")).toBe("@sam ");
     // The rest of the draft is untouched.
     expect(insertMentionHandle("a @b c @d", "diana")).toBe("a @b c @diana ");
+  });
+});
+
+/**
+ * WHO THE PICKER OFFERS (Samuel, 2026-08-27).
+ *
+ * ⚠ NOT YOURSELF. The SERVER already drops the author from the stamped mention set
+ * (`service-writes-metadata-mentions.ts`), so a row for your own name offered a token that reaches
+ * nobody — an inert row in a picker whose whole job is that every row lands.
+ * ⚠ BUT YOU STAY IN THE INDEX, which is a different question: ambiguity is a property of the ROOM
+ * (rule 5), so dropping yourself from the DERIVATION would offer a peer's `@sam` as unambiguous
+ * while your own name contested it, and the message would tag nobody.
+ */
+describe("who the picker offers", () => {
+  it("never offers the caller", () => {
+    const roster = [
+      member({ userId: ME, displayName: "Samuel Wang" }),
+      member({ userId: PEER, displayName: "Diana Taylor", role: "member" }),
+    ];
+    const rows = mentionSuggestions({ members: roster, currentUserId: ME, query: "" });
+    expect(rows.map((r) => r.handle)).toEqual(["diana-taylor"]);
+  });
+
+  it("still COUNTS the caller for ambiguity — a contested handle reaches nobody", () => {
+    // ⚠ THE CALLER IS ALSO A "Diana". Offering the peer `@diana` would insert a token the server
+    // resolves to NEITHER of them.
+    const roster = [
+      member({ userId: ME, displayName: "Diana Prince" }),
+      member({ userId: PEER, displayName: "Diana Taylor", role: "member" }),
+    ];
+    const rows = mentionSuggestions({ members: roster, currentUserId: ME, query: "diana" });
+    expect(rows.map((r) => r.handle)).toEqual(["diana-taylor"]);
+  });
+
+  it("offers MY OWN AGENTS, by slugged name or `agent-<id>`", () => {
+    const roster = [member({ userId: ME, displayName: "Samuel Wang" })];
+    const agents = [
+      { agentId: "k3v7d2mq", displayName: "Research Bot" },
+      { agentId: "zzzzzzzz", displayName: null },
+    ];
+    const rows = mentionSuggestions({ members: roster, agents, currentUserId: ME, query: "" });
+    expect(rows.map((r) => r.kind)).toEqual(["agent", "agent"]);
+    // ⚠ THE SLUG WHERE THERE IS A NAME, the id form otherwise — `lib/agent-mentions.ts`'s rule,
+    // and the SAME slugger the roster uses so one name cannot be spelled two ways.
+    expect(rows.map((r) => r.handle)).toEqual(["research-bot", "agent-zzzzzzzz"]);
+  });
+
+  it("drops an agent whose name is contested — fail closed, as members do", () => {
+    const agents = [
+      { agentId: "k3v7d2mq", displayName: "Twin" },
+      { agentId: "zzzzzzzz", displayName: "Twin" },
+    ];
+    const rows = mentionSuggestions({ members: [], agents, currentUserId: ME, query: "twin" });
+    expect(rows).toEqual([]);
+  });
+});
+
+/**
+ * THE PICKER BELONGS TO THE CHAT FIELD AND GOES WHERE IT GOES (2026-08-28).
+ *
+ * ⚠ TWO WAVES, ONE SURFACE, AND THE SEAM BETWEEN THEM IS WHAT THIS PINS. "One edit surface at a
+ * time" (2026-08-26) UNMOUNTS the chat textarea while either panel is open; the @-picker
+ * (2026-08-27) is a pure function of the DRAFT (`mentionQuery`), and a draft is state that
+ * survives the unmount. So a half-typed `@di` left in the box kept the popover floating over the
+ * panel, anchored to a field that was no longer there — and the `@` glyph, which appends its
+ * token to that same invisible draft and then focuses a null ref, was a control whose only
+ * effect was to summon it.
+ *
+ * ⚠ THE PROPERTY IS AN ABSENCE, which is the kind that comes back silently: nothing else in this
+ * file or in `composer.test.tsx` fails if the popover starts rendering over a panel again.
+ * ⚠ AND THE DRAFT MUST SURVIVE, which is the other half — a fix that CLEARED the draft would
+ * make this absence true and throw away the operator's half-typed message to do it.
+ */
+describe("the picker is gone while a panel is open", () => {
+  const openThreadPanel = () =>
+    fireEvent.click(screen.getByRole("button", { name: "New thread" }));
+
+  it("takes the popover down with the field, and brings both back", () => {
+    const body = mount();
+    type(body, "hey @di");
+    expect(options().length).toBeGreaterThan(0);
+
+    openThreadPanel();
+    // The field went (the 2026-08-26 rule) — and so must the popover anchored to it.
+    expect(screen.queryByLabelText("Message")).toBeNull();
+    expect(screen.queryByRole("listbox", { name: "Mention a member" })).toBeNull();
+    expect(options()).toEqual([]);
+
+    // ⚠ THE DRAFT IS STILL THERE. Shutting the panel restores the half-typed message AND its
+    // popover — the state the operator left, not a cleared box.
+    fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
+    expect((screen.getByLabelText("Message") as HTMLTextAreaElement).value).toBe("hey @di");
+    expect(options().length).toBeGreaterThan(0);
+  });
+
+  it("takes the `@` glyph too — a control that could only misfire", () => {
+    mount();
+    expect(screen.getByRole("button", { name: "Mention" })).toBeTruthy();
+    openThreadPanel();
+    // ABSENT, not disabled: with a panel up there is no chat field to mention into at all.
+    expect(screen.queryByRole("button", { name: "Mention" })).toBeNull();
   });
 });

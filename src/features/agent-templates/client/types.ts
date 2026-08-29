@@ -20,6 +20,7 @@ import type {
   AgentTemplate,
   TemplateField,
   TemplateKnowledgeBaseRef,
+  TemplateShelf,
   TemplateVisibility,
 } from "../types";
 import type {
@@ -31,6 +32,7 @@ export type {
   AgentTemplate,
   TemplateField,
   TemplateKnowledgeBaseRef,
+  TemplateShelf,
   TemplateVisibility,
 };
 

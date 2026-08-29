@@ -47,6 +47,7 @@ const CHANNEL: HomeChannel = {
   workspaceSegment: "ada-grace-abc123def456",
   channelId: "44444444-4444-4444-8444-444444444444",
   name: "Ada & Grace",
+  peers: [],
   peer: null,
   createdAt: "2026-08-20T00:00:00.000Z",
   lastMessageAt: null,

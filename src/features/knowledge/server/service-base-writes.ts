@@ -13,8 +13,10 @@ import type {
   KnowledgeBaseCreateInput,
   KnowledgeBaseUpdateInput,
 } from "../schema";
+import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
 import {
   AgentWriteDisabledError,
+  HomeScopeForbiddenError,
   KnowledgeBaseSlugConflictError,
   KnowledgeStaleVersionError,
   ScopeChangeForbiddenError,
@@ -30,6 +32,7 @@ import {
   listSlugs,
 } from "./service-shared";
 import { getBaseById } from "./service-bases";
+import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /**
  * Knowledge base writes — create / update (incl. sharing-scope transitions) /
@@ -37,6 +40,57 @@ import { getBaseById } from "./service-bases";
  */
 
 const SLUG_RETRY_MAX = 3;
+
+/**
+ * 🔒 THE HOME-SHELF FENCE — may THIS create land on the /home shelf?
+ * (Samuel's ruling 2026-08-26; `20260831120000_knowledge_base_home_scoped.sql`
+ * carries the full argument.)
+ *
+ * Three conditions, ALL required, and each one is a different question:
+ *
+ *   1. **A PERSON asked.** `isSharedCredential` false. A workspace-scoped key
+ *      or a container-locked session is a credential that may be shared between
+ *      humans — it has no "my home shelf" to write to, and `canSeeBase` would
+ *      not read the row back for it anyway.
+ *   2. **PRIVATE.** The shelf is the operator's own; a `public` base on it
+ *      would be visible to every member on a surface no member navigates to.
+ *      ⚠ Checked against the RESOLVED visibility, not `input.visibility` — the
+ *      teams branch above rewrites it to `public`, and reading the raw input
+ *      here would let `accessMode: "teams"` onto the shelf.
+ *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE.**
+ *      `findDefaultWorkspaceForUser` is the SAME lookup `getBootState` runs to
+ *      answer `POST /api/boot`'s `workspace`, which is what the /home pane
+ *      hands `CreateBaseDialog` — so the fence and the surface cannot disagree
+ *      about which workspace "home" means. A link container fails this, and so
+ *      does a second workspace the caller owns.
+ *
+ * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
+ * ever examined, so MCP `kb_create_base` and every other existing caller keep
+ * writing workspace-shelf rows with no new failure mode.
+ */
+async function resolveHomeScope(
+  ctx: KnowledgeContext,
+  input: KnowledgeBaseCreateInput,
+  resolvedVisibility: "public" | "private",
+  fromSharedCredential: boolean
+): Promise<boolean> {
+  if (input.homeScoped !== true) return false;
+  if (fromSharedCredential) {
+    throw new HomeScopeForbiddenError(
+      "a shared credential has no personal shelf"
+    );
+  }
+  if (resolvedVisibility !== "private") {
+    throw new HomeScopeForbiddenError("the home shelf holds private bases only");
+  }
+  const home = await findDefaultWorkspaceForUser(ctx.userId);
+  if (home === null || home.id !== ctx.workspaceId) {
+    throw new HomeScopeForbiddenError(
+      "it is not your home workspace"
+    );
+  }
+  return true;
+}
 
 export async function createBase(
   ctx: KnowledgeContext,
@@ -91,6 +145,15 @@ export async function createBase(
     resolvedVisibility = "public";
   }
 
+  // 🔒 WHICH SHELF, decided BEFORE the insert loop so a slug retry cannot
+  // re-ask a question with a side effect. Throws rather than returning false.
+  const homeScoped = await resolveHomeScope(
+    ctx,
+    input,
+    resolvedVisibility,
+    fromWorkspaceKey
+  );
+
   let attempt = 0;
   let baseSlug =
     input.slug ?? deriveSlug(input.name, await listSlugs(ctx.workspaceId));
@@ -108,6 +171,7 @@ export async function createBase(
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         accessMode: wantsTeams ? "teams" : "workspace",
+        homeScoped,
         createdBy: ctx.userId,
       });
       break;
@@ -138,6 +202,41 @@ export async function createBase(
           grant.level
         );
       }
+    } catch (err) {
+      await repo.hardDeleteBase(ctx.workspaceId, base.id).catch(() => {});
+      throw err;
+    }
+  }
+
+  // 🔒 CREATE-AND-SHARE, ATOMIC BY THE SAME ROLLBACK THE TEAM GRANTS USE
+  // (Samuel's ruling 2026-08-27 — the /home Shared section's create button).
+  //
+  // ⚠ THE ROLLBACK IS NOT TIDINESS. Two independent statements is what this is,
+  // so the failure mode without it is a base that exists, is shared with nobody,
+  // and is INVISIBLE on the surface that made it (/home shows a container base
+  // only through a grant) — and whose slug then collides with the retry. Hard
+  // delete, not soft: the row must stop existing, not become a tombstone that
+  // still owns the slug.
+  //
+  // ⚠ THE GRANT IS ALWAYS `visible`, NEVER `agent_only`. The button says
+  // "shared"; `agent_only` is a different audience (the operator's agent, not
+  // the person in the room) and is reached from the base's own settings, which
+  // is where a THREE-state control belongs. `guestWrite` starts FALSE — handing
+  // a guest a pen is its own decision, taken later and deliberately.
+  //
+  // ⚠ NOT A FORKED WRITE PATH. `setChannelKnowledgeGrant` is the same service
+  // the sharing settings section calls; it owns `canManageChannelGrants` (which
+  // the creator passes by construction), the trigger's same-workspace refusal,
+  // and — since 2026-08-27 — the agent refusal this second caller made
+  // necessary. The CHANNEL ITSELF is fenced by the ROUTE (`isChannelVisibleTo`)
+  // before this function runs, exactly as the grant PUT does it.
+  if (input.shareToChannelId) {
+    try {
+      await setChannelKnowledgeGrant(ctx, base, {
+        channelId: input.shareToChannelId,
+        level: "visible",
+        guestWrite: false,
+      });
     } catch (err) {
       await repo.hardDeleteBase(ctx.workspaceId, base.id).catch(() => {});
       throw err;

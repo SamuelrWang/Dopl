@@ -168,6 +168,26 @@ export const KnowledgeBaseCreateSchema = z
     accessMode: z.enum(["workspace", "teams"]).optional(),
     /** Initial team grants — only valid with `accessMode: 'teams'`. */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
+    /**
+     * Put the new base on the /home SHELF (`types.ts › KbShelf`) instead of the
+     * workspace Knowledge page. ⚠ A REQUEST, NOT A DECISION: the schema only
+     * says the word is spellable — `server/service-base-writes.ts ›
+     * resolveHomeScope` is the fence, and it 403s rather than downgrading.
+     * Omitted/false = the workspace shelf, which is every existing caller.
+     */
+    homeScoped: z.boolean().optional(),
+    /**
+     * Create the base AND share it into this channel in one call — the /home
+     * Shared section's create button (Samuel's ruling 2026-08-27). The grant is
+     * always `level: 'visible'`, `guestWrite: false`; anything else is the
+     * base's own sharing settings, where a three-state control belongs.
+     *
+     * ⚠ A REQUEST, NOT A DECISION. The ROUTE fences the channel against the
+     * caller's visible list (404 on a miss, never an oracle) and
+     * `server/service-channel-grants.ts › setChannelKnowledgeGrant` owns the
+     * rest; the base is rolled back if the grant fails, so this never half-lands.
+     */
+    shareToChannelId: z.string().uuid().optional(),
   })
   .superRefine(refineScope(true));
 export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>;

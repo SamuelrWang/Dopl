@@ -125,6 +125,98 @@ describe("what the controls show", () => {
       screen.getByLabelText("Message permissions for this agent").textContent
     ).toMatch(/Auto accept in/);
   });
+
+  /**
+   * ALL THREE WEAR THE CONSOLIDATED DROPDOWN SIZE (Samuel, 2026-08-29) —
+   * `select-menu.tsx › TRIGGER_FACE.raisedField`, the size the composer launch panel's
+   * Template/Model rows already wore, so the app has ONE small dropdown rather than two.
+   *
+   * ⚠ THIS PIN IS LOAD-BEARING FOR A NUMBER IN ANOTHER TREE. `main/agent-window.js ›
+   * createAgentWindow` derives the pop-out's default width (540) from THESE dimensions, and the
+   * row is `flex-wrap`: putting the taller/wider `raised` box back here does not clip or throw —
+   * the third control silently drops to a second line in a window that is now too narrow for it.
+   * Nothing in the renderer can observe that, and `test/agent-window.test.mjs` only sees the
+   * width. This case is the other half of that pair.
+   *
+   * ⚠ CLASS TOKENS, NOT SUBSTRINGS — the rule `panel-field.test.tsx` bought: a `toContain`
+   * check answers true on a neighbouring utility that merely spells the same letters.
+   */
+  it("wears the consolidated raisedField size on all three — the window width is measured from it", () => {
+    // The MODEL control is a separately detected capability, so the bridge needs both ops for
+    // this case to see the third trigger at all.
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { setMode: vi.fn(), setModel: vi.fn() },
+    };
+    mount();
+    for (const label of [
+      "Tool permissions for this agent",
+      "Message permissions for this agent",
+      "Model for this agent",
+    ]) {
+      const tokens = screen.getByLabelText(label).className.split(/\s+/);
+      // The FACE is shared with `raised` and must not drift; only the box is smaller.
+      expect(tokens).toContain("auth-btn-3d-light");
+      expect(tokens).toContain("h-6");
+      expect(tokens).toContain("px-2");
+      expect(tokens).toContain("text-small");
+      // `raised`'s box, the one this replaced.
+      expect(tokens).not.toContain("h-9");
+      expect(tokens).not.toContain("px-3");
+      expect(tokens).not.toContain("text-body");
+    }
+  });
+
+  /**
+   * ONE LINE, AND A LONG LABEL ELLIPSIZES RATHER THAN BREAKING IT (Samuel, 2026-08-29).
+   *
+   * ⚠ THIS IS THE HALF THAT LETS THE WINDOW BE NARROW. `main/agent-window.js` opened at 540 with
+   * ~34px of slack whose ONLY job was a long free-form model label — `agentModelOptionsFor`
+   * appends whatever the agent is actually running, and a dated id is far wider than any of the
+   * four picks. Samuel ruled the slack out ("only just enough so that they are all on the same
+   * line with the same spacing"), so the overflow case had to move to the CONTROL, and the window
+   * came down to 510.
+   *
+   * ⚠ THE ROW WAS `flex-wrap` AND THAT IS WHY THE TRUNCATION NEVER FIRED. `select-menu.tsx` has
+   * always given the trigger `min-w-0 max-w-full` and its label span `min-w-0 truncate` — but a
+   * flex line break is decided on an item's CONTENT width, BEFORE shrinking is considered, so the
+   * pill wrapped to line two while its own ellipsis contract sat there unused. `flex-nowrap` is
+   * what connects them.
+   *
+   * ⚠ jsdom LAYS NOTHING OUT, so this pins the MECHANISM and not the pixels: no wrap on the row,
+   * the truncate contract on the span that holds the long text, and the long label present rather
+   * than silently dropped. The pixel half is `test/agent-window.test.mjs`'s width bound.
+   */
+  it("keeps ONE line and ellipsizes a long free-form model label instead of wrapping", () => {
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { setMode: vi.fn(), setModel: vi.fn() },
+    };
+    // Not one of the four pickable ids — the exact shape `spa-bridge.ts` warns arrives.
+    const long = "claude-opus-4-5-20251101[1m]";
+    mount({ model: long } as Partial<DesktopSessionSummary>);
+
+    const trigger = screen.getByLabelText("Model for this agent");
+    const row = trigger.parentElement!;
+    const rowTokens = row.className.split(/\s+/);
+    expect(rowTokens).toContain("flex-nowrap");
+    // The class whose presence used to make the window pay for this label.
+    expect(rowTokens).not.toContain("flex-wrap");
+
+    // The label is SHOWN, not swallowed — a `SelectMenu` whose value matches no option renders
+    // blank, which is the surface saying nothing where it has an answer.
+    expect(trigger.textContent).toContain(long);
+    // …and it is the span carrying the ellipsis contract that holds it.
+    const label = Array.from(trigger.querySelectorAll("span")).find((s) =>
+      s.textContent?.includes(long)
+    )!;
+    expect(label).toBeTruthy();
+    const labelTokens = label.className.split(/\s+/);
+    expect(labelTokens).toContain("truncate");
+    expect(labelTokens).toContain("min-w-0");
+    // The trigger itself must be allowed to shrink, or the span never gets the chance.
+    expect(trigger.className.split(/\s+/)).toContain("min-w-0");
+  });
 });
 
 describe("what a change does", () => {
@@ -214,5 +306,54 @@ describe("when the controls are not offered at all", () => {
       />
     );
     expect(container.firstChild).toBeNull();
+  });
+
+  /**
+   * …BUT THE BOX ONLY GOES WHEN IT HOLDS NOTHING (2026-08-27).
+   *
+   * ⚠ THE REGRESSION THIS PINS. The usage readout moved INSIDE this box in the
+   * one-box wave, and the posture gate's bare `return null` then swallowed it:
+   * an ended agent's window lost its context meter along with its controls, which
+   * looked from the outside like the dropdowns "vanishing" on every agent. The
+   * numbers are the summary feed's — they have nothing to do with the session
+   * still running, or with the bridge op being present.
+   *
+   * ⚠ AND THE GATE ITSELF IS UNCHANGED AND MUST STAY: no posture row on an ended
+   * agent (`3dc7e6a7`'s rule), and no sentence about when a posture applies.
+   */
+  it("keeps the STATS on an ended agent, and still offers no posture", () => {
+    install(vi.fn());
+    render(
+      <PostureControls
+        agent={agent({ state: "ended", toolMode: null, messageMode: null })}
+        channelId={CHANNEL_ID}
+        taskId={TASK}
+        stats={<p>Context tokens</p>}
+      />
+    );
+    expect(screen.getByText("Context tokens")).toBeTruthy();
+    expect(screen.queryByLabelText("Tool permissions for this agent")).toBeNull();
+    expect(screen.queryByText(/from its next decision/i)).toBeNull();
+  });
+
+  // ⚠ A LIVE agent on a build with the op renders all THREE — the state the
+  // "vanished dropdowns" report was actually about. Same component in the pop-out.
+  it("renders all three dropdowns for a LIVE agent", () => {
+    (window as unknown as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { setMode: vi.fn(), setModel: vi.fn() },
+    };
+    render(
+      <PostureControls
+        agent={agent()}
+        channelId={CHANNEL_ID}
+        taskId={TASK}
+        stats={<p>Context tokens</p>}
+      />
+    );
+    expect(screen.getByLabelText("Tool permissions for this agent")).toBeTruthy();
+    expect(screen.getByLabelText("Message permissions for this agent")).toBeTruthy();
+    expect(screen.getByLabelText("Model for this agent")).toBeTruthy();
+    expect(screen.getByText("Context tokens")).toBeTruthy();
   });
 });

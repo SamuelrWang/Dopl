@@ -19,10 +19,17 @@
  * composer builds; the write layer's own behaviour (optimistic rows, reconcile,
  * rollback) is pinned against TanStack's `MutationObserver` in
  * `hooks/use-thread-writes.test.ts`, which is where it belongs.
+ *
+ * ⚠ THE BOT ICON AND THE TEMPLATE CHEVRON ARE `composer-launch.test.tsx` SINCE
+ * 2026-08-26 — the §1 split at the 500-line cap, which the panel's own
+ * description field pushed this file over. **The seam is the subject, not the
+ * line count**: this file is about what the composer WRITES (a chat message or
+ * a request fan-out); that one is about the BRIDGE SPAWN beside it, which posts
+ * nothing and reaches a different layer entirely.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 const send = vi.fn();
 const fanOutThreads = vi.fn();
@@ -36,15 +43,15 @@ vi.mock("../../hooks/use-thread-writes", () => ({
 }));
 
 /**
- * ⚠ THE TEMPLATE PICKER'S READ IS MOCKED, and the composer has mounted the
- * picker since 2026-08-22. What this file pins is that the BOT ICON did not
- * change — the picker is a second glyph beside it, exactly as "New thread" is
- * (`agent-templates/components/template-picker.test.tsx` owns the popover).
+ * ⚠ MOCKED BECAUSE THE MODULE IS IN THE GRAPH, not because this file asserts on
+ * it. `composer.tsx` imports the template picker unconditionally (it renders
+ * only with launch controls, which no test here hands down), and an unmocked
+ * `useAgentTemplates` would put a real react-query read behind every send case.
+ * The picker's own behaviour is `composer-launch.test.tsx`'s.
  */
-const templateList = vi.hoisted(() => ({ templates: [] as unknown[] }));
 vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
   useAgentTemplates: () => ({
-    templates: templateList.templates,
+    templates: [],
     loading: false,
     error: null,
     refetch: () => {},
@@ -52,7 +59,6 @@ vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
 }));
 
 import { ChannelsV2Composer } from "./composer";
-import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
 const THIRD = "u-third";
@@ -80,7 +86,16 @@ function mount(over: Partial<React.ComponentProps<typeof ChannelsV2Composer>> = 
     />
   );
   return {
+    // ⚠ CAPTURED AT MOUNT, WHICH IS PANEL-CLOSED. The chat textarea is
+    // UNMOUNTED while the request panel is open (Samuel, 2026-08-26 — one edit
+    // surface), so this reference goes stale on `openPanel`; the request tests
+    // below reach for `title()` / `description()` instead, which is the point.
     body: screen.getByLabelText("Message") as HTMLTextAreaElement,
+    /** The chat textarea if it is on screen at all, else `null`. */
+    bodyOrNull: () => screen.queryByLabelText("Message") as HTMLTextAreaElement | null,
+    title: () => screen.getByLabelText("Thread title") as HTMLInputElement,
+    description: () =>
+      screen.getByLabelText("Thread description") as HTMLTextAreaElement,
     openPanel: () =>
       // ⚠ THE PANEL MOVED OFF THE BOT ICON ON 2026-08-21 (Samuel). `Bot` is New
       // Agent now — a bridge spawn that posts nothing — and this panel, which
@@ -98,8 +113,18 @@ function mount(over: Partial<React.ComponentProps<typeof ChannelsV2Composer>> = 
   };
 }
 
-function type(field: HTMLTextAreaElement, value: string) {
+function type(field: HTMLTextAreaElement | HTMLInputElement, value: string) {
   fireEvent.change(field, { target: { value } });
+}
+
+/** Title + description, the two halves a request cannot be raised without. */
+function fillRequest(
+  c: ReturnType<typeof mount>,
+  title = "Sweep the docs",
+  description = "start here"
+) {
+  type(c.title(), title);
+  type(c.description(), description);
 }
 
 describe("the plain composer sends CHAT", () => {
@@ -147,25 +172,69 @@ describe("another surface can open the new-thread panel", () => {
     gate: { begin: vi.fn(), end: vi.fn() },
     newThreadSignal,
   });
-  /** The panel's open state, read off the one thing that changes with it. */
-  const placeholder = () =>
-    (screen.getByLabelText("Message") as HTMLTextAreaElement).placeholder;
+  /**
+   * The panel's open state.
+   *
+   * ⚠ THIS READ THE MESSAGE TEXTAREA'S PLACEHOLDER UNTIL 2026-08-26 — the panel
+   * used to swap it to "Describe the request", because the request's body WAS
+   * the chat draft. That surface is gone (the description is now a field inside
+   * the panel), so the tell is the toggle's own `aria-pressed`, which is what a
+   * screen reader reads too and what the sibling describe block already uses.
+   */
+  const panelOpen = () =>
+    screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed");
 
   /** ⚠ THE SIGNAL IS A COUNTER, so this asserts the SECOND ask lands too — a
    *  boolean prop would open once and then sit `true`, leaving the Threads
    *  tab's button dead for the rest of the session. */
   it("opens on a signal change, and again on the next one", () => {
     const view = render(<ChannelsV2Composer {...props(0)} />);
-    expect(placeholder()).toBe("Write a message");
+    expect(panelOpen()).toBe("false");
 
     view.rerender(<ChannelsV2Composer {...props(1)} />);
-    expect(placeholder()).toBe("Describe the request");
+    expect(panelOpen()).toBe("true");
 
     // Dismiss it, then ask again — the second increment must reopen.
     fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
-    expect(placeholder()).toBe("Write a message");
+    expect(panelOpen()).toBe("false");
     view.rerender(<ChannelsV2Composer {...props(2)} />);
-    expect(placeholder()).toBe("Describe the request");
+    expect(panelOpen()).toBe("true");
+  });
+});
+
+/**
+ * ONE EDIT SURFACE AT A TIME (Samuel, 2026-08-26: *"the user will solely need to
+ * edit the new thread panel"*).
+ *
+ * ⚠ THE PROPERTY IS AN ABSENCE, which is exactly the kind that comes back
+ * silently. The request's body used to be the chat textarea under the panel —
+ * one box that changed meaning while the panel was open — and re-rendering it
+ * beside the Description field would restore that ambiguity without failing
+ * anything else in this file.
+ */
+describe("the composer's two edit surfaces", () => {
+  it("takes the chat textarea off screen while the panel is open", () => {
+    const c = mount();
+    expect(c.bodyOrNull()).not.toBeNull();
+
+    c.openPanel();
+    expect(c.bodyOrNull()).toBeNull();
+    // ⚠ Not merely "a title field exists": the panel is always MOUNTED inside
+    // the collapsing grid, so both of its fields are queryable either way. What
+    // this pins is that the request's own description is the box on offer.
+    expect(c.description()).toBeTruthy();
+  });
+
+  it("gives the half-typed chat message back when the panel shuts", () => {
+    // ⚠ UNMOUNTED, NOT DISCARDED. `draft` is state in the composer rather than
+    // in the element, and a reader who opens the panel by mistake must not lose
+    // the message they were writing.
+    const c = mount();
+    type(c.body, "morning, all");
+
+    c.openPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
+    expect(c.bodyOrNull()?.value).toBe("morning, all");
   });
 });
 
@@ -173,10 +242,7 @@ describe("the agent panel sends a REQUEST FAN-OUT", () => {
   it("addresses every remaining pill, in ONE send with ONE base key", () => {
     const c = mount();
     c.openPanel();
-    fireEvent.change(screen.getByLabelText("Thread title"), {
-      target: { value: "Sweep the docs" },
-    });
-    type(c.body, "start here");
+    fillRequest(c);
     fireEvent.click(c.sendButton());
 
     expect(fanOutThreads).toHaveBeenCalledTimes(1);
@@ -191,19 +257,45 @@ describe("the agent panel sends a REQUEST FAN-OUT", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  /**
+   * ⚠ THE BODY IS THE PANEL'S DESCRIPTION, NOT THE CHAT DRAFT (2026-08-26). The
+   * wire field is still `body` — what moved is which BOX the operator types it
+   * in — so this is the case that would pass on the OLD wiring too if the
+   * description merely happened to be empty. Typing a chat draft FIRST is what
+   * makes it discriminating: the old composer would have sent that string.
+   */
+  it("takes the body from the panel's description, never the chat draft", () => {
+    const c = mount();
+    type(c.body, "a chat message I was part-way through");
+    c.openPanel();
+    fillRequest(c, "Sweep the docs", "read every §5 bullet");
+    fireEvent.click(c.sendButton());
+
+    expect(fanOutThreads.mock.calls[0][0].body).toBe("read every §5 bullet");
+  });
+
   it("drops a removed pill from the request rather than sending to them", () => {
     const c = mount();
     c.openPanel();
     fireEvent.click(
       screen.getByRole("button", { name: /^Remove .*Ada/ })
     );
-    fireEvent.change(screen.getByLabelText("Thread title"), {
-      target: { value: "Sweep the docs" },
-    });
-    type(c.body, "start here");
+    fillRequest(c);
     fireEvent.click(c.sendButton());
 
     expect(fanOutThreads.mock.calls[0][0].toUserIds).toEqual([PEER]);
+  });
+
+  it("clears BOTH panel fields after a send", () => {
+    const c = mount();
+    c.openPanel();
+    fillRequest(c);
+    fireEvent.click(c.sendButton());
+
+    // The panel shuts, and its fields are empty behind it — a second request
+    // must not start pre-loaded with the first one's words.
+    expect(c.title().value).toBe("");
+    expect(c.description().value).toBe("");
   });
 
   it("is NOT SENDABLE with no addressee, and says why", () => {
@@ -212,16 +304,13 @@ describe("the agent panel sends a REQUEST FAN-OUT", () => {
     for (const name of [/^Remove .*Diana/, /^Remove .*Ada/]) {
       fireEvent.click(screen.getByRole("button", { name }));
     }
-    fireEvent.change(screen.getByLabelText("Thread title"), {
-      target: { value: "Sweep the docs" },
-    });
-    type(c.body, "start here");
+    fillRequest(c);
 
     // ⚠ The UI refusal is a COURTESY. `schema.ts › TaskFanOutSchema` refuses an
     // empty `toUserIds` with a 400, which is the rule; this is the affordance.
     expect(c.sendButton().disabled).toBe(true);
     expect(c.sendButton().title).toBe(
-      "A request needs a title and at least one agent"
+      "A request needs a title, a description and at least one agent"
     );
     expect(screen.getByText(/reaches nobody/)).toBeTruthy();
     fireEvent.click(c.sendButton());
@@ -231,219 +320,141 @@ describe("the agent panel sends a REQUEST FAN-OUT", () => {
   it("is NOT SENDABLE with no title", () => {
     const c = mount();
     c.openPanel();
-    type(c.body, "start here");
+    type(c.description(), "start here");
     expect(c.sendButton().disabled).toBe(true);
     fireEvent.click(c.sendButton());
     expect(fanOutThreads).not.toHaveBeenCalled();
   });
-});
 
-/**
- * THE BOT ICON AND THE THREAD PANEL ARE TWO CONTROLS (Samuel, 2026-08-21).
- *
- * ⚠ THE SPLIT IS NOT COSMETIC AND THAT IS WHY IT IS PINNED. One glyph used to
- * mean both acts, and they do not even reach the same layer: the panel raises a
- * REQUEST at another member over the write layer; the Bot icon spawns MY OWN
- * agent on THIS machine over the bridge and posts nothing. A regression that
- * quietly re-merges them would make one of the two silently unreachable.
- *
- * ⚠ AND THE BOT ICON IS NOT RENDERED WHERE IT CANNOT WORK. `canLaunch` is the
- * bridge op's own detection — the web tree and the pop-out thread window get no
- * affordance rather than one that can only refuse (INVARIANTS §11).
- */
-describe("the composer's two agent controls", () => {
-  function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls {
-    return {
-      canLaunch: true,
-      launchBusy: false,
-      launchError: null,
-      launchAgent: vi.fn().mockResolvedValue({ ok: true }),
-      approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
-      ...over,
-    };
-  }
-
-  /** Whether the request panel is OPEN. ⚠ Not "is the title field in the DOM" —
-   *  the panel is always mounted inside the collapsing grid and merely `inert`
-   *  when shut, so its fields are queryable either way. The toggle's own
-   *  `aria-pressed` is the state, and it is what a screen reader reads too. */
-  const panelOpen = () =>
-    screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed");
-
-  it("opens the thread panel from NEW THREAD, and not from the Bot icon", () => {
-    mount({ newAgent: launcher() });
-    expect(panelOpen()).toBe("false");
-
-    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
-    // The Bot icon launches; it must not have opened the request panel.
-    expect(panelOpen()).toBe("false");
-
-    fireEvent.click(screen.getByRole("button", { name: "New thread" }));
-    expect(panelOpen()).toBe("true");
-    expect(screen.getByLabelText("Thread title")).toBeTruthy();
-  });
-
-  it("posts NOTHING when the Bot icon is clicked", () => {
-    mount({ newAgent: launcher() });
-    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
-    expect(send).not.toHaveBeenCalled();
+  /** ⚠ THE THIRD REQUIREMENT, and the newest. A title with no description is
+   *  a thread nobody can act on, and before 2026-08-26 the description could
+   *  not be empty because it was the chat draft the Send gate already checked —
+   *  moving it into the panel is exactly what put this case at risk. */
+  it("is NOT SENDABLE with no description", () => {
+    const c = mount();
+    c.openPanel();
+    type(c.title(), "Sweep the docs");
+    expect(c.sendButton().disabled).toBe(true);
+    fireEvent.click(c.sendButton());
     expect(fanOutThreads).not.toHaveBeenCalled();
-  });
 
-  it("launches onto the OPEN THREAD in thread view", () => {
-    const controls = launcher();
-    mount({ newAgent: controls, openThreadId: "t-1" });
-    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
-    expect(controls.launchAgent).toHaveBeenCalledWith("t-1");
-  });
-
-  it("launches a CHANNEL-LEVEL agent in channel view — null, not empty string", () => {
-    // ⚠ `""` is already a real wire value ("a responder whose thread never
-    // became first-class"), so the two must not collapse into one.
-    const controls = launcher();
-    mount({ newAgent: controls });
-    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
-    expect(controls.launchAgent).toHaveBeenCalledWith(null);
-  });
-
-  it("renders NO Bot icon when the bridge cannot launch", () => {
-    mount({ newAgent: launcher({ canLaunch: false }) });
-    expect(screen.queryByRole("button", { name: "New Agent" })).toBeNull();
-    // ⚠ And the thread panel is untouched by that absence — it is a write, not
-    // a bridge op, and it works in a plain browser.
-    expect(screen.getByRole("button", { name: "New thread" })).toBeTruthy();
-  });
-
-  it("renders no Bot icon at all with no launch controls handed down", () => {
-    mount();
-    expect(screen.queryByRole("button", { name: "New Agent" })).toBeNull();
-  });
-
-  it("disables the Bot icon ONLY while a launch is in flight", () => {
-    mount({ newAgent: launcher({ launchBusy: true }) });
-    expect(
-      (screen.getByRole("button", { name: "New Agent" }) as HTMLButtonElement).disabled
-    ).toBe(true);
-  });
-
-  it("stays enabled once a launch has settled — every click is a NEW agent", () => {
-    mount({ newAgent: launcher() });
-    expect(
-      (screen.getByRole("button", { name: "New Agent" }) as HTMLButtonElement).disabled
-    ).toBe(false);
-  });
-
-  it("says a refusal out loud rather than swallowing it", () => {
-    // ⚠ Main answering `{ok:false}` changes nothing on its side, so no push
-    // follows to explain a button that visibly did nothing.
-    mount({ newAgent: launcher({ launchError: "Session limit reached" }) });
-    expect(screen.getByRole("alert").textContent).toBe("Session limit reached");
-  });
-
-  it("shows no alert when there is nothing to report", () => {
-    mount({ newAgent: launcher() });
-    expect(screen.queryByRole("alert")).toBeNull();
+    // Whitespace is not a description either.
+    type(c.description(), "   ");
+    expect(c.sendButton().disabled).toBe(true);
   });
 });
 
 /**
- * THE CHEVRON BESIDE THE BOT ICON (2026-08-22, the agent-templates launch wave).
- *
- * ⚠ THE PINNED PROPERTY IS THE ONE-CLICK BLANK LAUNCH — Samuel's standing
- * channels-v2 ruling (*one lane, one-click launch*), which the templates spec
- * proposed trading for a popover plus Enter and which he refused. The Bot icon
- * still spawns a blank agent on the FIRST click, with a payload carrying no
- * template; the picker is an adjacent zone with its own accessible name.
- *
- * ⚠ THREE GLYPHS NOW, THREE ACTS. `Bot` = launch blank (bridge, posts nothing),
- * the chevron = choose an identity, `MessageSquarePlus` = raise a REQUEST at
- * another member (a write). Re-merging any two of them makes one unreachable —
- * which is exactly what happened to the thread panel in 2026-08-21.
+ * THE FOOTER (Samuel, 2026-08-27) — one submit control, and a Discard that is only there when
+ * there is something to discard.
  */
-describe("the composer's template chevron", () => {
-  function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls {
-    return {
-      canLaunch: true,
-      launchBusy: false,
-      launchError: null,
-      launchAgent: vi.fn().mockResolvedValue({ ok: true }),
-      approveTemplate: vi.fn().mockResolvedValue({ ok: true }),
-      ...over,
-    };
-  }
+describe("the composer's footer", () => {
+  it("hides DISCARD on an empty composer and shows it once there is text", () => {
+    // ⚠ IT RENDERED ALWAYS, which put a control that does nothing beside the send button —
+    // the inert chrome §5's interaction-completeness ruling forbids.
+    const c = mount();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
 
-  it("keeps the Bot icon a ONE-CLICK BLANK launch, opening nothing", () => {
-    const controls = launcher();
-    mount({ newAgent: controls, openThreadId: "t-1" });
+    type(c.body, "morning");
+    expect(screen.getByRole("button", { name: "Discard" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
-    expect(controls.launchAgent).toHaveBeenCalledWith("t-1");
-    // ⚠ EXACTLY ONE ARGUMENT — a spelled-out `null` template would be a
-    // different object on the wire from the one this icon has always sent.
-    expect(vi.mocked(controls.launchAgent).mock.calls[0].length).toBe(1);
-    expect(screen.queryByRole("menu")).toBeNull();
+    // Whitespace is not content.
+    type(c.body, "   ");
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
   });
 
-  it("opens the picker from the chevron, which launches nothing itself", () => {
-    const controls = launcher();
-    mount({ newAgent: controls });
+  it("is ONE submit, and a PANEL's submit wears a VISIBLE word", () => {
+    // ⚠ THE LABEL IS RENDERED TEXT, NOT A `title` ON AN ARROW (Samuel, 2026-08-27, from the
+    // rendered app). Shipping it as a tooltip made all three acts look identical on screen, and
+    // the earlier pin passed because an `aria-label` satisfies `getByRole({ name })` just as text
+    // content does. **Asserting `textContent` is what makes this case see the difference.**
+    const c = mount();
+    // A plain message sends from the kit's ARROW — an icon button, no word on it.
+    expect(screen.getByRole("button", { name: "Send" }).textContent).toBe("");
 
-    const chevron = screen.getByRole("button", { name: "Launch from template" });
-    expect(chevron.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(chevron);
-
-    expect(screen.getByRole("menu")).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /Blank agent/ })).toBeTruthy();
-    expect(controls.launchAgent).not.toHaveBeenCalled();
+    c.openPanel();
+    const create = screen.getByRole("button", { name: "Create" });
+    expect(create.textContent).toBe("Create");
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
   });
 
-  it("does NOT open the thread panel — three glyphs, three acts", () => {
-    mount({ newAgent: launcher() });
-    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
+  it("hangs SEND at the right end of the ICON ROW, not above it", () => {
+    // ⚠ THE ARROW MOVED TO THE BOTTOM-RIGHT (Samuel, live review 2026-08-28). It used to sit
+    // inside the input row beside the field, which put the card's one submit at the TOP-right
+    // while every other control sat along the bottom. It is now the last thing in the toolbar
+    // row, level with the icons.
+    // ⚠ SAME PARENT **AND** AFTER — either alone is satisfied by a mutation the other catches:
+    // an arrow re-parented back into the input row still follows the icons in document order,
+    // and an arrow moved to the row's LEFT end is still in the row.
+    const c = mount();
+    const send = screen.getByRole("button", { name: "Send" });
+    const attach = screen.getByRole("button", { name: "Attach file" });
+    expect(send.parentElement).toBe(attach.parentElement);
     expect(
-      screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed")
-    ).toBe("false");
+      attach.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    // And it is OUT of the field's own row — the input row is the field and nothing else here.
+    expect(c.body.parentElement?.contains(send)).toBe(false);
   });
 
-  it("renders no chevron where the bridge cannot launch", () => {
-    mount({ newAgent: launcher({ canLaunch: false }) });
-    expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
+  it("has NO expand control", () => {
+    // ⚠ DELETED, NOT HIDDEN (Samuel, live review 2026-08-28). The 4-arrow glyph carried no
+    // `onClick` in any shipped build, so nothing became unreachable — there is no expanded
+    // editor behind it to restore. ⚠ THE MUTATION THIS CATCHES is somebody "finishing" the
+    // toolbar by putting the icon back on the way to wiring it.
+    mount();
+    expect(screen.queryByRole("button", { name: "Expand composer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /expand/i })).toBeNull();
+  });
+});
+
+// ⚠ THE SHARED FIELD KIT'S PINS ARE `panel-field.test.tsx` (2026-08-27) — it is `PanelField`,
+// which BOTH panels mount, and half its cases were landing here and half in the launch suite.
+// ⚠ ONE PROPERTY STAYS HERE because it is the PANEL's and not the kit's: the description starts
+// at one line (`rows={1}`) rather than the three-line box that made the panel tall before a word
+// was typed. The growth itself is `use-auto-grow.ts`, a style mutation jsdom cannot measure.
+describe("the thread panel's description", () => {
+  it("starts at ONE line — it grows as it is typed", () => {
+    const c = mount();
+    c.openPanel();
+    expect(c.description().rows).toBe(1);
+  });
+});
+
+/**
+ * THE @ GLYPH OPENS THE PICKER (Samuel, 2026-08-27).
+ *
+ * ⚠ IT WAS INERT — a glyph sitting in a row of working controls, which §5's
+ * interaction-completeness ruling forbids outright. There is no second "open the popover" path to
+ * keep in step: the popover is a pure function of the DRAFT, so the honest wiring is to write the
+ * token the operator would have typed.
+ */
+describe("the composer's @ button", () => {
+  const atButton = () => screen.getByRole("button", { name: "Mention" });
+  const picker = () => screen.queryByRole("listbox", { name: "Mention a member" });
+
+  it("opens the same picker typing `@` opens", () => {
+    const c = mount();
+    expect(picker()).toBeNull();
+    fireEvent.click(atButton());
+    expect(picker()).not.toBeNull();
+    expect(c.bodyOrNull()?.value).toBe("@");
   });
 
-  it("disables the chevron only while a launch is in flight", () => {
-    mount({ newAgent: launcher({ launchBusy: true }) });
-    expect(
-      (screen.getByRole("button", { name: "Launch from template" }) as HTMLButtonElement)
-        .disabled
-    ).toBe(true);
+  it("puts a SPACE before the `@` when the draft does not end in one", () => {
+    // ⚠ WITHOUT IT the `@` welds onto the previous word and `mentionQuery` — which requires a
+    // boundary — answers null, so the button would write a character and open nothing.
+    const c = mount();
+    type(c.body, "morning");
+    fireEvent.click(atButton());
+    expect(c.bodyOrNull()?.value).toBe("morning @");
+    expect(picker()).not.toBeNull();
   });
 
-  it("carries the picked template into the SAME launch op the Bot icon uses", async () => {
-    templateList.templates = [
-      {
-        id: "tpl-9",
-        workspaceId: "ws-1",
-        name: "Code auditor",
-        description: null,
-        instructions: null,
-        model: null,
-        fields: [],
-        visibility: "private",
-        teamIds: [],
-        knowledgeBases: [],
-        createdBy: ME,
-        createdAt: "2026-08-01T00:00:00Z",
-        updatedAt: "2026-08-01T00:00:00Z",
-      },
-    ];
-    const controls = launcher();
-    mount({ newAgent: controls, openThreadId: "t-1" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
-    await waitFor(() =>
-      expect(controls.launchAgent).toHaveBeenCalledWith("t-1", "tpl-9", undefined)
-    );
-    templateList.templates = [];
+  it("does not double the space when the draft already ends in one", () => {
+    const c = mount();
+    type(c.body, "morning ");
+    fireEvent.click(atButton());
+    expect(c.bodyOrNull()?.value).toBe("morning @");
   });
 });

@@ -27,6 +27,7 @@ export {
   listBases,
   listBaseOwnerNames,
   listBaseStats,
+  listHomeScopedBaseIds,
   getBaseById,
   getBaseBySlug,
 } from "./service-bases";

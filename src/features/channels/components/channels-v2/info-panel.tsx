@@ -312,10 +312,15 @@ export function ChannelsV2InfoPanel({
           (`gap-1`, and the header drops to `px-2`) only while the fifth tab is
           present, and whatever remains SCROLLS rather than clipping — a tab pushed
           past the edge with no way to reach it is the failure, a 6px discreet bar
-          is not. ⚠ A RULING IS OWED on whether the five-tab row keeps this scale, and
-          do NOT pre-empt it by shortening the label: "Knowledge" is what the product
-          calls the thing, and a tab named something else to fit is a worse answer than
-          a tab that scrolls. */}
+          is not.
+          ⚠ RULED 2026-08-27 (F-340, Samuel): the DESKTOP host stopped passing the
+          capability, so /home is back to FOUR tabs and none of this engages there.
+          **It still engages on the GUEST lane**, which keeps the tab because it is a
+          guest's only way to read a base granted into the channel — so the tightening
+          and the scroll stay, and this comment with them.
+          ⚠ AND DO NOT "FIX" THE GUEST ROW BY SHORTENING THE LABEL: "Knowledge" is what
+          the product calls the thing on every other surface, and a tab named something
+          else to fit is a worse answer than a tab that scrolls. */}
       <div
         className={cn(
           "flex h-[56px] shrink-0 items-center border-b border-border-default",

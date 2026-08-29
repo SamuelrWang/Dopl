@@ -19,6 +19,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
+import {
+  OPEN_SCALE_ICON,
+  OpenScaleButton,
+} from "@/shared/ui/open-scale-button";
 import type { KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import { TreeContextMenu, type ContextMenuItem } from "../../tree-context-menu";
 import styles from "../knowledge-v2.module.css";
@@ -405,8 +409,17 @@ function RowEditor({
   );
 }
 
-/** Base-root create affordance: parentless folders/entries. Folder rows
- *  handle their own children on hover. */
+/**
+ * Base-root create affordance: parentless folders/entries. Folder rows handle
+ * their own children on hover.
+ *
+ * ⚠ THE PILL IS THE GLOBAL ONE (Samuel's ruling, 2026-08-28: the tree's create
+ * actions use the global button component). These were `.addBtn`, a naked
+ * hover-tint recipe private to `../knowledge-v2.module.css` and now deleted;
+ * they are `shared/ui/open-scale-button.tsx › OpenScaleButton` — the same face
+ * and scale as the KB card's Open and /home's section create buttons. Only the
+ * row's layout is still local.
+ */
 function AddRow({
   onCreateFolder,
   onCreateEntry,
@@ -434,22 +447,20 @@ function AddRow({
   };
   return (
     <div className={styles.addRow}>
-      <button
-        type="button"
-        className={styles.addBtn}
+      <OpenScaleButton
+        className="disabled:opacity-60"
         disabled={busy}
         onClick={() => create("entry")}
       >
-        <FilePlus size={13} /> New file
-      </button>
-      <button
-        type="button"
-        className={styles.addBtn}
+        <FilePlus size={OPEN_SCALE_ICON} aria-hidden="true" /> New file
+      </OpenScaleButton>
+      <OpenScaleButton
+        className="disabled:opacity-60"
         disabled={busy}
         onClick={() => create("folder")}
       >
-        <FolderPlus size={13} /> New folder
-      </button>
+        <FolderPlus size={OPEN_SCALE_ICON} aria-hidden="true" /> New folder
+      </OpenScaleButton>
     </div>
   );
 }

@@ -73,6 +73,29 @@ export class WorkspaceKeyPrivateVisibilityError extends Error {
 }
 
 /**
+ * A create asked for the /home SHELF (`homeScoped: true`) without standing
+ * where that shelf is. → 403.
+ *
+ * 🔒 REFUSE, NEVER DOWNGRADE. The tempting alternative — ignore the flag and
+ * create a workspace-shelf base — writes a row the caller cannot then find, on
+ * a surface whose whole point is that the two shelves are different PLACES
+ * (`20260831120000_knowledge_base_home_scoped.sql`). A silent landing on the
+ * wrong shelf is the class of bug this column exists to end, so the refusal is
+ * loud and names WHICH of the three conditions failed.
+ *
+ * ⚠ The `reason` is caller-safe by construction: it names a property of the
+ * REQUEST (not private, not the home workspace, shared credential), never the
+ * id or name of a workspace the caller may not know about.
+ */
+export class HomeScopeForbiddenError extends Error {
+  readonly code = "HOME_SCOPE_FORBIDDEN";
+  constructor(reason: string) {
+    super(`This knowledge base cannot be created on your home shelf — ${reason}.`);
+    this.name = "HomeScopeForbiddenError";
+  }
+}
+
+/**
  * The `enforce_channel_resource_grant()` trigger refused a (KB, channel) grant
  * — the KB, the channel and the grant row must all name the SAME workspace.
  * → 400.

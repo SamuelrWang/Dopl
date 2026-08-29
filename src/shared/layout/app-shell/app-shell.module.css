@@ -33,6 +33,25 @@
   background: var(--shell-surface);
 }
 
+/* THE POP-OUT WINDOW'S SURFACE — `.surface` with the frame taken off (Samuel, 2026-08-27).
+
+   ⚠ A SECOND CLASS, NOT AN EDIT TO `.surface`. That one is the MAIN window's, where the margin
+   and the 8px radius are the point: the page card floats on the shell's gray with breathing room
+   on every side. A pop-out has no shell around it — its viewport IS the content — so the same
+   rule painted a rounded panel on a gray ground inside an OS window that already has its own
+   corners, which is exactly what Samuel is looking at.
+
+   ⚠ IT PAINTS `--panel-surface`, NOT `--shell-surface`, and that is what covers `.root`'s gray.
+   `.root` is `position: fixed; inset: 0` and paints the shell gray for the main window; leaving
+   this surface on the shell colour would show that gray wherever the content did not reach.
+   Zero margin, zero radius, no second background anywhere. */
+.windowSurface {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: var(--panel-surface);
+}
+
 /* ⚠ Padding is load-bearing, not taste. Brand pill's top edge must land on the
    page card's top edge: page card = `.page-float`, margin-top 7px inside
    `.surface`; sidebar shares that surface top, so

@@ -15,6 +15,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type {
+  KbShelf,
   KnowledgeBase,
   KnowledgeEntry,
   KnowledgeFolder,
@@ -100,15 +101,18 @@ function useKnowledgeQuery<T>(
  *  one response, so consumers share a request instead of hitting it twice. */
 export function useKnowledgeBaseList(
   workspaceId?: string,
-  options?: { initialData?: KnowledgeBaseList }
+  options?: { initialData?: KnowledgeBaseList; shelf?: KbShelf }
 ): Result<KnowledgeBaseList> {
   // Workspace id in the key so switching workspaces re-fetches. Sentinel
   // fallback keeps the hook firing with no id (sole-workspace caller
   // auto-targets; multi-workspace fails closed as WORKSPACE_REQUIRED).
-  const key = knowledgeBasesCacheSegment(workspaceId);
+  // ⚠ SHELF IN THE KEY TOO, for the reason the channel variant is in it: a
+  // narrowed read is a DIFFERENT RESPONSE, and sharing one entry would let an
+  // unfiltered refetch overwrite what the narrowed reader is rendering.
+  const key = knowledgeBasesCacheSegment(workspaceId, undefined, options?.shelf);
   return useKnowledgeQuery<KnowledgeBaseList>(
     key,
-    () => fetchBaseList(workspaceId),
+    () => fetchBaseList(workspaceId, undefined, options?.shelf),
     options?.initialData !== undefined
       ? { initialData: options.initialData, initialKey: key }
       : undefined
@@ -128,20 +132,51 @@ export function useKnowledgeBaseList(
  */
 export function knowledgeBasesCacheSegment(
   workspaceId?: string,
-  channelId?: string
+  channelId?: string,
+  shelf?: KbShelf
 ): string {
   const ws = `bases:${workspaceId ?? "default"}`;
-  return channelId ? `${ws}:channel:${channelId}` : ws;
+  if (channelId) return `${ws}:channel:${channelId}`;
+  // ⚠ THE SHELF VARIANT IS A THIRD ENTRY BESIDE THE OTHER TWO, for the same
+  // reason and by the same mechanism: `?shelf=` changes the ROWS, so the
+  // narrowed list and the unfiltered one cannot share a cache entry or an
+  // unfiltered refetch would fold the workspace shelf back into the /home pane
+  // — the whole bug this wave closes, re-entering through the cache.
+  // ⚠ AND IT EXTENDS THE SEGMENT WITH A STRING, never a fourth array element,
+  // so `invalidateKnowledgeBaseLists`'s `startsWith(target + ":")` predicate
+  // reaches it unchanged. A key off by one ELEMENT is a silent no-op (§8); a
+  // key off by one SUFFIX is still reachable. Read that helper's docblock
+  // before inventing a fourth shape here.
+  // ⚠ `channelId` WINS when both are given, and no caller gives both: a
+  // container has no home shelf (`resolveHomeScope` fences the marker to the
+  // caller's default STANDARD workspace), so `?channelId=&shelf=home` would be
+  // a question with one possible answer — the empty list.
+  if (shelf) return `${ws}:shelf:${shelf}`;
+  return ws;
 }
 
 /** Cache key shared by every reader and writer of the base list. */
-export function knowledgeBasesQueryKey(workspaceId?: string, channelId?: string) {
-  return ["knowledge", knowledgeBasesCacheSegment(workspaceId, channelId)] as const;
+export function knowledgeBasesQueryKey(
+  workspaceId?: string,
+  channelId?: string,
+  shelf?: KbShelf
+) {
+  return [
+    "knowledge",
+    knowledgeBasesCacheSegment(workspaceId, channelId, shelf),
+  ] as const;
 }
 
 /**
- * Invalidate EVERY base-list entry for one workspace — the unscoped list and
- * each `?channelId=` variant beside it.
+ * Invalidate EVERY base-list entry for one workspace — the unscoped list, each
+ * `?channelId=` variant, and each `?shelf=` variant beside them.
+ *
+ * ⚠ THE SHELF VARIANTS COST THIS HELPER NOTHING, and that is the point of the
+ * predicate being on the SEGMENT rather than on a fixed key list: they extend
+ * the same `bases:<ws>` prefix with a string, so they were reachable the moment
+ * they existed. A create on one shelf still invalidates the other — correct,
+ * because "which shelf" is a server decision the client must re-ask for rather
+ * than predict.
  *
  * 🔒 ⚠ A PREFIX WILL NOT DO IT, AND THAT IS THE WHOLE REASON THIS EXISTS.
  * TanStack matches a query key ELEMENT BY ELEMENT, and the channel variant is a
@@ -163,42 +198,73 @@ export function invalidateKnowledgeBaseLists(
   queryClient: QueryClient,
   workspaceId?: string
 ): void {
-  const target = knowledgeBasesCacheSegment(workspaceId);
   void queryClient.invalidateQueries({
-    predicate: (query) => {
-      const segment = query.queryKey[1];
-      if (query.queryKey[0] !== "knowledge" || typeof segment !== "string") {
-        return false;
-      }
-      return segment === target || segment.startsWith(`${target}:`);
-    },
+    predicate: (query) => isBaseListKey(query.queryKey, workspaceId),
   });
 }
 
 /**
- * Upsert one base into the cached list, synchronously.
+ * Does this cache key address a base LIST for this workspace — the unscoped
+ * entry or any `:channel:` / `:shelf:` variant beside it?
+ *
+ * ⚠ ONE PREDICATE, shared by the invalidator and the row seeder below, because
+ * they are the same question asked twice and this repo has already paid for
+ * them drifting (see the docblock above, and `hooks-channel-grants.ts ›
+ * patchChannelGrantInCache`, which mints the identical match by hand).
+ */
+function isBaseListKey(
+  queryKey: readonly unknown[],
+  workspaceId?: string
+): boolean {
+  const segment = queryKey[1];
+  if (queryKey[0] !== "knowledge" || typeof segment !== "string") return false;
+  const target = knowledgeBasesCacheSegment(workspaceId);
+  return segment === target || segment.startsWith(`${target}:`);
+}
+
+/**
+ * Upsert one base into the cached list(s), synchronously.
  *
  * ⚠ Call BEFORE navigating to a just-created/renamed base. The controller
  * resolves the URL segment against this list; navigate-then-refetch leaves a
  * window where the segment matches nothing and the move is silently dropped.
+ *
+ * 🔒 ⚠ REPLACE EVERYWHERE, INSERT IN ONE PLACE — and the asymmetry is the whole
+ * design (2026-08-26). The two halves answer different questions:
+ *
+ *   - A base ALREADY IN a cached list is the SAME base wherever it is cached, so
+ *     a rename must reach every variant. Seeding only the caller's key is what
+ *     broke the workspace Knowledge page the moment it moved onto the
+ *     `:shelf:workspace` entry: `base-settings-form.tsx` patched the plain key,
+ *     nothing mounted it, and the renamed slug reverted the next time anything
+ *     was selected — §8's silent no-op with a visible symptom.
+ *   - A base NOT YET in a list may not belong there. Inserting it into every
+ *     variant would put a home-shelf create into the workspace page's entry and
+ *     a container create into the home list — F-331's shape exactly. So the
+ *     INSERT goes to the ONE key the caller named and nowhere else.
  */
 export function seedKnowledgeBase(
   queryClient: QueryClient,
   workspaceId: string | undefined,
-  base: KnowledgeBase
+  base: KnowledgeBase,
+  /** WHICH shelf's entry may receive an INSERT — the one the creating surface
+   *  is MOUNTING, not a property of the row. Omit for the unfiltered list.
+   *  ⚠ Irrelevant to the replace half above, which reaches every variant. */
+  shelf?: KbShelf
 ): void {
+  queryClient.setQueriesData<KnowledgeBaseList>(
+    { predicate: (query) => isBaseListKey(query.queryKey, workspaceId) },
+    (prev) =>
+      prev && prev.bases.some((b) => b.id === base.id)
+        ? { ...prev, bases: prev.bases.map((b) => (b.id === base.id ? base : b)) }
+        : prev
+  );
   queryClient.setQueryData<KnowledgeBaseList>(
-    knowledgeBasesQueryKey(workspaceId),
-    (prev) => {
-      if (!prev) return prev;
-      const known = prev.bases.some((b) => b.id === base.id);
-      return {
-        ...prev,
-        bases: known
-          ? prev.bases.map((b) => (b.id === base.id ? base : b))
-          : [base, ...prev.bases],
-      };
-    }
+    knowledgeBasesQueryKey(workspaceId, undefined, shelf),
+    (prev) =>
+      prev && !prev.bases.some((b) => b.id === base.id)
+        ? { ...prev, bases: [base, ...prev.bases] }
+        : prev
   );
 }
 
@@ -216,9 +282,15 @@ export function seedKnowledgeBase(
  * (1); key from the id captured AT SUBMIT (4). Rollback restores the SNAPSHOT,
  * not the inverse toggle — an inverse is wrong if a refetch landed between.
  */
-export function useToggleBaseStar(workspaceId?: string) {
+export function useToggleBaseStar(workspaceId?: string, shelf?: KbShelf) {
   const queryClient = useQueryClient();
-  const key = knowledgeBasesQueryKey(workspaceId);
+  // ⚠ THE SHELF MUST MATCH THE LIST THE SURFACE MOUNTED. This patches ONE
+  // entry; against a surface reading `bases:W:shelf:workspace` a plain
+  // `bases:W` key patches nothing anybody is listening to and the star
+  // round-trips with the card never changing — §8's silent no-op, and the exact
+  // failure `pages/home/knowledge-panel-cards.tsx › useStarToggle` exists to
+  // avoid on the channel variant.
+  const key = knowledgeBasesQueryKey(workspaceId, undefined, shelf);
   return useMutation({
     mutationFn: ({ baseId, starred }: { baseId: string; starred: boolean }) =>
       setBaseStar(baseId, starred, workspaceId),

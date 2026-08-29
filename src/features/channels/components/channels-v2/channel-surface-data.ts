@@ -228,6 +228,9 @@ export function useChannelSurfaceData({
     messages,
     threads,
     openThreadId,
+    // ⚠ THE SAME FEED THE AGENTS TAB READS — no new read, no second poll. It carries what each
+    // agent is CALLED, which is what lets the transcript render the CURRENT name (2026-08-27).
+    agentSessions,
   });
 
   // The thread view's outbound send box — `use-inline-consent.ts`.

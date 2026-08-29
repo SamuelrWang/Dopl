@@ -30,6 +30,7 @@ export type { AuthLike, TemplateShareCtx } from "./service-shared";
 
 export {
   listTemplates,
+  listHomeScopedTemplateIds,
   getTemplateById,
   resolveTemplateForLaunch,
 } from "./service-reads";

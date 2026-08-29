@@ -284,6 +284,28 @@ describe("the attribution pill", () => {
     expect(attributionName({ agent: false, agentId: null, authorLabel: "You" })).toBe("You");
     expect(attributionName({ agent: true, agentId: A, authorLabel: "You" })).toBe(`Agent #${A}`);
     expect(attributionName({ agent: true, agentId: null, authorLabel: "You" })).toBe("Agent");
+
+    // ── THE RENAME REACHES THE TRANSCRIPT (2026-08-27, Samuel's ruling) ──────────────────────
+    //
+    // ⚠ THE BUG WAS AN OMISSION, NOT A STALE CACHE. This function hardcoded `Agent #<id>` and
+    // never consulted the name store at all, while `agents-model.ts › agentDisplayName` (the
+    // CARDS' rule) had preferred the operator's own name since 2026-08-25 — so a rename showed on
+    // the card and never in the chat area. `agentName` is resolved AT RENDER from
+    // `AuthorIndex.agents`; nothing is stamped into a message row, and nothing may start being.
+    expect(
+      attributionName({ agent: true, agentId: A, authorLabel: "You", agentName: "Research" })
+    ).toBe("Research");
+    // ⚠ FALLS BACK, NEVER BLANKS. Most agents are never renamed, and the id is the honest answer.
+    expect(
+      attributionName({ agent: true, agentId: A, authorLabel: "You", agentName: null })
+    ).toBe(`Agent #${A}`);
+    expect(
+      attributionName({ agent: true, agentId: A, authorLabel: "You", agentName: "   " })
+    ).toBe(`Agent #${A}`);
+    // ⚠ A HUMAN ROW IS UNTOUCHED by an agent name arriving beside it.
+    expect(
+      attributionName({ agent: false, agentId: null, authorLabel: "You", agentName: "Research" })
+    ).toBe("You");
   });
 
   it("carries the avatar, the name and the message TIME in one capsule", () => {

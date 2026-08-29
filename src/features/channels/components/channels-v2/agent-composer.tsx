@@ -52,7 +52,7 @@
  */
 
 import { useState } from "react";
-import { SendButton } from "@/shared/ui/send-button";
+import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
 import { cn } from "@/shared/lib/utils";
 import { TAB_ACTION } from "./bits";
 import { canMessageAgent, messageAgent } from "./agents-controls";
@@ -180,48 +180,42 @@ export function AgentComposer({
 
   const label = name ? `Message ${name}` : "Message this agent";
 
+  // ⚠ THE BOTTOM IS `COMPOSER_BOTTOM`, NOT THIS SURFACE'S OWN NUMBER (Samuel, live review
+  // 2026-08-27). This pane is `inset-y-0` against the same bottom edge the message pane ends on,
+  // so the channel composer's box and this one are side by side — and a `py-3` here against a
+  // `pb-4` there put them on two different lines, 4px apart. The TOP stays `pt-3`: what sits
+  // above this is a work stream, not a transcript, and that spacing is not what aligns.
   return (
-    <div className={cn("shrink-0 py-3", className)}>
-      {/* ⚠ ONE RAISED BAR, NO HAIRLINES (Samuel, 2026-08-22). It was a concave
-          `FIELD_WELL` inside a hairline-topped block — an INSET face, which in
-          this kit means "a field pressed into a panel" and read as chrome the
-          operator had to find. The composer is the surface's one action, so it
-          takes the channel composer's own raised idiom instead: `.raised-tab`,
-          THE app-wide raised face (docs/DESIGN-SYSTEM.md), floating on the panel
-          with no rule above it and no border around it.
-          ⚠ `.raised-tab` SUPPLIES THE FILL, so no `bg-*` utility may ride along:
-          Tailwind's utility layer outranks the kit layer and a stray background
-          flattens the gradient to nothing. */}
-      <div className="raised-tab flex items-center gap-1.5 rounded-[10px] p-1 pl-2.5">
-        <textarea
-          rows={1}
-          value={text}
-          disabled={busy}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            // ⚠ IME GUARD, the same one the channel composer keeps: `isComposing`
-            // means the Enter is committing a candidate, not submitting.
-            if (e.nativeEvent.isComposing) return;
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder={label}
-          aria-label={label}
-          // ⚠ THE BAR RESTS AT THE SEND BUTTON'S OWN HEIGHT (30px) — one object,
-          // one line, which is what "a bar" means. `resize-none` + `overflow-auto`
-          // keep a pasted paragraph from growing the composer over the stream it
-          // sits under; Shift+Enter still breaks the line and the box scrolls.
-          className="h-[30px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-[6px] text-caption leading-[18px] text-text-primary outline-none placeholder:text-text-muted"
-        />
-        {/* ⚠ THE GLOBAL SEND AFFORDANCE (`shared/ui/send-button.tsx`), not a
-            local icon button. It is the v1 session window's `.send-btn` face and
-            is already what the playground's channels pane and the knowledge hero
-            chat send with — a third hand-rolled send glyph in one product is how
-            three of them come to disagree. */}
-        <SendButton onClick={send} disabled={busy || text.trim() === ""} />
-      </div>
+    <div className={cn("shrink-0 pt-3", COMPOSER_BOTTOM, className)}>
+      {/* ⚠ THE SHARED ROW, AND THIS SURFACE IS NOTHING BUT IT (`composer-input.tsx`). The bar's
+          whole face — ring, radius, padding, gap, field type, send button — lives there, so the
+          channel composer's input row and this one are the same tree rather than two trees given
+          the same class strings. That earlier arrangement rendered visibly differently side by
+          side, which is what this component replaced. **Do not restyle it from here.** */}
+      <ComposerInputRow
+        // ⚠ PILL: on THIS surface the row is the only object there is, so it wears the face. The
+        // channel composer mounts the same row `face="bare"` because its CARD wears that same
+        // edge instead — one box per surface, either way.
+        face="pill"
+        value={text}
+        onChange={setText}
+        onKeyDown={(e) => {
+          // ⚠ IME GUARD, the same one the channel composer keeps: `isComposing` means the Enter
+          // is committing a candidate, not submitting.
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send();
+          }
+        }}
+        placeholder={label}
+        ariaLabel={label}
+        disabled={busy}
+        onSend={send}
+        sendDisabled={busy || text.trim() === ""}
+        sendTitle={label}
+        sendLabel="Send"
+      />
       {/* ⚠ `role="alert"`, not `status`: it appears only AFTER the operator
           pressed Send, and it is the one thing on this surface that says the
           message did not land. Same role the launch refusals wear.
@@ -259,12 +253,12 @@ export function AgentComposer({
           )}
         </div>
       )}
-      {/* ⚠ SAYS WHAT THIS LANE IS, once, because it is the surface's one
-          genuinely surprising property: an input under a transcript normally
-          posts to it. */}
-      <p className="mt-1.5 text-micro text-text-muted">
-        Only your agent sees this. It is not posted to the thread.
-      </p>
+      {/* ⚠ THE "only your agent sees this" LINE MOVED TO THE EMPTY STATE (Samuel, 2026-08-27)
+          — `agent-stream.tsx › agentDirectCaption`, centred under "Send a message to wake agent".
+          It is the surface's one genuinely surprising property (an input under a transcript
+          normally posts to it), and it belongs where the operator is looking BEFORE they type,
+          not as a footnote under the bar they have already used. **Do not re-add it here**: two
+          statements of one fact is how the two come to word it differently. */}
     </div>
   );
 }

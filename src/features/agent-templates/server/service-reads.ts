@@ -4,6 +4,7 @@ import type {
   AgentTemplateContext,
   ResolvedAgentTemplate,
   TemplateKnowledgeBaseRef,
+  TemplateShelf,
 } from "../types";
 import { AgentTemplateNotFoundError } from "./errors";
 import * as repo from "./repository";
@@ -26,17 +27,51 @@ import {
  * deliberately does NOT group: grouping is a rendering decision (a picker wants
  * flat-with-headers, a settings page wants sections) and a grouped payload
  * forces one of those on every consumer.
+ *
+ * ⚠ `opts.shelf` NARROWS TO ONE SHELF (`../types.ts › TemplateShelf`) — the
+ * /home pane's Personal section asks for `"home"`, the workspace Agents page for
+ * `"workspace"`, and everything else (the launch picker, `resolveTemplateRef`,
+ * MCP) omits it and gets BOTH. It is applied in the QUERY, not over the result,
+ * so a shelf the caller did not ask for never reaches the wire (INVARIANTS §11).
+ *
+ * 🔒 THE SHELF IS ORTHOGONAL TO `canSeeTemplate`, which runs AFTER it and is
+ * unchanged. Shelf = which surface lists it; visibility = who may read it. A
+ * narrowed read can only ever return a SUBSET of what the unfiltered one would.
  */
 export async function listTemplates(
-  ctx: AgentTemplateContext
+  ctx: AgentTemplateContext,
+  opts: { shelf?: TemplateShelf } = {}
 ): Promise<AgentTemplate[]> {
-  const all = await repo.listTemplatesForWorkspace(ctx.workspaceId);
+  const all = await repo.listTemplatesForWorkspace(ctx.workspaceId, opts.shelf);
   if (all.length === 0) return [];
   const share = await shareCtxForTemplates(ctx, all);
   const visible = all
     .filter((t) => canSeeTemplate(ctx, t, share))
     .map((t) => withSharingSet(ctx, t, share));
   return decorateWithKnowledgeBases(ctx, visible);
+}
+
+/**
+ * Which of `templates` sit on the caller's PERSONAL (/home) shelf — the sibling
+ * key behind `GET /api/agent-templates › homeScopedTemplateIds` (2026-08-28).
+ *
+ * 🔒 ⚠ **A LABEL OVER AN ALREADY-FENCED LIST.** It takes the rows `listTemplates`
+ * already put through `canSeeTemplate`, and answers which of THOSE carry the
+ * flag. No visibility of its own; never a wider set. Twin of
+ * `knowledge/server/service-bases.ts › listHomeScopedBaseIds`, and the pair must
+ * move together — two list surfaces disagreeing about whether a shelf is
+ * knowable is exactly the confusion the one-mapping rule exists to prevent.
+ */
+export async function listHomeScopedTemplateIds(
+  ctx: AgentTemplateContext,
+  templates: AgentTemplate[]
+): Promise<string[]> {
+  if (templates.length === 0) return [];
+  const visible = new Set(templates.map((t) => t.id));
+  const scoped = await repo.listHomeScopedTemplateIds(ctx.workspaceId, [
+    ...visible,
+  ]);
+  return scoped.filter((id) => visible.has(id));
 }
 
 /**

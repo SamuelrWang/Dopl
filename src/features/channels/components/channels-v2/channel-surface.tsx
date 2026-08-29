@@ -114,11 +114,17 @@ export interface ChannelSurfaceCapabilities {
    *
    * ⚠ DEFAULT `false`, WHICH INVERTS THE OTHER TWO, and the inversion is the
    * decision. `memberManagement`/`selfManagement` default to the workspace
-   * page's behaviour because they REMOVE something; this one ADDS a tab, and the
-   * two hosts that want it are the container surfaces where the channel IS the
-   * application: the operator's /home record and the guest lane at
-   * `/c/[workspaceId]`. Both pass `true`, and they see the same list — which is
-   * the whole point of one component (the plan's "what do guests see").
+   * page's behaviour because they REMOVE something; this one ADDS a tab.
+   *
+   * ⚠ EXACTLY ONE HOST PASSES IT SINCE 2026-08-27 — THE GUEST LANE (Samuel's
+   * F-340 ruling). Both container surfaces did from M4, on the argument that the
+   * operator should see what the guest sees; that cost the info column a FIFTH
+   * tab on a width budget measured for four, and the row tightened and then
+   * scrolled. **The duplicate view gave way, not the capability:** /home's own
+   * header carries a full Knowledge FACE over the same bases
+   * (`pages/home/knowledge-panels.tsx`), whereas for a guest this tab is the
+   * ONLY way to read a base granted into the channel. Pinned in both directions
+   * by `knowledge-tab.test.tsx › the capability, per host`.
    *
    * ⚠ THE WORKSPACE CHANNEL PAGE DELIBERATELY DOES NOT PASS IT (this wave). The
    * lane is scoped to ONE channel's grants, and that page already carries the
@@ -319,6 +325,14 @@ export function ChannelSurface({
         }
         onToggleInfo={sel.toggleInfo}
         onExitThread={() => sel.openThread(null)}
+        // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28).
+        // ⚠ THE AGENTS TAB'S OWN OPEN MECHANISM, NOT A SECOND ONE — literally the
+        // function handed to `onOpenAgent` twenty lines below, so the card's Open
+        // button and the transcript's pill cannot come to mean different things.
+        // Safe on BOTH hosts of this surface: each one mounts the pane this moves
+        // (`overlays.tsx` on the workspace page, the panel inside
+        // `channel-surface-standalone.tsx` everywhere else).
+        onOpenAgent={sel.setOpenAgent}
         onOpenThread={sel.openThread}
       />
       {/* THE INFO COLUMN SLIDES (Samuel, 2026-08-24). The shell is ALWAYS

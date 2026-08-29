@@ -9,7 +9,7 @@ import {
 } from "../../client/hooks";
 import { useKnowledgeRealtime } from "../../client/realtime";
 import { kbScope } from "../../scope";
-import type { KnowledgeBase, KnowledgeEntry } from "../../types";
+import type { KbShelf, KnowledgeBase, KnowledgeEntry } from "../../types";
 import { findBaseBySegment } from "../../url";
 import type { BaseTree, ListFilter, Selection } from "./types";
 import {
@@ -34,6 +34,10 @@ interface ControllerArgs {
   initialBases: KnowledgeBase[];
   initialSelection?: Selection | null;
   initialTrees?: Record<string, BaseTree>;
+  /** WHICH SHELF (`../../types.ts › KbShelf`). ⚠ Used TWICE below and the two
+   *  uses must not drift: it keys the live list query AND the star mutation
+   *  that patches that query's entry. Undefined = unfiltered. */
+  shelf?: KbShelf;
   /** Selection ↔ address bar sync. Defaults to History API; desktop SPA passes
    *  a hash-router adapter so the same two effects drive both (./routing.ts). */
   urlSync?: KnowledgeUrlSync;
@@ -55,6 +59,7 @@ export function useKnowledgeV2Controller({
   initialBases,
   initialSelection = null,
   initialTrees,
+  shelf,
   urlSync,
 }: ControllerArgs) {
   const sync = useMemo(
@@ -68,6 +73,7 @@ export function useKnowledgeV2Controller({
   // reached on a COLD entry, which this view cannot start from (host resolves
   // the same query first), so it never overrides a real answer.
   const basesQuery = useKnowledgeBaseList(workspaceId, {
+    shelf,
     initialData: {
       bases: initialBases,
       ownerNames: {},
@@ -83,7 +89,9 @@ export function useKnowledgeV2Controller({
 
   // Optimistic against the list cache above (grid reorders on click); failure
   // rolls back — client/hooks.ts.
-  const starMutation = useToggleBaseStar(workspaceId);
+  // ⚠ SAME SHELF AS THE READ ABOVE — this patches the entry that query mounts,
+  // and a key off by one suffix patches nothing anybody is listening to (§8).
+  const starMutation = useToggleBaseStar(workspaceId, shelf);
   const starMutate = starMutation.mutate;
   const toggleStar = useCallback(
     (baseId: string, starred: boolean) => starMutate({ baseId, starred }),

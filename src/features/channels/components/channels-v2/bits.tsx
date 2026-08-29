@@ -147,46 +147,32 @@ export function agentAccent(agentId: string): string {
  * DISPLAY claim about who typed, never about who they are. The side the row
  * hangs on comes from `author_user_id`, which the server stamps.
  *
- * ⚠ `agentId` EXISTS BECAUSE MULTIPLAYER BROKE THE PLAIN CHIP (Samuel,
- * 2026-08-22). Two of one operator's agents posting into one thread both wore an
- * undifferentiated "Agent" pill under one account name, so a transcript with two
- * writers read as one. The id is the ONLY thing on the wire that tells them apart
- * — `agents-model.ts › parseAgentPostStamp` off the writer's own
- * `client_msg_id`, the same token `agentSentMessages` splits the panel's Sent
- * lane on (F-251).
+ * ⚠ IT SAYS "Agent" AND NOTHING ELSE, AND THE MISSING HALF IS DELIBERATE. It
+ * carried an `agentId` that it rendered verbatim in a mono span — the 2026-08-22
+ * multiplayer chip, from before `attribution-pill.tsx › AttributionPill` took
+ * over WHICH-agent attribution in the transcript. **That prop had no caller left**
+ * (`mentions-list.tsx` mounts `<AgentChip />` bare, which is the only mount), so
+ * the branch rendered nowhere — but a live component that prints eight machine
+ * characters the moment someone passes them is exactly the hole the 2026-08-27
+ * sweep closes (INVARIANTS §11: the raw agent id is never user-visible). WHICH
+ * agent is the pill's question and it answers it with `agentDisplayName`.
  *
- * ⚠ ABSENT IS THE OLD CHIP, NOT A BLANK. An unstamped agent post (an older main,
- * an agent that supplied its own idempotency key, a machine-level courtesy post)
- * renders exactly what it always did. Inventing an id for it, or dropping the
- * chip because there is none, would both report "cannot say" as something else
+ * ⚠ THE BARE NOUN IS THE HONEST READING HERE, not a degradation. This chip marks
+ * a Tags-inbox row as having an agent party to it; the row already names the
+ * account, and "cannot say which" is what an inbox row genuinely knows
  * (INVARIANTS §11).
  */
-export function AgentChip({
-  agentId = null,
-  className,
-}: {
-  /** The stamped per-instance id, or `null` for an unattributed agent post. */
-  agentId?: string | null;
-  className?: string;
-}) {
+export function AgentChip({ className }: { className?: string }) {
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-micro font-medium",
-        agentId ? agentAccent(agentId) : AGENT_ACCENTS[0],
+        AGENT_ACCENTS[0],
         className
       )}
     >
       <Bot size={11} aria-hidden />
       Agent
-      {agentId && (
-        <>
-          {/* ⚠ The separator is decoration; the id is read out on its own so a
-              screen reader says "Agent k3v7d2mq" rather than spelling a middot. */}
-          <span aria-hidden>·</span>
-          <span className="font-mono tracking-tight">{agentId}</span>
-        </>
-      )}
     </span>
   );
 }

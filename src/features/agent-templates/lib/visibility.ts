@@ -54,18 +54,23 @@ export const SECTIONS: ReadonlyArray<TemplateSectionDef> = [
 /**
  * The same axis inside a link CONTAINER — the /home Agents face.
  *
- * ⚠ **TWO OPTIONS, BECAUSE `team` IS A DEAD VALUE HERE.** A container has no
- * teams (§4A: one channel, one or two members), so `team` has no referent and a
- * third option would offer a scope that can never resolve to anybody. The
- * editor mounted against a container derives its visibility control from THIS
- * array for the same reason the workspace page derives it from {@link SECTIONS}.
- * ⚠ A `team` row that arrives anyway is DROPPED by {@link groupByVisibility} —
- * never re-filed under `private` or `workspace`, which would be this surface
- * inventing a sharing fact (INVARIANTS §11).
+ * 🔒 ⚠ **ONE OPTION SINCE 2026-08-27, AND THE DELETED ONE IS THE POINT.** It
+ * held `workspace` AND `private`; Samuel's ruling removed the per-channel
+ * private section from this pane (converging it on the Knowledge face), which
+ * makes a `private` CONTAINER template **reachable from nowhere**: /home no
+ * longer lists it, and a container is not navigable at all — `isStandardWorkspace`
+ * keeps it off the rail, so it has no workspace Agents page of its own.
+ * **Offering `private` here would create write-only rows.** The container
+ * editor derives its visibility control from this array, so trimming the array
+ * is what closes that door — do not "restore" the second entry.
  *
- * ⚠ THE ORDER IS THE PANE: SHARED first, then PRIVATE. It is the reverse of the
- * workspace page's, and deliberately so — "who else can wear this identity" is
- * the question a relationship surface leads with (`home-agents-tab.plan.md` §1).
+ * ⚠ `team` WAS ALREADY DEAD HERE and still is: a container has no teams (§4A),
+ * so the value has no referent. A `team` (or `private`) row that arrives anyway
+ * is DROPPED by {@link groupByVisibility} — never re-filed, which would be this
+ * surface inventing a sharing fact (INVARIANTS §11).
+ *
+ * ⚠ INSIDE A CONTAINER, `workspace` MEANS "THE OTHER PEOPLE IN THIS
+ * RELATIONSHIP" — hence "Shared in this channel", never "Public".
  */
 export const SECTIONS_CONTAINER: ReadonlyArray<TemplateSectionDef> = [
   {
@@ -73,24 +78,27 @@ export const SECTIONS_CONTAINER: ReadonlyArray<TemplateSectionDef> = [
     label: "Shared in this channel",
     emptyLine: "No agent is shared into this channel yet.",
   },
-  {
-    visibility: "private",
-    label: "Private",
-    emptyLine: "You haven't created an agent in this channel.",
-  },
 ];
 
 /**
- * Scope C — the caller's OWN workspace, asked the same private question from
- * inside a channel pane. Not a member of {@link SECTIONS_CONTAINER}: it reads a
- * DIFFERENT workspace, so it is a scope of the private section rather than a
- * fourth section, and its empty sentence has to differ from the container's or
- * the two states read as one (`home-agents-tab.plan.md` §4.3).
+ * The PERSONAL section — the caller's own HOME SHELF, always (Samuel's ruling
+ * 2026-08-27). Not a member of {@link SECTIONS_CONTAINER} because it reads a
+ * DIFFERENT workspace: the container array describes what lives in the channel,
+ * this describes what lives on the operator's own shelf.
+ *
+ * ⚠ **"Personal", NOT "Private" — UI COPY ONLY.** `visibility: 'private'` is
+ * unrenamed everywhere it is stored, read or fenced (this def still carries it);
+ * the word above a section and the value in a column are different things and
+ * must not be conflated in a predicate or a grep.
+ *
+ * ⚠ ITS ROWS ARE ALSO `home_scoped` — the visibility field here is the audience
+ * axis, and the SHELF axis is a server filter the client never sees
+ * (`../types.ts › TemplateShelf`).
  */
 export const SECTION_PRIVATE_EVERYWHERE: TemplateSectionDef = {
   visibility: "private",
-  label: "Private",
-  emptyLine: "You have no private agents in your own workspace.",
+  label: "Personal",
+  emptyLine: "You haven't created an agent here yet.",
 };
 
 /**

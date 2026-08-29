@@ -372,3 +372,76 @@ describe("the panel's button reaches it", () => {
     expect(screen.queryByText(/not built yet/i)).toBeNull();
   });
 });
+
+/**
+ * THE PANEL'S ONE CHROME BOX, AND THE METER AT ZERO (Samuel, 2026-08-27).
+ *
+ * ⚠ TWO STACKED BANDS BECAME ONE. The context meter had a strip of its own directly above the
+ * pause/end/open row — two bands of chrome about one agent, eating the height the STREAM wants.
+ * ⚠ AND A FRESH AGENT SHOWS THE BAR AT 0, not a sentence. `contextUsed` is a MEASURED zero on an
+ * agent that has sent nothing; "Context use is not measured yet." stated an ABSENCE where there
+ * was a fact. A missing WINDOW is still an absence — a bar needs a denominator, and inventing one
+ * is a guess drawn to scale (INVARIANTS §11).
+ */
+describe("the panel's usage readout", () => {
+  const mountPanel = (over: Partial<DesktopSessionSummary>) => {
+    const agent = summary(over);
+    render(
+      <ChannelsV2AgentPanel
+        openAgent={agentKey(agent)}
+        sessions={[agent]}
+        messages={[]}
+        currentUserId={ME}
+        workspaceSlug="acme-a1b2"
+        onClose={() => {}}
+      />
+    );
+  };
+
+  it("shows the bar at ZERO for an agent that has sent nothing", () => {
+    mountPanel({ contextUsed: 0, contextWindow: 200000 });
+    // ⚠ THE METER IS DRAWN — `UsageMeter` renders its label and a `0 / 200K` readout.
+    expect(screen.getByText(/Context tokens/)).toBeTruthy();
+    expect(screen.queryByText(/not measured yet/i)).toBeNull();
+  });
+
+  it("draws the bar even with NO window reported — the dead line is gone", () => {
+    // ⚠ THIS IS THE CASE THE PANE ACTUALLY HITS. A spawn-idle agent has sent nothing, so main has
+    // reported no `contextWindow` and the box used to read "Context use is not measured yet." —
+    // a dead line where the operator wanted the object they watch fill. `UsageMeter` owns the
+    // missing denominator (empty track, no division), so the meter renders unconditionally.
+    mountPanel({ contextUsed: null, contextWindow: null });
+    expect(screen.getByText(/Context tokens/)).toBeTruthy();
+    expect(screen.queryByText(/not measured yet/i)).toBeNull();
+  });
+
+  it("renders the readout INSIDE the controls box, not as a band of its own", () => {
+    // ⚠ STRUCTURAL, because "one box" is not a class name. The meter and the stop verbs share an
+    // ancestor that IS the controls box; before this they were siblings, two boxes apart.
+    // ⚠ NEEDS THE BRIDGE, because the buttons it must sit beside are feature-detected.
+    (window as { dopl?: unknown }).dopl = {
+      apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
+      sessions: { pause: vi.fn(), end: vi.fn(), openAgentWindow: vi.fn() },
+    };
+    mountPanel({ contextUsed: 0, contextWindow: 200000 });
+    const box = screen.getByText(/Context tokens/).closest("div.border-b");
+    expect(box).not.toBeNull();
+    expect(box?.textContent).toMatch(/Pause|End/);
+  });
+
+  it("KEEPS the readout on a build with no control ops at all", () => {
+    // ⚠ THE REGRESSION THE ONE-BOX MERGE COULD HAVE SHIPPED. `AgentControls` returns null when
+    // this build can neither pause nor open a window — correct while the box was buttons only,
+    // and it would have taken the usage numbers with it. They are the SUMMARY FEED's and owe the
+    // bridge nothing.
+    mountPanel({ contextUsed: 0, contextWindow: 200000 });
+    expect(screen.getByText(/Context tokens/)).toBeTruthy();
+  });
+
+  it("names the CHANNEL, not a missing field, for an agent on no thread", () => {
+    // ⚠ "no thread title" DESCRIBED A MISSING FIELD. A channel-level agent is attached to the
+    // ROOM on purpose (`agents-controls.ts`: `taskId: null`) — an ordinary scope, not a gap.
+    mountPanel({ threadTitle: null });
+    expect(screen.getByText(/in main channel/i)).toBeTruthy();
+  });
+});

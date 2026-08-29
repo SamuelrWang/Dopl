@@ -2,7 +2,8 @@
  * `service-writes.ts` — three gates, in the order each service applies them:
  *  - `createHomeChannel`: one container, one PRIVATE NON-DIRECT channel, rollback
  *    if the channel cannot be opened.
- *  - `mintContainerLink`: membership FIRST (404, never 403), FULL before insert.
+ *  - `mintContainerLink`: membership FIRST (404, never 403), then reuse-or-mint.
+ *    ⚠ NO CAPACITY GATE since 2026-08-26 — the roster's size is not an input.
  *  - `claimLink` (LEGACY UNBOUND, still live): unknown 404, dead 410, own 400,
  *    pair dedup before spend, atomic use guard.
  * ⚠ THE WHOLE ROLE HALF OF THE MINT LIVES IN
@@ -24,7 +25,6 @@ vi.mock("./repository", () => ({
   insertClaim: vi.fn(),
   findPairContainer: vi.fn(),
   findMemberContainer: vi.fn(),
-  countActiveContainerMembers: vi.fn(),
   insertLinkContainer: vi.fn(),
   insertSoloContainer: vi.fn(),
 }));
@@ -96,17 +96,22 @@ const CONTAINER: LinkContainerRow = {
   created_at: "2026-08-23T00:00:00.000Z",
 };
 
+const ADA = {
+  userId: CREATOR,
+  displayName: "Ada",
+  email: "ada@x.dev",
+  avatarUrl: null,
+};
+
 const CHANNEL = {
   workspaceId: WS,
   workspaceSegment: "ada-grace-abc123def456",
   channelId: "44444444-4444-4444-8444-444444444444",
   name: "Ada & Grace",
-  peer: {
-    userId: CREATOR,
-    displayName: "Ada",
-    email: "ada@x.dev",
-    avatarUrl: null,
-  },
+  // ⚠ `peer` IS `peers[0]`, not a second fact — `hydrateChannels` derives it, so
+  // a fixture where the two disagree is a shape the server cannot produce.
+  peers: [ADA],
+  peer: ADA,
   createdAt: "2026-08-23T00:00:00.000Z",
   lastMessageAt: null,
   lastMessagePreview: null,
@@ -122,7 +127,6 @@ beforeEach(() => {
   mocked.insertSoloContainer.mockResolvedValue(CONTAINER);
   mocked.insertClaim.mockResolvedValue(true);
   mocked.findMemberContainer.mockResolvedValue(CONTAINER);
-  mocked.countActiveContainerMembers.mockResolvedValue(1);
   mocked.findOpenLinkForWorkspace.mockResolvedValue(null);
   // Minter is the container OWNER → grant-above-self passes (pinned separately).
   vi.mocked(findMembership).mockResolvedValue({ role: "owner" } as WorkspaceMembership);
@@ -184,18 +188,22 @@ describe("mintContainerLink — the gate", () => {
       status: 404,
       code: "CHANNEL_NOT_FOUND",
     });
-    expect(mocked.countActiveContainerMembers).not.toHaveBeenCalled();
+    expect(mocked.findOpenLinkForWorkspace).not.toHaveBeenCalled();
     expect(mocked.insertLink).not.toHaveBeenCalled();
   });
 
-  it("409s a FULL container BEFORE inserting anything", async () => {
-    mocked.countActiveContainerMembers.mockResolvedValue(2);
+  it("MINTS for a container that already has a peer — there is no cap", async () => {
+    // 🔒 THE RULING, PINNED (Samuel, 2026-08-26: a home channel takes MORE THAN
+    // TWO people). This case used to 409 `LINK_CONTAINER_FULL` at two active
+    // members. The roster's size is no longer an INPUT to this service at all —
+    // there is no count to mock, which is the strongest form the assertion has:
+    // a re-added gate would need a repository read that no longer exists.
+    mocked.insertLink.mockResolvedValue(linkRow({ workspace_id: WS }));
 
     await expect(
       mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" })
-    ).rejects.toMatchObject({ status: 409, code: "LINK_CONTAINER_FULL" });
-    expect(mocked.findOpenLinkForWorkspace).not.toHaveBeenCalled();
-    expect(mocked.insertLink).not.toHaveBeenCalled();
+    ).resolves.toBeDefined();
+    expect(mocked.insertLink).toHaveBeenCalledTimes(1);
   });
 
   it("REVOKES a dead (un-revoked but expired) open link and mints a fresh one", async () => {
@@ -263,8 +271,8 @@ describe("mintContainerLink — the gate", () => {
     const [args] = mocked.insertLink.mock.calls[0];
     expect(args.creatorUserId).toBe(CREATOR);
     expect(args.workspaceId).toBe(WS);
-    // A bound link fills the container's ONE free seat — single-use by
-    // construction, never a client choice.
+    // A bound link admits ONE named person — single-use by construction, never
+    // a client choice, and the only thing bounding how a container grows.
     expect(args.maxUses).toBe(1);
     expect(args.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(args.expiresAt).toBeNull();

@@ -1,7 +1,7 @@
 import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { KnowledgeBase } from "../types";
+import type { KbShelf, KnowledgeBase } from "../types";
 import {
   KNOWLEDGE_BASE_COLS,
   mapBaseRow,
@@ -77,9 +77,24 @@ export async function findBaseByPublicId(
   return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
 }
 
+/**
+ * One workspace's bases, optionally narrowed to ONE SHELF.
+ *
+ * ⚠ `shelf` UNDEFINED IS "NO FILTER", NOT A DEFAULT SHELF, and every caller that
+ * omits it means the whole workspace: MCP `kb_list_bases` rides the unfiltered
+ * path, so does workspace search, and so does the lazy-seed count in
+ * `service-bases.ts › listBases` — which MUST see both shelves, or a workspace
+ * whose only bases are home-scoped would re-seed on every list call.
+ *
+ * ⚠ `home_scoped` IS FILTERED ON BUT NEVER SELECTED. It is absent from
+ * `KNOWLEDGE_BASE_COLS` on purpose (`../types.ts › KbShelf` holds the argument);
+ * Postgres does not require a column to be projected to filter on it, and
+ * leaving it off the row is what keeps the fence server-side.
+ */
 export async function listBasesForWorkspace(
   workspaceId: string,
-  includeDeleted = false
+  includeDeleted = false,
+  shelf?: KbShelf
 ): Promise<KnowledgeBase[]> {
   const db = supabaseAdmin();
   let query = db
@@ -88,9 +103,40 @@ export async function listBasesForWorkspace(
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true });
   if (!includeDeleted) query = query.is("deleted_at", null);
+  if (shelf !== undefined) query = query.eq("home_scoped", shelf === "home");
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as KnowledgeBaseRow[]).map(mapBaseRow);
+}
+
+/**
+ * WHICH of `baseIds` live on the /home SHELF — the fold behind
+ * `GET /api/knowledge/bases › homeScopedBaseIds`. One query for N bases.
+ *
+ * 🔒 ⚠ **THIS IS THE ONLY PLACE `home_scoped` IS SELECTED, AND IT SELECTS THE
+ * FLAG ALONE.** The column is deliberately absent from `KNOWLEDGE_BASE_COLS`
+ * (`dto.ts`) so no client can re-implement the shelf FENCE from a projected row
+ * — and nothing here changes that: what crosses the wire is a set of ids the
+ * caller was ALREADY shown, labelled, not a new column on the row.
+ *
+ * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. The id set IS the fence, exactly
+ * as `repository-stars.ts › listStarredBaseIds` requires — this function applies
+ * no visibility of its own and must never be given a wider set.
+ */
+export async function listHomeScopedBaseIds(
+  workspaceId: string,
+  baseIds: string[]
+): Promise<string[]> {
+  if (baseIds.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_bases")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("home_scoped", true)
+    .in("id", baseIds);
+  if (error) throw error;
+  return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
 
 /**
@@ -122,6 +168,13 @@ export interface InsertBaseArgs {
   visibility?: "public" | "private";
   /** `'workspace'` if omitted (matches DB column default). */
   accessMode?: "workspace" | "teams";
+  /**
+   * WHICH SHELF (`../types.ts › KbShelf`). `false` if omitted, matching the DB
+   * column default — so the seed path and every batch insert land on the
+   * WORKSPACE shelf without naming it. ⚠ Only `createBase` ever passes `true`,
+   * and only behind its three-part fence.
+   */
+  homeScoped?: boolean;
   createdBy: string | null;
 }
 
@@ -136,6 +189,7 @@ function baseInsertRow(args: InsertBaseArgs) {
     agent_write_enabled: args.agentWriteEnabled ?? false,
     visibility: args.visibility ?? "public",
     access_mode: args.accessMode ?? "workspace",
+    home_scoped: args.homeScoped ?? false,
     created_by: args.createdBy,
   };
 }

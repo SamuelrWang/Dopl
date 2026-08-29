@@ -185,7 +185,9 @@ describe("the 1:1 composer is GONE for an ended agent, not disabled", () => {
     );
     // ⚠ The lane STATES its absence rather than rendering blank — an ended agent
     // whose stream shows nothing at all reads as a surface that failed to load.
-    expect(screen.getByText(/Nothing yet|cannot show what your agent/i)).toBeTruthy();
+    // ⚠ THE EMPTY COPY IS AN INSTRUCTION SINCE 2026-08-27 ("Send a message to wake agent.")
+    // — the old "Nothing yet." stated a status where the operator needed an act.
+    expect(screen.getByText(/wake agent|cannot show what your agent/i)).toBeTruthy();
   });
 
   it("still offers the input for an IDLE agent — idle is not ended", () => {

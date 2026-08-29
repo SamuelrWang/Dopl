@@ -47,7 +47,7 @@ import { ChannelsV2AgentPanel } from "./agent-panel";
 // ⚠ The control strip is its own module since 2026-08-22 (split at the 500-line
 // cap when the 1:1 composer landed in the panel); its copy travelled with it.
 import { AGENT_CONTROL_REFUSED } from "./agent-panel-controls";
-import { agentKey, agentsForChannel } from "./agents-model";
+import { agentKey, agentsForChannel, NO_THREAD_LABEL } from "./agents-model";
 import { formatTokens } from "./agent-metrics";
 import { CHANNEL_ID, ME, message } from "./test-fixtures";
 
@@ -141,7 +141,17 @@ describe("AgentsTab — the cards", () => {
     expect(screen.queryByText(/0k/)).toBeNull();
   });
 
-  it("says a session with no first-class thread has no title, rather than nothing", () => {
+  /**
+   * ⚠ THIS PINNED THE RETIRED COPY UNTIL 2026-08-28, AND THAT IS THE FINDING RATHER THAN THE FIX.
+   * Samuel's 2026-08-27 ruling replaced "No thread title" — a MISSING FIELD — with the PLACE a
+   * channel-level agent is actually in (`agents-model.ts › NO_THREAD_LABEL`, "main channel"), and
+   * `agents-detail.test.tsx › "names the CHANNEL, not a missing field"` pins it on the PANEL. The
+   * card was never converted, so the two surfaces the operator clicks between said different
+   * things about one agent — and each had a green test defending its own wording.
+   * ⚠ IT ASSERTS THE CONSTANT, NOT A LITERAL, so the next re-wording cannot leave this pin
+   * defending a string the product no longer says.
+   */
+  it("names the CHANNEL for a session on no first-class thread, as the panel does", () => {
     render(
       <AgentsTab
         sessions={[summary({ taskId: "", threadTitle: null })]}
@@ -150,7 +160,7 @@ describe("AgentsTab — the cards", () => {
         onOpenAgent={noop}
       />
     );
-    expect(screen.getByText("No thread title")).toBeTruthy();
+    expect(screen.getByText(new RegExp(NO_THREAD_LABEL, "i"))).toBeTruthy();
   });
 
   it("shows only THIS channel's agents, and marks the open one Viewing", () => {

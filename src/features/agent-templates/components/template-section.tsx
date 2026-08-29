@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import { pendingRow } from "@/shared/ui/pending";
+import { SECTION_PANEL_GROUND, SectionPanel } from "@/shared/ui/section-panel";
 import type { AgentTemplate } from "../client/types";
 import type { TemplateSectionDef } from "../lib/visibility";
 
@@ -37,7 +38,19 @@ import type { TemplateSectionDef } from "../lib/visibility";
  * class strings**, which is the whole point of the split.
  */
 
-/** The flat panel shell: heading, optional header control, optional caption. */
+/**
+ * The flat panel shell: heading, optional header control, optional caption.
+ *
+ * ⚠ THE STRUCTURE IS `shared/ui/section-panel.tsx › SectionPanel` SINCE
+ * 2026-08-27, and this is now only the GROUND it stands on — the kit's flat
+ * "header strips, inset cards" face on a hairline. The /home Knowledge sections
+ * were `SectionBox` (a header strip over a CONCAVE body) until Samuel ruled the
+ * two /home faces onto one flat rectangle; `SectionPanel` is the shape they now
+ * share, and it paints nothing so this page's ground and /home's stay separate
+ * facts. ⚠ **THE /home PAGE REPAINTS THIS GROUND rather than passing one** —
+ * `pages/home/home.module.css › .frame :global([data-section-panel])` — so a
+ * mount there does not restate the page palette and this default is untouched.
+ */
 export function TemplatePanel({
   id,
   label,
@@ -56,24 +69,19 @@ export function TemplatePanel({
   children: ReactNode;
 }) {
   return (
-    <section
-      aria-labelledby={id}
-      className="rounded-[14px] border border-border-subtle bg-card-surface-subtle p-3"
+    <SectionPanel
+      id={id}
+      label={label}
+      action={action}
+      caption={caption}
+      // ⚠ THE VALUE MOVED, THE FACE DID NOT (2026-08-28). It was these two
+      // utilities typed here; the knowledge base-info face needed the same
+      // ground, so the string is `SECTION_PANEL_GROUND` in the kit and both
+      // callers read it. `SectionPanel` still paints nothing of its own.
+      className={SECTION_PANEL_GROUND}
     >
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        <h2
-          id={id}
-          className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary"
-        >
-          {label}
-        </h2>
-        {action}
-      </div>
-      {caption && (
-        <p className="px-1 pb-2.5 text-caption text-text-muted">{caption}</p>
-      )}
       {children}
-    </section>
+    </SectionPanel>
   );
 }
 

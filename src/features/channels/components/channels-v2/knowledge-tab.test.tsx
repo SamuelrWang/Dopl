@@ -12,9 +12,11 @@
  * the URLs are part of what is under test.
  *
  * ⚠ WHY THERE IS NO SEPARATE "GUEST" RENDER CASE. There is one component and it
- * takes no viewer argument: the operator on /home and a link-claimed guest on
- * `/c` mount THESE reads with THESE props. What differs between the two hosts is
- * one capability flag, and that is pinned where it is written — the two hosts'
+ * takes no viewer argument: whoever mounts it gets THESE reads with THESE props.
+ * ⚠ AND SINCE 2026-08-27 ONLY THE GUEST LANE MOUNTS IT AT ALL — /home stopped
+ * passing the capability (Samuel's F-340 ruling; the operator's Knowledge face on
+ * that page is the surface that replaced it). What differs between the hosts is
+ * that one flag, and it is pinned where it is written — each host's
  * own source (last describe below), the pass-through in
  * `channel-surface.test.tsx`, and the tab row in `info-panel.test.tsx`. Faking a
  * "guest" by re-rendering the same component with the same props would prove
@@ -420,30 +422,41 @@ describe("groupEntries — the flat payload, grouped honestly", () => {
 });
 
 /**
- * 🔒 THE TWO HOSTS THAT TURN IT ON, read out of their own source.
+ * 🔒 WHICH HOST TURNS IT ON — read out of each one's own source.
  *
- * The milestone's claim is "the guest sees exactly what the operator sees in
- * that tab", and it rests on both hosts passing the SAME capability. A render
- * test cannot see that — each host renders in a different tree — and a host that
- * silently lost the flag would ship a tab the operator has and the guest does
- * not, with nothing failing.
+ * ⚠ IT WAS "THE TWO HOSTS" UNTIL 2026-08-27 (Samuel's F-340 ruling), and the asymmetry is now
+ * the thing under test rather than the parity. The milestone's claim was "the guest sees exactly
+ * what the operator sees in that tab", which rested on BOTH hosts passing the same capability.
+ * The /home host no longer does: five tabs did not fit the 380px info column, and the operator
+ * already has a full Knowledge FACE one click away (`pages/home/knowledge-panels.tsx`) while the
+ * tab is the GUEST's only way to read a base granted into the channel. **The duplicate view gave
+ * way, not the capability.**
+ *
+ * A render test cannot see any of this — each host renders in a different tree — and a host that
+ * silently gained or lost the flag would ship a tab one side has and the other does not, with
+ * nothing failing. So it is a SOURCE read, in both directions.
  */
-describe("the capability, at both hosts", () => {
+describe("the capability, per host", () => {
   const ROOT = join(import.meta.dirname, "../../../../..");
-  const HOSTS = [
-    "apps/desktop-ui/src/pages/home/relationship-record.tsx",
-    "src/app/c/[workspaceId]/guest-channel.tsx",
-  ];
 
-  /** ⚠ COMMENTS STRIPPED. Both hosts EXPLAIN the flag in a docblock right above
-   *  it, so a raw source scan stays green when the line itself is deleted — the
-   *  exact mutation this pin exists to catch. Measured: without this, reverting
-   *  either host is VACUOUS. */
+  /** ⚠ COMMENTS STRIPPED. Every host EXPLAINS the flag in a docblock right above it, so a raw
+   *  source scan stays green when the line itself is deleted — the exact mutation this pin exists
+   *  to catch. Measured: without this, reverting a host is VACUOUS. ⚠ It is what makes the
+   *  NEGATIVE cases below honest too: `relationship-record.tsx`'s comment says the words
+   *  `knowledge: true` while the code does not. */
   const codeOf = (rel: string): string =>
     stripComments(readFileSync(join(ROOT, rel), "utf8"));
 
-  it.each(HOSTS)("%s passes `knowledge: true`", (rel) => {
-    expect(codeOf(rel)).toMatch(/knowledge:\s*true/);
+  it("the GUEST lane passes `knowledge: true` — it is the guest's only surface", () => {
+    expect(codeOf("src/app/c/[workspaceId]/guest-channel.tsx")).toMatch(/knowledge:\s*true/);
+  });
+
+  it("the /home record pane does NOT (Samuel, 2026-08-27 — F-340)", () => {
+    // ⚠ THE FIFTH TAB IS WHAT OVERFLOWED THE 380px COLUMN. Re-adding it here re-opens F-340;
+    // the operator's Knowledge FACE is the surface that replaced it, not a second tab.
+    expect(
+      codeOf("apps/desktop-ui/src/pages/home/relationship-record.tsx")
+    ).not.toMatch(/knowledge:\s*true/);
   });
 
   it("and the WORKSPACE channel page still does not (this wave, by decision)", () => {

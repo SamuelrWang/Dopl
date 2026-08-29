@@ -29,6 +29,26 @@ export type WriteSource = "user" | "agent";
  */
 export type Visibility = "public" | "private";
 
+/**
+ * WHICH SHELF a base lives on — the /home Knowledge pane's "across all
+ * channels" scope, or the workspace Knowledge page. Two PLACES over one table
+ * (Samuel's ruling 2026-08-26; `20260831120000_knowledge_base_home_scoped.sql`),
+ * and they exclude each other BOTH ways.
+ *
+ * ⚠ NOT A FIELD ON `KnowledgeBase`, and never make it one. It is a WRITE input
+ * (`KnowledgeBaseCreateInput.homeScoped`) and a READ FILTER
+ * (`GET /api/knowledge/bases?shelf=`); the stored `home_scoped` column is
+ * deliberately absent from `server/dto.ts › KNOWLEDGE_BASE_COLS`, so it never
+ * reaches a client that could re-implement the fence over a list it was handed
+ * — and the SDK-mirrored row type does not widen
+ * (`scripts/check-knowledge-type-drift.ts`). A surface that must SHOW the shelf
+ * gets a SIBLING key on the list response, like `baseStats` / `channelGrants`.
+ *
+ * ⚠ ABSENT IS NOT A THIRD VALUE — it means NO FILTER, which is what keeps MCP
+ * `kb_list_bases` and workspace search seeing the whole workspace.
+ */
+export type KbShelf = "home" | "workspace";
+
 export interface KnowledgeBase {
   id: string;
   workspaceId: string;

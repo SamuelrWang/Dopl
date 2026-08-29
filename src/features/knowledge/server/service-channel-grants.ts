@@ -304,16 +304,37 @@ export function canManageChannelGrants(
  * with the audience. Re-raising to `visible` therefore always starts from OFF
  * unless the caller says otherwise, which is the same default the schema sets.
  *
- * ⚠ THE SOURCE IS NOT CONSULTED, because the ROUTE is `sessionOnly` and no
- * agent token can reach it. If that gate is ever relaxed, this is where an
- * `ctx.source === "agent"` refusal belongs — do not conclude from its absence
- * that an agent may set grants.
+ * 🔒 ⚠ THE SOURCE IS NOW CONSULTED HERE, AND THAT PARAGRAPH IS WHY (2026-08-27).
+ * It used to read: *"THE SOURCE IS NOT CONSULTED, because the ROUTE is
+ * `sessionOnly` and no agent token can reach it. If that gate is ever relaxed,
+ * this is where an `ctx.source === "agent"` refusal belongs."* The gate was
+ * relaxed the moment this function gained a SECOND caller —
+ * `service-base-writes.ts › createBase`'s create-and-share branch, reached from
+ * `POST /api/knowledge/bases`, which is **not** `sessionOnly` and must not
+ * become so (MCP `kb_create_base` rides it). Rather than pin the new route, the
+ * refusal moved to the one place both callers pass through: **an agent token
+ * cannot widen its operator's audience, whichever door it comes in by.**
+ *
+ * ⚠ THE PUT ROUTE'S `sessionOnly` STAYS. Two statements of one rule is normally
+ * the defect this repo pays for, but these are different fences: the route
+ * refuses the CREDENTIAL at the door (so no agent-token request is even
+ * parsed), this refuses the ACT. Removing either is a widening.
+ *
+ * ⚠ `AgentWriteDisabledError` rather than a new type, matching `createBase`'s
+ * existing human-only refusal for teams scope — "sharing scope is a human-only
+ * setting" is the same sentence, and it maps to 403 `AGENT_WRITE_DISABLED`.
  */
 export async function setChannelKnowledgeGrant(
   ctx: KnowledgeContext,
   base: KnowledgeBase,
   input: { channelId: string; level: ChannelGrantLevelInput; guestWrite: boolean }
 ): Promise<ChannelResourceGrant | null> {
+  if (ctx.source === "agent") {
+    throw new AgentWriteDisabledError(
+      base.slug,
+      "Sharing a knowledge base into a channel is a human-only setting — an agent cannot change who can read it."
+    );
+  }
   if (!canManageChannelGrants(ctx, base)) throw new ScopeChangeForbiddenError();
 
   const db = supabaseAdmin();

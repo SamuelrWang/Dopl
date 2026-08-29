@@ -1,6 +1,11 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { AgentTemplate, TemplateField, TemplateVisibility } from "../types";
+import type {
+  AgentTemplate,
+  TemplateField,
+  TemplateShelf,
+  TemplateVisibility,
+} from "../types";
 import {
   AGENT_TEMPLATE_COLS,
   mapAgentTemplateRow,
@@ -19,11 +24,23 @@ import {
 
 // ─── Templates ──────────────────────────────────────────────────────────
 
+/**
+ * One workspace's templates, optionally narrowed to ONE SHELF.
+ *
+ * ⚠ `shelf` UNDEFINED IS "NO FILTER", NOT A DEFAULT SHELF. Every caller that
+ * omits it means the whole workspace: the launch picker, `resolveTemplateRef`,
+ * and MCP all ride the unfiltered path.
+ *
+ * ⚠ `home_scoped` IS FILTERED ON BUT NEVER SELECTED — it is absent from
+ * `AGENT_TEMPLATE_COLS` on purpose (`../types.ts › TemplateShelf` holds the
+ * argument). Postgres does not require a column to be projected to filter on it.
+ */
 export async function listTemplatesForWorkspace(
-  workspaceId: string
+  workspaceId: string,
+  shelf?: TemplateShelf
 ): Promise<AgentTemplate[]> {
   const db = supabaseAdmin();
-  const { data, error } = await db
+  let query = db
     .from("agent_templates")
     .select(AGENT_TEMPLATE_COLS)
     .eq("workspace_id", workspaceId)
@@ -31,10 +48,41 @@ export async function listTemplatesForWorkspace(
     // order: the client groups by visibility and renders alphabetically inside
     // each group, so the server hands back the order it will display in.
     .order("name", { ascending: true });
+  if (shelf !== undefined) query = query.eq("home_scoped", shelf === "home");
+  const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as AgentTemplateRow[]).map((r) =>
     mapAgentTemplateRow(r)
   );
+}
+
+/**
+ * WHICH of `templateIds` live on the /home SHELF — the fold behind
+ * `GET /api/agent-templates › homeScopedTemplateIds` (2026-08-28).
+ *
+ * 🔒 ⚠ **THE ONLY PLACE `home_scoped` IS SELECTED, AND IT SELECTS NOTHING ELSE.**
+ * The column stays out of `AGENT_TEMPLATE_COLS` on purpose (`../types.ts ›
+ * TemplateShelf`); this returns a set of ids the caller was ALREADY shown,
+ * labelled — not a new column on the row.
+ *
+ * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. This applies no `canSeeTemplate`
+ * of its own; the id set IS the fence, the same contract
+ * `knowledge/server/repository-bases.ts › listHomeScopedBaseIds` keeps.
+ */
+export async function listHomeScopedTemplateIds(
+  workspaceId: string,
+  templateIds: string[]
+): Promise<string[]> {
+  if (templateIds.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("agent_templates")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("home_scoped", true)
+    .in("id", templateIds);
+  if (error) throw error;
+  return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
 
 export async function findTemplateById(
@@ -62,6 +110,13 @@ export interface InsertTemplateArgs {
   model: string | null;
   fields: TemplateField[];
   visibility: TemplateVisibility;
+  /**
+   * WHICH SHELF (`../types.ts › TemplateShelf`). `false` if omitted, matching
+   * the DB column default, so every existing caller lands on the WORKSPACE
+   * shelf without naming it. ⚠ Only `createTemplate` ever passes `true`, and
+   * only behind its three-part fence.
+   */
+  homeScoped?: boolean;
   createdBy: string | null;
 }
 
@@ -79,6 +134,7 @@ export async function insertTemplate(
       model: args.model,
       fields: args.fields,
       visibility: args.visibility,
+      home_scoped: args.homeScoped ?? false,
       created_by: args.createdBy,
     })
     .select(AGENT_TEMPLATE_COLS)

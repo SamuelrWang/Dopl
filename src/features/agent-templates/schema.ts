@@ -142,6 +142,15 @@ export const AgentTemplateCreateSchema = z
     visibility: TemplateVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+    /**
+     * Put the new template on the /home SHELF (`types.ts › TemplateShelf`)
+     * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION: the
+     * schema only says the word is spellable — `server/service-writes.ts ›
+     * resolveTemplateHomeScope` is the fence, and it 403s rather than
+     * downgrading. Omitted/false = the workspace shelf, which is every existing
+     * caller.
+     */
+    homeScoped: z.boolean().optional(),
   })
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
 export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>;

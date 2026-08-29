@@ -64,6 +64,7 @@ const claimed = (existing: boolean): HomeLinkClaimResult => ({
     workspaceSegment: "dana-abc123def456",
     channelId: "66666666-6666-4666-8666-666666666666",
     name: "Dana",
+    peers: [],
     peer: null,
     createdAt: "2026-08-25T00:00:00.000Z",
     lastMessageAt: null,

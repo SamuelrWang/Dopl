@@ -14,8 +14,36 @@
   --kv-row-active: var(--surface-raised-3);
 
   /* Surface geometry (margin/border/shadow/radius) from global .page-float,
-     composed alongside this class in knowledge-v2.tsx. */
+     composed alongside this class in knowledge-v2.tsx — EXCEPT on an embedded
+     mount, which paints no surface of its own (see that file's `embedded`
+     prop). Direction is COLUMN in both modes now: the opened base is ONE panel
+     whose header spans it and whose rail + detail are the row below. */
   display: flex;
+  flex-direction: column;
+
+  /* 🔒 THE FILL, AND IT IS STATED HERE BECAUSE IT CANNOT COME FROM THE HOST
+     (Samuel's live review, 2026-08-28: the view sat in the LEFT HALF of the
+     record pane with page-gray beside it, and the header band stopped where the
+     content did).
+
+     ⚠ IT WAS `.page-float`'S ALL ALONG. That kit class carries `flex: 1;
+     min-width: 0` as well as the fill and the radius — so while this shell was
+     always composed with it, the sizing arrived for free and nothing in this
+     module said so. The `embedded` mount drops the float, and it dropped the
+     sizing with it: the shell became a content-sized flex item of /home's
+     `Crossfade` row (`pages/home/index.tsx`, `flex min-w-0 flex-1`), which is
+     exactly half a pane of white and half a pane of nothing.
+
+     ⚠ `min-width: 0` IS NOT OPTIONAL ALONGSIDE `flex: 1`. A flex item's default
+     `min-width: auto` floors it at its content, so a long file name in the rail
+     or a wide document would push the panel past the pane instead of scrolling
+     inside it. `min-height: 0` is the same rule on the column axis — without it
+     the header + body stack cannot shrink and the two inner scrollers never
+     engage. Declaring all three here means the float and the embedded mount are
+     the same box, and the ONE difference between the hosts stays the surface. */
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   font-family: var(--font-app), system-ui, sans-serif;
   color: var(--kv-text);
   -webkit-font-smoothing: antialiased;
@@ -26,27 +54,35 @@
   box-sizing: border-box;
 }
 
-/* ───────────────────────── List pane (middle) ───────────────────────── */
+/* ═══════════════════ OPENED BASE — one panel, two columns ═══════════════════
+   ⚠ NOTHING HERE PAINTS A SURFACE (Samuel's ruling, 2026-08-28: "kill the
+   double panel"). The rail and the detail column used to carry
+   `background: var(--kv-panel)` each, INSIDE a `.page-float` that already
+   painted it — and on /home inside the record pane on top of that, which is
+   what read as a panel on a panel. The single panel is the host's: the
+   workspace page's own `.page-float`, or /home's record pane
+   (`pages/home/index.tsx`, `border-2 border-home-panel-line bg-home-card`).
 
-.listPane {
-  width: 372px;
-  flex: 0 0 372px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--kv-panel);
-  border-right: 1px solid var(--kv-border);
-}
+   ⚠ THE TWO DIVIDERS ARE TAILWIND UTILITIES IN THE TSX, NOT RULES HERE — the
+   header's `border-b` and the detail column's `border-l`, both
+   `border-border-default` — because that is the class
+   `pages/home/home.module.css › .frame` selects on. A `--kv-border` rule in
+   this module is invisible to that scope, so the hairlines stayed neutral gray
+   inside a pane whose every other line is the account palette's: the "stray
+   hairlines" in the screenshot. ⚠ **AND THE SIDES ARE CHOSEN, NOT ARBITRARY**:
+   that file widens exactly `.border-l` and `.border-b` to 2px, so the rail's
+   divider is a `border-l` on the column to its RIGHT. Drawn as a `border-r` on
+   the rail it would take the colour and miss the weight. One mechanism, both
+   hosts — neutral hairlines on the workspace page, account palette at the
+   channel surface's weight on /home, no per-page fork. */
 
-/* Small text on purpose: base name is the DETAIL pane header, so a second
-   title here reads as a second page. */
-.paneCrumbs {
+.baseHead {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 14px 14px 10px;
-  font-size: var(--text-small);
+  gap: 6px;
+  height: 52px;
+  flex: 0 0 52px;
+  padding: 0 12px;
 }
 .headSpacer {
   flex: 1;
@@ -55,14 +91,97 @@
 /* Filter tabs: shared <SegmentedControl> (src/shared/ui/segmented-control.tsx).
    Home mode only. */
 
-.listBody {
+.baseBody {
+  display: flex;
+  flex: 1;
+  /* Both axes, for the reason `.shell` states: the rail is fixed-width and the
+     detail column takes the rest, so the ROW must be allowed to shrink or the
+     document's own measure decides the panel's width. */
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ───────────────────────── Folder rail (left) ─────────────────────────
+   ⚠ WIDTH, NOT TRANSFORM, and the same argument `.channel-info-slide` carries:
+   the rail is a FLEX SIBLING of the detail column, so a transform would slide
+   it OVER the content instead of handing the space back.
+
+   ⚠ IT COLLAPSES TO A STRIP, NOT TO NOTHING (mechanic chosen 2026-08-28). The
+   panel has ONE header and it belongs to the base (breadcrumb + controls); a
+   fully hidden rail would have to put its re-open control up there, which is a
+   second toggle for the same column in a place that names the base rather than
+   the tree. The 34px strip keeps the toggle where the rail is.
+
+   ⚠ THE CONTENT DOES NOT SQUASH MID-SLIDE: `.railInner` holds its own fixed
+   width and is clipped by the rail's `overflow: hidden`, so rows reflow zero
+   times during the 150ms. The toggle is OUTSIDE that block — absolutely
+   positioned in the strip — which is why it survives the fade the inner block
+   takes. */
+
+.rail {
+  --kv-rail-w: 232px;
+  position: relative;
+  display: flex;
+  width: var(--kv-rail-w);
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
+  transition: width 0.15s ease;
+}
+.railCollapsed {
+  --kv-rail-w: 34px;
+}
+.railToggle {
+  position: absolute;
+  top: 7px;
+  left: 4px;
+  z-index: 1;
+}
+.railInner {
+  display: flex;
+  flex-direction: column;
+  width: 232px;
+  flex: 0 0 232px;
+  min-height: 0;
+  transition: opacity 0.15s ease;
+}
+/* ⚠ `visibility`, not `display`: a collapsed rail's rows must leave the tab
+   order and the a11y tree (a Tab-reachable control inside a 34px strip is a
+   trap), and `display:none` would also drop the fade. */
+.railCollapsed .railInner {
+  opacity: 0;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .railInner {
+    transition: none;
+  }
+}
+/* Left pad clears the absolutely-positioned toggle. */
+.railHead {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  flex: 0 0 40px;
+  padding: 0 10px 0 36px;
+  font-size: var(--text-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.railBody {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px 0 16px;
-  border-top: 1px solid var(--kv-border);
+  padding: 0 0 16px;
 }
-.listBody::-webkit-scrollbar {
+.railBody::-webkit-scrollbar {
   width: 0;
 }
 
@@ -157,56 +276,46 @@
   opacity: 0.4;
   cursor: default;
 }
+/* ⚠ LAYOUT ONLY. The two buttons inside are `OpenScaleButton` (Samuel's ruling,
+   2026-08-28: the tree's create actions use the global button component), so
+   `.addBtn` — a naked hover-tint recipe declared here — is DELETED. Do not
+   re-add one: the pill is `src/shared/ui/open-scale-button.module.css`, and a
+   local rule beside it is the drift that move removed. */
+/* ⚠ THE ROW WRAPS SO THE PILLS DO NOT (2026-08-28). Two labelled 26px pills
+   against a 232px rail is a near-exact fit, and "near-exact" is a promise about
+   font metrics nobody can keep — a longer label, a different platform font, and
+   the row is over. `flex-wrap` stacks them cleanly instead; the pills
+   themselves are `nowrap` + `shrink-0` in the shared recipe. Left pad is the
+   tree's own indent, not the deeper row indent it used to carry, which is where
+   the missing ~12px came from. */
 .addRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  padding: 4px 16px 4px 28px;
-}
-.addBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: none;
-  background: none;
-  padding: 4px 7px;
-  border-radius: 6px;
-  font-size: var(--text-small);
-  color: var(--kv-text-3);
-  cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease;
-}
-.addBtn:hover {
-  background: var(--kv-row-hover);
-  color: var(--kv-text);
-}
-.addBtn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.addBtn svg {
-  flex: 0 0 auto;
+  gap: 6px;
+  padding: 6px 10px 4px 12px;
 }
 
-/* ───────────────────────── Detail pane (right) ───────────────────────── */
+/* ───────────────────────── Detail column (right) ─────────────────────────
+   No fill: see the "one panel, two columns" note above. */
 
 .detailPane {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--kv-panel);
 }
 
-.detailTop {
+/* The `Crossfade` surface itself (`src/shared/ui/crossfade.tsx`) — layout only;
+   the 150ms opacity swap and its reduced-motion opt-out are the kit's
+   `.crossfade`. Both faces below fill it and own their own scroll. */
+.detailFade {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 52px;
-  flex: 0 0 52px;
-  padding: 0 14px 0 10px;
-  border-bottom: 1px solid var(--kv-border);
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
+
 .detailTopTitle {
   display: inline-flex;
   align-items: center;
@@ -256,15 +365,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.divider {
-  width: 1px;
-  height: 22px;
-  background: var(--kv-border-strong);
-  margin: 0 4px;
-}
+/* ⚠ `.divider` STOOD HERE AND IS DELETED (Samuel, 2026-08-28: "stray
+   hairlines"). It was a 1px × 22px `--kv-border-strong` bar fencing the delete
+   control off from settings inside the header row — the only vertical rule in
+   the whole surface, and one the /home scope could not reach (it is a
+   background, not a border). The control cluster is spaced, not fenced. */
 
 /* Entry formatting toolbar. Sits above the scroll body so controls stay
-   reachable while a long document scrolls. */
+   reachable while a long document scrolls. ⚠ It lives INSIDE the fading face
+   now (`detail/file-view.tsx`), not in the panel header: it belongs to the
+   document, so it must arrive and leave with it. */
 .detailToolbarBand {
   display: flex;
   align-items: center;
@@ -273,50 +383,56 @@
   border-bottom: 1px solid var(--kv-border);
 }
 
-.detailBody {
+/* The DOCUMENT face's scroll body — generous measure, unchanged. */
+.docBody {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 34px 56px 64px;
 }
-.detailBody::-webkit-scrollbar {
+.docBody::-webkit-scrollbar {
   width: 0;
 }
 
-.metaCard {
-  border: 1px solid var(--kv-border-strong);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.metaCardHead {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 16px;
-  background: var(--card-surface-subtle);
-  border-bottom: 1px solid var(--kv-border);
-}
-.metaCardHead .label {
-  flex: 1;
-  font-size: var(--text-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv-text-2);
-}
-.metaCardBody {
-  padding: 20px 22px 22px;
+/* The INFO face's scroll body: a stack of flat `SectionPanel`s, at the same
+   gap and padding /home's own panel stack uses (`knowledge-panels.tsx ›
+   HomeKnowledgePanels`: `gap-3 … p-3`), because on /home these two stacks are
+   the same rectangle one level apart. */
+.infoBody {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+.infoBody::-webkit-scrollbar {
+  width: 0;
 }
 
-/* Global .concave-field kit recipe (composed in meta-card.tsx) supplies the
-   pressed-in surface; these add layout + type only. */
+/* ⚠ `.metaCard` / `.metaCardHead` / `.metaCardBody` STOOD HERE AND ARE DELETED
+   (2026-08-28). They were a bordered 14px card with its own
+   `--card-surface-subtle` header STRIP — a second framed surface inside the
+   pane, i.e. the third panel in a two-panel screenshot. The Details section is
+   `shared/ui/section-panel.tsx › SectionPanel` now, like every other section on
+   this surface and like both /home faces; the GROUND comes from the caller
+   (`detail/meta-card.tsx`), and on /home from the one rule that grounds every
+   panel in the record pane (`pages/home/home.module.css › .frame
+   :global([data-section-panel])`). */
+
+/* Layout + type for the editable field rows. ⚠ THE FACE IS NOT HERE: it is the
+   kit's `shared/ui/wells.ts › RAISED_INPUT`, composed in `detail/meta-card.tsx`.
+   These rules used to sit beside `.concave-field` — a pressed-in well — which
+   is the language Samuel's ruling replaced with raised-on-flat. */
 .fieldGroup {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* A flex item's `min-width: auto` floors it at its CONTENT, and a textarea's
+     content floor is its `cols` default (~20 characters plus padding) — which
+     is how a `w-full` field ends up wider than the card it is in. */
+  min-width: 0;
 }
 .fieldLabelRow {
   display: flex;
@@ -336,28 +452,33 @@
   font-size: var(--text-micro);
   color: var(--kv-text-3);
 }
-.fieldInput,
-.fieldTextarea {
-  width: 100%;
-  border-radius: 9px;
-  font-family: inherit;
-  font-size: var(--text-body);
-  color: var(--kv-text);
-  outline: none;
-}
-.fieldInput {
-  padding: 8px 11px;
-  font-weight: 500;
-}
-.fieldTextarea {
-  padding: 9px 11px;
+/* ⚠ `.fieldInput` / `.fieldTextarea` STOOD HERE AND ARE DELETED (2026-08-28).
+   Every declaration they carried — radius, type, ink, placeholder ink — is in
+   `RAISED_INPUT`, and the two that are not (height and padding) belong to the
+   caller by that recipe's own rule. What is left is the textarea's resize +
+   measure, below, which is layout. */
+/* The description textarea's measure and containment.
+ *
+ * 🔒 ⚠ `resize: none`, AND IT IS THE SAME RULING AS THE DELETED GRIP (Samuel's
+ * live review, 2026-08-28: the field overflowed its card with the resize handle
+ * sitting on the border). A user-resizable box on a flat section has the same
+ * problem `SectionBox`'s drag grip had when the frame went away — it is a
+ * handle gripping air — except this one could also be dragged WIDER than the
+ * section that contains it, which is what the screenshot shows. The 2026-08-27
+ * flat ruling took the grip off the section; this takes it off the last control
+ * that still had one.
+ *
+ * ⚠ `max-width: 100%` IS NOT REDUNDANT WITH `w-full`. A textarea carries an
+ * intrinsic `cols` width, and `width: 100%` resolves against the parent while
+ * the intrinsic minimum still floors the layout — so the pair (this plus
+ * `.fieldGroup`'s `min-width: 0`) is what actually contains it. Belt and
+ * braces, deliberately: this field is the one control on the surface that
+ * overflowed in a real screenshot. */
+.fieldBlock {
   line-height: 1.55;
-  resize: vertical;
+  resize: none;
   min-height: 78px;
-}
-.fieldInput::placeholder,
-.fieldTextarea::placeholder {
-  color: var(--kv-text-3);
+  max-width: 100%;
 }
 
 .metaFields {
@@ -446,22 +567,14 @@
   font-size: var(--text-body);
 }
 
-/* Empty detail state */
-.detailEmpty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--kv-text-3);
-}
-.detailEmpty svg {
-  color: var(--kv-border-strong);
-}
-.detailEmpty p {
-  font-size: var(--text-body);
-}
+/* ⚠ `.detailEmpty` STOOD HERE AND IS DELETED (2026-08-28) — with the branch it
+   dressed. It was the detail pane's "Select a knowledge base or file to see its
+   overview" state, reachable only through a `selection === null` that this
+   branch cannot hold: `knowledge-v2.tsx` renders the HOME GRID for a null
+   selection and the detail panel only under a narrowed non-null one. A face for
+   an impossible state is not a safety net, it is a second answer to "what does
+   an opened base look like when nothing is picked" — and the ruling's answer is
+   the base's own info page. */
 
 /* ═════════════════════ KNOWLEDGE HOME (the card grid) ═════════════════════
    `/knowledge` mode: one page-wide column instead of two panes. `.shell` still
@@ -627,11 +740,20 @@
   gap: 10px;
   min-width: 0;
 }
+/* ⚠ SIZE AND WEIGHT ARE DEFAULTED ALIASES, and the DEFAULT is the whole card
+   face everywhere except /home (Samuel, 2026-08-28, over a screenshot of the
+   /home Knowledge face: the title read "bold and large" beside the channel
+   list). /home rebinds them on its own grid — `apps/desktop-ui/src/pages/home/
+   home.module.css › .kbCards` — to the CHANNEL-ROW title's face
+   (`relationship-list.tsx`: `text-body`, i.e. --text-body, at normal weight).
+   The fallbacks below are the workspace Knowledge page's values, so that page
+   is unchanged by construction; a fork of `home/base-card.tsx` was the
+   alternative and is forbidden. Same alias mechanism as `--kv-*` above. */
 .cardName {
   flex: 1;
   min-width: 0;
-  font-size: var(--text-title);
-  font-weight: 600;
+  font-size: var(--kv-card-title-size, var(--text-title));
+  font-weight: var(--kv-card-title-weight, 600);
   letter-spacing: -0.01em;
   color: var(--kv-text);
   white-space: nowrap;
@@ -692,11 +814,15 @@
   font-size: var(--text-caption);
   font-style: italic;
   line-height: 1.45;
-  /* Floors at 3 lines; the -webkit-line-clamp below caps at 3. */
-  min-height: calc(var(--text-caption) * 1.45 * 3);
+  /* ⚠ FLOOR AND CAP ARE ONE NUMBER — the clamp and the min-height must state
+     the same line count or the row reserves space for lines that can never be
+     drawn. `--kv-card-desc-lines` is that number, defaulted to the workspace
+     page's 3; /home rebinds it to 2 on `.kbCards` so the shorter grid row still
+     fits the meta row and the foot. */
+  min-height: calc(var(--text-caption) * 1.45 * var(--kv-card-desc-lines, 3));
   color: var(--kv-text-2);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: var(--kv-card-desc-lines, 3);
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -750,18 +876,15 @@
   color: var(--warning);
 }
 
-/* Composed onto the kit's .btn-light face; stadium ends (`.seg-pill`). */
-.cardOpen {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: var(--text-small);
-  font-weight: 500;
-  color: var(--kv-text);
-}
+/* ⚠ `.cardOpen` STOOD HERE AND IS GONE (2026-08-28). Samuel ruled that /home's
+   small section buttons adopt this button's size/UI, so the declarations moved
+   OUT of this feature-private module into the shared primitive both surfaces
+   render: `src/shared/ui/open-scale-button.module.css › .openScale`, wrapped by
+   `shared/ui/open-scale-button.tsx › OpenScaleButton`. The card's own Open is
+   just another caller (`home/base-card.tsx`). Do NOT re-add a local rule here:
+   a second declaration of the 26px pill is the drift the move removed. The
+   `--kv-text` binding still reaches it — the shared rule reads
+   `var(--kv-text, var(--text-primary))`. */
 
 .cardNew {
   display: flex;

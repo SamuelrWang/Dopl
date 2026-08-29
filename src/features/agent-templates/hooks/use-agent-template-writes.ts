@@ -10,6 +10,7 @@ import {
 } from "@/shared/hooks/use-api-mutation";
 import { agentTemplateRequest } from "../client/api";
 import { agentTemplateKeys, agentTemplatePath, agentTemplatesPath } from "../client/query-keys";
+import type { TemplateShelf } from "../client/types";
 import type {
   AgentTemplate,
   AgentTemplateCreateBody,
@@ -97,6 +98,7 @@ function dropRow(cache: TemplatesCache | undefined, templateId: string) {
 
 export function createConfig(
   workspaceId: string,
+  shelf: TemplateShelf | undefined,
   coldFallback: () => ReturnType<typeof coldKeys>
 ): UseApiMutationConfig<CreateDraft, AgentTemplateResponse> {
   return {
@@ -107,7 +109,7 @@ export function createConfig(
       workspaceId,
     }),
     reconcile: (data) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
         upsertRow(cache, data.template)
       ),
     invalidate: coldFallback,
@@ -115,7 +117,8 @@ export function createConfig(
 }
 
 export function updateConfig(
-  workspaceId: string
+  workspaceId: string,
+  shelf: TemplateShelf | undefined
 ): UseApiMutationConfig<UpdateDraft, AgentTemplateResponse> {
   return {
     request: (draft) => ({
@@ -125,18 +128,19 @@ export function updateConfig(
       workspaceId,
     }),
     optimistic: (draft) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
         upsertRow(cache, draft.optimistic)
       ),
     reconcile: (data) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
         upsertRow(cache, data.template)
       ),
   };
 }
 
 export function deleteConfig(
-  workspaceId: string
+  workspaceId: string,
+  shelf: TemplateShelf | undefined
 ): UseApiMutationConfig<DeleteDraft, void> {
   return {
     request: (draft) => ({
@@ -145,7 +149,7 @@ export function deleteConfig(
       workspaceId,
     }),
     optimistic: (draft) =>
-      patchCache<TemplatesCache>(agentTemplateKeys.list().entry({ workspaceId }), (cache) =>
+      patchCache<TemplatesCache>(agentTemplateKeys.list(shelf).entry({ workspaceId }), (cache) =>
         dropRow(cache, draft.templateId)
       ),
   };
@@ -157,15 +161,32 @@ export interface AgentTemplateWrites {
   remove: ApiMutation<DeleteDraft, void>;
 }
 
-export function useAgentTemplateWrites(workspaceId: string): AgentTemplateWrites {
+/**
+ * @param shelf ⚠ MUST MATCH the `shelf` the surface's `useAgentTemplates` read
+ *   was mounted with (`../client/query-keys.ts`). Every patch below addresses
+ *   ONE entry; a mismatch patches a key nobody is subscribed to and the write
+ *   silently does not appear — F-331's failure with the SHELF as the axis.
+ *   `undefined` = the unfiltered list, which is what a link CONTAINER surface
+ *   and the launch picker use.
+ */
+export function useAgentTemplateWrites(
+  workspaceId: string,
+  shelf?: TemplateShelf
+): AgentTemplateWrites {
   const client = useQueryClient();
-  const listEntry = agentTemplateKeys.list().entry({ workspaceId });
+  const listEntry = agentTemplateKeys.list(shelf).entry({ workspaceId });
   return {
     create: useApiMutationWith(
       agentTemplateRequest,
-      createConfig(workspaceId, () => coldKeys(client, [listEntry]))
+      createConfig(workspaceId, shelf, () => coldKeys(client, [listEntry]))
     ),
-    update: useApiMutationWith(agentTemplateRequest, updateConfig(workspaceId)),
-    remove: useApiMutationWith(agentTemplateRequest, deleteConfig(workspaceId)),
+    update: useApiMutationWith(
+      agentTemplateRequest,
+      updateConfig(workspaceId, shelf)
+    ),
+    remove: useApiMutationWith(
+      agentTemplateRequest,
+      deleteConfig(workspaceId, shelf)
+    ),
   };
 }

@@ -1,52 +1,30 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronRight,
-  Database,
-  Download,
-  Settings,
-  Trash2,
-} from "lucide-react";
-import type { Editor } from "@tiptap/react";
-import { Toolbar } from "@/shared/editor/doc-editor-toolbar";
-import { toast } from "@/shared/ui/toast";
+import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import { DeleteBaseConfirm } from "../../delete-base-confirm";
-import { KnowledgeSearch } from "../../knowledge-search";
-import { KnowledgeApiError, deleteBase } from "../../../client/api";
-import { evictDeletedBase } from "../../../client/hooks";
+import { Crossfade } from "@/shared/ui/crossfade";
 import type {
-  KnowledgeBase,
   KnowledgeBaseStats,
   KnowledgeEntry,
-  KnowledgeFolder,
 } from "../../../types";
 import type { BaseTree, KbTeamRef, Selection } from "../types";
-import type { KnowledgeRouting } from "../routing";
 import { BaseOverview } from "./base-overview";
-import { EntryView } from "./entry-view";
+import { FileView } from "./file-view";
 import { viewModel } from "./view-model";
-import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import styles from "../knowledge-v2.module.css";
 
-/** App-wide icon-button recipe (chats/skills list panes): 28px, hover-raised. */
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
-
 interface Props {
-  selection: Selection | null;
+  selection: Selection;
   workspaceId: string;
-  /** Selected base's tree, for the breadcrumb folder chain. */
+  /** Selected base's tree — feeds Contents with no extra fetch. */
   selectedTree?: BaseTree;
   /** Controller-owned fetch: FULL body, not the tree's stripped copy. */
   openEntry: KnowledgeEntry | null;
   openEntryStatus: "idle" | "loading" | "success" | "error";
   refetchOpenEntry: () => void;
-  /** Admin-only: kbId → teams granted, surfaced in the base overview. */
+  /** Admin-only: kbId → teams granted, surfaced in the base info face. */
   kbTeams?: Record<string, KbTeamRef[]>;
-  /** Per-base counters from the list response; overview reads `storageBytes`
+  /** Per-base counters from the list response; info reads `storageBytes`
    *  from it. Absent = unknown, no bar. */
   baseStats?: Record<string, KnowledgeBaseStats>;
   /** Per-base storage cap in bytes, same response. */
@@ -55,40 +33,39 @@ interface Props {
   onTreeRefresh: (baseId: string) => void;
   /** Re-pull the base list after a name/description save. */
   onBaseSaved: () => void;
-  onSelectSearchEntry: (entryId: string, baseId: string) => void;
-  /** Jump to the first entry in a folder; null = the base itself. */
-  onCrumbSelect: (base: KnowledgeBase, folderId: string | null) => void;
-  /** Zip the whole base. */
-  onExportBase: (baseId: string) => void;
-  onOpenSettings: () => void;
-  /** Router bindings; the toolbar delete leaves this base's URL behind
-   *  (../routing.ts). */
-  routing: KnowledgeRouting;
 }
 
-/** Root → leaf folder chain for an entry, from the flat folder list. */
-function folderChainOf(
-  folders: KnowledgeFolder[],
-  folderId: string | null
-): KnowledgeFolder[] {
-  const chain: KnowledgeFolder[] = [];
-  const visited = new Set<string>();
-  let current = folderId;
-  while (current && !visited.has(current)) {
-    visited.add(current);
-    const folder = folders.find((f) => f.id === current);
-    if (!folder) break;
-    chain.unshift(folder);
-    current = folder.parentId;
-  }
-  return chain;
-}
+/** The token a BASE selection shows. ⚠ Includes the id, so switching bases
+ *  under a live mount is a swap and not a silent content change. */
+const infoToken = (baseId: string) => `info:${baseId}`;
+/** The token a FILE selection shows. ⚠ `file:` is not a prefix of `info:` and
+ *  vice versa, so the two branches below cannot claim each other's tokens. */
+const fileToken = (entryId: string) => `file:${entryId}`;
 
 /**
- * Right detail pane. With an entry selected, a slim header band hosts the
- * rich-text toolbar: DocEditor publishes its live instance up via `onEditor`
- * and its own floating pill is suppressed. Body = the entry's editor (DocPane
- * owns its title) or the base overview.
+ * THE DETAIL COLUMN — ONE surface whose contents fade between two faces
+ * (Samuel's ruling, 2026-08-28):
+ *
+ *   BASE selected → the INFO face, and it is the RESTING STATE. Opening a base
+ *       lands here; it is not a placeholder for "no file picked yet".
+ *   FILE selected → the document, arriving by a 150ms fade.
+ *
+ * ⚠ THE FADE IS THE SHARED PRIMITIVE (`shared/ui/crossfade.tsx`), the one
+ * /home's record pane and the channel info column use — same 150ms, same
+ * `prefers-reduced-motion` opt-out, one recipe. It takes a RENDER FUNCTION and
+ * hands back the token still ON SCREEN, which lags the selection by one fade.
+ *
+ * 🔒 ⚠ WHICH IS WHY `lastEntry` EXISTS. `openEntry` belongs to the CURRENT
+ * selection, so the moment a file is left it is already `null` — and the
+ * outgoing face, still mounted for its 150ms, would render its document as a
+ * loading skeleton on the way out. The latch holds the last FULLY LOADED entry
+ * and is consulted only when the shown token names it, so:
+ *   file → info: the outgoing document is still the document.
+ *   file A → file B: A fades out AS A; B fades in as a skeleton if its fetch is
+ *       still out — which is the truth, not a stale body wearing B's name.
+ * ⚠ Adjust-state-during-render, the sanctioned form (`pages/knowledge/index.tsx
+ * › deepLinkResolved` is the other one): an effect would land a frame late,
+ * i.e. exactly during the fade it exists to survive.
  */
 export function DetailPanel({
   selection,
@@ -103,183 +80,75 @@ export function DetailPanel({
   canEditBase,
   onTreeRefresh,
   onBaseSaved,
-  onSelectSearchEntry,
-  onCrumbSelect,
-  onExportBase,
-  onOpenSettings,
-  routing,
 }: Props) {
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  // Published by EntryView's DocEditor; drives the header-band toolbar. Null
-  // while a base is selected or a body is still loading.
-  const [entryEditor, setEntryEditor] = useState<Editor | null>(null);
-  const queryClient = useQueryClient();
+  const [lastEntry, setLastEntry] = useState<KnowledgeEntry | null>(
+    openEntry ?? null
+  );
+  if (openEntry && openEntry !== lastEntry) setLastEntry(openEntry);
 
-  // ⚠ Must mirror base-settings-form.tsx's danger-zone delete: same
-  // `deleteBase` call, then navigate to the base-less knowledge root so the
-  // view drops to an empty selection and the list is re-pulled.
-  async function handleDeleteBase() {
-    if (!selection) return;
-    const base = selection.base;
-    setDeleting(true);
-    try {
-      await deleteBase(base.id, workspaceId);
-      toast({ title: `"${base.name}" deleted` });
-      evictDeletedBase(queryClient, workspaceId, base.id);
-      routing.goToBase(null, "replace");
-      routing.refreshServerData();
-    } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Couldn't delete";
-      toast({ title: "Couldn't delete", description: msg });
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  if (!selection) {
-    return (
-      <div className={styles.detailPane}>
-        <div className={styles.detailEmpty}>
-          <Database size={40} strokeWidth={1.4} />
-          <p>Select a knowledge base or file to see its overview.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const vm = viewModel(selection);
-  const folders =
-    selectedTree?.status === "ready" ? selectedTree.folders : [];
-  const folderChain =
+  const token =
     selection.kind === "entry"
-      ? folderChainOf(folders, selection.entry.folderId)
-      : [];
+      ? fileToken(selection.entry.id)
+      : infoToken(selection.base.id);
 
   return (
-    <div className={styles.detailPane}>
-      <div className={styles.detailTop}>
-        <span className={styles.detailTopTitle}>
-          {selection.kind === "entry" ? (
-            <nav className={styles.crumbs} aria-label="Breadcrumb">
-              <button
-                type="button"
-                className={styles.crumbBtn}
-                onClick={() => onCrumbSelect(selection.base, null)}
-              >
-                {selection.base.name}
-              </button>
-              {folderChain.map((f) => (
-                <Fragment key={f.id}>
-                  <ChevronRight size={12} className={styles.crumbSep} />
-                  <button
-                    type="button"
-                    className={styles.crumbBtn}
-                    onClick={() => onCrumbSelect(selection.base, f.id)}
-                  >
-                    {f.name}
-                  </button>
-                </Fragment>
-              ))}
-              <ChevronRight size={12} className={styles.crumbSep} />
-              <span className={styles.crumbCurrent}>{selection.entry.title}</span>
-            </nav>
-          ) : (
-            <span>{vm.title}</span>
-          )}
-        </span>
-        <div className={styles.headSpacer} />
-        <div className={cn(appShell.lightScope, "hidden lg:block w-52")}>
-          <KnowledgeSearch
-            workspaceId={workspaceId}
-            baseSlug={selection.base.slug}
-            onSelectEntry={onSelectSearchEntry}
-          />
-        </div>
-        <button
-          className={ICON_BTN}
-          type="button"
-          aria-label="Download knowledge base"
-          title="Download this knowledge base"
-          onClick={() => onExportBase(selection.base.id)}
-        >
-          <Download size={16} />
-        </button>
-        <button
-          className={ICON_BTN}
-          type="button"
-          aria-label="Knowledge base settings"
-          title="Settings"
-          onClick={onOpenSettings}
-        >
-          <Settings size={16} />
-        </button>
-        <span className={styles.divider} />
-        <button
-          className={cn(ICON_BTN, "hover:text-danger")}
-          type="button"
-          aria-label="Delete knowledge base"
-          title="Delete this knowledge base"
-          disabled={deleting}
-          onClick={() => setConfirmDeleteOpen(true)}
-        >
-          <Trash2 size={16} />
-        </button>
-      </div>
-
-      {selection.kind === "entry" && (
-        // Rich-text toolbar band (entries only). Always above the scroll
-        // body so formatting stays reachable in long documents; empty until
-        // the editor mounts, keeping height stable.
-        <div className={styles.detailToolbarBand}>
-          {entryEditor && <Toolbar editor={entryEditor} variant="header" />}
-        </div>
-      )}
-
-      <div className={styles.detailBody}>
-        {selection.kind === "entry" ? (
-          // DocPane renders the editable title itself.
-          <EntryView
-            key={selection.entry.id}
-            base={selection.base}
-            fullEntry={openEntry}
-            status={openEntryStatus}
-            workspaceId={workspaceId}
-            onEditor={setEntryEditor}
-            onTreeRefresh={onTreeRefresh}
-            onFocusRefetch={() => {
-              refetchOpenEntry();
-              onTreeRefresh(selection.base.id);
-            }}
-          />
-        ) : (
-          <BaseOverview
-            key={selection.base.id}
-            base={selection.base}
-            vm={vm}
-            workspaceId={workspaceId}
-            canEdit={canEditBase}
-            onSaved={onBaseSaved}
-            teams={kbTeams?.[selection.base.id]}
-            storageBytes={baseStats?.[selection.base.id]?.storageBytes ?? null}
-            storageLimit={kbStorageLimit ?? null}
-            tree={selectedTree}
-            onTreeRefresh={onTreeRefresh}
-          />
-        )}
-      </div>
-
-      <DeleteBaseConfirm
-        open={confirmDeleteOpen}
-        onOpenChange={setConfirmDeleteOpen}
-        baseName={selection.base.name}
-        onConfirm={handleDeleteBase}
-      />
+    // ⚠ THE DIVIDER IS A UTILITY AND IT IS A `border-l` ON *THIS* COLUMN, not a
+    // `border-r` on the rail — the two draw the same line and only one of them
+    // is reachable. `pages/home/home.module.css › .frame` selects on the class
+    // NAME (a module rule reading `--kv-border` is invisible to it), and its
+    // second rule widens exactly `.border-l.border-border-default` to 2px, so
+    // this lands on the account palette at the same weight as the channel
+    // surface's info-column divider. A `border-r` would take the colour and
+    // miss the weight, which is a hairline that matches nothing on either page.
+    <div className={cn(styles.detailPane, "border-l border-border-default")}>
+      <Crossfade token={token} className={styles.detailFade}>
+        {(shown) => {
+          if (shown.startsWith("file:")) {
+            const entryId = shown.slice("file:".length);
+            // The body for THIS token, from the live fetch or the latch —
+            // never another file's.
+            const entry =
+              openEntry?.id === entryId
+                ? openEntry
+                : lastEntry?.id === entryId
+                  ? lastEntry
+                  : null;
+            return (
+              <FileView
+                key={entryId}
+                base={selection.base}
+                fullEntry={entry}
+                status={openEntryStatus}
+                workspaceId={workspaceId}
+                onTreeRefresh={onTreeRefresh}
+                onFocusRefetch={() => {
+                  refetchOpenEntry();
+                  onTreeRefresh(selection.base.id);
+                }}
+              />
+            );
+          }
+          return (
+            <div className={styles.infoBody}>
+              <BaseOverview
+                key={selection.base.id}
+                base={selection.base}
+                vm={viewModel({ kind: "base", base: selection.base })}
+                workspaceId={workspaceId}
+                canEdit={canEditBase}
+                onSaved={onBaseSaved}
+                teams={kbTeams?.[selection.base.id]}
+                storageBytes={
+                  baseStats?.[selection.base.id]?.storageBytes ?? null
+                }
+                storageLimit={kbStorageLimit ?? null}
+                tree={selectedTree}
+                onTreeRefresh={onTreeRefresh}
+              />
+            </div>
+          );
+        }}
+      </Crossfade>
     </div>
   );
 }

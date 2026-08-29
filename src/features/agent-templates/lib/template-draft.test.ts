@@ -232,7 +232,7 @@ describe("containerCopyDraft — \"Use in this channel\"", () => {
     const body = draftToCreateBody(containerCopyDraft(template()));
     expect(body).toEqual({
       name: "Release captain",
-      visibility: "private",
+      visibility: "workspace",
       description: "Runs the release checklist",
       instructions: "Be terse.",
       model: "claude-opus-5",
@@ -245,13 +245,25 @@ describe("containerCopyDraft — \"Use in this channel\"", () => {
     expect("teamIds" in body).toBe(false);
   });
 
-  it("FORCES private, even from a template that was shared where it came from", () => {
-    // ⚠ The gesture's word is "use". It must never silently PUBLISH the
-    // operator's own agent into a container the peer is standing in — sharing it
-    // is a second, deliberate edit.
-    const source = template({ visibility: "workspace" });
-    expect(containerCopyDraft(source).visibility).toBe("private");
-    expect(draftToCreateBody(containerCopyDraft(source)).visibility).toBe("private");
+  it("🔒 SHARES into the channel, whatever the original was — and the dialog says so", () => {
+    // 🔒 ⚠ THIS PIN WAS INVERTED ON 2026-08-27, DELIBERATELY. It read "FORCES
+    // private, even from a template that was shared where it came from", on the
+    // argument that "use" must never silently PUBLISH the operator's agent into
+    // a container the peer is standing in. That argument was right while the
+    // /home pane HAD a per-channel private section for the copy to land in.
+    // **Samuel's restructure deleted that section**, and a container is not
+    // navigable, so a `private` container row is now reachable from nowhere:
+    // the copy would succeed and appear on no surface at all.
+    //
+    // The choice was between an invisible write and a stated audience change,
+    // and the second is the honest one. **The "silently" half of the old
+    // argument is what the fix has to answer**, so it is answered where the
+    // operator is: `pages/home/agent-copy.tsx › describe` names the audience —
+    // "everyone here will see it" — before the confirm button. If that sentence
+    // is ever softened, this pin is wrong again.
+    const source = template({ visibility: "private" });
+    expect(containerCopyDraft(source).visibility).toBe("workspace");
+    expect(draftToCreateBody(containerCopyDraft(source)).visibility).toBe("workspace");
   });
 
   it("clears the TEAMS, which a container has none of anyway", () => {

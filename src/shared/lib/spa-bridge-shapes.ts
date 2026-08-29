@@ -342,9 +342,16 @@ export interface DesktopNarrationEntry {
   /** `false` only on a `result` that failed. */
   ok?: boolean;
   /**
-   * The line itself, already bounded main-side: **300 chars for every caption**, a `tool`
-   * entry's input summary capped at 140 before that, and **1000 for a `post`** — that one is a
-   * MESSAGE rather than a line about one, and a reply truncated at 300 makes the echo useless.
+   * The line itself, already bounded main-side, and the bound is THREE numbers because they are
+   * three kinds of string (`main/session-narration.js`): **300 for a CAPTION** (a tool's input
+   * or result summary — the input already 140 before that — and the status lines), **1000 for a
+   * `post`** (a MESSAGE, but one the transcript is the real record of, and the UI dedupes it),
+   * and **2000 for the agent's own PROSE** — `assistant` / `thinking` / the operator's 1:1 text,
+   * where this ring is the only copy that exists anywhere.
+   * ⚠ **2000 IS THE UI's OWN EXPANDED CEILING** (`channels-v2/agent-stream-log.tsx ›
+   * EXPANDED_CHARS`), and that is the point of the number: prose was capped at 300 until
+   * 2026-08-27, so "Show more" raised a display clamp over a string main had already cut
+   * mid-word, with nothing saying so. **A cap below what the UI will show is a silent lie.**
    * ⚠ **Truncate further in the UI** — these caps exist so the IPC frame stays small (the ring
    * is 200 deep and multiplied by the concurrent-session ceiling), not because they are display
    * lengths.

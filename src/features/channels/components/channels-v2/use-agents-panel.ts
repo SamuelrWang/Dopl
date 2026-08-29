@@ -105,6 +105,16 @@ export function launchRefusalText(reason: string | undefined): string {
 export interface AgentLaunchOutcome {
   ok: boolean;
   reason?: string;
+  /**
+   * THE ADDRESS MAIN CREATED, on a successful launch (2026-08-27).
+   *
+   * ⚠ IT IS MAIN'S ANSWER, NEVER AN ECHO OF THE ASK. A caller that pre-assigned an id
+   * (the composer's launch panel) still paints THIS — a desktop older than the forward in
+   * `main/session-launch-op.js` mints its own and says so here, and that is exactly the arm
+   * the panel's fallback exists for. Same never-echo rule `rename` / `setMode` / `setModel`
+   * follow. ⚠ Absent when the build could not say; read it optionally.
+   */
+  agentId?: string;
   /** Rides {@link LAUNCH_APPROVAL_REASON} only. Read tolerantly. */
   template?: { name?: string | null; instructions?: string | null } | null;
 }
@@ -133,7 +143,13 @@ export interface AgentLaunchControls {
   launchAgent: (
     threadId: string | null,
     templateId?: string | null,
-    overrides?: TemplateLaunchOverrides
+    overrides?: TemplateLaunchOverrides,
+    /**
+     * ⚠ THE FOURTH PARAM, AND IT IS FOURTH ON PURPOSE (2026-08-27). The zero- and one-argument
+     * calls above stay byte-identical, which is what keeps the one-click Bot icon pinned by
+     * `composer-launch.test.tsx` unchanged. Only the launch PANEL passes it.
+     */
+    agentId?: string
   ) => Promise<AgentLaunchOutcome>;
   /** Store a first-use approval for a FOREIGN template, machine-locally.
    *  ⚠ Feature-detected inside (`agents-controls.ts › approveTemplate`); an
@@ -174,7 +190,8 @@ export function useAgentsPanel({
   const launchAgent = async (
     threadId: string | null,
     templateId?: string | null,
-    overrides?: TemplateLaunchOverrides
+    overrides?: TemplateLaunchOverrides,
+    agentId?: string
   ): Promise<AgentLaunchOutcome> => {
     // ⚠ A GUARDED CALL ANSWERS `busy` RATHER THAN `undefined`. The picker awaits
     // this, and a silent early return would leave a row click looking exactly
@@ -215,6 +232,9 @@ export function useAgentsPanel({
         // stays byte-identical to a main that has never heard of templates.
         ...(templateId ? { templateId } : {}),
         ...(overrides ? { overrides } : {}),
+        // ⚠ ABSENT, NOT `undefined`-valued, for the same reason `templateId` is: a launch with
+        // no panel behind it must put the object it always did on the wire.
+        ...(agentId ? { agentId } : {}),
       });
       // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
       if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {
@@ -222,7 +242,7 @@ export function useAgentsPanel({
       }
       if (res.ok) refreshDesktopSessions?.();
       void refetch();
-      return { ok: res.ok, reason: res.reason, template: res.template };
+      return { ok: res.ok, reason: res.reason, template: res.template, agentId: res.agentId };
     } finally {
       setLaunchBusy(false);
     }

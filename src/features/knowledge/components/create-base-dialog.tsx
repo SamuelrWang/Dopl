@@ -2,15 +2,20 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
-// ⚠ Deep import, not the `settings-modal` barrel: the barrel re-exports
-// SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
-import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
-import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
+import { cn } from "@/shared/lib/utils";
+import {
+  DialogActions,
+  DialogField,
+  DIALOG_BTN_PRIMARY,
+  DIALOG_BTN_SECONDARY,
+  StandardDialog,
+} from "@/shared/ui/standard-dialog";
+import { RAISED_INPUT } from "@/shared/ui/wells";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import type { KbScope } from "../scope";
+import type { KbShelf } from "../types";
 import { KnowledgeApiError, createBase } from "../client/api";
 import { seedKnowledgeBase } from "../client/hooks";
 import type { KnowledgeRouting } from "./knowledge-v2/routing";
@@ -27,14 +32,62 @@ interface Props {
   workspaceSlug: string;
   currentUserId: string;
   role: Role;
+  /**
+   * WHICH SHELF this dialog writes to (`../types.ts › KbShelf`). Omitted = the
+   * WORKSPACE shelf, which is the workspace Knowledge page and every other
+   * caller. `"home"` is passed by the /home Knowledge pane on its "across all
+   * channels" scope, and it does TWO things that must stay together: it sends
+   * `homeScoped: true` so the row lands on the shelf, and it seeds the cache
+   * entry keyed by that same shelf. Sending one without the other creates a
+   * base the surface that created it cannot see (§8).
+   *
+   * ⚠ A REQUEST, NOT A GUARANTEE — `server/service-base-writes.ts ›
+   * resolveHomeScope` 403s if this workspace is not the caller's home one, and
+   * the dialog surfaces that message rather than retrying unmarked.
+   */
+  shelf?: KbShelf;
+  /**
+   * Create the base AND share it into this channel, atomically (Samuel's ruling
+   * 2026-08-27 — the /home Shared section's create button). The server writes a
+   * `channel_resource_grants` row at `level: 'visible'` and rolls the base back
+   * if that fails, so this never half-lands.
+   *
+   * ⚠ IT ALSO REMOVES THE "WHO CAN ACCESS" PICKER, and that is not cosmetic:
+   * the GRANT is the audience answer here, so leaving a workspace-visibility
+   * radio beside it would offer a second, contradicting one. The base is created
+   * `private` — private + a `visible` grant is precisely "readable in this
+   * channel and nowhere else", which is what the button says.
+   */
+  shareToChannelId?: string;
+  /**
+   * THE AUDIENCE IS ALREADY DECIDED, so do not ask again (Samuel, 2026-08-27 —
+   * the /home mounts). On /home the operator reached this dialog through a
+   * button that named the audience — **Personal** or **Shared** — and a
+   * private/public/team radio underneath would be a second answer to a question
+   * already answered, in a surface where two of its three options do not apply
+   * (a link container has no teams, §4A/§5A).
+   *
+   * ⚠ IT IS THE SAME RULE `shareToChannelId` ALREADY ENFORCES, named
+   * separately because the two are not the same fact: a shared create carries a
+   * channel grant, a personal one carries nothing but its shelf. The WORKSPACE
+   * Knowledge page passes neither and keeps the picker — that page's create
+   * button names no audience, so this is the only place its question is asked.
+   */
+  audienceFixed?: boolean;
   /** Where a freshly created base sends the user (./knowledge-v2/routing.ts). */
   routing: KnowledgeRouting;
 }
 
 /**
- * Create-knowledge-base dialog. Shared ModalShell, narrow size (same chrome as
- * `BaseSettingsModal`), plus the three-way scope picker. Server derives the
+ * Create-knowledge-base dialog. THE standard dialog chrome
+ * (`shared/ui/standard-dialog.tsx` — narrow width, centered uppercase heading,
+ * pillow fields, fully-rounded footer pair), plus the three-way scope picker
+ * where the caller has not already settled the audience. Server derives the
  * slug from the name.
+ *
+ * ⚠ NO EXPLAINER PARAGRAPH (2026-08-27). It carried one — what a knowledge base
+ * holds, and that MCP can reach it — which is the copy the minimal-copy ruling
+ * deletes and which none of the other three dialogs has. Label + control.
  */
 export function CreateBaseDialog({
   open,
@@ -43,6 +96,9 @@ export function CreateBaseDialog({
   workspaceSlug,
   currentUserId,
   role,
+  shelf,
+  shareToChannelId,
+  audienceFixed,
   routing,
 }: Props) {
   const queryClient = useQueryClient();
@@ -67,10 +123,18 @@ export function CreateBaseDialog({
     reset();
   }
 
+  // ⚠ ONE EXPRESSION, READ THREE TIMES — the render, the disabled guard and the
+  // body below all ask "is the picker live?". Three copies of that condition is
+  // how a hidden control starts contributing a scope to a write nobody chose.
+  const scopePicker = !shareToChannelId && !audienceFixed;
+
   const createDisabled =
     submitting ||
     !name.trim() ||
-    (scope === "team" && teamGrants.length === 0);
+    // ⚠ Only reachable when the picker is RENDERED; a create whose audience the
+    // caller already settled never shows it, so it can never be blocked by a
+    // team scope nobody chose.
+    (scopePicker && scope === "team" && teamGrants.length === 0);
 
   async function handleCreate() {
     const trimmed = name.trim();
@@ -82,18 +146,30 @@ export function CreateBaseDialog({
         {
           name: trimmed,
           description: description.trim() || undefined,
-          visibility: scope === "private" ? "private" : "public",
-          ...(scope === "team"
+          // ⚠ A CREATE WITH NO PICKER IS ALWAYS `private` ON THE WORKSPACE
+          // AXIS — the button (or the grant) carries the audience, and `scope`
+          // is not rendered at all in that mode, so reading it here would send
+          // whatever the state happened to be initialised to.
+          visibility:
+            !scopePicker || scope === "private" ? "private" : "public",
+          ...(scopePicker && scope === "team"
             ? { accessMode: "teams" as const, teamGrants }
             : {}),
+          ...(shareToChannelId ? { shareToChannelId } : {}),
+          // ⚠ Only ever SENT for the home shelf — an unconditional
+          // `homeScoped: shelf === "home"` would put an explicit `false` on
+          // every workspace-page create, which is the same row but a wider
+          // contract for the fence to have to allow.
+          ...(shelf === "home" ? { homeScoped: true } : {}),
         },
-        workspaceId
+        workspaceId,
       );
       close();
       // ⚠ Seed BEFORE navigating: the controller resolves the URL segment it
       // is about to see against the cached base list, and the
       // `refreshServerData` refetch has not landed yet.
-      seedKnowledgeBase(queryClient, workspaceId, base);
+      // ⚠ SAME SHELF THE PROP NAMES — see the `shelf` prop's docblock.
+      seedKnowledgeBase(queryClient, workspaceId, base, shelf);
       routing.goToBase(base, "push");
       routing.refreshServerData();
     } catch (err) {
@@ -109,99 +185,74 @@ export function CreateBaseDialog({
   }
 
   return (
-    <ModalShell
-      open={open}
-      onClose={close}
-      label="New knowledge base"
-      size="narrow"
-    >
-      <button
-        type="button"
-        className={modalStyles.close}
-        onClick={close}
-        aria-label="Close"
+    <StandardDialog open={open} onClose={close} title="New knowledge base">
+      <DialogField label="Name" htmlFor="create-base-name">
+        <input
+          id="create-base-name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Product specs"
+          autoFocus
+          className={cn(RAISED_INPUT, "h-9 px-3")}
+        />
+      </DialogField>
+
+      <DialogField
+        label="Description"
+        hint="(optional)"
+        htmlFor="create-base-description"
       >
-        <X size={18} />
-      </button>
-      <div className={modalStyles.narrowBody}>
-        <h2 className={modalStyles.narrowTitle} style={{ textAlign: "center" }}>New knowledge base</h2>
-        <p className="mb-6 text-lead leading-relaxed text-text-secondary">
-          A knowledge base holds folders + files. Editable in the browser,
-          also accessible to your agent over MCP once you flip the
-          agent-write toggle in settings.
+        <textarea
+          id="create-base-description"
+          value={description}
+          onChange={(e) =>
+            setDescription(e.target.value.slice(0, KB_BASE_DESCRIPTION_MAX))
+          }
+          placeholder="What lives in this knowledge base?"
+          rows={3}
+          maxLength={KB_BASE_DESCRIPTION_MAX}
+          className={cn(RAISED_INPUT, "resize-none px-3 py-2")}
+        />
+      </DialogField>
+
+      {/* ⚠ HIDDEN WHEREVER THE CALLER ALREADY NAMED THE AUDIENCE — see the
+          `shareToChannelId` and `audienceFixed` props. One audience question,
+          asked once. */}
+      {scopePicker && (
+        <DialogField label="Who can access">
+          <ScopePicker
+            workspaceSlug={workspaceSlug}
+            currentUserId={currentUserId}
+            role={role}
+            scope={scope}
+            onScopeChange={setScope}
+            teamGrants={teamGrants}
+            onTeamGrantsChange={setTeamGrants}
+          />
+        </DialogField>
+      )}
+
+      {error && (
+        <p role="alert" className="text-caption text-danger">
+          {error}
         </p>
+      )}
 
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
-              Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Product specs"
-              autoFocus
-              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
-              Description{" "}
-              <span className="text-text-muted normal-case tracking-normal">
-                (optional)
-              </span>
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) =>
-                setDescription(e.target.value.slice(0, KB_BASE_DESCRIPTION_MAX))
-              }
-              placeholder="What lives in this knowledge base?"
-              rows={3}
-              maxLength={KB_BASE_DESCRIPTION_MAX}
-              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
-              Who can access
-            </label>
-            <ScopePicker
-              workspaceSlug={workspaceSlug}
-              currentUserId={currentUserId}
-              role={role}
-              scope={scope}
-              onScopeChange={setScope}
-              teamGrants={teamGrants}
-              onTeamGrantsChange={setTeamGrants}
-            />
-          </div>
-
-          {error && <p className="text-small text-danger">{error}</p>}
-        </div>
-
-        <div className={modalStyles.confirmActions}>
-          <button
-            type="button"
-            className={modalStyles.btnCancel}
-            onClick={close}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={modalStyles.btnConfirm}
-            onClick={handleCreate}
-            disabled={createDisabled}
-          >
-            {submitting ? "Creating…" : "Create"}
-          </button>
-        </div>
-      </div>
-    </ModalShell>
+      <DialogActions>
+        <button type="button" className={DIALOG_BTN_SECONDARY} onClick={close}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={DIALOG_BTN_PRIMARY}
+          onClick={handleCreate}
+          disabled={createDisabled}
+        >
+          {submitting ? "Creating…" : "Create"}
+        </button>
+      </DialogActions>
+    </StandardDialog>
   );
 }
 
@@ -274,5 +325,7 @@ function TeamGrantPane({
       </p>
     );
   }
-  return <TeamGrantEditor teams={pickable} grants={grants} onChange={onChange} />;
+  return (
+    <TeamGrantEditor teams={pickable} grants={grants} onChange={onChange} />
+  );
 }

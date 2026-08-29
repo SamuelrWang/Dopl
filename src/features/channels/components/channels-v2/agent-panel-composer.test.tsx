@@ -99,9 +99,14 @@ describe("the panel's composer appears only where it can send", () => {
   });
 
   it("renders the input on a build that can send", () => {
+    // ⚠ THE LABEL IS `Message Agent #<id>`, NOT `Message <id>` (Samuel, 2026-08-27 — INVARIANTS
+    // §11). Every case in this file addressed the box by the bare token, which is the string the
+    // placeholder was ACTUALLY rendering and precisely what the ruling forbade: the composer read
+    // "Message rpa6kq24" on screen. It resolves `agents-model.ts › agentDisplayName` now, so an
+    // agent the operator has renamed is addressed here by that name instead.
     bridge();
     mount();
-    expect(screen.getByLabelText("Message a1b2c3d4")).toBeTruthy();
+    expect(screen.getByLabelText("Message Agent #a1b2c3d4")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
   });
 
@@ -111,7 +116,7 @@ describe("what the panel's composer sends", () => {
   it("names the INSTANCE the panel was opened on", async () => {
     const message = bridge();
     mount();
-    fireEvent.change(screen.getByLabelText("Message a1b2c3d4"), {
+    fireEvent.change(screen.getByLabelText("Message Agent #a1b2c3d4"), {
       target: { value: "check the failing spec" },
     });
     await act(async () => {
@@ -140,7 +145,7 @@ describe("what the panel's composer sends", () => {
   it("sends on Enter and keeps Shift+Enter for a newline", async () => {
     const message = bridge();
     mount();
-    const box = screen.getByLabelText("Message a1b2c3d4");
+    const box = screen.getByLabelText("Message Agent #a1b2c3d4");
     fireEvent.change(box, { target: { value: "one" } });
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
@@ -155,7 +160,7 @@ describe("what the panel's composer sends", () => {
   it("lets an IME's Enter commit its candidate instead of submitting", async () => {
     const message = bridge();
     mount();
-    const box = screen.getByLabelText("Message a1b2c3d4");
+    const box = screen.getByLabelText("Message Agent #a1b2c3d4");
     fireEvent.change(box, { target: { value: "にほんご" } });
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter", isComposing: true });
@@ -166,7 +171,7 @@ describe("what the panel's composer sends", () => {
   it("sends nothing for an empty or whitespace-only body", async () => {
     const message = bridge();
     mount();
-    const box = screen.getByLabelText("Message a1b2c3d4");
+    const box = screen.getByLabelText("Message Agent #a1b2c3d4");
     fireEvent.change(box, { target: { value: "   " } });
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter" });
@@ -177,7 +182,7 @@ describe("what the panel's composer sends", () => {
   it("clears on a real send", async () => {
     bridge();
     mount();
-    const box = screen.getByLabelText("Message a1b2c3d4") as HTMLTextAreaElement;
+    const box = screen.getByLabelText("Message Agent #a1b2c3d4") as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: "landed" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -188,7 +193,7 @@ describe("what the panel's composer sends", () => {
   it("says a refusal out loud and KEEPS the text", async () => {
     bridge(vi.fn().mockResolvedValue({ ok: false }));
     mount();
-    const box = screen.getByLabelText("Message a1b2c3d4") as HTMLTextAreaElement;
+    const box = screen.getByLabelText("Message Agent #a1b2c3d4") as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: "did this land" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -200,7 +205,7 @@ describe("what the panel's composer sends", () => {
   it("names the auth hold specifically — the operator can act on that one", async () => {
     bridge(vi.fn().mockResolvedValue({ ok: false, reason: "auth-hold" }));
     mount();
-    fireEvent.change(screen.getByLabelText("Message a1b2c3d4"), {
+    fireEvent.change(screen.getByLabelText("Message Agent #a1b2c3d4"), {
       target: { value: "hi" },
     });
     await act(async () => {
@@ -236,7 +241,7 @@ describe("what the panel's composer sends", () => {
 
   /** Send once, so the banner is on screen. */
   async function provokeNotice() {
-    fireEvent.change(screen.getByLabelText("Message a1b2c3d4"), {
+    fireEvent.change(screen.getByLabelText("Message Agent #a1b2c3d4"), {
       target: { value: "hi" },
     });
     await act(async () => {
@@ -314,7 +319,7 @@ describe("what the panel's composer sends", () => {
     // Gating on `working` would make every fresh agent unreachable.
     const message = bridge();
     mount(summary({ state: "idle" }));
-    fireEvent.change(screen.getByLabelText("Message a1b2c3d4"), {
+    fireEvent.change(screen.getByLabelText("Message Agent #a1b2c3d4"), {
       target: { value: "wake up" },
     });
     await act(async () => {

@@ -32,6 +32,7 @@ export function SendButton({
   disabled,
   onClick,
   label,
+  title,
   className,
 }: {
   mode?: SendButtonMode;
@@ -39,6 +40,13 @@ export function SendButton({
   onClick: () => void;
   /** Accessible-name override; defaults to the mode's label. */
   label?: string;
+  /**
+   * Hover text. ⚠ ADDED 2026-08-27 FOR ONE PROPERTY: a DISABLED send must say WHY (INVARIANTS §8,
+   * rule 4 — a control that swallows the click is a surface claiming to have sent something it did
+   * not). The channels composer carried that reason on its own `<button title>` before adopting
+   * this face, and dropping it here would have retired the rule by refactor.
+   */
+  title?: string;
   /** Layout-only extras. Never restyle the face here. */
   className?: string;
 }) {
@@ -48,6 +56,7 @@ export function SendButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label ?? sendButtonLabel(mode)}
+      title={title ?? label ?? sendButtonLabel(mode)}
       className={cn(
         "auth-btn-3d flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] p-0 text-text-on-cta",
         className

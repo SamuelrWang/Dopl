@@ -31,6 +31,10 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { CircleDashed, Plus } from "lucide-react";
+/** ⚠ The underline field is `shared/ui/wells.ts` SINCE 2026-08-26 — it stood
+ *  here as a local const while `agent-rename.tsx` carried a second copy, and
+ *  the composer's new-thread title made it a third. One statement now. */
+import { UNDERLINE_FIELD } from "@/shared/ui/wells";
 import { cn } from "@/shared/lib/utils";
 import { MetaRow } from "./bits";
 import {
@@ -49,11 +53,6 @@ import {
  * else may wear it, or the affordance appears for the wrong region.
  */
 export const INFO_CARD_SECTION = "group/infocard";
-
-/** The underline field — the whole editing chrome there is. Shared by the two
- *  columns so a label and a value cannot drift apart typographically. */
-const UNDERLINE_FIELD =
-  "min-w-0 border-0 border-b border-text-primary bg-transparent p-0 text-body text-text-primary outline-none placeholder:text-text-disabled";
 
 /**
  * One row, mid-edit. Pure UI: it owns the DRAFT and nothing else, and hands the

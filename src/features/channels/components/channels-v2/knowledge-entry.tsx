@@ -40,7 +40,7 @@ import {
 import type { AuthorIndex } from "./view-model";
 
 /** See the docblock — a knowledge body is tinted against nobody. */
-const NO_AUTHORS: AuthorIndex = { currentUserId: "", byId: new Map() };
+const NO_AUTHORS: AuthorIndex = { currentUserId: "", byId: new Map(), agents: new Map() };
 
 export function ChannelKnowledgeEntry({
   channelId,

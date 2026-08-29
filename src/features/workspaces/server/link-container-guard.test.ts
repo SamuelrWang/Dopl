@@ -193,10 +193,17 @@ describe("the BOUND CLAIM is the one admitted add, and it bypasses this guard", 
     expect(CLAIM_SRC).toMatch(/insertContainerMember/);
   });
 
-  it("leans on the DATABASE for the cap instead", () => {
-    // The guard it skips is a service-layer refusal; the fence it cannot skip is
-    // the trigger, so the module has to handle that RAISE.
-    expect(CLAIM_SRC).toMatch(/LINK_CONTAINER_FULL/);
+  it("carries NO member cap of its own — the cap is retired, not relocated", () => {
+    // ⚠ THIS ASSERTION INVERTED ON 2026-08-26 (Samuel's ruling: a home channel
+    // takes MORE THAN TWO people). It used to require `LINK_CONTAINER_FULL`,
+    // because the claim leaned on the DB trigger and had to translate its RAISE.
+    // The trigger is dropped (`20260830120000_link_container_multi_member.sql`)
+    // and the translation with it, so the string surviving here would mean a
+    // refusal wired to a fence that no longer exists — a 409 nothing can raise.
+    expect(CLAIM_SRC).not.toMatch(/LINK_CONTAINER_FULL/);
+    // What DOES still bound this path: it spends a single-use token, so a claim
+    // admits one person and the next one needs a fresh mint.
+    expect(CLAIM_SRC).toMatch(/consumeLinkUse/);
   });
 });
 

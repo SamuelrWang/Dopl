@@ -71,6 +71,20 @@ describe("MetaCard storage meter", () => {
     expect(screen.queryByText(/Nothing was deleted/)).toBeNull();
   });
 
+  it("🔒 keeps the description field inside the section", () => {
+    // 🔒 Samuel's live review, 2026-08-28: the textarea overflowed its card
+    // with the resize handle on the border. The containment is a THREE-part
+    // chain and this pins the half that lives in the markup — `RAISED_INPUT`'s
+    // `w-full` plus the module's capped block. The CSS half (`resize: none`,
+    // `max-width`, the parent's `min-width: 0`) is pinned in
+    // `../layout-rules.test.ts`, because jsdom has no layout to overflow.
+    renderCard();
+    const field = screen.getByPlaceholderText(/What's in this knowledge base/);
+    expect(field.tagName).toBe("TEXTAREA");
+    expect(field.className).toContain("w-full");
+    expect(field.className).toContain("fieldBlock");
+  });
+
   it("leaves the rest of the Details card exactly as it was", () => {
     renderCard({ storageBytes: 1_250_000, storageLimit: 5_000_000 });
     expect(screen.getByText("12 August 2026")).toBeTruthy();

@@ -243,7 +243,14 @@ describe("cross-workspace isolation", () => {
     // The service passes its own context's workspace and the repository takes
     // it as a required argument — there is no code path that reads a workspace
     // id off a request body.
-    expect(mockRepo.listTemplatesForWorkspace).toHaveBeenCalledWith("ws-other");
+    // ⚠ The second argument is the SHELF (2026-08-27), and `undefined` here is
+    // the assertion that an unasked-for shelf means NO filter — the workspace
+    // fence and the shelf filter are different axes and neither substitutes for
+    // the other.
+    expect(mockRepo.listTemplatesForWorkspace).toHaveBeenCalledWith(
+      "ws-other",
+      undefined
+    );
   });
 
   it("a missing row 404s exactly like an invisible one", async () => {

@@ -26,23 +26,24 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { ChannelsV2AgentWindow, agentWindowTitle } from "./agent-window";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { agentWindowTitle } from "./agent-window";
 // ⚠ THE WORK LANE MOVED OUT OF THE WINDOW ON 2026-08-22 and is now shared with
 // the slide-out panel (`agent-stream.tsx`). Its copy travelled with it; the
 // window's own cases below are unchanged, because the behaviour did not move —
 // only the file did.
 import { NARRATION_EMPTY, NARRATION_UNSUPPORTED } from "./agent-stream";
+import { toolRunLabel } from "./agent-stream-log";
 // ⚠ THE 1:1 COMPOSER MOVED OUT OF THE WINDOW ON 2026-08-22 and is now shared with
 // the slide-out panel (`agent-composer.tsx`). Its copy travelled with it; the
 // window's own cases below are unchanged, because the behaviour did not move —
 // only the file did.
 import { MESSAGE_AUTH_HELD, MESSAGE_REFUSED } from "./agent-composer";
-import { CHANNEL_ID, ME } from "./test-fixtures";
-
-const TASK = "t-1";
-const WS = "ws-1";
+import { CHANNEL_ID } from "./test-fixtures";
+// ⚠ THE RENDER MACHINERY IS A HARNESS since 2026-08-27 (§1) — the fake bridge, the
+// summary fixture and the mount. It moved WHOLE, unchanged; the cases below are
+// what this file is about. `agent-window-harness.tsx` carries why.
+import { TASK, WS, installBridge, mount, summary } from "./agent-window-harness";
 
 const { live, refetchMessages, refetchPending, consentMutate } = vi.hoisted(() => ({
   live: vi.fn<
@@ -82,88 +83,6 @@ vi.mock("../../hooks/use-channel-preference-writes", () => ({
     consent: { mutate: consentMutate, pending: false },
   }),
 }));
-
-function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
-  return {
-    sessionId: "s-1",
-    channelId: CHANNEL_ID,
-    taskId: TASK,
-    name: "flint",
-    state: "working",
-    channelName: "Website",
-    threadTitle: "UI-kit design",
-    detail: "tool",
-    toolLabel: "Bash",
-    ...over,
-  };
-}
-
-interface BridgeOver {
-  sessions?: DesktopSessionSummary[];
-  entries?: unknown[];
-  message?: ReturnType<typeof vi.fn>;
-  withNarration?: boolean;
-  withMessage?: boolean;
-}
-
-/** One live push, as `main/session-narration.js › flush` sends it. */
-type NarrationPush = (e: { sessionKey: string; entries: unknown[] }) => void;
-
-function installBridge(over: BridgeOver = {}) {
-  const {
-    sessions = [summary()],
-    entries = [],
-    message = vi.fn().mockResolvedValue({ ok: true }),
-    withNarration = true,
-    withMessage = true,
-  } = over;
-  // ⚠ CAPTURED, NOT STUBBED (2026-08-22, F-250). `onNarration` returning a bare
-  // unsubscriber meant NO TEST EVER DROVE A FRAME — which is precisely how a
-  // filter that could never match shipped: every case here read the mount value
-  // and the live half had no coverage at all.
-  const pushes: NarrationPush[] = [];
-  const narration = vi.fn(() => Promise.resolve({ entries }));
-  const api: Record<string, unknown> = {
-    summaries: () => Promise.resolve({ sessions }),
-    onSummaries: () => () => {},
-    reopen: vi.fn(),
-  };
-  if (withNarration) {
-    api.narration = narration;
-    api.onNarration = (cb: NarrationPush) => {
-      pushes.push(cb);
-      return () => {
-        const at = pushes.indexOf(cb);
-        if (at !== -1) pushes.splice(at, 1);
-      };
-    };
-  }
-  if (withMessage) api.message = message;
-  (window as unknown as { dopl?: unknown }).dopl = {
-    apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
-    sessions: api,
-  };
-  /** Fan one frame out to every subscriber, exactly as main does. */
-  const push = async (sessionKey: string, frame: unknown[]) => {
-    await act(async () => {
-      for (const cb of [...pushes]) cb({ sessionKey, entries: frame });
-    });
-  };
-  return { message, narration, push };
-}
-
-async function mount() {
-  await act(async () => {
-    render(
-      <ChannelsV2AgentWindow
-        workspaceId={WS}
-        channelId={CHANNEL_ID}
-        taskId={TASK}
-        currentUserId={ME}
-      />
-    );
-  });
-}
 
 beforeEach(() => {
   document.title = "Dopl";
@@ -217,6 +136,9 @@ describe("the work lane's two absences are worded differently", () => {
     expect(screen.queryByText(NARRATION_UNSUPPORTED)).toBeNull();
   });
 
+  // ⚠ THE TOOL DETAIL IS BEHIND ONE CLICK SINCE 2026-08-27 (Samuel) — a run of
+  // consecutive tool activity is one muted "Used N tools" row, collapsed by default
+  // (`agent-stream-log.tsx`). The COUNT is tool USES, so a call and its result are one.
   it("renders the work, with tool NAMES — the half F-212 called out by name", async () => {
     installBridge({
       entries: [
@@ -226,10 +148,14 @@ describe("the work lane's two absences are worded differently", () => {
       ],
     });
     await mount();
-    expect(await screen.findByText("npm test")).toBeTruthy();
+    // ⚠ The agent's own words are NEVER behind the chevron: they are the thing the
+    // operator opened this window to read.
+    expect(await screen.findByText("tests are green")).toBeTruthy();
+    expect(screen.queryByText("npm test")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: toolRunLabel(1) }));
+    expect(screen.getByText("npm test")).toBeTruthy();
     expect(screen.getByText("Bash")).toBeTruthy();
     expect(screen.getByText("158 passed")).toBeTruthy();
-    expect(screen.getByText("tests are green")).toBeTruthy();
   });
 
   /**
@@ -253,7 +179,8 @@ describe("the work lane's two absences are worded differently", () => {
       await push(`${CHANNEL_ID}:${TASK}:a1b2c3d4`, [
         { at: 9, kind: "tool", tool: "Bash", text: "npm run lint" },
       ]);
-      expect(await screen.findByText("npm run lint")).toBeTruthy();
+      fireEvent.click(await screen.findByRole("button", { name: toolRunLabel(1) }));
+      expect(screen.getByText("npm run lint")).toBeTruthy();
     });
 
     it("ignores a SIBLING agent's frame on the same thread", async () => {
@@ -312,7 +239,8 @@ describe("the work lane's two absences are worded differently", () => {
       entries: [{ at: 1, kind: "tool", tool: "mcp__dopl__dopl_channel", text: "{}" }],
     });
     await mount();
-    expect(await screen.findByText("dopl_channel")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: toolRunLabel(1) }));
+    expect(screen.getByText("dopl_channel")).toBeTruthy();
   });
 });
 
@@ -331,7 +259,10 @@ describe("the 1:1 composer", () => {
     // reaches a different agent than the one it is showing, silently.
     const { message } = installBridge({ sessions: [summary({ agentId: "a1b2c3d4" })] });
     await mount();
-    const box = await screen.findByLabelText("Message a1b2c3d4");
+    // ⚠ `Message Agent #<id>`, NOT `Message <id>` (Samuel, 2026-08-27 — INVARIANTS §11: the raw
+    // agent id is never user-visible). This window's composer placeholder was one of the three
+    // surfaces that shipped the bare token.
+    const box = await screen.findByLabelText("Message Agent #a1b2c3d4");
     fireEvent.change(box, { target: { value: "look at the failing test" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -411,10 +342,16 @@ describe("the 1:1 composer", () => {
 
   // ⚠ The one genuinely surprising property of this surface: an input under a transcript
   // normally posts to it.
-  it("says out loud that nothing here is posted to the thread", async () => {
+  //
+  // ⚠ THE SENTENCE MOVED AND WAS REWRITTEN TWICE (Samuel). It was a `text-micro` footnote under
+  // the composer bar; then two lines in the empty state, one of them quoting the agent's id; it
+  // is now ONE muted line saying what the lane is and what to do.
+  it("says out loud that the lane is private, in one line", async () => {
     installBridge();
     await mount();
-    expect(await screen.findByText(/not posted to the thread/i)).toBeTruthy();
+    expect(
+      await screen.findByText("Chat with your agent privately. Send a message to wake it up.")
+    ).toBeTruthy();
   });
 });
 

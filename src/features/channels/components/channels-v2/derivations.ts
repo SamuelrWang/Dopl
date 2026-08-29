@@ -19,7 +19,7 @@
 
 import { useMemo } from "react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { indexMembers } from "./view-model";
+import { agentIndexFromKey, agentIndexKey, indexAgents, indexMembers } from "./view-model";
 import { channelRows, threadRows } from "./view-model-rows";
 import { sidebarThreads } from "./view-model-requested";
 import type { AuthorIndex } from "./view-model";
@@ -56,6 +56,7 @@ export function useChannelsV2Derivations({
   messages,
   threads,
   openThreadId,
+  agentSessions = null,
 }: {
   members: ChannelMember[];
   currentUserId: string;
@@ -63,10 +64,55 @@ export function useChannelsV2Derivations({
   threads: ChannelThread[];
   /** The thread the operator asked for; resolved against `threads` below. */
   openThreadId: string | null;
+  /**
+   * THIS MACHINE'S OWN AGENTS, for the names the transcript renders (2026-08-27).
+   * ⚠ `null` IS "no desktop feed" (a plain browser, the pop-out) and is not an error — the index
+   * then holds no agents and every agent row reads `Agent #<id>`, exactly as before.
+   */
+  agentSessions?: ReadonlyArray<{
+    agentId?: string | null;
+    displayName?: string | null;
+    description?: string | null;
+  }> | null;
 }): ChannelsV2Derivations {
+  /**
+   * ⚠ MEMOISED ON THE FEED'S IDENTITY CONTENT, NOT ON THE FEED (2026-08-28). Memoising on
+   * `agentSessions` alone is what the 2026-08-27 rename wave shipped, and it is wrong for a
+   * reason neither wave could see from its own side: **that array is paced by TELEMETRY and this
+   * index holds only NAMES.**
+   *
+   * `main/session-summary.js › summariesDigest` is `JSON.stringify(list)` over rows that spread
+   * `session-metrics.js › metrics`, which carries `lastActivityAt` — a field whose own comment
+   * says it "moves on every dispatch" — plus `tokensSpent` and `contextUsed`. The quantization
+   * that would damp that is on the SERVER wire (`session-telemetry.js`), never on this local IPC
+   * push, and the push coalesces at `PUSH_COALESCE_MS` (200). So a single WORKING agent hands
+   * this hook a brand-new array about five times a second.
+   *
+   * Every one of those minted a new `Map`, moved `index`, and rebuilt `rows` — and nothing
+   * downstream absorbs it: neither `transcript.tsx` nor `message-markdown.tsx` memoises, so every
+   * message in the channel re-ran `marked.lexer` plus both mention-index builds, five times a
+   * second, for as long as an agent was working. ⚠ THE IDLE CASE HID IT: an empty feed returns
+   * the shared `view-model.ts › NO_AGENTS`, so `index` never moved and the churn appeared only
+   * while the operator was watching an agent run.
+   *
+   * ⚠ THE MAP IS BUILT FROM THE KEY, WHICH IS WHAT MAKES ITS IDENTITY A FUNCTION OF ITS CONTENT.
+   * A ref-held cache would do the same thing and is forbidden outright — `react-hooks/refs`, "cannot
+   * access refs during render" — so the round trip (`view-model.ts › agentIndexKey` /
+   * `› agentIndexFromKey`) is the honest form: two memos, no render-phase mutation, and the second
+   * one genuinely does not re-run when the key is unchanged.
+   *
+   * ⚠ THE RENAME STILL LANDS WITHOUT A REFETCH, which is the property the original memo existed
+   * for and the one this must not cost: a rename or a describe MOVES the key; a token count does
+   * not.
+   */
+  const agentKey = useMemo(
+    () => agentIndexKey(indexAgents(agentSessions)),
+    [agentSessions]
+  );
+  const agents = useMemo(() => agentIndexFromKey(agentKey), [agentKey]);
   const index = useMemo(
-    () => indexMembers(members, currentUserId),
-    [members, currentUserId]
+    () => indexMembers(members, currentUserId, agents),
+    [members, currentUserId, agents]
   );
   // DERIVED, never stored: a thread id that is not in THIS channel's list is a
   // stale pick (channel switched, thread aged past the read's ceiling), and the

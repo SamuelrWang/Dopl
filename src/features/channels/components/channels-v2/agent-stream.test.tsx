@@ -24,7 +24,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AgentStream, NARRATION_EMPTY, NARRATION_UNSUPPORTED } from "./agent-stream";
-import { buildAgentStream, frameLane } from "./agent-stream-model";
+import { toolRunLabel } from "./agent-stream-log";
+import { buildAgentStream, frameLane, groupStreamItems } from "./agent-stream-model";
 import type { AgentNarrationEntry } from "./use-agent-narration";
 import { message } from "./test-fixtures";
 
@@ -197,18 +198,65 @@ describe("the lanes look different, and the sent box is the loud one", () => {
     expect(screen.getByText("Posted to channel")).toBeTruthy();
   });
 
-  it("renders the private 1:1 exchange PLAIN, with a word for the side", () => {
+  it("renders the private 1:1 exchange PLAIN — my side right, the agent's left", () => {
     renderStream({
       entries: [
         wildFrame("operator", { text: "check the spec" }),
         wildFrame("private", { at: 2000, text: "on it" }),
       ],
     });
-    expect(screen.getByText("You")).toBeTruthy();
-    expect(screen.getByText("Agent")).toBeTruthy();
+    // ⚠ MY TURN CARRIES NO WORD AT ALL SINCE 2026-08-27 (Samuel). It wore a blue
+    // "You" in a label column; the SIDE is the signal now, and the avatar is the
+    // identity. A label saying who the viewer is, on every line they type, is the
+    // thing that made the row read as a log entry about them.
+    expect(screen.queryByText("You")).toBeNull();
+    expect(screen.getByText("check the spec").closest("div")?.className).toMatch(
+      /justify-end/
+    );
+    // ⚠ AND THE AGENT'S SIDE CARRIES NOTHING BUT THE TEXT (Samuel, 2026-08-27,
+    // second pass). The quote bar and the "Agent" marker went with the "You"
+    // label: ALIGNMENT is what tells the two sides apart now, and a rule plus a
+    // noun on top of that restates what the layout already says.
+    expect(screen.queryByText("Agent")).toBeNull();
+    const agentLine = screen.getByText("on it");
+    expect(agentLine.className).not.toMatch(/border-l/);
+    expect(agentLine.className).toMatch(/text-text-primary/);
     // ⚠ THE WHOLE POINT: a private line must not wear the sent box's banner.
     expect(screen.queryByText(/^Sent to /)).toBeNull();
     expect(screen.queryByText("Posted to channel")).toBeNull();
+  });
+
+  /**
+   * MY TURN WEARS MY FACE, AND NOTHING ELSE (Samuel, live review 2026-08-27).
+   *
+   * ⚠ NO NAME, NO EMAIL. The avatar is the identity; a name beside it is the
+   * viewer's own name quoted back at them on every line they type.
+   * ⚠ AND AN UNRESOLVED VIEWER RENDERS NO FACE rather than a placeholder — the
+   * host reads it off the transcript (`view-model.ts › viewerPerson`) and a
+   * viewer who has never posted has no hydrated row. Unknown is not empty.
+   */
+  it("puts the viewer's AVATAR on their own turn, and no name", () => {
+    renderStream({
+      entries: [wildFrame("operator", { text: "check the spec" })],
+      viewer: {
+        userId: "u-me",
+        email: "me@dopl.dev",
+        displayName: "Samuel Wang",
+        avatarUrl: null,
+      },
+    });
+    // The initials fallback IS the avatar when there is no image.
+    expect(screen.getByText("S")).toBeTruthy();
+    expect(screen.queryByText("Samuel Wang")).toBeNull();
+    expect(screen.queryByText("me@dopl.dev")).toBeNull();
+  });
+
+  it("renders my turn with NO face when the viewer could not be resolved", () => {
+    const { container } = renderStream({
+      entries: [wildFrame("operator", { text: "check the spec" })],
+    });
+    expect(screen.getByText("check the spec")).toBeTruthy();
+    expect(container.querySelectorAll("img")).toHaveLength(0);
   });
 
   it("renders an unknown frame's TEXT rather than dropping the line", () => {
@@ -225,8 +273,94 @@ describe("the lanes look different, and the sent box is the loud one", () => {
         frame({ at: 2000, kind: "result", ok: false, text: "boom" }),
       ],
     });
+    // ⚠ Behind the run's chevron since 2026-08-27 — but UNCHANGED once opened.
+    fireEvent.click(screen.getByRole("button", { name: toolRunLabel(1) }));
     expect(screen.getByText("dopl_channel")).toBeTruthy();
     expect(screen.getByText("failed")).toBeTruthy();
+  });
+
+  /**
+   * THE AGENT'S OWN WORDS STAND ALONE (Samuel, live review 2026-08-27).
+   *
+   * ⚠ A bold "says" sat in the label column of every `thinking` row — a speech
+   * verb attached to a machine, restating what the lane already is, in front of
+   * the one thing in this lane a person actually reads. The text is `text-primary`
+   * now, with nothing beside it.
+   */
+  it("gives the agent's own words NO label and the primary ink", () => {
+    renderStream({ entries: [frame({ text: "tests are green" })] });
+    expect(screen.queryByText("says")).toBeNull();
+    const line = screen.getByText("tests are green");
+    expect(line.className).toMatch(/text-text-primary/);
+  });
+});
+
+/**
+ * CONSECUTIVE TOOL ACTIVITY IS ONE GRAY ROW (Samuel, live review 2026-08-27).
+ *
+ * ⚠ THE FAILURE IT REPLACES: every tool call rendered its own row of raw JSON, so
+ * an agent doing ordinary work buried the POST the operator opened the panel to
+ * read. Collapsed by default, opening onto exactly the rows that were there.
+ *
+ * ⚠ AND NOTHING IS DROPPED. The count is real, the break is any non-tool lane, and
+ * a failed call still says so on the row inside — a summary that HID a failure
+ * would be worse than the noise it replaced.
+ */
+describe("a run of tool activity collapses into one row", () => {
+  const run = [
+    frame({ at: 1, kind: "tool", tool: "ToolSearch", text: '{"query":"x"}' }),
+    frame({ at: 2, kind: "result", ok: true, text: "[1,2,3]" }),
+    frame({ at: 3, kind: "tool", tool: "Bash", text: "npm test" }),
+    frame({ at: 4, kind: "result", ok: true, text: "158 passed" }),
+  ];
+
+  it("counts tool USES, not frames — a call and its result are one", () => {
+    const groups = groupStreamItems(
+      buildAgentStream({ entries: run, sent: [] })
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].tools).toBe(2);
+  });
+
+  it("BREAKS the run on any non-tool lane — a said line is never swallowed", () => {
+    const groups = groupStreamItems(
+      buildAgentStream({
+        entries: [
+          run[0],
+          frame({ at: 2, kind: "assistant", text: "now the tests" }),
+          run[2],
+        ],
+        sent: [],
+      })
+    );
+    expect(groups.map((g) => g.tools)).toEqual([1, null, 1]);
+  });
+
+  it("is COLLAPSED by default — the payloads are not on screen", () => {
+    renderStream({ entries: run });
+    expect(screen.getByRole("button", { name: toolRunLabel(2) })).toBeTruthy();
+    expect(screen.queryByText("npm test")).toBeNull();
+    expect(screen.queryByText("158 passed")).toBeNull();
+  });
+
+  it("opens onto the SAME detailed rows, and closes again", () => {
+    renderStream({ entries: run });
+    const summary = screen.getByRole("button", { name: toolRunLabel(2) });
+    fireEvent.click(summary);
+    expect(summary.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("ToolSearch")).toBeTruthy();
+    expect(screen.getByText("Bash")).toBeTruthy();
+    expect(screen.getByText("npm test")).toBeTruthy();
+    fireEvent.click(summary);
+    expect(screen.queryByText("npm test")).toBeNull();
+  });
+
+  it("keeps the 'Show more' ceiling INSIDE an expanded payload", () => {
+    renderStream({
+      entries: [frame({ kind: "tool", tool: "Bash", text: "x".repeat(400) })],
+    });
+    fireEvent.click(screen.getByRole("button", { name: toolRunLabel(1) }));
+    expect(screen.getByRole("button", { name: "Show more" })).toBeTruthy();
   });
 });
 
@@ -253,6 +387,28 @@ describe("the log lane is bounded in both directions", () => {
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
   });
 
+  /**
+   * "SHOW MORE" REVEALS THE **WHOLE** LINE (Samuel, live review 2026-08-27).
+   *
+   * ⚠ THE BUG THIS PINS LIVED IN MAIN, NOT HERE — `main/session-narration.js` capped the agent's
+   * prose at its CAPTION bound (300), so this control raised a display clamp over a string that
+   * had already been cut mid-word with no marker, and expanding changed nothing the reader
+   * cared about. The cap is `PROSE_CAP` now, equal to `EXPANDED_CHARS`.
+   *
+   * ⚠ SO THE CLAIM HERE IS AN EQUALITY, NOT A LENGTH: the expanded row's text is the source
+   * text, character for character, with no tail. A `toBeGreaterThan` would have passed on the
+   * broken build.
+   */
+  it("expanded, the row's text EQUALS the source — no tail, no mid-word cut", () => {
+    // A frame at exactly main's ceiling: the longest string that can reach this component.
+    const full = `${"word ".repeat(399)}end`;
+    expect(full.length).toBeLessThanOrEqual(2000);
+    renderStream({ entries: [frame({ text: full })] });
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(screen.getByText(full).textContent).toBe(full);
+    expect(screen.queryByText(/Clipped/)).toBeNull();
+  });
+
   it("CLIPS an enormous line even when expanded, and says it clipped", () => {
     // ⚠ A tool result can be a megabyte of JSON. "Show more" pasting all of it
     // into a 380px column destroys the stream it was meant to explain, and a
@@ -261,5 +417,33 @@ describe("the log lane is bounded in both directions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     expect(screen.getByText(/Clipped/)).toBeTruthy();
     expect(screen.queryByText("y".repeat(5000))).toBeNull();
+  });
+});
+
+/**
+ * THE EMPTY STATE IS ONE BLOCK (Samuel, 2026-08-27).
+ *
+ * ⚠ IT WAS TWO NODES IN TWO STYLES — a muted "Send a message to wake agent." over a body-size
+ * black caption naming the agent by id. Two sentences about one situation, in two type sizes,
+ * reading as two unrelated announcements. The pin is that there is exactly ONE node.
+ */
+describe("the empty state", () => {
+  it("is one sentence, in one node, naming no id", () => {
+    renderStream({ entries: [] });
+    const line = screen.getByText(
+      "Chat with your agent privately. Send a message to wake it up."
+    );
+    expect(line).toBeTruthy();
+    // ⚠ NO NAME SUBSTITUTION. It quoted `Agent #<id>` at the operator before anything existed to
+    // address — noise where the sentence's job is to say what the lane IS.
+    expect(line.textContent).not.toMatch(/Agent #/);
+    // ⚠ ONE NODE: the whole empty state is this paragraph and nothing beside it.
+    expect(line.parentElement?.querySelectorAll("p")).toHaveLength(1);
+  });
+
+  it("still says THIS BUILD CANNOT SHOW IT when there was nothing to ask", () => {
+    // ⚠ A DIFFERENT ABSENCE, and it keeps its own words: "asked and empty" is not "could not ask".
+    renderStream({ entries: null, supported: false });
+    expect(screen.getByText(NARRATION_UNSUPPORTED)).toBeTruthy();
   });
 });

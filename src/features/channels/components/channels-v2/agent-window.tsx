@@ -45,10 +45,12 @@ import { agentSentMessages } from "./agent-panel";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import { AgentStream } from "./agent-stream";
 import {
-  agentDisplayId,
+  NO_THREAD_LABEL,
+  agentDisplayName,
   agentLiveness,
 } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
+import { viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { AgentComposer } from "./agent-composer";
 import { PostureControls } from "./agent-posture";
@@ -180,16 +182,38 @@ export function ChannelsV2AgentWindow({
     [messages, taskId, currentUserId, agent?.agentId]
   );
 
-  // ⚠ THE ID, NOT THE HANDLE (2026-08-21) — `agents-model.ts › agentDisplayId`
-  // carries why, and it is the ONE reader of that field on every surface here.
-  useWindowTitle(agent ? agentDisplayId(agent) : null);
+  // ⚠ THE VIEWER'S FACE, OFF THE TRANSCRIPT THIS WINDOW ALREADY READS (Samuel,
+  // 2026-08-27 — their own turns in the stream wear it). No roster read: the
+  // window's diet is messages + consent and stays that way, and the hydrated
+  // author fields are keyed on the user id, so a row this viewer authored
+  // carries the profile a roster would have handed back (`view-model.ts ›
+  // viewerPerson`).
+  const viewer = useMemo(
+    () => viewerPerson(messages, currentUserId),
+    [messages, currentUserId]
+  );
+
+  // ⚠ THE DISPLAY NAME, NEVER THE RAW ID (Samuel, 2026-08-27 — now a stated rule, INVARIANTS §5).
+  // This wrote `agentDisplayId`, so the OS window read "Dopl — aczfk4p8": an eight-character
+  // machine token as the title of a window a person keeps in their dock. `agentDisplayName`
+  // resolves the operator's own name, falling back to `Agent #<id>` — which is a NAME the
+  // operator was shown at launch and accepted, not a raw id leaking through.
+  // ⚠ MAIN NEEDS NO CHANGE FOR THIS. Electron copies `document.title` onto the window and
+  // `main/agent-window.js` does not disable it, so writing the document title IS setting the
+  // window title — and a rename re-renders this, which re-writes it.
+  useWindowTitle(agent ? agentDisplayName(agent) : null);
 
   // ⚠ `sessions === null` is "could not ask" and is NOT the same as "this agent is gone".
   // Rendering the gone-state over a browser (or a main without the feed) would be a claim
   // about the operator's machine that this surface cannot make.
   if (sessions !== null && !agent) {
     return (
-      <div className="page-float flex flex-col antialiased">
+      // ⚠ THE SAME GROUND AS THE LOADED WINDOW BELOW, and it is the layer this
+      // branch was missed on. It kept `.page-float` after the main return gave it
+      // up, so an operator whose agent had ended saw exactly the floating rounded
+      // panel the 2026-08-27 fix removed — the gone-state is the ONE view that
+      // window shows on its own, which is the worst place to leave the old face.
+      <div className="flex min-h-0 flex-1 flex-col bg-[var(--panel-surface)] antialiased">
         <EmptyState
           icon={Bot}
           title="That agent isn't running"
@@ -200,12 +224,24 @@ export function ChannelsV2AgentWindow({
   }
 
   return (
-    <div className="page-float flex min-h-0 flex-1 flex-col antialiased">
+    // ⚠ NOT `.page-float` (Samuel, 2026-08-27). That recipe floats a rounded, bordered,
+    // shadowed card inside a margin — right for a PAGE in the app shell, wrong for a window
+    // whose whole viewport is this content: it read as a panel hovering on a background, with
+    // inner corners cutting across the OS window's own. The window IS the panel; the rounding
+    // belongs to the operating system. Fill only, and it is `.page-float`'s own colour.
+    <div className="flex min-h-0 flex-1 flex-col bg-[var(--panel-surface)] antialiased">
       <AgentWindowHeader agent={agent} />
-      <AgentWindowStats agent={agent} />
-      {agent && (
-        <PostureControls agent={agent} channelId={channelId} taskId={taskId} />
-      )}
+      {/* ⚠ ONE BOX, NOT TWO (Samuel, 2026-08-27). The usage strip sat directly above the three
+          dropdowns — two stacked bands about one agent. It renders INSIDE the posture box now,
+          under the controls. */}
+      {agent ? (
+        <PostureControls
+          agent={agent}
+          channelId={channelId}
+          taskId={taskId}
+          stats={<AgentWindowStats agent={agent} />}
+        />
+      ) : null}
       {/* ⚠ THE SAME STREAM THE SLIDE-OUT PANEL RENDERS (2026-08-22), shared
           rather than forked — `agent-stream.tsx` carries the lane rules. The
           window is this content at a comfortable width; the panel is the glance
@@ -225,6 +261,7 @@ export function ChannelsV2AgentWindow({
         onPost={(id) => consent.mutate({ id, decision: "allow" })}
         postBusy={consent.pending}
         threadTitle={agent?.threadTitle}
+        viewer={viewer}
         className="px-4"
       />
       {/* ⚠ THE COMPOSER IS SHARED WITH THE SLIDE-OUT PANEL (2026-08-22) —
@@ -238,7 +275,7 @@ export function ChannelsV2AgentWindow({
         channelId={channelId}
         taskId={taskId}
         agentId={agent?.agentId}
-        name={agent ? agentDisplayId(agent) : null}
+        name={agent ? agentDisplayName(agent) : null}
         // ⚠ THE WINDOW GOES READ-ONLY, IT DOES NOT GO AWAY. An ended agent's
         // history is retained and this is where it is read; only the input goes.
         ended={agent?.state === "ended"}
@@ -254,11 +291,11 @@ function AgentWindowHeader({ agent }: { agent: DesktopSessionSummary | null }) {
       <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-semibold text-text-primary">
-          {agent ? agentDisplayId(agent) : "Agent"}
+          {agent ? agentDisplayName(agent) : "Agent"}
         </span>
         <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
           <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
-          <span className="truncate">in {agent?.threadTitle ?? "no thread title"}</span>
+          <span className="truncate">in {agent?.threadTitle ?? NO_THREAD_LABEL}</span>
         </span>
       </span>
       {agent &&
@@ -271,8 +308,14 @@ function AgentWindowHeader({ agent }: { agent: DesktopSessionSummary | null }) {
   );
 }
 
-/** ⚠ Absences render AS absences — no denominator, no meter; no stamp, no clause. Never a
- *  zero standing in for "not measured" (INVARIANTS §11). Same rule as the panel's strip. */
+/** ⚠ Absences render AS absences — no denominator, no stamp, no clause. Never a zero standing in
+ *  for "not measured" (INVARIANTS §11). Same rule as the panel's strip.
+ *  ⚠ THIS SAID "no denominator, NO METER" until 2026-08-28, and the second half had been reversed
+ *  a day earlier: the 2026-08-27 ruling renders the BAR unconditionally, at 0, so a spawn-idle
+ *  agent gets a box instead of nothing. The docblock kept the retired rule twenty lines above the
+ *  call that breaks it. What survives — and what `shared/ui/usage-meter.tsx` now genuinely
+ *  enforces rather than being credited with — is the DENOMINATOR half: no window reported, no
+ *  `/ 0k` printed beside a number that is real. */
 function AgentWindowStats({ agent }: { agent: DesktopSessionSummary | null }) {
   if (!agent) return null;
   const used = metric(agent.contextUsed);
@@ -286,18 +329,20 @@ function AgentWindowStats({ agent }: { agent: DesktopSessionSummary | null }) {
   ].filter(Boolean);
 
   return (
-    <div className="shrink-0 border-b border-border-subtle bg-card-surface-subtle px-4 py-2.5">
-      {used !== null && window !== null && (
-        <UsageMeter
-          label="Context tokens"
-          used={used}
-          limit={window}
-          tone="ramp"
-          formatValue={formatTokens}
-        />
-      )}
+    <div className="flex flex-col gap-1.5">
+      {/* ⚠ THE BAR AT ZERO, ALWAYS — same ruling as the pane's (Samuel, 2026-08-27). It was
+          gated on a reported `contextWindow`, which a spawn-idle agent does not have, so the box
+          rendered nothing at all. `UsageMeter` handles the missing denominator itself (empty
+          track, no division), so this is one unconditional call. */}
+      <UsageMeter
+        label="Context tokens"
+        used={used ?? 0}
+        limit={window ?? 0}
+        tone="ramp"
+        formatValue={formatTokens}
+      />
       {line.length > 0 && (
-        <p className="mt-1.5 text-caption text-text-muted">{line.join(" · ")}</p>
+        <p className="text-caption text-text-muted">{line.join(" · ")}</p>
       )}
     </div>
   );

@@ -1,8 +1,12 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { agentTemplateKeys } from "../client/query-keys";
-import type { AgentTemplate, AgentTemplateListResponse } from "../client/types";
+import { agentTemplateKeys, templateListQuery } from "../client/query-keys";
+import type {
+  AgentTemplate,
+  AgentTemplateListResponse,
+  TemplateShelf,
+} from "../client/types";
 
 /**
  * THE list read behind every agent-template surface — every template the caller
@@ -50,6 +54,20 @@ export interface UseAgentTemplatesOptions {
    * dropdown pays for one workspace, not two.
    */
   enabled?: boolean;
+  /**
+   * WHICH SHELF (`../types.ts › TemplateShelf`) — the /home Personal section
+   * passes `"home"`, the workspace Agents page `"workspace"`, and the launch
+   * picker omits it to get BOTH.
+   *
+   * 🔒 ⚠ IT KEYS THE CACHE ENTRY AS WELL AS THE REQUEST, and the WRITES hook
+   * must be given the SAME value — see `../client/query-keys.ts`. A read on
+   * `[path, ws, {shelf:"home"}]` patched by a writer on `[path, ws, undefined]`
+   * is F-331 with a new axis: silent, and visible only as a created row that
+   * never appears.
+   * ⚠ Omitting it WIDENS. There is no client-side fallback filter; `home_scoped`
+   * is never projected.
+   */
+  shelf?: TemplateShelf;
 }
 
 export interface UseAgentTemplatesResult {
@@ -83,9 +101,12 @@ export function useAgentTemplates(
   opts: UseAgentTemplatesOptions = {}
 ): UseAgentTemplatesResult {
   const query = useApiQuery<AgentTemplateListResponse, AgentTemplate[]>(
-    agentTemplateKeys.list().path,
+    agentTemplateKeys.list(opts.shelf).path,
     {
       workspaceId: workspaceId ?? undefined,
+      // ⚠ ONE MINTER for the param and the key's third element — spelling the
+      // object here would be the second place it is decided.
+      query: templateListQuery(opts.shelf),
       select: selectTemplates,
       enabled: workspaceId !== null && (opts.enabled ?? true),
     }

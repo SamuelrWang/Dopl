@@ -4,19 +4,22 @@
  *
  *  1. self-claim 400
  *  2. already a member → `existing: true`, and NOTHING is spent
- *  3. full container → 409, and NOTHING is spent
- *  4. the use guard's `false` → re-read MEMBERSHIP, converge or 410
- *  5. the trigger's RAISE → the same 409 the service check gives
- *  6. the channel add fails → the MEMBER ROW is compensated, the CONTAINER is not
- *  7. the claim-row loser → converges, and again does NOT delete the container
- *  8. success revokes the link, so the chip clears and the seat is visibly taken
- */
+ *  3. the use guard's `false` → re-read MEMBERSHIP, converge or 410
+ *  4. the membership insert's failures surface AS THEMSELVES
+ *  5. the channel add fails → the MEMBER ROW is compensated, the CONTAINER is not
+ *  6. the claim-row loser → converges, and again does NOT delete the container
+ *  7. success revokes the link, so the chip clears and the next mint is free
+ *
+ * ⚠ THE NUMBERS SHIFTED DOWN BY ONE ON 2026-08-26 and the suite names shifted
+ * with them, deliberately: the service used to hold a CAPACITY step between
+ * dedup and the spend, and a test file that keeps a retired step's number is a
+ * file whose headings stop naming what they run. The un-numbered case after 2
+ * is what replaced it. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository", () => ({
   findMemberContainer: vi.fn(),
-  countActiveContainerMembers: vi.fn(),
   consumeLinkUse: vi.fn(),
   insertContainerMember: vi.fn(),
   deleteContainerMember: vi.fn(),
@@ -66,6 +69,7 @@ const CHANNEL = {
   workspaceSegment: "q3-fundraise-abc123def456",
   channelId: CHANNEL_ID,
   name: "Q3 Fundraise",
+  peers: [],
   peer: null,
   createdAt: "2026-08-24T00:00:00.000Z",
   lastMessageAt: null,
@@ -113,7 +117,6 @@ beforeEach(() => {
   // step 2 asks before joining (not a member), the final read-back asks after
   // (a member). Cases that need a different shape reset it explicitly.
   mocked.findMemberContainer.mockResolvedValueOnce(null).mockResolvedValue(CONTAINER);
-  mocked.countActiveContainerMembers.mockResolvedValue(1);
   mocked.consumeLinkUse.mockResolvedValue(true);
   mocked.insertContainerMember.mockResolvedValue(undefined);
   mocked.deleteContainerMember.mockResolvedValue(undefined);
@@ -148,7 +151,6 @@ describe("2 — dedup on MEMBERSHIP, before anything is spent", () => {
 
     expect(result).toEqual({ channel: CHANNEL, existing: true, bound: true });
     expect(mocked.consumeLinkUse).not.toHaveBeenCalled();
-    expect(mocked.countActiveContainerMembers).not.toHaveBeenCalled();
     expect(mocked.insertContainerMember).not.toHaveBeenCalled();
   });
 
@@ -160,22 +162,25 @@ describe("2 — dedup on MEMBERSHIP, before anything is spent", () => {
   });
 });
 
-describe("3 — capacity, before the spend", () => {
-  it("409s a FULL container without burning the single use", async () => {
-    // ⚠ Burning the use to then refuse would destroy the link on a request that
-    // changed nothing — the owner would have to mint another.
-    mocked.countActiveContainerMembers.mockResolvedValue(2);
+describe("THE CAP IS GONE — a THIRD member joins (Samuel, 2026-08-26)", () => {
+  it("admits a claimer into a container that already has two members", async () => {
+    // 🔒 THE RULING, PINNED (Samuel, 2026-08-26: a home channel takes MORE THAN
+    // TWO people). This case used to 409 `LINK_CONTAINER_FULL` before the spend.
+    // The roster's size is no longer read on this path at ALL — the repository
+    // has no counter left — so the claim turns entirely on possession of the
+    // token, and the assertion below is that the join really lands.
+    const result = await claimBoundLink(boundLink(), CLAIMER);
 
-    await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toMatchObject({
-      status: 409,
-      code: "LINK_CONTAINER_FULL",
-    });
-    expect(mocked.consumeLinkUse).not.toHaveBeenCalled();
-    expect(mocked.insertContainerMember).not.toHaveBeenCalled();
+    expect(result).toEqual({ channel: CHANNEL, existing: false, bound: true });
+    expect(mocked.consumeLinkUse).toHaveBeenCalledTimes(1);
+    expect(mocked.insertContainerMember).toHaveBeenCalledTimes(1);
+    // ⚠ AND THE TOKEN IS BURNT AND REVOKED, which is what keeps growth
+    // one-at-a-time: person #4 needs a fresh mint, not this URL again.
+    expect(mocked.markLinkRevoked).toHaveBeenCalled();
   });
 });
 
-describe("4 — the atomic use guard", () => {
+describe("3 — the atomic use guard", () => {
   it("re-reads MEMBERSHIP (never the link row) and converges on the winner", async () => {
     // Two tabs of ONE account: both clear step 2, one wins the use and joins,
     // the other reads exhausted while already being a member.
@@ -201,7 +206,7 @@ describe("4 — the atomic use guard", () => {
   });
 });
 
-describe("5 — workspace membership", () => {
+describe("4 — workspace membership", () => {
   it("stamps the CONTAINER OWNER as the inviter, at the link's granted role", async () => {
     await claimBoundLink(boundLink(), CLAIMER);
     expect(mocked.insertContainerMember).toHaveBeenCalledWith({
@@ -229,24 +234,27 @@ describe("5 — workspace membership", () => {
     }
   );
 
-  it("maps the member-cap TRIGGER's raise to the same 409 the pre-check gives", async () => {
-    // ⚠ The pre-check in step 3 is a friendlier sentence; the trigger is the
-    // fence. Two concurrent claims of two different links both pass step 3 and
-    // exactly one lands here.
+  it("has NO cap translation left — a check_violation surfaces as itself", async () => {
+    // ⚠ THE INVERSE OF THE OLD PIN. This used to map the cap trigger's raise
+    // back to a 409, matching on the message prefix (F-306's third site). Both
+    // the trigger and the matcher are gone, so a `check_violation` from
+    // `workspace_members` is now an ordinary failure: the link is revoked by the
+    // outer compensation and the ORIGINAL error reaches the caller, rather than
+    // being dressed as a capacity refusal the product no longer has.
     mocked.insertContainerMember.mockRejectedValue(
-      Object.assign(new Error("LINK_CONTAINER_FULL: a home container holds at most two members"), {
+      Object.assign(new Error("some other check on workspace_members"), {
         code: "23514",
       })
     );
 
-    await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toMatchObject({
-      status: 409,
-      code: "LINK_CONTAINER_FULL",
-    });
+    await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toThrow(
+      "some other check on workspace_members"
+    );
     expect(mockAddMember).not.toHaveBeenCalled();
+    expect(mocked.markLinkRevoked).toHaveBeenCalled();
   });
 
-  it("rethrows an insert failure that is NOT the cap", async () => {
+  it("rethrows an insert failure, and does not compensate a row it never wrote", async () => {
     mocked.insertContainerMember.mockRejectedValue(new Error("connection reset"));
     await expect(claimBoundLink(boundLink(), CLAIMER)).rejects.toThrow(
       "connection reset"
@@ -255,7 +263,7 @@ describe("5 — workspace membership", () => {
   });
 });
 
-describe("6 — channel membership, and the compensation that is NOT a rollback", () => {
+describe("5 — channel membership, and the compensation that is NOT a rollback", () => {
   it("adds the claimer through the channels service, acting as the OWNER", async () => {
     await claimBoundLink(boundLink(), CLAIMER);
     // The claimer is not a member of anything yet, so a context built for them
@@ -310,7 +318,7 @@ describe("6 — channel membership, and the compensation that is NOT a rollback"
   });
 });
 
-describe("7 — the claim row converges a double claim", () => {
+describe("6 — the claim row converges a double claim", () => {
   it("returns the winner's channel and does NOT delete the container", async () => {
     // ⚠ The unbound loser drops the container it just minted. This loser must
     // not: the container is somebody else's and the winner already put this user
@@ -336,7 +344,7 @@ describe("7 — the claim row converges a double claim", () => {
   });
 });
 
-describe("8 — success", () => {
+describe("7 — success", () => {
   it("joins the container, revokes the link, and reports bound:true", async () => {
     const result = await claimBoundLink(boundLink(), CLAIMER);
 

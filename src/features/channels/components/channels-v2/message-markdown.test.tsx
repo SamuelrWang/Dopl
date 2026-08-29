@@ -262,3 +262,71 @@ describe("the layout contract the transcript pins", () => {
     }
   });
 });
+
+/**
+ * AGENT MENTIONS TINT LIKE MEMBER MENTIONS (Samuel, 2026-08-27).
+ *
+ * ⚠ A SEPARATE NAMESPACE, DECIDING TINT ONLY. `metadata.mentionedUserIds` is the SERVER's stamped
+ * set and resolves against the channel ROSTER — an agent is not a member, that resolver correctly
+ * answers nobody, and it must go on doing so. What is rendered here is a local reading of THIS
+ * machine's own agents; the routing verdict is main's (`session-dispatch.js › mentionedAgentIds`,
+ * which accepts the same two shapes).
+ */
+describe("agent mentions", () => {
+  const AGENT = "k3v7d2mq";
+  const withAgents = (displayName: string | null) =>
+    indexMembers(
+      [
+        member({ userId: ME, displayName: "Sam Wang" }),
+        member({ userId: PEER, displayName: "Diana Taylor", role: "member" }),
+      ],
+      ME,
+      new Map([[AGENT, { displayName, description: null }]])
+    );
+
+  const tinted = (text: string, displayName: string | null = null) => {
+    const view = render(
+      <MessageMarkdown text={text} index={withAgents(displayName)} mentionsMe={false} />
+    );
+    return [...view.container.querySelectorAll("span.text-link")].map((n) => n.textContent);
+  };
+
+  it("tints `@agent-<id>` blue — the id form every agent always answers to", () => {
+    expect(tinted(`hey @agent-${AGENT} take this`)).toEqual([`@agent-${AGENT}`]);
+  });
+
+  it("tints the agent's SLUGGED custom name, on the same convention as a member's", () => {
+    // ⚠ ONE SLUGGER (`lib/mentions.ts › mentionSlug`), so "Research Bot" spells the same way a
+    // roster name does. A second `.replace(/\s+/g, "-")` anywhere is how the two would drift.
+    expect(tinted("ping @research-bot please", "Research Bot")).toEqual(["@research-bot"]);
+    // ⚠ AND THE ID FORM IS NEVER WITHDRAWN BY A RENAME — an address already written keeps working.
+    expect(tinted(`ping @agent-${AGENT}`, "Research Bot")).toEqual([`@agent-${AGENT}`]);
+  });
+
+  it("leaves an unknown agent handle as plain prose", () => {
+    // ⚠ INTERSECTED WITH THIS MACHINE'S LIVE AGENTS, exactly as main's parser is. A peer's agent
+    // has no entry here and could not be addressed anyway.
+    expect(tinted("@agent-deadbeef and @agent-notanid")).toEqual([]);
+  });
+
+  it("does NOT let an agent name steal a MEMBER's tint", () => {
+    // ⚠ THE ROSTER IS ASKED FIRST AND WINS. An operator may name an agent after a colleague, and
+    // that must not repoint a token the server stamped at the colleague.
+    const out = tinted("hi @diana-taylor", "Diana Taylor");
+    expect(out).toEqual(["@diana-taylor"]);
+  });
+
+  it("gives an agent mention NO viewer highlight — that wash means the server tagged YOU", () => {
+    // ⚠ `mentionsMe` is `metadata.mentionedUserIds`, a fact about a MEMBER. An agent mention is
+    // not in that set and must not borrow the signal.
+    const view = render(
+      <MessageMarkdown
+        text={`@agent-${AGENT}`}
+        index={withAgents(null)}
+        mentionsMe
+      />
+    );
+    const span = view.container.querySelector("span.text-link");
+    expect(span?.className).not.toMatch(/bg-link/);
+  });
+});

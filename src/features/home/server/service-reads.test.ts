@@ -82,7 +82,7 @@ const CONTAINER = {
 describe("getHomeChannels", () => {
   beforeEach(() => {
     mocked.listLinkContainers.mockResolvedValue([CONTAINER]);
-    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, PEER]]));
+    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, [PEER]]]));
     mocked.listContainerChannels.mockResolvedValue(
       new Map([[WS, { id: CHANNEL, name: "Ada & Grace" }]])
     );
@@ -109,6 +109,14 @@ describe("getHomeChannels", () => {
         workspaceSegment: "ada-grace-abc123def456",
         channelId: CHANNEL,
         name: "Ada & Grace",
+        peers: [
+          {
+            userId: PEER,
+            displayName: "Grace",
+            email: "grace@x.dev",
+            avatarUrl: "https://x.dev/g.png",
+          },
+        ],
         peer: {
           userId: PEER,
           displayName: "Grace",
@@ -123,7 +131,7 @@ describe("getHomeChannels", () => {
     ]);
   });
 
-  it("RENDERS a solo channel with peer: null — a channel with nobody in it is finished, not broken", async () => {
+  it("RENDERS a solo channel with no peers — a channel with nobody in it is finished, not broken", async () => {
     mocked.listContainerPeers.mockResolvedValue(new Map());
     mocked.listContainerChannels.mockResolvedValue(
       new Map([[WS, { id: CHANNEL, name: "Fundraise" }]])
@@ -131,10 +139,81 @@ describe("getHomeChannels", () => {
 
     const [row] = (await getHomeChannels(ME)).channels;
 
+    expect(row.peers).toEqual([]);
     expect(row.peer).toBeNull();
     // ⚠ The NAME is what the row has to render itself with when there is no
     // person to name it after.
     expect(row.name).toBe("Fundraise");
+  });
+
+  describe("MORE THAN TWO members — F-307's fix", () => {
+    const SECOND = "55555555-5555-4555-8555-555555555555";
+    const THIRD = "66666666-6666-4666-8666-666666666666";
+
+    beforeEach(() => {
+      // ⚠ THE ORDER IS THE REPOSITORY'S (`joined_at ASC, user_id ASC`) and this
+      // mock stands in for it. The service must PRESERVE that order and never
+      // re-sort — the whole point of F-307's fix is that one component decides.
+      mocked.listContainerPeers.mockResolvedValue(
+        new Map([[WS, [PEER, SECOND, THIRD]]])
+      );
+      mockProfiles.mockResolvedValue(
+        new Map([
+          [PEER, { email: "grace@x.dev", displayName: "Grace", avatarUrl: null }],
+          [SECOND, { email: "priya@x.dev", displayName: "Priya", avatarUrl: null }],
+          [THIRD, { email: "dana@x.dev", displayName: "Dana", avatarUrl: null }],
+        ])
+      );
+    });
+
+    it("hydrates EVERY member, in the repository's order", async () => {
+      const [row] = (await getHomeChannels(ME)).channels;
+
+      expect(row.peers.map((p) => p.userId)).toEqual([PEER, SECOND, THIRD]);
+      expect(row.peers.map((p) => p.displayName)).toEqual([
+        "Grace",
+        "Priya",
+        "Dana",
+      ]);
+    });
+
+    it("derives `peer` from `peers[0]` — one fact, never two that can disagree", async () => {
+      const [row] = (await getHomeChannels(ME)).channels;
+
+      // 🔒 The back-compat single field is the HEAD of the list and nothing
+      // else. A `peer` that is not `peers[0]` is F-307 re-opened in a shape no
+      // render test would catch, so it is pinned by IDENTITY, not by value.
+      expect(row.peer).toBe(row.peers[0]);
+      expect(row.peer?.userId).toBe(PEER);
+    });
+
+    it("KEEPS a member whose profile row is missing rather than dropping them", async () => {
+      // ⚠ `listProfileSummaries` answers only for ids it finds. A face the
+      // operator cannot name is still a person in the room — dropping them would
+      // under-count the avatar stack's `+N` and silently shrink the roster.
+      mockProfiles.mockResolvedValue(
+        new Map([[PEER, { email: "grace@x.dev", displayName: "Grace", avatarUrl: null }]])
+      );
+
+      const [row] = (await getHomeChannels(ME)).channels;
+
+      expect(row.peers).toHaveLength(3);
+      expect(row.peers[2]).toEqual({
+        userId: THIRD,
+        displayName: null,
+        email: null,
+        avatarUrl: null,
+      });
+    });
+
+    it("asks for each profile ONCE, however many containers share a member", async () => {
+      // §9: the profile tier widens with the rosters, and it stays ONE `.in()`
+      // over a DE-DUPLICATED set — never a read per member and never per row.
+      await getHomeChannels(ME);
+
+      const [ids] = mockProfiles.mock.calls[0];
+      expect([...ids].sort()).toEqual([PEER, SECOND, THIRD].sort());
+    });
   });
 
   it("still DROPS a container with no channel — there is nothing to open", async () => {
@@ -191,7 +270,7 @@ describe("getHomeChannels", () => {
 
 describe("getHomeChannel", () => {
   beforeEach(() => {
-    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, PEER]]));
+    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, [PEER]]]));
     mocked.listContainerChannels.mockResolvedValue(
       new Map([[WS, { id: CHANNEL, name: "Ada & Grace" }]])
     );

@@ -129,6 +129,7 @@ export function ChannelsV2MessagePane({
   onToggleInfo = NOOP,
   onToggleFavorite = NOOP,
   onExitThread = NOOP,
+  onOpenAgent,
   onOpenThread = NOOP,
 }: {
   channelId: string;
@@ -194,6 +195,14 @@ export function ChannelsV2MessagePane({
   onToggleFavorite?: () => void;
   /** `"page"` chrome only — the channel crumb is the way back out of a thread. */
   onExitThread?: () => void;
+  /**
+   * Set by an AGENT'S SENDER PILL — the transcript's way into the agent pane (Samuel,
+   * 2026-08-28). ⚠ PASSED STRAIGHT DOWN, and OPTIONAL for the same reason `newAgent` is: the
+   * `"window"` chrome has no agent pane beside it, so it hands none and its pills stay inert
+   * rather than becoming buttons that open nothing. `transcript.tsx › Message` carries the
+   * rest of the gate.
+   */
+  onOpenAgent?: (agentId: string) => void;
   /** Set by an in-transcript thread card — the channel view's way IN. */
   onOpenThread?: (id: string) => void;
 }) {
@@ -314,6 +323,7 @@ export function ChannelsV2MessagePane({
             canLaunchAgent={newAgent?.canLaunch ?? false}
             launchBusy={newAgent?.launchBusy ?? false}
             onLaunchAgent={(id) => void newAgent?.launchAgent(id)}
+            onOpenAgent={onOpenAgent}
             onOpenThread={onOpenThread}
           />
         )}
@@ -338,6 +348,9 @@ export function ChannelsV2MessagePane({
         workspaceId={workspaceId}
         members={members}
         currentUserId={index.currentUserId}
+        // ⚠ THE SAME MAP THE TRANSCRIPT TINTS FROM — one derivation, so the picker
+        // cannot offer an agent handle the rendered body would not highlight.
+        agents={index.agents}
         gate={gate}
         newAgent={newAgent}
         // ⚠ THE OPEN THREAD IS THE TARGET, and `null` is a real answer rather

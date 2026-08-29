@@ -314,6 +314,11 @@ export async function launchAgentOnThread(payload: {
   direct: boolean;
   /** The identity to wear, or `null`/absent for a BLANK agent. */
   templateId?: string | null;
+  /** ⚠ THE INSTANCE ID THIS AGENT SHOULD WEAR, pre-assigned by the composer's launch panel so
+   *  the operator can be shown it BEFORE the spawn (2026-08-27). Absent is the ordinary case and
+   *  main mints its own. ACCEPTED, NOT TRUSTED — main re-checks the charset — and only honoured
+   *  by a build exposing `sessions.mintAgentId`, which is the gate the panel detects on. */
+  agentId?: string;
   /** This run's ephemeral re-points. Absent ⇒ the template's own values. */
   overrides?: TemplateLaunchOverrides;
 }): Promise<{

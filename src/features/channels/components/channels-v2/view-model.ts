@@ -61,13 +61,120 @@ export function fanoutGroupOf(message: ChannelMessage): string | null {
 export interface AuthorIndex {
   currentUserId: string;
   byId: ReadonlyMap<string, ChannelMember>;
+  /**
+   * MY OWN LIVE AGENTS, by instance id — what each is CALLED right now and what it is FOR
+   * (2026-08-27, Samuel's rename-propagation ruling).
+   *
+   * ⚠ IT IS RESOLVED AT RENDER, NEVER STAMPED AT SEND. An agent's name is machine-local
+   * (`main/agent-names.js`) and mutable, and no message row carries one — so the transcript reads
+   * the CURRENT name off this map every time it draws. That is the whole fix for "a rename does
+   * not reach the chat area": there was no stale cache, `attribution-pill.tsx › attributionName`
+   * simply never consulted the store and hardcoded `Agent #<id>`.
+   *
+   * ⚠ EMPTY IS THE ORDINARY ANSWER on the web tree and in the pop-out, where there is no desktop
+   * feed at all — every agent row then reads `Agent #<id>`, exactly as it always did.
+   */
+  agents: ReadonlyMap<string, AgentIdentity>;
 }
+
+/** What the operator calls one of their agents, and what they said it is for. Both `null` when
+ *  never set — the ordinary case, and the caller renders the ABSENCE (INVARIANTS §11). */
+export interface AgentIdentity {
+  displayName: string | null;
+  description: string | null;
+}
+
+/** ⚠ ONE EMPTY MAP, not a fresh `new Map()` per call: `AuthorIndex` is a `useMemo` dependency of
+ *  the transcript's row build, and a new identity every render would re-derive every row. */
+const NO_AGENTS: ReadonlyMap<string, AgentIdentity> = new Map();
 
 export function indexMembers(
   members: ChannelMember[],
-  currentUserId: string
+  currentUserId: string,
+  /** ⚠ OPTIONAL, so the surfaces with no desktop feed (`thread-window.tsx`) are unchanged. */
+  agents: ReadonlyMap<string, AgentIdentity> = NO_AGENTS
 ): AuthorIndex {
-  return { currentUserId, byId: new Map(members.map((m) => [m.userId, m])) };
+  return { currentUserId, byId: new Map(members.map((m) => [m.userId, m])), agents };
+}
+
+/** The field and row separators, written as ESCAPES — never as literal bytes in this file.
+ *
+ *  ⚠ CONTROL CHARACTERS ON PURPOSE, not `|` or `:`. An agent id is `^[a-z][a-z0-9]{7}$` but a
+ *  display name is operator prose, so any printable delimiter is forgeable — `"a"` + `"|b"` and
+ *  `"a|"` + `"b"` would key identically. Both of these are refused at the WRITE end by
+ *  `main/agent-names.js › sanitizeName` and `› sanitizeDescription`, so no stored value can carry
+ *  one and neither the key nor its inverse can be ambiguous. */
+const KEY_FIELD_SEP = "\u0000";
+const KEY_ROW_SEP = "\u0001";
+
+/**
+ * THE IDENTITY CONTENT OF AN AGENT INDEX, as one comparable string.
+ *
+ * ⚠ IT EXISTS BECAUSE THE FEED IS PACED BY TELEMETRY AND THIS INDEX HOLDS ONLY NAMES — see
+ * `derivations.ts › useChannelsV2Derivations`, its only caller, which carries the whole argument.
+ * What belongs here is the SHAPE: a rename or a describe moves this string, and `lastActivityAt`
+ * / `tokensSpent` / `contextUsed` moving five times a second does not.
+ */
+export function agentIndexKey(agents: ReadonlyMap<string, AgentIdentity>): string {
+  const parts: string[] = [];
+  for (const [agentId, identity] of agents) {
+    parts.push(
+      [agentId, identity.displayName ?? "", identity.description ?? ""].join(KEY_FIELD_SEP)
+    );
+  }
+  return parts.join(KEY_ROW_SEP);
+}
+
+/**
+ * {@link agentIndexKey}'S INVERSE — the map back out of the key.
+ *
+ * ⚠ THE PAIR EXISTS SO THE MAP'S IDENTITY CAN BE A FUNCTION OF ITS CONTENT, which is the whole of
+ * the fix `derivations.ts › useChannelsV2Derivations` describes: building the index FROM the key
+ * makes a `useMemo` keyed on that string yield a referentially stable map across every telemetry
+ * push that did not touch a name — with no render-phase cache, which `react-hooks/refs` forbids
+ * outright.
+ *
+ * ⚠ AN EMPTY KEY IS {@link NO_AGENTS}, the shared instance, so the no-desktop case keeps its
+ * stable identity too rather than minting an empty `Map` per render.
+ */
+export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentIdentity> {
+  if (key === "") return NO_AGENTS;
+  const out = new Map<string, AgentIdentity>();
+  for (const row of key.split(KEY_ROW_SEP)) {
+    const [agentId, displayName, description] = row.split(KEY_FIELD_SEP);
+    if (!agentId) continue;
+    out.set(agentId, {
+      displayName: displayName || null,
+      description: description || null,
+    });
+  }
+  return out;
+}
+
+/**
+ * The desktop feed -> {@link AuthorIndex.agents}. ⚠ Reads `displayName` / `description` off a
+ * WIDENED LOCAL type rather than off `spa-bridge.ts › DesktopSessionSummary`: that type is the
+ * DESKTOP's to widen and this side must behave against either version of it — the same rule
+ * `agents-model.ts › agentRunningModel` follows.
+ */
+export function indexAgents(
+  sessions: ReadonlyArray<{
+    agentId?: string | null;
+    displayName?: string | null;
+    description?: string | null;
+  }> | null
+): ReadonlyMap<string, AgentIdentity> {
+  if (!sessions || sessions.length === 0) return NO_AGENTS;
+  const out = new Map<string, AgentIdentity>();
+  for (const session of sessions) {
+    const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
+    if (!id) continue;
+    out.set(id, {
+      displayName: session.displayName?.trim() || null,
+      description: session.description?.trim() || null,
+    });
+  }
+  return out;
 }
 
 /**
@@ -96,6 +203,49 @@ export function memberPerson(member: ChannelMember): AvatarPerson {
     displayName: member.displayName,
     avatarUrl: member.avatarUrl,
   };
+}
+
+/**
+ * THE VIEWER AS AN `AvatarPerson`, RESOLVED OFF THE TRANSCRIPT THEY ARE ALREADY
+ * READING (Samuel, 2026-08-27 — the agent stream's own turns wear their face).
+ *
+ * ⚠ IT IS THE TRANSCRIPT AND NOT THE ROSTER, and that is the whole reason it
+ * exists. The two surfaces that need it — `agent-panel.tsx` and
+ * `agent-window.tsx` — both already hold `messages` and NEITHER holds a roster:
+ * the window's diet is deliberately messages + consent and nothing else (its
+ * docblock states it), so a roster read there would be a new fetch, a new thing
+ * to keep fresh, and a new way for a pop-out to disagree with the page. The
+ * hydrated author fields are keyed on `authorUserId`, so any row the viewer
+ * authored carries the same profile the roster would have handed back.
+ *
+ * ⚠ `null` IS "CANNOT SAY", AND THE CALLER MUST RENDER IT AS ABSENCE. A viewer
+ * who has never posted in this channel has no hydrated row to read; inventing a
+ * placeholder face for them would be this surface claiming an identity it never
+ * fetched (INVARIANTS §11 — unknown is not empty).
+ *
+ * ⚠ THE NAME COMES ONLY FROM A `user` ROW. `authorName` on an AGENT row is the
+ * agent's display, not the operator's, and it would surface as the wrong initial
+ * in the avatar's fallback. The avatar URL is safe from either, because
+ * hydration is by user id.
+ */
+export function viewerPerson(
+  messages: readonly ChannelMessage[],
+  currentUserId: string
+): AvatarPerson | null {
+  if (!currentUserId) return null;
+  let avatarUrl: string | null = null;
+  let displayName: string | null = null;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.authorUserId !== currentUserId) continue;
+    if (!avatarUrl) avatarUrl = message.authorAvatarUrl;
+    if (!displayName && message.authorKind === "user") {
+      displayName = message.authorName;
+    }
+    if (avatarUrl && displayName) break;
+  }
+  if (!avatarUrl && !displayName) return null;
+  return { userId: currentUserId, email: null, displayName, avatarUrl };
 }
 
 /** The two parties of a thread (INVARIANTS §5: one requester + one target),

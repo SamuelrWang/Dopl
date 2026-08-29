@@ -1,6 +1,10 @@
 "use client";
 
 import { ArrowRight, Bookmark } from "lucide-react";
+import {
+  OPEN_SCALE_ICON,
+  OpenScaleButton,
+} from "@/shared/ui/open-scale-button";
 import { cn } from "@/shared/lib/utils";
 import { kbScope, type KbScope } from "../../../scope";
 import type { KnowledgeBase, KnowledgeBaseStats } from "../../../types";
@@ -129,9 +133,12 @@ export function BaseCard({
             />
           </button>
 
-          <button
-            type="button"
-            className={cn("btn-light", styles.cardOpen)}
+          {/* ⚠ THE FACE IS SHARED, NOT LOCAL (2026-08-28). It used to be
+              `cn("btn-light", styles.cardOpen)` here; those declarations moved
+              to `shared/ui/open-scale-button.module.css` when /home's section
+              buttons adopted this button's size — this card must render the
+              same component they do, or "adopted" lasts until the next edit. */}
+          <OpenScaleButton
             aria-label={`Open ${base.name}`}
             onClick={(e) => {
               // ⚠ Else the container's handler fires too: `onOpen` twice.
@@ -140,8 +147,8 @@ export function BaseCard({
             }}
           >
             Open
-            <ArrowRight size={12} />
-          </button>
+            <ArrowRight size={OPEN_SCALE_ICON} />
+          </OpenScaleButton>
         </div>
       </div>
     </article>

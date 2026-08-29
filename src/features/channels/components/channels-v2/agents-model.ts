@@ -58,20 +58,15 @@ function isAgentActive(state: DesktopSessionSummary["state"]): boolean {
  * THE AGENT'S OWN ID — what every surface in this family SHOWS where a stone
  * handle used to be (Samuel, 2026-08-21, multiplayer agents).
  *
- * ⚠ THE STONE-NAME POOL IS BEING DELETED, and the reason is not taste. `quartz`
- * / `flint` / `onyx` named ONE agent per channel, which is a promise multiplayer
- * cannot keep: every launch now mints a NEW instance and several of them sit on
- * one thread at once. Main mints a random 8-char id per instance instead, and
- * that id is the only thing an operator can say out loud to tell two of their
- * own agents apart.
+ * ⚠ THE STONE-NAME POOL IS DELETED, and the reason is not taste. `quartz` / `flint` / `onyx`
+ * named ONE agent per channel — a promise multiplayer cannot keep, since every launch mints a NEW
+ * instance and several sit on one thread. Main mints a random 8-char id per instance instead, and
+ * that id is the only thing an operator can say out loud to tell two of their own agents apart.
  *
- * ⚠ READ OPTIONALLY, AND IT FALLS BACK TO `name`. A main older than the id emits
- * a handle and nothing else, and the card must then read exactly as it did
- * before this existed — a blank header is strictly worse than a legacy name
- * (INVARIANTS §11: render what IS known, never a blank standing in for it).
- * The field is read off the summary rather than declared on
- * `spa-bridge.ts › DesktopSessionSummary` because the bridge type is the
- * DESKTOP's to widen; this side must survive either shape.
+ * ⚠ READ OPTIONALLY, AND IT FALLS BACK TO `name`. A main older than the id emits a handle and
+ * nothing else, and the card must read exactly as it did before this existed — a blank header is
+ * strictly worse than a legacy name (INVARIANTS §11). It is read off the summary rather than
+ * declared on `spa-bridge.ts › DesktopSessionSummary`, which is the DESKTOP's to widen.
  */
 export function agentDisplayId(session: {
   agentId?: string | null;
@@ -416,6 +411,11 @@ export function agentRunningModel(
 ): string | null {
   return normalizeAgentModel(session.model);
 }
+
+/** WHERE AN AGENT IS ON NO THREAD (Samuel, 2026-08-27). ⚠ It read "no thread title" — a MISSING
+ *  FIELD, where the truth is a PLACE: a channel-level agent is on the ROOM on purpose
+ *  (`agents-controls.ts`: `taskId: null`). ⚠ ONE STATEMENT; THREE callers each spelled it out — the third (`agents-tab-cards.tsx › AgentCard`) was missed by the 2026-08-27 wave and converted 2026-08-28, so the card and the panel it opens no longer disagree. */
+export const NO_THREAD_LABEL = "main channel";
 
 export type AgentLivenessTone = "working" | "waiting" | "idle" | "ended";
 

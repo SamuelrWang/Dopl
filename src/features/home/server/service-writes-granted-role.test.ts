@@ -26,7 +26,6 @@ vi.mock("./repository", () => ({
   insertLink: vi.fn(),
   findOpenLinkForWorkspace: vi.fn(),
   findMemberContainer: vi.fn(),
-  countActiveContainerMembers: vi.fn(),
   markLinkRevoked: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/repository", () => ({
@@ -68,7 +67,6 @@ function membership(role: Role) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocked.findMemberContainer.mockResolvedValue(CONTAINER);
-  mocked.countActiveContainerMembers.mockResolvedValue(1);
   mocked.findOpenLinkForWorkspace.mockResolvedValue(null);
   mockFindMembership.mockResolvedValue(membership("owner"));
   mocked.insertLink.mockImplementation(
@@ -100,11 +98,12 @@ describe("mintContainerLink — grantedRole threads to insertLink", () => {
 });
 
 describe("mintContainerLink — the MINT FLOOR (a guest may not invite)", () => {
-  // 🔒 DEPARTURE IS REMOVAL (§4A), so a container can drop back to ONE member.
-  // If that survivor is a GUEST, the two-member cap frees a seat and — before
-  // this floor — nothing else refused: `meetsMinRole("guest","guest")` is TRUE,
-  // so grant-above-self passed and a guest could hand a stranger a link into
-  // the operator's transcript.
+  // 🔒 THIS FLOOR IS NOW THE WHOLE CASE. `meetsMinRole("guest","guest")` is
+  // TRUE, so grant-above-self passes a guest; before the floor existed, the only
+  // other thing that ever refused one was the two-member cap happening to be
+  // full — and the cap came off on 2026-08-26. Without this 403 a guest, a
+  // person somebody else let in, could hand strangers links into the operator's
+  // transcript with nothing counting.
   it.each(["guest", "viewer"] as const)(
     "403s a %s minter before anything is read or inserted",
     async (role) => {
@@ -113,7 +112,6 @@ describe("mintContainerLink — the MINT FLOOR (a guest may not invite)", () => 
       await expect(
         mintContainerLink(CREATOR, WS, { workspaceId: WS, grantedRole: "guest" })
       ).rejects.toMatchObject({ status: 403, code: "LINK_MINT_FORBIDDEN" });
-      expect(mocked.countActiveContainerMembers).not.toHaveBeenCalled();
       expect(mocked.findOpenLinkForWorkspace).not.toHaveBeenCalled();
       expect(mocked.insertLink).not.toHaveBeenCalled();
     }
@@ -158,7 +156,7 @@ describe("mintContainerLink — grant-above-self", () => {
         grantedRole: "admin" as never,
       })
     ).rejects.toMatchObject({ status: 403, code: "GRANT_ABOVE_SELF" });
-    expect(mocked.countActiveContainerMembers).not.toHaveBeenCalled();
+    expect(mocked.findOpenLinkForWorkspace).not.toHaveBeenCalled();
     expect(mocked.insertLink).not.toHaveBeenCalled();
   });
 

@@ -323,3 +323,64 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
     ).rejects.toBe(boom);
   });
 });
+
+/**
+ * 🔒 THE AGENT REFUSAL — added 2026-08-27, and the reason it is HERE rather
+ * than on a route is a second caller.
+ *
+ * This function's own docblock used to say the source *"is not consulted,
+ * because the ROUTE is `sessionOnly`"*, with a note saying where the refusal
+ * would belong if that gate were ever relaxed. It was relaxed by
+ * `service-base-writes.ts › createBase`'s create-and-share branch, reached from
+ * `POST /api/knowledge/bases` — which is NOT `sessionOnly` and must not become
+ * so, because MCP `kb_create_base` rides it. So the refusal moved to the one
+ * place both doors pass through.
+ *
+ * ⚠ WHAT IT PROTECTS: a `visible` grant puts a knowledge base in front of every
+ * member of a channel, GUESTS INCLUDED. An agent token must not be able to
+ * widen its own operator's audience — and a `full`-profile session has Bash and
+ * can read the device token off disk, so "the renderer would never send it" is
+ * not a fence.
+ */
+describe("🔒 an AGENT token cannot set a grant, by either door", () => {
+  const AGENT: KnowledgeContext = { ...OWNER, source: "agent" };
+
+  it("refuses before touching the repository", async () => {
+    await expect(
+      setChannelKnowledgeGrant(AGENT, BASE, {
+        channelId: "chan-1",
+        level: "visible",
+        guestWrite: false,
+      })
+    ).rejects.toMatchObject({ code: "AGENT_WRITE_DISABLED" });
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses the DELETE arm too — un-sharing is a human decision as well", async () => {
+    // ⚠ `level: "none"` takes a different branch below the refusal. An agent
+    // that could not share but COULD un-share would still be editing an
+    // audience its operator set.
+    await expect(
+      setChannelKnowledgeGrant(AGENT, BASE, {
+        channelId: "chan-1",
+        level: "none",
+        guestWrite: false,
+      })
+    ).rejects.toMatchObject({ code: "AGENT_WRITE_DISABLED" });
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("refuses even the base's own CREATOR when the credential is an agent", async () => {
+    // ⚠ `canManageChannelGrants` would say yes — this is a different axis from
+    // "may this person manage sharing", and the order matters: the credential
+    // question is asked first, so the answer cannot depend on who owns the row.
+    expect(canManageChannelGrants(AGENT, BASE)).toBe(true);
+    await expect(
+      setChannelKnowledgeGrant(AGENT, BASE, {
+        channelId: "chan-1",
+        level: "agent_only",
+        guestWrite: false,
+      })
+    ).rejects.toMatchObject({ code: "AGENT_WRITE_DISABLED" });
+  });
+});

@@ -202,6 +202,33 @@ export interface SpaBridgeSurface {
       agentId: string,
       name: string
     ): Promise<{ ok: boolean; reason?: string; displayName?: string | null }>;
+    /**
+     * WHAT THE AGENT IS FOR — `rename`'s twin (2026-08-27, Samuel's launch-panel ruling).
+     *
+     * ⚠ EVERY SENTENCE OF `rename`'s CONTRACT APPLIES: machine-local, keyed by the instance
+     * address, display-only (it DESCRIBES, it never addresses), and an EMPTY string clears it.
+     * The answer is main's OWN stored value, so a refusal reverts rather than paints.
+     * ⚠ Feature-detect it — an older main has no handler.
+     */
+    describe?(
+      agentId: string,
+      description: string
+    ): Promise<{ ok: boolean; reason?: string; description?: string | null }>;
+    /**
+     * ONE FRESH INSTANCE ID, BELONGING TO NOBODY YET (2026-08-27, Samuel's launch-panel ruling).
+     *
+     * The composer's launch panel shows the operator the agent's ID while they are still filling
+     * the form, so it is minted BEFORE the spawn and handed back through `launch`'s `agentId`.
+     *
+     * ⚠ ITS PRESENCE IS THE CAPABILITY GATE FOR THAT WHOLE FEATURE, and it is the only honest
+     * one available: a build older than the forward in `main/session-launch-op.js` still has
+     * `launch`, still accepts the field, and silently mints its own id instead — so detecting
+     * `launch` proves nothing. Detect THIS (INVARIANTS §11) and fall back to filling the id in
+     * after the launch, rather than showing an address the agent will never have.
+     * ⚠ IT RESERVES NOTHING: a pure CSPRNG draw (`main/agent-id.js`), with nothing to release
+     * when the operator closes the panel without launching.
+     */
+    mintAgentId?(): Promise<{ ok: boolean; agentId?: string }>;
     setMode?(
       channelId: string,
       taskId: string,
@@ -289,6 +316,19 @@ export interface SpaBridgeSurface {
        * reader tell "attached to the room on purpose" from "never got a thread".
        */
       taskId: string | null;
+      /**
+       * THE INSTANCE ID THIS AGENT SHOULD WEAR, pre-assigned by the caller (2026-08-27).
+       *
+       * ⚠ ABSENT IS THE ORDINARY CASE and main mints its own — every launch that is not the
+       * composer's launch panel says nothing here, and gets exactly the behaviour it always had.
+       * ⚠ IT IS ACCEPTED, NOT TRUSTED: main re-checks `main/agent-id.js › isAgentId` and mints a
+       * fresh one when the shape fails, so a renderer cannot invent an id SHAPE. An id addresses;
+       * it grants nothing.
+       * ⚠ ONLY HONOURED BY A BUILD THAT EXPOSES {@link mintAgentId} — see that member. An older
+       * main accepts this field and drops it on the floor, which is why the gate is the op's
+       * presence and never this field's.
+       */
+      agentId?: string;
       workspaceId?: string;
       channelName?: string;
       threadTitle?: string | null;

@@ -57,8 +57,9 @@ const selectChannelMembers = (body: { members: ChannelMember[] }) =>
  *
  * ⚠ **THE CALL, STATED: it shows ALWAYS, and takes no props.** The alternatives
  * were "never" (the composer already says it) and "always". Never is wrong:
- * `channels-v2/composer.tsx`'s "No agent addressed — this thread reaches
- * nobody." speaks at SEND time inside the New-agent-thread panel — it reports a
+ * `channels-v2/composer-request-panel.tsx`'s "No agent addressed — this thread
+ * reaches nobody." speaks at SEND time inside the New-agent-thread panel — it
+ * reports a
  * draft's state, and it never explains the thread rule (channel-visible reads,
  * pair-only writes) at all, which is this note's second sentence and is stated
  * nowhere else on this surface. Unconditional also removes the note's own

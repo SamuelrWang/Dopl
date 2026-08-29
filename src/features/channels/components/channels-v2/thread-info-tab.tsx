@@ -43,7 +43,7 @@ import type { ChannelMember, ChannelThread } from "../../types";
 import { MetaRow, MetaRowDivider, PanelHeading } from "./bits";
 import { AgentLiveness } from "./agent-bits";
 import {
-  agentDisplayId,
+  agentDisplayName,
   agentKey,
   agentLiveness,
   ownAgentsFor,
@@ -143,7 +143,7 @@ export function ThreadInfoTab({
         {mine.map((agent) => (
           <AgentStateRow
             key={agentKey(agent)}
-            label={agentDisplayId(agent)}
+            label={agentDisplayName(agent)}
             sub="Yours"
             liveness={agentLiveness(agent)}
           />

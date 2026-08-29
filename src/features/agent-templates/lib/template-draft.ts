@@ -109,7 +109,19 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
 export function containerCopyDraft(template: AgentTemplate): TemplateDraft {
   return {
     ...draftFromTemplate(template),
-    visibility: "private",
+    // 🔒 ⚠ `workspace`, AND IT WAS `private` UNTIL 2026-08-27. The old value was
+    // right under the old pane: "use" must not publish the operator's agent into
+    // the room the peer is standing in, so the copy landed in the container's
+    // PRIVATE section. **That section is gone** (Samuel's ruling — the /home
+    // Agents face converged on Knowledge's two-section shape), and a container
+    // is not navigable, so a `private` container row is now reachable from
+    // NOWHERE: the copy would succeed, the dialog would close, and nothing would
+    // appear anywhere. A write-only row is worse than a stated audience change.
+    // ⚠ THE AUDIENCE CHANGE IS REAL AND IS SAID OUT LOUD — `agent-copy.tsx`'s
+    // confirm text names the peer before the operator presses. Do not quietly
+    // put this back to `private`; the fix for "I did not want to share it" is
+    // not to make it invisible.
+    visibility: "workspace",
     teamIds: [],
     knowledgeBaseIds: [],
   };

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Role } from "@/features/workspaces/types";
-import type { KnowledgeBase, KnowledgeBaseStats } from "../../types";
+import type { KbShelf, KnowledgeBase, KnowledgeBaseStats } from "../../types";
 import { CreateBaseDialog } from "../create-base-dialog";
 import { KnowledgeV2 } from "./knowledge-v2";
 import type { KnowledgeRouting, KnowledgeUrlSync } from "./routing";
@@ -29,9 +29,28 @@ export interface KnowledgeV2PreviewCoreProps {
   initialTrees?: Record<string, BaseTree>;
   /** Bundled hero image for the home banner — injected by the host app. */
   heroImageSrc?: string;
+  /**
+   * WHICH SHELF this view is (`../../types.ts › KbShelf`) — threaded, not
+   * assumed, because it has to reach TWO places that would otherwise disagree:
+   * the controller's live base-list query (and the star write that patches it)
+   * and the create dialog's cache seed. A host that narrows its read and
+   * forgets either one gets a §8 silent no-op: a star that round-trips without
+   * moving, or a new base that does not appear until a cold refetch.
+   * ⚠ Undefined = unfiltered, the pre-2026-08-26 behaviour.
+   */
+  shelf?: KbShelf;
+  /**
+   * Passed straight to the create dialog — see `../create-base-dialog.tsx ›
+   * Props.audienceFixed`. The /home mounts set it (the button that opened the
+   * pane already named the audience); the workspace Knowledge page does not.
+   */
+  audienceFixed?: boolean;
   /** Router-shaped dependencies, injected (./routing.ts). */
   routing: KnowledgeRouting;
   urlSync?: KnowledgeUrlSync;
+  /** This mount is already inside a panel — paint none. Threaded straight to
+   *  `./knowledge-v2.tsx › Props.embedded`, which carries the argument. */
+  embedded?: boolean;
 }
 
 /**
@@ -55,8 +74,11 @@ export function KnowledgeV2PreviewCore({
   initialSelection,
   initialTrees,
   heroImageSrc,
+  shelf,
+  audienceFixed,
   routing,
   urlSync,
+  embedded,
 }: KnowledgeV2PreviewCoreProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -76,8 +98,10 @@ export function KnowledgeV2PreviewCore({
         initialTrees={initialTrees}
         onCreate={() => setCreateOpen(true)}
         heroImageSrc={heroImageSrc}
+        shelf={shelf}
         routing={routing}
         urlSync={urlSync}
+        embedded={embedded}
       />
 
       <CreateBaseDialog
@@ -87,6 +111,11 @@ export function KnowledgeV2PreviewCore({
         workspaceSlug={workspaceSegment}
         currentUserId={currentUserId}
         role={role}
+        // ⚠ THE SAME SHELF THE VIEW READS. The dialog seeds the cache entry
+        // this prop names; handing it `undefined` while the controller reads
+        // `:shelf:workspace` seeds a key nobody has mounted.
+        shelf={shelf}
+        audienceFixed={audienceFixed}
         routing={routing}
       />
     </>

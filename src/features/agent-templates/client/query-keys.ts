@@ -1,4 +1,11 @@
-import { apiResource, type ApiResourceKeys } from "@/shared/api/query-keys";
+import {
+  apiPathKey,
+  apiQueryKey,
+  type ApiQueryKeyOpts,
+  type ApiQueryParams,
+  type ApiResourceKeys,
+} from "@/shared/api/query-keys";
+import type { TemplateShelf } from "../types";
 
 /**
  * The feature's URLs and the cache keys built from them, in ONE module — so a
@@ -31,7 +38,31 @@ export function agentTemplatePath(templateId: string): string {
   return `${agentTemplatesPath()}/${encodeURIComponent(templateId)}`;
 }
 
+/**
+ * The `query` half of the list read, for one shelf. ⚠ `undefined` (NOT `{}`) for
+ * "both shelves" — that is what `useApiQuery` registers when no `query` is
+ * passed, and `{}` would be a different tuple element and therefore a different
+ * cache entry.
+ */
+export function templateListQuery(shelf?: TemplateShelf): ApiQueryParams {
+  return shelf ? { shelf } : undefined;
+}
+
 export const agentTemplateKeys = {
-  /** The list read every section on the page renders from. */
-  list: (): ApiResourceKeys => apiResource(agentTemplatesPath()),
+  /**
+   * The list read every section on the page renders from, for ONE shelf.
+   * ⚠ `entry()` here IGNORES a caller-supplied `query` on purpose: the shelf
+   * argument is the only variant axis this path has, and letting a call site
+   * pass its own would put the two spellings back in two places.
+   */
+  list: (shelf?: TemplateShelf): ApiResourceKeys => {
+    const path = agentTemplatesPath();
+    const query = templateListQuery(shelf);
+    return {
+      path,
+      all: apiPathKey(path),
+      entry: (opts: ApiQueryKeyOpts = {}) =>
+        apiQueryKey(path, { workspaceId: opts.workspaceId, query }),
+    };
+  },
 };

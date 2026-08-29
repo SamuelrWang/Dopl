@@ -1,0 +1,68 @@
+/* THE 26px PILL — the KB card's Open button face.
+ *
+ * ⚠ MOVED HERE VERBATIM from `knowledge-v2.module.css › .cardOpen`
+ * (2026-08-28) — not copied. Samuel ruled that /home's small section buttons
+ * adopt the card Open's size/UI, and a second declaration of these numbers is
+ * exactly the drift the ruling was about. The knowledge module no longer
+ * carries a rule of its own; `base-card.tsx` renders `OpenScaleButton` like
+ * every other caller.
+ *
+ * Composed onto the kit's `.btn-light` face; stadium ends (`.seg-pill`).
+ *
+ * ⚠ THE COLOUR IS `--kv-text` WITH THE GLOBAL TOKEN BEHIND IT. Inside a
+ * knowledge surface (`knowledge-v2.module.css › .shell`, /home's
+ * `home.module.css › .kbCards`) the alias is bound and the card reads exactly
+ * as it did; on a /home section header there is no `--kv-*` scope, and an
+ * unbound `var()` is invalid at computed-value time — the button would silently
+ * inherit whatever ink its row had. Both bindings resolve to
+ * `var(--text-primary)`, so this is the same colour by two routes, not a
+ * second value. */
+.openScale {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--kv-text, var(--text-primary));
+
+  /* 🔒 A PILL IS ONE LINE (Samuel's live review, 2026-08-28: "New file" wrapped
+     to "New / file" in the knowledge rail).
+     ⚠ IT BELONGS IN THE SHARED RECIPE, NOT AT THE CALL SITE. The face survived
+     four callers without this only because every label was ONE WORD — the KB
+     card's "Open", /home's create buttons at a width that never squeezed. The
+     first multi-word label in a narrow column exposed it, and fixing it at that
+     call site would have left the next caller to rediscover it. A fixed 26px
+     height with a wrapping label is not a button that looks cramped; it is a
+     button whose second line is drawn outside its own face.
+     ⚠ `flex-shrink: 0` is the other half: nowrap alone lets a flex parent
+     compress the pill until its label is clipped instead of wrapped, which is
+     the same defect one property later. The parent wraps the ROW
+     (`knowledge-v2.module.css › .addRow`); the pill never wraps or shrinks. */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* THE SAME PILL WITH NO LABEL — a glyph-only control at 1:1 (2026-08-28).
+ *
+ * ⚠ IT IS `.openScale` PLUS A SQUARE, NOT A SECOND FACE. Height, radius,
+ * elevation (`.btn-light`) and ink are the pill's own — this rule adds `width`
+ * and drops the horizontal pad, so a toolbar glyph and a labelled create button
+ * are visibly one control at two shapes. Both are composed by
+ * `open-scale-button.tsx`, which applies `.openScale` first.
+ *
+ * ⚠ WHY IT EXISTS: the knowledge base header's download / settings / delete
+ * controls were a file-private `ICON_BTN` string (a bare 28px hover tint) —
+ * one of SIX hand-written copies of that recipe in `src/` (measured
+ * 2026-08-28: `grep -rn 'ICON_BTN' src`). Samuel ruled the base header's
+ * controls onto global components; this is the OpenScaleButton family's own
+ * square, so knowledge adds no seventh copy. The other five are untouched debt
+ * — REFACTOR-FINDINGS F-345. */
+.openScaleIcon {
+  width: 26px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}

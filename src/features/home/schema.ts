@@ -31,14 +31,20 @@ export type HomeChannelCreateInput = z.infer<typeof HomeChannelCreateSchema>;
  * produce another one.
  *
  * ⚠ `maxUses` IS GONE, and its absence is load-bearing rather than an omission.
- * A bound link fills the container's ONE free seat, so the service pins
- * `maxUses: 1` by construction and a client cannot ask for otherwise. The field
- * used to distinguish ABSENT from NULL — absent meaning "the caller said
- * nothing" and taking the safe single-use default, an explicit `null` meaning
- * "multi-use, I meant it" — a distinction bought by an incident where an omitted
- * field minted a link anybody could keep claiming. That reasoning is preserved
- * where reasoning lives, in ENGINEERING.md's 2026-08-24 stratum; what removed
- * the field is that the two-member cap now answers the question the field asked.
+ * A bound link admits ONE named person, so the service pins `maxUses: 1` by
+ * construction and a client cannot ask for otherwise. The field used to
+ * distinguish ABSENT from NULL — absent meaning "the caller said nothing" and
+ * taking the safe single-use default, an explicit `null` meaning "multi-use, I
+ * meant it" — a distinction bought by an incident where an omitted field minted
+ * a link anybody could keep claiming. That reasoning is preserved where
+ * reasoning lives, in ENGINEERING.md's 2026-08-24 stratum.
+ *   ⚠ **AND IT MUST NOT COME BACK NOW THE MEMBER CAP HAS (2026-08-26,
+ *   Samuel's ruling: a container takes MORE THAN TWO people).** The field was
+ *   removed while the two-member cap was ALSO answering the question, which
+ *   made single-use look over-determined; it is not, it is now the ONLY thing
+ *   bounding how a container grows. A multi-use link into a room whose size
+ *   nothing counts is a URL that admits everyone it is forwarded to. Adding
+ *   person #3 is a FRESH MINT, deliberately.
  *
  * ⚠ `expiresAt` must be in the FUTURE. Minting an already-dead link is a
  * validation failure, not a link: the caller gets a URL that 410s on its first

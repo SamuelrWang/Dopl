@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { PageShellSkeleton } from "@/shared/ui/skeleton";
 import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import { agentTemplateErrorMessage } from "../client/api";
-import type { AgentTemplate } from "../client/types";
+import type { AgentTemplate, TemplateShelf } from "../client/types";
 import { useAgentTemplates } from "../hooks/use-agent-templates";
 import { useAgentTemplateWrites } from "../hooks/use-agent-template-writes";
 import {
@@ -46,6 +46,26 @@ export interface AgentTemplatesCoreProps {
   workspaceId: string;
   /** Canonical `{slug}-{publicId}` segment — the teams read is keyed by it. */
   workspaceSlug: string;
+  /**
+   * THE HOST'S OWN LOADING SHAPE for the template read, or the shared page
+   * ghost when a host has none.
+   *
+   * ⚠ A SLOT, NOT AN IMPORT, AND IT HAS TO BE. This core is Next-free and
+   * router-free so BOTH trees mount it, which means it cannot reach into
+   * `apps/desktop-ui/` — the desktop's per-page skeleton lives there. Same
+   * idiom as `channels-v2-core.tsx`'s `Link` and `shared/ui/skeleton.tsx ›
+   * TwoPaneListSkeleton`'s `detail`: the host supplies what only the host can
+   * know.
+   *
+   * ⚠ WHY THE DESKTOP PASSES ONE. Its page gate already paints
+   * `pages/agents/agents-skeleton.tsx › AgentsPageSkeleton` while the workspace
+   * resolves, and THIS read is the very next frame — so leaving the default
+   * here swapped that shape for a different one mid-load, which is the "five
+   * flickers in five positions" `apps/desktop-ui/src/components/page-states.tsx`
+   * argues against, arriving inside one page. One shape across both gates reads
+   * as a single surface resolving.
+   */
+  loadingSkeleton?: ReactNode;
 }
 
 interface EditorState {
@@ -57,12 +77,30 @@ interface EditorState {
 
 const CLOSED: EditorState = { open: false, template: null, session: 0 };
 
+/**
+ * 🔒 WHICH SHELF THIS PAGE IS. ⚠ FORGETTING IT WIDENS: an omitted `shelf` means
+ * BOTH shelves, which is the pre-ruling behaviour and looks exactly like working
+ * code. There is no client-side fallback filter anywhere in this chain —
+ * `home_scoped` is deliberately never projected.
+ */
+const WORKSPACE_SHELF: TemplateShelf = "workspace";
+
 export function AgentTemplatesCore({
   workspaceId,
   workspaceSlug,
+  loadingSkeleton,
 }: AgentTemplatesCoreProps) {
-  const list = useAgentTemplates(workspaceId);
-  const writes = useAgentTemplateWrites(workspaceId);
+  // 🔒 THE WORKSPACE SHELF, AND THE EXCLUSION RUNS BOTH WAYS (Samuel's ruling
+  // 2026-08-27, `20260901120000_agent_template_home_scoped.sql`). This page and
+  // /home → Agents → Personal are two PLACES over one table: a template created
+  // from the /home pane does not appear here, and this page's creates do not
+  // appear there. A shelf that is its own place in one direction only is just a
+  // filter.
+  // ⚠ THE SHELF ALSO KEYS THE CACHE ENTRY, so the WRITES hook must be handed
+  // the same value — a read on `[path, ws, {shelf:"workspace"}]` patched by a
+  // writer on `[path, ws, undefined]` is F-331 with a new axis.
+  const list = useAgentTemplates(workspaceId, { shelf: WORKSPACE_SHELF });
+  const writes = useAgentTemplateWrites(workspaceId, WORKSPACE_SHELF);
   const { teams } = useTeams(workspaceSlug);
   const baseList = useKnowledgeBaseList(workspaceId);
 
@@ -138,7 +176,9 @@ export function AgentTemplatesCore({
     }
   }
 
-  if (list.loading) return <PageShellSkeleton label="Loading agents" />;
+  if (list.loading) {
+    return loadingSkeleton ?? <PageShellSkeleton label="Loading agents" />;
+  }
 
   return (
     <div className="page-float flex flex-col antialiased">

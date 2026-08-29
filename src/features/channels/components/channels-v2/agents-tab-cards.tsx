@@ -39,10 +39,36 @@ import {
   agentEndedAt,
   agentLiveness,
   agentRunningModel,
+  NO_THREAD_LABEL,
   peerRowStale,
 } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
 import { agentModelShortLabel } from "../../lib/agent-models";
+
+/**
+ * WHAT THE OPERATOR SAID THIS AGENT IS FOR, or `null` (2026-08-27).
+ *
+ * ⚠ ADDITIVE AND OPTIONAL, read off a widened LOCAL type rather than declared on
+ * `spa-bridge.ts › DesktopSessionSummary` — the same rule `agents-model.ts › agentRunningModel`
+ * and `› agentEndedAt` follow, and for the same reason: the bridge type is the DESKTOP's to
+ * widen, the two trees ship separately, and this side must behave against either version.
+ *
+ * ⚠ ABSENT IS THE ORDINARY ANSWER — a description is optional at launch and most agents carry
+ * none — so the card renders NOTHING rather than an empty line (INVARIANTS §11).
+ *
+ * ⚠ IT LIVES HERE AND NOT IN `agents-model.ts`, WHICH IS AT THE 500-LINE CAP. This card is its
+ * ONE consumer; move it to the projection the moment a second surface reads it, which is what
+ * that file is for.
+ *
+ * ⚠ MY OWN AGENTS ONLY, structurally: `main/agent-names.js` is machine-local and never reaches
+ * `channel_sessions`, so a PEER row has no description to carry and the peer card shows none.
+ */
+function agentDescription(
+  session: DesktopSessionSummary & { description?: string | null }
+): string | null {
+  const value = typeof session.description === "string" ? session.description.trim() : "";
+  return value || null;
+}
 
 /** Absolute epoch ms → the relative phrase the cards use. `formatRelativeTime`
  *  takes an ISO string and answers "" for an absent one, which is the right
@@ -151,15 +177,21 @@ export function AgentCard({
   viewing: boolean;
   onOpen: () => void;
 }) {
-  // A session with no first-class thread is a real session; it just has no title
-  // to show, and saying so beats an empty line.
-  const threadTitle = agent.threadTitle ?? "No thread title";
+  // ⚠ THE PLACE, NOT A MISSING FIELD (Samuel, 2026-08-27) — `agents-model.ts › NO_THREAD_LABEL`.
+  // This card read "No thread title" until 2026-08-28, describing an absent column, while the
+  // panel that opens FROM it already said "in main channel": one agent, two answers, in two
+  // surfaces the operator moves between with a click. A channel-level agent is on the ROOM on
+  // purpose (`agents-controls.ts`: `taskId: null`), which is a place and has a name.
+  // ⚠ THE CONSTANT'S OWN NOTE SAID "two callers"; THERE WERE THREE, and this was the one the
+  // ruling's pin (`agents-detail.test.tsx`) could not see, because it mounts the panel.
+  const threadTitle = agent.threadTitle ?? NO_THREAD_LABEL;
   const contextUsed = metric(agent.contextUsed);
   const contextWindow = metric(agent.contextWindow);
   const tokensSpent = metric(agent.tokensSpent);
   const started = relative(metric(agent.startedAt));
   const lastActivity = relative(metric(agent.lastActivityAt));
   const ended = agent.state === "ended";
+  const description = agentDescription(agent);
   // ⚠ WHEN IT ENDED, IN THE LINE THAT ALREADY EXISTS (2026-08-22) — no new
   // element, and it is the one thing about an ended agent an operator actually
   // sorts by ("which of these finished last"). ⚠ ABSENT ON AN OLDER MAIN and on
@@ -209,6 +241,15 @@ export function AgentCard({
             state alone. */}
         {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
       </div>
+
+      {/* ⚠ WHAT IT IS FOR, under what it is CALLED — one line, truncated, no label and no pill
+          (minimal copy, INVARIANTS §5; a 380px card cannot afford chrome for this). `title`
+          carries the whole thing for a description that does not fit. */}
+      {description && (
+        <p className="min-w-0 truncate text-caption text-text-secondary" title={description}>
+          {description}
+        </p>
+      )}
 
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
         <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />

@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type {
+  KbShelf,
   KnowledgeBase,
   KnowledgeBaseStats,
   KnowledgeContext,
@@ -45,14 +46,62 @@ import { seedWorkspace } from "./service-seed";
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Which of `bases` sit on the caller's PERSONAL (/home) shelf — the sibling key
+ * behind `GET /api/knowledge/bases › homeScopedBaseIds` (MCP surface v2 wave B,
+ * 2026-08-28).
+ *
+ * 🔒 ⚠ **A LABEL OVER AN ALREADY-FENCED LIST, NEVER A SECOND READ PATH.** It
+ * takes the POST-visibility rows — the ones `listBases` already put through
+ * `canSeeBase`, `filterTeamVisibleBases` AND the agent audience ceiling — and
+ * answers which of THOSE carry the flag. It applies no visibility of its own and
+ * must never be handed a wider set; the id set IS the fence, exactly as
+ * `service-stars.ts › listStarredBaseIds` states it.
+ *
+ * ⚠ IT DOES NOT PROJECT `home_scoped` ONTO THE ROW. That column stays out of
+ * `KNOWLEDGE_BASE_COLS` so no client can re-derive the shelf FENCE, and out of
+ * the SDK-mirrored `KnowledgeBase` so `check-knowledge-type-drift` has nothing
+ * new to compare. A sibling key is the shipped answer for this exact shape.
+ */
+export async function listHomeScopedBaseIds(
+  ctx: KnowledgeContext,
+  bases: KnowledgeBase[]
+): Promise<string[]> {
+  if (bases.length === 0) return [];
+  const visible = new Set(bases.map((b) => b.id));
+  const scoped = await repo.listHomeScopedBaseIds(ctx.workspaceId, [...visible]);
+  // Belt and braces over the `in` filter, the same guard the star fold keeps: an
+  // id outside the visible set means the filter was ignored.
+  return scoped.filter((id) => visible.has(id));
+}
+
+/**
  * Active bases for the workspace. Lazy-seeds only when the workspace has zero
  * bases AND is <24h old, so a mature workspace that intentionally cleared
  * everything is never re-seeded.
+ *
+ * ⚠ `opts.shelf` NARROWS TO ONE SHELF (`../types.ts › KbShelf`) — the /home
+ * pane's "across all channels" asks for `"home"`, the workspace Knowledge page
+ * for `"workspace"`, and everything else (MCP `kb_list_bases`, search) omits it
+ * and gets BOTH. It is applied in the QUERY, not over the result, so a shelf
+ * the caller did not ask for never reaches the wire (INVARIANTS §11: viewer
+ * filtering is server-side by principle).
+ *
+ * 🔒 A SHELF READ NEVER SEEDS, and that is not an optimisation. The seed gate
+ * below is "this workspace has NO bases at all"; asked of one shelf it becomes
+ * "no bases ON THIS SHELF", which is the normal state of a workspace whose
+ * content all lives on the other one — and a <24h-old workspace would then be
+ * re-seeded by every visit to the /home Knowledge pane. Narrowed reads are
+ * VIEWS; provisioning belongs to the unfiltered one.
  */
 export async function listBases(
-  ctx: KnowledgeContext
+  ctx: KnowledgeContext,
+  opts: { shelf?: KbShelf } = {}
 ): Promise<KnowledgeBase[]> {
-  const all = await repo.listBasesForWorkspace(ctx.workspaceId, false);
+  const all = await repo.listBasesForWorkspace(
+    ctx.workspaceId,
+    false,
+    opts.shelf
+  );
   // 🔒 The ceiling is the OUTERMOST filter, applied after the workspace gates
   // rather than instead of them: an agent in a shared container gets the
   // intersection of "what this caller could see anyway" and "what was granted
@@ -62,6 +111,10 @@ export async function listBases(
     await filterTeamVisibleBases(ctx, all.filter((b) => canSeeBase(ctx, b)))
   ).filter((b) => audienceAdmits(audience, b.id));
   if (visible.length > 0) return visible;
+  // 🔒 A NARROWED READ STOPS HERE — see the docblock. `all` is this SHELF's
+  // rows, so every gate below it would be answering a different question than
+  // the one it was written for.
+  if (opts.shelf !== undefined) return visible;
   // ⚠ CRITICAL: gate on the UNFILTERED count, not what the caller sees —
   // else a member joining a workspace whose only bases are someone else's
   // private items re-triggers seed on every list call.

@@ -21,7 +21,7 @@
  * finished state on any surface (INVARIANTS §5).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PanelTop, Pause, Square } from "lucide-react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
@@ -87,8 +87,16 @@ export function AgentControls({
   agent,
   workspaceSlug,
   onRefreshSessions,
+  stats,
 }: {
   agent: DesktopSessionSummary;
+  /**
+   * THE CONTEXT/USAGE READOUT, rendered INSIDE this box (Samuel, 2026-08-27).
+   * ⚠ IT HAD A BAND OF ITS OWN directly above these buttons — two stacked strips of chrome
+   * about one agent, eating the height the stream wants. It is a SLOT rather than a second
+   * component here because what it renders is the panel's business, not the controls'.
+   */
+  stats?: ReactNode;
   /** The workspace segment the agent window's route is built from. */
   workspaceSlug: string;
   /** Re-read the desktop's feed after a refusal — see `agents-model.ts ›
@@ -111,7 +119,12 @@ export function AgentControls({
 
   const canControl = canControlAgents();
   const canOpen = canOpenAgentWindow();
-  if (!canControl && !canOpen) return null;
+  // ⚠ THE BOX GOES ONLY WHEN IT HOLDS NOTHING (2026-08-27). It used to go whenever this build had
+  // neither control op — correct while the box was buttons and nothing else. Since the usage
+  // readout moved IN here (Samuel's one-box ruling), that early return would take it with it, and
+  // the numbers have nothing to do with the bridge: they are the SUMMARY FEED's, and a plain
+  // browser that can neither pause nor open a window can still say how much context is used.
+  if (!canControl && !canOpen && !stats) return null;
   const stopped = agent.state === "ended";
 
   /** Show one refusal line, replacing any that is already standing. */
@@ -194,6 +207,7 @@ export function AgentControls({
           />
         )}
       </div>
+      {stats}
       {notice && (
         <p role="status" className="text-caption text-text-muted">
           {notice}

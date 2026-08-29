@@ -14,13 +14,30 @@
 
 import type { Role } from "@/features/workspaces/types";
 
-/** The other person in a channel, resolved from their profile. */
+/** Another person in a channel, resolved from their profile. */
 export interface HomePeer {
   userId: string;
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
 }
+
+/**
+ * The absent-fallback for {@link HomeChannel.peers} — INVARIANTS §8's `EMPTY_X`,
+ * matching what a container with nobody else in it serialises to.
+ *
+ * 🔒 **SPELL IT `?? EMPTY_PEERS` INLINE AT EVERY READ, never behind an
+ * accessor.** The wire type is non-optional, so the read site is the only place
+ * the optionality is visible, and a rule living inside a helper nobody has to
+ * call is a rule the next read forgets (the deleted `infoCardOf()` is the
+ * precedent). ⚠ `channel?.peers` guards the CHANNEL being absent and does
+ * NOTHING about a live stale channel whose KEY is `undefined` — that is the
+ * 2026-08-26 correction in §8, and it is why this is per-key.
+ *
+ * ⚠ FROZEN, and shared: it is handed straight to render paths, so a caller that
+ * pushed into it would be editing every other caller's fallback.
+ */
+export const EMPTY_PEERS: readonly HomePeer[] = Object.freeze([]);
 
 /** One home channel — addresses its container like any workspace. */
 export interface HomeChannel {
@@ -34,9 +51,38 @@ export interface HomeChannel {
    *  peer to name it after. */
   name: string;
   /**
-   * ⚠ NULLABLE, and null is not a defect. A solo channel has no second member
-   * until somebody claims its link; a card with no face is the correct
-   * rendering of "just you", not a half-built one.
+   * EVERY other member of the container, OLDEST JOIN FIRST — F-307's fix
+   * (Samuel's ruling, 2026-08-26: a home channel takes more than two people).
+   * Empty for a solo channel. The order is TOTAL and comes from the repository
+   * (`joined_at ASC, user_id ASC`), so the faces do not shuffle between loads.
+   *
+   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS
+   * `?? EMPTY_PEERS` INLINE (INVARIANTS §8).** `GET /api/home/channels` is
+   * cached with a 24h `gcTime`, so an entry written by the previous bundle
+   * survives the upgrade WITHOUT this key: the wire type is non-optional and is
+   * right, the cache is a different moment. **`.length` and `.map` on
+   * `undefined` THROW and blank the pane** — this is the object-field case §8
+   * names, not the decorative one.
+   */
+  peers: HomePeer[];
+  /**
+   * The FIRST other member, or null. ⚠ **DERIVED FROM `peers[0]` IN EXACTLY ONE
+   * PLACE** (`server/service-reads.ts › hydrateChannels`) and never computed
+   * independently — two fields that can disagree about who is in a room is the
+   * whole reason F-307 was filed.
+   *
+   * ⚠ **KEPT RATHER THAN REPLACED BY `peers`, AND THE REASON IS THE CACHE.** An
+   * entry cached before 2026-08-26 HAS this key and LACKS `peers`, so a reader
+   * that only knew `peers` would fall back to `[]` and paint every one of the
+   * operator's channels as SOLO — "Just you", the agent glyph, the wrong
+   * roster — on the first paint after the upgrade. That is a FALSE sentence,
+   * where degrading to this field is merely the old, correct, one-face answer.
+   *
+   * ⚠ NULL IS NOT A DEFECT. A solo channel has no second member until somebody
+   * claims its link; a card with no face is the correct rendering of "just
+   * you", not a half-built one. **Its meaning is now STATED** — "the member who
+   * joined first" — where before the cap came off it was "whichever row came
+   * back first", which is what made it non-deterministic (F-307).
    */
   peer: HomePeer | null;
   createdAt: string;

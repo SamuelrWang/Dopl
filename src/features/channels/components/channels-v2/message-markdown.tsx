@@ -62,14 +62,23 @@ import { ExternalAnchor, safeHref } from "./message-markdown-links";
 import {
   MENTION_TOKEN_RE,
   buildMentionIndex,
+  mentionHandleOf,
   resolveMentionToken,
 } from "../../lib/mentions";
+import {
+  buildAgentMentionIndex,
+  resolveAgentHandle,
+  type AgentMentionIndex,
+} from "../../lib/agent-mentions";
 import type { AuthorIndex } from "./view-model";
 
 /** What every leaf and block needs: the roster, whether this row tags me, and
  *  the caller's two class halves (rules 4 and 5). */
 interface BodyContext {
   handles: ReturnType<typeof buildMentionIndex>;
+  /** MY OWN agents' handles (`lib/agent-mentions.ts`). ⚠ A SEPARATE NAMESPACE from the roster's —
+   *  it decides TINT ONLY and never reaches `metadata.mentionedUserIds`. */
+  agentHandles: AgentMentionIndex;
   index: AuthorIndex;
   mentionsMe: boolean;
   /** Geometry every block wears. */
@@ -96,6 +105,14 @@ export function MessageMarkdown({
 }) {
   const ctx: BodyContext = {
     handles: buildMentionIndex([...index.byId.values()]),
+    // ⚠ FROM THE LIVE FEED, so a rename re-tints the same token under a new spelling on the next
+    // push. Empty wherever there is no desktop (the web tree, the pop-out) — no tint, no error.
+    agentHandles: buildAgentMentionIndex(
+      [...index.agents.entries()].map(([agentId, identity]) => ({
+        agentId,
+        displayName: identity.displayName,
+      }))
+    ),
     index,
     mentionsMe,
     block: blockClassName,
@@ -425,7 +442,18 @@ function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
       {text.split(MENTION_TOKEN_RE).map((part, i) => {
         if (!part.startsWith("@")) return <span key={i}>{part}</span>;
         const userId = resolveMentionToken(part, ctx.handles);
-        if (!userId) return <span key={i}>{part}</span>;
+        // ⚠ AN AGENT MENTION TINTS THE SAME BLUE (Samuel, 2026-08-27) and is a SEPARATE
+        // namespace — `@agent-<id>`, or the agent's slugged custom name. It is asked only when
+        // the roster answered nobody, so a member can never lose their tint to an agent whose
+        // operator named it after them; the roster is the wider claim and wins.
+        // ⚠ NO VIEWER HIGHLIGHT ON THIS ARM. The bg wash means "this message tags YOU", which is
+        // `metadata.mentionedUserIds` — a server fact about a MEMBER. An agent mention is not in
+        // that set and must not borrow the signal.
+        const agentId =
+          userId === null
+            ? resolveAgentHandle(mentionHandleOf(part), ctx.agentHandles)
+            : null;
+        if (!userId && !agentId) return <span key={i}>{part}</span>;
         return (
           <span
             key={i}
@@ -434,7 +462,8 @@ function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
               // ⚠ BOTH halves required: the stamp says this message tags me,
               // the token says THIS is where. The stamp alone cannot place a
               // highlight and the token alone is a re-derivation.
-              ctx.mentionsMe &&
+              userId !== null &&
+                ctx.mentionsMe &&
                 userId === ctx.index.currentUserId &&
                 "rounded-[4px] bg-link/10 px-0.5"
             )}

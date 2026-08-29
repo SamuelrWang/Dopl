@@ -11,6 +11,7 @@ import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
   ChannelGrantChannelRef,
   ChannelResourceGrant,
+  KbShelf,
   KnowledgeBase,
   KnowledgeBaseStats,
   KnowledgeFolder,
@@ -105,7 +106,15 @@ export async function fetchBaseList(
   workspaceId?: string,
   /** When set, the request carries `?channelId=` and the response folds in the
    *  scope-A `channelGrants` map for that channel. */
-  channelId?: string
+  channelId?: string,
+  /**
+   * When set, the request carries `?shelf=` and the SERVER returns only that
+   * shelf's bases (`../types.ts › KbShelf`). ⚠ OMITTED IS BOTH SHELVES — this
+   * is a narrowing, so forgetting it widens; the caller that must never widen
+   * is the /home pane's scope C. There is deliberately no client-side fallback
+   * filter: the rows are meant not to arrive.
+   */
+  shelf?: KbShelf
 ): Promise<KnowledgeBaseList> {
   const data = await request<{
     bases: KnowledgeBase[];
@@ -116,7 +125,10 @@ export async function fetchBaseList(
     channelGrants?: Record<string, ChannelResourceGrant>;
   }>("/api/knowledge/bases", {
     workspaceId,
-    query: channelId ? { channelId } : undefined,
+    // ⚠ `withQuery` strips `undefined` values, so this object is safe to build
+    // unconditionally — an absent channelId/shelf sends no param at all, which
+    // is what "not channel-scoped" / "both shelves" mean on this route.
+    query: channelId || shelf ? { channelId, shelf } : undefined,
   });
   return {
     bases: data.bases,

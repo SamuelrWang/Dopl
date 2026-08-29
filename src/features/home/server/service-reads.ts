@@ -38,10 +38,21 @@ export const HOME_LINK_LIMIT = 50;
  * ⚠ A CONTAINER MISSING ITS PEER IS NOT (2026-08-24, the inversion). A solo
  * channel is the NORMAL first state of every home channel now: the operator
  * makes one, works in it with their agents, and a person arrives later or never.
- * `peer: null` is the answer, not a reason to hide the row.
+ * An EMPTY `peers` is the answer, not a reason to hide the row.
+ *
+ * ✅ **`peers` IS A LIST AND `peer` IS ITS HEAD — F-307 closed here (2026-08-26).
+ * THIS IS THE ONE PLACE THE TWO ARE RELATED**, and that is the whole point of
+ * deriving rather than reading twice: a second site computing `peer` from
+ * anything other than `peers[0]` re-opens the finding in a form no test would
+ * catch. The repository hands the list back in a TOTAL order (`joined_at ASC,
+ * user_id ASC`), so `peer` means "the member who joined first" rather than
+ * "whichever row came back first".
  *
  * ONE FAN, not two: the open bound link joins the peers+channels tier, so the
- * chip costs no extra round trip (§9's home bullet).
+ * chip costs no extra round trip (§9's home bullet). ⚠ **The profile tier now
+ * widens with the ROSTERS** — a container contributes one id per member instead
+ * of at most one — and it is still ONE `.in()` over the de-duplicated set, so
+ * the shape §9 forbids (a query per row) is unchanged.
  */
 export async function hydrateChannels(
   containers: LinkContainerRow[],
@@ -55,7 +66,7 @@ export async function hydrateChannels(
     repo.listLinksByWorkspaces(ids, HOME_CHANNEL_LIMIT),
   ]);
   const [profiles, lastMessages] = await Promise.all([
-    listProfileSummaries([...new Set(peers.values())]),
+    listProfileSummaries([...new Set([...peers.values()].flat())]),
     repo.listLastMessages([...channels.values()].map((c) => c.id)),
   ]);
 
@@ -63,8 +74,19 @@ export async function hydrateChannels(
   for (const container of containers) {
     const channel = channels.get(container.id);
     if (!channel) continue;
-    const peerId = peers.get(container.id);
-    const profile = peerId ? profiles.get(peerId) : undefined;
+    // ⚠ A MEMBER WITH NO PROFILE ROW IS KEPT, NOT DROPPED. `listProfileSummaries`
+    // answers only for ids it finds, and a face the operator cannot name is
+    // still a person in the room — dropping them would under-count the stack and
+    // silently shrink the roster the row claims to show.
+    const roster = (peers.get(container.id) ?? []).map((userId) => {
+      const profile = profiles.get(userId);
+      return {
+        userId,
+        displayName: profile?.displayName ?? null,
+        email: profile?.email ?? null,
+        avatarUrl: profile?.avatarUrl ?? null,
+      };
+    });
     const last = lastMessages.get(channel.id);
     const link = links.get(container.id);
     out.push({
@@ -75,14 +97,11 @@ export async function hydrateChannels(
       }),
       channelId: channel.id,
       name: channel.name,
-      peer: peerId
-        ? {
-            userId: peerId,
-            displayName: profile?.displayName ?? null,
-            email: profile?.email ?? null,
-            avatarUrl: profile?.avatarUrl ?? null,
-          }
-        : null,
+      peers: roster,
+      // ⚠ DERIVED, never a second read (see the docblock). Back-compat for a
+      // cache written before `peers` existed, and now a STATED rule: the member
+      // who joined first.
+      peer: roster[0] ?? null,
       createdAt: container.created_at,
       lastMessageAt: last?.at ?? null,
       lastMessagePreview: last ? truncatePreview(last.body) : null,

@@ -16,8 +16,8 @@
  *
  * ── THE MATCH RULE, IN FULL ─────────────────────────────────────────────────
  *  1. A TOKEN is `@` followed by one or more characters that are neither
- *     whitespace nor `@`. A display name with a space is therefore reachable
- *     only by its SQUASHED form (`@DianaTaylor`) or its first word (`@Diana`) —
+ *     whitespace nor `@`. A display name with a space is therefore reachable only by its SLUG
+ *     (`@diana-taylor`), its SQUASHED form (`@DianaTaylor`) or its first word (`@Diana`) —
  *     `@Diana Taylor` is the token `@Diana` followed by prose.
  *  2. Trailing punctuation comes off the token ({@link TRAILING_PUNCTUATION}),
  *     so `@diana,` and `@diana` are the same handle. Leading punctuation does
@@ -27,9 +27,11 @@
  *     set. Never a prefix, never a substring — the composer's autocomplete is
  *     substring-matched because a human then PICKS one; a resolver that guessed
  *     would tag `@dan` at Daniel.
- *  4. Each roster member claims up to four handles, from their display name and
- *     from the local part of their email: the whole source with whitespace
- *     removed, and its first whitespace-delimited word.
+ *  4. Each roster member claims up to SIX handles, from their display name and from the local
+ *     part of their email: the SLUG (lowercase, whitespace → `-`; {@link mentionSlug}), the whole
+ *     source with whitespace removed, and its first whitespace-delimited word. ⚠ The slug is
+ *     FIRST and is therefore what a picker inserts (Samuel, 2026-08-27: "Samuel Wang" →
+ *     `@samuel-wang`); the older two are kept so bodies already written keep resolving.
  *  5. ⚠ AMBIGUITY FAILS CLOSED. A handle claimed by two DIFFERENT members
  *     resolves to NOBODY. The alternative is that the order a roster read
  *     happens to return decides whose inbox a message lands in — silent, and
@@ -158,7 +160,37 @@ const TRAILING_HTML_TAG = /<\/?[A-Za-z][A-Za-z0-9-]*\s*\/?>$/;
  *  (rule 5: ambiguity resolves to nobody). */
 export type MentionIndex = ReadonlyMap<string, string | null>;
 
-/** The handles one member answers to. May repeat; the index de-dupes. */
+/**
+ * THE HANDLE CONVENTION — lowercase, whitespace runs to a single `-`
+ * (Samuel, 2026-08-27). "Samuel Wang" → `samuel-wang`.
+ *
+ * ⚠ ONE SLUGGER, AND IT IS THE ONLY ONE. It is used by {@link handlesOf} for roster members and
+ * by `lib/agent-mentions.ts` for agents, so the two kinds of mention cannot come to spell a name
+ * two ways. **Do not restate this at a call site** — a second `.replace(/\s+/g, "-")` is how the
+ * composer's insert and the transcript's tint come to disagree about what a handle is.
+ *
+ * ⚠ IT IS A HANDLE RULE, NOT A URL SLUG. Nothing here strips punctuation or non-ASCII: the
+ * resolver is exact equality against this same derivation, so anything it keeps is reachable, and
+ * stripping would silently make some names unmentionable. `-` is deliberately absent from
+ * {@link TRAILING_PUNCTUATION}, so a hyphen inside a handle survives the token strip.
+ */
+export function mentionSlug(source: string): string {
+  return source.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+/**
+ * The handles one member answers to. May repeat; the index de-dupes.
+ *
+ * ⚠ THE SLUG IS FIRST SINCE 2026-08-27, AND ORDER IS WHAT MAKES IT THE CONVENTION.
+ * {@link insertableHandle} returns the first handle the index resolves back to this member, so
+ * putting the slug at the head is what makes the composer INSERT `@samuel-wang`.
+ *
+ * ⚠ THE OLDER FORMS ARE KEPT, NOT REPLACED, AND THAT IS NOT HEDGING. The token lives in the
+ * message BODY as plain text — there is no id under it — so every `@samuelwang` already written
+ * would stop resolving the moment the squashed form left this list. Old bodies keep tagging the
+ * person they were written to tag; new ones are inserted in the new shape. The set only grows,
+ * and rule 5 still fails ambiguity closed across all of them.
+ */
 function handlesOf(candidate: MentionCandidate): string[] {
   const out: string[] = [];
   const sources = [
@@ -168,6 +200,8 @@ function handlesOf(candidate: MentionCandidate): string[] {
   for (const source of sources) {
     const trimmed = (source ?? "").trim();
     if (trimmed.length === 0) continue;
+    const slug = mentionSlug(trimmed);
+    if (slug.length > 0) out.push(slug);
     const squashed = trimmed.replace(/\s+/g, "").toLowerCase();
     if (squashed.length > 0) out.push(squashed);
     const first = trimmed.split(/\s+/)[0].toLowerCase();

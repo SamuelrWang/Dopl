@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import { UNDERLINE_FIELD } from "@/shared/ui/wells";
+import { cn } from "@/shared/lib/utils";
 import { agentDisplayName } from "./agents-model";
 
 /**
@@ -114,8 +116,9 @@ export function AgentName({
           }
         }}
         // ⚠ THE UNDERLINE IS THE WHOLE FIELD: no ring, no fill, no border but the bottom one,
-        // and the same type as the title it replaces so nothing shifts.
-        className={`min-w-0 flex-1 border-0 border-b border-text-primary bg-transparent p-0 text-body font-semibold text-text-primary outline-none ${className ?? ""}`}
+        // and the same type as the title it replaces so nothing shifts. `font-semibold` is this
+        // caller's own — the recipe is shared, the WEIGHT is the title's.
+        className={cn(UNDERLINE_FIELD, "flex-1 font-semibold", className)}
       />
     );
   }

@@ -10,7 +10,9 @@ import type {
   AgentTemplateCreateInput,
   AgentTemplateUpdateInput,
 } from "../schema";
+import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
 import {
+  TemplateHomeScopeForbiddenError,
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
@@ -36,6 +38,60 @@ import {
  */
 
 // ─── Create ─────────────────────────────────────────────────────────────
+
+/**
+ * 🔒 THE HOME-SHELF FENCE FOR TEMPLATES — the sibling of
+ * `features/knowledge/server/service-base-writes.ts › resolveHomeScope`
+ * (Samuel's ruling 2026-08-27;
+ * `20260901120000_agent_template_home_scoped.sql` carries the full argument).
+ *
+ * Three conditions, ALL required:
+ *
+ *   1. **A PERSON asked.** `isSharedCredential` false. A credential that may be
+ *      shared between humans has no "my home shelf" to write to — and
+ *      `canSeeTemplate` arm 2 would not read the row back for it anyway.
+ *   2. **PRIVATE.** ⚠ CHECKED AGAINST THE RESOLVED VALUE, NOT `input.visibility`
+ *      — the branch above rewrites it, and reading the raw input would let a
+ *      `team` or `workspace` template onto a shelf the UI calls "yours alone".
+ *      **This is where the fence DIFFERS from Knowledge's in substance, not just
+ *      in wording**: a KB can be `private` and still reach a channel through a
+ *      `(kb, channel)` grant, so there `private` is a floor. A template has NO
+ *      grant table and exactly one consumer per row, so `private` is TERMINAL —
+ *      it is the entire audience statement, which is precisely what makes it the
+ *      right condition for a personal shelf.
+ *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE.**
+ *      `findDefaultWorkspaceForUser` is the same lookup `getBootState` runs to
+ *      answer `POST /api/boot`'s `workspace`, which is what the /home pane
+ *      hands its editor — so the fence and the surface cannot disagree about
+ *      what "home" means. A link CONTAINER fails this, and so does a second
+ *      workspace the caller owns.
+ *
+ * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
+ * examined, so MCP and every other existing caller keep writing workspace-shelf
+ * rows with no new failure mode.
+ */
+async function resolveTemplateHomeScope(
+  ctx: AgentTemplateContext,
+  input: AgentTemplateCreateInput,
+  resolvedVisibility: TemplateVisibility
+): Promise<boolean> {
+  if (input.homeScoped !== true) return false;
+  if (isSharedCredential(ctx)) {
+    throw new TemplateHomeScopeForbiddenError(
+      "a shared credential has no personal shelf"
+    );
+  }
+  if (resolvedVisibility !== "private") {
+    throw new TemplateHomeScopeForbiddenError(
+      "the home shelf holds private agents only"
+    );
+  }
+  const home = await findDefaultWorkspaceForUser(ctx.userId);
+  if (home === null || home.id !== ctx.workspaceId) {
+    throw new TemplateHomeScopeForbiddenError("it is not your home workspace");
+  }
+  return true;
+}
 
 export async function createTemplate(
   ctx: AgentTemplateContext,
@@ -71,6 +127,10 @@ export async function createTemplate(
     input.knowledgeBaseIds ?? []
   );
 
+  // 🔒 WHICH SHELF, resolved before the insert so no half-written row depends
+  // on it. Throws rather than returning false.
+  const homeScoped = await resolveTemplateHomeScope(ctx, input, visibility);
+
   const template = await repo.insertTemplate({
     workspaceId: ctx.workspaceId,
     name: stripNullBytes(input.name),
@@ -79,6 +139,7 @@ export async function createTemplate(
     model: normalizeLabel(input.model),
     fields: normalizeFieldsInput(input.fields),
     visibility,
+    homeScoped,
     createdBy: ctx.userId,
   });
 

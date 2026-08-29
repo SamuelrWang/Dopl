@@ -80,10 +80,18 @@ export async function findMemberContainer(
  * together, so the filter is "A is a member and B is a member" evaluated in the
  * database over every row.
  *
- * ⚠ A container may now hold ONE member (a solo channel), so this is no longer
- * "members are exactly {A, B}" — it is "both are in it", which is the question
- * the legacy unbound claim asks. `.limit(1)` keeps it bounded; the two-member
- * cap trigger (20260824120000) is what keeps a pair to one container.
+ * ⚠ A container may hold ONE member (a solo channel) or MANY (2026-08-26), so
+ * this is not "members are exactly {A, B}" — it is "both are in it", which is
+ * the question the legacy unbound claim asks and the only one it needs answered.
+ * `.limit(1)` keeps it bounded.
+ *
+ * ⚠ **NOTHING KEEPS A PAIR TO ONE CONTAINER ANY MORE, AND THAT IS FINE HERE.**
+ * The two-member cap trigger used to (a second shared container would have
+ * needed a second two-person claim); the cap is dropped, so two people may share
+ * several containers — which is what "more than two members" implies anyway,
+ * since one relationship is no longer one room. This read still answers
+ * correctly: it returns SOME container both are in, which is precisely what the
+ * legacy unbound branch needs to avoid minting a duplicate.
  */
 export async function findPairContainer(
   userIdA: string,
@@ -228,10 +236,12 @@ export async function insertLinkContainer(args: {
  * claimer is deliberately lower-privileged. The LEGACY unbound path
  * (`insertLinkContainer`) keeps its hardcoded `admin` on purpose (plan §4.3).
  *
- * ⚠ THE CAP IS THE DATABASE'S, NOT THIS FUNCTION'S. A third active member
- * raises `LINK_CONTAINER_FULL` from the trigger in 20260824120000 — a service
- * pre-check is a TOCTOU under two concurrent claims, so the pre-check exists for
- * the ERROR MESSAGE and the trigger exists for the guarantee.
+ * ⚠ THERE IS NO MEMBER CAP TO CHECK — NOT HERE AND NOT IN THE DATABASE
+ * (2026-08-26, Samuel's ruling; `20260830120000_link_container_multi_member.sql`
+ * dropped the trigger). A third, fourth and fifth active member all insert
+ * cleanly. **What bounds this write is possession of a bound, SINGLE-USE token**
+ * — the caller above proved it and spent it — plus `assertMemberAddable`'s
+ * standing `LINK_CONTAINER_CLOSED` refusal on every OTHER way into a container.
  */
 export async function insertContainerMember(args: {
   workspaceId: string;
@@ -253,8 +263,9 @@ export async function insertContainerMember(args: {
 }
 
 /** Undo an `insertContainerMember` — the rollback arm when the step after it
- *  fails. Hard delete: a revoked membership row on a two-person container is
- *  not history anybody reads, and it would still occupy the cap. */
+ *  fails. Hard delete rather than a status flip: a membership row for a claim
+ *  that never completed is not history anybody reads, and leaving it revoked
+ *  would put a person in the container's roster reads who was never admitted. */
 export async function deleteContainerMember(
   workspaceId: string,
   userId: string
@@ -267,40 +278,53 @@ export async function deleteContainerMember(
   if (error) throw error;
 }
 
-/** Active members of one container. Answers "is there room for a peer?" — the
- *  friendly refusal in front of the trigger, never the guarantee. */
-export async function countActiveContainerMembers(
-  workspaceId: string
-): Promise<number> {
-  const { count, error } = await supabaseAdmin()
-    .from("workspace_members")
-    .select("user_id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId)
-    .eq("status", "active");
-  if (error) throw error;
-  return count ?? 0;
-}
-
-/** `workspaceId` → the OTHER member's user id. A SOLO container has no entry,
- *  which is a legitimate state now, not a broken row. */
+/**
+ * `workspaceId` → EVERY other active member's user id, OLDEST JOIN FIRST. A
+ * SOLO container has no entry, which is a legitimate state, not a broken row.
+ *
+ * ✅ **THIS IS F-307's FIX, AND IT IS BOTH HALVES OF IT (Samuel's ruling,
+ * 2026-08-26).** It returned ONE id per container, taken as "whichever row
+ * PostgREST handed back first" — correct only because the two-member cap made
+ * "the other one" unambiguous. The cap came off the same day, so above two
+ * members the same channel could render a different face between two loads,
+ * with no error anywhere. **A LIST, and a TOTAL ORDER over it.**
+ *
+ * ⚠ **`user_id` IS THE TIEBREAKER AND IT IS NOT DECORATION.** `joined_at` alone
+ * is not a total order — two members admitted in the same millisecond (or two
+ * legacy rows carrying NULL) would still flip between loads, which is the exact
+ * bug this read is being fixed for. `nullsFirst: false` puts an unstamped
+ * legacy row LAST rather than at the head of the stack, where it would claim
+ * the `peer` slot from a member who really did join first.
+ *
+ * ⚠ **ONE QUERY, AND THE ROW COUNT IS REAL DATA RATHER THAN A FAN (§9).** The
+ * `.in()` spans at most `HOME_CHANNEL_LIMIT` containers and the rule §9 states
+ * is "never a per-row query", which this still is not. What DID change is that
+ * a container may now contribute more than one id, so the profile read above it
+ * widens with the rosters — bounded by how many people are actually in the
+ * caller's home channels, which is a relationship count and not a directory.
+ */
 export async function listContainerPeers(
   workspaceIds: string[],
   viewerId: string
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
   if (workspaceIds.length === 0) return out;
   const { data, error } = await supabaseAdmin()
     .from("workspace_members")
     .select("workspace_id, user_id")
     .in("workspace_id", workspaceIds)
     .neq("user_id", viewerId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .order("joined_at", { ascending: true, nullsFirst: false })
+    .order("user_id", { ascending: true });
   if (error) throw error;
   for (const row of (data ?? []) as Array<{
     workspace_id: string;
     user_id: string;
   }>) {
-    if (!out.has(row.workspace_id)) out.set(row.workspace_id, row.user_id);
+    const seats = out.get(row.workspace_id);
+    if (seats) seats.push(row.user_id);
+    else out.set(row.workspace_id, [row.user_id]);
   }
   return out;
 }

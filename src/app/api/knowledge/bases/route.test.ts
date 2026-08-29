@@ -39,6 +39,7 @@ vi.mock("@/features/knowledge/server/service", () => ({
   listBaseOwnerNames: vi.fn(),
   listBaseStats: vi.fn(),
   listStarredBaseIds: vi.fn(),
+  listHomeScopedBaseIds: vi.fn(),
   resolveKbStorageLimit: vi.fn(),
 }));
 
@@ -50,22 +51,26 @@ vi.mock("@/features/workspaces/server/service-overview", () => ({
   isChannelVisibleTo: vi.fn(),
 }));
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 import {
+  createBase,
   listBaseOwnerNames,
   listBaseStats,
   listBases,
   listStarredBaseIds,
+  listHomeScopedBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
 import { getChannelGrantMap } from "@/features/knowledge/server/service-channel-grants";
 import { isChannelVisibleTo } from "@/features/workspaces/server/service-overview";
 
 const mockListBases = vi.mocked(listBases);
+const mockCreateBase = vi.mocked(createBase);
 const mockOwnerNames = vi.mocked(listBaseOwnerNames);
 const mockBaseStats = vi.mocked(listBaseStats);
 const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
 const mockStarred = vi.mocked(listStarredBaseIds);
+const mockHomeScoped = vi.mocked(listHomeScopedBaseIds);
 const mockGrantMap = vi.mocked(getChannelGrantMap);
 const mockChannelVisible = vi.mocked(isChannelVisibleTo);
 
@@ -88,6 +93,21 @@ function getReq(): NextRequest {
   return new NextRequest("http://localhost/api/knowledge/bases", { method: "GET" });
 }
 
+function shelfReq(shelf: string): NextRequest {
+  return new NextRequest(
+    `http://localhost/api/knowledge/bases?shelf=${shelf}`,
+    { method: "GET" }
+  );
+}
+
+function postReq(body: unknown): NextRequest {
+  return new NextRequest("http://localhost/api/knowledge/bases", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
+}
+
 function channelReq(channelId: string): NextRequest {
   return new NextRequest(
     `http://localhost/api/knowledge/bases?channelId=${channelId}`,
@@ -102,6 +122,7 @@ beforeEach(() => {
   mockBaseStats.mockResolvedValue(STATS);
   mockStorageLimit.mockResolvedValue(5_000_000);
   mockStarred.mockResolvedValue(["kb-2"]);
+  mockHomeScoped.mockResolvedValue(["kb-1"]);
 });
 
 describe("GET /api/knowledge/bases", () => {
@@ -114,6 +135,7 @@ describe("GET /api/knowledge/bases", () => {
       baseStats: STATS,
       kbStorageLimit: 5_000_000,
       starredBaseIds: ["kb-2"],
+      homeScopedBaseIds: ["kb-1"],
     });
   });
 
@@ -181,6 +203,7 @@ describe("GET /api/knowledge/bases", () => {
     mockBaseStats.mockResolvedValue({});
 
     mockStarred.mockResolvedValue([]);
+    mockHomeScoped.mockResolvedValue([]);
 
     const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
@@ -190,6 +213,7 @@ describe("GET /api/knowledge/bases", () => {
       baseStats: {},
       kbStorageLimit: 5_000_000,
       starredBaseIds: [],
+      homeScopedBaseIds: [],
     });
   });
 
@@ -202,6 +226,41 @@ describe("GET /api/knowledge/bases", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.bases).toHaveLength(2);
     expect(body.starredBaseIds).toEqual([]);
+  });
+
+  it("folds homeScopedBaseIds in as a SIBLING KEY, never onto the row", async () => {
+    // 🔒 `home_scoped` is deliberately absent from `KNOWLEDGE_BASE_COLS` so no
+    // client can re-implement the shelf FENCE from a projected column, and absent
+    // from the SDK-mirrored `KnowledgeBase` so `check-knowledge-type-drift` has
+    // nothing new to compare. The label rides BESIDE the rows.
+    const body = (await (await GET(getReq(), { params: Promise.resolve({}) })).json()) as {
+      bases: Array<Record<string, unknown>>;
+      homeScopedBaseIds: string[];
+    };
+    expect(body.homeScopedBaseIds).toEqual(["kb-1"]);
+    expect(mockHomeScoped).toHaveBeenCalledWith(expect.anything(), VISIBLE);
+    for (const b of body.bases) {
+      expect("homeScoped" in b).toBe(false);
+      expect("home_scoped" in b).toBe(false);
+      expect("shelf" in b).toBe(false);
+    }
+  });
+
+  it("degrades a shelf-flag failure to [] — UNLABELLED, never mislabelled", async () => {
+    // ⚠ THE SAFE DIRECTION. `[]` means no card carries a shelf label, which is
+    // what every surface showed before this key existed; the unsafe direction
+    // would be calling a workspace base personal, and no failure mode here
+    // produces that.
+    mockHomeScoped.mockRejectedValue(new Error("flag read down"));
+
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      bases: unknown[];
+      homeScopedBaseIds: string[];
+    };
+    expect(body.homeScopedBaseIds).toEqual([]);
+    expect(body.bases).toHaveLength(2);
   });
 
   it("keeps the stars OFF the base rows — the SDK type must not widen", async () => {
@@ -287,3 +346,101 @@ describe("GET /api/knowledge/bases?channelId= — the scope-A grant map", () => 
     expect(body.channelGrants).toEqual({});
   });
 });
+
+/**
+ * 🔒 `?shelf=` — WHICH SHELF (Samuel's ruling 2026-08-26;
+ * `features/knowledge/types.ts › KbShelf`).
+ *
+ * ⚠ THE MIXED-LIST QUESTION, ANSWERED AT THE ROUTE. A request that ASKED for a
+ * shelf must never be answered with both — and the dangerous shape is not the
+ * happy path, it is the misspelling. Absent means "no filter" for compatibility
+ * (MCP `kb_list_bases`, workspace search), so a route that shrugged at
+ * `?shelf=hom` would silently serve the WIDER list to a caller that was trying
+ * to narrow, and it would look like it worked. There is no client-side fallback
+ * filter to catch it: `home_scoped` is deliberately never projected.
+ */
+describe("GET /api/knowledge/bases?shelf=", () => {
+  it("passes a recognised shelf DOWN to the service", async () => {
+    await GET(shelfReq("home"), { params: Promise.resolve({}) });
+    expect(mockListBases).toHaveBeenCalledWith(expect.anything(), {
+      shelf: "home",
+    });
+
+    await GET(shelfReq("workspace"), { params: Promise.resolve({}) });
+    expect(mockListBases).toHaveBeenLastCalledWith(expect.anything(), {
+      shelf: "workspace",
+    });
+  });
+
+  it("asks for BOTH shelves when the param is absent", async () => {
+    // ⚠ Compatibility, not a default: every pre-shelf caller lands here.
+    await GET(getReq(), { params: Promise.resolve({}) });
+    expect(mockListBases).toHaveBeenCalledWith(expect.anything(), {
+      shelf: undefined,
+    });
+  });
+
+  it("🔒 400s an UNRECOGNISED shelf instead of widening to the mixed list", async () => {
+    const res = await GET(shelfReq("hom"), { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    // And it never reached the service — no list was built, wide or narrow.
+    expect(mockListBases).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 🔒 `shareToChannelId` — CREATE AND SHARE IN ONE CALL (Samuel's ruling
+ * 2026-08-27, the /home Shared section's button). The route owns ONE of the
+ * fences; the rest live in `createBase` / `setChannelKnowledgeGrant`.
+ */
+describe("POST /api/knowledge/bases with shareToChannelId", () => {
+  it("fences the channel BEFORE creating anything", async () => {
+    mockChannelVisible.mockResolvedValue(false);
+
+    const res = await POST(
+      postReq({ name: "Handover", shareToChannelId: CHANNEL_UUID }),
+      { params: Promise.resolve({}) }
+    );
+
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: { code: string } };
+    // ⚠ The SAME answer an unknown channel gets — the field is not an oracle.
+    expect(body.error.code).toBe("CHANNEL_NOT_FOUND");
+    // 🔒 AND NOTHING WAS WRITTEN. A base created and then rolled back would
+    // still have burned a slug and told the caller by TIMING what the 404
+    // refuses to say in words.
+    expect(mockCreateBase).not.toHaveBeenCalled();
+  });
+
+  it("creates once the channel is visible, and forwards the id", async () => {
+    mockChannelVisible.mockResolvedValue(true);
+    mockCreateBase.mockResolvedValue({ id: "kb-new" } as never);
+
+    const res = await POST(
+      postReq({ name: "Handover", shareToChannelId: CHANNEL_UUID }),
+      { params: Promise.resolve({}) }
+    );
+
+    expect(res.status).toBe(201);
+    expect(mockChannelVisible).toHaveBeenCalledWith("ws-1", "user-1", CHANNEL_UUID);
+    expect(mockCreateBase).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ shareToChannelId: CHANNEL_UUID })
+    );
+  });
+
+  it("does not consult the channel fence when nothing is being shared", async () => {
+    // ⚠ An ordinary create — MCP `kb_create_base` and the workspace Knowledge
+    // page — must not pay a channel read it has no use for.
+    mockCreateBase.mockResolvedValue({ id: "kb-new" } as never);
+
+    const res = await POST(postReq({ name: "Ordinary" }), {
+      params: Promise.resolve({}),
+    });
+
+    expect(res.status).toBe(201);
+    expect(mockChannelVisible).not.toHaveBeenCalled();
+  });
+});
+
+const CHANNEL_UUID = "aaaaaaaa-0000-4000-8000-000000000001";

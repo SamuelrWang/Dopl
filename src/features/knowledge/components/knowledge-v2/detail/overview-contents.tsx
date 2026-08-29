@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { DESCRIPTION_MAX } from "@/config";
 import { cn } from "@/shared/lib/utils";
-import { SectionBox } from "@/shared/ui/section-box";
+import {
+  SECTION_PANEL_GROUND,
+  SectionPanel,
+} from "@/shared/ui/section-panel";
+import { UNDERLINE_FIELD } from "@/shared/ui/wells";
 import type { KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import type { BaseTree } from "../types";
 import {
@@ -41,9 +45,25 @@ function byPosition<T extends { position: number }>(a: T, b: T): number {
 }
 
 /**
- * Base overview "Contents" tree: every folder + entry with an inline-editable
+ * Base info "Contents" tree: every folder + entry with an inline-editable
  * short description (folders → `description`, entries → `excerpt`). These are
  * the same summaries agents read in MCP get_tree / list_dir.
+ *
+ * ⚠ IT IS NOT THE NAVIGATION TREE. The rail on the left of this panel
+ * (`../list/list-panel.tsx`) is what OPENS files; this is the description
+ * editor for the same nodes, and it is the reason the section survived the
+ * overhaul rather than being folded into the rail. Selecting is one job,
+ * writing the summaries an agent reads is another.
+ *
+ * 🔒 ⚠ THE `SectionBox` DIVERGENCE IS RESOLVED HERE (INVARIANTS §5A, 2026-08-28).
+ * This rendered a `SectionBox` — a `bg-card-surface-subtle` header STRIP over a
+ * `bg-bg-inset` body carrying the concave inset shadow — inside /home's record
+ * pane, where every other section had already been ruled FLAT. The doc recorded
+ * it as a live divergence and said not to "finish the job" without asking;
+ * Samuel's 2026-08-28 ruling over the opened-base screenshot asked. It is
+ * `SectionPanel` on the same ground as Details, and it keeps the folder/file
+ * counts in the `caption` slot — `SectionBox`'s `meta` had no counterpart, and
+ * a count is a fact about the section, which is what that slot is for.
  */
 export function OverviewContents({
   tree,
@@ -156,23 +176,26 @@ export function OverviewContents({
   const isEmpty = ready && folders.length === 0 && entries.length === 0;
 
   return (
-    <SectionBox label="Contents" meta={meta}>
-      <div className="px-1.5 py-1.5">
-        {tree?.status === "loading" || tree === undefined ? (
-          <p className="px-3 py-2 text-caption text-text-muted">Loading contents…</p>
-        ) : tree.status === "error" ? (
-          <p className="px-3 py-2 text-caption text-text-muted">
-            Couldn&apos;t load the contents.
-          </p>
-        ) : isEmpty ? (
-          <p className="px-3 py-2 text-caption text-text-muted">
-            No folders or files yet.
-          </p>
-        ) : (
-          renderRows(null, 0)
-        )}
-      </div>
-    </SectionBox>
+    <SectionPanel
+      id="kb-contents"
+      label="Contents"
+      caption={meta}
+      className={SECTION_PANEL_GROUND}
+    >
+      {tree?.status === "loading" || tree === undefined ? (
+        <p className="px-1 py-1 text-caption text-text-muted">Loading contents…</p>
+      ) : tree.status === "error" ? (
+        <p className="px-1 py-1 text-caption text-text-muted">
+          Couldn&apos;t load the contents.
+        </p>
+      ) : isEmpty ? (
+        <p className="px-1 py-1 text-caption text-text-muted">
+          No folders or files yet.
+        </p>
+      ) : (
+        renderRows(null, 0)
+      )}
+    </SectionPanel>
   );
 }
 
@@ -351,10 +374,17 @@ function DescriptionField({
       maxLength={DESCRIPTION_MAX}
       aria-label="Description"
       placeholder="Short summary agents see in the tree"
-      className={cn(
-        "concave-field w-full rounded-md px-2 py-1 text-caption text-text-primary",
-        "placeholder:text-text-muted focus:outline-none disabled:opacity-60"
-      )}
+      // ⚠ THE UNDERLINE, NOT A WELL (docs/DESIGN-SYSTEM.md › "Inline editing is
+      // the UNDERLINE and nothing else"). This was a `.concave-field` — a
+      // pressed-in box appearing mid-row on a flat section, which is the
+      // "mismatched inset well" the 2026-08-28 ruling named. `UNDERLINE_FIELD`
+      // is taken VERBATIM, its `text-body` included: the recipe's whole promise
+      // is that a row does not change height between reading and editing, and a
+      // size utility bolted on beside it fights it in Tailwind's EMIT order
+      // rather than in class order. The row's resting description line is
+      // `text-caption`, so it grows by one step while open — a fact about this
+      // row, not a licence to fork the recipe.
+      className={cn(UNDERLINE_FIELD, "w-full disabled:opacity-60")}
       onChange={(e) => setDraft(e.target.value)}
       onCompositionStart={() => {
         composingRef.current = true;

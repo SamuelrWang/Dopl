@@ -27,6 +27,7 @@ export {
   findBaseByPublicId,
   listBasesForWorkspace,
   listBaseSlugsForWorkspace,
+  listHomeScopedBaseIds,
   insertBase,
   insertBases,
   updateBaseRow,

@@ -3,6 +3,11 @@
 import { CalendarCheck, CalendarDays, Flag, Users, UsersRound } from "lucide-react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { cn } from "@/shared/lib/utils";
+import {
+  SECTION_PANEL_GROUND,
+  SectionPanel,
+} from "@/shared/ui/section-panel";
+import { RAISED_INPUT } from "@/shared/ui/wells";
 import { TeamChip } from "@/features/members/components/team-bits";
 import { StorageMeter } from "../storage-meter";
 import styles from "../knowledge-v2.module.css";
@@ -37,9 +42,25 @@ export interface MetaCardProps {
 }
 
 /**
- * Base overview card: two editable fields (name + description) over a
- * read-only meta grid. Name/description persist via the base PATCH route; the
- * rest is derived from the base row.
+ * THE BASE'S DETAILS — the resting face of the detail column: two editable
+ * fields (name + description) over a read-only meta grid and the storage bar.
+ * Name/description persist via the base PATCH route; the rest is derived from
+ * the base row.
+ *
+ * ⚠ IT IS A FLAT `SectionPanel` NOW, NOT A CARD (Samuel's ruling, 2026-08-28).
+ * It was a 14px-radius bordered box with its own `--card-surface-subtle` header
+ * STRIP — a framed surface inside a pane that was itself framed inside a panel.
+ * The section language here is the one both /home faces already share
+ * (`shared/ui/section-panel.tsx`), and the GROUND is the kit's default for a
+ * workspace page; on /home the record pane repaints it in one rule
+ * (`pages/home/home.module.css › .frame :global([data-section-panel])`), so
+ * this file never names that palette.
+ *
+ * ⚠ THE FIELDS ARE RAISED, NOT PRESSED IN. They wore `.concave-field`; they
+ * wear `shared/ui/wells.ts › RAISED_INPUT` — Samuel's reference text-control
+ * face — with height and padding supplied HERE, which is that recipe's own
+ * division of labour. Do not add a `.concave-*` class back to this file: a
+ * pressed-in well on a flat panel is the mismatch the overhaul removed.
  */
 export function MetaCard({
   name,
@@ -57,17 +78,13 @@ export function MetaCard({
   storageLimit,
 }: MetaCardProps) {
   return (
-    <div className={styles.metaCard}>
-      <div className={styles.metaCardHead}>
-        <span className={styles.label}>Details</span>
-      </div>
-
-      <div className={styles.metaCardBody}>
+    <SectionPanel id="kb-details" label="Details" className={SECTION_PANEL_GROUND}>
+      <div className="flex flex-col gap-4 px-1 pt-0.5">
         <label className={styles.fieldGroup}>
           <span className={styles.fieldLabel}>Name</span>
           <input
             type="text"
-            className={cn("concave-field", styles.fieldInput)}
+            className={cn(RAISED_INPUT, "h-9 px-3 font-medium")}
             value={name}
             readOnly={!canEdit}
             onChange={(e) => onNameChange(e.target.value)}
@@ -86,7 +103,7 @@ export function MetaCard({
             ) : null}
           </span>
           <textarea
-            className={cn("concave-field", styles.fieldTextarea)}
+            className={cn(RAISED_INPUT, "px-3 py-2", styles.fieldBlock)}
             value={description}
             readOnly={!canEdit}
             onChange={(e) => onDescriptionChange(e.target.value)}
@@ -151,6 +168,6 @@ export function MetaCard({
           className="mt-0"
         />
       </div>
-    </div>
+    </SectionPanel>
   );
 }

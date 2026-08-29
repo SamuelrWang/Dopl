@@ -167,9 +167,30 @@ export function postEcho(text: string | null | undefined): string {
   return String(text ?? "").replace(/\s+/g, " ").trim().slice(0, POST_CAP).trim();
 }
 
-/** `main/session-narration.js › POST_CAP`. ⚠ A COPY OF A WIRE CONSTANT, and it
- *  only has to be an UPPER bound: main slicing shorter than this leaves both
- *  sides of the join untouched by the slice. */
+/**
+ * `main/session-narration.js › POST_CAP`, and it must be **≤** main's, never ≥.
+ *
+ * ⚠ THIS NOTE STATED THE SAFE DIRECTION BACKWARDS UNTIL 2026-08-28 — it read *"it only has to be
+ * an UPPER bound: main slicing shorter than this leaves both sides of the join untouched"*, which
+ * is the failing case, not the safe one. Work the join:
+ *
+ *   `echo   = postEcho(frameText)`  — over text main ALREADY cut at ITS cap
+ *   `landed = postEcho(fullBody)`   — over the untruncated server body
+ *
+ * If main's cap is SHORTER than this one, a body longer than main's cap gives `echo` main's
+ * prefix and `landed` this file's longer prefix. They cannot be equal, `landed.has(echo)` is
+ * false, and the card reads **Pending forever over a post that was delivered** — the exact defect
+ * the second `.trim()` above was written to prevent, arriving by the other road. If main's cap is
+ * LONGER, this file's `slice` cuts both chains at the same place and they match. So MAIN's is the
+ * upper bound on THIS one.
+ *
+ * ⚠ IN PRACTICE THEY ARE THE SAME 1000 AND SHOULD STAY SO — main's own constant says *"DO NOT
+ * MOVE IT: `channels-v2/agent-stream-model.ts › POST_CAP` is the SAME 1000 and the held-draft
+ * join is character-for-character against it."* ⚠ AND NOTHING PINS EITHER LITERAL: the desktop
+ * suite pins `PROSE_CAP`, not this, and the web side only brackets it from ABOVE
+ * (`agent-stream-consent.test.tsx` re-slices at a hand-written 1000, which still passes if both
+ * caps drop together). Filed as F-352.
+ */
 const POST_CAP = 1000;
 
 /** Is this frame a post the outbound gate is still holding? ⚠ Read defensively —
@@ -403,6 +424,56 @@ function dropSettledGateNotes(
   return items.filter(
     (item) => !(item.lane === "note" && item.text === GATE_NOTE)
   );
+}
+
+/**
+ * ONE RUN OF CONSECUTIVE TOOL ACTIVITY, AS ONE ROW (Samuel, 2026-08-27 — the
+ * Claude-Code-desktop pattern).
+ *
+ * ⚠ IT IS A GROUPING, NOT A FILTER. Every frame that went in comes out inside a
+ * group; nothing is dropped, and the detail the operator can open is the same
+ * rows this stream rendered before. The stream's job is unchanged (a log that
+ * loses lines is worse than a plain one) — what changes is that a dozen raw JSON
+ * payloads no longer push the POST the operator opened the panel to read off the
+ * screen.
+ *
+ * ⚠ THE BREAK IS ANY NON-TOOL LANE. A thinking line between two tool calls ends
+ * the run, because the agent said something there and the summary must not
+ * swallow it into "Used 4 tools".
+ *
+ * ⚠ THE COUNT IS TOOL USES, NOT ROWS. A call and its result are two frames about
+ * ONE use (`LANE_BY_KIND` maps `tool` and `result` alike), so the number comes
+ * from the frames that carry a tool NAME; a run of nameless frames falls back to
+ * its row count rather than reporting zero.
+ */
+export interface StreamGroup {
+  key: string;
+  /** `null` for a single non-tool row; otherwise the run's tool-use count. */
+  tools: number | null;
+  items: StreamItem[];
+}
+
+export function groupStreamItems(items: readonly StreamItem[]): StreamGroup[] {
+  const out: StreamGroup[] = [];
+  for (const item of items) {
+    if (item.lane !== "tool") {
+      out.push({ key: item.key, tools: null, items: [item] });
+      continue;
+    }
+    const last = out[out.length - 1];
+    if (last && last.tools !== null) {
+      last.items.push(item);
+      last.tools = toolUses(last.items);
+      continue;
+    }
+    out.push({ key: item.key, tools: toolUses([item]), items: [item] });
+  }
+  return out;
+}
+
+function toolUses(items: readonly StreamItem[]): number {
+  const named = items.filter((item) => !!item.tool).length;
+  return named || items.length;
 }
 
 /** `mcp__dopl__dopl_channel` → `dopl_channel`. ⚠ The segment after the LAST `__`,

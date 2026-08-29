@@ -58,7 +58,7 @@
  * elevation but cannot keep a 14px radius against the page edge.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bot, CornerDownRight, X } from "lucide-react";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
@@ -68,9 +68,10 @@ import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 import { IconButton } from "./bits";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
-  agentDisplayId,
-  agentLiveness,
+  NO_THREAD_LABEL,
+  agentDisplayName,
   agentKey,
+  agentLiveness,
   agentRunningModel,
   parseAgentPostStamp,
 } from "./agents-model";
@@ -79,6 +80,7 @@ import { agentModelShortLabel } from "../../lib/agent-models";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
+import { viewerPerson } from "./view-model";
 // ⚠ THE CONTROL STRIP IS ITS OWN FILE since 2026-08-22 (`agent-panel-controls.tsx`),
 // split at the 500-line cap when the composer landed — and on the COMMANDS seam,
 // not an arbitrary cut: it changes when the bridge does, this file when the layout
@@ -204,6 +206,13 @@ export function ChannelsV2AgentPanel({
     agent?.taskId ?? "",
     agent?.agentId
   );
+  // ⚠ THE VIEWER'S FACE, off the transcript this panel is already handed — no
+  // roster prop threaded through two hosts and no second read (`view-model.ts ›
+  // viewerPerson` carries why the transcript is the source).
+  const viewer = useMemo(
+    () => viewerPerson(messages, currentUserId),
+    [messages, currentUserId]
+  );
 
   return (
     <aside
@@ -215,7 +224,25 @@ export function ChannelsV2AgentPanel({
         // panel is absolutely positioned against the SAME right edge as the
         // info column, so a mismatch makes the divider jump sideways the moment
         // an agent view opens. **Change one and change the other.**
-        "bento absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col rounded-none border-y-0 border-r-0",
+        // ⚠ NOT `.bento` ANY MORE (Samuel, 2026-08-27). That recipe is a floating CARD — its own
+        // fill, hairline and drop shadow — and this pane is not a card ON the chat area, it is a
+        // COLUMN OF IT. The shadow and the pale hairline were what made it read as a lighter
+        // surface sitting on top. It takes the SAME fill the surface behind it has
+        // (`.page-float` → `--panel-surface`, `channels-v2-core.tsx`), stated explicitly so the
+        // two cannot drift if either recipe moves.
+        "absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col bg-[var(--panel-surface)]",
+        // ⚠ THE DIVIDER IS `border-l border-border-default` — THE SAME CLASS THIS PANE'S OTHER
+        // LINES ALREADY CARRY, and that is the whole point. Its header rule is
+        // `border-b border-border-default`; on /home BOTH are recoloured to the account palette's
+        // `--home-panel-line` by `pages/home/home.module.css › .frame :global(.border-border-
+        // default)`, which is the blue Samuel is pointing at. **The colour is not chosen here** —
+        // it is whatever that scoped rule says, so the divider and the pane's own lines cannot
+        // differ. An earlier attempt hardcoded `border-link`, a DIFFERENT blue, and in doing so
+        // dropped the class the /home rule keys on.
+        // ⚠ 2px COMES FROM THE SAME MODULE, not from a number here: `.frame :global(.border-l
+        // .border-border-default)` widens exactly this shape. On the workspace channels page it
+        // stays a neutral hairline, which is that page's own idiom.
+        "border-l border-border-default",
         "transition-transform duration-200 ease-out motion-reduce:transition-none",
         open ? "translate-x-0" : "pointer-events-none translate-x-full"
       )}
@@ -223,11 +250,15 @@ export function ChannelsV2AgentPanel({
       {agent && (
         <>
           <AgentPanelHeader agent={agent} onClose={onClose} />
-          <AgentStats agent={agent} />
+          {/* ⚠ ONE BOX, NOT TWO (Samuel, 2026-08-27). The context meter had a strip of its own
+              directly above the pause/end/open row — two stacked bands of chrome saying things
+              about the same agent, which ate the height the STREAM wants. The stats now render
+              inside the controls box, under its buttons. */}
           <AgentControls
             agent={agent}
             workspaceSlug={workspaceSlug}
             onRefreshSessions={onRefreshSessions}
+            stats={<AgentStats agent={agent} />}
           />
           {/* ⚠ THE FULL STREAM, NOT A SENT-LANE (Samuel, 2026-08-22). The panel
               showed only what the agent had POSTED, which is the one lane that
@@ -257,6 +288,10 @@ export function ChannelsV2AgentPanel({
             onPost={onPostPending}
             postBusy={postBusy}
             threadTitle={agent.threadTitle}
+            // ⚠ THE VIEWER'S FACE for their own turns, resolved off the SAME
+            // transcript the Sent lane reads (`view-model.ts › viewerPerson`) —
+            // no roster prop to thread through two hosts, and no second read.
+            viewer={viewer}
             className="px-3.5"
           />
           {/* ⚠ THE 1:1 LANE IS HERE NOW (Samuel, 2026-08-22), not only in the
@@ -270,7 +305,7 @@ export function ChannelsV2AgentPanel({
             channelId={agent.channelId}
             taskId={agent.taskId}
             agentId={agent.agentId}
-            name={agentDisplayId(agent)}
+            name={agentDisplayName(agent)}
             ended={agent.state === "ended"}
             className="px-3.5"
           />
@@ -292,12 +327,12 @@ function AgentPanelHeader({
       <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-semibold text-text-primary">
-          {agentDisplayId(agent)}
+          {agentDisplayName(agent)}
         </span>
         <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
           <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
           <span className="truncate">
-            in {agent.threadTitle ?? "no thread title"}
+            in {agent.threadTitle ?? NO_THREAD_LABEL}
           </span>
         {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
             (2026-08-22). It rides the detail line that already exists rather than
@@ -325,9 +360,16 @@ function AgentPanelHeader({
 }
 
 /**
- * The compact restatement of the card's numbers, on the kit's header-strip face
- * (`bg-card-surface-subtle`). ⚠ Absences render AS absences: no denominator, no
- * meter; no stamp, no clause. Never a zero standing in for "not measured".
+ * The compact restatement of the card's numbers.
+ *
+ * ⚠ Absences render AS absences: no denominator, no stamp, no clause. Never a zero standing in
+ * for "not measured".
+ * ⚠ THIS SAID "no denominator, NO METER", ON THE HEADER-STRIP FACE (`bg-card-surface-subtle`),
+ * AND BOTH CLAUSES WERE STALE BY 2026-08-28. The strip face is not applied here any more, and
+ * the 2026-08-27 ruling renders the BAR unconditionally at 0 so a spawn-idle agent gets a box
+ * rather than nothing. The DENOMINATOR half is the live rule, and it is
+ * `shared/ui/usage-meter.tsx` that keeps it — a reported `contextUsed` with no `contextWindow`
+ * prints the number alone, never `84k / 0k`.
  */
 function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
   const used = metric(agent.contextUsed);
@@ -344,22 +386,27 @@ function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
   ].filter(Boolean);
 
   return (
-    <div className="shrink-0 border-b border-border-subtle bg-card-surface-subtle px-3.5 py-2.5">
-      {used !== null && window !== null ? (
-        <UsageMeter
-          label="Context tokens"
-          used={used}
-          limit={window}
-          tone="ramp"
-          formatValue={formatTokens}
-        />
-      ) : (
-        <p className="text-caption text-text-muted">
-          Context use is not measured yet.
-        </p>
-      )}
+    <div className="flex flex-col gap-1.5">
+      {/* ⚠ THE BAR AT ZERO, ALWAYS — THERE IS NO "not measured" LINE ANY MORE (Samuel,
+          2026-08-27, on the rendered pane).
+          ⚠ THE FIRST ATTEMPT KEPT A `window === null` ARM, and that arm is the one this surface
+          actually hits: a spawn-idle agent has sent nothing, so main has reported no
+          `contextWindow` yet and the box read "Context use is not measured yet." — a dead line
+          where the operator wanted the object they watch fill. A fresh agent's usage is a
+          MEASURED zero, and zero is what a bar is for.
+          ⚠ `UsageMeter` OWNS THE NO-DENOMINATOR CASE and always did: "Zero/negative limit: empty
+          track rather than dividing by it" (`shared/ui/usage-meter.tsx`), so `limit={0}` draws the
+          empty track rather than a division. Nothing is invented here — the arithmetic guard is
+          the meter's own, which is why this can be one unconditional call. */}
+      <UsageMeter
+        label="Context tokens"
+        used={used ?? 0}
+        limit={window ?? 0}
+        tone="ramp"
+        formatValue={formatTokens}
+      />
       {line.length > 0 && (
-        <p className="mt-1.5 text-caption text-text-muted">{line.join(" · ")}</p>
+        <p className="text-caption text-text-muted">{line.join(" · ")}</p>
       )}
     </div>
   );

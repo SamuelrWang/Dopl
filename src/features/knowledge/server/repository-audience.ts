@@ -53,15 +53,23 @@ export async function findWorkspaceKind(
  * only thing separating "today's behaviour" from a narrowed audience.
  *
  * ⚠ `status='active'` IS THE FILTER, matching every other member count in the
- * system (`assertMemberAddable`'s cap, `enforce_link_container_member_cap`).
- * An invited-but-unaccepted row is not a peer in the room, and counting one
- * would narrow a solo operator's own agent for a person who never arrived.
+ * system (`assertMemberAddable`'s workspace cap). An invited-but-unaccepted row
+ * is not a peer in the room, and counting one would narrow a solo operator's own
+ * agent for a person who never arrived.
+ *
+ * ⚠ **THE ONLY THRESHOLD READ OFF THIS NUMBER IS SOLO-vs-NOT** (`<= 1` in
+ * `service-audience.ts`), and it must stay that way. A CONTAINER HAS NO MEMBER
+ * CAP since 2026-08-26 (`20260830120000_link_container_multi_member.sql` dropped
+ * `enforce_link_container_member_cap`; INVARIANTS §4A: "do not re-derive a cap
+ * from a roster length in any layer"), so this count is unbounded above and a
+ * second comparison against any fixed number would be inventing a limit the
+ * server does not have.
  *
  * ⚠ `head: true` + `count: "exact"` — the rows are never needed, only the
- * number, and a container is capped at two members so there is nothing to
- * paginate. A `null` count (PostgREST answering without one) is returned as `0`
- * by the caller's own fail-closed reading, NOT here: this function reports what
- * the database said and lets the service decide what silence means.
+ * number, so an unbounded roster costs nothing to count. A `null` count
+ * (PostgREST answering without one) is returned as `0` by the caller's own
+ * fail-closed reading, NOT here: this function reports what the database said
+ * and lets the service decide what silence means.
  */
 export async function countActiveWorkspaceMembers(
   db: SupabaseClient,

@@ -120,9 +120,13 @@ export async function createHomeChannel(
  * The order is the correctness argument:
  *  1. `findMemberContainer` is the FENCE. A non-member — or a standard
  *     workspace — reads as absent, so this 404s and never 403s (no oracle).
- *  2. FULL is judged BEFORE anything is inserted. A container with two active
- *     members has no seat to invite into, and minting a link that is guaranteed
- *     to be refused at claim time is worse than refusing here.
+ *  2. The MINT FLOOR and GRANT-ABOVE-SELF are judged BEFORE anything is
+ *     inserted — see below. ⚠ **THERE IS NO CAPACITY GATE ANY MORE
+ *     (2026-08-26, Samuel's ruling).** A container held two members and this
+ *     step 409'd `LINK_CONTAINER_FULL` past that; a home channel may now hold as
+ *     many people as it is given, so there is no number left to compare against
+ *     and nothing here to refuse. The gates that remain are about WHO is asking,
+ *     not HOW MANY are already in.
  *  3. An OPEN link is RETURNED, not replaced — the `getOrCreateJoinLink`
  *     precedent. Pressing "Add person" twice must hand back one URL; rotating
  *     silently would kill a link already pasted into an email. ⚠ BUT "open"
@@ -160,8 +164,11 @@ export async function createHomeChannel(
  *     is what makes that CONVERGE: a 23505 means somebody else's mint won, so
  *     re-read and return theirs.
  *
- * `maxUses: 1` always. A bound link fills the container's one free seat, so a
- * second use has nowhere to go — single-use is the shape, not a default.
+ * `maxUses: 1` always, and the cap's retirement did NOT loosen it. ONE TOKEN
+ * ADMITS ONE NAMED PERSON: adding a second, third and fourth member is a fresh
+ * mint each time, so an operator who pastes a link into the wrong window has let
+ * in one stranger rather than opened the room. Single-use is the shape, not a
+ * default, and it is now the ONLY thing bounding how a container grows.
  *
  * ⚠ GRANT-ABOVE-SELF (2026-08-25, M2): the link carries `input.grantedRole` (the
  * role the claimer lands at, default `guest`) and a minter cannot hand out a role
@@ -192,14 +199,15 @@ export async function mintContainerLink(
   // active membership of this link container; read the minter's ROLE in it (the
   // fence returns the container, not the role) and refuse a grant above it.
   const minter = await findMembership(workspaceId, userId);
-  // 🔒 A GUEST MAY NOT MINT, AND THIS FLOOR IS NOT IMPLIED BY THE GUARD BELOW
-  // (2026-08-26). `meetsMinRole("guest","guest")` is TRUE, so a guest passed
-  // grant-above-self and only the two-member cap stood in the way — and
-  // DEPARTURE-IS-REMOVAL is a standing ruling (§4A), so a container that drops
-  // back to ONE member leaves a surviving GUEST able to invite a third party
-  // into the operator's transcript. "Any MEMBER of a container may mint it"
-  // (Samuel, 2026-08-24) was written when `member` was the floor role; a guest
-  // is a person somebody else let in, not a party to the relationship.
+  // 🔒 A GUEST MAY NOT MINT, AND SINCE THE CAP CAME OFF IT IS THE ONLY THING
+  // STANDING HERE (2026-08-26). `meetsMinRole("guest","guest")` is TRUE, so a
+  // guest passes grant-above-self; the two-member cap used to refuse them
+  // anyway whenever the container was full, and that accident is gone. ⚠ **THE
+  // FLOOR NOW CARRIES THE WHOLE CASE ON ITS OWN**: without it a guest — a person
+  // somebody else let in — could hand strangers links into the operator's
+  // transcript, one after another, with nothing counting. "Any MEMBER of a
+  // container may mint it" (Samuel, 2026-08-24) was written when `member` was
+  // the floor role, and that is the reading that survives.
   if (!minter || !meetsMinRole(minter.role, "member")) {
     throw new HttpError(
       403,
@@ -212,14 +220,6 @@ export async function mintContainerLink(
       403,
       "GRANT_ABOVE_SELF",
       "You cannot grant a role above your own"
-    );
-  }
-
-  if ((await repo.countActiveContainerMembers(workspaceId)) >= 2) {
-    throw new HttpError(
-      409,
-      "LINK_CONTAINER_FULL",
-      "This channel already has somebody in it"
     );
   }
 

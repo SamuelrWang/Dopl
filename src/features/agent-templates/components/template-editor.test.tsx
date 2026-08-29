@@ -13,7 +13,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { AgentTemplate } from "../client/types";
@@ -81,6 +81,21 @@ async function open(over: Partial<React.ComponentProps<typeof TemplateEditor>> =
 const field = (selector: string) =>
   document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
 
+/**
+ * ⚠ SCOPED BY DIALOG NAME, ALWAYS. Adding a field opens a SECOND
+ * `StandardDialog` over the editor (2026-08-27), so from that moment "Cancel"
+ * is two buttons and `getByRole` on the bare name throws. Every add-field
+ * interaction goes through this helper, or through
+ * `within(screen.getByRole("dialog", { name: "Add field" }))`.
+ */
+async function addField(key: string, value: string) {
+  fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+  const dialog = await screen.findByRole("dialog", { name: "Add field" });
+  fireEvent.change(field("#add-field-key"), { target: { value: key } });
+  fireEvent.change(field("#add-field-value"), { target: { value } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+}
+
 afterEach(cleanup);
 
 describe("what the editor renders", () => {
@@ -128,13 +143,18 @@ describe("the visibility scopes the mount offers", () => {
     expect(tabs).toEqual(["Private", "Team", "Public"]);
   });
 
-  it("is TWO inside a link container, and neither is called Public", async () => {
+  it("🔒 is ONE inside a link container, and it is not called Public", async () => {
     // ⚠ A container has no teams (INVARIANTS §4A), so `team` there is a scope
     // that can never resolve to anybody — and `workspace` means "the other
-    // person in this relationship", not "everyone in your company".
+    // people in this relationship", not "everyone in your company".
+    // 🔒 ⚠ IT WAS **TWO** UNTIL 2026-08-27. `private` went with the /home pane's
+    // per-channel private section: a container is not navigable, so a private
+    // container template is now reachable from no surface at all — offering the
+    // option would create write-only rows. The array IS the control, so the
+    // array is where that door closes (`lib/visibility.ts`).
     await open({ sections: SECTIONS_CONTAINER });
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Shared in this channel", "Private"]);
+    expect(tabs).toEqual(["Shared in this channel"]);
   });
 
   it("takes its LABELS from `lib/visibility.ts`, never from a literal here", async () => {
@@ -203,13 +223,7 @@ describe("the save payload", () => {
     fireEvent.change(field("#agent-template-instructions"), {
       target: { value: "Search first." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-    fireEvent.change(field('input[aria-label="Field 1 key"]'), {
-      target: { value: "repo" },
-    });
-    fireEvent.change(field('input[aria-label="Field 1 value"]'), {
-      target: { value: "dopl" },
-    });
+    await addField("repo", "dopl");
     fireEvent.click(screen.getByRole("button", { name: "Attach" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Specs" }));
     fireEvent.click(screen.getByRole("button", { name: "Create template" }));
@@ -224,13 +238,30 @@ describe("the save payload", () => {
     });
   });
 
-  it("drops a field row the operator added and abandoned", async () => {
+  it("adds nothing when the Add-field dialog is abandoned", async () => {
+    // ⚠ THE OLD SHAPE OF THIS TEST ("drops a field ROW the operator added and
+    // abandoned") described the inline `+` that appended a blank pair. Adding
+    // is a dialog since 2026-08-27, so an abandoned add leaves no row at all —
+    // the `cleanFields` backstop it used to exercise stays pinned in
+    // `../lib/template-draft.test.ts`, where it does not depend on the chrome.
     const { onSave } = await open();
     fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
     fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add field" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     fireEvent.click(screen.getByRole("button", { name: "Create template" }));
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
     expect(draftToCreateBody(draft).fields).toBeUndefined();
+  });
+
+  it("refuses a pair with no key — the value alone would vanish at save", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add field" });
+    const add = () => within(dialog).getByRole("button", { name: "Add" }) as HTMLButtonElement;
+    expect(add().disabled).toBe(true);
+    fireEvent.change(field("#add-field-key"), { target: { value: "repo" } });
+    expect(add().disabled).toBe(false);
   });
 });
 
@@ -287,8 +318,18 @@ describe("no concave surfaces", () => {
    * graph, no alias and no second config. **A mirrored sweep in the SPA suite
    * was the alternative and is worse** — two lists of forbidden recipes drift,
    * and the one that matters is whichever the author did not open.
+   *
+   * ⚠ **THE SWEEP IS /home's NOW, NOT JUST THE AGENTS FACE'S (2026-08-27).**
+   * `knowledge-panels.tsx` joined it the day Samuel ruled the Knowledge
+   * sections flat: they were `SectionBox` — a header strip over a CONCAVE inset
+   * body — and are `shared/ui/section-panel.tsx › SectionPanel` on the page's
+   * flat panel gray since. That is the same "nothing here is pressed in" rule
+   * arriving on the second tab, so it is pinned the same way. **This list only
+   * grows**, and it grows toward MORE flatness: a /home file that renders a
+   * surface belongs in it.
    */
   const HOME_FILES = [
+    "knowledge-panels.tsx",
     "agent-panels.tsx",
     "agent-panel-cards.tsx",
     "agent-editor.tsx",
@@ -323,8 +364,44 @@ describe("no concave surfaces", () => {
     }
   });
 
+  /**
+   * ⚠ THE RECIPE MOVED, THE RULE DID NOT (2026-08-27). `RAISED_INPUT` was
+   * promoted out of `template-editor-rows.tsx` into `shared/ui/wells.ts` when
+   * the four /home dialogs standardised onto this page's face, so the assertion
+   * follows it: the SHARED recipe must still be built from `RAISED_WELL`, and
+   * this page's rows must still be wearing that recipe rather than a fork.
+   */
   it("uses the kit's RAISED well for its inputs", () => {
+    const wells = readFileSync(
+      path.join(process.cwd(), "src", "shared", "ui", "wells.ts"),
+      "utf8"
+    );
+    expect(wells).toContain("export const RAISED_INPUT = `${RAISED_WELL}");
     const rows = readFileSync(path.join(ROOT, "components", "template-editor-rows.tsx"), "utf8");
-    expect(rows).toContain("RAISED_WELL");
+    expect(rows).toContain("RAISED_INPUT");
+  });
+
+  /**
+   * ⚠ THE SAME RULE, ARRIVING ON THE BUTTONS (Samuel, 2026-08-28). The dialog's
+   * in-body controls — Add field, a row's Remove, the chip picker's
+   * Attach/Add-team — hand-wrote THREE different heights and radii for one
+   * class of control; they wear `shared/ui/open-scale-button.tsx`, the KB card
+   * Open scale that /home's section buttons already carry. Source read for the
+   * same reason as the sweep above: the pill is CSS, and jsdom loads none.
+   *
+   * ⚠ **WHAT THIS DELIBERATELY DOES NOT PIN** is the FOOTER. `DIALOG_BTN_*` is
+   * the `StandardDialog` contract for both this dialog's pair and the Add-field
+   * card's, and Delete is ink with no face at all by an older ruling of
+   * Samuel's — a pill in either place would be this dialog closing differently
+   * from every other one in the tree.
+   */
+  it("wears the kit's 26px pill on the buttons inside its body", () => {
+    const rows = readFileSync(path.join(ROOT, "components", "template-editor-rows.tsx"), "utf8");
+    expect(rows).toContain("OpenScaleButton");
+    expect(rows).toContain("OpenScaleIconButton");
+    // A hand-written pill FACE is what the ruling replaced, and the kit's
+    // module is the only place that declaration lives now. The static CHIP
+    // keeps its own rounded badge — it is not a button and never was.
+    expect(rows).not.toContain("btn-light");
   });
 });

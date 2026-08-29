@@ -148,15 +148,25 @@ describe("the two parties", () => {
 });
 
 describe("the agents on this thread", () => {
-  it("lists SEVERAL of my own agents on one thread, each by its own id", () => {
+  it("lists SEVERAL of my own agents on one thread, each by its own NAME", () => {
+    // ⚠ `Agent #<id>`, NOT the bare id (Samuel, 2026-08-27 — INVARIANTS §11, the raw agent id is
+    // never user-visible). This case asserted the eight-character token on its own, which is
+    // exactly what the rows were rendering and exactly what the ruling forbade; the rows resolve
+    // `agents-model.ts › agentDisplayName` now. The id is still what makes the two rows distinct
+    // — that is the multiplayer property this case exists for — it is just no longer the string
+    // a person reads.
     renderTab({
       agentSessions: [
         summary({ sessionId: "s-1", agentId: "a1b2c3d4" }),
         summary({ sessionId: "s-2", agentId: "e5f6g7h8" }),
       ],
     });
-    expect(screen.getByText("a1b2c3d4")).toBeTruthy();
-    expect(screen.getByText("e5f6g7h8")).toBeTruthy();
+    expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy();
+    expect(screen.getByText("Agent #e5f6g7h8")).toBeTruthy();
+    // ⚠ AND THE BARE TOKEN IS NOWHERE — a row that rendered both would satisfy the two lines
+    // above while still leaking the id.
+    expect(screen.queryByText("a1b2c3d4")).toBeNull();
+    expect(screen.queryByText("e5f6g7h8")).toBeNull();
   });
 
   it("narrows to THIS thread — an agent on another one is not here", () => {

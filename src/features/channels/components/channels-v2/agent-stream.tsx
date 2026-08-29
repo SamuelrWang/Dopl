@@ -10,14 +10,23 @@
  * set of facts, and the panel's job — a GLANCE at what this agent is up to — is
  * the window's content at another width, not a different question.
  *
- * ⚠ FOUR LANES, THREE FACES, AND THE DISTINCTION IS THE POINT.
+ * ⚠ FOUR LANES, FOUR FACES, AND THE DISTINCTION IS THE POINT.
  *   - **`sent` wears the BOX** (`SentToChannelBox`) — it is the only thing here
  *     the counterparty can see.
- *   - **`operator` / `private` are PLAIN**, indented as a 1:1 exchange. Private
- *     traffic that looked like a channel post would let an operator believe their
- *     steer was read by the other party.
- *   - **`thinking` / `tool` / `note` are quiet log lines**, truncated and
- *     expandable, because they are the bulk and almost never the answer.
+ *   - **`operator` IS THE VIEWER'S OWN TURN**: right-aligned, with their avatar
+ *     and no name (Samuel, 2026-08-27). Side is the signal; the label column went.
+ *   - **`private` is the AGENT's answer**: left, plain, and carrying NOTHING but
+ *     the text (2026-08-27 — the quote bar and the "Agent" marker went with the
+ *     "You" label; the sides are told apart by ALIGNMENT now). Private traffic
+ *     that looked like a channel post would let an operator believe their steer
+ *     was read by the other party.
+ *   - **`thinking` / `tool` / `note` are quiet log lines** — `agent-stream-log.tsx`,
+ *     where a RUN of consecutive tool activity collapses into one muted "Used N
+ *     tools" row. They are the bulk and almost never the answer.
+ *
+ * ⚠ THE LOG LANE IS ITS OWN FILE (§1, 2026-08-27). This one owns which lane a row
+ * is in and the two loud faces; `agent-stream-log.tsx` owns the bulk and how much
+ * of it is showing. Both are one reason to change each.
  *
  * ⚠ EVERY FRAME RENDERS, INCLUDING ONE THIS BUILD HAS NEVER HEARD OF.
  * `agent-stream-model.ts › frameLane` falls back to `note` and keeps the text —
@@ -26,16 +35,18 @@
  * plainly. The operator is reading this to find out what happened.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 import type { AgentNarrationEntry } from "./use-agent-narration";
 import { TAB_ACTION } from "./bits";
+import { LogLine, ToolRunGroup } from "./agent-stream-log";
 import {
   buildAgentStream,
-  shortToolName,
-  type StreamItem,
+  groupStreamItems,
+  type StreamGroup,
 } from "./agent-stream-model";
 
 /**
@@ -55,14 +66,20 @@ export const POST_ACTION_LABEL = "Post";
  *  operator's machine that it cannot know (INVARIANTS §11). */
 export const NARRATION_UNSUPPORTED =
   "This build cannot show what your agent is doing.";
-export const NARRATION_EMPTY = "Nothing yet. What it does will appear here.";
-
-/** How much of a log line shows before the operator asks for more, and the
- *  ceiling on what asking gets them. ⚠ BOTH BOUNDED: a tool result can be a
- *  megabyte of JSON, and an "expand" that pastes all of it into a 380px column
- *  destroys the very stream it was meant to explain. */
-const COLLAPSED_CHARS = 140;
-const EXPANDED_CHARS = 2000;
+/**
+ * THE EMPTY STATE, AS ONE BLOCK (Samuel, 2026-08-27).
+ *
+ * ⚠ IT WAS TWO NODES IN TWO STYLES and that is what this replaces: a muted "Send a message to
+ * wake agent." over a body-size black "Chat with <agent> directly. Only your agent sees this."
+ * Two sentences about one situation, in two type sizes, reading as two unrelated announcements.
+ * ONE string, ONE node, ONE style.
+ *
+ * ⚠ AND NO NAME SUBSTITUTION. It said "Chat with Agent #k3v7d2mq directly" — an id quoted at the
+ * operator before anything exists to address, which is noise where the sentence's job is to say
+ * what the lane IS. "your agent" is the whole subject.
+ */
+export const NARRATION_EMPTY =
+  "Chat with your agent privately. Send a message to wake it up.";
 
 export function AgentStream({
   entries,
@@ -73,6 +90,7 @@ export function AgentStream({
   onPost,
   postBusy = false,
   threadTitle,
+  viewer,
   className,
 }: {
   /** `null` = could not ask; `[]` = asked, nothing yet. ⚠ Never collapsed here. */
@@ -102,6 +120,17 @@ export function AgentStream({
   /** A decision is in flight — the double-submit guard, not a capability. */
   postBusy?: boolean;
   threadTitle?: string | null;
+  /**
+   * THE VIEWER'S OWN FACE, for the turns they typed (Samuel, 2026-08-27).
+   * `view-model.ts › viewerPerson` resolves it off the transcript the host is
+   * already reading — no roster, no second fetch.
+   *
+   * ⚠ ABSENT IS A REAL ANSWER AND RENDERS AS NO AVATAR, never as a placeholder
+   * face: a viewer who has not posted in this channel has no hydrated row, and
+   * inventing an identity is the one thing worse than showing none. The row is
+   * still right-aligned, which is what says whose turn it is.
+   */
+  viewer?: AvatarPerson | null;
   className?: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -149,10 +178,15 @@ export function AgentStream({
         </p>
       ) : (
         <ol className="flex flex-col gap-2.5">
-          {items.map((item) => (
+          {/* ⚠ GROUPED, NOT FILTERED (Samuel, 2026-08-27) — a run of consecutive
+              tool activity is ONE muted summary row that opens onto exactly the
+              rows that were here before (`agent-stream-log.tsx`). Every other
+              lane passes through as a group of one, so nothing else moves. */}
+          {groupStreamItems(items).map((group) => (
             <StreamRow
-              key={item.key}
-              item={item}
+              key={group.key}
+              group={group}
+              viewer={viewer}
               onPost={onPost}
               postBusy={postBusy}
             />
@@ -171,14 +205,20 @@ export function AgentStream({
 }
 
 function StreamRow({
-  item,
+  group,
+  viewer,
   onPost,
   postBusy,
 }: {
-  item: StreamItem;
+  group: StreamGroup;
+  viewer?: AvatarPerson | null;
   onPost?: (requestId: string) => void;
   postBusy?: boolean;
 }) {
+  // A tool RUN is the one group with more than one row in it, and it renders as
+  // the collapsed summary. Every other lane is a group of one.
+  if (group.tools !== null) return <ToolRunGroup group={group} />;
+  const item = group.items[0];
   if (item.lane === "sent") {
     return (
       <li>
@@ -195,10 +235,17 @@ function StreamRow({
       </li>
     );
   }
-  if (item.lane === "operator" || item.lane === "private") {
+  if (item.lane === "operator") {
     return (
       <li>
-        <PrivateLine text={item.text} fromOperator={item.lane === "operator"} />
+        <OperatorTurn text={item.text} viewer={viewer} />
+      </li>
+    );
+  }
+  if (item.lane === "private") {
+    return (
+      <li>
+        <AgentTurn text={item.text} />
       </li>
     );
   }
@@ -343,115 +390,67 @@ export function SentToChannelBox({
 }
 
 /**
- * THE PRIVATE 1:1 EXCHANGE — plain, and plain IS the design.
+ * THE OPERATOR'S OWN TURN — right-aligned, with their face and no name (Samuel,
+ * live review 2026-08-27).
  *
- * ⚠ IT MUST NOT LOOK LIKE THE BOX ABOVE. Nothing in this lane reached the
- * counterparty: the operator's steer and the agent's answer to it are out of band
- * by construction (`main/session-seed.js › frameOperatorTurn` tells the agent as
- * much). A private line wearing the sent box's banner would let an operator
- * believe the other party read something they never saw — which is the one thing
- * on this surface that is worse than showing nothing.
+ * ⚠ WHAT IT REPLACES: a left row with a blue "You" in the label column, mirroring
+ * the agent's. It read as a log entry ABOUT the operator rather than as something
+ * they had said. Side is the whole signal now — the side every chat surface in
+ * this product already uses for "mine" — so the label column goes.
  *
- * The side marker is a word, not a colour: "You" / "Agent". Colour alone does not
- * survive a screenshot, a colourblind reader, or a muted theme.
+ * ⚠ **NO NAME AND NO EMAIL, EVER.** The avatar is the identity; a name beside it
+ * is the viewer's own name quoted back at them on every line they type.
+ * `Avatar` at `xs` is the compact scale (24px) — the stream is 380px wide in the
+ * panel, and a `sm` face would be a third of the column.
+ *
+ * ⚠ IT STILL MUST NOT LOOK LIKE {@link SentToChannelBox}. Nothing in this lane
+ * reached the counterparty: the operator's steer is out of band by construction
+ * (`main/session-seed.js › frameOperatorTurn` tells the agent as much). A soft
+ * inset block on the right is as far from the dark-bannered delivery record as
+ * this column gets, which is the point of the two faces being different at all.
  */
-function PrivateLine({
+function OperatorTurn({
   text,
-  fromOperator,
+  viewer,
 }: {
   text: string;
-  fromOperator: boolean;
+  viewer?: AvatarPerson | null;
 }) {
   return (
-    <div className="flex min-w-0 gap-2 border-l-2 border-border-subtle pl-2.5">
-      <span
-        className={cn(
-          "shrink-0 text-caption font-medium",
-          fromOperator ? "text-link" : "text-text-secondary"
-        )}
-      >
-        {fromOperator ? "You" : "Agent"}
-      </span>
-      <span className="wrap-anywhere min-w-0 flex-1 whitespace-pre-wrap text-caption text-text-primary">
+    <div className="flex min-w-0 items-start justify-end gap-2">
+      <span className="wrap-anywhere max-w-[80%] whitespace-pre-wrap rounded-[10px] bg-bg-inset px-2.5 py-1.5 text-caption text-text-primary">
         {text}
       </span>
+      {/* ⚠ ABSENT RATHER THAN A PLACEHOLDER when the host could not resolve the
+          viewer (`view-model.ts › viewerPerson`): the row is already right-aligned,
+          which is what says whose turn it is. */}
+      {viewer && <Avatar person={viewer} size="xs" />}
     </div>
   );
 }
 
 /**
- * ONE LINE OF WORK — the agent's own words, or a tool it ran.
+ * THE AGENT'S PRIVATE ANSWER — **message text, and nothing else** (Samuel, live
+ * review 2026-08-27, second pass).
  *
- * ⚠ TRUNCATED AND COLLAPSED BY DEFAULT (Samuel, 2026-08-22). This lane is the
- * BULK of the stream and almost never the answer: a full tool result pushes the
- * post the operator opened the panel to read off the screen. The first line is
- * enough to recognise, and the row expands when it is not.
+ * ⚠ THE QUOTE BAR AND THE "Agent" MARKER ARE BOTH GONE. They came from the old
+ * two-sided line, where "You" / "Agent" in a label column was how a reader told
+ * the sides apart. **The right-aligned operator row now carries that whole
+ * job**: one side is aligned right with a face on it, the other is plain text on
+ * the left, and a rule plus a noun on top of that is chrome restating what the
+ * layout already says — the same thing the `says` label was doing on the log
+ * lane. This is the agent's own words; they read as words.
  *
- * ⚠ THE EXPANSION IS BOUNDED TOO. A tool result can be a megabyte of JSON, and
- * "expand" pasting all of it into a 380px column destroys the stream it was meant
- * to explain. Past the ceiling the row SAYS it clipped rather than pretending
- * that was the whole thing (INVARIANTS §9 — a clipped read says so).
- *
- * The tool name is shortened HERE, at render, through the same helper the pill's
- * detail uses — main sends the raw name so one call is never named two different
- * ways on one screen.
+ * ⚠ IT STILL MUST NOT LOOK LIKE {@link SentToChannelBox}, and now it is as far
+ * from it as this column gets. This reply reached nobody but the operator; a
+ * private line wearing the sent box's dark banner would let them believe the
+ * other party read something they never saw — the one thing on this surface that
+ * is worse than showing nothing. **Plain text is the face that claims least.**
  */
-function LogLine({ item }: { item: StreamItem }) {
-  const [open, setOpen] = useState(false);
-  const text = item.text ?? "";
-  const label =
-    item.lane === "tool"
-      ? item.ok === false
-        ? "failed"
-        : shortToolName(item.tool)
-      : item.lane === "thinking"
-        ? "says"
-        : "";
-  const tone =
-    item.lane === "tool" && item.ok === false
-      ? "text-danger"
-      : item.lane === "note"
-        ? "text-text-muted"
-        : "text-text-secondary";
-
-  const long = text.length > COLLAPSED_CHARS;
-  const clipped = open && text.length > EXPANDED_CHARS;
-  const shown = open
-    ? text.slice(0, EXPANDED_CHARS)
-    : text.slice(0, COLLAPSED_CHARS);
-
+function AgentTurn({ text }: { text: string }) {
   return (
-    <li className="flex min-w-0 gap-2 text-caption">
-      {label && (
-        <span className="shrink-0 font-medium text-text-primary">{label}</span>
-      )}
-      <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-        <span
-          className={cn(
-            "wrap-anywhere min-w-0 whitespace-pre-wrap text-left",
-            tone,
-            !open && "line-clamp-2"
-          )}
-        >
-          {shown}
-          {!open && long && "…"}
-        </span>
-        {clipped && (
-          <span className="text-micro text-text-muted">
-            Clipped — open the agent&apos;s own log for the rest.
-          </span>
-        )}
-        {long && (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className="shrink-0 text-micro font-medium text-link"
-          >
-            {open ? "Show less" : "Show more"}
-          </button>
-        )}
-      </span>
-    </li>
+    <p className="wrap-anywhere min-w-0 whitespace-pre-wrap text-caption text-text-primary">
+      {text}
+    </p>
   );
 }
