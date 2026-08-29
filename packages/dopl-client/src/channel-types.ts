@@ -39,6 +39,17 @@ export type ChannelMessageKind =
   | "task_failed"
   | "system";
 
+import type {
+  ChannelInfoCard,
+} from "./info-card-types.js";
+
+export type {
+  ChannelInfoCard,
+  ChannelInfoCardBuiltInKey,
+  ChannelInfoCardRow,
+  ChannelUpdateInput,
+} from "./info-card-types.js";
+
 export interface Channel {
   id: string;
   workspaceId: string;
@@ -63,6 +74,12 @@ export interface Channel {
   memberCount?: number;
   /** Present on list/get only — ISO datetime of latest message, or null. */
   lastMessageAt?: string | null;
+  /**
+   * The curated Main-info card. ⚠ OPTIONAL here and NOT on the server — see
+   * {@link ChannelInfoCard}. A reader that dereferences it without a fallback
+   * throws on a row minted before the column existed.
+   */
+  infoCard?: ChannelInfoCard;
 }
 
 export interface ChannelMessage {

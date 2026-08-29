@@ -36,6 +36,7 @@ import { registerMapTool } from "./map";
 import { registerSearchTool } from "./search";
 import { registerOntologyTool } from "./ontology";
 import { registerChannelTool } from "./channel";
+import { registerAgentTools } from "./agent";
 
 const REGISTRARS: Array<{
   file: string;
@@ -49,6 +50,7 @@ const REGISTRARS: Array<{
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
   { file: "channel.ts", register: registerChannelTool },
+  { file: "agent.ts", register: registerAgentTools },
 ];
 
 interface Captured {
@@ -172,7 +174,11 @@ const LEDGER: FilteredOp[] = [
     tool: "dopl_kb",
     op: "list_bases",
     filter: "canSeeBase + filterTeamVisibleBases",
-    proof: "client.listKbBases()",
+    // ⚠ Moved TWICE on 2026-08-28: `client.listKbBases()` → `({` when the shelf
+    // arg landed, → `Payload({` when the shelf LABEL needed the sibling key. The
+    // call is what proves the filter is still upstream of the render; its
+    // argument list is not part of the claim.
+    proof: "client.listKbBasesPayload({",
     discloses: ["can READ", "private", "no grant on"],
   },
   {
@@ -223,6 +229,14 @@ const LEDGER: FilteredOp[] = [
     filter: "admins/owners get an empty override list by design",
     proof: "client.getMyAccess()",
     discloses: ["NO PER-RESOURCE ROWS"],
+  },
+  {
+    tool: "dopl_agent",
+    op: "list",
+    filter:
+      "canSeeTemplate server-side + the shelf column is not projected onto the row",
+    proof: "client.listAgentTemplatesPayload({",
+    discloses: ["you can SEE", "not the workspace's roster", "NO shelf label"],
   },
 ];
 

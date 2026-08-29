@@ -28,6 +28,7 @@ export const DELETE_BLOCKED_OPS: Record<string, Set<string>> = {
   dopl_skill_admin: new Set(["delete"]),
   dopl_chats_admin: new Set(["delete", "delete_folder"]),
   dopl_ontology_admin: new Set(["delete_object", "delete_cluster"]),
+  dopl_agent_admin: new Set(["delete"]),
   // ⚠ A tool with no registrar needs no row — `delete-block.test.ts` pins this
   // map against the live registrar list, so a stale row fails.
 };

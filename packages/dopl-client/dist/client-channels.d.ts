@@ -7,7 +7,7 @@
  * watches a channel without busy-looping.
  */
 import { MemberMethods } from "./client-members.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
 import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 export declare class ChannelMethods extends MemberMethods {
     listChannels(opts?: {
@@ -15,6 +15,9 @@ export declare class ChannelMethods extends MemberMethods {
     }): Promise<Channel[]>;
     getChannel(channelId: string): Promise<Channel>;
     createChannel(input: ChannelCreateInput): Promise<Channel>;
+    /** ⚠ `infoCard` ONLY — see `channel.ts › updateChannel` for why the other
+     *  four fields of that PATCH are deliberately unbound. */
+    updateChannel(channelId: string, patch: ChannelUpdateInput): Promise<Channel>;
     listChannelMembers(channelId: string): Promise<ChannelMember[]>;
     inviteToChannel(channelId: string, userId: string): Promise<ChannelMember>;
     readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;

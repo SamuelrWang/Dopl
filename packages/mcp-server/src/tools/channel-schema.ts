@@ -60,6 +60,12 @@ export const CHANNEL_INPUT_SHAPE = {
       // reasons. `channel` required; the hold is bounded and a timeout is a
       // PENDING directive, not a failure.
       "launch_agent",
+      // ⚠ THE INFO CARD, AND ONLY THE INFO CARD (Samuel's ruling Q12 (b),
+      // 2026-08-28). The same route accepts name / topic / archived, and this op
+      // deliberately does not — see `channel-ops-update.ts`. Omitting
+      // `info_card` READS the current card and changes nothing, which the
+      // replace-whole contract requires.
+      "update",
     ])
     .describe("Operation to perform."),
   channel: z
@@ -266,6 +272,37 @@ export const CHANNEL_INPUT_SHAPE = {
     .optional()
     .describe(
       'op="launch_agent" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to look for the agent in read_sessions. Do not re-issue on a timeout, or you queue a second agent.',
+    ),
+  info_card: z
+    .object({
+      hidden: z
+        .array(z.string())
+        .max(3)
+        .optional()
+        .describe(
+          'Built-in rows to HIDE, by key: "email", "created", "lastActivity". Hiding a row changes what this CARD shows and nothing else — it does not clear anybody\'s email.',
+        ),
+      rows: z
+        .array(
+          z.object({
+            id: z
+              .string()
+              .max(64)
+              .optional()
+              .describe(
+                "Omit on a NEW row (one is minted for you); pass it to EDIT the row that already has it. Ids must be unique within a card.",
+              ),
+            label: z.string().min(1).max(40).describe("The left column — one short line."),
+            value: z.string().max(200).optional().describe("The right column. May be empty."),
+          }),
+        )
+        .max(12)
+        .optional()
+        .describe("The card's CUSTOM rows, at most 12."),
+    })
+    .optional()
+    .describe(
+      'op="update": the channel\'s whole info card. ⚠ REPLACES IT — a write that omits a row DELETES that row, and `info_card={}` clears the card. OMIT this argument entirely to READ the current card without changing it, which is how you get the rows to send back. Everyone in the channel sees this card.',
     ),
   limit: z.coerce
     .number()

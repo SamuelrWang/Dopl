@@ -54,6 +54,7 @@ import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread, opSetThreadMode } from "./channel-ops-threads";
 import { opLaunchAgent } from "./channel-ops-launch";
+import { opUpdate } from "./channel-ops-update";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
 /**
@@ -274,6 +275,15 @@ export function registerChannelTool(
             template: args.template,
             waitMs: args.wait_ms,
           });
+        }
+        // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
+        // the same route and are deliberately NOT routed here (Samuel's ruling
+        // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is
+        // the READ — the card is replaced whole, so a blind write clobbers.
+        case "update": {
+          const miss = missingParams("update", args, ["channel"]);
+          if (miss) return miss;
+          return opUpdate(client, args.channel as string, args.info_card);
         }
       }
     },

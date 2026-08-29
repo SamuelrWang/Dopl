@@ -47,34 +47,8 @@ const WORKSPACE_ARG_SHAPE = {
 function strictInput(shape) {
     return zod_1.z.strictObject(shape);
 }
-/**
- * THE BILLING SEAM FOR ONE TOOL CALL — charge, then run. ⚠ Must stay ONE helper
- * called at exactly the two terminal paths of `registerTool`'s wrapper; that is
- * what makes the per-tool-call charge exactly-once. A separate charge helper
- * means two call sites per path and a future path that remembers one of them.
- *
- * ⚠ ORDERING, non-negotiable: AFTER `gates.opRefusal` (delete refusal stays
- * first and unconditional — a refused delete costs zero round trips), AFTER
- * workspace resolution (credits are per-workspace), BEFORE the handler.
- *
- * ⚠ NOT in `withWorkspaceAuth` beside `logMcpToolCall` — that fires per
- * LOOPBACK request, and one tool call makes 0..N of them.
- */
-function createCreditedRunner(client) {
-    /**
-     * Spend one credit for `workspaceId`. Returns the refusal, or null to proceed.
-     *
-     * ⚠ FAIL OPEN on anything that is not an honest "out of credits" — refusing
-     * on a transient loopback blip bricks every agent and reads to the operator
-     * as "out of credits" for a workspace that is not.
-     *
-     * ⚠ ONLY `allowed === false` REFUSES, not "not truthy". A 200 missing
-     * `allowed` (proxy error page, shape change, partial response) leaves it
-     * undefined, and a truthiness test reads that as a refusal — fail-open for a
-     * THROWN error, silently inverted for a malformed answer, which is the more
-     * likely of the two. A body that does not say "no" is not a no.
-     */
-    async function charge(workspaceId) {
+function createCharger(client) {
+    return async function charge(workspaceId) {
         try {
             const outcome = await client.consumeCredits(workspaceId);
             return outcome?.allowed === false
@@ -85,7 +59,9 @@ function createCreditedRunner(client) {
             console.error(`[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${err instanceof Error ? err.message : String(err)}`);
             return null;
         }
-    }
+    };
+}
+function createCreditedRunner(charge) {
     /**
      * Charge one credit, then run the handler. Converts an entitlement denial (403
      * from any write op through @dopl/client) into a tool error; all other errors
@@ -108,7 +84,8 @@ function createCreditedRunner(client) {
 }
 function createToolRegistrars(deps) {
     const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, } = deps;
-    const runWithCredits = createCreditedRunner(client);
+    const chargeCredit = createCharger(client);
+    const runWithCredits = createCreditedRunner(chargeCredit);
     // Every domain tool funnels through here for two things:
     //   1. `workspace` arg auto-injected. Provided → runs inside a
     //      transport-level AsyncLocalStorage override so client.* requests carry
@@ -214,18 +191,64 @@ function createToolRegistrars(deps) {
     // `registerTool`'s wrapper by construction — hence the explicit gate calls
     // below. Never add a gate that only one path performs.
     //
-    // ⚠ MCP CREDITS ARE NOT CHARGED HERE, by DECISION: `current_workspace` /
-    // `list_workspaces` are how a lost agent finds out where it is, and are
-    // user-scoped, so a 0/2+-membership session has no workspace to charge. If
-    // ever metered, call the charge EXPLICITLY on both paths as `opRefusal` is —
-    // do not move it into the wrapper.
-    function registerMetaTool(name, description, schema, handler) {
+    // ⚠ MCP CREDITS ARE NOT CHARGED HERE BY DEFAULT, by DECISION:
+    // `current_workspace` / `list_workspaces` are how a lost agent finds out where
+    // it is, and are user-scoped, so a 0/2+-membership session has no workspace to
+    // charge.
+    //
+    // ⚠ **ONE TOOL OPTS IN, AND THE CALL IS EXPLICIT AND LOCAL** (Samuel's ruling
+    // Q2 (b), 2026-08-28). `dopl_home` reads content-adjacent data and WRITES, so
+    // it pays like a domain tool — but it cannot use the domain path, which injects
+    // a `workspace=` arg this tool exists to make answerable. The charge is
+    // therefore written HERE, by name, exactly as `opRefusal` is on both paths,
+    // rather than by routing this file's two registration helpers through one
+    // shared wrapper. A blanket charge on this path would meter the two
+    // orientation tools and delete the decision above.
+    function registerMetaTool(name, description, schema, handler, opts = {}) {
         if (gates.isSuppressedTool(name))
             return;
-        const gated = async (args) => gates.opRefusal(name, gates.requestedOp(args)) ?? handler(args);
+        const gated = async (args) => {
+            const refusal = gates.opRefusal(name, gates.requestedOp(args));
+            if (refusal)
+                return refusal;
+            if (!opts.charged)
+                return handler(args);
+            // ⚠ WHICH WORKSPACE PAYS, for a tool that targets none. The session
+            // default when there is one; otherwise the FIRST workspace this session
+            // may list. Under a container lock that list is `[container]`, and a
+            // container's burn reroutes server-side to the container owner
+            // (`billing/server/credits-service.ts › resolveBillingTarget`) — which is
+            // the F-325 guest-metering answer, reached here for free.
+            // ⚠ NO LISTABLE WORKSPACE ⇒ NO CHARGE, and that is FAIL-OPEN on purpose:
+            // this tool is user-scoped precisely so it works for a caller with no
+            // resolved workspace, and refusing them would break the one path the
+            // design exists to serve. Stated so the hole is a decision, not a gap.
+            const billTo = activeWorkspace?.id ?? (await firstListableWorkspaceId());
+            if (billTo) {
+                const denied = await chargeCredit(billTo);
+                if (denied)
+                    return denied;
+            }
+            return handler(args);
+        };
         server.registerTool(name, { description, inputSchema: strictInput(schema) }, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (0, status_footer_js_1.withDoplStatus)(gated, sessionEffective, caller));
     }
-    return { registerTool, registerMetaTool };
+    /**
+     * The first workspace this session may LIST, or null. ⚠ Reads
+     * `getWorkspaceList`, which is `lockedTo`-narrowed and container-filtered, so
+     * a locked session bills its container and an unlocked one bills a standard
+     * workspace it belongs to. Failures answer null — a metering target is not
+     * worth failing a call over.
+     */
+    async function firstListableWorkspaceId() {
+        try {
+            return (await directory.getWorkspaceList())[0]?.id ?? null;
+        }
+        catch {
+            return null;
+        }
+    }
+    return { registerTool, registerMetaTool, chargeCredit };
 }

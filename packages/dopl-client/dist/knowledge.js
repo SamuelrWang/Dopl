@@ -4,6 +4,7 @@
  * `DoplTransport`; the class-side method group is `client-knowledge.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.listKbBasesPayload = listKbBasesPayload;
 exports.listKbBases = listKbBases;
 exports.getKbBase = getKbBase;
 exports.getKbTree = getKbTree;
@@ -20,9 +21,27 @@ exports.searchKb = searchKb;
 const errors_js_1 = require("./errors.js");
 const enc = encodeURIComponent;
 // ─── Bases ──────────────────────────────────────────────────────────
-async function listKbBases(t) {
-    const data = await t.request("/api/knowledge/bases", { toolName: "kb_list_bases" });
-    return data.bases;
+/**
+ * The bases this caller may READ, optionally narrowed to one shelf.
+ *
+ * ⚠ `shelf` ABSENT = BOTH shelves — the pre-existing contract every caller
+ * rides, and the reason this stayed a no-arg call for so long. The narrowing is
+ * a `WHERE` server-side, not a post-filter, so a shelf the caller did not ask
+ * for never reaches the wire.
+ */
+async function listKbBasesPayload(t, opts = {}) {
+    const qs = opts.shelf ? `?shelf=${enc(opts.shelf)}` : "";
+    return t.request(`/api/knowledge/bases${qs}`, { toolName: "kb_list_bases" });
+}
+/**
+ * The rows alone. ⚠ DELEGATES to {@link listKbBasesPayload} rather than issuing
+ * its own request — one HTTP call either way, and one place that knows the URL.
+ * Kept as its own method because most callers want the array and nothing else;
+ * widening its return would have been a breaking change for all of them to buy
+ * a key one caller reads.
+ */
+async function listKbBases(t, opts = {}) {
+    return (await listKbBasesPayload(t, opts)).bases;
 }
 async function getKbBase(t, baseId) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}`, { toolName: "kb_get_base" });

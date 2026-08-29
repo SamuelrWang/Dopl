@@ -15,6 +15,8 @@ import {
   updateBaseValidationError,
   writeFileValidationError,
 } from "./knowledge-shared";
+import { confirmGate } from "./confirm-token";
+import { homeShelfForbidden, type ShelfArg } from "./shelf";
 
 /**
  * ⚠ Write confirmations read back the STORED value, not the argument (a
@@ -25,18 +27,114 @@ import {
 const NO_NAME = "`(unnamed)`";
 const NO_PATH = "`(unreadable path)`";
 
-export async function opCreateBase(client: DoplClient, name: string, description?: string): Promise<ToolResponse> {
-  const base = await client.createKbBase({ name, description });
+/**
+ * 🔒 CREATE, ON EITHER SHELF, WITH THE TWO GATES THE SPEC PUTS AROUND IT.
+ *
+ * 1. **THE SHELF CONTRADICTION IS REFUSED LOCALLY, BEFORE THE ROUND TRIP**
+ *    (spec §7.2, the `channel-ops-write.ts` refuse-before-send idiom).
+ *    `shelf: "personal"` sends `homeScoped: true` + `visibility: "private"`, so
+ *    an explicit `visibility: "public"` beside it is two incompatible
+ *    instructions — and the server's 403 ("the /home shelf holds private bases
+ *    only") is correct but reads as a permission problem rather than as
+ *    something the caller can fix by dropping one argument.
+ *
+ * 2. 🔒 **THE HOME-SHELF FENCE STAYS THE SERVER'S.**
+ *    `src/features/knowledge/server/service-base-writes.ts › resolveHomeScope`
+ *    wants a PERSON's credential, a PRIVATE row, and the caller's OWN default
+ *    standard workspace, all three, and 403s otherwise. Nothing here relaxes it
+ *    — `shelf.ts › homeShelfForbidden` only makes the refusal actionable.
+ *
+ * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
+ *    only for `visibility: "public"` inside a SHARED link container — a base
+ *    published into the room a peer is standing in, which is the knowledge half
+ *    of the audience-changing class. It does NOT fire in a standard workspace:
+ *    `set_visibility` has published bases workspace-wide with no confirm since
+ *    long before this wave, and gating one door and not the other would be
+ *    theatre.
+ */
+export async function opCreateBase(
+  client: DoplClient,
+  callerUserId: string | null,
+  input: {
+    name: string;
+    description?: string;
+    shelf?: ShelfArg;
+    visibility?: "public" | "private";
+    confirm_token?: string;
+  },
+): Promise<ToolResponse> {
+  const personal = input.shelf === "personal";
+  if (personal && input.visibility !== undefined && input.visibility !== "private") {
+    return err(
+      `Refused before sending: shelf="personal" and visibility="${input.visibility}" contradict each other, so nothing was created. Your personal shelf holds PRIVATE bases only — a public base on it would be readable by every member on a surface no member navigates to. Either drop \`visibility\` (personal implies private) or drop \`shelf\`.`,
+    );
+  }
+  const visibility = personal ? "private" : input.visibility;
+
+  const verdict = await confirmGate(
+    client,
+    {
+      tool: "dopl_kb",
+      op: "create_base",
+      callerUserId,
+      what: `a knowledge base named ${inlineOr(input.name, NO_NAME)}, readable by the whole container`,
+      audience: `everyone in that home channel — the peer standing in it can list it and read everything you put in it`,
+      payload: {
+        name: input.name,
+        description: input.description ?? null,
+        visibility: visibility ?? null,
+        shelf: input.shelf ?? null,
+      },
+    },
+    { publishes: visibility === "public", token: input.confirm_token },
+  );
+  if (verdict.kind === "halt") return verdict.response;
+
+  let base;
+  try {
+    base = await client.createKbBase({
+      name: input.name,
+      description: input.description,
+      visibility,
+      // ⚠ Only ever `true` — an explicit `false` and an omission mean the same
+      // thing to `resolveHomeScope` ("the default is false and silent").
+      homeScoped: personal ? true : undefined,
+    });
+  } catch (e) {
+    const home = homeShelfForbidden(e);
+    if (home) return err(home);
+    throw e;
+  }
   const visNote =
     base.visibility === "private"
       ? "Private to you — only you and your agent can see it."
       : "Visible to the whole workspace.";
+  const shelfNote = personal
+    ? " It is on your personal shelf, so the workspace Knowledge page will not list it."
+    : "";
   return ok(
-    `Created knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`
+    `Created knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}${shelfNote}`
   );
 }
 
-export async function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string): Promise<ToolResponse> {
+/**
+ * ⚠ THE SHELF IS NOT PATCHABLE, AND THE REFUSAL SAYS SO RATHER THAN IGNORING
+ * THE ARG — the twin of `agent-ops-write.ts › opUpdate`'s, word for word in
+ * substance. `home_scoped` is set at create and never written again for bases
+ * and templates alike (F-342; Samuel's ruling Q8, 2026-08-28 keeps it that way
+ * for v1), and the server's update schema does not accept it — so a silently
+ * dropped `shelf` here would return a 2xx over a move that never happened.
+ *
+ * ⚠ `shelf` RIDES `dopl_kb`'s SHARED OP SCHEMA, so it is spellable on every op;
+ * this is the ONE other op where it would read as an instruction the server
+ * carried out. The reads ignore it exactly as `dopl_agent(op="get")` does.
+ */
+export async function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string, shelf?: ShelfArg): Promise<ToolResponse> {
+  if (shelf !== undefined) {
+    return err(
+      `op="update_base" does not take \`shelf\`, and nothing was changed. A base's shelf is fixed when it is created and there is no move: to put an existing base on your personal shelf, create a NEW one there with op="create_base", shelf="personal". ⚠ The copy and the original are STRANGERS — writing to one never touches the other.`,
+    );
+  }
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   let updated;

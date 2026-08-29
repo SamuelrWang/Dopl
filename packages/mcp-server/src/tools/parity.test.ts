@@ -41,6 +41,12 @@ const READ_OPS: Record<string, string[]> = {
   dopl_chats: ["list", "get", "folders", "guide"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
   dopl_ontology: ["map", "anchor", "resolve", "get"],
+  // `opList` calls only `listAgentTemplates`; `opGet` resolves a ref through
+  // the same list and then `getAgentTemplate`. Neither writes.
+  dopl_agent: ["list", "get"],
+  // `opListChannels` calls only `getHomeChannels` (through the lock narrower).
+  // ⚠ `create_channel` is NOT here — it is in `WRITE_OPS`.
+  dopl_home: ["list_channels"],
   // `members` is a roster READ: `opMembers` calls only `listChannelMembers` and
   // renders it. Membership changes via op="invite" (gated as a write) and the
   // web UI. ⚠ "who may call it" and "does it write" are different questions —
@@ -76,6 +82,12 @@ describe("tool capture", () => {
     const names = TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
       [
+        // MCP surface v2 wave A (2026-08-28): the template family joins.
+        "dopl_agent",
+        "dopl_agent_admin",
+        // Wave B: `dopl_home` registers on the META path and is captured anyway —
+        // it has an op enum, a WRITE op and a charge (see `parity-harness.ts`).
+        "dopl_home",
         "dopl_channel",
         "dopl_chats",
         "dopl_chats_admin",

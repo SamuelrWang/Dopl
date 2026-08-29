@@ -64,6 +64,7 @@ function mockClient(): DoplClient {
     getWorkspaceId: vi.fn(() => null),
     setWorkspaceId: vi.fn(),
     listKbBases: unexpected("listKbBases"),
+    listKbBasesPayload: unexpected("listKbBasesPayload"),
     listSkills: unexpected("listSkills"),
     getOntology: unexpected("getOntology"),
     deleteKbBase: unexpected("deleteKbBase"),
@@ -143,6 +144,9 @@ describe("retired tools never register (D1/D2)", () => {
       "dopl_map",
       "dopl_search",
       "dopl_channel",
+      "dopl_agent",
+      "dopl_agent_admin",
+      "dopl_home",
       "list_workspaces",
       "current_workspace",
     ]) {
@@ -182,6 +186,7 @@ const DELETE_CALLS: Array<[string, Record<string, unknown>]> = [
   ["dopl_chats_admin", { op: "delete_folder", folder_id: "f-1" }],
   ["dopl_ontology_admin", { op: "delete_object", object: "o-1" }],
   ["dopl_ontology_admin", { op: "delete_cluster", cluster: "board" }],
+  ["dopl_agent_admin", { op: "delete", template: "Researcher" }],
 ];
 
 describe("every delete op is refused (§2b)", () => {
@@ -220,7 +225,7 @@ describe("every delete op is refused (§2b)", () => {
     // ⚠ `restore_*` reads as recovery, not deletion — must not be swept up.
     const client = build();
     await expect(tool("dopl_kb")({ op: "list_bases" })).rejects.toThrow(
-      "client.listKbBases() was called",
+      "client.listKbBasesPayload() was called",
     );
     expect(client.listWorkspaces).not.toHaveBeenCalled();
   });

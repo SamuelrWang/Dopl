@@ -14,6 +14,7 @@ import type {
   AwaitResult,
   Channel,
   ChannelCreateInput,
+  ChannelUpdateInput,
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
@@ -44,6 +45,12 @@ export class ChannelMethods extends MemberMethods {
 
   createChannel(input: ChannelCreateInput): Promise<Channel> {
     return channel.createChannel(this.transport, input);
+  }
+
+  /** ⚠ `infoCard` ONLY — see `channel.ts › updateChannel` for why the other
+   *  four fields of that PATCH are deliberately unbound. */
+  updateChannel(channelId: string, patch: ChannelUpdateInput): Promise<Channel> {
+    return channel.updateChannel(this.transport, channelId, patch);
   }
 
   listChannelMembers(channelId: string): Promise<ChannelMember[]> {

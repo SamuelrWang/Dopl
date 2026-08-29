@@ -16,6 +16,8 @@ exports.opMoveFile = opMoveFile;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+const confirm_token_1 = require("./confirm-token");
+const shelf_1 = require("./shelf");
 /**
  * ⚠ Write confirmations read back the STORED value, not the argument (a
  * canonicalised base name, a title derived from a path), spliced into our own
@@ -24,12 +26,76 @@ const knowledge_shared_1 = require("./knowledge-shared");
  */
 const NO_NAME = "`(unnamed)`";
 const NO_PATH = "`(unreadable path)`";
-async function opCreateBase(client, name, description) {
-    const base = await client.createKbBase({ name, description });
+/**
+ * 🔒 CREATE, ON EITHER SHELF, WITH THE TWO GATES THE SPEC PUTS AROUND IT.
+ *
+ * 1. **THE SHELF CONTRADICTION IS REFUSED LOCALLY, BEFORE THE ROUND TRIP**
+ *    (spec §7.2, the `channel-ops-write.ts` refuse-before-send idiom).
+ *    `shelf: "personal"` sends `homeScoped: true` + `visibility: "private"`, so
+ *    an explicit `visibility: "public"` beside it is two incompatible
+ *    instructions — and the server's 403 ("the /home shelf holds private bases
+ *    only") is correct but reads as a permission problem rather than as
+ *    something the caller can fix by dropping one argument.
+ *
+ * 2. 🔒 **THE HOME-SHELF FENCE STAYS THE SERVER'S.**
+ *    `src/features/knowledge/server/service-base-writes.ts › resolveHomeScope`
+ *    wants a PERSON's credential, a PRIVATE row, and the caller's OWN default
+ *    standard workspace, all three, and 403s otherwise. Nothing here relaxes it
+ *    — `shelf.ts › homeShelfForbidden` only makes the refusal actionable.
+ *
+ * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
+ *    only for `visibility: "public"` inside a SHARED link container — a base
+ *    published into the room a peer is standing in, which is the knowledge half
+ *    of the audience-changing class. It does NOT fire in a standard workspace:
+ *    `set_visibility` has published bases workspace-wide with no confirm since
+ *    long before this wave, and gating one door and not the other would be
+ *    theatre.
+ */
+async function opCreateBase(client, callerUserId, input) {
+    const personal = input.shelf === "personal";
+    if (personal && input.visibility !== undefined && input.visibility !== "private") {
+        return (0, respond_1.err)(`Refused before sending: shelf="personal" and visibility="${input.visibility}" contradict each other, so nothing was created. Your personal shelf holds PRIVATE bases only — a public base on it would be readable by every member on a surface no member navigates to. Either drop \`visibility\` (personal implies private) or drop \`shelf\`.`);
+    }
+    const visibility = personal ? "private" : input.visibility;
+    const verdict = await (0, confirm_token_1.confirmGate)(client, {
+        tool: "dopl_kb",
+        op: "create_base",
+        callerUserId,
+        what: `a knowledge base named ${(0, narration_1.inlineOr)(input.name, NO_NAME)}, readable by the whole container`,
+        audience: `everyone in that home channel — the peer standing in it can list it and read everything you put in it`,
+        payload: {
+            name: input.name,
+            description: input.description ?? null,
+            visibility: visibility ?? null,
+            shelf: input.shelf ?? null,
+        },
+    }, { publishes: visibility === "public", token: input.confirm_token });
+    if (verdict.kind === "halt")
+        return verdict.response;
+    let base;
+    try {
+        base = await client.createKbBase({
+            name: input.name,
+            description: input.description,
+            visibility,
+            // ⚠ Only ever `true` — an explicit `false` and an omission mean the same
+            // thing to `resolveHomeScope` ("the default is false and silent").
+            homeScoped: personal ? true : undefined,
+        });
+    }
+    catch (e) {
+        const home = (0, shelf_1.homeShelfForbidden)(e);
+        if (home)
+            return (0, respond_1.err)(home);
+        throw e;
+    }
     const visNote = base.visibility === "private"
         ? "Private to you — only you and your agent can see it."
         : "Visible to the whole workspace.";
-    return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`);
+    const shelfNote = personal
+        ? " It is on your personal shelf, so the workspace Knowledge page will not list it."
+        : "";
+    return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}${shelfNote}`);
 }
 async function opUpdateBase(client, ref, name, description, slug) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);

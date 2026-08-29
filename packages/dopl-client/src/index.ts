@@ -27,8 +27,27 @@ export type {
   SubmitIngestedEntryResult,
 } from "./types.js";
 export type {
+  AgentTemplate,
+  AgentTemplateCreateInput,
+  AgentTemplateListPayload,
+  AgentTemplateUpdateInput,
+  TemplateField,
+  TemplateKnowledgeBaseRef,
+  TemplateShelf,
+  TemplateVisibility,
+} from "./agent-template-types.js";
+export type {
+  HomeChannel,
+  HomeChannelCreateResult,
+  HomeChannelsPayload,
+  HomePeer,
+  HomePendingLink,
+} from "./home-types.js";
+export type {
+  KbShelf,
   KnowledgeBase,
   KnowledgeBaseCreateInput,
+  KnowledgeBaseListPayload,
   KnowledgeBaseUpdateInput,
   KnowledgeDirListing,
   KnowledgeEntry,
@@ -113,6 +132,12 @@ export type {
   WorkspaceChannelMessage,
   ThreadStatus,
 } from "./channel-types.js";
+export type {
+  ChannelInfoCard,
+  ChannelInfoCardBuiltInKey,
+  ChannelInfoCardRow,
+  ChannelUpdateInput,
+} from "./info-card-types.js";
 export type {
   OntologyAttribute,
   OntologyAttributeValue,

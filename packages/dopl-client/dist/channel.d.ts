@@ -11,7 +11,7 @@
  * op, by re-issuing with the same cursor.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
 import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
@@ -35,6 +35,23 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
  */
 export declare function awaitWorkspaceMessages(t: DoplTransport, opts: AwaitMessagesOptions): Promise<WorkspaceAwaitResult>;
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
+/**
+ * Patch a channel. ⚠ **`infoCard` IS THE ONLY FIELD BOUND HERE, AND THAT IS A
+ * RULING, NOT A GAP** (Samuel's ruling Q12, 2026-08-28).
+ *
+ * `PATCH /api/channels/{id}` also accepts `name`, `topic`, `archived` and
+ * `visibility`. `visibility` is field-level `sessionOnly` and an agent token is
+ * refused it outright. The other three are MANAGE writes the route accepts and
+ * **no UI can ask for** (F-346) — shipping RENAME first on the AGENT surface
+ * would mean the operator's only way to undo one is to ask an agent. So
+ * {@link ChannelUpdateInput} carries one key, and widening it is a product
+ * decision rather than a type edit.
+ *
+ * `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP rather than
+ * session: the card is the channel's shared scratch surface and changes no
+ * visibility, roster, lifecycle or fact.
+ */
+export declare function updateChannel(t: DoplTransport, channelId: string, patch: ChannelUpdateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 /**
  * Post a message.

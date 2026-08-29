@@ -6,9 +6,16 @@
  * resolves to folder/entry rows.
  */
 import { WorkspaceMethods } from "./client-workspaces.js";
-import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
+import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 export declare class KnowledgeMethods extends WorkspaceMethods {
-    listKbBases(): Promise<KnowledgeBase[]>;
+    listKbBases(opts?: {
+        shelf?: KbShelf;
+    }): Promise<KnowledgeBase[]>;
+    /** The rows PLUS the shelf sibling key. ⚠ Same single request as
+     *  {@link listKbBases}; read `homeScopedBaseIds` as `?? []` (INVARIANTS §8). */
+    listKbBasesPayload(opts?: {
+        shelf?: KbShelf;
+    }): Promise<KnowledgeBaseListPayload>;
     getKbBase(baseId: string): Promise<KnowledgeBase>;
     getKbTree(baseId: string, opts?: {
         entryLimit?: number;

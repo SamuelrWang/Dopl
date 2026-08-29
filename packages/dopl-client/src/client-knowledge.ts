@@ -9,8 +9,10 @@
 import { WorkspaceMethods } from "./client-workspaces.js";
 import * as kb from "./knowledge.js";
 import type {
+  KbShelf,
   KnowledgeBase,
   KnowledgeBaseCreateInput,
+  KnowledgeBaseListPayload,
   KnowledgeBaseUpdateInput,
   KnowledgeDirListing,
   KnowledgeEntry,
@@ -23,8 +25,16 @@ import type {
 } from "./knowledge-types.js";
 
 export class KnowledgeMethods extends WorkspaceMethods {
-  listKbBases(): Promise<KnowledgeBase[]> {
-    return kb.listKbBases(this.transport);
+  listKbBases(opts: { shelf?: KbShelf } = {}): Promise<KnowledgeBase[]> {
+    return kb.listKbBases(this.transport, opts);
+  }
+
+  /** The rows PLUS the shelf sibling key. ⚠ Same single request as
+   *  {@link listKbBases}; read `homeScopedBaseIds` as `?? []` (INVARIANTS §8). */
+  listKbBasesPayload(
+    opts: { shelf?: KbShelf } = {}
+  ): Promise<KnowledgeBaseListPayload> {
+    return kb.listKbBasesPayload(this.transport, opts);
   }
 
   getKbBase(baseId: string): Promise<KnowledgeBase> {

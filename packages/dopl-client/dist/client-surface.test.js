@@ -42,6 +42,21 @@ const BASE = "https://api.example.test";
  *        2026-08-18): `closeChannelThread` and `proposeChannelThreadClose`.
  *        The `PATCH /tasks/[id]` route arms behind them are deleted too, so
  *        restoring either binding would 400 rather than fail quietly.
+ *   70 — PLUS FOUR with the `AgentTemplateMethods` link (MCP surface v2 wave A,
+ *        2026-08-28): `listAgentTemplates`, `getAgentTemplate`,
+ *        `createAgentTemplate`, `updateAgentTemplate`. ⚠ FOUR, NOT FIVE — the
+ *        DELETE verb is deliberately unbound (`sessionOnly` on the route AND
+ *        app-only by standing policy), so there is no `deleteAgentTemplate` to
+ *        forget to gate.
+ *   75 — PLUS FIVE with wave B (2026-08-28): `getHomeChannels`,
+ *        `createHomeChannel` (the `HomeMethods` link), `updateChannel`, and the
+ *        two sibling-key payload readers `listKbBasesPayload` /
+ *        `listAgentTemplatesPayload`. ⚠ TWO home methods, not five — link MINT,
+ *        link REVOKE and the CLAIM are all `sessionOnly` and deliberately
+ *        unbound, the same omission the template DELETE makes. ⚠ And the two
+ *        `*Payload` readers each DELEGATE to nothing new on the wire: they are
+ *        the same request their array sibling makes, so the surface grew by two
+ *        names and by zero round trips.
  */
 const PUBLIC_SURFACE = [
     "appendChatMessages",
@@ -53,9 +68,11 @@ const PUBLIC_SURFACE = [
     "claimOntologyAnchor",
     "consumeCredits",
     "createChannel",
+    "createHomeChannel",
     "createLaunchDirective",
     "createChannelThread",
     "createChatFolder",
+    "createAgentTemplate",
     "createKbBase",
     "createKbFolderByPath",
     "createOntologyCluster",
@@ -71,6 +88,7 @@ const PUBLIC_SURFACE = [
     "exportChat",
     "getAccessMatrix",
     "getActiveWorkspace",
+    "getAgentTemplate",
     "getBaseUrl",
     "getChannel",
     // LAUNCH-OVER-MCP (2026-08-22): file a directive, then poll the row. ⚠ EXACTLY
@@ -82,6 +100,7 @@ const PUBLIC_SURFACE = [
     "getLaunchDirective",
     "getChannelThread",
     "getChat",
+    "getHomeChannels",
     "getKbBase",
     "getKbTree",
     "getMemberAccess",
@@ -93,6 +112,8 @@ const PUBLIC_SURFACE = [
     "getWorkspace",
     "getWorkspaceId",
     "inviteToChannel",
+    "listAgentTemplates",
+    "listAgentTemplatesPayload",
     "listChannelMembers",
     "listChannelSessions",
     "listChannelThreads",
@@ -100,6 +121,7 @@ const PUBLIC_SURFACE = [
     "listChatFolders",
     "listChats",
     "listKbBases",
+    "listKbBasesPayload",
     "listKbDirByPath",
     "listSkills",
     "listWorkspaceMembers",
@@ -114,6 +136,8 @@ const PUBLIC_SURFACE = [
     "searchKb",
     "setChannelThreadMode",
     "setWorkspaceId",
+    "updateAgentTemplate",
+    "updateChannel",
     "updateChat",
     "updateChatFolder",
     "updateKbBase",

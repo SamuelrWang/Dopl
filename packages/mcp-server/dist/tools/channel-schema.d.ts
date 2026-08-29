@@ -28,18 +28,19 @@ export declare const CHANNEL_INPUT_SHAPE: {
     op: z.ZodEnum<{
         list: "list";
         read: "read";
+        update: "update";
         members: "members";
         open: "open";
         invite: "invite";
         post: "post";
         milestone: "milestone";
+        create_thread: "create_thread";
+        set_thread_mode: "set_thread_mode";
+        launch_agent: "launch_agent";
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";
         read_sessions: "read_sessions";
-        create_thread: "create_thread";
-        set_thread_mode: "set_thread_mode";
-        launch_agent: "launch_agent";
     }>;
     channel: z.ZodOptional<z.ZodString>;
     direct: z.ZodOptional<z.ZodBoolean>;
@@ -78,6 +79,14 @@ export declare const CHANNEL_INPUT_SHAPE: {
     model: z.ZodOptional<z.ZodString>;
     template: z.ZodOptional<z.ZodString>;
     wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+    info_card: z.ZodOptional<z.ZodObject<{
+        hidden: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            id: z.ZodOptional<z.ZodString>;
+            label: z.ZodString;
+            value: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>>;
+    }, z.core.$strip>>;
     limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     timeout_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
 };

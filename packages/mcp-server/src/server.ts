@@ -29,6 +29,8 @@ import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerOntologyTool } from "./tools/ontology.js";
 import { registerChannelTool } from "./tools/channel.js";
+import { registerAgentTools } from "./tools/agent.js";
+import { registerHomeTool } from "./tools/home.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
 import { buildInstructions } from "./instructions.js";
 import { createGates } from "./gating.js";
@@ -173,7 +175,7 @@ export function createServer(
   // onto the SDK server and would otherwise pass through none of them.
   const gates = createGates(canWrite);
 
-  const { registerTool, registerMetaTool } = createToolRegistrars({
+  const { registerTool, registerMetaTool, chargeCredit } = createToolRegistrars({
     server,
     // One MCP credit per domain-tool call through this client
     // (`registrar.ts › createCreditedRunner`); meta-tools are exempt.
@@ -190,6 +192,12 @@ export function createServer(
     activeWorkspace,
     caller,
   });
+  // ⚠ META PATH, CHARGED — the ONE tool that takes `MetaToolOptions.charged`
+  // (Samuel's ruling Q2 (b)). It cannot be a domain tool: that path injects the
+  // `workspace=` argument this tool exists to make answerable. 🔒 `directory` is
+  // threaded in for the CONTAINER LOCK — `home-scopes.ts` narrows the channel
+  // list to it, or a locked session enumerates its operator's other rooms.
+  registerHomeTool(registerMetaTool, client, directory); // dopl_home — the caller's home channels
 
   // ⚠ THIS LIST IS THE SURFACE. Every published tool is registered here and
   // nowhere else, so `tools/list` == these calls minus `gating.ts ›
@@ -201,12 +209,19 @@ export function createServer(
   registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
   registerMembersTool(registerTool, client, caller); // dopl_members — membership/teams/access (read-only)
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
-  registerSearchTool(registerTool, client); // dopl_search — cross-domain search
+  // ⚠ `directory` + `chargeCredit` are what make `scope="everywhere"` possible
+  // AT ALL: the leg list must be the LOCKED list (B3), and a fan-out charges
+  // per leg (ruling Q3). Built without them the tool answers the single-scope
+  // search and says so rather than silently searching one scope.
+  registerSearchTool(registerTool, client, directory, chargeCredit); // dopl_search — cross-domain search
   registerOntologyTool(registerTool, client, caller); // dopl_ontology — routing graph (read-only)
   // ⚠ FULL identity, not just the id — `caller.runtime` decides whether the
   // wake teaching may claim a pending `await` outlives the turn. ⚠ `isAdmin`
   // scopes member email to admins + self; defaults false ⇒ fail-closed.
   registerChannelTool(registerTool, client, caller, options.isAdmin ?? false); // dopl_channel — cross-user collaboration channels
+  // ⚠ `caller` for TWO reasons here: framing another member's INSTRUCTIONS block
+  // as untrusted, and binding a confirm token to the identity that previewed.
+  registerAgentTools(registerTool, client, caller); // dopl_agent + dopl_agent_admin — persistent agent identities
 
   return server;
 }

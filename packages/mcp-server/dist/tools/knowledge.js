@@ -17,14 +17,15 @@ const zod_1 = require("zod");
 const delete_policy_js_1 = require("../delete-policy.js");
 const identity_1 = require("./identity");
 const respond_1 = require("./respond");
+const shelf_1 = require("./shelf");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 const knowledge_ops_admin_1 = require("./knowledge-ops-admin");
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
-- "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private and bases scoped to a team you have no grant on are absent, so this is your view and not the workspace's base count.
+- "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private and bases scoped to a team you have no grant on are absent, so this is your view and not the workspace's base count. Rows carry NO shelf label — the column is deliberately not projected onto the row — so pass \`shelf\` to find out which shelf a base is on. Optional: shelf ("personal" = your own /home shelf, "workspace" = the shared shelf; omit for BOTH).
 - "get_tree" — folder/entry tree for a base (metadata only, bodies stripped). FOLDERS ship in full; ENTRIES are paged, 400 per call by default, and the result says so and hands back an entry_cursor when there are more. First call when exploring a base; for a body follow up with op=read_file.
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
-- "create_base" — create a new base. New bases are private to the creator by default.
+- "create_base" — create a new base. New bases are private to the creator by default. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own /home shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel container or a second workspace you belong to. Creating a PUBLIC base inside a home channel somebody else is in previews first and hands back a one-time confirm_token.
 - "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here.
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders. Pass \`description\` to set the folder's short agent-facing summary (shown in get_tree/list_dir); re-calling with a \`description\` on an existing folder UPDATES it (the way to edit a folder summary without touching its contents).
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
@@ -41,9 +42,11 @@ const KB_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
     { op: "delete_file", effect: "would have deleted the entry at a path" },
 ], `Reach for instead: \`dopl_kb\` op=write_file to replace an entry's contents, op=move_file / op=move_folder to reorganize. If something genuinely has to go, say so and ask the user to delete it in the Dopl app.`);
 function registerKnowledgeTools(register, client, 
-// ⚠ Read for exactly ONE thing: whether an entry BODY is somebody else's,
-// which decides `UNTRUSTED_ENTRY_BODY_HEADER`. Nothing about visibility is
-// decided from it — the server already filtered.
+// ⚠ Read for exactly TWO things: whether an entry BODY is somebody else's,
+// which decides `UNTRUSTED_ENTRY_BODY_HEADER`; and binding a confirm token to
+// the identity that previewed (2026-08-28), so one caller's preview cannot be
+// spent by another. Nothing about visibility is decided from it — the server
+// already filtered.
 caller = identity_1.UNKNOWN_CALLER) {
     // ── dopl_kb — read + non-destructive writes ──────────────────────
     register("dopl_kb", KB_DESCRIPTION, {
@@ -72,11 +75,16 @@ caller = identity_1.UNKNOWN_CALLER) {
         limit: zod_1.z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20, 1-100)."),
         entry_limit: zod_1.z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400, 1-1000). Folders always ship in full."),
         entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
-        visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it readable by every member of the workspace). One-way — 'private' is rejected."),
+        visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it readable by every member of the workspace). One-way — 'private' is rejected. op=create_base: initial visibility (defaults to 'private'); 'public' beside shelf='personal' is refused as a contradiction."),
+        shelf: zod_1.z.enum(shelf_1.SHELF_VALUES).optional().describe(shelf_1.SHELF_ARG_DESCRIPTION),
+        confirm_token: zod_1.z
+            .string()
+            .optional()
+            .describe("op=create_base: the one-time token from this call's own dry-run preview, echoed back to go ahead. Only ever needed when the write would publish into a home channel somebody else is in; passing it on any other call is refused. Never guess one — they are random."),
     }, async (args) => {
         switch (args.op) {
             case "list_bases":
-                return (0, knowledge_ops_read_1.opListBases)(client);
+                return (0, knowledge_ops_read_1.opListBases)(client, (0, shelf_1.toWireShelfOrUndefined)(args.shelf));
             case "get_tree": {
                 const miss = (0, respond_1.missingParams)("get_tree", args, ["base"]);
                 if (miss)
@@ -93,7 +101,13 @@ caller = identity_1.UNKNOWN_CALLER) {
                 const miss = (0, respond_1.missingParams)("create_base", args, ["name"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opCreateBase)(client, args.name, args.description);
+                return (0, knowledge_ops_write_1.opCreateBase)(client, caller.userId, {
+                    name: args.name,
+                    description: args.description,
+                    shelf: args.shelf,
+                    visibility: args.visibility,
+                    confirm_token: args.confirm_token,
+                });
             }
             case "update_base": {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);

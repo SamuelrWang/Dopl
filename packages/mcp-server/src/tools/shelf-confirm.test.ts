@@ -1,0 +1,461 @@
+/**
+ * THE TWO MECHANISMS MCP SURFACE V2 WAVE A ADDS, checked where they bite.
+ *
+ *   A. THE SHELF AXIS on `dopl_kb` — the operator's noun (`personal`) mapped
+ *      onto the wire's (`home`) in ONE place, the asymmetric absent-argument
+ *      rule (READ = both shelves, WRITE = the workspace shelf), and the
+ *      home-shelf fence's 403 arriving as something a caller can act on.
+ *
+ *   B. 🔒 THE CONFIRM CLASS — dry run, then an opaque single-use token bound to
+ *      the exact payload, the caller and the room. ⚠ IT IS A TRIPWIRE, NOT A
+ *      FENCE (`confirm-token.ts`'s header), and these tests pin what it does
+ *      buy: nothing is written on the first call, a replayed / expired /
+ *      re-aimed token writes nothing either, and the class does NOT widen to
+ *      ordinary writes.
+ */
+
+import { describe, it, expect, vi, afterEach } from "vitest";
+import type { DoplClient, KnowledgeBase } from "@dopl/client";
+
+import { opListBases } from "./knowledge-ops-read";
+import { opCreateBase, opUpdateBase } from "./knowledge-ops-write";
+import { opCreate } from "./agent-ops-write";
+import { stub } from "./narration-fixtures";
+import { __resetConfirmTokensForTest } from "./confirm-token";
+
+const ME = "user-1";
+const PEER = "user-2";
+
+const BASE: KnowledgeBase = {
+  id: "kb-1",
+  workspaceId: "ws-1",
+  name: "Notes",
+  slug: "notes",
+  publicId: "pub-1",
+  description: null,
+  agentWriteEnabled: true,
+  visibility: "private",
+  accessMode: "workspace",
+  createdBy: ME,
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
+  deletedAt: null,
+};
+
+const TEMPLATE = {
+  id: "11111111-1111-4111-8111-111111111111",
+  workspaceId: "ws-1",
+  name: "Researcher",
+  description: null,
+  instructions: null,
+  model: null,
+  fields: [],
+  visibility: "workspace" as const,
+  teamIds: [],
+  knowledgeBases: [],
+  createdBy: ME,
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
+};
+
+const textOf = (res: { content: Array<{ text: string }> }) =>
+  res.content.map((c) => c.text).join("\n");
+
+function workspaceStub(
+  kind: "standard" | "link",
+  memberCount: number | undefined,
+) {
+  return {
+    getWorkspaceId: vi.fn(() => "ws-1"),
+    listWorkspaces: vi.fn(async () => ({
+      workspaces: [
+        {
+          id: "ws-1",
+          slug: "acme",
+          name: "Acme",
+          kind,
+          role: "owner",
+          memberCount,
+        },
+      ],
+    })),
+  };
+}
+
+/** A `kind='link'` container with a PEER in it — the only room the class fires in. */
+const sharedContainer = () => workspaceStub("link", 2);
+
+function apiError(status: number, code: string, apiMessage?: string): Error {
+  return Object.assign(new Error(`HTTP ${status}`), {
+    name: "DoplApiError",
+    status,
+    code,
+    apiMessage,
+  });
+}
+
+/** The token the preview handed back. */
+function tokenIn(text: string): string {
+  const m = /confirm_token="([^"]+)"/.exec(text);
+  expect(m, `no confirm_token in:\n${text}`).not.toBeNull();
+  return m![1];
+}
+
+afterEach(() => {
+  __resetConfirmTokensForTest();
+  vi.useRealTimers();
+});
+
+// ── A. The shelf axis ────────────────────────────────────────────────
+
+describe("dopl_kb — the shelf argument", () => {
+  it("READ: absent asks for BOTH shelves; personal maps to the wire's `home`", async () => {
+    const list = vi.fn(async () => ({ bases: [BASE] }));
+    const client = stub({ listKbBasesPayload: list }) as DoplClient;
+
+    await opListBases(client);
+    expect(list).toHaveBeenCalledWith({ shelf: undefined });
+
+    await opListBases(client, "home");
+    expect(list).toHaveBeenLastCalledWith({ shelf: "home" });
+  });
+
+  it("READ: the SIBLING KEY labels a personal row, and only that row", async () => {
+    // 🔒 `home_scoped` is deliberately absent from the DTO so no client can
+    // re-implement the fence, so the label rides BESIDE the list.
+    const other = { ...BASE, id: "kb-2", slug: "shared", name: "Shared" };
+    const text = textOf(
+      await opListBases(
+        stub({
+          listKbBasesPayload: vi.fn(async () => ({
+            bases: [BASE, other],
+            homeScopedBaseIds: ["kb-1"],
+          })),
+        }) as DoplClient,
+      ),
+    );
+    expect(text).toContain("`notes` · id: `kb-1` · private · personal");
+    // ⚠ The row NOT in the key carries no label at all — never "workspace",
+    // which would be an assertion the server did not make.
+    expect(text).toContain("id: `kb-2` · private)");
+  });
+
+  it("READ: an ABSENT sibling key leaves every row UNLABELLED (§8, fail-safe)", async () => {
+    // ⚠ THE DIRECTION THAT MATTERS. An older server sends no key; the reflex
+    // fallback would be to guess, and a guess here mislabels a workspace base as
+    // personal. Unknown must render as nothing.
+    const text = textOf(
+      await opListBases(
+        stub({ listKbBasesPayload: vi.fn(async () => ({ bases: [BASE] })) }) as DoplClient,
+      ),
+    );
+    expect(text).not.toContain("· personal");
+    expect(text).toContain("id: `kb-1` · private)");
+  });
+
+  it("WRITE: absent shelf writes the WORKSPACE shelf — homeScoped is never sent as false", async () => {
+    const create = vi.fn(async () => BASE);
+    await opCreateBase(
+      stub({ ...workspaceStub("standard", 3), createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes" },
+    );
+    expect(create).toHaveBeenCalledWith({
+      name: "Notes",
+      description: undefined,
+      visibility: undefined,
+      homeScoped: undefined,
+    });
+  });
+
+  it('WRITE: shelf="personal" sends homeScoped AND an explicit private visibility', async () => {
+    const create = vi.fn(async () => BASE);
+    await opCreateBase(
+      stub({ ...workspaceStub("standard", 3), createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes", shelf: "personal" },
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ homeScoped: true, visibility: "private" }),
+    );
+  });
+
+  it("WRITE: personal + public is refused LOCALLY, before any round trip", async () => {
+    const create = vi.fn();
+    const res = await opCreateBase(
+      stub({ ...workspaceStub("standard", 3), createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes", shelf: "personal", visibility: "public" },
+    );
+    expect(res.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("Refused before sending");
+  });
+
+  it("🔒 the fence's 403 SURFACES with its reason and with nothing created", async () => {
+    const res = await opCreateBase(
+      stub({
+        ...workspaceStub("standard", 3),
+        createKbBase: vi.fn(async () => {
+          throw apiError(
+            403,
+            "HOME_SCOPE_FORBIDDEN",
+            "This base cannot be created on your /home shelf — a shared credential has no personal shelf.",
+          );
+        }),
+      }) as DoplClient,
+      ME,
+      { name: "Notes", shelf: "personal" },
+    );
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toContain("a shared credential has no personal shelf");
+    expect(textOf(res)).toContain("Nothing was created");
+  });
+
+  /**
+   * ⚠ THE TWIN OF `agent-fences.test.ts › op=update REFUSES a shelf`. `shelf`
+   * rides `dopl_kb`'s SHARED op schema, so it is spellable on update_base — and
+   * a silently dropped one would answer 2xx over a shelf move that never
+   * happened. The two tools must refuse it identically or an agent learns the
+   * rule from one and unlearns it on the other.
+   */
+  it("WRITE: op=update_base REFUSES a shelf rather than dropping it — there is no move", async () => {
+    const update = vi.fn();
+    const list = vi.fn();
+    const res = await opUpdateBase(
+      stub({ updateKbBase: update, listKbBases: list }) as DoplClient,
+      "notes",
+      "Renamed",
+      undefined,
+      undefined,
+      "personal",
+    );
+    expect(res.isError).toBe(true);
+    expect(update).not.toHaveBeenCalled();
+    // ⚠ Refused BEFORE the ref is even resolved — no round trip at all.
+    expect(list).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("nothing was changed");
+    expect(textOf(res)).toContain('op="create_base", shelf="personal"');
+  });
+});
+
+// ── B. The confirm class ─────────────────────────────────────────────
+
+describe("the confirm class fires only where the audience changes", () => {
+  it("a PRIVATE template in a shared container needs no preview", async () => {
+    const create = vi.fn(async () => ({ ...TEMPLATE, visibility: "private" as const }));
+    const res = await opCreate(
+      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "private" },
+    );
+    expect(res.isError).toBeUndefined();
+    expect(create).toHaveBeenCalled();
+  });
+
+  it("a WORKSPACE template in a STANDARD workspace needs no preview", async () => {
+    // ⚠ Deliberate: `set_visibility` has published rows workspace-wide with no
+    // confirm since long before this wave, and gating one door and not the
+    // other would be theatre.
+    const create = vi.fn(async () => TEMPLATE);
+    const res = await opCreate(
+      stub({ ...workspaceStub("standard", 9), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "workspace" },
+    );
+    expect(res.isError).toBeUndefined();
+    expect(create).toHaveBeenCalled();
+  });
+
+  it("a SOLO container needs no preview — the class exists because a PEER arrived", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    await opCreate(
+      stub({ ...workspaceStub("link", 1), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "workspace" },
+    );
+    expect(create).toHaveBeenCalled();
+  });
+
+  it("an UNREADABLE workspace fails CLOSED — unknown is treated as a shared room", async () => {
+    const create = vi.fn();
+    const res = await opCreate(
+      stub({
+        getWorkspaceId: vi.fn(() => "ws-1"),
+        listWorkspaces: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+        createAgentTemplate: create,
+      }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "workspace" },
+    );
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("could not be read");
+  });
+
+  it("a stray token on a non-audience-changing call is REFUSED, not ignored", async () => {
+    const create = vi.fn();
+    const res = await opCreate(
+      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "private", confirm_token: "whatever" },
+    );
+    expect(res.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("not audience-changing");
+  });
+});
+
+describe("the dry-run → token round trip", () => {
+  it("the first call WRITES NOTHING and previews what, where and who", async () => {
+    const create = vi.fn();
+    const res = await opCreate(
+      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "workspace" },
+    );
+    const text = textOf(res);
+
+    expect(res.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(text).toContain("NOTHING WAS CREATED");
+    expect(text).toContain("**What would be created:**");
+    expect(text).toContain("**Where:**");
+    expect(text).toContain("**Who would see it:**");
+    // 🔒 The honest sentence has to reach the AGENT, not just the module header.
+    expect(text).toContain("a step that makes you LOOK, not a permission check");
+    expect(tokenIn(text).length).toBeGreaterThan(8);
+  });
+
+  it("echoing the token back performs the write exactly once", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    const args = { name: "Researcher", visibility: "workspace" as const };
+
+    const token = tokenIn(textOf(await opCreate(client, ME, args)));
+    const done = await opCreate(client, ME, { ...args, confirm_token: token });
+
+    expect(done.isError).toBeUndefined();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("REPLAY — a spent token creates nothing a second time", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    const args = { name: "Researcher", visibility: "workspace" as const };
+
+    const token = tokenIn(textOf(await opCreate(client, ME, args)));
+    await opCreate(client, ME, { ...args, confirm_token: token });
+    const replay = await opCreate(client, ME, { ...args, confirm_token: token });
+
+    expect(replay.isError).toBe(true);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(textOf(replay)).toContain("already used");
+  });
+
+  it("EXPIRY — a token older than its TTL is refused and says so", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    const args = { name: "Researcher", visibility: "workspace" as const };
+
+    vi.useFakeTimers();
+    const token = tokenIn(textOf(await opCreate(client, ME, args)));
+    vi.setSystemTime(new Date(Date.now() + 6 * 60_000));
+    const late = await opCreate(client, ME, { ...args, confirm_token: token });
+
+    expect(late.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(late)).toContain("EXPIRED");
+  });
+
+  it("PAYLOAD MISMATCH — a token cannot be re-aimed at a different write", async () => {
+    // ⚠ THE POINT OF BINDING. Without it the preview shows one thing and the
+    // confirmed call lands another, which is worse than no preview at all.
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+
+    const token = tokenIn(
+      textOf(await opCreate(client, ME, { name: "Researcher", visibility: "workspace" })),
+    );
+    const swapped = await opCreate(client, ME, {
+      name: "Exfiltrator",
+      visibility: "workspace",
+      confirm_token: token,
+    });
+
+    expect(swapped.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(swapped)).toContain("DIFFERENT payload");
+  });
+
+  it("a token is bound to the CALLER who previewed", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    const args = { name: "Researcher", visibility: "workspace" as const };
+
+    const token = tokenIn(textOf(await opCreate(client, ME, args)));
+    const other = await opCreate(client, PEER, { ...args, confirm_token: token });
+
+    expect(other.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("an invented token is refused, and the refusal does not invite guessing", async () => {
+    const create = vi.fn();
+    const res = await opCreate(
+      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher", visibility: "workspace", confirm_token: "made-up" },
+    );
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("Do not guess a token");
+  });
+});
+
+describe("the knowledge half of the confirm class", () => {
+  it("a PUBLIC base in a shared container previews, then writes on confirm", async () => {
+    const create = vi.fn(async () => ({ ...BASE, visibility: "public" as const }));
+    const client = stub({
+      ...sharedContainer(),
+      createKbBase: create,
+    }) as DoplClient;
+    const args = { name: "Notes", visibility: "public" as const };
+
+    const first = await opCreateBase(client, ME, args);
+    expect(first.isError).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(first)).toContain("read everything you put in it");
+
+    const token = tokenIn(textOf(first));
+    const done = await opCreateBase(client, ME, { ...args, confirm_token: token });
+    expect(done.isError).toBeUndefined();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("a PRIVATE base in the same container writes straight through", async () => {
+    const create = vi.fn(async () => BASE);
+    const res = await opCreateBase(
+      stub({ ...sharedContainer(), createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes" },
+    );
+    expect(res.isError).toBeUndefined();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});

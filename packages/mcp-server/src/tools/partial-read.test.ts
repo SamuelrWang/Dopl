@@ -52,6 +52,9 @@ const healthySearch = (over: Record<string, unknown> = {}) =>
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => [SKILL]),
     getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+    // FOURTH group since 2026-08-28 — a new domain is a new read the stub has
+    // to model, or the group renders as a failure nobody meant to test.
+    listAgentTemplates: vi.fn(async () => []),
     ...over,
   });
 
@@ -169,7 +172,7 @@ describe("dopl_search names the groups it could not read", () => {
 
     expect(text).toContain("PARTIAL READ");
     expect(text).toContain("Knowledge entries (`HTTP 500`)");
-    expect(text).toContain("1 of 3 groups could NOT be read");
+    expect(text).toContain("1 of 4 groups could NOT be read");
     expect(text).toContain("not absent from the workspace");
     expect(text).toContain("## Knowledge entries");
     expect(text).toContain("`ship-it`");
@@ -196,7 +199,10 @@ describe("dopl_search names the groups it could not read", () => {
         "## Ontology objects",
         "_No matches._",
         "",
-        '_Scope: max 8 per group. Only knowledge entries are matched on their BODIES; skills and ontology objects on names and trigger metadata only, so a term living inside a SKILL.md is not findable here. Drafts are excluded from Skills. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._',
+        "## Agent templates",
+        "_No matches._",
+        "",
+        '_Scope: max 8 per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template\'s instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._',
       ].join("\n"),
     );
     expect(text).not.toContain("PARTIAL READ —");

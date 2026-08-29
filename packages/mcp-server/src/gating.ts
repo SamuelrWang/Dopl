@@ -49,6 +49,7 @@ export const READ_ONLY_BLOCKED_TOOLS = new Set([
   "dopl_kb_admin",
   "dopl_skill_admin",
   "dopl_ontology_admin",
+  "dopl_agent_admin",
 ]);
 
 /**
@@ -89,6 +90,18 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     "write",
     "set_visibility",
   ]),
+  // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: `tools/parity-harness.ts` parses this set
+  // out of the SOURCE TEXT, so a quoted phrase in a comment is read as an op
+  // name and fails the WRITE_OPS-subset-of-enum check.
+  // ⚠ BOTH verbs write, and update is the one easiest to miss: it can raise a
+  // template to workspace visibility, which is the SHARE act itself (a template
+  // has no grant table). A read-only token must be refused it.
+  dopl_agent: new Set(["create", "update"]),
+  // ⚠ `dopl_home` REGISTERS ON THE META PATH AND IS STILL GATED HERE, because
+  // `opRefusal` is called explicitly on BOTH registration paths — which is the
+  // whole reason the gates were hoisted out of the domain wrapper. A read-only
+  // token lists home channels and creates none.
+  dopl_home: new Set(["create_channel"]),
   dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
   dopl_channel: new Set([
     "open",
@@ -112,6 +125,11 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     // set out of the SOURCE TEXT, so a quoted phrase in a comment is read as an
     // op name and fails the WRITE_OPS-subset-of-enum check.
     "launch_agent",
+    // ⚠ WRITES THE CHANNEL INFO CARD (Q12, 2026-08-28). It also READS when
+    // `info_card` is omitted, and it is classified as a WRITE anyway: an op that
+    // can write must be refused wholesale for a read-only token, or the read arm
+    // becomes the door the write arm walks through.
+    "update",
   ]),
 };
 

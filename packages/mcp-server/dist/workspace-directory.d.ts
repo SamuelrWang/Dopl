@@ -83,5 +83,18 @@ export interface WorkspaceDirectory {
     resolveWorkspaceRef(ref: string): Promise<WorkspaceListItem | null>;
     /** The isError response for a no-`workspace=` call with no session default. */
     noWorkspaceError(): Promise<ToolResponse>;
+    /**
+     * 🔒 THE LOCK, READABLE — the container id this session is narrowed to, or
+     * null when it is not locked.
+     *
+     * ⚠ EXPOSED BECAUSE THE LOCK NOW HAS A CONSUMER THIS OBJECT CANNOT SERVE
+     * (2026-08-28). `getWorkspaceList` narrows the WORKSPACE directory; `dopl_home`
+     * and `dopl_search(scope="everywhere")` narrow a list of HOME CHANNELS, which
+     * comes from `/api/home/channels` and never passes through here. Without this,
+     * each of them would restate the rule — and a restated fence is the one that
+     * drifts. ⚠ There is exactly ONE reader, `tools/home-scopes.ts ›
+     * narrowToLock`; add a second only by routing it through that.
+     */
+    lockedWorkspaceId(): string | null;
 }
 export declare function createWorkspaceDirectory(client: DoplClient, options?: WorkspaceDirectoryOptions): WorkspaceDirectory;

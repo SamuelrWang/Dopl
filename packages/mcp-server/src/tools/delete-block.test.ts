@@ -57,7 +57,11 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
     // capture.
     expect(VISIBLE_TOOLS.map((t) => t.name).sort()).toEqual(
       [
+        // MCP surface v2 wave A (2026-08-28): the template family joins.
+        "dopl_agent",
+        "dopl_agent_admin",
         "dopl_channel",
+        "dopl_home",
         "dopl_chats",
         "dopl_chats_admin",
         "dopl_kb",

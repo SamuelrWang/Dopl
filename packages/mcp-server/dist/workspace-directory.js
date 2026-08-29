@@ -116,5 +116,10 @@ function createWorkspaceDirectory(client, options = {}) {
             content: [{ type: "text", text: lines.join("\n") }],
         };
     }
-    return { getWorkspaceList, resolveWorkspaceRef, noWorkspaceError };
+    return {
+        getWorkspaceList,
+        resolveWorkspaceRef,
+        noWorkspaceError,
+        lockedWorkspaceId: () => lockedTo?.id ?? null,
+    };
 }

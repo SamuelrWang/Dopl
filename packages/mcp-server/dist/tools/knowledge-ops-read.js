@@ -40,17 +40,40 @@ const NO_NAME = "`(unnamed)`";
  * ⚠ Names the FILTERS, never a hidden count — counting what you were not shown
  * is a second query on every list call.
  */
-const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases and bases scoped to a team you have no grant on are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
-async function opListBases(client) {
-    const bases = await client.listKbBases();
+const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases and bases scoped to a team you have no grant on are not listed, so this is not the workspace's base count. A row marked \`personal\` is on your own /home shelf and does not appear on the workspace Knowledge page; an UNMARKED row is on the workspace shelf, or on a server too old to say. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+/**
+ * ⚠ `shelf` ABSENT LISTS BOTH SHELVES, and that is the RIGHT answer rather than
+ * an oversight (F-342 rules the unfiltered MCP read right and says it "must stay
+ * right"): an operator's agent asking "what knowledge is here" should see the
+ * operator's whole workspace. The narrowing is a server-side `WHERE`, so a shelf
+ * the caller did not ask for never reaches the wire.
+ */
+async function opListBases(client, shelf) {
+    const payload = await client.listKbBasesPayload({ shelf });
+    const bases = payload.bases;
+    // 🔒 ⚠ SIBLING KEY, `?? []` INLINE (INVARIANTS §8). `home_scoped` is
+    // deliberately not projected onto the row — no client may re-derive the shelf
+    // FENCE — so the label rides beside the list. An ABSENT key (older server,
+    // degraded read) means NO ROW IS LABELLED, which is exactly what this surface
+    // showed before the key existed. The unsafe direction would be calling a
+    // workspace base personal, and nothing here can produce that.
+    const personal = new Set(payload.homeScopedBaseIds ?? []);
+    const where = shelf === "home"
+        ? " on your personal shelf"
+        : shelf === "workspace"
+            ? " on the workspace shelf"
+            : "";
     if (bases.length === 0)
-        return (0, respond_1.ok)(`No knowledge bases visible to you. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`);
-    const lines = ["## Knowledge bases\n"];
+        return (0, respond_1.ok)(`No knowledge bases visible to you${where}. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`);
+    const lines = [`## Knowledge bases${where}\n`];
     for (const b of bases) {
         // ⚠ Immutable id beside the slug — the slug changes on rename.
         const vis = b.visibility === "private" ? "private" : "public";
         const desc = b.description ? `\n  ${(0, narration_1.inlineOr)(b.description, "")}` : "";
-        lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
+        // ⚠ The label appears only when the flag SAYS SO. An unlabelled row is
+        // "workspace shelf, or unknown" — never asserted as one of the two.
+        const shelfLabel = personal.has(b.id) ? " · personal" : "";
+        lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis}${shelfLabel})${desc}`);
     }
     lines.push("", BASES_SCOPE_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));

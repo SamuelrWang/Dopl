@@ -17,6 +17,7 @@ import type {
   AwaitResult,
   Channel,
   ChannelCreateInput,
+  ChannelUpdateInput,
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
@@ -178,6 +179,34 @@ export async function createChannel(
     body: input,
     toolName: "channel_create",
   });
+  return data.channel;
+}
+
+/**
+ * Patch a channel. ⚠ **`infoCard` IS THE ONLY FIELD BOUND HERE, AND THAT IS A
+ * RULING, NOT A GAP** (Samuel's ruling Q12, 2026-08-28).
+ *
+ * `PATCH /api/channels/{id}` also accepts `name`, `topic`, `archived` and
+ * `visibility`. `visibility` is field-level `sessionOnly` and an agent token is
+ * refused it outright. The other three are MANAGE writes the route accepts and
+ * **no UI can ask for** (F-346) — shipping RENAME first on the AGENT surface
+ * would mean the operator's only way to undo one is to ask an agent. So
+ * {@link ChannelUpdateInput} carries one key, and widening it is a product
+ * decision rather than a type edit.
+ *
+ * `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP rather than
+ * session: the card is the channel's shared scratch surface and changes no
+ * visibility, roster, lifecycle or fact.
+ */
+export async function updateChannel(
+  t: DoplTransport,
+  channelId: string,
+  patch: ChannelUpdateInput
+): Promise<Channel> {
+  const data = await t.request<{ channel: Channel }>(
+    `/api/channels/${enc(channelId)}`,
+    { method: "PATCH", body: patch, toolName: "channel_update" }
+  );
   return data.channel;
 }
 

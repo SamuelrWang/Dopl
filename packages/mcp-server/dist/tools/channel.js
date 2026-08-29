@@ -48,6 +48,7 @@ const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_launch_1 = require("./channel-ops-launch");
+const channel_ops_update_1 = require("./channel-ops-update");
 const identity_1 = require("./identity");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -234,6 +235,16 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     template: args.template,
                     waitMs: args.wait_ms,
                 });
+            }
+            // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
+            // the same route and are deliberately NOT routed here (Samuel's ruling
+            // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is
+            // the READ — the card is replaced whole, so a blind write clobbers.
+            case "update": {
+                const miss = (0, respond_1.missingParams)("update", args, ["channel"]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_update_1.opUpdate)(client, args.channel, args.info_card);
             }
         }
     });

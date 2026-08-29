@@ -44,8 +44,13 @@ exports.KnowledgeMethods = void 0;
 const client_workspaces_js_1 = require("./client-workspaces.js");
 const kb = __importStar(require("./knowledge.js"));
 class KnowledgeMethods extends client_workspaces_js_1.WorkspaceMethods {
-    listKbBases() {
-        return kb.listKbBases(this.transport);
+    listKbBases(opts = {}) {
+        return kb.listKbBases(this.transport, opts);
+    }
+    /** The rows PLUS the shelf sibling key. ⚠ Same single request as
+     *  {@link listKbBases}; read `homeScopedBaseIds` as `?? []` (INVARIANTS §8). */
+    listKbBasesPayload(opts = {}) {
+        return kb.listKbBasesPayload(this.transport, opts);
     }
     getKbBase(baseId) {
         return kb.getKbBase(this.transport, baseId);

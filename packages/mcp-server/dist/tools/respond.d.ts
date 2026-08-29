@@ -14,6 +14,29 @@ export type ToolResponse = {
     isError?: boolean;
 };
 export type RegisterTool = <S extends ZodRawShape>(name: string, description: string, schema: S, handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>) => void;
+/**
+ * Per-tool options on the META registration path.
+ *
+ * ⚠ `charged` EXISTS BECAUSE ONE META TOOL IS NOT LIKE THE OTHERS (Samuel's
+ * ruling Q2 (b), 2026-08-28). `current_workspace` and `list_workspaces` are
+ * uncharged BY DECISION — they are how a lost agent finds out where it is —
+ * while `dopl_home` READS CONTENT-ADJACENT DATA AND WRITES, so it pays like a
+ * domain tool. It cannot use the domain path at all: that path injects a
+ * `workspace=` arg, and this tool is the one that tells you what the containers
+ * to pass there even ARE.
+ *
+ * ⚠ OPT-IN, NEVER A DEFAULT. A blanket charge on this path would meter the two
+ * orientation tools, which is the decision the registrar's docblock records and
+ * this flag exists to preserve.
+ */
+export interface MetaToolOptions {
+    /** Spend one MCP credit before the handler runs. Default false. */
+    charged?: boolean;
+}
+/** The META registration path. ⚠ Structurally assignable to {@link RegisterTool}
+ *  (the extra parameter is optional), so every existing meta registrar keeps
+ *  its type. */
+export type RegisterMetaTool = <S extends ZodRawShape>(name: string, description: string, schema: S, handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>, opts?: MetaToolOptions) => void;
 export declare function ok(text: string): ToolResponse;
 export declare function err(message: string): ToolResponse;
 /**

@@ -140,7 +140,7 @@ describe("dopl_kb listings carry their own scope", () => {
   it("op=list_bases names the visibility filter, not a count", async () => {
     const text = await callTool(
       registerKnowledgeTools,
-      stub({ listKbBases: vi.fn(async () => [BASE]) }),
+      stub({ listKbBasesPayload: vi.fn(async () => ({ bases: [BASE] })) }),
       "dopl_kb",
       { op: "list_bases" },
     );
@@ -240,6 +240,7 @@ describe("dopl_search carries its own scope", () => {
         })),
       ),
       getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+      listAgentTemplates: vi.fn(async () => []),
     });
 
   it("marks a capped group, and states the metadata-only matching + archive gap", async () => {

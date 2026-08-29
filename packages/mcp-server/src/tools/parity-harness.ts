@@ -27,6 +27,8 @@ import { registerMapTool } from "./map.js";
 import { registerSearchTool } from "./search.js";
 import { registerOntologyTool } from "./ontology.js";
 import { registerChannelTool } from "./channel.js";
+import { registerAgentTools } from "./agent.js";
+import { registerHomeTool } from "./home.js";
 
 // ── Capture every registered domain tool ─────────────────────────────
 
@@ -50,7 +52,30 @@ export const REGISTRARS: Array<{
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
   { file: "channel.ts", register: registerChannelTool },
+  { file: "agent.ts", register: registerAgentTools },
+  // ⚠ **THE ONE META TOOL IN THIS CAPTURE, AND IT EARNS ITS PLACE** (2026-08-28).
+  // `current_workspace` / `list_workspaces` are deliberately absent: they carry
+  // no `op`, no write and no charge, so every suite below would be vacuous over
+  // them. `dopl_home` has all three — an `op` enum, a WRITE op in `WRITE_OPS`,
+  // and an explicit credit charge — so leaving it out would mean its enum is
+  // never checked against the write-gate table, which is exactly the
+  // read-only-token hole `parity.test.ts` exists to close.
+  // ⚠ It takes a `directory` its registrar needs; the harness passes a stub,
+  // because capture never runs a handler.
+  {
+    file: "home.ts",
+    register: (r, c) => registerHomeTool(r, c, STUB_DIRECTORY),
+  },
 ];
+
+/** Capture never invokes a handler, so the directory is never read. ⚠ The lock
+ *  itself is pinned for real in `container-lock.test.ts`, through `bootServer`. */
+const STUB_DIRECTORY = {
+  getWorkspaceList: async () => [],
+  resolveWorkspaceRef: async () => null,
+  noWorkspaceError: async () => ({ content: [], isError: true }),
+  lockedWorkspaceId: () => null,
+};
 
 export function captureTools(): CapturedTool[] {
   const tools: CapturedTool[] = [];

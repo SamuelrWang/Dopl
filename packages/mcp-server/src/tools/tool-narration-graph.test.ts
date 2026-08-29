@@ -54,7 +54,11 @@ describe("dopl_kb — a workspace-published base", () => {
   it("list_bases: a hostile base NAME cannot start a row of its own", async () => {
     const text = (
       await opListBases(
-        stub({ listKbBases: vi.fn(async () => [{ ...BASE, name: FORGERY }]) }),
+        stub({
+          listKbBasesPayload: vi.fn(async () => ({
+            bases: [{ ...BASE, name: FORGERY }],
+          })),
+        }),
       )
     ).content[0].text;
 
@@ -199,6 +203,7 @@ describe("dopl_search — hits from every domain at once", () => {
         ]),
         listSkills: vi.fn(async () => []),
         getOntology: vi.fn(async () => ({ clusters: [], objects: {} })),
+        listAgentTemplates: vi.fn(async () => []),
       }),
       "dopl_search",
       { query: "x" },

@@ -6,8 +6,10 @@
 import type { DoplTransport } from "./transport.js";
 import { DoplApiError } from "./errors.js";
 import type {
+  KbShelf,
   KnowledgeBase,
   KnowledgeBaseCreateInput,
+  KnowledgeBaseListPayload,
   KnowledgeBaseUpdateInput,
   KnowledgeDirListing,
   KnowledgeEntry,
@@ -22,12 +24,37 @@ const enc = encodeURIComponent;
 
 // ─── Bases ──────────────────────────────────────────────────────────
 
-export async function listKbBases(t: DoplTransport): Promise<KnowledgeBase[]> {
-  const data = await t.request<{ bases: KnowledgeBase[] }>(
-    "/api/knowledge/bases",
+/**
+ * The bases this caller may READ, optionally narrowed to one shelf.
+ *
+ * ⚠ `shelf` ABSENT = BOTH shelves — the pre-existing contract every caller
+ * rides, and the reason this stayed a no-arg call for so long. The narrowing is
+ * a `WHERE` server-side, not a post-filter, so a shelf the caller did not ask
+ * for never reaches the wire.
+ */
+export async function listKbBasesPayload(
+  t: DoplTransport,
+  opts: { shelf?: KbShelf } = {}
+): Promise<KnowledgeBaseListPayload> {
+  const qs = opts.shelf ? `?shelf=${enc(opts.shelf)}` : "";
+  return t.request<KnowledgeBaseListPayload>(
+    `/api/knowledge/bases${qs}`,
     { toolName: "kb_list_bases" }
   );
-  return data.bases;
+}
+
+/**
+ * The rows alone. ⚠ DELEGATES to {@link listKbBasesPayload} rather than issuing
+ * its own request — one HTTP call either way, and one place that knows the URL.
+ * Kept as its own method because most callers want the array and nothing else;
+ * widening its return would have been a breaking change for all of them to buy
+ * a key one caller reads.
+ */
+export async function listKbBases(
+  t: DoplTransport,
+  opts: { shelf?: KbShelf } = {}
+): Promise<KnowledgeBase[]> {
+  return (await listKbBasesPayload(t, opts)).bases;
 }
 
 export async function getKbBase(

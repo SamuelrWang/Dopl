@@ -8,9 +8,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSearchTool = registerSearchTool;
 const zod_1 = require("zod");
+const client_1 = require("@dopl/client");
 const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
 const partial_read_1 = require("./partial-read");
+const home_scopes_1 = require("./home-scopes");
+const search_everywhere_1 = require("./search-everywhere");
 const respond_1 = require("./respond");
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
 /** A result with nothing nameable left after neutralization. */
@@ -24,11 +27,22 @@ const NO_NAME = "`(unnamed)`";
 function snippet(raw) {
     return (0, narration_1.inlineOr)(raw.replace(/<\/?b>/g, ""), "`(no snippet)`");
 }
-const SEARCH_DESCRIPTION = `Ranked search across THREE domains at once: knowledge entries, skills, and ontology objects. Returns grouped hits with the handle to read each: dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_ontology(op="get"). Prefer this over per-domain listing when you don't already know where something lives.
+/**
+ * ⚠ THE GROUP COUNT IS A CONSTANT, NOT A LITERAL IN THREE PLACES. It is the
+ * DENOMINATOR `partialRead`'s notice reports against ("2 of 4 groups could not
+ * be read"), and it must move with the reads below and with the description's
+ * opening word — never independently of either. Named when the templates group
+ * landed (2026-08-28), because the previous shape had the number inline and the
+ * word "THREE" spelled out in prose that nothing tied to it.
+ */
+const SEARCH_GROUP_COUNT = 4;
+const SEARCH_DESCRIPTION = `Ranked search across FOUR domains at once: knowledge entries, skills, ontology objects, and agent templates. Returns grouped hits with the handle to read each: dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_ontology(op="get"), dopl_agent(op="get"). Prefer this over per-domain listing when you don't already know where something lives — including when the user names an agent by a nickname ("use my research agent").
 
-WHAT IT DOES NOT COVER, because a miss here is not evidence of absence: the CHAT ARCHIVE, members, teams and channels are not searched at all (dopl_chats(op="list", query=...) is the archive's own filter). Only knowledge entries are matched on their BODIES; skills and ontology objects are matched on names and short trigger metadata only, so a term that appears solely inside a SKILL.md will not be found. Only ACTIVE skills are searched, and only what you can see. Every group is capped at \`limit\`; a group whose backing read FAILED still shows "No matches", but the failure is NAMED in a PARTIAL READ notice on the result, so a group with no such notice against it really was searched.
+WHAT IT DOES NOT COVER, because a miss here is not evidence of absence: the CHAT ARCHIVE, members, teams and channels are not searched at all (dopl_chats(op="list", query=...) is the archive's own filter). Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates are matched on names and short metadata only, so a term that appears solely inside a SKILL.md — or solely inside a template's INSTRUCTIONS — will not be found. Only ACTIVE skills are searched, and only what you can see. Every group is capped at \`limit\`; a group whose backing read FAILED still shows "No matches", but the failure is NAMED in a PARTIAL READ notice on the result, so a group with no such notice against it really was searched.
 
-Params: query (required; all terms must appear, punctuation-folded), limit (max hits per group, default 8).`;
+SCOPE. \`scope="here"\` (the DEFAULT) searches the ONE workspace this call resolved to. \`scope="everywhere"\` fans out over every scope you can reach — your workspaces AND your home channels — and renders the hits under a PER-SCOPE heading carrying the id to target with \`workspace=\`. Nothing is merged across scopes, so a hit always says which room it came from. ⚠ THE FAN-OUT COSTS ONE MCP CREDIT PER SCOPE, is capped at ${search_everywhere_1.MAX_SCOPES} scopes, and NAMES the truncation when it hits the cap or runs out of credits — the count it reports is what it actually searched, never a promise of exhaustiveness. Use it when you do not know where something lives; use the default when you do.
+
+Params: query (required; all terms must appear, punctuation-folded), limit (max hits per group, default 8), scope ("here" | "everywhere", default "here").`;
 /**
  * "Showing N of M" for one group, or nothing when untruncated. ⚠ Both numbers
  * come from a list already in memory (the cap is applied HERE), so it is free —
@@ -51,14 +65,33 @@ function more(matched, shown, noun) {
  * NAMES it, and the footer says a group not named there really was searched.
  */
 function scopeNote(limit, notice) {
-    return `_${notice}Scope: max ${limit} per group. Only knowledge entries are matched on their BODIES; skills and ontology objects on names and trigger metadata only, so a term living inside a SKILL.md is not findable here. Drafts are excluded from Skills. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._`;
+    return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template's instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._`;
 }
-function registerSearchTool(register, client) {
+/**
+ * ⚠ `directory` AND `charge` ARE OPTIONAL, AND ABSENT MEANS "NO FAN-OUT". Six
+ * suites construct this registrar with `(register, client)` alone, and a fan-out
+ * is meaningless without the LOCKED leg list anyway — a `scope="everywhere"` on a
+ * registrar built without them answers the single-scope search and SAYS it did,
+ * rather than quietly searching one scope while the caller believes it searched
+ * all of them.
+ */
+/**
+ * ⚠ WIDENING THE **SCOPE** AXIS IS NOT WIDENING THE **DOMAIN** AXIS, and the
+ * fan-out result has to say so in its own footer — an agent that reads
+ * "everywhere" and gets four groups will otherwise take a miss as evidence of
+ * absence across its whole account rather than across four domains of it.
+ */
+const SCOPE_AXIS_NOTE = `Each scope was searched the same way a single-scope call searches: knowledge entries on their BODIES, skills, ontology objects and agent templates on names and short metadata only, ACTIVE skills only, and only what you can see there. The CHAT ARCHIVE, members, teams and channels are not searched in ANY scope. A wider SCOPE is not a wider DOMAIN — no scope here is proof of absence.`;
+function registerSearchTool(register, client, directory, charge) {
     register("dopl_search", SEARCH_DESCRIPTION, {
         query: zod_1.z.string().min(1).describe("What to find."),
         // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
         // z.number() rejects with an opaque -32602.
         limit: zod_1.z.coerce.number().int().min(1).max(25).optional().describe("Max hits per group (default 8)."),
+        scope: zod_1.z
+            .enum(["here", "everywhere"])
+            .optional()
+            .describe(`Which scopes to search. "here" (DEFAULT) = the one workspace this call resolved to, byte-identical to what this tool has always done. "everywhere" = every workspace AND home channel you can reach, one ordinary fenced search per scope, results under per-scope headings — capped at ${search_everywhere_1.MAX_SCOPES} scopes, ONE MCP CREDIT PER SCOPE, and the truncation is named in the result. A session pinned to a shared home channel reaches exactly that one, so "everywhere" there is the same single scope as "here".`),
     }, async (args) => {
         const limit = args.limit ?? 8;
         // Tokenize + punctuation-fold query AND haystack so "duplicate name"
@@ -75,10 +108,40 @@ function registerSearchTool(register, client) {
             const hay = ` ${fields.map((f) => fold(f ?? "")).join(" ")} `;
             return terms.every((t) => hay.includes(t));
         };
+        // ── scope="everywhere": N ordinary fenced searches, one per scope ──
+        if (args.scope === "everywhere" && directory && charge) {
+            const { legs, homeReadFailed } = await (0, home_scopes_1.searchLegs)(client, directory);
+            // ⚠ The leg the REGISTRAR already charged for, matched by id — the
+            // resolved workspace is not always the first leg.
+            const alreadyCharged = client_1.workspaceContext.getStore() ?? client.getWorkspaceId();
+            const fan = await (0, search_everywhere_1.fanOut)(client, charge, {
+                legs,
+                query: args.query,
+                limit,
+                alreadyCharged,
+                matches,
+            });
+            // ⚠ Only when NOTHING was searched does the credits refusal become the
+            // whole answer: a partial fan-out has real hits above it and must not be
+            // replaced by an error that discards them.
+            if (fan.refusal)
+                return fan.refusal;
+            const head = [
+                `# Search: ${(0, narration_1.inlineOr)(args.query, "`(unreadable query)`")} — everywhere`,
+                "",
+            ];
+            const foot = [
+                homeReadFailed
+                    ? `_⚠ YOUR HOME CHANNELS COULD NOT BE READ, so none of them was searched and none is named above. What follows covers your workspaces only._`
+                    : "",
+                `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`,
+            ].filter(Boolean);
+            return (0, respond_1.ok)([...head, ...fan.lines, ...foot].join("\n"));
+        }
         // ⚠ Fail-soft (one broken domain must not fail the search) but RECORD the
         // failure. Labels must match the group headings below.
         const reads = (0, partial_read_1.partialRead)();
-        const [entryHits, skills, ontology] = await Promise.all([
+        const [entryHits, skills, ontology, templates] = await Promise.all([
             reads.soft("Knowledge entries", client.searchKb(args.query, { limit }), []),
             reads.soft("Skills", client.listSkills(), []),
             // ⚠ SUMMARY PROJECTION, NOT THE GRAPH. This group uses four fields
@@ -87,6 +150,11 @@ function registerSearchTool(register, client) {
             // cluster `layout` — 634 KB vs 82 KB on a 366-object workspace, on a
             // tool agents call speculatively and often.
             reads.soft("Ontology objects", client.getOntology({ view: "summary" }), EMPTY_ONTOLOGY),
+            // ⚠ NO `shelf` FILTER — absent means BOTH shelves, which is the whole
+            // point of a FIND surface: a user naming "my research agent" does not
+            // know or care which shelf it is on. The server has already applied
+            // `canSeeTemplate`, so this is that caller's own view.
+            reads.soft("Agent templates", client.listAgentTemplates(), []),
         ]);
         // ⚠ Caller's own argument, but a backtick still escapes this span and
         // puts the tail back into the heading.
@@ -132,9 +200,26 @@ function registerSearchTool(register, client) {
         if (ontology.truncated) {
             lines.push((0, ontology_clipped_1.clippedNote)("the ontology group searched a prefix of the graph and a match outside it could not appear"));
         }
+        // ⚠ AGENT TEMPLATES ARE MATCHED ON NAME + DESCRIPTION ONLY, never on
+        // `instructions`. That is a deliberate omission, not an oversight: the
+        // instructions block is a system prompt another member wrote, and folding
+        // it into the haystack would let one member's prose decide which identity
+        // a stranger's agent surfaces. `visibility` rides the row because it is
+        // what makes two same-named hits distinguishable — the same reason the
+        // ambiguity refusal carries it.
+        const templateMatches = templates.filter((t) => matches(t.name, t.description));
+        const templateHits = templateMatches.slice(0, limit);
+        lines.push("", "## Agent templates");
+        if (templateHits.length === 0)
+            lines.push("_No matches._");
+        for (const t of templateHits) {
+            const summary = (0, narration_1.inlineOr)(t.description, "`(no description)`");
+            lines.push(`- ${(0, narration_1.inlineOr)(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility}) — ${summary}`);
+        }
+        lines.push(...more(templateMatches.length, templateHits.length, "agent templates"));
         // ⚠ GROUPS, not domains — the denominator must move with the reads above,
         // never independently of them.
-        lines.push("", scopeNote(limit, reads.notice(3, "groups")));
+        lines.push("", scopeNote(limit, reads.notice(SEARCH_GROUP_COUNT, "groups")));
         return (0, respond_1.ok)(lines.join("\n"));
     });
 }

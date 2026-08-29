@@ -77,6 +77,9 @@ const searchStub = (over: Record<string, unknown> = {}) =>
     searchKb: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
     getOntology: vi.fn(async () => SUMMARY),
+    // FOURTH group since 2026-08-28 — modelled so the group renders as a
+    // genuine miss rather than as a partial-read failure.
+    listAgentTemplates: vi.fn(async () => []),
     ...over,
   });
 

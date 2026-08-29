@@ -17,6 +17,11 @@ import { deleteAdminDescription } from "../delete-policy.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import {
+  SHELF_ARG_DESCRIPTION,
+  SHELF_VALUES,
+  toWireShelfOrUndefined,
+} from "./shelf";
+import {
   opGetTree,
   opListBases,
   opListDir,
@@ -35,11 +40,11 @@ import {
 import { opDeleteBase, opDeleteFile, opDeleteFolder } from "./knowledge-ops-admin";
 
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
-- "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private and bases scoped to a team you have no grant on are absent, so this is your view and not the workspace's base count.
+- "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private and bases scoped to a team you have no grant on are absent, so this is your view and not the workspace's base count. Rows carry NO shelf label — the column is deliberately not projected onto the row — so pass \`shelf\` to find out which shelf a base is on. Optional: shelf ("personal" = your own /home shelf, "workspace" = the shared shelf; omit for BOTH).
 - "get_tree" — folder/entry tree for a base (metadata only, bodies stripped). FOLDERS ship in full; ENTRIES are paged, 400 per call by default, and the result says so and hands back an entry_cursor when there are more. First call when exploring a base; for a body follow up with op=read_file.
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
-- "create_base" — create a new base. New bases are private to the creator by default.
-- "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here.
+- "create_base" — create a new base. New bases are private to the creator by default. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own /home shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel container or a second workspace you belong to. Creating a PUBLIC base inside a home channel somebody else is in previews first and hands back a one-time confirm_token.
+- "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here. There is no shelf move: a base's shelf is fixed at creation, and passing \`shelf\` here is refused rather than dropped.
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders. Pass \`description\` to set the folder's short agent-facing summary (shown in get_tree/list_dir); re-calling with a \`description\` on an existing folder UPDATES it (the way to edit a folder summary without touching its contents).
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
@@ -62,9 +67,11 @@ const KB_ADMIN_DESCRIPTION = deleteAdminDescription(
 export function registerKnowledgeTools(
   register: RegisterTool,
   client: DoplClient,
-  // ⚠ Read for exactly ONE thing: whether an entry BODY is somebody else's,
-  // which decides `UNTRUSTED_ENTRY_BODY_HEADER`. Nothing about visibility is
-  // decided from it — the server already filtered.
+  // ⚠ Read for exactly TWO things: whether an entry BODY is somebody else's,
+  // which decides `UNTRUSTED_ENTRY_BODY_HEADER`; and binding a confirm token to
+  // the identity that previewed (2026-08-28), so one caller's preview cannot be
+  // spent by another. Nothing about visibility is decided from it — the server
+  // already filtered.
   caller: CallerIdentity = UNKNOWN_CALLER,
 ): void {
   // ── dopl_kb — read + non-destructive writes ──────────────────────
@@ -97,12 +104,19 @@ export function registerKnowledgeTools(
       limit: z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20, 1-100)."),
       entry_limit: z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400, 1-1000). Folders always ship in full."),
       entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
-      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it readable by every member of the workspace). One-way — 'private' is rejected."),
+      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it readable by every member of the workspace). One-way — 'private' is rejected. op=create_base: initial visibility (defaults to 'private'); 'public' beside shelf='personal' is refused as a contradiction."),
+      shelf: z.enum(SHELF_VALUES).optional().describe(SHELF_ARG_DESCRIPTION),
+      confirm_token: z
+        .string()
+        .optional()
+        .describe(
+          "op=create_base: the one-time token from this call's own dry-run preview, echoed back to go ahead. Only ever needed when the write would publish into a home channel somebody else is in; passing it on any other call is refused. Never guess one — they are random.",
+        ),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "list_bases":
-          return opListBases(client);
+          return opListBases(client, toWireShelfOrUndefined(args.shelf));
         case "get_tree": {
           const miss = missingParams("get_tree", args, ["base"]);
           if (miss) return miss;
@@ -116,12 +130,18 @@ export function registerKnowledgeTools(
         case "create_base": {
           const miss = missingParams("create_base", args, ["name"]);
           if (miss) return miss;
-          return opCreateBase(client, args.name as string, args.description);
+          return opCreateBase(client, caller.userId, {
+            name: args.name as string,
+            description: args.description,
+            shelf: args.shelf,
+            visibility: args.visibility,
+            confirm_token: args.confirm_token,
+          });
         }
         case "update_base": {
           const miss = missingParams("update_base", args, ["base"]);
           if (miss) return miss;
-          return opUpdateBase(client, args.base as string, args.name, args.description, args.slug);
+          return opUpdateBase(client, args.base as string, args.name, args.description, args.slug, args.shelf);
         }
         case "create_folder": {
           const miss = missingParams("create_folder", args, ["base", "path"]);
