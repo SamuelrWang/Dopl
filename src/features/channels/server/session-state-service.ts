@@ -161,6 +161,9 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     // desktop that predates the field from a blank launch; only the DIRECTIVE
     // lane needs that distinction (spec E-4) and it is a different table.
     template_name: entry.templateName ?? null,
+    // 2026-08-31 (20260905120000): the operator-given agent name — peer-visible
+    // by design, `?? null` on the rollout contract every optional field here has.
+    display_name: entry.displayName ?? null,
   };
 }
 

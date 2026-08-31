@@ -146,10 +146,10 @@ describe("parseAgentPostStamp — the one reader of the wire format", () => {
 describe("the transcript's attribution pill", () => {
   it("names the agent IN THE NAME LINE when the post is stamped", () => {
     renderThread([byAgent("m-1", { agentId: A })]);
-    // ⚠ ONE TEXT NODE, `Agent #<id>` (Samuel, 2026-08-22). The grey
+    // ⚠ ONE TEXT NODE, `#<id>` (Samuel, 2026-08-31; `Agent #<id>` 2026-08-22 to then). The grey
     // `Agent · <id>` chip is deleted; the pill's NAME says which agent, and the
     // `#` is literal rather than a separator a screen reader has to spell.
-    expect(within(rowFor("BODY-m-1")).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-1")).getByText(`#${A}`)).not.toBeNull();
   });
 
   /** ⚠ An unstamped agent post renders exactly what it always did. Inventing an
@@ -212,9 +212,9 @@ describe("a different agent breaks the run", () => {
       byAgent("m-3", { agentId: A, seq: 3 }),
     ]);
     // Three rows, three pills, and each names its own agent.
-    expect(within(rowFor("BODY-m-1")).getByText(`Agent #${A}`)).not.toBeNull();
-    expect(within(rowFor("BODY-m-2")).getByText(`Agent #${B}`)).not.toBeNull();
-    expect(within(rowFor("BODY-m-3")).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-1")).getByText(`#${A}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-2")).getByText(`#${B}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-3")).getByText(`#${A}`)).not.toBeNull();
   });
 
   /** ⚠ THE SAME agent still groups — this must not turn every agent post into
@@ -226,7 +226,7 @@ describe("a different agent breaks the run", () => {
     ]);
     // The second row is a continuation: no pill, so nothing names an agent.
     expect(within(rowFor("BODY-m-2")).queryByText(/Agent/)).toBeNull();
-    expect(within(rowFor("BODY-m-1")).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-1")).getByText(`#${A}`)).not.toBeNull();
   });
 
   /** ⚠ Two legacy posts still group — `null === null`. A main that predates the
@@ -246,7 +246,7 @@ describe("a different agent breaks the run", () => {
       byAgent("m-1", { agentId: null, seq: 1 }),
       byAgent("m-2", { agentId: A, seq: 2 }),
     ]);
-    expect(within(rowFor("BODY-m-2")).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(rowFor("BODY-m-2")).getByText(`#${A}`)).not.toBeNull();
   });
 
   /** A HUMAN run is untouched — the stamp is only read on agent rows. */
@@ -282,7 +282,7 @@ describe("the attribution pill", () => {
 
   it("names the wording in one place, for all three cases", () => {
     expect(attributionName({ agent: false, agentId: null, authorLabel: "You" })).toBe("You");
-    expect(attributionName({ agent: true, agentId: A, authorLabel: "You" })).toBe(`Agent #${A}`);
+    expect(attributionName({ agent: true, agentId: A, authorLabel: "You" })).toBe(`#${A}`);
     expect(attributionName({ agent: true, agentId: null, authorLabel: "You" })).toBe("Agent");
 
     // ── THE RENAME REACHES THE TRANSCRIPT (2026-08-27, Samuel's ruling) ──────────────────────
@@ -298,10 +298,10 @@ describe("the attribution pill", () => {
     // ⚠ FALLS BACK, NEVER BLANKS. Most agents are never renamed, and the id is the honest answer.
     expect(
       attributionName({ agent: true, agentId: A, authorLabel: "You", agentName: null })
-    ).toBe(`Agent #${A}`);
+    ).toBe(`#${A}`);
     expect(
       attributionName({ agent: true, agentId: A, authorLabel: "You", agentName: "   " })
-    ).toBe(`Agent #${A}`);
+    ).toBe(`#${A}`);
     // ⚠ A HUMAN ROW IS UNTOUCHED by an agent name arriving beside it.
     expect(
       attributionName({ agent: false, agentId: null, authorLabel: "You", agentName: "Research" })
@@ -314,7 +314,7 @@ describe("the attribution pill", () => {
     expect(pill.className).toContain("rounded-full");
     // The reference's subtitle slot holds the transcript's own time format.
     const time = formatChannelTimestamp("2026-08-18T12:00:00.000Z");
-    expect(within(pill).getByText(`Agent #${A}`)).not.toBeNull();
+    expect(within(pill).getByText(`#${A}`)).not.toBeNull();
     expect(within(pill).getByText(time)).not.toBeNull();
   });
 

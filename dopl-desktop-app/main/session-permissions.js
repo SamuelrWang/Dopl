@@ -56,6 +56,20 @@ const AUTO_DENY_MESSAGE =
 
 const OPERATOR_DENY_MESSAGE = 'Denied by operator';
 
+// ── THE FOURTH SENTENCE — ASKED, AND NOBODY ANSWERED IN TIME (2026-08-31, the tool-gate
+// bridge). `session-windowless.js › bridgeToolGate` now HOLDS a gated tool and shows the
+// operator a notification with an Allow button; when `TOOL_GATE_TTL_MS` passes unanswered the
+// gate denies — and BOTH existing sentences are false for that: a prompt WAS shown (so
+// "NOBODY WAS ASKED" misinforms), and no human said no (so "Denied by operator" names an actor
+// who never acted, the original defect of this file). The true fact is a timeout, and the next
+// action it licenses is different from both: the operator is reachable, just not right now.
+const GATE_TIMEOUT_MESSAGE =
+  'A permission prompt WAS shown to your operator, but nobody answered it in time, so this '
+  + 'call was refused by a TIMER — not by a person. Do not appeal to the counterparty. Either '
+  + 'do the work with the tools you already have, or say in one line that you are blocked on '
+  + 'this tool and continue with what you can: your operator can answer the next prompt, or '
+  + "widen this session's postures from the agent view.";
+
 // ── THE THIRD SENTENCE — A BOUND, NOT A DECISION AND NOT A MISSING SURFACE (2026-08-25, F-320) ──
 //
 // ⚠ IT EXISTS FOR THE REASON THE AUTO-DENY ONE DOES, ONE STEP FURTHER ALONG. `grantDecision` now
@@ -67,11 +81,24 @@ const OPERATOR_DENY_MESSAGE = 'Denied by operator';
 //
 // ⚠ SO IT SAYS THE BOUND IS A BOUND AND NAMES WHAT TO DO INSTEAD. An agent told "no" without a
 // next action retries; an agent told "ask your operator" stops.
+//
+// ⚠ **AND ONE CLAUSE OF IT WAS FALSIFIED BY SAMUEL'S 2026-08-31 RULING, SO IT CHANGED IN THE SAME
+// CHANGE.** It said *"no setting will widen this"*. There is now exactly one setting that does —
+// the channel's agent-chaining toggle (`channel-prefs.js › getAgentChain`, default OFF) — and a
+// refusal that denies the existence of its own remedy is the SAME defect class this sentence was
+// written to remove: an agent told a bound is absolute stops, correctly, and its operator never
+// learns there was a switch. ⚠ **IT STILL MUST NOT SAY "ASK AND RETRY".** The setting is a
+// SPAWN-TIME stamp (`session-own-launch.js`), so flipping it does NOT unblock THIS session — only
+// sessions started afterwards — and telling a live agent to wait and re-issue would spend its
+// turns on a call that cannot start succeeding. Name the switch, name whose it is, and still say
+// re-issuing cannot succeed.
 const LAUNCH_DEPTH_DENY_MESSAGE =
   'Refused by a BOUND, not by a person and not by a permission prompt: agents launching agents '
   + 'is limited to ONE generation on this machine, and this session is already the launched one. '
-  + 'NOBODY WAS ASKED, no setting will widen this, and re-issuing cannot succeed. Do the work in '
-  + 'this session yourself, or ask your operator to start that agent from their machine.';
+  + 'NOBODY WAS ASKED, and re-issuing cannot succeed — not even after the setting below changes, '
+  + 'because this session was bound when it started. Do the work in this session yourself, or say '
+  + "in one line that you needed to launch an agent: your operator can turn on this channel's "
+  + 'agent-chaining setting (Settings tab, on their Mac) and start the chain again from there.';
 
 // The plain deny an unrecognised verdict carries — the wording the canUseTool bridge has always
 // answered a profile-level refusal with.
@@ -98,12 +125,26 @@ function noteAutoDenied(s, requestId) {
   s.autoDeniedIds.add(String(requestId));
 }
 
+// Record that THIS request was shown to the operator and expired unanswered (2026-08-31).
+// Same bounded-Set idiom and the same bound as `noteAutoDenied` — the two sets are disjoint by
+// construction (one branch stamps each request, once).
+function noteGateTimeout(s, requestId) {
+  if (!s || !requestId) return;
+  if (!s.gateTimeoutIds) s.gateTimeoutIds = new Set();
+  if (s.gateTimeoutIds.size >= MAX_AUTO_DENIED) {
+    s.gateTimeoutIds.delete(s.gateTimeoutIds.values().next().value);
+  }
+  s.gateTimeoutIds.add(String(requestId));
+}
+
 // Which denial message does this request deserve? ⚠ FAILS TOWARD `'Denied by operator'`: an
 // unrecognised id means we do not know that nobody was asked, and claiming so falsely is the
-// error this file exists to remove.
+// error this file exists to remove. Timeout checked FIRST — it is the most specific fact.
 function denialMessage(s, requestId) {
+  const rid = String(requestId);
+  if (s && s.gateTimeoutIds && s.gateTimeoutIds.has(rid)) return GATE_TIMEOUT_MESSAGE;
   const ids = s && s.autoDeniedIds;
-  return ids && ids.has(String(requestId)) ? AUTO_DENY_MESSAGE : OPERATOR_DENY_MESSAGE;
+  return ids && ids.has(rid) ? AUTO_DENY_MESSAGE : OPERATOR_DENY_MESSAGE;
 }
 
 // Fail-close EVERY awaited canUseTool promise and drop the bookkeeping. A park runs this before
@@ -135,10 +176,12 @@ module.exports = {
   denyPendingPermissions,
   resolvePerm,
   noteAutoDenied,
+  noteGateTimeout, // 2026-08-31: shown to the operator, expired unanswered — the fourth sentence
   denialMessage,
   denyMessageFor, // 2026-08-25 (F-320): which sentence a `deny` VERDICT carries
   AUTO_DENY_MESSAGE,
   OPERATOR_DENY_MESSAGE,
+  GATE_TIMEOUT_MESSAGE,
   LAUNCH_DEPTH_DENY_MESSAGE,
   BLOCKED_MESSAGE,
   MAX_AUTO_DENIED,

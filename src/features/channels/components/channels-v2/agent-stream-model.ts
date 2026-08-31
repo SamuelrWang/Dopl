@@ -33,69 +33,15 @@ import type { ChannelEscalation } from "../../escalation";
 import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 
 /**
- * THE LANES A STREAM ROW CAN BE IN.
- *
- * `thinking` the agent's own words · `tool` a command it ran · `sent` what it
- * POSTED into the channel · `operator` something I said to it privately ·
- * `private` its private answer to me · `note` a status line, or a frame this
- * build does not recognise.
+ * ⚠ THE LANE VOCABULARY LIVES IN `agent-stream-lanes.ts` SINCE 2026-08-31 (§1),
+ * and this file stays its import path of record — {@link StreamLane} and
+ * {@link frameLane} are re-exported here, so no importer changed. The seam: that
+ * file moves when the DESKTOP's `kind` / `lane` vocabulary moves, this one when
+ * the stream's own arithmetic does (the echo dedupe, the held-draft join, the
+ * TTL, the grouping) — and neither has ever needed the other's reason.
  */
-export type StreamLane =
-  | "thinking"
-  | "tool"
-  | "sent"
-  | "operator"
-  | "private"
-  | "note";
-
-/**
- * ⚠ ONE KIND, SEVERAL SPELLINGS, ON PURPOSE. Main and this tree ship separately,
- * so a kind can land on the wire before this file has heard of it and vice versa.
- * Each lane therefore accepts every spelling the desktop plausibly emits for it,
- * and anything unmatched falls to `note` — which still renders its text. Adding a
- * kind is adding a row here; it is never a code change anywhere else.
- */
-const LANE_BY_KIND: Record<string, StreamLane> = {
-  // The five that exist today (`session-narration.js › entryFor`).
-  assistant: "thinking",
-  tool: "tool",
-  result: "tool",
-  post: "sent",
-  status: "note",
-  // The vocabulary the desktop is growing as this lands.
-  thinking: "thinking",
-  step: "thinking",
-  command: "tool",
-  tool_use: "tool",
-  tool_result: "tool",
-  sent: "sent",
-  posted: "sent",
-  operator: "operator",
-  steer: "operator",
-  user: "operator",
-  private: "private",
-  reply: "private",
-};
-
-/**
- * WHICH LANE THIS FRAME BELONGS IN.
- *
- * ⚠ `lane` WINS OVER `kind` WHEN MAIN SENDS ONE. An explicit lane is a statement
- * about audience — public post vs private steer — and audience is the one thing
- * this surface must not infer wrongly. `kind` describes the shape of the event;
- * when the two disagree, the one that says who can SEE it decides.
- * ⚠ Both are read defensively: neither is declared on the entry type, because the
- * wire is the DESKTOP's to widen and this side must survive either version.
- */
-export function frameLane(entry: AgentNarrationEntry): StreamLane {
-  const raw = entry as AgentNarrationEntry & { lane?: unknown };
-  const lane = typeof raw.lane === "string" ? raw.lane.toLowerCase() : "";
-  if (lane === "private") return "private";
-  if (lane === "operator") return "operator";
-  if (lane === "channel" || lane === "sent") return "sent";
-  const kind = typeof entry.kind === "string" ? entry.kind.toLowerCase() : "";
-  return LANE_BY_KIND[kind] ?? "note";
-}
+export { frameLane, type StreamLane } from "./agent-stream-lanes";
+import { frameLane, type StreamLane } from "./agent-stream-lanes";
 
 /** One row of the rendered stream. */
 export interface StreamItem {
@@ -147,6 +93,30 @@ export interface StreamItem {
    * would put a live Post button on a row the decide route will refuse.
    */
   expired?: boolean;
+  /**
+   * MAIN CUT THIS LINE AT ITS PROSE CAP AND THE TAIL EXISTS NOWHERE (2026-08-31,
+   * `spa-bridge-shapes.ts › DesktopNarrationEntry.truncated`). The cap equals the
+   * renderer's own expanded ceiling, so a `length >` check can never detect a
+   * main-cut line — this flag is the only marker there is, and every face that
+   * shows the text must say so when it is set (INVARIANTS §9).
+   * ⚠ Absent means ARRIVED WHOLE — only an explicit `true` counts.
+   */
+  truncated?: boolean;
+  /**
+   * `directed` rows only — **WHICH of this operator's agents filed the direction**
+   * (F-376a, 2026-08-31): an 8-char agent instance id, not a display name.
+   *
+   * 🔒 **A CAPTION, AND AN UNVERIFIED ONE. Nothing may gate, filter or authorize on
+   * it** (`spa-bridge-shapes.ts › DesktopNarrationEntry.senderAgentId` carries the
+   * argument: the server derives it from a header that proves nothing about the
+   * caller). It is safe to SHOW only because sender and recipient are the same
+   * operator's agents by construction.
+   * ⚠ **IT IS AN ID, SO A FACE MUST RESOLVE IT BEFORE RENDERING IT** — an agent id
+   * is never printed at a person on this surface (`agent-id-visibility.test.ts`).
+   * ⚠ Absent is the ORDINARY case, not unknown: an external orchestrator has no
+   * session stamp. The fallback is the anonymous sentence, never a raw id.
+   */
+  senderAgentId?: string;
 }
 
 /**
@@ -383,6 +353,14 @@ export function buildAgentStream({
       tool: entry.tool,
       ok: entry.ok,
       to: lane === "sent" ? (threadTitle ?? null) : undefined,
+      // ⚠ Read like `framePending`: only an explicit `true` counts, and the field
+      // rides through so every face can confess the cut (INVARIANTS §9).
+      ...(entry.truncated === true ? { truncated: true } : {}),
+      // ⚠ Same absent-means-ordinary discipline: the field rides through only when
+      // main actually stamped one (F-376a).
+      ...(lane === "directed" && typeof entry.senderAgentId === "string" && entry.senderAgentId
+        ? { senderAgentId: entry.senderAgentId }
+        : {}),
       ...(held
         ? { pending: true, requestId: request?.id ?? null, expired: isExpired(request, now) }
         : {}),

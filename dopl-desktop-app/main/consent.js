@@ -274,6 +274,23 @@ function notifyOutbound({ channelName, proposedReply, onSend, onOpen }) {
   });
 }
 
+// A gated TOOL on a windowless session, HELD for the operator (2026-08-31, Samuel's ruling —
+// `session-windowless.js › bridgeToolGate` carries the whole argument). The button ALLOWS the
+// one held call; the body click navigates; DISMISS decides nothing (notify-action.js's rule),
+// so an ignored banner resolves by the bridge's own TTL, never here. ⚠ NO SERVER ROW behind
+// this one, deliberately: a tool grant is a fact about THIS machine, and must not be writable
+// by anything holding the operator's Dopl credential. `tool` and `channelName` arrive
+// sanitized and bounded by the caller.
+function notifyToolGate({ channelName, tool, onAllow, onOpen }) {
+  return buildActionNotification({
+    title: `${tool} — your agent is waiting`,
+    body: `Your agent in "${channelName}" wants to use ${tool}. Allow it, or ignore to refuse when the prompt expires.`,
+    actionText: 'Allow',
+    onAffirm: onAllow,
+    onOpen,
+  });
+}
+
 module.exports = {
   clampBody,
   truncate,
@@ -289,4 +306,5 @@ module.exports = {
   DECISION_FAILED,
   pollStatus,
   notifyOutbound,
+  notifyToolGate, // 2026-08-31: the held tool gate's banner — local, no row behind it
 };

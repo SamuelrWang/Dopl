@@ -27,8 +27,10 @@
 // second bound and carries the whole story.
 // ⚠ THE PER-ENTRY BOUND IS NOT ONE NUMBER, and since 2026-08-27 it is not one ORDER either:
 // captions are `TEXT_CAP` (300), a post is `POST_CAP` (1000), and the agent's own PROSE is
-// `PROSE_CAP` (2000) — read that constant's note for why the prose had to stop being a caption
-// and what the new ceiling costs.
+// `PROSE_CAP` — read `main/narration-text.js` for all four, for why the prose had to stop being a
+// caption, and for the CAPTION-vs-PROSE rule that decides which shaper a frame gets.
+// ⚠ THIS LINE SAID `PROSE_CAP` (2000) UNTIL 2026-08-31 AND THE CONSTANT WAS 8000 BY THEN — the
+// shape a number copied into a second file always ends up in. It is not restated here again.
 //
 // ⚠ NOTHING PRIVILEGED CROSSES. Entries carry ALREADY-SUMMARIZED display text: the tool
 // name through the gate's own normalizer, and `inputSummary` — which `session-io.js ›
@@ -48,7 +50,17 @@ const { isPrivateTurn } = require('./session-private');
 // 2026-08-31: WHOSE question this turn answers — the operator's own, or another of their
 // agents'. Attribution only; it reaches no gate.
 const { isDirectedTurn } = require('./session-directed');
+// F-376a (2026-08-31): the agent-id charset, so the sender CAPTION on a directed entry is
+// shape-gated against the ONE grammar rather than a second copy of it.
+const { AGENT_ID_RE } = require('./agent-id');
 const { diag } = require('./diag');
+// ⚠ THE FOUR CAPS AND THE TWO SHAPERS MOVED TO `main/narration-text.js` ON 2026-08-31 (§2 split,
+// under the §1 cap). Read that file's header before touching a bound: it carries the CAPTION vs
+// PROSE rule, why `line` flattens and `prose` must not, and the "bounded by CHARACTERS, never by
+// SHAPE" rule F-376b was filed for. ⚠ ABOVE THE SENTINEL, like `appWindows` and `isPrivateTurn`:
+// everything below it is a free var, and a `require` inside the block would break the extraction
+// idiom the marker promises. Re-exported at the foot, so no caller and no test moved.
+const { TEXT_CAP, TOOL_CAP, POST_CAP, PROSE_CAP, line, prose } = require('./narration-text');
 
 // ─── BEGIN SESSION-NARRATION-PURE (injectable; unit-tested via source extraction) ─────
 // `appWindows` and `diag` are free vars from here down.
@@ -106,62 +118,6 @@ function entryChars(entry) {
 // cadences make the panel judder for no benefit.
 const PUSH_COALESCE_MS = 200;
 
-// Text bounds. A narration line is a caption, and every one of these strings is
-// counterparty- or model-influenced on its way to a renderer.
-const TEXT_CAP = 300;
-const TOOL_CAP = 40;
-// ⚠ A POST IS A MESSAGE, NOT A CAPTION — see the `outbound_post` branch for the arithmetic that
-// picks 1000 rather than the UI's 2000.
-// ⚠ AND DO NOT MOVE IT: `channels-v2/agent-stream-model.ts › POST_CAP` is the SAME 1000 and the
-// held-draft join is character-for-character against it. Changing one silently breaks every
-// pending Post card.
-const POST_CAP = 1000;
-
-/**
- * THE AGENT'S OWN PROSE IS A MESSAGE, NOT A CAPTION (Samuel, live review 2026-08-27).
- *
- * ⚠ THE BUG THIS FIXES, and it was invisible from the renderer. `assistant` / `thinking` / the
- * operator's own 1:1 text were all bounded by `TEXT_CAP`, so **the string reaching the SPA was
- * ALREADY 300 chars, mid-word, with no marker**. The work stream's "Show more" raises a DISPLAY
- * clamp (140 → 2000) over a string that had been cut long before it got there, so expanding a
- * long line revealed nothing and left the reader looking at "…or I'll pi". Two truncations, one
- * of them silent — and the silent one was upstream of the control meant to undo it.
- *
- * ⚠ 2000 IS THE UI'S OWN CEILING, DELIBERATELY — `channels-v2/agent-stream-log.tsx ›
- * EXPANDED_CHARS`. Matching it makes the renderer's clip the ONLY truncation an operator can
- * ever meet, and that one SAYS it clipped (INVARIANTS §9). Main is out of the business of
- * cutting text nobody is told about.
- *
- * ⚠ WHY PROSE AND NOT THE CAPTIONS. `TEXT_CAP` still bounds the tool input/result summaries and
- * the status lines, and it must: a tool result is a caption ABOUT a payload, `inputSummary` is
- * already capped at 140 by `session-io.js › summarizeInput`, and `inputFull` — which can carry
- * an entire file — never enters this ring at all (see the header). Widening those is how the
- * ring becomes a file cache.
- *
- * ⚠ WHY PROSE AND NOT THE POST. `POST_CAP` stays 1000 on its own stated argument: a `post` frame
- * is a local ECHO covering the seconds before the transcript loads, and **the transcript is the
- * record** — the UI dedupes the echo against it. The agent's prose has NO second copy anywhere:
- * this ring is the only place it ever exists, which is exactly why a silent cut there destroys
- * the only text there is.
- *
- * ⚠ THE COST, STATED. The ring is `NARRATION_MAX` (200) deep per session, `flush()` sends the
- * WHOLE ring for each dirty session, and the per-session ceiling is multiplied by
- * `session-windowless.js › MAX_CONCURRENT_SESSIONS` (6). So the worst case rises from 200 × 300
- * = 60k chars to 200 × 2000 = 400k chars per session per flush — and that worst case requires
- * every one of 200 entries to be a maximal prose block, which cannot happen on a working agent:
- * tool/result frames are the bulk of any ring and stay at `TEXT_CAP`. The ring is memory-only,
- * dies with the session, and is never persisted. **If this ever needs tightening, tighten
- * `NARRATION_MAX` or send a delta instead of the ring — do not re-introduce a silent cut.**
- */
-const PROSE_CAP = 2000;
-
-/** One line, whitespace collapsed, bounded, or ''. The same discipline as
- *  `session-summary.js › displayText`. */
-function line(value, cap) {
-  if (value == null) return '';
-  return String(value).replace(/\s+/g, ' ').trim().slice(0, cap).trim();
-}
-
 /**
  * ONE REDUCER EVENT -> ONE NARRATION ENTRY, or `null` for an event this lane has nothing
  * to say about.
@@ -207,16 +163,22 @@ function entryFor(event, now) {
   // ⚠ `PROSE_CAP`, NOT `TEXT_CAP` (2026-08-27) — this is the agent SPEAKING, and the ring is the
   // only copy of it that exists anywhere. See PROSE_CAP's note for the whole argument.
   if (type === 'assistant') {
-    const text = line(p.text, PROSE_CAP);
-    return text ? { at: now, kind: 'assistant', text: text } : null;
+    const { text, truncated } = prose(p.text);
+    if (!text) return null;
+    const entry = { at: now, kind: 'assistant', text: text };
+    if (truncated) entry.truncated = true;
+    return entry;
   }
   // ⚠ 2026-08-22 — WHAT IT IS THINKING. A reasoning block is model-generated and unbounded by
   // construction, so it IS bounded here — but at `PROSE_CAP` since 2026-08-27, not at the caption
   // cap: the UI's "Show more" is the control for its length, and a 300-char cut upstream made
   // that control a no-op. The UI still collapses it by default.
   if (type === 'thinking') {
-    const text = line(p.text, PROSE_CAP);
-    return text ? { at: now, kind: 'thinking', text: text } : null;
+    const { text, truncated } = prose(p.text);
+    if (!text) return null;
+    const entry = { at: now, kind: 'thinking', text: text };
+    if (truncated) entry.truncated = true;
+    return entry;
   }
   // ⚠ THE OPERATOR'S OWN 1:1 MESSAGE (2026-08-22). `rawText` is what they TYPED — the `text` on
   // this event is the FRAMED prompt (`session-seed.js › frameOperatorTurn`), which is an
@@ -225,7 +187,7 @@ function entryFor(event, now) {
   // ⚠ `PROSE_CAP` here too: what the operator TYPED is a message, and it is the only copy of it
   // — the 1:1 lane posts nothing to the channel, so nothing else holds these words.
   if (type === 'steer' && event && event.private === true) {
-    const text = line(event.rawText, PROSE_CAP);
+    const { text, truncated } = prose(event.rawText);
     if (!text) return null;
     // ⚠ WHO SPOKE (2026-08-31). A DIRECTION arrives on the same `steer`, through the same
     // private lane, and is NOT the operator — it is another of their agents, running under
@@ -234,10 +196,23 @@ function entryFor(event, now) {
     // `session-seed.js › frameDirectedTurn` solves for the MODEL, solved here for the HUMAN.
     // ⚠ ITS OWN `lane`, because a lane is what a reader is required to prefer: a kind rename
     // can never turn this back into a line that looks like something the operator typed.
-    if (event.directed === true) {
-      return { at: now, kind: 'directed', lane: 'directed', text: text };
+    // ⚠ …AND SINCE 2026-08-31, **WHICH OF THEM** (F-376a). Samuel's same-owner ruling makes the
+    // operator's own desktop sessions first-class `direct_agent` callers, so a room can hold six
+    // of their agents directing each other and "your agent said this" stops being a complete
+    // sentence. ⚠ **A CAPTION, AND AN UNVERIFIED ONE** — the id is server-derived from
+    // `X-Dopl-Session-Id`, which proves nothing about the caller, so nothing on either side of
+    // this frame may gate, route or attribute AUTHORITY on it. ⚠ OMITTED WHEN ABSENT rather than
+    // written as null, the `truncated` / `pending` discipline: an EXTERNAL orchestrator has no
+    // session stamp and no agent id, and the reader's fallback for that is the sentence it
+    // already showed ("your agent").
+    const entry = event.directed === true
+      ? { at: now, kind: 'directed', lane: 'directed', text: text }
+      : { at: now, kind: 'operator', lane: 'operator', text: text };
+    if (event.directed === true && AGENT_ID_RE.test(String(event.senderAgentId || ''))) {
+      entry.senderAgentId = String(event.senderAgentId);
     }
-    return { at: now, kind: 'operator', lane: 'operator', text: text };
+    if (truncated) entry.truncated = true;
+    return entry;
   }
   if (type === 'tool_use') {
     return {

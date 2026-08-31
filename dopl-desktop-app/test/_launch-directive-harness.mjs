@@ -112,6 +112,10 @@ export function boot(over = {}) {
         getOrchestratorLaunch: () => cfg.enabled === true,
         launchStartModes: () => ({ tools: "bypass", messages: "auto_both" }),
         getLaunchModel: () => "claude-sonnet-5",
+        // ⚠ THE CHANNEL'S AGENT-CHAINING SETTING (2026-08-31, Samuel's ruling). Default here is
+        // FALSE — the one-generation bound — so every existing case in this suite keeps asserting
+        // the shipped behaviour; `cfg.chain` opts a case in, and `launch-chain.test.mjs` drives it.
+        getAgentChain: () => cfg.chain === true,
       };
     }
     if (id === "./targeting") {

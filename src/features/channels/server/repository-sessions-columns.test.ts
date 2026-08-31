@@ -36,6 +36,7 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   started_at: true,
   last_activity_at: true,
   template_name: true,
+  display_name: true,
 };
 
 const upsertKeys = () => Object.keys(UPSERT_KEYS);

@@ -31,6 +31,7 @@ const { apiFetch } = require('./api');
 const realtime = require('./realtime');
 const channelPrefs = require('./channel-prefs');
 const wire = require('./agent-direction-wire');
+const directionRate = require('./direction-rate'); // 2026-08-31: the per-target inbound rate bound (F-374's loop, now same-machine)
 const { diag } = require('./diag');
 
 const HTTP_TIMEOUT_MS = 15000;
@@ -210,6 +211,17 @@ async function handle(raw, workspaceId) {
     // ⚠ REMEMBERED BEFORE THE DELIVERY, deliberately: a crash mid-delivery must not let a
     // later frame re-deliver the same words into the same agent.
     remember(claimed.id);
+    // ── ⚠ THE INBOUND RATE BOUND (2026-08-31, Samuel's same-owner directions ruling; F-374) ──
+    // AFTER the claim so the caller gets an ANSWER rather than a ten-minute expiry, and BEFORE
+    // the delivery so no turn is started. `busy` is the existing word and its existing sentence
+    // ("declined FOR NOW … ask again in a minute or two, once, and stop if it refuses the same
+    // way twice") is exactly what a looping agent needs to read. `direction-rate.js` carries why
+    // the bound is a RATE at the DELIVERY end and not a depth anywhere.
+    if (!directionRate.admit(claimed.agentId)) {
+      diag('agent-direction: over the inbound rate bound', String(claimed.agentId || '').slice(0, 8));
+      await decide(claimed, { refused: 'busy' });
+      return;
+    }
     const outcome = await deliverTo(claimed);
     // ⚠ `null` MEANS THE DELIVERY IS STILL RUNNING and the ENGINE will report when the turn
     // ends — see `deliverTo`. Writing a terminal here would race the real answer.
@@ -265,7 +277,12 @@ async function deliverTo(d) {
     // ⚠ THE WHOLE OF WHAT MAKES THIS A DIRECTION RATHER THAN AN OPERATOR MESSAGE.
     // ⚠ `operatorUserId` RIDES THE DIRECTION so `messageByTask` can prove the TARGET SESSION
     // belongs to the same operator — the registry outlives a sign-out (2026-08-31 review).
-    directed: { id: d.id, workspaceId: d.workspaceId, operatorUserId: d.operatorUserId },
+    // ⚠ `senderAgentId` RIDES ALONG AS A CAPTION ONLY (F-376a, 2026-08-31) — the narration
+    // entry needs it so the operator can tell WHICH of their agents spoke. It is beside
+    // `operatorUserId` and is nothing like it: that one is compared and FENCES the delivery,
+    // this one is printed. `session-directed.js › readDirected` deliberately does not check it.
+    directed: { id: d.id, workspaceId: d.workspaceId, operatorUserId: d.operatorUserId,
+      senderAgentId: d.senderAgentId || null },
   });
   if (res && res.ok) return null; // the engine reports when the turn ends
   return { refused: wire.refusalFor(res && res.reason) };

@@ -186,10 +186,11 @@ const RESHOW_TYPES = new Set(['permission_request', 'counterparty', 'inbound_pen
 function emit(s, payload) {
   // 2026-08-20: a WINDOWLESS session's pending gate bridges to a consent row (outbound post) or denies — session-windowless.js owns the policy.
   if (sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }))) {
-    // ⚠ THE ONE PLACE THAT KNOWS NOBODY WAS ASKED. `claimGate` answers a `permission_request` by
-    // denying immediately (there is no surface); an `outbound_gate` bridges to a consent row a
-    // HUMAN answers. Stamping here is what lets `resolvePerm` tell those two denials apart.
-    if (payload && payload.type === 'permission_request') sessionPermissions.noteAutoDenied(s, payload.requestId);
+    // ⚠ WHICH DENIAL COPY a claimed gate deserves is `session-windowless.js`'s to stamp since
+    // 2026-08-31, not the engine's: a `permission_request` now HOLDS behind a notification, and
+    // only that file knows whether the banner was shown, expired unanswered (`noteGateTimeout`),
+    // or had no surface at all (`noteAutoDenied`) — the engine can no longer tell, so it stamps
+    // nothing. Stamping here again would mislabel a real human decision as never-asked.
     return;
   }
   if (!s.win || s.win.isDestroyed()) return;
@@ -310,7 +311,7 @@ async function startSession(spec, sdk) {
     taskId: spec.taskId || '',
     workspaceId: spec.workspaceId,
     side: state.side,
-    profile: spec.profile, launchDepth: spec.launchDepth, // ...and the LAUNCH-DEPTH stamp (2026-08-25, F-320): a containment input like the profile beside it, normalized fail-closed at the gate — ABSENT IS THE CAP, so only a lane that says "a human started this" (0) can launch agents (session-own-launch.js)
+    profile: spec.profile, launchDepth: spec.launchDepth, launchChain: spec.launchChain === true, // ...and the LAUNCH-DEPTH stamp (2026-08-25, F-320): a containment input like the profile beside it, normalized fail-closed at the gate — ABSENT IS THE CAP, so only a lane that says "a human started this" (0) can launch agents (session-own-launch.js). `launchChain` is the CHANNEL's chaining setting (2026-08-31, Samuel's ruling), stamped the same way and `=== true` here so absent reads FALSE and the one-generation bound stands
     // Item 9: human tool-profile label for the renderer's posture line (passed on init).
     profileLabel: require('./tool-profiles').profileLabel(spec.profile),
     mode: state.mode,

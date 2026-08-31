@@ -262,7 +262,7 @@ describe("the 1:1 composer", () => {
     // ⚠ `Message Agent #<id>`, NOT `Message <id>` (Samuel, 2026-08-27 — INVARIANTS §11: the raw
     // agent id is never user-visible). This window's composer placeholder was one of the three
     // surfaces that shipped the bare token.
-    const box = await screen.findByLabelText("Message Agent #a1b2c3d4");
+    const box = await screen.findByLabelText("Message #a1b2c3d4");
     fireEvent.change(box, { target: { value: "look at the failing test" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));

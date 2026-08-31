@@ -24,6 +24,11 @@
 // is still possible — they approve the bytes they were shown. That is the shape the ruling wants:
 // not "cannot post", but "cannot post WITHOUT you".
 //
+// ⚠ ONE STANDING EXCEPTION SINCE 2026-08-31 (Samuel's ruling, stated in full at
+// `autoSendMessageMode`): a channel whose durable AUTO-SEND toggle is ON has consented,
+// channel-wide and explicitly, to its agents posting with no click — so `effectiveMessageMode`
+// reads that toggle LIVE and FIRST, and the withdrawal below applies only while it is off.
+//
 // ⚠ THE IN-HALF IS DELIBERATELY LEFT ALONE, WHICH IS A CONSIDERED DEVIATION FROM "as if message
 // mode were `ask`". `ask` gates own-channel READS too (`isOwnChannelRead` follows the INBOUND
 // half), and in a windowless session a gated read is a DENIED read — there is no surface to
@@ -131,18 +136,65 @@ function isPrivateTurn(s) {
 }
 
 /**
+ * THE CHANNEL AUTO-SEND TOGGLE, APPLIED LIVE — the OUT half forced on, the IN half kept
+ * (2026-08-31, Samuel's ruling: "if a user toggles auto-send, that goes into effect for ALL
+ * their agents in that channel, IMMEDIATELY").
+ *
+ * ⚠ THE RULING THIS SUPERSEDES, STATED RATHER THAN BURIED: while the channel's toggle is ON,
+ * the 2026-08-22 private-turn withdrawal below DOES NOT APPLY — a post drafted inside a 1:1
+ * panel turn leaves the machine with no Send click, which is exactly the accident case that
+ * ruling closed. Samuel chose it with the trade-off on the table: the toggle is the channel-wide
+ * consent ("my agents in this room post without me"), it is OFF by default, and OFF restores
+ * the withdrawal in full. What made the old layering worse than the exposure was that it was
+ * ILLEGIBLE — the operator flipped a switch that then did not apply on the very lane (panel
+ * direction) they actually drive agents from, and nothing anywhere said why.
+ *
+ * ⚠ IN-HALF PRESERVED, JUNK FAIL-CLOSED: an unknown mode maps to `auto_outbound`, whose IN half
+ * is `ask` — the toggle's whole meaning is the OUT half and it must not smuggle inbound consent.
+ */
+function autoSendMessageMode(mode) {
+  return (mode === 'auto_inbound' || mode === 'auto_both') ? 'auto_both' : 'auto_outbound';
+}
+
+/**
  * AXIS B AS THE GATE SHOULD SEE IT for this session, right now.
  * ⚠ `session-io.js › grantArgs` is the ONE caller, so this is the single point where a private
  * turn changes what a tool call is allowed to do — every other posture read is untouched, and
  * AXIS A (the TOOL axis) is not consulted here at all, which keeps the v2.9 invariant intact:
  * a message op branches to Axis B and never reaches Axis A.
+ *
+ * ⚠ THE CHANNEL TOGGLE IS READ **LIVE AND FIRST** (2026-08-31). Auto-send used to be frozen
+ * into `state.messageMode` at launch (`channel-prefs.js › windowlessMessageMode`), which gave
+ * the toggle FOUR silent ways to not be in effect: a reopened/recreated shell drops its
+ * startModes (H2), a crash resume floors them, a running session never re-reads the store, and
+ * a private turn withdrew the half the toggle had granted. Reading it here — the single Axis-B
+ * read at decision time — makes the switch mean what it says on every spawn shape and every
+ * turn shape at once, ON and OFF alike. `channelAutoSend` is the live half below the pure
+ * block; in an environment with no store it answers false, which is not a grant.
  */
 function effectiveMessageMode(s) {
   const mode = (s && s.state && s.state.messageMode) || 'ask';
+  if (channelAutoSend(s && s.channelId)) return autoSendMessageMode(mode);
   return isPrivateTurn(s) ? privateTurnMessageMode(mode) : mode;
 }
 
 // ─── END SESSION-PRIVATE-PURE ────────────────────────────────────────────────────
+
+/**
+ * THE LIVE HALF — the channel's durable auto-send switch, read at DECISION time.
+ * ⚠ LAZY-REQUIRED, exactly like `session-directed.js › observe` reaches `agent-directions.js`:
+ * `channel-prefs.js` instantiates an electron-store at load, and this module is required by
+ * plain-node tests that must keep working. A failed require answers `false` — an unreadable
+ * store is not a grant, the same rule every reader of that store follows.
+ */
+function channelAutoSend(channelId) {
+  if (!channelId) return false;
+  try {
+    return require('./channel-prefs').getAutoSend(channelId) === true;
+  } catch (_err) {
+    return false;
+  }
+}
 
 module.exports = {
   turnInFlight,
@@ -150,5 +202,6 @@ module.exports = {
   closePrivateTurn,
   resetPrivateTurn, // 2026-08-22: a torn-down query owes no results — the window closes with it
   isPrivateTurn,
+  autoSendMessageMode, // 2026-08-31: the toggle's OUT-half widening, one spelling
   effectiveMessageMode,
 };

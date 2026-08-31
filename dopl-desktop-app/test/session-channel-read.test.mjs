@@ -95,8 +95,15 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // only THIS OPERATOR'S OWN sessions and never a peer's — which is also why it qualifies where
   // `list` does not, even though its `channel` is an optional FILTER rather than required:
   // `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
+  // ⚠ `read_directions` JOINED ON 2026-08-31 (Samuel's same-owner directions ruling) ON EXACTLY
+  // `read_sessions`'s argument, one bullet up: this operator's OWN directions and the replies
+  // their OWN agents gave, never a peer's, with `channel` an optional filter. ⚠ ITS WRITE TWIN
+  // `direct_agent` IS **NOT** HERE AND MUST NOT BE — that op starts a TURN on a running process,
+  // so it takes the two-axis conjunction in `session-own-direct.js`, and the case below that
+  // walks `ALWAYS_GATED` is what would catch it being mistaken for a read.
   assert.deepEqual(READS,
-    ["read", "await", "list_threads", "get_thread", "members", "read_sessions"]);
+    ["read", "await", "list_threads", "get_thread", "members", "read_sessions",
+      "read_directions"]);
   for (const op of ALWAYS_GATED.concat(MARKERS, THREAD_OPENS, ESCALATES)) {
     assert.ok(!READS.includes(op), `${op} must never be classified as a read`);
   }

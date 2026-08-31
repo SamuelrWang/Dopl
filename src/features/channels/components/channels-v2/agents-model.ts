@@ -77,12 +77,18 @@ export function agentDisplayId(session: {
 }
 
 /**
- * THE SAME AGENT, SAID IN FULL: `Agent #<id>` (Samuel, 2026-08-24) — what the transcript pill
- * renders (`attribution-pill.tsx › attributionName`), so one agent reads the same in both.
+ * THE SAME AGENT, SAID IN FULL: `#<id>` (Samuel, 2026-08-31; it was `Agent #<id>` from
+ * 2026-08-24) — what the transcript pill renders (`attribution-pill.tsx › attributionName`),
+ * so one agent reads the same in both.
+ * ⚠ THE WORD "agent" LEFT THE NAME AND MOVED INTO CHROME (Samuel's ruling): agent-ness is
+ * stated by a grey borderless chip beside the name (`attribution-pill.tsx › AgentChip`), so
+ * the NAME is just the id — or whatever the operator renamed it to. A name that carries the
+ * word "agent" next to a chip that says "agent" says it twice.
  * ⚠ The `#` is LITERAL and belongs to the id, not a separator; one text node.
- * ⚠ A LEGACY `name` IS NOT AN ID and gets no prefix: `Agent #flint` asserts a shape no main minted.
- * ⚠ PRECEDENCE, 2026-08-25: operator's OWN name, then `Agent #<id>`, then the legacy handle —
- * where both are reported the ID wins, since a pool handle was re-issued after its session left.
+ * ⚠ A LEGACY `name` IS NOT AN ID and gets no prefix: `#flint` asserts a shape no main minted.
+ * ⚠ PRECEDENCE, 2026-08-25 (unchanged): operator's OWN name, then `#<id>`, then the legacy
+ * handle — where both are reported the ID wins, since a pool handle was re-issued after its
+ * session left.
  */
 export function agentDisplayName(session: {
   agentId?: string | null;
@@ -92,7 +98,7 @@ export function agentDisplayName(session: {
   const own = typeof session.displayName === "string" ? session.displayName.trim() : "";
   if (own) return own;
   const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
-  return id ? `Agent #${id}` : agentDisplayId(session);
+  return id ? `#${id}` : agentDisplayId(session);
 }
 
 /**

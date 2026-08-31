@@ -96,9 +96,11 @@ async function describeAgent(agentId: string, description: string): Promise<bool
   return (await sessions.describe(agentId, description))?.ok === true;
 }
 
-/** The canonical name an unnamed agent wears — `agents-model.ts › agentDisplayName`'s shape. */
+/** The canonical name an unnamed agent wears — `agents-model.ts › agentDisplayName`'s shape.
+ *  ⚠ `#<id>` since 2026-08-31 (Samuel's ruling): the word "agent" moved out of the NAME and
+ *  into the grey chip (`attribution-pill.tsx › AgentChip`); the two must not both say it. */
 export function defaultAgentName(agentId: string | null): string {
-  return agentId ? `Agent #${agentId}` : "";
+  return agentId ? `#${agentId}` : "";
 }
 
 export interface AgentLaunchPanel {

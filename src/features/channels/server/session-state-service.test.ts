@@ -58,6 +58,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     started_at: null,
     last_activity_at: null,
     template_name: null,
+    display_name: null,
     ...over,
   };
 }
@@ -95,6 +96,7 @@ describe("listSessionStates", () => {
         startedAt: null,
         lastActivityAt: null,
         templateName: null,
+        displayName: null,
       },
       {
         channelId: CHAN,
@@ -113,6 +115,7 @@ describe("listSessionStates", () => {
         startedAt: null,
         lastActivityAt: null,
         templateName: null,
+        displayName: null,
       },
       {
         channelId: CHAN,
@@ -131,6 +134,7 @@ describe("listSessionStates", () => {
         startedAt: null,
         lastActivityAt: null,
         templateName: null,
+        displayName: null,
       },
     ]);
   });
@@ -269,6 +273,7 @@ describe("reportSessionStates", () => {
         started_at: null,
         last_activity_at: null,
         template_name: null,
+        display_name: null,
       },
     ]);
   });
@@ -307,6 +312,7 @@ describe("reportSessionStates", () => {
       // explicit-null are the same statement here ("no template"), which is why
       // the service is allowed to collapse them with `?? null`.
       template_name: null,
+      display_name: null,
     });
   });
 

@@ -44,7 +44,7 @@ import { shortToolName, type StreamGroup, type StreamItem } from "./agent-stream
 const COLLAPSED_CHARS = 140;
 /**
  * THE EXPANDED CEILING — **and main is cut to the same number** (2026-08-27,
- * `main/session-narration.js › PROSE_CAP`).
+ * `main/session-narration.js › PROSE_CAP`; both 8000 since 2026-08-31).
  *
  * ⚠ THAT PAIRING IS THE FIX FOR A REAL BUG, not tidiness. Main used to cap the
  * agent's prose at 300 (`TEXT_CAP`, its CAPTION bound), so this clamp was being
@@ -55,8 +55,15 @@ const COLLAPSED_CHARS = 140;
  * frame from a main that caps higher — where it still SAYS it clipped
  * (INVARIANTS §9). ⚠ Raise this and main's cap together, or the silent cut is
  * back.
+ *
+ * ⚠ AND EQUALITY HAS A BLIND SPOT THE FLAG COVERS (2026-08-31, Samuel's cutoff
+ * report). A line main cut at its cap arrives at EXACTLY this ceiling, so the
+ * `length >` check below is false on every such line — the one string that most
+ * needs a marker is the one string that cannot earn it by arithmetic. Main now
+ * stamps `truncated: true` on the frames it cut (`DesktopNarrationEntry`), and
+ * the clip row reads that flag as a second trigger.
  */
-const EXPANDED_CHARS = 2000;
+const EXPANDED_CHARS = 8000;
 
 /** What the collapsed run says. ⚠ Exported for the test: the COUNT is the whole
  *  claim this row makes, and a summary that miscounts is a log lying about how
@@ -147,7 +154,13 @@ export function LogLine({ item }: { item: StreamItem }) {
           : "text-text-secondary";
 
   const long = text.length > COLLAPSED_CHARS;
-  const clipped = open && text.length > EXPANDED_CHARS;
+  // ⚠ TWO TRIGGERS, AND THE FLAG IS THE ONE THAT CAN ACTUALLY FIRE TODAY: main's
+  // cap equals this ceiling, so a main-cut line arrives at exactly
+  // EXPANDED_CHARS and the arithmetic alone would call it whole (INVARIANTS §9 —
+  // a clipped read says so). `mainCut` also decides the WORDING below: a
+  // renderer clip has a fuller copy to go read; a main cut does not.
+  const mainCut = item.truncated === true;
+  const clipped = open && (text.length > EXPANDED_CHARS || mainCut);
   const shown = open
     ? text.slice(0, EXPANDED_CHARS)
     : text.slice(0, COLLAPSED_CHARS);
@@ -170,7 +183,13 @@ export function LogLine({ item }: { item: StreamItem }) {
         </span>
         {clipped && (
           <span className="text-micro text-text-muted">
-            Clipped — open the agent&apos;s own log for the rest.
+            {/* ⚠ Two different truths. A renderer clip is a DISPLAY bound over a
+                string this component holds whole; a main cut means the tail was
+                never kept anywhere, and pointing the reader at a fuller log
+                would be pointing at text that does not exist. */}
+            {mainCut
+              ? "Clipped — the message was longer than the panel keeps."
+              : "Clipped — open the agent's own log for the rest."}
           </span>
         )}
         {long && (

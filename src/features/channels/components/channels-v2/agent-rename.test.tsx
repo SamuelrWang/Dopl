@@ -38,7 +38,7 @@ afterEach(() => {
 describe("the agent card's inline rename", () => {
   it("offers no pencil without a bridge handler, and none without an id", () => {
     withBridge({});
-    render(<AgentName agentId="a1b2c3d4" name="Agent #a1b2c3d4" />);
+    render(<AgentName agentId="a1b2c3d4" name="#a1b2c3d4" />);
     expect(screen.queryByRole("button", { name: /^Rename/ })).toBeNull();
 
     cleanup();
@@ -52,9 +52,9 @@ describe("the agent card's inline rename", () => {
     // Main trims and collapses; the card must show ITS answer, or the two drift silently.
     rename.mockResolvedValue({ ok: true, displayName: "Research bot" });
     withBridge({ rename });
-    render(<AgentName agentId="a1b2c3d4" name="Agent #a1b2c3d4" />);
+    render(<AgentName agentId="a1b2c3d4" name="#a1b2c3d4" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename Agent #a1b2c3d4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename #a1b2c3d4" }));
     const field = screen.getByLabelText("Agent name");
     fireEvent.change(field, { target: { value: "  Research   bot  " } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -68,22 +68,22 @@ describe("the agent card's inline rename", () => {
   it("REVERTS a refusal — the card never shows a name nothing is holding", async () => {
     rename.mockResolvedValue({ ok: false, reason: "bad-name" });
     withBridge({ rename });
-    render(<AgentName agentId="a1b2c3d4" name="Agent #a1b2c3d4" />);
+    render(<AgentName agentId="a1b2c3d4" name="#a1b2c3d4" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename Agent #a1b2c3d4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename #a1b2c3d4" }));
     fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "x".repeat(99) } });
     fireEvent.keyDown(screen.getByLabelText("Agent name"), { key: "Enter" });
 
     await waitFor(() => expect(rename).toHaveBeenCalled());
-    expect(await screen.findByText("Agent #a1b2c3d4")).toBeTruthy();
+    expect(await screen.findByText("#a1b2c3d4")).toBeTruthy();
   });
 
   it("saves on blur too — clicking away keeps what was typed", async () => {
     rename.mockResolvedValue({ ok: true, displayName: "Reviewer" });
     withBridge({ rename });
-    render(<AgentName agentId="a1b2c3d4" name="Agent #a1b2c3d4" />);
+    render(<AgentName agentId="a1b2c3d4" name="#a1b2c3d4" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename Agent #a1b2c3d4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename #a1b2c3d4" }));
     fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "Reviewer" } });
     fireEvent.blur(screen.getByLabelText("Agent name"));
 
@@ -92,16 +92,16 @@ describe("the agent card's inline rename", () => {
 
   it("Escape cancels, and the blur it causes does NOT save", async () => {
     withBridge({ rename });
-    render(<AgentName agentId="a1b2c3d4" name="Agent #a1b2c3d4" />);
+    render(<AgentName agentId="a1b2c3d4" name="#a1b2c3d4" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename Agent #a1b2c3d4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename #a1b2c3d4" }));
     const field = screen.getByLabelText("Agent name");
     fireEvent.change(field, { target: { value: "Discard me" } });
     fireEvent.keyDown(field, { key: "Escape" });
     fireEvent.blur(field);
 
     expect(rename).not.toHaveBeenCalled();
-    expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy();
+    expect(screen.getByText("#a1b2c3d4")).toBeTruthy();
   });
 
   it("an EMPTY name clears to `Agent #<id>`, NOT back to the name being removed", async () => {
@@ -120,7 +120,7 @@ describe("the agent card's inline rename", () => {
 
     await waitFor(() => expect(rename).toHaveBeenCalledWith("a1b2c3d4", ""));
     // The canonical unnamed form, not the old custom name.
-    expect(await screen.findByText("Agent #a1b2c3d4")).toBeTruthy();
+    expect(await screen.findByText("#a1b2c3d4")).toBeTruthy();
     expect(screen.queryByText("Research bot")).toBeNull();
   });
 
@@ -140,16 +140,16 @@ describe("the agent card's inline rename", () => {
     fireEvent.keyDown(screen.getByLabelText("Agent name"), { key: "Enter" });
 
     // Before the promise resolves the card already reads the canonical form.
-    expect(await screen.findByText("Agent #a1b2c3d4")).toBeTruthy();
+    expect(await screen.findByText("#a1b2c3d4")).toBeTruthy();
     resolveRename({ ok: true, displayName: null });
-    await waitFor(() => expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("#a1b2c3d4")).toBeTruthy());
   });
 
   it("does not write when nothing changed", () => {
     withBridge({ rename });
-    render(<AgentName agentId="a1b2c3d4" name="Agent #a1b2c3d4" />);
+    render(<AgentName agentId="a1b2c3d4" name="#a1b2c3d4" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename Agent #a1b2c3d4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename #a1b2c3d4" }));
     fireEvent.keyDown(screen.getByLabelText("Agent name"), { key: "Enter" });
 
     // ⚠ Sending the unchanged title would store `Agent #<id>` AS a name — the address

@@ -24,6 +24,58 @@
  */
 
 import type { ReactNode } from "react";
+import type { AgentToolProfile } from "../../types";
+
+/**
+ * WHAT EACH TOOL PROFILE MEANS. ⚠ Source of truth is
+ * `dopl-desktop-app/main/tool-profiles.js` — read its header before touching a
+ * line here. Each rendered line is a claim about CONTAINMENT, so it is bounded
+ * by the same rules the long sentences were, at a FIFTH of the length.
+ *
+ * `full` — no `--tools` bound, no `--allowedTools`, no scoped `--settings`, and
+ * specifically NO `--strict-mcp-config`: the operator's OWN connected MCP servers
+ * load alongside Dopl's and their global `permissions.allow` keeps applying.
+ * That is the PRODUCT. The copy's job is to INFORM, not to warn.
+ *
+ * `dopl_only` — local read built-ins + WebFetch/WebSearch + NON-ADMIN Dopl tools,
+ * pre-approved by name so they work headless. ⚠ Not "full minus danger" — it is
+ * not more dangerous than `full` and is a legitimate first choice.
+ * `dopl_channel` is excluded AND denied by name, so its reply routes back through
+ * the approve-out gate rather than posting itself.
+ *
+ * `read_only` — local read built-ins only. The whole Dopl MCP server is denied by
+ * prefix, and so is the web, so it is the one profile with no outbound channel.
+ *
+ * ⚠ Do NOT add "and a few destructive tools are always denied" to the `full`
+ * line. `UNIVERSAL_HARD_DENY` is exactly the Dopl ADMIN + RETIRED tools, while
+ * the SDK lane's `SESSION_HARD_DENY` is BROADER on purpose — so a generalizing
+ * sentence is true on one lane and wrong on the other. These describe what each
+ * profile GRANTS and promise nothing about what is withheld. That rule survived
+ * the shortening: `full` still NAMES the connected apps, and no line ranks a
+ * restricted profile as the safe or recommended answer.
+ *
+ * ⚠ THESE ARE THE ONLY DESCRIPTIONS LEFT ON THE TAB (Samuel, 2026-08-19 —
+ * minimal copy). Tools keeps one because it is the CONTAINMENT pick; Permissions
+ * and Sends render their option labels alone and keep their per-option
+ * descriptions inside the `SelectMenu` dropdown, where a person reads them while
+ * choosing. **≤5 words each, no trailing period.** The full sentences these
+ * replaced are directly above — as a comment, deliberately.
+ *
+ * ⚠ SECOND PURE MOVE OUT OF `settings-agent.tsx` (2026-08-31), on the 2026-08-26
+ * move's exact argument and for the same reason: that file was at 496 of the 500
+ * cap and the agent-chaining switch (Samuel's ruling that day) had to land in it.
+ * Not one character of the table or its docblock changed. It belongs here for the
+ * reason the row vocabulary does — it is a rendering constant with no reader,
+ * writer or decision in it.
+ */
+export const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
+  value: AgentToolProfile;
+  description: string;
+}> = [
+  { value: "full", description: "Everything, including connected apps" },
+  { value: "dopl_only", description: "Files, web, and Dopl" },
+  { value: "read_only", description: "Local files only" },
+];
 
 /**
  * The heading over the launch posture. ⚠ IT NAMES THE ACT, NOT A TIME WINDOW.

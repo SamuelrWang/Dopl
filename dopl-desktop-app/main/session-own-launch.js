@@ -89,6 +89,51 @@
 // posture" — and for a capped session that sentence is FALSE in exactly the way F-320 was filed
 // for. The deny carries its own reason code (`launch-depth-capped`) and its own sentence
 // (`session-permissions.js › denyMessageFor`), which says the bound is a bound.
+// ⚠ **IT IS NOT POSTURE-OPENABLE AND IT IS NOW SETTING-OPENABLE, AND THOSE ARE DIFFERENT CLAIMS**
+// — see the block below. The deny sentence had to be corrected in the same change, because it
+// said *"no setting will widen this"* and that stopped being true.
+//
+// ── ⚠ THE BOUND IS A CHANNEL SETTING SINCE 2026-08-31 (Samuel's ruling; post-1.23.0 field run) ──
+//
+// FIELD MEASUREMENT: a launched agent's five worker-launch attempts were all refused with the
+// sentence above. The operator wanted the shape the bound forbids — an orchestrator that staffs
+// supervisors that staff workers — in the ONE room they run orchestrators in. Samuel's ruling:
+// **the one-generation limit becomes a CHANNEL SETTING, toggleable on and off, DEFAULT OFF**
+// (i.e. the default is today's bound, unchanged), flipped per channel by the operator.
+//
+//   OFF (default)  everything above applies verbatim. `deny`, `launch-depth-capped`, one
+//                  generation. A machine that has never seen the setting behaves identically.
+//   ON             the DEPTH question is not asked at all, and a launched session may launch.
+//
+// ⚠ **THE FLAG IS A SPAWN-TIME STAMP, NOT A LIVE READ, AND THAT IS DELIBERATE RATHER THAN LAZY.**
+// The 2026-08-25 live-apply ruling (`channel-dir-ipc.js › applyPostureToLive`) fans a changed
+// POSTURE out to running sessions on an argument that names its own limit: it *"widens
+// SUPERVISION — is the operator asked? — never CONTAINMENT."* This flag is CONTAINMENT, so it
+// takes the stamp discipline `launchDepth` and `profile` already take: a session is bound by what
+// the room said when it started, and flipping the switch reaches the sessions started after it.
+// ⚠ ABSENT READS FALSE, so every lane that does not deliberately pass it keeps the ONE-GENERATION
+// bound — the same fail-CLOSED direction the depth stamp has, and the reason a resume, a recreate
+// or a peer-triggered wake cannot inherit chaining by forgetting a field.
+//
+// ⚠ **WITH IT ON, THERE IS NO GENERATION BOUND LEFT. STATED, NOT IMPLIED.** Arithmetic over depth
+// is impossible here for the reason written above — the ask leaves this machine as a
+// `channel_launch_directives` row with no depth column — so a "hard cap at N generations" is not a
+// bound this build can express and pretending otherwise would be the bound-in-name-only this
+// module was written to refuse. **What stands in its place is TWO REAL CEILINGS, both enforced
+// where a process is actually bought and neither described as a generation count:**
+//
+//   INSTANTANEOUS  `session-windowless.js › MAX_CONCURRENT_SESSIONS` (six live sessions per
+//                  machine), refused at `session-launch.js › launch` as `cap`. Already there,
+//                  already applies to every spawn shape, and unchanged by this ruling.
+//   OVER TIME      `launch-budget.js` — a ROLLING PER-CHANNEL LAUNCH BUDGET, spent only by a
+//                  chained spawn, refused as the same `cap` word. It exists because the
+//                  concurrency ceiling is not a bound over time: sessions settle and free their
+//                  slots, so an unbounded chain under a fixed concurrency ceiling is a fork bomb
+//                  that merely runs at a steady rate. The budget is what makes ON ≠ fork bomb.
+//
+// ⚠ A DEPTH COLUMN IS THE ONLY THING THAT WOULD BUY A REAL GENERATION CAP, and it is FILED
+// (REFACTOR-FINDINGS F-378) rather than guessed at — it is a wire change across the DTO, the
+// create route, the narrowing and this machine's stamp, exactly as the paragraph above says.
 
 // THE OP, NAMED EXPLICITLY. ⚠ A LIST OF ONE, DELIBERATELY: this is an ALLOW list, never a
 // default-widening of unknown ops. An op named nowhere resolves to `gate` in every posture,
@@ -120,6 +165,18 @@ function launchDepthExhausted(depth) {
 }
 
 /**
+ * IS THE DEPTH BOUND LIFTED FOR THIS SESSION? The channel's chaining setting, stamped at spawn
+ * (`channel-prefs.js › getAgentChain` → `launch-directives.js` → the funnel → the session).
+ *
+ * ⚠ `=== true` AND NOTHING ELSE. A missing field, a string, a 1 and a truthy object all read
+ * FALSE, so the bound survives every lane that does not deliberately hand a real boolean in —
+ * the same fail-closed direction `normalizeLaunchDepth` takes from the other side.
+ */
+function launchChainEnabled(flag) {
+  return flag === true;
+}
+
+/**
  * A `launch_agent` aimed at THIS session's own channel.
  *
  * ⚠ SAME SCOPE RULE AND SAME SAFE FAILURE AS EVERY OTHER OWN-CHANNEL PREDICATE
@@ -147,7 +204,11 @@ function isOwnMachineLaunch(input, sessionChannelId) {
  */
 function launchLaneVerdict(args, autoOutbound) {
   const a = args || {};
-  if (launchDepthExhausted(a.launchDepth)) return 'deny';
+  // ⚠ THE SETTING IS ASKED **BEFORE** THE DEPTH, AND ONLY TO SKIP IT (2026-08-31). It is not a
+  // third grant: a chained session still has to clear BOTH axes below, exactly like the first
+  // generation does, so turning chaining on can never widen a posture. The one thing it changes
+  // is whether the depth question is asked at all.
+  if (!launchChainEnabled(a.launchChain) && launchDepthExhausted(a.launchDepth)) return 'deny';
   return a.toolMode === LAUNCH_TOOL_MODE && autoOutbound === true ? 'allow' : 'gate';
 }
 
@@ -157,6 +218,7 @@ module.exports = {
   MAX_LAUNCH_DEPTH,
   normalizeLaunchDepth,
   launchDepthExhausted,
+  launchChainEnabled, // 2026-08-31: the channel setting that lifts the depth bound, `=== true`
   isOwnMachineLaunch,
   launchLaneVerdict,
 };

@@ -14,8 +14,17 @@
 //              view's SEND BOX / the Inbox list render it. The decision resolves the held
 //              tool call through the reducer's own `permission_decision` event — the agent
 //              posts its own bytes; nothing here posts on its behalf.
-//   ANY OTHER GATED TOOL — denied. A gate means "ask a human", there is no surface to ask
-//              on, and the headless lane this shape replaces had the same answer.
+//   ANY OTHER GATED TOOL — HELD and ASKED, since 2026-08-31 (Samuel's ruling; it was an
+//              immediate deny before). The call stays pending, a native notification with an
+//              ALLOW action is shown, and the gate resolves on the click — or DENIES when
+//              `TOOL_GATE_TTL_MS` passes unanswered, with a message that says a human was
+//              notified and did not answer (a different fact from "nobody was asked", and
+//              `session-permissions.js` carries all three sentences). ⚠ LOCAL, deliberately:
+//              no server row — a tool grant is a fact about THIS machine and must not be
+//              writable by anything holding the operator's Dopl credential (the argument
+//              `orchestrator-consent.js` makes for its toggles). The one shape that still
+//              denies outright is a platform with no Notification support at all, which is
+//              the true no-surface case and keeps the old copy.
 //
 // ⚠ THE BRIDGE POLLS THE ROW (stops with the session or the resolution) rather than
 // subscribing: first-answer-wins means the web PATCH may decide it, and the row's status is
@@ -24,6 +33,9 @@
 const consent = require('./consent');
 const targeting = require('./targeting');
 const channelPost = require('./channel-post'); // notifyLocal: the denial notice, local-only
+// 2026-08-31: which DENIAL COPY a refused gate deserves is stamped HERE now, not by the engine —
+// this file alone knows whether a prompt was shown, timed out, or had no surface at all.
+const sessionPermissions = require('./session-permissions');
 const { diag } = require('./diag');
 
 // ⚠ 3s SINCE 2026-08-25, DOWN FROM 10s, AND THE COST IS STATED RATHER THAN HIDDEN.
@@ -109,31 +121,102 @@ function claimGate(s, payload, decide) {
     return true;
   }
   if (payload.type === 'permission_request') {
-    setImmediate(() => decide(rid, 'deny'));
-    diag('windowless session: gated tool denied (no surface to ask on)',
-      String(payload.name || '').slice(0, 40));
-    notifyDenied(s, payload);
+    // ⚠ RE-EMIT DEDUPE: a payload can reach emit more than once for one request (a reshow, a
+    // narration replay); the FIRST claim armed the notification and the TTL, and a second
+    // banner for the same held call is the storm ruling 6b closed. Claimed, and nothing else.
+    if (!s.bridgedToolGates) s.bridgedToolGates = new Set();
+    if (s.bridgedToolGates.has(rid)) return true;
+    if (s.bridgedToolGates.size >= MAX_BRIDGED_GATES) {
+      s.bridgedToolGates.delete(s.bridgedToolGates.values().next().value);
+    }
+    s.bridgedToolGates.add(rid);
+    // ⚠ setImmediate for the outbound branch's reason: emit runs inside a dispatch.
+    setImmediate(() => bridgeToolGate(s, payload, decide));
     return true;
   }
   return false;
 }
 
-// ── The denial NOTICE (2026-08-20) ───────────────────────────────────────────
+// ── THE TOOL-GATE BRIDGE (2026-08-31, Samuel's ruling) ───────────────────────
+// A gated tool used to be denied on the spot with "no surface to ask on" — and the operator's
+// own paste of the result ("Skill … NOBODY WAS ASKED … Bash … denied") is what bought this
+// bridge: the agent had legitimate work behind the gate, the operator was sitting right there,
+// and the machine refused on their behalf without asking. The notification IS a surface.
+//
+// ⚠ ALLOW-ONCE ONLY. The banner's button resolves THIS call; it mints no standing grant (the
+// decide lane carries no tool name for `allow-task` to key on, and a banner is too small a
+// surface to grant a session-wide power from). Repeat calls re-prompt; the systemic fix for
+// that friction is the default-permissions work, not a wider grant here.
+// ⚠ DISMISS DECIDES NOTHING (notify-action.js's rule) — only the TTL or a click resolves.
+const TOOL_GATE_TTL_MS = 10 * 60_000;
+const MAX_BRIDGED_GATES = 64; // same idiom + bound as autoDeniedIds; dies with the session
+
+/** The sanitized, bounded tool label — ONE spelling for the banner, the diag and the dedupe. */
+function toolLabel(payload) {
+  return String((payload && payload.name) || 'A tool')
+    .replace(/[\r\n\t]+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
+function bridgeToolGate(s, payload, decide) {
+  const rid = payload.requestId;
+  const tool = toolLabel(payload);
+  const channelName = (s.context && s.context.channelName) || 'this channel';
+  const notif = consent.notifyToolGate({
+    channelName,
+    tool,
+    onAllow: () => decide(rid, 'allow-once'),
+    onOpen: () => {
+      try {
+        targeting.openChannelForEntry(
+          {
+            channel: { id: s.channelId, name: channelName },
+            workspaceId: s.workspaceId,
+            workspaceSegment: (s.context && s.context.workspaceSegment) || null,
+          },
+          { threadId: s.taskId }
+        );
+      } catch (_) { /* navigation is best-effort */ }
+    },
+  });
+  if (!notif) {
+    // The TRUE no-surface case — no Notification support on this platform. The pre-2026-08-31
+    // behaviour in full: immediate deny, the NOBODY-WAS-ASKED copy, the deduped local notice.
+    sessionPermissions.noteAutoDenied(s, rid);
+    decide(rid, 'deny');
+    diag('windowless session: gated tool denied (no surface to ask on)', tool);
+    notifyDenied(s, payload);
+    return;
+  }
+  diag('windowless tool gated — operator notified', tool, 'req', String(rid).slice(0, 8));
+  const timer = setTimeout(() => {
+    // Already resolved (the click, a park's deny-close, the session's settle) → nothing to do.
+    if (s.settled || !s.pendingPermissions.has(rid)) return;
+    // ⚠ STAMPED BEFORE THE DECIDE, so `resolvePerm` reads the timeout copy and not
+    // "Denied by operator" — nobody said no, and claiming so is the defect class
+    // `session-permissions.js` exists to remove.
+    sessionPermissions.noteGateTimeout(s, rid);
+    decide(rid, 'deny');
+    diag('windowless tool gate expired unanswered', tool, 'req', String(rid).slice(0, 8));
+    try { notif.close(); } catch (_) { /* best-effort */ }
+  }, TOOL_GATE_TTL_MS);
+  if (timer && typeof timer.unref === 'function') timer.unref();
+}
+
+// ── The denial NOTICE (2026-08-20) — the FALLBACK's notice since 2026-08-31 ──
 // ⚠ A SILENT DENY IS THE WORST HALF OF THIS SHAPE, AND IT IS NOT WHAT THE
 // OPERATOR THINKS THEY CONFIGURED. `bypass` is a POSITIVE ALLOW-LIST
 // (`session-profiles.js` — "Unknown therefore GATES IN EVERY MODE, `bypass`
 // included"), so it covers the classified work set and nothing else: `Task`,
 // `AskUserQuestion`, the plan-mode ops, any built-in a newer CLI ships, and
 // EVERY tool from the operator's own connected MCP servers all still reach the
-// gate. In a windowless session a gate is a deny, and until now the only trace
-// was a diag line — so an operator who had set Tools = Bypass watched their
-// agent quietly fail to do things and had nothing to read.
+// gate.
 //
-// ⚠ IT IS A NOTICE, NOT A DECISION SURFACE. The deny has already been dispatched
-// above; nothing here can reverse it, and nothing here posts into the channel.
-// Bridging these to a consent row the way an outbound post is bridged is a
-// LATER wave — the shape is real (`bridgeOutbound`) but the product question
-// (which gated tools deserve an interruption) is Samuel's, not this file's.
+// ⚠ SINCE 2026-08-31 THE ORDINARY PATH ASKS (`bridgeToolGate` above), so this
+// notice fires only on the platform-without-notifications fallback — where the
+// deny has already been dispatched and nothing here can reverse it. It is a
+// NOTICE, not a decision surface, and it posts nothing into the channel.
 //
 // ⚠ NAMES THE TOOL AND THE CHANNEL, and nothing else. The tool NAME is a
 // counterparty-influenceable string on its way to an OS notification, so it is
@@ -289,4 +372,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-module.exports = { attachSurface, liveCount, claimGate, MAX_CONCURRENT_SESSIONS };
+module.exports = {
+  attachSurface,
+  liveCount,
+  claimGate,
+  MAX_CONCURRENT_SESSIONS,
+  TOOL_GATE_TTL_MS, // 2026-08-31: how long a held tool gate waits for the banner's Allow
+};

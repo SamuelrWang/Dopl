@@ -137,7 +137,7 @@ function grantArgs(s, toolName, input) {
     profile: s.profile,
     toolName: toolName,
     input: input, workspaceId: s.workspaceId, audience: s.audience || null, // B2's belt (plan §4.4): the audience is STAMPED AT SPAWN by session-credential.js, off the roster this machine already reads, and is null for every unlocked session
-    channelId: s.channelId, launchDepth: s.launchDepth, // ...and F-320's RECURSION BOUND, stamped at spawn: ABSENT READS AS THE CAP (session-own-launch.js), so no lane opens it by forgetting to pass one
+    channelId: s.channelId, launchDepth: s.launchDepth, launchChain: s.launchChain === true, // ...and F-320's RECURSION BOUND, stamped at spawn: ABSENT READS AS THE CAP (session-own-launch.js), so no lane opens it by forgetting to pass one. `launchChain` is the channel's chaining SETTING (2026-08-31), stamped at spawn beside it and read `=== true` so absent keeps the bound — it is not read LIVE, deliberately: the 2026-08-25 live-apply ruling widens SUPERVISION, never CONTAINMENT
     allowForTask: st.allowForTask || [],
     // AXIS A — never consulted for a dopl_channel call. ⚠ FLOORED AT `auto` ON A WINDOWLESS
     // SESSION (2026-08-22, ruling 4; the rule is `session-profiles.js › floorWindowlessTool`,
@@ -155,7 +155,9 @@ function grantArgs(s, toolName, input) {
     // attachSurface`), never on the axis — a hypothetical WINDOWED session is untouched.
     toolMode: s && s.windowless === true ? floorWindowlessTool(st.toolMode) : st.toolMode,
     // AXIS B. ⚠ Through `session-private.js` (2026-08-22): a PRIVATE 1:1 turn withdraws the OUT
-    // half, so a post gates and bridges to a consent row instead of auto-sending.
+    // half, so a post gates and bridges to a consent row instead of auto-sending. ⚠ AND SINCE
+    // 2026-08-31 that derivation reads the channel's AUTO-SEND toggle LIVE and FIRST (Samuel's
+    // ruling) — ON forces the OUT half open on every turn shape, private included.
     messageMode: sessionPrivate.effectiveMessageMode(s)
   };
 }

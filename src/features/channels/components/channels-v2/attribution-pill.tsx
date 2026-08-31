@@ -95,13 +95,34 @@ export function attributionName({
   agentId: string | null;
   authorLabel: string;
   /** What the operator calls this agent RIGHT NOW, or null. ⚠ Resolved at render — never a field
-   *  on the message row. */
+   *  on the message row. Since 2026-08-31 it may also arrive from the SERVER's peer projection
+   *  (`channel_sessions.display_name`), which is what lets the OTHER member read it too. */
   agentName?: string | null;
 }): string {
   if (!agent) return authorLabel;
   const named = agentName?.trim();
   if (named) return named;
-  return agentId ? `Agent #${agentId}` : "Agent";
+  // ⚠ `#<id>`, NOT `Agent #<id>` (Samuel, 2026-08-31): the word "agent" left the name and is
+  // stated by the grey chip beside it ({@link AgentChip}), so saying it in the name too says
+  // it twice. UNSTAMPED still reads the bare noun — there is no id to say and a chip alone
+  // with no name line is a blank claim (INVARIANTS §11).
+  return agentId ? `#${agentId}` : "Agent";
+}
+
+/**
+ * THE AGENT-NESS, AS CHROME (Samuel, 2026-08-31): a small GREY chip carrying the word
+ * "agent" — grey fill, NO border, no outline — beside the name. It replaces the word's old
+ * seat INSIDE the name (`Agent #<id>`), so the name is just the id or the operator's rename.
+ * ⚠ `bg-bg-inset` is the kit's flat grey ground and deliberately NOT `.bento` — a bento face
+ * carries the elevated shadow, and this chip must read as a label, not a card.
+ * ⚠ Lower-case "agent", one word, never pluralized — it is a type marker, not a title.
+ */
+export function AgentChip() {
+  return (
+    <span className="shrink-0 rounded-full bg-bg-inset px-1.5 py-px text-micro leading-tight text-text-muted">
+      agent
+    </span>
+  );
 }
 
 /**
@@ -178,7 +199,13 @@ export function AttributionPill({
     <>
       <Avatar person={author} size="sm" />
       <span className="flex min-w-0 flex-col">
-        <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
+        {/* ⚠ THE CHIP SITS BESIDE THE NAME, on agent rows only (2026-08-31): the name line
+            stopped carrying the word "agent", and this is where the fact moved. `items-center`
+            keeps the chip on the name's own line; the flex row wraps if a long rename must. */}
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
+          {agent && <AgentChip />}
+        </span>
         <span className="text-micro leading-tight text-text-muted">{time}</span>
       </span>
     </>
@@ -195,7 +222,7 @@ export function AttributionPill({
         data-agent-id={agentId ?? undefined}
         data-attribution-pill=""
         /* ⚠ THE NAME, NOT THE RAW ID. `label` is already the display name — the rename when
-           there is one, `Agent #<id>` otherwise — so this obeys the global invariant that a
+           there is one, `#<id>` otherwise — so this obeys the global invariant that a
            raw agent id never renders on its own. */
         aria-label={`Open agent ${label}`}
         onClick={onOpenAgent}

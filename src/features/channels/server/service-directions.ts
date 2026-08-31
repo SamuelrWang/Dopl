@@ -70,6 +70,9 @@ function toDirection(row: AgentDirectionRow, now: number): AgentDirection {
     channelId: row.channel_id,
     threadId: row.task_id,
     agentId: row.agent_id,
+    // ⚠ A LABEL, UNVERIFIED, and `?? null` because a desktop or a row older than
+    // the column simply has none — absent means UNKNOWN, never "the operator".
+    senderAgentId: row.sender_agent_id ?? null,
     body: row.body,
     status: expired
       ? "expired"
@@ -81,6 +84,55 @@ function toDirection(row: AgentDirectionRow, now: number): AgentDirection {
     expiresAt: row.expires_at,
     createdAt: row.created_at,
   };
+}
+
+/**
+ * 🔒 WHICH OF THE OPERATOR'S OWN AGENTS FILED THIS — **AN UNVERIFIED LABEL, AND
+ * THE ONLY HONEST ONE AVAILABLE** (F-376a, 2026-08-31).
+ *
+ * ⚠ **READ THIS BEFORE USING THE VALUE FOR ANYTHING.** The input is
+ * `X-Dopl-Session-Id`, the desktop's slot key `<channelId>:<taskId>:<agentId>`,
+ * and INVARIANTS §10 already records what that header is worth: *a routing hint,
+ * not authorization — anything holding this device token can set it, so it PROVES
+ * nothing about the caller. Nothing may be GRANTED on it.* This function does not
+ * change that and cannot. What comes out is a CAPTION for the operator's own
+ * panel; **nothing may gate, route, filter or authorize on it.**
+ *
+ * ⚠ WHY IT IS STILL WORTH STAMPING. Samuel's same-owner ruling makes the
+ * operator's own desktop sessions first-class `direct_agent` callers, so a room
+ * can hold six of their agents directing each other and "your agent said this"
+ * stops being a complete sentence. The alternatives were: a new REQUEST FIELD
+ * (rejected — no schema on this path accepts an identity, and adding the first
+ * one would be strictly worse, since a payload field is forgeable by exactly the
+ * same party AND breaks the rule that makes the fence easy to verify), or nothing
+ * at all. A server-derived caption that says it is a caption is the honest middle.
+ *
+ * ⚠ AND THE BLAST RADIUS IS ZERO BY CONSTRUCTION: the row is owner-only in SQL,
+ * in RLS and in every repository predicate, so the only party who could forge
+ * this value is the operator's own side, and the only party who can read it is
+ * the same operator. A forged sender mislabels one line on the forger's own
+ * screen.
+ *
+ * Returns `null` for anything that is not exactly an agent id — an unstamped
+ * external orchestrator, a malformed header, a segment of the wrong shape. ⚠ The
+ * charset is the column's CHECK and `main/agent-id.js › AGENT_ID_RE`; a value
+ * that fails it is DROPPED rather than stored, so a forged header cannot park
+ * free text in a column a renderer prints.
+ */
+const SENDER_AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
+
+export function senderAgentIdFrom(sessionId: string | null | undefined): string | null {
+  if (typeof sessionId !== "string" || sessionId === "") return null;
+  // ⚠ THE LAST SEGMENT, and it is read by SPLITTING rather than by a regex over
+  // the whole key: the key's internal shape is main's, not this tree's, and the
+  // desktop's own rule is that the key is COMPARED, never split
+  // (`session-store.js › threadKeyPrefix`). Reading only the tail keeps this
+  // ignorant of the first two segments, so a future key shape breaks the caption
+  // and nothing else.
+  const parts = sessionId.split(":");
+  if (parts.length < 3) return null;
+  const tail = parts[parts.length - 1];
+  return SENDER_AGENT_ID_RE.test(tail) ? tail : null;
 }
 
 /**
@@ -148,6 +200,9 @@ export async function createAgentDirection(
     channel_id: channel.id,
     task_id: input.threadId ?? null,
     agent_id: input.agentId,
+    // ⚠ STAMPED FROM THE TRANSPORT, NEVER FROM THE PAYLOAD (F-376a). See
+    // `senderAgentIdFrom` for what it is worth and what it must never be used for.
+    sender_agent_id: senderAgentIdFrom(ctx.sessionId),
     body: input.body,
     expires_at: new Date(now + AGENT_DIRECTION_TTL_MS).toISOString(),
   });

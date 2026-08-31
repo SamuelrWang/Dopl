@@ -5133,7 +5133,7 @@ change to a working chain) from "the goal was parked behind an event this lane c
 (the design defect that does). Query `channel_launch_directives` and `channel_sessions` before
 believing a narrative about either.
 
-### F-366 — an agent woken through the private panel answers into a lane nothing else can read (2026-08-31, RESOLVED in copy; the MCP half is CLOSED by the direct lane; the OPERATOR-facing half is open)
+### F-366 — an agent woken through the private panel answers into a lane nothing else can read (2026-08-31, RESOLVED in copy; the MCP half is CLOSED by the direct lane; the OPERATOR-facing half is BUILT, minus the counterparty's name — F-376)
 
 The panel lane (`sessions:message` → `steer`) is on no wire: its turns are rendered in the Dopl
 app and reach no member, no peer agent, and no MCP reader. An agent asked privately for CHANNEL
@@ -5174,6 +5174,25 @@ agent stream still has no face for `directed` / `directed-reply`, so today both 
 honest degradation (nothing is dropped) and it is the remaining work, filed here rather than
 re-filed: **whoever renders it owes the operator one short line saying the words came from another
 of their agents, and nothing more — the minimal-copy ruling applies.**
+
+⚠ **THE SPA FACE IS BUILT (2026-08-31, same day, Samuel's ruling).**
+`components/channels-v2/agent-stream-directed.tsx › DirectedBox` renders both sides as a box in
+the sent box's design family, with the dark CTA banner deliberately withheld (INVARIANTS §11 has
+the rule and the geometry). `› agent-stream-model.ts › frameLane` splits main's single
+`lane: 'directed'` on the `kind` so inbound and outbound are separate lanes on this side —
+`Directed by …` and `Reply to …` — and an unrecognised kind on that lane reads as the inbound
+face rather than falling back to a `note`.
+
+⚠ **WHAT IS STILL OPEN IS THE NAME, AND IT IS NOT THIS SURFACE'S TO FIX — F-376.** Samuel's
+ruling asks for the counterparty BY NAME. There is no name and no id to resolve one from at any
+layer, so the banner names the RELATION (`your agent`) — which is what the lane guarantees and
+therefore the true claim. The remaining half is F-376's.
+
+⚠ **THE ORIGINAL COMPLAINT — "nothing tells an OPERATOR that the panel answer they are reading is
+invisible to the room" — IS STILL UNANSWERED FOR THE `private` LANE.** The directed boxes say
+whose words they are; they say nothing about reach, and the plain `private` face still says
+nothing at all. That was deliberate: the minimal-copy ruling forbids the explainer, and a claim
+about reach on every private row is exactly that. **Left open here rather than solved by copy.**
 
 ### F-367 — the outbound-gate payload mints a pending card under a flag called `threadOpen`, and an escalation now takes that branch too (2026-08-31)
 
@@ -5333,3 +5352,134 @@ direction lapses.
 alone would make the two lanes differ for no stated reason. The fix is to `remember` only on the
 outcomes that mean somebody else has it (409 / 404 / `ok:false`), on BOTH lanes, in one change.
 Filed rather than built.
+
+### F-376 — a direction says nothing about WHO sent it, and every frame's prose is flattened before the SPA sees it (2026-08-31)
+
+Two separate main/server gaps, found together while building F-366's operator half
+(`components/channels-v2/agent-stream-directed.tsx`). Both are upstream of the renderer and
+neither can be fixed on the SPA side; the faces were built around them rather than forcing a key.
+
+**(a) THE PRIVATE DIRECT LANE HAS NO SENDER IDENTITY, AT ANY LAYER.** Samuel's ruling is that the
+directed boxes name the counterparty BY NAME, for both directions. There is nothing to name:
+
+- `supabase/migrations/20260903120000_channel_agent_directions.sql` — the columns are
+  `id / workspace_id / channel_id / task_id / operator_user_id / agent_id / body / status /
+  refusal_reason / reply / claimed_at / decided_at / expires_at / created_at`. **`agent_id` is the
+  ADDRESSEE** (`types-direction.ts › AgentDirection.agentId`: *"THE AGENT INSTANCE THIS IS AIMED
+  AT"*). There is no sender column.
+- `schema-direction.ts › DirectionCreateSchema` takes `{channel, agentId, threadId, body}`, so an
+  MCP caller cannot name itself even if it wanted to, and `server/service-directions.ts` stamps
+  only `ctx.userId`.
+- `main/agent-direction-wire.js › directionFrom` is a literal whitelist over that row and so has
+  nothing to carry; `main/agent-directions.js › deliverTo` passes
+  `directed: {id, workspaceId, operatorUserId}`; `main/session-narration.js › entryFor` emits
+  `{at, kind: 'directed', lane: 'directed', text}`.
+
+**So this is NOT a narration-payload gap and must not be closed as one.** A `fromAgentId` on the
+frame would need a sender identity to exist first: a column, a create-schema field, a service
+stamp and a wire-DTO field, across two trees — and a *deliberate ruling* on whether an agent may
+be told which of its operator's siblings addressed it, which is a disclosure question and not a
+plumbing one. ⚠ **The MCP caller is not obviously an agent at all**: `dopl_channel(op="direct_agent")`
+authenticates as the OPERATOR, so "which agent sent this" is a fact only the calling client holds.
+
+**What shipped instead, and why it is honest:** the banner names the RELATION — `your agent` — which
+the lane genuinely guarantees (`operator_user_id = ctx.userId` fences every read and write; §11:
+*a peer can neither be directed nor direct you*). `DirectedBox`'s `agent` prop is a live `null`
+path that takes a resolved DISPLAY NAME the day one exists, and may never take a raw id
+(`agent-id-visibility.test.ts`).
+
+**(b) EVERY NARRATION FRAME'S PROSE IS WHITESPACE-COLLAPSED, SO BLOCK MARKDOWN CANNOT REACH THE
+SPA.** `main/session-narration.js › line` is `String(value).replace(/\s+/g, ' ').trim().slice(0,
+cap).trim()` and **every** kind goes through it — `assistant`, `thinking`, the operator's own
+text, `post`, and both directed kinds. Newlines are gone before the frame is pushed.
+
+⚠ **AND THE 2026-08-31 PROSE SPLIT DID NOT FIX IT, WHICH IS WHY THIS IS FILED AGAINST THE NEW
+PATH TOO.** `› prose` was added the same day (Samuel's cutoff report — it raises `PROSE_CAP` and
+stamps `truncated` on a cut line) and opens with the SAME `replace(/\s+/g, ' ')`. It is now the
+dedicated prose helper, so it is the natural place for the newline rule to live — the split that
+was needed already happened; only the collapse stayed.
+
+Samuel's second ruling of 2026-08-31 is that the agent view renders markdown, and it now does
+(`› agent-stream-prose.tsx` over the transcript's `› message-markdown.tsx`, reuse not fork). But a
+list, a heading and a fenced code block are **made of newlines**, so on today's main the operator
+gets inline marks only — `**bold**`, `` `code` ``, emphasis, links — and never a rendered list or
+fence. Pinned as evidence in `agent-stream.test.tsx` ("cannot show BLOCK structure through main's
+whitespace collapse"): **when main stops flattening, that case fails, and the failure is the
+signal that this half closed.**
+
+⚠ **THE FIX IS THE NEWLINE RULE INSIDE `prose`, NOT A WIDER `line`.** The captions
+(`inputSummary`, `resultSummary`, the status lines) are single-line by construction and must keep
+collapsing —
+`agent-direction-wire.js` already draws exactly this distinction for exactly this reason (*"A
+direction body is PROSE an agent reads; flattening its paragraphs would change what was asked"*,
+its `body` vs its `text`). So: keep `\n` (and the `PROSE_CAP` bound) inside `prose` — which is
+already the path for `assistant` / `thinking` / `private` / `directed` / `directed-reply` and the
+operator's `rawText` — and leave `line` and the caption path alone. ⚠ `RING_CHAR_BUDGET`'s
+arithmetic is unaffected (a cap is a cap), but the desktop suite pins the collapse and would need
+the split stated.
+
+**Not built here deliberately:** it is a `dopl-desktop-app/main/**` change, and that tree was
+being actively edited by another session in the same window.
+
+### F-377 — RESOLVED: F-376(a) and F-376(b), both closed in the same wave (2026-08-31)
+
+Filed as its own id rather than edited into F-376, because the two halves closed for two different
+reasons and a resolution note that hides one of them is how a finding gets re-opened wrongly.
+
+**(a) THE SENDER — closed by ADDING A COLUMN, and the honest caveat is on the column.** F-376(a)
+concluded "a fact only the calling client holds" and that was right about the CREDENTIAL and wrong
+about the TRANSPORT: `X-Dopl-Session-Id` already carries the desktop's slot key
+`<channelId>:<taskId>:<agentId>`, the server already reads it (`service-writes-metadata.ts ›
+metadata.session_id`), and its third segment IS the sender's agent id.
+`supabase/migrations/20260904090000_direction_sender_agent.sql` (WRITTEN, NOT APPLIED) adds
+nullable `sender_agent_id` with `agent_id`'s own charset CHECK; `service-directions.ts ›
+senderAgentIdFrom` stamps it from `ctx.sessionId` — **never from a request field, so the "no schema
+on this path accepts an identity" rule is intact.**
+⚠ **IT IS UNVERIFIED AND EVERY LAYER SAYS SO.** That header is a documented non-authorization
+signal (§10: *nothing may be GRANTED on it*), so the value is a CAPTION: nothing gates, routes,
+filters or authorizes on it, here or downstream. It is safe to SHOW because sender and recipient
+are the same operator's agents by construction — the row is owner-only in SQL, in RLS and in every
+repository predicate, so the only party who could forge it is the only party who can read it.
+⚠ **`DirectedBox` STILL NEVER TAKES A RAW ID.** `agent-stream.tsx` gained an `agentNameFor`
+resolver; an unresolvable id renders the anonymous sentence rather than the id
+(`agent-id-visibility.test.ts` unchanged and still binding).
+
+**(b) THE COLLAPSE — closed exactly where the finding said to close it.** `session-narration.js ›
+prose` now keeps newlines and `› line` still flattens, which is the split the finding argued for.
+Prose is capped by CHARACTERS and never by SHAPE: CR/CRLF normalize to `\n`, blank-line runs
+collapse to one, trailing spaces go, horizontal runs INSIDE a line collapse, and **leading
+indentation survives** — a nested bullet and a fenced code body are made of it. `RING_CHAR_BUDGET`
+is unaffected: every normalization can only shorten. ⚠ **AND THE SPA-SIDE "EVIDENCE" PIN COULD NEVER HAVE
+FIRED, WHICH IS ITS OWN SMALL FINDING.** It flattened the fixture ITSELF and then asserted no `ul`
+and no `pre` — a property of the renderer given already-flat input, unconditionally true whatever
+main does — while its docblock promised *"when main stops flattening prose this test fails"*. Main
+stopped flattening the same day and it stayed green. **A pin that cannot fail is not evidence**, so
+it was REPLACED (not re-pointed) with two cases that drive `narration-text.js`'s REAL `prose` and
+`line`: blocks render through the first, a caption is still flattened by the second. Asserting only
+the first half would let a later "consistency" edit undo the split from either side.
+
+### F-378 — a real GENERATION cap needs a depth column, and it is filed rather than guessed at (2026-08-31)
+
+Samuel's agent-chaining ruling makes the one-generation launch bound a per-channel setting
+(`main/channel-prefs.js › getAgentChain`, default OFF). **With the setting ON there is no
+generation bound left at all**, and this entry exists so that is written down rather than implied.
+
+`main/session-own-launch.js`'s header already carries the reason and it is unchanged by the
+ruling: "parent depth + 1" needs the parent's depth to survive the round trip, and it cannot —
+the ask leaves the machine as a `channel_launch_directives` row, that row has no depth column, and
+`launch-directive-wire.js › directiveFrom` is a literal whitelist that would drop a smuggled one.
+Arithmetic over a number that cannot cross the wire is a bound in name only, which is precisely
+what that module refuses to build.
+
+**What holds instead, and neither is a generation count:** `session-windowless.js ›
+MAX_CONCURRENT_SESSIONS` (six live sessions, instantaneous, already enforced at
+`session-launch.js › launch`), and the new `main/launch-budget.js` — a rolling per-channel budget
+spent ONLY by a chained spawn, which is the bound over TIME the concurrency ceiling cannot be
+(sessions settle and free their slots, so an unbounded chain under a fixed ceiling is a fork bomb
+that has learned patience).
+
+**What it would take to get the real cap**, unchanged from the 2026-08-25 statement: a
+`launch_depth` column on `channel_launch_directives`, the DTO, the create route's narrowing, and
+this machine's stamp on both the read and the write. Four coordinated edits across two trees for a
+bound whose absence is currently covered by two real ceilings — worth doing deliberately, not as a
+side effect of the wave that revealed it.

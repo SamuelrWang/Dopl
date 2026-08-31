@@ -60,6 +60,9 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     // ⚠ JOINED 2026-08-22 (agent templates, Phase 4's `channel_sessions.template_name`). NULL HERE AND STILL
     // PRESENT, for the reason above: a blank agent has no template, and saying so is not saying nothing.
     templateName: null,
+    // ⚠ JOINED 2026-08-31 (20260905120000): the operator-given name, PEER-VISIBLE by design.
+    // NULL = never named; the render falls back to `#<id>`.
+    displayName: null,
     detail: null,
     toolLabel: null,
     model: null,
@@ -107,11 +110,19 @@ test("ROW: the wire row is exactly the sixteen columns, and no summary field rid
     agentId: "a1b2c3d4",
     templateName: "Code Auditor",
   });
+  // ⚠ SEVENTEEN since 2026-08-31: `displayName` joined DELIBERATELY, with the column to
+  // receive it (`channel_sessions.display_name`, PEER-VISIBLE by design — Samuel's ruling).
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
-    "channelId", "channelName", "contextUsed", "contextWindow", "detail", "lastActivityAt",
-    "model", "name", "sessionKey", "startedAt", "state", "templateName", "threadId",
-    "threadTitle", "tokensSpent", "toolLabel",
+    "channelId", "channelName", "contextUsed", "contextWindow", "detail", "displayName",
+    "lastActivityAt", "model", "name", "sessionKey", "startedAt", "state", "templateName",
+    "threadId", "threadTitle", "tokensSpent", "toolLabel",
   ]);
+  // ⚠ THE NAME CROSSES SANITIZED, exactly as `templateName` does below — `labelOrNull` at 60
+  // (`agent-names.js › MAX_NAME`, the column CHECK's own bound).
+  assert.equal(m.reportRow(entry({ displayName: "Bug Reviewer" })).displayName, "Bug Reviewer");
+  assert.equal(m.reportRow(entry({ displayName: "  a​b\nc  " })).displayName, "a b c");
+  assert.equal(m.reportRow(entry({ displayName: "x".repeat(300) })).displayName.length, 60);
+  assert.equal(m.reportRow(entry({ displayName: "   " })).displayName, null);
   // ⚠ AND IT IS THE NAME, NEVER THE ID, AND IT IS SANITIZED HERE. The server stores the string verbatim and
   // resolves nothing, so the desktop is the only place the charset and the 120-char bound are applied —
   // through `session-telemetry.js › labelOrNull`, the helper the three telemetry labels take.

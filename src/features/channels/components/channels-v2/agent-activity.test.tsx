@@ -15,7 +15,7 @@
  *    reader would wait for a reply that is not coming to the transcript they are
  *    looking at.
  *  - **THE NAME IS THE POINT.** These are the operator's own agents, renameable,
- *    and a row that keeps saying `Agent #ab12` after a rename is a row about
+ *    and a row that keeps saying `#ab12` after a rename is a row about
  *    somebody they no longer recognise.
  */
 
@@ -91,7 +91,7 @@ describe("ownAgentsWorking — what the strip is allowed to claim", () => {
 describe("the rows themselves", () => {
   it("renders one working agent, named", () => {
     render(<AgentActivityRows agents={ownAgentsWorking([session()], CHANNEL_ID)} />);
-    expect(screen.getByText("Agent #ab12cd34 is working…")).toBeTruthy();
+    expect(screen.getByText("#ab12cd34 is working…")).toBeTruthy();
   });
 
   it("STACKS two, one row each — never a count", () => {
@@ -107,8 +107,8 @@ describe("the rows themselves", () => {
       />
     );
     expect(screen.getAllByRole("status")).toHaveLength(2);
-    expect(screen.getByText("Agent #ab12cd34 is working…")).toBeTruthy();
-    expect(screen.getByText("Agent #zz99yy88 is working…")).toBeTruthy();
+    expect(screen.getByText("#ab12cd34 is working…")).toBeTruthy();
+    expect(screen.getByText("#zz99yy88 is working…")).toBeTruthy();
     expect(screen.queryByText(/2 agents/)).toBeNull();
   });
 
@@ -127,7 +127,7 @@ describe("the rows themselves", () => {
       />
     );
     expect(screen.getByText("Scout is working…")).toBeTruthy();
-    expect(screen.queryByText(/Agent #ab12cd34/)).toBeNull();
+    expect(screen.queryByText(/#ab12cd34/)).toBeNull();
   });
 
   it("says the same word the PEER row says", () => {

@@ -57,6 +57,7 @@ export function useChannelsV2Derivations({
   threads,
   openThreadId,
   agentSessions = null,
+  peerSessions = null,
 }: {
   members: ChannelMember[];
   currentUserId: string;
@@ -67,12 +68,24 @@ export function useChannelsV2Derivations({
   /**
    * THIS MACHINE'S OWN AGENTS, for the names the transcript renders (2026-08-27).
    * ⚠ `null` IS "no desktop feed" (a plain browser, the pop-out) and is not an error — the index
-   * then holds no agents and every agent row reads `Agent #<id>`, exactly as before.
+   * then holds no agents and every agent row reads `#<id>`, exactly as before.
    */
   agentSessions?: ReadonlyArray<{
     agentId?: string | null;
     displayName?: string | null;
     description?: string | null;
+  }> | null;
+  /**
+   * THE OTHER MEMBERS' AGENTS, from the server's peer projection (2026-08-31, Samuel's ruling;
+   * `channel_sessions.display_name` via `use-agents-panel.ts › peerSessions`). Their `name` IS
+   * the agent id (the handle column carries the instance id since multiplayer), so it keys the
+   * same index the local feed fills — which is what lets the transcript render a PEER's
+   * "Bug Reviewer" with no second lookup path. ⚠ Merged BELOW the local feed: for the
+   * operator's own agents the local name is fresher than the last push.
+   */
+  peerSessions?: ReadonlyArray<{
+    name?: string | null;
+    displayName?: string | null;
   }> | null;
 }): ChannelsV2Derivations {
   /**
@@ -106,8 +119,19 @@ export function useChannelsV2Derivations({
    * not.
    */
   const agentKey = useMemo(
-    () => agentIndexKey(indexAgents(agentSessions)),
-    [agentSessions]
+    () =>
+      agentIndexKey(
+        indexAgents([
+          // ⚠ PEERS FIRST, OWN LAST — `indexAgents` is last-write-wins per id, and the local
+          // feed's name for the operator's own agent is fresher than its last server push.
+          ...(peerSessions ?? []).map((p) => ({
+            agentId: p.name,
+            displayName: p.displayName,
+          })),
+          ...(agentSessions ?? []),
+        ])
+      ),
+    [agentSessions, peerSessions]
   );
   const agents = useMemo(() => agentIndexFromKey(agentKey), [agentKey]);
   const index = useMemo(

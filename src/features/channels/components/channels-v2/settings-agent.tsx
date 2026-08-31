@@ -74,8 +74,10 @@
 import { Check } from "lucide-react";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
+import { useChannelAgentChain } from "../../hooks/use-channel-agent-chain";
 import { useOrchestratorLaunch } from "../../hooks/use-orchestrator-launch";
 import {
+  AgentChainRows,
   AgentFolderRows,
   AutoSendRows,
   OrchestratorLaunchRows,
@@ -101,52 +103,14 @@ import {
   LAUNCH_POSTURE_HEADING,
   SettingName,
   SettingRow,
+  TOOL_PROFILE_OPTIONS,
 } from "./settings-agent-rows";
 import type { AgentToolProfile, ChannelMember } from "../../types";
 
-/**
- * WHAT EACH TOOL PROFILE MEANS. ⚠ Source of truth is
- * `dopl-desktop-app/main/tool-profiles.js` — read its header before touching a
- * line here. Each rendered line is a claim about CONTAINMENT, so it is bounded
- * by the same rules the long sentences were, at a FIFTH of the length.
- *
- * `full` — no `--tools` bound, no `--allowedTools`, no scoped `--settings`, and
- * specifically NO `--strict-mcp-config`: the operator's OWN connected MCP servers
- * load alongside Dopl's and their global `permissions.allow` keeps applying.
- * That is the PRODUCT. The copy's job is to INFORM, not to warn.
- *
- * `dopl_only` — local read built-ins + WebFetch/WebSearch + NON-ADMIN Dopl tools,
- * pre-approved by name so they work headless. ⚠ Not "full minus danger" — it is
- * not more dangerous than `full` and is a legitimate first choice.
- * `dopl_channel` is excluded AND denied by name, so its reply routes back through
- * the approve-out gate rather than posting itself.
- *
- * `read_only` — local read built-ins only. The whole Dopl MCP server is denied by
- * prefix, and so is the web, so it is the one profile with no outbound channel.
- *
- * ⚠ Do NOT add "and a few destructive tools are always denied" to the `full`
- * line. `UNIVERSAL_HARD_DENY` is exactly the Dopl ADMIN + RETIRED tools, while
- * the SDK lane's `SESSION_HARD_DENY` is BROADER on purpose — so a generalizing
- * sentence is true on one lane and wrong on the other. These describe what each
- * profile GRANTS and promise nothing about what is withheld. That rule survived
- * the shortening: `full` still NAMES the connected apps, and no line ranks a
- * restricted profile as the safe or recommended answer.
- *
- * ⚠ THESE ARE THE ONLY DESCRIPTIONS LEFT ON THE TAB (Samuel, 2026-08-19 —
- * minimal copy). Tools keeps one because it is the CONTAINMENT pick; Permissions
- * and Sends render their option labels alone and keep their per-option
- * descriptions inside the `SelectMenu` dropdown, where a person reads them while
- * choosing. **≤5 words each, no trailing period.** The full sentences these
- * replaced are directly above — as a comment, deliberately.
- */
-const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
-  value: AgentToolProfile;
-  description: string;
-}> = [
-  { value: "full", description: "Everything, including connected apps" },
-  { value: "dopl_only", description: "Files, web, and Dopl" },
-  { value: "read_only", description: "Local files only" },
-];
+// ⚠ `TOOL_PROFILE_OPTIONS` AND ITS DOCBLOCK MOVED TO `settings-agent-rows.tsx` ON
+// 2026-08-31 — a PURE move, on the 2026-08-26 row-vocabulary move's exact
+// argument: this file was at 496 of the 500-line cap (INVARIANTS §1) and the
+// agent-chaining switch had to land in it. Not one character changed.
 
 // ⚠ THE "ALWAYS ALLOW" SECTION STOOD HERE AND IS DELETED (Samuel, 2026-08-22).
 // `TRUST_SCOPE_HINT`, `TRUST_EMPTY_COPY`, the `TrustRow` switch, the
@@ -188,6 +152,8 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const launchPosture = useChannelLaunchPosture(props.channelId);
   const folder = useChannelFolder(props.channelId);
   const autoSend = useChannelAutoSend(props.channelId);
+  // ⚠ PER CHANNEL, unlike the machine-wide toggle below it (Samuel, 2026-08-31).
+  const agentChain = useChannelAgentChain(props.channelId);
   // ⚠ NO `channelId` — this one is per-MACHINE (`use-orchestrator-launch.ts`).
   const orchestrator = useOrchestratorLaunch();
 
@@ -218,6 +184,15 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
               on: autoSend.on,
               busy: autoSend.busy,
               onToggle: (next) => void autoSend.update(next),
+            }
+          : null
+      }
+      agentChain={
+        agentChain.bridge
+          ? {
+              on: agentChain.on,
+              busy: agentChain.busy,
+              onToggle: (next) => void agentChain.update(next),
             }
           : null
       }
@@ -280,6 +255,14 @@ export interface ChannelAgentSettingsViewProps {
   /** Auto-send (2026-08-20), or null outside the desktop shell (row absent). */
   autoSend?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
   /**
+   * AGENT CHAINING (Samuel, 2026-08-31), or null outside the desktop shell (row
+   * absent — the no-dead-rows rule). ⚠ PER CHANNEL, unlike `orchestrator` below:
+   * it says whether an agent launched IN THIS ROOM may launch further agents.
+   * Default OFF is the one-generation bound that shipped, so an older main
+   * without the bridge renders nothing and changes nothing.
+   */
+  agentChain?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
+  /**
    * ORCHESTRATOR LAUNCHES (2026-08-22), or null without the bridge (group
    * absent, heading included). ⚠ **THE ONLY PER-MACHINE CONTROL ON THIS TAB** —
    * no `channelId` anywhere in its chain; the scope argument is
@@ -308,6 +291,7 @@ export function ChannelAgentSettingsView({
   modelSupported = false,
   folder,
   autoSend = null,
+  agentChain = null,
   orchestrator = null,
 }: ChannelAgentSettingsViewProps) {
   // ⚠ BOTH WRITES GO THROUGH THE WARNING, never around it — either axis can be
@@ -465,6 +449,11 @@ export function ChannelAgentSettingsView({
             bridge (no dead rows); `settings-desktop-rows.tsx` owns both. */}
         {folder && <AgentFolderRows folder={folder} SettingName={SettingName} />}
         {autoSend && <AutoSendRows autoSend={autoSend} SettingName={SettingName} />}
+        {/* ⚠ IN THE PER-CHANNEL GROUP, under "For every session on this channel"
+            — which is exactly its scope: a session started in this room carries
+            the room's chaining stamp. The MACHINE-scoped switch below keeps its
+            own heading for the opposite reason. */}
+        {agentChain && <AgentChainRows agentChain={agentChain} SettingName={SettingName} />}
 
         {/* ⚠ THE MACHINE-SCOPED GROUP, LAST AND UNDER ITS OWN LABEL. It is
             deliberately NOT folded into the durable per-channel group above:

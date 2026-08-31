@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * THE SENDER PILL OPENS THAT AGENT'S VIEW (Samuel, 2026-08-28, over a channel transcript
- * screenshot of an `Agent #rrr5o70x` pill: *"make the pill a clickable button that opens that
+ * screenshot of an `#rrr5o70x` pill: *"make the pill a clickable button that opens that
  * agent's agent view"*).
  *
  * ⚠ ITS OWN FILE, NOT A BLOCK IN `agent-attribution.test.tsx`, which is at the 500-line cap.
@@ -98,7 +98,7 @@ describe("an agent's sender pill opens that agent's view", () => {
     const pill = pillFor("BODY-m-1");
     expect(pill.tagName).toBe("BUTTON");
     // ⚠ THE NAME, NEVER A BARE ID — `Agent #<id>` IS the display name (global invariant).
-    expect(pill.getAttribute("aria-label")).toBe(`Open agent Agent #${A}`);
+    expect(pill.getAttribute("aria-label")).toBe(`Open agent #${A}`);
     fireEvent.click(pill);
     // ⚠ THE ID, AND EXACTLY THE ID. This is the assertion a wrong argument fails.
     expect(onOpenAgent).toHaveBeenCalledTimes(1);

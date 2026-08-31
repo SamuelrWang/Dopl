@@ -94,6 +94,14 @@ export type SessionStateRow = {
    *  existence oracle for a row that has no name uniqueness precisely so that it
    *  cannot be probed. NULL = no template, or a desktop older than the field. */
   template_name: string | null;
+  /** THE OPERATOR-GIVEN AGENT NAME — **PEER-VISIBLE BY DESIGN** (2026-08-31,
+   *  20260905120000; Samuel's ruling: the other member should see you are
+   *  running a "Bug Reviewer"). ⚠ DELIBERATELY NOT in
+   *  {@link OPERATOR_ONLY_SESSION_COLUMNS} — visibility is its point, and unlike
+   *  `template_name` it is an instance label with no existence-oracle behind it.
+   *  NULL = never named (render falls back to the `name` handle), or a desktop
+   *  older than the field. */
+  display_name: string | null;
 };
 
 /**
@@ -162,6 +170,8 @@ export type SessionStateUpsert = {
   tokens_spent: number | null;
   started_at: string | null;
   last_activity_at: string | null;
+  /** 2026-08-31 (20260905120000): the operator-given agent name; peer-visible. */
+  display_name: string | null;
   /** ⚠ A SNAPSHOT THE DESKTOP REPORTS, NOT A LOOKUP THE SERVER PERFORMS. The
    *  server never resolves a template id here — main holds the resolved template
    *  on `context.template` from spawn (spec §3d) and reports its NAME, which is
@@ -274,6 +284,10 @@ export function mapPeerSessionStateRow(
     detail: narrowSessionDetail(row.detail),
     channelName: row.channel_name,
     threadTitle: row.thread_title,
+    // ⚠ PEER-VISIBLE BY DESIGN (2026-08-31, Samuel's ruling) — the operator-given
+    // agent name IS for the other member's eyes; bounded at the schema and the
+    // column CHECK both. `?? null` covers a row read before the migration.
+    displayName: row.display_name ?? null,
     updatedAt: row.updated_at,
   };
 }

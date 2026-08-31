@@ -124,7 +124,7 @@ describe("the Agents tab with three of mine on one thread", () => {
     // the bare id would also match a substring of it, so this asserts the
     // WHOLE label and would catch the prefix silently disappearing.
     for (const id of ["a1b2c3d4", "e5f6g7h8", "i9j0k1l2"]) {
-      expect(screen.getByText(`Agent #${id}`)).toBeTruthy();
+      expect(screen.getByText(`#${id}`)).toBeTruthy();
     }
     // Three cards, so three ways in — not one row standing for the thread.
     expect(screen.getAllByRole("button", { name: /^Open$/ })).toHaveLength(3);

@@ -111,6 +111,23 @@ const APP_OPS = [
   //     from an app window can flip a channel to auto-send — the same authority the
   //     Settings tab hands the operator — and never grants a tool, reads a secret, or
   //     reaches another member's machine.
+  // ⚠ TWO OPS JOINED HERE ON 2026-08-31 (Samuel's agent-chaining ruling): the pin failed on
+  // the ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
+  //     registers `channels:getAgentChain` / `channels:setAgentChain`, both `appWindowOnly`,
+  //     both UUID-gating `channelId`, storage in `main/channel-prefs.js › get/setAgentChain`
+  //     (durable, per channel, default OFF, boolean-only writes, off deletes the key).
+  //   • THEY WIDEN LITTLE, AND IN THE STATED DIRECTION: the setting lifts a DEPTH bound —
+  //     whether an agent launched in this channel may launch further agents — and grants
+  //     nothing else. A forged `set` from an app window can turn chaining on for one channel,
+  //     the same authority the Settings tab hands the operator, and a chained launch still
+  //     needs `bypass`, the outbound half, the machine-wide orchestrator toggle, a free slot
+  //     against `MAX_CONCURRENT_SESSIONS` and the rolling budget in `main/launch-budget.js`.
+  //   • ⚠ IT REACHES NO RUNNING SESSION. The flag is a SPAWN-TIME stamp, so a forged flip
+  //     cannot widen an agent that is already working — the asymmetry with
+  //     `setLaunchPosture` below, which fans out live, and it is deliberate: that one widens
+  //     SUPERVISION, this one is CONTAINMENT.
+  "channels.getAgentChain",
   "channels.getAutoSend",
   "channels.getFolderLabel",
   // ⚠ TWO MORE JOINED HERE ON 2026-08-20 (the arm-vs-durable-posture split): the pin failed
@@ -146,6 +163,7 @@ const APP_OPS = [
   // never true in production — measured, F-233). Nothing feature-detected these two, because
   // nothing could reach them. The main-process handlers are gone with them, so leaving them
   // pinned would assert a bridge to nowhere.
+  "channels.setAgentChain", // 2026-08-31 — the review is on `channels.getAgentChain` above
   "channels.setAutoSend",
   "channels.setLaunchPosture",
   // ⚠ ONE JOINED HERE ON 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth

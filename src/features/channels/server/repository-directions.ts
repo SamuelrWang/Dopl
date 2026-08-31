@@ -33,6 +33,11 @@ export type AgentDirectionRow = {
   /** ⚠ NOT NULL, unlike the launch mailbox's — a direction with no addressee
    *  would be a broadcast into somebody's private lane. */
   agent_id: string;
+  /** ⚠ Nullable, and OPTIONAL on the type as well — a deployment where
+   *  `20260904090000_direction_sender_agent.sql` has not replayed yet returns rows
+   *  with no such key at all, and `toDirection`'s `?? null` is what makes that the
+   *  same answer as "an external orchestrator sent it". */
+  sender_agent_id?: string | null;
   body: string;
   status: string;
   refusal_reason: string | null;
@@ -56,6 +61,13 @@ export type AgentDirectionInsert = {
    *  `operator_user_id` stamp has already fixed. A wrong id reaches nothing —
    *  the desktop resolves it against its own registry and answers `no-session`. */
   agent_id: string;
+  /** ⚠ **UNVERIFIED ATTRIBUTION, AND IT IS NOT CALLER-SUPPLIED.** Which of the
+   *  operator's own agent sessions filed this, derived by the SERVICE from the
+   *  transport's `X-Dopl-Session-Id` — never from a request field, so the "no
+   *  schema on this path accepts an identity" rule is intact. `null` for an
+   *  external orchestrator, which has no session stamp. ⚠ NOTHING GATES ON IT
+   *  (`types-direction.ts › AgentDirection.senderAgentId` carries the argument). */
+  sender_agent_id: string | null;
   body: string;
   expires_at: string;
 };

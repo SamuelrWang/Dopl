@@ -155,8 +155,7 @@ contextBridge.exposeInMainWorld('dopl', {
     // consumer … the arm stays single-use and consent-only": there is no arm to be separate
     // from, and the handler moved out of `channel-dir-ipc.js` at the F-226 split. Corrected
     // 2026-08-20. Same `asMode` coercion, same fail-closed write.
-    getLaunchPosture: (channelId) =>
-      ipcRenderer.invoke('channels:getLaunchPosture', asId(channelId)),
+    getLaunchPosture: (channelId) => ipcRenderer.invoke('channels:getLaunchPosture', asId(channelId)),
     setLaunchPosture: (channelId, preset) =>
       ipcRenderer.invoke('channels:setLaunchPosture', {
         channelId: asId(channelId),
@@ -171,12 +170,12 @@ contextBridge.exposeInMainWorld('dopl', {
           model: asMode(preset && preset.model),
         },
       }),
-    // AUTO-SEND (2026-08-20): the DURABLE per-channel posture for the operator's own
-    // agent's replies — unlike the single-use arm above. A boolean over the wire, nothing else.
-    getAutoSend: (channelId) =>
-      ipcRenderer.invoke('channels:getAutoSend', asId(channelId)),
-    setAutoSend: (channelId, on) =>
-      ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
+    // AUTO-SEND (2026-08-20): the DURABLE per-channel posture for the operator's own agent's replies — unlike the single-use arm above. A boolean over the wire, nothing else.
+    getAutoSend: (channelId) => ipcRenderer.invoke('channels:getAutoSend', asId(channelId)),
+    setAutoSend: (channelId, on) => ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
+    // AGENT CHAINING (2026-08-31, Samuel's ruling): may an agent launched in this channel launch MORE agents? Default and fail-closed answer are both FALSE — the one-generation bound that shipped. Same boolean-only wire as auto-send; it lifts a DEPTH bound and grants nothing (`main/channel-prefs.js › getAgentChain`).
+    getAgentChain: (channelId) => ipcRenderer.invoke('channels:getAgentChain', asId(channelId)),
+    setAgentChain: (channelId, on) => ipcRenderer.invoke('channels:setAgentChain', { channelId: asId(channelId), on: on === true }),
   },
 
   // ── ⚠ THE TWO ORCHESTRATOR CONSENTS ───────────────────────────────────────────────────────

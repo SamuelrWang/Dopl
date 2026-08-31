@@ -141,7 +141,7 @@ async function openTemplateMenu() {
   fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
   await waitFor(() =>
     expect((screen.getByLabelText("Agent name") as HTMLInputElement).value).toBe(
-      `Agent #${MINTED}`
+      `#${MINTED}`
     )
   );
   fireEvent.click(screen.getByRole("button", { name: "Agent template" }));

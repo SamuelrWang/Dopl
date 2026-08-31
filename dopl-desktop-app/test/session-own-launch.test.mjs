@@ -248,8 +248,19 @@ test("CAPPED: an immediate deny carrying the BOUND's own sentence, not 'Blocked 
   assert.equal(rec.events.length, 0, "nothing to ask — the bound is not a question");
   // The sentence has to stop the retry loop, so it must say all three things.
   assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /NOBODY WAS ASKED/);
-  assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /no setting will widen this/);
-  assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /ask your operator/);
+  assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /re-issuing cannot succeed/);
+  // ⚠ IT SAID `no setting will widen this` UNTIL 2026-08-31, AND SAMUEL'S AGENT-CHAINING RULING
+  // FALSIFIED THAT CLAUSE. There is now exactly one setting that widens it — the channel's
+  // chaining toggle — and a refusal that denies its own remedy is the defect class this whole
+  // sentence exists to remove: the agent stops (correctly) and the operator never learns there
+  // was a switch. ⚠ AND IT STILL MUST NOT INVITE A RETRY: the flag is a SPAWN-TIME stamp, so
+  // flipping it cannot unblock THIS session, which is why "cannot succeed" is asserted above and
+  // the remedy is addressed to a HUMAN rather than to the next tool call.
+  assert.ok(!/no setting will widen this/.test(perms.LAUNCH_DEPTH_DENY_MESSAGE),
+    "the falsified clause is gone, not softened");
+  assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /your operator/);
+  assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /agent-chaining setting/,
+    "it NAMES the switch — a bound with an unnamed remedy is the same dead end");
   // ...and a hard-denied tool keeps the generic wording.
   const hard = await io.makeCanUseTool(mkSession({ toolMode: "bypass" }), recorder().dispatch)(
     "mcp__dopl__dopl_kb_admin", { op: "delete_base" }, { requestId: "L4" });

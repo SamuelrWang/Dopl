@@ -330,7 +330,7 @@ async function spawn(d) {
     model: sessionModel.chainModel(d.model)
       || require('./session-launch-op').templateModel(sessionModel, template)
       || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId)),
-    idle: !d.goal, // ⚠ docblock. `directiveFrom` trimmed it, so '' is the only spelling of "none"
+    launchChain: channelPrefs.getAgentChain(d.channelId), idle: !d.goal, // ⚠ `launchChain` (2026-08-31, Samuel's agent-chaining ruling): THIS lane is the ONLY caller that passes it, read PER DIRECTIVE and never cached (the operator may flip the channel setting between two of them), so a session started here may launch further agents exactly when the room says so — every other lane passes nothing, reads false, and keeps the one-generation bound. ⚠ `idle`: docblock; `directiveFrom` trimmed the goal, so '' is the only spelling of "none"
     operatorArmed: true, // ⚠ both branches: FIX-4 reads it only for a shell, but it is true either way
   });
   if (res && res.agentId) return { agentId: res.agentId };

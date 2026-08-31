@@ -113,6 +113,13 @@ export type ChannelSessionState = {
   /** ⚠ Counterparty-influenced display text — neutralized before storage. */
   channelName: string | null;
   threadTitle: string | null;
+  /**
+   * THE OPERATOR-GIVEN AGENT NAME ("Bug Reviewer") — **PEER-VISIBLE BY DESIGN**
+   * (2026-08-31, Samuel's ruling; migration 20260905120000). ⚠ OPTIONAL AND
+   * NULLABLE on `detail`'s two grounds: ABSENT = an older server/desktop does
+   * not carry the field; `null` = never named. Renders fall back to `#<name>`.
+   */
+  displayName?: string | null;
   updatedAt: string;
 };
 

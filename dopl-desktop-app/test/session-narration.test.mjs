@@ -70,7 +70,14 @@ test("SAFETY: every text field is bounded and single-line", () => {
   // ⚠ PROSE, NOT A CAPTION, SINCE 2026-08-27 — bounded at `PROSE_CAP`, which is the UI's own
   // expanded ceiling. Still BOUNDED, which is what this case is about.
   assert.ok(entry.text.length <= m.PROSE_CAP);
-  assert.equal(/[\r\n\t]/.test(entry.text), false);
+  // ⚠ **PROSE KEEPS ITS NEWLINES SINCE 2026-08-31 (F-376b), AND THIS CASE ASSERTED THE BUG.**
+  // It required `\n` to be gone from an `assistant` frame — which is what deleted every heading,
+  // bullet, numbered step and fenced code block on the way to the operator's panel, on the one
+  // class of frame this ring is the ONLY copy of. Prose is bounded by CHARACTERS and never by
+  // SHAPE. ⚠ WHAT IS STILL NORMALIZED: `\r` and `\t` (one spelling of a break; a tab inside a
+  // line is a horizontal run and collapses), so those two stay asserted.
+  assert.equal(/[\r\t]/.test(entry.text), false);
+  assert.match(entry.text, /^first\nsecond /, "the break survives; the tab collapsed");
   const tool = m.entryFor(
     { type: "tool_use", payload: { name: long, inputSummary: long } },
     NOW
@@ -132,11 +139,17 @@ test("POST: the outbound echo cap is the SPA's join constant, character for char
 });
 
 test("PROSE: the agent's own words reach the UI's ceiling, not the caption cap", () => {
-  const long = "y".repeat(5_000);
-  assert.equal(m.PROSE_CAP, 2000, "the SPA's EXPANDED_CHARS — change both or neither");
+  const long = "y".repeat(m.PROSE_CAP + 5_000);
+  // ⚠ 8000 SINCE 2026-08-31 — `session-directed.js › REPLY_CAP`'s number: the operator's own
+  // panel must not show LESS of a private reply than the MCP mailbox carries off-machine.
+  assert.equal(m.PROSE_CAP, 8000, "the SPA's EXPANDED_CHARS — change both or neither");
   for (const type of ["assistant", "thinking"]) {
     const entry = m.entryFor({ type, payload: { text: long } }, NOW);
     assert.equal(entry.text.length, m.PROSE_CAP, `${type} was cut at the caption cap`);
+    // ⚠ THE CUT CONFESSES (2026-08-31, Samuel's cutoff report). The cap EQUALS the UI's expanded
+    // ceiling, so the renderer's own `length >` clip check is false on every line cut here — the
+    // flag is the only marker that can ever reach the reader, and the tail exists nowhere.
+    assert.equal(entry.truncated, true, `${type} was cut without saying so`);
   }
   // What the operator TYPED is a message too, and the 1:1 lane posts nothing — this ring is the
   // only copy of those words anywhere.
@@ -145,12 +158,13 @@ test("PROSE: the agent's own words reach the UI's ceiling, not the caption cap",
     NOW
   );
   assert.equal(steer.text.length, m.PROSE_CAP);
-  // ⚠ AND A LINE THAT FITS IS RETURNED WHOLE — no ellipsis, no tail, byte-for-byte.
+  assert.equal(steer.truncated, true, "the operator's own cut line must say so too");
+  // ⚠ AND A LINE THAT FITS IS RETURNED WHOLE — no ellipsis, no tail, byte-for-byte. `truncated`
+  // is ABSENT rather than false: absent-means-unremarkable, the discipline `pending` carries.
   const whole = "the tests are green and I pushed the branch";
-  assert.equal(
-    m.entryFor({ type: "assistant", payload: { text: whole } }, NOW).text,
-    whole
-  );
+  const fit = m.entryFor({ type: "assistant", payload: { text: whole } }, NOW);
+  assert.equal(fit.text, whole);
+  assert.equal("truncated" in fit, false, "a line that fits carries no flag");
 });
 
 // ── 2. THE VOCABULARY ────────────────────────────────────────────────────────────────
@@ -378,7 +392,10 @@ test("PUSH: frames are keyed by sessionKey so a window can filter", () => {
 // shared when it was not, or the reverse — which is the whole point of the private turn.
 
 test("THINKING: it rides as its own kind and is bounded — at the PROSE cap", () => {
-  const entry = m.entryFor({ type: "thinking", payload: { text: "x".repeat(5000) } }, NOW);
+  const entry = m.entryFor(
+    { type: "thinking", payload: { text: "x".repeat(m.PROSE_CAP + 5000) } },
+    NOW
+  );
   assert.equal(entry.kind, "thinking");
   // ⚠ A reasoning block is unbounded by construction, so it is bounded here — but at the cap the
   // UI can actually SHOW (2026-08-27). At 300 the SPA's "Show more" revealed nothing.
@@ -431,68 +448,9 @@ test("PRIVATE: the re-tag does not MUTATE the entry it was given", () => {
   assert.equal(line.kind, "assistant");
 });
 
-// ── 4. THE SECOND BOUND: CHARACTERS, NOT ENTRIES ─────────────────────────────────────
-//
-// REGRESSION: 17 GB dev RSS, 2026-08-30. `flush()` sends the WHOLE ring per dirty session,
-// `sendToWindows` clones it into EVERY live window's message pipe (up to nine), and `note()`
-// marks a session dirty on EVERY SDK event — so the feed re-serializes at up to 5 Hz per
-// session per window, into NATIVE memory (no GC pressure, nothing in a heap snapshot, no
-// backpressure from a renderer slow to drain). `PROSE_CAP` rose 300 → 2000 on 2026-08-27,
-// taking the per-flush ceiling from 60k chars to 400k; that constant's note did the SIZE
-// arithmetic and named the two acceptable fixes, but accounted for neither the FAN-OUT nor the
-// RATE. RING_CHAR_BUDGET restores the pre-2026-08-27 ceiling WITHOUT undoing PROSE_CAP: a long
-// line still arrives whole, never cut mid-word — what pays is the OLDEST ENTRIES.
-
-test("BOUND: the char budget is exactly the pre-PROSE_CAP ceiling (NARRATION_MAX × TEXT_CAP)", () => {
-  // ⚠ THE NUMBER IS DERIVED, NOT CHOSEN. If this ever drifts, the comment explaining
-  // where 60_000 came from has stopped being true.
-  assert.equal(m.RING_CHAR_BUDGET, m.NARRATION_MAX * m.TEXT_CAP);
-  assert.equal(m.RING_CHAR_BUDGET, 60_000);
-});
-
-test("BOUND: a ring of maximal PROSE_CAP lines stays under the budget", () => {
-  const s = { key: "c:t:a" };
-  const long = "x".repeat(m.PROSE_CAP);
-  for (let i = 0; i < m.NARRATION_MAX * 2; i++) {
-    m.push(s, { at: NOW + i, kind: "assistant", text: long });
-  }
-  const chars = s.narration.reduce(
-    (n, e) => n + e.text.length + m.ENTRY_OVERHEAD_CHARS,
-    0
-  );
-  assert.ok(chars <= m.RING_CHAR_BUDGET, `ring is ${chars} chars, budget is ${m.RING_CHAR_BUDGET}`);
-  assert.ok(s.narration.length <= m.NARRATION_MAX, "the entry bound still holds too");
-  // ⚠ AND THE PAYLOAD IS WHAT SHRANK — this is the number that used to reach every window
-  // five times a second. Before the budget it was NARRATION_MAX × PROSE_CAP.
-  assert.ok(
-    JSON.stringify(m.ringFor(s)).length < m.NARRATION_MAX * m.PROSE_CAP,
-    "the flushed payload must be smaller than the old unbounded-by-chars ceiling"
-  );
-});
-
-test("BOUND: what pays is the OLDEST entries — the newest line is never truncated", () => {
-  const s = { key: "c:t:a" };
-  const long = "y".repeat(m.PROSE_CAP);
-  for (let i = 0; i < 100; i++) m.push(s, { at: NOW + i, kind: "assistant", text: long });
-  const last = s.narration[s.narration.length - 1];
-  assert.equal(last.text.length, m.PROSE_CAP, "the newest entry keeps its full PROSE_CAP text");
-  assert.equal(last.at, NOW + 99, "and it is the most recent one, not an older survivor");
-  // No entry is ever rewritten — eviction is whole-entry, never a mid-word cut (the thing
-  // Samuel's 2026-08-27 ruling deleted).
-  for (const e of s.narration) assert.equal(e.text.length, m.PROSE_CAP);
-});
-
-test("BOUND: a single over-budget entry survives alone — the budget bounds a BACKLOG", () => {
-  const s = { key: "c:t:a" };
-  m.push(s, { at: NOW, kind: "assistant", text: "z".repeat(m.RING_CHAR_BUDGET * 2) });
-  assert.equal(s.narration.length, 1, "the present is never evicted, only the backlog");
-  assert.equal(s.narration[0].text.length, m.RING_CHAR_BUDGET * 2, "and it is not truncated");
-});
-
-test("BOUND: a ring of short captions is untouched — the budget is a ceiling, not a retune", () => {
-  const s = { key: "c:t:a" };
-  for (let i = 0; i < m.NARRATION_MAX; i++) {
-    m.push(s, { at: NOW + i, kind: "result", ok: true, text: "ok" });
-  }
-  assert.equal(s.narration.length, m.NARRATION_MAX, "a realistic ring still holds the full 200");
-});
+// ⚠ **THE CHARACTER-BUDGET CASES MOVED TO `test/session-narration-budget.test.mjs` ON
+// 2026-08-31**, under the §1 500-line cap. THE SEAM IS THE SUBJECT: everything here is about
+// WHAT A FRAME SAYS (which event becomes which kind, what is bounded, what never enters the
+// ring); the cases that moved are about WHAT A FLUSH COSTS — `RING_CHAR_BUDGET`, the 17 GB dev
+// incident's regression, and the arithmetic that derives the number instead of restating it.
+// Nothing was rewritten and no case was dropped.

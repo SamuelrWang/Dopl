@@ -209,6 +209,13 @@ function postureInto(map, channelId, raw) {
 // without a Send click), it is chosen on the channel's Settings tab, and it must survive
 // restarts or the operator would re-opt-in per session.
 // Default OFF — ask-first: an absent, corrupt, or non-boolean record reads false.
+//
+// ⚠ READ **LIVE AT THE GATE** SINCE 2026-08-31 (Samuel's ruling): `session-private.js ›
+// effectiveMessageMode` consults `getAutoSend(channelId)` on every Axis-B decision, so the
+// toggle applies to EVERY session in the channel IMMEDIATELY — running ones, reopened shells,
+// crash resumes, private and directed turns included — ON and OFF alike. It is deliberately
+// NOT folded into any launch-time mode any more (see `windowlessMessageMode`): one live
+// reader, zero frozen copies.
 const AUTO_SEND_KEY = 'channelAutoSend'; // { [channelId]: true }
 
 function getAutoSend(channelId) {
@@ -225,6 +232,67 @@ function setAutoSend(channelId, on) {
   else delete next[channelId];
   store.set(AUTO_SEND_KEY, next);
   diag('channel-prefs: autoSend', String(channelId).slice(0, 8), on === true ? 'on' : 'off');
+  return on === true;
+}
+
+// ── ⚠ AGENT CHAINING (2026-08-31, Samuel's ruling) — THE ONE-GENERATION BOUND, MADE A SETTING ──
+//
+// `session-own-launch.js › MAX_LAUNCH_DEPTH` limits a chain of launches to ONE generation: an
+// operator's orchestrator may staff itself and its staff may not staff themselves. Samuel ruled
+// that bound a CHANNEL SETTING after a field run where five worker-launch attempts by a launched
+// agent were all refused — the operator wanted an orchestrator that staffs supervisors that staff
+// workers, in the ONE room they run orchestrators in.
+//
+// DEFAULT OFF, which is the CURRENT bound. An absent, corrupt or non-boolean record reads false,
+// the same fail-closed rule auto-send, the template approvals and the two orchestrator toggles all
+// follow — so nothing about a machine that has never seen this key changes.
+//
+// ⚠ IT IS PER CHANNEL AND IT IS LOCAL, for auto-send's reason and for `orchestratorLaunch`'s. A
+// spawned session has `Bash` and this operator's device token on disk (§6), so a SERVER-STORED
+// version of this flag is one an agent holding the operator's own credential could flip for
+// itself. There is no route, no MCP op and no column, deliberately.
+//
+// ⚠ WHAT IT DOES **NOT** DO, and the list is the whole safety argument. It lifts a DEPTH bound and
+// nothing else. A launch still needs, unchanged and in conjunction: the Axis-A `bypass` posture,
+// the Axis-B outbound half, the machine-wide `orchestratorLaunchEnabled` consent that turns a
+// directive into a process, this channel's tool profile, `SESSION_HARD_DENY`, and the machine's
+// `MAX_CONCURRENT_SESSIONS` ceiling. With this ON and any one of those closed, nothing launches.
+//
+// ⚠ AND WITH IT ON THERE IS NO GENERATION BOUND LEFT — SAID PLAINLY RATHER THAN IMPLIED. Depth
+// cannot cross the wire (`session-own-launch.js`'s header carries the argument), so "N
+// generations" is not a bound this build can express. What stands in its place is stated where it
+// is enforced: `MAX_CONCURRENT_SESSIONS` (six live sessions, instantaneous) and
+// `launch-budget.js` (a rolling per-channel launch budget, over time). Neither is a generation
+// count and neither is described as one.
+const AGENT_CHAIN_KEY = 'channelAgentChain'; // { [channelId]: true }
+
+/** May a LAUNCHED session in this channel launch further agents? Default false. */
+function getAgentChain(channelId) {
+  if (!channelId) return false;
+  try {
+    const map = store.get(AGENT_CHAIN_KEY);
+    return !!(map && typeof map === 'object' && map[channelId] === true);
+  } catch (_err) {
+    return false; // an unreadable store is not a grant
+  }
+}
+
+/** Persist the channel's chaining setting. ⚠ OFF DELETES THE KEY — the same "absent and false are
+ *  the same record" rule the auto-send map follows, so nothing distinguishes never-set from
+ *  turned-off and no reader can grow a third state to get wrong. */
+function setAgentChain(channelId, on) {
+  if (!channelId) return false;
+  try {
+    const map = store.get(AGENT_CHAIN_KEY);
+    const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
+    if (on === true) next[channelId] = true;
+    else delete next[channelId];
+    store.set(AGENT_CHAIN_KEY, next);
+  } catch (err) {
+    diag('channel-prefs: could not persist agent chaining —', err && err.message);
+    return false;
+  }
+  diag('channel-prefs: agentChain', String(channelId).slice(0, 8), on === true ? 'on' : 'off');
   return on === true;
 }
 
@@ -347,8 +415,15 @@ function setLaunchPosture(channelId, raw) {
  * A windowless session has NO Accept UI, so the IN half is floored at
  * `auto_inbound` on every shape (INVARIANTS §11: the consent that admitted the
  * thread is the human decision, and a counterparty reply feeds as a turn). The
- * OUT half is the channel's durable auto-send switch, WIDENED — never narrowed —
- * by a picked posture that already says "send out".
+ * OUT half is a picked posture that already says "send out".
+ *
+ * ⚠ **AUTO-SEND IS NO LONGER FOLDED IN HERE (2026-08-31, Samuel's ruling).** The toggle is read
+ * LIVE at decision time — `session-private.js › effectiveMessageMode`, the single Axis-B read —
+ * and it must have exactly ONE consumer: the frozen copy this function used to bake into
+ * `state.messageMode` at launch is precisely why flipping the switch did nothing for sessions
+ * already running, and why a reopened/recreated/resumed shell (which drops its startModes — H2)
+ * silently lost it while the control still said ON. A setting with a live reader and a frozen
+ * copy is two settings that disagree; the frozen copy is the one that goes.
  *
  * ⚠ ONE FUNCTION BECAUSE THE LANES MUST NOT DRIFT. `trigger.js ›
  * launchResponderSession` passes NULL (it said "derives it from the consumed ARM" until
@@ -364,7 +439,7 @@ function setLaunchPosture(channelId, raw) {
  * `ask` cannot switch the floor off, because there is nothing to ask on.
  */
 function windowlessMessageMode(channelId, picked) {
-  const autoOut = getAutoSend(channelId) || picked === 'auto_outbound' || picked === 'auto_both';
+  const autoOut = picked === 'auto_outbound' || picked === 'auto_both';
   return autoOut ? 'auto_both' : 'auto_inbound';
 }
 
@@ -400,6 +475,12 @@ function getLaunchModel(channelId) {
 module.exports = {
   getAutoSend,
   setAutoSend,
+  // 2026-08-31 (Samuel's ruling): the per-channel AGENT-CHAINING setting — the one-generation
+  // launch bound, made toggleable. Default OFF = today's bound. The block above states what it
+  // lifts, what it does not, and what stands in for a generation count when it is on.
+  AGENT_CHAIN_KEY,
+  getAgentChain,
+  setAgentChain,
   // THE MACHINE-WIDE STANDING CONSENTS for the two MCP-driven capabilities — launching an
   // agent (2026-08-22) and DIRECTING one (2026-08-31). ⚠ RE-EXPORTED from
   // `orchestrator-consent.js` (§1 split), which carries why "outside the server entirely" is

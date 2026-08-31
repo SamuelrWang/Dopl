@@ -8,9 +8,15 @@
 // the agent simply omitted the argument").
 //
 // WHAT AN ACCIDENT LOOKS LIKE WITHOUT THE GATE: the operator asks their agent something in the
-// 1:1 composer, on a channel with auto-send ON, and the agent answers by posting into the
-// thread. The counterparty now has the operator's private question answered in public, and there
-// is no recall. That is the failure every case below is about.
+// 1:1 composer, and the agent answers by posting into the thread. The counterparty now has the
+// operator's private question answered in public, and there is no recall. That is the failure
+// every case below is about.
+//
+// ⚠ SCOPE SINCE 2026-08-31 (Samuel's ruling, stated at `session-private.js ›
+// autoSendMessageMode`): the withdrawal stands while the channel's AUTO-SEND toggle is OFF —
+// which is this process's permanent condition (`channelAutoSend` cannot load its store here and
+// answers false), so every case below drives the toggle-off arm. The toggle-ON arm, where the
+// channel-wide consent overrides this gate, is `test/session-autosend-live.test.mjs`'s to pin.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

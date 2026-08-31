@@ -10,7 +10,7 @@
  * set of facts, and the panel's job — a GLANCE at what this agent is up to — is
  * the window's content at another width, not a different question.
  *
- * ⚠ FOUR LANES, FOUR FACES, AND THE DISTINCTION IS THE POINT.
+ * ⚠ FIVE FACES NOW, AND THE DISTINCTION IS THE POINT.
  *   - **`sent` wears the BOX** (`SentToChannelBox`) — it is the only thing here
  *     the counterparty can see.
  *   - **`operator` IS THE VIEWER'S OWN TURN**: right-aligned, with their avatar
@@ -20,13 +20,29 @@
  *     "You" label; the sides are told apart by ALIGNMENT now). Private traffic
  *     that looked like a channel post would let an operator believe their steer
  *     was read by the other party.
+ *   - **`directed` / `directed-reply` wear their OWN BOX** (2026-08-31,
+ *     `agent-stream-directed.tsx`) — the private direct lane, where ANOTHER of
+ *     this operator's agents is the speaker. Same box family as the sent one,
+ *     deliberately NOT its dark banner: the geometry says "an exchange", the
+ *     weight says whether anyone off this machine can see it.
  *   - **`thinking` / `tool` / `note` are quiet log lines** — `agent-stream-log.tsx`,
  *     where a RUN of consecutive tool activity collapses into one muted "Used N
  *     tools" row. They are the bulk and almost never the answer.
  *
- * ⚠ THE LOG LANE IS ITS OWN FILE (§1, 2026-08-27). This one owns which lane a row
- * is in and the two loud faces; `agent-stream-log.tsx` owns the bulk and how much
- * of it is showing. Both are one reason to change each.
+ * ⚠ THE MESSAGE FACES RENDER MARKDOWN (Samuel, 2026-08-31). The agent's turns,
+ * the operator's own, both directed boxes and the SENT box's body go through
+ * `agent-stream-prose.tsx`
+ * — a thin adapter over the TRANSCRIPT's renderer (R1: reuse, never a fork), so
+ * the untrusted-body rules are stated once. **The log lane deliberately does
+ * not**: it bounds its rows by slicing the string, which cuts markdown mid-token,
+ * and `line-clamp` cannot clamp a container of sibling blocks. Bulk stays plain
+ * and keeps its clip. ⚠ What actually reaches the operator today is INLINE
+ * markdown only — main flattens every frame's whitespace before it ships (F-376).
+ *
+ * ⚠ THE LOG LANE IS ITS OWN FILE (§1, 2026-08-27), and the two boxes are theirs.
+ * This one owns which lane a row is in and how a row is dispatched to its face;
+ * `agent-stream-log.tsx` owns the bulk, `agent-stream-sent-box.tsx` the outbound
+ * review card, `agent-stream-directed.tsx` the private direct lane.
  *
  * ⚠ EVERY FRAME RENDERS, INCLUDING ONE THIS BUILD HAS NEVER HEARD OF.
  * `agent-stream-model.ts › frameLane` falls back to `note` and keeps the text —
@@ -42,6 +58,11 @@ import type { ChannelConsentRequest, ChannelMessage } from "../../types";
 import type { AgentNarrationEntry } from "./use-agent-narration";
 import { LogLine, ToolRunGroup } from "./agent-stream-log";
 import { AgentStreamEscalation } from "./agent-stream-escalation";
+// ⚠ THE PRIVATE DIRECT LANE'S FACES ARE THEIR OWN FILE, on the sent box's seam:
+// they move when THAT lane moves (INVARIANTS §11), where this file moves when a
+// stream row's dispatch moves.
+import { DirectedBox } from "./agent-stream-directed";
+import { StreamProse } from "./agent-stream-prose";
 // ⚠ THE OUTBOUND REVIEW CARD IS ITS OWN FILE SINCE 2026-08-31 (§1, at the cap),
 // and the seam is "one file, one reason to change": that card moves when the
 // OUTBOUND CONSENT product moves (§6) — it has already gained a Pending face, a
@@ -95,10 +116,25 @@ export function AgentStream({
   escalationAnswerable = true,
   threadTitle,
   viewer,
+  agentNameFor,
   className,
 }: {
   /** `null` = could not ask; `[]` = asked, nothing yet. ⚠ Never collapsed here. */
   entries: AgentNarrationEntry[] | null;
+  /**
+   * RESOLVE ONE OF THIS OPERATOR'S AGENT IDS TO ITS DISPLAY NAME, or `null` when
+   * this mount cannot say (F-376a, 2026-08-31).
+   *
+   * ⚠ **IT EXISTS SO AN ID IS NEVER PRINTED AT A PERSON.** A `directed` entry now
+   * carries `senderAgentId` — an 8-char instance id — and `agent-id-visibility
+   * .test.ts` is the standing rule that such an id does not reach a human-facing
+   * string. An unresolvable id therefore renders as the ANONYMOUS sentence, which
+   * is the same thing the surface showed before senders existed at all.
+   * ⚠ **OPTIONAL, AND ABSENT MEANS "THIS MOUNT CANNOT SAY"**, never "nobody sent
+   * it": a mount with no roster in hand must degrade to anonymous rather than
+   * inventing a name or leaking the id.
+   */
+  agentNameFor?: (agentId: string) => string | null;
   /** Whether this build can show the lane at all. */
   supported: boolean;
   /** What this agent POSTED, off the channel transcript — the authoritative
@@ -223,6 +259,7 @@ export function AgentStream({
               answerBusy={answerBusy}
               answeredEscalations={answeredEscalations}
               escalationAnswerable={escalationAnswerable}
+              agentNameFor={agentNameFor}
             />
           ))}
         </ol>
@@ -247,6 +284,7 @@ function StreamRow({
   answerBusy,
   answeredEscalations,
   escalationAnswerable,
+  agentNameFor,
 }: {
   group: StreamGroup;
   viewer?: AvatarPerson | null;
@@ -256,6 +294,8 @@ function StreamRow({
   answerBusy?: boolean;
   answeredEscalations?: ReadonlyMap<string, number>;
   escalationAnswerable?: boolean;
+  /** F-376a — resolve a directed entry's sender id to a name; see {@link AgentStream}. */
+  agentNameFor?: (agentId: string) => string | null;
 }) {
   // A tool RUN is the one group with more than one row in it, and it renders as
   // the collapsed summary. Every other lane is a group of one.
@@ -305,6 +345,7 @@ function StreamRow({
     return (
       <li>
         <OperatorTurn text={item.text} viewer={viewer} />
+        {item.truncated === true && <TruncatedNote alignEnd />}
       </li>
     );
   }
@@ -312,6 +353,34 @@ function StreamRow({
     return (
       <li>
         <AgentTurn text={item.text} />
+        {item.truncated === true && <TruncatedNote />}
+      </li>
+    );
+  }
+  // ⚠ THE TWO SIDES OF ONE EXCHANGE, AND THEY ARE ROUTED SEPARATELY RATHER THAN
+  // BY A FLAG. `frameLane` has already split main's single `lane: 'directed'` on
+  // the `kind`, so the direction is a LANE here — which is what keeps this switch
+  // exhaustive and stops a face defaulting to the wrong arrow.
+  // ⚠ THE INBOUND SIDE NOW HAS A SENDER, AND THE OUTBOUND SIDE STILL DOES NOT
+  // (F-376a, 2026-08-31). `senderAgentId` says which of the operator's agents
+  // FILED a direction; a `directed-reply` is THIS agent answering, so there is no
+  // counterparty to name on that half and it stays `null` deliberately.
+  // ⚠ RESOLVED TO A NAME, NEVER RENDERED AS AN ID (`agent-id-visibility.test.ts`),
+  // and an unresolvable one falls back to the anonymous sentence.
+  if (item.lane === "directed" || item.lane === "directed-reply") {
+    const sender =
+      item.lane === "directed" && item.senderAgentId && agentNameFor
+        ? agentNameFor(item.senderAgentId)
+        : null;
+    return (
+      <li>
+        <DirectedBox
+          text={item.text}
+          agent={sender}
+          outbound={item.lane === "directed-reply"}
+          at={item.at}
+        />
+        {item.truncated === true && <TruncatedNote />}
       </li>
     );
   }
@@ -347,9 +416,15 @@ function OperatorTurn({
 }) {
   return (
     <div className="flex min-w-0 items-start justify-end gap-2">
-      <span className="wrap-anywhere max-w-[80%] whitespace-pre-wrap rounded-[10px] bg-bg-inset px-2.5 py-1.5 text-caption text-text-primary">
-        {text}
-      </span>
+      {/* ⚠ THE BUBBLE IS A BLOCK CONTAINER SINCE 2026-08-31, not a `<span>`. The
+          markdown renderer emits a FRAGMENT OF BLOCKS (`message-markdown.tsx`'s
+          rule 4) and blocks cannot live inside an inline element. **The geometry
+          is unchanged** — same inset ground, same 80% cap, same radius, same
+          `wrap-anywhere` (now on each block) — so the row reads as it did. */}
+      <StreamProse
+        text={text}
+        className="max-w-[80%] rounded-[10px] bg-bg-inset px-2.5 py-1.5"
+      />
       {/* ⚠ ABSENT RATHER THAN A PLACEHOLDER when the host could not resolve the
           viewer (`view-model.ts › viewerPerson`): the row is already right-aligned,
           which is what says whose turn it is. */}
@@ -375,11 +450,41 @@ function OperatorTurn({
  * private line wearing the sent box's dark banner would let them believe the
  * other party read something they never saw — the one thing on this surface that
  * is worse than showing nothing. **Plain text is the face that claims least.**
+ *
+ * ⚠ "PLAIN" MEANS NO CHROME, NOT UNRENDERED MARKDOWN (Samuel, 2026-08-31). The
+ * rule above is about what this face CLAIMS — no banner, no rule, no label, no
+ * box — and formatting the agent's own words claims nothing at all: a `**bold**`
+ * that prints its asterisks is not a humbler face, it is a worse one. The body
+ * goes through the transcript's renderer like every other message face; the row
+ * still carries nothing but the text.
  */
 function AgentTurn({ text }: { text: string }) {
+  return <StreamProse text={text} />;
+}
+
+/**
+ * THE CUT, CONFESSED, UNDER THE FACE THAT SHOWS IT (2026-08-31, Samuel's cutoff
+ * report — INVARIANTS §9: a clipped read says so).
+ *
+ * ⚠ WHY THE FACES NEED THIS WHEN THE LOG LANE HAS ITS OWN CLIP ROW. The message
+ * faces (`OperatorTurn` / `AgentTurn` / `DirectedBox`) render their text whole
+ * with no clamp — main already bounded it at `PROSE_CAP` — so a line main CUT at
+ * that cap reaches the operator as prose that simply stops mid-sentence, with the
+ * arithmetic on every layer agreeing it fits. `StreamItem.truncated` is main's
+ * own confession that it shortened the line, and for prose the tail exists
+ * nowhere: this note is the only honest thing a face can add.
+ *
+ * ⚠ MUTED AND BELOW THE FACE, not inside it — it is a fact ABOUT the message,
+ * not part of what the agent said, and the same `text-micro text-text-muted`
+ * the log lane's clip row wears keeps one voice for "you are not seeing all
+ * of it" across the column.
+ */
+function TruncatedNote({ alignEnd }: { alignEnd?: boolean }) {
   return (
-    <p className="wrap-anywhere min-w-0 whitespace-pre-wrap text-caption text-text-primary">
-      {text}
-    </p>
+    <div className={cn("flex", alignEnd && "justify-end")}>
+      <span className="text-micro text-text-muted">
+        Clipped — the message was longer than the panel keeps.
+      </span>
+    </div>
   );
 }

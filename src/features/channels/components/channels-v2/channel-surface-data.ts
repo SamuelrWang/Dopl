@@ -263,6 +263,10 @@ export function useChannelSurfaceData({
     // ⚠ THE SAME FEED THE AGENTS TAB READS — no new read, no second poll. It carries what each
     // agent is CALLED, which is what lets the transcript render the CURRENT name (2026-08-27).
     agentSessions,
+    // ⚠ AND THE PEER PROJECTION THE SAME TAB ALREADY POLLS (2026-08-31, Samuel's ruling) — no
+    // new read here either. It carries the OTHER members' agent names
+    // (`channel_sessions.display_name`), so their "Bug Reviewer" renders on their posts too.
+    peerSessions: agentsPanel.peerSessions,
   });
 
   /**

@@ -118,6 +118,14 @@ function reportRow(e) {
     channelName: (e && e.channelName) || null,
     threadTitle: (e && e.threadTitle) || null,
     templateName: telemetry.labelOrNull(e && e.templateName, telemetry.TEMPLATE_NAME_MAX),
+    // ⚠ THE OPERATOR-GIVEN NAME, PEER-VISIBLE BY DESIGN (2026-08-31, Samuel's ruling;
+    // migration 20260905120000 + `schema-sessions.ts › displayName`). Rides the summary's
+    // `displayName` (`session-summary.js › liveSummary` ← `agent-names.js`), so a RENAME
+    // changes the digest and pushes like any state change — that is how the peer sees it.
+    // 60 is `agent-names.js › MAX_NAME`, which is the column CHECK's own bound; sanitized
+    // through the same labelOrNull every other operator-authored field crosses with, so a
+    // pathological stored name can never 400 the whole payload (INVARIANTS §11).
+    displayName: telemetry.labelOrNull(e && e.displayName, 60),
     ...telemetry.telemetryFields(e),
   };
 }

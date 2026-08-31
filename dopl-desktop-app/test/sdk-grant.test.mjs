@@ -56,6 +56,11 @@ const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
 // same precedent — `launch_agent` asks for a PROCESS rather than sending CONTENT, so it is its own
 // lane (both axes + a launch-depth bound) and not a fourth member of the outbound list.
 const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
+// 2026-08-31 (Samuel's same-owner directions ruling): the OWN-MACHINE DIRECT LANE, a FOURTH §2
+// file on the same precedent — `direct_agent` buys a TURN on a local process, so it takes the
+// launch lane's two-axis conjunction while carrying NO depth bound (that one bounds how many
+// agents come into existence; a direction creates none). Injected REAL, like every predicate here.
+const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
@@ -65,6 +70,7 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
+  "isOwnMachineDirect", "directLaneVerdict",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName",
@@ -76,6 +82,7 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
+  DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName);
 
 const PROFILES = ["read_only", "dopl_only", "full"];

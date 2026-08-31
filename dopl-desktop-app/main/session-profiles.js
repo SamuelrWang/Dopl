@@ -1,27 +1,20 @@
 // SESSION-mode tool grant table. Profile -> SDK-option pieces:
 //   { builtinTools, disallowedTools, preApproved, doplToolsPolicy }
-// Session analog of tool-profiles.js HEADLESS containment. Headless has no TTY (pre-approve a
-// fixed safe set only); a session has live canUseTool buttons, so dangerous tools LIVE-GATE.
+// Session analog of tool-profiles.js HEADLESS containment. Headless has no TTY (pre-approve a fixed safe set only); a session has live canUseTool buttons, so dangerous tools LIVE-GATE.
 //
-// ⚠ SHADOW GOTCHA: a tool in the SDK's `allowedTools` SHADOWS canUseTool — auto-approved before
-// any button appears. `preApproved` (== allowedTools) may hold ONLY silent-grant tools; a
-// live-gated tool must NEVER appear there.
+// ⚠ SHADOW GOTCHA: a tool in the SDK's `allowedTools` SHADOWS canUseTool — auto-approved before any button appears. `preApproved` (== allowedTools) may hold ONLY silent-grant tools; a live-gated tool must NEVER appear there.
 //
 // TWO AXES, because an outbound message is technically a tool call (`dopl_channel op=post`) on
 // the same canUseTool plumbing as Bash:
 //   AXIS A (toolMode)    manual | accept_edits | auto | bypass — what MY agent may do here.
 //   AXIS B (messageMode) ask | auto_inbound | auto_outbound | auto_both — what crosses.
-// ⚠ INVARIANT: Axis A can NEVER auto-approve a message op; Axis B can NEVER auto-approve a work
-// tool. grantDecision branches the channel tool to Axis B BEFORE any Axis A mode is consulted,
-// and no other tool reads messageMode.
+// ⚠ INVARIANT: Axis A can NEVER auto-approve a message op; Axis B can NEVER auto-approve a work tool. grantDecision branches the channel tool to Axis B BEFORE any Axis A mode is consulted, and no other tool reads messageMode.
 //
-// ⚠ Modes resolved HERE, never via the SDK's `permissionMode`: bypassPermissions stops the SDK
-// calling canUseTool at all, killing the outbound message card and the hard-deny path.
-// buildSdkOptions keeps `permissionMode: 'default'` + `settingSources: []` pinned.
+// ⚠ Modes resolved HERE, never via the SDK's `permissionMode`: bypassPermissions stops the SDK calling canUseTool at all, killing the outbound message card and the hard-deny path. buildSdkOptions keeps `permissionMode: 'default'` + `settingSources: []` pinned.
 //
-// PURE module (no electron/fs/path/SDK). test/session-profiles + test/sdk-grant slice the block
-// below and inject the tool-profiles constants, normalizeProfile, shaKey and the two
-// mcp-tool-names normalizers as parameters.
+// PURE module (no electron/fs/path/SDK). test/session-profiles + test/sdk-grant slice the block below and inject the tool-profiles constants, normalizeProfile, shaKey and the two mcp-tool-names normalizers as parameters.
+//
+// ⚠ **PARAGRAPHS ABOVE RE-WRAPPED, NOT EDITED, 2026-08-31.** Not one word changed; the physical line count did, because this file was AT the 500-line §1 cap and the own-machine DIRECT lane (Samuel's ruling that day) needs a require, a branch and a pointer to its argument. The alternative was a second §2 split of a file two tests slice by source markers, bought for three lines. ⚠ **RE-WRAPPING IS A ONE-TIME RECLAIM, NOT A BUDGET** — the next paragraph that has to land here SPLITS the file.
 
 const { makeGrantDetail, GATE_REASONS } = require('./session-gate-reason');
 const { containerOnlyDenies } = require('./session-audience'); // §2 SPLIT 2026-08-26: B2's belt
@@ -40,6 +33,7 @@ const {
   isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
 } = require('./session-own-outbound');
 const { isOwnMachineLaunch, launchLaneVerdict } = require('./session-own-launch'); // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25; F-320) — its own §2 file, on F-301's precedent
+const { isOwnMachineDirect, directLaneVerdict } = require('./session-own-direct'); // THE OWN-MACHINE DIRECT LANE (Samuel's ruling, 2026-08-31) — same conjunction, its own §2 file, and DELIBERATELY not a member of the launch list: that one carries the depth bound and folding this in would make private directions depend on the agent-chaining setting
 const {
   READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, UNIVERSAL_HARD_DENY,
   // Retired tools: denied everywhere, so unregistering cannot loosen a hard-deny.
@@ -200,8 +194,12 @@ function isOwnChannelPost(input, sessionChannelId) {
 // (channel-schema.ts), so an unfiltered call spans the WORKSPACE — which is exactly the shape
 // that keeps `list` off this list, and it still qualifies for the reason `list` does not:
 // `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
+// ⚠ `read_directions` JOINED ON 2026-08-31 (Samuel's same-owner directions ruling) ON EXACTLY
+// `read_sessions`'s ARGUMENT: this operator's own runtimes, never a peer's, `channel` an optional
+// filter. Its WRITE twin `direct_agent` is NOT here — that one buys a TURN and takes the two-axis
+// conjunction (`session-own-direct.js`, which carries the whole ruling).
 const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members',
-  'read_sessions'];
+  'read_sessions', 'read_directions'];
 
 // Read twin of isOwnChannelPost, SAME scoping rule and safe failure: a `channel` naming
 // anything but this session's id (slug included) is ANOTHER channel and gates.
@@ -426,6 +424,8 @@ function grantDecision(args) {
     // ⚠ THE OWN-MACHINE LAUNCH LANE, WHICH IS NOT A MEMBER OF THE OUTBOUND SET ABOVE: it needs
     // BOTH axes and a DEPTH BOUND, and `session-own-launch.js` carries all three arguments.
     if (isOwnMachineLaunch(a.input, a.channelId)) return launchLaneVerdict(a, autoOutboundMode(a.messageMode));
+    // ⚠ THE OWN-MACHINE DIRECT LANE (2026-08-31): SAME conjunction, SEPARATE list, NO depth question — `session-own-direct.js` carries all three arguments, including why sameness is not a reason to merge them. Its READ twin `read_directions` is on the inbound list above.
+    if (isOwnMachineDirect(a.input, a.channelId)) return directLaneVerdict(a, autoOutboundMode(a.messageMode));
     // Own-channel READ follows the INBOUND half: a read sends nothing, it brings the peer's
     // words into context unseen — what auto_inbound consents to. `auto_outbound` alone does
     // NOT cover it.
@@ -458,7 +458,7 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
-  OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, // 2026-08-25 (F-320): the own-machine launch lane
+  OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect, // 2026-08-25 (F-320): the own-machine launch lane; 2026-08-31: its direct twin
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
   toolModeAllows, isKnowledgeReadCall,

@@ -1,6 +1,7 @@
 "use client";
 
 import { LiquidGlass } from "@/shared/design/liquid-glass/liquid-glass";
+import { BannerDemo } from "./banner-demo/banner-demo";
 import { NotificationCard } from "./notification-card";
 import { useBannerScrub } from "./use-banner-scrub";
 
@@ -41,10 +42,15 @@ export function HeroBanner() {
               <span className="lp-banner-ripple" ref={rippleRef} aria-hidden="true" />
             </LiquidGlass>
 
-            {/* TODO(demo slot): deliberately blank — the interactive Dopl demo
-                goes here. Must stay a CHILD of the glass wrapper with a fixed
-                px inset for an even gap on all four sides. */}
-            <div className="lp-banner-demo-slot" aria-hidden="true" />
+            {/* Demo slot — a CHILD of the glass wrapper with a fixed px inset
+                for an even gap on all four sides. It is the scene's WINDOW:
+                BannerDemo FILLS this box edge to edge (width sets the scale,
+                height is derived — banner-demo.tsx › `fit`; it used to
+                contain-fit and leave white gutters down both sides) and slaves
+                its clock to the slot's opacity flips (use-demo-timeline.ts). */}
+            <div className="lp-banner-demo-slot" aria-hidden="true">
+              <BannerDemo />
+            </div>
           </div>
 
           {/* macOS pointer, inline. ⚠ SIBLING of the glass so it rides above.

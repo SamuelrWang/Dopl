@@ -161,8 +161,8 @@ describe("the agents on this thread", () => {
         summary({ sessionId: "s-2", agentId: "e5f6g7h8" }),
       ],
     });
-    expect(screen.getByText("Agent #a1b2c3d4")).toBeTruthy();
-    expect(screen.getByText("Agent #e5f6g7h8")).toBeTruthy();
+    expect(screen.getByText("#a1b2c3d4")).toBeTruthy();
+    expect(screen.getByText("#e5f6g7h8")).toBeTruthy();
     // ⚠ AND THE BARE TOKEN IS NOWHERE — a row that rendered both would satisfy the two lines
     // above while still leaking the id.
     expect(screen.queryByText("a1b2c3d4")).toBeNull();

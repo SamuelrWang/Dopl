@@ -426,7 +426,7 @@ function messageByTask(a) {
       text: (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text),
       rawText: text,
       private: true,
-      directed: !!directed, // ⚠ ATTRIBUTION — `session-narration.js` reads it
+      directed: !!directed, senderAgentId: (directed && directed.senderAgentId) || null, // ⚠ ATTRIBUTION — `session-narration.js` reads both. ⚠ THE SECOND IS A CAPTION AND AN UNVERIFIED ONE (F-376a): WHICH of the operator's own agents filed the direction, server-derived from `X-Dopl-Session-Id`, which proves nothing — nothing may gate on it, and the FENCE two lines up (`s.operatorUserId !== directed.operatorUserId`) is untouched by its presence
       priority: 'next',
     });
     // 🔒 AFTER THE DISPATCH (F-372) — a wake RESETS both windows. See `openPrivateTurn`.

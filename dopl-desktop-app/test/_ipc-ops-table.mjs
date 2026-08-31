@@ -45,6 +45,13 @@ export const OPS = [
   // send setting, boolean-only, same sender binding + UUID gate as every op above.
   ["channels:getAutoSend", CH, false],
   ["channels:setAutoSend", { channelId: CH, on: true }, { ok: false }],
+  // ⚠ TWO JOINED HERE 2026-08-31 (Samuel's agent-chaining ruling): the durable per-channel
+  // setting that lifts the one-generation launch bound. Boolean-only, same sender binding and
+  // UUID gate as every op above, and the same refusal SHAPES — a refused `get` answers plain
+  // `false`, which is also the fail-closed value, so a hostile page cannot tell a rejected
+  // sender from a channel with chaining off.
+  ["channels:getAgentChain", CH, false],
+  ["channels:setAgentChain", { channelId: CH, on: true }, { ok: false }],
   // ⚠ TWO MORE JOINED 2026-08-20 (then the arm's half of that split was deleted the same
   // day): the DURABLE launch posture, the same two axes the arm carried, same sender
   // binding + UUID gate — and now the most privileged write in the file. A refused `get`

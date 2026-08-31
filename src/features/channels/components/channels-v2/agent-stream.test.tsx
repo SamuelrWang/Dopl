@@ -210,15 +210,21 @@ describe("the lanes look different, and the sent box is the loud one", () => {
     // identity. A label saying who the viewer is, on every line they type, is the
     // thing that made the row read as a log entry about them.
     expect(screen.queryByText("You")).toBeNull();
-    expect(screen.getByText("check the spec").closest("div")?.className).toMatch(
-      /justify-end/
-    );
+    // ⚠ THE ROW, NOT THE NEAREST DIV (updated 2026-08-31). The bubble became a
+    // block container when the body started rendering markdown, so the text's
+    // closest `div` is now the bubble; `justify-end` has always lived on the ROW
+    // outside it. What is being pinned is unchanged: my turn is on the right.
+    expect(screen.getByText("check the spec").closest("div.justify-end")).not.toBeNull();
     // ⚠ AND THE AGENT'S SIDE CARRIES NOTHING BUT THE TEXT (Samuel, 2026-08-27,
     // second pass). The quote bar and the "Agent" marker went with the "You"
     // label: ALIGNMENT is what tells the two sides apart now, and a rule plus a
     // noun on top of that restates what the layout already says.
     expect(screen.queryByText("Agent")).toBeNull();
-    const agentLine = screen.getByText("on it");
+    // ⚠ THE BLOCK, NOT THE LEAF (updated 2026-08-31). The body renders through
+    // the transcript's markdown renderer now, which splits every text run into
+    // leaf spans so a mention can be tinted — so the row's type and the absence
+    // of chrome are pinned on the paragraph the renderer produced.
+    const agentLine = screen.getByText("on it").closest("p") as HTMLElement;
     expect(agentLine.className).not.toMatch(/border-l/);
     expect(agentLine.className).toMatch(/text-text-primary/);
     // ⚠ THE WHOLE POINT: a private line must not wear the sent box's banner.
@@ -413,10 +419,39 @@ describe("the log lane is bounded in both directions", () => {
     // ⚠ A tool result can be a megabyte of JSON. "Show more" pasting all of it
     // into a 380px column destroys the stream it was meant to explain, and a
     // silent clip is a claim that this was the whole thing (INVARIANTS §9).
-    renderStream({ entries: [frame({ text: "y".repeat(5000) })] });
+    renderStream({ entries: [frame({ text: "y".repeat(9000) })] });
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     expect(screen.getByText(/Clipped/)).toBeTruthy();
-    expect(screen.queryByText("y".repeat(5000))).toBeNull();
+    expect(screen.queryByText("y".repeat(9000))).toBeNull();
+  });
+
+  /**
+   * THE MAIN-CUT LINE SAYS SO TOO (2026-08-31, Samuel's cutoff report).
+   *
+   * ⚠ THE HOLE THIS PINS: main's `PROSE_CAP` EQUALS `EXPANDED_CHARS`, so a line
+   * main shortened arrives at exactly the ceiling and `text.length >
+   * EXPANDED_CHARS` is FALSE — the arithmetic calls the one string that most
+   * needs a marker whole. The `truncated` flag is main's own confession and the
+   * only trigger that can fire; a build that drops it re-opens the silent cut.
+   * The wording differs deliberately: this tail exists NOWHERE, so the note must
+   * not send the reader to a fuller log that does not hold it.
+   */
+  it("says it clipped when MAIN cut the line, even at exactly the ceiling", () => {
+    renderStream({
+      entries: [frame({ text: "y".repeat(8000), truncated: true })],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(screen.getByText(/longer than the panel keeps/)).toBeTruthy();
+  });
+
+  it("marks a MAIN-CUT private reply under its plain face", () => {
+    // ⚠ The private face renders whole with no clamp of its own — main already
+    // bounded it — so the flag is the only thing standing between the operator
+    // and prose that just stops mid-sentence (the exact report this fixes).
+    renderStream({
+      entries: [wildFrame("private", { text: "half an answ", truncated: true })],
+    });
+    expect(screen.getByText(/longer than the panel keeps/)).toBeTruthy();
   });
 });
 

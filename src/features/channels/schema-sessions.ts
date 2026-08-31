@@ -192,6 +192,23 @@ const SessionStateEntrySchema = z.object({
    * own result forges a line in your own result.
    */
   templateName: safeLabel("Template name", 120).nullable().optional(),
+
+  // ── THE OPERATOR-GIVEN AGENT NAME (2026-08-31, migration 20260905120000) ──
+  /**
+   * WHAT THE OPERATOR CALLS THIS AGENT ("Bug Reviewer"), snapshotted from the
+   * desktop's local name store (`main/agent-names.js`) on every push — the
+   * additive column that file's own header promised. ⚠ PEER-VISIBLE BY DESIGN
+   * (Samuel's ruling: the other member should see what your agent is called),
+   * so unlike `templateName` it maps through `mapPeerSessionStateRow`.
+   *
+   * ⚠ `.nullable().optional()` on the telemetry block's two grounds: `optional`
+   * is the rollout contract (an older desktop sends no key and its whole push
+   * must not 400 — INVARIANTS §11, §13); `nullable` is semantic (never named).
+   * ⚠ Bound is `safeLabel` at **60** — character for character the column's
+   * CHECK, which is itself `main/agent-names.js › MAX_NAME`. Operator-authored
+   * free text on a PEER's screen; the newline/zero-width strip is load-bearing.
+   */
+  displayName: safeLabel("Agent name", 60).nullable().optional(),
 });
 export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 

@@ -40,7 +40,7 @@ export const LATEST_VERSION_ENV = "DOPL_DESKTOP_LATEST_VERSION";
 /** Declared latest when the env var is UNSET — cold-start clamp fallback. ⚠ Set
  *  alongside `DEFAULT_MIN_VERSION` in the SAME release commit so the clamp can
  *  never refuse the floor shipped beside it. Release feed wins when reachable. */
-export const DEFAULT_DECLARED_LATEST = "1.23.0";
+export const DEFAULT_DECLARED_LATEST = "1.24.0";
 
 /**
  * `1.8.2`, optionally `1.9.0-beta.2`. ⚠ Deliberately RE-STATED rather than

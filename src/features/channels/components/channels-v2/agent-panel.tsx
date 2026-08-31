@@ -129,20 +129,37 @@ export function agentSentMessages(
   currentUserId: string,
   agentId?: string | null
 ): ChannelMessage[] {
-  if (!taskId) return [];
   const mine = typeof agentId === "string" ? agentId.trim() : "";
   return messages.filter((m) => {
     if (
       m.kind !== "message" ||
       m.authorKind !== "agent" ||
-      m.authorUserId !== currentUserId ||
-      m.metadata.taskId !== taskId
+      m.authorUserId !== currentUserId
     ) {
       return false;
     }
-    if (!mine) return true;
+    // The thread join, exactly as it always worked: same thread, and not
+    // positively attributed to a SIBLING instance.
+    if (taskId && m.metadata.taskId === taskId) {
+      if (!mine) return true;
+      const stamped = parseAgentPostStamp(m.clientMsgId);
+      return stamped === null || stamped === mine;
+    }
+    // ⚠ THE THREADLESS POST (2026-08-31, Samuel's attribution report — the
+    // 2026-08-25 F-251 note measured this exact miss and fixed only the LANDING
+    // check). A main-room post carries no `metadata.taskId`, so the join above
+    // can never admit it and the agent's own sent box showed nothing for it.
+    // With no thread to join on, only a POSITIVE per-instance attribution may
+    // admit the row — the writer's own stamp, or the `session_id` the desktop
+    // stamps on every outbound post (1.7.20) — because an unstamped threadless
+    // row could be any sibling's, and the wrong lane is worse than a short one
+    // here (the transcript still holds the post; this is the one surface where
+    // attribution IS the claim).
+    if (!mine) return false;
     const stamped = parseAgentPostStamp(m.clientMsgId);
-    return stamped === null || stamped === mine;
+    if (stamped === mine) return true;
+    const sessionStamp = (m.metadata as { session_id?: unknown }).session_id;
+    return typeof sessionStamp === "string" && sessionStamp === mine;
   });
 }
 

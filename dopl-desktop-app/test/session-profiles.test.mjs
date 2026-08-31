@@ -93,6 +93,11 @@ const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
 // `launchLaneVerdict` off the module head, so they are injected here like everything else, and
 // the REAL implementations, so the block stays pinned to what ships.
 const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
+// 2026-08-31 (Samuel's same-owner directions ruling): the OWN-MACHINE DIRECT LANE, a FOURTH §2
+// file on the same precedent — `direct_agent` buys a TURN on a local process, so it takes the
+// launch lane's two-axis conjunction while carrying NO depth bound (that one bounds how many
+// agents come into existence; a direction creates none). Injected REAL, like every predicate here.
+const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
@@ -103,6 +108,7 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
+  "isOwnMachineDirect", "directLaneVerdict",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName",
@@ -115,6 +121,7 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
+  DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName);
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = OUT;
 

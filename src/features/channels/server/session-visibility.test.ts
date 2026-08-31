@@ -66,6 +66,10 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     // does a substring search, and a value like "Auditor" would be defeated by a
     // row field that legitimately contains it.
     template_name: "Acme Contract Auditor",
+    // ⚠ 2026-08-31 — populated, NOT registered as operator-only: the display
+    // name is PEER-VISIBLE BY DESIGN (Samuel's ruling), so the property test
+    // below must see it SURVIVE the peer mapper rather than be scrubbed.
+    display_name: "Bug Reviewer",
     ...over,
   };
 }
@@ -127,6 +131,9 @@ describe("the PEER mapper can never emit operator-only telemetry", () => {
         "channelId",
         "channelName",
         "detail",
+        // 2026-08-31 — the operator-given agent name, peer-visible BY DESIGN
+        // (Samuel's ruling; 20260905120000). The one addition since telemetry.
+        "displayName",
         "name",
         "state",
         "threadId",

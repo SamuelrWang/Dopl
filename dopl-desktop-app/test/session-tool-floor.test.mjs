@@ -232,12 +232,16 @@ test("the floor sits BESIDE its Axis-B twin, in the one file that states both", 
     "they are adjacent — one fact about one shape, stated in one place");
 });
 
-test("the reason the floor is not optional: a windowless gate is STILL a deny", () => {
-  // ⚠ THE STANDING CONDITION. If a gate surface ever returns to this shape, the floor becomes a
-  // product choice rather than a correctness one. While it does not exist, `claimGate` denies
-  // every `permission_request` outright — pinned so whoever builds the surface reads this first.
+test("the gate surface EXISTS now — a windowless gate is HELD and asked (2026-08-31)", () => {
+  // ⚠ THE STANDING CONDITION THE OLD PIN GUARDED HAS FIRED, exactly as it said it might:
+  // `bridgeToolGate` IS the gate surface (a notification with an Allow action, TTL-bounded), so
+  // the Axis-A floor above is a PRODUCT choice now rather than a correctness one — and it is
+  // KEPT, deliberately: without it every Read/Edit on a windowless session would raise a
+  // banner, and a banner storm is the surface nobody reads (ruling 6b). The floor keeps the
+  // classified work set promptless; the banner covers what still gates.
   const src = read("session-windowless.js");
   assert.match(src, /payload\.type === 'permission_request'/);
-  assert.match(src, /setImmediate\(\(\) => decide\(rid, 'deny'\)\)/,
-    "a gated tool on a windowless session is denied, not queued");
+  assert.match(src, /bridgeToolGate/, "a gated tool is bridged to the operator, not auto-denied");
+  assert.match(src, /noteGateTimeout/, "an expired prompt carries the TIMEOUT copy, not a false actor");
+  assert.match(src, /noteAutoDenied/, "and the true no-surface fallback keeps the never-asked copy");
 });

@@ -192,7 +192,7 @@ async function sessionRowsWhere(
 const SESSION_DIFF_COLUMNS =
   "session_key, channel_id, task_id, name, state, channel_name, thread_title, " +
   "detail, tool_label, model, context_used, context_window, tokens_spent, " +
-  "started_at, last_activity_at, template_name";
+  "started_at, last_activity_at, template_name, display_name";
 
 /** ⚠ Field by field, NEVER JSON.stringify: key ORDER differs between a
  *  PostgREST row and a service-built object, so a string compare reports every
@@ -237,7 +237,10 @@ function sessionRowMatches(
     // but not in this compare reads back as a difference nobody made on the
     // FIRST push after the field ships, and a column in neither freezes at its
     // first value while the row keeps claiming to be current.
-    stored.template_name === reported.template_name
+    stored.template_name === reported.template_name &&
+    // 2026-08-31: a RENAME is exactly the change this diff must see — it is how
+    // the peer-visible name propagates on the next push with nothing else moving.
+    stored.display_name === reported.display_name
   );
 }
 

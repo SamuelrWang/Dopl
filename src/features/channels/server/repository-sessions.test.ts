@@ -53,6 +53,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     started_at: null,
     last_activity_at: null,
     template_name: null,
+    display_name: null,
     ...over,
   };
 }
@@ -240,7 +241,7 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
     // "only tokens_spent moved".
     detail: null, tool_label: null, model: null,
     context_used: null, context_window: null, tokens_spent: null,
-    started_at: null, last_activity_at: null, template_name: null,
+    started_at: null, last_activity_at: null, template_name: null, display_name: null,
     ...over,
   };
 }

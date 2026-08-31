@@ -14,6 +14,7 @@
 
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
+import { StreamProse } from "./agent-stream-prose";
 import { TAB_ACTION } from "./bits";
 
 /**
@@ -140,9 +141,18 @@ export function SentToChannelBox({
           </span>
         )}
       </div>
-      <p className="wrap-anywhere whitespace-pre-wrap px-3 py-[9px] text-caption leading-normal text-text-primary">
-        {text}
-      </p>
+      {/* ⚠ MARKDOWN, LIKE EVERY OTHER MESSAGE FACE (Samuel, 2026-08-31 — the
+          ruling extends here). This body is the SAME STRING the transcript
+          renders as markdown one pane over, so a post that read as formatted in
+          the channel and as raw asterisks in the operator's own review card was
+          one message wearing two faces. ⚠ THE §6 SEAM IS UNTOUCHED: the banner,
+          the four faces, the Post button and the expiry rule are what this card
+          owns, and none of them moved — only the body's renderer did. */}
+      <StreamProse
+        text={text}
+        className="px-3 py-[9px]"
+        textClassName="text-caption leading-normal text-text-primary"
+      />
       {/* ⚠ THE ACTION IS ON THE LAST ROW, RIGHT-ALIGNED — the position every card
           in this tree keeps (`bits.tsx › CARD_BUTTON`), so the eye finds the same
           control in the same corner. `TAB_ACTION`'s geometry: a 36px dark pill.

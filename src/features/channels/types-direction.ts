@@ -87,6 +87,27 @@ export type AgentDirection = {
    * applied to an authority-bearing one.
    */
   agentId: string;
+  /**
+   * 🔒 **WHICH of the operator's own agents FILED this — a LABEL, and an
+   * UNVERIFIED one (F-376a, 2026-08-31).**
+   *
+   * ⚠ **NOTHING MAY GATE, ROUTE, FILTER OR AUTHORIZE ON THIS FIELD**, and the
+   * reason is not caution, it is mechanics: the server derives it from the third
+   * segment of `X-Dopl-Session-Id`, a documented NON-authorization signal
+   * (INVARIANTS §10 — "nothing may be GRANTED on it") that anything holding the
+   * operator's device token can set. It is exactly as trustworthy as
+   * `metadata.session_id`, which is to say: useful for telling two of your own
+   * agents apart on your own screen, and worth nothing as a claim.
+   * ⚠ **THE FENCE IS `operatorUserId`, AND IT IS UNCHANGED.** Sender and
+   * recipient are the SAME operator's agents by construction, so this discloses
+   * nothing the row's only legitimate reader did not already own.
+   *
+   * `null` is the ORDINARY case, not a defect: an external orchestrator (Claude
+   * Desktop, Claude Code, any MCP client that is not a spawned desktop session)
+   * sends no session stamp and has no agent id to send. Render it as "your
+   * agent" — the sentence the surface used before this field existed.
+   */
+  senderAgentId: string | null;
   /** What to say to it. Never posted anywhere. */
   body: string;
   status: "pending" | "claimed" | "delivered" | "refused" | "expired";

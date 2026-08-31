@@ -24,6 +24,7 @@
 const store = require('./session-store');
 const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const sessionWindowless = require('./session-windowless'); // the concurrency + cost ceiling
+const launchBudget = require('./launch-budget'); // 2026-08-31: the CHAINED-launch ceiling over TIME
 const { diag } = require('./diag');
 
 let deps = { sessions: null, getSdk: null, startSession: null, liveOnThread: null, sessionOn: null };
@@ -72,6 +73,18 @@ async function launch(a) {
   // there is nothing to reclaim, and `MAX_CONCURRENT_SESSIONS` is a COST ceiling as much as a
   // concurrency one (INVARIANTS §11: every per-session bound multiplies against it).
   if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
+  // ── ⚠ THE CHAINED-LAUNCH BUDGET (2026-08-31, Samuel's agent-chaining ruling) ────────────────
+  // ⚠ SPENT ONLY BY A CHAINED SPAWN, AND THE CONDITION IS THE WHOLE SCOPE STATEMENT: the operator's
+  // own New Agent button, a peer-triggered responder, a resume and a recreate all pass no flag and
+  // are not counted. It bounds the ONE lane that can grow without a generation bound — see
+  // `launch-budget.js` for why the concurrency ceiling directly above is not a bound over TIME.
+  // ⚠ AFTER THE CONCURRENCY CHECK AND BEFORE THE SDK AWAIT, so a refused chained launch spends no
+  // budget, no SDK handle and no slot; `cap` is the same word both ceilings answer with, on
+  // purpose (the seven-word wire vocabulary is closed).
+  if (a.launchChain === true && !launchBudget.spend(a.channelId)) {
+    diag('session-launch: chained launch over budget', String(a.channelId || '').slice(0, 8));
+    return { skipped: 'cap' };
+  }
   let sdk;
   try { sdk = await deps.getSdk(); } catch (err) {
     diag('session-engine: SDK unavailable', err && err.message);
@@ -114,6 +127,14 @@ async function launch(a) {
     // forgets this field loses the right to launch agents rather than gaining it. ⚠ DO NOT give it
     // a `|| 0` default here — that inverts the whole bound in one character.
     launchDepth: a.launchDepth,
+    // ⚠ …AND THE CHANNEL'S CHAINING SETTING, FORWARDED THE SAME WAY AND WITH THE SAME RULE
+    // (2026-08-31). Exactly ONE caller passes it — `launch-directives.js › spawn`, which reads
+    // `channel-prefs.js › getAgentChain` per directive — and every other lane passes nothing,
+    // which reads FALSE and keeps the one-generation bound. ⚠ DO NOT give it a `|| true` or read
+    // the store here: an ambient read at the funnel would hand the flag to the peer-triggered
+    // wake, the resume and the recreate as well, which is precisely the re-arming shape
+    // `channel-prefs.js`'s H2 block exists to refuse.
+    launchChain: a.launchChain === true,
     // 2026-08-21 ruling 3: SPAWN IDLE. Registers the agent with prepared context and starts no
     // query; the first inbound message for this agent is what launches it.
     parkedShell: a.idle === true,

@@ -157,7 +157,7 @@ const launchButton = () => screen.getByRole("button", { name: "Launch" }) as HTM
 /** Open the panel and wait for the mint to land in the Name field. */
 async function openPanel() {
   fireEvent.click(botIcon());
-  await waitFor(() => expect(nameField().value).toBe(`Agent #${MINTED}`));
+  await waitFor(() => expect(nameField().value).toBe(`#${MINTED}`));
 }
 
 // ── 1. THE CONTROL ───────────────────────────────────────────────────────────
@@ -211,7 +211,7 @@ describe("the Bot icon opens a panel — it no longer launches on the click", ()
 
 describe("the ID is assigned before the spawn", () => {
   it("mints EXACTLY ONCE per open, and the prefill is THAT id", async () => {
-    // ⚠ THE BUG THIS PINS (Samuel, 2026-08-27, from a screenshot reading Name `Agent #k3wpf7c5`
+    // ⚠ THE BUG THIS PINS (Samuel, 2026-08-27, from a screenshot reading Name `#k3wpf7c5`
     // over ID `uyxw3rdv`): the mint lived inside the `setOpen` UPDATER. A state updater must be
     // pure — React runs it twice under StrictMode and again on any rebase — so two ids were drawn.
     // The second won `agentId`; the prefill guard was already false and kept the FIRST id's name.
@@ -221,7 +221,7 @@ describe("the ID is assigned before the spawn", () => {
     expect(mintAgentId).toHaveBeenCalledTimes(1);
     // ⚠ AND THE NAME IS THAT id. With two draws these disagreed — the second won `agentId` and
     // the first kept the name — which is exactly what the screenshot showed.
-    expect(nameField().value).toBe(`Agent #${MINTED}`);
+    expect(nameField().value).toBe(`#${MINTED}`);
   });
 
   it("does not re-mint while the panel stays open", async () => {

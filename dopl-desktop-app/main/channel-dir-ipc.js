@@ -41,6 +41,8 @@
 //   getLaunchPosture     discloses that posture
 //   setAutoSend          decides whether my agent's replies leave without me
 //   getAutoSend          discloses that setting
+//   setAgentChain        decides whether an agent I launched may launch MORE of my agents
+//   getAgentChain        discloses that setting
 //   chooseFolder         pops a native OS dialog on demand (UI-jacking / nagging)
 //   clearFolder          silently resets where a channel's agent runs
 //   getFolderLabel       discloses a fragment of the operator's LOCAL path
@@ -224,6 +226,30 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     return { ok: true, on: channelPrefs.setAutoSend(p.channelId, p.on === true) };
+  }));
+
+  // ── ⚠ AGENT CHAINING (2026-08-31, Samuel's ruling) — THE ONE-GENERATION LAUNCH BOUND, AS A
+  // PER-CHANNEL SETTING. Boolean in, boolean out, UUID-gated and `appWindowOnly` like every op
+  // here; default and fail-closed answer are both FALSE, which is the bound that shipped.
+  //
+  // ⚠ IT BELONGS ON THE H3 LIST ABOVE, AND ITS ENTRY IS: *decides whether an agent I launched may
+  // launch more of my agents.* A forged `set` from a hostile page in an app-window top frame
+  // could turn it on — the same authority the Settings row hands the operator, and no wider: it
+  // grants no tool, widens no posture, reaches no other machine, and a chained launch still needs
+  // `bypass` + the outbound half + the machine-wide orchestrator toggle + a free slot + budget.
+  //
+  // ⚠ NO LIVE FAN-OUT, UNLIKE `setLaunchPosture` DIRECTLY ABOVE, AND THE ASYMMETRY IS THE RULE
+  // RATHER THAN AN OMISSION. `applyPostureToLive`'s own argument is that it widens SUPERVISION and
+  // never CONTAINMENT; this is containment, so it takes the spawn-time stamp discipline instead
+  // (`session-own-launch.js`). A running session keeps the bound its room had when it started.
+  ipcMain.handle('channels:getAgentChain', appWindowOnly('getAgentChain', false, (_event, channelId) => {
+    if (!isUuid(channelId)) return false;
+    return channelPrefs.getAgentChain(channelId);
+  }));
+  ipcMain.handle('channels:setAgentChain', appWindowOnly('setAgentChain', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    return { ok: true, on: channelPrefs.setAgentChain(p.channelId, p.on === true) };
   }));
 
   // ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ────────

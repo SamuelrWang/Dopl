@@ -136,6 +136,17 @@ function directionFrom(raw, workspaceId) {
     // and drops every row — the failure F-284 shipped. Both spellings, always.
     operatorUserId: String(r.operator_user_id || r.operatorUserId || ''),
     agentId: agentId,
+    // ⚠ **WHO SAID IT — A LABEL, UNVERIFIED, AND SHAPE-GATED HERE** (F-376a, 2026-08-31). The
+    // server derives it from `X-Dopl-Session-Id`, which proves nothing about the caller, so
+    // NOTHING on this machine may gate, route or attribute AUTHORITY on it — it exists so the
+    // operator's own panel can tell two of their own agents apart. ⚠ A value that is not an
+    // agent id is DROPPED to `null` rather than carried, exactly like a bad `agent_id` is
+    // refused: a forged header must not be able to park free text in something a renderer
+    // prints. ⚠ `null` is the ORDINARY case (an external orchestrator has no session stamp) and
+    // is also what an OLDER SERVER's row reads as, which is the same answer for both.
+    senderAgentId: AGENT_ID_RE.test(String(r.sender_agent_id || r.senderAgentId || ''))
+      ? String(r.sender_agent_id || r.senderAgentId || '')
+      : null,
     body: body(r.body),
     status: STATUSES.indexOf(status) === -1 ? '' : status,
   };

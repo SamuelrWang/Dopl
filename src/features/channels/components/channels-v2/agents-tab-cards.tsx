@@ -120,7 +120,11 @@ export function PeerCards({
                 <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
               )}
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-                {peer.name}
+                {/* ⚠ THE PEER'S OWN NAME FOR IT, when their desktop reported one
+                    (2026-08-31, `channel_sessions.display_name` — Samuel's ruling:
+                    you should see a teammate is running a "Bug Reviewer").
+                    Falls back to the id handle exactly as before. */}
+                {peer.displayName?.trim() || peer.name}
               </span>
               {/* ⚠ A PEER ROW HAS NO `detail` AND NO `listening` — the
                   cross-machine wire carries the coarse state alone (INVARIANTS

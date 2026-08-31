@@ -11,13 +11,20 @@
  *   A SANDBOX. The tool profile applies on top whatever the cwd is
  *   (`main/tool-profiles.js`), so changing the folder never changes what the
  *   agent may do; an unset or vanished path falls back to the isolated sandbox.
- * - **Auto-send** (Samuel, 2026-08-20) — the durable posture for this channel's
- *   OWN-agent replies. OFF: the draft waits in the thread view's send box; ON:
- *   it posts on its own (`main/channel-prefs.js › getAutoSend`).
+ * - **Auto-send** (Samuel, 2026-08-20; live since 2026-08-31) — the durable
+ *   posture for this channel's OWN-agent replies. OFF: the draft waits in the
+ *   thread view's send box; ON: it posts on its own. ⚠ Read LIVE at the gate
+ *   (`main/session-private.js › effectiveMessageMode`), so flipping it applies
+ *   to every agent in this channel immediately — running sessions, reopened
+ *   shells, and panel-directed turns included; it is no longer frozen into a
+ *   session at launch.
  * - **Orchestrator launches** (2026-08-22) — may the operator's own EXTERNAL
  *   Claude session start agents on THIS Mac. ⚠ **PER-MACHINE, not per-channel**,
  *   and the only control on this tab that is: see
  *   {@link OrchestratorLaunchRows}.
+ * - **Agent chaining** (Samuel, 2026-08-31) — may an agent launched in THIS
+ *   channel launch further agents? Default OFF = the one-generation bound
+ *   (`main/session-own-launch.js`). Per channel, see {@link AgentChainRows}.
  */
 
 import { Switch } from "@/shared/ui/switch";
@@ -107,6 +114,52 @@ export function OrchestratorLaunchRows({
           disabled={orchestrator.busy}
           onChange={(next) => orchestrator.onToggle(next)}
           aria-label="Orchestrator launches on this Mac"
+        />
+      </div>
+    </>
+  );
+}
+
+/**
+ * AGENT CHAINING (Samuel, 2026-08-31) — may an agent launched in THIS channel
+ * launch further agents? Default OFF, which is the one-generation bound that
+ * shipped (`main/session-own-launch.js › MAX_LAUNCH_DEPTH`).
+ *
+ * ⚠ IT SITS IN THE PER-CHANNEL GROUP, NOT THE PER-MACHINE ONE ABOVE, and the
+ * distinction is the one {@link OrchestratorLaunchRows} exists to protect: that
+ * switch answers "on this Mac", this one answers "in this room". An operator who
+ * read them the other way round would either arm a machine they meant to arm a
+ * room, or wonder why the room they armed does nothing.
+ *
+ * ⚠ MINIMAL COPY (INVARIANTS §5): a NAME and a CONTROL. What it lifts, what it
+ * does NOT grant, and what still bounds a chain with it on are all written where
+ * they are enforced — `hooks/use-channel-agent-chain.ts` for the reader,
+ * `main/channel-prefs.js` and `main/launch-budget.js` for the rules. **Do not put
+ * a warning paragraph under this switch**; the `Note` recipe was deleted and this
+ * is exactly the control that would tempt it back.
+ */
+export function AgentChainRows({
+  agentChain,
+  SettingName,
+}: {
+  agentChain: { on: boolean; busy: boolean; onToggle: (on: boolean) => void };
+  SettingName: (props: { children: React.ReactNode }) => React.ReactNode;
+}) {
+  return (
+    <>
+      <SettingName>Agents</SettingName>
+      <div className="flex h-[38px] items-center gap-2.5 rounded-[8px] px-2">
+        <span className="min-w-0 flex-1 truncate text-body text-text-primary">
+          May launch agents
+        </span>
+        {agentChain.busy && (
+          <span className="text-caption text-text-muted">Saving…</span>
+        )}
+        <Switch
+          checked={agentChain.on}
+          disabled={agentChain.busy}
+          onChange={(next) => agentChain.onToggle(next)}
+          aria-label="Agents launched here may launch agents"
         />
       </div>
     </>

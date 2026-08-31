@@ -261,7 +261,18 @@ test("the cap is ONE branch: no eviction, no adopt, no second budget in launch",
   // failure is a branch REAPPEARING, which no input can provoke.
   assert.ok(!/atCapAfterEvict|evictIdleShell|MAX_SESSION_WINDOWS|adoptsConsent/.test(LAUNCH_CODE),
     "launch has grown back a window budget, an eviction or the consent adopt");
-  assert.equal((LAUNCH_CODE.match(/skipped: 'cap'/g) || []).length, 1, "exactly one cap refusal");
+  // ⚠ TWO SINCE 2026-08-31, AND THE SECOND ONE IS NOT THE SHAPE THIS CASE FORBIDS. Samuel's
+  // agent-chaining ruling lifted the one-generation launch bound behind a channel setting, and
+  // with it ON there is no generation bound left — so a SECOND ceiling was added for the chained
+  // lane alone: `launch-budget.js`, a rolling per-channel budget, spent only when
+  // `a.launchChain === true`. It shares the `cap` WORD deliberately (the seven-word directive
+  // vocabulary is closed and `cap`'s sentence — the machine is full, go look at what is running
+  // — is true of both), and it is NOT a window budget, an eviction or a consent adopt, which is
+  // what the source read above actually guards. ⚠ A THIRD would need its own argument here.
+  assert.equal((LAUNCH_CODE.match(/skipped: 'cap'/g) || []).length, 2,
+    "the concurrency ceiling and the chained-launch budget — no third");
+  assert.match(LAUNCH_CODE, /a\.launchChain === true && !launchBudget\.spend\(a\.channelId\)/,
+    "the second cap is CONDITIONED on the chained lane: the operator's own button is never bounded by it");
 });
 
 test("an unavailable SDK refuses with its own reason rather than a busy lie", async () => {
