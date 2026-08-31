@@ -51,6 +51,7 @@ import {
   sessionIsStale,
   sessionLegend,
 } from "./channel-session-render";
+import { SESSION_HANDLE_NOTE } from "./channel-session-handle";
 
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
@@ -248,10 +249,20 @@ export async function opReadSessions(
     `${UNTRUSTED_LISTING_HEADER}\n`,
   ];
   for (const s of sessions) {
-    lines.push(formatSessionLine(s, { telemetry: true, now, operatorOnline }));
+    // ⚠ `handle: true` — this op is own-scoped by construction (it "never shows
+    // a PEER's sessions"), which is the audience question
+    // {@link SessionRenderOpts.handle} asks. See it for why an agent id is not
+    // published on a peer row.
+    lines.push(
+      formatSessionLine(s, { telemetry: true, handle: true, now, operatorOnline }),
+    );
   }
   lines.push(
     `\n${sessionLegend(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`,
+    // ⚠ THE HANDLE NOTE SITS ABOVE THE TELEMETRY ONE, because it answers the
+    // question this op is actually asked ("which of these can I direct, and
+    // how") and the telemetry note answers a narrower one about the clauses.
+    `\n${SESSION_HANDLE_NOTE}`,
     `\n${SESSION_TELEMETRY_NOTE}`,
   );
   return ok(lines.join("\n"));

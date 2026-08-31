@@ -224,6 +224,85 @@ export class ChannelInfoCardTooLargeError extends ChannelError {
 }
 
 /**
+ * An `escalationAnswer` naming a message that is not an answerable escalation in
+ * this channel.
+ *
+ * ⚠ ONE ERROR FOR FOUR SITUATIONS, DELIBERATELY: no such message, a message in
+ * another channel, a message carrying no escalation payload, and an option index
+ * outside that escalation's own list. `ChannelNotFoundError`'s rule and the same
+ * reason — the alternative is a probe that walks the deployment's message ids and
+ * learns which of them are escalations and how many options each has.
+ */
+export class EscalationNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`No answerable escalation here: ${ref}`);
+  }
+}
+
+/**
+ * The caller is not one of the people this escalation asked.
+ *
+ * ⚠ **403, WHERE A FOREIGN THREAD TAG IS SILENTLY STRIPPED (INVARIANTS §5), AND
+ * THE ASYMMETRY IS THE RULING.** The strip exists because installed desktops post
+ * legacy `task-…` ids and a refusal would reject real posts from the field.
+ * `escalationAnswer` has no installed writers; a silent strip here would let a
+ * button report success over an answer that reached nobody, which is the failure
+ * the escalation card exists to remove.
+ *
+ * ⚠ It is reached only AFTER the row has been proved to be an answerable
+ * escalation in this channel, so it discloses nothing a 404 was protecting.
+ */
+export class EscalationForbiddenError extends ChannelError {
+  constructor() {
+    super(
+      "This escalation was not addressed to you. Only the member it tagged — or, when it tagged nobody, the operator whose agent asked — can answer it."
+    );
+  }
+}
+
+/**
+ * A second answer to an escalation that already has one.
+ *
+ * ⚠ Raised from the 23505 of the partial unique index over
+ * `metadata->'escalationAnswer'->>'escalationMessageId'`, never from a
+ * read-then-write check: that would be a race with a friendlier message and no
+ * guarantee behind it.
+ */
+export class EscalationAlreadyAnsweredError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`This escalation has already been answered: ${ref}`);
+  }
+}
+
+/**
+ * A DIRECTION id that resolves to nothing THIS operator owns.
+ *
+ * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY, and here the stakes are higher
+ * than the launch mailbox's: it does not exist, it belongs to another operator, or
+ * it is in another workspace. Splitting them would make this an id-probe primitive
+ * for every direction in the deployment — **and a direction row carries a private
+ * turn's answer in `reply`.** `ChannelNotFoundError`'s rule, same reason.
+ */
+export class DirectionNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Direction not found: ${ref}`);
+  }
+}
+
+/**
+ * A direction that cannot be claimed: already taken by another of this operator's
+ * machines, already decided, or past its TTL.
+ *
+ * ⚠ THE DESKTOP LANE READS THE 409 AS "STAND DOWN", NOT AS A FAULT — losing the
+ * claim CAS is the designed outcome for every machine but one.
+ */
+export class DirectionNotClaimableError extends ChannelError {
+  constructor(public readonly reason: "taken" | "decided" | "expired") {
+    super(`Direction is not claimable (${reason})`);
+  }
+}
+
+/**
  * A launch directive id that resolves to nothing THIS operator owns.
  *
  * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY: it does not exist, it belongs

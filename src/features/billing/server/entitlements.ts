@@ -1,6 +1,11 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
-import type { PlanId, BillingStatus } from "../plans";
+import {
+  FREE_CHATS_WINDOW_DAYS,
+  FREE_MULTI_MEMBER_OBJECT_CAP,
+  type PlanId,
+  type BillingStatus,
+} from "../plans";
 import { billingUrl } from "../url";
 import {
   countActiveMembers,
@@ -43,8 +48,20 @@ export interface WorkspaceEntitlements {
   chatsWindowDays: number | null;
 }
 
-export const FREE_MULTI_MEMBER_OBJECT_CAP = 100;
-export const FREE_CHATS_WINDOW_DAYS = 90;
+/**
+ * ⚠ DEFINED IN `../plans.ts`, RE-EXPORTED HERE (2026-08-30, G4). This module is
+ * `server-only`, so nothing that RENDERS could import these two — and every
+ * public surface that quotes them (`plans.ts › PLANS`,
+ * `marketing/components/pricing-content.tsx › COMPARE_ROWS`) restated the
+ * numbers as prose instead. They moved to the one module both sides can read.
+ * The re-export is not compatibility shim: this file is the ENFORCEMENT site
+ * and the place a reader looks for the rule, and every `vi.mock` of it in
+ * `chats/server/` mocks these names.
+ */
+export {
+  FREE_MULTI_MEMBER_OBJECT_CAP,
+  FREE_CHATS_WINDOW_DAYS,
+} from "../plans";
 
 /**
  * EFFECTIVE paid plan, or null → free rules. Live = active | past_due; canceled

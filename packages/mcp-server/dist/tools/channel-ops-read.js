@@ -30,6 +30,7 @@ const channel_addressing_1 = require("./channel-addressing");
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
 // statement, in channel-session-render.ts, shared with `await`'s session block.
 const channel_session_render_1 = require("./channel-session-render");
+const channel_session_handle_1 = require("./channel-session-handle");
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 async function opList(client) {
@@ -196,9 +197,17 @@ async function opReadSessions(client, ref) {
         `${channel_render_1.UNTRUSTED_LISTING_HEADER}\n`,
     ];
     for (const s of sessions) {
-        lines.push((0, channel_session_render_1.formatSessionLine)(s, { telemetry: true, now, operatorOnline }));
+        // ⚠ `handle: true` — this op is own-scoped by construction (it "never shows
+        // a PEER's sessions"), which is the audience question
+        // {@link SessionRenderOpts.handle} asks. See it for why an agent id is not
+        // published on a peer row.
+        lines.push((0, channel_session_render_1.formatSessionLine)(s, { telemetry: true, handle: true, now, operatorOnline }));
     }
-    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`, `\n${channel_session_render_1.SESSION_TELEMETRY_NOTE}`);
+    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`, 
+    // ⚠ THE HANDLE NOTE SITS ABOVE THE TELEMETRY ONE, because it answers the
+    // question this op is actually asked ("which of these can I direct, and
+    // how") and the telemetry note answers a narrower one about the clauses.
+    `\n${channel_session_handle_1.SESSION_HANDLE_NOTE}`, `\n${channel_session_render_1.SESSION_TELEMETRY_NOTE}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opListThreads(client, ref, selfUserId = null) {

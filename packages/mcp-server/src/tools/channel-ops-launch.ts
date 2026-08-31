@@ -289,12 +289,34 @@ export async function opLaunchAgent(
     const on = directive.threadId
       ? ` on thread \`${directive.threadId}\``
       : ` in the main room`;
+    // ⚠ THE GOAL CLAUSE BRANCHES, AND THAT IS THE 2026-08-31 CORRECTION. A
+    // directive carrying a goal now starts a session that RUNS it as its first
+    // instruction (`main/launch-directives.js › spawn`, `idle: !goal`); a
+    // directive with NO goal registers a stand-by agent that runs nothing until a
+    // PERSON talks to it. Those are different outcomes and the caller acts on the
+    // difference — "it is on it" vs "it is parked and you cannot start it" — so
+    // one sentence covering both would have to be the weaker claim, and the
+    // weaker one is wrong in the direction that leaves an orchestrator waiting.
+    const goalGiven = typeof opts.goal === "string" && opts.goal.trim() !== "";
+    const started = goalGiven
+      ? `Its FIRST INSTRUCTION is the \`goal\` you sent — that machine is working on it now, so there is nothing further to send to get it going.`
+      : `⚠ YOU SENT NO \`goal\`, SO IT IS STANDING BY AND IS RUNNING NOTHING. It starts on the first message that names it; see the handle below. If you meant it to work now, a launch WITH a goal is one call instead of two.`;
     return ok(
       [
-        `Agent **${directive.agentId}** is running in **${label}**${on}.`,
-        `DIRECT IT WITH \`@${directive.agentId}\` — write that token in the BODY of a post into this channel (thread it with the same thread id if it has one), and that specific agent picks it up. This is the ONE case where a handle addresses an agent rather than a person: the token is parsed on your operator's machine, not by the server's mention resolver.`,
-        `⚠ IT IS NOT YOUR SESSION AND YOU CANNOT SEE INSIDE IT. What comes back to you are its POSTS and its milestones, in this channel — arm dopl_channel(op="await", channel="${ref}", since=<your cursor>) to receive them, or omit \`channel\` to watch every channel you are in at once. Its live state shows up in dopl_channel(op="read_sessions").`,
-        `⚠ "Launched" means THE MACHINE SAID SO. There is no second source to confirm it against — if nothing appears in read_sessions and nothing is posted, say that rather than assuming it is working.`,
+        `Agent **${directive.agentId}** was started in **${label}**${on}. ${started}`,
+        // ── ⚠ THE ADDRESS, AND THE THREE LIMITS THAT USED TO BE MISSING ──────
+        // This line said: "DIRECT IT WITH `@<id>` — write that token in the BODY
+        // of a post into this channel, and that specific agent picks it up." The
+        // sentence was RIGHT and the surface underneath it was not: the loop
+        // fence refused every agent-authored message, so the only caller that
+        // held the id could not spend it, and a live orchestrator followed this
+        // copy five times into silence (ENGINEERING, 2026-08-31). Samuel's
+        // same-account carve made the sentence true; what it never had, and has
+        // now, is the boundary — addressed only, own operator only, unobservable.
+        `ITS HANDLE IS \`@agent-${directive.agentId}\` — that exact form, prefixed, which is what the Dopl app writes and tints. A friendly NAME your operator may give it lives on their machine alone and is never addressable from here.`,
+        `TO REDIRECT IT LATER, write \`@agent-${directive.agentId}\` in the BODY of a post into this channel (thread it with the same thread id if it has one). That is the ONE case where a handle addresses an agent rather than a person: the token is parsed on your operator's machine, not by the server's mention resolver, so it stamps nobody and lands in no Tags inbox. ⚠ THREE LIMITS, AND THEY ARE THE FENCE RATHER THAN A KNACK: it must NAME the agent (an unaddressed post of yours starts nobody, whatever it says); it works only for YOUR OWN operator's agents, because you post under their account and no post of yours can start anything on another member's machine; and the wake happens on a desktop this server cannot see, so nothing here confirms it landed.`,
+        `⚠ IT IS NOT YOUR SESSION AND YOU CANNOT SEE INSIDE IT. What comes back to you are its POSTS and its milestones, in this channel — arm dopl_channel(op="await", channel="${ref}", since=<your cursor>) to receive them, or omit \`channel\` to watch every channel you are in at once. Its live state shows up in dopl_channel(op="read_sessions"), which also prints each session's addressable handle.`,
+        `⚠ "Started" means THE MACHINE SAID SO. There is no second source to confirm it against — if nothing appears in read_sessions and nothing is posted, say that rather than assuming it is working.`,
       ].join("\n"),
     );
   }

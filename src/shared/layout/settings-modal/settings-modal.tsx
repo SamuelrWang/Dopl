@@ -15,7 +15,6 @@ interface Props {
   onSectionChange: (section: SettingsSection) => void;
   workspaceSegment: string;
   workspaceId: string;
-  currentUserId: string;
   role: Role;
   onWorkspaceChanged: () => void;
   /** Set from a Stripe redirect — Plans & Billing polls until state settles.
@@ -25,7 +24,7 @@ interface Props {
 }
 
 /**
- * Settings modal — WEB binding. Chrome/nav/members live in
+ * Settings modal — WEB binding. Chrome and nav live in
  * `./settings-modal-core`; this file supplies the three panes the packaged
  * renderer can't have: multipart icon uploader, Supabase account deletion,
  * Stripe embedded checkout.
@@ -37,7 +36,6 @@ export function SettingsModal({
   onSectionChange,
   workspaceSegment,
   workspaceId,
-  currentUserId,
   role,
   onWorkspaceChanged,
   billingReturn = null,
@@ -48,10 +46,6 @@ export function SettingsModal({
       onOpenChange={onOpenChange}
       section={section}
       onSectionChange={onSectionChange}
-      workspaceSegment={workspaceSegment}
-      workspaceId={workspaceId}
-      currentUserId={currentUserId}
-      role={role}
       workspacePane={
         <WorkspaceSection
           workspaceSegment={workspaceSegment}

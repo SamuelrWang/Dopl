@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { KnowledgeBase, KnowledgeBaseStats } from "../../../types";
 import type { ListFilter } from "../types";
-import { HERO_CHAT_PLACEHOLDER } from "./hero-chat";
 import { KnowledgeHome } from "./knowledge-home";
 
 /**
@@ -334,30 +333,40 @@ describe("KnowledgeHome stars", () => {
   });
 });
 
-/** Hero chat BEHAVIOUR lives in `hero-chat.test.tsx`; this file owns the
- *  ATTACHMENT — chat is part of the hero, not a sibling, so it lives and dies
- *  with the bundled image. Default (web + this suite) passes no `heroImageSrc`. */
-describe("KnowledgeHome hero chat wiring", () => {
+/**
+ * THE HERO IS A DECORATIVE BAND AND NOTHING ELSE (Samuel's ruling, 2026-08-30 —
+ * ledger ASK-5). `home/hero-chat.tsx › HeroChat` hung under this image and is
+ * DELETED: a composer, an auto-grow textarea, an IME guard, a live region and a
+ * hardcoded reply, wired to nothing, live on a workspace page.
+ *
+ * ⚠ THE ABSENCE IS THE ASSERTION, and it is written against the CONTROLS rather
+ * than against the component, so re-adding the same fake chat under a new name
+ * fails it too. The three probes below are the composer's own affordances: a
+ * textbox, a send control, a dictation toggle.
+ *
+ * ⚠ MUTATION-VERIFY: restoring `<HeroChat />` under the band turns the second
+ * case red on all three probes, and leaves the first (no image → no hero) green
+ * — which is why both are here.
+ */
+describe("KnowledgeHome hero", () => {
   const HERO = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 
-  it("renders NOTHING without a hero image", () => {
+  it("renders no hero at all without a bundled image", () => {
     renderHome();
-    expect(screen.queryByPlaceholderText(HERO_CHAT_PLACEHOLDER)).toBeNull();
-    expect(screen.queryByLabelText("Dictate a message")).toBeNull();
+    expect(document.querySelector("img[alt='']")).toBeNull();
   });
 
-  it("attaches the chat INSIDE the hero container, below the image", () => {
+  it("renders the image band and NO chat under it", () => {
     renderHome({ heroImageSrc: HERO });
 
-    const field = screen.getByPlaceholderText(HERO_CHAT_PLACEHOLDER);
     const img = document.querySelector("img[alt='']");
     expect(img).not.toBeNull();
 
-    // ⚠ ONE container (`.homeHero`) holds both bands; a SIBLING chat looks
-    // almost right and fails this.
+    // The hero container (`.homeHero`) — the band's parent.
     const hero = (img as HTMLElement).closest("div")?.parentElement ?? null;
     expect(hero).not.toBeNull();
-    expect(hero!.contains(field)).toBe(true);
-    expect((img as HTMLElement).parentElement!.contains(field)).toBe(false);
+    expect(within(hero!).queryByRole("textbox")).toBeNull();
+    expect(screen.queryByLabelText("Send to the assistant")).toBeNull();
+    expect(screen.queryByLabelText("Dictate a message")).toBeNull();
   });
 });

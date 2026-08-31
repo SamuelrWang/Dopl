@@ -104,17 +104,51 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     })),
   });
 
-  it("names the agent and teaches the @-token", async () => {
+  it("names the agent and publishes the PREFIXED handle", async () => {
     const out = await text(launched);
     expect(out).toContain("abcd1234");
-    expect(out).toContain("@abcd1234");
-    expect(out).toContain("DIRECT IT WITH");
+    // ⚠ THE `agent-` FORM, AND THE BARE FORM MUST NOT COME BACK. Both parse on
+    // the desktop, but the app's picker inserts and tints the prefixed one
+    // (`lib/agent-mentions.ts › agentMentionHandle`), and a surface publishing
+    // one form while the product writes the other is the F-266 split.
+    expect(out).toContain("@agent-abcd1234");
+    expect(out).toContain("ITS HANDLE IS");
   });
 
-  it("says the token is parsed on the DESKTOP, not by the mention resolver", async () => {
-    // ⚠ Otherwise an agent checks the handle against op="members", finds
-    // nothing, and concludes the tag is broken.
-    expect(await text(launched)).toContain("not by the server's mention resolver");
+  it("says a custom NAME is machine-local and never addressable from here", async () => {
+    // A rename lives in `main/agent-names.js` on ONE machine; nothing here
+    // carries it, so a caller must not infer that a name it saw in the app works.
+    expect(await text(launched)).toContain("lives on their machine alone");
+  });
+
+  it("⚠ TEACHES THE WAKE **WITH ITS THREE LIMITS** — the sentence the repro bought", async () => {
+    // ⚠ THIS BRANCH SAID "DIRECT IT WITH `@<id>` — write that token in the BODY
+    // of a post … and that specific agent picks it up", full stop. The sentence
+    // was right and the surface underneath it was not: the loop fence refused
+    // every agent-authored message, so the only caller holding the id could not
+    // spend it, and a live orchestrator followed this copy five times into
+    // silence (ENGINEERING, 2026-08-31). Samuel's same-account carve made it
+    // true; what it never had, and must never lose again, is the boundary.
+    const out = await text(launched);
+    expect(out).toContain("TO REDIRECT IT LATER");
+    expect(out).toContain("addresses an agent rather than a person");
+    expect(out).toContain("THREE LIMITS, AND THEY ARE THE FENCE RATHER THAN A KNACK");
+    // (1) ADDRESSED ONLY — tiers 2 and 3 stay shut to every agent-authored post.
+    expect(out).toContain("an unaddressed post of yours starts nobody");
+    // (2) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
+    expect(out).toContain("only for YOUR OWN operator's agents");
+    // (3) NOT OBSERVABLE — the wake happens on a desktop no server can see.
+    expect(out).toContain("nothing here confirms it landed");
+  });
+
+  it("says a GOAL-LESS launch runs nothing, and a goal RUNS", async () => {
+    // ⚠ Two different outcomes an orchestrator acts on differently. One
+    // sentence covering both would have to be the weaker claim, and the weaker
+    // one leaves a caller waiting on an agent that was never going to move.
+    expect(await text(launched)).toContain("IT IS STANDING BY AND IS RUNNING NOTHING");
+    expect(await text(launched, { goal: "Draft the notes" })).toContain(
+      "Its FIRST INSTRUCTION is the `goal` you sent",
+    );
   });
 
   it("points at await (channel AND workspace form) for what comes back", async () => {

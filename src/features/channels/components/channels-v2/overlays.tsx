@@ -28,6 +28,8 @@ export function ChannelsV2Overlays({
   messages,
   pendingPosts,
   onPostPending,
+  onAnswerEscalation,
+  answerBusy,
   postBusy,
   currentUserId,
   workspaceId,
@@ -48,6 +50,9 @@ export function ChannelsV2Overlays({
    *  them in place (Samuel, 2026-08-25). Handed down like everything here. */
   pendingPosts: readonly ChannelConsentRequest[];
   onPostPending: (requestId: string) => void;
+  /** ANSWER an escalation card in the agent pane — passed straight through. */
+  onAnswerEscalation: (escalationMessageId: string, optionIndex: number) => void;
+  answerBusy: boolean;
   postBusy: boolean;
   currentUserId: string;
   workspaceId: string;
@@ -71,6 +76,8 @@ export function ChannelsV2Overlays({
         messages={messages}
         pendingPosts={pendingPosts}
         onPostPending={onPostPending}
+        onAnswerEscalation={onAnswerEscalation}
+        answerBusy={answerBusy}
         postBusy={postBusy}
         currentUserId={currentUserId}
         workspaceSlug={workspaceSlug}

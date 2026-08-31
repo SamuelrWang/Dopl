@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { MoreHorizontal, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { Popover } from "@/shared/ui/popover-menu";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import { DEFAULT_TEAM_COLOR, TEAM_COLORS } from "../constants";
 
@@ -201,52 +199,6 @@ export function ColorSwatchPicker({
           />
         );
       })}
-    </div>
-  );
-}
-
-/** Kebab menu on the shared kit Popover. */
-export function KebabMenu({
-  items,
-  ariaLabel = "More actions",
-}: {
-  items: Array<{ label: string; onSelect: () => void; destructive?: boolean }>;
-  ariaLabel?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        aria-label={ariaLabel}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      <Popover open={open} onClose={() => setOpen(false)} align="right" className="min-w-[150px]">
-        {items.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              item.onSelect();
-            }}
-            className={cn(
-              "w-full text-left px-3 py-1.5 text-small cursor-pointer transition-colors",
-              item.destructive
-                ? "text-danger hover:bg-danger/10"
-                : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </Popover>
     </div>
   );
 }

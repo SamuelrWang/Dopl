@@ -13,6 +13,7 @@
 import type { DoplTransport } from "./transport.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
 import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
+import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -116,3 +117,12 @@ export declare function createLaunchDirective(t: DoplTransport, input: LaunchDir
  * ⚠ Another operator's directive answers 404, indistinguishable from absent.
  */
 export declare function getLaunchDirective(t: DoplTransport, id: string): Promise<LaunchDirective>;
+export declare function createAgentDirection(t: DoplTransport, input: AgentDirectionCreateInput): Promise<AgentDirectionCreated>;
+export declare function getAgentDirection(t: DoplTransport, id: string): Promise<AgentDirection>;
+/** The caller's own recent directions — what `op="read_directions"` renders.
+ *  ⚠ TERMINAL ROWS INCLUDED, unlike the desktop's backstop read: the `reply` is
+ *  the whole reason this op exists. */
+export declare function listAgentDirections(t: DoplTransport, query?: {
+    channel?: string;
+    agent?: string;
+}): Promise<AgentDirection[]>;

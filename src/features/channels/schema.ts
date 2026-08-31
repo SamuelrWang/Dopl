@@ -26,6 +26,10 @@ import {
   removedParam,
 } from "./schema-removed-params";
 import { ChannelInfoCardSchema } from "./info-card";
+import {
+  ChannelEscalationAnswerSchema,
+  ChannelEscalationSchema,
+} from "./escalation";
 
 /** ⚠ ANNOTATED `z.ZodType<ChannelVisibility>` (2026-08-20) so TS-side drift BREAKS THE
  * BUILD. This set is declared twice — the union in `types.ts` and this enum —
@@ -178,6 +182,13 @@ export const ChannelMessageCreateSchema = z.object({
   // Changing either to match the other would break the surface that relies on it.
   summary: z.string().trim().min(1).max(200).optional(),
   intent: MessageIntentSchema.optional(),
+  /**
+   * A STRUCTURED ESCALATION, and AN ANSWER to one. ⚠ TOP-LEVEL VALIDATED FIELDS
+   * AND NOT CALLER METADATA — the whole shape, and why, is stated once in
+   * `./escalation.ts`; `resolvePostMetadata` folds 10 and 11 are what enforce it.
+   */
+  escalation: ChannelEscalationSchema.optional(),
+  escalationAnswer: ChannelEscalationAnswerSchema.optional(),
   toAgent: removedParam(REMOVED_TO_AGENT),
   toAgents: removedParam(REMOVED_TO_AGENT),
   authorAgentId: removedParam(REMOVED_AUTHOR_AGENT),
@@ -477,3 +488,11 @@ export type {
   LaunchCreateInput,
   LaunchDecideInput,
 } from "./schema-launch";
+// THE PRIVATE DIRECT LANE (2026-08-31) — same arrangement, same reason.
+export {
+  DirectionClaimSchema, DirectionCreateSchema,
+  DirectionDecideSchema, DirectionRefusalReasonSchema,
+} from "./schema-direction";
+export type {
+  DirectionClaimInput, DirectionCreateInput, DirectionDecideInput,
+} from "./schema-direction";

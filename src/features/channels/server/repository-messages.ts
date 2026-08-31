@@ -257,6 +257,36 @@ export async function findMessageBySeq(
   return (data as ChannelMessageRow | null) ?? null;
 }
 
+/**
+ * ONE MESSAGE BY ID, SCOPED TO ITS CHANNEL.
+ *
+ * ⚠ **THE `channel_id` PREDICATE IS THE FENCE, NOT A NARROWING.** `id` is a
+ * uuid and unique on its own, so the extra `eq` looks redundant and is the whole
+ * authorization: the caller has already been proved a member of THIS channel,
+ * and without it an escalation answer could name a message in a room the caller
+ * has never been in. It is why this is not `findMessageById(id)`.
+ *
+ * ⚠ `select("*")` because the one reader needs the METADATA, the AUTHOR and the
+ * `client_msg_id` — the three columns a narrow select would have had to name
+ * anyway, plus a body it ignores. `findMessageBySeq` above makes the opposite
+ * trade for the opposite reason; both live here so a third copy has somewhere
+ * obvious to not be added.
+ */
+export async function findMessageById(
+  channelId: string,
+  id: string
+): Promise<ChannelMessageRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChannelMessageRow | null) ?? null;
+}
+
 type MessageInsert = {
   channel_id: string;
   workspace_id: string;

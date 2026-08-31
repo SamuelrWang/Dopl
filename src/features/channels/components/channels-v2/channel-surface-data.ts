@@ -28,17 +28,21 @@
  */
 
 import { CONSENT_INBOX_POLL_MS } from "../../constants";
+import { useCallback } from "react";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
 import { useChannelMentions } from "../../hooks/use-channel-mentions";
 import { useMentionWrites } from "../../hooks/use-mention-writes";
+import { useEscalationWrites } from "../../hooks/use-escalation-writes";
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelsV2Live } from "./live";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { useAgentsPanel } from "./use-agents-panel";
 import { useChannelsV2Derivations } from "./derivations";
+import { escalationOf, viewerPerson } from "./view-model";
+import { newClientMsgId } from "../../lib/optimistic-cache";
 import { useInlineConsent } from "./use-inline-consent";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
@@ -79,6 +83,19 @@ export interface ChannelSurfaceData extends ChannelsV2Derivations {
   outboundByThread: ReturnType<typeof useInlineConsent>["outboundByThread"];
   decideOutbound: (id: string, decision: "allow" | "deny") => void;
   consentBusy: boolean;
+  /**
+   * ANSWER AN ESCALATION CARD — the SIXTH write family on this surface (Samuel,
+   * 2026-08-31), on the same `gate` as the other five.
+   *
+   * ⚠ IT IS AN ORDINARY POST. An escalation is a question about shared work
+   * asked in a shared room, so its answer is public: it goes to the same
+   * messages route, appears in the transcript, and reaches the asking agent the
+   * way every other human message does. The client never names an agent — the
+   * server derives which one to wake off the escalation's own stamp.
+   */
+  answerEscalation: (escalationMessageId: string, optionIndex: number) => void;
+  /** An answer is in flight — the double-submit guard, not a capability. */
+  answerBusy: boolean;
 }
 
 export function useChannelSurfaceData({
@@ -221,6 +238,21 @@ export function useChannelSurfaceData({
   // `consent` decides the OUTBOUND send box and the Inbox's rows — same
   // mutation, same gate. ⚠ Its INBOUND callers are gone (Samuel, 2026-08-22).
   const { favorite, consent } = useChannelPreferenceWrites({ workspaceId, gate });
+  // THE ESCALATION ANSWER (Samuel, 2026-08-31) — the SIXTH family, same gate.
+  //
+  // ⚠ THE AUTHOR DISPLAY FOR THE PENDING ROW IS RESOLVED OFF THE TRANSCRIPT the
+  // viewer is already reading (`view-model.ts › viewerPerson`) rather than off
+  // the roster: it is the source `agent-panel.tsx` already uses, it costs no new
+  // read, and `null` is "cannot say" — a viewer who has never posted here gets a
+  // pending row with no name, which the reconcile fills in a moment later.
+  const viewer = viewerPerson(messages, currentUserId);
+  const escalationWrites = useEscalationWrites({
+    workspaceId,
+    currentUserId,
+    currentUserName: viewer?.displayName ?? null,
+    currentUserAvatarUrl: viewer?.avatarUrl ?? null,
+    gate,
+  });
 
   const derivations = useChannelsV2Derivations({
     members,
@@ -232,6 +264,39 @@ export function useChannelSurfaceData({
     // agent is CALLED, which is what lets the transcript render the CURRENT name (2026-08-27).
     agentSessions,
   });
+
+  /**
+   * ANSWER ONE ESCALATION — bound here so the option LABEL is resolved in ONE
+   * place.
+   *
+   * ⚠ THE BODY IS THE OPTION'S OWN LABEL, read off the escalation being
+   * answered, so the transcript reads as a sentence rather than as an index
+   * nobody can interpret. Both surfaces that can answer — the channel transcript
+   * and the agent pane — call THIS, because a second resolution is how the two
+   * come to post different words for one press.
+   *
+   * ⚠ IT IS A NO-OP FOR A MESSAGE THAT IS NOT AN ANSWERABLE ESCALATION. The
+   * button would not have rendered, so this is a belt; the server's own 404 is
+   * the fence.
+   */
+  const channelId = channel?.id ?? null;
+  const answerEscalation = useCallback(
+    (escalationMessageId: string, optionIndex: number) => {
+      const target = messages.find((m) => m.id === escalationMessageId);
+      const label = target
+        ? escalationOf(target)?.options[optionIndex]?.label
+        : undefined;
+      if (!label || !channelId) return;
+      escalationWrites.answer.mutate({
+        channelId,
+        escalationMessageId,
+        optionIndex,
+        optionLabel: label,
+        clientMsgId: newClientMsgId(),
+      });
+    },
+    [messages, escalationWrites.answer, channelId]
+  );
 
   // The thread view's outbound send box — `use-inline-consent.ts`.
   const { outboundByThread, decideOutbound, consentBusy } = useInlineConsent({
@@ -263,5 +328,7 @@ export function useChannelSurfaceData({
     outboundByThread,
     decideOutbound,
     consentBusy,
+    answerEscalation,
+    answerBusy: escalationWrites.pending,
   };
 }

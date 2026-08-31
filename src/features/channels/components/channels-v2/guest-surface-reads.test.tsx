@@ -72,6 +72,19 @@ vi.mock("../../hooks/use-mention-writes", () => ({
 vi.mock("../../hooks/use-channel-preference-writes", () => ({
   useChannelPreferenceWrites: () => ({ favorite: vi.fn(), consent: vi.fn() }),
 }));
+// The escalation card's ANSWER write (2026-08-31). ⚠ Mocked for the reason the
+// two writes above are, and for one more that matters to THIS file: it is the
+// first thing in `useChannelSurfaceData` to call `useQueryClient`, so unmocked
+// it demands a `QueryClientProvider` this suite deliberately does not mount —
+// every read here is stubbed precisely so the hook can be driven with no client.
+// ⚠ It issues NO READ, so it says nothing about the guest question this file
+// exists to answer.
+vi.mock("../../hooks/use-escalation-writes", () => ({
+  useEscalationWrites: () => ({
+    answer: { mutate: () => {}, pending: false },
+    pending: false,
+  }),
+}));
 vi.mock("../../hooks/use-consent-inbox", () => ({
   useConsentInbox: vi.fn(() => ({ requests: [], outbound: [], refetch: vi.fn() })),
 }));

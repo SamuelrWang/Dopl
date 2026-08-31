@@ -26,6 +26,8 @@
  * `settings-agent-harness.tsx` for why it is a file rather than a copy.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import {
@@ -141,6 +143,77 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     expect(screen.queryByText("Sends")).toBeNull();
     // The durable control survives — it is not desktop-gated.
     expect(screen.getByRole("radio", { name: /Full access/ })).toBeTruthy();
+  });
+});
+
+/**
+ * 🔒 THE TWO PERMISSION AXES, ACROSS BOTH TREES (G2, 2026-08-30).
+ *
+ * `TOOL_MODES` and `MESSAGE_MODES` are re-typed in THREE desktop main modules
+ * and once more over here in `channels/lib/permission-modes.ts`, and until
+ * this pass nothing compared them. `permission-modes.ts`'s own docblock names
+ * its ONE reason to change — *"the DESKTOP's enums moved"* — and states that
+ * its job is "to keep the web from offering a value main would reject". That
+ * is a claim no test made.
+ *
+ * ⚠ THE FAILURE IS SILENT AND IT FAILS CLOSED, WHICH IS WORSE THAN A THROW.
+ * `session-profiles.js › coerceMode` answers `'manual'` / `'ask'` for anything
+ * it does not recognise (`// fail-closed`), so a web-side mode the desktop
+ * dropped is written, acknowledged, re-rendered as the operator's choice, and
+ * applied as the most restrictive value on every launch. The supervision
+ * setting reads as saved and is not.
+ *
+ * ⚠ `session-profiles.js` WINS. It is the module that re-validates every
+ * write at spawn; the other three are copies of its answer.
+ *
+ * ⚠ DERIVED, NOT NAMED (the F-237 lesson this file already carries at
+ * `desktopMainFilesContaining`). The desktop's declaring files are found by
+ * scanning `main/`, so a FOURTH copy appearing joins the comparison instead of
+ * sitting outside a hand-typed list — which is exactly how `HOME_FILES` in
+ * `agent-templates/components/template-editor.test.tsx` missed a file.
+ */
+describe("the two permission axes agree across both trees", () => {
+  /** The string members of `const NAME = [...]` — single or double quoted, TS
+   *  `as const` or plain JS array. */
+  const modes = (source: string, name: string): string[] => {
+    const m = new RegExp(`const\\s+${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(source);
+    if (!m) throw new Error(`no \`const ${name} = [ … ]\` in source`);
+    return [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]);
+  };
+
+  const DESKTOP_FILES = desktopMainFilesContaining("const TOOL_MODES =");
+  const WEB_MODULE = "src/features/channels/lib/permission-modes.ts";
+  const web = readFileSync(resolve(process.cwd(), WEB_MODULE), "utf8");
+
+  it("finds the desktop declarations, and session-profiles.js among them", () => {
+    // An empty scan would make every assertion below vacuously true.
+    expect(DESKTOP_FILES).toContain("session-profiles.js");
+    expect(DESKTOP_FILES.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(["TOOL_MODES", "MESSAGE_MODES"])(
+    "%s is one list in every tree that declares it",
+    (name) => {
+      const winner = modes(desktopSource("session-profiles.js"), name);
+      // Order is part of it: `session-permission-axes.test.mjs` indexes
+      // `TOOL_MODES` positionally to build its permissiveness ladder.
+      expect(winner.length).toBeGreaterThan(0);
+      for (const file of DESKTOP_FILES) {
+        expect(modes(desktopSource(file), name), file).toEqual(winner);
+      }
+      expect(modes(web, name), WEB_MODULE).toEqual(winner);
+    }
+  );
+
+  it("the web module's DEFAULT is the desktop's fail-closed answer", () => {
+    // `coerceMode` falls back to these two by name; a default the desktop
+    // would itself coerce away is a posture the operator can never actually
+    // hold.
+    const profiles = desktopSource("session-profiles.js");
+    const fallback = (name: string) =>
+      new RegExp(`${name}\\.indexOf\\(mode\\) === -1 \\? '([^']+)'`).exec(profiles)?.[1];
+    expect(web).toContain(`tools: "${fallback("TOOL_MODES")}"`);
+    expect(web).toContain(`messages: "${fallback("MESSAGE_MODES")}"`);
   });
 });
 

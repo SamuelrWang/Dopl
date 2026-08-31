@@ -94,9 +94,15 @@ describe("THE LAW is stated, in full, in the tool description", () => {
     // what runs. That is what makes "you cannot start somebody else's agent
     // directly" true.
     expect(DESCRIPTION).toContain("ADDRESSING A PERSON");
-    expect(DESCRIPTION).toContain(
-      "There is no way to address an agent by name",
-    );
+    // ⚠ THIS SAID "There is no way to address an agent by name" UNTIL 2026-08-31,
+    // AND THAT STOPPED BEING TRUE ON THE SAME DAY. Samuel's same-account carve
+    // made `@agent-<id>` in a BODY a real address for the caller's own agents,
+    // and the very next bullet states it — so a flat denial two lines above the
+    // exception was a remnant teaching the retired rule. What is still absolute
+    // is the `to` PARAMETER: it names a MEMBER, and there is no agent-shaped
+    // value for it. The sentence is scoped to that rather than softened.
+    expect(DESCRIPTION).toContain("`to` cannot name an agent");
+    expect(DESCRIPTION).not.toContain("There is no way to address an agent by name");
   });
 
   it("says a message is CHAT or REQUEST, and that chat addresses nobody", () => {
@@ -110,15 +116,34 @@ describe("THE LAW is stated, in full, in the tool description", () => {
 
   it("keeps THE LOOP BRAKE absolute — agents do not wake each other by talking", () => {
     // ⚠ `classify` (dopl-desktop-app/main/targeting.js) refuses every
-    // unaddressed AGENT author first, at any member count. Pinned as an
-    // absolute — must never acquire a qualifier.
+    // unaddressed AGENT author first, at any member count, and
+    // `session-wake-tiers.js › wakeEligibility` refuses one at the tier gate.
+    // Pinned as an absolute over the UNADDRESSED case — that half must never
+    // acquire a qualifier, because it is the one with no bound.
     expect(DESCRIPTION).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
     expect(DESCRIPTION).toContain(
-      "an AGENT-authored unaddressed message starts nobody, in a room of two or of ten",
+      "an AGENT-authored UNADDRESSED message starts nobody, in a room of two or of ten",
     );
     expect(DESCRIPTION).toContain(
       "Agents do not wake each other by talking, and every post you make is agent-authored",
     );
+  });
+
+  it("⚠ STATES THE ONE EXCEPTION, AND STATES ITS TWO LIMITS WITH IT", () => {
+    // ⚠ SAMUEL'S SAME-ACCOUNT CARVE, 2026-08-31. An agent-authored message under
+    // the OPERATOR'S OWN user id may @-wake that operator's dormant agents. It
+    // had to be said here because the brake above, unqualified, is what a
+    // reader takes away — and taking it away is what left a live orchestrator
+    // unable to spend an id `launch_agent` had just handed it (ENGINEERING).
+    //
+    // ⚠ THE TWO LIMITS ARE PINNED WITH IT AND MAY NOT BE DROPPED FOR BREVITY.
+    // "Only by name" is what keeps tiers 2 and 3 shut to every agent-authored
+    // message; "never another member's agent" is the 2026-08-28 fence, which
+    // this carve did not touch. An exception stated without its boundary reads
+    // as the brake being negotiable.
+    expect(DESCRIPTION).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME");
+    expect(DESCRIPTION).toContain("`@agent-<id>` in a body wakes THAT agent");
+    expect(DESCRIPTION).toContain("Never another member's agent, and never without naming one");
   });
 
   it("names the two things to act on, and calls everything else ambient context", () => {

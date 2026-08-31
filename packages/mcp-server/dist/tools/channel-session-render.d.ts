@@ -108,6 +108,19 @@ export interface SessionRenderOpts {
     telemetry?: boolean;
     now?: number;
     operatorOnline?: boolean;
+    /**
+     * Render the row's ADDRESSABLE HANDLE (2026-08-31).
+     *
+     * ⚠ **OWN ROWS ONLY, AND IT IS ITS OWN FLAG RATHER THAN A READ OF
+     * {@link SessionRenderOpts.telemetry}.** An agent id is a WAKE TOKEN on the
+     * operator's machine — tier 1 is "at any roster size" and a peer HUMAN who
+     * knows the id can wake my agent with it (INVARIANTS §11) — so which handles a
+     * result publishes is an AUDIENCE decision, not a verbosity one. Overloading
+     * the telemetry flag would tie the two together, and the next caller that
+     * wants a compact own-row page would silently withdraw the handle. Both
+     * production call sites are own-scoped and pass it explicitly.
+     */
+    handle?: boolean;
 }
 /**
  * ONE session row, all peer-influenced text neutralized.

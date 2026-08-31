@@ -253,7 +253,12 @@ export function ChannelsV2Composer({
         {/* ⚠ TWO PANELS IN ONE SLOT, AND NEVER BOTH OPEN AT ONCE — the toggles close each other
             below. Same grid-rows 0fr→1fr idiom either way, so neither hardcodes a height. */}
         {newAgent?.canLaunch && (
-          <ComposerLaunch panel={launch} workspaceId={workspaceId} />
+          <ComposerLaunch
+            panel={launch}
+            workspaceId={workspaceId}
+            currentUserId={currentUserId}
+            members={members}
+          />
         )}
         <div
           className={cn(

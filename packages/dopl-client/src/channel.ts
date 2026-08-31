@@ -37,6 +37,11 @@ import type {
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
 } from "./launch-types.js";
+import type {
+  AgentDirection,
+  AgentDirectionCreateInput,
+  AgentDirectionCreated,
+} from "./direction-types.js";
 
 const enc = encodeURIComponent;
 
@@ -405,4 +410,53 @@ export async function getLaunchDirective(
     { toolName: "channel_launch_poll" }
   );
   return data.directive;
+}
+
+// ── THE PRIVATE DIRECT LANE (2026-08-31) ───────────────────────────────────
+//
+// ⚠ THE SIBLING OF THE LAUNCH MAILBOX ABOVE, AND NOT A MODE OF IT. A launch asks
+// for a PROCESS; a direction asks an EXISTING one to hear something privately.
+// ⚠ `claim` AND `decide` ARE DELIBERATELY ABSENT, exactly as they are for
+// launches: those two routes are consumed only by the DESKTOP, which addresses
+// them by path from `main/agent-direction-wire.js`. Binding them on this client
+// would publish verbs the MCP surface must never be able to reach.
+
+export async function createAgentDirection(
+  t: DoplTransport,
+  input: AgentDirectionCreateInput
+): Promise<AgentDirectionCreated> {
+  return t.request<AgentDirectionCreated>("/api/channels/agent-directions", {
+    method: "POST",
+    body: input,
+    toolName: "channel_direct_agent",
+  });
+}
+
+export async function getAgentDirection(
+  t: DoplTransport,
+  id: string
+): Promise<AgentDirection> {
+  const data = await t.request<{ direction: AgentDirection }>(
+    `/api/channels/agent-directions/${enc(id)}`,
+    { toolName: "channel_direct_poll" }
+  );
+  return data.direction;
+}
+
+/** The caller's own recent directions — what `op="read_directions"` renders.
+ *  ⚠ TERMINAL ROWS INCLUDED, unlike the desktop's backstop read: the `reply` is
+ *  the whole reason this op exists. */
+export async function listAgentDirections(
+  t: DoplTransport,
+  query: { channel?: string; agent?: string } = {}
+): Promise<AgentDirection[]> {
+  const params = new URLSearchParams();
+  if (query.channel) params.set("channel", query.channel);
+  if (query.agent) params.set("agent", query.agent);
+  const qs = params.toString();
+  const data = await t.request<{ directions: AgentDirection[] }>(
+    `/api/channels/agent-directions/recent${qs ? `?${qs}` : ""}`,
+    { toolName: "channel_read_directions" }
+  );
+  return data.directions;
 }

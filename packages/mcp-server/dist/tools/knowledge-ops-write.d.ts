@@ -39,7 +39,19 @@ export declare function opCreateBase(client: DoplClient, callerUserId: string | 
     visibility?: "public" | "private";
     confirm_token?: string;
 }): Promise<ToolResponse>;
-export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string): Promise<ToolResponse>;
+/**
+ * ⚠ THE SHELF IS NOT PATCHABLE, AND THE REFUSAL SAYS SO RATHER THAN IGNORING
+ * THE ARG — the twin of `agent-ops-write.ts › opUpdate`'s, word for word in
+ * substance. `home_scoped` is set at create and never written again for bases
+ * and templates alike (F-342; Samuel's ruling Q8, 2026-08-28 keeps it that way
+ * for v1), and the server's update schema does not accept it — so a silently
+ * dropped `shelf` here would return a 2xx over a move that never happened.
+ *
+ * ⚠ `shelf` RIDES `dopl_kb`'s SHARED OP SCHEMA, so it is spellable on every op;
+ * this is the ONE other op where it would read as an instruction the server
+ * carried out. The reads ignore it exactly as `dopl_agent(op="get")` does.
+ */
+export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string, shelf?: ShelfArg): Promise<ToolResponse>;
 export declare function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse>;
 export declare function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse>;
 export declare function opMoveFolder(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse>;

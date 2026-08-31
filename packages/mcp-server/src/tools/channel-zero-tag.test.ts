@@ -81,14 +81,21 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // working wake as broken; without the second, it reads "tag them properly"
     // and goes looking for a spelling that does not exist.
     expect(zero()).toContain("the human roster only");
-    expect(zero()).toContain("not a tag");
+    expect(zero()).toContain("That is not a failure");
   });
 
   it("keeps the wake CORRECT — it must not read as a thing to stop doing", () => {
-    // The same discipline as the self-tag removal above: this copy may say the
-    // call started no INBOX ENTRY, and may not say the wake failed. It did not.
-    expect(zero()).toContain("WAKE");
+    // ⚠ THIS COPY WAS BRIEFLY WRONG IN BOTH DIRECTIONS AND THE HISTORY IS WORTH
+    // KEEPING. It said `@<agentid>` "is a WAKE for that agent's machine" — true
+    // of a HUMAN writing it, and false of an AGENT, which is the only thing that
+    // reads a tool result, because the 2026-08-28 loop fence refused every
+    // agent-authored message. Samuel's SAME-ACCOUNT CARVE (2026-08-31) made the
+    // original sentence true again rather than requiring it to be softened, and
+    // the prefixed form is now what the copy names. This case is what stops
+    // either direction being "corrected" back.
     expect(zero()).toContain("starts no inbox entry");
+    expect(zero()).toContain("`@agent-<id>` is a WAKE for that agent");
+    expect(zero()).toContain("working as intended");
   });
 
   it("sends this cause to NO roster remedy — that is the wrong turn it fixes", () => {

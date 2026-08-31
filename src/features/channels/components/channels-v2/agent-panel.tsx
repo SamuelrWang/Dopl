@@ -80,7 +80,8 @@ import { agentModelShortLabel } from "../../lib/agent-models";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
-import { viewerPerson } from "./view-model";
+import { indexMembers, viewerPerson } from "./view-model";
+import { answersByEscalation } from "./view-model-escalation";
 // ⚠ THE CONTROL STRIP IS ITS OWN FILE since 2026-08-22 (`agent-panel-controls.tsx`),
 // split at the 500-line cap when the composer landed — and on the COMMANDS seam,
 // not an arbitrary cut: it changes when the bridge does, this file when the layout
@@ -152,6 +153,8 @@ export function ChannelsV2AgentPanel({
   pendingPosts,
   onPostPending,
   postBusy,
+  onAnswerEscalation,
+  answerBusy,
   currentUserId,
   workspaceSlug = "",
   onClose,
@@ -171,6 +174,14 @@ export function ChannelsV2AgentPanel({
   /** Approve one held draft — the host's CAS'd consent mutation. */
   onPostPending?: (requestId: string) => void;
   postBusy?: boolean;
+  /**
+   * ANSWER one of this agent's ESCALATION CARDS — the host's own message write
+   * (2026-08-31). ⚠ Absent renders no option buttons, never disabled ones; the
+   * card is then the record of a question the operator answers in the channel.
+   */
+  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
+  /** An answer is in flight — the double-submit guard, not a capability. */
+  answerBusy?: boolean;
   currentUserId: string;
   /** The workspace SEGMENT, for the agent window's router path (2026-08-20).
    *  ⚠ Main holds the workspace UUID and a route needs the slug, so it can only
@@ -213,6 +224,21 @@ export function ChannelsV2AgentPanel({
     () => viewerPerson(messages, currentUserId),
     [messages, currentUserId]
   );
+  // WHICH ESCALATION CARDS ALREADY HAVE AN ANSWER — off the SAME transcript, and
+  // through the SAME derivation the channel view uses, so one question cannot
+  // read as answered in one pane and open in the other.
+  // ⚠ `indexMembers` with NO ROSTER is deliberate: `answersByEscalation` needs
+  // the index only to LABEL who answered, and this panel renders an INDEX
+  // instead — the label is the transcript card's job, not this one's.
+  const answeredEscalations = useMemo(() => {
+    const answers = answersByEscalation(
+      messages as ChannelMessage[],
+      indexMembers([], currentUserId)
+    );
+    return new Map(
+      [...answers].map(([id, a]) => [id, a.optionIndex] as const)
+    );
+  }, [messages, currentUserId]);
 
   return (
     <aside
@@ -227,10 +253,26 @@ export function ChannelsV2AgentPanel({
         // ⚠ NOT `.bento` ANY MORE (Samuel, 2026-08-27). That recipe is a floating CARD — its own
         // fill, hairline and drop shadow — and this pane is not a card ON the chat area, it is a
         // COLUMN OF IT. The shadow and the pale hairline were what made it read as a lighter
-        // surface sitting on top. It takes the SAME fill the surface behind it has
-        // (`.page-float` → `--panel-surface`, `channels-v2-core.tsx`), stated explicitly so the
-        // two cannot drift if either recipe moves.
-        "absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col bg-[var(--panel-surface)]",
+        // surface sitting on top. It takes the SAME fill the CHAT AREA behind it has, stated
+        // explicitly so the two cannot drift if either recipe moves.
+        //
+        // ⚠ THAT FILL IS `--home-card` — THE WHITE CARD LEVEL — ON BOTH HOSTS, and reading it
+        // off the wrong level is what this line keeps getting wrong (twice on 2026-08-30, both
+        // caught on sight by Samuel). The chat surface does not paint a ground of its own; it
+        // inherits one, and after the shell restructure that ground is the white card in the
+        // frame model's level 2:
+        //   · WORKSPACE page — `channels-v2-core.tsx`'s `.page-float` is TRANSPARENT inside the
+        //     shell (`app-shell.module.css › .pageCard :global(.page-float)`), so the ground is
+        //     `.pageCard`'s `--home-card`.
+        //   · /home — `StandaloneChannelSurface` mounts inside the record pane, which states
+        //     `bg-home-card` itself (`pages/home/index.tsx`).
+        // ⚠ IT WAS `--panel-surface` (right while `.page-float` was white), then `--home-panel`
+        // for part of one afternoon — correct for the hour when the page float itself was the
+        // gray panel, and wrong the moment the page became a white card inside it, which is the
+        // gray-against-white Samuel is pointing at. **Read the level, not the history**: if this
+        // pane ever looks like a different surface from the transcript beside it, the ground it
+        // sits on moved and this token is what has to follow.
+        "absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col bg-[var(--home-card)]",
         // ⚠ THE DIVIDER IS `border-l border-border-default` — THE SAME CLASS THIS PANE'S OTHER
         // LINES ALREADY CARRY, and that is the whole point. Its header rule is
         // `border-b border-border-default`; on /home BOTH are recoloured to the account palette's
@@ -287,6 +329,13 @@ export function ChannelsV2AgentPanel({
             pending={pendingPosts}
             onPost={onPostPending}
             postBusy={postBusy}
+            // ⚠ WHICH CARDS ARE ALREADY ANSWERED IS DERIVED HERE, off the
+            // transcript this panel already holds — no new read, and the same
+            // first-answer-wins rule the channel transcript applies
+            // (`view-model-escalation.ts › answersByEscalation`).
+            answeredEscalations={answeredEscalations}
+            onAnswerEscalation={onAnswerEscalation}
+            answerBusy={answerBusy}
             threadTitle={agent.threadTitle}
             // ⚠ THE VIEWER'S FACE for their own turns, resolved off the SAME
             // transcript the Sent lane reads (`view-model.ts › viewerPerson`) —

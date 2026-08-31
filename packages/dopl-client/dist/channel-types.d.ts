@@ -15,6 +15,7 @@
  */
 export type ChannelVisibility = "public" | "private";
 export type ChannelMemberRole = "owner" | "member";
+import type { ChannelEscalationFields } from "./escalation-types.js";
 export type ThreadMode = "interactive" | "autonomous";
 export type ThreadStatus = "open" | "closed";
 export type ThreadOutcome = "completed" | "failed";
@@ -303,7 +304,7 @@ export interface ChannelThreadCreated {
  * a peer reply already in the channel and the wait never returned. `null` means
  * look it up, never "one past the last seq you saw".
  */
-export interface ChannelMessageInput {
+export interface ChannelMessageInput extends ChannelEscalationFields {
     body: string;
     kind?: ChannelMessageKind;
     metadata?: Record<string, unknown>;

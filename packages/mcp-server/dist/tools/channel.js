@@ -49,6 +49,11 @@ const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_launch_1 = require("./channel-ops-launch");
 const channel_ops_update_1 = require("./channel-ops-update");
+// ⚠ A structured POST, not a second delivery path — it delegates to `opPost`.
+const channel_ops_escalate_1 = require("./channel-ops-escalate");
+// THE PRIVATE DIRECT LANE (2026-08-31) — a mailbox the operator's OWN machine
+// claims, never a message and never another member's machine.
+const channel_ops_direct_1 = require("./channel-ops-direct");
 const identity_1 = require("./identity");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -215,6 +220,31 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     return miss;
                 return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
             }
+            // ⚠ DIRECT ONE OF THE OPERATOR'S OWN RUNNING AGENTS, PRIVATELY. The op
+            // NEVER names an operator — the server stamps the authenticated caller,
+            // because the only machine an agent may direct is its own operator's and
+            // there is no argument here that could say otherwise. `agent` is REQUIRED
+            // and has no fallback: this lane reaches a PRIVATE TURN, and resolving to
+            // "the oldest agent on the thread" would steer one the caller did not
+            // address with nothing reporting the swap.
+            case "direct_agent": {
+                const miss = (0, respond_1.missingParams)("direct_agent", args, [
+                    "channel",
+                    "agent_id",
+                    "body",
+                ]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_direct_1.opDirectAgent)(client, args.channel, args.agent_id, args.body, { thread: args.thread, waitMs: args.wait_ms });
+            }
+            // ⚠ BOTH FILTERS ARE OPTIONAL, hence no missingParams check. Own-scoped in
+            // the service; the transport credential IS the caller, so no identity is
+            // passed and none could be.
+            case "read_directions":
+                return (0, channel_ops_direct_1.opReadDirections)(client, {
+                    channel: args.channel,
+                    agent: args.agent_id,
+                });
             // ⚠ ASKS THE OPERATOR'S OWN MACHINE TO START AN AGENT. `goal`, `model`,
             // `thread` and `wait_ms` are all optional; only `channel` is required.
             // The op NEVER names an operator — the server stamps the authenticated
@@ -245,6 +275,36 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 if (miss)
                     return miss;
                 return (0, channel_ops_update_1.opUpdate)(client, args.channel, args.info_card);
+            }
+            // ⚠ A STRUCTURED POST, AND THE `kind` IS FIXED AT THIS SEAM — the same
+            // move `op="milestone"` makes, for a sharper reason: an escalation MUST
+            // stay `kind='message'` or `dopl-desktop-app/main/targeting.js ›
+            // classify` drops it and the human it is asking is never notified.
+            // ⚠ `to` is deliberately NOT routed through. Addressing a member starts
+            // THEIR agent (INVARIANTS §5), and an escalation exists precisely
+            // because a PERSON has to decide — the @-tag in the body is the inbox
+            // mechanism and it starts nobody.
+            case "escalate": {
+                const miss = (0, respond_1.missingParams)("escalate", args, [
+                    "channel",
+                    "issue",
+                    "options",
+                ]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_escalate_1.opEscalate)(client, args.channel, {
+                    issue: args.issue,
+                    // ⚠ `?? ""` rather than leaving it undefined: the payload's
+                    // `context` is a required string server-side (empty is legal,
+                    // absent is not), and the render branches on emptiness.
+                    context: args.context ?? "",
+                    options: args.options,
+                    recommendation: args.recommendation ?? null,
+                }, {
+                    thread: args.thread,
+                    clientMsgId: args.client_msg_id,
+                    runtime,
+                });
             }
         }
     });

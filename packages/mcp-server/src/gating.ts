@@ -117,6 +117,17 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     "milestone",
     "create_thread",
     "set_thread_mode",
+    // ⚠ `escalate` WRITES. It is a post under the hood — a real message row in a
+    // room every member reads — and a read-only token must be refused it for the
+    // SCOPE reason like any other post, not merely because the payload is
+    // structured.
+    "escalate",
+    // ⚠ `direct_agent` WRITES. It files a `channel_agent_directions` row and asks
+    // a machine to start a TURN on a running agent — not merely a read that
+    // happens to wait, and a read-only token must be refused it.
+    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
+    // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
+    "direct_agent",
     // ⚠ `launch_agent` WRITES. It files a `channel_launch_directives` row and
     // asks a machine to start a process — it is not merely a read that happens
     // to wait, and a read-only token must be refused it or a `dopl.read` session

@@ -15,11 +15,17 @@ import { cn } from "@/shared/lib/utils";
  * | extra | drag-to-resize grip | none |
  *
  * ⚠ **IT PAINTS NOTHING.** No fill, no border, no radius beyond the corner —
- * the GROUND is `className`, and that is the whole scoping story: a page's own
- * palette (`bg-home-panel` and the other `home-*` tokens are /home-ONLY,
- * `docs/DESIGN-SYSTEM.md`) can be selected by a page file without this module
- * ever naming it. A `tone="home"` prop here would put the /home palette one
- * autocomplete away from every workspace page.
+ * the GROUND is `className`, and that is the whole scoping story: a page states
+ * the ground it actually stands on without this module ever naming one. /home's
+ * record pane repaints its panels `--home-panel` in one CSS rule (below); a
+ * workspace page passes `SECTION_PANEL_GROUND`. A `tone="home"` prop here would
+ * turn a per-mount decision into an enum one autocomplete away from every page.
+ *
+ * ⚠ The old wording of this note said the `home-*` tokens are "/home-ONLY".
+ * **That is superseded** (Samuel, 2026-08-30): they are the APP FRAME palette
+ * and the workspace shell consumes them too (`docs/DESIGN-SYSTEM.md`). The rule
+ * here is unchanged and its reason is now stated for what it always was — this
+ * component does not choose grounds — not for a scope that no longer exists.
  *
  * ⚠ `data-section-panel` IS A PAGE-SCOPING HOOK, NOT DECORATION. It is how
  * `apps/desktop-ui/src/pages/home/home.module.css` repaints every panel inside
@@ -32,19 +38,30 @@ import { cn } from "@/shared/lib/utils";
  * "you have none" and "there are none to have" the same picture.
  */
 /**
- * THE DEFAULT GROUND for a `SectionPanel` on a WORKSPACE page — the kit's flat
- * "header strips, inset cards" token on a hairline.
+ * THE DEFAULT GROUND for a `SectionPanel` on a WORKSPACE page — a gray WELL, the
+ * frame model's last step (Samuel, 2026-08-30: *"panels on top of that go back
+ * to that sidebar panel gray — it's alternating"*). A workspace page renders
+ * inside `app-shell.module.css › .pageCard`, the white card floating in the one
+ * gray panel, so a panel drawn ON that page is exactly where /home's record-pane
+ * wells are — and it takes the same token they do.
+ *
+ * ⚠ IT IS `--home-panel` AND NOT `bg-card-surface-subtle` (#f4f6f9) BECAUSE THE
+ * WELL IS ONE COLOUR IN BOTH HOSTS. /home paints these `var(--home-panel)` in
+ * `pages/home/home.module.css › .frame :global([data-section-panel])`; the two
+ * grays were 3/255 apart and said the same thing twice. ⚠ The hairline STAYS
+ * here and /home's rule clears it — that page's record pane is already a bounded
+ * card, a workspace page's is not.
  *
  * ⚠ IT IS A DEFAULT, NOT THE COMPONENT'S OWN FACE. `SectionPanel` still paints
- * nothing (see the docblock): a page palette selects itself by passing
- * something else, and /home passes nothing at all because its record pane
- * repaints every panel inside it in one rule. This constant exists because the
+ * nothing (see the docblock): a page selects its own ground by passing
+ * something else, and /home passes nothing at all because that one CSS rule
+ * repaints every panel inside its record pane. This constant exists because the
  * value was stated inline in two features — `agent-templates/components/
  * template-section.tsx › TemplatePanel` and the knowledge base-info face — and
  * two identical class strings in two trees is one restyle away from a fork.
  */
 export const SECTION_PANEL_GROUND =
-  "border border-border-subtle bg-card-surface-subtle";
+  "border border-border-subtle bg-home-panel";
 
 export function SectionPanel({
   id,

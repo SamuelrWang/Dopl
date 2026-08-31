@@ -9,6 +9,7 @@
 import { MemberMethods } from "./client-members.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
 import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
+import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 export declare class ChannelMethods extends MemberMethods {
     listChannels(opts?: {
         includeArchived?: boolean;
@@ -38,6 +39,18 @@ export declare class ChannelMethods extends MemberMethods {
     createLaunchDirective(input: LaunchDirectiveCreateInput): Promise<LaunchDirectiveCreated>;
     /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */
     getLaunchDirective(id: string): Promise<LaunchDirective>;
+    /** DIRECT one of the operator's OWN running agents, privately (2026-08-31).
+     *  ⚠ A REQUEST like a launch: the machine may refuse with one of five words,
+     *  and `offline: true` means nothing was even filed. There is no operator
+     *  argument, deliberately — the server stamps the authenticated caller. */
+    createAgentDirection(input: AgentDirectionCreateInput): Promise<AgentDirectionCreated>;
+    /** Poll one direction — where the directed turn's final text comes back. */
+    getAgentDirection(id: string): Promise<AgentDirection>;
+    /** The caller's own recent directions, terminal rows included. */
+    listAgentDirections(query?: {
+        channel?: string;
+        agent?: string;
+    }): Promise<AgentDirection[]>;
     /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`
      *  rides beside the rows because presence is a fact about the MACHINE, not
      *  about any one session. See `channel-types.ts › ChannelSessionsPage`. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { UsersRound } from "lucide-react";
 import { ApiError } from "@/shared/api/api-client";
 import { toast } from "@/shared/ui/toast";
@@ -34,6 +34,17 @@ interface Props {
   workspaceId?: string;
   currentUserId: string;
   myRole: MemberRole;
+  /**
+   * THE HOST'S OWN LOADING SHAPE for the cold roster read below.
+   *
+   * ⚠ A SLOT BECAUSE THIS FILE CANNOT IMPORT ONE. The desktop page's skeleton
+   * lives in `apps/desktop-ui/`, which the shared tree may not reach into —
+   * same idiom as `agent-templates-core.tsx › loadingSkeleton`. It exists
+   * because /members has TWO gates back to back (the seam's workspace resolve,
+   * then this read) and the second one painting a different ghost made one page
+   * swap skeletons mid-load. Omitted, the shared two-pane ghost stands.
+   */
+  loadingSkeleton?: ReactNode;
 }
 
 /**
@@ -49,6 +60,7 @@ export function MembersV2View({
   workspaceId,
   currentUserId,
   myRole,
+  loadingSkeleton,
 }: Props) {
   const canManage = meetsMinRole(myRole, "admin");
   const viewer: Viewer = { userId: currentUserId, role: myRole };
@@ -172,10 +184,15 @@ export function MembersV2View({
     );
   }
 
-  // Cold arrival: the roster is the page, so it gets the two-pane skeleton
-  // rather than panes over an empty list.
+  // Cold arrival: the roster is the page, so it gets a skeleton rather than
+  // panes over an empty list. ⚠ THE HOST'S SHAPE WHEN IT SUPPLIED ONE — see
+  // `loadingSkeleton`; the shared ghost is the fallback, never the override.
   if (loading && members === null) {
-    return <TwoPaneListSkeleton label="Loading members" rows={6} leading="circle" />;
+    return (
+      loadingSkeleton ?? (
+        <TwoPaneListSkeleton label="Loading members" rows={6} leading="circle" />
+      )
+    );
   }
 
   return (

@@ -244,6 +244,12 @@ export function ChannelsV2Core({
         // these rows have exactly one surface and it is inside the work stream.
         pendingPosts={data.requests}
         onPostPending={(id) => data.decideOutbound(id, "allow")}
+        // ANSWERING AN ESCALATION FROM THE AGENT PANE (2026-08-31). ⚠ THE SAME
+        // MUTATION the transcript's own cards use — one write, one fence, one
+        // cache patch. A second path here is how the two panes come to disagree
+        // about whether a question was answered.
+        onAnswerEscalation={data.answerEscalation}
+        answerBusy={data.answerBusy}
         postBusy={data.consentBusy}
         currentUserId={currentUserId}
         workspaceId={workspaceId}

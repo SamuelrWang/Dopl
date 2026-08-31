@@ -236,9 +236,13 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     ),
   ];
 
-  // NINE since 2026-08-26: `channel_resource_grants.channel_id` (migration
-  // `20260827120000`, the Home Knowledge Panels scope-A grant) is the newest
-  // child; `channel_launch_directives` (`20260822160000`, the launch-over-MCP
+  // TEN since 2026-08-31: `channel_agent_directions.channel_id` (migration
+  // `20260903120000`, the PRIVATE DIRECT LANE's mailbox) is the newest child —
+  // and it CASCADES for the launch mailbox's reason, which is the one that
+  // matters here: a direction is addressed at an agent working THAT channel, so
+  // it is meaningless without it and must not outlive it. NINE since 2026-08-26:
+  // `channel_resource_grants.channel_id` (migration
+  // `20260827120000`, the Home Knowledge Panels scope-A grant); `channel_launch_directives` (`20260822160000`, the launch-over-MCP
   // mailbox) was the eighth and `channel_mention_reads` (`20260818140000`, the
   // Tags inbox's read-state) the seventh. ⚠ The NUMBER is not the point and
   // re-blessing it is not the fix — the point is the assertion below, that every
@@ -246,8 +250,8 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // one statement (INVARIANTS §5). A new child that does not cascade fails the
   // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
   // goes: it is a share INTO that channel, meaningless without it.
-  it("finds all nine child FKs", () => {
-    expect(refs.length).toBe(9);
+  it("finds all ten child FKs", () => {
+    expect(refs.length).toBe(10);
   });
 
   it("each one cascades — none is SET NULL or RESTRICT", () => {

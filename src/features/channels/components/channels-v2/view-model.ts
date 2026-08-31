@@ -17,6 +17,14 @@
  */
 
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
+import {
+  ESCALATION_ANSWER_METADATA_KEY,
+  ESCALATION_METADATA_KEY,
+  parseEscalation,
+  parseEscalationAnswer,
+  type ChannelEscalation,
+  type ChannelEscalationAnswer,
+} from "../../escalation";
 import type {
   Channel,
   ChannelMember,
@@ -55,6 +63,37 @@ export function threadIdOf(message: ChannelMessage): string | null {
 export function fanoutGroupOf(message: ChannelMessage): string | null {
   const value = message.metadata.fanoutGroup;
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * THE STRUCTURED ESCALATION on a message, or `null` for every other row.
+ *
+ * ⚠ RESERVED, SERVER-STAMPED metadata (`server/service-writes-metadata.ts ›
+ * resolvePostMetadata`, fold 10), stripped from caller input like every other
+ * reserved key — which is what makes it safe to render BUTTONS off. A
+ * caller-settable value would let any member hang a working control, and a wake
+ * behind it, off any words at all.
+ *
+ * ⚠ `null` IS THE ORDINARY ANSWER and the caller renders the row's BODY instead.
+ * That is the whole degrade story: the body carries the same four fields in
+ * prose (`escalation.ts › escalationBody`), so a row this cannot parse — an
+ * older shape, a payload written before a field existed — reads exactly as a
+ * prose escalation would have.
+ *
+ * ⚠ §8's STALE-CACHE RULE IS SATISFIED BY CONSTRUCTION HERE and must stay that
+ * way: it reads `message.metadata[key]` and never a nested field, so an entry
+ * cached before the key existed answers `null` rather than throwing.
+ */
+export function escalationOf(message: ChannelMessage): ChannelEscalation | null {
+  return parseEscalation(message.metadata[ESCALATION_METADATA_KEY]);
+}
+
+/** THE ANSWER on a message, or `null`. Same reserved terms, same never-throws
+ *  parse; `agentId` on it is the server's derivation and is never rendered. */
+export function escalationAnswerOf(
+  message: ChannelMessage
+): ChannelEscalationAnswer | null {
+  return parseEscalationAnswer(message.metadata[ESCALATION_ANSWER_METADATA_KEY]);
 }
 
 /** The people-lookup the rows are built against. */
@@ -246,6 +285,44 @@ export function viewerPerson(
   }
   if (!avatarUrl && !displayName) return null;
   return { userId: currentUserId, email: null, displayName, avatarUrl };
+}
+
+/**
+ * An `AvatarPerson` for a message author, from the roster when it is there and
+ * from the message's own hydrated display fields when it is not (a departed
+ * member still owns their history).
+ *
+ * ⚠ MOVED HERE FROM `view-model-rows.ts` ON 2026-08-31, when the escalation card
+ * split that file at the §1 cap. It belongs on the BASE layer by this module's
+ * own header — "the display names" — and putting it here is what lets
+ * `view-model-escalation.ts` build a row without importing back through the
+ * rows module (a cycle) or hand-rolling a second copy of the fallback chain.
+ */
+export function personFor(
+  message: ChannelMessage,
+  index: AuthorIndex
+): AvatarPerson {
+  const member = message.authorUserId
+    ? index.byId.get(message.authorUserId)
+    : undefined;
+  return {
+    userId: message.authorUserId ?? `unknown-${message.id}`,
+    email: member?.email ?? null,
+    displayName: member?.displayName ?? message.authorName,
+    avatarUrl: member?.avatarUrl ?? message.authorAvatarUrl,
+  };
+}
+
+/** "You" for the viewer, else the roster name, else whatever the row carried.
+ *  Moved here with {@link personFor}, for the same reason. */
+export function labelFor(message: ChannelMessage, index: AuthorIndex): string {
+  if (message.authorUserId === index.currentUserId) return "You";
+  const member = message.authorUserId
+    ? index.byId.get(message.authorUserId)
+    : undefined;
+  return (
+    member?.displayName ?? member?.email ?? message.authorName ?? "Member"
+  );
 }
 
 /** The two parties of a thread (INVARIANTS §5: one requester + one target),

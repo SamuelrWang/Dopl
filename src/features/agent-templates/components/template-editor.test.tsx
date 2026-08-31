@@ -324,19 +324,46 @@ describe("no concave surfaces", () => {
    * sections flat: they were `SectionBox` — a header strip over a CONCAVE inset
    * body — and are `shared/ui/section-panel.tsx › SectionPanel` on the page's
    * flat panel gray since. That is the same "nothing here is pressed in" rule
-   * arriving on the second tab, so it is pinned the same way. **This list only
-   * grows**, and it grows toward MORE flatness: a /home file that renders a
-   * surface belongs in it.
+   * arriving on the second tab, so it is pinned the same way.
+   *
+   * ⚠ **DERIVED FROM THE DIRECTORY SINCE 2026-08-30, AND THE REASON IS A MISS.**
+   * This was a HAND-TYPED LIST OF FIVE, under the sentence "a /home file that
+   * renders a surface belongs in it" — and it did not contain
+   * `pages/home/link-out-panel.tsx`, which renders a surface and was wearing
+   * `FIELD_WELL`, the first entry in `FORBIDDEN`. **The enforcement mechanism
+   * drifted from the ruling, not the ruling from the code**, and a list that
+   * only a human adds to cannot catch the file the human did not think of. The
+   * membership test is now the one the sentence always stated: every `.tsx` in
+   * `pages/home/`, minus an explicit opt-out that has to say why.
    */
-  const HOME_FILES = [
-    "knowledge-panels.tsx",
-    "agent-panels.tsx",
-    "agent-panel-cards.tsx",
-    "agent-editor.tsx",
-    "agent-copy.tsx",
-  ].map((name) =>
-    path.join(process.cwd(), "apps", "desktop-ui", "src", "pages", "home", name)
+  const HOME_DIR = path.join(
+    process.cwd(),
+    "apps",
+    "desktop-ui",
+    "src",
+    "pages",
+    "home"
   );
+
+  /**
+   * ⚠ MAY ONLY EVER SHRINK, and each entry names a reason that is about the
+   * file NOT BEING A SURFACE — never about it being inconvenient to fix.
+   * `.test.tsx` files are excluded by the same rule `sources()` applies in this
+   * tree: the suite names the strings it forbids, so a test asserting on itself
+   * is a false positive by construction.
+   */
+  const HOME_NOT_SURFACES = new Set([
+    // Render MACHINERY for the suites next to it — providers and fixtures, no
+    // surface of its own. Deliberately not a `.test.tsx` name so vitest does
+    // not collect it, which is why the extension filter cannot catch it.
+    "home-test-harness.tsx",
+  ]);
+
+  const HOME_FILES = readdirSync(HOME_DIR)
+    .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
+    .filter((name) => !HOME_NOT_SURFACES.has(name))
+    .sort()
+    .map((name) => path.join(HOME_DIR, name));
 
   const FILES = [...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))), ...HOME_FILES];
 
@@ -344,11 +371,21 @@ describe("no concave surfaces", () => {
     expect(FILES.length).toBeGreaterThan(5);
   });
 
-  // ⚠ A renamed /home file would otherwise leave `readFileSync` throwing inside
-  // `it.each` — which reads as a broken suite, not as an unswept file. This
-  // says which it is.
-  it.each(HOME_FILES)("%s is where the sweep expects it", (file) => {
-    expect(existsSync(file)).toBe(true);
+  // ⚠ THE DERIVATION ITSELF IS ASSERTED. A scan that answered `[]` — a moved
+  // directory, a changed extension convention — would make every /home case
+  // below vacuously green, which is a quieter version of the miss that caused
+  // the derivation in the first place.
+  it("derives the /home surfaces, and reaches BOTH tabs' files", () => {
+    expect(HOME_FILES.length).toBeGreaterThan(10);
+    for (const name of ["knowledge-panels.tsx", "agent-panels.tsx", "link-out-panel.tsx"]) {
+      expect(HOME_FILES).toContain(path.join(HOME_DIR, name));
+    }
+  });
+
+  // …and the opt-out may not outlive its entries: a name that is no longer in
+  // the directory is a comment claiming a fact.
+  it.each([...HOME_NOT_SURFACES])("the opt-out entry %s still exists", (name) => {
+    expect(existsSync(path.join(HOME_DIR, name))).toBe(true);
   });
 
   it.each(FILES)("%s wears no pressed-in recipe", (file) => {

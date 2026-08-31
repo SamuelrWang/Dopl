@@ -12,6 +12,14 @@ import {
 import { takeCalmFlags } from "./service-writes-metadata-markers";
 import { resolveBodyMentions } from "./service-writes-metadata-mentions";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
+import {
+  ESCALATION_ANSWER_METADATA_KEY,
+  ESCALATION_METADATA_KEY,
+} from "../escalation";
+import {
+  resolveEscalation,
+  resolveEscalationAnswer,
+} from "./service-writes-metadata-escalation";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -21,8 +29,8 @@ import type { ChannelContext } from "./service-shared";
  * server-validated values: `to_user_id`, `summary`, `runtime`, `appVersion`,
  * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
  * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
- * `handoff`, `fanoutGroup`, `mentionedUserIds`, and the six calm-terminal
- * flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
+ * `handoff`, `fanoutGroup`, `mentionedUserIds`, `escalation`,
+ * `escalationAnswer`, and the six calm-terminal flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
  * thread closing (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the
  * dead agent keys below, no RENDERER either.
  * `service-writes-metadata-markers.ts` records why. `taskId` stays
@@ -217,6 +225,19 @@ export interface PostMetadataOptions {
  *    mention in a plain channel post counts, and it still triggers nobody's
  *    agent. Stamped only when the set is non-empty, so no existing row shape
  *    moves.
+ * 10. **Escalation.** `escalation` stripped unconditionally and re-stamped only
+ *    from the validated `input.escalation` field. Reserved on `fanoutGroup`'s
+ *    terms and for the same kind of reason: the card it renders carries OPTION
+ *    BUTTONS that write back and wake an agent, so a caller-settable key would
+ *    let anybody hang a working control off anybody's words.
+ * 11. **Escalation answer.** `escalationAnswer` stripped unconditionally and
+ *    re-stamped only after the named escalation is proved to be an answerable
+ *    one IN THIS CHANNEL and the caller is proved to be one of the members it
+ *    asked. ⚠ Its `agentId` — the wake key — is DERIVED from the escalation's
+ *    own `client_msg_id` stamp and is never accepted from the caller. Both
+ *    checks live in `service-writes-metadata-escalation.ts`, which is a §1 split
+ *    rather than a fold here because it READS ANOTHER ROW and enforces an
+ *    authorization.
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
@@ -260,6 +281,12 @@ export async function resolvePostMetadata(
   // a caller able to set it could put its words in anybody's inbox without
   // naming them. Re-stamped from the server's own parse below.
   delete metadata[MENTIONS_METADATA_KEY];
+  // ⚠ Same terms as `fanoutGroup`, and the sharpest of the family: the card this
+  // key renders carries OPTION BUTTONS that write back and wake an agent. A
+  // caller able to set it could hang a working control off anybody's words, and
+  // the ANSWER key could aim a wake at an agent that never asked anything.
+  delete metadata[ESCALATION_METADATA_KEY];
+  delete metadata[ESCALATION_ANSWER_METADATA_KEY];
   const calmFlags = takeCalmFlags(metadata);
 
   // Only when supplied — absent stamps no key, and absence reads as `request`.
@@ -373,6 +400,19 @@ export async function resolvePostMetadata(
     ctx.source === "agent"
   );
   if (mentioned.length > 0) metadata[MENTIONS_METADATA_KEY] = mentioned;
+
+  // ESCALATION (10) and its ANSWER (11). ⚠ The answer runs LAST because it is
+  // the only fold that can THROW an authorization error, and a post refused
+  // there must not have been able to change anything on the way past.
+  resolveEscalation(input, metadata);
+  if (input.escalationAnswer) {
+    await resolveEscalationAnswer(
+      channel.id,
+      ctx.userId,
+      input.escalationAnswer,
+      metadata
+    );
+  }
 
   return { metadata };
 }

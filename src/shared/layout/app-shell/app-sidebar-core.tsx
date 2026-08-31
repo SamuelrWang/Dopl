@@ -35,22 +35,37 @@ export type NavSection =
   | "ontology"
   | "members";
 
+/**
+ * THE RENDERED NAV ORDER — CHANNELS-FIRST (Samuel's ruling, 2026-08-30; ledger
+ * ASK-6). Overview, Channels, Agents, Knowledge, Skills, Ontology, Chats,
+ * Members — then Settings, which is the foot button below and not a row here.
+ *
+ * ⚠ IT IS A PRODUCT STATEMENT, NOT A TIDY-UP. Channels is the lead product
+ * (2026-08-03 pivot) and ontology is substrate; the shipped rail said the
+ * opposite — ontology second, channels sixth — because nothing had ever
+ * reordered it. No doc recorded a demotion, so this line is the record.
+ *
+ * ⚠ `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES` CARRIES THE SAME ORDER
+ * BY HAND and must be edited with this list. That table cannot be imported here
+ * (this core is shared with the web tree, which does not build the SPA), and
+ * the SPA cannot own the order either, because this file is what draws the rail.
+ */
 export const NAV: ReadonlyArray<{
   label: string;
   icon: LucideIcon;
   section: NavSection;
 }> = [
   { label: "Overview", icon: Home, section: "overview" },
-  { label: "Ontology", icon: Network, section: "ontology" },
-  { label: "Knowledge", icon: BookOpen, section: "knowledge" },
-  { label: "Skills", icon: Sparkles, section: "skills" },
-  { label: "Chats", icon: MessagesSquare, section: "chats" },
   { label: "Channels", icon: Hash, section: "channels" },
   // AGENT TEMPLATES (2026-08-22). ⚠ The label is "Agents" and the path segment
   // is `agents`, NOT `agent-templates`: the operator's noun for the thing they
   // author here is the agent (INVARIANTS §5 — the noun on every agent surface is
   // AGENT, and a qualifier is a copy regression, not a style preference).
   { label: "Agents", icon: Bot, section: "agents" },
+  { label: "Knowledge", icon: BookOpen, section: "knowledge" },
+  { label: "Skills", icon: Sparkles, section: "skills" },
+  { label: "Ontology", icon: Network, section: "ontology" },
+  { label: "Chats", icon: MessagesSquare, section: "chats" },
   { label: "Members", icon: Users, section: "members" },
 ];
 

@@ -373,8 +373,14 @@
   transform-origin: top right;
   animation: lpMenuIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
+/* ⚠ Exit must be pointer-events: none — the backdrop is already gone, so a card
+   still taking events eats the click that follows a dismissal (140ms of a nav
+   that ignores you). The `src/app/globals.css › .menu-card` twin has carried
+   this rule AND this reasoning since it was written; this copy did not, which is
+   the "edit both together" instruction failing in the form of a live bug. */
 .lp-nav-menu-card[data-state="closing"] {
   animation: lpMenuOut 140ms ease-in forwards;
+  pointer-events: none;
 }
 
 /* rotateX is 7deg and no more: top edge arrives first (an unfold, not a fade)
@@ -436,10 +442,15 @@
     inset 0 -1px 0 rgba(255, 255, 255, 0.85);
 }
 
+/* ⚠ ALIGNED TO `globals.css › .menu-divider` (2026-08-30, the drift ledger's
+   §6.29 recommendation: globals wins, for the same reason it wins the
+   pointer-events rule above). This copy carried `7px 9px` / `var(--line)`
+   against the global layer's `7px 2px` / `var(--border-subtle)`, with no record
+   of which inset was intended. */
 .lp-nav-menu-divider {
   height: 1px;
-  margin: 7px 9px;
-  background: var(--line);
+  margin: 7px 2px;
+  background: var(--border-subtle);
 }
 
 .lp-nav-menu-cta {
@@ -669,15 +680,21 @@
   display: none;
 }
 
-/* Product-demo slot (see TODO in components/hero-banner.tsx). ⚠ FIXED px
-   inset, never %: % of width ≠ % of height on a wide picture, which gives
-   wider horizontal gaps than vertical. */
+/* Product-demo slot — the scene's WINDOW: the rounded frame, the hairline and
+   the drop. ⚠ FIXED px inset, never %: % of width ≠ % of height on a wide
+   picture, which gives wider horizontal gaps than vertical.
+
+   ⚠ THE GROUND IS THE APP FRAME, NOT WHITE (2026-08-30). It was `#ffffff`,
+   which is what showed at the two edges before the demo canvas filled the box.
+   The canvas fills it now (banner-demo.tsx › `fit`), so this is belt and
+   braces — but it is the RIGHT ground either way: the scene inside is /home's
+   dark slab, so a white one can only ever be a flash of the wrong colour. */
 .lp-banner-demo-slot {
   position: absolute;
   inset: 26px;
   z-index: 2;
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--home-frame);
   border: 1px solid rgba(0, 0, 0, 0.07);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.14),
@@ -3017,5 +3034,238 @@
   .lp-audio-toggle {
     left: 14px;
     bottom: 14px;
+  }
+}
+
+/* ── Banner demo — the /home account surface in the slot ──────────────
+   Markup: components/banner-demo/. The RECORD PANE is the product's own
+   channels-v2 surface (which is what /home itself mounts) styled by
+   globals.css tokens; the /home CHROME around it is mock markup in
+   `banner-demo/demo-home-chrome.tsx`, because /home lives in `apps/desktop-ui`
+   and the Next tree cannot import it. This file owns the demo's stage — the
+   scale wrapper, the frame geometry, the scripted cursor and its click ripple.
+
+   ⚠ NO COLOUR IS PICKED HERE. Every fill, line and radius below is a global
+   token (`globals.css › THE APP FRAME PALETTE` and the kit), so the scene reads
+   the same values the real page does and cannot drift into a look-alike. */
+
+.lp-demo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+/* THE DESIGN CANVAS. Width is fixed (CANVAS_W in demo-steps.ts — keep in
+   step); the component writes the HEIGHT and the centring transform + scale
+   inline, because the scale FILLS the slot's width and the height is derived
+   from it (banner-demo.tsx › `fit`). ⚠ Do not put a `height` back here: a
+   fixed one is exactly what letterboxed the canvas and left white gutters down
+   both sides of the slot. */
+.lp-demo-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1480px;
+  display: flex;
+  opacity: 1;
+  transition: opacity 400ms ease;
+}
+.lp-demo-canvas.is-resetting {
+  opacity: 0;
+}
+
+/* ── /home's frame: one dark slab, the rail, ONE gray panel ───────────
+   Mirrors `apps/desktop-ui/src/pages/home/index.tsx` and
+   `src/shared/layout/app-shell/app-shell.module.css › .root / .surface`
+   (both read 2026-08-30). The slab is a single ink: root, surface and rail all
+   paint `--home-frame`, so the panel's float margins read as one continuous
+   frame instead of a second border. */
+.lp-demo-home {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: var(--home-frame);
+  /* ⚠ REBOUND, NOT INHERITED. `.lp` sets `--ink: #0d0d0d` for the landing;
+     inside the scene it has to be the APP's ink or the demo prints the
+     marketing near-black wherever a kit recipe reads the alias. */
+  --ink: var(--text-primary);
+  color: var(--text-primary);
+  font-size: 15px;
+}
+.lp-demo-home *,
+.lp-demo-home *::before,
+.lp-demo-home *::after {
+  box-sizing: border-box;
+}
+
+/* THE ACCOUNT RAIL. Geometry from `account-rail.module.css`: a 54px rail
+   (`--shell-rail-w` on the desktop host; 0 on the web, so the number is stated
+   here rather than read from a token that is deliberately zero), 40px tiles at
+   13px radius, and 7px of gap — which is also the rail's top pad, so a tile
+   shows an even 7px each side. */
+.lp-demo-rail {
+  width: 54px;
+  flex: 0 0 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 0 20px;
+  overflow: hidden;
+  background: var(--home-frame);
+}
+.lp-demo-rail-tile {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+}
+/* The glyph FILLS its tile: 36px inside 40px is an even 2px ring, and an 11px
+   radius makes glyph and tile corners concentric with the tile's 13px. */
+.lp-demo-rail-tile > span,
+.lp-demo-rail-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  font-size: var(--text-title);
+}
+/* 4px of its own on top of the rail's 7px gap — the account/container break is
+   11px where a tile-to-tile gap is 7px. ⚠ RHYTHM, never a rule: the only
+   horizontal line in this rail belongs to the selected tile's `.raised-tab`
+   hairline, and a second one 7px from it reads as a doubled border. */
+.lp-demo-rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+/* THE PANEL — the kit's `.page-float` (fill, 2px line, 14px radius, float
+   margins, shadow) composed in the TSX; this adds layout only, plus the
+   flush-left margin. ⚠ `margin-left: 0` is `index.tsx`'s `!ml-0`: the dark
+   column the eye reads must be the 54px rail and nothing wider, or the rail's
+   perfectly centred tiles look shifted left. */
+.lp-demo-panel {
+  /* ⚠ ONE SOURCE FOR THE COLUMN WIDTH, load-bearing twice
+     (`home.module.css › .page`): the channel list IS this wide, and the
+     header's selector is indented by exactly this much so it starts on the
+     record pane's left edge. */
+  --home-list-w: 290px;
+  margin-left: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* THE RECORD PANE — a white card bounded by the account palette's 2px line,
+   NOT an elevation. ⚠ No shadow, deliberately (`index.tsx`): the pane has no
+   top or left margin, so the upward half of a drop printed straight into the
+   gap under the header as a gray smudge beside the info column's tab pills.
+   `position: relative` is the agent view's containing block, exactly as
+   `channel-surface-standalone.tsx` states. */
+.lp-demo-record {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  margin: 0 12px 12px 0;
+  border: 2px solid var(--home-panel-line);
+  border-radius: 14px;
+  background: var(--home-card);
+}
+
+/* ── The account palette, carried INTO the shared channel surface ─────
+   Port of `apps/desktop-ui/src/pages/home/home.module.css › .frame`, rule for
+   rule and for the same reasons. The surface inside this pane is SHARED with
+   the workspace channels page, where the neutral hairlines are correct; only
+   the copy mounted on /home wears the account palette, so the scope is the
+   pane's own class and nothing else can opt in.
+
+   ⚠ These select on Tailwind UTILITY class names, as the module does. If those
+   change in `features/channels/components/channels-v2/`, this degrades to the
+   neutral hairline — the old look, not a broken one. */
+.lp-demo-record .border-border-default,
+.lp-demo-record .border-border-subtle {
+  border-color: var(--home-panel-line);
+}
+/* Structural dividers match the pane's own 2px outer line; the soft internal
+   rules keep their hairline weight. `th` is excluded — a markdown table's
+   header cell carries the same utility and is not a pane divider. */
+.lp-demo-record .border-l.border-border-default {
+  border-left-width: 2px;
+}
+.lp-demo-record .border-b.border-border-default:not(th) {
+  border-bottom-width: 2px;
+}
+/* THE SENDER PILLS wear the raised-light face here — one notch up from the flat
+   `.bento` they carry on the workspace channels page. ⚠ Not a forked recipe:
+   these are the kit's own `--raised-light-*` parts, the same three
+   `.auth-btn-3d-light` is built from. The hook is
+   `attribution-pill.tsx › AttributionPill`'s attribute, carried by the human
+   `<span>` and the agent `<button>` alike, so this cannot miss one. */
+.lp-demo-record [data-attribution-pill] {
+  background: var(--raised-light-face);
+  border-color: var(--raised-light-line);
+  box-shadow: var(--raised-light-shadow);
+}
+/* THE COMPOSER'S PANELS wear the page's own panel gray — the recess a panel's
+   header sits in reads as the same surface the "New channel" button stands on,
+   one card out. ⚠ FILL ONLY: the concave shadow stack is deliberate and stays.
+   Hook: `composer-request-panel.tsx › PANEL_HOOK`. */
+.lp-demo-record [data-composer-panel] {
+  background-color: var(--home-panel);
+}
+
+/* ── Scripted cursor + click ripple ── */
+.lp-demo-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  opacity: 0;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+  transition:
+    transform 1050ms cubic-bezier(0.3, 0.7, 0.25, 1),
+    opacity 300ms ease;
+  will-change: transform;
+  pointer-events: none;
+}
+.lp-demo-cursor.is-shown {
+  opacity: 1;
+}
+.lp-demo-ripple {
+  position: absolute;
+  z-index: 49;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.14);
+  animation: lp-demo-ripple 560ms ease-out forwards;
+  pointer-events: none;
+}
+@keyframes lp-demo-ripple {
+  from {
+    opacity: 0.7;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* Reduced motion: the timeline is parked on the full tableau
+   (use-demo-timeline.ts); the cursor never enters. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-demo-cursor {
+    display: none;
   }
 }

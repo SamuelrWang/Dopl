@@ -158,3 +158,17 @@ export {
   decideLaunchDirective,
   LAUNCH_REFUSAL_REASONS,
 } from "./service-launch";
+
+// THE PRIVATE DIRECT LANE (2026-08-31) — the launch mailbox's sibling, and off
+// `channel_messages` for the same two reasons plus a third: the lane is PRIVATE BY
+// DEFINITION, so the shared transcript is not a trade-off but the feature's
+// negation. None of the post-path machinery applies to it either.
+export {
+  createAgentDirection,
+  getAgentDirection,
+  listPendingAgentDirections,
+  listRecentAgentDirections,
+  claimAgentDirection,
+  decideAgentDirection,
+  DIRECTION_REFUSAL_REASONS,
+} from "./service-directions";

@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { PLANS, type PlanDef } from "@/features/billing/plans";
+import {
+  FREE_CHATS_WINDOW_DAYS,
+  FREE_MULTI_MEMBER_OBJECT_CAP,
+  PLANS,
+  planNumber,
+  type PlanDef,
+} from "@/features/billing/plans";
+import { MONTHLY_MCP_CREDITS } from "@/features/billing/credits";
 import { billingPath } from "@/features/billing/url";
 import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 import { isStandardWorkspace } from "@/features/workspaces/types";
@@ -41,13 +48,16 @@ const COMPARE_ROWS: {
 }[] = [
   {
     label: "Ontology objects",
-    free: { main: "Unlimited", sub: "100 with 2+ members" },
+    free: {
+      main: "Unlimited",
+      sub: `${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} with 2+ members`,
+    },
     solo: { main: "Unlimited" },
     team: { main: "Unlimited" },
   },
   {
     label: "Chat history",
-    free: { main: "90 days" },
+    free: { main: `${FREE_CHATS_WINDOW_DAYS} days` },
     solo: { main: "Full" },
     team: { main: "Full" },
   },
@@ -58,13 +68,15 @@ const COMPARE_ROWS: {
     team: { main: "Unlimited", sub: "per seat" },
   },
   {
-    // ⚠ Copy, not config. Source of truth =
-    // `features/billing/credits.ts › MONTHLY_MCP_CREDITS`. Retune there, then
-    // sync this row AND `plans.ts › PLANS.features`.
+    // ⚠ INTERPOLATED SINCE 2026-08-30 (G4). This row said "Copy, not config",
+    // named `features/billing/credits.ts › MONTHLY_MCP_CREDITS` as the source of
+    // truth, and asked the next person to "sync this row AND `plans.ts ›
+    // PLANS.features`" by hand. Three hand-synced statements of a PUBLIC PRICE,
+    // with nothing that could go red — so the duplicate is deleted instead.
     label: "MCP credits",
-    free: { main: "500", sub: "/ month" },
-    solo: { main: "10,000", sub: "/ month" },
-    team: { main: "25,000", sub: "/ month" },
+    free: { main: planNumber(MONTHLY_MCP_CREDITS.free), sub: "/ month" },
+    solo: { main: planNumber(MONTHLY_MCP_CREDITS.solo), sub: "/ month" },
+    team: { main: planNumber(MONTHLY_MCP_CREDITS.team), sub: "/ month" },
   },
   {
     label: "Price",

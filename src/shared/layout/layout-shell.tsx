@@ -11,7 +11,7 @@ import { FlushGrid } from "@/shared/design";
 // ⚠ `/c/{workspaceId}` — the guest web channel (2026-08-25) — is DELIBERATELY
 // ABSENT, not an oversight. Listing it would dress the page in the centred
 // `FlushGrid` container, which is wrong for a full-viewport surface; the guest
-// page draws its own root and overrides the `#2c3640` body paint itself, so the
+// page draws its own root and overrides the frame body paint itself, so the
 // bare app-shell-classed render this set's ABSENCE produces is what it wants.
 const NON_WORKSPACE_ROOTS = new Set([
   "admin",
@@ -61,7 +61,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     } else if (isAppShellRoute) {
       document.body.classList.remove("mosaic-bg");
       document.body.classList.remove("landing-active");
-      document.body.style.backgroundColor = "#2c3640";
+      // ⚠ THE FRAME TOKEN, NOT A HEX (drift ledger ASK-31, settled by Samuel
+      // 2026-08-30: home-frame wins, one token). This was a literal `#2c3640` —
+      // a third near-identical dark slab, one hex off the frame the app-shell
+      // actually paints. An inline style may hold a `var()`; it resolves against
+      // `:root`, where `--home-frame` is declared.
+      document.body.style.backgroundColor = "var(--home-frame)";
     } else {
       document.body.classList.add("mosaic-bg");
       document.body.classList.remove("landing-active");

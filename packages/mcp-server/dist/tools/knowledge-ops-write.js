@@ -97,7 +97,22 @@ async function opCreateBase(client, callerUserId, input) {
         : "";
     return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}${shelfNote}`);
 }
-async function opUpdateBase(client, ref, name, description, slug) {
+/**
+ * ⚠ THE SHELF IS NOT PATCHABLE, AND THE REFUSAL SAYS SO RATHER THAN IGNORING
+ * THE ARG — the twin of `agent-ops-write.ts › opUpdate`'s, word for word in
+ * substance. `home_scoped` is set at create and never written again for bases
+ * and templates alike (F-342; Samuel's ruling Q8, 2026-08-28 keeps it that way
+ * for v1), and the server's update schema does not accept it — so a silently
+ * dropped `shelf` here would return a 2xx over a move that never happened.
+ *
+ * ⚠ `shelf` RIDES `dopl_kb`'s SHARED OP SCHEMA, so it is spellable on every op;
+ * this is the ONE other op where it would read as an instruction the server
+ * carried out. The reads ignore it exactly as `dopl_agent(op="get")` does.
+ */
+async function opUpdateBase(client, ref, name, description, slug, shelf) {
+    if (shelf !== undefined) {
+        return (0, respond_1.err)(`op="update_base" does not take \`shelf\`, and nothing was changed. A base's shelf is fixed when it is created and there is no move: to put an existing base on your personal shelf, create a NEW one there with op="create_base", shelf="personal". ⚠ The copy and the original are STRANGERS — writing to one never touches the other.`);
+    }
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
         return base;

@@ -228,7 +228,15 @@ export function ChannelsV2AgentWindow({
     // shadowed card inside a margin — right for a PAGE in the app shell, wrong for a window
     // whose whole viewport is this content: it read as a panel hovering on a background, with
     // inner corners cutting across the OS window's own. The window IS the panel; the rounding
-    // belongs to the operating system. Fill only, and it is `.page-float`'s own colour.
+    // belongs to the operating system. Fill only, and it is the POP-OUT SURFACE's own colour —
+    // `app-shell.module.css › .windowSurface`, which paints `--panel-surface`.
+    //
+    // ⚠ THE WINDOW IS NOT IN THE FRAME MODEL AND DELIBERATELY DID NOT FOLLOW IT (2026-08-30).
+    // This note used to say "`.page-float`'s own colour", which was true only while those two
+    // agreed; the frame ruling moved the in-shell page through `--home-panel` and on to
+    // `--home-card`, and NEITHER is right here. A pop-out has no rail, no frame and no panel to
+    // be a level of — its viewport IS the content — so it stays on the ground its own surface
+    // paints. Layer for layer in `pages/agent-window/frame.test.ts`, which pins both halves.
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--panel-surface)] antialiased">
       <AgentWindowHeader agent={agent} />
       {/* ⚠ ONE BOX, NOT TWO (Samuel, 2026-08-27). The usage strip sat directly above the three

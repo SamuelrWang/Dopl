@@ -86,8 +86,9 @@ describe("the /home ground", () => {
       "utf8"
     );
     expect(css).toContain(".frame :global([data-section-panel])");
-    // The page palette, never a literal — `--home-panel` is the fill the
-    // relationship list stands on (`docs/DESIGN-SYSTEM.md`, /home ONLY).
+    // The frame palette, never a literal — `--home-panel` is the fill the
+    // relationship list stands on (`docs/DESIGN-SYSTEM.md`; app-frame-wide
+    // since 2026-08-30, /home-scoped before that).
     const rule = css.slice(css.indexOf(".frame :global([data-section-panel])"));
     const body = rule.slice(0, rule.indexOf("}"));
     expect(body).toContain("var(--home-panel)");

@@ -97,6 +97,21 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     getLaunchDirective(id) {
         return channel.getLaunchDirective(this.transport, id);
     }
+    /** DIRECT one of the operator's OWN running agents, privately (2026-08-31).
+     *  ⚠ A REQUEST like a launch: the machine may refuse with one of five words,
+     *  and `offline: true` means nothing was even filed. There is no operator
+     *  argument, deliberately — the server stamps the authenticated caller. */
+    createAgentDirection(input) {
+        return channel.createAgentDirection(this.transport, input);
+    }
+    /** Poll one direction — where the directed turn's final text comes back. */
+    getAgentDirection(id) {
+        return channel.getAgentDirection(this.transport, id);
+    }
+    /** The caller's own recent directions, terminal rows included. */
+    listAgentDirections(query = {}) {
+        return channel.listAgentDirections(this.transport, query);
+    }
     /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`
      *  rides beside the rows because presence is a fact about the MACHINE, not
      *  about any one session. See `channel-types.ts › ChannelSessionsPage`. */

@@ -199,8 +199,11 @@ function templateRow(t, personal = false) {
  * workspace's roster.
  *
  * ⚠ AND THE SHELF IS NOT ON THE ROW. `home_scoped` is deliberately absent from
- * `server/dto.ts › AGENT_TEMPLATE_COLS` so no client can re-implement the fence,
- * so a row here cannot say which shelf it is on. Ask for one shelf at a time —
- * said out loud rather than implied by an unlabelled list.
+ * `server/dto.ts › AGENT_TEMPLATE_COLS` so no client can re-implement the fence;
+ * the `personal` marker {@link templateRow} prints comes from the response's
+ * SIBLING KEY (`homeScopedTemplateIds`), never from the row. Which is why the
+ * note below states what an UNMARKED row means — workspace shelf, or a server
+ * that does not send the key — rather than letting an absent label be read as an
+ * assertion.
  */
 exports.TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and team templates you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own /home shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;

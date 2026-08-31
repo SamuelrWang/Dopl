@@ -55,6 +55,12 @@ export const CHANNEL_INPUT_SHAPE = {
       // Neither may come back as a WORD either — `channel-law.test.ts ›
       // REMOVED_VOCABULARY` scans every string literal in this file.
       "set_thread_mode",
+      // ⚠ DIRECT one of the operator's OWN running agents, PRIVATELY. A
+      // mailbox row the operator's own machine claims and delivers into that
+      // agent's private turn — it reaches no other member and no other machine.
+      "direct_agent",
+      // What I have asked my own agents, and what came back.
+      "read_directions",
       // ASK THE OPERATOR'S DESKTOP TO START AN AGENT on a channel. ⚠ A REQUEST,
       // never a command: the desktop may refuse, and the refusal is one of seven
       // reasons. `channel` required; the hold is bounded and a timeout is a
@@ -66,6 +72,11 @@ export const CHANNEL_INPUT_SHAPE = {
       // `info_card` READS the current card and changes nothing, which the
       // replace-whole contract requires.
       "update",
+      // ASK A HUMAN A STRUCTURED QUESTION. ⚠ A `post` under the hood — it goes
+      // to the channel like any other message and is read by everyone in it —
+      // but the four fields are validated and stamped, so the surface renders
+      // them as a CARD WITH BUTTONS and the choice comes back to you as a reply.
+      "escalate",
     ])
     .describe("Operation to perform."),
   channel: z
@@ -220,6 +231,17 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). ⚠ For get_thread this returns the thread\'s METADATA ONLY — title, mode, the two parties, timestamps — and NO message bodies; to read what was said, use op="read" with thread=<id>. op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel).',
     ),
+  // ⚠ `agent_id`, NOT `agent`. `channel-addressing-rule.test.ts` bans a param
+  // literally named `agent` — it was the retired named-agent ADDRESSING surface,
+  // and "a param an MCP client can see is a param a model will try". This one
+  // names an INSTANCE ID on the caller's own machine and addresses nobody in the
+  // channel, which is exactly the distinction that guard exists to keep.
+  agent_id: z
+    .string()
+    .optional()
+    .describe(
+      'op="direct_agent" (required): WHICH of your operator\'s agents to speak to — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on this lane, deliberately: a direction reaches a PRIVATE turn, so guessing which agent you meant would steer one you did not address with nothing reporting the swap.',
+    ),
   // ⚠ `outcome` ("completed" | "failed") was a param here, required by
   // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
   // 2026-08-18); nothing in this surface has an outcome any more.
@@ -303,6 +325,72 @@ export const CHANNEL_INPUT_SHAPE = {
     .optional()
     .describe(
       'op="update": the channel\'s whole info card. ⚠ REPLACES IT — a write that omits a row DELETES that row, and `info_card={}` clears the card. OMIT this argument entirely to READ the current card without changing it, which is how you get the rows to send back. Everyone in the channel sees this card.',
+    ),
+  // ── op="escalate" ────────────────────────────────────────────────────────
+  // ⚠ FOUR SEPARATE PARAMS RATHER THAN ONE `escalation` OBJECT, deliberately.
+  // The whole point of the op is that an agent has to SAY the four things; a
+  // nested object lets a model fill one key with a paragraph and satisfy the
+  // schema. Caps mirror `src/features/channels/escalation.ts` — sync all three
+  // (that file, this one, `channel-errors.ts › FIELD_CAPS_NOTE`).
+  issue: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'op="escalate" (required): the question, in ONE line (<=200 chars). Not a summary of your work — the decision you cannot make. It becomes the card\'s title, so write it as the thing a person has to answer.',
+    ),
+  context: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional()
+    .describe(
+      'op="escalate" (optional, <=2000 chars): what a person needs to know to choose, and nothing else. Do not restate the options here and do not narrate what you tried — the options carry their own consequences, and a card that has to be read twice is the prose wall this op replaces.',
+    ),
+  options: z
+    .array(
+      z.object({
+        label: z
+          .string()
+          .trim()
+          .min(1)
+          .max(80)
+          .describe("The button's face — one short imperative, <=80 chars."),
+        consequence: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .describe(
+            "ONE line saying what happens if they press it (<=200 chars). Required on every option: an option with no stated consequence makes the reader do your analysis.",
+          ),
+      }),
+    )
+    .min(2)
+    .max(6)
+    .optional()
+    .describe(
+      'op="escalate" (required): 2-6 things a person could decide. ⚠ BOTH BOUNDS ARE REAL. ONE option is not a question — if there is only one way forward, take it and report with op="milestone". More than six is the wall of prose again with numbers on it; collapse the near-duplicates first.',
+    ),
+  recommendation: z
+    .object({
+      index: z
+        .number()
+        .int()
+        .min(0)
+        .describe("0-based index into `options` — the one you would take."),
+      why: z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .describe("ONE line for why (<=200 chars)."),
+    })
+    .optional()
+    .describe(
+      'op="escalate" (optional but almost always right): which option you would take and why. You did the work; a card that offers four choices and no opinion pushes the whole analysis back onto the person you interrupted. ⚠ `index` MUST be inside `options` — an out-of-range one refuses the whole call rather than posting a card that recommends nothing.',
     ),
   limit: z.coerce
     .number()

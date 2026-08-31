@@ -18,6 +18,12 @@ export type ChannelVisibility = "public" | "private";
 
 export type ChannelMemberRole = "owner" | "member";
 
+// ⚠ THE ESCALATION FIELDS ARE AN EXTENDED INTERFACE, NOT TWO KEYS DECLARED HERE
+// (2026-08-31). `escalation-types.ts` is their own module for `launch-types.ts`'s
+// reason — this file is at the 500-line cap — and `extends` is what keeps the
+// rule, the caps and the docblock stated ONCE, over there.
+import type { ChannelEscalationFields } from "./escalation-types.js";
+
 export type ThreadMode = "interactive" | "autonomous";
 
 export type ThreadStatus = "open" | "closed";
@@ -349,7 +355,7 @@ export interface ChannelThreadCreated {
  * look it up, never "one past the last seq you saw".
  */
 
-export interface ChannelMessageInput {
+export interface ChannelMessageInput extends ChannelEscalationFields {
   body: string;
   kind?: ChannelMessageKind;
   metadata?: Record<string, unknown>;

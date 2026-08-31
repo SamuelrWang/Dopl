@@ -16,7 +16,12 @@ import {
   ConsentAlreadyDecidedError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
+  DirectionNotClaimableError,
+  DirectionNotFoundError,
   DirectSelfTargetError,
+  EscalationAlreadyAnsweredError,
+  EscalationForbiddenError,
+  EscalationNotFoundError,
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
   LaunchTemplateAmbiguousError,
@@ -55,6 +60,32 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
+  }
+  // ⚠ 404 FOR ALL FOUR CAUSES — see the error's own docblock. Distinguishing
+  // them would make an answer a probe for which message ids are escalations.
+  if (err instanceof EscalationNotFoundError) {
+    return new HttpError(404, "CHANNEL_ESCALATION_NOT_FOUND", err.message);
+  }
+  // ⚠ 403, and it is REACHED ONLY AFTER the 404 above has passed, so it
+  // discloses nothing that error was protecting. It is loud rather than a silent
+  // strip because a button that reports success over an answer nobody received
+  // is the failure the card exists to remove.
+  if (err instanceof EscalationForbiddenError) {
+    return new HttpError(403, "CHANNEL_ESCALATION_FORBIDDEN", err.message);
+  }
+  // ⚠ 409 from the index's 23505, so a second click loses cleanly rather than
+  // posting a second answer that would wake the agent twice.
+  if (err instanceof EscalationAlreadyAnsweredError) {
+    return new HttpError(409, "CHANNEL_ESCALATION_ANSWERED", err.message);
+  }
+  // ⚠ 404 FOR ALL THREE CAUSES, and on this lane the probe it denies would return
+  // another operator's PRIVATE TURN text — see the error's own docblock.
+  if (err instanceof DirectionNotFoundError) {
+    return new HttpError(404, "CHANNEL_DIRECTION_NOT_FOUND", err.message);
+  }
+  // ⚠ 409, and the desktop lane reads it as "stand down", NOT as a fault.
+  if (err instanceof DirectionNotClaimableError) {
+    return new HttpError(409, "CHANNEL_DIRECTION_NOT_CLAIMABLE", err.message);
   }
   // ⚠ 404 FOR "not yours", not 403 — see the error's own docblock. A 403 would
   // confirm the id exists, which is exactly the probe the single error prevents.

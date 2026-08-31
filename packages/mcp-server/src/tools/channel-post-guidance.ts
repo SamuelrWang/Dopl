@@ -31,6 +31,7 @@
  */
 
 import type { ChannelMessage } from "@dopl/client";
+import { inlineOr } from "./channel-shared";
 
 /**
  * ⚠ HAND-COPIED from `src/features/channels/lib/mentions.ts ›
@@ -79,6 +80,131 @@ export function resolvedMentionCount(message: ChannelMessage): number {
   return value.filter((id) => typeof id === "string").length;
 }
 
+// ── PER-MENTION RESOLUTION (2026-08-31) ────────────────────────────────────
+//
+// ⚠ WHY A BREAKDOWN AND NOT JUST THE COUNT. {@link tagOutcomeNote} answers "how
+// many landed" and then spends a paragraph on five things that might have gone
+// wrong. That is the right answer when every token is the same KIND. It is the
+// wrong answer for a body carrying two kinds of token at once — which is the
+// ordinary shape of an orchestration post ("@samuel please look, @agent-x2sz1ztt
+// carry on") — because the count is over HUMAN handles only and reads as a
+// verdict on the whole body. A live orchestrator read a zero count that way and
+// concluded its agent handle was misspelled (ENGINEERING, 2026-08-31).
+//
+// ⚠ WHAT THIS PACKAGE CAN AND CANNOT DECIDE, STATED SO THE COPY CANNOT DRIFT
+// PAST IT:
+//   • THE GRAMMAR IS PUBLIC, so the ID FORM is decidable HERE, exactly.
+//     `@agent-<id>` / `@<id>` over `main/agent-id.js`'s charset is an AGENT
+//     handle by SHAPE, whatever it does or does not reach.
+//   • WHETHER AN AGENT HANDLE REACHES ANYTHING IS NOT DECIDABLE HERE OR ON THE
+//     SERVER AT ALL — the resolver is the operator's desktop, over ids minted on
+//     that machine (INVARIANTS §11's name door). So the report says what the
+//     token IS and what the LAW does with it, never that it arrived.
+//   • WHICH HUMAN HANDLE RESOLVED IS NOT DECIDABLE HERE EITHER: the server
+//     stamps USER IDS, not the tokens they came from, and this package cannot
+//     see the roster. So human tokens are reported as a SET against the server's
+//     COUNT, and where the two disagree the copy says it cannot tell which.
+//
+// ⚠ IT DOES NOT MIRROR THE CODE RULE, for the reason {@link bodyCarriesATag}
+// gives: a backticked handle is still a token the AUTHOR wrote, and swallowing
+// it here would leave the one line that explains why it reached nobody unwritten.
+
+/**
+ * ⚠ HAND-COPIED from `src/features/channels/lib/mentions.ts › MENTION_TOKEN_RE`
+ * — `@` plus one or more non-whitespace, non-`@` characters, at any position,
+ * mid-word included. Same copy {@link bodyCarriesATag} tests with, widened to a
+ * capture so the tokens themselves can be reported.
+ */
+const MENTION_TOKEN_RE = /@([^\s@]+)/g;
+
+/**
+ * ⚠ HAND-COPIED from `dopl-desktop-app/main/session-dispatch.js ›
+ * mentionedAgentIds` — the ID DOOR, both forms, the `agent-` prefix optional
+ * exactly as it is there. The lookbehind is NOT reproduced: that regex scans
+ * free prose and needs it so the bare alternative cannot also match inside
+ * `@agent-<id>`; this one is anchored against ONE already-extracted token, where
+ * the two forms cannot overlap.
+ */
+const AGENT_HANDLE_RE = /^(?:agent-)?[a-z][a-z0-9]{7}$/;
+
+/** ⚠ TRAILING PUNCTUATION IS STRIPPED, LEADING IS NOT — `mentions.ts ›
+ *  mentionHandleOf`'s rule, restated so `@agent-x2sz1ztt.` at the end of a
+ *  sentence classifies as the handle it plainly is. */
+function stripTrailing(token: string): string {
+  return token.replace(/[^\p{L}\p{N}_-]+$/u, "");
+}
+
+export type MentionKind = "agent" | "handle";
+
+export type MentionToken = { token: string; kind: MentionKind };
+
+/**
+ * Every `@…` in the body, in order, de-duplicated, classified by SHAPE.
+ * ⚠ De-duplicated because the report is about which ADDRESSES were written, not
+ * how many times; a body naming one agent four times has one address in it.
+ */
+export function classifyMentions(body: string): MentionToken[] {
+  const out: MentionToken[] = [];
+  const seen = new Set<string>();
+  for (const m of String(body ?? "").matchAll(MENTION_TOKEN_RE)) {
+    const token = stripTrailing(m[1] ?? "");
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    out.push({
+      token,
+      kind: AGENT_HANDLE_RE.test(token) ? "agent" : "handle",
+    });
+  }
+  return out;
+}
+
+/**
+ * THE PER-MENTION REPORT — one line, or none when the body carried no `@…`.
+ *
+ * ⚠ EVERY CLAUSE IS SOMETHING THIS SERVER ACTUALLY KNOWS. The agent half is a
+ * SHAPE judgement plus the LAW (which is this tool's own rule, not a guess about
+ * another machine); the human half is the server's own stamped count. Nothing
+ * here asserts that a particular token reached a particular reader.
+ */
+export function mentionBreakdownLine(mentions: MentionToken[], resolved: number): string | null {
+  if (mentions.length === 0) return null;
+  const agents = mentions.filter((m) => m.kind === "agent");
+  const handles = mentions.filter((m) => m.kind === "handle");
+  // ⚠ THE `@` GOES **INSIDE** `inlineOr`, NOT AROUND ITS RESULT. `narration.ts ›
+  // neutralizeInline` returns the value ALREADY WRAPPED in a code span, so
+  // wrapping it again produces `` `@`token`` `` — a broken span, in a line whose
+  // whole job is to show the caller the exact token it wrote back to it.
+  const show = (list: MentionToken[]) =>
+    list.map((m) => inlineOr(`@${m.token}`, "`(unreadable)`")).join(", ");
+
+  const parts: string[] = [`WHAT EACH \`@\` IN YOUR BODY IS:`];
+  if (agents.length > 0) {
+    parts.push(
+      `${show(agents)} — AGENT HANDLE${agents.length === 1 ? "" : "S"} by shape, so ${agents.length === 1 ? "it is" : "they are"} a WAKE and not a tag: an agent id is not a channel member, stamps nobody, and can never land in a Tags inbox. It reaches YOUR OWN operator's agent of that id (you post under their account, which is what licenses it) and never another member's. ⚠ THIS SERVER CANNOT CONFIRM IT LANDED — the token is resolved on your operator's machine, over ids no server holds, so treat the post as a REQUEST and watch for that agent's own posts rather than assuming it woke.`,
+    );
+  }
+  if (handles.length > 0) {
+    const label = `${show(handles)} — MEMBER HANDLE${handles.length === 1 ? "" : "S"} by shape, resolved by the server against THIS channel's human roster.`;
+    if (resolved === 0) {
+      parts.push(
+        `${label} NONE of them resolved: no reader was stamped on this message, so nobody's Tags inbox has it.`,
+      );
+    } else if (resolved >= handles.length) {
+      parts.push(
+        `${label} The server stamped ${resolved} reader${resolved === 1 ? "" : "s"}, so ${handles.length === 1 ? "it landed" : "they landed"}.`,
+      );
+    } else {
+      // ⚠ THE HONEST MIDDLE. The stamp is a set of USER IDS; the tokens are
+      // strings. There is no join between them here, and inventing one (by
+      // position, by count) would name the wrong token as the failure.
+      parts.push(
+        `${label} The server stamped only ${resolved} of ${handles.length} — at least one reached nobody, and WHICH ONE is not knowable from here (the stamp is a set of reader ids, not the tokens they came from).`,
+      );
+    }
+  }
+  return parts.join(" ");
+}
+
 /**
  * THE REPORT: the caller wrote an `@…`, so say what became of it. This is the
  * one line in the phase that catches a SILENT failure — a misspelled handle
@@ -109,6 +235,15 @@ export function resolvedMentionCount(message: ChannelMessage): number {
  *      ⚠ It carries NO roster remedy on purpose: the remedy sentence names
  *      (2), (3) and (4), and pointing this one at the member list is exactly
  *      the wrong turn that made it worth naming.
+ *      ⚠ **AND ITS SECOND SENTENCE WAS CORRECTED ON 2026-08-31.** It said
+ *      `@<agentid>` "is a WAKE for that agent's machine" — true of a HUMAN
+ *      writing it and false of the agent reading this line, which is the only
+ *      audience it has. An agent-authored post wakes nobody, so the copy was
+ *      telling every caller that the thing it had just done had worked. It now
+ *      says who may spend the handle. ⚠ AND THIS BRANCH NO LONGER FIRES AT ALL
+ *      for a body whose only tokens were agent handles — see
+ *      {@link postGuidanceLines}: five causes about roster spelling, printed
+ *      over a body that named no member, IS the mis-narration, not a fix for it.
  *
  * ⚠ SELF-TAGGING IS NO LONGER A CAUSE, and the removal is the point. The server
  * used to drop the AUTHOR unconditionally, so an agent tagging its own operator
@@ -127,7 +262,7 @@ export function tagOutcomeNote(channelId: string, count: number): string {
   if (count > 0) {
     return `TAGGED ${count} ${count === 1 ? "person" : "people"} — the server resolved that many readers out of your body and stamped them on the message, so it is in their Tags inbox, which is where an operator looks instead of reading every message.`;
   }
-  return `YOUR \`@\` TAG RESOLVED TO NOBODY — the message was posted, but no reader was stamped on it, so no one's Tags inbox has it. FIVE THINGS DO THIS. (1) THE HANDLE WAS IN CODE: a handle inside backticks or a fenced block is quoted text and tags nobody — if you were writing ABOUT tagging, that is what happened, and it is working as intended. Write the handle as plain prose when you mean it as a tag. (2) SPELLING: a handle is the person's display name or the local part of their email, lowercased, either whole with the spaces squeezed out or just its first word, and the match is EXACT, so \`@dia\` for Diana names nobody. (3) THEY ARE NOT IN THIS CHANNEL: tags resolve against this channel's roster only, so a workspace member who is not a member here cannot be tagged into it. (4) TWO MEMBERS ANSWER TO IT: a contested handle resolves to neither rather than being guessed — use the longer form (their full name with the spaces squeezed out). (5) YOU TAGGED AN AGENT ID: tags resolve against the human roster only — an agent id can never be tagged. Writing \`@<agentid>\` in a body is a WAKE for that agent's machine, not a tag, and it starts no inbox entry. For (2), (3) and (4), check dopl_channel(op="members", channel="${channelId}") and re-post with the handle spelled as it is listed there; if they are not on that list, they cannot be reached from this channel at all. (A server that does not resolve tags at all looks identical from here, so if the handle is plain prose and matches the roster, this is not yours to fix.)`;
+  return `YOUR \`@\` TAG RESOLVED TO NOBODY — the message was posted, but no reader was stamped on it, so no one's Tags inbox has it. FIVE THINGS DO THIS. (1) THE HANDLE WAS IN CODE: a handle inside backticks or a fenced block is quoted text and tags nobody — if you were writing ABOUT tagging, that is what happened, and it is working as intended. Write the handle as plain prose when you mean it as a tag. (2) SPELLING: a handle is the person's display name or the local part of their email, lowercased, either whole with the spaces squeezed out or just its first word, and the match is EXACT, so \`@dia\` for Diana names nobody. (3) THEY ARE NOT IN THIS CHANNEL: tags resolve against this channel's roster only, so a workspace member who is not a member here cannot be tagged into it. (4) TWO MEMBERS ANSWER TO IT: a contested handle resolves to neither rather than being guessed — use the longer form (their full name with the spaces squeezed out). (5) YOU TAGGED AN AGENT ID: tags resolve against the human roster only — an agent id can never be tagged and starts no inbox entry. That is not a failure: \`@agent-<id>\` is a WAKE for that agent, on your operator's machine, and it is working as intended. For (2), (3) and (4), check dopl_channel(op="members", channel="${channelId}") and re-post with the handle spelled as it is listed there; if they are not on that list, they cannot be reached from this channel at all. (A server that does not resolve tags at all looks identical from here, so if the handle is plain prose and matches the roster, this is not yours to fix.)`;
 }
 
 /**
@@ -157,10 +292,22 @@ export function threadTagNote(channelId: string): string {
 }
 
 /**
- * The whole contribution of this module to a successful `post` result: the tag
- * REPORT when the caller wrote one, plus at most ONE standing line chosen by
- * where the post landed (read back off the stored message, never off what the
- * caller asked for).
+ * The whole contribution of this module to a successful `post` result: the
+ * per-mention BREAKDOWN and the tag REPORT when the caller wrote an `@…`, plus
+ * at most ONE standing line chosen by where the post landed (read back off the
+ * stored message, never off what the caller asked for).
+ *
+ * ⚠ **THE REPORT IS NOW GATED ON THERE BEING A MEMBER HANDLE TO REPORT ON**
+ * (2026-08-31). {@link tagOutcomeNote}'s zero branch is five paragraphs about
+ * roster spelling; over a body whose every token was an AGENT handle it answers
+ * a question the caller did not ask, in the voice of a defect, about the one
+ * thing they did right. The BREAKDOWN covers that body instead, and says the
+ * true thing about it. A body with BOTH kinds gets both lines, in that order:
+ * what each token is, then what became of the member half.
+ *
+ * ⚠ The breakdown does NOT replace {@link tagOutcomeNote} where a member handle
+ * failed. It says WHICH token could not be accounted for; that note says the
+ * five reasons and the remedy, and neither is derivable from the other.
  */
 export function postGuidanceLines({
   channelId,
@@ -171,15 +318,25 @@ export function postGuidanceLines({
   channelId: string;
   /** `metadata.taskId` off the STORED message — absent means the main room. */
   landedThread: string | undefined;
-  /** The body as posted; only ever inspected for an @-token, never rendered. */
+  /** The body as posted; inspected for @-tokens, and only the TOKENS are ever
+   *  rendered back (neutralized) — never the surrounding prose. */
   body: string;
   /** The STORED message, for the server's own mention resolution. */
   message: ChannelMessage;
 }): string[] {
   const tagged = bodyCarriesATag(body);
-  const lines = tagged
-    ? [tagOutcomeNote(channelId, resolvedMentionCount(message))]
-    : [];
+  const mentions = classifyMentions(body);
+  const resolved = resolvedMentionCount(message);
+  const lines: string[] = [];
+  const breakdown = mentionBreakdownLine(mentions, resolved);
+  if (breakdown) lines.push(breakdown);
+  // ⚠ `bodyCarriesATag` still gates, and it is the WIDER of the two predicates:
+  // it fires on any `@x`, including a token `classifyMentions` reports as a
+  // member handle and one it reports as an agent one. The second conjunct is
+  // what stops the roster paragraph printing over an agent-only body.
+  if (tagged && mentions.some((m) => m.kind === "handle")) {
+    lines.push(tagOutcomeNote(channelId, resolved));
+  }
   if (!landedThread) lines.push(mainRoomPostNote(channelId));
   else if (!tagged) lines.push(threadTagNote(channelId));
   return lines;

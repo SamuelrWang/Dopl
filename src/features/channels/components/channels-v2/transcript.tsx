@@ -43,6 +43,7 @@
 import { cn } from "@/shared/lib/utils";
 import { AuthoredRow } from "./authored-row";
 import { ThreadCardMessage } from "./thread-card-row";
+import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
@@ -55,6 +56,8 @@ export function Transcript({
   launchBusy = false,
   onLaunchAgent,
   onOpenAgent,
+  onAnswerEscalation,
+  answerBusy = false,
   onOpenThread,
 }: {
   rows: TranscriptRow[];
@@ -91,6 +94,22 @@ export function Transcript({
    * `canLaunchAgent` above follows.
    */
   onOpenAgent?: (agentId: string) => void;
+  /**
+   * ANSWER an escalation card — post the pressed option back into this channel,
+   * which is what routes it to the asking agent.
+   *
+   * ⚠ ABSENT RENDERS NO BUTTONS AT ALL, never disabled ones (the rule
+   * `canLaunchAgent` above follows). The pop-out thread window and any other
+   * host with no write path hand none, and a card there reads as the record of a
+   * question rather than as a broken control.
+   *
+   * ⚠ IT TAKES THE ESCALATION'S OWN MESSAGE ID, not a thread or an agent. Who
+   * gets woken is the SERVER's derivation off that message's stamp — the client
+   * never names an agent, or this key would be a wake aimed anywhere.
+   */
+  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
+  /** An answer is in flight — the double-submit guard, not a capability. */
+  answerBusy?: boolean;
   onOpenThread: (id: string) => void;
 }) {
   if (rows.length === 0) {
@@ -128,6 +147,21 @@ export function Transcript({
               launchBusy={launchBusy}
               onLaunch={() => onLaunchAgent?.(row.openThreadId)}
               onOpen={() => onOpenThread(row.openThreadId)}
+            />
+          );
+        }
+        if (row.kind === "escalation") {
+          return (
+            <EscalationCardMessage
+              key={row.id}
+              row={row}
+              flash={row.id === flashId}
+              busy={answerBusy}
+              onAnswer={
+                onAnswerEscalation
+                  ? (optionIndex) => onAnswerEscalation(row.id, optionIndex)
+                  : undefined
+              }
             />
           );
         }

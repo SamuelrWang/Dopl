@@ -23,9 +23,10 @@
  * a guess (INVARIANTS §11 — UNKNOWN is not EMPTY).
  */
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { X } from "lucide-react";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
+import { authorMarker } from "@/features/agent-templates/components/template-picker";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { cn } from "@/shared/lib/utils";
@@ -40,10 +41,29 @@ import {
 import type { AgentLaunchPanel } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 
-/** A template row as the selector needs it — the read hook's shape, narrowed. */
+/**
+ * A template row as the selector needs it — the read hook's shape, narrowed.
+ *
+ * 🔒 ⚠ `marker` IS A SECURITY SIGNAL, NOT DECORATION, AND IT IS WHY THIS TYPE IS
+ * NOT `{id, name}` (RESTORED 2026-08-30 — ledger ASK-21, INVARIANTS §5A).
+ * A `team` / `workspace` template's instructions are another member's text about
+ * to run on this machine under this operator's credential. §5A: the marker is
+ * *"the ONLY signal shown to the human BEFORE the choice is made"* — and when
+ * this panel replaced the composer's template chevron on 2026-08-27 it narrowed
+ * the list to id + name, so the pre-choice signal was lost on the surface now
+ * taking most of the launch traffic. (`TemplateApprovalDialog` still fires on
+ * first use, so the FENCE held; what was lost is the warning before the click.)
+ *
+ * ⚠ IT IS `template-picker.tsx › authorMarker`'s ANSWER, never a second copy:
+ * an author the channel roster cannot name reads `by another member` rather than
+ * losing the marker, because dropping it would turn UNKNOWN into MINE.
+ * `null` = this operator's own template, which wears no marker (a marker over
+ * your own configuration is the noise that stops markers being read).
+ */
 export interface LaunchTemplateOption {
   id: string;
   name: string;
+  marker: string | null;
 }
 
 /** The blank-agent option's value. ⚠ `""` because `SelectMenu` is `<T extends string>`; it maps
@@ -64,7 +84,18 @@ export function AgentLaunchPanelView({
     // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration — it is what the Bot
     // icon spawned in one click for a year — so it is an option, not an empty state.
     { value: BLANK_TEMPLATE, label: "Blank agent" },
-    ...templates.map((t) => ({ value: t.id, label: t.name })),
+    // 🔒 ⚠ THE MARKER RIDES `description`, WHICH IS HOW IT REACHES THE ACCESSIBLE NAME.
+    // `MenuItem` renders `description` INSIDE the `role="menuitem"` button, so content-based
+    // naming puts "by <member>" in the row's accessible name as well as on its face — the same
+    // two places `template-picker.tsx › TemplateRow` puts it (there via `aria-label`, because
+    // that row hand-builds its own name). A screen-reader operator gets the same pre-choice
+    // signal a sighted one does. ⚠ `undefined`, never `""`: an empty description would render an
+    // empty second line under every own-template row.
+    ...templates.map((t) => ({
+      value: t.id,
+      label: t.name,
+      description: t.marker ?? undefined,
+    })),
   ];
 
   return (
@@ -174,14 +205,40 @@ export function AgentLaunchPanelView({
 export function ComposerLaunch({
   panel,
   workspaceId,
+  currentUserId,
+  members,
 }: {
   panel: AgentLaunchPanel;
   workspaceId: string;
+  /** Whose templates wear NO marker — everyone else's wear one. */
+  currentUserId: string;
+  /** The CHANNEL roster, for the marker's name half. ⚠ Not the workspace's: a
+   *  template shared by someone outside this channel resolves to no name and
+   *  degrades to "by another member" rather than disappearing — the same
+   *  argument `agents-tab.tsx` states over its own map. */
+  members: ReadonlyArray<{ userId: string; displayName: string | null; email: string | null }>;
 }) {
   // ⚠ NOT REQUESTED UNTIL THE PANEL IS OPEN, and it is the SAME cache entry the Agents tab and
   // the /home Agents face mount — a stable key on `[path, workspaceId, query]` (F-331), so two
   // mounts share one fetch. ⚠ READ-ONLY: this surface authors no template.
   const { templates } = useAgentTemplates(workspaceId, { enabled: panel.open });
+
+  const memberNames = useMemo(
+    () =>
+      new Map(members.map((m) => [m.userId, m.displayName || m.email || ""] as const)),
+    [members]
+  );
+  // 🔒 THE MARKER IS ATTACHED HERE, BESIDE THE READ, so the view takes rows that already carry
+  // the signal and there is no arm of it that renders a template without one (ledger ASK-21).
+  const options = useMemo(
+    () =>
+      templates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        marker: authorMarker(t, currentUserId, memberNames),
+      })),
+    [templates, currentUserId, memberNames]
+  );
 
   return (
     <div
@@ -194,7 +251,7 @@ export function ComposerLaunch({
     >
       <div className="overflow-hidden" inert={!panel.open}>
         <div className="pb-2">
-          <AgentLaunchPanelView panel={panel} templates={templates} />
+          <AgentLaunchPanelView panel={panel} templates={options} />
         </div>
       </div>
     </div>

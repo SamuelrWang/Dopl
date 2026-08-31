@@ -15,6 +15,7 @@ import {
   ChannelSlugConflictError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
+  EscalationAlreadyAnsweredError,
 } from "./errors";
 import {
   INFO_CARD_MAX_BYTES,
@@ -457,6 +458,20 @@ export async function postMessage(
     // index is `(channel_id, client_msg_id, author_user_id)`, so a `23505` here
     // can only be this author's own concurrent retry; another member's row on
     // the same key no longer collides at all.
+    // ⚠ THE ESCALATION INDEX IS THE SECOND WAY THIS TABLE CAN 23505, AND IT IS
+    // CHECKED FIRST BECAUSE IT IS THE ONE WITH A NAME. `channel_messages` now
+    // also carries a partial unique index over the answered escalation id, so a
+    // second answer collides — and converging it onto the FIRST answer, the way
+    // an idempotency retry converges, would report somebody else's decision back
+    // as this caller's own. It is a 409 with a sentence instead.
+    if (
+      repo.pgErrorCode(err) === UNIQUE_VIOLATION &&
+      input.escalationAnswer
+    ) {
+      throw new EscalationAlreadyAnsweredError(
+        input.escalationAnswer.escalationMessageId
+      );
+    }
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
       const raced = await repoMessages.findOwnMessageByClientId(
         channel.id,

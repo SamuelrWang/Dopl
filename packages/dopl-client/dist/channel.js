@@ -29,6 +29,9 @@ exports.createChannelThread = createChannelThread;
 exports.setChannelThreadMode = setChannelThreadMode;
 exports.createLaunchDirective = createLaunchDirective;
 exports.getLaunchDirective = getLaunchDirective;
+exports.createAgentDirection = createAgentDirection;
+exports.getAgentDirection = getAgentDirection;
+exports.listAgentDirections = listAgentDirections;
 const enc = encodeURIComponent;
 /** Network read-timeout for the long-poll — above the server cap. */
 const AWAIT_TIMEOUT_MS = 55_000;
@@ -268,4 +271,36 @@ async function createLaunchDirective(t, input) {
 async function getLaunchDirective(t, id) {
     const data = await t.request(`/api/channels/launch-directives/${enc(id)}`, { toolName: "channel_launch_poll" });
     return data.directive;
+}
+// ── THE PRIVATE DIRECT LANE (2026-08-31) ───────────────────────────────────
+//
+// ⚠ THE SIBLING OF THE LAUNCH MAILBOX ABOVE, AND NOT A MODE OF IT. A launch asks
+// for a PROCESS; a direction asks an EXISTING one to hear something privately.
+// ⚠ `claim` AND `decide` ARE DELIBERATELY ABSENT, exactly as they are for
+// launches: those two routes are consumed only by the DESKTOP, which addresses
+// them by path from `main/agent-direction-wire.js`. Binding them on this client
+// would publish verbs the MCP surface must never be able to reach.
+async function createAgentDirection(t, input) {
+    return t.request("/api/channels/agent-directions", {
+        method: "POST",
+        body: input,
+        toolName: "channel_direct_agent",
+    });
+}
+async function getAgentDirection(t, id) {
+    const data = await t.request(`/api/channels/agent-directions/${enc(id)}`, { toolName: "channel_direct_poll" });
+    return data.direction;
+}
+/** The caller's own recent directions — what `op="read_directions"` renders.
+ *  ⚠ TERMINAL ROWS INCLUDED, unlike the desktop's backstop read: the `reply` is
+ *  the whole reason this op exists. */
+async function listAgentDirections(t, query = {}) {
+    const params = new URLSearchParams();
+    if (query.channel)
+        params.set("channel", query.channel);
+    if (query.agent)
+        params.set("agent", query.agent);
+    const qs = params.toString();
+    const data = await t.request(`/api/channels/agent-directions/recent${qs ? `?${qs}` : ""}`, { toolName: "channel_read_directions" });
+    return data.directions;
 }

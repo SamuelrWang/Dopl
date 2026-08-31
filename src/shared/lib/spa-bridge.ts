@@ -85,6 +85,20 @@ export interface SpaBridgeSurface {
     set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
   };
   /**
+   * DIRECTING AGENTS OVER MCP — the PRIVATE DIRECT LANE's standing consent
+   * (2026-08-31). ⚠ **EVERY WORD OF `orchestratorLaunch`'s block above applies**, and it is a
+   * SEPARATE grant rather than a second spelling: launching buys COMPUTE, directing reaches a
+   * RUNNING agent's private lane and starts a turn in it. Default OFF, machine-wide, never
+   * server state, both members feature-probed, `set` answers main's own value.
+   * ⚠ IT DECIDES WHETHER A DIRECTION IS DELIVERED, NEVER WHAT THE AGENT MAY THEN DO — a
+   * directed turn runs inside the session's existing profile, both axes and the hard-deny
+   * floor, with the private-turn gate withdrawing AXIS B's outbound widening for its duration.
+   */
+  orchestratorDirect?: {
+    get(): Promise<{ enabled: boolean }>;
+    set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
+  };
+  /**
    * SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the auth
    * recovery flow, and the reason the "waiting for you to sign in" banner is now
    * answerable rather than merely true.

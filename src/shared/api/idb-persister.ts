@@ -67,35 +67,114 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    // ⚠ EVERY OPEN MUST SETTLE (2026-08-30). `onblocked` fires when another
+    // connection holds an older version open, and with no handler this promise
+    // never settled — taking with it the caller's whole dehydrated snapshot and,
+    // under the write storm below, one such orphan per cache event.
+    req.onblocked = () =>
+      reject(new Error("indexedDB open blocked by another connection"));
   });
+}
+
+/**
+ * ONE CONNECTION, REUSED. `openDb()` per operation was a fresh `indexedDB.open()`
+ * on every write, and the writes are per cache EVENT (see `persistClient`), so a
+ * failing-query storm opened connections faster than they could be closed.
+ * Invalidated whenever the handle stops being usable, so a caller never gets a
+ * dead one.
+ */
+let dbHandle: Promise<IDBDatabase> | null = null;
+
+function db(): Promise<IDBDatabase> {
+  if (dbHandle) return dbHandle;
+  dbHandle = openDb().then(
+    (handle) => {
+      handle.onclose = () => {
+        dbHandle = null;
+      };
+      // Another context is upgrading: let go rather than block it forever.
+      handle.onversionchange = () => {
+        handle.close();
+        dbHandle = null;
+      };
+      return handle;
+    },
+    (err) => {
+      dbHandle = null;
+      throw err;
+    }
+  );
+  return dbHandle;
 }
 
 async function withStore<T>(
   mode: IDBTransactionMode,
   op: (store: IDBObjectStore) => IDBRequest<T>
 ): Promise<T> {
-  const db = await openDb();
+  const handle = await db();
   try {
     return await new Promise<T>((resolve, reject) => {
-      const tx = db.transaction(STORE, mode);
+      const tx = handle.transaction(STORE, mode);
       const req = op(tx.objectStore(STORE));
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
-  } finally {
-    db.close();
+  } catch (err) {
+    // A transaction that fails because the CONNECTION is gone must not leave the
+    // dead handle cached for the next caller.
+    dbHandle = null;
+    throw err;
   }
 }
 
-/** Create the persister; call only in the browser. */
+/**
+ * Create the persister; call only in the browser.
+ *
+ * ⚠ THE WRITE IS COALESCED, AND THAT IS A BOUND, NOT AN OPTIMISATION (2026-08-30,
+ * the desktop abort-churn incident). `persistQueryClientSubscribe` calls
+ * `persistClient` on EVERY QueryCache and MutationCache event — added, removed,
+ * updated — and it does NOT await the result, throttle it, or offer an option to.
+ * Each call is a full synchronous `dehydrate()` of the entire cache, so a storm of
+ * failing queries (fetching → error → retry → error, times every mounted observer)
+ * produced one complete snapshot per transition, all of them in flight at once,
+ * each retaining its own deep copy of the cache until its IndexedDB transaction was
+ * scheduled. `queryClient.clear()` is the worst case in one gesture: it emits one
+ * `removed` event per query, so a single clear meant N unawaited snapshots.
+ *
+ * Latest-wins, one in flight: what reaches disk is always the newest state, the
+ * retained snapshots are bounded at TWO (the one being written and the one queued),
+ * and the intermediate snapshots — which nothing could ever read, since each is
+ * superseded microseconds later — are dropped instead of written.
+ */
 export function createIdbPersister(): Persister {
+  // The newest snapshot nobody has written yet. Overwritten, never queued: a
+  // queue of superseded snapshots is the accumulation this replaces.
+  let queued: PersistedClient | null = null;
+  let draining: Promise<void> | null = null;
+
+  const drain = async () => {
+    try {
+      while (queued) {
+        const next = queued;
+        queued = null; // ⚠ take it BEFORE the await, or a write landing during the
+        // await would be dropped as "already written".
+        try {
+          await withStore("readwrite", (s) => s.put(next, KEY));
+        } catch {
+          // Quota/corruption/dead connection — skip this snapshot; the cache is
+          // best-effort and the next event brings a fresher one.
+        }
+      }
+    } finally {
+      draining = null;
+    }
+  };
+
   return {
     persistClient: async (client: PersistedClient) => {
-      try {
-        await withStore("readwrite", (s) => s.put(client, KEY));
-      } catch {
-        // Quota/corruption — skip this snapshot; cache is best-effort.
-      }
+      queued = client;
+      if (!draining) draining = drain();
+      return draining;
     },
     restoreClient: async () => {
       try {

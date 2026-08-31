@@ -164,3 +164,21 @@ export type {
   LaunchDirectiveCreated,
   LaunchRefusalReason,
 } from "./launch-types.js";
+
+// THE PRIVATE DIRECT LANE's types — their own module since 2026-08-31, for the
+// same reason. ⚠ Re-exported here unchanged, so no consumer moved.
+export type {
+  AgentDirection,
+  AgentDirectionCreateInput,
+  AgentDirectionCreated,
+  DirectionRefusalReason,
+} from "./direction-types.js";
+
+// STRUCTURED ESCALATION types — their own module since 2026-08-31, for the same
+// reason. ⚠ Re-exported here unchanged, so no consumer moved.
+export type {
+  ChannelEscalationAnswerInput,
+  ChannelEscalationFields,
+  ChannelEscalationInput,
+  ChannelEscalationOption,
+} from "./escalation-types.js";

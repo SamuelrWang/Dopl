@@ -99,6 +99,8 @@ async function opPost(client, channelRef, body, opts = {}) {
             // ⚠ Omitted `intent` means `request` and stamps NO metadata key
             // (service-writes-metadata.ts).
             intent: opts.intent,
+            // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
+            escalation: opts.escalation,
         });
     }
     catch (e) {

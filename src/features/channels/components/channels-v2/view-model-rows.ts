@@ -23,7 +23,20 @@ import {
   type ReceiptStatus,
 } from "../../lib/message-receipt";
 import { parseAgentPostStamp } from "./agents-model";
-import { fanoutGroupOf, threadIdOf, type AuthorIndex } from "./view-model";
+import {
+  fanoutGroupOf,
+  labelFor,
+  personFor,
+  threadIdOf,
+  type AuthorIndex,
+} from "./view-model";
+// ⚠ THE ESCALATION HALF IS ITS OWN MODULE (§1 split, 2026-08-31) — it moves when
+// the escalation product moves, this file when a MESSAGE row's shape moves.
+import {
+  answersByEscalation,
+  escalationRowFor,
+  type EscalationRow,
+} from "./view-model-escalation";
 import type { ChannelMessage, ChannelThread } from "../../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
@@ -203,36 +216,8 @@ export type TranscriptRow =
   | MessageRow
   | SystemRow
   | ThreadCardRow
-  | ReceiptRow;
-
-/** An `AvatarPerson` for a message author, from the roster when it is there and
- *  from the message's own hydrated display fields when it is not (a departed
- *  member still owns their history). */
-function personFor(
-  message: ChannelMessage,
-  index: AuthorIndex
-): AvatarPerson {
-  const member = message.authorUserId
-    ? index.byId.get(message.authorUserId)
-    : undefined;
-  return {
-    userId: message.authorUserId ?? `unknown-${message.id}`,
-    email: member?.email ?? null,
-    displayName: member?.displayName ?? message.authorName,
-    avatarUrl: member?.avatarUrl ?? message.authorAvatarUrl,
-  };
-}
-
-/** "You" for the viewer, else the roster name, else whatever the row carried. */
-function labelFor(message: ChannelMessage, index: AuthorIndex): string {
-  if (message.authorUserId === index.currentUserId) return "You";
-  const member = message.authorUserId
-    ? index.byId.get(message.authorUserId)
-    : undefined;
-  return (
-    member?.displayName ?? member?.email ?? message.authorName ?? "Member"
-  );
-}
+  | ReceiptRow
+  | EscalationRow;
 
 /**
  * Same author, same agent-claim AND same agent INSTANCE as the row above → a
@@ -364,6 +349,7 @@ export function channelRows(
 ): TranscriptRow[] {
   const threadById = new Map(threads.map((t) => [t.id, t]));
   const groups = groupThreads(messages, threadById);
+  const answers = answersByEscalation(messages, index);
   const openerSeen = new Set<string>();
   const rows: TranscriptRow[] = [];
   let previous: ChannelMessage | null = null;
@@ -371,6 +357,20 @@ export function channelRows(
   for (const message of messages) {
     const threadId = threadIdOf(message);
     const thread = threadId ? threadById.get(threadId) : undefined;
+    // ⚠ AN ESCALATION IS CHECKED BEFORE THE THREAD BRANCH AND STAYS IN THE
+    // CHANNEL VIEW EVEN WHEN IT IS THREADED. A threaded message normally
+    // collapses into its thread CARD here — but a question waiting on a human is
+    // the one row that must not be one click away from being seen, and it is a
+    // card in its own right rather than an exchange to open. It renders in BOTH
+    // views, deliberately, which is the only duplication this builder allows.
+    const escalationRow = escalationRowFor(message, index, answers, formatTime);
+    if (escalationRow) {
+      rows.push(escalationRow);
+      // ⚠ `previous = null` for `ThreadCardRow`'s reason (F-251): a card has no
+      // pill, so leaving the run open would absorb the next message into it.
+      previous = null;
+      continue;
+    }
     if (isLifecycleKind(message)) {
       // ⚠ A receipt for a KNOWN thread belongs to THAT thread's transcript, by
       // the same rule the thread's other messages follow — the channel shows
@@ -425,9 +425,16 @@ export function threadRows(
   formatTime: (iso: string) => string
 ): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
+  const answers = answersByEscalation(messages, index);
   let previous: ChannelMessage | null = null;
   for (const message of messages) {
     if (threadIdOf(message) !== threadId) continue;
+    const escalationRow = escalationRowFor(message, index, answers, formatTime);
+    if (escalationRow) {
+      rows.push(escalationRow);
+      previous = null;
+      continue;
+    }
     if (isLifecycleKind(message)) {
       const receipt = toReceiptRow(message, formatTime);
       if (receipt) rows.push(receipt);

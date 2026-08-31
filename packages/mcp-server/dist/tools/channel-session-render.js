@@ -40,6 +40,9 @@ exports.formatSessionLine = formatSessionLine;
 exports.sessionLegend = sessionLegend;
 exports.sessionBlockLines = sessionBlockLines;
 const channel_shared_1 = require("./channel-shared");
+// ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
+// reason to change). See `channel-session-handle.ts`'s header.
+const channel_session_handle_1 = require("./channel-session-handle");
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
@@ -323,7 +326,14 @@ function formatSessionLine(s, opts = {}) {
         ? telemetryClauses(s, now)
         : [];
     const tail = extra.length > 0 ? ` · ${extra.join(" · ")}` : "";
-    return `- **${(0, channel_shared_1.inlineOr)(s.name, NO_NAME)}** — ${head}${detail}${on}${where}${tail}`;
+    // ⚠ THE HANDLE RIDES IN THE HEAD, NOT THE TAIL (2026-08-31). Everything after
+    // the em dash is STATE, and a caller skimming for "which of these can I talk
+    // to" reads the bold head; an address in the telemetry tail is the clause a
+    // model drops first. ⚠ A row whose name is NOT an agent id prints NOTHING
+    // extra rather than a plausible-looking handle — see {@link addressableHandle}.
+    const at = opts.handle ? (0, channel_session_handle_1.addressableHandle)(s.name) : null;
+    const address = at ? ` (\`${at}\`)` : "";
+    return `- **${(0, channel_shared_1.inlineOr)(s.name, NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 /**
  * THE LEGEND under a set of session lines. One sentence per thing a reader
@@ -385,7 +395,10 @@ operatorOnline) {
     const anyStale = sessions.some((s) => sessionIsStale(s, now));
     const lines = [``, `### Your agents — ${sessions.length}`];
     for (const s of sessions) {
-        lines.push(formatSessionLine(s, { telemetry: true, now, operatorOnline }));
+        // ⚠ `handle: true` — own-scoped by construction (`ChannelSessionStateOwn`,
+        // and the await route reads the caller's own rows). See
+        // {@link SessionRenderOpts.handle} for why it is not the telemetry flag.
+        lines.push(formatSessionLine(s, { telemetry: true, handle: true, now, operatorOnline }));
     }
     if (anyStale) {
         // ⚠ Same branch the lines above took, for the reason `sessionLegend` states:

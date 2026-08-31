@@ -42,9 +42,10 @@
  * deliberately NOT in `layout-shell.tsx › NON_WORKSPACE_ROOTS` — that branch
  * renders a centred container, which is the wrong shape for a full-viewport
  * surface — so the shell renders children bare AND paints the body with the app
- * rail's `#2c3640`. `h-[100dvh]` supplies the bounded flex parent every pane
+ * FRAME ink (`--home-frame`; it was a literal `#2c3640` until 2026-08-30).
+ * `h-[100dvh]` supplies the bounded flex parent every pane
  * below measures against (nothing in the Next tree does), and `bg-bg-elevated`
- * is the panel-surface token that overrides the rail colour. `dvh`, not `vh`:
+ * is the panel-surface token that overrides the frame colour. `dvh`, not `vh`:
  * a mobile browser's collapsing URL bar otherwise crops the composer.
  */
 

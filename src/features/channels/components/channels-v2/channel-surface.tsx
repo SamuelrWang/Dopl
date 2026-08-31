@@ -189,7 +189,6 @@ export function ChannelSurface({
     gate,
   } = data;
   const channelName = channelDisplayName(channel, members, currentUserId);
-
   // ⚠ THE PANEL OUTLIVES `infoOpen` BY ONE TRANSITION, so the closing slide has
   // something to clip; the shell it sits in is always rendered (see the JSX).
   // Presentation only — `sel.infoOpen` stays the single source of truth for the
@@ -333,6 +332,11 @@ export function ChannelSurface({
         // (`overlays.tsx` on the workspace page, the panel inside
         // `channel-surface-standalone.tsx` everywhere else).
         onOpenAgent={sel.setOpenAgent}
+        // ANSWER AN ESCALATION — the transcript's one WRITE, and the only place
+        // an option button can reach a mutation. `message-pane.tsx` passes it
+        // straight down; the pop-out hands none, so a card there is read-only.
+        onAnswerEscalation={data.answerEscalation}
+        answerBusy={data.answerBusy}
         onOpenThread={sel.openThread}
       />
       {/* THE INFO COLUMN SLIDES (Samuel, 2026-08-24). The shell is ALWAYS

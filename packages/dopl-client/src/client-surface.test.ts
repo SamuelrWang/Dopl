@@ -100,6 +100,18 @@ const PUBLIC_SURFACE = [
   // them here would put "claim another machine's directive" and "enumerate my
   // operator's launch queue" on the SDK every MCP tool holds.
   "getLaunchDirective",
+  // THE PRIVATE DIRECT LANE (2026-08-31): file a direction, poll the row, list my own.
+  // ⚠ EXACTLY THREE METHODS, AND THE OMISSIONS ARE THE SAME POINT ONE LANE OVER — CLAIM and
+  // DECIDE are the DESKTOP's, reached from `main/agent-directions.js` over its own
+  // authenticated fetch. Publishing them here would put "claim another machine's direction" on
+  // the SDK every MCP tool holds, and — sharper than on the launch lane — would let a tool
+  // WRITE the `reply` an operator reads as their own agent's words.
+  // ⚠ A THIRD METHOD WHERE LAUNCH HAS TWO, deliberately: a direction has no second surface. A
+  // launch's answer is findable in `read_sessions`; a direction's answer IS the row, so without
+  // a list a timed-out hold would strand it forever.
+  "createAgentDirection",
+  "getAgentDirection",
+  "listAgentDirections",
   "getChannelThread",
   "getChat",
   "getHomeChannels",

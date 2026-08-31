@@ -317,8 +317,13 @@ describe("what Launch puts on the wire", () => {
   });
 
   it("a CHOSEN template rides as its id — the chevron's job, in a row", async () => {
+    // ⚠ `createdBy: ME` so the row wears NO authorship marker and its accessible
+    // name is the bare template name. A foreign template's name carries "by …"
+    // since 2026-08-30 (ledger ASK-21) — that is `composer-launch-marker.test.tsx`'s
+    // subject, and pinning it here too would make this case fail for a reason
+    // that has nothing to do with what rides the wire.
     templateList.templates = [
-      { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1" },
+      { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
     const controls = launcher();
     mount({ newAgent: controls });

@@ -9,7 +9,6 @@ import type { KnowledgeBase, KnowledgeBaseStats } from "../../../types";
 import type { ListFilter } from "../types";
 import { SCOPE_FILTERS } from "../list-filters";
 import { BaseCard } from "./base-card";
-import { HeroChat } from "./hero-chat";
 import styles from "../knowledge-v2.module.css";
 
 interface Props {
@@ -95,10 +94,15 @@ export function KnowledgeHome({
         <SearchField value={query} onChange={onQueryChange} className="w-64" />
       </div>
 
-      {/* Decorative banner, so the image is alt="".
-          ⚠ CHAT IS PART OF THE HERO, not a sibling — one rounded container,
-          image band on top, gray panel below. Hence inside this guard: no
-          bundled image means no hero AND no floating chat box. */}
+      {/* Decorative banner, so the image is alt="". Absent image = no hero.
+          ⚠ THE HERO CHAT THAT HUNG UNDER THIS BAND IS DELETED (Samuel's ruling,
+          2026-08-30 — ledger ASK-5). It was 215 lines of composer wired to
+          NOTHING: its own docblock said "DESIGN ONLY… Send appends a HARDCODED
+          reply", and one of its hints shipped an internal note to the user. A
+          non-functional chat on a workspace page teaches people the product is
+          fake. **Do not re-add one here** — a chat on this surface means a real
+          one, over real reads, or none. The band itself is unchanged: the hero
+          is now the single image band it always drew. */}
       {heroImageSrc && (
         <div className={styles.homeHero}>
           <div className={styles.homeHeroBand}>
@@ -120,7 +124,6 @@ export function KnowledgeHome({
               </div>
             </LiquidGlass>
           </div>
-          <HeroChat />
         </div>
       )}
 

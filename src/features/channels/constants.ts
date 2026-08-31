@@ -280,3 +280,20 @@ export const AWAIT_REVALIDATE_EVERY_TICKS = 10;
  * observe.
  */
 export const LAUNCH_DIRECTIVE_TTL_MS = 120_000;
+
+/**
+ * HOW LONG A PRIVATE DIRECTION STAYS ANSWERABLE (2026-08-31).
+ *
+ * ⚠ **LONGER THAN A LAUNCH'S, AND THE DIFFERENCE IS THE WORK, NOT THE PATIENCE.**
+ * A launch is answered by a process START — a machine either has a free slot now
+ * or does not. A direction is answered by a TURN: the agent has to read the
+ * direction, possibly use tools, and produce a final text, and that is minutes of
+ * real work on a busy session where the direction queues behind a turn already in
+ * flight (`priority: 'next'`).
+ *
+ * ⚠ IT IS STILL A LIVENESS BOUND, NOT A PATIENCE ONE, and it is deliberately far
+ * longer than the MCP op's own hold (default 15s, cap 30s): the hold timing out is
+ * NOT the direction expiring, and the op says so. Enforced LAZILY at read time in
+ * `service-directions.ts › toDirection`; **there is no cron.**
+ */
+export const AGENT_DIRECTION_TTL_MS = 600_000;

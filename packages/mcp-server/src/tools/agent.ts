@@ -47,12 +47,39 @@ const AGENT_ADMIN_DESCRIPTION = deleteAdminDescription(
   `Reach for instead: \`dopl_agent\` op=update with visibility="private" takes a template out of everyone else's reach without destroying it, and op=update can rewrite its instructions in place. If it genuinely has to go, ask the user to delete it in the Dopl app.`,
 );
 
+/**
+ * ⚠ THE SERVER'S BOUNDS, RE-TYPED — and NAMED since 2026-08-30 (G3).
+ *
+ * The MCP package cannot import from `src/`, so every one of these numbers is a
+ * hand copy of `src/features/agent-templates/schema.ts`, which is itself paired
+ * with a `CHECK` in `supabase/migrations/20260822200000_agent_templates.sql`.
+ * They were BARE LITERALS scattered through the tool schema below, which made
+ * them invisible to a reader and to a grep alike — the drift-ledger's own
+ * example of a mirror with no gate.
+ *
+ * ⚠ THESE ARE THE ARGUMENT BOUNDS, NOT THE AUTHORITY. A value that gets past
+ * them still meets the route's zod and the column's CHECK; their job is to name
+ * the field and the number in a `-32602` before a round trip, the same argument
+ * `shelf.ts` makes for its enum. **The MIGRATION wins** — pinned from the other
+ * side by `src/features/agent-templates/schema-sql.test.ts`, which reads this
+ * file too.
+ */
+const MAX_NAME_CHARS = 120;
+const MAX_DESCRIPTION_CHARS = 2000;
+const MAX_INSTRUCTIONS_CHARS = 32_768;
+const MAX_MODEL_CHARS = 120;
+const MAX_FIELD_COUNT = 50;
+const MAX_FIELD_KEY_CHARS = 80;
+const MAX_FIELD_VALUE_CHARS = 1000;
+/** Same bound the server's `KnowledgeBaseIdsSchema` carries. */
+const MAX_KNOWLEDGE_BASE_IDS = 50;
+
 /** One custom field. ⚠ BOTH halves are short LABELS — they are spliced into the
  *  launch payload an agent reads back, line by line, so the server's own schema
  *  charset-bounds them and rejects a newline in either. */
 const FIELD_SHAPE = z.object({
-  key: z.string().min(1).max(80),
-  value: z.string().max(1000),
+  key: z.string().min(1).max(MAX_FIELD_KEY_CHARS),
+  value: z.string().max(MAX_FIELD_VALUE_CHARS),
 });
 
 export function registerAgentTools(
@@ -81,18 +108,18 @@ export function registerAgentTools(
       name: z
         .string()
         .min(1)
-        .max(120)
+        .max(MAX_NAME_CHARS)
         .optional()
         .describe("op=create (required) / op=update: the template's name. Names are deliberately NOT unique."),
       description: z
         .string()
-        .max(2000)
+        .max(MAX_DESCRIPTION_CHARS)
         .nullable()
         .optional()
         .describe("op=create / op=update: short human-facing description. null clears it."),
       instructions: z
         .string()
-        .max(32_768)
+        .max(MAX_INSTRUCTIONS_CHARS)
         .nullable()
         .optional()
         .describe(
@@ -100,7 +127,7 @@ export function registerAgentTools(
         ),
       model: z
         .string()
-        .max(120)
+        .max(MAX_MODEL_CHARS)
         .nullable()
         .optional()
         .describe(
@@ -108,7 +135,7 @@ export function registerAgentTools(
         ),
       fields: z
         .array(FIELD_SHAPE)
-        .max(50)
+        .max(MAX_FIELD_COUNT)
         .optional()
         .describe(
           "op=create / op=update: custom {key, value} pairs carried into the launch payload. REPLACE-SET — passing [] empties it, omitting leaves it alone.",
@@ -121,7 +148,7 @@ export function registerAgentTools(
         ),
       knowledge_bases: z
         .array(z.string().uuid())
-        .max(50)
+        .max(MAX_KNOWLEDGE_BASE_IDS)
         .optional()
         .describe(
           "op=create / op=update: knowledge base IDs to attach, as REFERENCES (never copies). REPLACE-SET. Every id must be one you can read — an id you cannot read answers the same way an unknown id does.",

@@ -47,6 +47,19 @@ interface PostOptions {
      * this op does — only what the result may claim about waiting for the reply.
      */
     runtime?: string | null;
+    /**
+     * THE STRUCTURED ESCALATION PAYLOAD, set only by `op="escalate"`.
+     *
+     * ⚠ IT RIDES THIS OP RATHER THAN GROWING A SECOND DELIVERY PATH — `milestone`'s
+     * precedent exactly. What `escalate` adds over `post` is a validated payload
+     * and its own result guidance; the message, the addressing, the 4xx mapping
+     * and every result line below are the same ones.
+     *
+     * ⚠ NOT `metadata`. The server strips `metadata.escalation` from caller input
+     * unconditionally and re-stamps it only from this validated field, because the
+     * card it renders carries buttons that write back and wake an agent.
+     */
+    escalation?: ChannelMessageInput["escalation"];
 }
 export declare function opPost(client: DoplClient, channelRef: string, body: string, opts?: PostOptions): Promise<ToolResponse>;
 export {};

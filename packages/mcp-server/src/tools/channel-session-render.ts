@@ -38,10 +38,14 @@ import type {
   SessionDetailKey,
 } from "@dopl/client";
 import { inlineOr } from "./channel-shared";
+// ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
+// reason to change). See `channel-session-handle.ts`'s header.
+import { addressableHandle } from "./channel-session-handle";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
+
 
 /**
  * ⚠ `state` is spliced into SERVER NARRATION, not a code span, so it must pass
@@ -288,6 +292,19 @@ export interface SessionRenderOpts {
   telemetry?: boolean;
   now?: number;
   operatorOnline?: boolean;
+  /**
+   * Render the row's ADDRESSABLE HANDLE (2026-08-31).
+   *
+   * ⚠ **OWN ROWS ONLY, AND IT IS ITS OWN FLAG RATHER THAN A READ OF
+   * {@link SessionRenderOpts.telemetry}.** An agent id is a WAKE TOKEN on the
+   * operator's machine — tier 1 is "at any roster size" and a peer HUMAN who
+   * knows the id can wake my agent with it (INVARIANTS §11) — so which handles a
+   * result publishes is an AUDIENCE decision, not a verbosity one. Overloading
+   * the telemetry flag would tie the two together, and the next caller that
+   * wants a compact own-row page would silently withdraw the handle. Both
+   * production call sites are own-scoped and pass it explicitly.
+   */
+  handle?: boolean;
 }
 
 /**
@@ -362,7 +379,14 @@ export function formatSessionLine(
       : [];
   const tail = extra.length > 0 ? ` · ${extra.join(" · ")}` : "";
 
-  return `- **${inlineOr(s.name, NO_NAME)}** — ${head}${detail}${on}${where}${tail}`;
+  // ⚠ THE HANDLE RIDES IN THE HEAD, NOT THE TAIL (2026-08-31). Everything after
+  // the em dash is STATE, and a caller skimming for "which of these can I talk
+  // to" reads the bold head; an address in the telemetry tail is the clause a
+  // model drops first. ⚠ A row whose name is NOT an agent id prints NOTHING
+  // extra rather than a plausible-looking handle — see {@link addressableHandle}.
+  const at = opts.handle ? addressableHandle(s.name) : null;
+  const address = at ? ` (\`${at}\`)` : "";
+  return `- **${inlineOr(s.name, NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 
 /**
@@ -431,7 +455,12 @@ export function sessionBlockLines(
   const anyStale = sessions.some((s) => sessionIsStale(s, now));
   const lines = [``, `### Your agents — ${sessions.length}`];
   for (const s of sessions) {
-    lines.push(formatSessionLine(s, { telemetry: true, now, operatorOnline }));
+    // ⚠ `handle: true` — own-scoped by construction (`ChannelSessionStateOwn`,
+    // and the await route reads the caller's own rows). See
+    // {@link SessionRenderOpts.handle} for why it is not the telemetry flag.
+    lines.push(
+      formatSessionLine(s, { telemetry: true, handle: true, now, operatorOnline }),
+    );
   }
   if (anyStale) {
     // ⚠ Same branch the lines above took, for the reason `sessionLegend` states:

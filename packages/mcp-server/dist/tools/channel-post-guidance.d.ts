@@ -57,6 +57,26 @@ export declare function bodyCarriesATag(body: string): boolean;
  * rather than being trusted.
  */
 export declare function resolvedMentionCount(message: ChannelMessage): number;
+export type MentionKind = "agent" | "handle";
+export type MentionToken = {
+    token: string;
+    kind: MentionKind;
+};
+/**
+ * Every `@…` in the body, in order, de-duplicated, classified by SHAPE.
+ * ⚠ De-duplicated because the report is about which ADDRESSES were written, not
+ * how many times; a body naming one agent four times has one address in it.
+ */
+export declare function classifyMentions(body: string): MentionToken[];
+/**
+ * THE PER-MENTION REPORT — one line, or none when the body carried no `@…`.
+ *
+ * ⚠ EVERY CLAUSE IS SOMETHING THIS SERVER ACTUALLY KNOWS. The agent half is a
+ * SHAPE judgement plus the LAW (which is this tool's own rule, not a guess about
+ * another machine); the human half is the server's own stamped count. Nothing
+ * here asserts that a particular token reached a particular reader.
+ */
+export declare function mentionBreakdownLine(mentions: MentionToken[], resolved: number): string | null;
 /**
  * THE REPORT: the caller wrote an `@…`, so say what became of it. This is the
  * one line in the phase that catches a SILENT failure — a misspelled handle
@@ -87,6 +107,15 @@ export declare function resolvedMentionCount(message: ChannelMessage): number;
  *      ⚠ It carries NO roster remedy on purpose: the remedy sentence names
  *      (2), (3) and (4), and pointing this one at the member list is exactly
  *      the wrong turn that made it worth naming.
+ *      ⚠ **AND ITS SECOND SENTENCE WAS CORRECTED ON 2026-08-31.** It said
+ *      `@<agentid>` "is a WAKE for that agent's machine" — true of a HUMAN
+ *      writing it and false of the agent reading this line, which is the only
+ *      audience it has. An agent-authored post wakes nobody, so the copy was
+ *      telling every caller that the thing it had just done had worked. It now
+ *      says who may spend the handle. ⚠ AND THIS BRANCH NO LONGER FIRES AT ALL
+ *      for a body whose only tokens were agent handles — see
+ *      {@link postGuidanceLines}: five causes about roster spelling, printed
+ *      over a body that named no member, IS the mis-narration, not a fix for it.
  *
  * ⚠ SELF-TAGGING IS NO LONGER A CAUSE, and the removal is the point. The server
  * used to drop the AUTHOR unconditionally, so an agent tagging its own operator
@@ -123,16 +152,29 @@ export declare function mainRoomPostNote(channelId: string): string;
  */
 export declare function threadTagNote(channelId: string): string;
 /**
- * The whole contribution of this module to a successful `post` result: the tag
- * REPORT when the caller wrote one, plus at most ONE standing line chosen by
- * where the post landed (read back off the stored message, never off what the
- * caller asked for).
+ * The whole contribution of this module to a successful `post` result: the
+ * per-mention BREAKDOWN and the tag REPORT when the caller wrote an `@…`, plus
+ * at most ONE standing line chosen by where the post landed (read back off the
+ * stored message, never off what the caller asked for).
+ *
+ * ⚠ **THE REPORT IS NOW GATED ON THERE BEING A MEMBER HANDLE TO REPORT ON**
+ * (2026-08-31). {@link tagOutcomeNote}'s zero branch is five paragraphs about
+ * roster spelling; over a body whose every token was an AGENT handle it answers
+ * a question the caller did not ask, in the voice of a defect, about the one
+ * thing they did right. The BREAKDOWN covers that body instead, and says the
+ * true thing about it. A body with BOTH kinds gets both lines, in that order:
+ * what each token is, then what became of the member half.
+ *
+ * ⚠ The breakdown does NOT replace {@link tagOutcomeNote} where a member handle
+ * failed. It says WHICH token could not be accounted for; that note says the
+ * five reasons and the remedy, and neither is derivable from the other.
  */
 export declare function postGuidanceLines({ channelId, landedThread, body, message, }: {
     channelId: string;
     /** `metadata.taskId` off the STORED message — absent means the main room. */
     landedThread: string | undefined;
-    /** The body as posted; only ever inspected for an @-token, never rendered. */
+    /** The body as posted; inspected for @-tokens, and only the TOKENS are ever
+     *  rendered back (neutralized) — never the surrounding prose. */
     body: string;
     /** The STORED message, for the server's own mention resolution. */
     message: ChannelMessage;

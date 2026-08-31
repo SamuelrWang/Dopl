@@ -602,9 +602,12 @@
   gap: 12px;
   padding: 18px 22px 12px;
 }
-/* ONE ROUNDED CONTAINER, TWO BANDS (image + chat panel): border and radius
-   live here, `overflow:hidden` clips both children, so no seam/gap/second
-   border between them. Height auto — chat panel grows the hero. */
+/* THE ROUNDED CONTAINER: border and radius live here, `overflow:hidden` clips
+   the band, so no seam/gap/second border.
+   ⚠ IT HELD TWO BANDS UNTIL 2026-08-30 — the image, and the fake hero chat
+   panel under it (ledger ASK-5, deleted). The column layout is kept as-is
+   rather than collapsed into `.homeHeroBand`: the ruling was "remove the fake
+   chat", not "redesign the landing". */
 .homeHero {
   position: relative;
   display: flex;
@@ -616,7 +619,7 @@
   border: 1px solid var(--kv-border-strong);
 }
 /* LiquidGlass panel's containing block: glass positions against this fixed
-   210px, so attaching the chat below can never stretch it. */
+   210px. */
 .homeHeroBand {
   position: relative;
   flex: 0 0 auto;
@@ -633,45 +636,12 @@
   user-select: none;
   -webkit-user-drag: none;
 }
-/* HERO CHAT height animation only; the panel's look is kit + tokens in
-   home/hero-chat.tsx. `grid-template-rows` 0fr→1fr over an `overflow:hidden`
-   child = auto-height transition with no measurement: no ResizeObserver, no
-   max-height guess that clips long conversations or eases to an unreached
-   number. */
-.heroChatReveal {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.3s ease-out;
-}
-.heroChatReveal[data-open="true"] {
-  grid-template-rows: 1fr;
-}
-/* ⚠ Both load-bearing: without `overflow:hidden` content ignores the 0fr
-   track; without `min-height:0` the grid item won't shrink below content. */
-.heroChatRevealInner {
-  overflow: hidden;
-  min-height: 0;
-}
-/* Log caps at ~10 body lines then scrolls itself, so the reveal animation
-   eases to a capped height and the input row stays put below. */
-.heroChatLog {
-  max-height: calc(var(--text-body) * 1.625 * 10);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 2px;
-}
-.heroChatLog::-webkit-scrollbar {
-  width: 8px;
-}
-.heroChatLog::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .heroChatReveal {
-    transition: none;
-  }
-}
+/* ⚠ `.heroChatReveal` / `.heroChatRevealInner` / `.heroChatLog` (+ its
+   scrollbar rules and the reduced-motion block) STOOD HERE AND ARE DELETED
+   (2026-08-30, ledger ASK-5). They dressed `home/hero-chat.tsx`, which is gone;
+   nothing else has ever used them. The grid-rows 0fr→1fr auto-height idiom they
+   carried is not lost — `channels-v2/composer.tsx` and `composer-launch-panel.tsx`
+   spell it inline, which is where a live surface needs it. */
 
 /* Hairline sits ABOVE the filters (hero↔pills), not between pills and grid. */
 .homeFilters {

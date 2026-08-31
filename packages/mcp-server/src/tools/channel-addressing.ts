@@ -128,7 +128,7 @@ export function rosterAddressingRule(ref: string, memberCount: number): string {
   // at every size (`feedLiveSession` reads the tag, never the roster), and a
   // count-scoped "reaches no one's agent at all" is the over-claim this module
   // exists to stop.
-  const how = `Address a request to ONE of them: dopl_channel(op="post", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="create_thread". A channel reaches PEOPLE — there is no handle for an agent. NOTHING addresses a post for you, a DIRECT (1:1) message channel included. The other way to reach an agent is a THREAD tag: \`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not.`;
+  const how = `Address a request to ONE of them: dopl_channel(op="post", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="create_thread". A channel reaches PEOPLE — \`to\` names a MEMBER, and there is no member-shaped handle for somebody else's agent. NOTHING addresses a post for you, a DIRECT (1:1) message channel included. Two other things reach an agent, and neither uses \`to\`: a THREAD tag (\`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not), and \`@agent-<id>\` in the BODY, which wakes one of YOUR OWN operator's agents by name (op="read_sessions" lists their handles).`;
   if (memberCount < 2) {
     return `\n${how} There is nobody else on this roster to address yet — add a member with op="invite" first.`;
   }

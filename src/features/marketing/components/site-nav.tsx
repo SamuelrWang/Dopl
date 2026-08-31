@@ -269,11 +269,20 @@ export function SiteNav() {
           </button>
 
           {menuState !== "closed" && (
+            /* ⚠ A CLOSING CARD LEAVES THE A11Y TREE AS WELL AS THE HIT-TEST
+               (2026-08-30). The CSS half is `pointer-events: none` on
+               `[data-state="closing"]`; this is the half a pointer rule cannot
+               do — for 140ms the card is still mounted, and a keyboard or
+               screen-reader user would otherwise reach a menu that is
+               dismissing. `shared/ui/popover-menu.tsx` set the precedent: it
+               drops `role` and sets `inert` on exactly this transition, with
+               the same sentence. */
             <div
               className="lp-nav-menu-card"
               data-state={menuState}
               ref={cardRef}
-              role="menu"
+              role={menuState === "closing" ? undefined : "menu"}
+              inert={menuState === "closing"}
               aria-label={MENU_LABEL}
             >
               {/* TODO: no destination for Product yet — non-navigating.

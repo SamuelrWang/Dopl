@@ -64,6 +64,14 @@ const READ_OPS: Record<string, string[]> = {
     // main process and must NOT become an MCP op: an external agent does not
     // get to say what a session on somebody's machine is doing.
     "read_sessions",
+    // `opReadDirections` calls only `listAgentDirections` — own-scoped at the
+    // server (`operator_user_id = ctx.userId` in the SQL predicate), no write.
+    // ⚠ THE TWO DESKTOP WRITES ON THAT LANE — claim and decide — ARE NOT MCP OPS
+    // AND MUST NEVER BECOME ONE. They are how a MACHINE reports what it did with
+    // a direction; an external agent does not get to say that a direction was
+    // delivered, still less to write the `reply` an operator will read as its own
+    // agent's words. They are unbound on `@dopl/client` for the same reason.
+    "read_directions",
   ],
 };
 

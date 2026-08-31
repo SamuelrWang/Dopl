@@ -130,6 +130,8 @@ export function ChannelsV2MessagePane({
   onToggleFavorite = NOOP,
   onExitThread = NOOP,
   onOpenAgent,
+  onAnswerEscalation,
+  answerBusy = false,
   onOpenThread = NOOP,
 }: {
   channelId: string;
@@ -203,6 +205,17 @@ export function ChannelsV2MessagePane({
    * rest of the gate.
    */
   onOpenAgent?: (agentId: string) => void;
+  /**
+   * ANSWER an escalation card — set by a host that can WRITE.
+   *
+   * ⚠ OPTIONAL, and absent renders no option buttons at all (never disabled
+   * ones) — the same rule `onOpenAgent` above and `newAgent` follow. The
+   * `"window"` chrome hands none, so a card popped out reads as the record of a
+   * question rather than as a control that cannot fire.
+   */
+  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
+  /** An answer is in flight — the double-submit guard, not a capability. */
+  answerBusy?: boolean;
   /** Set by an in-transcript thread card — the channel view's way IN. */
   onOpenThread?: (id: string) => void;
 }) {
@@ -324,6 +337,8 @@ export function ChannelsV2MessagePane({
             launchBusy={newAgent?.launchBusy ?? false}
             onLaunchAgent={(id) => void newAgent?.launchAgent(id)}
             onOpenAgent={onOpenAgent}
+            onAnswerEscalation={onAnswerEscalation}
+            answerBusy={answerBusy}
             onOpenThread={onOpenThread}
           />
         )}

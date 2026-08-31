@@ -14,3 +14,5 @@ export type { AwaitMessagesOptions, AwaitResult, Channel, ChannelAuthorKind, Cha
 export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, ChannelUpdateInput, } from "./info-card-types.js";
 export type { OntologyAttribute, OntologyAttributeValue, OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyClusterSummary, OntologyMethod, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologyObjectSummary, OntologyRelationship, OntologySnapshot, OntologySummary, OntologyTemplateField, } from "./ontology-types.js";
 export type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated, LaunchRefusalReason, } from "./launch-types.js";
+export type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated, DirectionRefusalReason, } from "./direction-types.js";
+export type { ChannelEscalationAnswerInput, ChannelEscalationFields, ChannelEscalationInput, ChannelEscalationOption, } from "./escalation-types.js";

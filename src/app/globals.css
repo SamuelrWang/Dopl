@@ -72,8 +72,9 @@
   --color-surface-cta: var(--surface-cta);
   --color-text-on-cta: var(--text-on-cta);
 
-  /* /home's own four-value palette — the ACCOUNT surface reads cooler than the
-     workspace chrome (Samuel's wireframe, 2026-08-24). Scoped to that page. */
+  /* THE APP FRAME palette as Tailwind utilities (Samuel's wireframe 2026-08-24;
+     no longer page-scoped since his 2026-08-30 ruling — see the `:root` block
+     below, which carries the supersession in full). */
   --color-home-frame: var(--home-frame);
   --color-home-panel: var(--home-panel);
   --color-home-panel-line: var(--home-panel-line);
@@ -252,16 +253,38 @@
   /* Cluster/agent active green */
   --agent-on: oklch(0.52 0.14 162);
 
-  /* /home palette (Samuel's wireframe, 2026-08-24). Four values, that page
-     only: the dark FRAME behind rail + shell, the base PANEL the header and
-     relationship list sit on, the hairline/track LINE, and the warm CARD the
-     record pane is filled with. Deliberately NOT aliases of the neutral
-     surface ramp — home is cooler and warmer at once, and folding either end
-     into `--bg-*` would repaint every workspace page. */
+  /* THE APP FRAME PALETTE (Samuel's wireframe 2026-08-24; SCOPE WIDENED by his
+     live-review ruling 2026-08-30). Four values: the dark FRAME behind rail +
+     shell, the base PANEL a full-page card is filled with, the hairline/track
+     LINE, and the warm CARD a record pane wears on top of the panel.
+
+     ⚠ "THESE FOUR ARE /home-ONLY" IS SUPERSEDED (2026-08-30, Samuel): *"the
+     workspace pages adopt /home's frame model and palette — the two surfaces
+     must match."* They are consumed by /home AND by the workspace shell —
+     `src/shared/layout/app-shell/app-shell.module.css` (root/surface/sidebar),
+     `apps/desktop-ui/src/components/app-shell/account-rail.module.css` (the
+     rail) and the kit's `.page-float` (every full-page card in the app). Do NOT
+     re-add a page-scoping claim to these names.
+
+     ⚠ THE `--home-` PREFIX STAYS, and it has outgrown its name. Renaming to
+     `--frame-*` would touch every consumer, BOTH token copies, six docs and the
+     drift script for zero behaviour change. Read `home` as "the frame /home
+     introduced", not as a page scope.
+
+     Deliberately NOT aliases of the neutral surface ramp — the frame is cooler
+     and the card warmer than `--bg-*`, which is the whole reason the four
+     exist. */
   --home-frame: #2f3542;
   --home-panel: #f1f3f5;
   --home-panel-line: #e2ecf0;
   --home-card: #fbfcfc;
+  /* ⚠ `--home-frame-ink` / `--home-frame-hover` WERE ADDED AND REMOVED ON
+     2026-08-30, both within Samuel's review of the same ruling. They existed so
+     the workspace sidebar's nav chips could stand on the DARK frame beside the
+     account rail's tiles. The corrected model puts the sidebar on a gray PANEL
+     (`app-shell.module.css › .sidebar`), so the rail's tiles are the only rows
+     on the frame left, and a two-token pair with one consumer is an indirection
+     that says nothing. The rail states its own ink, as it always did. */
 
   /* THE RAISED-LIGHT FACE, as parts. `.auth-btn-3d-light` and `.raised-tab`
      are ONE elevation (docs/DESIGN-SYSTEM.md) and both are built from these, so
@@ -296,8 +319,12 @@
   --panel-header-text: #ffffff;
 
   /* App-shell chrome. Duplicates of semantic tokens are ALIASED to keep one source; the rest
-     (rail/purple/lavender/orange/line) have no semantic equivalent. */
-  --rail: #2c3640;
+     (purple/lavender/orange/line) have no semantic equivalent.
+     ⚠ `--rail: #2c3640` STOOD HERE AND IS DELETED (2026-08-30). It was the old app frame, had
+     had ZERO `var(--rail)` consumers since the shell went gray on 2026-08-11, and was a second
+     near-identical dark slab one hex off `--home-frame` (drift ledger ASK-31). Samuel's ruling
+     that day made the home frame THE frame — one token, not two — so this is a delete, not an
+     alias. `--rail-tile`/`--rail-tile-hi` are a different colour and are left alone. */
   --rail-tile: #3a4651;
   --rail-tile-hi: #46535f;
   --bg: #d6dee7;
@@ -344,8 +371,9 @@
   --mint: #9EFFBF;        /* success */
   --gold: #F4D35E;        /* warnings */
 
-  /* ⚠ Must match the rail/frame color or the body flashes dark on route transitions. */
-  --body-bg: #2c3640;
+  /* ⚠ IS the frame colour, read from it — or the body flashes a different dark on route
+     transitions. Was a hand-copied `#2c3640`, one hex off the frame, until 2026-08-30. */
+  --body-bg: var(--home-frame);
 
   /* Gradients — neutral charcoal */
   --gradient-elevated: linear-gradient(
@@ -439,13 +467,27 @@ html {
   --shell-rail-w: 0px;
   --shell-sidebar-w: 232px;
   --shell-surface: #ececec;
-  --shell-chip: #e2e2e2;
+  /* Resting `.nav-chip` fill. ⚠ Lightened #e2e2e2 → #e8e8e8 on 2026-08-30
+     (Samuel: *"the grayed resting backgrounds one step lighter"*). It is read in
+     exactly one place — `.nav-chip:not(.nav-chip-active)` — and both mounts of
+     that chip wanted the same shift: the app sidebar's nav rows, which now stand
+     on `--home-panel` (#f1f3f5, lighter than the #ececec the old value was tuned
+     against), and the settings modal's section list on `--shell-surface`. */
+  --shell-chip: #e8e8e8;
   /* Must match --shell-gap-bottom: equal top/bottom panel margins. */
   --shell-gap-top: 6px;
   --shell-gap-right: 6px;
   --shell-gap-bottom: 6px;
-  /* Must match `.page-float`'s 8px side margin. */
-  --shell-gap-left: 8px;
+  /* ⚠ ZERO SINCE 2026-08-30, AND THAT IS THE RAIL'S GEOMETRY, NOT A GAP THAT
+     WENT MISSING. The account rail IS the left frame, so the panel butts against
+     it and the visible dark column is the 54px rail exactly — which is what makes
+     a rail-centred tile read as centred. /home discovered this (its `!ml-0`
+     pair) and the workspace shell had kept an 8px sliver of frame between the
+     rail and the panel, so the same tiles read "shifted left" there and the two
+     hosts disagreed. The brand pill's balance survives at 14px each side: to the
+     rail it is 0 + `.panel`'s 2px border + 12px padding; to the page card it is
+     12px padding + `.pageCard`'s 0 margin + its 2px border. */
+  --shell-gap-left: 0px;
   --shell-panel-radius: 0px;
   /* Derived: viewport insets of the white main panel. */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
@@ -697,13 +739,21 @@ html {
    Every page composes these; never re-hardcode their recipes locally. */
 
 /* Floating page surface — the ONE raised card a full-page view renders into. Margins reveal
-   the lower panel as a frame. */
+   the frame beneath it on every side.
+   ⚠ IT WEARS THE APP FRAME PALETTE (Samuel, 2026-08-30, ruling items 2 + 3: the panel
+   background matched, "the border blue matched, same width"). Fill is `--home-panel`, the
+   ground /home's panel already stood on; the edge is `--home-panel-line` at the SAME 2px the
+   /home record pane wears (`apps/desktop-ui/src/pages/home/index.tsx`,
+   `border-2 border-home-panel-line`). Changing the ONE recipe is what makes the two surfaces
+   match — /home's `bg-home-panel` utility now merely restates this — and every workspace page
+   inherits it without a per-page repaint. Geometry is UNCHANGED and is the shared bit ruling
+   item 4 asks for. */
 .page-float {
   flex: 1;
   min-width: 0;
   margin: 7px 8px 9px 8px;
-  background: var(--panel-surface);
-  border: 1px solid var(--border-strong);
+  background: var(--home-panel);
+  border: 2px solid var(--home-panel-line);
   border-radius: 14px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.05),

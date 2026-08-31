@@ -1,14 +1,55 @@
 /* App-shell chrome. Self-contained, isolated from the global dark/light token
-   system. */
+   system.
+
+   ⚠ THE MODEL IS /home's, AND IT ALTERNATES (Samuel, live review 2026-08-30):
+   *"the workspace pages adopt /home's frame model and palette — the two
+   surfaces must match"*, then, over the first attempt: *"it should be the
+   sidebar panel gray, then the inner panel is white, and panels on top of that
+   go back to that sidebar panel gray — it's alternating."*
+
+   ⚠ THE PANELS NEST, THEY DO NOT SIT SIDE BY SIDE (third and final cut, same
+   review): *"the right panel sits ON TOP OF the gray panel that holds the
+   sidebar."* /home is the literal spec and it has ONE float —
+   `pages/home/index.tsx`: a single `page-float bg-home-panel` `<main>` spanning
+   everything right of the rail, the relationship list standing DIRECTLY on that
+   gray, and the record pane a white `border-2 border-home-panel-line
+   bg-home-card` card floating INSIDE it. The workspace shell is that structure
+   with the nav where the list is:
+
+       dark FRAME (`--home-frame`)  ← `.root`, `.surface`, the account rail
+         └ ONE gray PANEL  ← `.panel`, which IS the kit's `.page-float`,
+           │                 spanning rail → right edge (/home's `<main>`)
+           ├ `.sidebar`    ← switcher + nav + upsell + settings, standing
+           │                 DIRECTLY on the gray: no fill, no border, no float
+           └ white CARD    ← `.pageCard`, the routed page, inset so the gray
+             │               shows around it (/home's record pane)
+             └ gray WELL (`--home-panel` again)
+                  ← `[data-section-panel]`, `SECTION_PANEL_GROUND`
+
+   Every level reads the app-frame palette (`globals.css › THE APP FRAME
+   PALETTE`, which supersedes that palette's old "/home only" note).
+
+   ⚠ TWO WRONG CUTS ARE RECORDED HERE BECAUSE BOTH ARE EASY TO RE-MAKE. (1) The
+   dark is FRAME ONLY — the margin around panels, never a surface content sits
+   on; painting `.sidebar` the frame ink left the nav rows floating on bare dark.
+   (2) The panels NEST — giving `.sidebar` its own panel face made it and the
+   page card two siblings with a border between them, which is not what /home
+   does and not what was asked for.
+
+   ⚠ THE VALUE IS READ, NEVER RESTATED. `--shell-surface` (#ececec) is still the
+   LIGHT chip-rail gray and still correct where it is left: the settings modal's
+   left nav (`settings-modal.module.css`) and the web playground shell. Those
+   are not the app frame, which is why this module names the frame token
+   directly instead of re-valuing `--shell-surface` out from under them. */
 
 .root {
   /* Palette lives in globals.css :root — inherited, never redefined here. */
   position: fixed;
   inset: 0;
   z-index: 30;
-  /* Root paints the SAME gray as `.surface`, so surface margins read as
-     breathing room, not a frame. */
-  background: var(--shell-surface);
+  /* Root paints the SAME ink as `.surface`, so the surface's own margins read
+     as one continuous frame rather than a second border. */
+  background: var(--home-frame);
   color: var(--ink);
   font-family: var(--font-app), system-ui, sans-serif;
   font-size: 15px;
@@ -30,7 +71,11 @@
   border-radius: 8px;
   overflow: hidden;
   margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
-  background: var(--shell-surface);
+  /* THE GROUND THE PAGE CARD FLOATS ON — the frame, since 2026-08-30. It was
+     `--shell-surface`, which meant `.page-float`'s 7px/9px top and bottom
+     margins revealed gray-on-gray and the card read as flush. Samuel's ruling
+     item 4: the panel must visibly SIT ON the frame top AND bottom. */
+  background: var(--home-frame);
 }
 
 /* THE POP-OUT WINDOW'S SURFACE — `.surface` with the frame taken off (Samuel, 2026-08-27).
@@ -41,9 +86,11 @@
    rule painted a rounded panel on a gray ground inside an OS window that already has its own
    corners, which is exactly what Samuel is looking at.
 
-   ⚠ IT PAINTS `--panel-surface`, NOT `--shell-surface`, and that is what covers `.root`'s gray.
-   `.root` is `position: fixed; inset: 0` and paints the shell gray for the main window; leaving
-   this surface on the shell colour would show that gray wherever the content did not reach.
+   ⚠ IT PAINTS `--panel-surface`, and that is what covers `.root`'s ground. `.root` is
+   `position: fixed; inset: 0` and paints the app FRAME for the main window (the shell gray until
+   2026-08-30, `--home-frame` since — the argument is the same either way, and the frame makes it
+   louder); leaving this surface on that colour would show it wherever the content did not reach.
+   ⚠ NOT `--home-panel` either: the window's ground is this class, not the page card's.
    Zero margin, zero radius, no second background anywhere. */
 .windowSurface {
   flex: 1;
@@ -52,17 +99,91 @@
   background: var(--panel-surface);
 }
 
-/* ⚠ Padding is load-bearing, not taste. Brand pill's top edge must land on the
-   page card's top edge: page card = `.page-float`, margin-top 7px inside
-   `.surface`; sidebar shares that surface top, so
-   `padding-top + .brand padding-top` must equal 7px (7 + 0 here).
-   Left/right equal (12px) so pill's gap to window edge
-   (--shell-gap-left 8 + 12 = 20) equals its gap to the page card
-   (12 + .page-float margin-left 8 = 20). */
+/* ── THE ONE GRAY PANEL, and the white card inside it ─────────────────────
+   Structure and the reason for it are in this file's header. `.panel` is
+   composed IN THE TSX as `cn("page-float", styles.panel)` — the FACE (fill,
+   2px line, radius, float margins, shadow) is the kit's `.page-float`, the
+   exact recipe /home's `<main>` wears, so there is one statement of the panel
+   and the two surfaces cannot drift. This class adds LAYOUT ONLY. */
+.panel {
+  display: flex;
+  /* ⚠ FLUSH AGAINST THE RAIL, the second half of `--shell-gap-left: 0`
+     (2026-08-30). `.page-float`'s own 8px left margin would put a sliver of
+     frame between the rail and the panel, and that sliver is what made the rail
+     tiles read "shifted left" on workspace pages while reading centred on /home
+     — the eye takes rail + sliver as one dark column and the tile is only
+     centred in the rail. /home fixes it with `!ml-0` on its `<main>`; this is
+     the same statement for the shell's panel. */
+  margin-left: 0;
+  /* ⚠ OVERRIDES `.page-float`'s `overflow: hidden`, deliberately. The workspace
+     switcher's menu is the NON-portalled `Popover` branch — an `absolute
+     top-full` panel anchored on `.brand` inside the sidebar region
+     (`shared/ui/popover-menu.tsx` portals only when given an `at` coordinate) —
+     so clipping this box eats the dropdown. Nothing needs the clip here: both
+     children are inset from the rounded corners (the sidebar by its 12px
+     padding, the card by its margin), and the CARD does its own clipping. */
+  overflow: visible;
+}
+
+/* THE ROUTED PAGE, as a white card floating in the gray — /home's record pane,
+   class for class: `rounded-[14px] border-2 border-home-panel-line bg-home-card`
+   (`pages/home/index.tsx`). Stated here rather than as utilities on the mount
+   because it is shell chrome, and pinned against /home's own line in
+   `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts`.
+
+   ⚠ THE MARGIN IS `12px 12px 12px 0`, WHICH IS /home's PANE PLUS A TOP. That
+   pane takes `mb-3 mr-3` and NO top or left — it butts the page header above it
+   and the list column's own 12px right padding beside it. The workspace panel
+   has no header strip, so a flush top would weld the card to the panel's border;
+   12px there is the header's gap, kept as a margin. LEFT stays 0 for /home's
+   reason exactly: `.sidebar`'s 12px right padding is already the channel. */
+.pageCard {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 12px 12px 12px 0;
+  background: var(--home-card);
+  border: 2px solid var(--home-panel-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* ⚠ THE PAGE'S OWN `.page-float` COLLAPSES INSIDE THE CARD, and this is the
+   seam the restructure turned on. Sixteen surfaces across two trees compose
+   `.page-float` to mean "THE full-page surface" — every workspace page, its
+   skeleton, `PageLoading`/`PageError`, the shared feature cores — and stripping
+   the class from all of them would also strip it from the mounts that still
+   need the real recipe: /home's `<main>`, the pop-out thread window, the web
+   playground. So the SHELL takes the surface over and the page's float becomes
+   a plain filling box; the class keeps meaning "the full-page surface", the
+   shell just supplies it now.
+
+   ⚠ FACE AND MARGIN ONLY — `flex: 1; min-width: 0; overflow: hidden` are NOT
+   reset, and that is load-bearing. DESIGN-SYSTEM's note on `.page-float` spells
+   out the trap: views composed with it get their sizing from it and never say
+   so, and a mount that loses that sizing renders at content width. */
+.pageCard :global(.page-float) {
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* ⚠ Padding is load-bearing, not taste. Left/right equal (12px) so the brand
+   pill's gap to the rail (`--shell-gap-left` 8 + `.panel` border 2 + 12 = 22)
+   equals its gap to the page card (12 + `.pageCard` margin-left 0 + its border
+   2 … + the card's own inner padding) — the pill and the card's left edge sit
+   on one line. Top pad 7px + `.brand`'s 0 keeps the pill off the panel's border.
+
+   ⚠ IT PAINTS NOTHING AND MUST NOT. The sidebar is a REGION of the one gray
+   panel, not a panel of its own: no fill, no border, no margin, no radius. It
+   had all four for one iteration (see the header) and the border between it and
+   the page card is exactly what Samuel rejected. */
 .sidebar {
   width: var(--shell-sidebar-w);
   flex: 0 0 var(--shell-sidebar-w);
-  background: var(--shell-surface);
   padding: 7px 12px 20px 12px;
   display: flex;
   flex-direction: column;
@@ -152,9 +273,15 @@
   padding: 12px 0;
 }
 
+/* The Pro upsell — a CARD on the sidebar panel, so it takes the white card face
+   the alternation gives that level (2026-08-30). It was `--bg-inset` (#f1f1f1),
+   which is a WELL colour: against the panel gray it read as a recess pressed
+   into the sidebar, and at 2/255 from `--home-panel` it barely read at all.
+   Structure, padding and the black CTA below are untouched — this is a
+   re-ground, not a redesign. */
 .wordsCard {
   margin-top: 16px;
-  background: var(--bg-inset);
+  background: var(--home-card);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 18px;

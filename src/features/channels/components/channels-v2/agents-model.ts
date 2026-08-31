@@ -111,30 +111,15 @@ export function agentDisplayName(session: {
  * written out by hand is how the two come to disagree about what an agent id is.
  * The review wave already caught one such duplicate attempt — do not re-declare
  * this pattern anywhere, import {@link parseAgentPostStamp}.
- */
-const AGENT_POST_STAMP_RE = /^agent-([a-z][a-z0-9]{7})-\d+$/;
-
-/**
- * WHICH OF MY AGENTS WROTE THIS POST — the agent id off a `client_msg_id`, or
- * `null` when the row is not stamped by one instance.
  *
- * ⚠ `null` IS "CANNOT SAY", NEVER "SOME OTHER AGENT". Three real classes of
- * agent-authored row carry no per-instance stamp: a main older than the stamp,
- * an agent that supplied its own idempotency key, and every courtesy no-op
- * `main/channel-post.js › postCourtesy` sends about the MACHINE rather than
- * about one agent (`agent-<channelUUID>-<seq>` — the UUID form fails the
- * anchored pattern above, and that failure IS the discriminator). Both readers
- * fail toward the OLD behaviour on `null`: `agent-panel.tsx ›
- * agentSentMessages` keeps showing the row, and the transcript keeps the plain
- * "Agent" pill (INVARIANTS §11 — render what IS known, never a blank or a guess
- * standing in for it).
+ * ⚠ **IT MOVED TO `lib/agent-post-stamp.ts` ON 2026-08-31 AND IS RE-EXPORTED
+ * HERE, SO NO IMPORT CHANGED** — `lib/mentions-mask.ts`'s split, for the same
+ * kind of reason. A SERVER reader arrived (`server/service-writes-metadata-
+ * escalation.ts`, deriving the asking agent off the escalation it answers) and
+ * this module is `"use client"`. **One declaration is still the rule; this file
+ * is no longer where it lives.**
  */
-export function parseAgentPostStamp(
-  clientMsgId: string | null | undefined
-): string | null {
-  if (typeof clientMsgId !== "string") return null;
-  return AGENT_POST_STAMP_RE.exec(clientMsgId)?.[1] ?? null;
-}
+export { parseAgentPostStamp } from "../../lib/agent-post-stamp";
 
 /**
  * THE STABLE IDENTITY OF ONE AGENT, and the id the open-agent state holds.

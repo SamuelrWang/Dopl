@@ -17,25 +17,34 @@ import {
 } from "./template-approval";
 
 /**
- * WHICH IDENTITY THE NEXT AGENT WEARS — one popover, mounted by BOTH launch
- * surfaces (`channels-v2/agents-tab.tsx`'s New Agent split button and
- * `channels-v2/composer.tsx`'s Bot icon).
+ * WHICH IDENTITY THE NEXT AGENT WEARS — one popover, with ONE live mount:
+ * `channels-v2/agents-tab.tsx`'s New Agent split button.
+ *
+ * ⚠ THIS DOCBLOCK SAID "mounted by BOTH launch surfaces … and
+ * `channels-v2/composer.tsx`'s Bot icon" UNTIL 2026-08-30, AND THAT MOUNT WAS
+ * RETIRED ON 2026-08-27. The composer's Bot icon and the chevron beside it are
+ * both replaced by `channels-v2/composer-launch-panel.tsx`, whose **Template
+ * row is this picker's whole function**; `composer.tsx` imports
+ * `TemplateApprovalDialog` and `ComposerLaunch` and no picker at all. INVARIANTS
+ * §5A carried the same stale sentence and is corrected in the same change.
+ * Re-derive rather than trusting this line: `grep -rn TemplateLaunchPicker src apps`.
  *
  * ⚠ THE ONE-CLICK BLANK LAUNCH IS UNTOUCHED AND THIS COMPONENT IS NOT ON IT
  * (Samuel's standing channels-v2 ruling — *one lane, one-click launch* — which
  * RESOLVES the spec's OQ-4 against its own recommendation). The New Agent button
- * and the Bot icon still spawn a blank agent in exactly one click; this opens
- * from a DISTINCT adjacent chevron zone on each surface. A popover that
- * intercepted the click would put a keystroke in front of the most common action
- * in the product.
+ * still spawns a blank agent in exactly one click; this opens from a DISTINCT
+ * adjacent chevron zone beside it. A popover that intercepted the click would
+ * put a keystroke in front of the most common action in the product.
  *
- * ⚠ TWO MOUNTS, ONE READ, AND THAT IS DIFFERENT FROM `useAgentsPanel`. The
- * "never mount it twice" rule there is about a POLL INTERVAL
- * (`PEER_SESSIONS_POLL_MS` — two mounts are two answers to "how fresh is fresh
- * enough"). `useAgentTemplates` is a react-query read on a stable key, so two
- * mounts share one in-flight fetch and one cache entry. ⚠ And the hook lives in
- * {@link PickerBody}, which `Popover` mounts only while the popover is OPEN — so
- * a channel the operator never opens the picker in costs no request at all.
+ * ⚠ THE READ IS SHAREABLE, AND THAT IS DIFFERENT FROM `useAgentsPanel` — kept
+ * because it is the rule for the NEXT surface that wants this picker, not a
+ * claim that a second mount exists today. The "never mount it twice" rule there
+ * is about a POLL INTERVAL (`PEER_SESSIONS_POLL_MS` — two mounts are two answers
+ * to "how fresh is fresh enough"). `useAgentTemplates` is a react-query read on
+ * a stable key, so two mounts would share one in-flight fetch and one cache
+ * entry. ⚠ And the hook lives in {@link PickerBody}, which `Popover` mounts only
+ * while the popover is OPEN — so a channel the operator never opens the picker
+ * in costs no request at all.
  *
  * ⚠ THE AUTHORSHIP MARKER IS A SECURITY SIGNAL, NOT DECORATION (§4's injection
  * surface). A `team` / `workspace` template's instructions are another member's

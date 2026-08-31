@@ -432,3 +432,5 @@ export type {
 } from "./types-sessions";
 
 export type { LaunchRefusalReason, LaunchDirective } from "./types-launch";
+
+export type { DirectionRefusalReason, AgentDirection } from "./types-direction";

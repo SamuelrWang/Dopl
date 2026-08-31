@@ -19,13 +19,25 @@ import {
  * and multi-line markdown in it is the point.
  */
 
+/**
+ * ⚠ THE BOUNDS ARE NAMED CONSTANTS, NOT LITERALS, AND EVERY ONE IS EXPORTED
+ * (2026-08-30, G3). `schema-sql.test.ts` reads the migration and pins each of
+ * these against the `CHECK` it pairs with — a comment claiming a pairing is not
+ * a gate, which is what this file's own header used to rely on.
+ */
+
 /** Rendered into the template picker and into the launch payload. Matches the
  *  `agent_templates_name_charset_check` bound in the migration. */
-const NameSchema = safeLabel("Template name", 120);
+export const MAX_NAME_CHARS = 120;
+const NameSchema = safeLabel("Template name", MAX_NAME_CHARS);
 
 /** Prose. Newline/tab allowed; empty string preserved (a cleared textarea
  *  sends one, and the service maps it to NULL). */
-const DescriptionSchema = safeOptionalProse("Template description", 2000);
+export const MAX_DESCRIPTION_CHARS = 2000;
+const DescriptionSchema = safeOptionalProse(
+  "Template description",
+  MAX_DESCRIPTION_CHARS
+);
 
 /**
  * The system-prompt block. 32 KB, matching the DB CHECK.
@@ -34,7 +46,7 @@ const DescriptionSchema = safeOptionalProse("Template description", 2000);
  * prepended to every turn of every session spawned from it. The bound is a
  * cost signal as much as a DoS floor.
  */
-const MAX_INSTRUCTIONS_CHARS = 32_768;
+export const MAX_INSTRUCTIONS_CHARS = 32_768;
 const InstructionsSchema = safeOptionalProse(
   "Instructions",
   MAX_INSTRUCTIONS_CHARS
@@ -46,8 +58,12 @@ const InstructionsSchema = safeOptionalProse(
  * server release to accept a model the desktop already runs, and the failure
  * mode would be a 400 on a value the operator can see in their own picker.
  * Charset-bounded because it renders into the launch payload.
+ * ⚠ Deliberately the SAME number as `MAX_NAME_CHARS`, and the migration pairs
+ * them the same way (`agent_templates_model_charset_check`). Named separately
+ * because they are two columns, not one shared rule.
  */
-const ModelSchema = safeLabel("Model", 120);
+export const MAX_MODEL_CHARS = 120;
+const ModelSchema = safeLabel("Model", MAX_MODEL_CHARS);
 
 // ─── Custom fields ──────────────────────────────────────────────────────
 
@@ -64,11 +80,17 @@ const ModelSchema = safeLabel("Model", 120);
 export const MAX_FIELDS_BYTES = 8192;
 
 /** Bounds chosen so `MAX_FIELD_COUNT` fields at max size lands ABOVE the byte
- *  cap — the count is a sanity rail, the bytes are the contract. */
-const MAX_FIELD_COUNT = 50;
+ *  cap — the count is a sanity rail, the bytes are the contract.
+ *  ⚠ NO SQL COUNTERPART, on purpose: the migration bounds the SERIALIZED size
+ *  and the array-ness, and leaves element shape to zod. */
+export const MAX_FIELD_COUNT = 50;
+
+/** Per-field halves. ⚠ Also zod-only — see `MAX_FIELD_COUNT`. */
+export const MAX_FIELD_KEY_CHARS = 80;
+export const MAX_FIELD_VALUE_CHARS = 1000;
 
 export const TemplateFieldSchema = z.object({
-  key: safeLabel("Field key", 80),
+  key: safeLabel("Field key", MAX_FIELD_KEY_CHARS),
   /** ⚠ A LABEL, not prose: field values are spliced into the launch payload
    *  line-by-line, so a newline in one forges a line in the server's voice.
    *  Empty is legal — a key with no value yet is a legitimate half-filled
@@ -79,7 +101,7 @@ export const TemplateFieldSchema = z.object({
   value: z
     .string()
     .trim()
-    .max(1000)
+    .max(MAX_FIELD_VALUE_CHARS)
     .refine((v) => v === "" || SAFE_LABEL_RE.test(v), {
       message: safeLabelMessage("Field value"),
     }),

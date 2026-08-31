@@ -36,11 +36,14 @@ export declare const CHANNEL_INPUT_SHAPE: {
         milestone: "milestone";
         create_thread: "create_thread";
         set_thread_mode: "set_thread_mode";
+        escalate: "escalate";
+        direct_agent: "direct_agent";
         launch_agent: "launch_agent";
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";
         read_sessions: "read_sessions";
+        read_directions: "read_directions";
     }>;
     channel: z.ZodOptional<z.ZodString>;
     direct: z.ZodOptional<z.ZodBoolean>;
@@ -74,6 +77,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
     }>>;
     handoff: z.ZodOptional<z.ZodBoolean>;
     thread: z.ZodOptional<z.ZodString>;
+    agent_id: z.ZodOptional<z.ZodString>;
     since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     goal: z.ZodOptional<z.ZodString>;
     model: z.ZodOptional<z.ZodString>;
@@ -86,6 +90,16 @@ export declare const CHANNEL_INPUT_SHAPE: {
             label: z.ZodString;
             value: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>>;
+    }, z.core.$strip>>;
+    issue: z.ZodOptional<z.ZodString>;
+    context: z.ZodOptional<z.ZodString>;
+    options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        label: z.ZodString;
+        consequence: z.ZodString;
+    }, z.core.$strip>>>;
+    recommendation: z.ZodOptional<z.ZodObject<{
+        index: z.ZodNumber;
+        why: z.ZodString;
     }, z.core.$strip>>;
     limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     timeout_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;

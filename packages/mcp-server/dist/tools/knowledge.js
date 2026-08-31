@@ -26,7 +26,7 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk t
 - "get_tree" — folder/entry tree for a base (metadata only, bodies stripped). FOLDERS ship in full; ENTRIES are paged, 400 per call by default, and the result says so and hands back an entry_cursor when there are more. First call when exploring a base; for a body follow up with op=read_file.
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
 - "create_base" — create a new base. New bases are private to the creator by default. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own /home shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel container or a second workspace you belong to. Creating a PUBLIC base inside a home channel somebody else is in previews first and hands back a one-time confirm_token.
-- "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here.
+- "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here. There is no shelf move: a base's shelf is fixed at creation, and passing \`shelf\` here is refused rather than dropped.
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders. Pass \`description\` to set the folder's short agent-facing summary (shown in get_tree/list_dir); re-calling with a \`description\` on an existing folder UPDATES it (the way to edit a folder summary without touching its contents).
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
@@ -113,7 +113,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
+                return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug, args.shelf);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);
