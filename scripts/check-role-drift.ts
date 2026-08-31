@@ -40,14 +40,29 @@
  * `dist/` is not, and because the check states the requirement where a reader
  * of this file will look for it.
  *
+ * ⚠ THIS SCRIPT NOW GUARDS THREE FAMILIES, not one — each is a hand-mirror
+ * across the SAME two type files, so they share one read and one CI step:
+ *   A. the ROLE set (above)                        — `main`
+ *   B. the workspace LIST-ITEM field set            — `checkWorkspaceMirror`
+ *   C. `WorkspaceKind` + `isStandardWorkspace`      — `checkWorkspaceKind` (F-295)
+ *
  * Exits non-zero with a diff summary if any set drifts. Run via:
  *   npx tsx scripts/check-role-drift.ts
  */
 import { readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 
-/** Pull the string-literal members of `export type <Name> = "a" | "b" | …;`. */
-function extractUnion(source: string, typeName: string): string[] {
+/**
+ * Pull the string-literal members of `export type <Name> = "a" | "b" | …;`.
+ *
+ * ⚠ EXPORTED SINCE 2026-08-30 and imported by `check-knowledge-type-drift.ts`'s
+ * shelf pass (G1). It is a `type` declaration reader, not a role reader — the
+ * shelf unions are the same shape and a second copy of this regex is exactly
+ * the class of duplication both scripts exist to catch. The `main()` call at
+ * the bottom is guarded on `require.main` so importing this file runs the
+ * helper and not the gate.
+ */
+export function extractUnion(source: string, typeName: string): string[] {
   const re = new RegExp(`export\\s+type\\s+${typeName}\\s*=([^;]+);`);
   const m = source.match(re);
   if (!m) throw new Error(`could not find \`export type ${typeName}\` in source`);
@@ -227,6 +242,81 @@ function checkWorkspaceMirror(read: (rel: string) => string): boolean {
   return drift;
 }
 
+/**
+ * 🔒 THE WORKSPACE-KIND MIRROR (F-295, gated 2026-08-30).
+ *
+ * `WorkspaceKind` and `isStandardWorkspace` exist TWICE — once in `src/`, once
+ * in the SDK (plus the SDK's committed `dist/`, which is what `main` imports) —
+ * and until this pass nothing read them: `grep -rn "isStandardWorkspace" scripts/`
+ * answered zero. The bodies are byte-identical today only because both were
+ * flipped together on 2026-08-24; consumers of the package copy went 3 → 6
+ * during the /home wave and one of them is now a CONFIRM GATE
+ * (`packages/mcp-server/src/tools/confirm-token.ts`), so a copy that drifts
+ * decides whether a write into somebody else's room previews first.
+ *
+ * TWO things are asserted, and the second is not implied by the first:
+ *   1. the KIND SET agrees across all three declarations;
+ *   2. every copy of the predicate is the POSITIVE form. INVARIANTS §4A: the
+ *      negative spelling (`!== "link"`) admits every kind added to the union
+ *      LATER, silently, into the one place the predicate exists to keep kinds
+ *      out of. A set-only check cannot see a coordinated flip to `!==`.
+ */
+function checkWorkspaceKind(read: (rel: string) => string): boolean {
+  const kinds: Array<[string, string[]]> = [
+    [
+      "src/features/workspaces/types.ts › WorkspaceKind",
+      extractUnion(read("src/features/workspaces/types.ts"), "WorkspaceKind"),
+    ],
+    [
+      "packages/dopl-client/src/types.ts › WorkspaceKind",
+      extractUnion(read("packages/dopl-client/src/types.ts"), "WorkspaceKind"),
+    ],
+    [
+      "packages/dopl-client/dist/types.d.ts › WorkspaceKind",
+      extractUnion(read("packages/dopl-client/dist/types.d.ts"), "WorkspaceKind"),
+    ],
+  ];
+  // The `src/` union is the reference — it is the one the SDK's docblock names
+  // as the source of its own wording.
+  const reference = new Set(kinds[0][1]);
+  let drift = false;
+  for (const [label, set] of kinds.slice(1)) {
+    const have = new Set(set);
+    const missing = [...reference].filter((k) => !have.has(k));
+    const extra = [...have].filter((k) => !reference.has(k));
+    if (missing.length || extra.length) {
+      drift = true;
+      console.error(`[drift] ${label}:`);
+      if (missing.length) console.error(`  missing kind(s): ${missing.join(", ")}`);
+      if (extra.length) console.error(`  extra kind(s):   ${extra.join(", ")}`);
+    }
+  }
+
+  // ⚠ The `dist/` copy checked here is `types.js`, the EMITTED BODY — the
+  // `.d.ts` carries only a signature, so a `dist/` whose runtime predicate was
+  // hand-edited would pass a declaration-only read.
+  const POSITIVE = /\(\s*workspace\.kind\s*\?\?\s*"standard"\s*\)\s*===\s*"standard"/;
+  for (const file of [
+    "src/features/workspaces/types.ts",
+    "packages/dopl-client/src/types.ts",
+    "packages/dopl-client/dist/types.js",
+  ]) {
+    if (!POSITIVE.test(read(file))) {
+      drift = true;
+      console.error(
+        `[drift] ${file} › isStandardWorkspace is not the POSITIVE form \`(kind ?? "standard") === "standard"\` (INVARIANTS §4A, F-295).`
+      );
+    }
+  }
+
+  if (!drift) {
+    console.log(
+      `✅ WorkspaceKind agrees across 3 declarations (${[...reference].sort().join(", ")}) and all 3 isStandardWorkspace copies are the positive form.`
+    );
+  }
+  return drift;
+}
+
 function main(): void {
   const root = resolve(__dirname, "..");
   const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
@@ -315,6 +405,18 @@ function main(): void {
     );
     process.exit(1);
   }
+
+  // The THIRD family — same two files again, same reason (F-295).
+  if (checkWorkspaceKind(read)) {
+    console.error(
+      "\n❌ Workspace KIND drift detected (F-295). `WorkspaceKind` and `isStandardWorkspace` are hand-mirrored across src, the SDK and its committed dist/: change every side in ONE change, keep the POSITIVE spelling, and rebuild with `npm run build -w @dopl/client`."
+    );
+    process.exit(1);
+  }
 }
 
-main();
+// ⚠ Guarded: `check-knowledge-type-drift.ts` imports `extractUnion` from here,
+// and an unguarded call would run this whole gate as a side effect of that
+// import — two gates behind one exit code, and a role failure reported under a
+// knowledge heading.
+if (require.main === module) main();

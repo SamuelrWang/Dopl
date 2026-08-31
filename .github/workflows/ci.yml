@@ -200,6 +200,12 @@ jobs:
           fi
           echo "All files within the 500-line cap."
 
+  # THE HAND-MIRROR GATES. Every step here guards a declaration that exists in
+  # two or more trees with no shared module between them, because the SDK and
+  # the MCP package cannot import `src/`, SQL can import nothing, and the SPA's
+  # CSS is a second copy of the web's. ⚠ The job name says "knowledge" for
+  # history; it covers knowledge types, the shelf vocabulary, the role set, the
+  # workspace list-item mirror, `WorkspaceKind` and the design tokens.
   type-drift:
     name: knowledge type-drift check
     runs-on: ubuntu-latest
@@ -214,8 +220,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Diff knowledge types between server and SDK
+      # Also the SHELF vocabulary since 2026-08-30 (the two unions, their dist/
+      # mirrors, both `readShelf` guards, the MCP wire mapper, and the
+      # `home_scoped` boolean that caps the union at two).
+      - name: Diff knowledge types and the shelf vocabulary
         run: npx tsx scripts/check-knowledge-type-drift.ts
 
+      # Three families in one script: the role set, the workspace list-item
+      # field set, and `WorkspaceKind`/`isStandardWorkspace` (F-295).
       - name: Diff workspace role set across server, SDK and MCP
         run: npx tsx scripts/check-role-drift.ts
+
+      # The SPA's `tokens.css` is a hand copy of `globals.css`'s token layer
+      # (F-074). The prose "edit both together" instruction it carries failed
+      # twice in one wave, which is why this is a gate and not a comment.
+      - name: Diff design tokens between globals.css and the SPA's tokens.css
+        run: npx tsx scripts/check-css-token-drift.ts

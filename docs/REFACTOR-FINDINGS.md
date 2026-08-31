@@ -38,7 +38,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
 
 **Pruned 2026-08-11 (fourth pass) — the resolved-in-place sweep. 105 entries in, 91 out.** Scope: every entry carrying RESOLVED / ✅ / "closed" in its title or status line was re-verified **against the working tree on disk** — greps for the named symbols and files, never the entry's own text, never another entry, never a commit message. Strict numeric order survives; the entry template is unchanged. No code was touched and no `git` state was changed. **Where a claim was about PRODUCTION rather than about code, it was settled with read-only introspection against the live project** (`pg_constraint`, `pg_indexes`, `pg_proc`, `pg_publication_tables`, `schema_migrations`) — see the near-miss below for why that was not optional.
 
-- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `components/channels-v2/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `sdk-loader.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from `members-tab.tsx` AND `members-section.tsx`), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
+- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `components/channels-v2/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `sdk-loader.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
 - **⚠⚠ THE MOST IMPORTANT THING THIS PASS PRODUCED IS A NEAR-MISS, NOT A REFUTATION — AND THE STALE SOURCE WAS THE WORKING TREE ITSELF.** This pass came within one edit of writing a loud, confident, **false** refutation into this header. It had drafted: *"F-099's ✅ is wrong, the charset CHECKs are not in production."* **They are in production.** The reasoning that produced the error is worth more than the entry:
   - Three prior prunes established the rule **"verify against the working tree on disk, not against entries or commit messages."** This pass followed it. `supabase/migrations/20260808150000_replay_hardening_wave_20260731.sql` **opens with `-- UNAPPLIED. DO NOT run without reading this header.` and repeats `-- NOT APPLIED. This is a repo file only.` at `:76`.** That is a primary source, on disk, in the file that owns the DDL — and it is **stale**, because a migration header is authored *before* the apply and nothing on earth updates it afterwards. `docs/LAUNCH-READINESS-ROADMAP.md:5` says the same thing and is stale for the same reason.
   - What caught it was an accident: F-102's status line disagreed. Chasing that disagreement into `pg_constraint` gave ground truth — **`profiles_display_name_check` present, `channels_name_check` present *in its charset-bounded form* (not the loose length-only inline one), `channels_topic_check` present, all 14 `*_charset_check` present, `channel_agents_engaged_idx` dropped, `supabase_realtime` at exactly 17 tables, and local files 157 = history rows 157 with zero local-only and zero remote-only.** Everything the 2026-07-31 wave was supposed to do is live, via the replay migration, applied 2026-08-09.
@@ -46,7 +46,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
   - **And note which direction the error ran.** Every previous prune found entries claiming *resolved* when they were open. This one nearly recorded an entry as *open* when it was resolved — and would have sent someone to re-apply DDL that is already live. **A prune's own output is a status line and expires exactly like the ones it corrects.**
 - **Two status lines were genuinely stale, in opposite directions, both corrected:** **F-183** carried `RESOLVED 2026-08-09` in its title and `Status: open (needs Samuel's decision)` on its last line — the code was resolved (`group-thread-render.ts` routed `isSessionEndedMarker` to `notices`, two tests present — that whole family was later DELETED in wiring plan Phase 5, 2026-08-18), so the entry is deleted and the status line was simply never updated. **F-133** was the reverse: its title asserted `CRON_SECRET` is unset, which the 2026-08-10 measurement had already refuted.
 - **Deleted as RESOLVED BY MEASUREMENT (2 more, on top of the 12 above):** **F-099** (the ✅ was correct — see the near-miss; the charset CHECKs are live) and **F-094** (`clusters` / `channel_agents` / `workflow_*` are all out of `supabase_realtime`, which publishes exactly 17 tables — its "written, not applied" premise is false; its `realtime.list_changes` sizing survives in F-091, which is the finding that would actually move the number).
-- **Rewritten down to the open half (7):** **F-100** (MCP half verified closed and deleted; the open half is that `member-row.tsx:88,95-97` renders every member's email to every member with no admin-or-self test anywhere on the web path), **F-133** (premise refuted; what survives is that **no run of any of the three cron jobs has ever been observed**, and `stale-threads`' first non-empty run lands ~2026-08-14), **F-169** (both big halves closed by measurement; what remains is two cosmetic repo-vs-prod drifts that keep `db diff` permanently noisy), **F-172** (see below), **F-175** (two field-triggered residuals), **F-177** (one conditional; its third open item deleted as stale), **F-178** (the M4 component wiring, still unpinned — verified: none of the four test files in `apps/desktop-ui/src/features/channels/` mentions `membersStale`, `rosterStale`, or the help string).
+- **Rewritten down to the open half (7):** **F-100** (MCP half verified closed and deleted; the open half is that the web roster renders every member's email to every member with no admin-or-self test anywhere on the web path — ⚠ **the site named here, the v1 member row, was DELETED 2026-08-30 (ledger ASK-1); the finding did NOT die with it**, see its own entry below for the v2 sites it moved to), **F-133** (premise refuted; what survives is that **no run of any of the three cron jobs has ever been observed**, and `stale-threads`' first non-empty run lands ~2026-08-14), **F-169** (both big halves closed by measurement; what remains is two cosmetic repo-vs-prod drifts that keep `db diff` permanently noisy), **F-172** (see below), **F-175** (two field-triggered residuals), **F-177** (one conditional; its third open item deleted as stale), **F-178** (the M4 component wiring, still unpinned — verified: none of the four test files in `apps/desktop-ui/src/features/channels/` mentions `membersStale`, `rosterStale`, or the help string).
 - **⚠ F-172's OPEN HALF ENUMERATED THE WRONG SITES, and the one it missed is the loudest.** The bullet named `channel-description.ts:68` (now fixed) and a test comment. It never listed the **`propose_close` SUCCESS response** — `channel-ops-threads.ts:301`, mirrored in the shipped `dist/` — which still ends *"Do not propose again; a repeat collapses into the same prompt."* That is what the agent reads **immediately after proposing**, it contradicts the corrected description, and `channel-closed-thread.test.ts:172` asserts its presence, so fixing the copy turns the suite red. A well-behaved agent still never re-proposes: the finding's actual defect is live. **The lesson is about the shape of the miss, not the sentence — a copy sweep that lists the sites it can think of will always be a strict subset of the sites that carry the rule. Grep the RULE, not the file you remember.**
 - **Deleted as STALE (0 entries; 1 sub-item).** The ~10 oldest open entries (F-016, F-017, F-023, F-026, F-027, F-033, F-035, F-036, F-038, F-040) were each re-checked at the symbol level and **every one still points at live code** — `resolveWorkspaceSegmentForUser`'s legacy branch, `computeEffectiveAccess`/`effectiveResourceAccess`, `listMessages`/`listVisibleChats`/`countHiddenChats`, the two timestamp-CAS sites, all four `features/clusters` files, all four copied workflows components. Nothing to prune there this pass. The one stale sub-item removed is **F-177's `doplToolsPolicy`-as-`string[]` follow-up**, which describes an assignment F-179 deleted.
 - **Five open entries carried refuted DEPENDENCY or DEPLOY-STATE sentences and were corrected in place, not re-litigated:** F-064 and F-105 both said their mechanism is "inert until `CRON_SECRET` is set" — it is set, so F-064's proposed `expire-consent` cron would go live on its first deploy rather than sitting inert, which changes the cost of the fix rather than merely the wording. **A dependency on an unconfigured environment is the same rotting fact as the environment itself, one hop out.** F-091's "apply F-156 first" ordering note, F-102's title ("the unapplied migration" — it is applied), F-110 item (l)'s "application state unknown", and F-141 item (c)'s "application unverified" were all repointed at what has now been measured.
@@ -120,7 +120,36 @@ F-282/F-283's standing shape and is why the lane took its own file rather than f
 
 - **open** — not yet addressed
 - **deferred** — will be fixed post-refactor; captured for future work
-- Resolved entries are deleted from this file (git remembers); reference their ID + this file's history.
+- **resolved** — kept IN PLACE, marked. See below.
+
+### ⚠ THE REAL CONVENTION IS RESOLVED-IN-PLACE, AND THIS LEGEND SAID THE OPPOSITE (corrected 2026-08-30)
+
+This line read *"Resolved entries are deleted from this file (git remembers); reference their ID +
+this file's history."* **That has not been the practice since ~2026-08-18, and 58 resolved entries
+are kept in place right now** — so the legend was instructing readers to expect a file shape the
+file does not have. The two prunes recorded in the header (2026-07-17, 2026-07-31) were deliberate
+BULK passes and are the exception; a single entry that resolves is now marked, not deleted, because
+the argument is usually worth more than the id.
+
+**HOW TO READ A STATUS. There are three places it can live, and a grep that checks one of them is
+wrong roughly half the time:**
+
+1. **The heading**, e.g. `— ✅ RESOLVED 2026-08-22`.
+2. **The `Status:` line**, e.g. `Status: **closed 2026-08-30; entry kept as the record**`.
+3. **Neither** — the newer `## F-NNN — <prose title>` format silently dropped the template's
+   `Status:` field, and **32 entries have no status line at all**. For those, the body is the status.
+
+⚠ **AND THERE ARE TWO HEADING FORMS** — `### F-NNN` (105) and `## F-NNN` (122), measured 2026-08-30
+— **so a single-form grep under-counts by roughly half in either direction.** Always match both:
+
+```
+grep -nE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md          # 227 live entries
+node scripts/check-doc-refs.mjs                                   # corroborates the count
+```
+
+**When you resolve one:** mark the heading, set (or add) a `Status:` line, and write the ONE fact
+that closed it with a `path › symbol` anchor. Delete an entry only in a bulk prune, and record the
+ids in the header when you do.
 
 ## Severity
 
@@ -225,7 +254,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Proposed resolution: only revisit if the retention gate ever becomes contractual — needs a security-definer read path + removing direct-table SELECT for owners.
 - Status: open (accepted)
 
-### F-036: `pick-menu` / `read-pick-menu` / `workflow-bits` are copied from ontology into workflows
+### F-036: `pick-menu` / `read-pick-menu` / `workflow-bits` are copied from ontology into workflows — ✅ RESOLVED 2026-08-30
 - Location: `src/features/workflows/components/{pick-menu,read-pick-menu,workflow-bits}.tsx` vs `src/features/ontology/components/pick-menu.tsx`
 - Found during: workflows pivot (2026-07-16)
 - Severity: smell
@@ -233,6 +262,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - **The trigger is now effectively unreachable, and that is the finding's new shape.** Workflows are retired from every surface (ENGINEERING §7). A retired feature does not grow consumers, so the copies are frozen rather than drifting, and this stops being a promotion decision and becomes part of whatever eventually deletes `features/workflows`. **Do NOT promote to `src/shared/ui` on the strength of a workflows consumer** — that would move code into shared on behalf of a caller nobody can reach.
 - Proposed resolution: defer — promote only if a LIVE third consumer appears; otherwise this dies with `features/workflows`.
 - Status: open (downgraded)
+- ⚠ **CLOSED 2026-08-30 — superseded:** `features/workflows` was deleted (0 tracked files; the tables went with `supabase/migrations/20260811120000_drop_workflows_and_clusters.sql`), so the copies died with it exactly as this entry's own resolution predicted — `src/features/ontology/components/pick-menu.tsx › PickMenu` is the sole remaining statement.
 
 ### F-038: Concurrent-edit protection — version tokens are timestamp strings
 - Location: `src/features/skills/server/repository.ts:348` (`.eq("body_updated_at", …)`), `:259` (`.eq("updated_at", …)`); `src/features/knowledge/server/repository-entries.ts:342` (`.eq("updated_at", …)`)
@@ -550,7 +580,7 @@ COMMIT;
 - Proposed resolution: refactor the list one file at a time, outside a hardening round. **The web tree just proved this works when a wave actually does it** — `server.ts`, this entry's standing "first, on reach" pick, went 1045 → 227. Consider making the exemption a size CEILING rather than an off switch. **DO NOT ADD TO THE EXEMPTION LIST — split the file instead.**
 - Status: open (rule holding; **5-file backlog, down from 10**; the desktop cluster is now the worse half)
 
-### F-096: Stale prose still describes the deleted `main/mcp-cli-entry.js` as live — and it SHIPS
+### F-096: Stale prose still describes the deleted `main/mcp-cli-entry.js` as live — and it SHIPS — ✅ RESOLVED 2026-08-30
 - Location: `packages/mcp-server/src/tools/channel-await-budget.ts:71`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-await-budget.js:74` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
 - Found during: Q9 follow-up (2026-07-31)
 - Severity: smell (prose that ships as part of the server)
@@ -558,6 +588,7 @@ COMMIT;
 - **Line numbers re-measured 2026-08-08 (all four had drifted).** Other surviving mentions are DELIBERATE and must not be "cleaned up": `dopl-desktop-app/main/mcp-config.js:13` and `main/mcp-cli-add.js:11` explain the removal; `test/sdk-mcp-token.test.mjs:251,257,260,264` assert it; `docs/ENGINEERING.md:567` records the reasoning.
 - Proposed resolution: fix-now — one sentence in `channel-await-budget.ts` plus one in the route, then `npm run build:packages`.
 - Status: open (prose only; rides the next build + push)
+- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-await-budget.ts › AWAIT_HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
 
 ### F-097: `POST` and `DELETE` on `/api/auth/mcp-device-token` disagree about an invalid `label`
 - Location: `src/app/api/auth/mcp-device-token/route.ts:24-32` (`readLabel`) vs `:87-92` (`RevokeSchema.safeParse`)
@@ -576,7 +607,7 @@ COMMIT;
 - Status: open (needs a server push)
 
 ### F-100: The WEB roster still shows every member's EMAIL to every member — the MCP half is closed, the web DTO is not
-- Location: `packages/mcp-server/src/tools/channel-render.ts:412-416` (`formatMemberLine`, the closed half, kept as the shape to copy); the OPEN half is the web roster — `src/features/members/types.ts:28,46` carry `email` on the member shapes and `components/member-row.tsx:88,95-97` renders it **unconditionally for every member**, with no admin-or-self test anywhere on the path; the parity comment is `packages/mcp-server/src/tools/members.ts:176`
+- Location: `packages/mcp-server/src/tools/channel-render.ts:412-416` (`formatMemberLine`, the closed half, kept as the shape to copy); the OPEN half is the web roster — `src/features/members/types.ts:28,46` carry `email` on the member shapes and the console renders it **unconditionally for every member**, with no admin-or-self test anywhere on the path. ⚠ **RE-SITED 2026-08-30**: this named the v1 member row, which was deleted with the rest of the v1 console (ledger ASK-1). **The finding survives the file** — v2 renders the same field at `src/features/members/components/members-v2/member-rows.tsx › MemberSectionCard`, `› member-facts.tsx`, `› member-header.tsx` and `› team-detail-pane.tsx`, four sites where there was one, and `› visibility.ts` is where an admin-or-self test would go; the parity comment is `packages/mcp-server/src/tools/members.ts:176`
 - Found during: the N-party wave review (2026-07-31); **rewritten down 2026-08-11 — the MCP half verified closed on disk and deleted from this entry**
 - Severity: question (owner call)
 - **The closed half, kept in one sentence because it is the shape the open half should copy:** `formatMemberLine` computes `emailAllowed = callerIsAdmin || isSelf`; every other member renders as name + id + role, a name-less member renders **by id alone**, and `isAdmin` defaults to `false` at every hop so a boot ping that failed to resolve the flag scrubs rather than leaks. Pinned by `channel-addressing.test.ts`.
@@ -673,7 +704,7 @@ COMMIT;
   - (e) ~~the `client.ts` size half is tracked at F-093 (720 lines)~~ — **closed 2026-08-08: `client.ts` is 34**, split into a ten-link method-group chain. See F-093.
 - Status: open (residuals recorded, not queued)
 
-### F-110: Multiplayer — the five residuals that outlived the rollback
+### F-110: Multiplayer — the five residuals that outlived the rollback — ✅ RESOLVED 2026-08-30
 - Location: `dopl-desktop-app/main/{session-pool,session-spawner,session-store,channel-prefs}.js`; `supabase/migrations/2026073109/10/11*`
 - Found during: three adversarial per-lane reviews of the multiplayer wave (2026-07-31)
 - Severity: smell
@@ -683,6 +714,7 @@ COMMIT;
   - **(k) The permission preset is CHANNEL-keyed, so one session can consume another's single-use arm.** `main/channel-prefs.js:148` stores `map[channelId]`, `takeArmFrom` deletes on read at `:155-159`. De-amplified (the multi-agent-in-a-room half went with named agents), leaving the original single-session shape. Re-keying the arm to a SLOT touches the same surface F-119's `adoptsConsent` single-setter pin guards, so it is not a drive-by.
   - **(l) ANSWERED AND CLOSED — the constraints are LIVE.** `20260731090000_profiles_display_name_bounds`, `20260731100000_channels_name_topic_bounds` and `20260731110000_short_label_charset_bounds` had history rows whose objects never existed (a `migration repair --status applied` inserts the row without running the SQL); they were re-created for real by `20260808150000_replay_hardening_wave_20260731`. **Verified against production 2026-08-11 by direct `pg_constraint` introspection**, not by reading a file: `profiles_display_name_check`, the charset-bounded `channels_name_check`, `channels_topic_check` and all 14 `*_charset_check` are present. **`migration list` could never have answered this** — it compares history rows to filenames and executes nothing, which is precisely why this item sat open for three days. Nothing left to check here.
 - Status: open (residuals)
+- ⚠ **CLOSED 2026-08-30 — superseded:** all three surviving residuals lost their subject on 2026-08-20. (g) `session-pool.js` went with the headless lane; (j) `claudeSessions` is a retired store key, pinned in `dopl-desktop-app/test/removed-vocabulary.test.mjs › RETIRED_STORE_KEYS`; (k) the single-use permission arm (`takeArmFrom`) is deleted and replaced by the DURABLE posture at `dopl-desktop-app/main/channel-prefs.js › getLaunchPosture`.
 
 ### F-111: Two agents in one thread on the AUTO posture have no SHORT bound
 - Location: `dopl-desktop-app/main/settings.js:29` (`DEFAULT_TURN_CAP = 24`); no consecutive-exchange limit in `session-profiles.js`, `session-gate.js` or `session-reducer.js`
@@ -713,7 +745,7 @@ COMMIT;
 - **The discipline to preserve:** `session_id` is a stamp, not a lock — always stripped from caller metadata, re-stamped only from `X-Dopl-Session-Id`, absent header ⇒ NO KEY, and **it is a hint, never an authorization signal** (any device-token holder can send it; nothing gates on it). Enforcing one live session per agent id was rejected: it breaks the legitimate three-slot design and does nothing for an external CLI passing `as_agent`.
 - Status: open (residuals)
 
-### F-114: A closed thread can only be reopened by a human, and an agent has no op to point at
+### F-114: A closed thread can only be reopened by a human, and an agent has no op to point at — ✅ RESOLVED 2026-08-30
 - Location: `src/features/channels/schema.ts:288` (`z.object({ op: z.literal("reopen") })`, documented web-only at `:266`); `server/service-writes-metadata.ts:429-437` (the legacy branch) and `:493`
 - Found during: the 2026-08-01 two-agent live run
 - Severity: smell (the silent-acceptance bug is fixed)
@@ -721,6 +753,7 @@ COMMIT;
   - **(a) `reopen` still has no MCP op**, and it matters MORE than it did. The only mcp-server mention is a comment at `packages/mcp-server/src/tools/channel-post-linkage.ts:58`. That mattered little while nothing closed threads; **F-105's propose-then-confirm means closes now actually happen**, so an agent working a thread a human closed early has no way back in and no op to point at. **Not a drive-by:** the close is deliberately human-only (`ThreadCloseIsHumanOnlyError`), so the reopen's authority is a product call.
   - **(b) A LEGACY thread tag can never warn.** The legacy branch never assigns `task` — it only strips or keeps the tag — so there is no status to read. Correct (it is not a thread, which is the same reason F-115 renders it `ad-hoc`), but it means an ad-hoc exchange has no "this is over" signal at all.
 - Status: open (residuals)
+- ⚠ **CLOSED 2026-08-30 — superseded:** threads no longer close at all (wiring plan Phase 4). `close`, `propose_close` and `reopen` are always-failing tombstones at `src/features/channels/schema.ts › removedOp` under `REMOVED_THREAD_CLOSE`, so there is no close for an agent to be locked out of, and residual (b)'s legacy-tag warning has nothing left to warn about.
 
 ### F-115: A synthetic `task-<channel>-<seq>` id is labelled `ad-hoc`, and so is a fabricated one
 - Location: `packages/mcp-server/src/tools/channel-render-threads.ts:147` (`isFirstClassThreadId(id) ? "thread" : "ad-hoc"`, the predicate a bare `UUID_RE.test` at `:87-89`); same split at `:194-195`
@@ -741,7 +774,7 @@ COMMIT;
   - **(e) `session_id` and `appVersion` never co-occur on one row, so the forensic join is still missing.** `/api/mcp/route.ts` reads only `readRuntimeHeader` (`:82`) and `readSessionIdHeader` (`:89`) and forwards no version; `sdk-loader.js` sets `X-Dopl-Runtime` (`:181`) and `X-Dopl-Session-Id` (`:231`) and no version header. The plumbing exists elsewhere (`src/shared/auth/app-version-header.ts:50`, read at `with-workspace-auth.ts:218`, sent by `main/app-version.js:25`), so this is a wire change on two surfaces, not a guard. **Confirmed real in prod rows during the 2026-08-02 incident**: SDK-lane posts carry `session_id` + `runtime` and no `appVersion`; lifecycle posts carry `appVersion` and no `session_id`.
 - Status: open (residuals)
 
-### F-118: ATTENDED HANDOFF — five residuals, every one a consequence of "resolve locally, decide nothing on the server"
+### F-118: ATTENDED HANDOFF — five residuals, every one a consequence of "resolve locally, decide nothing on the server" — ✅ RESOLVED 2026-08-30
 - Location: `dopl-desktop-app/main/attended-handoff.js` (348 lines, wired through the session window's `session:attended-handoff` IPC), `main/attended-prompt.js`, and the session window's attended UI. ⚠ **ALL FOUR ARE DELETED (2026-08-20, F-228)** — the handoff's only entry point was a pre-consent card's window. The paths are kept unlinked below as the record of what was audited
 - Found during: build + review of the attended-handoff feature (2026-08-02)
 - Severity: smell (all five accepted for v1, and each is documented in the source)
@@ -754,6 +787,8 @@ COMMIT;
 - **THE INVARIANT A FUTURE SESSION MUST NOT RELAX: zero peer bytes in the prefill.** An attended session is the operator's personal Claude — full tool set, no Dopl containment — so the template interpolates ONLY three narrowed ids. Peer/channel names were deleted after a reviewer demonstrated injection via a 48-char channel rename. `narrowId` is pinned byte-identical to `prompt-framing.idToken` by differential test.
 - **And the measured platform limits, because they are not documented anywhere else:** the `claude-cli://` handler silently drops any URL over **4,096 TOTAL characters** (4,096 delivers, 4,097 vanishes; `openExternal` resolves either way, so there is no error to catch) — the documented 5,000-char `q` cap is unreachable. The `claude://code/new` app route TRUNCATES params at **1,024**, which is worse than dropping: half a procedure still looks whole. Both are pre-flighted.
 - Status: open (residuals)
+- ⚠ **CLOSED 2026-08-30 — superseded by deletion:** the two attended-handoff modules in `dopl-desktop-app/main/` (attended-handoff.js, attended-prompt.js — named in prose because the files are gone) went with the pre-consent window (F-228) and are pinned as retired vocabulary in `dopl-desktop-app/test/removed-vocabulary.test.mjs`.
+- ⚠ **THE "DELETING THIS WOULD DELETE KNOWLEDGE WITH NO OTHER HOME" CAVEAT WAS MOSTLY FALSE, AND CHECKING IT IS THE LESSON.** Both standing-knowledge blocks were ALREADY in `docs/ENGINEERING.md`, under its attended-handoff section — the `claude-cli://` 4,096 / `claude://code/new` 1,024 limits and the zero-peer-bytes prefill invariant. **Exactly three details were unique to this entry** (the off-by-one datum, the unreachable 5,000-char `q` cap, and the 48-char channel rename that demonstrated the injection); they were copied into `docs/ENGINEERING.md` in this same change, so this entry now carries nothing that is not written down elsewhere. **An entry kept alive to protect knowledge should say WHICH knowledge and WHERE ELSE it is not** — this one asserted the negative without checking it.
 
 ### F-119: THE POSTURE WAVE — four surviving residuals
 - Location: `dopl-desktop-app/main/{session-dispatch,session-profiles,session-model,session-engine,settings}.js`
@@ -768,7 +803,7 @@ COMMIT;
 - **The blocker this wave's review caught is worth restating, because it is a trap the codebase can re-enter:** the consent arm was keyed to the `(channel, thread)` SLOT and consumed unconditionally by EVERY spawn shape, so a peer-driven parked-shell wake racing a pending armed card started at bypass/auto_both while the real Accept spawned manual/ask. Fixed with `adoptsConsent`, threaded from `launch()`'s own adopt test and pinned as a SINGLE SETTER. Do not add a second setter.
 - Status: open (residuals)
 
-### F-120: The reopen route — three residuals, one of them stale
+### F-120: The reopen route — three residuals, one of them stale — ✅ RESOLVED 2026-08-30
 - Location: `dopl-desktop-app/main/session-gate.js:185-189` and `:191-195`; `main/listener-messages.js:112-121`; `main/targeting.js:46-49`
 - Found during: Samuel's live Claude-desktop DM test on 1.7.23 (2026-08-02)
 - Severity: smell (the second-consent-window bug is fixed by route (6))
@@ -778,6 +813,7 @@ COMMIT;
   - **(c) STALE — the `agent-escalation` verdict no longer exists.** `main/targeting.js:46-49` records that nothing stamps `author_agent_id` or `to_agent_id` any more, and `main/listener-messages.js:118-121` says the verdict is unreachable and gone. There is no classification left to precede the reopen route.
 - **The design property worth preserving:** route (6) is the ONE post-classify route, and post-classify placement buys the no-collateral guarantee by construction — task-reply/fyi/chat/ignore are dispatched before it can run. A recreate is NOT an adoption: the route never touches the consent-entry arm, which is what keeps the `adoptsConsent` single-setter pin green.
 - Status: open (residuals (a) and (b))
+- ⚠ **CLOSED 2026-08-30 — superseded:** the hold path itself is deleted (2026-08-20, F-228). A windowless session's message axis is floored at `auto_inbound` by `dopl-desktop-app/main/session-profiles.js › floorWindowlessMessage`, so `dopl-desktop-app/main/session-gate.js › feedInbound` dispatches straight through and nothing is ever held — which retires both (a) the memory-only queue and (b) the peer's stuck "Working…" card.
 
 ### F-123: An intermittently failing app-shell test (~1 in 3 full-suite runs)
 - Location: `apps/desktop-ui/src/components/app-shell/app-shell.test.tsx` — "rewrites a stale segment to the canonical one, keeping the page"
@@ -830,13 +866,14 @@ COMMIT;
 - Description: `listSessionStates` carries a `PGRST205` degrade for the case where the `channel_sessions` table does not exist. The migration `20260805120000_channel_sessions.sql` was applied on 2026-08-06 — the table exists and carries live rows, and `read_sessions` answered 200 in the live harness — so that branch is unreachable. **It is worth deleting rather than leaving:** a degrade path for a missing table is a strong hint to a reader that the table might be missing, which is now false and would slow down the next person debugging that read.
 - Status: open
 
-### F-146: `main/ui-sync.js` still binds a table nothing writes
+### F-146: `main/ui-sync.js` still binds a table nothing writes — ✅ RESOLVED 2026-08-30
 - Location: `dopl-desktop-app/main/ui-sync.js` (`SYNC_TABLES` includes `channel_agents`)
 - Found during: the residue pass (2026-08-05); **rewritten down to the one deferred item 2026-08-08**
 - Severity: smell
 - Description: nothing writes `channel_agents` and no web hook watches it, so the binding is residue. It was NOT dropped because that is a BEHAVIOUR change with a pinned contract test and the pass that found it was comment-only. Sequence with F-141 (c)/(e).
 - **The lesson from that pass, which this file has now had to learn twice:** its own "NOT CHANGED, with reasoning" clause said the F-105 / F-110..F-117 residual sets were "assessed and left, because the rollback did not invalidate them". It had invalidated most of them. **"Assessed" was doing work an `ls` would not have supported.** Distrust any status line that reports on a set the writer did not re-read.
 - Status: open
+- ⚠ **CLOSED 2026-08-30 — superseded:** `channel_agents` is absent from `dopl-desktop-app/main/ui-sync-core.js › SYNC_TABLES`; the binding was dropped 2026-08-06, as `ui-sync.js`'s own header records. ⚠ **The Location anchor is doubly stale** — the list also MOVED out of `ui-sync.js` at the 500-line split (2026-08-18), which is the same basename trap F-220 records.
 
 ### F-150: The knip sweep is MEASURED, not executed
 - Location: `knip.json` (ignore list is exactly `[".claude/**", "**/dist/**", "supabase/**", "dopl-desktop-app/**"]`)
@@ -862,7 +899,7 @@ COMMIT;
 - What would have to be true: (1) a product call on privacy — a visible steer is one key and one predicate; a private one needs a transport that is not the shared thread, i.e. schema + RLS; (2) regardless, a peer-side drop rule shipped FIRST, then a skew window, then the sender flag; (3) an explicit gated-vs-ungated call, which is a token-custody decision and not an agent's to make.
 - Status: **not built, deliberately** — open until (1) and (3) land
 
-### F-155: A non-direct channel's delete is "hidden forever, retained forever", and the copy is waiting on the product call
+### F-155: A non-direct channel's delete is "hidden forever, retained forever", and the copy is waiting on the product call — ✅ RESOLVED 2026-08-30
 - Location: `src/features/channels/components/channel-pane.tsx` (the non-DM ConfirmDialog); `server/service-writes.ts#deleteChannel` → `repository.ts:239#softDeleteChannel`; `reviveChannel` at `repository.ts:177`; migration `20260807110000_purge_soft_deleted_rows.sql:48-51`
 - Found during: the retirement + hard-delete truthfulness sweep (2026-08-07)
 - Severity: question (product decision)
@@ -871,6 +908,7 @@ COMMIT;
 - ⚠ **Do NOT "resolve" this by picking a side in the copy. The copy is waiting on the product call, not the other way round.**
 - ⚠ **Two things a future session must not undo.** The DM copy is REVERSIBLE-by-design and must stay that way while `softDeleteChannel` is what `deleteChannel` calls. And `channel-pane.tsx` is **495 lines** — five from the cap — so the next edit to it is a split, not an addition (§2).
 - Status: open (question)
+- ⚠ **CLOSED 2026-08-30 — superseded:** the product call was made and shipped. `src/features/channels/server/service-writes.ts › deleteChannel` routes a non-direct channel to `src/features/channels/server/repository.ts › hardDeleteChannel` (only a DM still soft-closes), and `src/features/channels/components/channels-v2/channel-manage.tsx` states it plainly — *"permanently deleted for everyone in the workspace. This can't be undone."* The entry's instruction not to pick a side in the copy held: the copy followed the ruling, not the other way round.
 
 ### F-158: `/` stays in the proxy matcher, deliberately
 - Location: `src/proxy.ts` `config.matcher`; `next.config.ts` `headers()`; ENGINEERING §9.3
@@ -972,7 +1010,7 @@ COMMIT;
 - Proposed resolution: fix-now for the routed files above (mechanical, no design questions); then apply the migration; then regenerate the DB types. Separately, decide whether a per-channel "quiet here" preference is wanted at all — F-079's surviving sentence asks the same question from the DM end.
 - Status: open (UI, client wiring, schema, `classify` and the desktop tests are done; server DTO, `sendFyi` and the column remain)
 
-### F-172: `propose_close` is re-raisable — but the SUCCESS RESPONSE still tells the agent "Do not propose again", and a test pins it there
+### F-172: `propose_close` is re-raisable — but the SUCCESS RESPONSE still tells the agent "Do not propose again", and a test pins it there — ✅ RESOLVED 2026-08-30
 - Location: **the stale copy** — `packages/mcp-server/src/tools/channel-ops-threads.ts:301` (the `propose_close` success text) and its mirror in the shipped `dist/tools/channel-ops-threads.js:258`; pinned by `packages/mcp-server/src/tools/channel-closed-thread.test.ts:172` (`expect(text).toContain("Do not propose again")`)
 - Found during: audit item C-6 → Samuel's decision to make it re-raisable (2026-08-08); **rewritten down 2026-08-11 — the server fix verified, the copy sweep found INCOMPLETE**
 - Severity: bug (the fix is defeated at the loudest surface)
@@ -984,6 +1022,7 @@ COMMIT;
 - Status: open (one stale sentence + its pinning test)
 
 ---
+- ⚠ **CLOSED 2026-08-30 — superseded:** the whole op went with thread closing. The string *"Do not propose again"* is absent from `packages/` (source and `dist/`), and the pinning test is INVERTED — `packages/mcp-server/src/tools/channel-closed-thread.test.ts` now asserts the response mentions neither `propose_close` nor `close_thread`, backed by the tombstones at `src/features/channels/schema.ts › REMOVED_THREAD_CLOSE`.
 
 ## F-175 — Desktop reliability round: the two field-triggered residuals
 
@@ -1078,7 +1117,7 @@ COMMIT;
 
 ---
 
-## F-185 — `teams/server/repository-resources.ts` reads and writes three other features' tables — pre-existing debt, now visible
+## F-185 — `teams/server/repository-resources.ts` reads and writes three other features' tables — pre-existing debt, now visible — ⚠ RE-CLASSIFIED 2026-08-30 — GREW WORSE, still open
 
 - Location: `src/features/teams/server/repository-resources.ts:28,34,40` (`knowledge_bases` / `workflows` / `skills`), `:82`, `:140`, `:184-185` (an `access_mode` UPDATE on the resource's own table)
 - Found during: the teams `repository.ts` 625 → 114 split
@@ -1089,6 +1128,10 @@ COMMIT;
 - Status: open
 
 ---
+- ⚠ **NOT SUPERSEDED — RE-CLASSIFIED 2026-08-30 AS *GREW WORSE*, because this entry's OWN DEFERRAL TRIGGER HAS FIRED.** It deferred with *"revisit when a fourth grantable resource type is added"*; `src/features/teams/server/repository-resources.ts › RESOURCE_TABLES` is now polymorphic across **FOUR** tables — `knowledge_base`, `skill`, `chat`, `chat_folder` — and the module's own docblock says so in those words. **A trigger nobody re-reads is a deferral with no end date.**
+- ⚠ **AND THE COUNT IN THE TITLE IS STALE THE OTHER WAY:** `workflows` is gone, so it reads and writes **two** other features' tables, not three. Both numbers moved; neither was re-measured until now.
+- **PARTIAL MITIGATION EXISTS AND IS NOT ADOPTION.** `› setResourceAccessModeRow` REFUSES `chat` / `chat_folder` and routes them to the chats service — **precisely the shape this entry proposed** — but applied to two of the four, so the module is now half one design and half the other. Finish it or reverse it; do not leave it split.
+- Status: **open — moved to GREW WORSE.**
 
 ## F-187 — Pending-auth store: renderer-driven slot pressure, and the records are plaintext
 
@@ -1220,7 +1263,7 @@ COMMIT;
 - Proposed resolution: none proposed. If the boundary ever needs to move, the unit has to change first — a per-REQUEST price, not a per-TOOL-CALL one — and that is a pricing decision, not a refactor.
 - Status: open (accepted residual)
 
-## F-199 — The bundled SPA is NOT realtime-dark, and three surviving comments said it was (2026-08-18)
+## F-199 — The bundled SPA is NOT realtime-dark, and three surviving comments said it was (2026-08-18) — ✅ RESOLVED 2026-08-30
 
 - Location of the false claim: `apps/desktop-ui/src/pages/channels/index.tsx › ChannelsPage` ("⚠ REALTIME IS OFF HERE … `shared-channel-registry.ts` short-circuits on `window.dopl`"), `apps/desktop-ui/src/components/app-shell/app-shell.tsx › AppShellLayout` ("POLLED because realtime is a no-op in the SPA"), `dopl-desktop-app/main/ui-sync.js`'s own header ("short-circuits to a no-op the moment it sees the SPA bridge"), and inherited by `apps/desktop-ui/src/pages/channels-v2/MAPPING.md` § *Not represented in the mock*
 - Location of the truth: `src/shared/realtime/shared-channel-registry.ts › subscribeSharedWorkspaceTables` — the SPA branch is CAPABILITY-KEYED, not a truthiness check on `window.dopl`. With `onSyncEvent` + `syncWatch` present it returns `› subscribeViaBridge`; only their ABSENCE (an older main) returns the no-op
@@ -1232,8 +1275,9 @@ COMMIT;
 - Fixed in this change: both `apps/desktop-ui` docblocks, the `ui-sync.js` header clause, and the MAPPING.md parenthetical. §7 gained an explicit sentence so the next reader does not have to re-derive it from `SYNC_TABLES`
 - Pinned so it cannot silently regress: `src/shared/realtime/shared-channel-registry.test.ts` now drives the real channels table constants through the bridge branch, and `dopl-desktop-app/test/ui-sync-tables.test.mjs` names all five channel tables individually with the transcript-freeze reason
 - Status: open only as a LESSON — the claim is corrected everywhere it was found. **A comment is a measurement with no date on it. This one was falsified 26 minutes after it was written and survived fifteen days of work on the files around it.**
+- ⚠ **CLOSED 2026-08-30 — superseded:** all three false comments are corrected in the tree. `apps/desktop-ui/src/pages/channels/index.tsx › ChannelsPage` now reads *"REALTIME IS LIVE HERE"* and cites F-199/F-200, `ui-sync.js`'s header states that the UI feed watches the channel tables, and the capability-keyed branch is pinned at `src/shared/realtime/shared-channel-registry.ts › subscribeSharedWorkspaceTables`. INVARIANTS §7 remains the statement of record.
 
-## F-200 — The consent card's desktop-only rows are wired; the same docblock said the preload does not expose them (2026-08-18)
+## F-200 — The consent card's desktop-only rows are wired; the same docblock said the preload does not expose them (2026-08-18) — ✅ RESOLVED 2026-08-30
 
 - Location of the false claim: `apps/desktop-ui/src/pages/channels/index.tsx › ChannelsPage` — "NOT WIRED: consent card's desktop-only rows (working folder, permission preset) feature-detect `window.dopl.channels`, which the SPA preload does not expose. They render nothing, as in a plain browser."
 - Location of the truth: `dopl-desktop-app/renderer/app-preload.js` exposes `channels.getFolderLabel`, `channels.chooseFolder`, `channels.clearFolder`, `channels.getPermissionPreset` and `channels.setPermissionPreset` — five ops, each an `ipcRenderer.invoke` on a `channels:*` handler
@@ -1243,8 +1287,9 @@ COMMIT;
 - **Commit archaeology (verified, 2026-08-18).** `24862c76` "feat(desktop): channels bridge surface on the SPA preload" landed 00:32:10 -0700 on 2026-08-03 — **under three minutes after** `1f614c1a` wrote the denial at 00:29:43
 - Fixed in this change: the docblock now states the exposed surface and cites the parity pin
 - Status: open only as a LESSON, same shape as F-199 and from the same night
+- ⚠ **CLOSED 2026-08-30 — superseded:** the "NOT WIRED" denial no longer exists anywhere in `apps/desktop-ui/src`, and the exposed surface is pinned by `dopl-desktop-app/test/preload-parity.test.mjs › APP_OPS`. ⚠ **The surface has since NARROWED to the three folder ops** — `getPermissionPreset`/`setPermissionPreset` were deleted from `renderer/app-preload.js` with the arm — so do not read this entry's five-op list as current.
 
-## F-203 — Tracked `packages/*/dist` is stale against `src`, and a plain rebuild proves it (2026-08-18)
+## F-203 — Tracked `packages/*/dist` is stale against `src`, and a plain rebuild proves it (2026-08-18) — ⚠ RE-VERIFIED 2026-08-30 — still open
 
 - Measured 2026-08-18: with a clean tree, `npm run build:packages` rewrote **152 tracked files** under `packages/dopl-client/dist` and `packages/mcp-server/dist` (+3659 / −6136), the overwhelming majority of them unrelated to anything being changed — e.g. `packages/dopl-client/dist/abort.js`'s header still carried a docblock revision its `src` no longer has. Re-run the command on a clean tree to re-measure; do not quote the number
 - So the committed `dist` is the output of some OLDER `src`, and `docs/INVARIANTS.md` §10's *"`packages/*/dist` is what the app loads at runtime — after editing either package's `src/`, run `npm run build:packages` or the old surface ships"* has silently not been happening
@@ -1252,6 +1297,10 @@ COMMIT;
 - Deliberately NOT resolved in Phase 1: the rebuild was reverted rather than committed, because 152 files of unrelated regenerated output inside a read-model change buries the change and asserts, on someone else's behalf, that the whole regenerated surface is intended
 - Proposed resolution, once the consumer question is answered: either (a) `dist` is a build artifact for every consumer → gitignore it and delete it from the index, or (b) some consumer really loads it → commit a deliberate full rebuild ON ITS OWN, and add the rebuild to a gate so it cannot drift again. **What is not acceptable is the current state, where the tree says one thing and the build says another**
 - Status: open (needs a decision, not a patch)
+- ⚠ **NOT SUPERSEDED — STILL OPEN, RE-VERIFIED 2026-08-30.** Neither branch of the decision this entry demands has been taken: `dist` is still tracked (218 files), `.gitignore` carries no `dist` entry, and `.github/workflows/ci.yml` BUILDS both packages as a precondition but **never diffs the rebuild against the committed tree** — so there is still no gate.
+- 🔴 **AND THE DRIFT IS LIVE, MEASURED BY DOING WHAT THIS ENTRY ASKS FOR (2026-08-30).** A plain `npm run build -w @dopl/mcp-server` rewrote **three modules that nothing in that change had touched** — `dist/tools/agent-shared.{js,d.ts}`, `dist/tools/knowledge-ops-write.{js,d.ts}` and `dist/tools/knowledge.js` — and one of them was not a comment: the committed `opUpdateBase` still had the FIVE-argument signature with no `shelf` refusal, so **the shelf-is-fixed-at-create ruling (F-342) was in `src/` and not in the build the MCP server loads.** The one example this entry cited (`dist/abort.js`'s header) HAS healed; the class has not.
+- **The consumer question this entry says to answer first now has an answer for at least one path:** `scripts/check-role-drift.ts` reads the committed `dist/` deliberately, *"because it is what `main` actually imports"*. So option (a) — gitignore it — is not free; it would blind that gate. **Option (b) — a deliberate full rebuild plus a CI rebuild-diff step — is the branch the evidence now points at.**
+- Status: **open (needs a decision, not a patch) — with the 2026-08-30 measurement above as the evidence it was waiting for.**
 
 ## F-204 — `react-hooks/refs` catches the assign-a-ref-during-render pattern in one channels file and not in its twin (2026-08-18)
 
@@ -1302,7 +1351,7 @@ COMMIT;
 - ⚠ **THIS ENTRY IS OUT OF NUMERIC ORDER NO LONGER.** It sat between F-201 and F-203 — F-202's vacated slot, taken when F-202 was deleted as resolved — from Phase 4 until 2026-08-18. Moved into order in fix wave 3, unchanged in content
 - Status: open (actionable — one migration, no code change, no floor raise)
 
-## F-208 — INVARIANTS §10 describes a `/playground` feature this tree does not contain (2026-08-18)
+## F-208 — INVARIANTS §10 describes a `/playground` feature this tree does not contain (2026-08-18) — ✅ RESOLVED 2026-08-30
 
 - Found during: Phase 4 of `docs/CHANNELS-V2-WIRING-PLAN.md`, reconciling §13's cron count after deleting `/api/cron/stale-threads`
 - **The disagreement, measured.** `docs/INVARIANTS.md` §10's last bullet describes the playground in detail — `POST /api/playground/session`, `app/api/playground/mcp/[token]/route.ts`, `features/playground/server/token.ts`, `features/playground/session.tsx`, the `/playground` page, and **a fourth cron, `app/api/cron/playground-reaper`, "vercel.json"**. On 2026-08-18 in this worktree: `ls src/features/playground`, `ls src/app/api/playground` and `ls src/app/playground` all report no such directory, and `ls src/app/api/cron/` returns two entries. ⚠ **The original wording of this bullet also claimed `vercel.json` listed two schedules. IT LISTED THREE** — the deleted `stale-threads` entry was still in the file and went unnoticed by this measurement too (see F-207's correction). It lists two as of 2026-08-18, after the wave-2 fix pass deleted it; re-run `jq '.crons[].path' vercel.json` rather than trusting the count
@@ -1311,6 +1360,7 @@ COMMIT;
 - **What resolving it needs** — one of: confirmation that the playground was retired (then §10's bullet is deleted, and `SELF_AUTH_ROUTES` / `PUBLIC_ROUTES` / `write-gate-coverage.test.ts` are checked for its leftovers), or the branch it lives on (then §10 is correct-but-early, and it should say so with a date)
 - **MEASURED CAUSE (2026-08-18, merge pass): the playground is UNTRACKED WORK IN THE MAIN CHECKOUT** — `git status` there shows `src/app/playground/`, `src/app/api/playground/`, `src/features/playground/` and `src/app/api/cron/playground-reaper/` all as `??`. Same class as F-209: the doc was committed ahead of the code. Resolves when that work lands; §10's bullet is correct-but-early
 - Status: open (awaiting Samuel — only he can say which side is stale)
+- ⚠ **CLOSED 2026-08-30 — superseded:** this entry's own MEASURED CAUSE resolved. The untracked playground work landed: `src/features/playground/server/token.ts › issuePlaygroundToken`, `src/app/api/playground/mcp/[token]/route.ts`, `src/app/playground/page.tsx` and `src/app/api/cron/playground-reaper/route.ts` are all tracked, and `/api/cron/playground-reaper` is one of `vercel.json`'s THREE crons. **§10's bullet was correct-but-early**, which was one of the two readings this entry named. The stale counter-note in `docs/INVARIANTS.md` §13 is deleted in this same change.
 
 ## F-209 — INVARIANTS §3 describes an `/authenticate` sign-in page and a loop-counted route set this tree does not have (2026-08-18) — ✅ RESOLVED 2026-08-25
 
@@ -1388,7 +1438,7 @@ COMMIT;
 - **THE AGENT-SIDE HALF IS NOT BUILT EITHER, and it is the wiring plan's Phase 11.** "Tagging is a capability the agent must be TOLD it has" (MAPPING wiring intent) is MCP prose that does not exist yet, so until it lands **no agent tags anybody and the agent-escalation rate is zero**. That is the safe direction — the failure is silence, not noise — but it means the mention gate currently reads as "agents stopped notifying" rather than as "agents notify when it matters", and a judgement about whether the policy is right should not be formed on this interval
 - **What was measured, not inferred:** the desktop's THREE remaining per-message notification paths are the addressed request (`consent.notifyInbound`, deliberately ungated), `trigger.js › sendFyi` and `task-notify.js › notifyTaskReply` (both gated). One concrete banner that used to fire and now does not: a peer's agent replying in an interactive thread opened by an EXTERNAL requester (the operator's own Claude Code over MCP). That reply still reaches the external session through its own armed await, so nothing is lost — but the desktop courtesy notice is gone unless the reply tags the operator (`test/wake-external-requester.test.mjs`, "EXTERNAL reply that tags NOBODY")
 - Proposed resolution: do F-211's workspace-wide read and its sidebar badge as the next piece of channels work, and treat Phase 11's tagging prose as part of the same product decision rather than as MCP documentation. Do NOT answer this by widening the gate
-## F-214 — A request notification lands on the channel, and the channel has no way to launch or decline (2026-08-18)
+## F-214 — A request notification lands on the channel, and the channel has no way to launch or decline (2026-08-18) — ✅ RESOLVED 2026-08-30
 
 - Found during: Phase 9 of `docs/CHANNELS-V2-WIRING-PLAN.md`, inverting the windowing
 - Location: `src/features/channels/components/channels-v2/transcript.tsx › ThreadCardMessage` (the `PendingChip` branch) vs `src/features/channels/components/channels-v2/inbox-pane.tsx`
@@ -1396,6 +1446,7 @@ COMMIT;
 - **So the operator's path is one click, not zero:** land on the channel → see the chip → open Inbox → launch or decline. The Inbox badge is visible on landing, so nothing is hidden; it is a step the ruling did not ask for
 - **Why the phase did not "fix" it by routing requests to the Inbox instead.** The Inbox read is `(operator, workspace)`-scoped and WORKSPACE-WIDE by construction (F-206), so landing there discards the one fact the notification carried — which channel. It would also fork `targeting-window.js › openChannelForEntry`, the single seam all three notification producers share, on a distinction `entry` does not carry
 - Proposed resolution: give the transcript's pending row a real decision control — the same `LaunchPanel`, inline, on the same `use-channel-preference-writes › consent` mutation and the same page-level `useRefetchGate` the Inbox pane already holds. That is a component placement, not a new read or a new write. ⚠ Do NOT solve it by making the chip a shortcut that opens the Inbox: that is the click this finding is about, wearing a different hat
+- ⚠ **CLOSED 2026-08-30 — superseded BY RULING, not by the proposed fix.** Samuel retired the entire ask/answer vocabulary on 2026-08-22 (*"remove all the stuff about declining and approving of threads"*): `PendingChip`, the card's Decline/Launch pair, `ThreadAwaitingStrip` and the Inbox's inbound rows are all deleted, leaving `src/features/channels/components/channels-v2/thread-consent.tsx › ThreadSendBox` as the outbound-only survivor. **There is no inbound decision left to place on the channel** — so the one-click-not-zero cost this entry measured no longer exists to pay.
 ## F-215 — `prompt-framing.test.mjs` is 7 lines from the desktop's hard cap, and the desktop has zero exemptions (2026-08-18)
 
 - Found during: Phase 11 of `docs/CHANNELS-V2-WIRING-PLAN.md`, pinning the two new VOCABULARY capabilities on both sides
@@ -1460,7 +1511,20 @@ COMMIT;
 - Cost is small and entirely cosmetic: the first paint reflows when live data arrives, which is the one thing a skeleton exists to prevent
 - ⚠ **Do not fix it by hand-rolling a recipe in the channels tree.** The file's own docblock records that it used to carry a local `animate-pulse` / `bg-surface-raised-2` clone and that `shared/ui/skeleton.tsx` plus DESIGN-SYSTEM.md forbid exactly that. A third column is a third shared primitive, or one added to the kit
 - Proposed resolution: add the info-panel column from the shared kit, or retire the skeleton for the empty-tree render the surface already has
-- Status: open
+- Status: **open — RE-VERIFIED 2026-08-30 and STILL VALID, and how it nearly closed is the useful half**
+- ⚠ **A 2026-08-30 pass classified this SUPERSEDED and was WRONG, by resolving the FILENAME against the
+  wrong tree.** There are two files called `channels-skeleton.tsx`:
+  `apps/desktop-ui/src/pages/channels/channels-skeleton.tsx`, which the skeleton wave DID rebuild, and
+  `src/features/channels/components/channels-skeleton.tsx`, **which this entry names** and which still
+  composes `TwoPaneListSkeleton` + `DetailPaneSkeleton` while `channels-v2/channels-v2-core.tsx` still
+  paints it. **Two same-named files in two trees, one fixed and one not, is precisely the shape that
+  makes an entry look closed to a reader who greps a basename** — treat any such claim as unverified
+  until the TREE is named, not just the file.
+- ⚠ **AND IT IS BIGGER THAN THIS ENTRY DESCRIBES: THE PAGE PAINTS TWO DIFFERENT SKELETONS IN SEQUENCE.**
+  The wrong-shaped one above is the initial-load branch; a second, correctly-shaped one follows it as the
+  live read settles. So the first paint reflows into a skeleton and then reflows again into content —
+  the reflow this entry calls "small and entirely cosmetic" happens twice. The fix is one `loadingSkeleton`
+  slot, not two skeletons that agree.
 
 ## F-221 — ✅ RESOLVED: copies of the IPC sender guard disagreed, with the more privileged ones on the lenient side (2026-08-18)
 
@@ -1496,7 +1560,7 @@ COMMIT;
 - Proposed resolution: add a `gen:types` script (`supabase gen types typescript --project-id <ref> > src/shared/supabase/types.ts`) and either a CI check that regenerating produces no diff, or — since only a linked project can answer — a documented step in the migration ritual. **Whichever: the current state is a generated artifact with no generator, which is the same class as F-203's tracked `dist` with no rebuild gate**
 - Status: open (needs a script + a decision about enforcement, not a patch)
 
-## F-224 — `check-doc-refs` had two blind spots, and the channels-v2 review walked through both (2026-08-18)
+## F-224 — `check-doc-refs` had two blind spots, and the channels-v2 review walked through both (2026-08-18) — ✅ RESOLVED 2026-08-30
 
 - Found during: the channels-v2 adversarial review, whose two largest classes of finding were BOTH invisible to the one gate that exists to catch exactly them (`node scripts/check-doc-refs.mjs`, INVARIANTS §14)
 - **BLIND SPOT ONE — `.md` was not in `SOURCE_EXT`.** The file-reference and symbol-anchor regexes both build off that alternation, so a doc naming another doc was never checked in either form. The review found **42 live citations of `apps/desktop-ui/src/pages/channels-v2/MAPPING.md`** across ~20 source files and 4 docs, months-fresh in tone and pointing at a file DELETED at the Phase 12 cutover, all of them green
@@ -1506,6 +1570,8 @@ COMMIT;
 - **The generalizable bit, and it is the reason to keep this entry after the code change:** a gate's SCOPE is a claim about where a class of rot can occur, and this one's scope had been inherited from its first day (`docs/*.md`, non-recursive) through three later hardenings that each widened what it checked and never re-asked WHERE. **A checker that is green over the wrong tree reads exactly like a checker that is green.**
 - Fixed in this change: `md` in `SOURCE_EXT`; class (d) over the six source roots, with `dist/` skipped there and only there (generated output carries whatever its source carried, so an id in it is not a second claim); the run now prints the source-tree counts beside the doc counts, because a scope you cannot see in the output is a scope nobody re-asks
 - Status: open (the two extensions LANDED; the bare-path class is measured, argued and deliberately NOT taken — that half is what stays open)
+- ⚠ **CLOSED 2026-08-30 — superseded:** the open half — the deliberately-untaken bare-path class — shipped 2026-08-26 as class (e) in `scripts/check-doc-refs.mjs › PLAIN_PATH_BASELINE_REL`, a MEASURED RATCHET over `scripts/doc-refs-plain-path-baseline.json`. What remains open is the baselined debt, which is **F-337**, not this.
+- ⚠ **AND THE NUMBER THAT GETS QUOTED FOR IT IS WRONG.** The baseline file records `measuredAt 2026-08-26`, **`count` 457** (and 457 `entries`), with **613** as `rawViolationsAtMeasurement`. The "611 baselined refs" quoted in `docs/DRIFT-LEDGER-2026-08-30.md` matches neither number; the baselined count is **457**.
 
 
 ## F-226 — a per-file line cap is not a property either side of a MERGE can be checked for (2026-08-18)
@@ -1682,7 +1748,7 @@ COMMIT;
   - ⚠ **THE FALLBACK IS WHERE THE REMAINING RISK LIVES, and it is worth naming even on a closed finding.** Every degradation here is silent and plausible: an omitted id does not fail, it acts on the OLDEST live agent and reports success. That is correct for an older main and wrong for a new one that simply forgot to pass the id — and the two are indistinguishable at the call site. The tests are the only thing holding the difference, which is why each op has both cases rather than the happy one.
 - Status: **RESOLVED** — route + ops + summary field on the desktop (2026-08-21), ops + route reader on the SPA (2026-08-22)
 
-## F-240 — `cn()` silently drops a class whenever a custom `text-*` SIZE meets a `text-*` COLOUR (2026-08-21)
+## F-240 — `cn()` silently drops a class whenever a custom `text-*` SIZE meets a `text-*` COLOUR (2026-08-21) — ✅ RESOLVED 2026-08-30 (residual fixed in the same change)
 
 - Found during: the transcript's markdown renderer, composing the body's block recipe with a heading's and a code fence's
 - **MEASURED, not inferred** (2026-08-21, `tailwind-merge@^3.5.0`): `twMerge("wrap-anywhere max-w-[92%] text-lead text-text-primary", "text-body font-semibold")` returns `"wrap-anywhere max-w-[92%] text-body font-semibold"` — **the COLOUR is gone.** The same call with `"list-disc pl-5"` keeps it, so the loss depends entirely on what the second argument happens to contain
@@ -1692,6 +1758,9 @@ COMMIT;
 - **Remedies, in order:** (a) teach `tailwind-merge` the scale via `extendTailwindMerge({ classGroups: { 'font-size': [{ text: ['lead','body','small','caption','micro','label','stat'] }] } })` in `shared/lib/utils.ts` — one edit, fixes every call site at once, and is the reason that wrapper exists; (b) rename the colour utilities out of the `text-*` namespace (large, breaks every component); (c) accept it and keep splitting recipes by hand, which is what today's code does
 - ⚠ **(a) MUST BE MEASURED BEFORE IT IS TRUSTED.** Widening the group changes what `cn` drops at every existing call site in the tree, and some of them may be relying on today's behaviour without knowing it
 - Status: **OPEN**
+- ⚠ **CLOSED 2026-08-30 — superseded SIX WEEKS BEFORE IT WAS FILED.** Remedy (a) had already shipped: `src/shared/lib/utils.ts › twMerge` is `extendTailwindMerge` with a `font-size` classGroup, landed 2026-07-07 (`e9c6d6cc`, found with `git log -S 'extendTailwindMerge'`) against this entry's 2026-08-21 filing. ⚠ **An entry that is superseded before it is written is a REVIEW failure, not a code one** — the check was one `git log -S` away.
+- 🔴 **RESIDUAL, KEPT: `text-stat` is the one type-ramp rung MISSING from that `font-size` classGroup**, which lists eight (`micro, label, caption, small, body, lead, title, display`) while `--text-stat: 26px` is a real rung in BOTH `src/app/globals.css` and `apps/desktop-ui/src/styles/tokens.css`. So any `cn()` composing `text-stat` with a `text-*` colour still drops one silently — **live at `apps/desktop-ui/src/pages/overview/overview-bits.tsx › StatFigure`**, which pairs `text-stat` with `text-text-primary` in one `className` and imports `cn` from that same module.
+- ✅ **THE RESIDUAL IS FIXED IN THE SAME CHANGE (2026-08-30): `stat` is in the classGroup**, and the docblock above it now says the list IS the type ramp, so a rung added to the ramp is a rung added there. **The whole entry is closed.**
 
 ## F-241 — a PEER's desktop keeps pushing a session for a thread that was just deleted, and the FK makes the whole push 500 (2026-08-21)
 
@@ -2367,7 +2436,7 @@ fresh (`grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-
 → **F-294**). If a concurrent wave also claimed any of these, the earlier claim wins and this block
 renumbers.
 
-## F-295 — `WorkspaceKind` + `isStandardWorkspace` exist TWICE, in two packages, with no drift gate (2026-08-23)
+## F-295 — `WorkspaceKind` + `isStandardWorkspace` exist TWICE, in two packages, with no drift gate (2026-08-23) — ✅ RESOLVED 2026-08-30
 
 - Location: `src/features/workspaces/types.ts › isStandardWorkspace` (and `› WorkspaceKind`) against
   `packages/dopl-client/src/types.ts › isStandardWorkspace` (re-exported by `packages/dopl-client/src/index.ts`,
@@ -2388,7 +2457,25 @@ renumbers.
 - ⚠ **Word this as the state of the GATE, not of the code:** if a drift check for this pair has since
   been added, this entry closes on that fact alone — the duplication itself is accepted and is not
   what is being filed. **Verify before acting:** `grep -rn "isStandardWorkspace\|WorkspaceKind" scripts/`.
-- Proposed resolution: fix-now (add the drift case) — Status: **open**
+- Proposed resolution: fix-now (add the drift case) — Status: **closed 2026-08-30; entry kept as the record**
+- ✅ **CLOSED ON ITS OWN TERMS — THE GATE EXISTS.** `scripts/check-role-drift.ts › checkWorkspaceKind`
+  (wired as the `type-drift` job's *"Diff workspace role set across server, SDK and MCP"* step in
+  `.github/workflows/ci.yml`) compares the `WorkspaceKind` union across `src/features/workspaces/types.ts`,
+  `packages/dopl-client/src/types.ts` and the committed `packages/dopl-client/dist/types.d.ts`. This entry's
+  own instruction was to word it as the state of the GATE, and the verification command it names —
+  `grep -rn "isStandardWorkspace\|WorkspaceKind" scripts/` — no longer answers zero.
+- ⚠ **THE GATE ASSERTS A SECOND THING THE ENTRY DID NOT ASK FOR, AND IT IS THE HALF WITH TEETH.**
+  A set comparison cannot see a COORDINATED flip: all three copies rewritten from
+  `(kind ?? "standard") === "standard"` to `!== "link"` would agree perfectly and silently admit every
+  kind invented later, which is the exact failure INVARIANTS §4A exists to prevent. So the check also
+  requires the POSITIVE SPELLING in each copy, and it reads `dist/types.js` — the EMITTED BODY — because
+  the `.d.ts` carries only a signature and a hand-edited runtime predicate would pass a declaration-only read.
+- ⚠ **THE ENTRY UNDERSTATED ITSELF BEFORE IT CLOSED** (drift-ledger §7.2): consumers of the package copy
+  went 3 → 6 during the /home wave, and one of them is now a CONFIRM GATE
+  (`packages/mcp-server/src/tools/confirm-token.ts`), so a drifted copy would have decided whether a write
+  into somebody else's room previews first. Recorded because it is the argument for the gate, not a residual.
+- ⚠ **Mutation-verified 2026-08-30**: flipping `dist/types.js` to the negative spelling, and adding a third
+  member to the SDK's union, each turn the check red.
 
 ## F-296 — deleting a link container does not block the pair, and the same-link re-claim degenerates into a permanent 409 (2026-08-23, DEFERRED TO SAMUEL)
 
@@ -2865,7 +2952,7 @@ constraint moves, and nothing connects the two.
   cheap one and needs a product call on what the row should say at four members.
 - Proposed resolution: needs-user-decision (product: what a multi-member row shows) — Status: ✅ **RESOLVED 2026-08-26** (Samuel ruled: `peers` as a list + stacked avatars; see the note at the top of this entry)
 
-## F-308 — the update-required screen's button CSS drifted from `kit.css`, and the desktop suite has been RED (2026-08-25, PRE-EXISTING)
+## F-308 — the update-required screen's button CSS drifted from `kit.css`, and the desktop suite has been RED (2026-08-25, PRE-EXISTING) — ✅ RESOLVED 2026-08-30
 
 - Location: `dopl-desktop-app/renderer/update-required.html` (`button.secondary`) vs
   `apps/desktop-ui/src/styles/kit.css` (`.auth-btn-3d-light`); the assertion is
@@ -2892,6 +2979,7 @@ constraint moves, and nothing connects the two.
   the values would change how a blocking screen looks, in a lane this wave does not own.** Fixing the
   TEST instead would delete the only thing watching a copy that has already drifted once.
 - Proposed resolution: fix-now, design-system owner — Status: **open**
+- ⚠ **CLOSED 2026-08-30 — superseded:** the exact repair this entry prescribed shipped. `dopl-desktop-app/renderer/update-required.html` declares `--raised-light-face` / `--raised-light-line` / `--raised-light-shadow` locally and its `button.secondary` (plus `:hover` and `:active`) consumes them through `var()`, matching `apps/desktop-ui/src/styles/kit.css › .auth-btn-3d-light` declaration for declaration. The desktop suite is green (2 470 tests, 2026-08-30).
 
 ## F-309 — Q6's auth recovery was DETECTED, SURFACED and NEVER CALLABLE: two complete functions with zero production callers (2026-08-25) — ✅ RESOLVED 2026-08-25
 
@@ -3178,7 +3266,7 @@ F-320 is a product gap in the ORCHESTRATION of the wave rather than in the wave.
 ⚠ **Id note.** `grep -ohE '^#{2,3} F-[0-9]{3}' docs/REFACTOR-FINDINGS.md | grep -oE '[0-9]{3}' |
 sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-run it; do not quote it.
 
-## F-317 — `WEB_ONLY_ROOTS` lists `join` and `invite` but not `link`, so `dopl://open/link/…` would parse as a workspace (2026-08-25)
+## F-317 — `WEB_ONLY_ROOTS` lists `join` and `invite` but not `link`, so `dopl://open/link/…` would parse as a workspace (2026-08-25) — ⚠ WIDENED (it was FIVE roots, not one) then ✅ RESOLVED 2026-08-30
 
 - Location: `dopl-desktop-app/main/deep-link-target.js › WEB_ONLY_ROOTS`
 - Found during: the guest-web-channel M4 doc pass, reading the reserved-name lists `/c/` had to join
@@ -3201,7 +3289,33 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   no longer matches the rule it states, not a live break — and it is the shape that bites the day
   somebody adds the producer, because the failure is a wrong workspace rather than an error.
 - Proposed resolution: one line in the set carrying the same reason `join`/`invite` do, plus a row in
-  the desktop's deep-link coverage. Status: **open**
+  the desktop's deep-link coverage. Status: **closed 2026-08-30; entry kept as the record**
+- 🔴 **FIRST, THE WIDENING: IT WAS NEVER ONE ROOT. FIVE were missing** — `link`, `c`,
+  `authenticate`, `signup`, `get-started` — every one of them a live top-level web route that
+  `config/index.ts › RESERVED_WORKSPACE_SLUGS` already carries for the identical shadowing reason.
+  This entry's own measurement quoted the twelve-name set and then compared it against **one** name,
+  which is how a one-line finding hid a five-line one: **the check it needed was a SET COMPARISON, and
+  it did the lookup instead.**
+- 🔴 **AND IT WAS NOT "no live break" EITHER.** `/c/{workspaceId}` is the GUEST WEB CHANNEL, shipped by
+  this same 2026-08-25 wave — so the wave that filed this entry added a second instance of the defect
+  while describing the first. `dopl://open?target=/link/{token}` resolved to the workspace route
+  `/link/overview`.
+- ✅ **RESOLVED — the five roots are in `dopl-desktop-app/main/deep-link-target.js › WEB_ONLY_ROOTS`,
+  each with the reason it is there.**
+- 🔒 **AND THE REMEDY IS THE GATE, NOT THE FIVE LINES.** `dopl-desktop-app/test/deep-link-reserved-slugs.test.mjs`
+  asserts **`RESERVED_WORKSPACE_SLUGS` ⊆ (`WEB_ONLY_ROOTS` ∪ `ROOT_ROUTES` ∪ a shrink-only allowlist
+  that states a reason per entry)**, reading the web tree's `config/index.ts` across trees the way
+  `deep-link-target.test.mjs` already reads `routes.tsx`. **Adding a top-level web route is now a
+  two-file change or it goes red** — which is the property this entry lacked, and the reason a
+  hand-added sixth root would have drifted the same way. The allowlist also fails when an entry stops
+  being a reserved slug, so it cannot outlive its own reasons. Mutation-verified: removing `link`
+  from the set turns it red.
+- ⚠ **RESIDUAL, FILED HERE RATHER THAN SILENTLY FIXED: `billing` and `playground` are live top-level
+  routes (`src/app/billing/[segment]`, `src/app/playground`) and are in NEITHER list.** They are not
+  in `RESERVED_WORKSPACE_SLUGS`, so the new gate is green over them by construction — the gap is in the
+  web tree's reserved set first, and widening that is a workspace-slug policy change (it can strand an
+  existing slug), not a deep-link fix. **`dopl://open?target=/billing/{segment}` parses `billing` as a
+  workspace today.** Verify before acting: `ls src/app` against `config/index.ts › RESERVED_WORKSPACE_SLUGS`.
 
 ## F-318 — three skeleton composites announce NOTHING, and the fix landed at one of the two call sites (2026-08-25)
 
@@ -3441,7 +3555,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   none is read on the guest's API path (all service-role). A policy arm with no reader is the same
   speculative cost §12 refuses for an index with no statement.
 
-### F-325 — a guest's MCP tool calls run UNMETERED by construction, and the failure is a log line
+### F-325 — a guest's MCP tool calls run UNMETERED by construction, and the failure is a log line — ✅ RESOLVED 2026-08-30
 
 - Location: `src/app/api/mcp/credits/consume/route.ts` — `withWorkspaceAuth(…, { writeScopeExempt:
   true })` with **no `minRole`**, so it sits at the wrapper's `viewer` default and a guest-scoped
@@ -3494,6 +3608,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   `channels/guest-route-floor.test.ts` (15 entries), `packages/mcp-server/src/credits.test.ts`.
   Mutation-verified: 5 reverts → 11 / 8 / 1 / 3 / 1 failures, 0 vacuous. Status: **RESOLVED**
 - **What is still open is the LIMIT, not the payer — F-328.**
+- ⚠ **CLOSED 2026-08-30 — superseded:** this entry already carried `Status: RESOLVED` and the fix is verified in the tree — `src/features/billing/server/credits-service.ts › resolveBillingTarget` routes the burn to the container's active owner via `src/features/workspaces/server/repository.ts › findActiveOwnerUserId`, and `src/app/api/mcp/credits/consume/route.ts` sits at `minRole: "guest"`. What stays open is the LIMIT, which is **F-328**.
 
 ### F-326 — the mentions service is the one guest-floored write with NO channel-membership fence
 
@@ -4243,14 +4358,37 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   inside a CONTAINER, where shelves do not exist, so the param would be meaningless there). **There
   is no template equivalent of item 2** — templates have no search surface — so that half of this
   finding stays a knowledge-only question.
-- **Also unresolved: there is no way to MOVE a base OR A TEMPLATE between shelves.** `home_scoped` is set at
-  create and never written again; neither `KnowledgeBaseUpdateSchema` nor
-  `AgentTemplateUpdateSchema` accepts it. A base made in the
-  wrong place is re-created or moved by hand in SQL. Nobody asked for a move affordance — recording
-  that the absence is a decision, not an oversight.
+- ⚠ **A FOURTH UNFILTERED TEMPLATE READER, ADDED 2026-08-27 — THE SAME DAY THE SHELF SPLIT SHIPPED
+  (recorded 2026-08-30).** `src/features/channels/components/channels-v2/composer-launch-panel.tsx`
+  calls `useAgentTemplates(workspaceId, { enabled: panel.open })` with no shelf. **The same answer
+  applies** — the launch panel lives inside a CHANNEL, and a container has no shelves, so the param
+  would be meaningless there — but the enumeration above was one short, and an enumeration that
+  claims to be complete is the thing a later reader trusts. **Re-derive, never quote:**
+  `grep -rn "useAgentTemplates(" src apps`.
+- ✅ **AND ONE HALF OF THIS ENTRY IS RESOLVED-AS-RULED, NOT OPEN — the MOVE.** It said *"there is no
+  way to MOVE a base OR A TEMPLATE between shelves"* as an unresolved item; the shelf is now REFUSED
+  BY NAME on update rather than merely unaccepted, which is the decision rather than the absence of
+  one: `packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate` answers *"op=\"update\" does not
+  take `shelf`, and nothing was changed … the copy and the original are STRANGERS"*, and
+  `› knowledge-ops-write.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
+  create and never written again, and that is now a stated rule with a refusal behind it. ⚠ **The
+  refusal is what stops a silent 2xx over a move that never happened**, which is why it counts as a
+  resolution and an unaccepted field would not.
+  - ⚠ **BUT THE BASES HALF WAS NOT IN THE COMMITTED `packages/mcp-server/dist/` UNTIL 2026-08-30** —
+    the tracked build lagged its source by three modules, so the `dist/tools/knowledge-ops-write.js`
+    the MCP server actually loads still had the five-argument `opUpdateBase` with no refusal. Rebuilt.
+    **A ruling that is only in `src/` is not shipped**, and `check-role-drift.ts`'s own docblock says
+    why the committed `dist/` is read as its own declaration class.
+- ⚠ **NARROWING ON THE MCP LEG: *"MCP has no shelf concept"* IS NO LONGER TRUE** (it was when this was
+  filed). `packages/mcp-server/src/tools/shelf.ts › SHELF_VALUES` is a full operator-facing vocabulary
+  (`personal` | `workspace`, mapped to the wire nouns by `› toWireShelf`), `agent-ops-write.ts` takes it
+  on create and `› agent-ops-read.ts` takes it on list. **Only the READ DEFAULT is unfiltered, and this
+  entry calls that right** — item 1's argument is untouched. As of 2026-08-30 the whole shelf vocabulary
+  is gated across all ten of its declarations by `scripts/check-knowledge-type-drift.ts › checkShelfUnions`.
 - Severity: **consistency, not access.** No item here shows anybody a base they could not already
   read; every one of them is the caller's own workspace under their own credential.
-  Status: **open — item 2 is the one worth a ruling.**
+  Status: **open — item 2 is the one worth a ruling.** (The MOVE half is closed, above; the four
+  unfiltered readers are recorded as deliberate.)
 
 ### F-343 — /home cannot tell a MEMBER from a GUEST inside a container, so two of its affordances guess
 
@@ -4318,7 +4456,7 @@ re-measure, because the triage bill then scales with channel traffic rather than
 agent is fed regardless of what triage said"` and `§ "wake FENCE: an agent-authored message still
 FEEDS a RUNNING sibling — ruling 4 survives"`.
 
-### F-345 — the 28px icon-button recipe is hand-written in FIVE more places, and each copy is one file's taste (2026-08-28)
+### F-345 — the 28px icon-button recipe is hand-written in FIVE more places, and each copy is one file's taste (2026-08-28) — ⚠ REWRITTEN 2026-08-30 (three corrections; still OPEN)
 
 **What was built.** The knowledge base header's download / settings / delete controls were a
 file-private `ICON_BTN` const — a bare 28px square with a hover tint and no face. Samuel's
@@ -4338,22 +4476,80 @@ Two are live app surfaces — `src/features/chats/components/list-pane.tsx` and
 `src/features/chats/components/detail-pane.tsx` — and three are playground mock panes
 (`src/features/playground/components/panes/chats-pane.tsx`, `panes/members-pane.tsx`,
 `panes/knowledge-pane.tsx`; the last is a copy of the very surface this wave rebuilt, which is how
-the recipe spread). A SEVENTH statement of the same idea is a real component,
-`src/features/members/components/members-v2/bits.tsx › IconButton`. They are not byte-identical —
-the sizes and hover tints have already drifted — which is the finding, rather than an aesthetic
-complaint about duplication.
+the recipe spread). Two more statements of the same idea are real components —
+`src/features/members/components/members-v2/bits.tsx › IconButton` and
+`src/features/channels/components/channels-v2/icon-button.tsx › IconButton`.
+
+---
+
+## ⚠ REWRITTEN 2026-08-30 — THREE ERRORS, AND ONE OF THEM WAS LOAD-BEARING
+
+**The title's count is right and always was** (*"FIVE more places"*): the five `ICON_BTN` consts are
+what remained after the knowledge header was converted. DESIGN-SYSTEM.md's prose carries the
+historical SIX because it counts the one this wave consumed — a sentence that reads as a live count
+and is not one, not a defect in this entry. What follows are the three things that WERE wrong.
+
+**(a) 🔴 THE `bare` VARIANT IS ATTRIBUTED TO THE WRONG MODULE, AND THE PROPOSED SETTLEMENT
+THEREFORE NAMES THE WRONG PROMOTION TARGET.** `members-v2/bits.tsx › IconButton` has **`onInvert`,
+not `bare`**. `bare` belongs to `channels-v2/icon-button.tsx › IconButton`, and the
+`home.module.css` comment this entry cites as evidence names **channels-v2's** — the ambiguity is
+the basename: `bits.tsx` in that comment resolves through `channels-v2/bits.tsx`, which
+**re-exports** the control after the 2026-08-25 §1 split. **Anyone acting on the settlement as
+originally written would have promoted the members module and carried the wrong variant set**, so
+this correction lands BEFORE the icon-button batch, not after it (ASK-24).
+
+**(b) THE "already drifted" CLAIM IS FALSE OF THE FIVE IT COUNTS, WHICH NARROWS THE RESIDUAL.**
+Measured 2026-08-30, all five `ICON_BTN` consts are ONE unique string, byte for byte:
+
+```
+grep -rhA1 '^const ICON_BTN' src apps | grep '"flex' | sort -u | wc -l   # → 1
+```
+
+`"flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors
+hover:bg-surface-raised-1 hover:text-text-primary"`. The real drift is against the WIDER family (the
+two components, and the CSS-module faces in (c)) — not among the copies. **This makes the residual a
+cheap mechanical promotion rather than a reconciliation**, which is the opposite of how the entry
+reads.
+
+**(c) THE MEASUREMENT COMMAND IS STRUCTURALLY BLIND TO CSS-MODULE COPIES OF THE SAME FACE.**
+`grep -rn "ICON_BTN"` finds Tailwind-string copies and nothing else, so
+`knowledge-v2.module.css › .treeActionBtn` (22px) and `› .cardStar` (26px) — the same bare
+square-with-a-hover-tint idea, one file away from the surface this wave converted — survived a
+sweep aimed at exactly them. **State the residual as "the bare icon-button FACE, however spelled"**
+and carry a second command:
+
+```
+grep -rn "ICON_BTN" src apps                                   # the Tailwind-string copies
+grep -rnE "^\.[a-zA-Z]*([Bb]tn|[Bb]utton|Star) \{" src apps --include=*.module.css   # the module-class copies
+```
+
+**⚠ AN EIGHTH STATEMENT, OMITTED: `channels-v2/icon-button.tsx › IconButton`, WHOSE OWN DOCBLOCK
+NAMES THE CONVERGENCE** — *"`features/members/components/members-v2/bits.tsx` has its OWN copy of
+the same idea, and this file is where the two would one day converge."* The code had already written
+down the answer this entry was looking for.
+
+**⚠ AND THE DISPOSITION NOTE CONTRADICTS THE TREE.** It said *"the playground panes are mock
+surfaces and can be left or deleted with the rest of that tree."* `/playground` is in
+`src/shared/auth/public-routes.ts › PUBLIC_ROUTES`, `/api/playground` is in `› SELF_AUTH_ROUTES`,
+`src/features/marketing/components/connect-section.tsx` links *"Try in playground"* from the landing
+hero, `/api/playground/session` provisions a guest bearer, three `-live` modules poll a real guest
+workspace and `/api/cron/playground-reaper` reaps the sessions. **It is public, linked and live — the
+exemption people assume it has does not exist.** Three of the five copies are therefore on a SHIPPED
+public surface, not on scaffolding.
+
+---
 
 **Why it was left.** Standing rule R2 for this wave — do not touch what was not named. Converting
 chats and members is a behavioural change to two surfaces nobody reviewed in this pass, and
-`members-v2/bits.tsx › IconButton` additionally carries a `bare` variant that the /home info toggle
-depends on (`home.module.css`'s deleted circle rule documents that dependency), so a promotion has
-to carry that variant with it rather than replace it.
+`channels-v2/icon-button.tsx › IconButton` carries the `bare` variant the /home info toggle depends
+on (`home.module.css`'s deleted-circle comment documents that dependency), so a promotion has to
+carry that variant with it rather than replace it.
 
-**What would settle it.** Promote `members-v2/bits.tsx › IconButton` — variants and all — into
-`src/shared/ui/`, then point chats, members and this square at it, keeping `OpenScaleIconButton` as
+**What would settle it.** Promote **`channels-v2/icon-button.tsx › IconButton`** — variants and all,
+`bare` included — into `src/shared/ui/`, absorb `members-v2/bits.tsx › IconButton`'s `onInvert` into
+it, then point chats, the playground panes and this square at it, keeping `OpenScaleIconButton` as
 the RAISED member of the family and the promoted one as the BARE member. Two faces, one module, no
-per-file string. The playground panes are mock surfaces and can be left or deleted with the rest of
-that tree.
+per-file string — and the CSS-module faces in (c) fold in with the same move.
 
 ---
 
@@ -4612,3 +4808,528 @@ cap is the upper bound on the web's, not the reverse. Corrected in place.
 `EXPANDED_CHARS` and the web `POST_CAP` are both module-private `const`s. Closing it means
 exporting both and asserting them in a web test mirroring the desktop's two lines. That is a
 module-surface change (`knip.json` governs unused exports) and was left rather than made blind.
+
+### F-353 — an unread `fetch` Response is abandoned on ~20 more main-process branches, and each one pins an undici socket (2026-08-30)
+
+**Found sweeping for the 17 GB dev-RSS incident** (ENGINEERING, 2026-08-30 stratum). Node's `fetch`
+in Electron main is undici: until a `Response` body is consumed or cancelled the request counts as
+IN FLIGHT, its socket is never returned to the pool, and the next call to the same origin opens
+another connection. What is retained is **native** — socket buffers plus TLS session state — so it
+exerts no GC pressure, never appears in a heap snapshot, and shows up only as RSS.
+
+**⚠ THE LEAKING BRANCHES ARE THE ERROR BRANCHES**, which is backwards from where anyone looks: the
+success path calls `res.json()` and is fine, while `if (!res.ok) { … return; }` — the path a
+saturated server or a stale credential puts every caller on — drops the body on the floor.
+
+**Fixed in the incident wave** (the three highest-frequency seams, all through one shared helper,
+`dopl-desktop-app/main/api-repair.js › discardBody`):
+
+- `main/channel-listener.js › channelLoop` — one poll per watched channel, forever;
+- `main/presence.js › beatOnce` — one beat per workspace every 30s, **success branch included**;
+- `main/api-repair.js › fetchWithAuthRepair` — the pre-retry 401, under BOTH transports.
+
+**A SECOND BATCH LANDED IN THE 2026-08-30 FAILING-AUTH WAVE**, chosen by measured rate on the
+abort-churn path rather than by file order. All through the same shared helper; pinned by
+`dopl-desktop-app/test/unread-body-seams.test.mjs`, which also asserts nobody re-implements it:
+
+- `main/ui-bridge.js › performApiRequest` — the pre-retry 401, the BEARER transport's copy of the
+  rule `api-repair.js` already owned for the two cookie ones;
+- `main/listener-io.js › listWorkspaces` — ~2/min forever behind the self-heal's re-ask (see the
+  ceiling added in the same wave, below);
+- `main/listener-io.js › listChannels` — ×3 per workspace per pass via `listChannelsWithRetry`;
+- `main/consent.js › pollStatus` — the highest instantaneous rate in `main/` (F-354's loop);
+- `main/session-state-push.js › send` — **success branch included**, the `presence.beatOnce` class;
+- `main/version-gate.js › fetchFloor` — leaks with or without a credential, every 10 min, forever.
+
+**Still open — ranked by rate:**
+
+| site | branch | rate |
+|---|---|---|
+| `main/channel-post.js › postTaskEvent` / `› postWithRetry` | `return res.ok === true` — no branch reads | per agent message posted, × up to 3 retries |
+| `main/consent.js › createConsentRequest` / `› patchDecision` | 404 / `!res.ok` / 409 — **every** exit of `patchDecision` | per gated post, per operator decision, and on every session settle (`watchRow`'s teardown deny) |
+| `main/listener-io.js › resolveIdentity` / `refreshNameCache` | 401 / `!res.ok` | per workspace per reconcile |
+| `main/launch-directives.js › pollWorkspace` / `› post` | `if (!res \|\| !res.ok) return` — and the 404 self-disable does NOT fire for 401 | per workspace per 60s |
+| `main/session-credential.js › findWorkspace` / `ensureContainerCredential` / `releaseContainerCredential` | `!res.ok` | ~3 per session launch + teardown, cumulative for the process lifetime |
+| `main/mcp-config.js › obtainDeviceToken` / `› revokeDeviceToken` | 404 / `!res.ok` / non-JSON / missing-token | per launch, per sign-out |
+| `main/template-resolve.js › resolveTemplate` | 404 → `no-template`, `!res.ok` → `busy` | per agent launch with a template identity |
+| `main/avatar-cache.js › fetchDataUri`, `main/channel-dirs.js`, `main/channel-prefs.js`, `main/channel-dir-ipc.js`, `main/auth.js` | assorted `!res.ok` | low |
+
+**⚠ AND ONE THAT IS NOT AN ERROR-BRANCH MISS AT ALL — `main/mcp-config.js › withTimeout`.** On
+timeout it resolves `null` and ABANDONS the losing `apiFetch` promise entirely, so when that
+request eventually settles nobody holds the `Response` and the body can never be consumed or
+cancelled **by anyone**. It is the only place in `main/` where a `Response` is unreachable by
+construction; every other row above is a branch that could call the helper today.
+
+**Why it was scoped rather than swept.** The helper exists and is exported; applying it is
+mechanical. But it is a ~20-file edit across every transport in `main/`, and two of those files
+(`ui-bridge.js`, `channel-post.js`) sit near the 500-line cap, so the sweep is its own wave with
+its own review. **The rule to hold in the meantime: a `Response` this process will not read must be
+released, and the success branch is not exempt.**
+
+### F-354 — `session-windowless.js › watchRow` polls every 3s with no ceiling and cannot tell a server error from "still pending" (2026-08-30)
+
+```js
+for (;;) {
+  await sleep(POLL_MS);              // 3_000
+  const status = await consent.pollStatus(s.workspaceId, rowId);
+  if (status === null || status === 'pending') continue;
+```
+
+`main/consent.js › pollStatus` answers `null` for **any** transient failure — a thrown fetch, or a
+non-ok status (5xx, 502, 403). The loop treats that identically to `'pending'` and continues, with
+**no attempt counter, no backoff and no ceiling**. A consent endpoint returning 500 therefore puts
+this in a 20 req/min tight loop per gated outbound post, for the life of the session, and each
+iteration additionally abandons a Response (F-353).
+
+The header's stated bound — "it stops dead on the first terminal status" — is true of the happy
+path only: **a 5xx is not a terminal status here.** The real bound is the session's own settle or
+the 24h consent TTL, neither of which is consulted between polls except through `s.settled`.
+
+**PARTLY RESOLVED 2026-08-30 (the failing-auth wave).** The two halves that needed no ruling are
+fixed: `pollStatus` now releases the body on every exit that does not read it, and `watchRow`
+distinguishes `null` (could not ASK) from `'pending'` (asked and answered) — a failed read doubles
+the delay to a 60s ceiling while a genuinely pending row keeps the unchanged 3s cadence. Pinned by
+`dopl-desktop-app/test/unread-body-seams.test.mjs`.
+
+**Still open, and it is the half that needs Samuel:** the loop still never gives UP. What a
+persistently unreachable consent endpoint should DO to a held post — drop it loudly, like
+`listener-messages.js`'s poison-message escape? hold to the 24h TTL? — is a product decision, not a
+mechanical one. Today it holds until the session settles, now quietly instead of at 20 req/min.
+
+### F-355 — `session-io.js › makePushIterator`'s queue is unbounded, beside a `pendingInbound` that is deliberately capped (2026-08-30)
+
+```js
+push(msg) {
+  if (closed) return;
+  if (waiting) { …w({ value: msg, done: false }); }
+  else { queue.push(msg); }
+}
+```
+
+No cap, no eviction. Fed from `main/session-engine.js › runEffect` (`'pushTurn'`, and the
+`'feedInbound'` continuation framing), and what it holds is the **full framing** — role block,
+security rules, multiplayer paragraph, channel transcript seed — which is kilobytes to tens of
+kilobytes per entry. When the SDK is not draining (a parked session whose query was torn down but
+whose `pushIterator` was not closed; an `authHeld` session) every fed message accumulates.
+
+**The asymmetry is the finding.** `s.pendingInbound` sitting right beside it carries
+`MAX_PENDING_INBOUND = 16`; this queue carries nothing. What bounds it in practice is
+`main/session-dispatch.js › mayFeed` refusing to feed dormant sessions — a gate added on
+2026-08-28, i.e. **the structure was unbounded and ungated for its whole life before that**, and a
+future widening of what may be fed re-opens it. It wants the same explicit cap its neighbour has.
+
+### F-356 — `main/realtime.js › addChannel` reuses a STABLE realtime topic, which §7 says never to do (2026-08-30)
+
+INVARIANTS §7 states the rule and the reason: **generation-unique topic names**, because
+"realtime-js dedupes by name and forgets removed channels only after the leave push settles, so
+topic reuse resurrects corpse channels". `main/ui-sync.js` obeys it (`ui-sync-core.js › nextTopic`
+mints `dopl-ui-sync-<ws>-g<n>`) and its own header explains that a reused topic hands back the old,
+already-subscribed channel whose `.subscribe()` silently no-ops and whose `.on()` throws, since v2
+fixes the binding list at JOIN time.
+
+`main/realtime.js › addChannel` joins `dopl-desktop:${wsId}` — the same string every time — and
+`› scheduleResubscribe` rejoins through `removeChannel(wsId); addChannel(wsId)`, which is exactly
+the reuse-across-a-reconnect the rule names.
+
+**⚠ MEASURED, NOT ASSUMED, AND THE LIBRARY IS NOT THE PROBLEM.** A probe against the installed
+`@supabase/realtime-js` 2.111.0 (50 connect/release cycles under a dead socket, and 30 under a
+socket that acks joins but never acks leaves) left `client.channels`, the phoenix channel list and
+`socket.stateChangeCallbacks` all at their baseline — `_canPush()` is false for a channel that was
+never joined, so the leave short-circuits to `'ok'` and teardown runs. **So this is not the 17 GB
+leak and no channel accumulation was demonstrated.** What is left is the flap the field log does
+show: 84 `realtime sub … CLOSED reason=no-payload` lines in 7.5h with subs stuck `down`, which is
+the *symptom* topic reuse produces (a no-op re-subscribe on a closed channel) and which nothing in
+this module can currently distinguish from a server-side close.
+
+Filed rather than fixed because the fix is a behaviour change to the delivery transport — the
+per-workspace subscription every counterparty wake rides — and it wants its own wave with a live
+two-machine exchange to verify, not a same-day edit inside a memory incident.
+
+**⚠ `describeState()` reports `subscribed`, never `client.channels.length`,** which is why neither
+this nor its absence was answerable from `listener.log`. Whatever the fix, it should add that count
+to the state line.
+
+### F-357 — the Overview page's period well is `--bg-inset`, which the frame model no longer has a level for (2026-08-30)
+
+`apps/desktop-ui/src/pages/overview/period-stats.tsx` draws its group as
+`rounded-[14px] border border-border-default bg-bg-inset p-3.5`. That is a WELL — level 3 in
+`docs/DESIGN-SYSTEM.md › The frame model ALTERNATES` — and level 3 is `--home-panel` since the
+2026-08-30 restructure, expressed as `src/shared/ui/section-panel.tsx › SECTION_PANEL_GROUND`
+(`border border-border-subtle bg-home-panel`) on `[data-section-panel]`. The same argument was
+already applied to the sidebar's upsell card that night: `src/shared/layout/app-shell/app-shell.module.css › .wordsCard`'s
+header records `--bg-inset` (#f1f1f1) being dropped there as "a WELL colour" that "read as a recess
+pressed into the sidebar". This page's group is the identical shape one level down — a well inside
+the white `.pageCard`.
+
+Two other overview atoms take `--bg-inset` for the same non-reason:
+`› member-load.tsx`'s bar track and `src/features/agent-templates/components/template-section.tsx`'s
+"scope" pill.
+
+**Filed, not fixed, and the skeleton deliberately follows the CODE.**
+`› overview-skeleton.tsx` restates this exact class string and is byte-share-pinned against it in
+`apps/desktop-ui/src/components/skeletons/page-skeletons.test.tsx`, so the ghost matches the page it
+resolves into — which is INVARIANTS §1A's whole rule. Re-grounding the skeleton alone would break
+that; re-grounding the page is a visual change to a surface Samuel has not reviewed since the
+restructure, and it belongs to a palette pass over the workspace pages, not to a skeleton wave.
+When it happens, the pin makes the skeleton fail on the same commit.
+
+### F-358 — `app.isQuitting` has FIVE writers and ZERO readers, and a test comment calls it "the flag every other module reads" (2026-08-30)
+
+Measured on 2026-08-30 while adding the quit confirmation's Cancel branch
+(`main/quit-guard.js › cancelQuit`):
+
+```
+grep -rn "isQuitting" dopl-desktop-app/main dopl-desktop-app/test | grep -v node_modules
+```
+
+Five **writes** — `main/quit-guard.js › onBeforeQuit`, `main/index.js` (the tray's `onQuit`),
+`main/updater.js › quitAndInstall`, `main/update-required-window.js`, and the assertion in
+`test/update-required-screen.test.mjs` — and **not one read anywhere in the tree**. It is dead
+state that four production sites keep faithfully maintaining.
+
+The conventional Electron reader is a `win.on('close', …)` handler that hides instead of closing
+unless a quit is under way. **This app has no such handler at all** — `grep -n "on('close"` over
+`main/spa-window.js`, `main/app-windows.js`, `main/agent-window.js`, `main/popout-window.js`
+finds only `'closed'` (past tense, cleanup) listeners, and `app.on('window-all-closed', …)` is a
+deliberate no-op so the app stays resident in the tray. So closing the last window does not quit,
+and nothing ever needed to distinguish "closing" from "quitting".
+
+⚠ **The fiction is load-bearing in a test.** `test/quit-guard.test.mjs` asserts
+`app.isQuitting = true` is set first, with the rationale *"the flag every other module reads is
+still set first"* — a claim that has no referent. The assertion itself is fine to keep (the write
+is a real Electron convention and a future close-to-hide handler would want it); **the stated
+reason is what is false**, and it is exactly the kind of comment that gets promoted into a doc.
+
+NOT FIXED HERE, per CLAUDE.md's rule: this is code that looks wrong, so it is a finding rather
+than an edit. `cancelQuit` now *clears* the flag on an aborted quit, which is correct against the
+convention and a no-op against the current (empty) reader set — deliberately, so the day someone
+adds a close-to-hide handler it does not inherit a stale `true`.
+
+Two ways out, both cheap; pick when someone is in this file anyway:
+- **keep it** and correct the comment to say the flag is maintained for the convention and has no
+  reader today, or
+- **delete it** from all four production sites and drop the assertions.
+Do not do half of it: four writers and a corrected comment is stable, four writers and the current
+comment is how this becomes an INVARIANTS bullet.
+
+### F-359 — the update-restart lane asks TWICE, and the second dialog can now cancel a restart the operator already confirmed (2026-08-30)
+
+`main/updater.js › requestRestart` checks `liveSessions().length` and, when anything is live, runs
+its **own** `promptRestart()` that names the sessions a restart would kill. Once the operator
+confirms, it calls `quitAndInstall()`, whose own docblock says it *"runs the normal quit path
+(before-quit fires)"* — which is now `main/quit-guard.js › onBeforeQuit`, and that reads the same
+registry and puts up a **second** dialog about the same sessions.
+
+So the update lane has always been a double-prompt on exactly the case both dialogs exist for. It
+was survivable while the second dialog's buttons were `Quit anyway` / `Wait for them to finish`,
+since both still ended in the restart.
+
+⚠ **2026-08-30 makes it worse in a new way.** The second dialog now carries `Cancel`, and `Cancel`
+is its `defaultId`/`cancelId`. An operator who confirms the restart and then presses Return on the
+dialog they did not expect **aborts an update they already agreed to**, and lands in an app that
+believes no quit is under way — with `readyVersion` still set, so the tray keeps offering it. No
+data is lost and nothing is orphaned; the update simply does not happen and the second prompt is
+what stopped it.
+
+The fix is a seam, not a flag on the dialog: the updater's confirmation should mark the quit as
+ALREADY CONFIRMED so `onBeforeQuit` skips straight to `finishQuit` — the `disarmed` latch is the
+existing shape for "the decision has been made", it just has no way in from outside the module.
+NOT DONE HERE: it changes the updater's contract, and 2026-08-30's ruling was scoped to ⌘Q.
+
+### F-360 — `use-api-query-core.ts › useApiQueryWith`'s "stranded" self-heal turns every `queryClient.clear()` into an app-wide refetch burst (2026-08-30)
+
+**Found chasing the abort-churn amplifier** (ENGINEERING, 2026-08-30 stratum). The predicate is
+`stranded = enabled && query.isPending && query.fetchStatus === "idle"`, answered 50 ms later by
+`strandedRefetch()`. `QueryCache.clear()` removes every query, and each mounted observer then
+IMMEDIATELY re-creates its query in exactly the `pending + idle` state that predicate names — so a
+single `clear()` schedules one refetch per mounted observer, all firing together at +50 ms.
+
+That is correct behaviour for the failure the self-heal exists for (a query that genuinely never
+dispatched). It is also, unmodified, an amplifier attached to a cache wipe: in the 2026-08-30
+incident `app.tsx › App` wiped the cache on every auth flap, each wipe re-fired every query, each
+of those 401'd, and each 401 drove another flap. **The flap is fixed at its source**
+(`auth-tokens.js › noteSessionRejected`), so this no longer has a driver — which is precisely why
+it is a FINDING and not a fix: nothing here is wrong on its own, and changing it would need a way
+to tell "this observer was stranded" from "the cache was just cleared under it".
+
+The obvious shape — have `clear()` set a flag the predicate reads — puts renderer-wide state behind
+a per-observer hook. **Not attempted.** The honest bound is upstream: nothing should be clearing the
+cache in a loop.
+
+### F-361 — `src/shared/api/api-client.ts › apiRequest` never removes its abort listener, while its desktop twin does (2026-08-30)
+
+The bridge branch races the invocation against a rejection promise that does
+`opts.signal!.addEventListener("abort", onAbort, { once: true })` — and never detaches it on the
+SETTLE path. `apps/desktop-ui/src/lib/api-transport.ts › ipcTransport` is the same shape with
+`.finally(() => signal.removeEventListener("abort", onAbort))`, so the two copies of one idea
+disagree, which is the F-221 pattern again.
+
+The retention is bounded by the signal's own life (`{ once: true }` means it self-removes if the
+abort ever fires, and TanStack discards the controller when the query settles), so this is a small,
+short-lived leak rather than the unbounded kind — one dangling listener plus its never-settling
+reject promise per in-flight request, for up to the 30s timeout. It is filed rather than fixed
+because the FIX is one line and the QUESTION is which file should own it: the two transports should
+share the raced-abort helper the way `discardBody` is shared, not both spell it.
+
+### F-362 — `main/mcp-config.js › withTimeout` abandons a `Response` by construction (2026-08-30)
+
+Split out of F-353 because it is a different defect. Every other row in that table is a BRANCH that
+could call `discardBody(res)` today; this one resolves `null` on timeout and drops the losing
+`apiFetch` promise on the floor, so when that request eventually settles **nobody holds the
+`Response`** and the body can never be consumed or cancelled by anyone. No amount of discipline at
+the call sites reaches it — the fix has to be inside the race (keep the loser's promise and discard
+its body when it lands), which is a change to a helper several callers share.
+
+### F-363 — `main/listener-heal.js › missCounts` and `main/channel-context.js › cache` still have no cap (2026-08-30)
+
+Swept out beside F-353. Both grow with distinct channel count rather than with failure count, so
+neither feeds a permanent-401 state and neither is on the incident's path — recorded so the next
+sweep does not have to re-derive that. `missCounts` (channelId → int) is cleared only in `stop()`;
+`channel-context.js › cache` (channelId → `{at, ctx}`) checks its TTL on READ but never deletes a
+stale entry, so a long-lived process retains one entry per channel it has ever resolved context
+for. `listener-io.js`'s `nameCache` / `avatarUrlCache` were the third of this set and were capped in
+the 17 GB wave; these two are the remainder.
+
+---
+
+### F-364 — ✅ RESOLVED 2026-08-31 — `launch_agent` published an agent id its only holder could not spend, and told it to spend it anyway
+
+**Measured, not inferred** (live prod, channel `bb0f57db`, container `e7998a94` — the queries are
+in ENGINEERING 2026-08-31). A directive landed `launched` with a **1 111-char goal**, agent
+`x2sz1ztt`. Five follow-up messages, `seq` 799–803, **all `author_kind = 'agent'`**, four naming
+`@x2sz1ztt` and one `@agent-x2sz1ztt`, none carrying `to`. None woke anything.
+
+**The class, and it is not "the fence was wrong".** The 2026-08-28 loop fence
+(`session-wake-tiers.js › wakeEligibility`, then a boolean) refused every agent-authored message; the 2026-08-22
+`launch_agent` copy told its reader to direct the agent by writing `@<id>` in a post body. Each
+was correct when written. **The fence moved and the surface that hands out the key did not** —
+and because an inert post is not a refused post, the caller repeated itself four more times with
+nothing anywhere saying why.
+
+Resolved by two rulings (Samuel, 2026-08-31) and the copy that had to follow them:
+- **the SAME-ACCOUNT CARVE** — an agent-authored message under the operator's own user id may
+  @-wake that operator's dormant agents, tier 1 only (INVARIANTS §11);
+- **`idle: !d.goal`** — an MCP-lane launch carrying a goal spawns RUNNING (INVARIANTS §11);
+- `channel-session-handle.ts`, the per-mention breakdown, and the rewritten `launch_agent` /
+  law-block text (INVARIANTS §10).
+
+⚠ **THE THING TO CARRY FORWARD IS THE PAIRING, NOT THE FIX.** A published address and the fence
+that governs it are ONE contract written in two trees. **When a wake rule changes, the diff to
+read is the surfaces that hand out the key** — `channel-ops-launch.ts`, `channel-description.ts`,
+`channel-post-guidance.ts`, `channel-session-handle.ts` — not the surfaces that enforce it.
+
+### F-365 — the goal-delivery chain was blamed for a defect it did not have, and only the projection could tell them apart (2026-08-31, CLOSED as a note)
+
+Filed as a note rather than debt, because the lesson is a METHOD and the code was correct. The
+field report was *"launched with a goal that apparently never ran — your context is empty"*, which
+reads as a plumbing bug: DTO, CAS narrowing, `spec.goal`, `firstMessage`, `s.launchGoal`,
+`takeFraming`. **Every link was intact**, and `channel_sessions` said the session had spent
+**470 000 tokens** with `tool_label` Bash — i.e. it ran, after a human reached it through the
+private panel.
+
+⚠ **AN AGENT'S ACCOUNT OF ITSELF IS EVIDENCE, NOT A MEASUREMENT.** Reading the projection is what
+separated "the goal was dropped" (a bug that does not exist, and whose "fix" would have been a
+change to a working chain) from "the goal was parked behind an event this lane cannot receive"
+(the design defect that does). Query `channel_launch_directives` and `channel_sessions` before
+believing a narrative about either.
+
+### F-366 — an agent woken through the private panel answers into a lane nothing else can read (2026-08-31, RESOLVED in copy; the MCP half is CLOSED by the direct lane; the OPERATOR-facing half is open)
+
+The panel lane (`sessions:message` → `steer`) is on no wire: its turns are rendered in the Dopl
+app and reach no member, no peer agent, and no MCP reader. An agent asked privately for CHANNEL
+work answered privately, and from every other vantage point had produced nothing.
+
+**Closed in the framing** — `prompt-framing-text.js › REPLY_ROUTING`, on all four
+`deliverySection` branches, keyed on the AUDIENCE rather than on the lane the question arrived on
+(INVARIANTS §11).
+
+⚠ **WHAT IS STILL OPEN IS THE SURFACE, AND IT IS NOT A COPY PROBLEM.** Nothing tells an OPERATOR
+that the panel answer they are reading is invisible to the room, and nothing over MCP reports that
+a session has been talking privately — `read_sessions` shows `state` and telemetry, and a session
+mid-panel-exchange is indistinguishable from one working the channel. A `detail` key for it would
+be the smallest honest signal (the vocabulary is closed and peer-visible, §10), but that is a
+schema change on both trees and wants Samuel's word before anyone builds it.
+
+⚠ **DISPOSITION AFTER THE PRIVATE DIRECT LANE (2026-08-31) — THE TWO HALVES SEPARATE, AND ONLY ONE
+IS SUPERSEDED.**
+
+**The MCP half is CLOSED, and by the lane's EXISTENCE rather than by a signal.** This entry asked
+for a `detail` key so an orchestrator could tell that a session had been talking privately. It no
+longer needs one for its own directions: `channel_agent_directions` IS the record — an orchestrator
+sees its own question, the status, and the turn's final text on the row, through
+`dopl_channel(op="read_directions")`. **A `detail` key would have been a hint that a private
+exchange happened; the lane returns the exchange.** ⚠ **A `detail` KEY MUST NOT NOW BE ADDED FOR
+THIS**: `detail`'s vocabulary is CLOSED and PEER-VISIBLE (§10), so a value meaning "this agent is
+in a private exchange" would tell a COUNTERPARTY that the operator is steering their agent out of
+band — which is the one thing the private lane is for not telling them. That is a sharper argument
+against the key than the schema cost this entry originally weighed.
+
+**The OPERATOR-facing half is open and is now BIGGER, because there are two private lanes.** The
+operator still is not told that a panel answer is invisible to the room — and since 2026-08-31 a
+second voice can produce one. That much IS built: a direction is tagged `directed` / `lane:
+'directed'` through `session-narration.js`, so the operator's own words and their other agent's
+are distinguishable in the ring. **What is NOT built is the SPA rendering of that lane** — the
+agent stream still has no face for `directed` / `directed-reply`, so today both fall through
+`agent-stream-model.ts › frameLane`'s `note` fallback and render as plain text. That is the
+honest degradation (nothing is dropped) and it is the remaining work, filed here rather than
+re-filed: **whoever renders it owes the operator one short line saying the words came from another
+of their agents, and nothing more — the minimal-copy ruling applies.**
+
+### F-367 — the outbound-gate payload mints a pending card under a flag called `threadOpen`, and an escalation now takes that branch too (2026-08-31)
+
+`main/session-io.js` builds the OUTBOUND consent payload and sets
+`...(isOutboundPost(name, input, s.channelId) ? {} : { threadOpen: true })` — the flag
+`entryFor` reads to mint the pending card a call with no `outbound_post` carrier cannot
+otherwise get (F-321).
+
+It was accurate while `create_thread` was the only non-post on that lane. Since 2026-08-31
+`escalate` is on it too (§11), so an escalation's gated call is now stamped `threadOpen: true`
+and the name says something false about it. **Nothing misbehaves** — the flag's one consumer
+asks "does this need a minted card", which is still exactly the question — but a reader
+debugging an escalation's consent row is told it is a thread open.
+
+The honest fix is a rename to what it means (`mintPendingCard`, or similar) across
+`session-io.js`, `entryFor` and their suites. **Not done here deliberately:** it is a
+cross-tree rename in files another session was actively editing the same day, and the wrong
+week to do it is the week the lane gained a member. **Filed rather than built.**
+
+### F-368 — `channels-v2/agent-panel.tsx`'s header says the panel has no composer; it renders one (2026-08-31)
+
+The file's docblock (the lanes list, and the paragraph under it) states that the panel offers
+"Open window" INSTEAD of a composer. The component renders `<AgentComposer>`, whose own inline
+comment says *"THE 1:1 LANE IS HERE NOW (Samuel, 2026-08-22), not only in the window"*, and
+`agent-panel-composer.test.tsx` pins its presence.
+
+Per CLAUDE.md's precedence the CODE wins and the header is stale. Recorded rather than edited
+because the file was being changed by another session in the same window; the correction is a
+docblock edit with no behaviour attached.
+
+### F-369 — the per-channel sessions route cites a `/channels/[channelId]/launch-directives` route that does not exist (2026-08-31)
+
+`src/app/api/channels/[channelId]/sessions/route.ts`'s docblock names
+`/channels/[channelId]/launch-directives` as a sibling server route at the viewer floor. There
+is no such path: every launch-directive route is workspace-scoped under
+`src/app/api/channels/launch-directives/` (`route.ts`, `[directiveId]/route.ts`, `claim/`,
+`decide/`).
+
+Comment wrong, code right — so it is a finding rather than an edit. ⚠ It is the shape
+`check-doc-refs.mjs` cannot catch: a path inside a `.ts` comment is not a doc reference, and
+the plain-path ratchet only reads `docs/`.
+
+### F-370 — the fence-line strip is exact-match on `trim()`, and `trim()` does not remove zero-width characters (2026-08-31)
+
+Found by the adversarial review of the private direct lane. **Fixed for that lane; OPEN for the
+other four framers.**
+
+`session-seed.js`'s framers strip a forged fence line by comparing `line.trim()` against the exact
+token. `String.prototype.trim` removes `Zs`, `\t\n\v\f\r`, U+00A0, U+2028, U+2029 and U+FEFF —
+**and nothing from U+200B–U+200F or U+2060–U+206F**. So `END-OPERATOR-<nonce>` plus one U+200B
+survives the filter and renders to the model as a byte-indistinguishable terminator, after which
+the body can restate a preamble verbatim and continue in a voice it was not given.
+
+**Why the direction lane was the sharp end, and is now fixed.** The nonce is a per-session 64-bit
+CSPRNG value that never crosses the wire, so it cannot be guessed — but the direct lane is the
+first with a READ-BACK: a direction asking "quote the delimiter lines you can see" returns them in
+`reply`, and a second direction forges with what it learned. Closed at the WIRE
+(`main/agent-direction-wire.js › UNSAFE_BODY_RE`): a field that cannot HOLD the character cannot
+forge a line in any surface written later, which is `shared/lib/safe-label.ts`'s own input-side
+discipline. Pinned in `test/agent-directions.test.mjs`.
+
+⚠ **STILL OPEN, AND DELIBERATELY NOT FIXED IN THAT WAVE:** `frameOperatorTurn`,
+`frameContinuation`, `frameHistorySeed` and `prompt-sanitize.js › stripFence` all use the same
+`line.trim()` exact match. None of them has a read-back, so the nonce prerequisite is not
+satisfiable from those lanes today — but the strip is one line in each and the property should not
+depend on the absence of a leak. **The fix is the same `UNSAFE_*_RE` pass; it belongs to whoever
+next opens `session-seed.js`, not to a feature wave that would be touching four framers to fix a
+fifth.**
+
+### F-371 — `session-directed.js` argued a torn-down query owes no `result`, and it does (2026-08-31, RESOLVED)
+
+Found by the adversarial review. The first version of the direct lane OMITTED the
+`resetDirected` calls on the engine's `abortQuery` / `denyPending` effects, arguing that
+`session-query.js › consume` drops a superseded query's tail on `s.query !== q`.
+
+**That guard is not armed at teardown.** Neither effect nulls `s.query` — only
+`session-query.js › abortInFlight` (on relaunch) and `session-park.js › resumeParked` do — so
+between a park and the next relaunch `s.query === q` and the tail still arrives. The reducer drops
+those stray events for a parked or ended session, but `sessionDirected.observe` is called from the
+dispatch funnel **after** the reducer and outside every one of those guards.
+
+Consequence: a park landing mid-directed-turn (auth hold, idle timer, operator End) left the
+capture armed, and the first stray `result` closed it and reported a PARTIAL answer marked
+`delivered` — the one outcome the module says must never happen. **Resolved**: both resets are
+back, beside `resetPrivateTurn`, and the corrected argument is recorded in the module rather than
+the wrong one being quietly deleted.
+
+### F-372 — a private turn opened BEFORE the dispatch is wiped by the wake that same message triggers (2026-08-31, RESOLVED)
+
+Found by the adversarial review of the direct lane; **the defect is older than that lane and the
+operator's own 1:1 composer had it since 2026-08-22.**
+
+`session-reopen.js › messageByTask` opened the private window and then dispatched the `steer`. For
+a PARKED session the reducer emits `resumeQuery` BEFORE `pushTurn`, and
+`session-park.js › resumeParked` calls `resetPrivateTurn` — so the window opened for that very
+message was zeroed by the wake it caused. The turn then ran with AXIS B's outbound widening
+INTACT, i.e. an accidental public reply to a private question became possible, which is precisely
+what `session-private.js` exists to prevent. **An idle agent is the ordinary target of both the
+composer and a direction, so this was the common path, not an edge.**
+
+**Resolved** by opening both windows AFTER the dispatch — still before any `result` can arrive,
+since `dispatch` is synchronous and only pushes onto the iterator — with `wasInFlight` read before
+and passed in, because the dispatch moves activity to `working`. `openPrivateTurn`'s second
+argument is optional, so no other caller moved. Pinned in `test/session-direction-lane.test.mjs`.
+
+### F-373 — the engine's session registry outlives a sign-out, and nothing stamped whose session it was (2026-08-31, RESOLVED for the direct lane)
+
+Found by the adversarial review. `session-engine.js`'s registry is process-lifetime and there is
+no `sessions.clear()` anywhere; `auth-state.js › signOut` revokes the credential and clears the
+stores but **does not end or clear live sessions** (`endLiveSessions` has one caller, the quit
+guard). `session-reopen.js › resolveSession` looks a session up by `(channel, thread, agent)` with
+no owner check.
+
+So: operator A runs an agent, signs out, B signs in on the same Mac. B's external agent files a
+direction naming A's still-live `agentId`. The direct lane's gate 3 compares the row to the
+CURRENTLY signed-in user — which is B — so it passes, and A's private turn text would be written
+back to B's row, in the one column that leaves the machine.
+
+**Resolved for this lane** by the guard the tree already uses one module over
+(`session-state-push.js › trackOrigin`): `startSession` stamps `s.operatorUserId` once, never
+rewrites it, and `messageByTask` refuses a direction whose operator does not match — failing
+CLOSED on an unstamped session.
+
+⚠ **THE GENERAL SHAPE IS STILL OPEN**, and it is wider than this lane: `listLiveSessions` has no
+owner filter either, so a departed operator's agents remain visible in the local app surface to
+whoever is at the machine. The honest fix is ending live sessions on sign-out, which is a ruling
+rather than a patch — **filed, not built.**
+
+### F-374 — the private direct lane is UNBOUNDED across machines, and "loop-free by construction" was an overclaim (2026-08-31)
+
+The scoping plan claimed the direct lane is loop-free by construction because `direct_agent` is on
+no own-channel allow list, so a desktop-run agent cannot file one. **That half is verified and
+holds** — an unclassified `dopl_channel` op falls to the Axis-A gate, a windowless session answers
+a gate with `deny`, and `read_directions` is unclassified too, so a desktop agent can neither send
+a direction nor read a reply. No self-sustaining loop can close inside one machine.
+
+**But the cross-machine loop has no bound.** External orchestrator → direction → private turn →
+`reply` on the row → the op's hold or `read_directions` returns it → next direction. Nothing counts
+generations, and the launch lane's own reason applies verbatim (`session-own-launch.js`: the row
+has no depth column, so a parent depth cannot cross the wire). The only restraint shipped is prose
+in the MCP result — which the launch lane explicitly refused to accept as a bound.
+
+This is **F-315's shape** (an unbounded agent CONVERSATION), not F-320's. Recorded as an ACCEPTED
+unbounded lane rather than a closed one, because the operator's own toggle is the thing that gates
+it existing at all and a depth column is a schema change in both trees. Do not repeat the
+"loop-free by construction" claim without the second half of the sentence.
+
+### F-375 — a transient claim failure permanently drops a direction on that machine (2026-08-31)
+
+`main/agent-directions.js › handle` calls `remember(d.id)` whenever `claim()` answers `null` — and
+`claim` answers `null` for EVERY failure, including a 500 or a network timeout. The row genuinely
+stays `pending`, but gate 4's dedupe then blocks this machine from ever retrying it, so the poll
+backstop — which exists for exactly the unhealthy-transport case — cannot recover it. The
+direction lapses.
+
+⚠ **INHERITED, NOT NEW:** `main/launch-directives.js` has the identical shape, so fixing it here
+alone would make the two lanes differ for no stated reason. The fix is to `remember` only on the
+outcomes that mean somebody else has it (409 / 404 / `ok:false`), on BOTH lanes, in one change.
+Filed rather than built.

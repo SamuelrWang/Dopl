@@ -1841,7 +1841,12 @@ The desktop half of §8's MULTIPLAYER v2. Three routing changes and a doorbell c
 - **THE INVARIANT: ZERO PEER BYTES IN THE PREFILL.** An attended session is the operator's personal Claude — full tools, none of the spawn path's containment — so `attended-prompt.buildAttendedPrompt` interpolates exactly THREE NARROWED IDS and nothing else. No names (deleted after a working injection via channel rename), no titles, no bodies; the consent registry entry deliberately holds no display strings for it to reach. The session learns real names from its own scoped `read`, inside the server's fencing. `narrowId` is pinned byte-identical to `prompt-framing.idToken` by differential test. Do not add a field to that template without treating it as the security boundary it is.
 - The prompt teaches the external-session contract: imperative ToolSearch first (deferred-not-absent), connector-not-set-up self-diagnosis then STOP (Dopl cannot detect connector auth from outside — the prompt is the detector), scoped read before replying, post with channel+workspace+thread on every op INCLUDING await, await re-arm cadence with no push promises.
 - Never let prompt text near a shell string: `encodeURIComponent` is the only encoder, there is no osascript/spawn rung in v1, and the deep link's own RCE history (flag smuggling via `q`, fixed CLI 2.1.118) is the reason.
-- Residuals and the open lane-priority question from the first live 1.7.20 test are F-118 / F-117 in REFACTOR-FINDINGS.md — read them before extending this surface (the window-budget hold, residual (a), is the sharpest).
+- ⚠ **THREE MEASURED DETAILS MOVED HERE FROM F-118 WHEN THAT ENTRY CLOSED (2026-08-30), because they existed nowhere else** — the entry was being kept alive to hold them, and the rest of its "standing knowledge" was already the two bullets above:
+  - **The `claude-cli://` cap is an OFF-BY-ONE you can measure: 4,096 delivers, 4,097 vanishes.** `openExternal` resolves either way, so there is no error to catch and no signal at all.
+  - **The DOCUMENTED 5,000-character `q` cap is therefore UNREACHABLE** — the 4,096 TOTAL-URL ceiling bites first, which is why the route decision measures the BUILT URL and never the per-param number the docs give.
+  - **The injection that deleted peer names from the prefill was demonstrated with a 48-CHARACTER CHANNEL RENAME.** That is the budget an attacker had; it is the reason the template carries ids and not strings.
+  ⚠ **The surface itself is DELETED** (the pre-consent window went 2026-08-20, F-228; the two `main/` modules are pinned as retired vocabulary in `dopl-desktop-app/test/removed-vocabulary.test.mjs`). This section is archaeology — the three facts above are kept because they are platform measurements, not product ones, and the next deep-link surface pays for them again otherwise.
+- Residuals and the open lane-priority question from the first live 1.7.20 test are F-118 / F-117 in REFACTOR-FINDINGS.md — read them before extending this surface (the window-budget hold, residual (a), is the sharpest). ⚠ **F-118 is CLOSED as of 2026-08-30**; F-117 is the live half.
 
 ### Desktop app — THE POSTURE WAVE: arms, reasons, model, meter, requester shells (2026-08-02, F-119)
 
@@ -2054,7 +2059,7 @@ still the source of the dmg.
 - **`/get-started` IS AUTH-REQUIRED, AND ITS NAME IS LOAD-BEARING.** It is deliberately NOT in `PUBLIC_ROUTES`, so a signed-out visitor bounces to `/login?redirectTo=/get-started` and returns. It must also not begin with `/download`: that entry is a `startsWith` prefix, so any `/download*` path would be silently public. New top-level routes also go in `RESERVED_WORKSPACE_SLUGS` (`src/config/index.ts`) and `NON_WORKSPACE_ROOTS` (`layout-shell.tsx`) — `download` was missing from the former and was added with it.
 - **THE PAGE IS THE RETIREMENT PLAN'S `/retired`.** Same audience (signed in), same message ("Dopl lives on your desktop"), same download. Stage B's `WEBSITE_RETIRED` redirect map should point at `/get-started` rather than mint a second page that would drift from it.
 - **THE AUTO-START IS A ZERO-SIZED SAME-ORIGIN IFRAME, NOT `location.assign`.** Both download identically when the asset resolves. They differ when it does not, and it did not during this build (see F-131): a top-level navigation to a GitHub 404 COMMITS, throwing the visitor off the page and taking the install instructions with them; the same response in an iframe is `X-Frame-Options: deny` and the page survives. The frame is not `sandbox`ed (Chrome blocks downloads from sandboxed frames) and not `display:none` (not guaranteed to load). Visible "Not working? Download again" is a real `<a href="/download">` — a user-chosen click is the one navigation allowed to leave.
-- **THE PAGE IS TWO FULL-HEIGHT FIELDS, cloned from the reference Samuel supplied** (Wispr Flow's post-login download screen), rebuilt 2026-08-04. Left 43%: brand lockup, a SERIF display heading (`--font-playfair` = Newsreader, the same token the auth wordmarks use — the marketing lockup's own wordmark stays grotesk by `.lp-brand-word`'s explicit rule), three numbered steps, "Not working? Try again."; the reference's bottom-left ornament slot carries the live `role="status"` download line instead, because Dopl's only circular brand object is the app icon already sitting at the top of the same column. Right 57%: the illustration, cropped by the field rather than centred in a box. **BOTH FIELD COLOURS ARE EXISTING TOKENS** — left `--ink` (marketing.css's own black), right `--rail-tile` → `--rail` (globals.css, the app-shell frame, also `--body-bg`): the drawing of the install sits on the colour of the thing being installed. Below 900px they stack, copy first.
+- **THE PAGE IS TWO FULL-HEIGHT FIELDS, cloned from the reference Samuel supplied** (Wispr Flow's post-login download screen), rebuilt 2026-08-04. Left 43%: brand lockup, a SERIF display heading (`--font-playfair` = Newsreader, the same token the auth wordmarks use — the marketing lockup's own wordmark stays grotesk by `.lp-brand-word`'s explicit rule), three numbered steps, "Not working? Try again."; the reference's bottom-left ornament slot carries the live `role="status"` download line instead, because Dopl's only circular brand object is the app icon already sitting at the top of the same column. Right 57%: the illustration, cropped by the field rather than centred in a box. **BOTH FIELD COLOURS ARE EXISTING TOKENS** — left `--ink` (marketing.css's own black), right `--rail-tile` → `--rail` (globals.css, the app-shell frame, also `--body-bg`): the drawing of the install sits on the colour of the thing being installed. ⚠ **`--rail` was deleted on 2026-08-30** — the app frame is `--home-frame` now and `--body-bg` reads it (`docs/DESIGN-SYSTEM.md`); `--rail-tile` itself is untouched. Re-measure before trusting this sentence: `grep -rn 'rail-tile' src` was empty on 2026-08-30. Below 900px they stack, copy first.
 - **THE INSTALL ANIMATION IS CSS OVER DIVS, ON ONE CLOCK.** `src/features/get-started/` — ten keyframe tracks sharing `--gs-dur`, in a fixed **640×660** coordinate space scaled as a whole by `--gs-k` (cursor targets are literal px; a percentage layout puts the cursor beside the folder at one width and inside it at another). **`--gs-k` reads the FIELD, not the viewport** — `min(calc(100cqw / 640px), calc(100cqh / 636px))` against `.gs-field`'s `container-type: size`, so the width fit keeps the browser fragment bleeding past the left edge and the height fit keeps the volume window off the fold on a short, wide field; the same one factor is therefore correct in the stacked layout too. The composition has TWO anchors — a browser fragment cropped by the field's top and left edges (its recede beat is **opacity-only**, because a scale would walk its hidden corners back into view) and the volume window in the lower right. `prefers-reduced-motion` gets the LAST FRAME, not a blank box. Scoped under `.lp` so type, ink, hairlines and gutter all come from `marketing.css`; the only values added are the mock macOS chrome greys plus alphas of white for on-dark ink, declared once as `--gs-*`. **Three stylesheets, one per purpose** (page/copy · composition · timeline): `get-started.css`, `install-animation.css`, `install-animation-motion.css`, all imported by `page.tsx`.
 
 ## Appendix A — ESLint rules to add
@@ -2370,7 +2375,15 @@ The slim header strip below the knowledge detail breadcrumb (`.detailToolbarBand
 
 ### App shell dropped its dark window frame, and the brand pill joined one elevation (2026-08-11)
 
-`.root` in `src/shared/layout/app-shell/app-shell.module.css` used to paint a dark navy window frame behind `.surface`. Since 2026-08-11 it paints the SAME gray as `.surface`, so the surface's margins read as breathing room instead of a border. `--rail` is still defined and still used by other features — it is simply no longer the app frame, so do not read its existence as evidence the frame is coming back. In the same pass the sidebar's `.brandPill` gave up its own flatter recipe (an #e2e2e0 hairline and a single 3px/8px drop), which read as a different, shallower object sitting directly above chips that did not, and adopted `.auth-btn-3d-light` value for value: the landing/auth white button, the sidebar's active `.raised-tab` chip and the workspace-switcher trigger are now ONE elevation. A real `border` is safe on the pill where it is not on `.raised-tab` because the pill is `width: 100%`, so the extra 2px comes out of the content box rather than the layout.
+`.root` in `src/shared/layout/app-shell/app-shell.module.css` used to paint a dark navy window frame behind `.surface`. From 2026-08-11 it painted the SAME gray as `.surface`, so the surface's margins read as breathing room instead of a border.
+
+⚠ **REVERSED 2026-08-30** (Samuel, live review: *"the workspace pages adopt /home's frame model and palette — the two surfaces must match"*). The dark frame is back, and it is `--home-frame` — the ink /home introduced — painted by `.root`, `.surface` and the account rail's `.rail`, with `.page-float` floating on it.
+
+⚠ **IT TOOK THREE CUTS, AND THE TWO WRONG ONES ARE WORTH KEEPING** because each is a plausible reading of the words and neither is what /home does. **(1) `.sidebar` painted the frame ink** (from *"the left bar/rail + sidebar background → the home frame blue"*) — nav rows floating on bare dark with no panel under them. **The dark is FRAME ONLY: the margin around panels, never a surface content sits on.** **(2) `.sidebar` given its own panel face** (from *"it should be the sidebar panel gray, then the inner panel is white … it's alternating"*) — sidebar and page card as two sibling floats with a 2px line between them. Samuel, third time: *"the right panel sits ON TOP OF the gray panel that holds the sidebar."* **The panels NEST.**
+
+**What shipped is /home's structure**: ONE `.page-float` spanning rail → right edge (`app-shell.module.css › .panel`, composed as `cn("page-float", styles.panel)` so the face is the kit's and cannot drift from /home's `<main>`), the sidebar a REGION of it painting nothing at all, and the routed page a white card floating inside (`› .pageCard` — /home's record pane class for class, `margin: 12px 12px 12px 0`: the pane's `mb-3 mr-3` plus a top, since the workspace panel has no header strip to supply that gap). ⚠ **The seam that made it cheap**: sixteen surfaces across both trees compose `.page-float` to mean "the full-page surface", including three that still supply their own (/home's `<main>`, the pop-out thread window, the web playground). Rather than strip the class from thirteen files and their pins, the SHELL takes the surface over — `.pageCard :global(.page-float)` resets face and margin and deliberately **not** the `flex: 1; min-width: 0` sizing those views inherit without restating. Zero page files changed. Four things fell out across the three cuts: the `--home-frame-ink`/`--home-frame-hover` pair and the scoped `.nav-chip` rebind that read them (added and deleted within one review), `.wordsCard`'s `--bg-inset` well colour (now the white card face), and `SECTION_PANEL_GROUND`, which round-tripped `bg-card-surface-subtle` → `bg-home-card` → `bg-home-panel` as the level under it moved. The four-level table is in `docs/DESIGN-SYSTEM.md`; the chain and both rejected cuts are pinned in `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts`. Two things did NOT come back: the old `--rail` ink (`#2c3640`, a second slab one hex off the frame, ledger ASK-31 — the token was deleted from both copies in the same change, having had zero `var(--rail)` consumers since 2026-08-11), and any per-page repaint (/home's three `!bg-home-frame` overrides were deleted, because the shell now says it once). See "the app frame palette" in `docs/DESIGN-SYSTEM.md`.
+
+In the same 2026-08-11 pass the sidebar's `.brandPill` gave up its own flatter recipe (an #e2e2e0 hairline and a single 3px/8px drop), which read as a different, shallower object sitting directly above chips that did not, and adopted `.auth-btn-3d-light` value for value: the landing/auth white button, the sidebar's active `.raised-tab` chip and the workspace-switcher trigger are now ONE elevation. A real `border` is safe on the pill where it is not on `.raised-tab` because the pill is `width: 100%`, so the extra 2px comes out of the content box rather than the layout.
 
 *Relocated from* `src/shared/layout/app-shell/app-shell.module.css › .root`
 
@@ -4565,10 +4578,13 @@ and cards directly on it.
   plus a ground — so the workspace Agents page is pixel-unchanged while neither /home face owns a
   copy of the structure.
 - **`SectionPanel` paints nothing, and that is the scoping decision.** The obvious API was
-  `tone="home"`. It is the wrong one: `--home-panel` is one of four values that are /home's alone,
-  and a shared component able to select them puts that palette one autocomplete away from every
-  workspace page — the exact failure DESIGN-SYSTEM's "never fold them into `--bg-*`" warning is about.
-  The ground is `className`, so a page palette can only be chosen by a file that lives on that page.
+  `tone="home"`. It is the wrong one: a shared component able to select grounds by enum puts one
+  autocomplete away from every page a decision each mount should be making in its own file. The
+  ground is `className`, so it can only be chosen by a file that lives on the page. ⚠ The reasoning
+  as written in 2026-08-27 leaned on "`--home-panel` is one of four values that are /home's alone" —
+  **that premise is superseded** (Samuel, 2026-08-30: the four are the APP FRAME palette and the
+  workspace shell consumes them). The decision survived its premise; the argument above is the one
+  that always did the work.
 - **The ground is one CSS rule, not a prop at each mount.** `.frame :global([data-section-panel])`
   repaints every panel in the record pane at once. Two arguments, and the second is the real one:
   (1) the /home Agents face is `agent-panels.tsx`, which another agent was actively restructuring —
@@ -5149,3 +5165,459 @@ by op: happy paths and ref resolution stay, the fences and the policy refusals m
 desktop's tool lists against it. It went red for `dopl_home` exactly as it did for `dopl_agent` a
 wave earlier. **A brief that names `packages/mcp-server` is understating its own blast radius every
 time**, and the reason that is fine is that the gate is louder than the brief.
+
+## 2026-08-30 — 17 GB of RSS, and the bound that was stated without its multiplier
+
+The dev Electron app grew to **17 GB** and had to be killed. Samuel's report carried one clue and
+one hypothesis, and the hypothesis was wrong — which is most of what this entry is for.
+
+### The clue that was not the bug
+
+The local Next dev log was full of this, continuously, across every watched channel:
+
+```
+GET /api/channels/<id>/await?since=714&timeoutMs=1 200 in 3.8s (application-code: 3.3s)
+[await-hold] channel=… polls=1 revalidations=0 outcome=timeout ms=1096
+```
+
+`timeoutMs=1` reads like a collapsed budget. **It is the design.**
+`config.js › REALTIME.CHEAP_AWAIT_TIMEOUT_MS` has been 1 since `1f76730c` (2026-07-28, the
+poll→push transport): the smallest value `AwaitQuerySchema`'s `.positive()` accepts, chosen so a
+healthy realtime socket gets a single-DB-read catch-up with **no held serverless function**, paired
+with a 45s wake-interruptible idle. `polls=1` in that very log line is the property working. Nor
+was the wake-tiers wave starving it: `listener-messages.js` awaits `feedLiveSession` **after** the
+await returns, holding the cursor by design — it delays the NEXT poll, it does not consume the
+current one's budget.
+
+What the log was actually showing was **22 watched channels** (measured off `cursors` in the
+electron-store) × one cheap poll per 45s, against a `next dev` spending ~3.5s of application code
+per request. That is ~1.8 requests in flight on a server that compiles as it serves — saturated,
+without anything being wrong.
+
+**The lesson is the one this repo keeps re-learning from the other direction: a number that looks
+alarming in a log is not evidence until you have found the constant it came from.** The pin
+`test/listener-cheap-await.test.mjs › "FLOOR: timeoutMs=1 is the DESIGN on the cheap path"` exists
+to stop the next reader spending an afternoon the way this one did.
+
+### The real regression, and it was four days old
+
+`main/session-narration.js` is the agent window's work lane. `flush()` sends **the whole ring** for
+each dirty session; `sendToWindows` clones that payload into **every live window's** message pipe;
+`note()` marks a session dirty on **every SDK event**. So the feed re-serializes the entire ring at
+up to 5 Hz, per session, per window — and `webContents.send` structure-clones into a Mojo pipe,
+which is **native memory**: no GC pressure, nothing in a heap snapshot, and no backpressure at all
+from a renderer that is slow to drain. A dev renderer under Vite HMR is exactly such a renderer.
+
+On **2026-08-27** `PROSE_CAP` rose 300 → 2000 (shipped in `9706943b`), correcting a real bug — the
+agent's own words were being cut at 300 chars, mid-word, upstream of the "Show more" control meant
+to reveal them. That constant's note did the arithmetic honestly:
+
+> the worst case rises from 200 × 300 = 60k chars to 200 × 2000 = 400k chars per session per flush
+
+…and named the two acceptable fixes: *"tighten `NARRATION_MAX` or send a delta instead of the
+ring."* **What it left out was the fan-out and the rate.** The payload is cloned once per live
+window and there can be nine (the SPA plus `MAX_POPOUTS` plus `MAX_AGENT_WINDOWS`); 400k × 6
+sessions × 9 windows × 5 Hz is not a size, it is a bandwidth, and nothing in that file bounded one.
+
+**So the standing rule is now stated where it can be enforced: a per-session bound written without
+the fan-out and the rate is not a bound on anything that matters.** Every `sendToWindows` feed owes
+an answer to "how many bytes per second, to how many windows". `session-summary.js` has one (a
+digest gate — it fires only when the projection MOVES). Narration cannot have one by construction:
+a digest over an append-only ring changes on every append, which is precisely why F-212 chose a
+second channel for it in the first place, and precisely why its bound has to sit on the payload.
+
+`RING_CHAR_BUDGET` is 60_000 — **derived, not chosen**: `NARRATION_MAX` × `TEXT_CAP`, i.e. exactly
+the ceiling the feed was designed around before `PROSE_CAP` moved. It restores that ceiling without
+undoing the 2026-08-27 ruling: a long line still arrives **whole**, never cut mid-word and never cut
+silently. It simply costs more of the ring, so what pays is the oldest entries — which is what a
+ring is for. ⚠ **The next over-run must not be answered by lowering `PROSE_CAP`.** That would put
+the silent cut back.
+
+### The second accumulator: an unread Response is not free
+
+Node's `fetch` in Electron main is undici. Until a body is consumed or cancelled the request counts
+as in flight, its socket is never returned to the pool, and the next call opens another connection —
+retaining socket buffers and TLS state, all of it **native**, all of it invisible to a heap snapshot.
+
+The house style leaked it on ~20 branches, and **the leaking branches are the ERROR branches**:
+the success path reads `res.json()` and is fine, while `if (!res.ok) { … return; }` — the path a
+saturated server or a stale cookie puts every caller on at once — drops the body on the floor. The
+steadiest one was `presence.js › beatOnce`, which reads no body on **any** branch, success included,
+once per workspace every 30s forever.
+
+One shared helper (`api-repair.js › discardBody`, best-effort by construction) now covers the three
+highest-frequency seams. The remaining sites are **F-353**, scoped as its own wave because it is a
+~20-file edit across every transport in `main/` and two of those files sit at the size cap.
+
+### The self-sustaining poll, which was not the cause but would have been next
+
+`channelLoop`'s catch read `if (err && err.name === 'AbortError') continue;` under a comment saying
+an abort is *"our own fetch timeout (normal long-poll turnover) or a wake() kick — both just
+re-await immediately"*. **True of the held poll only**, where `AWAIT_FETCH_TIMEOUT_MS` (58s)
+deliberately outlives the server's 50s hold so the server always answers first.
+
+On the cheap path — the normal one whenever push is healthy — our 15s budget sits **under** a route
+whose own ceiling is 60s. A merely slow server therefore blows our budget while it is still working,
+and a zero-delay re-poll sets the loop's rate to the **server's latency** instead of the 45s idle:
+each channel re-issues the instant it gives up, each abandoned request leaves the server still
+executing it, and the set converges on whatever rate keeps the server exactly slow enough to keep
+aborting. Self-sustaining, and it never backs off. The field log shows the neighbourhood of it —
+`presence: beat error This operation was aborted` and `reconcile: listWorkspaces error — This
+operation was aborted`, i.e. 15s fetches blown against a dev server.
+
+The discriminator had to be **ownership**, not the error, because both paths reject with the same
+`AbortError`: `channelLoop`'s own controller is aborted only by a wake, while the budget aborts
+`sendOnce`'s separate private one. `main/listener-budget.js › isWakeAbort` is that one question,
+and it exists as a file because **both** `channel-listener.js` (499 lines) and `listener-io.js` were
+sitting at the §2 cap and the fix could not be written until something moved — the same reason
+`listener-messages.js` exists. Being dependency-free, it is `require`d by its test for real rather
+than sliced out of a source string, which is strictly better than what it replaced.
+
+A blown budget now leaves `await budget expired` in `listener.log`. It left nothing before, which is
+why the incident's own log could not tell us whether it had happened.
+
+### What was measured and found innocent — recorded so nobody re-runs it
+
+`ui-sync.js` mints **generation-unique** realtime topics (`ui-sync-core.js › nextTopic`), and the
+field log showed generation **6735** in one process. That looks exactly like unbounded channel
+accumulation, and INVARIANTS §7's own wording invites the inference — realtime-js "forgets removed
+channels only after the leave push settles". A probe against the installed `@supabase/realtime-js`
+2.111.0 (50 connect/release cycles under a dead socket; 30 under a socket that acks joins but never
+acks leaves) left `client.channels`, the phoenix channel list and `socket.stateChangeCallbacks` all
+at baseline: `_canPush()` is false for a channel that was never joined, so the leave short-circuits
+to `'ok'` and `teardown()` runs. **No accumulation. The hypothesis was wrong and the probe is why we
+know.** What the generation counter really measures is reconnect/watch churn, and `describeState()`
+reports `subscribed` rather than `client.channels.length`, so neither the leak nor its absence was
+answerable from the log — filed as **F-356** along with the stable-topic rule violation in
+`realtime.js` that the same reading turned up.
+
+Two further unbounded structures came out of the sweep and are filed rather than fixed: **F-354**
+(`watchRow`'s 3s poll cannot distinguish a 5xx from "still pending", and has no ceiling) and
+**F-355** (`makePushIterator`'s queue is uncapped beside a `pendingInbound` that is deliberately
+capped at 16). The listener's `nameCache` / `avatarUrlCache` — the only structures in `main/` with
+no bound of any kind — were capped in this wave rather than filed, because the fix is four lines and
+the alternative was a finding that says "add a cap".
+
+## 2026-08-30 (later the same day) — the auth flap, and a sign-out claim nothing recorded
+
+A second Electron RSS report, hours after the narration-ring fix, with two new clues: macOS
+Keychain denied `safeStorage` (`userCanceledErr`), and the log then filled with
+`Error occurred in handler for 'dopl:api-request': [DOMException [AbortError]]`, continuously.
+
+⚠ **SEVERITY, STATED HONESTLY AND FIRST.** The headline number in the report was ~20 GB, and it
+should not be attributed to this app without qualification: Claude Desktop was independently
+observed at 17 GB on the same machine holding a large session, and the earlier 17 GB entry's own
+measurements (`next dev` at ~3.5 s/request across 22 watched channels) describe a saturated dev
+server, not a leaking Electron process. **What the logs support on their own is a churn loop with
+unbounded structures in it, not a measured 20 GB of Dopl.** The mechanisms below are real and each
+one is independently arguable from the code; the growth they produced was probably a good deal
+smaller than the number that started the hunt. **The next report needs a per-process RSS reading
+before anybody spends an afternoon on it** — which is the same lesson the 17 GB entry filed under
+"a number that looks alarming in a log is not evidence until you have found the constant it came
+from", learned again from the other end.
+
+### The state that had no exit
+
+`auth-store.persist()` refuses to write a Supabase refresh token in cleartext when the keychain is
+unavailable — correct — and **deletes both store keys on the way out**. So `loadSession()` answered
+null for the whole run, and the app sat in a state nothing in it could describe:
+
+- `auth-state.isSignedIn()` said **TRUE** (a fresh cookie identity counts, Q4's fix), so the
+  listener, presence, reconcile and mcp-config all kept running and kept issuing HTTP;
+- `auth-tokens.getAuthState()` said **FALSE** (blob-only), so the bearer seam sent no
+  `Authorization` header, `ui-sync` failed closed forever, and the renderer was told signed-out.
+
+**The Q4 rule rested on an assumption nobody wrote down: that the blob is STALE, hence repairable
+from the jar.** When the keychain refuses, the blob is not stale, it is IMPOSSIBLE — and
+`auth.refreshInner()` reads its refresh token from that blob, so nothing on the machine could
+rotate the jar's JWT either. "Signed in via cookie" bought one hour of a credential that could not
+be renewed, followed by every cookie lane 401ing forever against its own retry ladder.
+`signedInFrom` now takes `canPersist`, and a cookie session with no way to store it is **signed
+out** — with `needsRefresh` false, because re-probing cannot change an answer that turns on the
+keychain. Recovery is by GESTURE (an explicit sign-in re-enters `persist()` and re-asks the OS),
+never by poll: a background probe re-prompting the operator every 30 s is the storm, not the fix.
+
+⚠ Two smaller things fell out of the same read, and both are the "report what happened, not what
+you attempted" rule that `captureFromFragment` already learned: `rebuildBlobFromCookieSession`
+answered `true` unconditionally, and — because every freshness guard in it is written
+`if (stored && …)` and `stored` was permanently null — re-attempted the persist and logged
+"rebuilt session blob from cookie jar" on **every probe**. FIX S9's write-storm guard, reached from
+the one direction it did not cover.
+
+### The flap, which is the part that was expensive
+
+Both 401-repair seams answered "a 401 survived a forced rotation" with a bare
+`emitAuthState('signed-out')`. That payload FORCES `signedIn:false` into one push **and changes
+nothing else** — the blob stays exactly where it is. So the next request re-entered `refreshNow`,
+which emits off `getAuthState()` and therefore announced `signedIn:TRUE` again.
+
+Three properties combine to make that a loop rather than a log line:
+
+1. `lastEmitKey` dedupes repeats, and cannot dedupe an ALTERNATING pair;
+2. `ui-bridge.broadcastAuthState` forwards `{signedIn, userId}` and drops the STATUS, so the
+   renderer cannot tell `'refreshing'` from `'signed-in'` — it sees a boolean flip;
+3. `app.tsx › App` therefore read a genuine auth TRANSITION per 401 and answered each the only way
+   it can: `queryClient.clear()`, `persister.removeClient()`, `router.navigate("/")`.
+
+And the cache clear re-fires every mounted query (`use-api-query-core`'s stranded self-heal
+guarantees it — F-360), each of those 401s, and each 401 drives another flap. **Positive feedback,
+with the cache wipe as the amplifier.**
+
+**The fix is a latch, and the reason it is a latch is that the old code made a CLAIM it did not
+RECORD.** `auth-tokens.noteSessionRejected` remembers the rejection, `getAuthState()` reports it
+ahead of the blob, and `getAccessToken` / `refreshNow` / `kick` / `tick` all stop working off a
+session the API has refused. ⚠ **Cleared only by `onSignIn`/`onSignOut`, never by a successful
+rotation** — rotating the same session mints a different token for the same rejected identity,
+which is exactly the resurrection that made the claim a lie. ⚠ **And it does NOT drop the blob:**
+that decision stays bounded in `noteRefreshOutcome` (N consecutive definitive refresh rejections),
+because a 401 from our own API is evidence about the API, not proof the Supabase refresh token is
+dead.
+
+### Why the SPA stranded instead of showing the sign-in screen
+
+`ui-bridge`'s handler aborts at `REQUEST_TIMEOUT_MS` and REJECTS the IPC with a **status-less**
+error. `page-states.isUnauthorized` needs an `ApiError` with status 401, so the renderer could not
+read that as "signed out" — it rendered a retryable error card instead, and a status-less error is
+the one class the shared TanStack predicate DOES retry. Meanwhile the request was doomed before it
+left: with no stored session this seam attaches no credential at all, so `withUserAuth` could only
+answer 401.
+
+So it is not sent. `performApiRequest` short-circuits to the envelope the server itself would
+return — **copied byte-for-byte from `with-auth.ts`, not invented**, so one condition cannot read
+two ways depending on whether the request left the machine. ⚠ Gated on
+`getAuthState().signedIn`, **never on a null token read**: `getBearerToken()` also answers null for
+a signed-IN operator mid-backoff after a network blip, and answering 401 there is the same renderer
+flap from the other side.
+
+### The bounds that were rates, not give-backs
+
+`listener-heal.scheduleRetry` was a FIXED 30 s re-armed from the failure it had just produced —
+bounded in CONCURRENCY (one shared timer) and not at all in DURATION, so a condition that does not
+clear on its own re-ran the whole reconcile pass twice a minute forever. `MISS_GIVE_UP_COUNT` had
+already learned the other half of this on the loop-miss path. `listRetryDelay` now doubles to the
+5-minute periodic reconcile's own period, past which the retry adds nothing that pass does not do,
+and `noteWorkspaceListOk` brings it back down — **a ladder that only climbs is a give-up with extra
+steps.** ⚠ It never gives UP, deliberately: a failed workspace list starves presence, push,
+identity and every channel loop at once.
+
+`session-windowless.watchRow` had the same shape at 3 s and could not tell a failure from a wait
+(F-354), and `useMcpConnectionPoll` was a `setInterval` at 3.5 s with no in-flight guard against a
+30 s transport — **~9 doomed requests in flight at once, per window, forever.** ⚠ The rule worth
+keeping from this pair: **a cadence shorter than the request timeout with no in-flight guard is not
+a poll, it is an amplifier — the sicker the server, the more load it gets.** And an in-flight guard
+alone is not enough, because a 401 storm fails FAST; both need the backoff too.
+
+### The renderer-side accumulator, which is the one that actually retains bytes
+
+`persistQueryClientSubscribe` calls `persistClient` on **every** QueryCache and MutationCache event
+— added, removed, updated — does not await it, does not throttle it, and offers no option to. Each
+call is a full synchronous `dehydrate()` of the whole cache, and `createIdbPersister` then opened a
+**new `indexedDB.open()` per call**. `queryClient.clear()` is the worst case in one gesture: one
+`removed` event per query, so a single clear meant N complete snapshots in flight, each retaining
+its own deep copy until its transaction was scheduled. `openDb` also had no `onblocked` handler, so
+a blocked open never settled and orphaned its promise, its snapshot and its connection permanently.
+
+Now: one connection, reused and invalidated when it dies; every open settles; and the write is
+**latest-wins with one in flight**. ⚠ The bound is TWO retained snapshots, not one, and two is the
+honest number — the write already in flight cannot be recalled, so the most that can be held is
+that one plus the newest queued. Everything between them is dropped, which is the point: an
+intermediate snapshot is superseded microseconds later and nothing could ever read it.
+
+### The split that had to happen first, again
+
+`auth-tokens.js` was at 498 of the 500-line cap and the latch had nowhere to go, so the fenced
+`AUTH-TOKENS-PURE` block moved to `main/auth-token-rules.js` — **sentinels and all**, so the two
+suites still slice ONE source rather than gaining a second copy. Same move, same reason, as
+`listener-budget.js` in the morning's wave. ⚠ Being dependency-free it is now `require`-able for
+real, which is where a future test should go. `test/listener-auth-repair.test.mjs`'s seam
+enumeration moved with it: `auth-tokens.js` left the "who decides 401 policy" list because it no
+longer CALLS `shouldRepairAuth`, only re-exports it.
+
+---
+
+## 2026-08-31 — The agent nobody could start: an address published without its rule
+
+**The trail, measured against production rather than reconstructed.** An external MCP session
+(Samuel's own Claude Code, holding his Dopl credential) asked for an agent in channel
+`bb0f57db` inside container `e7998a94`, then tried to direct it. Every number below is a query
+against the live database, not a claim:
+
+```sql
+select id, task_id, length(goal), template_name, status, agent_id from channel_launch_directives
+  where channel_id = 'bb0f57db-bb46-4ce6-af96-83eb8e2dbf28';
+select seq, author_kind, client_msg_id, metadata->'mentionedUserIds' from channel_messages
+  where channel_id = 'bb0f57db-bb46-4ce6-af96-83eb8e2dbf28' order by seq;
+select session_key, state, tokens_spent, template_name from channel_sessions
+  where channel_id = 'bb0f57db-bb46-4ce6-af96-83eb8e2dbf28';
+```
+
+- The directive was **`launched`**, with a **1 111-character goal**, `task_id` NULL
+  (channel-level), template `Orchestrator`, agent `x2sz1ztt`.
+- Five messages followed, `seq` 799–803. **All five `author_kind = 'agent'`**, all naming the
+  agent (`@x2sz1ztt` ×4, `@agent-x2sz1ztt` ×1), none carrying `to`, none with a stamped mention.
+- The session row exists and shows real work — `tokens_spent` 470 000, `tool_label` Bash — which
+  is what makes this worth writing down, because it is the one fact that contradicts the obvious
+  reading.
+
+**What was NOT wrong, and this is the part a plausible story gets backwards.** The goal was not
+dropped. `d.goal` → `spec.goal` → `firstMessage` → `s.launchGoal` → `session-seed.js ›
+takeFraming` was intact at every link, the DTO carried `goal`, the CAS returned it, and the
+narrowing whitelist named it. **The chain worked and the premise under it did not:** on the
+spawn-idle lane that goal is delivered AT A WAKE, and
+
+> **the only caller of the directive lane cannot produce a wake.**
+
+A dormant session woke on a HUMAN-authored message (`session-wake-tiers.js › wakeEligibility`, the
+2026-08-28 loop fence), and a directive is filed by an AGENT whose every post is agent-authored.
+The five @-posts were not misrouted, misspelled or refused — they were correctly, silently inert,
+and nothing in the product said so. The agent eventually ran because a human reached it through
+the app's private panel, which is the only door that was open.
+
+**Three things were wrong, and they are three different kinds of wrong.**
+
+1. **A CAPABILITY WITH NO REACHABLE TRIGGER.** `launch_agent` handed out an id its only holder
+   could not spend. Samuel's ruling: **the same-account carve** — an agent-authored message
+   posted under the OPERATOR'S OWN user id may @-wake that operator's dormant agents, tier 1 and
+   nothing else. Both properties that made agent-to-agent wake a loop survive: it must NAME an
+   agent (tiers 2 and 3 stay shut to every agent-authored message on every account), and it must
+   be ONE ACCOUNT (a peer's agent is exactly as dead as 2026-08-28 left it).
+2. **A SPAWN SHAPE THAT DEFERRED AN INSTRUCTION NOBODY WOULD DELIVER.** Samuel's ruling: an
+   MCP-lane launch **carrying a goal spawns RUNNING**. The operator had already approved that
+   lane on that machine — the launch-over-MCP toggle IS the consent — so the human step ruling 3's
+   spawn-idle shape preserves had happened before the row was written. The BUTTON lane keeps
+   ruling 3: it composes its own stand-by sentence and a human is at the keyboard to talk to it.
+3. **COPY THAT WAS TRUE OF A READER IT DOES NOT HAVE.** `launch_agent` said *"DIRECT IT WITH
+   `@<id>` — write that token in the BODY of a post … and that specific agent picks it up."* True
+   of a HUMAN; false of the only thing that reads a tool result. `channel-post-guidance.ts`'s
+   fifth zero-tag cause said the same in the other direction. Both are corrected, and both now
+   carry the boundary rather than the headline.
+
+**What generalises, and it is not "check the fence".**
+
+- **A FENCE PLUS A PUBLISHED ADDRESS IS A CONTRACT, AND THE TWO WERE WRITTEN A WEEK APART.** The
+  2026-08-28 tier ruling narrowed *who may wake*; the 2026-08-22 `launch_agent` copy told the
+  caller *how to wake*. Neither change was wrong on its own and nobody re-read the other. **When a
+  fence moves, the surfaces that hand out the key are the diff to look at** — not the surfaces
+  that enforce it.
+- **AN INERT ACTION THAT NOTHING REFUSES IS THE MOST EXPENSIVE FAILURE THIS PRODUCT HAS.** The
+  posts landed, the results said "posted", the zero-tag diagnostic explained the wrong thing at
+  length, and the caller repeated itself four more times. F-266's tint-says-tagged /
+  stamp-says-nobody class again, one namespace over — which is why the per-mention BREAKDOWN
+  reports what each `@` IS rather than only how many resolved.
+- **AND A PROJECTION CAN CONTRADICT THE OBVIOUS DIAGNOSIS.** "The goal never ran" was the caller's
+  reading and it was wrong: `channel_sessions` said 470 000 tokens. Reading the row is what
+  separated "the goal was dropped" (a plumbing bug that does not exist) from "the goal was parked
+  behind an unreachable event" (a design defect that does). **Query the projection before
+  believing an agent's account of itself.**
+- **THE PANEL IS A LANE, AND NOTHING SAID SO.** The agent that did run answered in the private
+  composer, which is on no wire: from the room, and over MCP, it had produced nothing. The framing
+  said where to DELIVER and never that the two inbound lanes have different audiences. Fixed as
+  `prompt-framing-text.js › REPLY_ROUTING`, on all four delivery branches — the defect was found
+  on a responder and is not a property of the side.
+
+## 2026-08-31 — Structured escalations: the card that had to survive not being a card
+
+Samuel's ruling: agents escalate questions as STRUCTURE — issue, bounded context, 2–6 options each
+carrying a one-line consequence, and a recommendation — rendered as a card with option buttons the
+operator presses, with the choice routed back to the asking agent as its answer.
+
+- **THE KIND WAS DECIDED BY THE NOTIFIER, NOT BY THE RENDERER.** The obvious build is a new
+  `channel_messages.kind`. It cannot be: `main/targeting.js › classify` returns `ignore` for every
+  `kind !== 'message'`, so a card on any other kind renders in the transcript and **pings nobody** —
+  which deletes the half of the feature that gets a human to look. The renderer would have been
+  perfectly happy either way, and that is what makes this the kind of decision a UI-first reading
+  gets wrong. The card is `kind='message'` plus reserved metadata, on `fanoutGroup`'s exact terms.
+- **THE BODY IS THE FEATURE'S FALLBACK, AND IT IS WHY THE RENDER IS A HAND COPY IN TWO TREES.** Four
+  live surfaces know nothing about the metadata key — `op="read"`, a plain browser, the pop-out
+  thread window, and every desktop older than the card. A stub body would render an empty row on all
+  four, so the body carries the whole question in prose and the card is a BETTER rendering of the
+  same words rather than the only one. `packages/` cannot import `src/`, so the two composers are
+  paired the way `main/agent-handles.js` is paired with `lib/mentions.ts`: one fixture table, driven
+  from both sides, either tree failing alone.
+- **"WHO MAY ANSWER" HAD A MECHANISM ALREADY, AND THE TEMPTING ONE WAS WRONG.** `to_user_id` is the
+  obvious addressee field and it is exactly backwards here: addressing a member TRIGGERS their
+  listener and starts THEIR agent, and an escalation exists precisely because only a *person* can
+  answer. The @-tag is the right primitive — server-resolved, caller-unsettable, ambiguity failing
+  closed, already wired to the Tags inbox and the desktop banner — so the answerer set is the
+  stamped mention set, else the author. **No new addressing concept, no new fence, nothing extra to
+  keep in step.** The narrow rule was chosen over channel-wide answerability on the reversibility
+  argument: widening later costs nothing, narrowing later takes a capability away.
+- **THE ANSWER IS PUBLIC BECAUSE THE QUESTION WAS.** Routing it down the private panel lane was
+  available and is the wrong shape: a visible question with an invisible answer leaves a card that
+  reads unanswered forever (F-366's defect, one lane over). Making it an ordinary message also kept
+  the feature independent of the private-lane work entirely.
+- **THE WAKE KEY IS METADATA BECAUSE THE OBVIOUS TOKEN IS FORBIDDEN.** The natural way to route an
+  answer back is `@agent-<id>` in the body — except the raw agent id is never user-visible chrome,
+  and a PEER's machine cannot know the asking agent's local display name, so the body token is the
+  *only* form available to them and it is the banned one. A server-stamped `escalationAnswer.agentId`
+  is both allowed and strictly less forgeable than a token any member can type: it is a third tier-1
+  door onto ADDRESSING, and the loop fence above it is untouched.
+- **THE PERMISSION LANE WAS THE PART MOST EASILY SHIPPED BROKEN.** An `escalate` left unclassified
+  falls to the Axis-A gate, and a windowless session answers a gate with `deny` — so the op a stuck
+  agent is told to reach for would have been auto-refused in every posture, for the agents that need
+  it most. That is F-320's defect class; `create_thread` had already paid for the lesson. And the
+  matching half is `outboundConsentShape`: without it a *gated* escalate raises the dock's
+  `permission_request`, which a windowless session denies outright — F-321. **Two one-line omissions,
+  either of which would have left the feature working only for the agents that did not need it.**
+- **FOUR FILES CROSSED THE 500-LINE CAP UNDER THIS WAVE AND EACH SPLIT ON A REASON, NOT ON THE
+  COUNT** — the escalation row derivations out of `view-model-rows.ts`, the outbound review card out
+  of `agent-stream.tsx`, the escalation payload types out of `channel-types.ts`, and the stamp parser
+  down to `lib/` so a service could read it without importing a `"use client"` module. Twice the cap
+  was hit by a DOCBLOCK, and the right answer both times was to delete the duplicate statement rather
+  than the explanation: the rule lives in one module, and the second copy was going to drift anyway.
+
+## 2026-08-31 (later) — The private direct lane: three fences, and the one the review found
+
+Samuel's ruling: an operator's own EXTERNAL agent may DIRECT one of that operator's own running
+desktop sessions privately, and read that turn's answer back — because today the only way to steer
+a running agent is a noisy main-room post.
+
+- **THE FIRST QUESTION WAS NOT "HOW DO WE SEND IT" BUT "WHAT IS THE PRIVATE LANE ACTUALLY MADE
+  OF".** The brief's own suspicion was right: the agent panel is a machine-local narration ring
+  merged with server message rows, and nothing in it reaches a server. So "MCP reads the panel"
+  would have required inventing a per-SDK-event server writer — the one thing
+  `session-state-push.js` forbids in capitals — and exporting the operator's private lane
+  wholesale. **The shape is a WRITE with a bounded reply, and that conclusion came from reading
+  `flush()`, not from the feature request.**
+- 🔒 **THE LOAD-BEARING RULING IS ABOUT VOICE, NOT TRANSPORT.** `frameOperatorTurn` is deliberately
+  NOT fenced as data, because the operator is the one voice a session is told to weigh. A
+  direction is text ANOTHER agent wrote, produced by a process holding a 90-day device token —
+  so it gets its own preamble that says it carries no operator authority, and the launch `goal`'s
+  precedent ("text another agent wrote, so it is a BODY, never the trusted preamble") is one
+  paragraph away in the same file. **Reusing the operator framing would have handed the highest
+  authority in the system to the lane with the weakest human in it.**
+- **AND THE PIN FOR IT WAS WRONG ON THE FIRST ATTEMPT, WHICH IS THE LESSON.** The suite asserted
+  that `frameDirectedTurn` and `frameOperatorTurn` differ, and that both say what they should. A
+  mutation swapping the CALL SITE to the operator framing left every one of those cases green: a
+  caller reaching for the wrong function leaves both functions perfectly correct. **"A pin on a
+  symbol is not a pin" applies to a pair of symbols too** — the assertion has to be on the text a
+  turn actually got.
+- **THE ADVERSARIAL PASS EARNED ITS COST THREE TIMES, AND TWO OF THE THREE WERE OLDER THAN THE
+  FEATURE.** (1) The fence-line strip is exact-match on `trim()`, which does not remove zero-width
+  characters — and this is the first lane with a READ-BACK, so an attacker can *ask* for the nonce
+  and forge with it (F-370). (2) A private window opened BEFORE the dispatch is wiped by the wake
+  that same message triggers, so a direction to a PARKED agent ran with the outbound gate OFF —
+  and the operator's own composer had had that defect since 2026-08-22 (F-372). (3) The engine's
+  session registry outlives a sign-out with no owner stamp, so on a shared Mac one operator's
+  private turn text could be written back to the next operator's row (F-373). **None of the three
+  is reachable from reading the feature's own diff; all three came from asking "what would I do
+  with this if I were hostile".**
+- **A WRONG ARGUMENT IN A COMMENT IS WORSE THAN NO COMMENT, AND THE FIX IS TO RECORD THE
+  CORRECTION.** The first version omitted two teardown resets and argued at length that a
+  torn-down query owes no `result`. It does — the guard that argument rests on is not armed at
+  teardown, and the observer sits outside the reducer's parked-session drops. The resets are back
+  and the module now carries the corrected reasoning rather than a quietly deleted paragraph
+  (F-371).
+- **"LOOP-FREE BY CONSTRUCTION" WAS HALF TRUE AND IS NOW STATED AS A HALF.** No self-sustaining
+  loop can close inside one machine — `direct_agent` is on no own-channel allow list, so a
+  windowless session's gate denies it. But the CROSS-machine loop has no bound, and the launch
+  lane's own reason applies verbatim: the row has no depth column, so a parent depth cannot cross
+  the wire. Recorded as an accepted unbounded lane (F-374), because a claim that is true of one
+  half and false of the other is the kind that gets quoted without its qualifier.
+- **SEVEN FILES CROSSED THE 500-LINE CAP UNDER THIS WAVE, AND ONE SPLIT HAD TO BE REVERTED.**
+  Extracting the C-8 quit-orphan block out of `session-reopen.js` was a clean seam on paper and
+  broke four source-extraction suites that slice that file's PURE sentinel — **a split is not free
+  when a test evaluates the block rather than importing it**, and the cheaper answer was to state
+  the rules once in the module that owns them and point from the call site. The splits that stuck
+  were the ones where nothing sliced the source: the realtime mailbox bindings, the two MCP
+  consents, the escalation row derivations, and the direction lane's own test file.

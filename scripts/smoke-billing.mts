@@ -86,7 +86,14 @@ async function main() {
       { workspace_id: wsId, user_id: userB, role: "member", status: "active" },
     ]);
     ent = await getWorkspaceEntitlements(wsId);
-    check("2-member free: objectCap=1000", ent.objectCap === FREE_MULTI_MEMBER_OBJECT_CAP);
+    // ⚠ THE LABEL IS INTERPOLATED (D14, 2026-08-30). It read `objectCap=1000`
+    // against a constant that is 100 — the assertion was always right and the
+    // sentence printed beside it was not, which is the worst of the two to
+    // read in a smoke log.
+    check(
+      `2-member free: objectCap=${FREE_MULTI_MEMBER_OBJECT_CAP}`,
+      ent.objectCap === FREE_MULTI_MEMBER_OBJECT_CAP
+    );
     check("2-member free: memberCount=2", ent.memberCount === 2);
 
     // seed exactly cap-1 objects, then walk the boundary
