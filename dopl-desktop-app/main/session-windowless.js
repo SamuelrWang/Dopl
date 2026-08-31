@@ -50,6 +50,9 @@ const { diag } = require('./diag');
 // (last-writer-wins) and an event there is a DOORBELL, never content (INVARIANTS §7), so wiring
 // it to this loop is new cross-module plumbing with its own correctness questions.
 const POLL_MS = 3_000;
+// …and the ceiling this poll gives back to when it is FAILING rather than waiting
+// (2026-08-30, F-354). See `watchRow` for why the two are different questions.
+const POLL_MAX_MS = 60_000;
 
 // ── THE CONCURRENCY CEILING FOR THIS LANE ────────────────────────────────────
 // ⚠ THE NAME MOVED HERE ON 2026-08-20, AND THE NUMBER DID NOT CHANGE. `MAX_CONCURRENT_SESSIONS`
@@ -252,9 +255,18 @@ async function bridgeOutbound(s, payload, decide) {
 
 // Poll until the row settles, the permission is gone (a park deny-closed it), or the
 // session itself settles. Every terminal status that is not an allow is a deny.
+//
+// ⚠ A FAILED READ IS NOT A PENDING ROW (2026-08-30, F-354). `pollStatus` answers `null`
+// for every transient failure — a 5xx, a torn socket, our own timeout — and this loop
+// treated that identically to "still waiting", so an API that was DOWN produced a
+// three-second poll with no backoff and no ceiling for as long as the session lived, one
+// abandoned `Response` per turn. The row's real cadence is unchanged; only the failing
+// read gives back, doubling to POLL_MAX_MS. It never gives UP: the operator may still
+// decide, and the session's own settle is what ends this loop.
 async function watchRow(s, rowId, requestId, decide) {
+  let failures = 0;
   for (;;) {
-    await sleep(POLL_MS);
+    await sleep(failures ? Math.min(POLL_MAX_MS, POLL_MS * 2 ** Math.min(failures, 8)) : POLL_MS);
     if (s.settled || !s.pendingPermissions.has(requestId)) {
       // The tool call this row was gating is gone (park deny-closed it, or the
       // session ended). A row left `pending` would take a Send that posts
@@ -263,7 +275,9 @@ async function watchRow(s, rowId, requestId, decide) {
       return;
     }
     const status = await consent.pollStatus(s.workspaceId, rowId);
-    if (status === null || status === 'pending') continue;
+    if (status === null) { failures += 1; continue; } // could not ASK — back off
+    failures = 0;
+    if (status === 'pending') continue; // asked and answered: still waiting, full cadence
     const allow = status === 'allowed' || status === 'auto_allowed';
     diag('windowless outbound decided', allow ? 'allow' : `deny (${status})`, 'row', String(rowId).slice(0, 8));
     decide(requestId, allow ? 'allow-once' : 'deny');

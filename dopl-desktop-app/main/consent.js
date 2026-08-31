@@ -51,6 +51,7 @@ const { Notification } = require('electron');
 // able to inject fakes for them.
 const { requestAttention, buildActionNotification } = require('./notify-action');
 const { apiFetch } = require('./api');
+const { discardBody } = require('./api-repair');
 const { diag } = require('./diag');
 
 const CONSENT_PATH = '/api/channels/consent';
@@ -241,10 +242,15 @@ async function pollStatus(workspaceId, rowId) {
   } catch (_) {
     return null;
   }
-  if (res.status === 404) return 'expired';
-  if (!res.ok) return null;
+  // ⚠ RELEASE THE BODY ON EVERY EXIT THAT DOES NOT READ IT (2026-08-30). This is the
+  // highest-FREQUENCY unread `Response` in main — `session-windowless.watchRow` calls it
+  // per gated tool call, and before that function learned to back off, a failing API put
+  // it here twice a second per pending row. An unread undici body pins its socket (see
+  // api-repair.js › discardBody).
+  if (res.status === 404) { discardBody(res); return 'expired'; }
+  if (!res.ok) { discardBody(res); return null; }
   let data;
-  try { data = await res.json(); } catch (_) { return null; }
+  try { data = await res.json(); } catch (_) { discardBody(res); return null; }
   return statusOf(data) || 'pending';
 }
 

@@ -69,28 +69,62 @@ test("PURE: both blocks are sliceable and hold no electron/fs/network reference"
 // in the room" — and two agents that can wake each other on unaddressed prose is a loop with no
 // operator in it and no natural stopping point.
 
-const human = (over = {}) => ({ kind: "message", authorKind: "user", authorUserId: "u1", body: "hi", ...over });
+//
+// ⚠ **AND IT HAS THREE ANSWERS SINCE 2026-08-31 (Samuel's SAME-ACCOUNT CARVE), NOT TWO.** An
+// agent-authored message posted under THIS OPERATOR'S OWN user id may wake via TIER 1 and via
+// nothing else. Both properties that made an agent-agent wake a loop are preserved: it must be
+// ADDRESSED (so tiers 2 and 3, which wake on traffic nobody addressed, stay shut to every
+// agent-authored message on every account), and it must be ONE ACCOUNT (so a PEER's agent is as
+// dead as 2026-08-28 left it). What it buys is the capability `launch_agent` always claimed:
+// the MCP caller holds its operator's credential, so before the carve the agent id it was handed
+// could never be spent by the one caller that had it.
 
-test("FENCE: only a HUMAN-authored `message` row may wake anything", () => {
-  assert.equal(tiers.wakeEligible(human()), true);
+const ME = "u1";
+const PEER = "u2";
+const human = (over = {}) => ({ kind: "message", authorKind: "user", authorUserId: ME, body: "hi", ...over });
+const elig = (m) => tiers.wakeEligibility(m, ME);
+
+test("FENCE: a HUMAN-authored `message` row is eligible on EVERY tier", () => {
+  assert.equal(elig(human()), tiers.ELIGIBLE_ALL);
   // …and an absent authorKind is a human: every message written before `author_kind` existed
   // carries none, and the server derives it from the caller's credential rather than the wire.
-  assert.equal(tiers.wakeEligible(human({ authorKind: undefined })), true);
+  assert.equal(elig(human({ authorKind: undefined })), tiers.ELIGIBLE_ALL);
+  // A human PEER is a human — the carve is about agents, and narrows nothing here.
+  assert.equal(elig(human({ authorUserId: PEER })), tiers.ELIGIBLE_ALL);
 });
 
-test("FENCE: an AGENT-authored message wakes nothing, whatever it says", () => {
-  assert.equal(tiers.wakeEligible(human({ authorKind: "agent" })), false);
-  assert.equal(tiers.wakeEligible(human({ authorKind: "agent", body: `@${A1} wake up` })), false);
+test("CARVE: MY OWN account's agent-authored message is eligible for TIER 1 ONLY", () => {
+  // ⚠ `mention`, never `all`. The distinction is the entire carve: an addressed message may wake,
+  // an unaddressed one may not, and `tierFor` below is where that is enforced.
+  assert.equal(elig(human({ authorKind: "agent" })), tiers.ELIGIBLE_MENTION);
+  assert.equal(elig(human({ authorKind: "agent", body: `@${A1} wake up` })), tiers.ELIGIBLE_MENTION);
+});
+
+test("CARVE: a PEER'S agent stays dead — the 2026-08-28 ruling, untouched", () => {
+  // ⚠ MUTATION GUARD. This is the arm the 2026-08-28 fence exists for, and the carve must never
+  // widen it: another member's machine cannot start anything here, addressed or not.
+  assert.equal(elig(human({ authorKind: "agent", authorUserId: PEER })), tiers.ELIGIBLE_NONE);
+  assert.equal(elig(human({ authorKind: "agent", authorUserId: PEER, body: `@${A1} wake up` })), tiers.ELIGIBLE_NONE);
+});
+
+test("CARVE: it FAILS CLOSED on the identity — an unknown operator carves nothing", () => {
+  // A blank operator id can never equal a non-blank author id, so the check needs no second
+  // branch — but a machine that does not know who it is must not hand out the carve either.
+  for (const me of [null, undefined, ""]) {
+    assert.equal(tiers.wakeEligibility(human({ authorKind: "agent" }), me), tiers.ELIGIBLE_NONE, JSON.stringify(me));
+  }
+  // ⚠ And an AUTHORLESS agent row is NONE before the comparison is even reached.
+  assert.equal(tiers.wakeEligibility({ kind: "message", authorKind: "agent", authorUserId: "" }, ""), tiers.ELIGIBLE_NONE);
 });
 
 test("FENCE: a non-`message` kind, an authorless row and no message at all wake nothing", () => {
   for (const kind of ["task_started", "task_progress", "task_finished", "task_failed", "system"]) {
-    assert.equal(tiers.wakeEligible(human({ kind })), false, kind);
+    assert.equal(elig(human({ kind })), tiers.ELIGIBLE_NONE, kind);
   }
-  assert.equal(tiers.wakeEligible(human({ authorUserId: null })), false);
-  assert.equal(tiers.wakeEligible(human({ authorUserId: "" })), false);
-  assert.equal(tiers.wakeEligible(null), false);
-  assert.equal(tiers.wakeEligible(undefined), false);
+  assert.equal(elig(human({ authorUserId: null })), tiers.ELIGIBLE_NONE);
+  assert.equal(elig(human({ authorUserId: "" })), tiers.ELIGIBLE_NONE);
+  assert.equal(elig(null), tiers.ELIGIBLE_NONE);
+  assert.equal(elig(undefined), tiers.ELIGIBLE_NONE);
 });
 
 test("FENCE: it FAILS CLOSED, unlike `mayFeed`'s unknown-session rule", () => {
@@ -98,13 +132,22 @@ test("FENCE: it FAILS CLOSED, unlike `mayFeed`'s unknown-session rule", () => {
   // SESSION shape keeps the fan-out (worst case: a wasted launch). An unfamiliar MESSAGE shape
   // wakes nobody (worst case, if it did not: an agent loop, which has no bound).
   for (const junk of [{}, { kind: "message" }, { authorKind: "user" }, 0, "", false]) {
-    assert.equal(tiers.wakeEligible(junk), false, JSON.stringify(junk));
+    assert.equal(elig(junk), tiers.ELIGIBLE_NONE, JSON.stringify(junk));
+  }
+});
+
+test("FENCE: `mayWakeAtAll` is true for both live verdicts and false for NONE", () => {
+  assert.equal(tiers.mayWakeAtAll(tiers.ELIGIBLE_ALL), true);
+  assert.equal(tiers.mayWakeAtAll(tiers.ELIGIBLE_MENTION), true);
+  assert.equal(tiers.mayWakeAtAll(tiers.ELIGIBLE_NONE), false);
+  for (const junk of [true, 1, "", null, undefined, "mentions"]) {
+    assert.equal(tiers.mayWakeAtAll(junk), false, JSON.stringify(junk));
   }
 });
 
 // ── 2. THE TIER TABLE ────────────────────────────────────────────────────────
 
-const T = (over = {}) => tiers.tierFor({ eligible: true, addressedMe: false, addressedAny: false, channelAgents: 1, ...over });
+const T = (over = {}) => tiers.tierFor({ eligible: tiers.ELIGIBLE_ALL, addressedMe: false, addressedAny: false, channelAgents: 1, ...over });
 
 test("TIER: an @-mention of THIS agent is tier 1, at any roster size", () => {
   for (const n of [1, 2, 6, 40]) {
@@ -138,11 +181,38 @@ test("TIER: an uncountable or empty roster wakes NOBODY", () => {
 });
 
 test("TIER: the fence is upstream of every tier, mention included", () => {
-  assert.equal(tiers.tierFor({ eligible: false, addressedMe: true, channelAgents: 1 }), tiers.TIER_NONE);
+  assert.equal(tiers.tierFor({ eligible: tiers.ELIGIBLE_NONE, addressedMe: true, channelAgents: 1 }), tiers.TIER_NONE);
   assert.equal(tiers.tierFor({ addressedMe: true, channelAgents: 1 }), tiers.TIER_NONE, "absent === not eligible");
-  for (const truthy of ["yes", 1, {}]) {
-    assert.equal(tiers.tierFor({ eligible: truthy, channelAgents: 1 }), tiers.TIER_NONE, JSON.stringify(truthy));
+  // ⚠ A LEGACY `eligible: true` IS REFUSED, NOT READ AS `all`. The old boolean's `true` meant
+  // "human-authored"; silently accepting it would let a caller nobody updated hand an
+  // agent-authored message the widest verdict — the one shape the carve exists to withhold.
+  for (const truthy of [true, "yes", 1, {}]) {
+    assert.equal(tiers.tierFor({ eligible: truthy, addressedMe: true, channelAgents: 1 }), tiers.TIER_NONE, JSON.stringify(truthy));
   }
+});
+
+// ── 2A. THE CARVE AT THE TIER TABLE — where `mention` stops ──────────────────
+//
+// ⚠ THE TWO CASES BELOW ARE THE WHOLE SAFETY ARGUMENT FOR THE 2026-08-31 RULING, and they are
+// the ones to run when anybody touches this table.
+
+test("CARVE: `mention` eligibility WAKES an addressed agent", () => {
+  const M = (over = {}) => tiers.tierFor({ eligible: tiers.ELIGIBLE_MENTION, addressedMe: false, addressedAny: false, channelAgents: 1, ...over });
+  for (const n of [1, 2, 6]) {
+    assert.equal(M({ addressedMe: true, addressedAny: true, channelAgents: n }), tiers.TIER_MENTION, String(n));
+  }
+});
+
+test("CARVE: `mention` eligibility reaches NEITHER solo NOR triage — the loop brake's core", () => {
+  // ⚠ MUTATION GUARD. Tiers 2 and 3 wake on traffic nobody addressed; that is the shape with no
+  // natural stopping point, and no agent-authored message may reach it on any account. A solo
+  // room is the sharpest case: under `ELIGIBLE_ALL` the same arguments answer SOLO.
+  const M = (over = {}) => tiers.tierFor({ eligible: tiers.ELIGIBLE_MENTION, addressedMe: false, addressedAny: false, ...over });
+  assert.equal(M({ channelAgents: 1 }), tiers.TIER_NONE, "a solo room does NOT open for an agent-authored post");
+  assert.equal(T({ channelAgents: 1 }), tiers.TIER_SOLO, "…while the same shape from a HUMAN still does");
+  for (const n of [2, 3, 6]) assert.equal(M({ channelAgents: n }), tiers.TIER_NONE, `triage stays shut at ${n}`);
+  // …and a sibling being named is still nobody's directive.
+  assert.equal(M({ addressedAny: true, channelAgents: 4 }), tiers.TIER_NONE);
 });
 
 test("TIER: the KILL SWITCH is a main-side constant, and it reverts to the 2026-08-22 rule", () => {
@@ -152,10 +222,14 @@ test("TIER: the KILL SWITCH is a main-side constant, and it reverts to the 2026-
   assert.equal(tiers.WAKE_TIERS_ENABLED, true, "shipped ON");
   assert.match(TIERS_SRC, /const WAKE_TIERS_ENABLED = true;/);
   const body = TIERS_SRC.slice(TIERS_SRC.indexOf("function tierFor(a) {"), TIERS_SRC.indexOf("function tierIsFree"));
-  assert.ok(body.indexOf("arg.eligible !== true") < body.indexOf("WAKE_TIERS_ENABLED !== true"),
+  assert.ok(body.indexOf("=== ELIGIBLE_NONE") < body.indexOf("WAKE_TIERS_ENABLED !== true"),
     "the fence is read BEFORE the switch");
   assert.ok(body.indexOf("arg.addressedMe === true") < body.indexOf("WAKE_TIERS_ENABLED !== true"),
     "and tier 1 is not behind it");
+  // ⚠ AND THE 2026-08-31 CARVE IS OUTSIDE IT TOO, for the same reason tier 1 always was: the
+  // switch must revert to a KNOWN GOOD state, and since 2026-08-31 that state includes the carve.
+  assert.ok(body.indexOf("!== ELIGIBLE_ALL") < body.indexOf("WAKE_TIERS_ENABLED !== true"),
+    "the carve's ceiling is read BEFORE the switch");
   assert.equal((TIERS_SRC.match(/WAKE_TIERS_ENABLED/g) || []).length, 4,
     "declared, headlined twice, read once — no second reader to forget");
 });

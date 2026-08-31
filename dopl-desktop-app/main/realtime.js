@@ -57,6 +57,8 @@ const { RealtimeClient } = require('@supabase/realtime-js');
 const WebSocket = require('ws');
 const { SUPABASE_URL, SUPABASE_ANON_KEY, REALTIME } = require('./config');
 const { diag } = require('./diag');
+// The extra MAILBOX bindings this socket also carries (§1 split, 2026-08-31).
+const mailboxes = require('./realtime-mailboxes');
 // The pure cores (breaker, wake coalescer, wake-payload extraction, subscribe-
 // error normalization, health + join gates) live in a sibling so they stay
 // importable by the node --test slicer and this file stays under the line cap.
@@ -80,7 +82,6 @@ let client = null;
 let getToken = null;
 let getTokenInfo = null;
 let onInsertCb = null;
-let onDirectiveCb = null;
 let onHealthCb = null;
 let coalescer = null;
 let started = false;
@@ -130,7 +131,10 @@ const subs = new Map(); // wsId -> { channel, subscribed, resubTimer }
 // marks the sub down, the breaker opens, and the loops fall back to the held long-poll exactly
 // as for any other subscribe failure.
 // ⚠ A BINDING CAN ONLY BE ADDED BEFORE `.subscribe()`, so a flip REBUILDS the joined channels.
-let bindDirectives = false;
+// 2026-08-31: the PRIVATE DIRECT LANE's own flag/callback pair. ⚠ ITS OWN, not a reuse of the
+// two above: these are single-purpose scalars, and a second mailbox sharing one flag could
+// never be armed independently — which is the point, since the two capabilities have separate
+// operator consents.
 
 function subscribedCount() {
   let n = 0;
@@ -315,13 +319,26 @@ function onStatus(wsId, status, err) {
 // filter is WORKSPACE-wide, so a colleague's frame arrives here too) and CLAIMS the row over an
 // authenticated route before acting on a field of it. **The claim is the authorization path;
 // this frame only makes it prompt.**
-function onDirective(wsId, payload) {
-  const row = payload && payload.new;
-  if (!row || !onDirectiveCb) return;
-  // The id PREFIX only — a directive carries a free-text goal, and this log is a support
-  // artifact. `launch-directives.js` owns what may be said about one.
-  diag('realtime directive', String(wsId).slice(0, 8), 'row', String(row.id || '').slice(0, 8));
-  try { onDirectiveCb(wsId, row); } catch (_) { /* one directive must not kill the socket */ }
+/**
+ * REJOIN EVERY WORKSPACE — what arming or disarming a mailbox needs, because
+ * `postgres_changes` bindings are fixed at JOIN time.
+ *
+ * ⚠ INJECTED INTO THE MAILBOX MODULE RATHER THAN EXPORTED: the loop is this file's business
+ * (it owns `subs`), the DECISION to run it belongs to whichever mailbox flipped. ⚠ It does
+ * not touch the BREAKER — a rejoin takes the same `onStatus` path as any other join.
+ */
+// ARM / DISARM a mailbox binding. ⚠ `const`s rather than literals inside `module.exports`:
+// `main-audit-exports.test.mjs` requires every exported name to be BOUND in this file.
+const setDirectives = (on, h) => mailboxes.setDirectives(on, h, rejoinAll);
+const setDirections = (on, h) => mailboxes.setDirections(on, h, rejoinAll);
+
+function rejoinAll() {
+  if (!started || !client) return; // the next addChannel will read the new flags
+  for (const wsId of Array.from(subs.keys())) {
+    removeChannel(wsId);
+    addChannel(wsId);
+  }
+  emitHealth();
 }
 
 function addChannel(wsId) {
@@ -338,17 +355,11 @@ function addChannel(wsId) {
       { event: 'INSERT', schema: 'public', table: 'channel_messages', filter: `workspace_id=eq.${wsId}` },
       (payload) => onInsert(wsId, payload)
     );
-  // ⚠ SECOND, AND ONLY WHEN THE OPERATOR HAS ARMED THE LANE — see `bindDirectives` above for
-  // why the gate is here and not in the handler.
-  if (bindDirectives) {
-    ch = ch.on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'channel_launch_directives', filter: `workspace_id=eq.${wsId}` },
-      (payload) => onDirective(wsId, payload)
-    );
-  }
-  // Take BOTH callback args: realtime-js passes the join-error payload second,
-  // and dropping it is what made every failure read as a bare CHANNEL_ERROR.
+  // ⚠ EVERY EXTRA MAILBOX THIS SOCKET ALSO CARRIES, chained onto the SAME per-workspace
+  // channel before `.subscribe()` — not a second socket and not a second breaker. Which
+  // ones are armed, and why the gate is there rather than in a handler, is
+  // `realtime-mailboxes.js`.
+  ch = mailboxes.applyBindings(ch, wsId);
   entry.channel = ch.subscribe((status, err) => onStatus(wsId, status, err));
 }
 
@@ -455,21 +466,9 @@ function refreshAuth() {
  * ⚠ IT DOES NOT TOUCH THE BREAKER: a rejoin takes the same `onStatus` path as any other, so a
  * flip on a project without the table degrades to the long-poll rather than failing loudly.
  */
-function setDirectives(on, handler) {
-  const next = on === true;
-  onDirectiveCb = next && typeof handler === 'function' ? handler : null;
-  if (next === bindDirectives) return;
-  bindDirectives = next;
-  diag('realtime directives', next ? 'ARMED' : 'disarmed', '— rejoining', subs.size, 'ws');
-  if (!started || !client) return; // the next addChannel will read the new value
-  for (const wsId of Array.from(subs.keys())) { removeChannel(wsId); addChannel(wsId); }
-  emitHealth();
-}
-
 function stop() {
   started = false;
-  bindDirectives = false;
-  onDirectiveCb = null;
+  mailboxes.reset();
   for (const wsId of Array.from(subs.keys())) removeChannel(wsId);
   try { if (client) client.disconnect(); } catch (_) { /* best-effort */ }
   client = null;

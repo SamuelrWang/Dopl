@@ -62,6 +62,17 @@ const EXPECTED = {
   // `channel_id` is not a UUID. Those two strings are about to be POSTed and handed to a spawn,
   // and the row arrives over a realtime frame this module deliberately does not trust.
   "launch-directive-wire.js": "inside LAUNCH-DIRECTIVE-WIRE, sliced by launch-directives.test",
+  // ⚠ JOINED 2026-08-31 (the PRIVATE DIRECT LANE), on `launch-directive-wire.js`'s terms exactly:
+  // `agent-direction-wire.js` states the desktop's half of the `channel_agent_directions`
+  // contract, its whole body sits inside AGENT-DIRECTION-WIRE — a pure block its suite
+  // evaluates and that, like every other entry here, MAY HOLD NO REQUIRE — so
+  // `ipc-guards.js › isUuid` is unreachable from it.
+  // ⚠ AND THE COPY IS LOAD-BEARING, not incidental: it is what refuses a direction whose `id` or
+  // `channel_id` is not a UUID, on a row that arrives over a realtime frame this module
+  // deliberately does not trust. Its SIBLING copy of the agent-id grammar is load-bearing for
+  // the same reason and is sharper — a direction with no valid agent id has nowhere to go, and
+  // guessing is the one thing this lane refuses to do.
+  "agent-direction-wire.js": "inside AGENT-DIRECTION-WIRE, sliced by agent-directions.test",
 };
 
 /** Every occurrence of the rule in main/, by file. */

@@ -34,6 +34,7 @@ const framing = createRequire(import.meta.url)(join(HERE, "..", "main", "session
 // is already in flight. A fake would let this suite go green over a window covering the wrong
 // turn — the one bug the depth exists to prevent.
 const privateTurn = createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js"));
+const directedTurn = createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js"));
 // ⚠ THE REAL AXIS-B FLOOR, injected for the same reason (2026-08-20, F-236). `setModeByTask`
 // clamps a windowless session's message axis, and a stub would let this suite pass over a
 // clamp that does not match the one lane the launch path uses. Its own rules live in
@@ -73,7 +74,13 @@ const KEY = `chan-1:task-9:${AGENT}`;
  * case that still wants one passes it explicitly, and exactly one below does — deliberately.
  */
 function fakeSession(over = {}) {
-  return { key: KEY, agentId: AGENT, sessionId: "s-1", settled: false, win: null, context: {}, ...over };
+  // ⚠ `operatorUserId` (2026-08-31): the cross-account stamp `startSession` now writes. The
+  // PRIVATE DIRECT LANE refuses a session whose stamp does not match the direction's operator,
+  // because the registry outlives a sign-out.
+  return {
+    key: KEY, agentId: AGENT, sessionId: "s-1", settled: false, win: null, context: {},
+    operatorUserId: "op-1", ...over,
+  };
 }
 
 /**
@@ -104,9 +111,14 @@ function harness(over = {}) {
     "framing",
     "floorWindowlessMessage",
     "privateTurn",
+    // ⚠ `directedTurn` JOINED ON 2026-08-31 (the private direct lane): `messageByTask`
+    // now reads a DIRECTION off its argument and, when there is one, frames it as DATA
+    // and arms the reply capture. The REAL module — it is pure, and the branch it
+    // drives is the behaviour.
+    "directedTurn",
     `${BLOCK}\n return { bind, resolveSession, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
        listOrphanRisk, endLiveSessions };`
-  )(store, framing, floorWindowlessMessage, privateTurn);
+  )(store, framing, floorWindowlessMessage, privateTurn, directedTurn);
   const sessions = new Map();
   // ⚠ The REAL `frameOperatorTurn` is injected, not a stub: the MESSAGE cases are about the
   // delimiting the operator's turn actually gets, and a stub would let the two drift.

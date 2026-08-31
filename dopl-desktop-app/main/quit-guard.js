@@ -21,6 +21,19 @@
 // TWO WAYS FORWARD, both real. "Quit anyway" kills now. "Wait for them to finish" waits for
 // every agent to come off a turn and THEN quits by itself — it is not a disguised cancel.
 //
+// ⚠ AMENDED 2026-08-30 (Samuel's ruling): THERE IS A THIRD BUTTON, AND IT IS A REAL CANCEL.
+// The 2026-08-07 shape had no way to say "I did not mean to quit". Both of its buttons ended in
+// a quit, so an accidental ⌘Q could be DEFERRED but never TAKEN BACK — and the safe default
+// (Wait) still closed the app minutes later, unattended, which is the same lost work arriving
+// late. "Cancel" aborts the quit outright: no teardown, no latch, no pending auto-quit, and
+// `app.isQuitting` is put BACK to false so an aborted quit leaves no trace of itself.
+//
+// THE PRIOR RULING SURVIVES INTACT. "Wait for them to finish" is NOT replaced by Cancel and is
+// still not a disguised one — it is the branch for "quit, but not on top of live work". Cancel
+// is the branch for "I did not mean this at all". Collapsing them would have deleted a decision
+// Samuel made deliberately, so this ADDS the third rather than trading one for the other.
+// Cancel takes `defaultId`/`cancelId`, because the safest of three is the one that does nothing.
+//
 // MID-TOOL-CALL IS NOT A REASON TO WAIT. On "Quit anyway" there is no grace period and no
 // letting the current step land: the abort goes out with everything else. A tool call
 // half-finished by a process that is going away is not worth the seconds, and the peer is
@@ -71,6 +84,7 @@ const WAIT_CAP_MS = DEFAULT_IDLE_MS + 60 * 1000;
 
 const BUTTON_QUIT = 0;
 const BUTTON_WAIT = 1;
+const BUTTON_CANCEL = 2; // 2026-08-30: the one button that does not end in a quit
 
 let deps = null;
 let disarmed = false; // one-way: the teardown has run (or failed), so let every quit through
@@ -99,26 +113,41 @@ function describeAll(list) {
   return list.map((s) => `• ${describeSession(s)}`).join('\n');
 }
 
+// The headline COUNTS (2026-08-30 wording), the body NAMES (2026-08-07 ruling). Both, not
+// either: the count is what the operator needs to size the decision, the list is what lets them
+// recognise the work — the original defect was a count with no list under it.
 function quitMessage(list) {
   const n = list.length;
-  return n === 1 ? 'One agent is still running.' : `${n} agents are still running.`;
+  return n === 1
+    ? 'You have 1 active agent session.'
+    : `You have ${n} active agent sessions.`;
 }
 
 // The copy is deliberately about CONSEQUENCE, not about mechanism: an operator deciding this
 // does not need to know what an SDK child is, only that stopping now interrupts named work.
-const QUIT_DETAIL_TAIL =
-  'Quitting now stops them where they are. The people waiting are told the session went inactive.';
+//
+// ⚠ IT NOW SAYS "PERMANENTLY", AND THAT IS A CLAIM THE CODE HAS TO EARN (2026-08-30). It does:
+// these are the sessions holding a live `claude` child, and the teardown ends each through the
+// reducer's `inactive` terminal, which SETTLES the record. Nothing resumes a settled session on
+// the next launch. The sessions that DO come back — parked shells, including a spawn-idle "New
+// Agent" — hold no child and are excluded from this list entirely, so the word is never said
+// about a session that survives.
+function quitDetailTail(n) {
+  return n === 1
+    ? 'Quitting Dopl ends this agent permanently. It stops where it is and cannot be resumed. The person waiting is told the session went inactive.'
+    : 'Quitting Dopl ends these agents permanently. They stop where they are and cannot be resumed. The people waiting are told the session went inactive.';
+}
 
 function buildDialogOptions(list) {
   return {
     type: 'question',
-    buttons: ['Quit anyway', 'Wait for them to finish'],
-    defaultId: BUTTON_WAIT, // the non-destructive one is what Return picks
-    cancelId: BUTTON_WAIT, // …and so is Escape: neither may silently kill work
+    buttons: ['Quit anyway', 'Wait for them to finish', 'Cancel'],
+    defaultId: BUTTON_CANCEL, // Return does NOTHING: the safest of three is the one with no effect
+    cancelId: BUTTON_CANCEL, // …and Escape means Escape, which is the whole point of adding it
     noLink: true,
     title: 'Dopl',
     message: quitMessage(list),
-    detail: `${describeAll(list)}\n\n${QUIT_DETAIL_TAIL}`,
+    detail: `${describeAll(list)}\n\n${quitDetailTail(list.length)}`,
   };
 }
 
@@ -185,6 +214,24 @@ async function finishQuit(reason) {
   try { app.quit(); } catch (err) { diag('quit-guard: app.quit threw', err && err.message); }
 }
 
+// ABORT the quit (2026-08-30). The mirror image of `finishQuit`, and every line of it is the
+// opposite on purpose:
+//   • `disarmed` stays FALSE — the guard must arm again, because the next ⌘Q is a new decision.
+//   • no teardown, so nothing is killed and no final flush goes out; the app is still running
+//     and its rows are still true.
+//   • any pending "wait" is cancelled too. Cancel means the quit is OFF, not rescheduled — an
+//     auto-quit still ticking after the operator pressed Cancel is the bug this button exists
+//     to prevent.
+//   • `app.isQuitting` goes BACK to false. `onBeforeQuit` sets it on the way in, before it knows
+//     the answer, so an aborted quit would otherwise leave the app permanently believing it is
+//     on its way out.
+function cancelQuit(reason) {
+  diag('quit-guard: quit CANCELLED —', reason, '— nothing was torn down');
+  stopWaiting();
+  prompting = false;
+  try { app.isQuitting = false; } catch (err) { diag('quit-guard: could not clear isQuitting', err && err.message); }
+}
+
 // "Wait for them to finish": poll the SAME list the dialog named until nobody is mid-turn,
 // then quit by itself. Capped (WAIT_CAP_MS), announced, and re-openable — a second Quit while
 // waiting brings the dialog back so "Quit anyway" is always one click away.
@@ -217,6 +264,7 @@ async function promptThenQuit(list) {
     await finishQuit('dialog failed');
     return;
   }
+  if (choice === BUTTON_CANCEL) { cancelQuit('operator chose Cancel'); return; }
   if (choice === BUTTON_WAIT) { prompting = false; startWaiting(); return; }
   await finishQuit('operator chose Quit anyway');
 }
@@ -267,9 +315,11 @@ module.exports = {
   WAIT_CAP_MS,
   BUTTON_QUIT,
   BUTTON_WAIT,
+  BUTTON_CANCEL,
   describeSession,
   describeAll,
   quitMessage,
+  quitDetailTail,
   buildDialogOptions,
   waitSatisfied,
   waitExpired,

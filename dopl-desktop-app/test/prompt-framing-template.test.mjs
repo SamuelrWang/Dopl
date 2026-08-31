@@ -243,10 +243,27 @@ const SCHEMA_SRC = readFileSync(
   fileURLToPath(new URL("../../src/features/agent-templates/schema.ts", import.meta.url)), "utf8"
 );
 
+// ⚠ THE SERVER NAMED ITS BOUNDS ON 2026-08-30 (G3), so these read the CONSTANT
+// DECLARATIONS rather than the literals inside the schema expressions. The
+// numbers still come from that file and are still not typed here; what changed
+// is that a `.max(1000)` became a `.max(MAX_FIELD_VALUE_CHARS)`, and a scan for
+// the literal in the expression would now find nothing and go red on a rename
+// that moved no bound. ⚠ The BINDING is asserted too — that the schema field
+// actually uses the constant — or this file would be pinning a number the
+// schema had stopped reading.
+const serverBound = (name) => {
+  const m = new RegExp(`const ${name} = ([0-9_]+)`).exec(SCHEMA_SRC);
+  assert.ok(m, `no \`const ${name}\` in the server's schema`);
+  return Number(m[1].replace(/_/g, ""));
+};
+
 test("the server's bounds are what this file asserts against (read, not typed)", () => {
-  assert.match(SCHEMA_SRC, /key: safeLabel\("Field key", 80\)/);
-  assert.match(SCHEMA_SRC, /value: z[\s\S]{0,120}?\.max\(1000\)/);
-  assert.match(SCHEMA_SRC, /NameSchema = safeLabel\("Template name", 120\)/);
+  assert.equal(serverBound("MAX_FIELD_KEY_CHARS"), 80);
+  assert.equal(serverBound("MAX_FIELD_VALUE_CHARS"), 1000);
+  assert.equal(serverBound("MAX_NAME_CHARS"), 120);
+  assert.match(SCHEMA_SRC, /key: safeLabel\("Field key", MAX_FIELD_KEY_CHARS\)/);
+  assert.match(SCHEMA_SRC, /value: z[\s\S]{0,160}?\.max\(MAX_FIELD_VALUE_CHARS\)/);
+  assert.match(SCHEMA_SRC, /NameSchema = safeLabel\("Template name", MAX_NAME_CHARS\)/);
 });
 
 test("a field VALUE renders at its own 1000 bound, not at the display default of 80", () => {

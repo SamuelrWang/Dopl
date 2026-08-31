@@ -35,7 +35,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { fnOf, orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -47,6 +47,10 @@ const IO = M("listener-io.js");
 const API = M("api.js");
 const LISTENER = M("channel-listener.js");
 const TOKENS = M("auth-tokens.js");
+// ⚠ THE 401 RULE MOVED (2026-08-30): `shouldRepairAuth` and the rest of the pure block
+// live in `main/auth-token-rules.js` since auth-tokens.js hit the §2 cap. Same source,
+// new address; auth-tokens.js re-exports it, so no call site changed.
+const TOKEN_RULES = M("auth-token-rules.js");
 
 // fnOf slices from the `function` keyword, so an `async function` loses its
 // modifier. Re-attach it, asserting the shipped function really is async.
@@ -57,7 +61,7 @@ function asyncFnOf(src, name) {
 
 // The REAL one-retry rule, not a mirror of it.
 const shouldRepairAuth = new Function(
-  `${fnOf(TOKENS, "shouldRepairAuth")}\n return shouldRepairAuth;`
+  `${fnOf(TOKEN_RULES, "shouldRepairAuth")}\n return shouldRepairAuth;`
 )();
 
 const abortError = () => Object.assign(new Error("aborted"), { name: "AbortError" });
@@ -85,12 +89,21 @@ function transport(opts = {}) {
     shouldRepairAuth,
     forceRefresh: async () => { calls.refreshes += 1; return refresh(); },
     emitAuthState: (s) => calls.emits.push(s),
+    // ⚠ 2026-08-30: the 401-survived branch LATCHES rather than emitting bare. Recorded as
+    // the same 'signed-out' the old seam produced, because the observable half is
+    // unchanged — what moved is that auth-tokens now REMEMBERS it (the flap fix). The
+    // latch itself is pinned in test/auth-storage-unavailable.test.mjs.
+    noteSessionRejected: () => calls.emits.push("signed-out"),
   };
   const diag = (...a) => calls.diag.push(a.join(" "));
 
+  // ⚠ `discardBody` IS SLICED FROM SOURCE ALONGSIDE IT, not stubbed (2026-08-30): the
+  // release of the pre-retry 401 body is the thing the leak pin below measures, and a
+  // stub here would let the shipped call be deleted with the pin still green.
   const fetchWithAuthRepair = new Function(
     "auth", "authTokens", "diag",
-    `${asyncFnOf(REPAIR, "fetchWithAuthRepair")}\n return fetchWithAuthRepair;`
+    `${fnOf(REPAIR, "discardBody")}\n`
+      + `${asyncFnOf(REPAIR, "fetchWithAuthRepair")}\n return fetchWithAuthRepair;`
   )(auth, authTokens, diag);
 
   // `responses` is consumed one entry per ATTEMPT: a response, an Error to throw,
@@ -263,13 +276,16 @@ test("awaitOrCheap still chooses the URL and options — the repair sits underne
 function listWorkspacesWith(res) {
   const calls = { diag: [], stale: 0 };
   const fn = new Function(
-    "apiFetch", "notifyStale", "diag", "normalizeList",
+    "apiFetch", "notifyStale", "diag", "normalizeList", "discardBody",
     `${asyncFnOf(IO, "listWorkspaces")}\n return listWorkspaces;`
   )(
     async () => res,
     () => { calls.stale += 1; },
     (...a) => calls.diag.push(a.join(" ")),
-    (d, k) => (d && d[k]) || []
+    (d, k) => (d && d[k]) || [],
+    // 2026-08-30: every early return releases the body. Counted, not stubbed away —
+    // test/unread-body-seams.test.mjs is where the rule itself is pinned.
+    (r) => { calls.discarded = (calls.discarded || 0) + 1; return r; }
   );
   return { run: fn, calls };
 }
@@ -398,6 +414,66 @@ test("every authenticated main-process fetch seam goes through the shared repair
   // carries the equivalent one-retry rule inline (writing cookies there would be
   // wrong). It is the only other place `shouldRepairAuth` may appear.
   const repairers = files.filter((f) => /shouldRepairAuth\(/.test(M(f))).sort();
-  assert.deepEqual(repairers, ["api-repair.js", "auth-tokens.js", "ui-bridge.js"],
+  // ⚠ `auth-tokens.js` LEFT THIS LIST ON 2026-08-30 and `auth-token-rules.js` took its
+  // place: the rule's definition moved with the rest of the pure block when that file hit
+  // the §2 cap. auth-tokens.js still re-exports the name — it simply no longer CALLS it.
+  assert.deepEqual(repairers, ["api-repair.js", "auth-token-rules.js", "ui-bridge.js"],
     "a module deciding 401 policy on its own is how listener-io drifted in the first place");
+});
+
+// ── THE ABANDONED-BODY LEAK (regression: 17 GB dev RSS, 2026-08-30) ──────────
+//
+// Node's `fetch` is undici: until a `Response` body is consumed or cancelled the request
+// counts as IN FLIGHT, its socket is never returned to the pool, and the next call opens
+// ANOTHER connection. What is retained is native — socket buffers plus TLS session state —
+// so it never pressures GC, never appears in a heap snapshot, and shows up only as RSS.
+//
+// The branches that leak are the ERROR branches, which is backwards from where anyone looks:
+// the success path reads `res.json()` and is fine, while the paths a saturated or
+// stale-credentialed server puts every caller on drop the body on the floor, forever.
+
+test("LEAK: the pre-retry 401 body is RELEASED before a second connection is opened", async () => {
+  const cancelled = [];
+  const body = (tag) => ({ cancel: async () => { cancelled.push(tag); } });
+  const t = transport({
+    responses: [
+      { ok: false, status: 401, body: body("first"), bodyUsed: false },
+      { ok: true, status: 200, body: body("retry"), bodyUsed: false },
+    ],
+  });
+  const res = await t.apiFetch("/api/channels", {});
+  assert.equal(res.status, 200, "the retry's response is what the caller gets");
+  assert.deepEqual(t.calls.fetch.length, 2, "one repair, one retry");
+  assert.deepEqual(cancelled, ["first"], "the abandoned 401 is released; the returned one is not");
+});
+
+test("LEAK: releasing is BEST-EFFORT — an odd or already-read body must not throw", async () => {
+  // A body already consumed, absent, or one whose cancel() rejects: none of those may
+  // escape into a caller that had finished with the response.
+  const shapes = [
+    { ok: false, status: 401 },                                   // no body at all
+    { ok: false, status: 401, body: {}, bodyUsed: false },        // no cancel()
+    { ok: false, status: 401, body: { cancel: () => {} }, bodyUsed: true },  // already read
+    { ok: false, status: 401, body: { cancel: () => { throw new Error("boom"); } }, bodyUsed: false },
+    { ok: false, status: 401, body: { cancel: () => Promise.reject(new Error("late")) }, bodyUsed: false },
+  ];
+  for (const first of shapes) {
+    const t = transport({ responses: [first, { ok: true, status: 200 }] });
+    const res = await t.apiFetch("/api/channels", {});
+    assert.equal(res.status, 200, `shape ${JSON.stringify(Object.keys(first))} still retries`);
+  }
+});
+
+test("LEAK: the presence heartbeat releases its body on EVERY branch, success included", () => {
+  // ⚠ THE STEADIEST LEAK IN THE APP PRECISELY BECAUSE NOTHING ABOUT IT EVER FAILS: one beat
+  // per workspace every 30s, for the life of the process, and `beatOnce` reads no body on
+  // any branch — it only looks at `res.status` / `res.ok`.
+  const PRESENCE = M("presence.js");
+  const fn = fnOf(PRESENCE, "beatOnce");
+  assert.match(fn, /discardBody\(res\)/, "the beat must release the response it never reads");
+  assert.ok(
+    orderOf(fn, "discardBody(res)", "if (res.status === 404)", "beatOnce"),
+    "released BEFORE the branches that return without reading it"
+  );
+  assert.match(PRESENCE, /require\('\.\/api-repair'\)/, "and it uses the ONE shared helper");
 });

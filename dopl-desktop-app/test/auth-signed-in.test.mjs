@@ -161,8 +161,9 @@ function loadRebuild(stored) {
   const blob = {
     loadSession: () => stored,
     persist: (s) => calls.persisted.push(s),
-    jwtExp: (t) => fakeExp(t),
-    decodeJwt: (t) => (fakeSub(t) ? { sub: fakeSub(t) } : null),
+    jwtExp: (t) => fakeExp(t), decodeJwt: (t) => (fakeSub(t) ? { sub: fakeSub(t) } : null),
+    // Knobs — auth-rejected-token.test.mjs drives the marker; auth-storage-unavailable.test.mjs, a keychain that says no.
+    isRefreshTokenRejected: () => false, encryptionAvailable: () => true, authFail: () => {},
   };
   const diag = (...a) => calls.logged.push(a.join(" "));
   const fn = new Function(

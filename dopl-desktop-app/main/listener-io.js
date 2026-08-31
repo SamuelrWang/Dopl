@@ -16,13 +16,40 @@ const Store = require('electron-store');
 const auth = require('./auth');
 const appVersion = require('./app-version');
 const heal = require('./listener-heal');
-const { fetchWithAuthRepair } = require('./api-repair');
+const { fetchWithAuthRepair, discardBody } = require('./api-repair');
+const budget = require('./listener-budget'); // poll budgets + what an abort means (split 2026-08-30)
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
 
 const store = new Store();
 const nameCache = new Map(); // userId -> displayName, refreshed once per reconcile
 const avatarUrlCache = new Map(); // userId -> avatarUrl (item 1/5/6), refreshed with the name cache
+
+/**
+ * ⚠ THE ONLY TWO CACHES IN `main/` WITH NO BOUND AT ALL (2026-08-30, swept out during the 17 GB
+ * dev incident): no cap, no TTL, no `delete`, no `clear` — every member of every workspace ever
+ * enumerated stayed for the life of the process. Every comparable structure here already carries
+ * one (`avatar-cache.js › MAX_CACHE`, `legacy-threads.js › LEGACY_THREAD_CAP`,
+ * `session-wake-tiers.js › MAX_CHANNELS`, `version-skew.js › SEEN_CAP`, `agent-names.js ›
+ * MAX_NAMES`). ⚠ NOT what ate the 17 GB — that was `session-narration.js`'s per-flush fan-out
+ * and abandoned `fetch` bodies — and bounded anyway, so nobody has to re-derive "how many members
+ * could this operator see" the next time a workspace is added.
+ * ⚠ OLDEST-OUT (insertion order) IS THE RIGHT EVICTION rather than an LRU because
+ * `refreshNameCache` REWRITES every member it sees once per reconcile: a still-watched
+ * workspace's members are re-inserted continuously, one the operator left never is. A miss is
+ * not a failure — `displayNameFor` answers 'A teammate'. Pinned by test/listener-name-cache.test.mjs.
+ */
+const MAX_CACHED_MEMBERS = 1000;
+
+function cacheMember(cache, userId, value) {
+  if (cache.has(userId)) cache.delete(userId); // re-insert so the order is "last seen"
+  cache.set(userId, value);
+  while (cache.size > MAX_CACHED_MEMBERS) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
+}
 
 let featureAvailable = true; // false once /api/channels 404s (feature not deployed)
 let staleNotified = false; // one-shot guard for the "session expired" notification
@@ -90,14 +117,21 @@ function seedModeFor(seeded /* , cursor */) {
 // path is BYTE-FOR-BYTE today's behavior (see awaitOrCheap / idleAfterAwait).
 // Pure: no electron / store / fetch refs; timers are Node globals (injectable).
 
-// The `/await?timeoutMs=` value: cheap when healthy, else today's held timeout.
-function awaitTimeoutFor(healthy, cheapMs, heldMs) {
-  return healthy ? cheapMs : heldMs;
+// ⚠ WRAPPED, NOT RE-EXPORTED BARE, so a blown budget is OBSERVABLE: "this channel quietly
+// stopped answering" is precisely the failure the 17 GB incident had no log line for. The
+// DECISION stays pure next door; only the diagnostic lives here.
+function isWakeAbort(err, signal, channelId) {
+  if (budget.isWakeAbort(err, signal)) return true;
+  if (err && err.name === 'AbortError') {
+    diag('await budget expired', String(channelId || '?').slice(0, 8), '— backing off');
+  }
+  return false;
 }
-// Our own fetch-abort timeout: short when healthy, else today's held value.
-function fetchTimeoutFor(healthy, cheapMs, heldMs) {
-  return healthy ? cheapMs : heldMs;
-}
+
+// ⚠ THE TWO TIMEOUT SELECTORS + THEIR NAMED FLOORS LEFT FOR `listener-budget.js` ON 2026-08-30
+// (the 17 GB dev incident), with `isWakeAbort` — the one question this loop's catch block has to
+// answer correctly. Read that file for the floors' argument and the abort-classification story;
+// it is dependency-free, so its test `require`s it instead of slicing it out of here.
 // The idle wait AFTER a cycle. Unhealthy → today's short gap between held polls
 // (byte-for-byte). Healthy + still draining a batch → the same short gap (keep
 // paging fast). Healthy + caught up → the LONG idle, which a wake interrupts.
@@ -230,8 +264,8 @@ function apiFetch(pathname, opts = {}) {
 // held function); unhealthy → today's EXACT held long-poll (same URL + same
 // fetch options, so the fallback is byte-for-byte). See the CHEAP-AWAIT block.
 function awaitOrCheap(entry, since, healthy, signal) {
-  const timeoutMs = awaitTimeoutFor(healthy, REALTIME.CHEAP_AWAIT_TIMEOUT_MS, LISTENER.AWAIT_TIMEOUT_MS);
-  const fetchMs = fetchTimeoutFor(healthy, REALTIME.CHEAP_FETCH_TIMEOUT_MS, LISTENER.AWAIT_FETCH_TIMEOUT_MS);
+  const timeoutMs = budget.awaitTimeoutFor(healthy, REALTIME.CHEAP_AWAIT_TIMEOUT_MS, LISTENER.AWAIT_TIMEOUT_MS);
+  const fetchMs = budget.fetchTimeoutFor(healthy, REALTIME.CHEAP_FETCH_TIMEOUT_MS, LISTENER.AWAIT_FETCH_TIMEOUT_MS);
   return apiFetch(
     `/api/channels/${entry.channel.id}/await?since=${since}&timeoutMs=${timeoutMs}`,
     { workspaceId: entry.workspaceId, timeoutMs: fetchMs, signal }
@@ -266,13 +300,19 @@ function normalizeList(data, key) {
 // record, and the 401 one says what it costs.
 async function listWorkspaces() {
   const res = await apiFetch('/api/workspaces', { timeoutMs: 15000 });
+  // ⚠ RELEASE BEFORE EVERY EARLY RETURN (2026-08-30). Both exits below abandoned the
+  // `Response`, and an unread undici body counts as IN FLIGHT — socket and TLS state never
+  // return to the pool (api-repair.js › discardBody). The success path reads `res.json()`
+  // and was fine; the 401 branch — the one a stale credential puts EVERY pass on — leaked
+  // once per reconcile, up to twice a minute, for the life of the process.
   if (res.status === 401) {
+    discardBody(res);
     notifyStale();
     diag('listWorkspaces 401 — session stale even after the repair; NO workspaces this pass,',
       'so presence, push and every channel loop are starved until one succeeds');
     return null;
   }
-  if (!res.ok) { diag('listWorkspaces', res.status); return null; }
+  if (!res.ok) { discardBody(res); diag('listWorkspaces', res.status); return null; }
   return normalizeList(await res.json(), 'workspaces');
 }
 
@@ -301,9 +341,11 @@ async function listChannels(workspaceId) {
     diag('listChannels error ws', short, err && err.message);
     return null;
   }
-  if (res.status === 404) { featureAvailable = false; return []; }
-  if (res.status === 401) { lastChannelsAuthFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
-  if (!res.ok) { diag('listChannels', res.status, 'ws', short); return null; }
+  // ⚠ Same rule as listWorkspaces above, and here it is AMPLIFIED: listChannelsWithRetry
+  // runs this up to three times per workspace per pass.
+  if (res.status === 404) { discardBody(res); featureAvailable = false; return []; }
+  if (res.status === 401) { discardBody(res); lastChannelsAuthFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
+  if (!res.ok) { discardBody(res); diag('listChannels', res.status, 'ws', short); return null; }
   try {
     const list = normalizeList(await res.json(), 'channels');
     featureAvailable = true;
@@ -418,10 +460,10 @@ async function refreshNameCache(ws) {
     for (const mem of members) {
       if (mem && mem.userId) {
         const dn = mem.displayName || mem.email || null;
-        if (dn) nameCache.set(mem.userId, dn);
+        if (dn) cacheMember(nameCache, mem.userId, dn);
         // Cache the avatar URL alongside the name (covers the operator AND every peer,
         // since the members list includes the operator). Consumed only by avatar-cache.
-        if (mem.avatarUrl) avatarUrlCache.set(mem.userId, mem.avatarUrl);
+        if (mem.avatarUrl) cacheMember(avatarUrlCache, mem.userId, mem.avatarUrl);
       }
     }
     diag('namecache loaded', members.length, 'ws', ws.slug);
@@ -445,6 +487,8 @@ module.exports = {
   idleAfterAwait,
   sleepOrWake,
   wakeEntry,
+  discardBody, // re-exported so channelLoop releases the bodies it never reads (api-repair.js)
+  isWakeAbort, // …and classifies an abort, logging a blown budget (listener-budget.js)
   normalizeList,
   listWorkspaces,
   listChannels,

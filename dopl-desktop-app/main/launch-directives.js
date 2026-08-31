@@ -68,14 +68,14 @@
 //   5. RESOLVE  the TEMPLATE, if one was named — this operator's credential, this machine's call.
 //               404 -> `no-template`; timeout/5xx -> `busy`; a NULLED id beside a live NAME is a
 //               DELETION and refuses without asking (E-4).
-//   6. LAUNCH   through `session-engine.launchRequesterSession`, the same funnel the button
-//               uses, on the SPAWN-IDLE lane with the goal delivered at wake.
+//   6. LAUNCH   through `session-engine.launchRequesterSession`, the same funnel the button uses.
+//               WITH a goal it RUNS; without one it registers a spawn-idle shell (see `spawn`).
 //   7. DECIDE   `launched` + the agent id, or `refused` + one of the seven words. Exactly one of
 //               them, always — see `launch-directive-wire.js › decideBody`.
 //
 // ⚠ IDEMPOTENCE IS BELT AND BRACES. The server CAS is the real guarantee; `decided` below is the
-// local belt, because a realtime frame and a backstop poll can deliver the same row within
-// milliseconds of each other and the claim is a network round-trip wide.
+// local belt — a realtime frame and a backstop poll can deliver the same row within milliseconds
+// of each other, and the claim is a network round-trip wide.
 //
 // The wire shapes and the route paths live in `launch-directive-wire.js`, which states which of
 // them are the OTHER lane's contract and which are this tree's own vocabulary.
@@ -221,9 +221,8 @@ async function decide(d, outcome) {
  *      orchestrator is in and the operator is not is created fine and REFUSED here as
  *      `no-template`, which is fail-closed and the designed outcome rather than a bug.
  *   2. `knowledgeBases` IS VIEWER-FILTERED AGAINST WHOEVER RESOLVES, so a shared template cannot
- *      launder access to a private base. 3. REFUSE, NEVER DEGRADE: no branch drops an
- *      unresolvable template and launches blank — a blank agent wearing no identity goes
- *      unnoticed.
+ *      launder access to a private base. 3. REFUSE, NEVER DEGRADE: no branch drops an unresolvable
+ *      template and launches blank — a blank agent wearing no identity goes unnoticed.
  *
  * ⚠ NO FIRST-USE APPROVAL ON THIS LANE — a RULING, not an omission (OQ-3). The BUTTON lane's
  * one-modal gate (`session-launch-op.js`, answering its own renderer with `template-approval`)
@@ -239,12 +238,14 @@ async function decide(d, outcome) {
  * is not "safer" in any useful sense — it is the operator's configured channel behaving
  * differently depending on who pressed, the drift H2's one-consumer rule exists to make visible.
  *
- * ⚠ SPAWN-IDLE, WITH THE GOAL DELIVERED AT WAKE. `idle: true` registers the agent with prepared
- * context and starts NO query, so a directive costs no `claude` child until someone talks to the
- * agent. The goal rides as `firstMessage` -> `s.launchGoal` -> `session-seed.js › takeFraming`,
- * which fences it as the WAKE turn's request body (the 1.17.1 wake design; before it the launch
- * goal reached nobody at all on this lane). ⚠ THROUGH THE FENCE, NEVER THE PREAMBLE: the goal is
- * text another agent wrote, so it is a BODY, like the thread title the button's goal interpolates.
+ * ── ⚠ `idle: !d.goal` — A GOAL RUNS, NO GOAL STANDS BY (2026-08-31; ENGINEERING §8 has the repro
+ * and the whole argument). It was `idle: true` unconditionally, with the goal held for a WAKE
+ * (`s.launchGoal` -> `session-seed.js › takeFraming`). Every link of that worked; the PREMISE did
+ * not — **the only caller of this lane cannot produce that wake**, since a dormant session needs
+ * a HUMAN-authored message and a directive is filed by an AGENT whose posts `session-wake-tiers
+ * .js › wakeEligible` refuses. ⚠ THE FENCE DID NOT MOVE AND MUST NOT; the SPAWN SHAPE did. No-goal
+ * keeps the shell (`defaultGoal` is a synthesized stand-by line, not an instruction anybody wrote);
+ * `buildFencedTurn` fences the goal on both branches, and only the WHEN differs.
  */
 async function spawn(d) {
   const channel = deps.watchedChannel ? deps.watchedChannel(d.channelId) : null;
@@ -329,8 +330,8 @@ async function spawn(d) {
     model: sessionModel.chainModel(d.model)
       || require('./session-launch-op').templateModel(sessionModel, template)
       || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId)),
-    idle: true,
-    operatorArmed: true,
+    idle: !d.goal, // ⚠ docblock. `directiveFrom` trimmed it, so '' is the only spelling of "none"
+    operatorArmed: true, // ⚠ both branches: FIX-4 reads it only for a shell, but it is true either way
   });
   if (res && res.agentId) return { agentId: res.agentId };
   return { refused: wire.refusalFor(res && res.skipped) };
@@ -409,8 +410,7 @@ async function pollWorkspace(wsId) {
       // ⚠ NOT A FILED GAP — an OLDER SERVER. Worded as the deployment fact it is, so an operator
       // reading `listener.log` is not sent to a finding that closed on 2026-08-22.
       diag('launch-directives: this server has no pending-directives read (it predates it) —',
-        'the breaker-open backstop is disabled for this run;',
-        'realtime is the only delivery path, and a missed directive expires');
+        'the backstop is disabled for this run; realtime is the only path, and a miss expires');
     }
     if (!res || !res.ok) return;
     const body = await res.json().catch(() => null);
@@ -444,9 +444,9 @@ async function poll() {
  * and the orchestrator already handles expiry — it is the toggle-off path's normal answer.
  * ⚠ AND IT COSTS NOTHING TO SAFETY. A claimed row is not `pending`, so no machine re-actions it;
  * the worst case is one orchestrator request that times out instead of being refused promptly.
- * ⚠ WHAT WOULD CHANGE THE ANSWER: a directive that carried the agent id it expected, or a
- * session record durable enough to answer "did this directive's spawn survive". Neither exists,
- * and inventing one for this is a bigger change than the lane.
+ * ⚠ WHAT WOULD CHANGE THE ANSWER: a directive carrying the agent id it expected, or a session
+ * record durable enough to answer "did this spawn survive". Neither exists, and inventing one for
+ * this is a bigger change than the lane.
  */
 function start(opts) {
   const o = opts || {};

@@ -13,6 +13,11 @@
 //      running". The point is that the operator recognises what they are interrupting.
 //   2. BOTH WAYS FORWARD ARE REAL. "Quit anyway" kills now. "Wait for them to finish" waits
 //      and then quits BY ITSELF; it is not a disguised cancel, and it is capped.
+//   2b. …AND SINCE 2026-08-30 THERE IS A THIRD, WHICH IS A REAL CANCEL. Both of the original
+//      buttons ended in a quit, so an accidental ⌘Q could be deferred but never taken back.
+//      "Cancel" aborts outright: no teardown, no latch, no pending auto-quit, `isQuitting` put
+//      back. It takes the default, because the safest of three is the one that does nothing.
+//      ⚠ It is CHOSEN, never fallen into: every failure still resolves to QUIT (see rule 6).
 //   3. MID-TOOL-CALL IS NOT A REASON TO WAIT. On Quit anyway there is no grace period.
 //   4. THE PEER IS TOLD. Killed sessions take C-5's calm `inactive` terminal, so the waiting
 //      requester's card stops pulsing "Working…" — one terminal path, not a second one.
@@ -42,10 +47,10 @@ for (const banned of ["require(", "electron", "child_process"]) {
 }
 
 const pure = (over = {}) => new Function(
-  "deps", "BUTTON_QUIT", "BUTTON_WAIT", "WAIT_CAP_MS", "diag",
+  "deps", "BUTTON_QUIT", "BUTTON_WAIT", "BUTTON_CANCEL", "WAIT_CAP_MS", "diag",
   `${BLOCK}\n return { describeSession, describeAll, quitMessage, buildDialogOptions,
-                       waitSatisfied, waitExpired, QUIT_DETAIL_TAIL };`
-)(over.deps || {}, 0, 1, over.cap || 16 * 60 * 1000, () => {});
+                       waitSatisfied, waitExpired, quitDetailTail };`
+)(over.deps || {}, 0, 1, 2, over.cap || 16 * 60 * 1000, () => {});
 
 const s = (o = {}) => ({
   key: "c1:t1", channelName: "Ops", taskTitle: "Ship the invoice import",
@@ -73,29 +78,78 @@ test("a thread with no title still reads as something, and a DM falls back to th
 test("the dialog is a LIST, not a count — the count alone was the thing being fixed", () => {
   const q = pure();
   const opts = q.buildDialogOptions([s(), s({ key: "c2:t2", taskTitle: "Fix the importer", channelName: "Eng" })]);
-  assert.equal(opts.message, "2 agents are still running.");
+  assert.equal(opts.message, "You have 2 active agent sessions.");
   for (const needle of ["Ship the invoice import", "Fix the importer", "Ops", "Eng"]) {
     assert.ok(opts.detail.includes(needle), `${needle} missing from the dialog body`);
   }
-  assert.equal(q.quitMessage([s()]), "One agent is still running.", "…and it reads right for one");
+  assert.equal(q.quitMessage([s()]), "You have 1 active agent session.", "…and it reads right for one");
 });
 
-test("the copy says what quitting COSTS, and that the peer will be told", () => {
+test("the copy says what quitting COSTS, that it is PERMANENT, and that the peer will be told", () => {
   const q = pure();
   const opts = q.buildDialogOptions([s()]);
-  assert.ok(opts.detail.includes("stops them where they are"), opts.detail);
+  assert.ok(opts.detail.includes("stops where it is"), opts.detail);
+  // 2026-08-30, Samuel's ruling: the dialog must say the ending is PERMANENT, not merely that
+  // the agents stop. The teardown settles each record and nothing resumes a settled session.
+  assert.ok(opts.detail.includes("permanently"), "the consequence Samuel asked to be named");
+  assert.ok(opts.detail.includes("cannot be resumed"), opts.detail);
   assert.ok(opts.detail.includes("went inactive"), "it promises exactly what C-5 posts");
-  assert.ok(!/—/.test(q.QUIT_DETAIL_TAIL), "no em dash in copy");
+  for (const n of [1, 2]) assert.ok(!/—/.test(q.quitDetailTail(n)), "no em dash in copy");
+});
+
+test("the tail is singular/plural aware — one agent is never 'these agents'", () => {
+  const q = pure();
+  assert.match(q.quitDetailTail(1), /this agent permanently\. It stops where it is/);
+  assert.match(q.quitDetailTail(1), /The person waiting is told/);
+  assert.match(q.quitDetailTail(3), /these agents permanently\. They stop where they are/);
+  assert.match(q.quitDetailTail(3), /The people waiting are told/);
 });
 
 // ── 2. BOTH WAYS FORWARD ARE REAL ────────────────────────────────────────────────────
 
-test("the dialog offers exactly two, and NEITHER default can silently kill work", () => {
+test("the dialog offers THREE, and the default is the one that does nothing at all", () => {
   const q = pure();
   const opts = q.buildDialogOptions([s()]);
-  assert.deepEqual(opts.buttons, ["Quit anyway", "Wait for them to finish"]);
-  assert.equal(opts.defaultId, 1, "Return picks the non-destructive one");
-  assert.equal(opts.cancelId, 1, "…and so does Escape");
+  // ⚠ THIS PINNED EXACTLY TWO UNTIL 2026-08-30, and both of them ended in a quit — so an
+  // accidental ⌘Q could be deferred but never taken back, and the "safe" default still closed
+  // the app minutes later unattended. Cancel is the third, and it is the default.
+  assert.deepEqual(opts.buttons, ["Quit anyway", "Wait for them to finish", "Cancel"]);
+  assert.equal(opts.defaultId, 2, "Return does nothing — the safest of three has no effect");
+  assert.equal(opts.cancelId, 2, "…and Escape means Escape");
+});
+
+// ── 2b. CANCEL IS A REAL ABORT (2026-08-30, Samuel's ruling) ─────────────────────────
+
+test("Cancel is wired to its OWN branch, and that branch is checked before the others", () => {
+  const prompt = SRC.slice(SRC.indexOf("async function promptThenQuit("));
+  assert.match(prompt, /if \(choice === BUTTON_CANCEL\) \{ cancelQuit\(/,
+    "Cancel must not fall through to the wait or the kill");
+  assert.ok(prompt.indexOf("BUTTON_CANCEL") < prompt.indexOf("BUTTON_WAIT"),
+    "…and it is tested first, so no reordering can make Cancel mean Wait");
+  assert.equal(SRC.match(/const BUTTON_CANCEL = 2;/) !== null, true);
+});
+
+test("cancelQuit tears NOTHING down and does NOT latch — the next quit re-prompts", () => {
+  const cancel = SRC.slice(SRC.indexOf("function cancelQuit("), SRC.indexOf("// \"Wait for them to finish\""));
+  assert.ok(!/teardown\(|endLiveSessions|flushSessionState|app\.quit\(\)/.test(cancel),
+    "an aborted quit must not kill a session, flush the rows, or close the app");
+  assert.ok(!/disarmed = true/.test(cancel),
+    "latching here would make the NEXT quit skip the dialog entirely");
+});
+
+test("Cancel also kills a pending WAIT — the quit is off, not rescheduled", () => {
+  const cancel = SRC.slice(SRC.indexOf("function cancelQuit("), SRC.indexOf("// \"Wait for them to finish\""));
+  assert.match(cancel, /stopWaiting\(\);/,
+    "an auto-quit still ticking after Cancel is the bug this button exists to prevent");
+  assert.match(cancel, /prompting = false;/, "…and the dialog is no longer on screen");
+});
+
+test("Cancel puts app.isQuitting BACK, so an aborted quit leaves no trace of itself", () => {
+  // `onBeforeQuit` sets the flag on the way IN, before it knows the answer. Five modules write
+  // it; leaving it true after an abort means the app permanently believes it is on its way out.
+  const cancel = SRC.slice(SRC.indexOf("function cancelQuit("), SRC.indexOf("// \"Wait for them to finish\""));
+  assert.match(cancel, /app\.isQuitting = false;/);
+  assert.match(cancel, /try \{ app\.isQuitting = false; \} catch/, "even this is survivable");
 });
 
 test("the wait is satisfied when nobody is mid-turn — that is what 'finish' means", () => {
@@ -253,6 +307,17 @@ test("every failure path lets the quit through — the latch, the dialog, the re
     "a dialog that cannot be shown must not become a quit that cannot happen");
   assert.match(SRC, /function orphanRisk\(\)[\s\S]*?return \[\];[\s\S]*?\}/,
     "an unreadable registry reads as 'nothing running', which quits");
+});
+
+test("the fail-open fallback is QUIT, never the new CANCEL — Cancel must be CHOSEN", () => {
+  // Adding a third button added a way to get this exactly backwards: if a dialog that throws or
+  // answers garbage resolved to Cancel, a broken dialog would become an app that cannot be
+  // closed — rule (6) inverted by one constant.
+  const prompt = SRC.slice(SRC.indexOf("async function promptThenQuit("));
+  assert.match(prompt, /let choice = BUTTON_QUIT;/, "the pre-answer default is the quit");
+  assert.match(prompt, /res && typeof res\.response === 'number' \? res\.response : BUTTON_QUIT/,
+    "a malformed answer quits rather than silently cancelling");
+  assert.ok(!/= BUTTON_CANCEL;/.test(prompt), "nothing may DEFAULT to Cancel");
 });
 
 test("no live agents means no dialog at all — the teardown just runs", () => {

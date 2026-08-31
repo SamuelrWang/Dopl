@@ -233,7 +233,11 @@ test("reconcile re-applies the last known-good workspaces when push wants none",
 
 test("listChannels distinguishes 'no answer' from 'no channels'", () => {
   const fn = fnOf(IO, "listChannels");
-  assert.match(fn, /if \(res\.status === 404\) \{ featureAvailable = false; return \[\]; \}/,
+  // ⚠ `discardBody(res);` LEADS EACH BRANCH SINCE 2026-08-30 — an abandoned undici body
+  // pins its socket, and this function is run up to three times per workspace per pass.
+  // The assertions below name the DECISION, not the whole line, so releasing a body is
+  // not mistaken for changing an answer.
+  assert.match(fn, /if \(res\.status === 404\) \{ discardBody\(res\); featureAvailable = false; return \[\]; \}/,
     "404 is a real answer: the feature is not deployed");
   assert.match(fn, /res\.status === 401.*return null/s, "401 is not an empty workspace");
   assert.match(fn, /if \(!res\.ok\).*return null/s);
@@ -334,5 +338,6 @@ test("the retry ladder only repairs the session on a 401, not on every failure",
   assert.match(fn, /await sleep\(delay\)/, "a non-auth failure still backs off and retries");
   const chans = fnOf(IO, "listChannels");
   assert.match(chans, /lastChannelsAuthFailure = false;/, "reset on entry, so it never goes stale");
-  assert.match(chans, /res\.status === 401\) \{ lastChannelsAuthFailure = true;/, "set only by a 401");
+  assert.match(chans, /res\.status === 401\) \{ discardBody\(res\); lastChannelsAuthFailure = true;/,
+    "set only by a 401 (and the body released ahead of it — see unread-body-seams)");
 });

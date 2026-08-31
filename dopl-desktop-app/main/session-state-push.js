@@ -40,6 +40,7 @@
 // identity is never reported — fail closed. Signing back in as the SAME operator resumes reporting automatically.
 
 const { apiFetch } = require('./api');
+const { discardBody } = require('./api-repair'); // ⚠ NO branch here read the body — success included (the presence.beatOnce leak)
 const { diag } = require('./diag');
 // THE QUANTIZER + CADENCE FLOOR (2026-08-22). ABOVE the sentinel like `apiFetch`, so the harness injects the REAL
 // module. Its header carries the derivations; this file only spends them.
@@ -337,11 +338,10 @@ async function send(workspaceId, rows) {
       });
     } catch (err) {
       if (attempt < MAX_ATTEMPTS) { await sleep(RETRY_DELAY_MS); continue; }
-      noteFailure(workspaceId, 'network', (err && err.message) || 'network error');
-      return false;
+      noteFailure(workspaceId, 'network', (err && err.message) || 'network error'); return false;
     }
-    if (res && res.ok) { clearFailures(workspaceId); return true; }
-    const status = (res && res.status) || 0;
+    if (res && res.ok) { discardBody(res); clearFailures(workspaceId); return true; }
+    const status = (res && res.status) || 0; discardBody(res); // nothing below reads it
     if (retryable(status) && attempt < MAX_ATTEMPTS) { await sleep(RETRY_DELAY_MS); continue; }
     noteFailure(workspaceId, 'http-' + status, 'HTTP ' + status);
     return false;

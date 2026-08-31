@@ -43,6 +43,21 @@ const ENUM_RETRY_DELAYS_MS = [1_000, 3_000];
 // (b) …and if it still failed, re-run the whole pass this soon, rather than
 // waiting out LISTENER.CHANNEL_REFRESH_MS (5 min).
 const ENUM_RETRY_RECONCILE_MS = 30_000;
+// (b) THE CEILING THAT WAS MISSING (2026-08-30, the abort-churn incident). The retry
+// above is a FIXED 30s and it re-arms itself from the failure it just produced, so a
+// condition that does not clear on its own — a stale cookie the bearer authority cannot
+// rotate, a saturated API, an offline machine — re-ran the whole reconcile pass every 30
+// seconds for the life of the process. Bounded in CONCURRENCY (one shared `retryTimer`)
+// but not in DURATION, which is the half `MISS_GIVE_UP_COUNT` already learned to bound on
+// the other path: "at most once per window" is a rate, not a give-back.
+//
+// ⚠ THE LADDER DOES NOT END IN GIVING UP, and that is deliberate. Unlike a parked channel
+// (which the periodic reconcile still picks up), a failed WORKSPACE LIST starves presence,
+// push, identity and every channel loop at once — so the self-heal must keep trying. What
+// it must stop doing is trying at a rate that treats the tenth consecutive failure as
+// urgently as the first. The ceiling is the 5-minute periodic reconcile's own period: past
+// it this retry adds nothing the periodic pass does not already do.
+const LIST_RETRY_MAX_MS = 5 * 60 * 1000;
 
 // ── Pure decisions ──────────────────────────────────────────────────────────
 
@@ -61,6 +76,16 @@ function missReconcileDue(nowMs, lastAtMs, windowMs) {
 function enumerationRetryDelay(attempt) {
   const i = Number(attempt) || 0;
   return i >= 0 && i < ENUM_RETRY_DELAYS_MS.length ? ENUM_RETRY_DELAYS_MS[i] : null;
+}
+
+// (b) Delay before the follow-up reconcile after `consecutive` back-to-back failures
+// (1-based; 0 or 1 is the first failure). Doubles from `baseMs` to `maxMs` and stops
+// there. Pure so the ladder is a truth table, not a timer to observe.
+function listRetryDelay(consecutive, baseMs = ENUM_RETRY_RECONCILE_MS, maxMs = LIST_RETRY_MAX_MS) {
+  const n = Math.max(1, Math.floor(Number(consecutive) || 1));
+  // Cap the exponent before the multiply: 2 ** 1024 is Infinity, and
+  // Math.min(Infinity, maxMs) would be fine while `Infinity * 0` is not.
+  return Math.min(maxMs, baseMs * 2 ** Math.min(n - 1, 20));
 }
 
 // (b) Whether a loop whose channel is absent from the freshly-enumerated
@@ -94,11 +119,13 @@ function createReconcileHealer(opts = {}) {
   const T = opts.timers || { setTimeout, clearTimeout };
   const missWindowMs = opts.missWindowMs || MISS_RECONCILE_WINDOW_MS;
   const retryMs = opts.retryMs || ENUM_RETRY_RECONCILE_MS;
+  const listRetryMaxMs = opts.listRetryMaxMs || LIST_RETRY_MAX_MS;
   const giveUpAfter = opts.giveUpAfter || MISS_GIVE_UP_COUNT;
 
   let lastMissAt = 0;
   let suppressedMisses = 0;
   let retryTimer = null;
+  let listFailures = 0; // consecutive workspace-list failures — drives the backoff
   const missCounts = new Map(); // channelId -> miss-triggered passes run for it (S7)
 
   // A realtime INSERT woke a channel with NO loop. Re-enumerate — but only once
@@ -133,13 +160,14 @@ function createReconcileHealer(opts = {}) {
   // ONE pending follow-up pass, whatever asked for it. Both re-ask paths below
   // share this timer, so a workspace-list failure and a per-workspace enumeration
   // failure can never stack into two reconcile storms (F-072).
-  function scheduleRetry(what) {
+  function scheduleRetry(what, delayMs) {
     if (retryTimer) return false;
-    log('reconcile self-heal:', what, 'in', `${retryMs}ms`);
+    const ms = delayMs || retryMs;
+    log('reconcile self-heal:', what, 'in', `${ms}ms`);
     retryTimer = T.setTimeout(() => {
       retryTimer = null;
       run();
-    }, retryMs);
+    }, ms);
     if (retryTimer && retryTimer.unref) retryTimer.unref();
     return true;
   }
@@ -175,8 +203,29 @@ function createReconcileHealer(opts = {}) {
   // the heartbeat POSTs the same origin with the same credential, so whatever killed
   // `/api/workspaces` kills `/api/channels/presence`. The credential is the bug, and
   // the 401 repair (api-repair.js) is where it is fixed.
+  //
+  // ⚠ AND IT BACKS OFF SINCE 2026-08-30. The delay was a flat 30s that re-armed off the
+  // failure it had just produced, so a condition that does not clear on its own re-ran the
+  // WHOLE reconcile pass — the workspace list, every workspace's name cache and channel
+  // enumeration — twice a minute for the life of the process, each pass leaving another
+  // unread `Response` behind it. `listRetryDelay` climbs to the periodic reconcile's own
+  // 5-minute period, past which this timer is adding nothing that pass does not already do.
   function onWorkspaceListFailure() {
-    return scheduleRetry('the WORKSPACE LIST itself failed (nothing enumerated) — re-asking');
+    listFailures += 1;
+    const delay = listRetryDelay(listFailures, retryMs, listRetryMaxMs);
+    // ⚠ NO COUNT IN THIS COPY. A bare number here is what sent the 1.8.x outage looking
+    // for one broken workspace for hours; the DELAY already says how far up the ladder we
+    // are, and test/listener-auth-repair.test.mjs pins the absence.
+    return scheduleRetry('the WORKSPACE LIST itself failed (nothing enumerated) — re-asking', delay);
+  }
+
+  // A pass got a real answer. ⚠ CALLED ON SUCCESS, which is the half a backoff cannot be
+  // written without: a ladder that only ever climbs is a give-up with extra steps.
+  function noteWorkspaceListOk() {
+    if (!listFailures) return false;
+    log('reconcile self-heal: workspace list answered again after', listFailures, 'failure(s)');
+    listFailures = 0;
+    return true;
   }
 
   function pendingRetry() {
@@ -187,10 +236,14 @@ function createReconcileHealer(opts = {}) {
     if (retryTimer) { T.clearTimeout(retryTimer); retryTimer = null; }
     lastMissAt = 0;
     suppressedMisses = 0;
+    listFailures = 0;
     missCounts.clear(); // S7: a restart is the operator's reset for a parked channel
   }
 
-  return { onLoopMiss, onEnumerationFailure, onWorkspaceListFailure, pendingRetry, stop };
+  return {
+    onLoopMiss, onEnumerationFailure, onWorkspaceListFailure, noteWorkspaceListOk,
+    pendingRetry, stop,
+  };
 }
 
 module.exports = {
@@ -198,6 +251,8 @@ module.exports = {
   MISS_GIVE_UP_COUNT,
   ENUM_RETRY_DELAYS_MS,
   ENUM_RETRY_RECONCILE_MS,
+  LIST_RETRY_MAX_MS,
+  listRetryDelay,
   missReconcileDue,
   enumerationRetryDelay,
   keepLoopOnPrune,

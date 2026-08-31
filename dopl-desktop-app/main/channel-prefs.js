@@ -228,71 +228,12 @@ function setAutoSend(channelId, on) {
   return on === true;
 }
 
-// ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ──────────
-//
-// MAY ANOTHER AGENT — an ORCHESTRATOR holding this operator's own Dopl credential — cause this
-// MACHINE to spawn a session? Default FALSE. It is the standing consent for the whole
-// `channel_launch_directives` lane (`main/launch-directives.js`); with it OFF the watcher reads
-// a directive addressed to this operator and IGNORES IT SILENTLY, and the directive expires
-// server-side where the orchestrator can see it happen.
-//
-// ⚠ IT IS MACHINE-WIDE, NOT PER CHANNEL, and it is the one record in this file that is. It
-// lives here because this is where the local, never-POSTed, default-restrictive launch settings
-// already are and a second electron-store module for one boolean would be worse — but it is
-// keyed by NOTHING: one operator, one Mac, one answer. A per-channel version was not built
-// because the question it answers is "do I let a program press the button on this laptop",
-// which is not a fact about a channel.
-//
-// ── ⚠ WHY IT LIVES OUTSIDE THE SERVER ENTIRELY, AND WHY THAT IS THE POINT (§6 threat) ───────
-//
-// THE TOGGLE IS THE CONSENT. Samuel's ruling replaces "the click IS that human" for this lane:
-// there is no click at directive time, so the standing local decision has to BE the human, and
-// a consent that a program can grant itself is not one.
-//
-// ⚠ A SPAWNED SESSION HAS `Bash` AND THE DEVICE TOKEN IS ON DISK. Under the `bypass` tool
-// posture `Bash` is pre-approved, the session runs on this Mac as this user, and this operator's
-// Dopl credential is in the app's own store — so an agent that can reach a SERVER-STORED
-// setting can reach it with the operator's own authority and flip it. Any surface a Dopl
-// credential can address is therefore disqualified: not a `workspace_settings` column, not a
-// member preference, not an MCP op, not an authenticated route. **A server-side "allow
-// orchestrated launches" flag would let a compromised or merely over-eager agent grant itself
-// the right to spawn more agents on every machine the operator owns — which is the escalation
-// this whole lane has to not have.**
-//
-// ⚠ SO THE ONLY WRITER IS THE APP-WINDOW IPC PAIR (`channel-dir-ipc.js ›
-// orchestrator:getLaunchEnabled / setLaunchEnabled`, `appWindowOnly`), reachable from the
-// bundled SPA's top frame and from nothing else. `Bash` on this machine could of course rewrite
-// the electron-store file directly — that is true of every local setting and is not what this
-// defends against. What it defends against is the REMOTE path: no request, from any credential,
-// to any Dopl endpoint, can change this value, so a compromised workspace cannot arm a fleet.
-//
-// ⚠ AND IT NARROWS NOTHING ELSE. A directive-driven launch is exactly as contained as a button
-// launch: same channel tool profile, same durable posture, same `SESSION_HARD_DENY`, same
-// windowless message floor. This toggle decides WHO MAY PRESS, never WHAT IS ALLOWED.
-//
-// Default OFF — an absent, corrupt or non-boolean record reads false, the same fail-closed rule
-// auto-send follows.
-const ORCHESTRATOR_LAUNCH_KEY = 'orchestratorLaunchEnabled'; // a bare boolean
+// ⚠ **THE TWO MCP CONSENTS MOVED TO `main/orchestrator-consent.js` ON 2026-08-31**, at the
+// §1 cap and on a real seam: they change when a capability an EXTERNAL agent may ask for is
+// added or its grant moves, where the rest of this file changes when a CHANNEL preference
+// does. Re-exported below, so no caller moved.
+const orchestratorConsent = require('./orchestrator-consent');
 
-function getOrchestratorLaunch() {
-  try {
-    return store.get(ORCHESTRATOR_LAUNCH_KEY) === true;
-  } catch (_err) {
-    return false; // an unreadable store is not a grant
-  }
-}
-
-function setOrchestratorLaunch(on) {
-  const next = on === true;
-  try {
-    store.set(ORCHESTRATOR_LAUNCH_KEY, next);
-  } catch (err) {
-    diag('channel-prefs: could not persist the orchestrator launch toggle —', err && err.message);
-    return getOrchestratorLaunch();
-  }
-  diag('channel-prefs: orchestrator launch', next ? 'ENABLED' : 'disabled');
-  return next;
-}
 
 // ── ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3) ─────────────
 //
@@ -459,12 +400,16 @@ function getLaunchModel(channelId) {
 module.exports = {
   getAutoSend,
   setAutoSend,
-  // 2026-08-22: the MACHINE-WIDE standing consent for the orchestrator launch lane. Read the
-  // block above before wiring a second reader or writer — the "outside the server entirely"
-  // property is the security content, not the storage.
-  ORCHESTRATOR_LAUNCH_KEY,
-  getOrchestratorLaunch,
-  setOrchestratorLaunch,
+  // THE MACHINE-WIDE STANDING CONSENTS for the two MCP-driven capabilities — launching an
+  // agent (2026-08-22) and DIRECTING one (2026-08-31). ⚠ RE-EXPORTED from
+  // `orchestrator-consent.js` (§1 split), which carries why "outside the server entirely" is
+  // the security content rather than the storage, and why there is one toggle per capability.
+  ORCHESTRATOR_LAUNCH_KEY: orchestratorConsent.ORCHESTRATOR_LAUNCH_KEY,
+  getOrchestratorLaunch: orchestratorConsent.getOrchestratorLaunch,
+  setOrchestratorLaunch: orchestratorConsent.setOrchestratorLaunch,
+  ORCHESTRATOR_DIRECT_KEY: orchestratorConsent.ORCHESTRATOR_DIRECT_KEY,
+  getOrchestratorDirect: orchestratorConsent.getOrchestratorDirect,
+  setOrchestratorDirect: orchestratorConsent.setOrchestratorDirect,
   // 2026-08-22 (OQ-3): FIRST-USE APPROVAL for another member's agent template. Same
   // machine-local, never-server-reachable property as the toggle above, and the block over these
   // two functions says why that property is the security content.

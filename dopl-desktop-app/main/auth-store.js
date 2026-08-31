@@ -31,6 +31,30 @@ function authFail(what, err) {
   diag('auth:', what, '—', detail);
 }
 
+// CAN THIS MACHINE HOLD A SESSION AT ALL? (2026-08-30, the abort-churn incident.)
+//
+// ⚠ ASKED, NOT INFERRED, and this is the fact the rest of the auth stack was missing.
+// `persist()` below REFUSES to write when the OS keychain is unavailable — the right
+// call, it will not downgrade a refresh token to cleartext — and it also DELETES both
+// keys on the way out. So `loadSession()` answers null forever, and every consumer that
+// reasons about the blob was reading "the blob is stale" where the truth was "the blob
+// is IMPOSSIBLE". Those are different states and only one of them is recoverable in this
+// process: a stale blob is repaired from the jar, an impossible one is not, because the
+// repair is the very write that cannot happen.
+//
+// ⚠ READ LIVE, NEVER LATCHED. On macOS a denied keychain prompt (`userCanceledErr`)
+// makes this false for the rest of the run, but an operator who grants it on the next
+// launch — or a platform where the answer changes — must be picked up with no special
+// case and no cached "no". The throw guard exists because this is an OS call.
+function encryptionAvailable() {
+  try {
+    return safeStorage.isEncryptionAvailable();
+  } catch (err) {
+    authFail('safeStorage availability check threw', err);
+    return false;
+  }
+}
+
 // TRUE only when the session actually reached disk. The outcome is REPORTED
 // rather than swallowed: captureFromFragment used to answer "adopted" after a
 // refusal below, so on a machine with no keychain sign-in returned {ok:true},
@@ -39,7 +63,7 @@ function authFail(what, err) {
 function persist(sessionObj) {
   try {
     const json = JSON.stringify(sessionObj);
-    if (safeStorage.isEncryptionAvailable()) {
+    if (encryptionAvailable()) {
       store.set(STORE_KEY, safeStorage.encryptString(json).toString('base64'));
       store.delete(PLAIN_KEY);
       return true;
@@ -69,7 +93,7 @@ function persist(sessionObj) {
 function loadSession() {
   try {
     const enc = store.get(STORE_KEY);
-    if (enc && safeStorage.isEncryptionAvailable()) {
+    if (enc && encryptionAvailable()) {
       return JSON.parse(safeStorage.decryptString(Buffer.from(enc, 'base64')));
     }
     const plain = store.get(PLAIN_KEY);
@@ -83,6 +107,30 @@ function loadSession() {
 function clearSession() {
   store.delete(STORE_KEY);
   store.delete(PLAIN_KEY);
+}
+
+// ── Rejected refresh-token memory (the 2026-08-29 sign-out loop) ───────────
+// THE LOOP THIS BREAKS, seen verbatim in a field listener.log: the bearer
+// authority drops the blob after N definitive refresh rejections → the next
+// auth-state probe finds "no blob" and adopts the COOKIE JAR's session — whose
+// refresh token is the very one the server just rejected (nothing had rotated
+// the jar since the remote page's supabase-js left) → refresh 400s again →
+// drop → re-adopt, forever, flapping 'signed-out' every ~30s. The jar is not a
+// second credential, it is a stale COPY of the dead one, and adoption could not
+// tell. This marker is how it tells: refreshInner records the rejected token
+// at the drop, and rebuildBlobFromCookieSession refuses to resurrect it.
+//
+// IN MEMORY ONLY, on purpose. Persisting a dead token — even to refuse it —
+// keeps a credential-shaped secret on disk for no reader; and across a restart
+// the jar has either been cleared at the drop (auth.js does that when the jar
+// carries the same token) or genuinely holds a NEWER session, which must adopt.
+// ⚠ Compared, never logged (I11).
+let rejectedRefreshToken = null;
+function markRefreshTokenRejected(rt) {
+  if (typeof rt === 'string' && rt) rejectedRefreshToken = rt;
+}
+function isRefreshTokenRejected(rt) {
+  return typeof rt === 'string' && rt !== '' && rt === rejectedRefreshToken;
 }
 
 // ── JWT helpers (offline) ──────────────────────────────────────────────────
@@ -103,4 +151,15 @@ function jwtExp(token) {
   return typeof exp === 'number' && Number.isFinite(exp) ? exp : null;
 }
 
-module.exports = { store, authFail, persist, loadSession, clearSession, decodeJwt, jwtExp };
+module.exports = {
+  store,
+  authFail,
+  encryptionAvailable,
+  persist,
+  loadSession,
+  clearSession,
+  decodeJwt,
+  jwtExp,
+  markRefreshTokenRejected,
+  isRefreshTokenRejected,
+};

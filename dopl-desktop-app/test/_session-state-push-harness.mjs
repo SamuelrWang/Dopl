@@ -7,7 +7,8 @@
 // extraction, which is how two suites end up testing two different programs. Same seam and
 // same precedent as `_classify-harness.mjs` / `_session-summary-harness.mjs`.
 //
-// THE IDIOM. The module's three deps (`apiFetch`, `diag`, `store`) sit ABOVE its BEGIN
+// THE IDIOM. The module's deps (`apiFetch`, `diag`, `store`, and since 2026-08-30
+// `discardBody`) sit ABOVE its BEGIN
 // sentinel, so everything from there to `module.exports` is evaluated verbatim with fakes —
 // no Electron, no network, no disk. `setTimeout` is injected too, so the retry's real 2s
 // gap costs the suite nothing; the code under test is unchanged by it.
@@ -83,9 +84,15 @@ export function load(opts = {}) {
   // Immediate, so RETRY_DELAY_MS costs nothing here. It shadows the global inside the block.
   const fakeSetTimeout = (fn) => { Promise.resolve().then(fn); return { unref() {} }; };
   const api = new Function(
-    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date",
+    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
-  )(apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate);
+  )(
+    apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate,
+    // 2026-08-30: `send` releases the response body on EVERY branch, success included
+    // (api-repair.js › discardBody). Identity here — the rule is pinned in
+    // test/unread-body-seams.test.mjs; this harness only has to let the code run.
+    (res) => res
+  );
   return {
     ...api,
     posts,

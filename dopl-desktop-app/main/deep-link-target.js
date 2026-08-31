@@ -108,6 +108,19 @@ const ROOT_ROUTES = new Set(['onboarding', 'home']);
  * Listing them matters because the alternative reading is worse: without this,
  * `/login` parses as a workspace named "login" and the app opens on a resolve
  * that cannot succeed.
+ *
+ * ⚠ FIVE ROOTS WERE MISSING UNTIL 2026-08-30 (F-317, which knew only `link`).
+ * `dopl://open?target=/link/{token}` parsed as a workspace slugged "link" and
+ * opened `/link/overview` — a resolve that cannot succeed, on the one link that
+ * exists to bring a person INTO a channel. `c`, `authenticate`, `signup` and
+ * `get-started` were the same shape. The set added is exactly the set
+ * `src/config/index.ts › RESERVED_WORKSPACE_SLUGS` already carried for the
+ * identical shadowing reason.
+ *
+ * ⚠ `RESERVED_WORKSPACE_SLUGS` IS THE REFERENCE, and the subset is now GATED —
+ * `test/deep-link-target.test.mjs` reads it across trees and fails when a slug
+ * is reserved over there and unhandled here. Adding a top-level web route is
+ * therefore a two-file change or it goes red.
  */
 const WEB_ONLY_ROOTS = new Set([
   'login',
@@ -122,6 +135,17 @@ const WEB_ONLY_ROOTS = new Set([
   'auth',
   'api',
   'download',
+  // Home-channel claim links: `/link/{token}` (2026-08-23). The claim is a WEB
+  // flow — it mints a session and hands off — so the desktop's honest answer is
+  // its own boot route, not a workspace named "link".
+  'link',
+  // Guest web channel: `/c/{workspaceId}` (2026-08-25).
+  'c',
+  // The one auth page (2026-08-16); `/login` and `/signup` 307 to it.
+  'authenticate',
+  'signup',
+  // The post-auth download page.
+  'get-started',
 ]);
 
 /**

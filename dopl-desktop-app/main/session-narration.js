@@ -19,6 +19,12 @@
 // bound is multiplied by `MAX_CONCURRENT_SESSIONS` (`session-windowless.js`, measured 6 on
 // 2026-08-27 — this line said "4") — INVARIANTS §11 says so and this is one of them. The ring
 // dies with the session object (no persistence, no TTL, no sweep).
+// ⚠ AND IT IS MULTIPLIED AGAIN BY THE WINDOW COUNT, which this header did not say until
+// 2026-08-30 and which is what made the 17 GB dev incident: `flush()` sends the WHOLE ring and
+// `sendToWindows` clones it into EVERY live window's message pipe (up to nine), five times a
+// second, in NATIVE memory no heap snapshot shows. **A per-session bound stated without the
+// fan-out and the rate is not a bound on anything that matters.** `RING_CHAR_BUDGET` is the
+// second bound and carries the whole story.
 // ⚠ THE PER-ENTRY BOUND IS NOT ONE NUMBER, and since 2026-08-27 it is not one ORDER either:
 // captions are `TEXT_CAP` (300), a post is `POST_CAP` (1000), and the agent's own PROSE is
 // `PROSE_CAP` (2000) — read that constant's note for why the prose had to stop being a caption
@@ -39,6 +45,9 @@ const appWindows = require('./app-windows');
 // the window; this lane only asks. Required above the sentinel like `appWindows`, so it is a
 // free var the source-extraction test injects.
 const { isPrivateTurn } = require('./session-private');
+// 2026-08-31: WHOSE question this turn answers — the operator's own, or another of their
+// agents'. Attribution only; it reaches no gate.
+const { isDirectedTurn } = require('./session-directed');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-NARRATION-PURE (injectable; unit-tested via source extraction) ─────
@@ -49,6 +58,48 @@ const NARRATION_EVENT = 'dopl:session-narration';
 // The per-session ring. See the header for the arithmetic; 200 is roughly an hour of a
 // busy agent and comfortably more than a human scrolls back through.
 const NARRATION_MAX = 200;
+
+/**
+ * THE RING'S SECOND BOUND — CHARACTERS, NOT ENTRIES (2026-08-30, the 17 GB dev incident).
+ *
+ * ⚠ THE BUG. `flush()` sends the WHOLE ring for each dirty session, `sendToWindows` fans that
+ * payload out to EVERY live window, and `note()` marks a session dirty on EVERY SDK event — so
+ * the feed re-serializes the entire ring at up to `1000 / PUSH_COALESCE_MS` = 5 Hz, per session,
+ * per window. `webContents.send` STRUCTURE-CLONES its payload into a Mojo message pipe, which is
+ * NATIVE memory: it exerts no GC pressure, it shows up in RSS and not in a heap snapshot, and a
+ * renderer that is slow to drain (a dev renderer under HMR, one mid-refetch-storm, one with
+ * DevTools attached) queues it with no backpressure whatsoever.
+ *
+ * ⚠ WHAT MADE IT AN INCIDENT RATHER THAN A COST. `PROSE_CAP` rose 300 → 2000 on 2026-08-27, and
+ * that constant's own note does the arithmetic — "the worst case rises from 200 × 300 = 60k to
+ * 200 × 2000 = 400k chars per session per flush". What the note leaves out is the FAN-OUT: the
+ * payload is cloned once per live window, and there can be nine (the SPA plus
+ * `popout-window.js › MAX_POPOUTS` plus `agent-window.js › MAX_AGENT_WINDOWS`). 400k × 6
+ * sessions × 9 windows × 5 Hz is a rate, not a size, and nothing in this file bounded a rate.
+ * That note ALSO named the two acceptable fixes — "tighten `NARRATION_MAX` or send a delta
+ * instead of the ring" — and this is the first of them, generalized.
+ *
+ * ⚠ 60_000 IS EXACTLY THE PRE-2026-08-27 CEILING (200 × `TEXT_CAP`), and that is the whole
+ * argument for the number. It restores the byte ceiling the feed was designed around WITHOUT
+ * undoing `PROSE_CAP`: a long line still arrives WHOLE, never cut mid-word, never cut silently
+ * — it simply costs more of the ring, so what pays is the OLDEST ENTRIES, which is what a ring
+ * is for. **Do not "fix" a future over-run by lowering `PROSE_CAP`. That reintroduces the silent
+ * cut Samuel's 2026-08-27 ruling deleted; lower this, or send a delta.**
+ *
+ * Pinned by test/session-narration.test.mjs (regression: 17 GB dev RSS, 2026-08-30).
+ */
+const RING_CHAR_BUDGET = 60_000;
+
+/** Per-entry overhead beyond `text` — `at` / `kind` / `lane` / `toolUseId` / `tool` / `ok` /
+ *  `pending` and their JSON punctuation. Approximate ON PURPOSE: the budget is a ceiling on a
+ *  wire payload, not an accounting record, and a fixed charge per entry is what stops 200
+ *  empty-text frames from being free. */
+const ENTRY_OVERHEAD_CHARS = 64;
+
+function entryChars(entry) {
+  const text = entry && typeof entry.text === 'string' ? entry.text.length : 0;
+  return text + ENTRY_OVERHEAD_CHARS;
+}
 
 // One burst of engine dispatches must cost ONE render, exactly as the summaries feed
 // decided. Deliberately the SAME 200ms: two feeds landing on one surface at different
@@ -175,7 +226,18 @@ function entryFor(event, now) {
   // — the 1:1 lane posts nothing to the channel, so nothing else holds these words.
   if (type === 'steer' && event && event.private === true) {
     const text = line(event.rawText, PROSE_CAP);
-    return text ? { at: now, kind: 'operator', lane: 'operator', text: text } : null;
+    if (!text) return null;
+    // ⚠ WHO SPOKE (2026-08-31). A DIRECTION arrives on the same `steer`, through the same
+    // private lane, and is NOT the operator — it is another of their agents, running under
+    // their credential, over MCP. Rendering it as an operator turn would put words in the
+    // operator's mouth on their own screen, wearing their avatar: the impersonation problem
+    // `session-seed.js › frameDirectedTurn` solves for the MODEL, solved here for the HUMAN.
+    // ⚠ ITS OWN `lane`, because a lane is what a reader is required to prefer: a kind rename
+    // can never turn this back into a line that looks like something the operator typed.
+    if (event.directed === true) {
+      return { at: now, kind: 'directed', lane: 'directed', text: text };
+    }
+    return { at: now, kind: 'operator', lane: 'operator', text: text };
   }
   if (type === 'tool_use') {
     return {
@@ -274,13 +336,45 @@ function retagPrivate(entry, isPrivate) {
   return { ...entry, kind: 'private', lane: 'private' };
 }
 
-/** Append to a session's ring, dropping the oldest past the bound. Returns the ring. */
+/**
+ * THE ANSWER TO A DIRECTION, TAGGED AS ONE (2026-08-31).
+ *
+ * ⚠ APPLIED AFTER {@link retagPrivate} AND ONLY OVER ITS OUTPUT, so there is exactly one
+ * place an `assistant` line becomes private and this narrows that result rather than
+ * competing with it. A directed turn IS a private turn; what this adds is WHOSE question it
+ * answers, which is the half the operator cannot otherwise see.
+ * ⚠ ONLY `private` MOVES — the same rule `retagPrivate` follows for `assistant`. A `post`
+ * inside a directed turn keeps `lane: 'channel'`, because it is the one thing that did not
+ * stay private.
+ */
+function retagDirected(entry, isDirected) {
+  if (!entry || !isDirected || entry.kind !== 'private') return entry;
+  return { ...entry, kind: 'directed-reply', lane: 'directed' };
+}
+
+/**
+ * Append to a session's ring, dropping the oldest past EITHER bound. Returns the ring.
+ *
+ * ⚠ TWO BOUNDS, AND THE SECOND IS THE ONE THAT MATTERS FOR MEMORY. `NARRATION_MAX` bounds how
+ * far back a watcher can scroll; `RING_CHAR_BUDGET` bounds what `flush()` re-serializes to every
+ * window five times a second. See `RING_CHAR_BUDGET`'s note.
+ * ⚠ THE LAST ENTRY IS NEVER DROPPED, even alone over budget: a single maximal `PROSE_CAP` line
+ * must still reach the window it was widened for. The budget bounds a BACKLOG, never the present.
+ */
 function push(s, entry) {
   if (!s.narration) s.narration = [];
   s.narration.push(entry);
   if (s.narration.length > NARRATION_MAX) {
     s.narration = s.narration.slice(s.narration.length - NARRATION_MAX);
   }
+  let chars = 0;
+  for (const e of s.narration) chars += entryChars(e);
+  let drop = 0;
+  while (drop < s.narration.length - 1 && chars > RING_CHAR_BUDGET) {
+    chars -= entryChars(s.narration[drop]);
+    drop += 1;
+  }
+  if (drop > 0) s.narration = s.narration.slice(drop);
   return s.narration;
 }
 
@@ -310,7 +404,10 @@ function start(opts) {
  */
 function note(s, event) {
   if (!s || !s.key) return;
-  const entry = retagPrivate(entryFor(event, Date.now()), isPrivateTurn(s));
+  const entry = retagDirected(
+    retagPrivate(entryFor(event, Date.now()), isPrivateTurn(s)),
+    isDirectedTurn(s)
+  );
   if (!entry) return;
   push(s, entry);
   dirty.set(String(s.key), true);
@@ -374,6 +471,9 @@ module.exports = {
   // the pure core (re-exported for the shell + the tests)
   NARRATION_EVENT,
   NARRATION_MAX,
+  TEXT_CAP, // exported so the char-budget pin DERIVES its number instead of restating it
+  RING_CHAR_BUDGET,
+  ENTRY_OVERHEAD_CHARS,
   PUSH_COALESCE_MS,
   entryFor,
   PROSE_CAP,

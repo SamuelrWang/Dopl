@@ -83,14 +83,15 @@ async function channelLoop(entry) {
       res = await io.awaitOrCheap(entry, since, healthy, awaitCtrl.signal);
     } catch (err) {
       entry.awaitCtrl = null;
-      // AbortError is either our own fetch timeout (normal long-poll turnover) or
-      // a wake() kick — both just re-await immediately with the current cursor.
-      if (err && err.name === 'AbortError') continue;
+      // ⚠ A WAKE RE-AWAITS AT ONCE; OUR OWN EXPIRED BUDGET TAKES THE LADDER. This branch used to
+      // do neither — one undiscriminated `continue` for both, which is what let a merely slow
+      // server set the loop's rate. `listener-budget.js › isWakeAbort` carries the whole incident.
+      if (io.isWakeAbort(err, awaitCtrl.signal, entry.channel.id)) continue;
       await backoff(entry);
       continue;
     }
     entry.awaitCtrl = null;
-
+    if (!res.ok) io.discardBody(res); // an abandoned undici body pins its socket (api-repair.js)
     if (res.status === 404) {
       // L2: a single channel's await 404 means THIS channel is gone (deleted /
       // left), not that the whole Channels feature is down. Drop just this loop —
@@ -222,13 +223,11 @@ async function reconcileInner() {
   let workspaces;
   try {
     workspaces = await io.listWorkspaces();
-  } catch (err) {
-    diag('reconcile: listWorkspaces error —', err && err.message);
-    workspaces = null;
-  }
+  } catch (err) { diag('reconcile: listWorkspaces error —', err && err.message); workspaces = null; }
   // Nothing was enumerated — NOT "one unenumerated workspace" (listener-heal owns
   // the copy AND the ordering note: presence/realtime keep their last-good sets).
   if (workspaces === null) { healer.onWorkspaceListFailure(); setStatus(); return; }
+  healer.noteWorkspaceListOk(); // the list answered — reset its backoff ladder
 
   const desired = new Map();
   const failedWorkspaces = new Set(); // enumeration never answered for these

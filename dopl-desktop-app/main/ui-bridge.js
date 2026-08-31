@@ -29,6 +29,10 @@
 const { ipcMain, shell } = require('electron');
 const appVersion = require('./app-version');
 const authTokens = require('./auth-tokens');
+// ⚠ THE BODY-RELEASE HELPER ONLY — NOT `fetchWithAuthRepair`, which repairs the COOKIE
+// JAR (a jar write from the bearer seam would be wrong; api-repair.js states the split).
+// `discardBody` is the transport-agnostic half, so it is shared, not re-implemented.
+const { discardBody } = require('./api-repair');
 const { API_BASE, APP_ORIGIN } = require('./config');
 const uiSync = require('./ui-sync');
 const sessionSummary = require('./session-summary'); // the session-pill projection
@@ -192,7 +196,37 @@ async function sendApiRequest(href, opts, token) {
   }
 }
 
+// ⚠ COPIED FROM THE SERVER, NOT INVENTED: byte-for-byte the body
+// `src/shared/auth/with-auth.ts` answers a credential-less request — the flat
+// `{ error, message }` shape `api-envelope.decodeResponse` turns into
+// `ApiError(401, "Authentication required", "Sign in to continue.")`. A prettier envelope
+// here would make ONE condition read two ways depending on whether the request left the
+// machine, which is the drift the shared decoder exists to prevent.
+function unauthenticatedEnvelope() {
+  return {
+    status: 401,
+    statusText: 'Unauthorized',
+    hasBody: true,
+    body: { error: 'Authentication required', message: 'Sign in to continue.' },
+  };
+}
+
 async function performApiRequest(href, opts) {
+  // ⚠ NO SESSION ⇒ NO REQUEST (2026-08-30, the abort-churn incident). This seam attaches
+  // a BEARER and nothing else, so with no stored session the request is unauthenticated
+  // by construction and `withUserAuth` can only answer 401. Sending it anyway cost
+  // everything on the failing path: against a saturated API each doomed call held a
+  // socket for REQUEST_TIMEOUT_MS and then REJECTED the IPC with a status-less
+  // AbortError — which `page-states.isUnauthorized` cannot read as "signed out", so the
+  // SPA stranded on a retryable error card instead of the sign-in screen, and a
+  // status-less error is the one class the shared TanStack predicate DOES retry.
+  //
+  // ⚠ THE DISCRIMINATOR IS THE AUTHORITY'S STATE, NOT A NULL TOKEN READ: `getBearerToken()`
+  // also answers null for a SIGNED-IN operator mid-backoff after a network blip, and a 401
+  // there is the renderer flap the note below refuses to cause. `getAuthState().signedIn`
+  // is false only when nothing is stored — where a refused OS keychain leaves the app.
+  if (!getAuthState().signedIn) return unauthenticatedEnvelope();
+
   let res = await sendApiRequest(href, opts, await getBearerToken());
 
   // ⚠ 401 REPAIR — ONE forced rotation and ONE retry, NEVER a loop. A token can be revoked or
@@ -205,8 +239,17 @@ async function performApiRequest(href, opts) {
     // flips the renderer to the login screen and tears down the sync feed (watched workspace
     // included) on a network blip, then flaps back. main/api.js gates it the same way.
     if (fresh && fresh.access_token) {
+      // ⚠ RELEASE THE FIRST 401 BEFORE OPENING A SECOND CONNECTION (2026-08-30). `res` is
+      // about to be reassigned and its body is then unreachable — and an unread undici body
+      // counts as IN FLIGHT, pinning socket + TLS state (native, invisible to a heap
+      // snapshot). `api-repair.js` covers this for the two COOKIE transports; ui-bridge is
+      // the BEARER one, kept its rule inline, and kept the leak with it.
+      discardBody(res);
       res = await sendApiRequest(href, opts, fresh.access_token);
-      if (res.status === 401) authTokens.emitAuthState('signed-out');
+      // ⚠ RECORDED, NOT JUST ANNOUNCED (2026-08-30): a bare `emitAuthState('signed-out')`
+      // changed nothing, so the next request re-announced signed-IN and the renderer read
+      // an auth transition per 401. `auth-tokens.js › noteSessionRejected` has the loop.
+      if (res.status === 401) authTokens.noteSessionRejected('ui-bridge: 401 survived a forced refresh');
     }
   }
 

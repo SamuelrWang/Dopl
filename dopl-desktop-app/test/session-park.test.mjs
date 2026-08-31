@@ -119,10 +119,17 @@ function harness(over = {}) {
   };
   const api = new Function(
     "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
+    // ⚠ `directedTurn` JOINED THE INJECTED SET ON 2026-08-31 (the private direct lane).
+    // `resumeParked` drops a DIRECTED capture for the same reason it zeroes the private
+    // depth: a rebuilt query owes no results, so a capture carried across a resume would
+    // attach the NEXT turn's text to a direction that never got one. The REAL module is
+    // injected rather than a stub — it is pure, and the reset is the behaviour.
+    "directedTurn",
     "sessionWindowless", "diag", "sessionCredential",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
   )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
+    createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js")),
     sessionWindowless, diag,
     // 🔒 THE CONTAINER LOCK (plan §4.4 B1). Stubbed to a no-op mint: this harness is about the
     // RESUME path, and the credential's own behaviour is pinned in

@@ -32,10 +32,11 @@
 // "whatever is said in the room" — and two agents that can wake each other on unaddressed prose
 // is a loop with no operator in it and no natural stopping point. So:
 //
-//   • `authorKind: 'agent'`  never wakes. ⚠ IT STILL FEEDS a session that is already RUNNING —
-//     that is ruling 4's fan-out, how two of my agents coordinate ("I'll take this one"), and it
-//     is UNTOUCHED. The fence is on WAKING a dormant one, which is the only place a new turn is
-//     conjured out of nothing.
+//   • `authorKind: 'agent'`  never wakes — ⚠ **EXCEPT ON THE SAME ACCOUNT, AND THEN ONLY VIA AN
+//     @-MENTION (2026-08-31, Samuel's ruling; see THE SAME-ACCOUNT CARVE below).** ⚠ IT STILL
+//     FEEDS a session that is already RUNNING — that is ruling 4's fan-out, how two of my agents
+//     coordinate ("I'll take this one"), and it is UNTOUCHED. The fence is on WAKING a dormant
+//     one, which is the only place a new turn is conjured out of nothing.
 //   • a non-`message` kind (lifecycle markers, `task_progress` milestones) never wakes. It never
 //     reached a session at all — `session-dispatch.js › feedLiveSession`'s kind filter — and the
 //     rule is restated here so a future widening of that filter cannot widen the wake with it.
@@ -44,6 +45,34 @@
 //     (`session-dispatch.js › wroteIt`), because every agent on this machine posts under the
 //     operator's own account and authorship cannot tell three of my agents apart.
 //
+// ── ⚠ THE SAME-ACCOUNT CARVE (2026-08-31, Samuel's ruling) ───────────────────────────────────
+//
+// AN AGENT-AUTHORED MESSAGE WHOSE AUTHOR IS **THIS OPERATOR'S OWN USER ID** MAY @-WAKE THIS
+// OPERATOR'S DORMANT AGENTS. Nothing else about the fence moves.
+//
+// WHY IT HAD TO EXIST. `launch_agent` over MCP hands the caller an agent id and the product then
+// had no lane by which that caller could ever start it: the id door is tier 1, tier 1 sat behind
+// this fence, and every post an agent makes is agent-authored. On 2026-08-31 an external
+// orchestrator wrote the handle into FIVE posts, woke nothing, and was told nothing — the agent
+// it had asked for sat holding a 1 111-character goal (ENGINEERING). The operator had approved
+// that launch on this machine; the fence was refusing the operator's own instrument.
+//
+// ⚠ WHY IT IS SAFE, AND WHY IT IS EXACTLY THIS NARROW. The 2026-08-28 fence exists to stop TWO
+// AGENTS WAKING EACH OTHER ON PROSE, which is a loop with no operator in it. Both properties that
+// make that a loop are preserved here:
+//   1. **ADDRESSED ONLY.** The carve licenses TIER 1 and nothing else. Tiers 2 and 3 wake on
+//      traffic nobody addressed — the exact shape that has no natural stopping point — and they
+//      stay closed to every agent-authored message including this one. An @-mention is a
+//      deliberate act naming one agent, and it costs the author a turn to write.
+//   2. **ONE ACCOUNT.** The author must be the operator whose machine this is. A PEER's agent is
+//      as dead as it was on 2026-08-28, which is that ruling's own subject; nothing another
+//      member's machine emits can start anything here.
+// ⚠ THE RESIDUAL, STATED: two of MY OWN agents can now @-wake each other. That is a loop the
+// OPERATOR authored, on one account, requiring an explicit id in every hop, and `wroteIt` still
+// stops a session waking on its own post. It is the price of the capability and is not a hole.
+// ⚠ IT FAILS CLOSED ON THE IDENTITY. An unknown or blank operator id makes an agent-authored
+// message ineligible, exactly as before the carve — the same direction every other axis fails.
+//
 // ── THE KILL SWITCH ──────────────────────────────────────────────────────────────────────────
 // ⚠ A MAIN-SIDE CONSTANT, AND NO SETTINGS SURFACE (Samuel's ruling: "no new UI"). Flipping
 // `WAKE_TIERS_ENABLED` to false collapses tiers 2 and 3 and leaves the @-mention rule exactly as
@@ -51,8 +80,10 @@
 // untested one, which is the only kind of kill switch worth having. Tier 1 is deliberately NOT
 // behind it: it predates this build.
 // ⚠ THE LOOP FENCE IS **NOT** BEHIND IT EITHER, and that is the point of putting it in
-// `wakeEligible` rather than inside the tier branch. A switch that could re-admit agent-authored
-// wakes would be a switch that re-admits the loop.
+// `wakeEligibility` rather than inside the tier branch. A switch that could re-admit UNADDRESSED
+// agent-authored wakes would be a switch that re-admits the loop. ⚠ The 2026-08-31 same-account
+// carve is likewise outside it, for the same reason tier 1 always was: flipping this to `false`
+// must revert to a KNOWN GOOD state, and since 2026-08-31 that state includes the carve.
 
 // ─── BEGIN WAKE-TIERS-PURE (no I/O; unit-tested via source extraction) ─────────
 
@@ -67,29 +98,55 @@ const TIER_SOLO = 'solo';
 const TIER_TRIAGE = 'triage';
 const TIERS = [TIER_NONE, TIER_MENTION, TIER_SOLO, TIER_TRIAGE];
 
+// THE FENCE'S THREE ANSWERS. ⚠ IT STOPPED BEING A BOOLEAN ON 2026-08-31 (the same-account carve),
+// and the middle member is the whole reason: "may wake" and "may wake WITHOUT BEING ADDRESSED" are
+// two different questions, and collapsing them is exactly how a carve meant for tier 1 leaks into
+// tiers 2 and 3. `NONE` is the fail-closed member, the convention every frozen table here uses.
+const ELIGIBLE_NONE = 'none'; // wakes nothing, on any tier
+const ELIGIBLE_MENTION = 'mention'; // TIER 1 ONLY — an @-mention may wake; unaddressed may not
+const ELIGIBLE_ALL = 'all'; // every tier, which is what a HUMAN-authored message buys
+const ELIGIBILITIES = [ELIGIBLE_NONE, ELIGIBLE_MENTION, ELIGIBLE_ALL];
+
 /**
- * THE LOOP FENCE. May this MESSAGE wake a dormant agent at all?
+ * THE LOOP FENCE. How far may this MESSAGE wake a dormant agent?
  *
- * ⚠ IT IS A PROPERTY OF THE MESSAGE, NOT OF ANY READER, so it is answered ONCE per message and
- * every tier below is downstream of it. A reader-scoped fence would have to be re-asked per
+ * ⚠ IT IS A PROPERTY OF THE MESSAGE PLUS THE MACHINE'S OWN IDENTITY, answered ONCE per message,
+ * and every tier below is downstream of it. A reader-scoped fence would have to be re-asked per
  * candidate and would be re-derivable per candidate, which is how the two come to disagree.
+ * ⚠ `operatorUserId` IS THE SIGNED-IN OPERATOR OF **THIS** MACHINE (`feedLiveSession`'s
+ * `myUserId`), never anything off the message. Reading an identity out of the row being judged
+ * would let the row decide its own eligibility.
  *
  * ⚠ FAIL CLOSED ON EVERY AXIS. Unlike `mayFeed`'s unknown-session rule — which fails toward
  * FEEDING, because the failure there is a wasted launch — an unrecognised MESSAGE shape wakes
- * nothing. The failure here is an agent loop, and there is no bound on that.
+ * nothing, and an agent-authored message on an UNKNOWN identity is `NONE`. The failure here is an
+ * agent loop, and there is no bound on that.
  */
-function wakeEligible(m) {
-  if (!m) return false;
-  if (m.kind !== 'message') return false; // lifecycle markers / task_progress milestones
-  if (m.authorKind === 'agent') return false; // ⚠ THE REVERSAL — see the header
-  if (!m.authorUserId) return false; // a system row: nobody spoke
-  return true;
+function wakeEligibility(m, operatorUserId) {
+  if (!m) return ELIGIBLE_NONE;
+  if (m.kind !== 'message') return ELIGIBLE_NONE; // lifecycle markers / task_progress milestones
+  if (!m.authorUserId) return ELIGIBLE_NONE; // a system row: nobody spoke
+  if (m.authorKind === 'agent') {
+    // ⚠ THE CARVE, AND IT IS ONE COMPARISON. Same account -> TIER 1 only; anything else -> NONE,
+    // which is the 2026-08-28 fence unchanged. A blank operator id can never equal a non-blank
+    // author id, so the identity check fails closed without a second branch.
+    const me = String(operatorUserId || '');
+    return me && String(m.authorUserId) === me ? ELIGIBLE_MENTION : ELIGIBLE_NONE;
+  }
+  return ELIGIBLE_ALL;
+}
+
+/** May this message wake ANYTHING (tier 1 included)? The boolean `feedLiveSession` gates the
+ *  per-reader @-mention verdict on. ⚠ NOT a substitute for the tri-state at the tier table. */
+function mayWakeAtAll(eligibility) {
+  return eligibility === ELIGIBLE_MENTION || eligibility === ELIGIBLE_ALL;
 }
 
 /**
  * WHICH TIER a message reaches a DORMANT candidate on.
  *
- * `a.eligible`     `wakeEligible(m)`, answered once by the caller.
+ * `a.eligible`     `wakeEligibility(m, myUserId)`, answered once by the caller. ⚠ ONE OF THE
+ *                  THREE STRINGS, and `true` is not one of them — see below.
  * `a.addressedMe`  this candidate's own id was @-mentioned.
  * `a.addressedAny` SOMEBODY's agent id was @-mentioned (this one's or a sibling's).
  * `a.channelAgents` how many agents are associated with the CHANNEL — see
@@ -99,12 +156,21 @@ function wakeEligible(m) {
  * That is both the cost rule ("no triage on @-messages") and the right semantics: naming one
  * agent is the clearest possible statement that the message is not for the others. It is also
  * the 2026-08-22 rule preserved verbatim — "somebody else's addressee is not a directive".
+ *
+ * ⚠ **THE `ELIGIBLE_MENTION` GATE SITS BETWEEN TIER 1 AND TIER 2, AND THAT POSITION IS THE WHOLE
+ * OF THE 2026-08-31 CARVE** (2026-08-31). Above it: an addressed message, which a same-account
+ * agent may now send. Below it: every tier that wakes on traffic nobody addressed, which no
+ * agent-authored message may reach on any account. ⚠ A LEGACY `eligible: true` IS REFUSED rather
+ * than read as `ALL` — the old boolean's `true` meant "human-authored", and silently accepting it
+ * would let a caller that was never updated hand an agent-authored message the widest verdict.
  */
 function tierFor(a) {
   const arg = a || {};
-  if (arg.eligible !== true) return TIER_NONE;
+  const eligibility = String(arg.eligible == null ? '' : arg.eligible);
+  if (ELIGIBILITIES.indexOf(eligibility) === -1 || eligibility === ELIGIBLE_NONE) return TIER_NONE;
   if (arg.addressedMe === true) return TIER_MENTION;
   if (arg.addressedAny === true) return TIER_NONE; // a sibling was named — not for this one
+  if (eligibility !== ELIGIBLE_ALL) return TIER_NONE; // ⚠ THE CARVE STOPS HERE — tier 1 only
   if (WAKE_TIERS_ENABLED !== true) return TIER_NONE; // the kill switch: back to @-only
   const n = Number(arg.channelAgents);
   if (!Number.isFinite(n) || n < 1) return TIER_NONE; // a roster this machine cannot count wakes nobody
@@ -288,7 +354,12 @@ module.exports = {
   TIER_SOLO,
   TIER_TRIAGE,
   TIERS,
-  wakeEligible,
+  ELIGIBLE_NONE,
+  ELIGIBLE_MENTION,
+  ELIGIBLE_ALL,
+  ELIGIBILITIES,
+  wakeEligibility,
+  mayWakeAtAll,
   tierFor,
   tierIsFree,
   parseTriage,

@@ -179,31 +179,31 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
   },
 
-  // ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ────────
-  //
-  // MAY ANOTHER AGENT CAUSE THIS MACHINE TO SPAWN A SESSION? Default FALSE, per machine, and it
-  // is the STANDING CONSENT for the whole `channel_launch_directives` lane
-  // (`main/launch-directives.js`) — with it off, a directive addressed to this operator is
-  // ignored silently and expires server-side where the orchestrator can see it happen.
-  //
-  // ⚠ IT IS ITS OWN NAMESPACE, NOT A MEMBER OF `channels`, because it takes no channel: one
-  // operator, one Mac, one answer. Both members are FEATURE-PROBED by the SPA and an older main
-  // simply has no toggle, which reads as OFF — the correct terminal answer, not a compatibility
-  // mode (UNKNOWN is not EMPTY).
-  //
-  // ⚠ THIS BRIDGE IS THE ONLY WAY THE VALUE MOVES, AND THAT IS THE SECURITY CONTENT rather
+  // ── ⚠ THE TWO ORCHESTRATOR CONSENTS ───────────────────────────────────────────────────────
+  //   `orchestratorLaunch` (2026-08-22) — may another agent make this machine SPAWN a session?
+  //   `orchestratorDirect` (2026-08-31) — may one DIRECT a session already running here?
+  // ⚠ TWO GRANTS, NOT TWO SPELLINGS OF ONE: launching buys COMPUTE, directing reaches a RUNNING
+  // agent's PRIVATE lane, and an operator may want one and not the other. Both default FALSE,
+  // per machine; with one off, a row addressed to this operator is ignored SILENTLY and expires
+  // server-side where the orchestrator can see it happen.
+  // ⚠ THEIR OWN NAMESPACES, NOT MEMBERS OF `channels`, because neither takes a channel: one
+  // operator, one Mac, one answer. Every member is FEATURE-PROBED, and an older main simply has
+  // no toggle — which reads as OFF, the correct terminal answer rather than a compatibility mode.
+  // ⚠ THIS BRIDGE IS THE ONLY WAY EITHER VALUE MOVES, AND THAT IS THE SECURITY CONTENT rather
   // than a storage detail. A spawned session runs with `Bash` and this operator's device token
-  // is on disk (§6), so a SERVER-STORED version of this flag could be flipped by an agent
-  // holding the operator's own credential — arming every machine they own. There is no route,
-  // no MCP op and no column for it, deliberately; read `main/channel-prefs.js`'s block before
-  // adding any second writer.
-  //
-  // ⚠ `set` ANSWERS MAIN'S OWN VALUE, never an echo, so the SPA's optimistic switch reverts on
-  // `{ok:false}` instead of showing a state nothing is enforcing.
+  // is on disk (§6), so a SERVER-STORED version of either flag could be flipped by an agent
+  // holding the operator's own credential — arming every machine they own. There is no route, no
+  // MCP op and no column for either, deliberately; read `main/orchestrator-consent.js`'s block
+  // (the 2026-08-31 §1 split out of `channel-prefs.js`) before adding any second writer.
+  // ⚠ `set` ANSWERS MAIN'S OWN VALUE, never an echo, so an optimistic switch reverts on
+  // `{ok:false}` rather than showing a state nothing enforces.
   orchestratorLaunch: {
     get: () => ipcRenderer.invoke('orchestrator:getLaunchEnabled'),
-    set: (enabled) =>
-      ipcRenderer.invoke('orchestrator:setLaunchEnabled', { enabled: enabled === true }),
+    set: (e) => ipcRenderer.invoke('orchestrator:setLaunchEnabled', { enabled: e === true }),
+  },
+  orchestratorDirect: {
+    get: () => ipcRenderer.invoke('orchestrator:getDirectEnabled'),
+    set: (e) => ipcRenderer.invoke('orchestrator:setDirectEnabled', { enabled: e === true }),
   },
 
   // ── ⚠ SIGN IN TO CLAUDE CODE, FROM INSIDE THE APP (2026-08-25) ───────────────────────────

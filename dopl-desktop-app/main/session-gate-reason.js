@@ -65,6 +65,11 @@ const GATE_REASONS = [
   //                             `launch_agent` that BOTH axes covered — the audit answer to
   //                             "what asked this machine for a process with no click?", which no
   //                             outbound code can give, because nothing left as CONTENT.
+  'auto-outbound-escalate', //   2026-08-31 (Samuel's ruling): the same outbound half on an
+  //                             own-channel op="escalate" — an agent asking a HUMAN a structured
+  //                             question. Its own code because "the agent asked for a decision"
+  //                             is a different answer to "what left with no click?" than a
+  //                             milestone or a thread open.
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
   //                             own-channel `create_thread`. ITS OWN CODE, for the reason the
   //                             marker has one: the question an audit asks is "what left this
@@ -183,6 +188,7 @@ function makeGateReason(deps) {
       // own code, asked FIRST because the two op sets are disjoint and neither may absorb the
       // other's audit line.
       if (d.isOwnChannelThreadOpen(a.input, a.channelId)) return 'auto-outbound-thread-open';
+      if (d.isOwnChannelEscalate(a.input, a.channelId)) return 'auto-outbound-escalate';
       if (d.isOwnChannelMarker(a.input, a.channelId)) return 'auto-outbound-marker';
       return 'auto-outbound';
     }

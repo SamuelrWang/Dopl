@@ -75,9 +75,26 @@ function turnInFlight(state) {
  * turn in flight still costs +2, because the alternative failure is a private answer posted in
  * public.
  */
-function openPrivateTurn(s) {
+function openPrivateTurn(s, wasInFlight) {
   if (!s) return 0;
-  const add = (turnInFlight(s.state) && !isPrivateTurn(s)) ? 2 : 1;
+  // 🔒 **THE WINDOW IS OPENED AFTER THE DISPATCH SINCE 2026-08-31, AND `wasInFlight` IS WHAT
+  // MAKES THAT POSSIBLE** (adversarial review; F-372).
+  //
+  // THE DEFECT: a `steer` at a PARKED session makes the reducer emit `resumeQuery` BEFORE
+  // `pushTurn`, and `session-park.js › resumeParked` calls `resetPrivateTurn` — so a window
+  // opened before the dispatch was WIPED by the wake that same message triggered, and the turn
+  // ran with AXIS B's outbound widening intact. An accidental public reply became possible,
+  // which is the one thing this file exists to prevent. An IDLE agent is the ordinary target of
+  // both the operator's composer and a direction, so this was the common path.
+  //
+  // ⚠ OPENING AFTERWARDS IS STILL BEFORE ANY `result` CAN ARRIVE: `dispatch` is synchronous and
+  // only PUSHES onto the iterator, so the SDK cannot have answered by then.
+  // ⚠ THE CALLER MUST READ `wasInFlight` BEFORE the dispatch, because the dispatch moves
+  // activity to `working` and the state can no longer answer the question afterwards.
+  // ⚠ ABSENT FALLS BACK TO READING THE STATE, so the pre-2026-08-31 one-argument call keeps its
+  // exact behaviour and no other caller had to move.
+  const inFlight = wasInFlight === undefined ? turnInFlight(s.state) : wasInFlight === true;
+  const add = (inFlight && !isPrivateTurn(s)) ? 2 : 1;
   s.privateDepth = (Number(s.privateDepth) || 0) + add;
   return s.privateDepth;
 }

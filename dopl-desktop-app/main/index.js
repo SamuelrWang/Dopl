@@ -36,6 +36,7 @@ const settings = require('./settings');
 const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle echo seam (2026-08-20)
 const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
 const launchDirectives = require('./launch-directives'); // 2026-08-22: the orchestrator launch lane
+const agentDirections = require('./agent-directions'); // 2026-08-31: the PRIVATE DIRECT lane
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -352,6 +353,20 @@ if (!gotLock) {
         workspaces: () => require('./realtime').desiredWorkspaceIds(),
       });
     } catch (err) { diag('launchDirectives.start error', err && err.message); }
+
+    // THE PRIVATE DIRECT LANE (2026-08-31). ⚠ ITS OWN `start`, and its own consent: the
+    // launch toggle does not arm this one, because launching buys COMPUTE and directing
+    // reaches a RUNNING agent's private lane.
+    try {
+      agentDirections.start({
+        getUserId: () => (authTokens.getAuthState() || {}).userId || null,
+        // ⚠ THE SAME OP THE OPERATOR'S OWN COMPOSER USES (ruling R1) — one resolution, one
+        // `steer`, one private-turn open. What the `directed` argument changes inside it is
+        // the FRAMING (fenced data, never operator authority) and the reply capture.
+        direct: (spec) => require('./session-reopen').messageByTask(spec),
+        workspaces: () => require('./realtime').desiredWorkspaceIds(),
+      });
+    } catch (err) { diag('agentDirections.start error', err && err.message); }
 
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
     // no-ops when signed out or the CLI/endpoint isn't available).

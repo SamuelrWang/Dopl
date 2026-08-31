@@ -104,7 +104,7 @@ export function harness(over = {}) {
   const io = { displayNameFor: (id) => cfg.displayName(id) };
   const api = new Function(
     "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
-    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, addressingFor, mayFeed, unwoken, dormant, wakeCandidates };`
+    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, escalationAnswerAgentIds, addressingFor, mayFeed, unwoken, dormant, wakeCandidates };`
   )(targeting, sessionEngine, io, wakeTiers, sessionTriage, agentHandles, () => {});
   wakeTiers.resetForTests(); // the recent-message ring is module state; every harness starts cold
   return { ...api, calls, cfg };

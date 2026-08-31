@@ -39,9 +39,13 @@ import { between, fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TOKENS = readFileSync(join(HERE, "..", "main", "auth-tokens.js"), "utf8");
+// ⚠ THE PURE BLOCK MOVED (2026-08-30). It lives in `main/auth-token-rules.js` — sentinels
+// and all — because auth-tokens.js hit the §2 cap and the rejected-session latch had
+// nowhere to go. Same source, new address; auth-tokens.js re-exports every name.
+const RULES = readFileSync(join(HERE, "..", "main", "auth-token-rules.js"), "utf8");
 
 const PURE = between(
-  TOKENS,
+  RULES,
   "// ─── BEGIN AUTH-TOKENS-PURE",
   "// ─── END AUTH-TOKENS-PURE",
   "auth-tokens pure block"
@@ -73,6 +77,7 @@ const build = (opts = {}) => new Function(
   ${fnOf(TOKENS, "sessionLifetimeSec")}
   let failure = { definitive: 0, attempts: 0 };
   let retryNotBeforeMs = 0;
+  let sessionRejected = false; // the 2026-08-30 latch; false is the "healthy" default
   ${fnOf(TOKENS, "noteRefreshOutcome")}
   ${asyncFn("refreshNow")}
   ${asyncFn("getAccessToken")}

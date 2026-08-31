@@ -31,6 +31,7 @@ const framing = require('./session-seed');
 // 2026-08-22: the PRIVATE TURN's window. Required at module scope like `store` and `framing`, so
 // the source-extraction test injects it and the block stays free of runtime handles.
 const privateTurn = require('./session-private');
+const directedTurn = require('./session-directed'); // 2026-08-31: attribution + capture
 // 2026-08-22: the frozen model enum + the id -> alias seam. A free var inside the block below,
 // like `store` and `framing`, so the source-extraction test injects it.
 const sessionModel = require('./session-model');
@@ -376,7 +377,8 @@ async function setModelByTask(a) {
 // 4. ⚠ THE TEXT IS DELIMITED WITH THE SESSION'S NONCE AND CARRIES OPERATOR AUTHORITY —
 //    `session-seed.js › frameOperatorTurn`, which states why fencing it as DATA would be
 //    the wrong move. The body is bounded by the caller and stripped of forged fence lines;
-//    it is never rewritten.
+//    it is never rewritten. ⚠ **A DIRECTION IS THE INVERSE** — `› frameDirectedTurn` (2026-08-31):
+//    text another AGENT wrote, fenced as DATA, no operator authority. The lane's core ruling.
 //
 // 5. ⚠ THE FAILURE DIRECTION, STATED PLAINLY BECAUSE IT IS WIDER THAN PAUSE/END'S. A
 //    forged call makes the operator's OWN agent do work they did not ask for, inside that
@@ -389,9 +391,14 @@ function messageByTask(a) {
   const channelId = String((a && a.channelId) || '');
   const taskId = String((a && a.taskId) || '');
   const text = String((a && a.text) || '').trim();
+  // ⚠ A DIRECTION (2026-08-31): same op, different SPEAKER (`session-directed.js › readDirected`).
+  const directed = directedTurn.readDirected(a);
   if (!text || !deps.sessions || !deps.dispatch) return { ok: false };
+  if (directed === false) return { ok: false, reason: 'no-session' };
   const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  // 🔒 CROSS-ACCOUNT FENCE (F-373): the registry outlives a sign-out. Fails closed if unstamped.
+  if (directed && s.operatorUserId !== directed.operatorUserId) return { ok: false, reason: 'no-session' };
   // H1: a session HELD on the sign-in action has no query to feed — the push would land on
   // a closed iterator and the operator's words would vanish. Refuse and say which, so the
   // composer can tell them to sign in rather than silently eating the message.
@@ -405,7 +412,7 @@ function messageByTask(a) {
     // While the window is open, AXIS B's OUTBOUND widening is withdrawn — a post the agent
     // attempts reaches the outbound consent gate instead of auto-sending
     // (`session-private.js` carries the whole argument).
-    privateTurn.openPrivateTurn(s);
+    const inFlight = privateTurn.turnInFlight(s.state); // BEFORE the dispatch — see below
     // `priority: 'next'` — an out-of-band note QUEUES behind the turn in flight rather
     // than interrupting it. 'now' exists (it is the send button's interrupt morph) and is
     // deliberately not used: the operator asked to say something, not to stop the agent,
@@ -416,11 +423,15 @@ function messageByTask(a) {
     // steer is the 1:1 lane rather than any other steer.
     deps.dispatch(s, {
       type: 'steer',
-      text: framing.frameOperatorTurn(s.nonce, text),
+      text: (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text),
       rawText: text,
       private: true,
+      directed: !!directed, // ⚠ ATTRIBUTION — `session-narration.js` reads it
       priority: 'next',
     });
+    // 🔒 AFTER THE DISPATCH (F-372) — a wake RESETS both windows. See `openPrivateTurn`.
+    privateTurn.openPrivateTurn(s, inFlight);
+    if (directed) directedTurn.armAndOpen(s, directed, inFlight);
   } catch (_) {
     return { ok: false };
   }

@@ -152,14 +152,17 @@ function reopen(sessions) {
   );
   const dispatched = [];
   const api = new Function(
-    "store", "framing", "floorWindowlessMessage", "privateTurn",
+    "store", "framing", "floorWindowlessMessage", "privateTurn", "directedTurn",
     `${BLOCK}\n return { bind, reopenByTask, controlByTask, setModeByTask, messageByTask };`
   )(
     store,
     require(join(MAIN, "session-seed.js")),
     (m) => m,
     // The REAL private-turn window (2026-08-22): `messageByTask` opens it before dispatching.
-    require(join(MAIN, "session-private.js"))
+    require(join(MAIN, "session-private.js")),
+    // ⚠ And the REAL directed-turn module (2026-08-31): `messageByTask` reads a DIRECTION off
+    // its argument now. An ENDED agent must answer `no-session` on that lane too.
+    require(join(MAIN, "session-directed.js"))
   );
   api.bind({
     sessions,

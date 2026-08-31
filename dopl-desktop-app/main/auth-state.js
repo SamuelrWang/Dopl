@@ -36,6 +36,30 @@ const { diag } = require('./diag');
 // then be routing one account's channel traffic under the other's identity, with
 // nothing in the log saying so. `blobUserId` is the blob's own `sub`; when the two
 // disagree the state is a CONFLICT, not 'both', and the adoption is refused.
+//
+// FIX (2026-08-30, the abort-churn incident) — A COOKIE SESSION IS NOT A CREDENTIAL
+// WHEN THE BLOB CANNOT BE WRITTEN. The rule above rests on an assumption nobody stated:
+// that the blob is merely STALE and therefore repairable from the jar. When the OS
+// keychain refuses (`safeStorage` unavailable — a denied macOS prompt is enough), the
+// blob is not stale, it is IMPOSSIBLE: `persist()` refuses and deletes the keys, so the
+// rebuild below can never land, `getUserId()` stays null, and — the load-bearing part —
+// `auth.refreshInner()` reads its `refresh_token` from THE BLOB, so nothing on this
+// machine can rotate the jar's JWT either. What "signed in via cookie" then buys is one
+// hour of a credential that cannot be renewed, followed by every cookie lane (listener,
+// presence, reconcile, mcp-config) 401ing forever against its own retry ladder while the
+// bearer lane — `auth-tokens.getAuthState()`, which is blob-only — reports SIGNED OUT to
+// the renderer. That split brain is the churn: half the app retrying on a credential the
+// other half already declared dead, with no state either half can reach that ends it.
+//
+// So the honest answer is signed out, and it is reached the moment the process learns it
+// cannot store anything. `needsRefresh` goes false with it: probing the jar again cannot
+// change an answer that turns on the keychain, and re-probing is how this became a storm.
+// ⚠ RECOVERY IS BY GESTURE, NOT BY POLL. An explicit sign-in re-enters `persist()`, which
+// re-asks the OS live (`auth-store.encryptionAvailable`) and re-prompts; a background
+// probe doing the same on a 30s cooldown would re-prompt the operator forever.
+// ⚠ UNKNOWN IS PERMISSIVE HERE, deliberately and against the house default: only an
+// EXPLICIT `canPersist: false` narrows, so a caller that does not know (and every caller
+// that predates this input) keeps the Q4 truth table exactly.
 function signedInFrom(state) {
   const hasBlob = !!(state && state.blob);
   const c = (state && state.cookie) || null;
@@ -47,19 +71,28 @@ function signedInFrom(state) {
   // A mismatch needs BOTH ids to be readable. An unreadable one is ignorance, not
   // disagreement, and must not raise a conflict (fail toward today's behavior).
   const mismatch = !!(hasBlob && blobUserId && hasCookie && c.userId !== blobUserId);
+  // Nothing can be stored AND nothing is stored. (A readable blob proves the keychain
+  // worked at least once, so the two are mutually exclusive by construction.)
+  const storageUnavailable = state && state.canPersist === false && !hasBlob;
   return {
-    signedIn: hasBlob || cookieFresh,
+    signedIn: hasBlob || (cookieFresh && !storageUnavailable),
     source: mismatch
       ? 'conflict'
-      : hasBlob && cookieFresh ? 'both' : hasBlob ? 'blob' : cookieFresh ? 'cookie' : 'none',
+      : storageUnavailable
+        ? 'storage-unavailable'
+        : hasBlob && cookieFresh ? 'both' : hasBlob ? 'blob' : cookieFresh ? 'cookie' : 'none',
     cookieStale: hasCookie && !cookieFresh,
     // The jar and the blob name DIFFERENT users. We are still signed in (a usable
     // credential exists) but nothing may silently pick a winner: the blob is not
     // overwritten, and the listener drops its cached identity so it re-resolves.
     mismatch,
+    // No keychain ⇒ no storable session. Reported so a caller can say WHY it is signed
+    // out; never logged as a token, because it is not one.
+    storageUnavailable: !!storageUnavailable,
     // Nothing usable right now → the sync caller should kick one bounded async
     // probe (cooldowned) so a cookie-only sign-in is picked up between reconciles.
-    needsRefresh: !hasBlob && !cookieFresh,
+    // ⚠ Not when storage is unavailable: the probe cannot change that answer.
+    needsRefresh: !hasBlob && !cookieFresh && !storageUnavailable,
   };
 }
 // ─── END SIGNED-IN ─────────────────────────────────────────────────────────
@@ -84,6 +117,7 @@ function signedInState() {
     cookie: cookieIdentity,
     nowMs: Date.now(),
     ttlMs: COOKIE_IDENTITY_TTL_MS,
+    canPersist: blob.encryptionAvailable(), // no keychain ⇒ the jar is not a credential
   });
 }
 
@@ -99,6 +133,29 @@ function signedInState() {
 // adopted the exps match and this returns false until the renderer rotates.
 function rebuildBlobFromCookieSession(cookieSession) {
   if (!cookieSession || !cookieSession.access_token || !cookieSession.refresh_token) return false;
+  // ⚠ ASK THE KEYCHAIN BEFORE DOING THE WORK (2026-08-30). Every freshness guard below is
+  // written `if (stored && …)`, because FIX S9's write-storm bound assumed a blob that
+  // EXISTS. With `safeStorage` unavailable `persist()` refuses AND deletes the keys, so
+  // `stored` is null on the next probe too — the guards are skipped, `persist()` is
+  // re-attempted, and this function logs "rebuilt session blob from cookie jar (no blob)"
+  // on EVERY probe forever while nothing is ever rebuilt. That is FIX S9's own defect
+  // (a read becoming a write storm) reached from the one direction its guard did not
+  // cover, plus a log line that says the opposite of what happened.
+  if (!blob.encryptionAvailable()) {
+    // authFail throttles this to once a minute and never carries a token.
+    blob.authFail('safeStorage unavailable — cannot adopt the cookie session; staying signed out', null);
+    return false;
+  }
+  // ⚠ A DEAD TOKEN IS NOT A SESSION (the 2026-08-29 sign-out loop —
+  // auth-store.js › markRefreshTokenRejected carries the field log). The jar
+  // can hold a stale COPY of the very refresh token the server just rejected
+  // N times; adopting it re-arms the drop cycle and the app flaps
+  // 'signed-out' every ~30s until somebody signs in by hand. Refuse it here;
+  // a jar with a genuinely different (fresh) session still adopts.
+  if (blob.isRefreshTokenRejected(cookieSession.refresh_token)) {
+    diag('auth: cookie jar holds the already-rejected refresh token — refusing to adopt it back');
+    return false;
+  }
   const cookieExp = blob.jwtExp(cookieSession.access_token);
   const stored = blob.loadSession();
   const storedExp = stored ? blob.jwtExp(stored.access_token) : null;
@@ -123,7 +180,10 @@ function rebuildBlobFromCookieSession(cookieSession) {
   // whole point, so the refusal applies only when a blob already exists.
   if (stored && (storedExp == null || cookieExp == null)) return false;
   if (stored && storedExp >= cookieExp) return false;
-  blob.persist({
+  // ⚠ REPORT WHAT HAPPENED, not what was attempted — the same rule captureFromFragment
+  // learned (auth.js). This answered `true` unconditionally, so a refused write was
+  // logged as a rebuild and every caller believed the jar had been adopted.
+  const wrote = blob.persist({
     access_token: cookieSession.access_token,
     refresh_token: cookieSession.refresh_token,
     token_type: cookieSession.token_type || 'bearer',
@@ -131,6 +191,7 @@ function rebuildBlobFromCookieSession(cookieSession) {
     expires_at: cookieSession.expires_at || cookieExp || Math.floor(Date.now() / 1000) + 3600,
     user: cookieSession.user || null,
   });
+  if (!wrote) return false; // persist() has already logged the reason, throttled
   diag('auth: rebuilt session blob from cookie jar', stored ? '(stale blob)' : '(no blob)');
   return true;
 }

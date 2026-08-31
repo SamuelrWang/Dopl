@@ -65,6 +65,33 @@ const { diag } = require('./diag');
  * @returns {Promise<Response>} the retry's response when one happened, else the
  *   original. Rejections (AbortError, network) propagate untouched.
  */
+/**
+ * RELEASE A RESPONSE NOBODY WILL READ (2026-08-30, the 17 GB dev incident).
+ *
+ * ⚠ AN UNREAD `Response` IS NOT FREE, and that is the whole reason this exists. Node's `fetch`
+ * is undici: until the body is consumed or cancelled the request counts as IN FLIGHT, its socket
+ * is never returned to the pool, and the next call opens ANOTHER connection. The retained state
+ * is native — socket buffers plus TLS session — so it never pressures GC, never appears in a
+ * heap snapshot, and shows up only as RSS.
+ *
+ * ⚠ THE BRANCHES THAT LEAK ARE THE ERROR BRANCHES, which is exactly backwards from where anyone
+ * looks: the success path reads `res.json()` and is fine, while `if (!res.ok) { backoff; continue; }`
+ * — the path a saturated server puts every caller on — drops the body on the floor once per
+ * poll, per channel, forever.
+ *
+ * Best-effort by construction: a body already consumed, already errored, or absent must not
+ * throw into a caller that had finished with it.
+ */
+function discardBody(res) {
+  try {
+    if (res && res.body && typeof res.body.cancel === 'function' && !res.bodyUsed) {
+      const p = res.body.cancel();
+      if (p && typeof p.catch === 'function') p.catch(() => { /* nothing left to release */ });
+    }
+  } catch (_) { /* nothing left to release */ }
+  return res;
+}
+
 async function fetchWithAuthRepair(label, what, send) {
   const res = await send();
   if (!authTokens.shouldRepairAuth(res.status, false)) return res;
@@ -83,12 +110,20 @@ async function fetchWithAuthRepair(label, what, send) {
   } catch (err) {
     diag(`${label}: jar repair after 401 failed —`, (err && err.message) || String(err));
   }
+  // ⚠ THE ORIGINAL 401 IS UNREACHABLE FROM HERE ON — release it before opening a second
+  // connection to the same origin, or a stale-cookie episode (this module's header records
+  // "hours of it") pins one socket per repaired call for the life of the process.
+  discardBody(res);
   const retried = await send();
   if (retried.status === 401) {
     diag(`${label}: 401 survived a forced refresh —`, what);
-    authTokens.emitAuthState('signed-out');
+    // ⚠ LATCHED, not merely announced (2026-08-30). A bare `emitAuthState('signed-out')`
+    // here left the stored blob untouched, so the next caller's repair rotated again and
+    // announced signed-IN — an auth flap per 401, which the renderer answers with a full
+    // cache wipe. `auth-tokens.js › noteSessionRejected` carries the loop.
+    authTokens.noteSessionRejected(`${label}: ${what}`);
   }
   return retried;
 }
 
-module.exports = { fetchWithAuthRepair };
+module.exports = { fetchWithAuthRepair, discardBody };

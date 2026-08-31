@@ -12,6 +12,7 @@
 // not-yet-shipped route. Cookie auth via the shared api helper; no tokens logged.
 
 const { apiFetch } = require('./api');
+const { discardBody } = require('./api-repair');
 const auth = require('./auth');
 const { diag } = require('./diag');
 
@@ -63,6 +64,12 @@ async function beatOnce() {
       diag('presence: beat error', err && err.message);
       continue;
     }
+    // ⚠ A HEARTBEAT READS NO BODY ON ANY BRANCH — the SUCCESS one included — so every beat
+    // used to abandon an undici response and pin its socket (see `api-repair.js ›
+    // discardBody`). One per workspace every 30s, for the life of the process, is the
+    // steadiest leak in the app precisely because nothing about it ever fails.
+    // (2026-08-30, the 17 GB dev incident.)
+    discardBody(res);
     if (res.status === 404) {
       unavailableUntil = Date.now() + UNAVAILABLE_BACKOFF_MS;
       diag('presence: endpoint 404 (not deployed) — backing off 5m');

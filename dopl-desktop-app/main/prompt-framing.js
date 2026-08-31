@@ -26,7 +26,7 @@
 
 // ⚠ FIXED TEXT BLOCKS live in prompt-framing-text.js: what the agent is TOLD changes on a
 // different clock from how a turn is ASSEMBLED. Nothing is interpolated into any of them.
-const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY } = require('./prompt-framing-text');
+const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING } = require('./prompt-framing-text');
 // The id charset, so a value that is not one is never printed as though it were an address.
 const { AGENT_ID_RE } = require('./agent-id');
 
@@ -287,6 +287,10 @@ function firstActions(side, ctx) {
 // call comes back asking for `workspace=`. Both ids ride the spawn context, so the prompt
 // states the concrete call and says discovery is unnecessary. Missing either id degrades to the
 // generic wording.
+// ⚠ `REPLY_ROUTING` RIDES ON ALL FOUR BRANCHES (2026-08-31, Samuel's ruling), and "all four" is
+// the point: the defect it closes is about the lane an answer LEAVES by, which every side and
+// every id-availability case shares. Putting it on the requester branch alone would leave a
+// panel-woken responder answering into the invisible lane, which is where it was found.
 function deliverySection(side, ctx) {
   const call = deliveryCall(ctx);
   const own = [
@@ -302,6 +306,7 @@ function deliverySection(side, ctx) {
         `mcp__dopl__dopl_channel MCP tool (op "post", this channel). That is how the peer's`,
         `agent receives you.`,
         ...PROSE_RULE,
+        ...REPLY_ROUTING,
       ];
     }
     return [
@@ -310,6 +315,7 @@ function deliverySection(side, ctx) {
       ...own,
       `That is how the peer's agent receives you.`,
       ...PROSE_RULE,
+      ...REPLY_ROUTING,
     ];
   }
   if (!call) {
@@ -318,6 +324,7 @@ function deliverySection(side, ctx) {
       `(op "post", this channel); that is how the counterparty receives it, and there is no`,
       `other capture.`,
       ...PROSE_RULE,
+      ...REPLY_ROUTING,
     ];
   }
   return [
@@ -326,6 +333,7 @@ function deliverySection(side, ctx) {
     ...own,
     `That is how the counterparty receives your reply; there is no other capture.`,
     ...PROSE_RULE,
+    ...REPLY_ROUTING,
   ];
 }
 

@@ -36,6 +36,7 @@ const { Notification } = require('electron');
 const { API_BASE, VERSION_GATE } = require('./config');
 const appVersion = require('./app-version');
 const minVersion = require('./min-version');
+const { discardBody } = require('./api-repair');
 const { diag } = require('./diag');
 
 const UNKNOWN_UPDATER = { supported: false, checked: false, available: false, ready: false };
@@ -94,6 +95,10 @@ async function fetchFloor() {
       signal: ctrl.signal,
     });
     if (!res.ok) {
+      // ⚠ Unread body ⇒ pinned socket. SHARED helper, never a private copy — "a third copy
+      // of the rule is the bug" (api-repair.js). Leaks regardless of auth: `arm(RETRY_MS)`
+      // re-runs this every 10 minutes, forever.
+      discardBody(res);
       diag('version gate: floor fetch', res.status);
       return null;
     }

@@ -70,6 +70,21 @@ const MARKERS = ["milestone"];
 // 2026-08-24: and the op that moved next, kept separate from MARKERS for the same reason — the
 // two are admitted on different arguments and carry different gate-diag ALLOW codes.
 const THREAD_OPENS = ["create_thread"];
+// ⚠ REQUIREMENT CHANGE, 2026-08-31 (SAMUEL'S RULING): `escalate` is the THIRD op on the OUTBOUND
+// half, kept as its own name for the same reason the two above are — a different argument, a
+// different gate-diag ALLOW code (`auto-outbound-escalate`).
+//
+// It is admitted on `create_thread`'s argument, not on `milestone`'s: a milestone earned the lane
+// by SAYING LESS than the post beside it, and an escalation says MORE — it is a post with a
+// question and a set of answers on it. What admits it is outbound CONTENT into this session's own
+// channel, addressed to a member of that same channel. The bar that keeps `close_thread` out is
+// cleared the way a thread open clears it: an escalation settles no shared state, it ASKS.
+//
+// WHAT LEAVING IT GATED WOULD HAVE COST is F-320's defect class, restated: the agent that most
+// needs to escalate is a BLOCKED one, which is almost always a windowless session on the
+// operator's own machine — and a windowless session answers a gate with `deny`, so the op the
+// tool's protocol tells a stuck agent to reach for would be auto-refused in EVERY posture.
+const ESCALATES = ["escalate"];
 
 // ── the read set ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +97,7 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
   assert.deepEqual(READS,
     ["read", "await", "list_threads", "get_thread", "members", "read_sessions"]);
-  for (const op of ALWAYS_GATED.concat(MARKERS, THREAD_OPENS)) {
+  for (const op of ALWAYS_GATED.concat(MARKERS, THREAD_OPENS, ESCALATES)) {
     assert.ok(!READS.includes(op), `${op} must never be classified as a read`);
   }
   assert.ok(!READS.includes("post"), "a post is the OUTBOUND half's business");
@@ -93,8 +108,13 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // Asserted as three separate constants, because a single merged list is how "a marker earns
   // this lane by saying less" would quietly come to cover an op that says more.
   assert.deepEqual(profiles.OWN_CHANNEL_THREAD_OPS, THREAD_OPENS);
-  assert.deepEqual(profiles.OWN_CHANNEL_OUTBOUND_OPS, MARKERS.concat(THREAD_OPENS));
-  for (const op of MARKERS.concat(THREAD_OPENS)) {
+  // 2026-08-31: and the third, on its own constant for the same reason.
+  assert.deepEqual(profiles.OWN_CHANNEL_ESCALATE_OPS, ESCALATES);
+  assert.deepEqual(
+    profiles.OWN_CHANNEL_OUTBOUND_OPS,
+    MARKERS.concat(THREAD_OPENS, ESCALATES)
+  );
+  for (const op of MARKERS.concat(THREAD_OPENS, ESCALATES)) {
     assert.ok(!READS.includes(op), `${op} is outbound, not a read`);
   }
 });

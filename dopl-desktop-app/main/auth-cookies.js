@@ -150,6 +150,26 @@ async function clearSessionCookies() {
   }
 }
 
+// The 2026-08-29 sign-out loop, jar half (auth-store.js ›
+// markRefreshTokenRejected carries the field log). After the bounded drop
+// rejects a refresh token for good, a jar still holding that SAME session is a
+// stale COPY of the dead credential — clearing it is what stops the next
+// auth-state probe adopting it straight back into the blob. A jar holding a
+// DIFFERENT session (the renderer signed in fresh) is left alone. Answers what
+// happened for the caller's diag line; never throws, never logs a token (I11).
+async function clearCookiesIfSameRefreshToken(rejectedRefreshToken) {
+  try {
+    const jar = await readCookieSession();
+    if (jar && jar.refresh_token === rejectedRefreshToken) {
+      await clearSessionCookies();
+      return 'cleared';
+    }
+    return 'differs';
+  } catch (_) {
+    return 'error';
+  }
+}
+
 // Best-effort resilience: encode the stored session into the Electron cookie jar
 // in @supabase/ssr's format (`base64-` + base64url(JSON), chunked at 3180) so a
 // background call still has valid cookies if the renderer's own auto-refresh has
@@ -211,4 +231,5 @@ module.exports = {
   getSessionCookieHeader,
   writeSessionCookies,
   clearSessionCookies,
+  clearCookiesIfSameRefreshToken,
 };

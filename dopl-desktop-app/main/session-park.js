@@ -16,6 +16,9 @@ const store = require('./session-store');
 // 2026-08-22: the PRIVATE TURN's window. A resume rebuilds the query, so the depth the old one
 // was carrying is owed by nobody — see `session-private.js › resetPrivateTurn`.
 const privateTurn = require('./session-private');
+// 2026-08-31: the DIRECTED turn's capture. ⚠ Required AT MODULE SCOPE — the SESSION-PARK-PURE
+// block may not reference `require(` and its suite asserts so.
+const directedTurn = require('./session-directed');
 // 2026-08-22, F-272: the concurrency + cost ceiling. `session-launch.js` takes it the same way
 // and for the same reason — the number lives in ONE place and every spawn shape asks it.
 const sessionWindowless = require('./session-windowless');
@@ -90,6 +93,10 @@ function resumeParked(s) {
   // nobody made private. The park's own `abortQuery` effect resets it too; both, because a resume
   // can also follow a crash, where no effect ran.
   privateTurn.resetPrivateTurn(s);
+  // 2026-08-31: same rule, same edge — a rebuilt query owes no results, so a directed
+  // capture carried across a resume would attach the NEXT turn's text to a direction that
+  // never got one. Dropped; the row lazy-expires.
+  directedTurn.resetDirected(s);
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
   s.resumeSdkId = s.sdkSessionId || s.resumeSdkId || null;

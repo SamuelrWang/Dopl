@@ -146,11 +146,15 @@ test("CONTAINMENT: an unwatched channel is refused, and nothing is launched", as
   assert.equal(decidePosts(h)[0].body.refusalReason, "no-bridge");
 });
 
-test("LAUNCH: it is SPAWN-IDLE, windowless, and operator-armed", async () => {
+test("LAUNCH: it is windowless, operator-armed, and RUNS when a goal was sent", async () => {
+  // ⚠ **`idle` IS NOW CONDITIONAL, AND THE DEFAULT FIXTURE CARRIES A GOAL** (2026-08-31, Samuel's
+  // ruling). An operator-approved directive that names work RUNS it as the session's first turn;
+  // the goal-less case below keeps ruling 3's stand-by shell. The two lanes and the two goal
+  // states are pinned together in `test/launch-goal-delivery.test.mjs`.
   const h = boot();
   await h.api.handle(row(), WS);
   const spec = h.cfg.lastSpec;
-  assert.equal(spec.idle, true, "no `claude` child until someone talks to the agent");
+  assert.equal(spec.idle, false, "a goal was sent, so no wake is needed for it to start");
   assert.equal(spec.windowless, true);
   // ⚠ `operatorArmed` IS WHAT LETS THE DURABLE POSTURE REACH AN IDLE SPAWN (`session-engine.js`'s
   // FIX-4 guard). The TOGGLE is the human here — Samuel's ruling replaces the click with it on
@@ -158,10 +162,11 @@ test("LAUNCH: it is SPAWN-IDLE, windowless, and operator-armed", async () => {
   assert.equal(spec.operatorArmed, true);
 });
 
-// ⚠ THE GOAL MUST ACTUALLY REACH THE AGENT. On the spawn-idle lane `firstTurn` is '' by
-// construction, so the goal rides as `firstMessage` -> `s.launchGoal` -> `session-seed.js ›
-// takeFraming`, which fences it as the WAKE turn's request body. That plumbing was added in
-// 1.17.1 for the button's own goal, which until then reached nobody.
+// ⚠ THE GOAL MUST ACTUALLY REACH THE AGENT, ON EITHER SHAPE. A RUNNING spawn's goal is built
+// into `firstTurn` by `startSession`; a spawn-idle shell's rides as `firstMessage` ->
+// `s.launchGoal` -> `session-seed.js › takeFraming`, which fences it as the WAKE turn's request
+// body (the 1.17.1 plumbing, which the 2026-08-31 ruling narrows to the no-goal case rather than
+// deleting). Both ends are driven in `test/launch-goal-delivery.test.mjs`.
 test("LAUNCH: the directive's goal is handed in as the requester goal, and lands in launchGoal", async () => {
   const h = boot();
   await h.api.handle(row({ goal: "Draft the release notes" }), WS);
@@ -178,9 +183,11 @@ test("LAUNCH: a goal-less directive falls back to the button's own sentence", as
   const h = boot();
   await h.api.handle(row({ goal: "" }), WS);
   assert.match(h.cfg.lastSpec.goal, /Join this thread as my agent/);
+  assert.equal(h.cfg.lastSpec.idle, true, "…and a synthesized sentence does NOT buy a `claude` child");
   const ch = boot();
   await ch.api.handle(row({ goal: "", task_id: null }), WS);
   assert.match(ch.cfg.lastSpec.goal, /Stand by in this channel/);
+  assert.equal(ch.cfg.lastSpec.idle, true);
 });
 
 // ⚠ THE MODEL GOES THROUGH THE FROZEN LIST, so an unknown id from an orchestrator on a newer
@@ -189,7 +196,7 @@ test("MODEL: a known id becomes its argv-safe alias", async () => {
   const ok = boot();
   await ok.api.handle(row({ model: "claude-opus-5" }), WS);
   assert.equal(ok.cfg.lastSpec.model, "opus");
-  assert.equal(ok.cfg.lastSpec.idle, true);
+  assert.equal(ok.cfg.lastSpec.idle, false, "the fixture carries a goal — see the ruling above");
 });
 
 // ⚠ **F-285 — AN ALIAS IS A LEGITIMATE VALUE ON THIS LANE, AND IT USED TO BE THROWN AWAY.**
@@ -215,7 +222,7 @@ test("MODEL: an id this build does not know FALLS BACK to the channel's pick (F-
   const bad = boot();
   await bad.api.handle(row({ model: "claude-from-the-future-9" }), WS);
   assert.equal(bad.cfg.lastSpec.model, "sonnet", "the channel's stored pick, not the SDK default");
-  assert.equal(bad.cfg.lastSpec.idle, true, "…and the launch still happens (F-5: never refuse)");
+  assert.equal(bad.cfg.lastSpec.idle, false, "…and the launch still happens (F-5: never refuse)");
 });
 
 // ⚠ THE TEMPLATE'S LINK SITS BETWEEN THEM, and an unknown DIRECTIVE model must not step over it.

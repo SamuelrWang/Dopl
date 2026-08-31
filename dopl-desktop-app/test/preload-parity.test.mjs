@@ -200,6 +200,28 @@ const APP_OPS = [
   //     forged `set` from an app-window top frame buys the same thing the Settings row hands
   //     the operator and reaches no other machine.
   //   • Both are feature-probed by the SPA; an older main has no toggle, which reads OFF.
+  // ⚠ TWO JOINED HERE ON 2026-08-31: `orchestratorDirect`, the PRIVATE DIRECT LANE's standing
+  // consent. The pin failed on the ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
+  //     registers `orchestrator:getDirectEnabled` / `orchestrator:setDirectEnabled` under the
+  //     same `appWindowOnly()` sender binding as every op above. They take NO id: the subject
+  //     is the MACHINE, so there is nothing to UUID-gate and `=== true` on a bare boolean is
+  //     the whole validation — the same shape the two `orchestratorLaunch` members have, and
+  //     enumerated in `channel-ipc-sender.test.mjs` beside them.
+  //   • WHAT IT WIDENS, AND IN WHICH DIRECTION: it lets the operator's OWN external agent
+  //     deliver a private message into one of the operator's OWN running agents. Default OFF,
+  //     so the lane does nothing until a human turns it on at this machine.
+  //   • FORGED FROM AN APP-WINDOW TOP FRAME, the worst case is that the operator's direction
+  //     lane is armed or disarmed. It starts no turn by itself, grants no tool, widens no
+  //     posture, reads no secret and reaches no other machine — a direction still has to be
+  //     filed by that operator's own credential and still lands in an existing session's
+  //     private turn, inside that session's existing containment.
+  //   • WHAT IT DOES NOT DO: it is not a second launch toggle, it cannot direct a PEER's agent
+  //     (there is no argument anywhere that names another operator), and it cannot make a
+  //     directed turn post anything — the private-turn gate holds an outbound post for the
+  //     operator's approval whatever this is set to.
+  "orchestratorDirect.get",
+  "orchestratorDirect.set",
   "orchestratorLaunch.get",
   "orchestratorLaunch.set",
   "passwordSignIn",

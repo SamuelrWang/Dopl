@@ -112,6 +112,13 @@
 //      `session-registry.js › agentIdsInChannel` already serves the framing's sibling list: two
 //      of my agents in one channel can duplicate each other's work even when one is in a thread
 //      and the other is watching the main room.
+//   ⚠ 2A. THE FENCE HAS THREE ANSWERS SINCE 2026-08-31 (Samuel's SAME-ACCOUNT CARVE). An
+//      agent-authored message posted under THIS OPERATOR'S OWN user id may wake a dormant agent
+//      via TIER 1 — and via nothing else. That is what makes `launch_agent` over MCP a usable
+//      capability: the caller holds the operator's credential, so its posts are authored by that
+//      account, and before the carve the id it was handed could never be spent. A PEER's agent
+//      stays exactly as dead as the 2026-08-28 ruling left it, and NO agent-authored message on
+//      any account reaches tier 2 or tier 3. `session-wake-tiers.js` carries the argument.
 //   3. THE WAKE VERDICT TRAVELS AS ONE BOOLEAN (`wake`) TO `session-gate.js › feedInbound`, and
 //      the belt now reads THAT rather than re-deriving the addressing rule. Two spellings of one
 //      rule is how two readers come to disagree about one message — the gate's own header says so
@@ -202,6 +209,40 @@ function mentionedAgentIds(body, liveIds, handleIndex) {
     if (liveIds.indexOf(id) !== -1 && out.indexOf(id) === -1) out.push(id);
   }
   return out;
+}
+
+// ── THE THIRD DOOR: AN ESCALATION ANSWER ───────────────────────────────────────────────────────
+// A human pressing an option on an ESCALATION CARD posts an ordinary message carrying reserved
+// `metadata.escalationAnswer` — and the agent that ASKED the question is the one that must be
+// told (Samuel, 2026-08-31).
+//
+// ⚠ IT IS A DOOR ONTO ADDRESSING, NOT A HOLE IN THE LOOP FENCE. `wakeEligibility` is asked FIRST
+// and of the MESSAGE, so this contributes nothing at all unless a HUMAN wrote a `kind: 'message'`
+// row — the same precondition the id and name doors sit behind.
+//
+// ⚠ IT IS STRICTLY LESS FORGEABLE THAN THE OTHER TWO, which is the argument for it existing. The
+// id and name doors read the BODY, which any member can type; this key is stripped from caller
+// input unconditionally and re-stamped server-side only after the caller is proved to be a member
+// that escalation asked, with the agent id DERIVED from the escalation's own post stamp
+// (`server/service-writes-metadata-escalation.ts`). A member cannot aim it.
+//
+// ⚠ WHY THE ANSWER DOES NOT SIMPLY WRITE `@agent-<id>` IN THE BODY: the raw agent id is never
+// user-visible chrome (INVARIANTS §11), and a PEER's machine cannot know the asking agent's
+// display name — so the body token is the only form available to them and it is the forbidden one.
+//
+// ⚠ AN OLDER MAIN IGNORES THIS KEY AND DEGRADES CORRECTLY, which is why it is additive: the answer
+// is still an ordinary visible message, so `feedLiveSession` delivers it to every LIVE agent on the
+// thread. Only a DORMANT one fails to wake there, and it wakes on the operator's next word.
+// ⚠ INTERSECTED WITH `liveIds` LIKE THE OTHER TWO. An answer naming an agent that is not on this
+// thread contributes nothing rather than reaching for one.
+function escalationAnswerAgentIds(m, liveIds) {
+  if (!liveIds || !liveIds.length) return [];
+  const meta = m && m.metadata;
+  const answer = meta && typeof meta === 'object' ? meta.escalationAnswer : null;
+  if (!answer || typeof answer !== 'object') return [];
+  const id = typeof answer.agentId === 'string' ? answer.agentId : '';
+  if (!id || liveIds.indexOf(id) === -1) return [];
+  return [id];
 }
 
 // The ADDRESSING verdict for one reader, handed to the framing.
@@ -296,22 +337,37 @@ async function feedLiveSession(entry, m, myUserId) {
   // authority there could be — and swallows a store failure into FEWER resolvable handles rather
   // than into a broken route (`agent-handles.js` states both).
   const addressed = mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds));
+  // ⚠ THE ESCALATION-ANSWER DOOR IS UNIONED AFTER THE TWO BODY DOORS, never merged into them:
+  // those read text and this reads a server-stamped key, and keeping them separate is what lets
+  // the body parser stay the one statement of what an @-mention is. Order is preserved — an
+  // explicit address still sorts ahead — and a duplicate is dropped rather than repeated.
+  for (const id of escalationAnswerAgentIds(m, liveIds)) {
+    if (addressed.indexOf(id) === -1) addressed.push(id);
+  }
   const authorName = authorLabel(m); // the AUTHOR, not just the account — see authorLabel
 
   // ── THE TIER DECISION, MADE ONCE PER MESSAGE ────────────────────────────────────────────────
   // ⚠ THE LOOP FENCE IS ASKED FIRST AND OF THE MESSAGE, so no branch below can route around it:
   // an agent-authored post, a lifecycle marker or an authorless row wakes NOTHING, whatever it
   // says and whoever it names. It is still FED to every running session — that is ruling 4.
-  const eligible = wakeTiers.wakeEligible(m);
-  const candidates = eligible ? wakeCandidates(live, m) : [];
+  // ⚠ THREE ANSWERS SINCE 2026-08-31, NOT TWO (Samuel's same-account carve). `ELIGIBLE_MENTION`
+  // is an agent-authored message from THIS OPERATOR'S OWN ACCOUNT: it may wake via TIER 1 and via
+  // nothing else. `myUserId` is this machine's signed-in operator and is the only identity the
+  // carve may read — never anything off the row being judged.
+  const eligibility = wakeTiers.wakeEligibility(m, myUserId);
+  const mayWake = wakeTiers.mayWakeAtAll(eligibility);
+  const candidates = mayWake ? wakeCandidates(live, m) : [];
   // Which dormant agent, if any, a tier-2/3 wake awarded this message to. '' = nobody.
   let claimed = '';
   let tier = wakeTiers.TIER_NONE;
   if (candidates.length && addressed.length === 0) {
     // ⚠ CHANNEL-WIDE, THREAD-SCOPED FEED — see (2) in the header. An empty roster (a registry
     // this machine cannot read) answers TIER_NONE inside `tierFor`, which wakes nobody.
+    // ⚠ THE ELIGIBILITY IS PASSED THROUGH, NOT RE-ASSERTED AS `true`. This branch is the
+    // UNADDRESSED one, so it is exactly where `ELIGIBLE_MENTION` must stop — and `tierFor` is the
+    // one place that decides it, rather than a second condition on this line that could drift.
     tier = wakeTiers.tierFor({
-      eligible: true,
+      eligible: eligibility,
       addressedMe: false,
       addressedAny: false,
       channelAgents: sessionEngine.agentIdsInChannel(entry.channel.id).length,
@@ -342,7 +398,7 @@ async function feedLiveSession(entry, m, myUserId) {
     const addressing = addressingFor(s.agentId, addressed);
     // TIER 1 (@-mention) is per-reader and is answered here, because `addressing` is; tiers 2
     // and 3 were answered above. Both are gated on `eligible`, which is the loop fence.
-    const wake = eligible && (
+    const wake = mayWake && (
       (addressing && addressing.me === true) || (claimed !== '' && String(s.agentId || '') === claimed)
     );
     if (!mayFeed(s, wake)) { held += 1; continue; }
@@ -378,7 +434,11 @@ async function feedLiveSession(entry, m, myUserId) {
     diag('fan-out', entry.channel.id.slice(0, 8), 'seq', m.seq,
       'fed', fed, 'of', live.length, held ? `held:${held} (no wake)` : '',
       addressed.length ? `addressed:${addressed.join(',')}` : 'unaddressed',
-      'tier', tier, claimed ? `woke:${claimed}` : '');
+      // ⚠ THE ELIGIBILITY IS ON THE LINE SINCE 2026-08-31. `mention` (the same-account carve) and
+      // `none` (a peer's agent) produce the SAME outcome for an unaddressed message and a
+      // different one for an addressed one, so a log that printed only the outcome could not tell
+      // an operator which fence answered.
+      'elig', eligibility, 'tier', tier, claimed ? `woke:${claimed}` : '');
   }
   return fed > 0;
 }

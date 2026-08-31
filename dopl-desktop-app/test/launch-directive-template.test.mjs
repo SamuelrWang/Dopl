@@ -154,7 +154,7 @@ test("MODEL: the template's default slots in BELOW the directive's param and ABO
   const unknown = withTemplate("claude-from-the-future-9");
   await unknown.api.handle(row({ model: "", template_id: TPL }), WS);
   assert.equal(unknown.cfg.lastSpec.model, "sonnet");
-  assert.equal(unknown.cfg.lastSpec.idle, true, "…and the launch still happens");
+  assert.equal(unknown.cfg.lastSpec.idle, false, "…and the launch still happens (the fixture carries a goal)");
 });
 
 // ⚠ THE NEGATIVE PIN. `template-approval` is the BUTTON lane's answer to its own renderer when a
@@ -167,7 +167,7 @@ test("TEMPLATE: this lane has NO first-use approval gate, and cannot answer `tem
     resolve: { ok: true, template: { name: "Foreign", model: null, authoredByCaller: false } },
   });
   await h.api.handle(row({ template_id: TPL }), WS);
-  assert.equal(h.cfg.lastSpec.idle, true, "a FOREIGN template launches here with no click");
+  assert.equal(h.cfg.lastSpec.idle, false, "a FOREIGN template launches here with no click");
   assert.equal(decidePosts(h)[0].body.status, "launched");
   const code = SRC.split("\n")
     .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))

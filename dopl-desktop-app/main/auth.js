@@ -27,7 +27,16 @@ const crypto = require('crypto');
 const { app } = require('electron');
 const cookies = require('./auth-cookies');
 const state = require('./auth-state');
-const { store, authFail, persist, loadSession, clearSession, decodeJwt, jwtExp } = require('./auth-store');
+const {
+  store,
+  authFail,
+  persist,
+  loadSession,
+  clearSession,
+  decodeJwt,
+  jwtExp,
+  markRefreshTokenRejected,
+} = require('./auth-store');
 const { diag } = require('./diag');
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./config');
 
@@ -376,7 +385,20 @@ async function refreshInner() {
       const verdict = require('./auth-tokens').noteRefreshOutcome({ ok: false, status: res.status });
       if (verdict && verdict.dropSession) {
         clearSession();
-        diag('auth: refresh rejected repeatedly — stored blob dropped; cookie session may still be live');
+        // ⚠ THE JAR MUST NOT RESURRECT THIS TOKEN (the 2026-08-29 sign-out
+        // loop — auth-store.js › markRefreshTokenRejected carries the field
+        // log). Two halves: remember the rejected token so the auth-state
+        // probe refuses to adopt it back, and clear a jar holding THAT SAME
+        // dead session (auth-cookies.js › clearCookiesIfSameRefreshToken —
+        // a different, fresher jar session is left alone).
+        markRefreshTokenRejected(s.refresh_token);
+        const jarOutcome = await cookies.clearCookiesIfSameRefreshToken(s.refresh_token);
+        diag(
+          'auth: refresh rejected repeatedly — stored blob dropped;',
+          jarOutcome === 'cleared'
+            ? 'cookie jar held the same dead session and was cleared'
+            : 'cookie session differs and may still be live'
+        );
       }
       return null;
     }
@@ -398,6 +420,19 @@ async function refreshInner() {
       user: data.user || null,
     };
     persist(next);
+    // ⚠ THE JAR ROTATES WITH THE BLOB (2026-08-29). Supabase rotates the
+    // refresh token on every use, and the blob was the only store this write
+    // reached — the jar kept the PREVIOUS session forever, since the remote
+    // page's supabase-js (the jar's old refresher) is gone. That drift is what
+    // armed the sign-out loop: the moment the blob was dropped, auth-state
+    // adopted the jar's long-dead token back. One credential, one rotation,
+    // BOTH stores. Best-effort: a jar write failure must not fail a refresh
+    // that already succeeded.
+    try {
+      await cookies.writeSessionCookies(next);
+    } catch (err) {
+      authFail('cookie write-back after refresh failed', err);
+    }
     require('./auth-tokens').noteRefreshOutcome({ ok: true });
     console.log('[auth] refreshed Supabase session');
     return next;

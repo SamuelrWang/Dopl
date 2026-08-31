@@ -270,6 +270,28 @@ function register(opts = {}) {
     return got === want ? { ok: true, enabled: got } : { ok: false, reason: 'store', enabled: got };
   }));
 
+  // ── THE PRIVATE DIRECT LANE'S TOGGLE (Samuel's ruling, 2026-08-31) ────────────────────────
+  //
+  // ⚠ **THE SAME SHAPE AS THE PAIR ABOVE AND A SEPARATE GRANT.** Launching over MCP buys
+  // COMPUTE; directing over MCP reaches a running agent's PRIVATE lane and starts a turn in it.
+  // An operator may want one and not the other, so there are two toggles and two IPC pairs.
+  // ⚠ NO `channelId` AND NO UUID GATE: the subject is the MACHINE, so `=== true` on a bare
+  // boolean is the whole validation.
+  // ⚠ THE `refresh()` CALL IS LOAD-BEARING — without it the toggle flips and nothing subscribes
+  // until the next reconcile, which is a setting that appears to work and silently does not.
+  // Lazy-required so this IPC module keeps loading in the harnesses, which stub `require`.
+  // ⚠ THE ANSWER IS MAIN'S OWN VALUE, never an echo of the request, so an SPA that stamped
+  // optimistically can revert on `{ok:false}`.
+  ipcMain.handle('orchestrator:getDirectEnabled', appWindowOnly('getDirectEnabled', { enabled: false }, () =>
+    ({ enabled: channelPrefs.getOrchestratorDirect() })));
+  ipcMain.handle('orchestrator:setDirectEnabled', appWindowOnly('setDirectEnabled', { ok: false }, (_event, payload) => {
+    const want = (payload || {}).enabled === true;
+    const got = channelPrefs.setOrchestratorDirect(want);
+    try { require('./agent-directions').refresh(); }
+    catch (err) { diag('orchestrator direct toggle: could not re-arm the direction lane —', err && err.message); }
+    return got === want ? { ok: true, enabled: got } : { ok: false, reason: 'store', enabled: got };
+  }));
+
   // ⚠ ONE REGISTRATION ENTRY POINT. The session + window ops take the SAME registry accessor
   // and the same binding; splitting the file did not split the wiring, because a second
   // `register(...)` in index.js would be a second place to forget `getSenderIds` — and an

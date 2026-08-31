@@ -25,6 +25,7 @@ const MAIN = join(HERE, "..", "main");
 const M = (p) => join(MAIN, p);
 
 const priv = require(M("session-private.js"));
+const directedTurn = require(M("session-directed.js"));
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
 const seed = require(M("session-seed.js"));
@@ -248,7 +249,10 @@ function composer() {
   };
   const sessions = new Map([[s.key, s]]);
   const fn = new Function(
-    "deps", "store", "framing", "privateTurn", "floorWindowlessMessage",
+    // ⚠ `directedTurn` JOINED ON 2026-08-31: `messageByTask` reads a DIRECTION off its
+    // argument now. The REAL module — these cases assert the PRIVATE depth, and the two
+    // counters must be shown not to interfere.
+    "deps", "store", "framing", "privateTurn", "directedTurn", "floorWindowlessMessage",
     `${body}\n return messageByTask;`
   )(
     {
@@ -260,6 +264,7 @@ function composer() {
       threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:` },
     seed,
     priv,
+    directedTurn,
     profiles.floorWindowlessMessage
   );
   return { fn, s };

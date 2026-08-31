@@ -41,6 +41,7 @@ const sessionWindowless = require('./session-windowless'); // §2 split: the win
 const agentHistory = require('./agent-history'); // 2026-08-22: what an ended agent leaves, for 7 days
 const sessionMetrics = require('./session-metrics'); // ...and what it cost, frozen with it
 const sessionPrivate = require('./session-private'); // 2026-08-22: the 1:1 turn's window
+const sessionDirected = require('./session-directed'); // 2026-08-31: the DIRECTED turn's capture
 const sessionRegistry = require('./session-registry');
 const { liveOnThread, agentIdsOnThread, agentIdsInChannel, sessionOn, noteSiblings } = sessionRegistry;
 // §2 SPLIT (2026-08-22): the TERMINAL — teardown order, the history freeze, and the read of a
@@ -110,20 +111,9 @@ function dispatch(s, event) {
   // funnel, rather than as a reducer effect: the window is a fact about the SESSION OBJECT, not
   // reducer state, so it survives a park/resume like the nonce and no SDK event can forge it.
   if (event && event.type === 'result') sessionPrivate.closePrivateTurn(s);
-  // ⚠ A SPAWN-IDLE AGENT HAS BEEN DIRECTED (2026-08-22, Samuel's wake ruling). HERE, at the one
-  // dispatch funnel, because the wake has TWO lanes and they must clear the flag identically:
-  //   `steer`           the operator's own 1:1 message (`session-reopen.js › messageByTask`),
-  //                     which never passes through `session-dispatch.js` at all.
-  //   `inbound_arrived` a thread or main-room message that @-MENTIONED this agent — the ONLY
-  //                     inbound that reaches this line while the flag is set, because
-  //                     `session-dispatch.js › mayFeed` and `session-gate.js › feedInbound` both
-  //                     refuse an unaddressed one upstream.
-  // Clearing it on the DISPATCH rather than at either gate is what makes "woken" mean the same
-  // thing on both lanes, and it is a fact about the SESSION OBJECT (like the private-turn depth
-  // and the nonce), so it survives a park/resume and no SDK event can forge it.
   if (event && (event.type === 'steer' || event.type === 'inbound_arrived')) s.awaitingDirective = false;
   const { state, effects } = sessionReducer(s.state, event);
-  s.state = state; sessionSummary.noteActivity(s, event); sessionNarration.note(s, event); // §3.3: the pill's state + detail, and the agent window's work lane, all off the ONE funnel
+  s.state = state; sessionSummary.noteActivity(s, event); sessionNarration.note(s, event); sessionDirected.observe(s, event); // §3.3: the pill's state + detail, the agent window's work lane, and the DIRECTED turn's reply capture (2026-08-31) — all off the ONE funnel
   let resolvedLive = false;
   for (const eff of effects) resolvedLive = runEffect(s, eff) === true || resolvedLive;
   return resolvedLive;
@@ -171,11 +161,13 @@ function runEffect(s, eff) {
     // withdrawn for turns nobody asked to be private.
     case 'abortQuery':
       sessionPrivate.resetPrivateTurn(s);
+      sessionDirected.resetDirected(s); // 2026-08-31: a stray `result` must not report a partial answer
       try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
       try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
       break;
     case 'denyPending': // P1: DENY every awaited canUseTool promise (fail closed) before a
       sessionPrivate.resetPrivateTurn(s);
+      sessionDirected.resetDirected(s); // same rule as abortQuery above
       denyPendingPermissions(s, 'Session paused'); // park's abort — no resolver may dangle
       break;
     case 'clearIdle': if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; } break;
@@ -306,9 +298,10 @@ async function startSession(spec, sdk) {
   // spawn-idle session never runs it, so anything put here would be dropped; `launchGoal` below
   // carries `spec.firstMessage` to the WAKE turn instead, where `session-seed.js › takeFraming`
   // fences it as that turn's request body. Its docblock carries the whole argument.
+  // ⚠ `profile` SPREAD AT THE CALL, NEVER ONTO `s.context` — `session-seed.js › takeFraming` owns that argument, and the 2026-08-31 half about why THIS site lacked it.
   const firstTurn = spec.parkedShell ? ''
     : spec.rawFirstTurn ? spec.rawFirstTurn
-      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context, nonce });
+      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: { ...context, profile: spec.profile }, nonce });
   const s = {
     key: spec.key,
     sessionId,
@@ -386,6 +379,13 @@ async function startSession(spec, sdk) {
     ownPostSeq: store.resumedPostSeq(spec.ownPostSeq),
     win: null, query: null, abortController: null, pushIterator: null,
   };
+  // 🔒 **WHOSE SESSION THIS IS — the cross-account stamp (adversarial review, 2026-08-31).**
+  // Written ONCE, at registration, and never rewritten: the registry is process-lifetime and a
+  // sign-out does NOT clear it, so operator A's live agent survives B signing in on the same
+  // Mac. The PRIVATE DIRECT LANE resolves a target by `(channel, thread, agent)` against this
+  // registry, so without a stamp B's direction could reach A's session and ship A's private
+  // turn text back to B. Same guard, same reason, as `session-state-push.js › trackOrigin`.
+  s.operatorUserId = selfUserId || null;
   noteSiblings(s); // the framing's multiplayer paragraph, current as of registration
   sessions.set(s.key, s); sessionSummary.touch(); // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for the SDK's first dispatch (§11)
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it

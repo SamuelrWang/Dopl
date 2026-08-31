@@ -71,9 +71,33 @@ const OWN_CHANNEL_MARKER_OPS = ['milestone'];
 // The THREAD-OPEN half (Samuel's ruling, 2026-08-24). Its own name for the same reason.
 const OWN_CHANNEL_THREAD_OPS = ['create_thread'];
 
+// The ESCALATION half (Samuel's ruling, 2026-08-31). Its own name for the same reason as the two
+// above: `auto-outbound-escalate` is a different answer to "what left this machine with no click?"
+// than a milestone or a thread open.
+//
+// ⚠ IT EARNS THE LANE ON `create_thread`'s ARGUMENT, NOT ON `milestone`'s. A milestone earned it
+// by SAYING LESS than the post beside it; an escalation says more — it is a post with a QUESTION
+// and a set of ANSWERS on it. What admits it is the other argument: outbound CONTENT into this
+// session's own channel, addressed to a member of that same channel, which is exactly what the
+// outbound half consents to. The bar that keeps `close_thread` out is cleared for the same reason
+// a thread open clears it — an escalation settles no shared state, it ASKS.
+//
+// ⚠ WHAT LEAVING IT OFF WOULD HAVE COST, and it is F-320's defect class exactly: the agent that
+// most needs to escalate is a BLOCKED one, and a blocked agent is almost always a windowless
+// session on the operator's own machine. Unclassified, it falls to the AXIS-A gate — and a
+// windowless session answers a gate with `deny` — so the op the tool's own protocol tells a stuck
+// agent to reach for would be auto-refused in EVERY posture, with nothing an operator could set.
+//
+// ⚠ `escalationAnswer` IS NOT HERE AND MUST NEVER BE. An agent answering an escalation is an agent
+// deciding a question a human was asked, which is the whole thing the card exists to prevent. It
+// rides an ordinary `post` and hits `isOwnChannelPost`'s gate like any other.
+const OWN_CHANNEL_ESCALATE_OPS = ['escalate'];
+
 // What `grantDecision` actually asks about. Derived, never restated: a third member added to
 // either list above joins the lane and the reason codes for free.
-const OWN_CHANNEL_OUTBOUND_OPS = OWN_CHANNEL_MARKER_OPS.concat(OWN_CHANNEL_THREAD_OPS);
+const OWN_CHANNEL_OUTBOUND_OPS = OWN_CHANNEL_MARKER_OPS
+  .concat(OWN_CHANNEL_THREAD_OPS)
+  .concat(OWN_CHANNEL_ESCALATE_OPS);
 
 // THE ONE SCOPE RULE, shared by every predicate below so two of them can never disagree about
 // what "my own channel" means. Same shape and same safe failure as
@@ -97,7 +121,12 @@ function isOwnChannelThreadOpen(input, sessionChannelId) {
   return scopedToOwnChannel(OWN_CHANNEL_THREAD_OPS, input, sessionChannelId);
 }
 
-/** Either of them — the single question `grantDecision`'s Axis-B branch asks. */
+/** An own-channel `escalate`. Used by the gate REASON, to say which allow this was. */
+function isOwnChannelEscalate(input, sessionChannelId) {
+  return scopedToOwnChannel(OWN_CHANNEL_ESCALATE_OPS, input, sessionChannelId);
+}
+
+/** Any of them — the single question `grantDecision`'s Axis-B branch asks. */
 function isOwnChannelOutbound(input, sessionChannelId) {
   return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, input, sessionChannelId);
 }
@@ -105,8 +134,10 @@ function isOwnChannelOutbound(input, sessionChannelId) {
 module.exports = {
   OWN_CHANNEL_MARKER_OPS,
   OWN_CHANNEL_THREAD_OPS,
+  OWN_CHANNEL_ESCALATE_OPS,
   OWN_CHANNEL_OUTBOUND_OPS,
   isOwnChannelMarker,
   isOwnChannelThreadOpen,
+  isOwnChannelEscalate,
   isOwnChannelOutbound,
 };

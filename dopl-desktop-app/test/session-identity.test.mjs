@@ -137,9 +137,20 @@ test("session-engine: startSession merges the spec ids into the context for EVER
   // One merge, read by BOTH the eager first turn (fresh responder / requester) and the
   // session object the lazy fresh-shell framing later reads (io.takeFraming -> s.context).
   assert.match(src, /const context = \{ \.\.\.\(spec\.context \|\| \{\}\), channelId: spec\.channelId, workspaceId: spec\.workspaceId \};/);
-  assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context, nonce \}\)/);
+  // ⚠ THE BUILDER TAKES THAT MERGE PLUS THE SESSION'S TOOL PROFILE, AND THE SPREAD IS AT THE
+  // CALL (2026-08-31). The profile is a fact about the SESSION, not about the launch payload, so
+  // it is spread here rather than stored on `s.context` — exactly what `session-seed.js ›
+  // takeFraming` already did, and what this site was missing. It went unseen while both
+  // template-carrying lanes spawned idle, so `takeFraming` was the only builder a template ever
+  // reached; a running directive spawn reaches this one, and an undefined profile reads as "not
+  // read_only" through `kbReadable`, i.e. the turn would ORDER a hard-denied tool.
+  assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile \}, nonce \}\)/);
   assert.match(src, /\n {4}context, \/\//, "the SAME merged object is what the session carries");
   assert.ok(!/context: spec\.context/.test(src), "no path keeps the un-merged context");
+  // ⚠ …and the profile is NOT written INTO the merged object: `s.context` must stay
+  // caller-shaped, so nothing a launch payload carries can pose as the session's profile.
+  assert.ok(!/channelId: spec\.channelId, workspaceId: spec\.workspaceId, profile/.test(src),
+    "the profile never joins the stored context");
 });
 
 test("prompt-framing: a responder prompt is NOT changed by the new context field", () => {

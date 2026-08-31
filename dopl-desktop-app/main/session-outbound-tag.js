@@ -37,7 +37,9 @@
 // dependency-free (session-profiles only, which is crypto + tool-profiles) so the truth table
 // drives the real shipped code instead of a slice.
 
-const { isOwnChannelPost, isChannelTool, isOwnChannelThreadOpen } = require('./session-profiles');
+const {
+  isOwnChannelPost, isChannelTool, isOwnChannelThreadOpen, isOwnChannelEscalate,
+} = require('./session-profiles');
 
 // ─── BEGIN SESSION-IO-PURE (pure; unit-tested via source extraction) ──────────
 //
@@ -74,9 +76,16 @@ function isOutboundPost(name, input, sessionChannelId) {
 // `session-own-outbound.js`'s, re-exported through session-profiles, so a call that
 // `grantDecision` classified onto the Axis-B outbound lane is exactly the call that reaches the
 // outbound surface. A slug-addressed one is cross-channel to both, which is the safe failure.
+// ⚠ `escalate` JOINED ON 2026-08-31 (Samuel's ruling) AND LEAVING IT OFF WOULD HAVE BEEN F-321
+// EXACTLY. An escalation is a question a HUMAN has to answer, so the session asking one is
+// windowless far more often than not — and without this predicate a gated one raises the dock's
+// `permission_request`, which `claimGate` denies outright. The agent would be told "this session
+// has no surface to show one on" about the one call whose entire purpose is to reach a surface.
 function outboundConsentShape(name, input, sessionChannelId) {
+  if (!isChannelTool(name)) return false;
   return isOutboundPost(name, input, sessionChannelId)
-    || (isChannelTool(name) && isOwnChannelThreadOpen(input, sessionChannelId));
+    || isOwnChannelThreadOpen(input, sessionChannelId)
+    || isOwnChannelEscalate(input, sessionChannelId);
 }
 
 // ─── BEGIN OUTBOUND-THREAD-TAG (pure; unit-tested via source extraction) ──────

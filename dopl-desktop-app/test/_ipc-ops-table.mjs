@@ -62,6 +62,11 @@ export const OPS = [
   // machine that never enabled the lane answers too, so the difference discloses nothing.
   ["orchestrator:getLaunchEnabled", undefined, { enabled: false }],
   ["orchestrator:setLaunchEnabled", { enabled: true }, { ok: false }],
+  // 2026-08-31: the PRIVATE DIRECT LANE's own consent — the same machine-wide, no-id shape as
+  // the launch pair above, and a SEPARATE grant (directing reaches a running agent's private
+  // lane; launching buys a process). Both refusals are indistinguishable from a genuine "off".
+  ["orchestrator:getDirectEnabled", undefined, { enabled: false }],
+  ["orchestrator:setDirectEnabled", { enabled: true }, { ok: false }],
   // ⚠ JOINED 2026-08-22 (Samuel's ended-agent ruling): the desktop half of the thread-delete
   // cascade. Main cannot see the SERVER's cascade, so an ended agent's frozen 7-day history
   // would outlive the thread it worked. It drops LOCAL stores only — never a `channel_message`,
@@ -181,6 +186,8 @@ export const OPS = [
 export const NO_BAD_PAYLOAD = new Set([
   "orchestrator:getLaunchEnabled",
   "orchestrator:setLaunchEnabled",
+  "orchestrator:getDirectEnabled",
+  "orchestrator:setDirectEnabled",
   "claude:signIn",
   // ⚠ IT READS NO PAYLOAD AT ALL (2026-08-27), so there is no bad one to build: it answers
   // eight CSPRNG characters to any bound caller and the sender binding is the entire gate.

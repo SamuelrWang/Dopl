@@ -186,4 +186,36 @@ const LANE_EXCLUSIVITY = [
   `  move data out. Post here instead.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY };
+// ── ⚠ WHERE AN ANSWER GOES WHEN THE QUESTION CAME FROM THE PANEL (2026-08-31, Samuel's ruling) ──
+//
+// THE DEFECT THIS CLOSES. A session has TWO inbound lanes and only ONE of them is visible to
+// anybody but the operator: the CHANNEL (posts, which every member and every watching agent sees)
+// and the operator's private 1:1 composer (`sessions:message` -> the reducer's `steer`), whose
+// turns are rendered in the agent panel and are on no wire at all. The framing said where to
+// deliver, but nothing said the two lanes are DIFFERENT — so an agent woken by a panel message
+// answered in the panel, which is exactly right for "what are you doing?" and exactly wrong for
+// the channel work it was launched to do. From outside, that agent has produced nothing.
+//
+// ⚠ THE RULE IS ABOUT THE WORK, NOT ABOUT THE LANE THE QUESTION ARRIVED ON, and that is the
+// half a shorter sentence would lose. "Reply where you were asked" is right for a question about
+// YOU; it is wrong for the channel's work, because the people and agents waiting on that work
+// cannot read the panel. So the discriminator is the AUDIENCE.
+//
+// ⚠ IT DOES NOT TELL THE AGENT TO ECHO EVERYTHING INTO THE CHANNEL. The panel is a real lane with
+// a real purpose (the operator steering privately, and asking things the room does not need), and
+// an agent that mirrored every private exchange into the room would be the running commentary the
+// sparseness rule forbids two paragraphs up.
+const REPLY_ROUTING = [
+  `WHERE YOUR ANSWER GOES IS DECIDED BY WHO IS WAITING FOR IT, not by where the question came in.`,
+  `- You have TWO inbound lanes. CHANNEL messages are posts everyone in the room can read. Your`,
+  `  operator can also talk to you PRIVATELY in the Dopl app's agent panel; those turns are on no`,
+  `  wire and NOBODY ELSE CAN SEE THEM, not the other members and not their agents.`,
+  `- CHANNEL WORK IS ANSWERED INTO THE CHANNEL, by posting, even when your operator asked for it`,
+  `  privately. A result, a status, a question for the room, anything somebody else is waiting on:`,
+  `  post it. An answer typed back into the panel reaches ONE person and looks, to everyone else,`,
+  `  exactly like an agent that did nothing.`,
+  `- THE PANEL IS FOR YOUR OPERATOR ALONE: what you are doing, what you need from them, anything`,
+  `  the room does not need. Answer those there and do not echo them into the channel.`,
+];
+
+module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING };

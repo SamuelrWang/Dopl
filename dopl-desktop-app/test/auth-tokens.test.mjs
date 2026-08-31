@@ -35,6 +35,9 @@ import { between, fnOf } from "./helpers/source-probe.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const TOKENS = M("auth-tokens.js");
+// ⚠ THE PURE BLOCK MOVED (2026-08-30) to `main/auth-token-rules.js`, sentinels included —
+// auth-tokens.js hit the §2 cap and the rejected-session latch had nowhere to go.
+const RULES = M("auth-token-rules.js");
 const AUTH = M("auth.js");
 const API = M("api.js");
 const IO = M("listener-io.js");
@@ -42,7 +45,7 @@ const REPAIR = M("api-repair.js");
 const BRIDGE = M("ui-bridge.js");
 
 const PURE = between(
-  TOKENS,
+  RULES,
   "// ─── BEGIN AUTH-TOKENS-PURE",
   "// ─── END AUTH-TOKENS-PURE",
   "auth-tokens pure block"

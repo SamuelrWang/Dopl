@@ -36,8 +36,8 @@ const { isKnowledgeReadCall } = require('./knowledge-ops');
 // and could no longer carry the ruling's argument beside the list it admits to). Re-exported
 // below, and injected into the extracted table by the two harness tests like the two above.
 const {
-  OWN_CHANNEL_MARKER_OPS, OWN_CHANNEL_THREAD_OPS, OWN_CHANNEL_OUTBOUND_OPS,
-  isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
+  OWN_CHANNEL_MARKER_OPS, OWN_CHANNEL_THREAD_OPS, OWN_CHANNEL_ESCALATE_OPS, OWN_CHANNEL_OUTBOUND_OPS,
+  isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
 } = require('./session-own-outbound');
 const { isOwnMachineLaunch, launchLaneVerdict } = require('./session-own-launch'); // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25; F-320) — its own §2 file, on F-301's precedent
 const {
@@ -457,7 +457,7 @@ function grantDecision(args) {
 const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, BYPASS_TOOLS, normalizeToolMode,
-  canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelOutbound,
+  canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, // 2026-08-25 (F-320): the own-machine launch lane
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
@@ -470,10 +470,10 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
 module.exports = {
   buildSessionToolConfig, grantDecision, shortDoplName, isOwnChannelPost,
   isOwnChannelRead, OWN_CHANNEL_READ_OPS, // own-channel READ set, Axis B inbound half
-  // Axis B's OUTBOUND half beside the post — re-exported from session-own-outbound.js (§2
-  // SPLIT, 2026-08-24), so `require('./session-profiles')` still answers for all of it.
-  isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, // the `milestone` half (M4, 2026-08-05)
-  isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_OPS, // `create_thread` (Samuel's ruling, 2026-08-24)
+  // Axis B's OUTBOUND half — re-exported from session-own-outbound.js (§2 SPLIT, 2026-08-24), which
+  // carries the ARGUMENT each of the three was admitted on and why each keeps its own constant.
+  isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_OPS,
+  isOwnChannelEscalate, OWN_CHANNEL_ESCALATE_OPS,
   isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS, // the union grantDecision's Axis-B branch asks
   isKnowledgeReadCall, // 2026-08-22 (OQ-1): re-exported from knowledge-ops, the op-scoped kb read
   DOPL_READ_REFERENCE, // the member the knowledge branch asks "where does a Dopl read resolve?"

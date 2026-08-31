@@ -58,11 +58,13 @@ test("wake T1: a message addressed to a SIBLING wakes nobody else, and buys no t
 
 // ── THE LOOP FENCE — the part to not soften ─────────────────────────────────
 
-test("wake FENCE: an AGENT-authored message wakes NOTHING, @-mention included", async () => {
+test("wake FENCE: a PEER'S AGENT wakes NOTHING, @-mention included", async () => {
   // ⚠ THIS IS A DELIBERATE REVERSAL of 2026-08-22's "FROM ANY AUTHOR, operator, peer or PEER'S
   // AGENT". Tiers 2 and 3 wake on traffic nobody addressed, so two agents that can wake each
-  // other on unaddressed prose is a loop with no operator in it. The @-mention lane is narrowed
+  // other on unaddressed prose is a loop with no operator in it. The @-mention lane was narrowed
   // with them rather than left as the one door a loop could still use.
+  // ⚠ `peerMsg` AUTHORS AS **PEER**, WHICH IS WHAT MAKES THIS THE ARM THE 2026-08-31 CARVE DID
+  // NOT TOUCH. Another member's machine cannot start anything here, addressed or not.
   for (const make of [idle, parked]) {
     const named = harness({ agents: [make(A1)] });
     assert.equal(await named.feedLiveSession(entry, peerMsg({ authorKind: "agent", body: `@${A1} go` }), ME), false);
@@ -71,6 +73,58 @@ test("wake FENCE: an AGENT-authored message wakes NOTHING, @-mention included", 
     assert.equal(await solo.feedLiveSession(entry, peerMsg({ authorKind: "agent" }), ME), false);
     assert.equal(solo.calls.triage.length, 0, "and it does not even buy a router call");
   }
+});
+
+// ── ⚠ THE SAME-ACCOUNT CARVE (2026-08-31, Samuel's ruling) ──────────────────
+//
+// An agent-authored message posted under THIS OPERATOR'S OWN user id may @-wake this operator's
+// dormant agents. That is what makes `launch_agent` over MCP usable: the caller holds its
+// operator's credential, so its posts are authored by that account, and before the carve the
+// agent id it was handed could never be spent by the one caller that had it.
+
+test("wake CARVE: MY OWN account's agent-authored @-post WAKES a dormant agent", async () => {
+  for (const make of [idle, parked]) {
+    const h = harness({ agents: [make(A1)], channelAgents: [A1] });
+    assert.equal(
+      await h.feedLiveSession(entry, peerMsg({ authorKind: "agent", authorUserId: ME, body: `@${A1} go` }), ME),
+      true,
+    );
+    assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1]);
+    assert.equal(h.calls.feedInbound[0].wake, true, "and it is a WAKE, not merely a feed");
+  }
+});
+
+test("wake CARVE: the PREFIXED form works too — both doors, one carve", async () => {
+  // `@agent-<id>` is what the app's picker inserts and what `read_sessions` and `launch_agent`
+  // now publish, so the carve would be decorative if only the bare form reached it.
+  const h = harness({ agents: [idle(A1)], channelAgents: [A1] });
+  assert.equal(
+    await h.feedLiveSession(entry, peerMsg({ authorKind: "agent", authorUserId: ME, body: `@agent-${A1} go` }), ME),
+    true,
+  );
+  assert.equal(h.calls.feedInbound[0].wake, true);
+});
+
+test("wake CARVE: MY OWN account's UNADDRESSED agent post still starts NOBODY", async () => {
+  // ⚠ THE LOOP BRAKE'S CORE, AND THE MUTATION TO WATCH. Tier 2 is the sharpest case: a solo room
+  // wakes on EVERY human message with no @ at all, and it must not open for an agent-authored one
+  // even on the operator's own account. Tier 3 likewise buys no router call.
+  const solo = harness({ agents: [idle(A1)], channelAgents: [A1] });
+  assert.equal(await solo.feedLiveSession(entry, peerMsg({ authorKind: "agent", authorUserId: ME }), ME), false);
+  assert.equal(solo.calls.feedInbound.length, 0);
+  const many = harness({ agents: [idle(A1), idle(A2)], channelAgents: [A1, A2] });
+  assert.equal(await many.feedLiveSession(entry, peerMsg({ authorKind: "agent", authorUserId: ME }), ME), false);
+  assert.equal(many.calls.triage.length, 0, "and it spends no model call finding that out");
+});
+
+test("wake CARVE: a peer's agent @-post stays dead beside an own-account one that works", async () => {
+  // ⚠ THE TWO ARMS SIDE BY SIDE, on one shape, so a change that widens the identity check fails
+  // here rather than only in the pure table.
+  const mine = harness({ agents: [idle(A1)], channelAgents: [A1] });
+  const theirs = harness({ agents: [idle(A1)], channelAgents: [A1] });
+  const body = `@${A1} go`;
+  assert.equal(await mine.feedLiveSession(entry, peerMsg({ authorKind: "agent", authorUserId: ME, body }), ME), true);
+  assert.equal(await theirs.feedLiveSession(entry, peerMsg({ authorKind: "agent", authorUserId: PEER, body }), ME), false);
 });
 
 test("wake FENCE: an agent-authored message still FEEDS a RUNNING sibling — ruling 4 survives", async () => {
