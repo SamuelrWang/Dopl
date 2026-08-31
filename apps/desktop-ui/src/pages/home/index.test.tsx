@@ -131,6 +131,27 @@ describe("home page", () => {
     expect(pane?.className).not.toMatch(/\bbento\b/);
   });
 
+  /**
+   * THE ONLY WAY INTO SETTINGS FROM /home (Samuel, 2026-08-30). The workspace
+   * shell reaches it through the sidebar's gear; this page has no sidebar, and
+   * before this it had no settings entry at all.
+   *
+   * ⚠ PINNED AS "THE CONTROL OPENS THE MODAL", not as an avatar rendering. The
+   * face degrades to initials while `/api/user/profile` is in flight or on the
+   * day it fails, which is fine; a control that does not open settings is not.
+   */
+  it("opens settings from the operator's own face in the left column", async () => {
+    renderHome();
+    const control = await screen.findByRole("button", { name: "Settings" });
+    // It lives in the LIST COLUMN, above the rows — the cell is exactly the
+    // column's width, which is what keeps the selector on the record pane's edge.
+    expect(control.closest(".w-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(control);
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+  });
+
   it("renders claimed relationships and pending links in one list", async () => {
     renderHome();
 

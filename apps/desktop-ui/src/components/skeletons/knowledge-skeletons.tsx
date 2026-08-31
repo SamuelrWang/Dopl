@@ -1,5 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonLine, SkeletonText } from "@/shared/ui/skeleton";
+import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
 import kv from "@/features/knowledge/components/knowledge-v2/knowledge-v2.module.css";
 import { SkeletonSurface } from "./skeleton-surface";
 
@@ -88,6 +89,15 @@ export function KnowledgeHomeSkeleton({
  * An OPENED base — header strip spanning the panel, then the folder rail and
  * the detail column beneath it (the one-panel-three-parts shape Samuel ruled
  * for on 2026-08-28).
+ *
+ * ⚠ THE DETAIL COLUMN WAS THE STALE HALF (re-measured 2026-08-30). It ghosted a
+ * `px-6 pt-6 gap-5` document — a title, a paragraph and two flat cards — which
+ * was the pre-overhaul info face. What opening a base shows now is
+ * `detail/base-overview.tsx`: NO title, NO wrapper, two `SectionPanel`s
+ * standing directly in `.infoBody` (12px gap, 12px pad). And they are WELLS —
+ * `SECTION_PANEL_GROUND`, frame-model level 3 — because this column sits inside
+ * the shell's white `.pageCard`; a flat shimmer block there resolved into a gray
+ * panel appearing under the reader.
  */
 export function KnowledgeBaseSkeleton({
   label = "Loading knowledge base",
@@ -101,14 +111,18 @@ export function KnowledgeBaseSkeleton({
       label={label}
       className={cn(!embedded && "page-float", kv.shell)}
     >
-      {/* HEADER STRIP — 52px, spanning both columns. Crumbs left, controls right. */}
+      {/* HEADER STRIP — 52px, spanning both columns. Crumbs left; then the
+          `w-52` search well (lg and up) and THREE 26px round controls —
+          download, settings, delete (`detail/base-header.tsx`). */}
       <div className={cn(kv.baseHead, "border-b border-border-default")}>
         <SkeletonLine w={96} h={12} />
         <SkeletonLine w={10} h={10} />
         <SkeletonLine w={132} h={12} />
         <div className={kv.headSpacer} />
-        <Skeleton className="h-7 w-7 rounded-md" />
-        <Skeleton className="h-7 w-7 rounded-md" />
+        <Skeleton className="mr-1 hidden h-8 w-52 rounded-[9px] lg:block" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-[26px] w-[26px] shrink-0 rounded-full" />
+        ))}
       </div>
 
       <div className={kv.baseBody}>
@@ -127,18 +141,40 @@ export function KnowledgeBaseSkeleton({
           </div>
         </div>
 
-        {/* THE DETAIL COLUMN — title, then the section blocks the info face
-            stacks. */}
+        {/* THE DETAIL COLUMN — the info face's two flat wells, in `.infoBody`'s
+            own gap and padding. */}
         <div className={cn(kv.detailPane, "border-l border-border-default")}>
-          <div className="flex min-h-0 flex-1 flex-col gap-5 px-6 pt-6">
-            <SkeletonLine w="42%" h={22} />
-            <SkeletonText lines={3} />
-            <Skeleton className="h-[104px] w-full rounded-[14px]" />
-            <Skeleton className="h-[104px] w-full rounded-[14px]" />
+          <div className={kv.infoBody}>
+            <InfoPanelGhost lines={3} />
+            <InfoPanelGhost lines={4} />
           </div>
         </div>
       </div>
     </SkeletonSurface>
+  );
+}
+
+/**
+ * One section of the info face — Details, then Contents.
+ *
+ * ⚠ NOT `SectionPanel` ITSELF: it takes a `label` STRING and paints it as an
+ * `<h2>`, and a skeleton carries no text. What it keeps is the box
+ * (`rounded-[14px] p-3`), the `data-section-panel` hook — the one /home's record
+ * pane repaints every panel through — and `SECTION_PANEL_GROUND`, so this ghost
+ * re-grounds with `detail/meta-card.tsx` and `detail/overview-contents.tsx`
+ * rather than beside them.
+ */
+function InfoPanelGhost({ lines }: { lines: number }) {
+  return (
+    <div
+      data-section-panel
+      className={cn("rounded-[14px] p-3", SECTION_PANEL_GROUND)}
+    >
+      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
+        <SkeletonLine w={72} h={9} />
+      </div>
+      <SkeletonText lines={lines} className="px-1" />
+    </div>
   );
 }
 

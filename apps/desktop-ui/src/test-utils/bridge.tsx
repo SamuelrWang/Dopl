@@ -72,6 +72,33 @@ export function meBody(over: Record<string, unknown> = {}) {
   return { role: "owner", userId: USER_ID, ...over };
 }
 
+/** `GET /api/user/profile` — the caller's OWN row, bare (no envelope), as
+ *  `src/app/api/user/profile/route.ts` answers it. Account-level, like
+ *  `bootBody`: any surface that paints the operator's face reads it. */
+export function profileBody(over: Record<string, unknown> = {}) {
+  return {
+    id: USER_ID,
+    display_name: "Sam Operator",
+    avatar_url: null,
+    email: "sam@example.com",
+    ...over,
+  };
+}
+
+/**
+ * The ACCOUNT-level reads — identity, and the caller's own profile row. Returns
+ * `null` for anything else so a suite chains its own table after it, the same
+ * shape `workspaceRoutes` has.
+ *
+ * ⚠ These are NOT workspace-scoped and that is why they are their own table:
+ * /home has no workspace and opens with both of them.
+ */
+export function accountRoutes(path: string): Promise<BridgeResponse> | null {
+  if (path === "/api/boot") return Promise.resolve(ok(bootBody()));
+  if (path === "/api/user/profile") return Promise.resolve(ok(profileBody()));
+  return null;
+}
+
 /**
  * The reads every workspace-scoped page opens with. Returns `null` for any
  * other path so a suite can chain its own table:

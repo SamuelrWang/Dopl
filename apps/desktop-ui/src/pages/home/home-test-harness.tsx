@@ -3,7 +3,7 @@ import {
   USER_ID,
   WORKSPACE,
   WORKSPACE_ID,
-  bootBody,
+  accountRoutes,
   noContent,
   ok,
   renderWithProviders,
@@ -378,7 +378,6 @@ export function routes(
   if (EMPTY_TREE_PATH.test(bare)) {
     return Promise.resolve(ok({ base: KB_PRIVATE, folders: [], entries: [] }));
   }
-  if (bare === "/api/boot") return Promise.resolve(ok(bootBody()));
   if (bare === "/api/workspaces") return Promise.resolve(ok(WORKSPACES));
   if (bare === "/api/home/channels") {
     return Promise.resolve(ok(HOME));
@@ -414,7 +413,8 @@ export function routes(
       ok({ channel: { ...CHANNEL, infoCard: patch.infoCard ?? EMPTY_INFO_CARD } })
     );
   }
-  return null;
+  // Identity + the caller's profile row — `#/test-utils/bridge › accountRoutes`.
+  return accountRoutes(bare);
 }
 
 /** A channel with nobody in it yet — the state "Add person" acts on. */

@@ -55,15 +55,28 @@ export interface PageRoute {
   element?: React.ReactNode;
 }
 
+/**
+ * ⚠ CHANNELS-FIRST, ONTOLOGY LAST-BUT-TWO (Samuel's ruling, 2026-08-30 — ledger
+ * ASK-6). The order is **Overview, Channels, Agents, Knowledge, Skills,
+ * Ontology, Chats, Members, Settings**, and it is a product statement: channels
+ * is the lead product and ontology is substrate. The shipped order said the
+ * opposite — ontology second, channels sixth — which was a stale nav from before
+ * the 2026-08-03 pivot, not a decision anybody had made.
+ *
+ * ⚠ THIS TABLE IS NOT WHAT THE SIDEBAR RENDERS. `src/shared/layout/app-shell/
+ * app-sidebar-core.tsx › NAV` is, and it carries the same order by hand for the
+ * same reason the deep-link copy does — it is shared with the web tree and
+ * cannot import this file. **Reordering one without the other is the drift.**
+ *
+ * ⚠ `dopl-desktop-app/main/deep-link-target.js › WORKSPACE_PAGES` needs NO edit
+ * for a reorder: it is an OBJECT keyed by page, its drift test
+ * (`test/deep-link-target.test.mjs › the page table matches the SPA's route
+ * table`) sorts both sides before comparing, and its value means "has a `:param`
+ * detail child" — a question order cannot change. Adding or REMOVING a page
+ * still needs it.
+ */
 export const WORKSPACE_PAGES: PageRoute[] = [
   { path: "overview", label: "Overview", element: <OverviewPage /> },
-  { path: "ontology", label: "Ontology", element: <OntologyPage /> },
-  { path: "ontology/:clusterSlug", label: "Cluster", element: <OntologyDetailPage /> },
-  { path: "knowledge", label: "Knowledge", element: <KnowledgePage /> },
-  { path: "knowledge/:kbSlug", label: "Knowledge base", element: <KnowledgeDetailPage /> },
-  { path: "skills", label: "Skills", element: <SkillsPage /> },
-  { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
-  { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "channels", label: "Channels", element: <ChannelsPage /> },
   // ⚠ THE NOTIFICATION'S LANDING ROUTE (wiring plan Phase 9). A clicked request
   // notification focuses the app and navigates HERE, naming the channel the
@@ -83,6 +96,13 @@ export const WORKSPACE_PAGES: PageRoute[] = [
   // wants `agents: false` — a `true` there would hand the renderer a third
   // segment that matches nothing.
   { path: "agents", label: "Agents", element: <AgentsPage /> },
+  { path: "knowledge", label: "Knowledge", element: <KnowledgePage /> },
+  { path: "knowledge/:kbSlug", label: "Knowledge base", element: <KnowledgeDetailPage /> },
+  { path: "skills", label: "Skills", element: <SkillsPage /> },
+  { path: "skills/:skillSlug", label: "Skill", element: <SkillDetailRedirect /> },
+  { path: "ontology", label: "Ontology", element: <OntologyPage /> },
+  { path: "ontology/:clusterSlug", label: "Cluster", element: <OntologyDetailPage /> },
+  { path: "chats", label: "Chats", element: <ChatsPage /> },
   { path: "members", label: "Members", element: <MembersPage /> },
   { path: "settings", label: "Settings", element: <SettingsPage /> },
 ];

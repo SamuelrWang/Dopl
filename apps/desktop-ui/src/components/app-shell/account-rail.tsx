@@ -18,10 +18,11 @@ export interface AccountRailProps {
   activeWorkspacePublicId: string | null;
   onNavigate: (path: string) => void;
   onCreateWorkspace: () => void;
-  /** Backdrop override only — /home repaints the rail its own frame ink so the
-   *  rail and the shell around it read as ONE slab. Needs `!` (module class and
-   *  utility are the same specificity). Layout stays in the module. */
-  className?: string;
+  // ⚠ `className?: string` STOOD HERE AND IS DELETED (2026-08-30). Its only
+  // purpose was /home passing `!bg-home-frame` to repaint the rail's backdrop;
+  // `.rail` paints `--home-frame` at the source now, so both mounts get the one
+  // slab and the escape hatch had no caller left. A backdrop prop on a chrome
+  // component is how the rail and the shell drifted apart in the first place.
 }
 
 /**
@@ -37,11 +38,10 @@ export function AccountRail({
   activeWorkspacePublicId,
   onNavigate,
   onCreateWorkspace,
-  className,
 }: AccountRailProps) {
   const isHome = activeWorkspacePublicId === null;
   return (
-    <nav className={cn(styles.rail, className)} aria-label="Account">
+    <nav className={styles.rail} aria-label="Account">
       <button
         type="button"
         title="Home"
@@ -54,8 +54,9 @@ export function AccountRail({
         <img src={doplMark} alt="" className={styles.homeMark} />
       </button>
 
-      <div className={styles.divider} role="presentation" />
-
+      {/* ⚠ A `role="presentation"` divider rule stood here and is DELETED — see
+          `account-rail.module.css`. The account/container boundary is the 11px
+          break `.workspaces` opens with; the selected tile owns the only line. */}
       <div className={styles.workspaces}>
         {workspaces.map((ws) => {
           const isActive = ws.publicId === activeWorkspacePublicId;

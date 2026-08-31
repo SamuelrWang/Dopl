@@ -137,13 +137,22 @@
 /* Official global surface components. Compose these; never re-hardcode
    their recipes locally. */
 
-/* THE ONE raised card a full-page view renders into. */
+/* THE ONE raised card a full-page view renders into.
+   ⚠ IT WEARS THE APP FRAME PALETTE (Samuel, 2026-08-30, ruling items 2 + 3:
+   the panel background matched, "the border blue matched, same width"). Fill is
+   `--home-panel`, the ground /home's panel already stood on; the edge is
+   `--home-panel-line` at the SAME 2px the /home record pane wears
+   (`pages/home/index.tsx`, `border-2 border-home-panel-line`). Changing the ONE
+   recipe is what makes the two surfaces match — /home's `bg-home-panel` utility
+   is now saying what this already says, and every workspace page inherits it
+   without a per-page repaint. Geometry (the float margins that reveal the frame
+   above and below) is UNCHANGED and is the shared bit item 4 asks for. */
 .page-float {
   flex: 1;
   min-width: 0;
   margin: 7px 8px 9px 8px;
-  background: var(--panel-surface);
-  border: 1px solid var(--border-strong);
+  background: var(--home-panel);
+  border: 2px solid var(--home-panel-line);
   border-radius: 14px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.05),

@@ -6,7 +6,9 @@
  * from the component left the window still rendering a rounded panel on a gray ground, because
  * the frame ABOVE it was painting too. The layers, top to bottom:
  *
- *   1. `shell.root`          fixed inset-0; paints `--shell-surface` (the shell gray)
+ *   1. `shell.root`          fixed inset-0; paints the app FRAME (`--home-frame`; it was the
+ *                            `--shell-surface` gray until 2026-08-30 — either way, a ground this
+ *                            window must cover, which is the only thing this file cares about)
  *   2. `shell.body`          transparent flex row
  *   3. `shell.windowSurface` paints `--panel-surface`, ZERO margin, ZERO radius  ← the fix
  *   4. the window component  paints `--panel-surface`, no margin/radius/shadow
@@ -65,8 +67,8 @@ describe("the pop-out's painted stack", () => {
   });
 
   it("windowSurface paints the PANEL colour, covering the shell gray beneath", () => {
-    // ⚠ `.root` is `position: fixed; inset: 0` and paints `--shell-surface`. If this layer
-    // painted the same gray, the panel would simply not be there; if it painted nothing, the gray
+    // ⚠ `.root` is `position: fixed; inset: 0` and paints the app frame. If this layer painted
+    // that same ground, the panel would simply not be there; if it painted nothing, the frame
     // would show wherever the content did not reach.
     expect(windowSurface).toContain("var(--panel-surface)");
     expect(windowSurface).not.toContain("var(--shell-surface)");

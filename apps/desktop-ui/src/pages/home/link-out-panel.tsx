@@ -1,6 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
-import { FIELD_WELL } from "@/shared/ui/wells";
+import { RAISED_WELL } from "@/shared/ui/wells";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import { errorMessage } from "#/components/page-states";
 import type { HomePendingLink } from "@/features/home/types";
@@ -26,6 +26,15 @@ import { useRevokeHomeLink } from "./home-writes";
  * pane is {@link PendingLinkCard} — the same panel in a floating card. Two
  * copies of a revoke button is how the two come to disagree about what revoking
  * means.
+ *
+ * ⚠ THE URL WELL IS `RAISED_WELL`, NOT `FIELD_WELL` (2026-08-30). It wore the
+ * concave `FIELD_WELL` against /home's "nothing here is pressed in" ruling
+ * (Samuel, 2026-08-27), while `add-person-dialog.tsx` renders the SAME BLOCK —
+ * the same class tail, the same `displayUrl` + `CopyButton` pair — on
+ * `RAISED_WELL` one file over. The sweep that pins that ruling
+ * (`agent-templates/components/template-editor.test.tsx`) had a hand-typed
+ * five-file list and this file was not on it; the list is derived from the
+ * directory now, so the enforcement mechanism covers what the ruling always did.
  */
 export function LinkOutPanel({ link }: { link: HomePendingLink }) {
   const revoke = useRevokeHomeLink();
@@ -34,7 +43,7 @@ export function LinkOutPanel({ link }: { link: HomePendingLink }) {
     <div>
       <div
         className={cn(
-          FIELD_WELL,
+          RAISED_WELL,
           "flex items-center gap-2 px-3 py-2 font-mono text-small text-text-primary"
         )}
       >

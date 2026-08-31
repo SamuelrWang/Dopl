@@ -18,6 +18,7 @@ import { PageError, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
+import { HomeSettingsControl } from "./home-settings-control";
 import { RelationshipList } from "./relationship-list";
 import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
@@ -118,6 +119,7 @@ export default function HomePage() {
 
   const selected =
     visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
+
 
   // 🔒 EVERY FACE THAT RENDERS A CHANNEL IS KEYED BY THE ROW, NOT BY THE TAB
   // (2026-08-26). Chat always was; Knowledge and then Agents had to become so
@@ -240,10 +242,14 @@ export default function HomePage() {
   };
 
   return (
-    // `!bg-home-frame` (×3): Home's frame is one dark slab — shell root,
-    // shell surface and the account rail — with the base panel floating on it.
-    // `!` because the module fills are the same one-class specificity and
-    // stylesheet order between module CSS and utilities is not guaranteed.
+    // ⚠ `!bg-home-frame` (×3) STOOD HERE AND IS DELETED (Samuel, 2026-08-30).
+    // Home's frame is one dark slab — shell root, shell surface, account rail —
+    // and this page used to be the only surface that said so, forcing the ink
+    // on three mounts. The RULING made that the app's frame: `.root`,
+    // `.surface`, `.sidebar` and `.rail` all paint `--home-frame` at the source
+    // now, so /home simply mounts the shell and gets its slab. **Do not put the
+    // overrides back** — the whole point is that there is one statement of the
+    // frame and the workspace pages cannot drift off it.
     //
     // ⚠ THE PANEL BUTTS FLUSH-LEFT AGAINST THE RAIL ON /home (Samuel, twice:
     // "rail glyphs look off-centre"). MEASURED cause: the account rail's tiles
@@ -258,18 +264,27 @@ export default function HomePage() {
     // edge (x=54): the visible dark column becomes the 54px rail, and the tiles'
     // 7px/7px gutters read centred. The panel keeps its top/right/bottom float —
     // the rail is simply the slab's left frame, so there is no left gap to float
-    // over. Workspace shell is unaffected: there `.surface` is the LIGHT
-    // `--shell-surface`, so the rail's right edge is already visible at 54px.
-    <div className={cn(shell.root, "!bg-home-frame")}>
+    // over.
+    //
+    // ⚠ WHY THE WORKSPACE SHELL DOES NOT NEED THE SAME `!ml-0` even though its
+    // surface is now the same frame ink (2026-08-30): there the rail is followed
+    // by the 232px SIDEBAR, so the dark region is ~294px wide and reads as a
+    // frame, not as a column the tiles are supposed to be centred in. The
+    // illusion this zeroes is specific to a 70px sliver.
+    <div className={shell.root}>
       <div className={shell.body}>
         <AccountRail
-          className="!bg-home-frame"
           workspaces={workspacesQuery.data ?? []}
           activeWorkspacePublicId={null}
           onNavigate={(path) => navigate(path)}
           onCreateWorkspace={() => setCreateWsOpen(true)}
         />
-        <div className={cn(shell.surface, "!bg-home-frame", "!ml-0")}>
+        {/* ⚠ `!ml-0` DROPPED FROM THE SURFACE (2026-08-30) — `--shell-gap-left`
+            is 0 now, so the surface already starts at the rail's right edge on
+            BOTH hosts. The one on `<main>` below stays: that is `.page-float`'s
+            own left margin, and the workspace panel zeroes the same one in
+            `app-shell.module.css › .panel`. */}
+        <div className={shell.surface}>
           {/* Layered panels: the BASE panel (`bg-home-panel`) carries the
               header + relationship list; the record pane sits on it, bounded by
               the account palette's 2px line rather than by an elevation (Samuel,
@@ -290,16 +305,32 @@ export default function HomePage() {
                 the selector's left edge on the record pane's (Samuel,
                 2026-08-24). Same var the column is sized from — see
                 `home.module.css › .page`. */}
-            <div className="flex items-center justify-between gap-3 py-3 pl-[var(--home-list-w)] pr-5">
-              {/* The selector REPLACES the page title — the surface names
-                  itself by which face is raised. */}
-              <SegmentedControl<HomeTab>
-                options={HOME_TABS}
-                value={tab}
-                onChange={setTab}
-                variant="track"
-                size="lg"
-              />
+            <div className="flex items-center justify-between gap-3 py-3 pr-5">
+              {/* ⚠ THE LEFT PAD BECAME A REAL CELL (2026-08-30) AND THE WIDTH IS
+                  WHY IT STILL ALIGNS. It was `pl-[var(--home-list-w)]` on this
+                  row; the operator's face needed to live IN the list column, so
+                  the pad is now a cell of exactly that width holding it, and the
+                  selector starts on the record pane's left edge as before —
+                  same var, same edge (`home.module.css › .page`).
+                  ⚠ THE TWO ARE ONE GROUP, or `justify-between` would spread
+                  three children and walk the selector off that edge. */}
+              <div className="flex min-w-0 items-center">
+                <div className="flex w-[var(--home-list-w)] shrink-0 items-center px-3">
+                  <HomeSettingsControl
+                    identity={identity.data}
+                    onWorkspaceChanged={() => void workspacesQuery.refetch()}
+                  />
+                </div>
+                {/* The selector REPLACES the page title — the surface names
+                    itself by which face is raised. */}
+                <SegmentedControl<HomeTab>
+                  options={HOME_TABS}
+                  value={tab}
+                  onChange={setTab}
+                  variant="track"
+                  size="lg"
+                />
+              </div>
               <div className="flex items-center gap-2.5">
                 <HomeSearch query={query} onQueryChange={setQuery} />
                 {/* ⚠ ONE PRIMARY ACTION, AND IT IS "New channel" (Samuel,
@@ -392,9 +423,11 @@ export default function HomePage() {
           navigate(`/${workspaceSegment(created)}`);
         }}
       />
+
     </div>
   );
 }
+
 
 /** No conversation selected. A token, so the empty pane crossfades like any
  *  other pane content — and it can never collide with a row id. */

@@ -83,12 +83,14 @@
    out. ⚠ BOTH of them — the new-thread panel and, since 2026-08-27, the new-agent launch panel;
    they share one attribute so this stays ONE rule.
 
-   ⚠ SCOPED, for the reason at the top of this file. `--home-panel` is one of
-   /home's four account-palette values and is that page's alone
-   (`tokens.css › /home palette`); the shared composer keeps its neutral
-   `bg-bg-inset` on the workspace channels page. The point is the BINDING, not
-   the ~4/255 the two grays differ by today — re-tune the account palette and
-   this panel follows it instead of drifting off it.
+   ⚠ SCOPED, for the reason at the top of this file. The RULE is /home's, even
+   though the token is not: `--home-panel` is one of the APP FRAME palette's
+   four values (`tokens.css › THE APP FRAME PALETTE` — Samuel widened that
+   palette's scope on 2026-08-30 and the "that page's alone" claim this note
+   used to make is superseded). What stays page-scoped is the BINDING: the
+   shared composer keeps its neutral `bg-bg-inset` on the workspace channels
+   page, and only the copy mounted inside `.frame` follows the panel gray. The
+   point is that binding, not the ~4/255 the two grays differ by today.
 
    ⚠ FILL ONLY. The concave shadow stack is deliberate and stays
    (`composer-request-panel.tsx`); only the colour under it is /home's.
@@ -116,12 +118,14 @@
    drift the moment one of them is re-tuned. Stating the ground once means a
    change to it cannot land on one tab only.
 
-   ⚠ SCOPED, for the reason at the top of this file: `--home-panel` is /home's
-   alone, so `TemplatePanel` keeps its neutral flat card face on the WORKSPACE
-   Agents page (`.frame` is applied nowhere else). This is also why
-   `shared/ui/section-panel.tsx` paints nothing of its own — a `tone="home"`
-   prop there would put this palette one autocomplete away from every workspace
-   page.
+   ⚠ SCOPED, for the reason at the top of this file: `.frame` is applied nowhere
+   else, so `TemplatePanel` keeps its neutral flat card face on the WORKSPACE
+   Agents page. ⚠ The scope is the RULE's, not the token's — `--home-panel` was
+   /home's alone until 2026-08-30 and is now the app frame's panel fill; this
+   rule is what keeps the two Agents faces apart, and it always was. This is
+   also why `shared/ui/section-panel.tsx` paints nothing of its own — a
+   `tone="home"` prop there would turn a per-mount decision into an enum one
+   autocomplete away from every page.
 
    ⚠ `border-color`, NOT `border: none` — the background paints under the
    border box, so a transparent hairline is seamless AND leaves the box model

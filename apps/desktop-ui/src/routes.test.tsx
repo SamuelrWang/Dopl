@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "#/lib/query-client";
+import { NAV } from "@/shared/layout/app-shell/app-sidebar-core";
 import {
   THREAD_WINDOW_PATH,
   WORKSPACE_HOME_PATH,
@@ -139,7 +140,13 @@ describe("app routes", () => {
     expect(match?.params.kbSlug).toBe("some-base-9f2a");
   });
 
-  it("mirrors the web app's page list", () => {
+  it("mirrors the web app's page list, CHANNELS-FIRST", () => {
+    // ⚠ THE ORDER IS THE ASSERTION, and it is Samuel's 2026-08-30 ruling
+    // (ledger ASK-6): Overview, Channels, Agents, Knowledge, Skills, Ontology,
+    // Chats, Members, Settings — channels is the lead product, ontology is
+    // substrate. `toEqual` on the array (not a set) is what makes a silent
+    // re-sort red.
+    //
     // ⚠ NO `channels-v2` ROW. It existed from Phase 2 to the CUTOVER (Phase 12,
     // 2026-08-18) as a temporary path over the ported surface, beside a
     // `channels` row that had no detail child. Both v2 rows were renamed to
@@ -147,20 +154,37 @@ describe("app routes", () => {
     // `channels-v2` row would now resolve to nothing.
     expect(WORKSPACE_PAGES.map((page) => page.path)).toEqual([
       "overview",
-      "ontology",
-      "ontology/:clusterSlug",
+      "channels",
+      "channels/:channelId",
+      "agents",
       "knowledge",
       "knowledge/:kbSlug",
       "skills",
       "skills/:skillSlug",
+      "ontology",
+      "ontology/:clusterSlug",
       "chats",
-      "channels",
-      "channels/:channelId",
-      "agents",
       "members",
       "settings",
     ]);
     expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("channels-v2");
+  });
+
+  it("the rendered sidebar carries the SAME order as the route table", () => {
+    // ⚠ TWO HAND-KEPT LISTS, ONE RULING. `app-sidebar-core.tsx › NAV` is what
+    // DRAWS the rail; `WORKSPACE_PAGES` is what registers the routes. Neither
+    // can import the other (the sidebar core is shared with the web tree), so
+    // this is the alarm — reordering one and not the other is the drift, and it
+    // is invisible in every other test.
+    //
+    // Settings is deliberately absent from `NAV` (it is the rail's foot button),
+    // and detail rows carry no nav row of their own.
+    const navOrder = NAV.map((row) => row.section);
+    const pageOrder = WORKSPACE_PAGES.map((page) => page.path).filter(
+      (path) => !path.includes("/") && path !== "settings"
+    );
+    expect(navOrder).toEqual(pageOrder);
+    expect(navOrder[1]).toBe("channels");
   });
 
   it("registers the agents page — one row, and NO detail child", () => {

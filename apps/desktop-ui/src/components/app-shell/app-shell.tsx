@@ -4,6 +4,7 @@ import {
   AppSidebarCore,
   activeSectionFromPath,
 } from "@/shared/layout/app-shell/app-sidebar-core";
+import { cn } from "@/shared/lib/utils";
 import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switcher-core";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
@@ -15,15 +16,17 @@ import { WelcomePopup } from "@/features/onboarding/components/welcome-popup";
 import { TourProviderCore } from "@/features/tour/components/tour-provider-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { isStandardWorkspace } from "@/features/workspaces/types";
+import type { HomeChannelsPayload } from "@/features/home/types";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
+import { HOME_CHANNELS_PATH } from "#/pages/home/home-rows";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 // ⚠ `?inline` (data URI) required: packaged renderer is a `file://` document
 // under `img-src 'self' data: blob:`, so an absolute `/favicons/...` src
 // resolves to the filesystem root and never loads.
 import doplMark from "#/assets/dopl-mark.png?inline";
-import { AccountRail } from "./account-rail";
+import { AccountRail, HOME_PATH } from "./account-rail";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
 
@@ -69,6 +72,69 @@ export function AppShellLayout() {
     if (!needsRedirect || !segment) return;
     navigate(canonicalPath(location.pathname, segment), { replace: true });
   }, [needsRedirect, segment, location.pathname, navigate]);
+
+  /**
+   * 🔒 A GUEST AT A WORKSPACE URL GOES TO THEIR CHANNEL (Samuel's ruling,
+   * 2026-08-30 — ledger ASK-2, option b).
+   *
+   * ⚠ THE FLOOR IS NOT THE FIX AND MUST NOT BECOME ONE. `segment.ts ›
+   * BOOT_MIN_ROLE` stays `"guest"` deliberately: the two pop-out windows live
+   * OUTSIDE this layout and pay the boot read themselves, so a `viewer` floor
+   * there answers 404 and a guest's popped-out thread renders "Workspace not
+   * found". The floor says WHO MAY ASK; this says WHERE THEY LAND. Both are
+   * needed and they are different questions.
+   *
+   * WHAT IT REPLACES: a guest reaching `/{linkContainerSegment}` got the shell
+   * in full and then every routed page 403'd at the `viewer` default — fully
+   * painted chrome around a stack of `PageError` cards. Not a leak (nothing
+   * links a guest here), but URL-reachable.
+   *
+   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, and this resolves it THE WAY THE
+   * GUEST WEB LANE DOES — `src/app/c/[workspaceId]/page.tsx` calls
+   * `getHomeChannel(user, workspaceId)`, whose HTTP twin reachable from a
+   * renderer is `GET /api/home/channels` (`withUserAuth`, no `X-Workspace-Id`,
+   * fenced by the caller's own membership rows — so a guest may ask it and a
+   * container they do not belong to is not in the answer). Matching on
+   * `workspaceId` is what makes it the SAME container, not merely a channel.
+   *
+   * ⚠ NO CHANNEL ⇒ `/home`, NOT A THIRD ERROR CARD — and a FAILED read lands
+   * there too. That is not UNKNOWN-rendered-as-EMPTY (INVARIANTS §11), because
+   * `/home` asserts nothing: the question this answers is "where does a guest
+   * belong", the answer is never a workspace page, and `/home` is the guest's
+   * own surface, which reports its own read failure honestly. Claiming "you have
+   * no channel" ON a workspace URL is the thing that would be a lie.
+   *
+   * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above: while `needsRedirect` is
+   * true the routed segment is stale, and both effects firing in one tick would
+   * race two `replace`s over one history entry.
+   *
+   * ⚠ THE TARGET IS COMPARED BEFORE NAVIGATING — it is a route INSIDE this
+   * layout, so an unguarded navigate re-runs this effect forever.
+   */
+  const isGuest = role === "guest";
+  const guestChannelId = useApiQuery<HomeChannelsPayload, string | null>(
+    HOME_CHANNELS_PATH,
+    {
+      enabled: isGuest,
+      // `?? []` is the stale-cache guard (INVARIANTS §8): this payload is
+      // IndexedDB-persisted, and a `.find` on an absent key throws INSIDE the
+      // shell, which blanks every page rather than one pane.
+      select: (body) =>
+        (body.channels ?? []).find((c) => c.workspaceId === workspace?.id)
+          ?.channelId ?? null,
+    }
+  );
+  const guestSettled = isGuest && !guestChannelId.isPending;
+  const guestTarget = guestSettled
+    ? guestChannelId.data
+      ? `/${segment}/channels/${guestChannelId.data}`
+      : HOME_PATH
+    : null;
+  useEffect(() => {
+    if (needsRedirect || !segment || guestTarget === null) return;
+    if (location.pathname === guestTarget) return;
+    navigate(guestTarget, { replace: true });
+  }, [needsRedirect, segment, guestTarget, location.pathname, navigate]);
 
   const workspacesQuery = useApiQuery<
     { workspaces?: WorkspaceLike[] },
@@ -116,49 +182,68 @@ export function AppShellLayout() {
           onCreateWorkspace={() => setCreateWsOpen(true)}
         />
         <div className={styles.surface}>
-          <AppSidebarCore
-            workspaceSegment={segment}
-            activeSection={activeSectionFromPath(location.pathname)}
-            onOpenSettings={openSettings}
-            Link={RouterLink}
-            brand={
-              <WorkspaceSwitcherCore
-                workspaceSegment={segment}
-                workspacePublicId={workspace.publicId}
-                workspaceName={workspace.name}
-                workspaces={workspaces}
-                isLoading={workspacesQuery.isPending}
-                onNavigate={(path) => navigate(path)}
-                onOpenSettings={openSettings}
-                onCreateWorkspace={() => setCreateWsOpen(true)}
-              />
-            }
-          />
-          {/* Order matches the web layout: tour wraps the routed page. */}
-          <TourProviderCore
-            workspaceSegment={segment}
-            onNavigate={(path) => navigate(path)}
-          >
-            {/* ⚠ Required: without it useMyAccessContext no-ops and every
-                teams-mode gate resolves to a FALSE edit affordance. */}
-            <MyAccessProvider workspaceSegment={segment}>
-              <Outlet />
-              {/* Terminal step of the join-approval loop (GAP-7). */}
-              <JoinRequestNoticesCore onNavigate={(path) => navigate(path)} />
-              <ConnectAgentBanner />
-              <WelcomePopup
-                brand={
-                  // No Next runtime in this SPA, so next/image is forbidden.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={doplMark}
-                    alt="Dopl"
-                    className="auth-logo-3d h-11 w-11 rounded-[8px]"
-                  />
-                }
-              />
-            </MyAccessProvider>
-          </TourProviderCore>
+          {/* ⚠ ONE PANEL, AND THE SIDEBAR IS A REGION OF IT (Samuel, 2026-08-30:
+              *"the right panel sits ON TOP OF the gray panel that holds the
+              sidebar"*). This is /home's structure — one `page-float` spanning
+              everything right of the rail, with the nav standing where /home's
+              relationship list stands and the routed page floating inside as
+              /home's record pane does. The FACE is the kit's `.page-float`,
+              composed here rather than restated, so the panel /home wears and
+              the panel this wears are one recipe. `styles.panel` adds layout
+              only; see `app-shell.module.css`'s header for the level table. */}
+          <div className={cn("page-float", styles.panel)}>
+            <AppSidebarCore
+              workspaceSegment={segment}
+              activeSection={activeSectionFromPath(location.pathname)}
+              onOpenSettings={openSettings}
+              Link={RouterLink}
+              brand={
+                <WorkspaceSwitcherCore
+                  workspaceSegment={segment}
+                  workspacePublicId={workspace.publicId}
+                  workspaceName={workspace.name}
+                  workspaces={workspaces}
+                  isLoading={workspacesQuery.isPending}
+                  onNavigate={(path) => navigate(path)}
+                  onOpenSettings={openSettings}
+                  onCreateWorkspace={() => setCreateWsOpen(true)}
+                />
+              }
+            />
+            {/* Order matches the web layout: tour wraps the routed page. */}
+            <TourProviderCore
+              workspaceSegment={segment}
+              onNavigate={(path) => navigate(path)}
+            >
+              {/* ⚠ Required: without it useMyAccessContext no-ops and every
+                  teams-mode gate resolves to a FALSE edit affordance. */}
+              <MyAccessProvider workspaceSegment={segment}>
+                {/* ⚠ THE CARD WRAPS THE OUTLET AND NOTHING ELSE. The three
+                    notice/guidance mounts below stay OUTSIDE it: they are
+                    overlays over the whole shell, and `.pageCard` clips
+                    (`overflow: hidden`) so a banner inside it would be cut off
+                    at the card's rounded edge instead of floating over the
+                    page. */}
+                <div className={styles.pageCard}>
+                  <Outlet />
+                </div>
+                {/* Terminal step of the join-approval loop (GAP-7). */}
+                <JoinRequestNoticesCore onNavigate={(path) => navigate(path)} />
+                <ConnectAgentBanner />
+                <WelcomePopup
+                  brand={
+                    // No Next runtime in this SPA, so next/image is forbidden.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={doplMark}
+                      alt="Dopl"
+                      className="auth-logo-3d h-11 w-11 rounded-[8px]"
+                    />
+                  }
+                />
+              </MyAccessProvider>
+            </TourProviderCore>
+          </div>
         </div>
       </div>
 

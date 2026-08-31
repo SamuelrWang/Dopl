@@ -32,8 +32,10 @@ interface Props {
  * gear opens a modal over the current page (the `/settings` route still works
  * for deep links).
  *
- * General, Members and the Account profile form come from the shared cores
- * unchanged. What the renderer cannot do arrives as SLOTS: multipart icon
+ * General and the Account profile form come from the shared cores unchanged.
+ * ⚠ THERE IS NO MEMBERS PANE (Samuel, 2026-08-30 — ledger ASK-1): `/members` is
+ * the one console, and the v1 one this modal used to mount is deleted.
+ * What the renderer cannot do arrives as SLOTS: multipart icon
  * upload absent (the bridge carries JSON only), account deletion links out,
  * Plans & Billing reroutes its two Stripe actions to the browser
  * (`./billing-pane`).
@@ -51,9 +53,11 @@ export function SettingsModal({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Main owns the session here, so the caller id comes off the membership
-  // endpoint — the SAME cache entry `useWorkspaceAccess` fills, and only while
-  // the modal is open (the Members pane needs it).
+  // Main owns the session here, so the authoritative role comes off the
+  // membership endpoint — the SAME cache entry `useWorkspaceAccess` fills, and
+  // only while the modal is open. ⚠ The `userId` half went unread when the
+  // members pane was deleted (2026-08-30); the payload still carries it and
+  // narrowing the type here would fork the shape `useWorkspaceAccess` reads.
   const me = useApiQuery<{ role: Role; userId: string }>("/api/workspaces/me", {
     workspaceId,
     enabled: open && Boolean(workspaceId),
@@ -70,10 +74,6 @@ export function SettingsModal({
       onOpenChange={onOpenChange}
       section={section}
       onSectionChange={onSectionChange}
-      workspaceSegment={workspaceSegment}
-      workspaceId={workspaceId}
-      currentUserId={me.data?.userId ?? ""}
-      role={me.data?.role ?? role}
       workspacePane={
         <WorkspaceSectionCore
           workspaceSegment={workspaceSegment}

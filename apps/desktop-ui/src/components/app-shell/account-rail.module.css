@@ -1,15 +1,17 @@
 /* Account rail — the ACCOUNT-level strip left of the workspace chrome.
    Home (personal, cross-org surface) pinned top; workspace tiles under it;
    create at the end. Shell chrome like app-shell.module.css: paints the same
-   --shell-surface so the workspace sidebar reads as a sibling panel, not a
-   framed inset. */
+   --home-frame, so rail, sidebar and shell read as ONE slab. */
 
 .rail {
   width: var(--shell-rail-w);
   flex: 0 0 var(--shell-rail-w);
-  /* The app's dark frame ink (--surface-cta) — same surface as panel headers,
-     so the account level reads as FRAME, not as another gray pane. */
-  background: var(--surface-cta);
+  /* THE FRAME (Samuel, 2026-08-30). It was `--surface-cta` (#1c2127, the panel
+     header ink) — which /home then had to override per-mount with
+     `!bg-home-frame` to get its own slab. One token now, so the rail matches
+     /home BY CONSTRUCTION and that override is deleted rather than duplicated
+     onto the workspace shell. */
+  background: var(--home-frame);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -81,20 +83,25 @@
   border-radius: 11px;
 }
 
-/* Home is not a sibling of the workspace tiles — the rule under it draws the
-   account/container boundary. */
-.divider {
-  width: 22px;
-  height: 1px;
-  flex: 0 0 auto;
-  background: rgba(255, 255, 255, 0.18);
-}
+/* ⚠ `.divider` — a 22×1 `rgba(255,255,255,.18)` rule between Home and the
+   workspace tiles — STOOD HERE AND IS DELETED (Samuel, 2026-08-30: the selected
+   rail tile *"shows a double borderline at the top"*). MEASURED cause: the rule
+   sat 7px above the first workspace tile, and on a workspace page that tile is
+   the selected one, wearing `.raised-tab`'s `inset 0 0 0 1px` hairline. Two
+   horizontal lines 7px apart, reading as one doubled border on the tile.
 
+   ⚠ THE BOUNDARY IT DREW SURVIVES AS RHYTHM, NOT AS A SECOND LINE. Home is
+   still not a sibling of the workspace tiles: `.workspaces` opens with 4px of
+   its own on top of the rail's 7px gap, so the account/container break is 11px
+   where a tile-to-tile gap is 7px. **Do not put the rule back** — the only
+   horizontal line in this rail is the selected tile's, which is the one that
+   carries state. */
 .workspaces {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 7px;
+  margin-top: 4px;
   overflow-y: auto;
   min-height: 0;
 }

@@ -48,13 +48,15 @@ const LIST_ROWS = 7;
  */
 export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {
   return (
-    // `!bg-home-frame` (×3) and `!ml-0` (×2) for the reason `index.tsx`'s own
-    // docblock gives: the frame is ONE dark slab and the panel butts flush
-    // against the rail, so the visible dark column is the 54px rail exactly.
-    <SkeletonSurface label={label} className={cn(shell.root, "!bg-home-frame")}>
+    // `!ml-0` (×2) for the reason `index.tsx`'s own docblock gives: the panel
+    // butts flush against the rail, so the visible dark column is the 54px rail
+    // exactly. The frame ink itself is the SHELL's since 2026-08-30 — the three
+    // `!bg-home-frame` overrides are gone from both this ghost and the page, so
+    // neither can drift off the other or off the workspace shell.
+    <SkeletonSurface label={label} className={shell.root}>
       <div className={shell.body}>
         <HomeRailGhost />
-        <div className={cn(shell.surface, "!bg-home-frame", "!ml-0")}>
+        <div className={shell.surface}>
           <main
             className={cn(
               "page-float !ml-0 flex flex-1 flex-col overflow-hidden bg-home-panel",
@@ -237,8 +239,10 @@ function HomeRailGhost() {
   return (
     <div className="flex w-[var(--shell-rail-w)] shrink-0 flex-col items-center gap-[7px] pt-[7px]">
       <Skeleton className="h-10 w-10 rounded-[13px]" />
-      <div className="my-1 h-px w-7 bg-border-subtle" aria-hidden />
-      <Skeleton className="h-10 w-10 rounded-[13px]" />
+      {/* ⚠ The divider rule the real rail drew here is GONE (2026-08-30) and so
+          is its ghost; the account/container break is the 4px `.workspaces`
+          opens with on top of the 7px gap — `mt-1` mirrors that exactly. */}
+      <Skeleton className="mt-1 h-10 w-10 rounded-[13px]" />
       <Skeleton className="h-10 w-10 rounded-[13px]" />
       <Skeleton className="h-10 w-10 rounded-[13px]" />
     </div>
