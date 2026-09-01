@@ -178,7 +178,18 @@ fi
 if [[ -n "${GH_TOKEN:-}" ]]; then
   ok "GitHub auth: \$GH_TOKEN set"
 elif gh auth token >/dev/null 2>&1; then
-  ok "GitHub auth: gh CLI logged in"
+  # ⚠ EXPORTED, NOT JUST DETECTED (2026-09-01). This branch used to only REPORT
+  # that the gh CLI was logged in, and the 1.25.0 release failed here because of
+  # it: electron-builder reads the GH_TOKEN ENV VAR and cannot see the CLI's
+  # keyring, so the preflight said "GitHub auth: ok", the build ran for six
+  # minutes, notarization succeeded — and then all four uploads died with
+  # "GitHub Personal Access Token is not set". A preflight that passes on
+  # credentials the publisher cannot use is worse than one that fails, because
+  # it fails AFTER the expensive part. Detecting it and handing it over is the
+  # whole fix. The value is never printed and never reaches a command line.
+  GH_TOKEN="$(gh auth token)"
+  export GH_TOKEN
+  ok "GitHub auth: gh CLI logged in (token exported for electron-builder)"
 else
   soft "no GitHub credentials — run 'gh auth login' or export GH_TOKEN. electron-builder and every upload step need it."
 fi
