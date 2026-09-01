@@ -1,0 +1,45 @@
+# ── LINE ENDINGS ARE LF EVERYWHERE, INCLUDING ON A WINDOWS CHECKOUT ──────────
+#
+# ⚠ THIS FILE EXISTS BECAUSE OF A RED CI RUN, NOT AS HOUSEKEEPING (2026-09-01).
+# `node 22 / windows-latest` failed on
+# `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts` with
+#
+#     expected '"use client";\r\n\r\nimport type { Re…'
+#       to contain 'SECTION_PANEL_GROUND =\n  "border bor…'
+#
+# The test is a SOURCE PIN: it `readFileSync`s a real source file and asserts
+# the file contains a multi-line literal. On a Windows runner git's default
+# `core.autocrlf=true` checks that file out with CRLF, so every `\n` in every
+# expected literal misses by one invisible byte. Nothing was wrong with the
+# code — the assertion was comparing against a differently-encoded copy of it.
+#
+# ⚠ IT IS A CLASS, NOT ONE TEST. There are ~27 source-pinning tests in this
+# repo (`grep -rl readFileSync` over `src/` and `apps/desktop-ui/src/`), and
+# EVERY ONE of them is a latent Windows failure the moment it asserts across a
+# line break. Fixing them one `.replace(/\r\n/g, "\n")` at a time is a bug
+# waiting on the next author to forget; fixing the CHECKOUT fixes all of them
+# and every one written after this.
+#
+# ⚠ ZERO CHURN, VERIFIED BEFORE ADDING: `git grep -Il $'\r'` matched NOTHING at
+# the time this landed, i.e. every text file in the repo is already LF in the
+# index. This changes what a Windows working tree gets, never what is stored.
+#
+# `text=auto` keeps git's own binary detection — do not replace it with a blunt
+# `text`, which would corrupt images, fonts and the `.icns` app icon.
+* text=auto eol=lf
+
+# Explicitly binary, so no heuristic ever gets a vote on them.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.pdf  binary
+*.zip  binary
+*.dmg  binary
+*.node binary

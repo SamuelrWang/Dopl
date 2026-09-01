@@ -42,7 +42,15 @@ import { join } from "node:path";
 
 const HERE = import.meta.dirname;
 const REPO = join(HERE, "../../../../..");
-const read = (rel: string) => readFileSync(join(REPO, rel), "utf8");
+/** ⚠ NEWLINES NORMALIZED, AND A RED WINDOWS RUN IS WHY (2026-09-01). Every
+ *  assertion below is a multi-line literal containing `\n`; a Windows checkout
+ *  used to hand this file CRLF and every one of them missed by one invisible
+ *  byte, on code that was correct. The repo-root `.gitattributes` (`eol=lf`)
+ *  is the real fix and covers every source-pinning test at once — this stays as
+ *  the local belt, because a test that reads source must not depend on how the
+ *  reader's git is configured. */
+const read = (rel: string) =>
+  readFileSync(join(REPO, rel), "utf8").replace(/\r\n/g, "\n");
 
 const SHELL_CSS = "src/shared/layout/app-shell/app-shell.module.css";
 const RAIL_CSS =
