@@ -10,37 +10,28 @@
 //
 // ── WHY IT REUSES THE SESSION AUTH PATH RATHER THAN AN API KEY ────────────────────────────────
 // ⚠ THE DESKTOP HAS NO API KEY AND MUST NOT ACQUIRE ONE. A session authenticates through the
-// BUNDLED `claude` binary against whatever this Mac already has — an auth env var, our own stored
-// setup-token, or the CLI's own keychain sign-in (`session-auth.js › credentialState`) — and
-// `@anthropic-ai/sdk` sitting in package.json is not that lane. So triage goes through the SAME
-// `sdk.query` the engine spawns, with `env: sessionAuth.withStoredCredential(buildScrubbedEnv())`,
-// which is byte-for-byte what `session-query.js › buildSdkOptions` hands a real session. One
-// credential story, one place it can break, and a signed-out Mac produces no triage rather than a
-// second, differently-shaped auth failure.
+// runtime's own bundled binary against whatever this Mac already has (`session-auth.js ›
+// credentialState`), and a direct HTTP API client is not that lane. So triage goes through the
+// SAME runtime a real session spawns on, with the SAME scrubbed env and stored credential —
+// `main/runtime/claude/triage.js` builds it beside the launch spec so the two cannot diverge.
+// One credential story, one place it can break, and a signed-out Mac produces no triage rather
+// than a second, differently-shaped auth failure.
 //
 // ── THE FENCE ────────────────────────────────────────────────────────────────────────────────
-// ⚠ THIS RUN READS GUEST TEXT AND MUST NOT BE ABLE TO ACT ON IT. Four layers, and each closes a
-// different door:
-//   mcpServers: {}      no dopl server at all — no channel read, no post, no knowledge, and
-//                       nothing to stamp a workspace against. A triage run cannot reach Dopl.
-//   canUseTool: deny    EVERY tool call is refused. ⚠ THIS IS THE LOAD-BEARING ONE: the SDK has
-//                       no "offer no tools" option (`options.tools = []` means NO BOUND, i.e.
-//                       everything — `session-profiles.js`'s own note), so the positive bound
-//                       cannot express what is wanted here and the gate has to.
-//   maxTurns: 1         one assistant turn. Even a denied tool call cannot be retried.
-//   permissionMode      'default' + `settingSources: []`, so no local settings file and no
-//                       permission-mode knob can short-circuit that gate. `buildScrubbedEnv`
-//                       already drops the env knobs and turns the claude.ai connector lane off.
-// ⚠ `disallowedTools` CARRIES THE CREDENTIAL-PATH RULES ANYWAY (`buildSecretPathDenyRules`),
-// belt to the gate's braces: a pre-approved read is SHADOWED past canUseTool in a real session,
-// and copying the deny list costs nothing and cannot become the one difference that matters.
-// ⚠ THE cwd IS THE OS TEMP DIR, NOT THE CHANNEL FOLDER. `channel-dirs.js › sessionSpawnDir` hands
-// a real session the operator's chosen working directory; the router has no business knowing it
-// exists, and no tool with which to look.
+// ⚠ THIS RUN READS GUEST TEXT AND MUST NOT BE ABLE TO ACT ON IT, and the fence that stops it is
+// the RUNTIME's to build — it is expressed in one platform's option vocabulary and has no meaning
+// in another's. `main/runtime/claude/triage.js` holds it and carries the whole argument for each
+// of its four layers (no MCP surface at all, a deny-everything gate because this platform cannot
+// express "offer no tools", a one-turn bound, and ambient-config isolation).
+// ⚠ AND IT IS DECLARED, NOT JUST BUILT: `descriptor.triage` names every layer, so a runtime that
+// cannot express one of them says so instead of shipping this call with a layer silently missing.
+// `turnBound: null` is launch-blocking — an unbounded triage turn reading untrusted text is an
+// unfenced one.
 //
 // ── COST, STATED AS A CEILING ────────────────────────────────────────────────────────────────
 // Per HUMAN message, in a channel with N>1 agents and no @-mention: at most ONE call per DORMANT
-// candidate on that thread, and dormant candidates are bounded by `MAX_CONCURRENT_SESSIONS` (6).
+// candidate on that thread, and dormant candidates are bounded by `MAX_CONCURRENT_SESSIONS` (15
+// since 2026-09-01).
 // Zero calls when the message @-mentions anybody, zero in a solo-agent room, zero for
 // agent-authored or lifecycle traffic, zero for a running session (ruling 4's fan-out is not a
 // wake and buys no triage). Each call is Haiku with ~1–2k input tokens (a capped persona, up to
@@ -50,21 +41,19 @@
 // dispatch holds the channel's cursor. `TRIAGE_TIMEOUT_MS` aborts the call and the abort answers
 // PASS — a triage that cannot answer in time must not become a channel that stops draining.
 
-const os = require('os');
 const crypto = require('crypto');
 const sessionAuth = require('./session-auth');
-const sessionModel = require('./session-model');
 const agentNames = require('./agent-names');
 const wakeTiers = require('./session-wake-tiers');
-const { getSdk, resolveClaudeExecutable, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
+const runtimeRegistry = require('./runtime');
 const { diag } = require('./diag');
 
-// ⚠ THE DATED ID IS THE RULING'S OWN VALUE and it is coerced through the frozen table rather than
-// spelled as argv. `session-model.js › aliasForModelId` maps it to the `haiku` ALIAS the bundled
-// CLI resolves — that module's header explains why the alias is what reaches a child process, and
-// why this exact id is the lossy row in that map. Naming the id here and the alias there is what
-// keeps the ruling's value and the argv-safe value from drifting into two literals.
-const TRIAGE_MODEL_ID = 'claude-haiku-4-5-20251001';
+// ⚠ THE MODEL IS THE RUNTIME'S TO NAME, AND IT IS NEVER INHERITED FROM THE SESSION PICKER
+// (2026-08-31): a router question is not the agent's work, and spending the operator's chosen
+// model on it would make this tier's cost ceiling meaningless. Read off
+// `descriptor.triage.model`, so the value and the argv coercion that spends it stay in one place
+// — `main/runtime/claude/triage.js` carries the ruling's own id and why its map row is lossy.
+const TRIAGE_MODEL_ID = runtimeRegistry.descriptorFor(null).triage.model;
 
 // The whole tier-3 pass, not one call. A candidate that answers in 7.9s and one that never
 // answers cost the channel the same wall clock, because they run concurrently.
@@ -75,12 +64,20 @@ const TRIAGE_TIMEOUT_MS = 8_000;
 // `session-windowless.js › MAX_CONCURRENT_SESSIONS` and is deliberately NOT imported from it:
 // that one bounds how many agents may RUN, this bounds how many questions one message may buy,
 // and tying them would make raising the concurrency ceiling silently raise the triage bill.
-const MAX_TRIAGE_PER_MESSAGE = 6;
+//
+// ⚠ RAISED 6 → 15 ON 2026-09-01, BY HAND, WITH THE CONCURRENCY CEILING — and the reason it had to
+// move is the TRUNCATION. This cap does not REFUSE the overflow, it SLICES it (see `triage` below:
+// the oldest N candidates are asked and the rest simply stay dormant). So leaving it at 6 under a
+// cap of 15 would not have cost money, it would have cost WAKES: past the sixth dormant agent in a
+// room, a candidate could never be triaged and therefore could never be woken by an unaddressed
+// human message. A silent, order-dependent hole in the wake path is a worse bug than a bigger
+// bill, which is why the two numbers are still equal and still not imported from one another.
+const MAX_TRIAGE_PER_MESSAGE = 15;
 
 // ─── BEGIN SESSION-TRIAGE-PURE (injectable; unit-tested via source extraction) ─
-// The block references its leaf deps (wakeTiers / agentNames / diag / the sdk-loader helpers /
-// sessionAuth / sessionModel / os / crypto) as FREE VARS, so test/wake-tiers.test.mjs slices it,
-// proves it holds no electron require, and drives it with a fake `query`.
+// The block references its leaf deps (wakeTiers / agentNames / diag / sessionAuth /
+// runtimeRegistry / crypto) as FREE VARS, so the harness slices it, proves it holds no electron
+// require, and drives it with a fake runtime.
 
 /** What the router is told this agent IS. Three fields, each independently absent-tolerant:
  *  a never-renamed agent with no template still gets a well-formed prompt that simply says so. */
@@ -104,37 +101,6 @@ function personaFor(s) {
   };
 }
 
-/** The SDK options ONE triage call runs with. See THE FENCE in this file's header — every field
- *  here is a fence, and there is nothing in it that is merely configuration. */
-function triageOptions(abortController) {
-  const options = {
-    cwd: os.tmpdir(), // never the channel folder
-    model: sessionModel.aliasForModelId(TRIAGE_MODEL_ID),
-    maxTurns: 1,
-    allowedTools: [], // nothing SHADOWED past the gate
-    disallowedTools: buildSecretPathDenyRules(),
-    mcpServers: {}, // no dopl surface at all
-    settingSources: [],
-    permissionMode: 'default',
-    env: sessionAuth.withStoredCredential(buildScrubbedEnv()),
-    abortController: abortController,
-    includePartialMessages: false,
-    // ⚠ THE ONLY THING THAT CAN EXPRESS "no tools" — see THE FENCE. Async because the SDK awaits
-    // it; the shape is `session-io.js › makeCanUseTool`'s deny branch.
-    canUseTool: () => Promise.resolve({ behavior: 'deny', message: 'triage runs no tools' }),
-  };
-  const bin = resolveClaudeExecutable();
-  if (bin) options.pathToClaudeCodeExecutable = bin;
-  return options;
-}
-
-/** The text the model answered, or '' — the ONE place a raw model string is read. */
-function answerText(msg) {
-  if (!msg || msg.type !== 'result') return '';
-  if (msg.subtype !== 'success') return ''; // an error result is a PASS, like everything else
-  return typeof msg.result === 'string' ? msg.result : '';
-}
-
 /**
  * ONE candidate's claim/pass. Resolves to a BOOLEAN and never rejects: every failure mode —
  * no SDK, no credential, a timeout, a thrown query, a malformed answer, an injected answer —
@@ -144,15 +110,38 @@ function answerText(msg) {
  * the solo tier and the @-mention both already route around, and would double the wall clock the
  * channel's cursor is held for.
  */
-async function claimOne(sdk, s, prompt) {
+async function claimOne(rt, s, prompt) {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     try { controller.abort(); } catch (_) { /* best effort */ }
   }, TRIAGE_TIMEOUT_MS);
   try {
-    const q = sdk.query({ prompt: prompt, options: triageOptions(controller) });
+    // ⚠ TWO VERBS AND NOTHING ELSE. `start()` runs the fenced call the adapter built; `answerText`
+    // is the ONE place a raw model string is read, and it is the adapter's because the shape it
+    // reads is. Everything around them — the 8s bound, the concurrency, the deterministic
+    // tie-break and the budget ceiling below — is Dopl's and identical on every runtime.
+    const run = rt.triageSpec({ prompt: prompt, abortController: controller });
+    // ⚠ `null` IS A DECLARED ANSWER, NOT A FAILURE, AND IT USED TO BE LOGGED AS ONE (fixed
+    // 2026-08-31, wave D). `contract.js › RUNTIME_METHODS` documents `triageSpec` as "the opaque
+    // triage launch payload, OR `null`", and two of the three shipped adapters answer `null` on
+    // purpose — a runtime with no `maxTurns` analogue and no "offer no tools" option cannot fence
+    // a call that reads untrusted guest text, so it declines to make one. Without this branch the
+    // `null` fell through to `run.start()`, and the `catch` below reported
+    // `"triage: call failed — Cannot read properties of null (reading 'start') (reads as PASS)"`.
+    // Three things were wrong with that line and only the verdict was right: NO CALL WAS MADE, so
+    // "call failed" is false; a TypeError string was being read by an operator as a platform
+    // fault; and it fired once per dormant candidate per guest message, forever, on a runtime
+    // behaving exactly as designed — which is how a log stops being somewhere real failures show.
+    // ⚠ THE VERDICT IS UNCHANGED AND MUST BE: a runtime that cannot triage does not claim, which
+    // is the same outcome as losing the race. Nothing hangs and nothing is granted.
+    if (!run) {
+      diag('triage', String(s && s.agentId).slice(0, 8),
+        'pass — this runtime declares no triage shape, so no call was made');
+      return false;
+    }
+    const q = run.start();
     for await (const msg of q) {
-      const text = answerText(msg);
+      const text = run.answerText(msg);
       if (!text) continue;
       const claimed = wakeTiers.parseTriage(text);
       diag('triage', String(s && s.agentId).slice(0, 8), claimed ? 'CLAIM' : 'pass');
@@ -186,12 +175,14 @@ async function claim(a) {
   const arg = a || {};
   const candidates = (arg.candidates || []).slice(0, MAX_TRIAGE_PER_MESSAGE);
   if (!candidates.length) return '';
-  let sdk = arg.sdk || null;
-  if (!sdk) {
+  let rt = arg.runtime || null;
+  if (!rt) {
     try {
-      sdk = await getSdk();
+      rt = runtimeRegistry.runtimeFor(arg.runtimeId);
+      const gate = await rt.available();
+      if (!gate.ok) throw new Error(gate.reason);
     } catch (err) {
-      diag('triage: no SDK —', err && err.message, '(nobody wakes)');
+      diag('triage: no agent runtime —', err && err.message, '(nobody wakes)');
       return '';
     }
   }
@@ -200,7 +191,7 @@ async function claim(a) {
   // (`session-auth.js › credentialState` is itself cached for 5s).
   try {
     if (!sessionAuth.credentialState().usable) {
-      diag('triage: no Claude credential on this machine — nobody wakes');
+      diag('triage: no agent-runtime credential on this machine — nobody wakes');
       return '';
     }
   } catch (err) {
@@ -210,7 +201,7 @@ async function claim(a) {
   const nonce = crypto.randomUUID().slice(0, 8);
   const recent = wakeTiers.recentFor(arg.channelId);
   const results = await Promise.all(candidates.map((s) => claimOne(
-    sdk,
+    rt,
     s,
     wakeTiers.triagePrompt({
       nonce: nonce,
@@ -234,12 +225,10 @@ async function claim(a) {
 // ─── END SESSION-TRIAGE-PURE ──────────────────────────────────────────────────
 
 module.exports = {
-  TRIAGE_MODEL_ID,
+  TRIAGE_MODEL_ID, // read off `descriptor.triage.model` — the ruling's value lives with the fence
   TRIAGE_TIMEOUT_MS,
   MAX_TRIAGE_PER_MESSAGE,
   personaFor,
-  triageOptions,
-  answerText,
   claimOne,
   claim,
 };

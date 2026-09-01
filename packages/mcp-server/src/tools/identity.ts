@@ -24,6 +24,23 @@ import { inlineOr } from "./narration";
  */
 export const DESKTOP_SESSION_RUNTIME = "desktop-session";
 
+/**
+ * Recognized `X-Dopl-Vendor` values — WHICH AGENT RUNTIME drives the session
+ * the stamp above says the desktop spawned. ⚠ HAND-COPIED from
+ * `src/shared/auth/runtime-header.ts` for the same reason as the constant
+ * above, and pinned against it by
+ * `dopl-desktop-app/test/runtime-stamp-literals.test.mjs`.
+ *
+ * ⚠ A SECOND DIMENSION, NOT A RUNTIME VALUE (2026-08-31). `runtimeWord` below
+ * compares `runtime` strictly against `DESKTOP_SESSION_RUNTIME`, and so does
+ * `channel-wake-guidance.ts`; a Codex or Cursor session spawned by the desktop
+ * is still `desktop-session` and must keep answering true there. What differs
+ * between vendors is what this server may TEACH, which reads `vendor` instead.
+ */
+export const CLAUDE_VENDOR = "claude";
+export const CODEX_VENDOR = "codex";
+export const CURSOR_VENDOR = "cursor";
+
 /** How the presented credential was obtained. Mirrors `McpCredential.kind`. */
 export type CallerCredentialKind = "device" | "oauth-app";
 
@@ -37,6 +54,12 @@ export interface CallerIdentity {
   userId: string | null;
   /** `desktop-session` when the request carried the recognized runtime header, else null. */
   runtime: string | null;
+  /**
+   * The recognized `X-Dopl-Vendor` word, else null. ⚠ Null means UNKNOWN, never
+   * `claude`: an older desktop build stamps custody and no vendor, and a
+   * guessed vendor is how a Codex session gets taught Claude's tool verbs.
+   */
+  vendor: string | null;
   /** How the credential was minted. */
   credentialKind: CallerCredentialKind | null;
   /** The credential's label, UNTRUSTED — neutralized on the way out, never before. */
@@ -47,6 +70,7 @@ export interface CallerIdentity {
 export const UNKNOWN_CALLER: CallerIdentity = {
   userId: null,
   runtime: null,
+  vendor: null,
   credentialKind: null,
   credentialLabel: null,
 };

@@ -60,6 +60,19 @@ import type {
 export interface ChannelSurfaceData extends ChannelsV2Derivations {
   messages: ChannelMessage[];
   messagesLoading: boolean;
+  /** More transcript history exists to fetch — `use-channel-messages.ts`. */
+  hasOlderMessages: boolean;
+  /** A `before` page is in flight. */
+  loadingOlderMessages: boolean;
+  /** Ask for the page immediately older than the loaded window. */
+  loadOlderMessages: () => void;
+  /**
+   * DROP one thread's rows from the scroll-back window — the half of the thread
+   * DELETE's optimistic patch that lives outside the query cache
+   * (`lib/message-window.ts › dropThreadFromWindow` says why). The host calls it
+   * on the delete's own exit callback; nothing else may.
+   */
+  dropThreadFromHistory: (threadId: string) => void;
   members: ChannelMember[];
   refetchMembers: () => void;
   threads: ChannelThread[];
@@ -131,6 +144,10 @@ export function useChannelSurfaceData({
     messages,
     loading: messagesLoading,
     refetch: refetchMessages,
+    hasOlder: hasOlderMessages,
+    loadingOlder: loadingOlderMessages,
+    loadOlder: loadOlderMessages,
+    dropThread: dropThreadFromHistory,
   } = useChannelMessages(channel?.id ?? null, workspaceId);
   const { members, refetch: refetchMembers } = useChannelMembers(
     channel?.id ?? null,
@@ -313,6 +330,10 @@ export function useChannelSurfaceData({
     ...derivations,
     messages,
     messagesLoading,
+    hasOlderMessages,
+    loadingOlderMessages,
+    loadOlderMessages,
+    dropThreadFromHistory,
     members,
     refetchMembers: () => void refetchMembers(),
     threads,

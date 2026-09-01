@@ -11,6 +11,7 @@ import {
   HOME,
   MEMBERS,
   THREADS,
+  openChannelRecord,
   renderHome,
   routes,
   staleCachedChannel,
@@ -88,63 +89,71 @@ describe("MORE THAN TWO people (Samuel, 2026-08-26 — F-307)", () => {
     pendingLinks: [],
   };
 
-  it("titles the header by two names and counts the rest", async () => {
+  /**
+   * 🔒 **THE HEADER IS THE CHANNEL (Samuel, 2026-09-01).** These three cases
+   * replace the ones that pinned the OPPOSITE — a header titled
+   * "Priya Shah, Dana Ruiz +1" over that peer's email, and a Channel-info Email
+   * row that appeared at exactly one member. Together they made the Info tab
+   * turn into a member's profile the moment somebody joined.
+   */
+  it("titles the header by the CHANNEL, however many people are in it", async () => {
     serve(CROWDED);
     renderHome();
-    // ⚠ SCOPED TO THE SURFACE, and the reason is a FEATURE: the list row and
-    // this header both render `channelTitle`, so an unscoped query finds two.
-    // The two faces of one channel agreeing is exactly the point of sharing the
-    // presenter — see `home-rows.test.ts` for the title's own cases.
-    const surface = await screen.findByTestId("channel-surface");
+    // ⚠ SCOPED TO THE SURFACE: the list row and this header render the same
+    // `channelTitle`, so an unscoped query finds two. The two faces of one
+    // channel agreeing is the point — see `home-rows.test.ts` for the title's
+    // own cases.
+    const surface = await openChannelRecord();
 
     expect(
-      await within(surface).findByText("Priya Shah, Dana Ruiz +1")
+      await within(surface).findByText(CROWDED_CHANNEL.name)
     ).toBeInTheDocument();
+    // The roster is not the heading, in either of its old forms.
+    expect(within(surface).queryByText(/Priya Shah, Dana Ruiz/)).toBeNull();
+    expect(within(surface).queryByText("3 people")).toBeNull();
   });
 
-  it("replaces the header's email subline with the size of the room", async () => {
-    // 🔒 THE DECISION, PINNED. One address under a title naming two OTHER people
-    // reads as theirs. The addresses are in the roster below, beside the faces
-    // they belong to.
+  it("keeps every member's address in the ROSTER and out of the header", async () => {
+    // 🔒 THE DECISION, PINNED. An address belongs beside the face it belongs
+    // to; in a header it reads as a fact about the channel.
     serve(CROWDED);
     renderHome();
-    const surface = await screen.findByTestId("channel-surface");
+    const surface = await openChannelRecord();
 
-    // ⚠ SCOPED TO THE HEADER'S OWN TEXT BLOCK (the title's parent), NOT to the
-    // surface — because the address SHOULD still be on this tab, one section
-    // down in the roster, beside the face it belongs to. That is the whole
-    // decision: the email did not disappear, it moved somewhere it can be
-    // attributed. An unscoped `queryByText(...).toBeNull()` would pass only by
-    // also asserting the roster had lost it.
+    // ⚠ SCOPED TO THE HEADER'S OWN BLOCK, NOT to the surface — because the
+    // address SHOULD still be on this tab, one section down in the roster. An
+    // unscoped `queryByText(...).toBeNull()` would pass only by ALSO asserting
+    // the roster had lost it, which is the opposite of the ruling.
     const header = (
-      await within(surface).findByText("Priya Shah, Dana Ruiz +1")
+      await within(surface).findByText(CROWDED_CHANNEL.name)
     ).parentElement as HTMLElement;
 
-    expect(within(header).getByText("3 people")).toBeInTheDocument();
     expect(within(header).queryByText("priya@shahco.tax")).toBeNull();
     expect(within(surface).getByText("priya@shahco.tax")).toBeInTheDocument();
   });
 
-  it("DROPS the Channel-info Email row above one peer, and keeps it at exactly one", async () => {
-    // ⚠ The row was already absent on a SOLO channel for the mirror reason — it
-    // answers a question nobody asked. With three members it answers the wrong
-    // person. ⚠ NOT replaced by three Email rows: the card is curated and
-    // capped, and the roster IS that list.
+  it("has NO Channel-info Email row at ANY roster size", async () => {
+    // ⚠ The row used to render at exactly ONE peer — absent on a solo channel
+    // and dropped again above one — so the card gained and lost a stranger's
+    // address as people came and went. It is gone at every size now. ⚠ NOT
+    // replaced by N Email rows: the card is curated and capped, and the roster
+    // IS that list.
     serve(CROWDED);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     await screen.findByText("Channel info");
     expect(screen.queryByText("Email")).toBeNull();
 
     serve(HOME);
     renderHome();
-    expect(await screen.findByText("Email")).toBeInTheDocument();
+    await screen.findAllByText("Channel info");
+    expect(screen.queryByText("Email")).toBeNull();
   });
 
   it("still offers Add person — a fourth member joins the same way the third did", async () => {
     serve(CROWDED);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     await screen.findByText("Members");
 
     expect(
@@ -159,12 +168,15 @@ describe("MORE THAN TWO people (Samuel, 2026-08-26 — F-307)", () => {
     // falling back to `peer` is merely the pre-upgrade answer.
     serve({ channels: [staleCachedChannel()], pendingLinks: [] });
     renderHome();
-    const surface = await screen.findByTestId("channel-surface");
+    const surface = await openChannelRecord();
 
+    // ⚠ THE ASSERTION MOVED TO THE ROSTER (2026-09-01). It used to be the
+    // HEADER's title, which is the channel's name now whatever the cache holds
+    // — so a title assertion would pass even if the merge had degraded to
+    // "nobody". The roster is where the peers actually surface, and it is the
+    // only place the fallback is observable.
     expect(await within(surface).findByText("Priya Shah")).toBeInTheDocument();
-    expect(screen.queryByText("Just you")).toBeNull();
-    // The one-peer surface is intact, Email row included.
-    expect(await within(surface).findByText("Email")).toBeInTheDocument();
+    expect(within(surface).getByText("priya@shahco.tax")).toBeInTheDocument();
   });
 });
 

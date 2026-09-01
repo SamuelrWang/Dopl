@@ -16,8 +16,8 @@ import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
 
 // ⚠ PostgREST truncates an un-limited select SILENTLY. Far above the desktop's
 // live ceiling (`dopl-desktop-app/main/session-windowless.js ›
-// MAX_CONCURRENT_SESSIONS`, 6, measured 2026-08-22); exists only to make
-// truncation loud.
+// MAX_CONCURRENT_SESSIONS`, 15 since 2026-09-01 — 6 when this was written on
+// 2026-08-22); exists only to make truncation loud.
 //
 // ⚠ THE DERIVATION HAD A SECOND TERM AND IT IS GONE (2026-08-22, F-269 — the
 // same correction `schema-sessions.ts › SESSION_REPORT_MAX` took as F-255, which

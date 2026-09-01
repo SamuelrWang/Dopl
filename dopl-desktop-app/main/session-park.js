@@ -6,7 +6,7 @@
 // test/session-park.test.mjs slices it and drives it with fakes.
 //
 // ⚠ SECURITY: parked resume and recreated-shell resume BOTH assemble SDK options through the
-// engine's OWN buildSdkOptions — the SAME path a fresh launch uses (allowedTools shadow rule,
+// engine's OWN buildLaunchSpec — the SAME path a fresh launch uses (allowedTools shadow rule,
 // canUseTool gate, scrubbed env, disallowedTools, settingSources:[], permissionMode 'default').
 // NO divergent option assembly, NO new auto-approval; `options.resume = retained sdkSessionId`
 // is the only difference from a cold launch. feedInbound stays bound to the stored counterparty.
@@ -26,12 +26,17 @@ const { Notification } = require('electron');
 const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const { diag } = require('./diag');
 const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
+// 2026-08-31 (port wave D): the RESUME capability, read off the runtime's descriptor. ⚠ Required
+// AT MODULE SCOPE for `directedTurn`'s reason — the PURE block may not reference `require(` — and
+// it names no vendor: `capability.js` is the one module allowed to interpret a descriptor's nulls.
+const runtimeRegistry = require('./runtime');
+const runtimeCapability = runtimeRegistry.capability;
 
 // ─── BEGIN SESSION-PARK-PURE (injectable; unit-tested via source extraction) ──────
 
 let deps = null;
 
-// The engine binds its internals here at load (sessions, getSdk, buildSdkOptions, consume,
+// The engine binds its internals here at load (sessions, acquireRuntime, buildLaunchSpec, consume,
 // dispatch, startSession, hasLiveSession,
 // settleSession). Read at CALL time, so bind order at module load does not matter.
 function bind(d) {
@@ -83,9 +88,27 @@ function contextFromRecord(rec) {
 // window alive), only its live SDK query was torn down.
 // ⚠ Rebuild the abort controller + push iterator SYNCHRONOUSLY so the pushInbound / pushTurn
 // effect the reducer queues right after lands on the FRESH iterator. resumeSdkId feeds
-// options.resume, continuing the SAME sdk session.
+// options.resume, continuing the SAME conversation.
 function resumeParked(s) {
   if (!deps || !s || s.settled || s.resuming) return;
+  // ── ⚠ RESUME IS A DECLARED CAPABILITY, AND AN UNVERIFIED METER REFUSES IT (2026-08-31) ─────
+  //
+  // ⚠ THE COST CAP IS WHAT IS AT STAKE, NOT THE RESUME. Two lines below, this function zeroes
+  // `s.lastTotalCost` and `s.lastTotalTokens` because it ASSUMES the runtime restarts its
+  // cumulative total on a resumed conversation. A runtime that CONTINUES the total instead makes
+  // every subsequent delta negative; `session-io.js` clamps it to zero; `session-state.js ›
+  // costCapReached` is fed by that one number and is therefore never reached. The budget control
+  // stops existing with no error, no log and no symptom until a bill arrives — which is why
+  // `capability.js › canResume` refuses rather than hides, and why a COLD launch is unaffected.
+  // ⚠ IT REFUSES IN PLACE AND LEAVES THE SESSION PARKED. There is nothing to tear down (no query
+  // was rebuilt yet) and a parked session is a resumable one the moment the answer lands, so the
+  // operator's next wake retries. The reason is logged as a SENTENCE rather than a code, because
+  // an operator is who has to read it.
+  const refusal = runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(s.runtimeId));
+  if (refusal) {
+    diag('session-park: resume refused —', refusal);
+    return;
+  }
   s.resuming = true;
   // ⚠ THE PRIVATE WINDOW DOES NOT SURVIVE THE TORN-DOWN QUERY (2026-08-22). The depth is spent by
   // each turn's `result`, and the results this session was still owed died with the query the park
@@ -107,9 +130,14 @@ function resumeParked(s) {
   // ⚠ SYNCHRONOUSLY supersede the torn-down query's consume loop so its `s.query !== q` guard
   // trips — otherwise a late non-abort rejection from the OLD query crashes this session.
   s.query = null;
-  // ⚠ ASSUMPTION: the SDK restarts total_cost_usd from 0 on a resumed query, so resetting the
-  // delta baseline preserves the running cap total in state.costUsd (the cap keeps enforcing
-  // across park AND crash/resume). Revisit if the SDK ever continues the cumulative total.
+  // ⚠ ASSUMPTION: the runtime restarts its cumulative cost from 0 on a resumed query, so resetting
+  // the delta baseline preserves the running cap total in state.costUsd (the cap keeps enforcing
+  // across park AND crash/resume).
+  // ⚠ IT IS A DECLARED CAPABILITY SINCE 2026-08-31, NOT A COMMENT ANYBODY HAS TO FIND:
+  // `descriptor.session.usageResetsOnResume`. An `'unverified'` answer REFUSES the resume (a cold
+  // launch is unaffected), because a runtime that CONTINUES the total makes every delta negative,
+  // clamps it to zero in `session-io.js › applyCoreEvents`, and stops the cost cap ever firing —
+  // silently, with no symptom until a bill arrives.
   s.lastTotalCost = 0;
   // ⚠ THE SAME ASSUMPTION, THE SAME RESET, ONE LINE APART ON PURPOSE. `result.usage` restarts
   // from zero on the resumed query exactly like `total_cost_usd`, so its delta baseline drops
@@ -120,11 +148,16 @@ function resumeParked(s) {
 }
 
 async function startResumedConsumer(s) {
-  let sdk;
+  let rt;
   try {
-    sdk = await deps.getSdk();
+    // ⚠ THE SESSION'S OWN RUNTIME, NOT THE DEFAULT (2026-08-31, port wave D). `s.runtimeId` is
+    // stamped at spawn and never re-read live, precisely so a park cannot land a conversation on
+    // a different vendor: the handle in `s.resumeSdkId` is one runtime's and means nothing to
+    // another. Absent (every session record written before the port) resolves to the default,
+    // which is the runtime those sessions actually ran on.
+    rt = await deps.acquireRuntime(s.runtimeId);
   } catch (err) {
-    diag('session-park: resume sdk unavailable', err && err.message);
+    diag('session-park: resume runtime unavailable', err && err.message);
     s.resuming = false;
     if (!s.settled) deps.dispatch(s, { type: 'crash' });
     return;
@@ -142,10 +175,14 @@ async function startResumedConsumer(s) {
     // a session that 401s on its first tool call). The case this site exists for is a WOKEN
     // SPAWN-IDLE SHELL, which was registered without ever starting a query and so has none.
     await sessionCredential.ensureContainerCredential(s, diag);
-    const q = sdk.query({ prompt: s.pushIterator, options: deps.buildSdkOptions(s) });
+    // ⚠ `resume`, NOT `start`, AND THE SECOND ARGUMENT IS THE HANDLE BEING SUPERSEDED. On the
+    // runtime registered today a resume is a fresh child carrying the conversation id, so that
+    // argument is ignored; a runtime that RE-ATTACHES to a live conversation needs it, and
+    // declaring the signature now is what keeps that from being a core change later.
+    const q = rt.resume(deps.buildLaunchSpec(s), s.query);
     s.query = q;
     s.resuming = false;
-    deps.consume(s, q); // fire-and-forget consumer loop
+    deps.consume(s, q, rt); // fire-and-forget consumer loop
   } catch (err) {
     diag('session-park: resume start failed', err && err.message);
     s.resuming = false;
@@ -249,15 +286,25 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     diag('session-park: resume refused — cap', `(${sessionWindowless.MAX_CONCURRENT_SESSIONS} live)`);
     return false;
   }
-  let sdk;
-  try { sdk = await deps.getSdk(); } catch (_) { return false; }
+  // ⚠ THE SAME RESUME REFUSAL AS `resumeParked`, AT THE OTHER RESUME SHAPE (2026-08-31). This one
+  // rebuilds the session from the DURABLE RECORD, so the runtime comes off `rec.runtimeId`
+  // (`session-store.js › durableSessionRecord`) rather than off a live object. `false` is this
+  // function's existing refusal shape and the notification click simply does not resume —
+  // widening it would change a contract two callers read, for no gain.
+  const resumeRefusal = runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(rec.runtimeId));
+  if (resumeRefusal) {
+    diag('session-park: resume refused —', resumeRefusal);
+    return false;
+  }
+  let rt;
+  try { rt = await deps.acquireRuntime(rec.runtimeId); } catch (_) { return false; }
   // ⚠ Re-check AFTER the await: a reopen shell or racing launch may have created this slot
-  // during getSdk, and startSession would overwrite the Map entry and orphan that window.
+  // during the runtime probe, and startSession would overwrite the Map entry and orphan that window.
   if (deps.hasLiveSession(slot)) return false;
-  // ⚠ AND THE CAP AFTER IT TOO, for the same reason `launch()` re-checks its slot: `getSdk` is
-  // wide enough for a peer wake or the operator's own button to have taken the last slot.
+  // ⚠ AND THE CAP AFTER IT TOO, for the same reason `launch()` re-checks its slot: acquiring the
+  // runtime is wide enough for a peer wake or the operator's own button to have taken the last slot.
   if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) {
-    diag('session-park: resume refused — cap (taken during getSdk)');
+    diag('session-park: resume refused — cap (taken during the runtime probe)');
     return false;
   }
   const s = await deps.startSession({
@@ -298,7 +345,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // this; see its `ownPostSeq` line.
     ownPostSeq: rec.ownPostSeq,
     model: rec.model, // the operator's model pick, coerced by startSession
-  }, sdk);
+  }, rt);
   return !!s;
 }
 

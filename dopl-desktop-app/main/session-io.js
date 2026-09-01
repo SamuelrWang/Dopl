@@ -1,20 +1,29 @@
 // Session engine I/O helpers (v1.9 Session Window, Track T1).
 //
-// The push-based prompt iterator, the SDKUserMessage constructor, the SDK-message -> reducer-event
-// mapping, the canUseTool permission bridge, the durable-record projection, and the
-// tool-input/result summarizers (the untrusted-inbound continuation fence + the seed live in
-// session-seed.js, re-exported at the bottom unchanged). Split out of session-engine.js so each
-// stays under the 500-line §2 cap (contract §E). Every helper is PARAMETERIZED — it takes the
-// session object plus `dispatch` / `store` and holds NO module-level mutable state and NO
-// electron / SDK handle, so the engine stays the only stateful, electron-bound module.
+// The push-based prompt iterator, the user-turn constructor, the CORE-EVENT application, the
+// durable-record projection, and the tool-input/result summarizers (the untrusted-inbound
+// continuation fence + the seed live in session-seed.js, re-exported at the bottom unchanged).
+// Split out of session-engine.js so each stays under the 500-line §2 cap (contract §E). Every
+// helper is PARAMETERIZED — it takes the session object plus `dispatch` / `store` and holds NO
+// module-level mutable state and NO electron or platform handle, so the engine stays the only
+// stateful, electron-bound module.
+//
+// ⚠ THREE THINGS LEFT ON 2026-08-31 (runtime-adapter port, step 3/4) AND THE FILE IS UNDER CAP
+// AGAIN. `› sdkRenderEvents` and `› handleSdkMessage` — the two functions that read a platform's
+// own message schema — are the ADAPTER's (`main/runtime/claude/normalize.js`), which is what lets
+// a later runtime be tested from a recorded transcript with nothing installed. `› makeCanUseTool`
+// SPLIT: the verdict plumbing, the diag line, the card payloads and the resolver parking are
+// platform-free and went to `main/session-gate-bridge.js`; only the held-callback wiring and the
+// platform's reply vocabulary are the adapter's. What replaces all three here is
+// `› applyCoreEvents`, which owns the bookkeeping none of them could give away — the conversation
+// handle, the durable record, the cost/token DELTAS and the meter's last reading.
 
-const crypto = require('crypto');
-const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool, mcpShortName, floorWindowlessTool } = require('./session-profiles');
+const { grantDecisionDetail, floorWindowlessTool } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
-// The own-channel-post classifier (`isOutboundPost`), the OUTBOUND CONSENT SHAPE and the FORCED
-// thread tag live in session-outbound-tag.js (§2 cap). Both are re-exported below, no caller moved.
+// The own-channel-post classifier (`isOutboundPost`) and the FORCED thread tag live in
+// session-outbound-tag.js (§2 cap). Re-exported below, no caller moved.
 const outboundTag = require('./session-outbound-tag');
-const { isOutboundPost, outboundConsentShape } = outboundTag;
+const { isOutboundPost } = outboundTag;
 // The turn-TEXT assembly (fences, the channel-history seed, the gate-exclusion
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
 // 500-line split. Re-exported verbatim at the bottom, so every caller is unchanged.
@@ -153,7 +162,14 @@ function grantArgs(s, toolName, input) {
     // select keeps showing what was set, the gate applies what a surface-less session can
     // enforce. ⚠ Conditioned on `s.windowless` (stamped by `session-windowless.js ›
     // attachSurface`), never on the axis — a hypothetical WINDOWED session is untouched.
-    toolMode: s && s.windowless === true ? floorWindowlessTool(st.toolMode) : st.toolMode,
+    // ⚠ THE FLOOR IS THE RUNTIME'S SINCE 2026-08-31 (§0.1b): a mode that fail-closes to a
+    // vocabulary the runtime does not speak denies EVERYTHING on a surface-less session, so the
+    // floor is declared per runtime and applied here. `s.runtimeId` is absent on a session record
+    // written before this wave and resolves to the default runtime, which is what shipped.
+    toolMode: s && s.windowless === true ? floorWindowlessTool(st.toolMode, s.runtimeId) : st.toolMode,
+    // WHICH RUNTIME'S VOCABULARY steps 1 and 4 of `grantDecision` are asked in. ⚠ IT DECIDES
+    // NOTHING — the order, the verdicts and every Axis-B lane are the same on every runtime.
+    runtime: (s && s.runtimeId) || null,
     // AXIS B. ⚠ Through `session-private.js` (2026-08-22): a PRIVATE 1:1 turn withdraws the OUT
     // half, so a post gates and bridges to a consent row instead of auto-sending. ⚠ AND SINCE
     // 2026-08-31 that derivation reads the channel's AUTO-SEND toggle LIVE and FIRST (Samuel's
@@ -163,43 +179,13 @@ function grantArgs(s, toolName, input) {
 }
 
 // v2.7 L3 — WILL this own-channel post stop on an operator decision? It asks the SAME decision
-// makeCanUseTool asks, with the SAME arguments, so the stream-time artifact and the gate agree
+// the gate bridge asks, with the SAME arguments, so the stream-time artifact and the gate agree
 // about the SAME post: one that gates paints as the inline decision card (`pending`), one that is
 // auto-approved paints as the delivered record. It DECIDES nothing. FIX F3: the real tool NAME is
 // threaded through — grant keys are per tool name, so asking about `dopl_channel` for a
 // `dopl_channel_v2` call would claim "sent" over a held post.
 function postWillGate(s, input, toolName) {
   return grantDecisionDetail(grantArgs(s, toolName || DOPL_CHANNEL_TOOL, input)).decision === 'gate';
-}
-
-// ── THE GATE DIAG LINE (2026-08-02) ───────────────────────────────────────────────
-// "Bypass still asks" had to be diagnosed from SOURCE: a session logged nothing about why it
-// stopped, so "the mode never landed" and "the mode landed but does not cover this tool" looked
-// identical in the field. One line per verdict fixes that, deliberately THIN: tool NAME (server
-// prefix stripped, capped), M3's channel OP, the verdict, the reason code, both postures, and an
-// 8-char session prefix to join on. NEVER the tool input, the drafted body, prompt text or a full
-// id — listener.log is plaintext. F-139: the strip is `mcpShortName`, the gate's OWN normalizer.
-const DIAG_NAME_CAP = 40; const DIAG_OP_CAP = 24;
-function shortToolLabel(name) {
-  return mcpShortName(name).slice(0, DIAG_NAME_CAP) || 'unnamed';
-}
-// M3 (2026-08-05) — THE OP, ON THE LINE. `dopl_channel gate channel-op-approval-required` read
-// identically for a read, an invite and a DM open, so the read/post incoherence took code
-// archaeology to find. THE OP NAME ONLY (a closed vocabulary from the server's enum), sanitized
-// because it arrives from model input; never a body, recipient or channel. Non-channel tools get
-// no `op=` segment, so every line this file already produced is byte-unchanged.
-function channelOpLabel(toolName, callInput) {
-  if (!isChannelTool(toolName)) return '';
-  const raw = callInput && callInput.op;
-  if (typeof raw !== 'string') return raw == null ? 'none' : 'invalid';
-  return raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, DIAG_OP_CAP) || 'invalid';
-}
-function logGateVerdict(log, s, toolName, verdict, op) {
-  if (typeof log !== 'function') return;
-  const st = (s && s.state) || {};
-  log.apply(null, ['session gate:', shortToolLabel(toolName)].concat(op ? ['op=' + op] : [],
-    [verdict.decision, verdict.reason || 'no-reason', 'tool=' + (st.toolMode || 'manual'),
-      'msg=' + (st.messageMode || 'ask'), 'session=' + String(s && s.sessionId ? s.sessionId : '').slice(0, 8)]));
 }
 
 // ─── THE POST SURFACE MOVED OUT (§2 split, 2026-08-06) ────────────────────────
@@ -209,76 +195,6 @@ function logGateVerdict(log, s, toolName, verdict, op) {
 // id an agent typed) pushed it over. RE-EXPORTED BELOW, so every `io.<name>` caller is unchanged.
 const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface'); const { denyMessageFor } = require('./session-permissions'); // the 1:1 gate; the post surface; which sentence a `deny` verdict carries (F-320)
 const { withPostSurface, postKindOf } = postSurface;
-
-// Map ONE SDK message to the reducer events the renderer needs. Only assistant (text turns +
-// tool_use cards + op=post outbound messages) and user (tool_result fills) produce render events;
-// system/init and result are handled directly by the engine (they mutate session state). Unknown
-// types -> []. `sessionChannelId` + `peerName` (item 2 / §B.4) classify an own-channel post as an
-// `outbound_post` addressed to the peer. `willGatePost` (v2.7 L3, optional — absent reads as
-// "never gates") marks that post PENDING so the renderer paints the decision card.
-function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost, peerId) {
-  const out = [];
-  const blocks = (msg && msg.message && msg.message.content) || [];
-  if (msg && msg.type === 'assistant') {
-    for (const b of blocks) {
-      if (b && b.type === 'text' && b.text) {
-        out.push({ type: 'assistant', payload: { type: 'turn', role: 'assistant', text: b.text } });
-      } else if (b && b.type === 'thinking' && b.thinking) {
-        out.push({ type: 'thinking', payload: { type: 'thinking', text: b.thinking } }); // work lane, bounded downstream
-      } else if (b && b.type === 'tool_use') {
-        if (isOutboundPost(b.name, b.input, sessionChannelId)) {
-          // The agent wants to SEND a message to the peer. Emit ONE `outbound_post` and SUPPRESS
-          // the generic tool card for the same tool_use, so a sent message never double-renders
-          // as a tool call. It flows THROUGH the reducer (case 'outbound_post') so it can set
-          // postedThisTurn: recorded optimistically here, un-counted on the two paths that
-          // retract a post — a failing tool_result (FIX F3) and a park (FIX F6). MEDIUM-2: `to`
-          // is the call's REAL addressee when it set one, the bound counterparty otherwise;
-          // `postKind` rides along for a lifecycle-kinded post.
-          const payload = withPostSurface({
-            type: 'outbound_post',
-            toolUseId: b.id,
-            text: b.input && b.input.body != null ? String(b.input.body) : '',
-          }, b.input, peerName, peerId);
-          // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits,
-          // then resolves in place. `ownChannel` feeds the card's destination line (the
-          // renderer is fail-suspicious: anything but an explicit true reads as another
-          // channel), and it is a boolean — never another channel's id (§H-9).
-          if (typeof willGatePost === 'function' && willGatePost(b.input, b.name) === true) {
-            payload.pending = true;
-            payload.ownChannel = true;
-          }
-          out.push({ type: 'outbound_post', payload });
-        } else {
-          out.push({
-            type: 'tool_use',
-            payload: {
-              type: 'tool_use',
-              toolUseId: b.id,
-              name: b.name,
-              inputSummary: summarizeInput(b.input),
-              inputFull: safeInput(b.input),
-            },
-          });
-        }
-      }
-    }
-  } else if (msg && msg.type === 'user') {
-    for (const b of blocks) {
-      if (b && b.type === 'tool_result') {
-        out.push({
-          type: 'tool_result',
-          payload: {
-            type: 'tool_result',
-            toolUseId: b.tool_use_id,
-            ok: !b.is_error,
-            resultSummary: summarizeResult(b.content),
-          },
-        });
-      }
-    }
-  }
-  return out;
-}
 
 // The whitelisted durable projection of a live session (mirrors the store shape).
 // Live handles (query / window / iterator) are NEVER copied — only the fields the
@@ -318,158 +234,121 @@ function baseRecord(s) {
     // (session-store.durableSessionRecord) and again on the way back IN (startSession), so this
     // projection stays a plain copy with no dependency of its own.
     model: s.model || null,
+    // 2026-08-31 (port wave D): WHICH RUNTIME drove this session. Whitelisted for the same reason
+    // `model` above is and with a sharper consequence — `session-park.js › startResume` hands the
+    // persisted `sdkSessionId` to the runtime it acquires, so a record that lost this would resume
+    // one platform's conversation handle on another platform's adapter. `session-store.js ›
+    // durableSessionRecord` bounds the value; `runtime/index.js › resolve` turns an unknown id
+    // into the default, which is the runtime every pre-port record actually ran on.
+    runtimeId: s.runtimeId || null,
   };
 }
 
-// The canUseTool bridge. Profile pre-approved reads are shadowed by allowedTools and never reach
-// here; what DOES reach here is the live-gated work tools plus `dopl_channel` (FIX H1 removed it
-// from allowedTools). It consults the OP-SCOPED decision FIRST, with the tool INPUT and the
-// session's OWN channelId. 'preapproved' / 'allow' auto-allow with NO button (v2.5 D2: an
-// own-channel post no longer lands in the first of those; it GATES like every write); 'deny'
-// refuses without one (belt — disallowedTools should have blocked it first); 'gate' PAUSES on an
-// awaited operator button, and only that branch stashes a resolver for resolvePermission. `log`
-// is injected (session-engine passes diag) so this module stays electron-free.
-function makeCanUseTool(s, dispatch, log) {
-  return function canUseTool(name, input, opts) {
-    // v2.9: BOTH axes resolve inside grantDecision — no post-decision override here any more.
-    // The old item-10 `gate && autoApprove -> allow` line is gone: a second decision point that
-    // knew nothing about which axis a call belonged to is exactly how one switch came to
-    // authorize both Bash and outbound messages. 2026-08-02: the verdict comes back WITH the
-    // reason code that explains it, for the card and for the diag line.
-    const verdict = grantDecisionDetail(grantArgs(s, name, input));
-    const decision = verdict.decision;
-    logGateVerdict(log, s, name, verdict, channelOpLabel(name, input));
-    // THE FORCED THREAD TAG (session-outbound-tag.js — the prompt alone demonstrably does not
-    // hold it). Computed here but read only on an ALLOW: it rides a verdict, never makes one,
-    // and both axes resolved above without seeing it. ⚠ MINTED ONLY FOR A REAL OWN-CHANNEL POST
-    // (2026-08-21): minting on every tool call would spend ids the session never posts under and
-    // blunt the bounded lookback that makes the fan-out self-filter cheap.
-    const outbound = isOutboundPost(name, input, s.channelId);
-    const tag = outbound ? outboundTag.threadTagFor(input, s.taskId, outboundTag.nextOwnPostId(s)) : null;
-    if (tag && tag.action === 'conflict' && typeof log === 'function') {
-      log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
-        'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');
+// APPLY the CoreEvents one raw platform message produced. ⚠ SUCCESSOR TO `› handleSdkMessage`
+// (2026-08-31): the PARSING is the adapter's, the BOOKKEEPING is here, and the split is exactly
+// "what could a fixture test without a session". Returns the `auth_hold` event when the stream
+// must stop being read, and `null` otherwise; the caller owns what stopping means, and gets the
+// runtime's own sentence rather than re-deriving it.
+//
+// ⚠ ORDER IS PRESERVED AND IT IS OBSERVABLE. `result` dispatches BEFORE the turn's `context`,
+// because that is the order the two consumers ran in and the reducer's cap checks read the cost
+// on the `result`. Nothing here reorders a stream.
+// ⚠ `log` IS INJECTED, NOT REQUIRED, AND THAT IS THIS FILE'S STANDING RULE RATHER THAN a new one.
+// `diag.js` requires electron at its top and this module must not — `session-outbound-tag.test.mjs`
+// pins exactly that (`diag requires electron; this file must not`), because a dozen suites require
+// this file in plain Node. The precedent is `session-gate-bridge.js › makeCanUseTool(s, dispatch,
+// log)`, whose `log` the adapter's option assembly supplies; the consume loop supplies this one.
+// ⚠ OPTIONAL BY CONTRACT: a caller that passes nothing loses the LINE, never the SWALLOW. The
+// try/catch below is the behaviour; the log is how you find out it fired.
+function applyCoreEvents(s, list, dispatch, store, log) {
+  for (const ev of list || []) {
+    if (!ev || !ev.type) continue;
+    if (ev.type === 'auth_hold') return ev;
+    if (ev.type === 'context') {
+      // The METER's raw reading, remembered rather than dispatched. ⚠ `tokens > 0` GUARDS THE
+      // WRITE, not the event: a turn that measured nothing must keep the LAST real reading rather
+      // than fall back to a zero, because a zero would paint an empty gauge over a full window.
+      if (ev.tokens > 0) s.promptTokens = ev.tokens;
+      if (ev.model) s.liveModel = ev.model; // a mid-session model switch
+      continue;
     }
-    if (decision === 'preapproved' || decision === 'allow') return Promise.resolve(outboundTag.allowResult(tag));
-    if (decision === 'deny') return Promise.resolve({ behavior: 'deny', message: denyMessageFor(verdict.reason) }); // F-320: a deny has two causes now, and the LAUNCH BOUND is not "blocked by the profile"
-    return new Promise((resolve) => {
-      const requestId = (opts && opts.requestId) || crypto.randomUUID();
-      // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for
-      // this task" click records, so a post grant stays scoped to own-channel posts.
-      // The renderer still sees the real tool name in the payload.
-      const grantName = grantKeyFor(name, input, s.channelId);
-      // The tag rides the OPERATOR's allow here; a deny (park included) carries nothing.
-      s.pendingPermissions.set(requestId, outboundTag.wrapAllow(resolve, tag));
-      s.pendingNames.set(requestId, grantName);
-      // v2.7 L3 — an OWN-CHANNEL POST decides on its own inline stream card, not the bottom
-      // dock. The POLICY path is untouched: same `permission_request` reducer event and
-      // pendingPermissions tracking (park deny-closes fail-closed, auto-approve drain resolves),
-      // same scoped grantName, same fail-closed decision mapping. ONLY the renderer PAYLOAD
-      // differs — `outbound_gate` hands the already-painted pending card its requestId, so it
-      // answers for ITSELF and the dock is free for the next NON-post request. Other tools keep
-      // the dock payload below. FIX F4: the gate carries the AUTHORIZED BYTES — this call's body
-      // plus the destination name — so the surface comes from the input the decision covers, not
-      // the streamed copy. Doubles as the RE-CREATE path (FIX F5): a gate whose stream-time
-      // artifact never landed still paints a card. `to` is a display NAME, ownChannel a boolean —
-      // never another channel's id (§H-9). ⚠ Own-channel `create_thread` takes it too (2026-08-24, Samuel) — `outboundConsentShape` argues why.
-      const payload = outboundConsentShape(name, input, s.channelId)
-        ? withPostSurface({
-          type: 'outbound_gate',
-          requestId,
-          toolUseId: opts && opts.toolUseID,
-          ownChannel: true, ...(s.direct === true ? { directChannel: true } : {}), // H2: in a DM the server addresses this post, so the card names who gets it
-          // ⚠ `threadOpen` → `entryFor` mints the pending card a create_thread lacks an `outbound_post` to carry, else a gated windowless one hangs to its 24h TTL (F-321).
-          ...(isOutboundPost(name, input, s.channelId) ? {} : { threadOpen: true }),
-          text: input && input.body != null ? String(input.body) : '',
-        }, input, s.counterpartyName, s.counterpartyId)
-        : {
-          type: 'permission_request',
-          requestId,
-          toolUseId: opts && opts.toolUseID,
-          name,
-          // FIX #9: WHERE an op=post is headed. The dock rendered the body with no target,
-          // so a cross-channel post (the exfil shape D2 exists to catch) looked exactly
-          // like a normal reply, and the 140-char inputSummary usually truncated the
-          // channel field away. A boolean, never the other channel's id (§H-9).
-          ownChannel: isOwnChannelPost(input, s.channelId),
-          inputSummary: summarizeInput(input),
-          inputFull: safeInput(input),
-          title: opts && opts.title,
-          // MEDIUM-2 belt for the DOCK path (a CROSS-channel post): name a forged
-          // lifecycle kind here too. `to` is deliberately left off — this card's
-          // destination line already reads "another channel", the louder warning.
-          postKind: postKindOf(input),
-        };
-      if (payload.postKind == null) delete payload.postKind; // absent stays absent
-      // 2026-08-02 — WHY THIS CARD IS ON SCREEN, on BOTH gate surfaces. Without it every
-      // uncovered tool reads as a broken bypass toggle and every slug-addressed post reads as
-      // a random refusal. A CODE, never words: the renderer owns the copy, and a code it does
-      // not know renders no line rather than a guess. Absent stays absent, like postKind.
-      if (verdict.reason) payload.gateReason = verdict.reason;
-      dispatch(s, { type: 'permission_request', requestId, name: grantName, payload });
-    });
-  };
+    if (ev.type === 'launched') {
+      s.sdkSessionId = ev.sessionId;
+      // ⚠ THE CONVERSATION HANDLE IS PERSISTED BEFORE THE REDUCER IS TOLD. It is the only thing a
+      // resume has, so a crash between the two must leave the id recoverable, never the phase.
+      store.setSdkSessionId(s.key, ev.sessionId);
+      store.saveRecord(baseRecord(s));
+      if (ev.model) s.liveModel = ev.model; // the first honest statement of what is really running
+      dispatch(s, { type: 'launched', payload: launchedPayload(s, ev.model) });
+      continue;
+    }
+    if (ev.type === 'result') {
+      // THE DELTAS. ⚠ Both numbers arrive CUMULATIVE for the current run, so a resumed run
+      // restarts them from zero and `session-park.js › resumeParked` zeroes the baselines to
+      // match. Summing DELTAS is what makes the figures survive a park+resume; the raw totals
+      // would collapse. ⚠ `Math.max(0, …)` is the clamp that makes a platform which does NOT
+      // restart on resume fail SILENTLY — which is why `descriptor.session.usageResetsOnResume`
+      // is launch-blocking rather than a footnote.
+      const total = Number(ev.costUsd) || 0;
+      const turnCost = Math.max(0, total - (s.lastTotalCost || 0));
+      s.lastTotalCost = total;
+      const tokenTotal = Number(ev.sessionTokens) || 0;
+      s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
+      s.lastTotalTokens = tokenTotal;
+      dispatch(s, { type: 'result', turnCostUsd: turnCost, model: ev.model });
+      // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
+      // zero (`session-model.js › contextEvent`).
+      const context = sessionModel.contextEvent(s.promptTokens, s.liveModel);
+      // ⚠ THE METER MAY NOT KILL THE SESSION, AND THIS `try/catch` IS THE WHOLE OF THAT RULE.
+      // It came over from `session-model.js › observe` with the dispatch it wraps and was LOST in
+      // the port (restored 2026-09-01, D7.3). The context event is a GAUGE READING — the last
+      // assistant message's prompt tokens over a window denominator — and it is dispatched from
+      // inside the consume loop's `for await`. A throw here therefore does not fail the meter, it
+      // escapes to `session-query.js › consume`'s catch, which reads it as a query error and
+      // dispatches `crash` -> settle + destroy + `task_failed{interrupted}`. So a reducer bug on a
+      // COSMETIC row would tear down a session mid-turn and report it to the peer as an
+      // interruption. HEAD swallowed it to one diag line and kept the stream alive; that is the
+      // correct trade and the line is kept VERBATIM (`session-model:` prefix included) so the
+      // existing `listener.log` grep still finds it.
+      // ⚠ SWALLOWED, NOT RETHROWN, AND ONLY HERE. Every other dispatch in this loop is a state
+      // transition the session's correctness depends on — those must still reach `crash`.
+      if (context) {
+        try {
+          dispatch(s, context);
+        } catch (err) {
+          if (typeof log === 'function') log('session-model: context dispatch failed', err && err.message);
+        }
+      }
+      continue;
+    }
+    dispatch(s, ev); // every render event, unchanged
+  }
+  return null;
 }
 
-// Map ONE raw SDK message onto reducer events (the "event mapping" half of the pre-authorized
-// split). system/init captures the sdkSessionId + persists the record then dispatches `launched`;
-// assistant/user become render events; result hands the reducer a per-turn cost DELTA
-// (total_cost_usd is cumulative). Unknown types ignored. `dispatch` + `store` injected, so this
-// stays electron/SDK-handle-free.
-function handleSdkMessage(s, msg, dispatch, store) {
-  if (!msg || !msg.type) return;
-  if (msg.type === 'system' && msg.subtype === 'init') {
-    s.sdkSessionId = msg.session_id;
-    store.setSdkSessionId(s.key, msg.session_id);
-    store.saveRecord(baseRecord(s));
-    dispatch(s, {
-      type: 'launched',
-      payload: {
-        type: 'init',
-        sessionId: s.sessionId,
-        side: s.side,
-        profile: s.profile,
-        mode: s.mode,
-        model: msg.model,
-        profileLabel: s.profileLabel || null, // item 9: human posture label (§B.2)
-        channelName: (s.context && s.context.channelName) || null,
-        taskTitle: (s.context && s.context.taskTitle) || null,
-        from: s.counterpartyName || null,
-        // Item 1/5/6 (§B.1): bounded data: URIs (or null) — the operator's photo for my-agent/
-        // operator/outbound bubbles, the peer's for counterparty bubbles + the header. Warm here
-        // when the cache is hot; else null + a follow-up `avatars` event from
-        // avatar-cache.resolveForSession. NEVER a remote URL.
-        selfAvatar: s.selfAvatar || null,
-        fromAvatar: s.peerAvatar || null,
-        // NEVER the SDK's absolute cwd (label-only rule) — emitFolder() feeds the chip its label.
-        cwdLabel: null,
-      },
-    });
-    return;
-  }
-  if (msg.type === 'assistant' || msg.type === 'user') {
-    // §B.4 seam: pass the session's OWN channelId + the counterparty display name so an op=post
-    // into this channel renders as an outbound message to the peer. v2.7 L3 adds the gate
-    // PREDICTION, so that one artifact starts as the decision card when the post will stop.
-    const willGate = (input, toolName) => postWillGate(s, input, toolName);
-    for (const ev of sdkRenderEvents(msg, s.channelId, s.counterpartyName, willGate, s.counterpartyId)) dispatch(s, ev);
-    return;
-  }
-  if (msg.type === 'result') {
-    const total = Number(msg.total_cost_usd) || 0;
-    const turnCost = Math.max(0, total - (s.lastTotalCost || 0));
-    s.lastTotalCost = total;
-    // LIFETIME TOKEN SPEND, by the SAME arithmetic as the cost above and for the same reason:
-    // `msg.usage` is this QUERY's running total, so a resumed query restarts it from zero
-    // (session-park resets both baselines together). Summing DELTAS is what makes the figure
-    // survive a park+resume; the raw total would collapse it. ⚠ NOT the context meter's number
-    // — see session-model.js `sessionTokens` vs `promptTokens`.
-    const tokenTotal = sessionModel.sessionTokens(msg.usage);
-    s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
-    s.lastTotalTokens = tokenTotal;
-    const model = msg.model || (msg.modelUsage && Object.keys(msg.modelUsage)[0]) || null;
-    dispatch(s, { type: 'result', turnCostUsd: turnCost, model });
-  }
+// The `launched` payload. Split out only so `applyCoreEvents` stays a routing shape; every field
+// is the one `handleSdkMessage` sent.
+function launchedPayload(s, model) {
+  return {
+    type: 'init',
+    sessionId: s.sessionId,
+    side: s.side,
+    profile: s.profile,
+    mode: s.mode,
+    model: model,
+    profileLabel: s.profileLabel || null, // item 9: human posture label (§B.2)
+    channelName: (s.context && s.context.channelName) || null,
+    taskTitle: (s.context && s.context.taskTitle) || null,
+    from: s.counterpartyName || null,
+    // Item 1/5/6 (§B.1): bounded data: URIs (or null) — the operator's photo for my-agent/
+    // operator/outbound bubbles, the peer's for counterparty bubbles + the header. Warm here
+    // when the cache is hot; else null + a follow-up `avatars` event from
+    // avatar-cache.resolveForSession. NEVER a remote URL.
+    selfAvatar: s.selfAvatar || null,
+    fromAvatar: s.peerAvatar || null,
+    // NEVER the platform's absolute cwd (label-only rule) — emitFolder() feeds the chip its label.
+    cwdLabel: null,
+  };
 }
 
 module.exports = {
@@ -492,11 +371,14 @@ module.exports = {
   postAddress: postSurface.postAddress, // MEDIUM-2: the call's REAL addressee (null when unaddressed)
   postKindOf, // MEDIUM-2: the lifecycle kind it claims (null for a plain message)
   withPostSurface,
+  // ⚠ HOW MUCH OF A TOOL INPUT MAY APPEAR ON A CARD IS A PRIVACY RULE, not formatting, so all
+  // three summarizers stay here and both the gate bridge and the adapter's normalizer ask for
+  // them rather than growing their own bound.
   summarizeInput,
+  safeInput,
+  summarizeResult,
   initialRequestPayload: seed.initialRequestPayload, // the initiating ask, display-only (§2 split)
   isOutboundPost,
-  sdkRenderEvents,
   baseRecord,
-  makeCanUseTool,
-  handleSdkMessage,
+  applyCoreEvents, // 2026-08-31: successor to `handleSdkMessage` — the bookkeeping half
 };

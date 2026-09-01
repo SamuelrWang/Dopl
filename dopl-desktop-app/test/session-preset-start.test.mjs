@@ -453,7 +453,7 @@ test("the starting posture is emitted BEFORE anything can run", () => {
   assert.match(ENGINE, /emit\(s, \{ type: 'modes', tool: state\.toolMode, message: state\.messageMode \}\)/);
   const attach = ENGINE.indexOf("sessionWindowless.attachSurface(s, spec)");
   const at = ENGINE.indexOf("emit(s, { type: 'modes'");
-  const start = ENGINE.indexOf("await startQuery(s, sdk);");
+  const start = ENGINE.indexOf("await startQuery(s, rt);");
   assert.ok(attach !== -1 && at !== -1 && start !== -1, "all three anchors exist — a -1 makes this vacuous");
   assert.ok(at > attach, "after the surface is attached, so the replay ring carries it");
   assert.ok(at < start, "and before anything can run");

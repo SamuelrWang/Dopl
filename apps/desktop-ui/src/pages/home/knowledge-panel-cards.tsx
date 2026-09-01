@@ -1,6 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
-import { setBaseStar, type KnowledgeBaseList } from "@/features/knowledge/client/api";
+import {
+  EMPTY_SHARED,
+  setBaseStar,
+  type KnowledgeBaseList,
+} from "@/features/knowledge/client/api";
 import { knowledgeBasesQueryKey } from "@/features/knowledge/client/hooks";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
@@ -47,6 +51,10 @@ export function BaseCell({
   const ownerNames = list?.ownerNames ?? EMPTY_OWNER_NAMES;
   const baseStats = list?.baseStats ?? EMPTY_BASE_STATS;
   const starredBaseIds = list?.starredBaseIds ?? EMPTY_STARRED;
+  // ⚠ `sharedBaseIds` is the YOUNGEST of these keys (2026-09-01), so it is the
+  // one most likely to be absent from a live cache entry — same rule, same
+  // shape, spelled at the read.
+  const sharedBaseIds = list?.sharedBaseIds ?? EMPTY_SHARED;
   // Same three-way answer `knowledge-home.tsx › ownerLabelFor` gives: own and
   // ownerless bases read "You", a peer's base reads their resolved name, and a
   // degraded name lookup reads neutrally rather than claiming the caller wrote
@@ -71,6 +79,7 @@ export function BaseCell({
         storageLimit={list?.kbStorageLimit}
         ownerLabel={ownerLabel}
         starred={starredBaseIds.includes(base.id)}
+        shared={sharedBaseIds.includes(base.id)}
         onOpen={onOpen}
         onToggleStar={(baseId, starred) => onToggleStar({ baseId, starred })}
       />
@@ -81,7 +90,7 @@ export function BaseCell({
 /** Frozen module-level empties, so a degraded read does not mint a new object
  *  per render and re-run every downstream memo. ⚠ MISSING is UNKNOWN, and each
  *  of these renders as the honest unknown: no name (→ "Someone else"), no stats
- *  line, not starred. */
+ *  line, not starred, not known to be shared. */
 const EMPTY_OWNER_NAMES: Readonly<Record<string, string>> = Object.freeze({});
 const EMPTY_BASE_STATS: Readonly<
   Record<string, KnowledgeBaseList["baseStats"][string]>

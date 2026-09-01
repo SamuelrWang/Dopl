@@ -710,21 +710,33 @@
   gap: 10px;
   min-width: 0;
 }
-/* ⚠ SIZE AND WEIGHT ARE DEFAULTED ALIASES, and the DEFAULT is the whole card
-   face everywhere except /home (Samuel, 2026-08-28, over a screenshot of the
-   /home Knowledge face: the title read "bold and large" beside the channel
-   list). /home rebinds them on its own grid — `apps/desktop-ui/src/pages/home/
-   home.module.css › .kbCards` — to the CHANNEL-ROW title's face
-   (`relationship-list.tsx`: `text-body`, i.e. --text-body, at normal weight).
-   The fallbacks below are the workspace Knowledge page's values, so that page
-   is unchanged by construction; a fork of `home/base-card.tsx` was the
-   alternative and is forbidden. Same alias mechanism as `--kv-*` above. */
+/* 🔒 ⚠ **THE DEFAULT *IS* THE CHANNEL-ROW TITLE'S FACE NOW (Samuel,
+   2026-09-01), ON EVERY SURFACE — /home AND the workspace Knowledge page.**
+   The one reference is `apps/desktop-ui/src/pages/home/relationship-list.tsx ›
+   RelationshipRow`'s name span, `truncate text-body font-medium
+   text-text-primary`, so the three declarations below are that class list
+   restated in CSS and nothing else:
+     `text-body`         → --text-body           (the ramp's default-body rung)
+     `font-medium`       → 500
+     `text-text-primary` → --text-primary, which is what --kv-text resolves to
+                           in `.shell` (line 9) and in /home's `.kbCards`.
+   ⚠ **NO `letter-spacing` ANY MORE.** It was -0.01em, and the row has none —
+   "match exactly" includes the tracking, which at 12.5px is the difference
+   between two words that look set in different faces.
+
+   ⚠ **THE ALIASES SURVIVE, THE DIVERGENCE DOES NOT.** `--kv-card-title-size` /
+   `--kv-card-title-weight` are still readable so a future surface can rebind
+   them on its own grid; what is gone is the state where the two Knowledge faces
+   answered differently (title/600 here, body/400 on /home — one of them was
+   always going to be the wrong one), and /home's rebind of these two is deleted
+   with it. History: they were minted 2026-08-28 to make /home alone match this
+   face; the ruling widened that match to every surface rather than keeping a
+   per-page fork. A fork of `home/base-card.tsx` remains forbidden. */
 .cardName {
   flex: 1;
   min-width: 0;
-  font-size: var(--kv-card-title-size, var(--text-title));
-  font-weight: var(--kv-card-title-weight, 600);
-  letter-spacing: -0.01em;
+  font-size: var(--kv-card-title-size, var(--text-body));
+  font-weight: var(--kv-card-title-weight, 500);
   color: var(--kv-text);
   white-space: nowrap;
   overflow: hidden;

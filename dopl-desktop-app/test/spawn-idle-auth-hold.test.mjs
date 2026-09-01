@@ -40,12 +40,12 @@ const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8
 const TAIL = between(
   ENGINE,
   "if (spec.windowless && sessionAuth.holdIfNoCredential(s))",
-  "await startQuery(s, sdk);",
+  "await startQuery(s, rt);",
   "startSession's spawn tail"
-) + "await startQuery(s, sdk);\n return s;";
+) + "await startQuery(s, rt);\n return s;";
 
 const runTail = new Function(
-  "spec", "s", "sdk", "sessionAuth", "sessions", "sessionSummary", "scheduleIdle", "diag", "startQuery",
+  "spec", "s", "rt", "sessionAuth", "sessions", "sessionSummary", "scheduleIdle", "diag", "startQuery",
   `return (async () => {\n${TAIL}\n})();`
 );
 

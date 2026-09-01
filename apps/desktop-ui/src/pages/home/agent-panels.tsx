@@ -51,7 +51,7 @@ import { HomeAgentPanelsSkeleton } from "./home-skeleton";
  * word; the collision is RECORDED (INVARIANTS §5A) rather than resolved.
  *
  * ⚠ NO LAUNCH CONTROL, DELIBERATELY (§4.6, §5A). This is the AUTHORING half of
- * a lane that is already wired end to end: the Chat face's `TemplateLaunchPicker`
+ * a lane that is already wired end to end: the Channels face's `TemplateLaunchPicker`
  * reads THIS SAME container list and launches from it (plan §0.2). A second
  * launch surface fights `resolve`'s singularity, so the absence is tested
  * (`agent-panels.test.tsx › what this pane deliberately leaves out`). CREATE and

@@ -80,7 +80,13 @@ export function AgentsTab({
   onApproveTemplate,
   openAgent,
   onOpenAgent,
-  onNewThread,
+  // ⚠ `onNewThread` IS ACCEPTED AND NOT DESTRUCTURED (2026-09-01). The
+  // channel-level-launch ruling deleted its only reader here — the "make a
+  // thread first" redirect — and binding it anyway is an unused local, which is
+  // an ERROR under the SPA's `noUnusedLocals`. The PROP stays: `info-panel.tsx`
+  // passes it to both mounts and `agents-tab-launch.test.tsx` pins that it is
+  // NOT called, so dropping it from the type would break two callers to delete
+  // a word. See its docblock below.
 }: {
   /** The whole machine's feed, or `null` for "could not ask" — no bridge, or a
    *  main without it. ⚠ Never collapse `null` into `[]` on the way in. */
@@ -113,9 +119,14 @@ export function AgentsTab({
    * still what the New Agent button does in ONE CLICK, and the two optional
    * arguments exist for the picker beside it (Samuel's "one lane, one-click
    * launch" ruling — the picker never intercepts the button).
+   * ⚠ `null` IS A CHANNEL-LEVEL LAUNCH (2026-08-31, Samuel's ruling) — an agent
+   * on the ROOM, the same threadless lane the composer's Bot icon has had since
+   * 2026-08-21 (`use-agents-panel.ts` words it: no counterparty, and that is not
+   * a refusal). The tab's channel view offers it directly now instead of
+   * redirecting through "make a thread first".
    */
   onLaunchAgent?: (
-    threadId: string,
+    threadId: string | null,
     templateId?: string | null,
     overrides?: TemplateLaunchOverrides
   ) => Promise<AgentLaunchOutcome> | void;
@@ -127,10 +138,17 @@ export function AgentsTab({
   openAgent: string | null;
   onOpenAgent: (key: string) => void;
   /**
-   * Opens the composer's new-thread panel. ⚠ THE LAUNCH BUTTON'S OTHER HALF:
-   * an agent runs INSIDE a thread, so with none open there is nothing to launch
-   * into and the honest first step is making one. Same lane, one step earlier —
-   * not a second way to launch.
+   * Opens the composer's new-thread panel.
+   *
+   * 🔒 **INERT ON THIS TAB SINCE 2026-08-31 AND DELIBERATELY STILL ACCEPTED.**
+   * It was THE LAUNCH BUTTON'S OTHER HALF — with no thread open the button
+   * opened this panel instead, on the argument that an agent runs INSIDE a
+   * thread. Samuel's channel-level-launch ruling deleted that redirect (both
+   * views launch in one click; with no thread open the launch is on the ROOM),
+   * so nothing here calls it any more. ⚠ **Do not "finish the job" by removing
+   * the prop**: `info-panel.tsx` passes it to both mounts of this tab, and
+   * `agents-tab-launch.test.tsx` pins that it is NOT called — which is the
+   * assertion that would go silent if the prop stopped being accepted.
    */
   onNewThread?: () => void;
 }) {
@@ -202,8 +220,14 @@ export function AgentsTab({
   // panel — the exact flow the Threads tab's button opens. The title says so,
   // because a button that does something other than its label without a word is
   // the surface lying.
-  const canStartThread = !openThreadId && !!onNewThread;
-  const launchRow = canLaunch && onLaunchAgent && (openThreadId || canStartThread) && (
+  // ⚠ THE "MAKE A THREAD FIRST" REDIRECT IS GONE (2026-08-31, Samuel's ruling).
+  // The channel view's button used to open the new-thread panel on the argument
+  // that an agent runs inside a thread — but the threadless lane has existed
+  // since 2026-08-21 (the composer's Bot icon launches an agent ON THE ROOM,
+  // and `use-agents-panel.ts` words it: no counterparty is not a refusal), so
+  // the redirect was the one surface still pretending it did not. Both views
+  // launch in ONE CLICK now; with no thread open the launch is channel-level.
+  const launchRow = canLaunch && onLaunchAgent && (
     <div className="mb-3">
       <div className="flex justify-end">
         {/* ⚠ IT CANNOT BE `TAB_ACTION` — a split button is a wrapper plus two
@@ -215,17 +239,13 @@ export function AgentsTab({
             type="button"
             disabled={launchBusy}
             title={
-              openThreadId
-                ? undefined
-                : "Start a thread — an agent runs inside one"
+              openThreadId ? undefined : "Launches an agent on the channel"
             }
-            onClick={() =>
-              openThreadId ? void onLaunchAgent(openThreadId) : onNewThread?.()
-            }
+            onClick={() => void onLaunchAgent(openThreadId ?? null)}
             className="flex min-w-0 cursor-pointer items-center gap-1 px-[15px] text-small font-semibold text-text-on-cta disabled:opacity-60"
           >
             <Plus size={13} aria-hidden />
-            {launchBusy ? "Starting\u2026" : "Launch agent"}
+            {launchBusy ? "Starting\u2026" : "New agent"}
           </button>
           {/* ⚠ THE CHEVRON NEEDS A THREAD TOO, and unlike the face it has no
               honest fallback: "launch THIS template" names a target that does

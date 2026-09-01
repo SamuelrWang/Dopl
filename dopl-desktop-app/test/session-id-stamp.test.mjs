@@ -31,8 +31,8 @@ import { fnOf, orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const LOADER = M("sdk-loader.js");
-const QUERY = M("session-query.js");
+const LOADER = M(join("runtime", "claude", "loader.js"));
+const SPEC = M(join("runtime", "claude", "launch-spec.js"));
 const CONFIG = M("mcp-config.js");
 const STORE = M("session-store.js");
 const LEGACY = M("legacy-threads.js");
@@ -50,7 +50,7 @@ function reSourceOf(src, what) {
   assert.ok(m, `${what} must define SESSION_ID_RE`);
   return m[1];
 }
-const DESKTOP_RE_SRC = reSourceOf(LOADER, "sdk-loader.js");
+const DESKTOP_RE_SRC = reSourceOf(LOADER, "runtime/claude/loader.js");
 const SERVER_RE_SRC = reSourceOf(SERVER, "session-header.ts");
 // The live regex the SERVER narrows with, compiled from its own source.
 const SERVER_RE = new Function(`return ${SERVER_RE_SRC};`)();
@@ -104,7 +104,7 @@ test("the desktop narrows a slot with the SERVER's regex, character for characte
   assert.equal(
     DESKTOP_RE_SRC,
     SERVER_RE_SRC,
-    "sdk-loader's SESSION_ID_RE must be the server's SESSION_ID_RE — fix the copy, not this test"
+    "the loader's SESSION_ID_RE must be the server's SESSION_ID_RE — fix the copy, not this test"
   );
 });
 
@@ -130,6 +130,7 @@ test("the slot key rides the dopl entry beside the bearer, pin and runtime stamp
   assert.deepEqual(servers.dopl.headers, {
     Authorization: "Bearer device-token",
     "X-Dopl-Runtime": "desktop-session",
+    "X-Dopl-Vendor": "claude", // 2026-08-31: the vendor dimension (runtime-stamp-literals.test.mjs)
     "X-Workspace-Id": "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee",
     "X-Dopl-Session-Id": `${CH}:${THREAD}:${AGENT}`,
   }, "every header the builder set survives, and the stamp joins them");
@@ -185,7 +186,7 @@ test("an absent / empty / non-string slot leaves the entry with no such header",
     withSessionStamp(servers, nothing);
     assert.deepEqual(
       Object.keys(servers.dopl.headers),
-      ["Authorization", "X-Dopl-Runtime"],
+      ["Authorization", "X-Dopl-Runtime", "X-Dopl-Vendor"],
       `slot=${JSON.stringify(nothing)} must leave the headers exactly as built`
     );
     assert.ok(!("X-Dopl-Session-Id" in servers.dopl.headers));
@@ -272,26 +273,28 @@ test("a slot key built from a hostile id degrades to NO stamp, never to a bad he
 
 // ── The wiring: session-query.js actually applies it, with the slot key ─────────
 
-test("buildSdkOptions stamps the assembled mcpServers with store.slotKey(s)", () => {
-  const opts = fnOf(QUERY, "buildSdkOptions");
+test("the launch spec stamps the assembled mcpServers with store.slotKey(s)", () => {
+  // ⚠ 2026-08-31: the assembly is the RUNTIME ADAPTER's (`runtime/claude/launch-spec.js`); the
+  // stamp, its ordering and the container-lock argument are unchanged.
+  const opts = fnOf(SPEC, "buildOptions");
   // The stamp names the REGISTRY SLOT this run occupies — `store.slotKey` is the one
   // definition of that (channel, agent) / (channel, thread) arithmetic. Rebuilding the
   // value by hand here is the bug FIX N1 already fixed one file over.
-  assert.match(opts, /withSessionStamp\(options\.mcpServers, store\.slotKey\(s\)\);/);
+  assert.match(opts, /loader\.withSessionStamp\(options\.mcpServers, store\.slotKey\(s\)\);/);
   // The builder literal two other suites source-scan is untouched, and the stamp is
   // applied AFTER it — stamping a not-yet-built object would be a silent no-op.
   // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child
   // credential for a session spawned into a SHARED link container, '' for every other
   // session. It is pinned INTO this literal rather than beside it because dropping the
   // argument silently reverts every locked session to the operator's device token.
-  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
+  assert.match(opts, /mcpServers: loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   assert.ok(
-    orderOf(opts, "mcpServers: buildMcpServers(", "withSessionStamp(", "buildSdkOptions"),
+    orderOf(opts, "mcpServers: loader.buildMcpServers(", "loader.withSessionStamp(", "buildOptions"),
     "the entry must exist before it can be stamped"
   );
   // …and the two modules are really joined: the import and the export.
-  assert.match(QUERY, /withSessionStamp[^\n]*\} = require\('\.\/sdk-loader'\);/);
-  assert.match(LOADER, /^\s*withSessionStamp, \/\/ F2/m, "exported from the one SDK-facing module");
+  assert.match(SPEC, /^const loader = require\('\.\/loader'\);$/m);
+  assert.match(LOADER, /^\s*withSessionStamp, \/\/ F2/m, "exported from the one platform-facing module");
 });
 
 test("the per-session stamp NEVER reaches the shared, on-disk spawn config", () => {

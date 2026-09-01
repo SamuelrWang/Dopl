@@ -65,9 +65,12 @@ export function HomePageSkeleton({ label = "Opening home" }: { label?: string })
           >
             {/* ⚠ THE LEFT PAD IS THE LIST COLUMN'S WIDTH — one var, two places. */}
             <div className="flex items-center justify-between gap-3 py-3 pl-[var(--home-list-w)] pr-5">
-              {/* The Chat / Knowledge / Agents selector, ghosted. */}
+              {/* The Overview / Channels / Knowledge / Agents selector,
+                  ghosted — four pills since 2026-09-01, sized to their labels
+                  so the ghost does not re-flow when the real row lands. */}
               <div className="seg-track">
-                <Skeleton className="h-[30px] w-[62px] rounded-full" />
+                <Skeleton className="h-[30px] w-[80px] rounded-full" />
+                <Skeleton className="h-[30px] w-[82px] rounded-full" />
                 <Skeleton className="h-[30px] w-[92px] rounded-full" />
                 <Skeleton className="h-[30px] w-[70px] rounded-full" />
               </div>

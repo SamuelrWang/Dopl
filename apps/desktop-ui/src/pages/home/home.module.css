@@ -4,7 +4,7 @@
 
 /* ⚠ ONE SOURCE FOR THE COLUMN WIDTH, and it is load-bearing in TWO places
    (Samuel, 2026-08-24): the relationship list IS this wide, and the header's
-   Chat/Knowledge/Agents selector is indented by exactly this much so it starts
+   Overview/Channels/Knowledge/Agents selector is indented by exactly this much so it starts
    on the record pane's left edge. The record pane has no left margin, so that
    edge is the column's right edge — one number, or the two drift the first time
    either is touched. Consumers read it as `w-[var(--home-list-w)]` /
@@ -181,14 +181,17 @@
   --kv-row-hover: var(--surface-raised-1);
   --kv-row-active: var(--surface-raised-3);
 
-  /* ⚠ THE TITLE IS THE CHANNEL ROW'S TITLE (Samuel, 2026-08-28: *"not bold,
-     font size = the channel name in the left list"*). That row is
-     `relationship-list.tsx › RelationshipRow`'s name span — `truncate text-body
-     font-medium` — so the SIZE is `--text-body`, the token behind `text-body`.
-     The WEIGHT is normal because the ruling said "not bold" in its own clause;
-     the row itself is 500. Do not restate 12.5px here — read the token. */
-  --kv-card-title-size: var(--text-body);
-  --kv-card-title-weight: 400;
+  /* 🔒 ⚠ **THE TITLE REBINDS ARE DELETED (Samuel, 2026-09-01) AND THAT IS THE
+     FIX, NOT A REGRESSION.** They stood here as the two
+     `--kv-card-title-*` rebinds — /home matching the channel row's SIZE
+     (`--text-body`) but at weight 400 while the row itself is 500 (the
+     2026-08-28 ruling said "not bold", and 400 was one step further than the
+     row). The new ruling is that a KB card's name matches the channel-row title
+     EXACTLY, on every surface, so the match moved into
+     `knowledge-v2.module.css › .cardName`'s own DEFAULTS — where the workspace
+     Knowledge page reads it too — and a rebind here would only be able to make
+     /home disagree with it again. The aliases are still readable if a future
+     surface genuinely needs its own face. */
   /* Two description lines, not three: at a third of the pane a card cannot pay
      for a 3-line floor AND the meta/foot rows inside a shorter row. */
   --kv-card-desc-lines: 2;

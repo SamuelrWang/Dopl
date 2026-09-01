@@ -27,7 +27,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -147,7 +147,20 @@ function boundIdentifiers(src) {
   return names;
 }
 
-const FILES = readdirSync(MAIN).filter((f) => f.endsWith(".js")).sort();
+// ⚠ RECURSIVE SINCE 2026-08-31. This is a SOURCE scan, not a require, so walking the whole tree
+// costs nothing — and the runtime-adapter port moved a dozen modules into `main/runtime/**`,
+// which a flat `readdirSync` would have dropped from a guard whose whole subject is a name in an
+// export object that nothing binds. That defect is a load-time `ReferenceError`, and an adapter
+// tree nothing loads until a spawn is the worst place to keep one.
+function walkJs(dir, prefix, out) {
+  for (const entry of readdirSync(dir).sort()) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) { walkJs(full, prefix ? `${prefix}/${entry}` : entry, out); continue; }
+    if (entry.endsWith(".js")) out.push(prefix ? `${prefix}/${entry}` : entry);
+  }
+  return out;
+}
+const FILES = walkJs(MAIN, "", []);
 
 test("the detector really catches the defect it was written for", () => {
   // A POSITIVE CONTROL. Everything above is a filter, and a filter that quietly

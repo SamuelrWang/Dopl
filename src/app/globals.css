@@ -771,6 +771,27 @@ html {
     0 6px 18px rgba(0, 0, 0, 0.05);
 }
 
+/* Frosted glass panel — THE card a PUBLIC page standing on white renders into
+   (the `/link/{token}` claim landing). `.bento`'s geometry with the opaque fill
+   traded for a translucent one, so the page ground reads through it.
+
+   ⚠ THE FILL MUST STAY TRANSLUCENT. `backdrop-filter` samples what is behind
+   the box; swapping the rgba for `--panel-surface` (opaque #fbfcfd) leaves the
+   blur computed and never seen, and the panel collapses into a flat `.bento`.
+   ⚠ `-webkit-backdrop-filter` is not redundant — Safari still ships only the
+   prefixed property, and this surface is a link people open on a phone. */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 18px 40px -12px rgba(0, 0, 0, 0.12);
+}
+
 /* Recessed switcher track — pair the active item with .raised-tab. */
 .concave-track {
   background: #e9eaec;

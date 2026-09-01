@@ -255,8 +255,8 @@ async function resumeAfterSignIn(s) {
   try {
     if (hold.kind === 'preflight') {
       if (s.state) { s.state.phase = 'launching'; s.state.parked = false; s.state.activity = 'working'; }
-      const sdk = await deps.getSdk();
-      await deps.startQuery(s, sdk);
+      const rt = await deps.acquireRuntime();
+      await deps.startQuery(s, rt);
       return;
     }
     deps.dispatch(s, { type: 'steer', text: RESUME_NUDGE, priority: 'next' });
@@ -297,7 +297,7 @@ async function resumeAfterSignIn(s) {
 // ⚠ THE LIST IS TAKEN FIRST, then walked. `resumeAfterSignIn` mutates the sessions it releases
 // (and `steer` can wake one), and iterating the live Map while that happens is how a held
 // session comes to be skipped.
-// ⚠ SEQUENTIAL, AND EACH ONE IS CAUGHT ALONE. A resume awaits `getSdk()` and starts a query; one
+// ⚠ SEQUENTIAL, AND EACH ONE IS CAUGHT ALONE. A resume awaits `acquireRuntime()` and starts a query; one
 // machine-level failure must not strand the sessions queued behind it in the hold forever.
 async function resumeHeldSessions() {
   const registry = deps && deps.sessions;

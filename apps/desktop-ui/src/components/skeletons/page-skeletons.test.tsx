@@ -228,17 +228,25 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
   });
 
   /**
-   * ⚠ THE OVERVIEW GHOST IS FOUR TAILWIND STRINGS THE PAGE ALREADY OWNS, and
-   * none of them can be imported: three are arbitrary values or grid templates
-   * typed inline in the modules, the fourth is the plot-height constant. So the
-   * pin is a byte-share, module by module. Re-tune the real grid and this fails
-   * on the same commit rather than on screen three weeks later.
+   * ⚠ THE OVERVIEW GHOST IS THREE TAILWIND STRINGS THE PAGE ALREADY OWNS, none
+   * of which can be imported — they are arbitrary values and grid templates
+   * typed inline in the modules — so the pin is a byte-share, module by module.
+   * Re-tune the real grid and this fails on the same commit rather than on
+   * screen three weeks later.
+   *
+   * ⚠ **THE FOURTH STRING IS GONE, AND ITS ABSENCE IS THE FIX (2026-09-01).**
+   * The plot height was `activity-chart.tsx`'s module-LOCAL, unexported
+   * `PLOT_HEIGHT_CLASS`, byte-shared here because it could not be imported —
+   * DRIFT-LEDGER P9's example of a claim by reference that nothing enforced.
+   * The plot moved to `#/components/charts/bar-series` (shared with /home's
+   * Overview face) and that module EXPORTS the value, so the ghost imports it
+   * like the channels ghost imports `COMPOSER_BOTTOM`, and a byte-share is no
+   * longer the best available pin.
    */
   it("the overview ghost byte-shares the page's own grids and column", () => {
     const page = file("../../pages/overview/index.tsx");
     const stats = file("../../pages/overview/stat-cards.tsx");
     const period = file("../../pages/overview/period-stats.tsx");
-    const chart = file("../../pages/overview/activity-chart.tsx");
 
     for (const [source, geometry] of [
       // The centred column and its scroll box.
@@ -256,9 +264,24 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       expect(OVERVIEW_SKELETON).toContain(geometry);
     }
 
-    // The plot is `activity-chart.tsx`'s own height constant, not a guess.
-    expect(chart).toContain('const PLOT_HEIGHT_CLASS = "h-40"');
-    expect(OVERVIEW_SKELETON).toContain("h-40 ");
+    // The plot height is IMPORTED from the shared plot, never re-typed — so
+    // the ghost cannot carry a stale literal at all, and the byte-share this
+    // pin used to make has nothing left to compare.
+    expect(OVERVIEW_SKELETON).toContain(
+      'import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series"'
+    );
+    expect(OVERVIEW_SKELETON).toContain("PLOT_HEIGHT_CLASS,");
+    // ⚠ OVER THE COMMENT-STRIPPED SOURCE, for this suite's own stated reason:
+    // the file's docblock DESCRIBES the shape it mirrors ("the chart card over
+    // its `h-40` plot"), and a raw-text scan would make the repair "delete the
+    // explanation". What must not come back is the CLASS.
+    expect(code("../../pages/overview/overview-skeleton.tsx")).not.toContain(
+      "h-40"
+    );
+    // The value it names is still the plot's own.
+    expect(file("../charts/bar-series.tsx")).toContain(
+      'export const PLOT_HEIGHT_CLASS = "h-40"'
+    );
   });
 
   /**
@@ -272,6 +295,12 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     const rows = shared("features/channels/components/channels-v2/sidebar-rows.tsx");
     const header = shared("features/channels/components/channels-v2/bits.tsx");
     const pane = shared("features/channels/components/channels-v2/message-pane.tsx");
+    // ⚠ THE HEADER MOVED OUT OF THE PANE ON 2026-09-01 (`message-pane.tsx` hit
+    // the 500-line cap when the transcript gained scroll-up paging). The ghost
+    // still byte-shares that ONE strip; only the file it is read from changed.
+    const paneHeader = shared(
+      "features/channels/components/channels-v2/message-pane-header.tsx"
+    );
     const composer = shared("features/channels/components/channels-v2/composer.tsx");
 
     for (const [source, geometry] of [
@@ -280,7 +309,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       [sidebar, "flex flex-col gap-px px-2"],
       // The section header's strip — `pt-3`, not the `pt-4` this ghost carried.
       [header, "flex items-center gap-1 px-3 pb-1 pt-3"],
-      [pane, "flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
+      [paneHeader, "flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
       [pane, "px-8 py-5"],
       // The composer CARD — and it takes no row gap of its own.
       [composer, "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"],

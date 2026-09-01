@@ -1,7 +1,7 @@
 // Session engine — the imperative shell.
 //
-// Owns ONE Claude Agent SDK query() per live session and executes the pure session-reducer's
-// side-effect-free effect descriptors.
+// Owns ONE agent-runtime query per live session and executes the pure session-reducer's
+// side-effect-free effect descriptors. ⚠ WHICH runtime is `main/runtime/index.js`'s answer.
 //
 // ⚠ THREE THINGS THIS HEADER USED TO DESCRIBE ARE DELETED (2026-08-20, F-228): the CONSENT
 // REFLOW (a pre-consent window running no agent work until Accept, then ADOPTED by
@@ -29,8 +29,8 @@ const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const sessionEffects = require('./session-effects'); // 2026-08-22: `terminalBody` — a terminal says why
 const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's windowless floor (F-236)
-const { getSdk } = require('./sdk-loader');
-const sessionQuery = require('./session-query'); const { buildSdkOptions, startQuery, consume } = sessionQuery; // §3 split: SDK options + the query lifecycle (H1)
+const runtimeRegistry = require('./runtime'); const acquireRuntime = runtimeRegistry.acquire; // THE REGISTRY — the only place an adapter is named
+const sessionQuery = require('./session-query'); const { buildLaunchSpec, startQuery, consume } = sessionQuery; // §3 split: the launch spec + the query lifecycle (H1)
 const sessionNarration = require('./session-narration'); // 2026-08-20: the agent window's work lane (F-212)
 const sessionModel = require('./session-model'); // the frozen model enum (argv), coerced here too
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
@@ -74,28 +74,27 @@ function readCaps() {
 // Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).
 function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tray optional */ } }
 
-// Resume machinery (session-park.js) is fed the engine handles it can't require: the registry, SDK loader, buildSdkOptions (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession. Hoisted, so bind order does not matter.
+// Resume machinery (session-park.js) is fed the engine handles it can't require: the registry, the runtime acquire (it THROWS where the old SDK loader threw — `main/runtime/index.js › acquire` carries that argument, and why it is neither the binary probe nor the credential one), buildLaunchSpec (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession. Hoisted, so bind order does not matter.
 // ⚠ FOUR HANDLES LEFT WITH THE SHELL-RECREATE FAMILY (2026-08-20, F-228): `windowFactoryReady`,
 // `atWindowCap`, `loadHistory` and `settleSession` all existed for a lane that opened a window,
 // and `resolveChannelContext` fed the record-less shell alone.
 sessionPark.bind({
-  sessions, getSdk, buildSdkOptions, consume, dispatch, startSession, hasLiveSession,
+  sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
   emit,
 });
-// §3 split: session-query owns the option assembly + the consume loop, but needs the engine's
-// dispatch and the replay-aware quiet emit (neither module requires back into the engine).
+// §3 split: session-query owns the query LIFECYCLE (the assembly is the runtime's since 2026-08-31) and needs the engine's dispatch + replay-aware quiet emit; neither module requires back into the engine.
 sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arms the launch watchdog through the ONE timer
 // Q6: same injection for the preflight + in-window sign-in. `startQuery` is the SHARED deferred
 // launch (session-query), so an auth hold never assembles a second query and inherits H1's
 // supersede-before-relaunch; `denyPending` fail-closes before it parks.
-sessionAuth.bind({ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions });
+sessionAuth.bind({ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions });
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
 sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) }); // C-8: quit ends live sessions through the reducer; 2026-08-20: a live session's VIEW is the agent window
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
 sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions }); sessionRegistry.bind({ sessions });
-sessionLaunch.bind({ sessions, getSdk, startSession, liveOnThread, sessionOn }); // the funnel cannot require the engine back // ...and the narration ring + the addressing reads take the same registry
+sessionLaunch.bind({ sessions, acquireRuntime, startSession, liveOnThread, sessionOn }); // the funnel cannot require the engine back // ...and the narration ring + the addressing reads take the same registry
 // §2 SPLIT: the terminal takes the registry, the durable projection, the fail-closed sweep, the
 // tray refresh and the address read. `baseRecord` is assigned below, so this bind is hoisted past
 // it deliberately — `bind` stores the reference and `settle` reads it at CALL time.
@@ -150,7 +149,7 @@ function runEffect(s, eff) {
       noteSiblings(s);
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing))));
       break;
-    case 'interruptQuery':
+    case 'interruptQuery': // ⚠ ON A RUNTIME THAT DECLARES NO INTERRUPT THIS SILENTLY DOES NOTHING, and the honest two-line log for it DID NOT FIT — this file is AT the 500-line cap with no headroom, which is F-388 demonstrated rather than asserted. `main/runtime/capability.js › interruptRefusal` holds the sentence; the SPA hides the control and the launch surface warns with it (design §3.2). Add the log when this file splits.
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
       break;
     // ⚠ BOTH OF THESE ALSO CLOSE THE PRIVATE WINDOW (2026-08-22). The depth is spent by a turn's
@@ -243,7 +242,7 @@ function setLifecycleHandlers(h) { lifecycle = { onLaunched: h && h.onLaunched, 
 // Build the session object, open (or ADOPT) its window, start the query (launch + resume). The per-session nonce is
 // minted HERE so the first turn's fence + every fed-inbound continuation share the SAME token (else injected content
 // forges it). v2.x: the CONCRETE channel + workspace UUIDs are merged into the context here — the framing reads only the context, while every spawn shape carries the ids on its spec (fresh responder/requester, parked resume, recreated shell).
-async function startSession(spec, sdk) {
+async function startSession(spec, rt) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
   // H2 — THE ONLY WAY A STORED POSTURE REACHES A SPAWN. It used to be an AMBIENT read of a
@@ -307,6 +306,7 @@ async function startSession(spec, sdk) {
     key: spec.key,
     sessionId,
     sdkSessionId: spec.resumeSdkId || null,
+    runtimeId: (rt && rt.id) || runtimeRegistry.DEFAULT_ID, // WHICH RUNTIME DRIVES THIS SESSION (2026-08-31) — ⚠ STAMPED AT SPAWN, NEVER READ LIVE: the conversation handle, the tool vocabulary and the Axis-A modes all belong to ONE runtime, so a park or crash-resume must not land on another. Absent => the default
     channelId: spec.channelId,
     taskId: spec.taskId || '',
     workspaceId: spec.workspaceId,
@@ -434,7 +434,7 @@ async function startSession(spec, sdk) {
     diag('session spawned IDLE (no query until the first message)', 'agent', String(s.agentId || ''), 'thread', String(s.taskId || '').slice(0, 8));
     return s;
   }
-  await startQuery(s, sdk);
+  await startQuery(s, rt);
   return s;
 }
 

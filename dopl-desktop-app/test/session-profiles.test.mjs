@@ -100,7 +100,18 @@ const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
 const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
-const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
+// 2026-08-31 (runtime-adapter port, §0.1b): the AXIS-A TAIL LEFT THIS BLOCK. `buildSessionToolConfig`
+// and the mode transforms are a vocabulary of ONE runtime's built-in tool names, so they live in
+// `main/runtime/claude/tools.js`; the block asks the REGISTRY for them per call, through the two
+// contract methods `toolConfigFor` / `axisAAllows`. `runtimeFor` is injected here exactly like every
+// other predicate, and the REAL registry is injected, so the block stays pinned to what ships.
+const RUNTIME = require(join(HERE, "..", "main", "runtime", "index.js"));
+const CLAUDE_TOOLS = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
+const buildSessionToolConfig = CLAUDE_TOOLS.buildSessionToolConfig;
+const shortDoplName = CLAUDE_TOOLS.shortDoplName;
+
+
+const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   isChannelTool } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
@@ -111,9 +122,9 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   "isOwnMachineDirect", "directLaneVerdict",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
-  "containerOnlyDenies", "isDoplToolName",
+  "containerOnlyDenies", "isDoplToolName", "runtimeFor", "EDIT_TOOLS",
   `${BLOCK}
-   return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
+   return { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
@@ -122,10 +133,18 @@ const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
-  AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName);
+  AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
+  RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";
+// ⚠ D7.2 (2026-09-01): THE TWO AGENT-OPS VERBS ARE PART OF THE TABLE NOW, SO THE deepEqual PINS
+// BELOW READ THEM. They were pre-approved on all three profiles before this too — but appended in
+// `runtime/claude/launch-spec.js`, DOWNSTREAM of `buildSessionToolConfig`, so these three
+// assertions passed while the shipped `allowedTools` was two names wider than what they measured.
+// That is the defect: a shadow this file could not see. Injected REAL from the module that defines
+// the wire, never restated, so a rename cannot make these cases agree with a stale copy.
+const AGENT_OPS = require(join(HERE, "..", "main", "agent-self-ops.js")).AGENT_OPS_TOOL_NAMES;
 // The work tools that were live-gated under `full` even when the rest of DENIED_BUILTINS was
 // hard-denied there. F-177 released the rest, so this list no longer PARTITIONS anything — it
 // is kept because these are the tools whose gated-ness is oldest and most load-bearing, and
@@ -165,7 +184,7 @@ test("FIX H1: NO profile pre-approves dopl_channel, and NO profile denies it —
 test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/admins + write/exec denied", () => {
   const cfg = buildSessionToolConfig("read_only");
   assert.deepEqual(cfg.builtinTools, READ_BUILTINS);
-  assert.deepEqual(cfg.preApproved, READ_BUILTINS); // FIX H1: no dopl_channel here
+  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(AGENT_OPS)); // FIX H1: no dopl_channel here. D7.2: + the two self-ops verbs, DECLARED
   for (const t of DENIED_BUILTINS.concat(WEB_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_SAFE_TOOLS)) {
     assert.ok(cfg.disallowedTools.includes(t), `read_only must deny ${t}`);
   }
@@ -188,7 +207,7 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
   assert.deepEqual(cfg.builtinTools, READ_BUILTINS.concat(WEB_TOOLS));
   // FIX H1: no dopl_channel. FIX F2: no dopl WRITE tool either — a shadowed write tool never
   // reaches canUseTool at all, which is the v1.9 half of the `auto` auto-approval hole.
-  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ));
+  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ, AGENT_OPS)); // D7.2: + the two self-ops verbs, DECLARED
   for (const t of DOPL_WRITE) {
     assert.ok(!cfg.preApproved.includes(t), `dopl_only must NOT shadow ${t}`);
     assert.ok(!cfg.disallowedTools.includes(t), `${t} must REACH the gate, not be denied`);
@@ -209,7 +228,8 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
 test("F-177: full pre-approves only local reads and hard-denies ONLY the universal floor", () => {
   const cfg = buildSessionToolConfig("full");
   assert.deepEqual(cfg.builtinTools, [], "no positive bound: work tools offered then gated per call");
-  assert.deepEqual(cfg.preApproved, READ_BUILTINS, "FIX H1: no dopl_channel pre-approved");
+  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(AGENT_OPS),
+    "FIX H1: no dopl_channel pre-approved. D7.2: + the two self-ops verbs, DECLARED");
   assert.equal(cfg.doplToolsPolicy, null, "no per-server scoping under full");
   // THE NEW INVARIANT, asserted as an EQUALITY rather than a containment: a containment check
   // ("the floor is denied") passed under the old, broader set too, which is how a lane could

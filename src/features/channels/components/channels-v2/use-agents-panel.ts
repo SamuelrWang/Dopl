@@ -149,7 +149,16 @@ export interface AgentLaunchControls {
      * calls above stay byte-identical, which is what keeps the one-click Bot icon pinned by
      * `composer-launch.test.tsx` unchanged. Only the launch PANEL passes it.
      */
-    agentId?: string
+    agentId?: string,
+    /**
+     * ⚠ THE FIFTH, ON THE FOURTH'S EXACT ARGUMENT (2026-08-31, the runtime-adapter port).
+     * `''` and absent both mean NO OVERRIDE — the channel's durable pick applies — so an
+     * untouched panel and a one-click launch still put the same payload on the wire.
+     * ⚠ IT IS NOT AN `overrides` MEMBER: that object is the TEMPLATE's re-points, and main
+     * reads the runtime off the payload's top level (`agents-controls.ts ›
+     * launchAgentOnThread` carries the whole argument).
+     */
+    runtime?: string
   ) => Promise<AgentLaunchOutcome>;
   /** Store a first-use approval for a FOREIGN template, machine-locally.
    *  ⚠ Feature-detected inside (`agents-controls.ts › approveTemplate`); an
@@ -191,7 +200,8 @@ export function useAgentsPanel({
     threadId: string | null,
     templateId?: string | null,
     overrides?: TemplateLaunchOverrides,
-    agentId?: string
+    agentId?: string,
+    runtime?: string
   ): Promise<AgentLaunchOutcome> => {
     // ⚠ A GUARDED CALL ANSWERS `busy` RATHER THAN `undefined`. The picker awaits
     // this, and a silent early return would leave a row click looking exactly
@@ -235,6 +245,11 @@ export function useAgentsPanel({
         // ⚠ ABSENT, NOT `undefined`-valued, for the same reason `templateId` is: a launch with
         // no panel behind it must put the object it always did on the wire.
         ...(agentId ? { agentId } : {}),
+        // ⚠ ABSENT WHEN THERE IS NO OVERRIDE, for `agentId`'s reason and one more: an
+        // EMPTY string is a real value further down the wire (it clears a channel's
+        // durable pick), so putting `runtime: ''` on a LAUNCH would be a per-spawn
+        // statement where the operator made none.
+        ...(runtime ? { runtime } : {}),
       });
       // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
       if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {

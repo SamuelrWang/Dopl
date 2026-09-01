@@ -224,6 +224,24 @@ async function launchFromButton(payload) {
     // ⚠ MESSAGES WIDENS, NEVER NARROWS, and it is floored at auto_inbound for the windowless
     // reason (no Accept UI exists).
     startModes: channelPrefs.launchStartModes(p.channelId),
+    // ── ⚠ THE RUNTIME PRECEDENCE CHAIN, COMPUTED IN MAIN AND ONLY IN MAIN (2026-08-31) ────────
+    //
+    //   p.runtime                          the LAUNCH SHEET's deliberate per-spawn pick
+    //     > channelRuntime.getChannelRuntime  the channel's durable pick (its Settings row)
+    //     > ''                             the DEFAULT adapter (`runtime/index.js › DEFAULT_ID`)
+    //
+    // ⚠ THE SHEET BEATS THE CHANNEL for the model's exact reason: one is a deliberate per-call
+    // choice and the other is a default. And the whole chain fails toward the DEFAULT rather than
+    // refusing, which is the tree's rule for every unknown enum that grants nothing.
+    // ⚠ THE RENDERER'S VALUE IS ACCEPTED, NOT TRUSTED, AND THIS IS THE LINE THAT DOES IT.
+    // `normalizeRuntimeId` answers `''` for anything not in `runtime/index.js › ids()`, so a
+    // version-skewed page can only ever select an adapter this build already registered — and a
+    // registered adapter is one `contract.js › sealAdapter` has already proved can enforce every
+    // Dopl profile it declares. That is why a runtime may come off the payload where the TOOL
+    // PROFILE, three fields down, may never: picking a runtime widens nothing (see
+    // `main/channel-runtime.js`'s header), and picking a profile is containment itself.
+    runtime: require('./channel-runtime').normalizeRuntimeId(p.runtime)
+      || require('./channel-runtime').getChannelRuntime(p.channelId),
     // ── ⚠ THE MODEL PRECEDENCE CHAIN, COMPUTED IN MAIN AND ONLY IN MAIN ───────────────────
     //
     //   sessions:setModel live override (post-spawn, `session-reopen.js`)

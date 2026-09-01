@@ -28,7 +28,13 @@ export const DeliverableSchema = z.object({
   done: z.boolean(),
 });
 
-const SourceSchema = z.enum(["claude-code", "claude-desktop", "cursor", "other"]);
+const SourceSchema = z.enum([
+  "claude-code",
+  "claude-desktop",
+  "codex",
+  "cursor",
+  "other",
+]);
 const VisibilitySchema = z.enum(["private", "public"]);
 const AccessModeSchema = z.enum(["workspace", "teams"]);
 const SessionDateSchema = z

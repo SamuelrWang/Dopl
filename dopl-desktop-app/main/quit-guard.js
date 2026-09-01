@@ -184,7 +184,7 @@ async function teardown(reason) {
   try { deps.listener.stop(); } catch (err) { diag('quit-guard: listener.stop threw', err && err.message); }
   let ended = 0;
   try { ended = deps.endLiveSessions(); } catch (err) { diag('quit-guard: endLiveSessions threw', err && err.message); }
-  diag('quit-guard: ended', ended, 'session(s) holding a claude child');
+  diag('quit-guard: ended', ended, 'session(s) still holding a runtime');
   // THE ROWS. Every ended session has left the projection by now, so this posts the empty set
   // and deletes what this machine was claiming. Raced, never awaited — see the header.
   try {

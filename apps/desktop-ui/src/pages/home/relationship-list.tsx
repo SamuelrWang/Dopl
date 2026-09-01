@@ -1,15 +1,6 @@
-import { Bot } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { Avatar } from "@/shared/ui/avatar";
-import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import {
-  channelPeople,
-  channelSubline,
-  channelTitle,
-  hasLinkOut,
-  type HomeRow,
-} from "./home-rows";
+import { channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
 
 /**
  * Home's left pane — the CHANNEL list. Deliberately not the workspace channels
@@ -78,20 +69,20 @@ function RelationshipRow({
   onSelect: () => void;
 }) {
   const pending = row.kind === "link";
-  /** Everybody else in this channel, oldest first — empty on a link row. ⚠ The
-   *  cache-shape rule for `peers` lives in `channelPeople` and nowhere else. */
-  const people = row.kind === "channel" ? channelPeople(row.channel) : [];
-  /** No peers and not a link: the operator and their agents, nobody else. */
-  const solo = row.kind === "channel" && people.length === 0;
   /** ⚠ THE CHIP IS THE SAME FACT ON BOTH ROW KINDS — an invitation is out. A
    *  bound link says it about the channel it rides on; a legacy unbound one is
    *  the whole row. `hasLinkOut` answers for both, and since 2026-08-27 this
    *  chip is the ONLY place that fact is said on this page. */
   const linkOut = hasLinkOut(row);
+  /** 🔒 THE CHANNEL'S OWN NAME — `channelTitle` no longer derives one from the
+   *  roster (Samuel, 2026-09-01; the rule and its history live in that
+   *  function's docblock). A link row has no channel yet, so it wears its
+   *  label. */
   const name =
     row.kind === "channel" ? channelTitle(row.channel) : (row.link.label ?? "Link");
-  const subline =
-    row.kind === "channel" ? channelSubline(row.channel) : row.link.url;
+  // ⚠ UNCHANGED BY THE 2026-09-01 IDENTITY RULING, both arms: a channel's last
+  // message and a link's claim state are facts about the ROW, not about who is
+  // in it. Only the roster-derived title, faces and subline were removed.
   const lastLine =
     row.kind === "channel"
       ? (row.channel.lastMessagePreview ?? "No messages yet")
@@ -119,61 +110,20 @@ function RelationshipRow({
         selected && "selected-ring"
       )}
     >
-      {/* ⚠ A SOLO CHANNEL GETS A GLYPH, NOT A FACE (Samuel, 2026-08-24). It has
-          no second member, and initials generated from the CHANNEL's name read
-          as a person who does not exist — the one thing this list must never
-          invent. An unclaimed LINK keeps the faceless avatar: somebody is
-          coming, they just have not arrived.
-          ⚠ `w-8 h-8` matches `Avatar size="sm"` exactly, or rows with and
-          without a peer sit at two heights. */}
-      {solo ? (
-        <span
-          aria-hidden
-          className="btn-light flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary"
-        >
-          <Bot size={15} />
-        </span>
-      ) : people.length > 1 ? (
-        // ⚠ TWO OR MORE PEOPLE GET A STACK, AND IT IS THE SHARED PRIMITIVE
-        // (2026-08-26, F-307's fix). `shared/ui/avatar-stack.tsx` already owned
-        // the overlap, the separator ring and the `+N` chip for four other
-        // surfaces; what it lacked was a SIZE, so it gained one rather than this
-        // page growing a fourth copy of a stack. ⚠ `size="sm"` is `Avatar
-        // size="sm"` to the pixel — the branches above and below are the same
-        // 32px box, or a row changes height the moment a second person joins.
-        // ⚠ `max={3}` NOT the primitive's default 4: this row is 290px wide and
-        // the title beside it has to stay readable. `+N` counts the HIDDEN ones.
-        <div className="shrink-0" aria-hidden>
-          <AvatarStack
-            size="sm"
-            max={3}
-            users={people.map((p) => ({
-              userId: p.userId,
-              // ⚠ `AvatarStackUser.displayName` is NON-nullable and feeds both
-              // the initials and the hover title, so the fallback happens HERE.
-              // "Member" rather than "" — an empty string initials to "?" and
-              // titles the face with nothing at all.
-              displayName: p.displayName || p.email || "Member",
-              avatarUrl: p.avatarUrl,
-            }))}
-          />
-        </div>
-      ) : (
-        <Avatar
-          person={
-            people[0] ?? {
-              // An unclaimed link has no face yet — the row id keys the
-              // fallback so the generated colour is stable.
-              userId: row.id,
-              email: null,
-              displayName: name,
-              avatarUrl: null,
-            }
-          }
-          size="sm"
-          className={cn(pending && "opacity-55")}
-        />
-      )}
+      {/* 🔒 ⚠ **NO AVATAR, NO STACK, NO BOT GLYPH — DELETED 2026-09-01
+          (Samuel).** The row carried THREE identity faces chosen by roster size:
+          a `Bot` glyph when solo, one `Avatar` with a peer, an `AvatarStack`
+          with several. That made a channel's ICON a function of its MEMBERSHIP,
+          which is the same defect as the member-derived title beside it — a
+          channel you had been working in grew a stranger's face the moment they
+          claimed a link. **A channel is not a DM and must not be dressed as
+          one.** Real DMs keep their faces; their code is
+          `channels.is_direct` / `Channel.directPeer`, in the channels feature,
+          and nothing here ever touched it.
+          ⚠ **Do not put a "channel avatar" back in its place either** —
+          initials generated from a channel's name read as a person who does not
+          exist, which is the one thing this list must never invent. The row is
+          the NAME. */}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           <span
@@ -188,9 +138,12 @@ function RelationshipRow({
             {formatChannelTimestamp(row.at)}
           </span>
         </span>
-        <span className="block truncate text-caption text-text-muted">
-          {subline}
-        </span>
+        {/* 🔒 THE SUBLINE IS GONE WITH THE FACES (2026-09-01). Every value it
+            could hold was the ROSTER — the lone peer's email address, "N
+            people", or the words "Just you" — so it was the member-derived
+            identity a second time, in smaller type. Who is in the channel is
+            answered by the Info tab's roster, beside each face and each
+            address, where it can be attributed. */}
         <span className="mt-0.5 flex items-center gap-1.5">
           {linkOut && (
             <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 text-micro font-medium text-text-secondary">

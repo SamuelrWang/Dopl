@@ -127,6 +127,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     turns: 7, // FIX #9: the running cap counters, persisted for a P2 rehydrate
     costUsd: 0.42,
     ownPostSeq: 11, // 2026-08-22: the outbound post counter, persisted for the SAME resume
+    runtimeId: "codex", // 2026-08-31: WHICH RUNTIME this session ran on — see the note below
   });
   assert.deepEqual(Object.keys(rec).sort(), [
     // "model" (2026-08-02) is the operator's per-session model pick. It is on this list rather
@@ -141,10 +142,16 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // context without it, reported `templateName: null`, and — because `templateName` is in
     // `session-telemetry.js › STATE_FIELDS` and so bypasses the cadence floor — ERASED
     // `channel_sessions.template_name` on the next push, under a still-running agent.
+    // "runtimeId" (2026-08-31, the runtime-adapter port) is the FOURTH of that family and has
+    // the sharpest version of the argument yet: `session-park.js › startResume` rebuilds the whole
+    // session from this record and hands the persisted `sdkSessionId` to whatever runtime it
+    // acquires — so a record without it resumed onto the DEFAULT adapter, which would be asked to
+    // continue ANOTHER PLATFORM's conversation id, in another platform's tool vocabulary, against
+    // another credential. Not a cosmetic revert and not silent data loss: a broken resume.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
     "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "phase", "profile",
-    "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle", "templateName",
-    "turns", "workspaceId",
+    "runtimeId", "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle",
+    "templateName", "turns", "workspaceId",
   ]);
   assert.equal(rec.ownPostSeq, 11);
   assert.equal(rec.templateName, "Code Auditor");

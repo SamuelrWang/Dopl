@@ -18,16 +18,21 @@
 // (`session-ipc-ops.js`). Deleting a shape here turns a refusal into a peer waiting forever.
 //
 // ⚠ NO ELECTRON, NO SDK HANDLE. Everything the funnel cannot compute is injected via `bind()`:
-// the registry, `getSdk`, `startSession`, and the two registry reads. `test/session-engine-slot
+// the registry, `acquireRuntime`, `startSession`, and the two registry reads. `test/session-engine-slot
 // .test.mjs` slices `launch` out of THIS file and drives the real control flow against fakes.
 
 const store = require('./session-store');
 const { newAgentId, isAgentId } = require('./agent-id'); // one random id per INSTANCE
 const sessionWindowless = require('./session-windowless'); // the concurrency + cost ceiling
 const launchBudget = require('./launch-budget'); // 2026-08-31: the CHAINED-launch ceiling over TIME
+// 2026-09-01 (D1): `windowlessFloorRefusal` — the ONE launch-blocking question this funnel asks of
+// the runtime's own declaration (`contract.js › LAUNCH_BLOCKING[3]`). ⚠ PURE: `session-profiles.js`
+// is the electron-free module two suites slice standalone, so this pulls nothing new into the
+// funnel and `test/session-engine-slot.test.mjs` injects it like every other module binding.
+const profiles = require('./session-profiles');
 const { diag } = require('./diag');
 
-let deps = { sessions: null, getSdk: null, startSession: null, liveOnThread: null, sessionOn: null };
+let deps = { sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null };
 
 /**
  * The engine binds its registry and the two handles this file may not require here at load.
@@ -38,7 +43,7 @@ let deps = { sessions: null, getSdk: null, startSession: null, liveOnThread: nul
 function bind(d) {
   deps = {
     sessions: (d && d.sessions) || null,
-    getSdk: (d && d.getSdk) || null,
+    acquireRuntime: (d && d.acquireRuntime) || null,
     startSession: (d && d.startSession) || null,
     liveOnThread: (d && d.liveOnThread) || null,
     sessionOn: (d && d.sessionOn) || null,
@@ -85,12 +90,73 @@ async function launch(a) {
     diag('session-launch: chained launch over budget', String(a.channelId || '').slice(0, 8));
     return { skipped: 'cap' };
   }
-  let sdk;
-  try { sdk = await deps.getSdk(); } catch (err) {
-    diag('session-engine: SDK unavailable', err && err.message);
+  let rt;
+  // ── ⚠ THE RUNTIME THIS SPAWN RUNS ON (2026-08-31, port wave D) ────────────────────────────
+  //
+  // ⚠ IT IS FORWARDED, NEVER INVENTED, exactly like `model` and `launchDepth` below. Absent —
+  // and every lane except the operator's own button passes nothing — resolves to the DEFAULT
+  // adapter (`main/runtime/index.js › DEFAULT_ID`, the first registered), so a session record
+  // written before the port and every wake, resume and recreate lands on the runtime it always
+  // ran on. That is what makes "behaviour byte-identical for existing sessions" a property of
+  // the funnel rather than a hope.
+  // ⚠ IT IS NOT A CONTAINMENT INPUT, and that is why it may travel this way where `toolProfile`
+  // may not. `main/channel-runtime.js`'s header carries the whole argument: every adapter
+  // re-derives its own deny lists and Axis-A vocabulary, `contract.js › sealAdapter` refuses to
+  // register one that cannot, and the four gate steps before Axis A are core's on all of them.
+  // ⚠ AN UNKNOWN ID IS THE DEFAULT, NOT A REFUSAL — `resolve` fails closed toward "the runtime
+  // this build actually ships" rather than stranding a session with no way to end it.
+  try { rt = await deps.acquireRuntime(a.runtime); } catch (err) {
+    // ⚠ THE SKIP CODE IS THE WIRE AND DOES NOT CHANGE. `trigger.js` and the directive lane both
+    // branch on `'no-sdk'`, and it means "this machine has no agent runtime" on every runtime —
+    // renaming it would be a vocabulary change dressed as a cleanup.
+    diag('session-engine: agent runtime unavailable', err && err.message);
     return { skipped: 'no-sdk' };
   }
   if (hasLiveSession(slot)) return { skipped: 'busy' }; // FIX #7: re-check after await — a slot-scoped check now, so only an id collision (unreachable) trips it
+  // ── ⚠ THE WINDOWLESS TOOL FLOOR, AS A LAUNCH REFUSAL (2026-09-01, D1) ─────────────────────
+  //
+  // `contract.js › LAUNCH_BLOCKING[3]`. `capability.js › floorWindowlessTool`'s header has always
+  // said `windowlessFloor: null` REFUSES THE WINDOWLESS LAUNCH — but nothing anywhere refused it:
+  // the predicate silently handed back the session's own stored mode, which starts at the
+  // NARROWEST member and resets to it on park, on a session with no gate surface. Every tool call
+  // denied, no error, and the agent reporting it cannot read files the prompt told it to read.
+  //
+  // ⚠ HERE, AND HERE IS THE POINT. It is after `acquireRuntime` (so the runtime is known and
+  // usable) and BEFORE `startSession` (so nothing is registered, no id is spent, no slot is held,
+  // and there is no rollback to get wrong — contrast the auth hold below, which must
+  // `sessions.delete`). This whole file is the "what happens before a session exists" seam.
+  // ⚠ EVERY LAUNCH THROUGH THIS FUNNEL IS WINDOWLESS (`a.windowless` is checked at the top, F-228),
+  // so no windowed shape is caught by this; the refusal is still asked of the windowless question
+  // rather than of the adapter, because a runtime with no floor is perfectly launchable WITH a gate.
+  // ⚠ `'disabled'` AND NOT AN EIGHTH WIRE WORD, AND THAT IS A DECISION RATHER THAN A SHORTCUT.
+  // `launch-directive-wire.js › REFUSAL_REASONS` is not a local list: the SAME seven words are
+  // `schema-launch.ts › LaunchRefusalReasonSchema`, `service-launch.ts › LAUNCH_REFUSAL_REASONS`,
+  // `use-agents-panel.ts › launchRefusalText`'s copy map, and a column CHECK in a deployed
+  // migration. Minting a word here would put this tree one word ahead of a constraint that
+  // REJECTS it at rest — a refusal that fails to record itself. `'disabled'` is the existing
+  // local-only code for "this build will not run this spawn shape", it is the documented
+  // exception in `launch-directive-wire.test.mjs`, and `refusalFor` maps it to `no-bridge`.
+  // ⚠ THE SPECIFIC SENTENCE IS THEREFORE THE DIAG'S JOB, and that is where it belongs anyway:
+  // the diag is local-only, so it is the one surface allowed to name a runtime (`trigger.js ›
+  // skippedHint`'s header carries that rule). ⚠ IF A FUTURE WAVE WANTS THIS DISTINGUISHABLE ON
+  // THE WIRE, the change is five files plus a migration, not this line.
+  const floorRefusal = profiles.windowlessFloorRefusal(a.runtime);
+  if (floorRefusal) {
+    diag('session-launch: windowless launch refused —', floorRefusal);
+    return { skipped: 'disabled' };
+  }
+  // ── ⚠ AXIS B'S COLLAPSE WARNING (2026-09-01, D3) ──────────────────────────────────────────
+  //
+  // `capability.js › axisBOpScoped` was DECLARED, documented in the strongest terms, and read by
+  // nothing: no core branch, no UI warning, no launch refusal. This is its consumer.
+  // ⚠ A WARNING AND NOT A REFUSAL, DELIBERATELY. The failure direction is CLOSED — input the gate
+  // cannot read fails `postFieldsOk`, `grantDecision` answers `'gate'`, and a windowless gate is a
+  // DENY — so the agent is broken and the boundary holds. Refusing here would take a registered
+  // adapter off the only spawn shape this tree has over a failure that cannot leak anything;
+  // whether such a runtime may SHIP is a release decision, exactly like `interruptRefusal`'s.
+  // ⚠ AND IT IS NOT AN `if` AROUND THE LAUNCH. The line goes out and the spawn continues.
+  const opScopedWarning = profiles.axisBOpScopedWarning(a.runtime);
+  if (opScopedWarning) diag('session-launch: Axis B is not op-scoped on this runtime —', opScopedWarning);
   const s = await deps.startSession({
     key,
     agentId,
@@ -140,7 +206,7 @@ async function launch(a) {
     parkedShell: a.idle === true,
     operatorArmed: a.operatorArmed === true,
     triggerSeq: a.triggerSeq, // the ask's seq — the outbound bridge's seq-join floor
-  }, sdk);
+  }, rt);
   if (!s) return { skipped: 'disabled' };
   if (s.authHold === true) return { skipped: 'auth-hold' };
   // ⚠ THE AGENT ID IS PART OF THE ANSWER (2026-08-21): a SPAWN-IDLE launch has no work in

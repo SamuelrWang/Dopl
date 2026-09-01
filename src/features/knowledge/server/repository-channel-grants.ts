@@ -216,3 +216,51 @@ export async function deleteChannelKnowledgeGrant(
     .eq("resource_id", baseId);
   if (error) throw error;
 }
+
+/**
+ * WHICH OF THESE BASES IS SHARED INTO AT LEAST ONE CHANNEL — the read behind the
+ * card's `Shared` pill (2026-09-01).
+ *
+ * ⚠ **ONE `IN (baseIds)` QUERY FOR THE WHOLE GRID, never a lookup per card.** It
+ * is the shape `listChannelKnowledgeGrants` already uses; the only difference is
+ * that no `channel_id` narrows it, because the question is "any channel at all".
+ * Empty `baseIds` short-circuits with no query.
+ *
+ * ⚠ **ONE COLUMN, AND THE OMISSIONS ARE THE POINT.** It selects `resource_id`
+ * alone — not `channel_id`, not `level`, not `created_by`. The caller wants a
+ * SET of base ids; every other column would put the identity of channels the
+ * caller may not be able to see one `.map()` away from a response body, which is
+ * exactly what `listChannelGrantsForBase`'s docblock warns its own caller to
+ * intersect against. Answering "yes, somewhere" leaks nothing about where.
+ *
+ * ⚠ **BOTH LEVELS COUNT.** `agent_only` and `visible` are both a share — the
+ * base has left the operator's private shelf either way, and the pill answers
+ * "is this still only mine", not "who can read it".
+ *
+ * ⚠ `workspace_id`-filtered like every read in this file: the service passes the
+ * RLS-BYPASSING client, so the tenancy fence has to be explicit.
+ */
+export async function listSharedBaseIds(
+  db: SupabaseClient,
+  workspaceId: string,
+  baseIds: string[],
+  limit: number
+): Promise<string[]> {
+  if (baseIds.length === 0) return [];
+  const { data, error } = await db
+    .from("channel_resource_grants")
+    .select("resource_id")
+    .eq("workspace_id", workspaceId)
+    .eq("resource_type", "knowledge_base")
+    .in("resource_id", baseIds)
+    .limit(limit);
+  if (error) throw error;
+  // ⚠ DE-DUPLICATED HERE: a base granted into four channels is four rows and
+  // one answer. The SET is the contract (`sharedBaseIds` is a subset of the
+  // listed ids), so a caller can `includes` it without counting.
+  return [
+    ...new Set(
+      ((data ?? []) as Array<{ resource_id: string }>).map((r) => r.resource_id)
+    ),
+  ];
+}

@@ -40,6 +40,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const outbound = require(M("session-outbound.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
@@ -84,7 +90,7 @@ test("H2: main stamps `directChannel` on a DM session's post surface, and only t
   });
   const gated = (s) => {
     const evs = [];
-    io.makeCanUseTool(s, (_s, ev) => evs.push(ev))(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" },
+    axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev))(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" },
       { requestId: "r1", toolUseID: "t1" });
     for (const id of s.pendingPermissions.keys()) s.pendingPermissions.get(id)({ behavior: "deny" });
     return evs[0].payload;
@@ -161,7 +167,7 @@ test("H2: an AUTO-ALLOWED post carries the same destination fields as a gated on
   // opted INTO hands-off sending would be the one who stopped being told where things went.
   const emitted = [];
   const s = { channelId: "ch1", counterpartyName: "David", direct: true };
-  outbound.wrapCanUseTool(s, () => Promise.resolve({ behavior: "allow" }), (_s, ev) => emitted.push(ev))(
+  outbound.wrapGate(s, () => Promise.resolve({ behavior: "allow" }), (_s, ev) => emitted.push(ev))(
     DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, { toolUseID: "t1" });
   return new Promise((resolve) => setImmediate(() => {
     assert.equal(emitted[0].directChannel, true);

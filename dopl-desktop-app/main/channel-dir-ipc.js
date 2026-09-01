@@ -75,6 +75,11 @@ const { ipcMain } = require('electron');
 const { isAppWindowSender, isUuid } = require('./ipc-guards');
 const channelDirs = require('./channel-dirs');
 const channelPrefs = require('./channel-prefs');
+// 2026-08-31 (port wave D): the channel's RUNTIME pick, and the registry that says which ids
+// exist. Both ride the EXISTING posture pair below rather than growing a fourth op — see the
+// block over `channels:getLaunchPosture`.
+const channelRuntime = require('./channel-runtime');
+const runtimeRegistry = require('./runtime');
 const sessionIpcOps = require('./session-ipc-ops');
 const { diag } = require('./diag');
 
@@ -199,20 +204,61 @@ function register(opts = {}) {
   // Same `appWindowOnly` + UUID gating as everything here; both modes are re-validated in
   // channel-prefs against the frozen enums, so an unknown value on either axis writes nothing.
   // → the EFFECTIVE pair, never null (an unset channel really is manual/ask).
+  // ── ⚠ THE RUNTIME RIDES THIS PAIR, AND IT DOES NOT GET AN OP OF ITS OWN (2026-08-31) ────────
+  //
+  // ⚠ THIS IS THE `model` FIELD'S IDIOM, RESTATED FOR A REASON THE TREE ALREADY WROTE DOWN.
+  // `src/features/channels/lib/permission-modes.ts › hasModelKey` is an OWN-KEY capability probe
+  // precisely because the model "rides the EXISTING getLaunchPosture / setLaunchPosture pair —
+  // there is no new op to feature-detect on, which is what the rest of this family does". The
+  // runtime is the same shape of decision (what MY agent starts as when I press Launch), it is
+  // read and written from the same Settings surface, and giving it its own op would add a fourth
+  // thing for the SPA to probe for one more field on a record it already reads.
+  // ⚠ AND THERE IS A HARD CONSTRAINT BEHIND THAT PREFERENCE, NOT ONLY AN AESTHETIC ONE:
+  // `renderer/app-preload.js` is AT the 500-line §1 cap and `test/preload-parity.test.mjs`
+  // asserts that NO preload requires anything but `electron` — so it has no split seam, and a new
+  // bridge NAMESPACE cannot be added there without changing that security invariant. Recorded as
+  // a finding rather than worked around silently.
+  //
+  // ⚠ THE DESCRIPTOR TABLE RIDES THE READ, AND IT IS PURE DATA BY CONSTRUCTION. `contract.js ›
+  // sealAdapter` deep-freezes every descriptor and REFUSES one carrying a function, exactly so it
+  // survives this structured-clone hop and reaches the UI as data rather than as `undefined` —
+  // which is the one meaning ("capability absent") that must never be produced by accident.
+  // ⚠ IT DISCLOSES NOTHING PRIVILEGED: what a runtime can do, its own mode vocabulary, and the
+  // sentences a refusal carries. No path, no credential, no token.
   ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, (_event, channelId) => {
     if (!isUuid(channelId)) return null;
-    return channelPrefs.getLaunchPosture(channelId);
+    return Object.assign({}, channelPrefs.getLaunchPosture(channelId), {
+      // The channel's pick, `''` for the default adapter. ⚠ ALWAYS PRESENT ON THE WIRE even when
+      // nothing is stored, for `model`'s reason: an OWN-KEY probe is how the SPA tells "this
+      // desktop has no runtime concept" (render no row) from "no pick, the default applies".
+      runtime: channelRuntime.getChannelRuntime(channelId),
+      runtimes: runtimeRegistry.all().map((a) => a.descriptor),
+      defaultRuntime: runtimeRegistry.DEFAULT_ID,
+    });
   }));
   ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     const res = channelPrefs.setLaunchPosture(p.channelId, p.preset);
     if (!res || res.ok !== true) return res || { ok: false };
+    // ⚠ THE RUNTIME IS WRITTEN AFTER THE PAIR AND ONLY ON A SUCCESSFUL ONE, so a rejected posture
+    // never half-applies. `setChannelRuntime` answers the value the store ACTUALLY holds, and an
+    // id this build does not register CLEARS the key rather than parking a value nothing can
+    // resolve — so the reply is always a runtime the SPA can name.
+    // ⚠ IT IS NOT FANNED OUT TO LIVE SESSIONS, and the asymmetry with `applied` below is the
+    // rule rather than an omission. `applyPostureToLive` widens SUPERVISION on a running agent;
+    // a session's runtime is STAMPED AT SPAWN and never read live (`session-engine.js ›
+    // startSession`), because the conversation handle, the tool vocabulary and the Axis-A modes
+    // all belong to ONE runtime. Re-pointing a running session would hand one platform's
+    // conversation id to another platform's adapter.
+    const runtime = Object.prototype.hasOwnProperty.call(p.preset || {}, 'runtime')
+      ? channelRuntime.setChannelRuntime(p.channelId, (p.preset || {}).runtime)
+      : channelRuntime.getChannelRuntime(p.channelId);
     // ⚠ AND IT APPLIES TO THE AGENTS ALREADY RUNNING (2026-08-25, Samuel's ruling: "permission
     // settings must apply to running sessions"). See `applyPostureToLive` below for the whole
     // argument. ADDITIVE on the wire — `applied` is a new field beside the existing
     // `{ok, preset}`, so a renderer that does not read it is unaffected.
-    return Object.assign({}, res, { applied: applyPostureToLive(p.channelId, res.preset) });
+    return Object.assign({}, res, { applied: applyPostureToLive(p.channelId, res.preset), runtime });
   }));
 
   // AUTO-SEND (2026-08-20) — the durable per-channel send posture (channel-prefs.js

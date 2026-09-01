@@ -15,6 +15,14 @@ import type { ChatScope } from "../scope";
 export interface ChatListCache {
   chats: Chat[];
   hiddenCount: number;
+  /**
+   * ⚠ OPTIONAL HERE AND REQUIRED ON THE WIRE (`types.ts › ChatList`), and the
+   * difference is the point: this type describes a CACHE ENTRY, which may have
+   * been written by a bundle that predates the key (INVARIANTS §8 — the query
+   * cache is IndexedDB-persisted with a 24h `gcTime`). Every reader spells
+   * `?? false`.
+   */
+  truncated?: boolean;
 }
 export interface ChatFoldersCache {
   folders: ChatFolder[];

@@ -1,5 +1,7 @@
 import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
+import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
+import { cn } from "@/shared/lib/utils";
 
 /**
  * `/:workspaceSegment/overview`'s loading shape — the page's OWN column, not
@@ -65,8 +67,18 @@ export function OverviewSkeleton({
             </div>
             <div className="mt-4 flex gap-2">
               <div className="w-8 shrink-0" />
-              {/* `h-40` is `activity-chart.tsx › PLOT_HEIGHT_CLASS`. */}
-              <Skeleton className="h-40 min-w-0 flex-1 rounded-[10px]" />
+              {/* ⚠ IMPORTED, NOT RE-TYPED (2026-09-01). The plot height was a
+                  literal here under a comment pointing at a module-LOCAL
+                  constant — a claim by reference that nothing enforced
+                  (DRIFT-LEDGER P9). The plot now lives in
+                  `#/components/charts/bar-series`, which EXPORTS the value, so
+                  the ghost takes it the way the channels ghost takes
+                  `COMPOSER_BOTTOM`. ⚠ Do NOT restate the literal in this
+                  comment: `page-skeletons.test.tsx` scans this file's raw text
+                  for it, which is what makes "never re-typed" enforceable. */}
+              <Skeleton
+                className={cn(PLOT_HEIGHT_CLASS, "min-w-0 flex-1 rounded-[10px]")}
+              />
             </div>
           </div>
 

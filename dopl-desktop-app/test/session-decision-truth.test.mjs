@@ -45,9 +45,17 @@ const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 // "did a live awaited resolver really take it", and `dispatch` still propagates it — but the
 // slice now reads two sources, and the harness's `denyPending` mirror follows the moved one.
 const PERMS = readFileSync(M("session-permissions.js"), "utf8");
-// §3 SPLIT: buildSdkOptions + the query lifecycle live in main/session-query.js now.
-const QUERY = readFileSync(M("session-query.js"), "utf8");
+// §3 SPLIT: the query lifecycle lives in main/session-query.js; the OPTION ASSEMBLY moved on
+// 2026-08-31 to main/runtime/claude/launch-spec.js (runtime-adapter port) — one platform's option
+// vocabulary is that platform's to own. What the pins assert is unchanged.
+const QUERY = readFileSync(M("runtime/claude/launch-spec.js"), "utf8");
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(M("runtime/claude/axis-b.js"));
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
 const POST = { op: "post", body: "Shipping the invoice import tonight." };
@@ -132,7 +140,7 @@ function gatedSession(h) {
   };
   s.state = RED.sessionReducer(s.state, { type: "launched", payload: { type: "init" } }).state;
   const settled = []; // what the SDK's canUseTool promise finally resolves to
-  io.makeCanUseTool(s, h.dispatch)(CHANNEL_TOOL, POST, { requestId: "r1", toolUseID: "t1" })
+  axisB.makeCanUseTool(s, h.dispatch)(CHANNEL_TOOL, POST, { requestId: "r1", toolUseID: "t1" })
     .then((v) => settled.push(v));
   return { s, settled };
 }
@@ -264,7 +272,7 @@ test("F4: main sends the AUTHORIZED bytes, and `to` is the peer NAME (never an i
     pendingPermissions: new Map(), pendingNames: new Map(),
   };
   const events = [];
-  io.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "r1", toolUseID: "t1" });
+  axisB.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "r1", toolUseID: "t1" });
   assert.deepEqual(events[0].payload, {
     type: "outbound_gate", requestId: "r1", toolUseId: "t1", ownChannel: true, text: POST.body, to: "David",
     // 2026-08-02: plus the code that explains the gate. AXIS B is at its `ask` default here, so
@@ -273,7 +281,7 @@ test("F4: main sends the AUTHORIZED bytes, and `to` is the peer NAME (never an i
   });
   // A bodiless post still gates, with an empty body rather than an undefined one.
   const events2 = [];
-  io.makeCanUseTool(s, (_s, ev) => events2.push(ev))(CHANNEL_TOOL, { op: "post" }, { requestId: "r2", toolUseID: "t2" });
+  axisB.makeCanUseTool(s, (_s, ev) => events2.push(ev))(CHANNEL_TOOL, { op: "post" }, { requestId: "r2", toolUseID: "t2" });
   assert.equal(events2[0].payload.text, "");
 });
 
@@ -284,7 +292,7 @@ test("F4: includePartialMessages:false and NO hooks option are load-bearing for 
   // the suite. Its subject is main/session-query.js, which F-228 did not touch. Two of the four
   // pins below (permissionMode / settingSources) are doubled by test/session-model.test.mjs §3;
   // the other two are only here.
-  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("// H1 — SUPERSEDE"));
+  const opts = QUERY.slice(QUERY.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), QUERY.indexOf("function buildLaunchSpec("));
   assert.match(opts, /includePartialMessages: false,/, "a partial tool_use input must never paint the decision");
   assert.ok(!/hooks/.test(stripComments(opts)), "no PreToolUse hook may rewrite the input the operator approved");
   assert.match(opts, /LOAD-BEARING for v2\.7 L3 \(FIX F4\)/, "and the option site says why");

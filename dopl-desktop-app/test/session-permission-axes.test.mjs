@@ -42,6 +42,8 @@ const M = (p) => join(HERE, "..", "main", p);
 const profiles = require(M("session-profiles.js"));
 const reducer = require(M("session-reducer.js"));
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31: `makeCanUseTool` SPLIT — the verdict plumbing, the diag line, the card payloads and the resolver parking are platform-free (`main/session-gate-bridge.js`); the HELD-CALLBACK WIRING and the platform's reply vocabulary are the adapter's, and that is what these cases drive.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
 const GATE = readFileSync(M("session-gate.js"), "utf8");
@@ -50,7 +52,8 @@ const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
 // two mode tables it defends itself with — moved to session-state.js when session-reducer.js
 // (a zero-headroom §2 file) had to grow the self-authored inbound conjunct.
 const STATE_SRC = readFileSync(M("session-state.js"), "utf8");
-const QUERY = readFileSync(M("session-query.js"), "utf8"); // §3 SPLIT: buildSdkOptions lives here
+// ⚠ 2026-08-31 (runtime-adapter port): the option assembly is the ADAPTER's — it is written in ONE platform's option vocabulary. What the pins assert is unchanged: the platform's own permission mode stays at its most conservative value, so the held gate is never short-circuited and no ambient settings file may shadow it.
+const QUERY = readFileSync(M("runtime/claude/launch-spec.js"), "utf8");
 
 const { grantDecision, grantKeyFor, TOOL_MODES, MESSAGE_MODES } = profiles;
 // Source pins run against CODE, not the prose above it: a comment may name the thing it replaced
@@ -191,7 +194,8 @@ test("INVARIANT: the channel branch returns BEFORE Axis A is consulted (source p
   const src = readFileSync(M("session-profiles.js"), "utf8");
   const fn = src.slice(src.indexOf("function grantDecision(args) {"), src.indexOf("// ─── END SESSION-PROFILE TABLE"));
   const channelBranch = fn.indexOf("isChannelTool(a.toolName)");
-  const axisA = fn.indexOf("toolModeAllows(a.toolMode");
+  // ⚠ AXIS A IS ASKED OF THE RUNTIME SINCE 2026-08-31 (`rt.axisAAllows`) — the modes and the lists it resolves against are one runtime's vocabulary. The ORDER pinned here is untouched, and so is the invariant under it.
+  const axisA = fn.indexOf("rt.axisAAllows(a.toolMode");
   // F-139 (2026-08-05): the lookup is on the CANONICAL name now (`canonicalDoplName(a.toolName)`
   // one line above), because a deny list a different server prefix walks past is not a deny
   // list. The ORDER this test exists to pin is untouched.
@@ -287,7 +291,7 @@ test("MEDIUM-2: the gate payload carries the call's REAL to/kind, not the sessio
   const s = { profile: "full", channelId: CH, counterpartyName: "David", state: { allowForTask: [], messageMode: "ask" },
     pendingPermissions: new Map(), pendingNames: new Map() };
   const evs = [];
-  const canUse = io.makeCanUseTool(s, (_s, ev) => evs.push(ev));
+  const canUse = axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev));
   // Unaddressed: the bound counterparty, and NO extra fields (the v2.8 payload exactly).
   canUse(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, { requestId: "r1", toolUseID: "t1" });
   assert.deepEqual(evs[0].payload, {
@@ -459,7 +463,7 @@ test("A: the SDK is still driven at permissionMode 'default' with settingSources
   // The load-bearing pin: `bypassPermissions` would stop the SDK calling canUseTool at all,
   // which would kill the outbound message card AND the hard-deny path. All four tool modes
   // resolve in OUR gate, so the SDK options must never learn about them.
-  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("// H1 — SUPERSEDE"));
+  const opts = QUERY.slice(QUERY.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), QUERY.indexOf("function buildLaunchSpec("));
   assert.match(opts, /permissionMode: 'default'/);
   assert.match(opts, /settingSources: \[\]/);
   assert.ok(!/acceptEdits|bypassPermissions|toolMode|messageMode/.test(stripComments(opts)),

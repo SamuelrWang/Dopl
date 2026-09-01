@@ -87,7 +87,10 @@ describe("listChats — retention window", () => {
   it("free plan passes the DB cutoff to the query and surfaces hiddenCount", async () => {
     mockEnt.mockResolvedValue(ent(90));
     vi.mocked(repo.retentionCutoff).mockResolvedValue("2026-04-17");
-    vi.mocked(repo.listVisibleChats).mockResolvedValue([row()]);
+    vi.mocked(repo.listVisibleChats).mockResolvedValue({
+      rows: [row()],
+      truncated: false,
+    });
     vi.mocked(repo.countHiddenChats).mockResolvedValue(4);
 
     const result = await listChats(ctx);
@@ -100,10 +103,10 @@ describe("listChats — retention window", () => {
 
   it("pro plan applies no window filter, hiddenCount 0, no extra queries", async () => {
     mockEnt.mockResolvedValue(ent(null));
-    vi.mocked(repo.listVisibleChats).mockResolvedValue([
-      row(),
-      row({ id: "chat-2" }),
-    ]);
+    vi.mocked(repo.listVisibleChats).mockResolvedValue({
+      rows: [row(), row({ id: "chat-2" })],
+      truncated: false,
+    });
 
     const result = await listChats(ctx);
 
@@ -159,5 +162,38 @@ describe("getChat — retention boundary", () => {
     const detail = await getChat(ctx, "chat-1");
     expect(detail.id).toBe("chat-1");
     expect(repo.retentionCutoff).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⚠ THE CLIP IS THE READ'S, NOT THE FILTERED LIST'S — the ceiling bites before
+ * the visibility filter, so a page that filters down to one chat out of a full
+ * read is still a page that did not reach the end of the archive. Reporting the
+ * post-filter length would call that exhausted.
+ */
+describe("listChats — the read ceiling", () => {
+  it("passes the repository's clip through untouched", async () => {
+    mockEnt.mockResolvedValue(ent(null));
+    vi.mocked(repo.listVisibleChats).mockResolvedValue({
+      rows: [row()],
+      truncated: true,
+    });
+
+    const result = await listChats(ctx);
+
+    expect(result.truncated).toBe(true);
+    // ⚠ And it is NOT folded into the retention count: a clip has no upgrade
+    // behind it, and offering one would sell a fix for a different problem.
+    expect(result.hiddenCount).toBe(0);
+  });
+
+  it("reports an unclipped read as exhausted", async () => {
+    mockEnt.mockResolvedValue(ent(null));
+    vi.mocked(repo.listVisibleChats).mockResolvedValue({
+      rows: [row()],
+      truncated: false,
+    });
+
+    await expect(listChats(ctx)).resolves.toMatchObject({ truncated: false });
   });
 });

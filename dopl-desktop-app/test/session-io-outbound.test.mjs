@@ -81,12 +81,22 @@ test("isOutboundPost: only the dopl_channel tool qualifies — any other tool na
 
 const io = require(join(HERE, "..", "main", "session-io.js"));
 
+// ⚠ 2026-08-31 (runtime-adapter port, step 4): the SDK-message -> render-event mapping is the
+// ADAPTER's (`main/runtime/claude/normalize.js`), which is what makes it fixture-testable with
+// nothing installed. Its context arrives as one object rather than four positional arguments,
+// because a runtime that needs a fifth must not be a signature change in core. This shim keeps
+// every case below reading exactly as it did.
+const NORMALIZE = require(join(HERE, "..", "main", "runtime", "claude", "normalize.js"));
+const renderEvents = (msg, channelId, peerName, willGatePost, peerId) =>
+  NORMALIZE.renderEvents(msg, { channelId, peerName, willGatePost, peerId });
+
+
 const assistantMsg = (blocks) => ({ type: "assistant", message: { content: blocks } });
 const toolUse = (id, name, input) => ({ type: "tool_use", id, name, input });
 
 test("sdkRenderEvents: an own-channel post -> a single outbound_post, NO tool card", () => {
   const msg = assistantMsg([toolUse("t1", DOPL_CHANNEL_TOOL, { op: "post", body: "on it, shipping now" })]);
-  const evs = io.sdkRenderEvents(msg, "ch1", "Bob");
+  const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs.length, 1, "exactly one event — the tool card is suppressed");
   assert.equal(evs[0].type, "outbound_post");
   assert.deepEqual(evs[0].payload, {
@@ -100,7 +110,7 @@ test("sdkRenderEvents: an own-channel post -> a single outbound_post, NO tool ca
 
 test("sdkRenderEvents: a non-post dopl_channel op still renders as a generic tool card", () => {
   const msg = assistantMsg([toolUse("t2", DOPL_CHANNEL_TOOL, { op: "open", target: "someone" })]);
-  const evs = io.sdkRenderEvents(msg, "ch1", "Bob");
+  const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs.length, 1);
   assert.equal(evs[0].type, "tool_use");
   assert.equal(evs[0].payload.toolUseId, "t2");
@@ -108,7 +118,7 @@ test("sdkRenderEvents: a non-post dopl_channel op still renders as a generic too
 
 test("sdkRenderEvents: a plain work tool stays a tool card (not an outbound post)", () => {
   const msg = assistantMsg([toolUse("t3", "Bash", { command: "ls" })]);
-  const evs = io.sdkRenderEvents(msg, "ch1", "Bob");
+  const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs[0].type, "tool_use");
 });
 
@@ -117,7 +127,7 @@ test("sdkRenderEvents: narration + a post in one message emit a turn THEN the ou
     { type: "text", text: "Let me reply to Bob." },
     toolUse("t4", DOPL_CHANNEL_TOOL, { op: "post", body: "done" }),
   ]);
-  const evs = io.sdkRenderEvents(msg, "ch1", "Bob");
+  const evs = renderEvents(msg, "ch1", "Bob");
   assert.deepEqual(evs.map((e) => e.type), ["assistant", "outbound_post"]);
   assert.equal(evs[0].payload.text, "Let me reply to Bob.");
   assert.equal(evs[1].payload.text, "done");
@@ -125,13 +135,13 @@ test("sdkRenderEvents: narration + a post in one message emit a turn THEN the ou
 
 test("sdkRenderEvents: a missing peer name -> to:null; a missing body -> text:''", () => {
   const msg = assistantMsg([toolUse("t5", DOPL_CHANNEL_TOOL, { op: "post" })]);
-  const evs = io.sdkRenderEvents(msg, "ch1"); // peerName omitted
+  const evs = renderEvents(msg, "ch1"); // peerName omitted
   assert.equal(evs[0].payload.to, null);
   assert.equal(evs[0].payload.text, "");
 });
 
 test("sdkRenderEvents: a cross-channel post is NOT suppressed (gated op keeps its card)", () => {
   const msg = assistantMsg([toolUse("t6", DOPL_CHANNEL_TOOL, { op: "post", channel: "other", body: "leak?" })]);
-  const evs = io.sdkRenderEvents(msg, "ch1", "Bob");
+  const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs[0].type, "tool_use", "a cross-channel post gates and renders as a tool card, not outbound");
 });

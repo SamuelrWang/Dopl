@@ -56,8 +56,13 @@ const RESEND =
 // old copy told the peer to resend into a slot that will not free itself — the operator has to
 // sign in on that Mac first, and nothing was saying so. No local detail leaks: it names the
 // state, not the machine, the account, or the error.
+// ⚠ VENDOR-FREE SINCE 2026-08-31 (port wave D, §2.5), AND BY THIS CONSTANT'S OWN RULE. The block
+// above says "No local detail leaks: it names the state, not the machine, the account, or the
+// error" — and WHICH RUNTIME this operator's agents run on is local detail of exactly that kind,
+// readable by anyone who can address them. It also stopped being true: a build that ships three
+// adapters cannot promise the held credential is any particular vendor's.
 const AUTH_HELD_REPLY =
-  "I can't run this right now — my Claude Code sign-in on this machine needs attention. I'll pick it up once that's sorted.";
+  "I can't run this right now — my agent's sign-in on this machine needs attention. I'll pick it up once that's sorted.";
 
 // 2026-08-20: the engine refused the launch outright (the concurrency ceiling, or no runnable
 // Claude Code on this machine). ⚠ It says the request was NOT answered and it does NOT invite a

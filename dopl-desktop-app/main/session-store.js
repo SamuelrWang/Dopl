@@ -203,6 +203,24 @@ function durableSessionRecord(rec) {
     // this field existed, or a mid-wave caller can only ever land on 'default' — no model
     // option at all. Frozen enum, spelled out, no normalization of near misses.
     model: ['default', 'opus', 'sonnet', 'haiku', 'fable'].indexOf(r.model) === -1 ? 'default' : r.model,
+    // ── 2026-08-31 (port wave D) — WHICH RUNTIME THIS SESSION RAN ON ─────────────────────────
+    //
+    // ⚠ WITHOUT IT A CRASH RESUME COMES BACK ON A DIFFERENT VENDOR. `session-park.js ›
+    // startResume` rebuilds the whole session from this record and hands the conversation handle
+    // (`sdkSessionId`, persisted three fields up) to whatever runtime it acquires — so a record
+    // with no runtime resumed onto the DEFAULT adapter, which would be asked to continue another
+    // platform's conversation id, in another platform's tool vocabulary, against another
+    // credential. `session-engine.js › startSession` stamps the live session and this is the
+    // only thing that carries the stamp across a restart.
+    // ⚠ COERCED BY CHARSET, NOT AGAINST THE REGISTRY, and that is forced rather than lazy: this
+    // function is evaluated STANDALONE by the extraction tests (the same constraint `model` above
+    // states), so it cannot ask `main/runtime/index.js` what is registered. The bound here is
+    // "could be an id at all"; `runtime/index.js › resolve` is what turns an id this build does
+    // not know into the DEFAULT runtime, fail-closed toward the one adapter it is certain it
+    // ships. A hand-edited store can therefore only ever select a runtime this build already has.
+    // ⚠ `null` IS A RECORD WRITTEN BEFORE THIS FIELD and reads as the default, which is the
+    // runtime every such session actually ran on.
+    runtimeId: typeof r.runtimeId === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(r.runtimeId) ? r.runtimeId : null,
   };
 }
 

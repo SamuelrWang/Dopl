@@ -68,7 +68,8 @@ const POST_CAP = 1000;
  *
  * ⚠ THE COST, STATED. The ring is `NARRATION_MAX` (200) deep per session, `flush()` sends the
  * WHOLE ring for each dirty session, and the per-session ceiling is multiplied by
- * `session-windowless.js › MAX_CONCURRENT_SESSIONS` (6). Since 2026-08-30 the cost is bounded by
+ * `session-windowless.js › MAX_CONCURRENT_SESSIONS` (15 since 2026-09-01). Since 2026-08-30 the
+ * cost is bounded by
  * `RING_CHAR_BUDGET` (60k chars per session per flush) whatever this number says — which is what
  * makes raising it safe at all: a maximal prose block costs more of the ring, and what pays is
  * the OLDEST entries. The ring is memory-only, dies with the session, and is never persisted.

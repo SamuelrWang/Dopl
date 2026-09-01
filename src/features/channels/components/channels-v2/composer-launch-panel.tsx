@@ -26,6 +26,12 @@
 import { useMemo, useRef } from "react";
 import { X } from "lucide-react";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
+import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
+import {
+  descriptorFor,
+  interruptRefusal,
+  type RuntimeDescriptor,
+} from "../../lib/runtime-capability";
 import { authorMarker } from "@/features/agent-templates/components/template-picker";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { SelectMenu } from "@/shared/ui/select-menu";
@@ -70,16 +76,56 @@ export interface LaunchTemplateOption {
  *  to `templateId: null` at the boundary, which is the wire's own spelling of "no template". */
 const BLANK_TEMPLATE = "";
 
+/**
+ * "Whatever this channel is set to" — the Runtime row's first option, and a REAL pick.
+ *
+ * ⚠ ITS `""` MEANS SOMETHING DIFFERENT FROM THE SETTINGS ROW'S, WHICH IS WHY THE LABEL DIFFERS.
+ * On the DURABLE record `''` sets the channel back to the DEFAULT ADAPTER; here it means the
+ * operator expressed no per-spawn preference, so `main/session-launch-op.js`'s chain falls
+ * through to the channel's own pick. Labelling both "Default" would claim this row can reset a
+ * setting it never touches.
+ */
+const CHANNEL_RUNTIME = "";
+const CHANNEL_RUNTIME_LABEL = "Channel default";
+
 export function AgentLaunchPanelView({
   panel,
   templates,
+  runtimes = EMPTY_RUNTIMES,
+  channelRuntime = "",
+  defaultRuntime = "",
 }: {
   panel: AgentLaunchPanel;
   /** The channel's templates. ⚠ READ-ONLY here — this surface authors none. */
   templates: ReadonlyArray<LaunchTemplateOption>;
+  /**
+   * THE RUNTIME FAMILY, off the channel's launch posture (2026-08-31, design §3.1/§3.2).
+   * ⚠ EMPTY RENDERS NO RUNTIME ROW AND NO WARNING — a plain browser, and every desktop older
+   * than the port. It is the same no-dead-rows rule the Settings tab's row follows, and here
+   * it is the stronger one: an older main accepts `payload.runtime` and drops it.
+   */
+  runtimes?: ReadonlyArray<RuntimeDescriptor>;
+  /** The channel's durable pick, `''` for the default adapter. */
+  channelRuntime?: string;
+  defaultRuntime?: string;
 }) {
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(descriptionRef, panel.description);
+  /**
+   * WHAT THIS SPAWN WOULD ACTUALLY RUN ON — the panel's own pick, else the channel's, else
+   * the default. ⚠ IT MIRRORS MAIN'S PRECEDENCE CHAIN EXACTLY (`session-launch-op.js`:
+   * `p.runtime > getChannelRuntime > ''`). A warning computed off any other order would name
+   * a refusal belonging to a runtime this launch is not about to use.
+   */
+  const effective = useMemo(
+    () => descriptorFor(runtimes, panel.runtime || channelRuntime, defaultRuntime),
+    [runtimes, panel.runtime, channelRuntime, defaultRuntime]
+  );
+  // ⚠ A REFUSAL, NOT AN ABSENCE, AND THAT IS WHY IT IS A SENTENCE (§3.2). Without an
+  // interrupt Dopl cannot stop a session it started, so the Stop control on the agent panel
+  // goes inert — and a control that vanishes with no reason is one the operator works around.
+  // The launch surface is where they can still choose differently, so it is where it is said.
+  const stopWarning = runtimes.length ? interruptRefusal(effective) : null;
   const templateOptions = [
     // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration — it is what the Bot
     // icon spawned in one click for a year — so it is an option, not an empty state.
@@ -160,6 +206,27 @@ export function AgentLaunchPanelView({
           />
         </PanelField>
 
+        {/* ⚠ ABOVE Model, BELOW Template, because it decides what the two rows under it
+            mean — the model roster and the permission vocabulary are the RUNTIME's. */}
+        {runtimes.length > 0 && (
+          <PanelField label="Runtime:" as="div" center line={false}>
+            <SelectMenu
+              value={panel.runtime}
+              options={[
+                { value: CHANNEL_RUNTIME, label: CHANNEL_RUNTIME_LABEL },
+                // ⚠ THE PLATFORM'S OWN LABEL, off the descriptor — Dopl does not rename a
+                // vendor's product, and a second table of names is the drift
+                // `lib/agent-models.ts` states the rule against.
+                ...runtimes.map((d) => ({ value: d.id, label: d.label })),
+              ]}
+              onChange={panel.setRuntime}
+              ariaLabel="Agent runtime"
+              variant="raisedField"
+              className="min-w-0 flex-1"
+            />
+          </PanelField>
+        )}
+
         <PanelField label="Model:" as="div" center line={false}>
           {/* ⚠ `AGENT_MODEL_OPTIONS`, NOT `agentModelOptionsFor`. That one widens the roster with
             whatever a LIVE agent is already running; nothing is running yet, so the list here is
@@ -178,6 +245,16 @@ export function AgentLaunchPanelView({
         {/* ⚠ A REFUSAL AFTER THE AGENT STARTED, said out loud on its own line. The launch SUCCEEDED
           — reporting it as a failure would be a lie about the thing that mattered — but a name or
           description main would not take must not vanish silently either. */}
+        {/* ⚠ ONE SENTENCE, AND THE ONE EXCEPTION TO THE MINIMAL-COPY RULING (INVARIANTS §5).
+            It is the descriptor's own words (`runtime-capability.ts › interruptRefusal`), not
+            Dopl's paraphrase, and it is a NOTE rather than an ALERT: nothing has failed, and
+            the operator is being told what this runtime cannot do before they start it. */}
+        {stopWarning && (
+          <p role="note" className="px-0.5 text-caption text-warning">
+            {stopWarning}
+          </p>
+        )}
+
         {panel.identityError && (
           <p role="alert" className="px-0.5 text-caption text-danger">
             {panel.identityError}
@@ -204,11 +281,16 @@ export function AgentLaunchPanelView({
  */
 export function ComposerLaunch({
   panel,
+  channelId,
   workspaceId,
   currentUserId,
   members,
 }: {
   panel: AgentLaunchPanel;
+  /** The channel whose durable posture supplies the runtime roster and the pick this
+   *  launch falls through to. ⚠ The read is the SAME shared record the Settings tab
+   *  writes (`use-channel-launch-posture.ts`), so a pick made there is live here. */
+  channelId: string;
   workspaceId: string;
   /** Whose templates wear NO marker — everyone else's wear one. */
   currentUserId: string;
@@ -222,6 +304,9 @@ export function ComposerLaunch({
   // the /home Agents face mount — a stable key on `[path, workspaceId, query]` (F-331), so two
   // mounts share one fetch. ⚠ READ-ONLY: this surface authors no template.
   const { templates } = useAgentTemplates(workspaceId, { enabled: panel.open });
+  // ⚠ GATED BY THE SAME MOUNT THE TEMPLATES READ IS. This component renders only where a
+  // launch is possible, so the bridge read costs nothing on a surface with no launch control.
+  const posture = useChannelLaunchPosture(channelId);
 
   const memberNames = useMemo(
     () =>
@@ -251,9 +336,21 @@ export function ComposerLaunch({
     >
       <div className="overflow-hidden" inert={!panel.open}>
         <div className="pb-2">
-          <AgentLaunchPanelView panel={panel} templates={options} />
+          <AgentLaunchPanelView
+            panel={panel}
+            templates={options}
+            // ⚠ EMPTY UNTIL THE PROBE ANSWERS, and empty forever off-desktop — which renders
+            // no runtime row and no warning, the correct direction while the answer is out.
+            runtimes={posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES}
+            channelRuntime={posture.runtime}
+            defaultRuntime={posture.defaultRuntime}
+          />
         </div>
       </div>
     </div>
   );
 }
+
+/** ⚠ Module-level, so a surface with no runtime concept hands the view the SAME array every
+ *  render rather than a fresh identity `effective` would re-derive from. */
+const EMPTY_RUNTIMES: ReadonlyArray<RuntimeDescriptor> = [];

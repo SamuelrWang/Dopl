@@ -229,6 +229,34 @@ export const DEFAULT_MESSAGE_LIMIT = 100;
 /** Hard cap on a message read page (contract: `limit <= 200`). */
 export const MAX_MESSAGE_LIMIT = 200;
 
+/**
+ * ONE PAGE OF TRANSCRIPT — what the channel surface asks for on open, and what
+ * each scroll-up page then adds (`hooks/use-channel-messages.ts`).
+ *
+ * ⚠ IT REPLACED {@link MAX_MESSAGE_LIMIT} AS THE TRANSCRIPT'S READ SIZE
+ * (2026-09-01). The surface used to open on the newest 200 with no way to reach
+ * message 201 — bounded, so never the unbounded read §9 forbids, but a hard
+ * FLOOR under the channel's history: everything older than the ceiling was
+ * simply unreachable from the UI, and the mention jump said so out loud
+ * (`message-pane.tsx › SCROLL_TARGET_MISSING_NOTE`). Paging up removes the
+ * floor, which is what lets the first paint be a QUARTER of what it was.
+ *
+ * ⚠ **A SMALLER FIRST PAGE IS A SMALLER DERIVATION WINDOW, AND THAT IS THE
+ * TRADE.** The channel view's thread cards, the escalation cards and the
+ * outbound send-box join are all derived from the messages ON SCREEN
+ * (`channel-surface-data.ts`), so a thread whose last activity is older than
+ * this page has no card until the reader pages back to it. The Threads tab is
+ * the surface that answers "what threads exist" — it has its own read and its
+ * own ceiling ({@link CHANNEL_THREAD_LIST_LIMIT}) — so the transcript is not
+ * the record of record for that question and does not need to be sized as if it
+ * were.
+ *
+ * 50 is a screen and a half at typical row heights, so the reader has somewhere
+ * to scroll before the next page is asked for; the page fetch itself is bounded
+ * by {@link MAX_MESSAGE_LIMIT} at the schema, not by this.
+ */
+export const CHANNEL_TRANSCRIPT_PAGE_SIZE = 50;
+
 /** Await long-poll: hard cap on the client-requested timeout (ms). */
 export const MAX_AWAIT_TIMEOUT_MS = 50_000;
 

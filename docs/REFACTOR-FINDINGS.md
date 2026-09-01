@@ -38,7 +38,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
 
 **Pruned 2026-08-11 (fourth pass) — the resolved-in-place sweep. 105 entries in, 91 out.** Scope: every entry carrying RESOLVED / ✅ / "closed" in its title or status line was re-verified **against the working tree on disk** — greps for the named symbols and files, never the entry's own text, never another entry, never a commit message. Strict numeric order survives; the entry template is unchanged. No code was touched and no `git` state was changed. **Where a claim was about PRODUCTION rather than about code, it was settled with read-only introspection against the live project** (`pg_constraint`, `pg_indexes`, `pg_proc`, `pg_publication_tables`, `schema_migrations`) — see the near-miss below for why that was not optional.
 
-- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `components/channels-v2/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `sdk-loader.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
+- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `components/channels-v2/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `runtime/claude/loader.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
 - **⚠⚠ THE MOST IMPORTANT THING THIS PASS PRODUCED IS A NEAR-MISS, NOT A REFUTATION — AND THE STALE SOURCE WAS THE WORKING TREE ITSELF.** This pass came within one edit of writing a loud, confident, **false** refutation into this header. It had drafted: *"F-099's ✅ is wrong, the charset CHECKs are not in production."* **They are in production.** The reasoning that produced the error is worth more than the entry:
   - Three prior prunes established the rule **"verify against the working tree on disk, not against entries or commit messages."** This pass followed it. `supabase/migrations/20260808150000_replay_hardening_wave_20260731.sql` **opens with `-- UNAPPLIED. DO NOT run without reading this header.` and repeats `-- NOT APPLIED. This is a repo file only.` at `:76`.** That is a primary source, on disk, in the file that owns the DDL — and it is **stale**, because a migration header is authored *before* the apply and nothing on earth updates it afterwards. `docs/LAUNCH-READINESS-ROADMAP.md:5` says the same thing and is stale for the same reason.
   - What caught it was an accident: F-102's status line disagreed. Chasing that disagreement into `pg_constraint` gave ground truth — **`profiles_display_name_check` present, `channels_name_check` present *in its charset-bounded form* (not the loose length-only inline one), `channels_topic_check` present, all 14 `*_charset_check` present, `channel_agents_engaged_idx` dropped, `supabase_realtime` at exactly 17 tables, and local files 157 = history rows 157 with zero local-only and zero remote-only.** Everything the 2026-07-31 wave was supposed to do is live, via the replay migration, applied 2026-08-09.
@@ -329,12 +329,13 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Status: open
 
 ### F-053: Channel thread has no backward pagination past the latest page
-- Location: `src/features/channels/constants.ts:112` (`MAX_MESSAGE_LIMIT = 200`); `schema.ts:340-350` (`MessageReadQuerySchema` = `since`/`limit`/`thread`, no `before`); `server/repository-messages.ts:60` (only `.gt("seq", since)`); `hooks/use-channel-messages.ts:12`
+- Location: `src/features/channels/constants.ts › CHANNEL_TRANSCRIPT_PAGE_SIZE`; `schema-reads.ts › MessageReadQuerySchema`; `server/repository-messages.ts › listMessages`; `hooks/use-channel-messages.ts › useChannelMessages`; `lib/message-window.ts`; `components/channels-v2/use-load-older.ts`
 - Found during: Channels feature build (2026-07-25)
 - Severity: smell (scale)
-- Description: the thread reads only the most recent messages with no load-older path, so past ~200 messages the older history is unreachable from the UI. The `seq` cursor already drives incremental FORWARD reads.
-- Proposed resolution: defer — add a `before=<seq>&limit=` descending page + a load-older control when channel history reaches real size. Same shape as F-027.
-- Status: open
+- Description: the thread read only the most recent messages with no load-older path, so past the page ceiling the older history was unreachable from the UI. The `seq` cursor already drove incremental FORWARD reads.
+- **Status: RESOLVED 2026-09-01**, along the shape this entry proposed. `MessageReadQuerySchema` takes `before=<seq>`; `listMessages` reads `seq < before` DESC-capped-then-flipped off `channel_messages_channel_seq_idx`; the transcript opens on `CHANNEL_TRANSCRIPT_PAGE_SIZE` (50, down from 200) and pages up on scroll. Two things this entry did not anticipate and that the implementation had to answer:
+  - **The history is NOT a query-cache entry.** A `?before=` entry sits under the same prefix key every messages write patches (`use-thread-writes-shared.ts › messagesKey`), so each send would append its pending row into every loaded page of history. It lives in the hook, beside the newest page — `lib/message-window.ts` carries the argument, and `dropThreadFromWindow` is the one write that has to be told about it by hand.
+  - **The newest page can OUTRUN the loaded window.** It is refetched on every doorbell and always returns the newest page, so a burst bigger than one page leaves a gap neither half holds — and `seq` is a table-wide identity, so no arithmetic over the rows can detect it. `message-window.ts › isContiguous` checks a remembered boundary cursor instead and drops the window rather than rendering the hole.
 
 ### F-055: `dopl_channel` invite/post pre-resolve by scanning `listChannels`
 - Location: `packages/mcp-server/src/tools/channel-shared.ts:126` (`resolveChannelOr` → `client.listChannels({ includeArchived: true })`); `packages/dopl-client/src/channel.ts:68` (`getChannel`, wired at `client.ts:592`, zero callers)
@@ -477,7 +478,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
     - ⚠ **AND ITS PROPOSED FIX SHAPE WAS WRONG — recorded because the next round would otherwise implement it.** It read *"thread `extraDenyRules` … into `buildRestrictionArgs` + `writeScopedSettings`, and emit `--disallowedTools` for `full` too"*. That closes the `Read` door and **not the `Bash` one**, which is the door that matters: Claude Code `Bash(...)` permission rules match COMMAND patterns, never path globs, so no deny rule of that family can fence a path against a shell. **A deny rule that cannot fire is worse than none, because it reads as coverage.**
     - **What was done instead:** stop writing the file. Nothing in the app had read it since `session-spawner.js › runForChannel` — the headless `claude -p` executor — was deleted 2026-08-20; the SDK path takes the bearer in memory from `mcp-config.js › deviceTokenForSpawn` (safeStorage) and manual `claude` runs are served by the user-scope CLI entry `ensureMcpConfig` adds. `removeSpawnConfig()` runs where the write used to, so existing installs shed the token. Mutation-verified in `dopl-desktop-app/test/sdk-mcp-token.test.mjs` (9 mutations).
     - ⚠ **Residuals (iii) and (iv) below are the same CLASS and are still open**, and F-329 residual #3 is the audience-ceiling consequence of it.
-  - **(ii) PARTIAL — the rules now NAME Grep/Glob but enforcement is still unproven.** `main/sdk-loader.js:104` `SECRET_TOOLS = ['Read','Grep','Glob']`, applied at `:117`; the docblock at `:101-103` still concedes "an unrecognized rule is a harmless no-op on this CLI". SDK path only (`main/session-query.js:43`), not the CLI/headless spawn.
+  - **(ii) PARTIAL — the rules now NAME Grep/Glob but enforcement is still unproven.** `main/runtime/claude/loader.js:104` `SECRET_TOOLS = ['Read','Grep','Glob']`, applied at `:117`; the docblock at `:101-103` still concedes "an unrecognized rule is a harmless no-op on this CLI". SDK path only (`main/session-query.js:43`), not the CLI/headless spawn.
   - **(iii) STILL OPEN — a permissive tool mode can read the credential dirs via the shell.** `Bash` is in `SESSION_GATED_WORK_TOOLS` (`main/session-profiles.js:94`), so under `full` + `bypass` (`BYPASS_TOOLS` at `:348`) it auto-runs, and the deny rules cover only Read/Grep/Glob.
   - **(iv) STILL OPEN — safeStorage-unavailable fallback.** `main/mcp-config.js:47` `DT_KEY_PLAIN`, written unencrypted at `:193`, read at `:207`.
 - Proposed resolution: defer; do the headless deny-rule threading with the next spawner pass. **(i) is the one with a real blast radius — it is the 90-day device token in cleartext behind a tool the operator may have pre-approved.**
@@ -574,7 +575,7 @@ COMMIT;
 | `src/features/channels/lib/group-thread.ts` 819 | **428** | `-markers` 176 · `-render` 162 · `-types` 131 · `-draft` 127; the grouping state machine kept WHOLE per §2's reducer carve-out, all public names re-exported so no importer changed |
 
 - **`src/shared/auth/mcp-oauth.ts` is 498 and deliberately NOT exempted** — unchanged, two lines of headroom. Its stale "sits at EXACTLY 500" comment has been corrected in `eslint.config.mjs`.
-- **THE DESKTOP CLUSTER GOT WORSE WHILE THE WEB TREE GOT BETTER — FOUR files at exactly 500 now, not three:** `main/ui-sync.js`, `main/session-profiles.js`, `main/session-engine.js`, and **`main/session-reducer.js`, which this entry recorded at 496 and is at the cap** — plus `test/session-chrome.test.mjs` at 500. **A file at 500 cannot absorb a COMMENT**, so all five need a split before they can be *documented*. That is not hypothetical: the `doplToolsPolicy` correction (F-179) belonged in `session-profiles.js` and had to be written in `sdk-loader.js` instead. The desktop config has the same rule at the same severity and **no exemptions at all**; only `renderer/app/**` is ignored. The one over-cap file in either tree is `renderer/session/session.css` at 1064, which nothing lints.
+- **THE DESKTOP CLUSTER GOT WORSE WHILE THE WEB TREE GOT BETTER — FOUR files at exactly 500 now, not three:** `main/ui-sync.js`, `main/session-profiles.js`, `main/session-engine.js`, and **`main/session-reducer.js`, which this entry recorded at 496 and is at the cap** — plus `test/session-chrome.test.mjs` at 500. **A file at 500 cannot absorb a COMMENT**, so all five need a split before they can be *documented*. That is not hypothetical: the `doplToolsPolicy` correction (F-179) belonged in `session-profiles.js` and had to be written in `runtime/claude/loader.js` instead. The desktop config has the same rule at the same severity and **no exemptions at all**; only `renderer/app/**` is ignored. The one over-cap file in either tree is `renderer/session/session.css` at 1064, which nothing lints.
 - **⚠ A NUMBER THIS ENTRY PUBLISHED WAS UNREPRODUCIBLE.** It said `test/ui-sync-tables.test.mjs` "is 496 … four lines from the cap". **It is 359** (248 at HEAD, so it did grow — but 496 was never a measurement). A number nobody can reproduce is worse than none: it retires a file from the reader's watch list while looking like diligence. Also corrected against a full re-measure: `main/channel-listener.js` is **493** not 494, and **`main/consent-watcher.js` at 492 was missing from every previous band**. Separately, **eight `test/*.mjs` files sit within eleven lines of the cap** (499 down to 489) and not one had been named here.
 - **The extraction-then-drift pattern, re-measured:** `main/targeting.js` 395 → **424**, `main/trigger.js` 394 → **439**, `main/session-reducer.js` 496 → **500**. An extraction buys headroom; it does not buy a habit.
 - Proposed resolution: refactor the list one file at a time, outside a hardening round. **The web tree just proved this works when a wave actually does it** — `server.ts`, this entry's standing "first, on reach" pick, went 1045 → 227. Consider making the exemption a size CEILING rather than an off switch. **DO NOT ADD TO THE EXEMPTION LIST — split the file instead.**
@@ -736,7 +737,7 @@ COMMIT;
 - Status: open (residual (c))
 
 ### F-113: One agent handle, several concurrent sessions — the stamp names a SLOT, not a run
-- Location: `dopl-desktop-app/main/sdk-loader.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
+- Location: `dopl-desktop-app/main/runtime/claude/loader.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
 - Found during: the 2026-08-01 two-agent live run
 - Severity: smell (the wire-identity gap itself is closed)
 - **Rewritten down to the residuals 2026-08-08; both re-verified, and the rollback did not touch either — the stamp is server-side and slot-keyed.**
@@ -765,13 +766,13 @@ COMMIT;
 - Status: open (residual (a))
 
 ### F-116: The F1–F7 review round — three surviving residuals
-- Location: `packages/mcp-server/src/tools/channel-render.ts:299`; `packages/dopl-client/src/channel.ts:188`; `src/app/api/mcp/route.ts:82,89` and `dopl-desktop-app/main/sdk-loader.js:181,231`
+- Location: `packages/mcp-server/src/tools/channel-render.ts:299`; `packages/dopl-client/src/channel.ts:188`; `src/app/api/mcp/route.ts:82,89` and `dopl-desktop-app/main/runtime/claude/loader.js:181,231`
 - Found during: the adversarial review over the F1–F7 wave (2026-08-01)
 - Severity: smell
 - **Rewritten 2026-08-08. Two residuals no longer apply** ((a) the milestone-cadence release note — the lane that delivered milestones is deleted; (c) the `to_agents` 64-cap measurement — `toAgent`/`toAgents` are `z.never()`). Three re-verified:
   - **(b) `· no thread` prints on a page whose only tags are ad-hoc.** `anyThreaded = messages.some((m) => threadIdOf(m) !== undefined)` counts ANY tag, and `threadTagOf` then prints `· no thread`. Cosmetic; rename to `· untagged` if that file is touched.
   - **(d) `@dopl/client.postMessage` returns `{ threadClosed: false }` where a malformed empty 2xx body once returned `undefined`.** Unreachable (the transport throws on non-2xx first); recorded against the docblock's strict-additivity claim, not as a defect.
-  - **(e) `session_id` and `appVersion` never co-occur on one row, so the forensic join is still missing.** `/api/mcp/route.ts` reads only `readRuntimeHeader` (`:82`) and `readSessionIdHeader` (`:89`) and forwards no version; `sdk-loader.js` sets `X-Dopl-Runtime` (`:181`) and `X-Dopl-Session-Id` (`:231`) and no version header. The plumbing exists elsewhere (`src/shared/auth/app-version-header.ts:50`, read at `with-workspace-auth.ts:218`, sent by `main/app-version.js:25`), so this is a wire change on two surfaces, not a guard. **Confirmed real in prod rows during the 2026-08-02 incident**: SDK-lane posts carry `session_id` + `runtime` and no `appVersion`; lifecycle posts carry `appVersion` and no `session_id`.
+  - **(e) `session_id` and `appVersion` never co-occur on one row, so the forensic join is still missing.** `/api/mcp/route.ts` reads only `readRuntimeHeader` (`:82`) and `readSessionIdHeader` (`:89`) and forwards no version; `runtime/claude/loader.js` sets `X-Dopl-Runtime` (`:181`) and `X-Dopl-Session-Id` (`:231`) and no version header. The plumbing exists elsewhere (`src/shared/auth/app-version-header.ts:50`, read at `with-workspace-auth.ts:218`, sent by `main/app-version.js:25`), so this is a wire change on two surfaces, not a guard. **Confirmed real in prod rows during the 2026-08-02 incident**: SDK-lane posts carry `session_id` + `runtime` and no `appVersion`; lifecycle posts carry `appVersion` and no `session_id`.
 - Status: open (residuals)
 
 ### F-118: ATTENDED HANDOFF — five residuals, every one a consequence of "resolve locally, decide nothing on the server" — ✅ RESOLVED 2026-08-30
@@ -1039,12 +1040,12 @@ COMMIT;
 ## F-177 — `full` means full: the one surviving conditional
 
 - Status: open (one conditional follow-up; the round itself is resolved and deleted — git remembers)
-- Found during: the two spawn lanes disagreeing about `full` (2026-08-08). Full statement of the rules is in [ENGINEERING.md §18, "`full` MEANS FULL"](ENGINEERING.md). Verified on disk 2026-08-11: `main/session-profiles.js:99` is literally `const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();` and `main/sdk-loader.js:190` carries `alwaysLoad: true` on the dopl MCP entry.
+- Found during: the two spawn lanes disagreeing about `full` (2026-08-08). Full statement of the rules is in [ENGINEERING.md §18, "`full` MEANS FULL"](ENGINEERING.md). Verified on disk 2026-08-11: `main/session-profiles.js:99` is literally `const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();` and `main/runtime/claude/loader.js:190` carries `alwaysLoad: true` on the dopl MCP entry.
 - Severity: smell (a conditional, not a defect)
 
 - **`alwaysLoad` was added to the SDK lane only.** The headless `--mcp-config` file (`main/mcp-config.js`) is compared as exact bytes, and headless `full` is already documented as MCP-limited (no `--allowedTools` means non-pre-approved tools auto-deny with no TTY), so the field buys nothing there today. **Add it if the headless lane ever pre-approves dopl tools under `full`.**
 - **A note that is NOT debt, kept because it is the argument someone will re-open:** an approved `Task`/`Agent` is an approval of everything the subagent then does — it does not inherit this session's `canUseTool` bound. That was FIX H3's case for the old split, and F-177 answered it with the operator's click rather than with the tool table, because the same session can already run `Bash`. If it ever needs a stronger answer, the place is an `AgentDefinition` with its own `disallowedTools`, not a return to the split.
-- **DELETED AS STALE 2026-08-11 — this entry's third open item.** It read: *"`buildMcpServers` passes `doplToolsPolicy` as an array of STRINGS, while the SDK types `McpHttpServerConfig.tools` as `McpServerToolPolicy[]` … if the string form is ignored at runtime, that layer is inert and should be re-shaped."* **The field is no longer sent at all** — F-179 established that the string form was not ignored, it caused the CLI to drop the whole server entry, and the assignment was removed (`sdk-loader.js:216` now records where it stood). The item describes code that does not exist.
+- **DELETED AS STALE 2026-08-11 — this entry's third open item.** It read: *"`buildMcpServers` passes `doplToolsPolicy` as an array of STRINGS, while the SDK types `McpHttpServerConfig.tools` as `McpServerToolPolicy[]` … if the string form is ignored at runtime, that layer is inert and should be re-shaped."* **The field is no longer sent at all** — F-179 established that the string form was not ignored, it caused the CLI to drop the whole server entry, and the assignment was removed (`runtime/claude/loader.js:216` now records where it stood). The item describes code that does not exist.
 - Proposed resolution: defer — conditional on the headless lane changing.
 
 ---
@@ -1999,7 +2000,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 
 **RESOLVED — R1 (suppress at the process boundary) + R3a (framing belt). R3b deferred.**
 
-- **R1: `sdk-loader.js › buildScrubbedEnv` sets `ENABLE_CLAUDEAI_MCP_SERVERS='0'`,** written **last and unconditionally** so an inherited `=1` in the parent env cannot re-admit the lane (the name does not match `PERMISSION_ENV_RE`, so it would otherwise copy straight through the scrub loop). Exported as `CLAUDEAI_MCP_ENV` / `CLAUDEAI_MCP_OFF` so the value has one definition.
+- **R1: `runtime/claude/loader.js › buildScrubbedEnv` sets `ENABLE_CLAUDEAI_MCP_SERVERS='0'`,** written **last and unconditionally** so an inherited `=1` in the parent env cannot re-admit the lane (the name does not match `PERMISSION_ENV_RE`, so it would otherwise copy straight through the scrub loop). Exported as `CLAUDEAI_MCP_ENV` / `CLAUDEAI_MCP_OFF` so the value has one definition.
 - ⚠ **POLARITY WAS INFERRED FROM MINIFIED CODE AND THEN VERIFIED TWICE, WHICH IS THE ONLY REASON IT IS TRUSTED.** Statically: the eligibility chain is `if (su(process.env.ENABLE_CLAUDEAI_MCP_SERVERS) || <setting>) return {}`, and `su` is `e === undefined ? false : typeof e === 'boolean' ? !e : ['0','false','no','off'].includes(String(e).toLowerCase().trim())` — i.e. **"explicitly set FALSY"**, so a var named `ENABLE_` *disables*. Empirically: the table above. ⚠ **`''` IS A SILENT NO-OP** — `su('')` is false, so *clearing* this var re-admits nine servers and nothing errors. That trap is a test case, not a comment.
 - **R3a: `prompt-framing-text.js › LANE_EXCLUSIVITY`**, spread into `prompt-framing.js › firstActions` so it rides **both sides**: `mcp__dopl__dopl_channel` is the only path off this machine, and no other `mcp__` server (Slack, Gmail, Drive, anything that is not `mcp__dopl__`) is this session's lane. ⚠ **It went in the TEXT module, not the assembly module, because that is the seam that file's own header declares** — fixed text with nothing interpolated — and because `prompt-framing.js` was at 499 of the cap. Two rules it had to clear: no em dash (`prompt-framing.test.mjs` scans every line naming `dopl_channel`) and no `task=`.
 - ⚠ **NEITHER HALF IS THE CONTAINMENT, and the entry says so where it cannot be skimmed past.** Execution was never reachable: connector tools are unclassified, `AUTO_TOOLS`/`BYPASS_TOOLS` are positive allow-lists, so `grantDecision` gates them and a windowless session denies — all 12 profile × mode cells pinned by `session-tool-name-prefix.test.mjs`. **What this removes is the OFFERED SURFACE:** an inventory of the operator's connected accounts sitting in a prompt that can be auto-sent, and its per-turn token cost across every live session.
@@ -2045,7 +2046,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 
 - Found during: the orchestrator-surface wave (desktop lane), auditing every spawn shape before adding one.
 - **THE GAP WAS EXACTLY ONE SESSION WIDE.** `main/session-park.js › startResume` guarded `deps.hasLiveSession(slot)` — *"is THIS slot taken"* — and never `liveCount`. It is the one spawn that does not go through `session-launch.js › launch` (F-257 records why), and `launch` is where the ceiling is enforced. **The reachable producer is `offerResume`'s crash-scan notification**, which the operator may click at any moment, including one when six agents are already running.
-- **DECIDED DELIBERATELY: ENFORCE, NOT DOCUMENT AS +1 HEADROOM.** The case for headroom is that a resume RESTORES work the operator already started, so it is not new load. Rejected on two grounds: **(1)** a resumed session costs a full `claude` child exactly like a fresh one, and `MAX_CONCURRENT_SESSIONS` is a **COST** ceiling — the narration ring, the pending-inbound queue, the gated-body ledger and the retained-ended set are each N times it (§11); **(2)** a documented +1 is not a bound at all — nothing would have stopped a second crash record resuming at 7, then 8, and **the missing guard was the only thing that could ever have said no.** ⚠ Samuel ruled the number stays at 6 for the multi-machine wave; one lane quietly exceeding it is that ruling overridden by an omission.
+- **DECIDED DELIBERATELY: ENFORCE, NOT DOCUMENT AS +1 HEADROOM.** The case for headroom is that a resume RESTORES work the operator already started, so it is not new load. Rejected on two grounds: **(1)** a resumed session costs a full `claude` child exactly like a fresh one, and `MAX_CONCURRENT_SESSIONS` is a **COST** ceiling — the narration ring, the pending-inbound queue, the gated-body ledger and the retained-ended set are each N times it (§11); **(2)** a documented +1 is not a bound at all — nothing would have stopped a second crash record resuming at 7, then 8, and **the missing guard was the only thing that could ever have said no.** ⚠ Samuel ruled the number stays at 6 for the multi-machine wave; one lane quietly exceeding it is that ruling overridden by an omission. ⛔ **THAT RULING IS SUPERSEDED (2026-09-01): Samuel raised the cap to 15** for the orchestrator-spawns-workers model, `end_agent` having given an agent a way to return its slot. **F-272's fix is UNAFFECTED and must stay** — the point was that `startResume` ENFORCES the ceiling rather than documenting headroom past it, and that is true at any value.
 - **RESOLVED.** `startResume` checks `sessionWindowless.liveCount(deps.sessions) >= MAX_CONCURRENT_SESSIONS` **before `getSdk` and again after it** — the same check-then-act discipline `launch()` applies to its own slot guard, because `getSdk` is wide enough for a peer wake or the operator's button to take the last slot. **The refusal shape is the function's existing `false`** and the vocabulary is `launch()`'s `cap`, said in the diag line: `startResume` answers a boolean, and widening it to a skip shape would change a contract two callers read for no gain.
 - **Tests** (`test/session-park.test.mjs`): refused at the ceiling with nothing asked of the SDK; one below still resumes; **settled entries do not count** (the case that would make the guard wrong rather than strict — a crash scan resumes records whose sessions were just marked ended); the slot taken DURING `getSdk`; and the ceiling under test is read out of `session-windowless.js`'s own source, since the harness must stub that module and a self-agreeing number is the failure C-2 caught elsewhere.
 - Status: **RESOLVED** (2026-08-22). Three park harnesses gained the injected ceiling; two deliberately set it out of the way, because their subjects are the profile and the cap BUDGET, and a refused resume would pass those assertions vacuously.
@@ -3490,7 +3491,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   `kind='link'` container; the read side is closed by `src/shared/auth/with-workspace-auth.ts`
   (viewer+ default now rejects guest) and RLS (`is_workspace_member(...,'viewer')` false for a
   guest), plus channel payloads carrying no KB. The pinning seam if it is ever forbidden is
-  `dopl-desktop-app/main/sdk-loader.js` (which tools a home-channel agent loads).
+  `dopl-desktop-app/main/runtime/claude/loader.js` (which tools a home-channel agent loads).
 - Found during: **guest-role M1, 2026-08-25** — Samuel's Q5 ruling ("accept the residual for MVP").
 - Severity: **smell / accepted-for-MVP** — no READ exposure to the guest at any layer (API is
   viewer+ → guest 403; RLS denies; the channel carries no KB), so nothing leaks. What is filed is
@@ -3498,7 +3499,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   relationship the guest can never read back. Harmless for the read direction F-319 is about, but a
   latent oddity (orphaned, guest-invisible KB accreting inside a two-person container).
 - Proposed resolution: **defer, per Samuel's Q5.** If the product later wants home-channel agents to
-  never author container KB at all, that is a separate `sdk-loader.js` tool-pinning change, not a
+  never author container KB at all, that is a separate `runtime/claude/loader.js` tool-pinning change, not a
   server fence.
 - ✅ **THE READ DIRECTION IS NOW CLOSED, AND THE RESIDUAL IS AUTHORING ALONE (Home Knowledge Panels
   M5, 2026-08-26).** This entry recorded an ASYMMETRY whose read half was closed only by the guest's
@@ -3656,7 +3657,37 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   unique index) or rewrite both doc claims to "the container's FIRST channel is the one the home
   surface renders". Do not do half. Status: **open**
 
-### F-328 — a guest can spend the operator's credits, and the credit ledger cannot express a per-guest limit
+### F-328 — a guest can spend the operator's credits, and the credit ledger cannot express a per-guest limit — ⚠ ATTRIBUTION HALF RESOLVED 2026-09-01, LIMIT HALF OPEN
+
+**⚠ UPDATE 2026-09-01 — READ THIS BEFORE THE ENTRY BELOW, WHICH DESCRIBES THE PRE-LEDGER WORLD.**
+Samuel asked the /home Overview for credits BY CHANNEL and BY PERSON, so the attribution gap was
+closed at the schema rather than worked around: **`supabase/migrations/20260901120000_credit_usage_events.sql`**
+adds a per-burn ledger — `workspace_id` (the PAYER), `origin_workspace_id` (where the call was made,
+which IS the channel dimension), `user_id`, `amount`, `period_start` — written by
+`src/features/billing/server/credit-ledger.ts › recordCreditUsageEvent`, fired from
+`credits-service.ts › consumeMcpCredits` **only when the consume was ALLOWED**.
+
+- 🔒 **THE COUNTER IS UNCHANGED AND IS STILL THE ONLY AUTHORITY.** `consume_workspace_credits` decides
+  `allowed` and drives the meter; the ledger is written beside it, after the spend is committed. The
+  "NO SCHEMA WAS ADDED" paragraph below still holds *for the counter row* — nothing was added to
+  `workspace_credit_usage`, its CAS key did not move, and that is precisely why a SECOND table was
+  the answer.
+- ⚠ **THE LEDGER MAY UNDER-COUNT, BY DESIGN.** Its writer is fire-and-forget on the hottest write
+  path in the product and swallows its own errors, so `SUM(amount)` is a **floor** and every surface
+  reading it says so. A dropped insert costs an attribution row, never a credit.
+- ⚠ **NO `channel_id` COLUMN.** The consume route's auth context carries a workspace and a user and
+  no channel; resolving one would add a round trip to that same path (INVARIANTS §12). Readers group
+  by `origin_workspace_id` and join the container's channel name, which is exact because a home
+  container holds exactly one channel.
+- ⚠ **IT STARTS EMPTY AND THE UI HAS TO SURVIVE THAT.** There is no history behind the migration, so
+  `/home` → Overview's credit rails read zero and the credit series answers an EMPTY points array
+  (never zeroed bins) until traffic accrues.
+- 🚧 **NOT APPLIED.** The migration file is written and unapplied — Samuel runs it. Until then the
+  ledger reads answer nothing and the writer's insert fails into its own warn.
+- **STILL OPEN: the LIMIT half.** There is no way to say "this guest may spend N of my credits", and
+  the ledger does not add one — a cap has to be enforced at consume time, against the CAS, which is
+  the design problem the paragraph below describes and this change deliberately did not touch.
+
 
 - Location: `src/features/billing/server/workspace-billing.ts › consumeWorkspaceCredits` /
   `› getWorkspaceCreditsUsed`, over `workspace_credit_usage` — a
@@ -3713,7 +3744,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
      credential is the only one they can reach. `dopl-desktop-app/main/mcp-config.js ›
      writeSpawnConfig` wrote the operator's **UNLOCKED 90-day device token in plaintext** to
      `userData/mcp-spawn.json` on every signed-in launch, and
-     `main/sdk-loader.js › buildSecretPathDenyRules` denied that path only for
+     `main/runtime/claude/loader.js › buildSecretPathDenyRules` denied that path only for
      `SECRET_TOOLS = ['Read','Grep','Glob']` — **`Bash` is not on that list**, and `full`'s deny set
      does not cover it. One `cat` and the session holds an unlocked credential: B1 voided for the
      rest of the session, and layer A with it (the audience ceiling only fires on
@@ -5483,3 +5514,783 @@ that has learned patience).
 this machine's stamp on both the read and the write. Four coordinated edits across two trees for a
 bound whose absence is currently covered by two real ceilings — worth doing deliberately, not as a
 side effect of the wave that revealed it.
+
+### F-379 — the desktop's 500-line cap is RED at HEAD, and `npm run lint` there does not fail CI on it (2026-08-31)
+
+Measured at `1a1853dd` with a clean working tree, before the runtime-adapter port touched
+anything: **three files already exceed the desktop's zero-exemption cap** —
+`dopl-desktop-app/main/channel-prefs.js` (514), `main/session-state-push.js` (508),
+`test/session-state-push.test.mjs` (507). Re-measure, never quote:
+
+```
+cd dopl-desktop-app && npm run lint
+```
+
+**Why it was not noticed is the interesting half, and it is a gate-design fact rather than an
+oversight.** `docs/INVARIANTS.md` §14 records that the desktop lint step runs a bare
+`npm run lint` while the root runs `npm run lint -- --max-warnings 0` — so the root tree's zero is
+ENFORCED and the desktop's is not... but these are `error`s, not warnings, so the desktop step
+really should be red. **The finding is therefore about the CI job, not the cap**: either the
+desktop lint step is not running in the matrix, or its failure is not failing the job. Check
+`.github/workflows/ci.yml` before splitting anything.
+
+⚠ **This is filed rather than fixed deliberately.** Splitting three unrelated at-cap files is
+exactly the kind of collateral edit that makes a behaviour-preserving refactor unreviewable, and
+none of the three is touched by the port. The port's own at-cap files were held under: `main/
+session-engine.js` was AT 500 and came back to 500, `session-io.js` went 502 → 351, and
+`session-profiles.js` went 500 → 428.
+
+### F-380 — an uncommitted `agents-tab.tsx` holds root lint, the SPA typecheck and two suites red (2026-08-31)
+
+`src/features/channels/components/channels-v2/agents-tab.tsx:83` declares `onNewThread` and never
+reads it. That single unused prop fails **three** gates at once:
+
+- `npm run lint -- --max-warnings 0` → 1 warning, 0 errors (the root's zero IS enforced)
+- `npm run typecheck -w @dopl/desktop-ui` → `TS6133`
+- `npx vitest run` → `use-agents-panel.test.tsx` × 2 (`renders the refusal beside the button`,
+  `stays enabled with agents ALREADY on this thread`)
+
+**Verified to be the whole cause by measurement, not by reading:** stashing only
+`agents-tab.tsx`, `info-panel.tsx` and `agents-tab-launch.test.tsx` turns all three gates green
+(root vitest 4720/4720, lint clean, SPA typecheck clean) and restoring them turns all three red
+again. The file is part of an in-flight uncommitted batch and belongs to whoever is holding it —
+recorded here so the next session does not spend the round re-deriving that these three failures
+are ONE cause and not three.
+
+### F-381 — two core modules still hold one runtime's built-in tool names, and the port's step 3 did not move them (2026-08-31)
+
+The runtime-adapter port moved every Axis-A list into `main/runtime/claude/tools.js`, and
+`test/core-vocabulary.test.mjs` now refuses a vendor word on a code line in core. **Two survivals
+are real and neither is caught by that scan**, because a built-in's NAME is not a vendor's name:
+
+1. **`main/session-grant-keys.js › makeGrantKeyFor`** hardcodes `'Bash'` and `WEB_SCOPED` (the web
+   tools) to scope a shell / fetch grant to the shape the operator was shown, and takes
+   `EDIT_TOOLS` as an injected list. Those are one runtime's built-ins. ⚠ **It is deferred rather
+   than done for a reason that is not effort:** a grant KEY is a durable string an operator's
+   standing grants are stored against, so changing how one is minted is a data question, not a
+   refactor. A second runtime needs its own answer here before its `bypass` means anything.
+2. **`main/session-profiles.js`'s Axis-A re-exports** (`AUTO_TOOLS`, `BYPASS_TOOLS`,
+   `BYPASS_READS`, `EDIT_TOOLS`, `ESCALATION_TOOLS`) are reads off the DEFAULT runtime's
+   descriptor, not copies — core holds no list — but they are the DEFAULT's answer, and the
+   callers that take them (the durable posture's write validator, the reducer's coercion) run
+   before a runtime is chosen. That is correct while one adapter is registered and becomes a
+   per-agent question the moment a second one is.
+   - ⚠ **A SECOND ONE IS REGISTERED AS OF 2026-08-31** (`main/runtime/codex/`), so item 2 is no
+     longer hypothetical and item 1 has a concrete cost. **Item 2:** `session-profiles.js`'s
+     re-exports and `TOOL_MODES` still read the DEFAULT runtime, so the SPA's posture picker, the
+     reducer's coercion and the durable posture's write validator all offer Claude's four modes to
+     a Codex agent, whose vocabulary is `untrusted / granular / on-request / never`. **The GATE is
+     unaffected** — it resolves per session through `a.runtime` — so a mis-typed posture
+     fail-closes rather than widening; what is wrong is the CONTROL, which offers modes that agent
+     cannot hold. Closing it is the design's §3.1 (render `descriptor.toolMode` per agent), a UI
+     step this wave did not take. **Item 1:** `main/runtime/codex/index.js` declares
+     `toolMode.editScopedTools: []` for a second reason on top of the durable-key one — the field
+     of a `fileChange` approval payload that carries a path is unmeasured (smoke item C2) — so a
+     Codex edit grant is scoped by a digest of the whole input, which is strictly narrower than a
+     directory scope and is the safe direction while the shape is unknown.
+   - ⚠ **AND `settings-agent-posture.test.tsx` NEEDED THE SAME CORRECTION**, found by the second
+     adapter rather than by review: its "TOOL_MODES is one list in every tree that declares it"
+     case scanned `main/` for the literal declaration and held EVERY hit against Claude's four, so
+     a second runtime declaring its own vocabulary read as drift. It now scopes the comparison to
+     the DEFAULT adapter and asserts, positively, that every other adapter declares a DIFFERENT
+     list — because a second runtime whose modes MATCHED Claude's would be the synthesised-mode
+     failure decision (1) exists to forbid.
+
+**And one design claim did not survive contact with the tree, recorded so the next wave does not
+re-derive it:** the port's design specifies a core-vocabulary scan forbidding the bare word
+`cursor`. Four CODE lines in core use it for the LISTENER's pagination cursor
+(`main/listener-io.js`, `main/listener-messages.js` × 2, `main/session-triage.js`) — a core domain
+term with nothing to do with Anysphere. The scan forbids the VENDOR SPELLINGS instead
+(`@cursor/`, `cursor-agent`, `cursor://`, and the id as a quoted literal), which collide with
+nothing. Forbidding the bare word would have failed four correct lines and taught the next reader
+to rename a real concept.
+
+### F-382 — the gate's VERDICT SHAPE is a cross-runtime contract nothing declares, and the word came from one platform's API (2026-08-31)
+
+Found while building the Codex adapter (port step 7), by reverse-engineering rather than by
+reading — which is the finding.
+
+`main/runtime/contract.js` declares two things an adapter must agree with core about: the
+`CORE_EVENTS` vocabulary and the sixteen `RUNTIME_METHODS`. **There is a third and it is not
+declared anywhere**: the object a held permission callback resolves with. Three core modules mint
+or read it —
+
+- `main/session-permissions.js › resolvePerm` resolves the OPERATOR'S OWN CLICK with
+  `{ behavior: 'allow' }` / `{ behavior: 'deny', message }`, and its pause path with the same;
+- `main/session-outbound-tag.js › allowResult` / `› wrapAllow` build the tagged allow around that
+  shape;
+- `main/session-outbound.js › wrapGate` observes `verdict.behavior === 'allow'` to resolve the
+  inline card an auto-allowed post painted.
+
+— and none of them is an adapter. So `{ behavior }` **is** core's verdict vocabulary at the
+parked-resolver boundary. That is defensible; what is not is that `wrapGate`'s own header says
+*"This wrapper is CORE — it observes a verdict and never makes one, on every runtime"* while
+reading a key whose spelling came from one platform's `PermissionResult` type, and that nothing
+states the contract where the next adapter author will look.
+
+**The concrete failure it would have caused, and nearly did.** The Codex adapter's natural first
+shape was for its callback to answer in Codex's own words (`{ decision: 'accept' }`), because that
+is what the wire takes. Every gate decision would still have been correct — and every auto-allowed
+own-channel post would have left the inline Send/Deny card on screen forever, because `wrapGate`
+would never have seen an `allow`. Silent, cosmetic-looking, and untestable by any existing suite.
+The adapter now answers in `{ behavior }` and translates to `accept`/`decline` at the wire
+(`main/runtime/codex/launch-spec.js › makeApprovalHandler`), with the reasoning written at both
+ends.
+
+**Not fixed here, deliberately** — this is a code/contract disagreement and the rule is to file it,
+not to pick a side. Two candidate fixes, both real work:
+
+1. Declare it. Add the verdict shape to `main/runtime/contract.js` beside `CORE_EVENTS` (a
+   constructor pair, `allow(tag)` / `deny(message)`, in `main/runtime/events.js`), and have
+   `runtime-contract.test.mjs` drive each adapter's callback to assert it answers that shape. This
+   is the small version and it closes the discoverability half.
+2. Rename it. `behavior` is one vendor's word for a Dopl concept, exactly as `wrapCanUseTool` was
+   before step 3 renamed it to `wrapGate`. A rename touches the three modules above plus
+   `main/runtime/claude/{approval,axis-b}.js`, and — the reason it is not a five-minute change —
+   the Claude adapter's answer object IS the platform's own `PermissionResult`, so core would have
+   to stop minting the platform's type and the Claude adapter would gain a translation step it does
+   not have today.
+
+⚠ **`test/core-vocabulary.test.mjs` cannot catch this class and that is worth stating.** It scans
+for VENDOR NAMES and one platform's API SHAPES (`sdk.query`, `canUseTool`, `permissionMode`). A
+field name that a platform happens to share with core reads as neither.
+
+### F-383 — three desktop files are over the 500-line cap AT HEAD, so `npm run lint` in the desktop job is red on master (2026-08-31)
+
+Measured on a clean read of the committed tree, not of the working copy — all three files are
+UNMODIFIED in the uncommitted batch:
+
+```
+git show HEAD:dopl-desktop-app/main/channel-prefs.js            | wc -l   -> 514
+git show HEAD:dopl-desktop-app/main/session-state-push.js       | wc -l   -> 508
+git show HEAD:dopl-desktop-app/test/session-state-push.test.mjs | wc -l   -> 507
+```
+
+`cd dopl-desktop-app && npm run lint` → **3 errors, 0 warnings**, all `max-lines`.
+
+⚠ **THIS IS A SEPARATE RED FROM F-380 AND MUST NOT BE FOLDED INTO IT.** F-380 is an
+*uncommitted* `agents-tab.tsx` holding the ROOT lint, the SPA typecheck and two root suites red,
+and it is somebody's in-flight work. This is the DESKTOP lint gate, red on committed code, on
+files nobody is currently holding. A session that reads "three known reds" and stops looking will
+mark these as expected and they are not.
+
+⚠ **AND THE CAP IS THE ONE GATE THIS TREE STATES HAS NO EXEMPTIONS.** `eslint.config.js` applies
+`max-lines: 500` over `main/**/*.js`, `test/**/*.mjs` and `test/live/**/*.js` with zero overrides,
+and INVARIANTS §1 asks for splits by reason-to-change rather than for waivers. The desktop lint
+step is a bare `npm run lint` (unlike the root's `--max-warnings 0`), so only ERRORS fail it — and
+these are errors.
+
+**Not fixed here** — three splits by responsibility is its own wave, and doing it inside the Codex
+adapter's change would mix a gate repair into a feature commit. Named so the next session budgets
+for it rather than discovering it at CI.
+
+✅ **RESOLVED 2026-08-31 (port wave D). `cd dopl-desktop-app && npm run lint` → 0 problems.** Three
+splits, each by REASON TO CHANGE rather than by arithmetic, and each a pure move — every export kept
+its name and its signature, and the argument travelled with the code:
+
+| From | To | The seam |
+|---|---|---|
+| `main/channel-prefs.js` 514 → **451** | `main/template-approval.js` (99) | first-use approval of ANOTHER MEMBER'S standing configuration. Keyed by a TEMPLATE id, not a channel — the tell that it was never a channel preference. Same seam and same precedent as the `orchestrator-consent.js` split one wave earlier; re-exported, so no caller moved. |
+| `main/session-state-push.js` 508 → **413** | `main/session-state-push-wire.js` (136) | the three client-side refusals (the ad-hoc key, the nameless row, the ended row). They move when the SERVER'S contract for a row moves; the push moves when the digest gate, the cadence floor or the retry does. ⚠ **A FACTORY, not free functions** — `reportable` REMEMBERS what it already said, and the writer's suites evaluate a fresh copy of the push block per case, so a shared set would leak one case's log into the next one's "said once" assertion. |
+| `test/session-state-push.test.mjs` 507 → **325** | `test/session-state-push-wire.test.mjs` (214) | the same seam on the test side, in the same change. |
+
+⚠ **AND A FOURTH FILE WAS AT EXACTLY 500 AND IS NOW SPLIT TOO — see F-388, which also found that
+NINE desktop files sit at exactly 500 @ 2026-08-31, seven of them core session modules.** `main/launch-directives.js`
+was not RED (500 passes), so it was invisible to this finding's own measurement, and it is the
+condition this finding's argument is actually about: *a file at the cap does not stop growing, it
+stops being CORRECTABLE.* Adding a five-line comment to it during the integration wiring is what
+found it.
+
+### F-384 — the design's §1.4 `deepLink` prediction for Cursor did not survive the build, so the parity census could not be emptied by deletion (2026-08-31, port step 8)
+
+`test/adapter-parity.test.mjs › PENDING_UNTIL_CURSOR` held **six** descriptor fields that could not
+vary until a third adapter registered. Each row named the value the port design's §1.4 table
+predicts Cursor declares — a dated prediction, not a shrug — and the suite's own arm-at-three case
+demanded the census be emptied when the adapter landed.
+
+**Five confirmed. One did not**, and the suite said so itself before anybody looked:
+
+```
+axisB.enforcementPoint  in-process    ✔   (held-callback / held-callback / in-process)
+approval.heldCallback   false         ✔   (true / true / false)
+approval.granularity    null          ✔   (per-tool / category / null)
+mcp.sessionTransport    in-process    ✔   (http / http / in-process)
+mcp.hostRegistration    inline        ✔   (cli-verb / cli-verb / inline)
+deepLink                cursor://…    ✘   still null on ALL THREE
+```
+
+⚠ **THE ADAPTER IS RIGHT AND THE TABLE IS STALE**, and the argument is the SAME four-part one the
+2026-08-31 amendment already applied to Codex — every part of which holds for Cursor: the scheme is
+documented, but ① it does not auto-send (a prefill, never a launch), ② there is no documented link
+that opens an EXISTING session by id, ③ **the ceiling is unbisected** — the port design's §5 item X5 asks whether 8,000 is
+on `text` or on the whole URL and whether it TRUNCATES or DROPS, and neither is answered, so a
+`ceiling` with a null `ceilingScope` and a null `onOverflow` cannot be enforced or failed safely —
+and ④ design §7 ships no deep-link rung for any platform in v1 regardless, so a non-null value would
+render an "Open in…" button §7 says does not ship. Proofpoint's "CursorJack" makes this the one
+scheme whose overflow behaviour should be measured *before* a rung is built.
+
+**What was done instead of deleting the row.** Deleting all six would have retired six dated
+predictions unmeasured. So the five that came true are now pinned as
+`CURSOR_PREDICTIONS` — asserted BOTH that the field varies AND that Cursor's value is the predicted
+one, so a later adapter cannot silently rewrite a design decision — and the sixth became
+`DEFERRED_BY_DESIGN`, a one-row census keyed to a SMOKE ITEM (C14 / X5) rather than to an adapter
+count, because a fourth adapter would not answer it.
+
+**Owed:** a dated §1.4 amendment on the Cursor `deepLink` cell, matching the four Codex cells that
+already carry one. ✅ **PAID 2026-08-31 (wave D re-verified it):** the design's
+`#### AMENDMENT — 2026-08-31, step 8 (the Cursor adapter)` block carries it as item 1, with the same
+four-part argument. The CENSUS half of this entry stays open — `DEFERRED_BY_DESIGN` is keyed to
+smoke items C14 / X5, and only a measurement empties it.
+
+### F-385 — an in-process runtime has NO ambient environment fence, and the design has no field that says so (2026-08-31, port step 8)
+
+`descriptor.ambientFences.envDeny` exists because "ambient config that survives the scrub can flip
+the gate", and both other adapters populate it: they hand a SCRUBBED environment to a CHILD PROCESS
+(`runtime/claude/loader.js › buildScrubbedEnv`, `runtime/codex/launch-spec.js › buildScrubbedEnv`).
+
+**The Cursor adapter has no child process.** `@cursor/sdk` local mode runs IN THE ELECTRON MAIN
+PROCESS and reads `process.env` directly, so a "scrub" would mean mutating Dopl's own environment —
+a global side effect on the app, not a fence on one session. `envDeny` is therefore `[]`.
+
+⚠ **THE SECOND HALF IS THE ONE THAT MATTERS.** `configFlags` is `[]` too, and for a worse reason:
+`codex app-server` takes `--ignore-user-config`, which skips the operator's own config entirely.
+Nothing in the Cursor research gives this runtime an equivalent, and it reads permission strings
+from `~/.cursor/cli-config.json`, `<project>/.cursor/cli.json`, a team dashboard and **four hook
+tiers** (enterprise > team > project > user). What stands in for the flag is that **deny beats
+allow** — an operator's `permissions.allow` cannot open something the launch denied. That covers
+widening and **does not reach the hook tiers at all**.
+
+⚠ **SO THE DESCRIPTOR CANNOT CURRENTLY EXPRESS "THIS RUNTIME HAS NO CONFIG-ISOLATION LEVER".** `[]`
+reads as "no members" where the honest statement is "no such flag exists, and here is what stands in
+for it". That is a shape the design should carry rather than a comment in one adapter — proposed as
+a smoke-item-gated field rather than invented here. §5 items X13 and X20.
+
+### F-386 — `descriptor.meter.windowSource` has no honest value on a runtime whose only window signal is a hook the design forbids writing (2026-08-31, port step 8)
+
+The port design's §1.4 table predicts Cursor's `meter.windowSource` is `'hook'` (the `preCompact`
+hook's `context_window_size`). **The shipped adapter declares `null`**, and the two statements cannot
+both stand: design §7 ships **no hooks** on this runtime — `.cursor/hooks.json` is a shared file,
+hooks fail open unless every event sets `failClosed`, and decision (1) removed the hook-shim design
+from scope — so a `windowSource` naming a hook this adapter does not install would be declaring a
+measurement nobody takes. That is the "declared but not applied" failure the Codex `triage` cell was
+made `null` to avoid.
+
+The consequence is visible and correct rather than hidden: `main/session-model.js › contextWindowFor`
+answers `null` for an unknown window, so the meter shows tokens with no percentage — the
+null-never-zero rule doing its job on a denominator instead of a numerator.
+
+⚠ **Not a gap to fill by writing the hook.** Filling it means either taking the hook shim back into
+scope (which decision (1) closed) or finding a non-file transport for `preCompact`, which is the same
+question as §5 X9. **Owed:** a dated §1.4 amendment on the Cursor `meter.windowSource` cell.
+✅ **PAID 2026-08-31 (wave D re-verified it):** the design's step-8 §1.4 amendment carries it as
+item 2. The finding itself stays open — what is recorded is the CELL, and the measurement (X9) is
+still unmade.
+
+### F-387 — `renderer/app-preload.js` is AT the 500-line cap and, uniquely in this tree, has NO split seam (2026-08-31, port wave D)
+
+```
+wc -l dopl-desktop-app/renderer/app-preload.js   -> 500 @ 2026-08-31 (499 before this wave's one line)
+```
+
+`eslint.config.js` applies `max-lines: 500` over `renderer/**/*.js` with zero overrides, so the file
+is legal and has **one line of headroom that is now spent**. That would ordinarily be an ordinary
+split — INVARIANTS §1's answer to a file at the cap — except that this one cannot be split:
+
+> `test/preload-parity.test.mjs › loadPreload` executes every preload against a stub `require` that
+> **throws on anything but `electron`**, and the file's own header states the property: *"No preload
+> requires anything but `electron`."*
+
+That is not a style rule. A preload is the ENTIRE privileged surface a renderer gets, and the pin's
+whole argument is that it EXECUTES the preload rather than grepping it — so a surface assembled out
+of modules the pin does not load is a surface the pin does not measure. **Relaxing it is a change to
+the security model, not a refactor**, which is why this wave did not.
+
+**What it cost, concretely.** The runtime picker needed a bridge surface. `main/channel-dir-ipc.js`
+had room for three new ops; the preload did not have room for a NAMESPACE. So the runtime pick and
+the descriptor table ride the EXISTING `channels:get/setLaunchPosture` pair — which is defensible on
+its own terms (it is the `model` field's documented idiom: `src/features/channels/lib/permission-modes.ts › hasModelKey`
+says the model rides that pair "because there is no new op to feature-detect on, which is what the
+rest of this family does") **but it was not chosen on those terms, it was forced.** The next
+capability that genuinely needs its own namespace has no move left.
+
+⚠ **THE THREE OPTIONS, NONE OF THEM FREE, AND THIS IS SAMUEL'S TO RULE:**
+1. **Relax the pin to an ALLOW-LIST** of preload-local modules the harness loads too. Keeps the
+   execute-don't-grep property; costs a reviewed list, and the list is a thing that can be added to.
+2. **A SECOND preload for a second window class.** The tree already has three (`app-preload.js`,
+   `code-prompt-preload.js`, `update-required-preload.js`) — but a pop-out is an APP window and
+   deliberately gets this one, so splitting by window class would split the wrong axis.
+3. **Reclaim by re-wrapping.** Eight empty `//` lines exist. This is what
+   `main/session-profiles.js`'s header calls a ONE-TIME RECLAIM, NOT A BUDGET, and it buys one wave.
+
+**Not fixed here.** Option 1 is a security-model change and option 3 is a deferral; both want a
+ruling rather than an agent's preference.
+
+### F-388 — a file at exactly 500 is invisible to the lint gate and to the finding that exists for it (2026-08-31, port wave D)
+
+```
+git show HEAD:dopl-desktop-app/main/launch-directives.js | wc -l   -> 500
+```
+
+`max-lines: 500` fails at 501, so a file at 500 is GREEN — and F-383, which measured the three RED
+files on a clean read of the committed tree, could not see it. It was found the only way it can be:
+by trying to add five comment lines to it during the integration wiring, and going red.
+
+**This is the condition F-383's own argument is about, one line earlier.** `main/session-ipc-ops.js`'s
+header states it — *"a file at the cap does not just stop growing; it stops being CORRECTABLE"* — and
+`channel-dir-ipc.js` was split at exactly 500 for exactly this reason, with its own header recording
+that it *"could absorb ONE line, and it was carrying four stale comments."*
+
+**Split in the same wave, on a real seam.** `main/launch-directives.js` 500 → **442**;
+`main/launch-directive-calls.js` (98) takes `post` / `claim` / `decide` — the two authenticated calls,
+which move when the SERVER's contract moves (the routes, the claim envelope, which HTTP status means
+another machine won), where the watcher moves when the LOCAL policy does. ⚠ `post` is NOT re-exported:
+it had no caller outside the two verbs, and re-exporting a raw POST from the module that owns the §6
+consent argument would be a door beside the gate. `test/_launch-directive-harness.mjs` evaluates the
+REAL calls module against the SAME `./api` stub rather than faking the pair, so the 409-is-a-normal-loss
+rule, the three accepted claim envelopes and the `wire.directiveFrom` re-narrow all stay in the suite's
+reach — the change's whole point being that nothing moved.
+
+⚠ **THE MEASUREMENT IS THE FINDING, AND IT IS CHEAP.** There is no gate for "at the cap" and this
+entry does not propose adding one (a warning nobody can act on is noise). What it proposes is that
+any wave touching `dopl-desktop-app/` RUN this first — not reason about it — because it takes a
+second and it is the difference between a planned split and a forced one:
+
+```
+cd dopl-desktop-app && find main renderer test -type f \( -name '*.js' -o -name '*.mjs' \) \
+  | xargs wc -l | awk '$1==500 && $2!="total" {print $2}'
+```
+
+⚠⚠ **AND THE FIRST DRAFT OF THIS ENTRY GOT ITS OWN NUMBER WRONG, WHICH IS THE POINT TWICE OVER.**
+It said *"TWO files at exactly 500 and nothing else"* — `renderer/app-preload.js` and
+`main/session-engine.js` — and that sentence was **reasoned, not run**: it listed the two files this
+wave had happened to bump into. The command above, actually executed @ 2026-08-31 after this wave,
+returns **NINE**:
+
+```
+main/listener-io.js       main/session-reducer.js   main/ui-bridge.js
+main/session-engine.js    main/session-reopen.js    renderer/app-preload.js
+main/session-ipc-ops.js   main/session-summary.js   test/auth-signed-in.test.mjs
+```
+
+**That changes what this finding IS.** Two would be a coincidence worth a note; nine is a SYSTEMIC
+condition — a `max-lines` cap with no headroom band converges files onto its own boundary, because
+every split lands as close under the cap as the author can get and every later edit walks the rest up
+to it. **Seven of these nine are core session modules**, i.e. exactly the files a runtime-adapter port
+has to be able to edit. `main/session-ipc-ops.js` is on the list and is where step 6's
+`claude:signIn` → `runtime:signIn` rename lands — so the NEXT wave of this port is already blocked
+the same way this one was, and now knows it before it starts rather than at the eleventh hour.
+
+⚠ **THE LESSON IS THIS FILE'S OWN, RE-LEARNED:** *a number in a doc that was not measured is a future
+wrong answer.* CLAUDE.md's first standing rule says to prefer the command over the number, and the
+first draft wrote the number anyway — inside the very entry arguing that this condition is invisible
+unless you measure it.
+
+⚠ **AND THE COST OF `session-engine.js` BEING THERE WAS PAID INSIDE THIS WAVE, WHICH IS WHY THIS
+ENTRY IS NOT THEORETICAL.** `runEffect` case `interruptQuery` is the tree's only `.interrupt()`, and
+on a runtime that declares none (Cursor today, smoke item X0) it finds a handle, calls a method that
+resolves without stopping anything, and reports nothing — a stop that silently did not happen, which
+is worse than a refusal because a timeout then looks handled. The fix is two lines: ask
+`main/runtime/capability.js › canInterrupt` and log `› interruptRefusal`'s sentence. **It did not
+fit.** What landed instead is a one-line comment appended to the existing `case` — net zero — saying
+so. **A file at the cap does not stop growing; it stops being CORRECTABLE, and this is what that
+looks like from the inside.** The refusal is still SAID (the SPA hides the control and the launch
+surface warns, design §3.2); what is lost is the main-process record when the effect fires anyway.
+
+### F-389 — an adapter comment cited a test file that has never existed (2026-08-31, port wave D)
+
+`main/runtime/codex/approval.js` claimed that a suite named codex-approval.test.mjs (spelled out
+rather than cited, because the whole point is that the path resolves to nothing and
+`scripts/check-doc-refs.mjs` would refuse a citation of it) *"pins that no verdict, however wide,
+produces the other word"* — the guarantee that `acceptForSession` is a declared
+CAPABILITY and never an actuated one (design §1.4 amendment, step 7, item 4). **No such file exists
+@ 2026-08-31** (`ls dopl-desktop-app/test/ | grep codex` → `codex-gate.test.mjs`,
+`codex-normalize.test.mjs`).
+
+**The pin is real; only the anchor was wrong.** `test/codex-gate.test.mjs` carries it as
+*"a Dopl allow answers `accept`, and NOTHING ever answers `acceptForSession`"*, including a source
+scan asserting that every line naming the word is a COMMENT. Corrected in place, against the tree.
+
+⚠ **WHY IT IS WORTH AN ID RATHER THAN A SILENT FIX.** A reference to a pin is worth exactly what the
+pin is, and one pointing at nothing reads as a STRONGER guarantee than the real one — the reader
+believes a dedicated suite exists. This is the class `scripts/check-doc-refs.mjs` was built for, and
+**it does not reach here**: the checker resolves `path › symbol` anchors in `docs/**`, and this was a
+`path` citation inside a `main/**` comment. `check-doc-refs` already scans source trees for F-ids
+(1303 refs @ 2026-08-31); extending the FILE-ref half of it over `dopl-desktop-app/main/**` comments
+would have caught this one. **Not done here** — measure the false-positive rate on the existing 2165
+scanned files before adding a gate.
+
+### F-390 — the runtime PICK crossed the wire; the runtime's own Axis-A vocabulary did not (2026-08-31, port wave D, the SPA half)
+
+Design §3.1 says *"the permission control becomes data"* — the Settings tab renders
+`descriptor.toolMode.options`, plus `toolMode.secondaryAxis` and `approval.categories`. The SPA half
+of wave D ships that rendering. **What it cannot ship is the WRITE for any of it**, and the reason is
+one line of the desktop's own:
+
+```
+grep -n "^const TOOL_MODES" dopl-desktop-app/main/channel-prefs.js
+```
+
+`main/channel-prefs.js › normalizePreset` validates the durable posture's TOOLS axis against a frozen
+`['manual','accept_edits','auto','bypass']` and **rejects the WHOLE write** on anything else (the two
+axes validate hard; only `model` and `runtime` validate soft). That list is the DEFAULT runtime's
+vocabulary — `main/session-profiles.js › TOOL_MODES` is literally `cap.toolModes(descriptorFor(null))`
+— so on Codex or Cursor the Permissions row offers the platform's own words and main refuses to store
+the pick. The hook reverts, so nothing lies; the control simply does not take.
+
+**This is stated main-side as planned work, not discovered here.** `main/session-profiles.js`'s own
+comment over `TOOL_MODES` says the three core coercions *"all coerce a posture stored BEFORE a runtime
+is chosen"* and that per-runtime coercion is *"a step-5 change, not a step-3 one"*. The finding records
+what the UI does in the meantime.
+
+**`secondaryAxis` and `approval.categories` are worse off than that: they have no wire field AT ALL.**
+`normalizePreset` drops every key but the three it stores, and nothing anywhere writes
+`s.state.sandboxMode` / `s.state.sandboxEnabled` — the two values
+`main/runtime/{codex,cursor}/launch-spec.js › nativePair` read (`grep -rn 'sandboxMode\|sandboxEnabled'
+dopl-desktop-app/main` → **two hits, both readers, @ 2026-08-31**). Both adapters' comments say
+*"wiring that control is a UI change and not a launch change"* — **that claim is currently false**: a
+UI change alone cannot reach `s.state`, because `main/session-launch-op.js` builds the spec from a
+literal field list and `session-engine.js › startSession` seeds state from `{mode, side, readCaps(),
+startModes}`.
+
+⚠ **SO THE SPA RENDERS THEM AS DATA, NOT AS CONTROLS** (`channels-v2/settings-agent-launch-rows.tsx`):
+the row exists exactly where the platform declares the axis (absent on Claude — §3.2's hide rule is
+honoured whole) and shows the runtime's own declared default, which is what `nativePair` will actually
+use. A live control there would be the failure `settings-agent.tsx`'s docblock names — *"the operator
+picks Opus, the write succeeds, and every agent keeps launching on the default"* — with a SANDBOX as
+the thing that silently did not move.
+
+**Closing it is three main-side changes, in this order:** (1) `normalizePreset` takes the channel's
+runtime and validates TOOLS against that descriptor's `cap.toolModes`; (2) the posture record grows a
+secondary-axis value, validated against `descriptor.toolMode.secondaryAxis.options`; (3)
+`session-launch-op.js` forwards it into `spec.state`. Only (1) is needed to make the Permissions row
+take on every runtime.
+
+### F-391 — the descriptor does not say WHICH Axis-A option its approval categories belong to (2026-08-31, port wave D, the SPA half)
+
+Design §3.1: the five categories render *"under Codex's `granular` option only"*. The descriptor
+carries `approval.granularity: 'category'` and `approval.categories: [...]`, and **nothing joins either
+to a member of `toolMode.options`.** The prose names the option; the data does not.
+
+So `src/features/channels/lib/runtime-capability.ts › approvalCategoryMode` makes the join, once,
+gated on BOTH declarations and fail-closed: a runtime that does not claim category granularity, or
+that declares no option by that name, gets **no sub-control** rather than a guess. The vendor word is
+a LOOKUP against the runtime's own option values and never a label — the matched option's own `label`
+is what renders — so a platform that spells its mode differently silently gets nothing, which is the
+safe direction and also the wrong one.
+
+⚠ **IT IS A LITERAL IN THE UI TREE, WHICH IS THE THING THE DESCRIPTOR EXISTS TO PREVENT.** §1.4's "on
+the approval vocabulary generally" is explicit that inventing category names *"inside the descriptor
+whose purpose is to enforce native vocabulary"* is the failure decision (1) exists to stop; a mode
+name hardcoded on the READING side is the same defect one module further out. **The fix is a
+descriptor field — `approval.categoryMode` — and it belongs to main**, alongside `granularity` and
+`categories`, where `contract.js › sealAdapter` can require the three to agree.
+
+### F-392 — `src/shared/lib/spa-bridge.ts` is now AT the 500-line cap (2026-08-31, port wave D, the SPA half)
+
+Measured 2026-08-31: 498 before this wave, **500 after**, for one `runtime?: string` field on the
+`sessions.launch` payload plus a one-line comment. The field's whole argument therefore lives in
+`src/features/channels/components/channels-v2/agents-controls.ts › launchAgentOnThread` and the
+declaration points at it — which is the right place for it, but it was not a free choice.
+
+⚠ **IT IS EXACTLY F-388'S SHAPE ON THE WEB SIDE, AND IT IS INVISIBLE TO THE GATE FOR THE SAME REASON.**
+`max-lines` is `{max: 500}`, so 500 passes and 501 fails: this file will go red on the next line
+anyone adds, including a COMMENT (INVARIANTS §1 — *"a file at 500 cannot absorb a comment"*).
+
+**Unlike `renderer/app-preload.js` (F-387) this one HAS seams**, and the wave that needs the space
+should take one: `spa-bridge-shapes.ts` already holds the two wire SHAPES on the 2026-08-22 precedent,
+and the `sessions` namespace — the `launch` payload alone is ~90 lines of field prose — is the obvious
+next extraction. Not done here: this wave's business is the runtime port, and a bridge-surface split
+is its own review.
+
+### F-393 — `DesktopSessionSummary` carries no runtime, so a per-spawn override is invisible to the Stop control (2026-08-31, port wave D, the SPA half)
+
+§3.2 says an unverified `session.interrupt` disables the Stop control. The control is
+`src/features/channels/components/channels-v2/agent-panel-controls.tsx`, and it is about **one running
+agent** — but a running agent's runtime is stamped at spawn and **the summary that reaches the SPA does
+not carry it** (`grep -n 'runtime' src/shared/lib/spa-bridge-shapes.ts` → **no hits @ 2026-08-31**; the
+type has `channelId` and `agentId`).
+
+So the control asks the CHANNEL's effective descriptor
+(`hooks/use-channel-launch-posture.ts › descriptor`). That is correct for every agent launched from
+that channel with no per-spawn override, which is every launch today except one made from the
+composer's launch panel with its Runtime row moved. **In that one case the strip can be wrong in both
+directions**: it can disable Pause/End on an agent that CAN be interrupted (channel says Cursor,
+the spawn said Claude), and — the one that matters — leave them enabled on an agent that cannot.
+
+⚠ **THE SAME GAP MAKES `agent-posture.tsx` UNPORTABLE.** That surface is the LIVE Axis-A pick on a
+running agent, and `main/session-profiles.js › normalizeToolMode(mode, runtimeId)` already takes a
+runtime — so the per-agent lane is the ONE place §3.1's control could be fully live today (unlike
+F-390's durable lane). It still renders Dopl's hardcoded four, because this side cannot name the
+agent's runtime. **One field on the summary closes both.**
+
+### F-394 — the Cursor adapter cites a findings entry that was never written, for the one §3.1 control it declines to render (2026-08-31, port wave D)
+
+`main/runtime/cursor/index.js` declares `toolMode.freeform: null` — the classifier
+`allow_instructions` / `block_instructions` textareas design §3.1 asks for — and closes its
+argument with: *"X9 is what flips it, and it is recorded in docs/REFACTOR-FINDINGS.md as a
+deliberate divergence from §3.1 rather than an oversight."*
+
+**It is not recorded.** `grep -rn "divergence from §3.1\|allow_instructions\|block_instructions\|classifier" docs/`
+returns nothing @ 2026-08-31.
+
+⚠ **THE REFUSAL ITSELF IS RIGHT AND IS NOT WHAT THIS ENTRY DISPUTES.** §5 item X9 asks where those
+two keys are really written and whether Cursor re-reads the file mid-session, and neither is settled;
+the documented home is `permissions.json`, a file the operator and Cursor itself also own, and this
+adapter's standing rule — inherited from its own `mcp.js › registerMcp` — is to write nothing into a
+shared file until the route is verified, because a side effect that outlives the session is one the
+operator has to find and undo by hand. Two textareas whose contents reach nothing would be the
+control that lies, which decision (1) forbids outright. **Hidden is the correct answer.**
+
+⚠ **WHAT IS WRONG IS THE CLAIM ABOUT THE RECORD, AND IT IS F-389'S CLASS EXACTLY.** A comment that
+says "this is filed" is read as *someone has weighed this and it has an owner*; a comment that says
+"this is unfiled" is read as *I should check*. The first is strictly more load-bearing, and it was
+the false one. Both of this wave's two instances were found by following the citation rather than by
+reading around it — which is the only way either could be found, and the argument for extending
+`scripts/check-doc-refs.mjs`'s FILE-ref half over `dopl-desktop-app/main/**` comments (F-389's
+closing note; an `F-NNN` ref there is already scanned, a `docs/` path is not).
+
+**Fixed by writing the entry rather than by deleting the sentence** — the sentence was right about
+what should exist. The Cursor `freeform` cell now also carries a dated §1.4 amendment in the port
+design (which lives OUTSIDE this repo, so it is named in prose rather than cited as a path — the same
+convention INVARIANTS §11.0d already uses for the platform research), alongside the three cells
+step 8 already amended. ⚠ **It is a FOURTH
+Cursor cell that did not survive the build, and the step-8 amendment says "three".**
+
+---
+
+## The 2026-09-01 PORT-VERIFICATION wave — F-395 through F-401
+
+An adversarial reviewer who built none of the code under test drove the runtime-adapter port and
+filed seven defects. **No live security hole was found** — every path probed fails closed, and five
+deliberately flipped capability declarations were each caught by a pin. **What did not survive was
+the claim of behaviour preservation.** All seven are resolved below; the ones that changed live
+rules are stated in `docs/INVARIANTS.md` §11.0 / §11.0g and that is where they are maintained.
+
+⚠ **THE METHOD IS THE FINDING, AND IT IS WORTH MORE THAN ANY ONE ENTRY.** Every defect here was
+found by diffing against `git show HEAD:` or by MUTATING the shipped tree and watching what stayed
+green — never by reading. Two of the seven (F-396, F-398) had **zero** failing tests before the
+mutation, on a tree with 2786 passing ones. **A suite that passes is evidence a change was safe; it
+is never evidence a change was a MOVE.**
+
+### F-395 — the port's "byte-identical" claim was false, and it was an instruction not to look (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+`runtime/claude/launch-spec.js`'s header asserted *"Every option, every pin and every ordering below
+is byte-identical to what shipped"*; `runtime/claude/tools.js` and `runtime/claude/index.js` made the
+same claim, as did the port design's step 3 and INVARIANTS §11.0's loader row. **Diffing the four
+moved sites against HEAD found NINE observable differences plus four narration changes**, including a
+new MCP header on every request and two features that rode inside a change described as a move
+(`main/agent-self-ops.js` does not exist at HEAD).
+
+⚠ **THE PHRASE WAS LOAD-BEARING AND THAT IS THE WHOLE SEVERITY.** "Byte-identical" is the reason a
+reviewer skips re-testing the Claude lane — and it was asserted in a file header that was itself one
+of the drifted files.
+
+**Resolved by retraction plus enumeration, not by softening.** The claim everywhere is now
+**behaviour-preserving with SEVEN declared observable differences and THREE narration changes**
+(nine minus the two regressions fixed as F-400/F-401, and four narration lines minus the one those
+restored). The list lives in **INVARIANTS §11.0g** and nowhere else; the four source headers and the
+design's step 3 point at it. ⚠ **The design doc also gained a dated amendment saying its acceptance
+test was wrong**: it named "the desktop suite passing unchanged", and a step of this shape should
+name the DIFF instead.
+
+### F-396 — `floorWindowlessTool` claimed to refuse a null floor and silently picked the NARROWEST mode (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+`main/runtime/capability.js › floorWindowlessTool`. Its header stated the rule as a refusal —
+*"`windowlessFloor: null` REFUSES THE WINDOWLESS LAUNCH rather than picking a mode"* — and the code
+read `if (target === -1) return normalizeToolMode(d, mode)`, handing back the session's own
+**un-floored** mode. Axis A starts at the narrowest member and RESETS to it on park, and an
+unrecognised value fail-closes there too, so the "refusal" produced **exactly the harm the same file
+documents two paragraphs earlier**: the narrowest mode on a session with no gate surface, where every
+gated call is a silent deny of the reads the prompt ORDERS the agent to make. **Nothing anywhere
+refused a windowless launch on a null floor, and `windowlessFloor` was not in `LAUNCH_BLOCKING`.**
+
+**Resolved:** the predicate answers `null`; `› windowlessFloorRefusal` carries the sentence;
+`toolMode.windowlessFloor` is `LAUNCH_BLOCKING[3]` (the list's header said "THE THREE" over a list of
+three and now says four); and `session-launch.js › launch` refuses AFTER `acquireRuntime` and BEFORE
+`startSession`, so nothing is registered and there is no rollback to get wrong. A floor NAMED but
+absent from `toolMode.options` refuses identically — neither is orderable.
+
+⚠ **THE REFUSAL RIDES `{skipped:'disabled'}` AND MUST NOT MINT AN EIGHTH WIRE WORD.**
+`launch-directive-wire.js › REFUSAL_REASONS` is the same seven words as `schema-launch.ts`,
+`service-launch.ts › LAUNCH_REFUSAL_REASONS`, `use-agents-panel.ts › launchRefusalText` and a
+**deployed column CHECK** — a new word here would be a refusal the database refuses to record. The
+specific sentence rides the diag, the one surface allowed to name a runtime. **`launch-directive-wire
+.test.mjs` caught this attempt; the pin works.**
+
+### F-397 — `axisBOpScoped` had a documented severe consequence and ZERO consumers (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+`main/runtime/capability.js › axisBOpScoped`. Codex declares `axisB.opScoped: 'unverified'`, and the
+predicate's own comment says `false` *"COLLAPSES AXIS B FROM OP-SCOPED TO WHOLE-TOOL — every channel
+call gates, READS INCLUDED"*. Grepping `main/` and `src/` returned **one hit, and it was a comment**.
+No core branch, no UI warning, no launch refusal — so the operator got nothing.
+
+⚠ **THE DIRECTION OF FAILURE IS SAFE AND THAT IS WHY THE FIX IS A WARNING, NOT A REFUSAL.** Traced:
+unreadable input fails `› postFieldsOk`, `grantDecision` answers `'gate'`, and a windowless session's
+`claimGate` answers a gate with a DENY. **Axis B on such a runtime is OVER-restrictive, never open —
+the agent is broken, the boundary is not.** `› floorWindowlessMessage` cannot compensate (it is a
+core transform over the message enum and never consults `opScoped`), which is what makes the warning
+worth carrying. Refusing would take a registered adapter off the only spawn shape this tree has over
+a failure that cannot leak anything — a release decision, exactly like `interruptRefusal`'s.
+
+**Resolved:** `› axisBOpScopedWarning` is the consumer, logged by `session-launch.js` at the spawn.
+It distinguishes `false` from `'unverified'`, reads ABSENT as not-op-scoped (absent is not `true`),
+and names no vendor. **It fires on the shipped tree today.**
+
+### F-398 — `sealAdapter` validated a MIRROR of the thing it protects, and accepted an empty deny list (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+`main/runtime/contract.js › descriptorProblems`; `main/runtime/capability.js › canLaunchProfile`. Two
+holes, one shape:
+
+1. Both checked only `Array.isArray(p.denyList)`. **An empty array is a list**, so `denyList: []` —
+   semantically *"this profile denies nothing"* — passed registration and passed the launch
+   predicate. Nine mutations were driven against `sealAdapter`; it refused eight and admitted this.
+2. **`grantDecision` step 1 reads `runtime.toolConfigFor(p).disallowedTools` — the runtime METHOD —
+   and has NEVER read `descriptor.containment.profiles.<p>.denyList`.** The descriptor field is a
+   declaration mirror, so an adapter hand-writing a plausible descriptor over a `toolConfigFor` that
+   returns `[]` seals cleanly, `canLaunchProfile` calls the profile enforced, the UI renders
+   containment, and the gate denies nothing.
+
+**MEASURED, and the asymmetry is the entry:** hardcoding `denyList: []` across every Claude profile
+**failed 0 of 2786 tests**; emptying the ENFORCEMENT list (`claude/tools.js` `read_only`
+`disallowedTools: []`) fired **16 pins**. The enforcement was well defended. The declaration was not,
+and the three shipped adapters were kept honest only by each CHOOSING to derive one from the other.
+
+**Resolved:** `descriptorProblems` refuses an empty list on any profile but `full`
+(`› UNRESTRICTED_PROFILE` — `full`'s supervision IS Axis A rather than a list, so an empty floor
+there is a posture somebody chose); `canLaunchProfile` refuses the same and `profileRefusal`
+distinguishes "denies nothing" from "declares no list"; and **`› mirrorProblems` cross-checks the
+declaration against `runtime.toolConfigFor(p).disallowedTools` inside `sealAdapter`** — a SET
+comparison, since an adapter may build its list in any order. Re-run after the fix, the verifier's
+exact mutation now **refuses at registration**.
+
+### F-399 — the agent-ops shadow rode every profile from DOWNSTREAM of the containment table (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+`runtime/claude/launch-spec.js › buildOptions` read
+`allowedTools: cfg.preApproved.concat(agentOps.AGENT_OPS_TOOL_NAMES)` — the two self-ops verbs
+appended AFTER `buildSessionToolConfig`. They were therefore shadowed past `canUseTool` on **every**
+profile, `read_only` included, while being **absent from `descriptor.containment.profiles.<p>
+.allowList`** (which mirrors that function), **invisible to the three `deepEqual` pins in
+`session-profiles.test.mjs`**, and **unseen by `grantDecision`'s step-2 `preApproved` read**.
+
+⚠ **THE SHADOW ITSELF IS CORRECT AND IS NOT THE DEFECT.** An unclassified name gates in EVERY Axis-A
+mode and a windowless gate DENIES, so routing these two through the gate would not contain them — it
+would delete the feature for exactly the channel-launched sessions the 2026-08-31 ruling is about.
+**What was wrong is that the containment table did not know what the launch pre-approved**, and the
+table is what the descriptor, the pins and the gate all read.
+
+**Resolved:** each profile's `preApproved` declares the two names, with the argument written beside
+the deny lists; `launch-spec.js` passes `cfg.preApproved` whole and a pin forbids ANY downstream
+widening of `allowedTools`, by these names or others. `grantDecision` now answers `preapproved`
+rather than `gate` — after hard-deny and the audience belt, both of which run first, so a future
+profile CAN refuse one.
+
+⚠ **THE `read_only` ANSWER IS ABOUT THESE TWO VERBS AND DOES NOT GENERALISE.** A profile bounds
+REACH; rename is display-only against a LOCAL store (nothing resolves an agent by that string, so a
+rename cannot re-point a running instruction) and end is a stop verb that widens nothing. **A third
+verb on that server that WRITES, ADDRESSES or SENDS belongs on the gate, not on that line.**
+
+### F-400 — the moved context dispatch lost its `try/catch`, turning a swallowed error into a session crash (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+HEAD wrapped the turn-end context dispatch in `try/catch` inside `session-model.js › observe` and
+swallowed to one diag line. The port left a bare `if (context) dispatch(s, context)` in
+`session-io.js › applyCoreEvents`. **That function runs inside `session-query.js › consume`'s
+`for await`, so a throw escapes to that loop's catch, is read as a query error, and dispatches
+`crash` — settle + destroy + `task_failed{interrupted}`.** A reducer bug on a COSMETIC gauge row
+would tear a session down mid-turn and report it to the waiting peer as an interruption.
+
+**Resolved:** restored, with HEAD's line kept **verbatim** (`session-model: context dispatch failed`)
+so an existing `listener.log` grep still finds it. ⚠ **`log` IS INJECTED, NOT REQUIRED** — `diag.js`
+pulls electron and `session-io.js` may not (a dozen suites require it in plain Node;
+`session-outbound-tag.test.mjs` pins the absence, **and caught the first attempt**), so `consume`
+passes `diag` as the fifth argument on the `session-gate-bridge.js › makeCanUseTool(s, dispatch,
+log)` precedent. ⚠ **The pin is a PAIR** — a throwing `context` is swallowed, a throwing `result` is
+NOT — because a single "it does not throw" case would pass over a blanket try/catch around the whole
+loop, which is the wrong fix.
+
+### F-401 — the auth sentinel stopped draining a stream HEAD kept reading (2026-09-01) — ✅ RESOLVED 2026-09-01
+
+HEAD read `if (sessionAuth.holdIfAuthMessage(s, msg)) return;`. The port kept the call and
+**discarded its answer**, returning unconditionally. `holdIfAuthFailure` answers FALSE without acting
+in three cases — no bound deps, no session, and **`s.settled`** — so a settled session emitting an
+auth-shaped message stopped consuming.
+
+**Settling does not end the child.** `holdIfAuthFailure` is the thing that aborts and closes, and it
+declines on a settled session precisely because that teardown already ran — so returning there
+abandons a live iterator with nothing left to consume its tail, and the loop's only other exit
+(`s.query !== q`) is one a settled-but-not-superseded session never trips.
+
+**Resolved:** `if (hold && sessionAuth.holdIfAuthFailure(s, hold.text)) return;` — the same shape the
+`catch` immediately below it never lost. ⚠ **The source pin now asserts the CONJUNCTION and forbids
+the unconditional form**, because a looser regex matches a call whose answer is discarded, which is
+exactly how this was lost.
+
+### F-402 — a home container's channel can still carry `is_direct = true`, so a THIRD surface named it after its peer (2026-09-01) — ✅ MASKED, the DATA is still open
+
+Samuel's ruling of the same day — **a channel's identity is its own name, never its roster's** —
+was applied at `apps/desktop-ui/src/pages/home/home-rows.ts › channelTitle`, which the /home list
+row and the Info tab both read. **The record pane's HEADER reads a different derivation**:
+`src/features/channels/lib/channel-display.ts › channelDisplayName`, via
+`channels-v2/channel-surface.tsx`, and that one returns the peer's display name whenever
+`channels.is_direct`. So a container whose channel was minted before the 2026-08-24 channel-first
+inversion — the era when a home container really was a two-party relationship, and the row came out
+of `channels/server/service-writes.ts › createDirectChannel` — showed **the peer's name at the top of the pane, under a
+list row and an Info card that both said the channel's**.
+
+**Masked, not fixed at the source, and that is deliberate.** `channel-display.ts` is the ONE
+counterpart derivation for the workspace surfaces (`channels-v2/sidebar.tsx` name + avatar,
+`channels-v2/channel-manage.tsx`), where a DM *must* keep naming its peer — editing it would break
+real DMs to fix a container that is not one. Instead `ChannelSurfaceCapabilities.peerNamedHeader`
+(default `true`) pins the header to `channel.name`, and `pages/home/relationship-record.tsx` passes
+`false`. Pinned in `channels-v2/channel-surface.test.tsx › the header's identity`, which asserts
+BOTH directions so the default cannot drift either.
+
+**What is still open is the DATA.** No migration was written: link containers holding an
+`is_direct = true` channel still exist, so the row disagrees with the model, and **any future
+surface that asks `channel-display.ts` about a home container re-opens this**. Two honest remedies,
+neither taken here: a backfill setting `is_direct = false` on channels whose workspace is
+`kind = 'link'`, or a rule that the home lane never reads that column. ⚠ Measure before backfilling
+— `select count(*) from channels c join workspaces w on w.id = c.workspace_id where w.kind = 'link'
+and c.is_direct` — because that write also sets `direct_key`, and the DM uniqueness index
+is keyed on it.
+
+### F-403 — five whole-workspace list reads are still unbounded, and PostgREST is already clipping them where nothing reports it (2026-09-01)
+
+Surveyed while resolving F-053 (channel transcript paging) and bounding the chat archive.
+INVARIANTS §9's "every whole-workspace list read carries a `limit`, and a clipped read SAYS SO"
+is failed by these, **in order of real data volume**:
+
+1. `src/features/knowledge/server/repository-folders.ts › listFoldersForBase` **and**
+   `› repository-entries.ts › listEntriesForBase` — the KB tree
+   (`service-folders.ts › getBaseTree` → `GET /api/knowledge/bases/[baseId]/tree`). Entries
+   `.range()` only when a `limit` is passed and **the web client never passes one**
+   (`knowledge/client/api.ts › fetchTree`); only `packages/mcp-server/src/tools/knowledge-ops-read.ts`
+   caps it. Folders are unbounded on BOTH paths. This is DL-010, still live for the browser.
+2. `src/features/channels/server/repository.ts › listChannels` — `select("*")`, no limit, and its
+   result array feeds four `.in(ids)` fans in `service-reads.ts › listChannels` whose own ceilings
+   were sized against a bounded channel list.
+3. `src/features/skills/server/repository.ts › listSkillsForWorkspace` — lean summary projection, no
+   ceiling, with a post-hoc visibility `.filter()`.
+4. `src/features/knowledge/server/repository-bases.ts › listBasesForWorkspace` — and the four
+   `.in(baseIds)` sibling maps folded onto it inherit its size.
+5. `src/features/chats/server/repository.ts › listMessages` — one chat's transcript, `select("*")`,
+   verbatim bodies, no bound. Detail path, so one row-set per open.
+
+⚠ **THEY ARE NOT "UNBOUNDED", THEY ARE "BOUNDED BY A NUMBER NO LAYER REPORTS"** — PostgREST applies
+its own `max-rows` ceiling regardless (the reason `channels/server/repository-agents.ts` states its
+`AGENT_ROWS_LIMIT` out loud). That is the §9 failure in its worst form: a clip nobody can see.
+⚠ **AND NOTHING IN THIS REPO VIRTUALIZES** — `react-window` / `react-virtuoso` /
+`@tanstack/react-virtual` return zero hits in `src`, `apps/desktop-ui` and `package.json` — so every
+row a read returns is a row that renders.
+
+Deliberately NOT taken in the same wave: each needs a ceiling AND a wording (§9 allows no bare
+`.limit()`), the KB tree needs lazy folder expansion to be genuinely fixed rather than merely capped,
+and `listChannels` is load-bearing for four downstream fans. Sequence: 1, then 2.
+
+⚠ Two names the 2026-06-20 audit gave for this class are now WRONG and should not be chased. The
+knowledge trash read it called `listDeletedForWorkspace` **is gone from the tree entirely** — DL-012
+is moot, there is no trash route, and the name is deliberately written here WITHOUT a `path › symbol`
+anchor because an anchor at a deleted symbol is a claim it exists (`scripts/check-doc-refs.mjs`
+rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-folders.ts`, not in
+`repository.ts` — that file is a re-export barrel with no queries in it.
+
+- Status: open

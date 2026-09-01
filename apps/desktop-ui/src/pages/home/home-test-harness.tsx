@@ -1,15 +1,13 @@
+import { fireEvent, screen } from "@testing-library/react";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import {
   USER_ID,
   WORKSPACE,
-  WORKSPACE_ID,
   accountRoutes,
   noContent,
   ok,
   renderWithProviders,
 } from "#/test-utils/bridge";
-import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
-import type { KnowledgeBase } from "@/features/knowledge/types";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
 import type {
   Channel,
@@ -17,11 +15,32 @@ import type {
   ChannelThread,
 } from "@/features/channels/types";
 import type { HomeChannelsPayload, HomePeer } from "@/features/home/types";
+import {
+  CHANNEL_ID,
+  LINK_SEGMENT,
+  LINK_WORKSPACE_ID,
+} from "./home-test-ids";
+// ⚠ TWO FACES' FIXTURES LIVE NEXT DOOR (2026-09-01) — this file sat at EXACTLY
+// the 500-line cap, so the Overview wave could not add a row to it. Both are
+// re-exported below: every suite still imports from THIS harness, one door.
+import { overviewRoutes } from "./overview-test-harness";
+import {
+  EMPTY_TREE_PATH,
+  KB_PRIVATE,
+  knowledgeBases,
+} from "./knowledge-test-harness";
 import type {
   WorkspaceOverviewSeries,
   WorkspaceWithRole,
 } from "@/features/workspaces/types";
 import HomePage from "./index";
+
+export {
+  HOME_OVERVIEW,
+  HOME_SERIES,
+  SECOND_WORKSPACE_ID,
+} from "./overview-test-harness";
+export * from "./knowledge-test-harness";
 
 /**
  * SHARED HOME-PAGE TEST HARNESS — the account surface's fixtures and its bridge
@@ -38,10 +57,17 @@ import HomePage from "./index";
  * 15 lines of stub is cheaper than a hoisting trap.
  */
 
-export const LINK_WORKSPACE_ID = "ws-link-1";
-export const LINK_SEGMENT = "link-priya-aa11bb";
-export const CHANNEL_ID = "chan-1";
-export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+// ⚠ THE IDS MOVED TO A LEAF MODULE (2026-09-01) — `home-test-ids.ts`, which
+// carries why. In short: the two sub-harnesses below need them, they were
+// declared HERE, and importing them back out of this file made a cycle that
+// baked `undefined` into every fixture built at their module scope. Re-exported
+// here, so every suite still reads them from this one door.
+export {
+  CHANNEL_ID,
+  LINK_SEGMENT,
+  LINK_WORKSPACE_ID,
+  SEVEN_DAYS_MS,
+} from "./home-test-ids";
 
 /** The default fixture's one peer. Exported so a multi-peer case extends the
  *  roster rather than restating it. */
@@ -229,146 +255,6 @@ export const WORKSPACES: { workspaces: WorkspaceWithRole[] } = {
   ],
 };
 
-// ─── Knowledge (the /home Knowledge tab, plan M3) ────────────────────────
-
-/** One base, typed so a rename of any `KnowledgeBase` field breaks the fixture
- *  at compile time rather than leaving the panels' suite green against a shape
- *  the endpoint stopped sending. */
-function base(over: Partial<KnowledgeBase> & { id: string; name: string }): KnowledgeBase {
-  return {
-    workspaceId: LINK_WORKSPACE_ID,
-    slug: over.name.toLowerCase().replace(/\s+/g, "-"),
-    publicId: over.id.slice(-6),
-    description: null,
-    agentWriteEnabled: false,
-    visibility: "public",
-    accessMode: "workspace",
-    createdBy: USER_ID,
-    createdAt: "2026-08-01T10:00:00.000Z",
-    updatedAt: "2026-08-20T10:00:00.000Z",
-    deletedAt: null,
-    ...over,
-  };
-}
-
-/** Scope A, `visible` — the peer sees this one in the channel. ⚠ Created by the
- *  PEER, so the card's owner label is a real lookup rather than "You". */
-export const KB_SHARED = base({ id: "kb-shared-1", name: "Renewals", createdBy: "user-2" });
-/** Scope A, `agent_only` — reachable by the agent, invisible to the peer. */
-export const KB_AGENT = base({ id: "kb-agent-1", name: "Pricing rules" });
-/** Scope B — private, mine, in the container, NO grant row. */
-export const KB_PRIVATE = base({
-  id: "kb-private-1",
-  name: "Call notes",
-  visibility: "private",
-});
-/** ⚠ Private but SOMEBODY ELSE'S: scope B must drop it. A container base the
- *  caller cannot have created is the case a `createdBy` filter typo passes. */
-export const KB_PRIVATE_PEER = base({
-  id: "kb-private-2",
-  name: "Priya's drafts",
-  visibility: "private",
-  createdBy: "user-2",
-});
-/** ⚠ NEITHER SCOPE. Mine and ungranted, but PUBLIC to the container — so it is
- *  not shared into the channel and it is not private either. Without a base in
- *  this state, dropping scope B's `visibility` test changes nothing visible. */
-export const KB_PUBLIC_UNGRANTED = base({
-  id: "kb-public-1",
-  name: "Team playbook",
-});
-/** Scope C — private, mine, in the HOME workspace (a different container). */
-export const KB_HOME = base({
-  id: "kb-home-1",
-  name: "Fundraise memos",
-  workspaceId: WORKSPACE_ID,
-  visibility: "private",
-});
-
-/** `GET /api/knowledge/bases?channelId=` for the link container. */
-export const CONTAINER_BASES: KnowledgeBaseList = {
-  bases: [KB_SHARED, KB_AGENT, KB_PRIVATE, KB_PRIVATE_PEER, KB_PUBLIC_UNGRANTED],
-  ownerNames: { "user-2": "Priya Shah" },
-  baseStats: {},
-  kbStorageLimit: null,
-  starredBaseIds: [],
-  channelGrants: {
-    [KB_SHARED.id]: { level: "visible", guestWrite: false },
-    [KB_AGENT.id]: { level: "agent_only", guestWrite: false },
-  },
-};
-
-/**
- * 🔴 THE WORKSPACE SHELF — SAMUEL'S BUG, MADE REPEATABLE (ruling 2026-08-26).
- * Same workspace as `KB_HOME`, private, the caller's own: every property scope C
- * used to select on. Only `?shelf=home` separates them. Nothing was leaking
- * across workspaces (measured in production 2026-08-26) — the RANGE was wrong.
- * ⚠ Never add it to `HOME_BASES`.
- */
-export const KB_WORKSPACE_SHELF = base({
-  id: "kb-ws-shelf-1",
-  name: "Dopl GTM",
-  workspaceId: WORKSPACE_ID,
-  visibility: "private",
-});
-
-/** `GET /api/knowledge/bases?shelf=home` for the caller's HOME workspace — no
- *  channel, so the route sends no `channelGrants` key at all (INVARIANTS §9). */
-export const HOME_BASES: KnowledgeBaseList = {
-  bases: [KB_HOME],
-  ownerNames: {},
-  baseStats: {},
-  kbStorageLimit: null,
-  starredBaseIds: [],
-  channelGrants: {},
-};
-
-/**
- * The base list, routed by WHICH WORKSPACE was asked for — `x-workspace-id` is
- * an `opts` field over the bridge, not part of the path, so a suite that
- * matched on the path alone would serve the container's bases to the home
- * scope and pass while the two scopes were wired to one workspace.
- *
- * 🔒 ⚠ AND BY WHICH SHELF (2026-08-26) — hence the PATH argument: `?shelf=` is a
- * query param, so the workspace axis alone no longer separates scope C from the
- * workspace Knowledge page, which ask the SAME workspace for different shelves.
- * ⚠ ABSENT `shelf` ANSWERS BOTH, mirroring the route. That branch is what a
- * forgotten param falls into and the only reason the exclusion pin can fail —
- * collapse it into "home" and the pin goes vacuous.
- */
-export function knowledgeBases(
-  opts: BridgeRequestOpts,
-  path = ""
-): Promise<BridgeResponse> {
-  if (opts.method === "POST") {
-    const body = (opts.body ?? {}) as { name?: string; visibility?: string };
-    return Promise.resolve(
-      ok({
-        base: base({
-          id: "kb-new-1",
-          name: body.name ?? "Untitled",
-          workspaceId: opts.workspaceId ?? LINK_WORKSPACE_ID,
-          visibility: body.visibility === "private" ? "private" : "public",
-        }),
-      })
-    );
-  }
-  if (opts.workspaceId !== WORKSPACE_ID) return Promise.resolve(ok(CONTAINER_BASES));
-  const shelf = new URLSearchParams(path.split("?")[1] ?? "").get("shelf");
-  if (shelf === "home") return Promise.resolve(ok(HOME_BASES));
-  if (shelf === "workspace") {
-    return Promise.resolve(ok({ ...HOME_BASES, bases: [KB_WORKSPACE_SHELF] }));
-  }
-  return Promise.resolve(
-    ok({ ...HOME_BASES, bases: [KB_HOME, KB_WORKSPACE_SHELF] })
-  );
-}
-
-/** Any base's tree. The panels resolve one BEFORE mounting the detail view
- *  (`knowledge-base-view.tsx`), so a suite that opens a base must answer this
- *  or the pane sits on its skeleton forever. */
-const EMPTY_TREE_PATH = /^\/api\/knowledge\/bases\/[^/]+\/tree$/;
-
 export function routes(
   path: string,
   opts: BridgeRequestOpts
@@ -413,6 +299,10 @@ export function routes(
       ok({ channel: { ...CHANNEL, infoCard: patch.infoCard ?? EMPTY_INFO_CARD } })
     );
   }
+  // The Overview face's reads — see `overviewRoutes` for why the scoped and
+  // unscoped overview paths answer different bodies.
+  const overview = overviewRoutes(path);
+  if (overview) return overview;
   // Identity + the caller's profile row — `#/test-utils/bridge › accountRoutes`.
   return accountRoutes(bare);
 }
@@ -488,6 +378,37 @@ export function renderHome() {
     ],
     ["/home"]
   );
+}
+
+/**
+ * RAISE THE CHANNELS FACE.
+ *
+ * ⚠ **NEEDED SINCE 2026-09-01, WHEN THE PAGE'S DEFAULT MOVED TO OVERVIEW**
+ * (Samuel; `home-tabs.ts › HOME_DEFAULT_TAB`). Every suite on this page that
+ * wants the record pane used to get it for free on first paint. Clicking the
+ * real header control is deliberate — nothing here bypasses the pane token, so
+ * the crossfade runs exactly as it does for an operator.
+ *
+ * ⚠ IT DOES NOT AWAIT THE SURFACE: a suite with an empty channel list has no
+ * surface to wait for, and gating on one here would hang those cases. Callers
+ * that need the pane await it themselves, as they already did.
+ */
+export async function openChannels(): Promise<void> {
+  fireEvent.click(await screen.findByRole("tab", { name: "Channels" }));
+  await screen.findByRole("tab", { name: "Channels", selected: true });
+}
+
+/**
+ * Raise the Channels face AND wait for its record pane.
+ *
+ * ⚠ THE COMMON CASE, kept as one call because it is two statements in nineteen
+ * places in `person-info-tab.test.tsx` alone — and that file sits AT the
+ * 500-line cap, where nineteen extra lines is the difference between a suite
+ * that lints and one that does not.
+ */
+export async function openChannelRecord(): Promise<HTMLElement> {
+  await openChannels();
+  return screen.findByTestId("channel-surface");
 }
 
 /** Answer everything normally except one path, which fails. */

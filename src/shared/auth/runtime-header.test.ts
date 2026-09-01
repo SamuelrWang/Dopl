@@ -14,15 +14,24 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  CLAUDE_VENDOR,
+  CODEX_VENDOR,
+  CURSOR_VENDOR,
   DESKTOP_SESSION_RUNTIME,
   DESKTOP_UI_RUNTIME,
   RUNTIME_HEADER,
+  VENDOR_HEADER,
   narrowRuntime,
+  narrowVendor,
   readRuntimeHeader,
+  readVendorHeader,
 } from "./runtime-header";
 
 const req = (value?: string) => ({
   headers: new Headers(value === undefined ? {} : { [RUNTIME_HEADER]: value }),
+});
+const vendorReq = (value?: string) => ({
+  headers: new Headers(value === undefined ? {} : { [VENDOR_HEADER]: value }),
 });
 
 describe("readRuntimeHeader — the CLAIM", () => {
@@ -90,6 +99,62 @@ describe("narrowRuntime — the VERDICT", () => {
     ]) {
       expect(narrowRuntime(value, session)).toBeUndefined();
       expect(narrowRuntime(value, agent)).toBeUndefined();
+    }
+  });
+});
+
+/**
+ * ⚠ CUSTODY AND VENDOR ARE TWO DIMENSIONS, and this block is the pin that keeps
+ * them from collapsing into one (2026-08-31, runtime-adapter port step 1). The
+ * failure it guards is silent: a vendor word admitted into the RUNTIME enum
+ * would leave every non-Claude session stamped with a value that
+ * `runtimeWord`, `channel-wake-guidance` and `targeting.js › DESKTOP_RUNTIMES`
+ * all read as "not the desktop", changing what those sessions are taught and
+ * whether a requester window opens — with nothing failing.
+ */
+describe("the VENDOR dimension is separate from the custody enum", () => {
+  it("a vendor word is NOT a runtime value, on either reader", () => {
+    for (const vendor of [CLAUDE_VENDOR, CODEX_VENDOR, CURSOR_VENDOR]) {
+      expect(readRuntimeHeader(req(vendor))).toBeUndefined();
+      expect(narrowRuntime(vendor, { agentCredential: false })).toBeUndefined();
+      expect(narrowRuntime(vendor, { agentCredential: true })).toBeUndefined();
+    }
+  });
+
+  it("a runtime word is NOT a vendor value, on either reader", () => {
+    for (const runtime of [DESKTOP_SESSION_RUNTIME, DESKTOP_UI_RUNTIME]) {
+      expect(readVendorHeader(vendorReq(runtime))).toBeUndefined();
+      expect(narrowVendor(runtime)).toBeUndefined();
+    }
+  });
+
+  it("recognizes the three vendors the port will register", () => {
+    for (const vendor of [CLAUDE_VENDOR, CODEX_VENDOR, CURSOR_VENDOR]) {
+      expect(readVendorHeader(vendorReq(vendor))).toBe(vendor);
+      expect(narrowVendor(vendor)).toBe(vendor);
+    }
+  });
+
+  it("absent stays absent — a custody stamp never implies a vendor", () => {
+    // ⚠ The whole point of `null`-means-unknown: an older desktop build stamps
+    // custody and no vendor, and defaulting that to `claude` is how a Codex
+    // session gets taught a tool verb it does not have.
+    expect(readVendorHeader(vendorReq())).toBeUndefined();
+    expect(readVendorHeader({ headers: new Headers({ [RUNTIME_HEADER]: DESKTOP_SESSION_RUNTIME }) }))
+      .toBeUndefined();
+  });
+
+  it("exact match, no case folding, no prefixes", () => {
+    for (const value of ["Claude", "CODEX", "cursor-agent", "gpt", ""]) {
+      expect(readVendorHeader(vendorReq(value))).toBeUndefined();
+      expect(narrowVendor(value)).toBeUndefined();
+    }
+    // ⚠ Padding is NOT tested through the reader: `Headers` trims values on the
+    // way in, so `"claude "` arrives as `claude` and would assert the opposite
+    // of what it reads like. The narrower is where padding is really refused —
+    // it takes the string as given, exactly as `narrowRuntime` does above.
+    for (const value of ["  claude  ", "claude ", " codex", undefined, null]) {
+      expect(narrowVendor(value)).toBeUndefined();
     }
   });
 });

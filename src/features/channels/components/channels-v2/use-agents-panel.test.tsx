@@ -258,7 +258,10 @@ describe("useAgentsPanel › launch", () => {
     expect(screen.getByRole("alert").textContent).toBe("Session limit reached");
     // ⚠ AND THE BUTTON IS STILL LIVE. A refusal is not a cap: the operator's next
     // click is a legitimate retry, and every click mints a NEW agent (2026-08-21).
-    const button = screen.getByRole("button", { name: /Launch agent/ });
+    // ⚠ THE LABEL IS "New agent" SINCE 2026-08-31, not "Launch agent" — the
+    // channel-level-launch ruling renamed it (`agents-tab.tsx › launchRow`) and
+    // left this query and the one below matching nothing.
+    const button = screen.getByRole("button", { name: /New agent/ });
     expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -291,7 +294,7 @@ describe("useAgentsPanel › launch", () => {
         onOpenAgent={() => {}}
       />
     );
-    const button = screen.getByRole("button", { name: /Launch agent/ });
+    const button = screen.getByRole("button", { name: /New agent/ });
     expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 

@@ -181,24 +181,108 @@ describe("the two permission axes agree across both trees", () => {
     return [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]);
   };
 
-  const DESKTOP_FILES = desktopMainFilesContaining("const TOOL_MODES =");
+  // ⚠ DERIVED PER AXIS, NOT ONCE. Since 2026-08-31 the two axes are declared in different
+  // places — Axis A in the runtime adapter's `tools.js`, Axis B in the gate — so one scan for
+  // "files containing TOOL_MODES" would drag a file that declares only one of them into the
+  // comparison for the other. The needle is the LITERAL DECLARATION, so a file that merely READS
+  // a list (as `session-profiles.js` now does for Axis A) is correctly not in it.
+  const declaringFiles = (name: string) => desktopMainFilesContaining(`const ${name} = [`);
   const WEB_MODULE = "src/features/channels/lib/permission-modes.ts";
   const web = readFileSync(resolve(process.cwd(), WEB_MODULE), "utf8");
 
-  it("finds the desktop declarations, and session-profiles.js among them", () => {
+  /**
+   * ⚠ AXIS A'S LIST STOPPED BEING A LITERAL ON 2026-08-31 (the runtime-adapter port,
+   * §0.1b). The modes are a vocabulary of ONE runtime's built-in tools — a runtime
+   * storing Axis A as its own words would resolve every call to the most restrictive
+   * mode, which on a surface-less session is a silent DENY of every read — so they are
+   * DECLARED by the adapter (`main/runtime/claude/index.js › descriptor.toolMode`) and
+   * `session-profiles.js` reads them.
+   *
+   * ⚠ THE INVARIANT THIS BLOCK IS FOR IS UNCHANGED, and it is not about literals: the SPA
+   * must never offer a mode the desktop would coerce away, because such a mode is written,
+   * acknowledged, re-rendered as the operator's choice, and applied as the most restrictive
+   * value on every launch — a supervision setting that reads as saved and is not. What moved
+   * is only WHICH desktop source is the winner.
+   */
+  const ADAPTER = "runtime/claude/index.js";
+  const declaredToolModes = (): string[] => {
+    const block = /options: \[([\s\S]*?)\n {4}\]/.exec(desktopSource(ADAPTER));
+    if (!block) throw new Error(`no \`toolMode.options\` array in ${ADAPTER}`);
+    return [...block[1].matchAll(/\{ value: '([^']+)'/g)].map((x) => x[1]);
+  };
+
+  /**
+   * ⚠ A SECOND RUNTIME'S AXIS-A LIST IS NOT A COPY OF THIS ONE, AND THIS SPLIT IS WHY THE
+   * COMPARISON BELOW STILL MEANS SOMETHING (2026-08-31, the Codex adapter).
+   *
+   * `main/runtime/codex/tools.js` declares `const TOOL_MODES = ['untrusted', 'granular',
+   * 'on-request', 'never']` — `approval_policy`'s own values. The scan finds it, and until this
+   * repair the "one list in every tree" case compared it against Claude's four and failed.
+   *
+   * ⚠ THE CASE WAS RIGHT AT ONE ADAPTER AND WRONG AT TWO, IN THE ONE DIRECTION THAT MATTERS.
+   * Axis A's modes ARE per-runtime — that is the whole of the port's §0.1b, and a second adapter
+   * whose list MATCHED Claude's would be the synthesised-mode failure decision (1) exists to
+   * forbid. So the comparison is scoped to the DEFAULT adapter (the runtime an un-stamped session
+   * resolves to, and the only one the SPA renders today), and every OTHER adapter is asserted to
+   * declare its own DIFFERENT list.
+   *
+   * The invariant is unchanged and is still not about literals: **the SPA must never offer a mode
+   * the desktop would coerce away.** What changed is that "the desktop's answer" is now a
+   * per-runtime question, and the SPA's single copy is the default runtime's.
+   */
+  const ADAPTER_DIR = ADAPTER.slice(0, ADAPTER.lastIndexOf("/") + 1); // `runtime/claude/`
+  const isOtherAdapter = (file: string) =>
+    file.startsWith("runtime/") && !file.startsWith(ADAPTER_DIR);
+
+  it("finds the desktop declarations, and the right file for each axis", () => {
     // An empty scan would make every assertion below vacuously true.
-    expect(DESKTOP_FILES).toContain("session-profiles.js");
-    expect(DESKTOP_FILES.length).toBeGreaterThanOrEqual(3);
+    expect(declaringFiles("MESSAGE_MODES")).toContain("session-profiles.js");
+    expect(declaringFiles("TOOL_MODES")).toContain(`${ADAPTER_DIR}tools.js`);
+    expect(declaringFiles("TOOL_MODES").length).toBeGreaterThanOrEqual(3);
+    expect(declaredToolModes().length).toBeGreaterThan(0);
+  });
+
+  it("a SECOND runtime declares its own Axis-A vocabulary, not a copy of the default's", () => {
+    // ⚠ THE POSITIVE HALF, so "scoped to the default adapter" cannot become a way for a second
+    // adapter to quietly ship the first one's mode names. A runtime that offered
+    // manual/accept_edits/auto/bypass would be Dopl pretending, which is exactly what the
+    // no-synthesised-modes rule forbids — and the operator's mental model would be wrong about
+    // the platform they chose.
+    const others = declaringFiles("TOOL_MODES").filter(isOtherAdapter);
+    for (const file of others) {
+      const theirs = modes(desktopSource(file), "TOOL_MODES");
+      expect(theirs.length, file).toBeGreaterThan(0);
+      expect(theirs, file).not.toEqual(declaredToolModes());
+    }
+  });
+
+  it("session-profiles.js READS Axis A rather than declaring it — core holds no copy", () => {
+    // The half that keeps the winner honest: if this file ever re-declares a literal, the
+    // comparison below silently starts measuring core against itself.
+    const profiles = desktopSource("session-profiles.js");
+    expect(profiles).not.toMatch(/const TOOL_MODES = \[/);
+    expect(profiles).toContain("const TOOL_MODES = cap.toolModes(descriptorFor(null));");
   });
 
   it.each(["TOOL_MODES", "MESSAGE_MODES"])(
     "%s is one list in every tree that declares it",
     (name) => {
-      const winner = modes(desktopSource("session-profiles.js"), name);
+      // ⚠ TWO WINNERS NOW, AND THE SPLIT IS THE ARGUMENT. Axis B is DOPL'S OWN enum — it
+      // names no platform tool and no platform mode, so it is still a literal in the gate.
+      // Axis A is the runtime's, so its winner is the descriptor.
+      const winner = name === "TOOL_MODES"
+        ? declaredToolModes()
+        : modes(desktopSource("session-profiles.js"), name);
       // Order is part of it: `session-permission-axes.test.mjs` indexes
-      // `TOOL_MODES` positionally to build its permissiveness ladder.
+      // `TOOL_MODES` positionally to build its permissiveness ladder, and the adapter's
+      // own contract suite reads `[0]` as the fail-closed member and the last as the widest.
       expect(winner.length).toBeGreaterThan(0);
-      for (const file of DESKTOP_FILES) {
+      for (const file of declaringFiles(name)) {
+        // ⚠ ANOTHER RUNTIME'S ADAPTER IS NOT A COPY OF THIS ONE — see the block above; its own
+        // case asserts it differs. Every OTHER declaring file (core, and the default adapter's
+        // own modules) is still held against the winner, which is where the drift this suite
+        // exists for would actually appear.
+        if (name === "TOOL_MODES" && isOtherAdapter(file)) continue;
         expect(modes(desktopSource(file), name), file).toEqual(winner);
       }
       expect(modes(web, name), WEB_MODULE).toEqual(winner);
@@ -206,14 +290,17 @@ describe("the two permission axes agree across both trees", () => {
   );
 
   it("the web module's DEFAULT is the desktop's fail-closed answer", () => {
-    // `coerceMode` falls back to these two by name; a default the desktop
-    // would itself coerce away is a posture the operator can never actually
-    // hold.
+    // A default the desktop would itself coerce away is a posture the operator can never
+    // actually hold. ⚠ Axis A's fail-closed answer is `descriptor.toolMode.default`, which
+    // `runtime-contract.test.mjs` separately pins to be the NARROWEST option — the two halves
+    // of "a session starts asking, and park resets it there".
     const profiles = desktopSource("session-profiles.js");
-    const fallback = (name: string) =>
-      new RegExp(`${name}\\.indexOf\\(mode\\) === -1 \\? '([^']+)'`).exec(profiles)?.[1];
-    expect(web).toContain(`tools: "${fallback("TOOL_MODES")}"`);
-    expect(web).toContain(`messages: "${fallback("MESSAGE_MODES")}"`);
+    const adapterDefault = /default: '([^']+)',/.exec(desktopSource(ADAPTER))?.[1];
+    expect(adapterDefault).toBe(declaredToolModes()[0]);
+    expect(web).toContain(`tools: "${adapterDefault}"`);
+    const messageFallback =
+      /MESSAGE_MODES\.indexOf\(mode\) === -1 \? '([^']+)'/.exec(profiles)?.[1];
+    expect(web).toContain(`messages: "${messageFallback}"`);
   });
 });
 

@@ -27,6 +27,12 @@ const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const { GATE_REASONS } = require(M("session-gate-reason.js"));
 const { DOPL_CHANNEL_TOOL, DENIED_BUILTINS } = require(M("tool-profiles.js"));
 
@@ -217,7 +223,7 @@ function gateOnce(sessionOver, toolName, input) {
   };
   const evs = [];
   const logged = [];
-  io.makeCanUseTool(s, (_s, ev) => evs.push(ev), (...parts) => logged.push(parts.join(" ")))(
+  axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev), (...parts) => logged.push(parts.join(" ")))(
     toolName, input, { requestId: "r1", toolUseID: "t1" });
   for (const id of [...s.pendingPermissions.keys()]) s.pendingPermissions.get(id)({ behavior: "deny" });
   return { payload: evs[0] && evs[0].payload, logged };
@@ -390,13 +396,17 @@ test("FIX 3: no log function, no throw — the diag is a diagnostic, never a dep
     pendingPermissions: new Map(), pendingNames: new Map(),
   };
   const evs = [];
-  io.makeCanUseTool(s, (_s, ev) => evs.push(ev))("Bash", { command: "ls" }, { requestId: "r1" });
+  axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev))("Bash", { command: "ls" }, { requestId: "r1" });
   assert.equal(evs[0].payload.gateReason, "awaiting-approval");
   for (const id of [...s.pendingPermissions.keys()]) s.pendingPermissions.get(id)({ behavior: "deny" });
 });
 
 test("FIX 3 (source pin): the diag call passes CODES and postures, never an input or a body", () => {
-  const src = readFileSync(M("session-io.js"), "utf8");
+  // ⚠ 2026-08-31 (runtime-adapter port, step 3): the gate DIAG LINE moved with the rest of the
+  // verdict plumbing to `main/session-gate-bridge.js`. It is platform-free by construction — a
+  // tool name, a channel op, a verdict, a reason code and both postures — which is exactly why it
+  // did not go to an adapter.
+  const src = readFileSync(M("session-gate-bridge.js"), "utf8");
   // BRACE-MATCHED, NOT BOUNDED BY THE NEXT COMMENT (2026-08-06). This used to slice from
   // `function logGateVerdict(` up to the `BEGIN SESSION-IO-POST-SURFACE` sentinel that
   // happened to follow it. That block moved to session-post-surface.js in the §2 split, so

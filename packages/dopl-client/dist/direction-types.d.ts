@@ -33,6 +33,17 @@ export interface AgentDirection {
     /** The agent instance this is aimed at. Required at create; there is no
      *  oldest-agent fallback on this lane. */
     agentId: string;
+    /**
+     * 🔒 WHICH of the operator's own agents FILED this — **an UNVERIFIED LABEL**
+     * (F-376a, 2026-08-31). Server-derived from `X-Dopl-Session-Id`, a documented
+     * NON-authorization header that anything holding the operator's device token
+     * can set; **nothing may gate, route, filter or authorize on it**, here or in
+     * any consumer. `null` for an external orchestrator, which sends no session
+     * stamp — that is the ORDINARY case, not a defect, and renders as "your agent".
+     * ⚠ OPTIONAL on the type as well, because a deployment where the column has not
+     * replayed answers rows without the key at all.
+     */
+    senderAgentId?: string | null;
     body: string;
     status: "pending" | "claimed" | "delivered" | "refused" | "expired";
     refusalReason: DirectionRefusalReason | null;

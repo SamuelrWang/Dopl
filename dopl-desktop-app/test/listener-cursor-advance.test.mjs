@@ -118,7 +118,7 @@ test("THE FIX: a message that does not dispatch does NOT move the cursor", async
 });
 
 test("…and neither do the messages BEHIND it — order is the contract", async () => {
-  const h = harness({ 8: "no-claude-runtime" });
+  const h = harness({ 8: "no-agent-runtime" });
   await h.drainPage(entry(), page(7, 8, 9), null);
   assert.deepEqual(h.dispatched, [7, 8], "seq 9 is not delivered ahead of the seq 8 it follows");
 });
@@ -146,7 +146,7 @@ test("a THROWING dispatch defers too, instead of escaping and killing the channe
 // ── 2. THE RETRY IS BOUNDED, AND 3. THE ESCAPE IS LOUD ───────────────────────────────
 
 test("the ladder is bounded: after DISPATCH_MAX_ATTEMPTS the head is stepped over", async () => {
-  const h = harness({ 8: "no-claude-runtime" });
+  const h = harness({ 8: "no-agent-runtime" });
   const e = entry();
   for (let i = 1; i < LISTENER.DISPATCH_MAX_ATTEMPTS; i += 1) {
     assert.equal(await h.drainPage(e, page(8, 9), null), true, `attempt ${i} still holds`);
@@ -238,12 +238,12 @@ test("the fail-closed return in handleTrigger answers a REASON, not silence", ()
   // unchanged and is what these cases pin — a reason string holds the cursor, silence advances
   // it — and `no-consent-row` still exercises it as a fixture above, because drainPage treats
   // every non-empty reason identically.
-  assert.match(TRIGGER, /return 'no-claude-runtime';/);
+  assert.match(TRIGGER, /return 'no-agent-runtime';/);
   // It is the FIRST statement of the function, so a deferral can never leave a side effect
   // behind for the retry to duplicate. (It used to have to be stated as "upstream of
   // `watcher.register`"; there is no durable record to be half-written any more.)
   const body = TRIGGER.slice(TRIGGER.indexOf("async function handleTrigger("));
-  assert.ok(body.indexOf("return 'no-claude-runtime';") < body.indexOf("notifyAsk({"),
+  assert.ok(body.indexOf("return 'no-agent-runtime';") < body.indexOf("notifyAsk({"),
     "the runtime probe must stay ahead of the notification it would otherwise raise");
   assert.equal(/return 'no-consent-row';/.test(TRIGGER), false,
     "the consent-row deferral is deleted with the row");

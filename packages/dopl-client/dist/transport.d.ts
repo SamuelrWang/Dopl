@@ -24,6 +24,16 @@ export interface DoplTransportOptions {
      */
     runtime?: string;
     /**
+     * Vendor label, echoed as `X-Dopl-Vendor` (2026-08-31, runtime-adapter port
+     * step 1). WHICH AGENT RUNTIME drives the session the `runtime` label above
+     * says the desktop spawned — `claude` | `codex` | `cursor`. A SECOND
+     * DIMENSION, never a value of `runtime`: widening that enum would flip every
+     * `=== "desktop-session"` comparison false for a non-Claude session. Set by
+     * the in-app MCP route from the caller's own header; unset = unknown, and
+     * unknown is never guessed.
+     */
+    vendor?: string;
+    /**
      * Session label, echoed as `X-Dopl-Session-Id` (F2). ONLY consumer: the
      * server's reserved `metadata.session_id` stamp — what lets a reader tell two
      * concurrent sessions of one POSTER apart. A LABEL, NOT A LOCK: nothing gates
@@ -72,6 +82,7 @@ export declare class DoplTransport {
     private readonly toolHeaderName;
     private readonly clientIdentifier;
     private readonly runtime;
+    private readonly vendor;
     private readonly sessionId;
     private readonly signal;
     private workspaceId;

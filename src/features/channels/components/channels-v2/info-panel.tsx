@@ -203,7 +203,8 @@ export function ChannelsV2InfoPanel({
    *  is still what the New Agent button makes. Passed straight through — this
    *  panel decides nothing about launches. */
   onLaunchAgent?: (
-    threadId: string,
+    // ⚠ `null` = a CHANNEL-LEVEL launch (2026-08-31) — see `agents-tab.tsx`.
+    threadId: string | null,
     templateId?: string | null,
     overrides?: TemplateLaunchOverrides
   ) => Promise<AgentLaunchOutcome> | void;

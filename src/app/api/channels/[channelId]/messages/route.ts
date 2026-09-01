@@ -19,8 +19,12 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     // `thread` is a FILTER on metadata.taskId, not a lookup: an id nothing carries returns [].
     // The await path deliberately has no counterpart.
+    // ⚠ `parseQuery` reads ONLY the keys named here — a param added to the
+    // schema and forgotten in this list parses as absent, silently, forever.
+    // `before` is the transcript's backward page cursor.
     const query = parseQuery(request.nextUrl.searchParams, MessageReadQuerySchema, [
       "since",
+      "before",
       "limit",
       "thread",
     ]);

@@ -30,6 +30,12 @@ const lane = require(M("session-own-direct.js"));
 const launchLane = require(M("session-own-launch.js"));
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const rate = require(M("direction-rate.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
@@ -130,7 +136,7 @@ function mkSession(over) {
 test("ADMITTED: {allow}, no dispatch, no parked resolver", async () => {
   const s = mkSession({ toolMode: "bypass", messageMode: "auto_both" });
   const events = [];
-  const res = await io.makeCanUseTool(s, (_s, ev) => events.push(ev))(
+  const res = await axisB.makeCanUseTool(s, (_s, ev) => events.push(ev))(
     DOPL_CHANNEL_TOOL, DIRECT, { requestId: "D1" });
   assert.deepEqual(res, { behavior: "allow" });
   assert.equal(events.length, 0);

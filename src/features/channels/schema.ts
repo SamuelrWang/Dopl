@@ -3,9 +3,6 @@ import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
 import {
   CHANNEL_FANOUT_MAX_ADDRESSEES,
-  DEFAULT_MESSAGE_LIMIT,
-  MAX_AWAIT_TIMEOUT_MS,
-  MAX_MESSAGE_LIMIT,
   MAX_METADATA_SERIALIZED_BYTES,
 } from "./constants";
 import type {
@@ -399,47 +396,14 @@ export type ChannelMemberRemoveInput = z.infer<
 >;
 
 /**
- * `?since=<seq>&limit=<n<=200>&thread=<taskId>` for a message read.
- *
- * `thread` is a FILTER, not a lookup: keeps rows whose `metadata.taskId`
- * equals it. ⚠ Deliberately ANY non-empty string, NOT `.uuid()` — the
- * transcript still carries legacy `task-<channelId>-<seq>` ids from before
- * threads were a table, and `.uuid()` would 400 exactly those.
- *
- * Never checked against `channel_tasks`: an unmatched id returns `[]`, not an
- * error. Length bounded like `clientMsgId`.
+ * The READ-QUERY schemas — `MessageReadQuerySchema` (the transcript's paged read,
+ * `since` / `before` / `limit` / `thread`) and `AwaitQuerySchema` (the long-poll
+ * hold) — live in `schema-reads.ts` (split 2026-09-01 at the cap). Re-exported
+ * here for the same reason the four blocks below are: this file is the barrel.
  */
-export const MessageReadQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative().optional(),
-  limit: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(MAX_MESSAGE_LIMIT)
-    .optional()
-    .default(DEFAULT_MESSAGE_LIMIT),
-  thread: z.string().trim().min(1).max(200).optional(),
-});
-export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
+export { AwaitQuerySchema, MessageReadQuerySchema } from "./schema-reads";
+export type { AwaitQuery, MessageReadQuery } from "./schema-reads";
 
-/**
- * `?since=<seq>&timeoutMs<=50000&excludeAuthor=<userId>` for the await
- * long-poll. `excludeAuthor` is OPT-IN: desktop listener omits it (needs its
- * own account's messages for thread targeting, requester-window routing,
- * version-skew observation); MCP await passes the caller's own id so its own
- * posts cannot pop its hold.
- */
-export const AwaitQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative().optional(),
-  timeoutMs: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(MAX_AWAIT_TIMEOUT_MS)
-    .optional(),
-  excludeAuthor: z.string().uuid().optional(),
-});
-export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
 
 /**
  * Session-state schemas live in `schema-sessions.ts`, and the CONSENT / TRUST /

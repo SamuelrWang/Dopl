@@ -83,6 +83,7 @@
 const { apiFetch } = require('./api');
 const realtime = require('./realtime');
 const channelPrefs = require('./channel-prefs');
+const channelRuntime = require('./channel-runtime'); // 2026-08-31: which runtime this channel's agents run on
 const wire = require('./launch-directive-wire');
 const sessionModel = require('./session-model');
 const { diag } = require('./diag');
@@ -122,80 +123,14 @@ function enabled() {
   try { return channelPrefs.getOrchestratorLaunch() === true; } catch (_err) { return false; }
 }
 
-// ── The two authenticated calls ──────────────────────────────────────────────────────────
-//
-// ⚠ BOTH RIDE `api.js`, which carries the shared 401 repair (`api-repair.js` — a second copy of
-// that repair produced the 1.8.x Channels outage) and the app-version stamp. Never a raw fetch.
-
-async function post(workspaceId, path, body) {
-  try {
-    const res = await apiFetch(path, {
-      method: 'POST', workspaceId, body, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
-    });
-    if (!res || !res.ok) return { ok: false, status: (res && res.status) || 0 };
-    let parsed = null;
-    try { parsed = await res.json(); } catch (_err) { parsed = null; }
-    return { ok: true, body: parsed || {} };
-  } catch (err) {
-    return { ok: false, status: 0, error: (err && err.message) || 'network error' };
-  }
-}
-
-/**
- * THE CAS. Returns the claimed directive, or null.
- *
- * ⚠ NULL IS THE ORDINARY ANSWER AND CARRIES NO ALARM. Another of this operator's machines won
- * the race; the row expired; the orchestrator withdrew it. None of those is a failure of this
- * machine and none of them produces a decision — the winner will write one.
- * ⚠ AND A CLAIM THAT FAILS ON THE NETWORK IS ALSO A NO-OP, deliberately: an unclaimed directive
- * is still `pending`, so it expires visibly. Retrying would be this machine competing with itself.
- */
-async function claim(d) {
-  const res = await post(d.workspaceId, wire.ROUTES.claim, wire.claimBody(d.id));
-  if (!res.ok) {
-    // ⚠ **409 IS THE DESIGNED OUTCOME FOR EVERY MACHINE BUT ONE, NOT AN ERROR** (F-286).
-    // `service-launch.ts › claimLaunchDirective` throws `LaunchDirectiveNotClaimableError` when
-    // the CAS matches no row — taken, decided, or expired — which `http-mapping.ts` maps to 409.
-    // So on the ORDINARY multi-machine path (header step 4) the loser lands here, and telling it
-    // "the row stays pending" asserts the opposite of the truth: the row is CLAIMED and another
-    // machine is launching it. 404 is the same kind of answer. Only network faults and 5xx leave
-    // the row genuinely pending.
-    if (res.status === 409 || res.status === 404) {
-      diag('launch-directive: claim lost', String(d.id).slice(0, 8),
-        `— HTTP ${res.status}, another machine won or the row is gone (a normal no-op)`);
-      return null;
-    }
-    diag('launch-directive: claim failed', String(d.id).slice(0, 8),
-      res.status ? `HTTP ${res.status}` : res.error || 'network', '— the row stays pending and expires');
-    return null;
-  }
-  // ⚠ THREE ENVELOPE SHAPES ACCEPTED, DELIBERATELY. The route answers `{ directive }` today (the
-  // suite pins that against `claim/route.ts`); the generosity predates it landing and is kept,
-  // because `{directive}`, `{ok, directive}` and the bare row all mean the same thing — the
-  // discriminator is whether a claimable ROW came back, not which envelope carried it. ⚠ IT
-  // WIDENS NOTHING: authorization already happened server-side, and `directiveFrom` narrows.
-  const body = res.body || {};
-  const granted = body.directive || (body.ok === undefined && body.id ? body : null);
-  if (!granted || body.ok === false) {
-    diag('launch-directive: claim lost', String(d.id).slice(0, 8),
-      '—', String(body.reason || 'another machine won'), '(a normal no-op)');
-    return null;
-  }
-  // ⚠ RE-NARROWED FROM THE CLAIM'S OWN ANSWER, not carried over from the realtime frame. The
-  // frame is a prompt; the CLAIMED row is what was granted, and if they disagree the
-  // authenticated one wins.
-  return wire.directiveFrom(granted, d.workspaceId);
-}
-
-/** The terminal write. Best-effort by the same logic as the claim — the machine has already
- *  done the thing; a lost decision costs the orchestrator a wait, not a wrong action. */
-async function decide(d, outcome) {
-  const body = wire.decideBody(d.id, outcome);
-  const res = await post(d.workspaceId, wire.ROUTES.decide, body);
-  diag('launch-directive', String(d.id).slice(0, 8), body.status,
-    body.agentId ? `agent ${body.agentId}` : `(${body.refusalReason})`,
-    res.ok ? '' : '— DECISION NOT RECORDED, the orchestrator will see it expire');
-}
+// ⚠ **THE TWO AUTHENTICATED CALLS MOVED TO `main/launch-directive-calls.js` ON 2026-08-31**, at
+// the §1 cap and on a real seam: they change when the SERVER's contract moves (the routes, the
+// claim envelope, which status means "another machine won"), where everything left in this file
+// changes when the LOCAL policy does. `post` is no longer re-exported — it had no caller outside
+// the two verbs built on it, and re-exporting a raw POST from the module that owns the §6 argument
+// would be handing the next reader a door beside the gate.
+const calls = require('./launch-directive-calls');
+const { claim, decide } = calls;
 
 // ── The launch ───────────────────────────────────────────────────────────────────────────
 
@@ -285,6 +220,13 @@ async function spawn(d) {
     channelId: d.channelId,
     taskId: d.taskId,
     workspaceId: d.workspaceId || null,
+    // ⚠ THE CHANNEL'S RUNTIME, INHERITED (2026-08-31, port wave D) — `trigger.js ›
+    // launchResponderSession` carries the whole argument for why this record travels where the
+    // permission pair may not. An orchestrator's directive is a lane with no human at the
+    // keyboard, so it inherits the channel's setting exactly as it inherits the tool profile and
+    // the model: picking a runtime widens nothing, and a directive answered on a vendor the
+    // operator never chose is the surprise the port exists to avoid. Absent => the default.
+    runtime: channelRuntime.getChannelRuntime(d.channelId),
     goal: d.goal || defaultGoal(channelLevel),
     counterpartyId: null,
     direct: false,

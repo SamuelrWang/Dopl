@@ -63,9 +63,12 @@ export interface EscalationRow {
   /**
    * The answer, when one is already in this transcript page.
    *
-   * ⚠ `null` MEANS "NOT IN THIS PAGE", NEVER "UNANSWERED". The transcript is
-   * bounded (`MAX_MESSAGE_LIMIT`), so an answer far below its escalation can be
-   * off the window — the same limitation the fan-out card's grouping has. The
+   * ⚠ `null` MEANS "NOT IN THIS PAGE", NEVER "UNANSWERED". The transcript is a
+   * WINDOW (`constants.ts › CHANNEL_TRANSCRIPT_PAGE_SIZE`, plus whatever history
+   * the reader has scrolled back through), so an answer far below its escalation
+   * can be off it — the same limitation the fan-out card's grouping has. ⚠ And
+   * scroll-up paging does NOT close this: it extends the window DOWNWARD, and an
+   * answer is always NEWER than the escalation it answers. The
    * card therefore never says "waiting"; it shows the buttons, and the server's
    * 409 is what settles a genuine race.
    */

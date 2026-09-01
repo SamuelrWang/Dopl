@@ -33,6 +33,12 @@ const lane = require(M("session-own-launch.js"));
 const profiles = require(M("session-profiles.js"));
 const perms = require(M("session-permissions.js"));
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const budget = require(M("launch-budget.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
@@ -75,7 +81,7 @@ test("OFF: a launched session is still denied, in every posture, exactly as befo
 test("OFF: the deny still carries the BOUND's sentence and asks nobody", async () => {
   const s = mkSession({ toolMode: "bypass", messageMode: "auto_both" }); // no depth => the cap
   const events = [];
-  const res = await io.makeCanUseTool(s, (_s, ev) => events.push(ev))(
+  const res = await axisB.makeCanUseTool(s, (_s, ev) => events.push(ev))(
     DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "C1" });
   assert.equal(res.behavior, "deny");
   assert.equal(res.message, perms.LAUNCH_DEPTH_DENY_MESSAGE);
@@ -114,7 +120,7 @@ test("ON: a launched session may launch — under the SAME two axes, never fewer
 test("ON: the admitted call resolves inline — no dispatch, nothing to auto-deny", async () => {
   const s = mkSession({ toolMode: "bypass", messageMode: "auto_both", launchChain: true });
   const events = [];
-  const res = await io.makeCanUseTool(s, (_s, ev) => events.push(ev))(
+  const res = await axisB.makeCanUseTool(s, (_s, ev) => events.push(ev))(
     DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "C2" });
   assert.deepEqual(res, { behavior: "allow" });
   assert.equal(events.length, 0);

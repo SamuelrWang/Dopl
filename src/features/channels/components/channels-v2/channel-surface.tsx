@@ -88,6 +88,30 @@ export interface ChannelSurfaceCapabilities {
    */
   memberManagement?: boolean;
   /**
+   * Whether this surface's HEADER may name the channel after its counterpart.
+   * Default `true` — `channel-display.ts › channelDisplayName`, which returns
+   * the peer's name when `channels.is_direct`, and is what the workspace
+   * channels page has always rendered for a DM.
+   *
+   * 🔒 **`false` PINS THE HEADER TO `channel.name`, AND /home PASSES IT
+   * (Samuel, 2026-09-01).** A home container is a CHANNEL, not a DM: its
+   * identity is its own name and does not change when its roster does. The
+   * /home list row and Info tab were fixed at their own derivation
+   * (`pages/home/home-rows.ts › channelTitle`), but this header reads a
+   * DIFFERENT one — so a container whose channel carries `is_direct = true`
+   * (every one minted before the 2026-08-24 channel-first inversion, which came
+   * out of `../../server/service-writes.ts › createDirectChannel`) would still
+   * have shown the peer's name at the
+   * top of the pane, under a row and an Info card that both said the channel's.
+   *
+   * ⚠ **REAL DMs ARE UNAFFECTED, WHICH IS WHY THIS IS A FLAG AND NOT AN EDIT TO
+   * `channel-display.ts`.** That module is the ONE counterpart derivation for
+   * the workspace surfaces — `sidebar.tsx` (name + avatar) and
+   * `channel-manage.tsx` — and a DM there must keep naming its peer. What
+   * changed is which surfaces ASK it.
+   */
+  peerNamedHeader?: boolean;
+  /**
    * Whether the VIEWER'S OWN STAKE in this channel — the membership row they
    * hold and the agent they run in it — is theirs to manage HERE. Default
    * `true` — every desktop mount. `false` hides the "Leave channel" row AND the
@@ -188,7 +212,12 @@ export function ChannelSurface({
     rows,
     gate,
   } = data;
-  const channelName = channelDisplayName(channel, members, currentUserId);
+  // 🔒 THE HEADER NAME, AND `peerNamedHeader: false` IS THE /home ANSWER — see
+  // the capability's own docblock for the ruling.
+  const channelName =
+    capabilities?.peerNamedHeader === false
+      ? channel.name
+      : channelDisplayName(channel, members, currentUserId);
   // ⚠ THE PANEL OUTLIVES `infoOpen` BY ONE TRANSITION, so the closing slide has
   // something to clip; the shell it sits in is always rendered (see the JSX).
   // Presentation only — `sel.infoOpen` stays the single source of truth for the
@@ -322,6 +351,12 @@ export function ChannelSurface({
             />
           ) : null
         }
+        // SCROLL-UP PAGING — the three values `use-channel-messages.ts` returns
+        // for it, handed down whole. The pane owns the trigger and the anchor;
+        // the hook owns the cursor.
+        hasOlder={data.hasOlderMessages}
+        loadingOlder={data.loadingOlderMessages}
+        onLoadOlder={data.loadOlderMessages}
         onToggleInfo={sel.toggleInfo}
         onExitThread={() => sel.openThread(null)}
         // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28).
@@ -411,7 +446,17 @@ export function ChannelSurface({
                 sel.selectChannel(null);
                 onDeselect?.();
               }}
-              onExitThread={() => sel.openThread(null)}
+              // ⚠ THIS SLOT'S `onExitThread` FIRES ON A THREAD DELETE AND
+              // NOTHING ELSE (`settings-slot.tsx` wires it to `onDeleted`), so
+              // it is where the scroll-back window is told. The query cache's
+              // half of the same cascade is the optimistic patch in
+              // `use-thread-lifecycle-writes.ts`; the window is not in that
+              // cache, and a reader scrolled back through history would
+              // otherwise keep rendering the deleted rows.
+              onExitThread={() => {
+                if (openThread) data.dropThreadFromHistory(openThread.id);
+                sel.openThread(null);
+              }}
               onRosterChanged={() => {
                 onRosterChanged?.();
                 data.refetchMembers();

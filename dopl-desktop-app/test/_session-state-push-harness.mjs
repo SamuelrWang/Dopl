@@ -55,6 +55,13 @@ const EXPORTED = [
 // avoid in the first place.
 export const telemetry = createRequire(import.meta.url)(join(MAIN, "session-telemetry.js"));
 
+// ⚠ AND SO IS THE WIRE FILTER (2026-08-31, the §1 split). `session-state-push-wire.js` is pure —
+// no electron, no store, no network — and it is a FACTORY taking the logger, so injecting the
+// real module is what keeps `serverReportable` / `nameReportable` / `liveForWire` / `reportable`
+// the same program the app ships rather than a stub that can drift from the server's contract.
+// The fresh set per `load()` is the factory's whole reason for existing; see that file's header.
+export const wire = createRequire(import.meta.url)(join(MAIN, "session-state-push-wire.js"));
+
 /**
  * A fresh copy of the module, with a fake transport, a fake log, a fake store and a CLOCK.
  *
@@ -84,14 +91,15 @@ export function load(opts = {}) {
   // Immediate, so RETRY_DELAY_MS costs nothing here. It shadows the global inside the block.
   const fakeSetTimeout = (fn) => { Promise.resolve().then(fn); return { unref() {} }; };
   const api = new Function(
-    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody",
+    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody", "wire",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate,
     // 2026-08-30: `send` releases the response body on EVERY branch, success included
     // (api-repair.js › discardBody). Identity here — the rule is pinned in
     // test/unread-body-seams.test.mjs; this harness only has to let the code run.
-    (res) => res
+    (res) => res,
+    wire
   );
   return {
     ...api,

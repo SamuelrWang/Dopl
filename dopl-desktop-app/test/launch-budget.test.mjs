@@ -80,7 +80,7 @@ test("BUDGET: the channel map is BOUNDED — an unbounded one leaks for the proc
 });
 
 test("BUDGET: the ceiling is stated in terms of what the machine can actually run", () => {
-  // ⚠ NOT DERIVED IN CODE, deliberately (a `2 * 6` would tie a COST ceiling to a RATE ceiling and
+  // ⚠ NOT DERIVED IN CODE, deliberately (a `2 * 15` would tie a COST ceiling to a RATE ceiling and
   // move one when the other is tuned) — but the RELATIONSHIP is the justification, so it is
   // asserted here where a future retune will read it.
   const windowless = require_(join(MAIN, "session-windowless.js"));

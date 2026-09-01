@@ -321,6 +321,25 @@ export async function launchAgentOnThread(payload: {
   agentId?: string;
   /** This run's ephemeral re-points. Absent ⇒ the template's own values. */
   overrides?: TemplateLaunchOverrides;
+  /**
+   * THIS SPAWN'S RUNTIME — the launch panel's per-call pick (2026-08-31, the
+   * runtime-adapter port).
+   *
+   * ⚠ IT IS A TOP-LEVEL FIELD, NOT AN `overrides` MEMBER, because it is not a
+   * re-point of a TEMPLATE: `main/session-launch-op.js` reads `p.runtime` and
+   * resolves `p.runtime > the channel's durable pick > the default adapter`,
+   * while `overrides` is the template's own model/fields lane.
+   * ⚠ ABSENT IS THE ORDINARY CASE and the channel's pick applies — every launch
+   * with no panel behind it says nothing here and puts the object on the wire it
+   * always did.
+   * ⚠ ACCEPTED, NOT TRUSTED, AND THAT IS WHY A RENDERER MAY SEND IT AT ALL. Main
+   * re-runs `channel-runtime.js › normalizeRuntimeId`, so an id this build never
+   * registered falls back to the channel's pick rather than refusing — and a
+   * registered adapter is one `runtime/contract.js › sealAdapter` already proved
+   * can enforce every Dopl profile it declares. PICKING A RUNTIME WIDENS NOTHING;
+   * the tool PROFILE, which is containment itself, may never come off a payload.
+   */
+  runtime?: string;
 }): Promise<{
   ok: boolean;
   agentId?: string;

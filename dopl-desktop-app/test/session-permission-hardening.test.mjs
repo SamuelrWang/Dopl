@@ -39,7 +39,10 @@ const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
 
 const profiles = require(M("session-profiles.js"));
+const claudeTools = require(M("runtime/claude/tools.js")); // ⚠ 2026-08-31: the profile table and its short-name normalizer are the adapter's — one runtime's tool vocabulary
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31: `makeCanUseTool` SPLIT — the verdict plumbing is platform-free (`session-gate-bridge.js`), the held-callback wiring is the adapter's, and that is what these cases drive.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const framing = require(M("prompt-framing.js"));
 const tp = require(M("tool-profiles.js"));
 
@@ -133,7 +136,7 @@ test("F2: `dopl_only` no longer SHADOWS the write tools — they reach canUseToo
   // The read half stays pre-approved: dopl_only is the "look things up" profile.
   for (const tool of DOPL_READ) assert.ok(cfg.preApproved.includes(tool), tool);
   // The MCP server still OFFERS all of them; the gate is what changed, not the surface.
-  for (const tool of DOPL_WRITE) assert.ok(cfg.doplToolsPolicy.includes(profiles.shortDoplName(tool)), tool);
+  for (const tool of DOPL_WRITE) assert.ok(cfg.doplToolsPolicy.includes(claudeTools.shortDoplName(tool)), tool);
 });
 
 // ── ⚠ F2's FOURTH TEST — REMOVED 2026-08-20, but the guard MOVED, it did not die ──
@@ -428,7 +431,7 @@ const mkSession = () => ({
 function gateOnce(input) {
   const s = mkSession();
   const evs = [];
-  io.makeCanUseTool(s, (_s, ev) => evs.push(ev))(DOPL_CHANNEL_TOOL, input, { requestId: "r1", toolUseID: "t1" });
+  axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev))(DOPL_CHANNEL_TOOL, input, { requestId: "r1", toolUseID: "t1" });
   const payload = evs[0] && evs[0].payload;
   if (s.pendingPermissions.has("r1")) s.pendingPermissions.get("r1")({ behavior: "deny" });
   return payload;

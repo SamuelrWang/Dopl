@@ -100,10 +100,6 @@ export function visibleRows(rows: HomeRow[], query: string): HomeRow[] {
   return rows.filter((row) => !q || searchText(row).includes(q));
 }
 
-/** How many names a title spells before it starts counting. Two fit a 290px
- *  row; three truncate into uselessness. */
-const TITLE_NAMES = 2;
-
 /**
  * EVERYBODY ELSE IN THIS CHANNEL, oldest join first — the ONE read of
  * `HomeChannel.peers` on this page, and the only place the cache-shape rule for
@@ -131,50 +127,32 @@ export function channelPeople(channel: HomeChannel): readonly HomePeer[] {
 }
 
 /**
- * The row's own title. A channel with people in it is titled by the PEOPLE —
- * that is what the operator is looking for in this list — and a nameless one
- * falls back to their email. A SOLO channel has no person, so it is titled by
- * the channel.
+ * The row's own title — **THE CHANNEL'S NAME, ALWAYS.**
  *
- * ⚠ **THE MULTI-PERSON FORM COUNTS RATHER THAN LISTING (2026-08-26).** Two
- * names, then `+N` for the rest — `Grace, Priya +2`. A row is 290px wide and
- * ends in a timestamp, so a fourth name does not shrink the title, it deletes
- * the first one behind an ellipsis. ⚠ **THE ONE-PERSON BRANCH IS UNCHANGED, to
- * the byte, including its `|| channel.name` last resort**: a nameless, emailless
- * lone peer still reads as the channel, which is the only sensible thing left to
- * call it. That fallback is deliberately NOT extended to the multi branch —
- * naming a four-person channel after the channel while claiming to name people
- * would attribute it to whoever the reader assumes.
+ * 🔒 **THE MEMBER-DERIVED TITLE IS DELETED (Samuel, 2026-09-01), AND THIS IS A
+ * MODEL CORRECTION, NOT A TWEAK.** This function used to name a channel after
+ * the PEOPLE in it — one peer's display name, then their email, then two names
+ * and a `+N` — which made a channel's identity a function of its membership. So
+ * adding somebody to a channel RENAMED it: the row you had been working in for
+ * a week became "Priya Shah" (or `priya@shahco.tax`) the moment she claimed a
+ * link, and it changed again when the next person joined. **A channel's name is
+ * its own immutable display identity; a roster is not a name.**
+ *
+ * ⚠ **THAT PRESENTATION WAS A DM'S, ON A THING THAT IS NOT A DM.** It was
+ * written on 2026-08-24 when a home container really was a two-party
+ * relationship, and it outlived the model twice — the channel-first inversion
+ * the same week (a channel exists BEFORE anyone else is in it) and the
+ * multi-member containers of 2026-08-30. ⚠ **REAL DMs ARE UNAFFECTED and their
+ * code is elsewhere**: `channels.is_direct` + `Channel.directPeer`, rendered by
+ * the channels feature. Nothing in this file ever touched them — home
+ * containers hold a PRIVATE, NON-DIRECT channel by construction
+ * (`home/server/repository-containers.ts › listContainerChannels` says so).
+ *
+ * ⚠ **NOTHING IS LOST.** Who is in the channel is answered by the Info tab's
+ * roster, beside each face and each address, where it can be attributed.
  */
 export function channelTitle(channel: HomeChannel): string {
-  const people = channelPeople(channel);
-  if (people.length === 0) return channel.name;
-  if (people.length === 1) {
-    return people[0].displayName || people[0].email || channel.name;
-  }
-  const names = people.map((p) => p.displayName || p.email || "Member");
-  const shown = names.slice(0, TITLE_NAMES).join(", ");
-  const rest = names.length - TITLE_NAMES;
-  return rest > 0 ? `${shown} +${rest}` : shown;
-}
-
-/**
- * The line UNDER the title on a channel row: who this channel is with.
- *
- * ⚠ **THE EMAIL IS A ONE-PERSON ANSWER AND MUST NOT SURVIVE INTO THE MULTI CASE
- * (2026-08-26).** With one peer the subline is their address — useful, and what
- * this row has always shown. With three, showing ONE address under a title
- * naming two different people attributes it to the wrong one; the honest line is
- * the size of the room, and the Info tab's roster is where addresses live.
- * ⚠ A SOLO channel's line is the STATIC words "Just you" (Samuel, 2026-08-24),
- * not an agent or thread count — a count here would be a second read per row for
- * a line nobody acts on.
- */
-export function channelSubline(channel: HomeChannel): string {
-  const people = channelPeople(channel);
-  if (people.length === 0) return "Just you";
-  if (people.length === 1) return people[0].email ?? "";
-  return `${people.length} people`;
+  return channel.name;
 }
 
 /** A URL reads as a link without its scheme; the COPY still carries the whole

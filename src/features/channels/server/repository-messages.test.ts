@@ -62,6 +62,7 @@ function makeAdmin(rows: ChannelMessageRow[]) {
     neq: (c: string, v: unknown) => rec("neq", [c, v]),
     or: (f: string) => rec("or", [f]),
     gt: (c: string, v: unknown) => rec("gt", [c, v]),
+    lt: (c: string, v: unknown) => rec("lt", [c, v]),
     order: (c: string, o: unknown) => rec("order", [c, o]),
     limit: (n: number) => rec("limit", [n]),
     then: (resolve: (r: { data: ChannelMessageRow[]; error: null }) => void) =>
@@ -82,6 +83,63 @@ function eqFilters(calls: Call[]): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("listMessages — the BACKWARD `before` cursor", () => {
+  it("filters `seq < before` and takes the NEWEST qualifying page, flipped", async () => {
+    // ⚠ THE ORDERING IS THE WHOLE POINT. Rows come back descending from the DB
+    // (the `limit` has to bite the end NEAREST the cursor) and are flipped for
+    // display. Read ascending instead and every page would be the channel's
+    // oldest `limit` rows — the same page forever, which is the bug this test
+    // exists to catch.
+    const calls = makeAdmin([messageRow(9), messageRow(8), messageRow(7)]);
+
+    const rows = await listMessages(CHANNEL, { before: 10, limit: 3 });
+
+    expect(calls.find((c) => c.op === "lt")?.args).toEqual(["seq", 10]);
+    expect(calls.find((c) => c.op === "order")?.args[1]).toEqual({
+      ascending: false,
+    });
+    expect(calls.find((c) => c.op === "limit")?.args).toEqual([3]);
+    expect(rows.map((r) => r.seq)).toEqual([7, 8, 9]);
+  });
+
+  it("BEATS `since` on the ordering when both ends are given (a bounded window)", async () => {
+    // Both cursors is legal and means a window; `before` still decides which end
+    // the limit bites, so the page is the NEWEST rows inside it.
+    const calls = makeAdmin([messageRow(6), messageRow(5)]);
+
+    const rows = await listMessages(CHANNEL, { since: 2, before: 7, limit: 2 });
+
+    expect(calls.find((c) => c.op === "gt")?.args).toEqual(["seq", 2]);
+    expect(calls.find((c) => c.op === "lt")?.args).toEqual(["seq", 7]);
+    expect(calls.find((c) => c.op === "order")?.args[1]).toEqual({
+      ascending: false,
+    });
+    expect(rows.map((r) => r.seq)).toEqual([5, 6]);
+  });
+
+  it("applies NO `lt` when the cursor is absent (the newest-page read is unchanged)", async () => {
+    const calls = makeAdmin([messageRow(2), messageRow(1)]);
+
+    const rows = await listMessages(CHANNEL, { limit: 2 });
+
+    expect(calls.some((c) => c.op === "lt")).toBe(false);
+    expect(rows.map((r) => r.seq)).toEqual([1, 2]);
+  });
+
+  it("composes with the thread filter — a thread pages back too", async () => {
+    const calls = makeAdmin([messageRow(4, THREAD_UUID)]);
+
+    await listMessages(CHANNEL, {
+      before: 5,
+      limit: 50,
+      threadId: THREAD_UUID,
+    });
+
+    expect(eqFilters(calls)["metadata->>taskId"]).toBe(THREAD_UUID);
+    expect(calls.find((c) => c.op === "lt")?.args).toEqual(["seq", 5]);
+  });
 });
 
 describe("listMessages — thread scope", () => {

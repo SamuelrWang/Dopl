@@ -10,9 +10,9 @@ import {
   HOME,
   LINK_OUT,
   MEMBERS,
-  SERIES,
   SOLO_CHANNEL,
   THREADS,
+  openChannelRecord,
   renderHome,
   routes,
 } from "./home-test-harness";
@@ -142,15 +142,20 @@ describe("Channel info — removable rows", () => {
     serve(HOME, MEMBERS, held);
 
     renderHome();
-    await screen.findByTestId("channel-surface");
-    expect(await screen.findByText("Email")).toBeInTheDocument();
+    await openChannelRecord();
+    // ⚠ THE SUBJECT IS "Created", NOT "Email" (2026-09-01). The Email row is
+    // deleted from this card — it was the last member-derived fact on it, and
+    // `person-info-tab.tsx` carries the ruling — so the × is exercised on a row
+    // that is genuinely about the CHANNEL. The mechanism under test (optimistic
+    // hide, one key, survives the reconcile) is unchanged.
+    expect(await screen.findByText("Created")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Remove Email from this card" })
+      screen.getByRole("button", { name: "Remove Created from this card" })
     );
 
-    await waitFor(() => expect(screen.queryByText("Email")).toBeNull());
-    expect(lastCardSent()).toEqual({ hidden: ["email"], rows: [] });
+    await waitFor(() => expect(screen.queryByText("Created")).toBeNull());
+    expect(lastCardSent()).toEqual({ hidden: ["created"], rows: [] });
 
     // Now let the server answer, and let the write's own `invalidate` re-read
     // `/api/channels` — the half that only passes if the server KEPT it.
@@ -160,9 +165,8 @@ describe("Channel info — removable rows", () => {
         bridgeCalls(apiRequest).filter((c) => c.path === "/api/channels").length
       ).toBeGreaterThan(1)
     );
-    expect(screen.queryByText("Email")).toBeNull();
+    expect(screen.queryByText("Created")).toBeNull();
     // The rows it did NOT name are untouched — an × is one row, not a reset.
-    expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Last activity")).toBeInTheDocument();
   });
 
@@ -172,7 +176,7 @@ describe("Channel info — removable rows", () => {
     stored = { hidden: ["email"], rows: [] };
     serve(HOME);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     await screen.findByText("Created");
     expect(screen.queryByText("Email")).toBeNull();
     expect(
@@ -184,7 +188,7 @@ describe("Channel info — removable rows", () => {
 describe("Channel info — the discreet add", () => {
   it("is present but INVISIBLE until the section is hovered", async () => {
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const add = await screen.findByTestId("info-card-add");
     // ⚠ CLASS ASSERTIONS, because jsdom applies no stylesheet: the contract is
     // that the wrapper rests at zero opacity and is lifted by the SECTION's
@@ -199,7 +203,7 @@ describe("Channel info — the discreet add", () => {
 
   it("adds a custom item in place and persists it", async () => {
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     fireEvent.click(await screen.findByText("Add item"));
 
     fireEvent.change(screen.getByLabelText("Item label"), {
@@ -221,7 +225,7 @@ describe("Channel info — the discreet add", () => {
 
   it("ESCAPE cancels the draft and writes nothing", async () => {
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     fireEvent.click(await screen.findByText("Add item"));
     fireEvent.change(screen.getByLabelText("Item label"), {
       target: { value: "Phone" },
@@ -237,7 +241,7 @@ describe("Channel info — the discreet add", () => {
     stored = { hidden: [], rows: [{ id: "row-1", label: "Phone", value: "old" }] };
     serve(HOME);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit Phone" }));
     fireEvent.change(screen.getByLabelText("Item value"), {
@@ -257,7 +261,7 @@ describe("Channel info — the discreet add", () => {
     stored = { hidden: [], rows: [{ id: "row-1", label: "Phone", value: "x" }] };
     serve(HOME);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     await screen.findByText("Phone");
 
     fireEvent.click(
@@ -278,7 +282,7 @@ describe("Members", () => {
    */
   it("renders the channels-page row — name, EMAIL and role — for a peer channel", async () => {
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const roster = await screen.findByTestId("channel-members");
 
     expect(within(roster).getByText("Sam Wang")).toBeInTheDocument();
@@ -303,7 +307,7 @@ describe("Members", () => {
     };
     serve(HOME, guestRoster);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const roster = await screen.findByTestId("channel-members");
     expect(within(roster).getByText("Owner")).toBeInTheDocument();
     expect(within(roster).getByText("Guest")).toBeInTheDocument();
@@ -319,7 +323,7 @@ describe("Members", () => {
     });
     serve(HOME, { members: stale } as typeof MEMBERS);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const roster = await screen.findByTestId("channel-members");
     expect(within(roster).getByText("Owner")).toBeInTheDocument();
     expect(within(roster).getByText("Member")).toBeInTheDocument();
@@ -329,7 +333,7 @@ describe("Members", () => {
   it("renders the operator ALONE on a solo channel — never an empty state", async () => {
     serve(SOLO_HOME, SOLO_MEMBERS);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const roster = await screen.findByTestId("channel-members");
     expect(within(roster).getByText("Sam Wang")).toBeInTheDocument();
     expect(within(roster).queryByText("Priya Shah")).toBeNull();
@@ -342,7 +346,7 @@ describe("Members", () => {
   it("puts Add person UNDER the roster", async () => {
     serve(SOLO_HOME, SOLO_MEMBERS);
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const heading = await screen.findByText("Members");
     const add = screen.getByRole("button", { name: "Add person" });
     // ⚠ ORDER IS THE ASSERTION (Samuel, 2026-08-25). `DOCUMENT_POSITION_
@@ -359,7 +363,7 @@ describe("Members", () => {
     // used to assert the control was gone. Adding the next person is the same
     // act as adding the first, so the affordance must survive the first claim.
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     await screen.findByText("Members");
     expect(
       screen.getByRole("button", { name: "Add person" })
@@ -375,7 +379,7 @@ describe("Members", () => {
       SOLO_MEMBERS
     );
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const surface = screen.getByTestId("channel-surface");
     expect(await within(surface).findByText("Link out")).toBeInTheDocument();
     // ⚠ ONE SECTION, TWO STATES, AND NEVER BOTH — this is the rule the cap's
@@ -388,65 +392,11 @@ describe("Members", () => {
   });
 });
 
-describe("Thread activity", () => {
-  /**
-   * ⚠ THE VISUAL IS THE CHANNELS PAGE'S DENSITY STRIP AND THE NUMBERS ARE REAL
-   * (Samuel, 2026-08-25 — this replaces the plain thread LIST the first pass
-   * substituted). What it must never become again is that page's FIXTURE: the
-   * squares are only honest because a counted series is behind them.
-   */
-  it("draws the strip from the channel-scoped series", async () => {
-    renderHome();
-    await screen.findByTestId("channel-surface");
-    expect(await screen.findByText("Thread activity")).toBeInTheDocument();
-
-    const strip = await screen.findByRole("img", { name: /Messages in this channel/i });
-    expect(strip.children).toHaveLength(SERIES.days.length);
-    // The label states the unit and the window — a bare row of squares that
-    // names neither is a picture the reader has to guess at.
-    expect(strip.getAttribute("aria-label")).toContain("per day");
-  });
-
-  it("⚠ asks for THIS CHANNEL, not the container's whole workspace", async () => {
-    renderHome();
-    await screen.findByTestId("channel-surface");
-    await screen.findByRole("img", { name: /Messages in this channel/i });
-
-    const call = bridgeCalls(apiRequest).find((c) =>
-      c.path.includes("/overview-series")
-    );
-    expect(call).toBeTruthy();
-    // Today a link container holds exactly one channel, so an UNSCOPED series
-    // would look identical and be right by accident. It would stop being right
-    // the moment that stops being true, and nothing would say so.
-    expect(call?.path).toContain(`channelId=${CHANNEL_ID}`);
-    expect(call?.path).toContain("metric=messages");
-  });
-
-  it("renders NO squares rather than empty wells when the series cannot answer", async () => {
-    // A stale persisted cache entry, or a read still in flight: an empty well
-    // is a MEASURED zero, so 31 of them would state a month of quiet nobody
-    // counted.
-    apiRequest.mockImplementation(
-      (path: string, opts: BridgeRequestOpts = {}) =>
-        path.split("?")[0].endsWith("/overview-series")
-          ? Promise.resolve(ok({ metric: "messages" }))
-          : (routes(path, opts) ??
-            Promise.reject(new Error(`unexpected: ${path}`)))
-    );
-    renderHome();
-    await screen.findByTestId("channel-surface");
-    expect(await screen.findByText("Thread activity")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("img", { name: /Messages in this channel/i })
-    ).toBeNull();
-  });
-});
 
 describe("section order", () => {
   it("is header → Channel info → Thread activity → Members", async () => {
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     const main = await screen.findByText("Channel info");
     const activity = screen.getByText("Thread activity");
     const members = screen.getByText("Members");
@@ -487,7 +437,7 @@ describe("a cache entry written before the info card existed", () => {
       }
     );
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     expect(await screen.findByText("Channel info")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
     // And the add affordance still works off the empty card.

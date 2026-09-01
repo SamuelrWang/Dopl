@@ -90,12 +90,27 @@ export interface KnowledgeBaseList {
    *  a base property, so it rides the response not the row. `[]` covers both
    *  "nothing starred" and degraded — both render identically. */
   starredBaseIds: string[];
+  /**
+   * Base ids granted into AT LEAST ONE channel — the set behind the card's
+   * `Shared` pill (2026-09-01). Subset of `bases`.
+   *
+   * ⚠ **`?? EMPTY_SHARED` INLINE AT EVERY READ (INVARIANTS §8).** This list is
+   * IndexedDB-persisted, so an entry written by a bundle that predates the key
+   * survives the upgrade WITHOUT it — the wire type is non-optional and is
+   * right, the cache is a different moment. Absent reads as "none known to be
+   * shared", which is exactly what shipped before the key existed.
+   */
+  sharedBaseIds: string[];
   /** `{baseId → {level, guestWrite}}` for the channel passed as `channelId`.
    *  ⚠ `EMPTY_GRANTS` ({}) when NO channelId was requested OR a pre-grant server
    *  sent no key — both mean "no scope-A grants to show here", which renders
    *  identically. A base with no grant is simply ABSENT from the map. */
   channelGrants: Record<string, ChannelResourceGrant>;
 }
+
+/** Shared frozen empty list — the §8 fallback for `sharedBaseIds`, never a
+ *  fresh `[]` per read (which would churn every memo keyed on it). */
+export const EMPTY_SHARED: readonly string[] = Object.freeze([]);
 
 /** Shared frozen empty map — a stale cached payload (no `channelGrants` key)
  *  and an unscoped read both fall back to THIS, never a fresh `{}` per read. */
@@ -122,6 +137,7 @@ export async function fetchBaseList(
     baseStats?: Record<string, KnowledgeBaseStats>;
     kbStorageLimit?: number | null;
     starredBaseIds?: string[];
+    sharedBaseIds?: string[];
     channelGrants?: Record<string, ChannelResourceGrant>;
   }>("/api/knowledge/bases", {
     workspaceId,
@@ -138,6 +154,10 @@ export async function fetchBaseList(
     // could not resolve it, correctly.
     kbStorageLimit: data.kbStorageLimit ?? null,
     starredBaseIds: data.starredBaseIds ?? [],
+    // Pre-deploy server sends no key; "none known to be shared" is the same
+    // answer a degraded read gives and renders identically (every card keeps
+    // its scope word).
+    sharedBaseIds: data.sharedBaseIds ?? [],
     // ⚠ §8 stale-cache: a payload cached before this field existed carries no
     // `channelGrants` key. `?? EMPTY_GRANTS` keeps the read from crashing and
     // renders "no grants", never a blank pane.

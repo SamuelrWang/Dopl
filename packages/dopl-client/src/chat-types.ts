@@ -3,7 +3,12 @@
  * Mirrors src/features/chats/types.ts in the app.
  */
 
-export type ChatSource = "claude-code" | "claude-desktop" | "cursor" | "other";
+export type ChatSource =
+  | "claude-code"
+  | "claude-desktop"
+  | "codex"
+  | "cursor"
+  | "other";
 
 export type ChatExportFormat = "summarized" | "verbatim" | "mixed";
 

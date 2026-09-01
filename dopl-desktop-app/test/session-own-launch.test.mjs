@@ -31,6 +31,12 @@ const lane = require(M("session-own-launch.js"));
 const profiles = require(M("session-profiles.js"));
 const perms = require(M("session-permissions.js"));
 const io = require(M("session-io.js"));
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(M("runtime/claude/axis-b.js"));
 const { GATE_REASONS } = require(M("session-gate-reason.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
@@ -220,7 +226,7 @@ function recorder() {
 test("ADMITTED: {allow}, NO dispatch, NO parked resolver — claimGate is never reached", async () => {
   const s = mkSession({ toolMode: "bypass", messageMode: "auto_both", launchDepth: 0 });
   const rec = recorder();
-  const res = await io.makeCanUseTool(s, rec.dispatch)(DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "L1" });
+  const res = await axisB.makeCanUseTool(s, rec.dispatch)(DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "L1" });
   assert.deepEqual(res, { behavior: "allow" });
   assert.equal(rec.events.length, 0, "nothing was dispatched, so nothing can be auto-denied");
   assert.equal(s.pendingPermissions.size, 0, "no resolver parked for claimGate to deny");
@@ -229,7 +235,7 @@ test("ADMITTED: {allow}, NO dispatch, NO parked resolver — claimGate is never 
 test("ASK: ONE permission_request, carrying the reason — refusable, not silent", async () => {
   const s = mkSession({ toolMode: "bypass", messageMode: "ask", launchDepth: 0 });
   const rec = recorder();
-  const pending = io.makeCanUseTool(s, rec.dispatch)(DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "L2" });
+  const pending = axisB.makeCanUseTool(s, rec.dispatch)(DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "L2" });
   assert.equal(rec.events.length, 1);
   assert.equal(rec.events[0].type, "permission_request");
   assert.equal(rec.events[0].payload.gateReason, "launch-posture-required",
@@ -242,7 +248,7 @@ test("ASK: ONE permission_request, carrying the reason — refusable, not silent
 test("CAPPED: an immediate deny carrying the BOUND's own sentence, not 'Blocked for this session'", async () => {
   const s = mkSession({ toolMode: "bypass", messageMode: "auto_both" }); // no depth => the cap
   const rec = recorder();
-  const res = await io.makeCanUseTool(s, rec.dispatch)(DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "L3" });
+  const res = await axisB.makeCanUseTool(s, rec.dispatch)(DOPL_CHANNEL_TOOL, LAUNCH, { requestId: "L3" });
   assert.equal(res.behavior, "deny");
   assert.equal(res.message, perms.LAUNCH_DEPTH_DENY_MESSAGE);
   assert.equal(rec.events.length, 0, "nothing to ask — the bound is not a question");
@@ -262,7 +268,7 @@ test("CAPPED: an immediate deny carrying the BOUND's own sentence, not 'Blocked 
   assert.match(perms.LAUNCH_DEPTH_DENY_MESSAGE, /agent-chaining setting/,
     "it NAMES the switch — a bound with an unnamed remedy is the same dead end");
   // ...and a hard-denied tool keeps the generic wording.
-  const hard = await io.makeCanUseTool(mkSession({ toolMode: "bypass" }), recorder().dispatch)(
+  const hard = await axisB.makeCanUseTool(mkSession({ toolMode: "bypass" }), recorder().dispatch)(
     "mcp__dopl__dopl_kb_admin", { op: "delete_base" }, { requestId: "L4" });
   assert.deepEqual(hard, { behavior: "deny", message: perms.BLOCKED_MESSAGE });
 });

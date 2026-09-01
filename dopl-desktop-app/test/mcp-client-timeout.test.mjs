@@ -27,7 +27,7 @@ import { fnOf } from "./helpers/source-probe.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const CONFIG = M("mcp-config.js");
-const LOADER = M("sdk-loader.js");
+const LOADER = M("runtime/claude/loader.js");
 
 const BUDGET = readFileSync(
   join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-await-budget.ts"),
@@ -109,8 +109,8 @@ test("the ONE entry this app owns reads the constant — no second literal", () 
   assert.match(LOADER, /timeout: clientTimeoutMs\(\),/);
   assert.match(
     fnOf(LOADER, "clientTimeoutMs"),
-    /require\('\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
-    "sdk-loader imports it from mcp-config rather than restating it"
+    /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
+    "the loader imports it from mcp-config rather than restating it"
   );
   assert.ok(
     !/\b280_000\b/.test(CONFIG + LOADER),

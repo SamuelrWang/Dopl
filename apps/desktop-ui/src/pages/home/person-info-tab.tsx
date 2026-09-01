@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { Bot, CalendarDays, Clock3, Mail, type LucideIcon } from "lucide-react";
-import { Avatar } from "@/shared/ui/avatar";
-import { AvatarStack } from "@/shared/ui/avatar-stack";
+import { CalendarDays, Clock3, type LucideIcon } from "lucide-react";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
@@ -26,19 +24,35 @@ import {
 } from "@/features/channels/info-card";
 import type { Channel } from "@/features/channels/types";
 import type { HomeChannel } from "@/features/home/types";
-import { channelPeople, channelSubline, channelTitle } from "./home-rows";
+import { channelTitle } from "./home-rows";
 import { PersonMembers } from "./person-members";
 import { PersonThreadActivity } from "./person-thread-activity";
 
 /**
- * The Info tab of a home channel's surface — THE PERSON, where a workspace
- * channel shows its metadata and roster (`channel-surface.tsx › infoTab`).
+ * The Info tab of a home channel's surface — THE CHANNEL, exactly as a
+ * workspace channel's own Info tab is (`channel-surface.tsx › infoTab`).
  *
- * ⚠ TWO CARDS, ONE PANEL (2026-08-24). With a peer it is the PERSON: their
- * face, their email, the channel's dates. With none it is the CHANNEL: a glyph,
- * the channel's name, and only the facts that exist — an "Email —" row on a
- * solo channel answers a question nobody asked and implies a person who is not
- * there. The rows that survive both are the ones about the channel itself.
+ * 🔒 **ONE CARD, AND IT IS THE CHANNEL'S (Samuel, 2026-09-01).** This file said
+ * "TWO CARDS, ONE PANEL" and meant it: with a peer the tab was that PERSON —
+ * their face, their name as the heading, their email as the subline and again as
+ * a built-in row — and with nobody it was the channel. So **adding a member
+ * turned the tab into that member's profile**, and the sections under it
+ * (Channel info, Thread activity) read as facts about them. A channel's
+ * identity is not its roster's identity, and it does not change when the roster
+ * does.
+ *
+ * ⚠ **THE SAME CORRECTION LANDED ON THE LIST ROW IN THE SAME CHANGE** —
+ * `home-rows.ts › channelTitle` returns `channel.name` and nothing else now, and
+ * `relationship-list.tsx` dropped its avatars. Both surfaces were reading one
+ * derivation; both had to stop.
+ *
+ * ⚠ **MEMBERS APPEAR IN EXACTLY ONE PLACE ON THIS TAB: `PersonMembers`, at its
+ * foot** — every member, with their face, their name and their address, where
+ * each fact can be attributed to the person it belongs to.
+ *
+ * ⚠ THE COMPONENT AND FILE ARE STILL NAMED `Person*`, like `relationship-list`
+ * next door and for the same reason: a rename is churn in files a later wave
+ * rewrites. What changed is what the tab READS.
  *
  * ⚠ THE MOCK'S POSTURE SELECT, NOTES FIELD AND POLICY ROW ARE DELETED, not
  * disabled: none of the three has a backend, and a control that cannot be
@@ -49,10 +63,8 @@ import { PersonThreadActivity } from "./person-thread-activity";
  * the list adds a custom `label: value` pair. Both edits are stored on
  * `channels.info_card` and written through the PATCH that already writes the
  * channel — see `features/channels/info-card.ts`.
- *   ⚠ REMOVING A ROW REMOVES IT FROM THE CARD, NOT FROM THE WORLD. The peer's
- *   email is still on their profile, still on the roster, still in the header
- *   subline above; what changed is what this card shows. Do not "finish the
- *   job" by nulling anything.
+ *   ⚠ REMOVING A ROW REMOVES IT FROM THE CARD, NOT FROM THE WORLD. What changed
+ *   is what this card shows. Do not "finish the job" by nulling anything.
  *
  * ⚠ THE ORDER IS HEADER → CHANNEL INFO → THREAD ACTIVITY → MEMBERS (+ ADD PERSON)
  * (Samuel, 2026-08-25 — corrected the same day; the first pass put Members
@@ -77,9 +89,9 @@ export function PersonInfoTab({
    *  ChannelInfoTabContext`. Never a second one minted here. */
   gate: MutationGate;
 }) {
-  // ⚠ Everybody else in the container, oldest join first. The cache-shape rule
-  // for `peers` lives in `channelPeople` and is enforced from `home-rows.test.ts`.
-  const people = channelPeople(homeChannel);
+  // 🔒 THE CHANNEL'S OWN NAME. `channelTitle` returns `channel.name` and nothing
+  // else since 2026-09-01 — the roster-derived title is gone, and that function's
+  // docblock carries the ruling and its history.
   const name = channelTitle(homeChannel);
   // ⚠ CACHE-SHAPE FALLBACK: the persisted query cache (IndexedDB) serves
   // channel rows minted before `infoCard` existed, so the field can be absent
@@ -94,34 +106,30 @@ export function PersonInfoTab({
 
   // ⚠ BUILT AS DATA, THEN FILTERED — never `hidden.includes(...)` written three
   // times inline. One list means the divider arithmetic below cannot disagree
-  // with what is on screen, and adding a fourth built-in row is one entry plus
-  // one key in `info-card.ts`.
-  // 🔒 ⚠ THE EMAIL ROW IS A ONE-PERSON ROW AND IS DROPPED ABOVE ONE
-  // (2026-08-26). It was already absent on a SOLO channel, for the reason at the
-  // top of this file — a row answering a question nobody asked, implying a
-  // person who is not there. **A container with three people asks the mirror
-  // question and it has no honest answer**: one address under a header naming
-  // two other members reads as THEIR address, and a card whose whole premise is
-  // curated facts must not print a fact about the wrong person. Every member's
-  // address is one section down, beside their face, in the roster
-  // (`PersonMembers` → `MemberRoster`, name over EMAIL) — so nothing is lost,
-  // it is shown where it can be attributed. ⚠ Do NOT "fix" this by stacking N
-  // Email rows: the card is capped and curated, and the roster IS that list.
+  // with what is on screen, and adding a built-in row is one entry plus one key
+  // in `info-card.ts`.
+  //
+  // 🔒 ⚠ **THE EMAIL ROW IS DELETED (Samuel, 2026-09-01) — IT WAS THE LAST
+  // MEMBER-DERIVED FACT ON THIS CARD.** It rendered only when the container held
+  // EXACTLY ONE peer, which is what made it a morph: a channel's info card grew
+  // a stranger's address the moment they claimed a link, and lost it again when
+  // a second person joined. (It had already been dropped above one peer on
+  // 2026-08-26, for the narrower reason that one address under a header naming
+  // two other members reads as THEIRS — the same defect, caught one case
+  // early.) **A card whose whole premise is curated facts about THIS CHANNEL
+  // must not carry a fact about a person.**
+  //
+  // ⚠ **NOTHING IS LOST**: every member's address is one section down, beside
+  // their face, in the roster (`PersonMembers` → `MemberRoster`, name over
+  // EMAIL) — shown where it can be attributed, and the only place an added user
+  // appears on this tab.
+  //
+  // ⚠ **`"email"` STAYS IN `info-card.ts › INFO_CARD_BUILT_IN_KEYS` AND MUST.**
+  // Stored cards carry it in `hidden` for operators who removed the row while it
+  // existed; that file already states the rule — a key hidden on a channel that
+  // does not render the row is INERT rather than wrong. Dropping it from the
+  // union would turn every one of those stored rows into a validation failure.
   const builtIns: BuiltInRow[] = [
-    ...(people.length === 1
-      ? [
-          {
-            key: "email" as const,
-            icon: Mail,
-            label: "Email",
-            value: (
-              <span className="truncate text-body text-text-primary">
-                {people[0].email ?? "—"}
-              </span>
-            ),
-          },
-        ]
-      : []),
     {
       key: "created" as const,
       icon: CalendarDays,
@@ -148,48 +156,26 @@ export function PersonInfoTab({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      <div className="flex items-center gap-3 px-3.5 pt-4">
-        {people.length > 1 ? (
-          // ⚠ THE SAME STACK AS THE ROW, ONE STEP UP (2026-08-26). `md` is
-          // `Avatar size="md"` to the pixel, so the header does not shift as a
-          // channel grows; `max={4}` is the primitive's default and there is
-          // room for it here where the 290px row only had room for three.
-          <div className="shrink-0" aria-hidden>
-            <AvatarStack
-              size="md"
-              users={people.map((p) => ({
-                userId: p.userId,
-                displayName: p.displayName || p.email || "Member",
-                avatarUrl: p.avatarUrl,
-              }))}
-            />
-          </div>
-        ) : people.length === 1 ? (
-          <Avatar person={people[0]} size="md" />
-        ) : (
-          // ⚠ `w-10 h-10` is `Avatar size="md"` — same reason the row's glyph
-          // matches `sm`: the header must not shift with the peer's presence.
-          <span
-            aria-hidden
-            className="btn-light flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-secondary"
-          >
-            <Bot size={18} />
-          </span>
-        )}
-        <div className="min-w-0">
-          <div className="truncate text-title font-semibold text-text-primary">
-            {name}
-          </div>
-          {/* ⚠ ONE PEER KEEPS ITS ADDRESS; TWO OR MORE GET THE SIZE OF THE ROOM
-              — `channelSubline`'s rule, shared with the list row so the two
-              faces of one channel cannot say different things about it. The
-              "No email on file" nuance is this header's alone: the row leaves
-              that line blank rather than narrating an absence in a list. */}
-          <div className="truncate text-caption text-text-muted">
-            {people.length === 1
-              ? (people[0].email ?? "No email on file")
-              : channelSubline(homeChannel)}
-          </div>
+      {/* 🔒 ⚠ **THE HEADER IS THE CHANNEL, AND ONLY THE CHANNEL (Samuel,
+          2026-09-01).** It used to be a PERSON CARD chosen by roster size — an
+          `AvatarStack`, a single `Avatar`, or a `Bot` glyph, over a title that
+          was the peer's display name and a subline that was their email — so
+          adding one member turned the whole Info tab into that member's
+          profile, and the tab's remaining sections read as facts ABOUT THEM.
+          **A channel's identity is not its roster's identity**, and the same
+          correction landed on the list row in this change
+          (`home-rows.ts › channelTitle`).
+          ⚠ **NOTHING IS LOST AND NOTHING MOVED**: every member, with their face
+          and their address, is in `PersonMembers` at the foot of this tab —
+          which is where an added user is supposed to appear, and the only place
+          they now do.
+          ⚠ **NO GLYPH IN THE AVATAR'S PLACE EITHER.** A face here that varied
+          with membership was the defect; a face that does not vary is a
+          decoration this panel does not need, and initials minted from a
+          channel name read as a person who does not exist. */}
+      <div className="px-3.5 pt-4">
+        <div className="truncate text-title font-semibold text-text-primary">
+          {name}
         </div>
       </div>
 

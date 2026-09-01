@@ -195,6 +195,12 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./channel-prefs") return { getLaunchPosture: () => PRESET, setLaunchPosture: () => ({ ok: true }), launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }), getAutoSend: () => false, setAutoSend: () => true };
+    // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride
+    // the EXISTING posture pair rather than growing a fourth op (see `channel-dir-ipc.js`), so
+    // there is no new row in the OPS table; what they need here is only to exist, because the
+    // handler reads them on the SUCCESS path these cases must never reach.
+    if (id === "./channel-runtime") return { getChannelRuntime: () => "", setChannelRuntime: () => "" };
+    if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude" };
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
@@ -232,11 +238,18 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // but broke the write would be a Settings tab that renders and silently does nothing,
     // which is the failure Phase 10 exists to prevent. `setLaunchPosture` is the worst case
     // now, so it is the one driven positively here.
-    assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH), PRESET, which);
+    // ⚠ THE READ CARRIES THREE MORE KEYS SINCE 2026-08-31 (the runtime-adapter port): the
+    // channel's runtime pick, the frozen descriptor table the Settings picker renders, and the
+    // default adapter's id. They ride this pair rather than a fourth op — `channel-dir-ipc.js`
+    // carries why, and `renderer/app-preload.js` being at the §1 cap with no split seam is the
+    // hard half of it. Asserted as the WHOLE reply rather than a subset, because what this case
+    // is about is that a bound sender gets the real one.
+    assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH),
+      { ...PRESET, runtime: "", runtimes: [], defaultRuntime: "claude" }, which);
     // ⚠ `applied` (2026-08-25) is the live fan-out's count — see test/channel-posture-live.test.mjs.
     // This harness binds no session engine, so a bound sender's write succeeds with nothing to
     // apply it to; what is being driven HERE is the sender binding, not the fan-out.
-    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }), { ok: true, applied: 0 }, which);
+    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }), { ok: true, applied: 0, runtime: "" }, which);
     assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
     await ipc.handlers["channels:chooseFolder"](sender, CH);
     assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);

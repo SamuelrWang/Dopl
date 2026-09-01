@@ -47,6 +47,7 @@ function seededList(): KnowledgeBaseList {
     baseStats: {},
     kbStorageLimit: null,
     starredBaseIds: [],
+  sharedBaseIds: [],
     channelGrants: {},
   };
 }
@@ -171,18 +172,39 @@ describe("the /home card face is a rebind, not a fork", () => {
     expect(kbCards).toMatch(/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
   });
 
-  it("🔒 rebinds the card's title and clamp on the GRID, and by token", () => {
-    // ⚠ `var(--text-body)` — the token behind `text-body`, which is what
-    // `relationship-list.tsx`'s channel-row name wears. A literal `12.5px` here
-    // would be the same pixel today and a drift the day the scale moves.
-    expect(kbCards).toContain("--kv-card-title-size: var(--text-body)");
-    expect(kbCards).toMatch(/--kv-card-title-weight:\s*400/);
+  it("🔒 rebinds the card's clamp on the GRID — and NOT its title", () => {
     expect(kbCards).toMatch(/--kv-card-desc-lines:\s*2/);
+    // 🔒 THE TITLE REBINDS ARE GONE (Samuel, 2026-09-01). A KB card's name
+    // matches the channel-row title EXACTLY on EVERY surface now, so the match
+    // lives in `.cardName`'s own defaults (pinned below) — and a rebind here
+    // could only make /home disagree with it again.
+    expect(kbCards).not.toContain("--kv-card-title-size");
+    expect(kbCards).not.toContain("--kv-card-title-weight");
   });
 
-  it("🔒 the SHARED card keeps the workspace page's values as fallbacks", () => {
-    expect(cardCss).toContain("var(--kv-card-title-size, var(--text-title))");
-    expect(cardCss).toContain("var(--kv-card-title-weight, 600)");
+  /**
+   * 🔒 **THE CARD NAME IS THE CHANNEL-ROW NAME, TOKEN FOR TOKEN.** The one
+   * reference is `relationship-list.tsx › RelationshipRow`'s name span,
+   * `truncate text-body font-medium text-text-primary` — so the defaults are
+   * `--text-body` (the token behind `text-body`, never a literal `12.5px`, which
+   * would be the same pixel today and a drift the day the ramp moves), weight
+   * 500, and `--kv-text`, which resolves to `--text-primary` in both hosts.
+   * ⚠ AND NO TRACKING: the card carried `letter-spacing: -0.01em` and the row
+   * carries none — at 12.5px that is the difference between two words that look
+   * set in different faces.
+   */
+  it("🔒 the SHARED card's defaults ARE the channel row's face", () => {
+    expect(cardCss).toContain("var(--kv-card-title-size, var(--text-body))");
+    expect(cardCss).toContain("var(--kv-card-title-weight, 500)");
+    const cardName = cardCss.slice(
+      cardCss.indexOf(".cardName {"),
+      cardCss.indexOf("}", cardCss.indexOf(".cardName {"))
+    );
+    expect(cardName).not.toContain("letter-spacing");
+    // The row it must match, read from ITS source — so this fails if EITHER
+    // side moves, which is the half that matters.
+    const row = read("./relationship-list.tsx");
+    expect(row).toContain('"truncate text-body font-medium"');
     // Floor and cap read ONE number, or the row reserves lines it cannot draw.
     expect(cardCss).toContain("-webkit-line-clamp: var(--kv-card-desc-lines, 3)");
     expect(cardCss).toContain(

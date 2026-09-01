@@ -61,8 +61,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 
-const LOADER = read("sdk-loader.js");
-const QUERY = read("session-query.js");
+const LOADER = read("runtime/claude/loader.js");
+// ⚠ 2026-08-31 (runtime-adapter port): the OPTION ASSEMBLY is the runtime adapter's — one
+// platform's option vocabulary is that platform's to own. What this pins is unchanged.
+const QUERY = read("runtime/claude/launch-spec.js");
 const AUTH = read("session-auth.js");
 const FRAMING_TEXT = read("prompt-framing-text.js");
 
@@ -154,9 +156,9 @@ test("the scrub's existing jobs are untouched", () => {
 // else in the option set re-opens the lane. These are the joins.
 
 test("the env that reaches query() is the SCRUBBED one, through the one assembly point", () => {
-  assert.match(QUERY, /env: sessionAuth\.withStoredCredential\(buildScrubbedEnv\(\)\)/,
-    "buildSdkOptions must build options.env from buildScrubbedEnv — nothing else");
-  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions("));
+  assert.match(QUERY, /env: sessionAuth\.withStoredCredential\(loader\.buildScrubbedEnv\(\)\)/,
+    "the launch spec must build options.env from buildScrubbedEnv — nothing else");
+  const opts = QUERY.slice(QUERY.indexOf("function buildOptions("));
   const body = opts.slice(0, opts.indexOf("\nfunction ", 1));
   assert.equal((body.match(/^\s*env:/gm) || []).length, 1, "exactly one env assignment");
   assert.equal(/options\.env\s*=/.test(body), false, "and nothing rewrites it afterwards");
@@ -200,7 +202,7 @@ test("`settingSources: []` is still pinned, and it is WHY the env var is needed"
 test("`--strict-mcp-config` has NOT crept in as a second answer", () => {
   // Considered and rejected: it hard-errors on enterprise machines carrying managed-mcp.json.
   // If it ever lands, this case is where the trade gets re-argued.
-  for (const [name, src] of [["session-query.js", QUERY], ["sdk-loader.js", LOADER]]) {
+  for (const [name, src] of [["runtime/claude/launch-spec.js", QUERY], ["runtime/claude/loader.js", LOADER]]) {
     const code = src.replace(/^\s*\/\/.*$/gm, "");
     assert.equal(/strictMcpConfig/.test(code), false, `${name}: strictMcpConfig option`);
   }

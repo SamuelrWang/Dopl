@@ -41,6 +41,7 @@ const { Notification } = require('electron');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const channelPrefs = require('./channel-prefs'); // the shared windowless message derivation
+const channelRuntime = require('./channel-runtime'); // 2026-08-31: which runtime this channel's agents run on
 const sessionModel = require('./session-model'); // the frozen model enum + the id -> alias map
 const spawner = require('./session-spawner');
 const sessionEngine = require('./session-engine');
@@ -164,12 +165,12 @@ async function handleTrigger(entry, m) {
   // on PATH", which a fresh install has not got), so it returned HERE — before the
   // notification and the window. claude-runtime.js has the story.
   if (!(await spawner.sessionSpawnAvailable())) {
-    diag('trigger skipped: no claude runtime at all (bundled or external)');
+    diag('trigger skipped: no agent runtime at all (bundled or external)');
     // C-3: DEFERRED, not dropped. The bundled-executable probe reads the asar-unpacked
     // bundle and can fail transiently (a first-access unpack race, a volume that has not
     // mounted yet); a machine that genuinely has no runtime simply exhausts the ladder and
     // the escape says so, instead of the request vanishing with no record anywhere.
-    return 'no-claude-runtime';
+    return 'no-agent-runtime';
   }
 
   const requesterName = io.displayNameFor(m.authorUserId);
@@ -230,6 +231,10 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     channelId: entry.channel.id,
     taskId,
     workspaceId: entry.workspaceId,
+    // ⚠ THE CHANNEL'S RUNTIME, INHERITED ON THIS LANE ON PURPOSE (2026-08-31) — the `model`'s
+    // rule, not the durable PERMISSION pair's. `main/channel-runtime.js`'s header carries the
+    // whole argument for why (picking a runtime widens nothing) in one place. Absent => default.
+    runtime: channelRuntime.getChannelRuntime(entry.channel.id),
     message: m.body,
     windowless: true,
     triggerSeq: m.seq, // the ask's seq — the outbound bridge's seq-join floor
@@ -306,7 +311,13 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
 // name this machine's state; the peer's copy (`CANNOT_RUN`) may not.
 function skippedHint(skipped) {
   if (skipped === 'cap') return 'Too many agents are already running here — end one and ask them to resend.';
-  if (skipped === 'no-sdk') return 'Claude Code is not available on this machine.';
+  // ⚠ VENDOR-FREE SINCE 2026-08-31 (port wave D, §2.5). It read "Claude Code is not available on
+  // this machine", and this function is handed a SKIP CODE and nothing else — it has no channel,
+  // no session and therefore no runtime to name. A sentence that names one runtime on a build that
+  // ships three is wrong for two of them, and naming the right one would mean threading a runtime
+  // id into a copy helper. The state is what the operator can act on; §3.3's per-runtime prose is
+  // step 9's and needs the id, not a second guess here.
+  if (skipped === 'no-sdk') return 'No agent runtime is available on this machine.';
   return 'The agent could not be started.';
 }
 

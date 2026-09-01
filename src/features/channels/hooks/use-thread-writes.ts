@@ -139,7 +139,7 @@ export function sendConfig(
     //
     // ⚠ `coldKeys`, never a plain listing: `invalidateQueries` defaults to
     // `refetchType: "active"` and the transcript query IS active, so naming it
-    // unconditionally re-downloads the 200-message page on EVERY send — the
+    // unconditionally re-downloads the whole newest page on EVERY send — the
     // exact cost this write exists to remove. `openThread` and `threadOp` DO
     // name it unconditionally and are right to: their server-written opening
     // message and lifecycle echo cannot be reconciled from the response at all.

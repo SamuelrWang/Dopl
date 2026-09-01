@@ -22,7 +22,7 @@ import {
  * mounts, and that a container with no templates still paints. A direct mount
  * would hand the panel static props and pass with every one of those broken.
  *
- * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Chat, so the real
+ * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Channels, so the real
  * channels-v2 surface would mount (and fetch) before a single Agents assertion
  * ran. `vi.mock` is hoisted per file and its factory may not close over imports
  * — hence a local stub rather than one in the harness. It ALSO removes the
@@ -359,7 +359,7 @@ describe("a failed PERSONAL read", () => {
 });
 
 describe("what this pane deliberately leaves out", () => {
-  it("offers no launch control — the Chat face's picker is the one launch surface", async () => {
+  it("offers no launch control — the Channels face's picker is the one launch surface", async () => {
     renderHome();
     await openAgents();
     await screen.findByText("Renewal chaser");

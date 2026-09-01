@@ -22,6 +22,8 @@ import type { HomeLinkClaimResult } from "@/features/home/types";
 
 const TOKEN = "b".repeat(64);
 const HOME_DEEP_LINK = "dopl://open/home";
+/** THE accepted heading — one string for both `existing` values (2026-08-31). */
+const ACCEPTED = "Invitation accepted. You are now connected with Dana's agent.";
 /** The web guest lane, built from the same factory the server payload is typed by. */
 const webLane = (result = claimed(false)) => `/c/${result.channel.workspaceId}`;
 
@@ -137,11 +139,32 @@ describe("ready to claim", () => {
     renderCard();
     await clickConnect();
 
-    expect(screen.getByText("You're connected to Dana.")).toBeDefined();
+    expect(screen.getByRole("heading", { name: ACCEPTED })).toBeDefined();
     expect(
       screen.getByRole("link", { name: "Open Dopl" }).getAttribute("href")
     ).toBe(HOME_DEEP_LINK);
     expect(navigated).toBe(HOME_DEEP_LINK);
+  });
+
+  /**
+   * ⚠ THE ACCEPTED STATE REPLACES THE INVITATION, it does not append to it
+   * (Samuel, 2026-08-31, over a screenshot of five stacked lines). The pitch and
+   * the "Dopl is a desktop app…" explainer were deleted outright; a regression
+   * that re-renders the invitation copy underneath the acceptance is exactly
+   * what this pins. Only the eyebrow survives into this state.
+   */
+  it("drops the invitation copy once accepted", async () => {
+    answer(claimed(false));
+    renderCard();
+    await clickConnect();
+
+    expect(
+      screen.queryByRole("heading", { name: "Dana invites you to connect" })
+    ).toBeNull();
+    expect(screen.queryByText(/wants a direct/)).toBeNull();
+    expect(screen.queryByText(/Dopl is a desktop app/)).toBeNull();
+    expect(screen.queryByText(/You're connected to/)).toBeNull();
+    expect(screen.getByText("Dopl connection")).toBeDefined();
   });
 
   it("also offers the browser lane, at the claimed container's own id", async () => {
@@ -156,11 +179,14 @@ describe("ready to claim", () => {
     ).toBe(webLane());
   });
 
-  it("says so when the pair already had a container", async () => {
+  // ⚠ `existing` NO LONGER FORKS THE COPY (2026-08-31). The card used to say
+  // "You're ALREADY connected to Dana."; the accepted state has ONE heading now,
+  // and the server flag is a field this surface simply does not read.
+  it("gives a re-claim the same accepted heading as a first claim", async () => {
     answer(claimed(true));
     renderCard();
     await clickConnect();
-    expect(screen.getByText("You're already connected to Dana.")).toBeDefined();
+    expect(screen.getByRole("heading", { name: ACCEPTED })).toBeDefined();
   });
 
   // ⚠ `existing: true` is the SAME ending, so it gets the same two ways in —

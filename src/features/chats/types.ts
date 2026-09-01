@@ -1,6 +1,7 @@
 export type ChatSource =
   | "claude-code"
   | "claude-desktop"
+  | "codex"
   | "cursor"
   | "other";
 
@@ -81,4 +82,16 @@ export type ChatDetail = Chat & { messages: ChatMessage[] };
 export type ChatList = {
   chats: Chat[];
   hiddenCount: number;
+  /**
+   * The read hit its ceiling (`constants.ts › CHAT_LIST_LIMIT`) — there are
+   * older chats this payload does not contain.
+   *
+   * ⚠ DISTINCT FROM `hiddenCount`, and never merged with it. One is a PLAN
+   * boundary with an upgrade behind it; this is a READ boundary with no remedy
+   * to offer at all (INVARIANTS §9 — a notice may not promise a deeper read
+   * that does not exist). ⚠ §8 STALE CACHE: added 2026-09-01, so a payload
+   * cached by the previous bundle has no such key — every reader spells
+   * `?? false`, which reads as "not clipped", the fail-safe direction.
+   */
+  truncated: boolean;
 };

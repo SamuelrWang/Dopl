@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Database } from "@/shared/supabase/types";
 import type { ChatFolderRow, ChatMessageRow, ChatRow, ProfileRef } from "./dto";
+import { CHAT_LIST_LIMIT } from "../constants";
 
 type ChatUpdate = Database["public"]["Tables"]["chats"]["Update"];
 
@@ -37,7 +38,7 @@ export async function listVisibleChats(
   workspaceId: string,
   userId: string,
   since: string | null = null
-): Promise<ChatRowWithCount[]> {
+): Promise<{ rows: ChatRowWithCount[]; truncated: boolean }> {
   const db = supabaseAdmin();
   let query = db
     .from("chats")
@@ -49,9 +50,16 @@ export async function listVisibleChats(
     .or("deleted_at.is.null")
     .or(`owner_id.eq.${userId},visibility.eq.public`);
   if (since) query = query.gte("session_date", since);
-  const { data, error } = await query.order("updated_at", { ascending: false });
+  const { data, error } = await query
+    .order("updated_at", { ascending: false })
+    .limit(CHAT_LIST_LIMIT);
   if (error) throw error;
-  return (data ?? []) as ChatRowWithCount[];
+  const rows = (data ?? []) as ChatRowWithCount[];
+  // ⚠ AT the ceiling counts as CLIPPED — at is indistinguishable from over
+  // (INVARIANTS §9). And it is measured on the RAW rows, before the caller's
+  // visibility filter: a page that filters down to two chats out of two hundred
+  // read is still a page that did not reach the end of the archive.
+  return { rows, truncated: rows.length >= CHAT_LIST_LIMIT };
 }
 
 /** Readable chats OUTSIDE the retention window. Same owner-or-public

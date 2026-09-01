@@ -63,7 +63,18 @@ const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
 const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
-const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
+// 2026-08-31 (runtime-adapter port, §0.1b): the AXIS-A TAIL LEFT THIS BLOCK. `buildSessionToolConfig`
+// and the mode transforms are a vocabulary of ONE runtime's built-in tool names, so they live in
+// `main/runtime/claude/tools.js`; the block asks the REGISTRY for them per call, through the two
+// contract methods `toolConfigFor` / `axisAAllows`. `runtimeFor` is injected here exactly like every
+// other predicate, and the REAL registry is injected, so the block stays pinned to what ships.
+const RUNTIME = require(join(HERE, "..", "main", "runtime", "index.js"));
+const CLAUDE_TOOLS = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
+const buildSessionToolConfig = CLAUDE_TOOLS.buildSessionToolConfig;
+const shortDoplName = CLAUDE_TOOLS.shortDoplName;
+
+
+const { grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
@@ -73,9 +84,9 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "isOwnMachineDirect", "directLaneVerdict",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
-  "containerOnlyDenies", "isDoplToolName",
+  "containerOnlyDenies", "isDoplToolName", "runtimeFor", "EDIT_TOOLS",
   `${BLOCK}
-   return { buildSessionToolConfig, grantDecision, grantKeyFor };`
+   return { grantDecision, grantKeyFor };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
   KB_OPS.isKnowledgeReadCall,
@@ -83,7 +94,8 @@ const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
-  AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName);
+  AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
+  RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });
@@ -222,7 +234,7 @@ test("grantDecision tolerates missing args and unknown profiles (fail closed to 
 // instead of a readFileSync of mcp-spawn.json, and the url is always the compiled-in
 // MCP_URL. The credential-path story itself is pinned in test/sdk-mcp-token.test.mjs.
 
-const LOADER = readFileSync(join(HERE, "..", "main", "sdk-loader.js"), "utf8");
+const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "loader.js"), "utf8");
 const MCP_BLOCK = LOADER.slice(
   LOADER.indexOf("function buildMcpServers("),
   LOADER.indexOf("// FIX M2 — a scrubbed copy")
@@ -257,6 +269,10 @@ test("the session's workspace UUID rides as the X-Workspace-Id header, beside th
   assert.deepEqual(servers.dopl.headers, {
     Authorization: "Bearer secret-token",
     "X-Dopl-Runtime": "desktop-session", // WAKE-V1, below
+    // 2026-08-31 (adapter port step 1): the VENDOR dimension, unconditional like the custody
+    // stamp beside it and deliberately not a value of it — `test/runtime-stamp-literals.test.mjs`
+    // owns the argument and the join with the server's constant.
+    "X-Dopl-Vendor": "claude",
     "X-Workspace-Id": WS_UUID,
   }, "the header the MCP endpoint reads as its per-request pin");
   assert.equal(servers.dopl.type, "http");
@@ -266,9 +282,9 @@ test("the session's workspace UUID rides as the X-Workspace-Id header, beside th
 test("no session workspace -> NO pin header at all (today's behavior, unchanged)", () => {
   for (const missing of [undefined, null, "", "   ", 42, {}]) {
     const headers = buildServers(null, missing).dopl.headers;
-    // The runtime header is unconditional (it identifies the RUNTIME, not the
-    // workspace); the workspace PIN is still the only conditional one.
-    assert.deepEqual(Object.keys(headers), ["Authorization", "X-Dopl-Runtime"], JSON.stringify(missing));
+    // The runtime and vendor headers are unconditional (they identify the CUSTODY and the
+    // RUNTIME, not the workspace); the workspace PIN is still the only conditional one.
+    assert.deepEqual(Object.keys(headers), ["Authorization", "X-Dopl-Runtime", "X-Dopl-Vendor"], JSON.stringify(missing));
   }
 });
 
@@ -346,20 +362,22 @@ test("the pin does not disturb how the dopl tools policy is handled (or the bear
   assert.deepEqual(buildServers(null, WS_UUID, ""), {}, "no bearer -> no server");
 });
 
-test("buildSdkOptions passes the SESSION's workspace, so every session query is pinned", () => {
-  // §3 split: the option assembly + the query lifecycle moved out of session-engine.js
-  // into session-query.js. The engine still BINDS it (asserted below), which is what
-  // makes the park/reopen paths share this one assembly.
+test("the launch spec passes the SESSION's workspace, so every session query is pinned", () => {
+// ⚠ 2026-08-31 (runtime-adapter port, steps 3–4): the OPTION ASSEMBLY moved to
+// `main/runtime/claude/launch-spec.js` — it is written in ONE platform's option vocabulary, so it
+// is that platform's adapter. `session-query.js` keeps the LIFECYCLE (supersede-before-relaunch,
+// the loop tagging, the launch watchdog) and hands the opaque spec straight back to the runtime.
+// The pins below follow the code; what they assert is unchanged.
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-  const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
-  const opts = QUERY.slice(QUERY.indexOf("function buildSdkOptions(s) {"), QUERY.indexOf("async function startQuery("));
-  assert.ok(opts.length > 0, "buildSdkOptions slice not found in session-query.js");
+  const SPEC = readFileSync(join(HERE, "..", "main", "runtime", "claude", "launch-spec.js"), "utf8");
+  const opts = SPEC.slice(SPEC.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), SPEC.indexOf("function buildLaunchSpec("));
+  assert.ok(opts.length > 0, "the option assembly slice not found in runtime/claude/launch-spec.js");
   // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child
   // credential for a session spawned into a SHARED link container, '' for every other
   // session. It is pinned INTO this literal rather than beside it because dropping the
   // argument silently reverts every locked session to the operator's device token.
-  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
-  // A parked resume and a recreated shell assemble options through this SAME function
-  // (session-park calls deps.buildSdkOptions), so they are pinned by construction.
-  assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, getSdk, buildSdkOptions/);
+  assert.match(opts, /mcpServers: loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
+  // A parked resume and a recreated shell assemble the spec through this SAME function
+  // (session-park calls deps.buildLaunchSpec), so they are pinned by construction.
+  assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, acquireRuntime, buildLaunchSpec/);
 });

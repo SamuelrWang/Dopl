@@ -1,31 +1,30 @@
-// session-query.js — SDK option assembly + the query lifecycle (v3.1, H1).
+// session-query.js — the query LIFECYCLE. ⚠ AND NOTHING ABOUT WHICH PLATFORM IS RUNNING IT.
 //
-// Extracted from session-engine.js to hold that AT-CAP file (§O-7 / F-09c) under the
-// 500-line cap while H1 adds the supersede-before-relaunch discipline below. Leaf deps
-// (io / store / diag / channelDirs / sdk-loader / session-profiles / session-outbound /
-// session-auth) are required at the top exactly like session-park.js; the two
-// ENGINE-owned handles it cannot require — `dispatch` and the replay-aware `emitQuiet` —
-// are injected via bind(). None of the modules required here require session-engine
-// back, so there is no cycle.
+// ⚠ THE OPTION ASSEMBLY LEFT ON 2026-08-31 (runtime-adapter port, steps 3–4). `› buildSdkOptions`
+// — every option, every pin, the held gate, the scrubbed env, the deny list — is now the
+// ADAPTER's (`main/runtime/claude/launch-spec.js`), and this file no longer knows what is inside
+// the object it hands back. What stayed is the discipline that was never platform-shaped: the
+// supersede-before-relaunch rule, the loop tagging that makes a superseded consumer inert, the
+// launch watchdog, and the auth-hold short circuit.
 //
-// SECURITY: `buildSdkOptions` is the ONE assembly point for every spawn shape (fresh
-// launch, parked resume, recreated shell, post-sign-in relaunch). session-park calls it
-// through deps.buildSdkOptions and session-auth relaunches through the engine's own
-// startQuery, so no path anywhere assembles its own options: the allowedTools shadow
-// rule, the canUseTool gate, the scrubbed env, disallowedTools, settingSources:[] and
-// permissionMode 'default' hold identically on all of them. `options.resume` is the only
-// field that ever differs between a cold launch and a resume.
+// SECURITY: `buildLaunchSpec` is still the ONE assembly point for every spawn shape (fresh
+// launch, parked resume, recreated shell, post-sign-in relaunch). session-park calls it through
+// `deps.buildLaunchSpec` and session-auth relaunches through the engine's own `startQuery`, so no
+// path anywhere assembles its own spec — which is what makes the pre-approval shadow rule, the
+// held gate, the ambient-config isolation and the pinned permission mode hold identically on all
+// of them. The conversation id is the only thing that ever differs between cold and resumed.
+//
+// Leaf deps (io / store / diag / session-auth / the runtime registry) are required at the top
+// exactly like session-park.js; the two ENGINE-owned handles this file cannot require —
+// `dispatch` and the replay-aware `emitQuiet` — are injected via bind(). None of the modules
+// required here require session-engine back, so there is no cycle.
 
 const io = require('./session-io');
 const store = require('./session-store');
 const { diag } = require('./diag');
-const channelDirs = require('./channel-dirs');
 const sessionAuth = require('./session-auth');
-const sessionOutbound = require('./session-outbound');
-const sessionModel = require('./session-model'); // the frozen model enum + the context meter
 const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
-const { buildSessionToolConfig } = require('./session-profiles');
-const { resolveClaudeExecutable, buildMcpServers, withSessionStamp, buildSecretPathDenyRules, buildScrubbedEnv } = require('./sdk-loader');
+const runtimeRegistry = require('./runtime');
 
 let deps = null; // { dispatch, emitQuiet, scheduleIdle }
 
@@ -33,60 +32,21 @@ function bind(d) {
   deps = d || null;
 }
 
-function buildSdkOptions(s) {
-  const cfg = buildSessionToolConfig(s.profile);
-  const options = {
-    // Item 7: the per-channel folder (else ~/Downloads) as the SDK cwd. Context (§H-9), not a fence.
-    cwd: channelDirs.sessionSpawnDir(s.channelId),
-    allowedTools: cfg.preApproved, // pre-approved => SHADOWED, no button (§A.5)
-    // C1: the profile's hard-deny PLUS the credential-path rules — a pre-approved read is SHADOWED
-    // and never reaches canUseTool, so only this tool-bound layer can fence userData / ~/.claude*.
-    disallowedTools: cfg.disallowedTools.concat(buildSecretPathDenyRules()),
-    // v2.x: buildMcpServers PINS this session's workspace (X-Workspace-Id), so a call that omits
-    // `workspace=` auto-targets instead of being refused; a per-call `workspace=` still wins.
-    // 🔒 CONTAINER LOCK (plan §4.4 B1): `sessionBearer(s)` is the child credential
-    // `session-credential.js` stamped on this session at spawn when its workspace is a SHARED
-    // link container, and '' for every other session. It REPLACES the device token, so a locked
-    // session — and anything it shells out to, which inherits the same credential — is refused
-    // every other workspace server-side. The `X-Workspace-Id` pin below it stays a hint that
-    // grants nothing; this is the part that actually refuses.
-    // ⚠ Read HERE rather than minted here: this function is synchronous and is re-entered by
-    // every spawn shape, park/resume included, so the credential must already be on `s`.
-    mcpServers: buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
-    settingSources: [], // ALWAYS — the global allow-list can never shadow a gate
-    permissionMode: 'default', // FIX M2: pin — bypass/acceptEdits/dontAsk short-circuit canUseTool
-    // FIX M2: strip permission-mode env knobs, keep auth (sdk-loader). Q6: withStoredCredential adds
-    // CLAUDE_CODE_OAUTH_TOKEN only when our own setup-token is this machine's ONLY credential.
-    env: sessionAuth.withStoredCredential(buildScrubbedEnv()),
-    // C6: the gate is unchanged; the wrapper only resolves the card an ALLOWED post painted.
-    canUseTool: sessionOutbound.wrapCanUseTool(s, io.makeCanUseTool(s, deps.dispatch, diag), deps.emitQuiet), // diag: the forced-thread-tag conflict log (session-io stays electron-free)
-    abortController: s.abortController,
-    // LOAD-BEARING for v2.7 L3 (FIX F4): the outbound card shows the operator the bytes a post will
-    // send, so the streamed tool_use input must be the WHOLE, FINAL input. No fragments (below) and NO
-    // `hooks` option is ever set — a PreToolUse hook could rewrite the input the card already painted.
-    includePartialMessages: false,
-  };
-  // F2 — THIS RUN'S SLOT KEY onto the dopl entry (X-Dopl-Session-Id), which the server turns into
-  // the reserved `metadata.session_id`. `store.slotKey` is the ONE definition of a slot — (channel,
-  // agent) for a team session, (channel, thread) for every other shape — so the stamp names exactly
-  // the registry slot this run occupies, and two concurrent sessions of ONE agent handle stamp two
-  // DIFFERENT values (which is the whole point: nothing on the wire could tell them apart). Applied
-  // here rather than inside buildMcpServers because that builder is shared with the headless spawn
-  // config, which has no session to name. A LABEL, not a lock: nothing here limits how many run, and
-  // a missing slot stamps nothing.
-  withSessionStamp(options.mcpServers, store.slotKey(s));
-  if (cfg.builtinTools.length) options.tools = cfg.builtinTools; // positive bound; [] => full offers all, gated
-  const bin = resolveClaudeExecutable();
-  if (bin) options.pathToClaudeCodeExecutable = bin;
-  // THE PER-SESSION MODEL. `s.model` survives park/resume and the post-sign-in relaunch for
-  // free, because every one of those shapes re-enters through this one assembly point on the
-  // SAME session object. `modelArg` re-coerces against the frozen enum HERE, at the last step
-  // before the value becomes `--model` on a child process, so nothing upstream is trusted; a
-  // 'default' (or anything unrecognized) sets no field at all, which is the CLI's own pick.
-  const model = sessionModel.modelArg(s.model);
-  if (model) options.model = model;
-  if (s.resumeSdkId) options.resume = s.resumeSdkId;
-  return options;
+/**
+ * The OPAQUE launch payload for this session's runtime. ⚠ CORE NEVER LOOKS INSIDE IT — that is
+ * the seam, and inspecting it here would put a platform's option vocabulary straight back into
+ * the module the extraction removed it from.
+ *
+ * ⚠ THE ENGINE'S TWO HANDLES RIDE THE REQUEST. The held gate needs the dispatch (to paint a
+ * card) and the replay-aware quiet emitter (to resolve one an auto-allowed post painted), and the
+ * adapter must not require the engine back.
+ */
+function buildLaunchSpec(s) {
+  return runtimeRegistry.runtimeFor(s.runtimeId).buildLaunchSpec({
+    session: s,
+    dispatch: deps.dispatch,
+    emitQuiet: deps.emitQuiet,
+  });
 }
 
 // H1 — SUPERSEDE the live query handles without touching lifecycle state. The consume
@@ -100,18 +60,18 @@ function abortInFlight(s) {
   s.query = null;
 }
 
-async function startQuery(s, sdk) {
+async function startQuery(s, rt) {
   // H1 (THE TWO-CHILDREN BUG): this used to overwrite s.abortController / s.query with NO
-  // teardown of what was already there. A second call therefore left the FIRST claude child
-  // alive — still holding this session's pre-approved dopl_channel access, still able to
-  // post into the channel — with nothing left pointing at it to stop it, and s.firstTurn
-  // pushed twice. session-auth.resumeAfterSignIn is what made it reachable: a sign-in that
-  // lands on a session a peer wake had already resumed, or simply a double-click on the
-  // sign-in button. Superseding FIRST makes a relaunch idempotent at this layer, whatever
-  // the caller does; a cold launch is unaffected (abortInFlight is a no-op there).
+  // teardown of what was already there. A second call therefore left the FIRST child process
+  // alive — still holding this session's pre-approved channel access, still able to post into
+  // the channel — with nothing left pointing at it to stop it, and s.firstTurn pushed twice.
+  // session-auth.resumeAfterSignIn is what made it reachable: a sign-in that lands on a session
+  // a peer wake had already resumed, or simply a double-click on the sign-in button. Superseding
+  // FIRST makes a relaunch idempotent at this layer, whatever the caller does; a cold launch is
+  // unaffected (abortInFlight is a no-op there).
   abortInFlight(s);
-  // 🔒 THE CONTAINER LOCK (plan §4.4 B1), minted before the options are assembled because
-  // `buildSdkOptions` is SYNCHRONOUS and reads the stamp off `s`.
+  // 🔒 THE CONTAINER LOCK (plan §4.4 B1), minted before the spec is assembled because
+  // `buildLaunchSpec` is SYNCHRONOUS and reads the stamp off `s`.
   // ⚠ THERE ARE EXACTLY TWO CALL SITES AND THAT IS NOT AN OVERSIGHT — this one and
   // `session-park.js › startResumedConsumer`. They are the two places a query STARTS: a woken
   // SPAWN-IDLE shell never passes through here (`startSession` returns before `startQuery`, and
@@ -123,11 +83,14 @@ async function startQuery(s, sdk) {
   await sessionCredential.ensureContainerCredential(s, diag);
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
-  const q = sdk.query({ prompt: s.pushIterator, options: buildSdkOptions(s) });
+  // ⚠ SYNCHRONOUS BY CONTRACT. The handle is assigned to the session IMMEDIATELY; an await
+  // between "the child exists" and "something points at it" is the two-children bug above,
+  // reintroduced at a different layer.
+  const q = rt.start(buildLaunchSpec(s));
   s.query = q;
   s.pushIterator.push(io.userMessage(s.firstTurn));
   // C-4 — ARM THE LAUNCH WATCHDOG. The idle timer used to be armed ONLY by reducer effects
-  // that require `launched`, which only the SDK's `system/init` dispatches — so a child that
+  // that require `launched`, which only the runtime's own init event dispatches — so a child that
   // booted and never emitted one had no timer of any kind: phase 'launching' forever,
   // `hasLiveSession` true, every retry `{skipped:'busy'}`, and its slot spent against
   // MAX_WINDOWS for the life of the process.
@@ -140,26 +103,64 @@ async function startQuery(s, sdk) {
   // launch bound — so there is no second timer to leak and `launched`'s own scheduleIdle
   // replaces this one the instant the session really starts.
   if (deps && deps.scheduleIdle) deps.scheduleIdle(s);
-  consume(s, q); // fire-and-forget consumer loop
+  consume(s, q, rt); // fire-and-forget consumer loop
 }
 
-async function consume(s, q) {
+// The normalizer's read-only context. ⚠ Rebuilt per message on purpose: `willGatePost` asks the
+// LIVE gate, so a posture changed mid-turn applies to the next call, exactly as it always did.
+function normalizeCtx(s) {
+  return {
+    channelId: s.channelId,
+    peerName: s.counterpartyName,
+    peerId: s.counterpartyId,
+    // v2.7 L3: the gate PREDICTION, so one artifact starts as the decision card when the post
+    // will stop. It DECIDES nothing.
+    willGatePost: (input, toolName) => io.postWillGate(s, input, toolName),
+  };
+}
+
+async function consume(s, q, rt) {
   try {
     // FIX #1b: `q` tags this loop; a park->resume swaps s.query, so s.query !== q => SUPERSEDED (ignore its tail + late rejection).
-    // Q6: an auth failure the CLI reports as CONTENT (its "Please run /login" line) is consumed here — the
-    // dead-end bubble is REPLACED by the sign-in action, and this loop stops rather than rendering it.
-    // THE CONTEXT METER reads the RAW stream, here rather than inside handleSdkMessage, because
-    // what it needs is the LAST assistant message's own usage block — the prompt the model just
-    // saw — and the render mapping deliberately drops everything that is not a render event.
-    // It observes only; the reducer decides (session-model.observe -> dispatch `context`).
-    for await (const msg of q) { if (s.query !== q) return; if (sessionAuth.holdIfAuthMessage(s, msg)) return; io.handleSdkMessage(s, msg, deps.dispatch, store); sessionModel.observe(s, msg, deps.dispatch); }
+    // Q6: an auth failure the runtime reports as CONTENT is consumed here — the dead-end bubble is
+    // REPLACED by the sign-in action, and this loop stops rather than rendering it.
+    // ⚠ ONE CALL PER MESSAGE SINCE 2026-08-31, WHERE THERE WERE THREE. The auth sentinel, the
+    // render mapping and the per-message usage extraction all read the same raw schema and all
+    // three are now the adapter's `normalize`; core applies what comes back. That is what makes
+    // the whole message-handling surface fixture-testable rather than a third of it.
+    // ⚠ THE SENTINEL'S ANSWER IS THE STOP CONDITION — NOT THE FACT THAT IT WAS ASKED (D7.4,
+    // restored 2026-09-01). HEAD read `if (sessionAuth.holdIfAuthMessage(s, msg)) return;`, and
+    // that function answers FALSE without acting in three cases — no bound deps, no session, and
+    // `s.settled`. The port dropped the return value and returned unconditionally, so a SETTLED
+    // session that emits an auth-shaped message stopped draining the stream HEAD kept reading.
+    // That matters because settling does not end the child process: `holdIfAuthFailure` is the
+    // thing that aborts and closes, and it declines to on a settled session precisely because the
+    // teardown already ran. Returning there abandons the iterator mid-stream with nothing left to
+    // consume its tail — the loop's own supersede tag (`s.query !== q`) is the ONLY other exit,
+    // and a settled-but-not-superseded session never trips it.
+    // ⚠ AND IT IS THE SAME SHAPE THE CATCH BELOW ALREADY USES (`held.length &&
+    // holdIfAuthFailure(...)`), which never lost it. The two auth lanes now agree again.
+    for await (const msg of q) {
+      if (s.query !== q) return;
+      // ⚠ `diag` RIDES THE CALL (D7.3). `session-io.js` may not require it — it is required in
+      // plain Node by a dozen suites and `diag.js` pulls electron — so the swallowed context
+      // dispatch's log line is supplied from here, exactly as the option assembly supplies the
+      // gate bridge's. This file already requires `diag` at its top for the query-error line.
+      const hold = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store, diag);
+      if (hold && sessionAuth.holdIfAuthFailure(s, hold.text)) return;
+    }
   } catch (err) {
     if (s.query !== q) return;
     if (!isAbortError(err)) {
-      // Q6: an auth-shaped rejection surfaces the in-window "Sign in to Claude" instead of `crash`
-      // (settle + destroy + task_failed{interrupted}). Every other error keeps that path unchanged.
-      if (sessionAuth.holdIfAuthFailure(s, (err && err.message) || err)) return;
-      diag('session-engine: query error', err && err.message);
+      // Q6: an auth-shaped rejection surfaces the in-window sign-in action instead of `crash`
+      // (settle + destroy + task_failed{interrupted}). Every other error keeps that path
+      // unchanged. ⚠ THE RUNTIME DECIDES WHETHER IT IS AUTH-SHAPED, not this loop: a rejection
+      // string is as platform-specific as a message, so it goes through the same normalizer as
+      // a synthetic error message.
+      const text = (err && err.message) || err;
+      const held = rt.normalize({ type: 'error', text: String(text == null ? '' : text) }, normalizeCtx(s));
+      if (held.length && sessionAuth.holdIfAuthFailure(s, held[0].text)) return;
+      diag('session-engine: query error', text);
       if (!s.settled) deps.dispatch(s, { type: 'crash' });
     }
   }
@@ -171,7 +172,7 @@ function isAbortError(err) {
 
 module.exports = {
   bind,
-  buildSdkOptions,
+  buildLaunchSpec,
   abortInFlight,
   startQuery,
   consume,

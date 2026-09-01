@@ -80,6 +80,9 @@ export function useKnowledgeV2Controller({
       baseStats: {},
       kbStorageLimit: null,
       starredBaseIds: [],
+      // Same argument as `starredBaseIds` above: only reached on a COLD entry,
+      // which this view cannot start from, so it never overrides a real answer.
+      sharedBaseIds: [],
       // This view is never channel-scoped; no scope-A grants to seed.
       channelGrants: {},
     },

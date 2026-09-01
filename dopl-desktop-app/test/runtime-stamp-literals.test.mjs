@@ -76,13 +76,50 @@ test("the SESSION stamp's literal matches the server's too, on the one spawn pat
   // server still recognizes that string.
   const serverSession = /export const DESKTOP_SESSION_RUNTIME = "([^"]+)";/.exec(SHARED);
   assert.ok(serverSession, "the server's constant moved — this join needs re-pinning");
-  for (const file of ["sdk-loader.js"]) {
+  for (const file of ["runtime/claude/loader.js"]) {
     const src = M(file);
     const hit = /'X-Dopl-Runtime': '([^']+)',/.exec(src);
     assert.ok(hit, `${file} no longer sends the runtime header at all`);
     assert.equal(hit[1], serverSession[1],
       `${file} claims a runtime value narrowRuntime does not recognize`);
   }
+});
+
+// ⚠ THE SECOND DIMENSION (2026-08-31, runtime-adapter port step 1). Vendor is NOT a value of the
+// custody enum above, and this file is where that stays true across a join with no shared module:
+// `main/targeting.js › DESKTOP_RUNTIMES`, `packages/mcp-server/src/tools/identity.ts ›
+// runtimeWord` and `channel-wake-guidance.ts` all read the CUSTODY word by strict equality or
+// membership, so a vendor word admitted there would flip every non-Claude session out of the
+// desktop branch with nothing failing.
+test("the VENDOR stamp is a SECOND header, and its literal matches the server's", () => {
+  const serverVendorHeader = /export const VENDOR_HEADER = "([^"]+)";/.exec(SHARED);
+  const serverClaude = /export const CLAUDE_VENDOR = "([^"]+)";/.exec(SHARED);
+  assert.ok(serverVendorHeader && serverClaude,
+    "the server's vendor constants moved — this join needs re-pinning");
+  const src = M("runtime/claude/loader.js");
+  const hit = /'X-Dopl-Vendor': '([^']+)',/.exec(src);
+  assert.ok(hit, "sdk-loader.js no longer sends the vendor header at all");
+  assert.equal(hit[1], serverClaude[1],
+    "sdk-loader claims a vendor value readVendorHeader does not recognize");
+  assert.equal("X-Dopl-Vendor".toLowerCase(), serverVendorHeader[1].toLowerCase(),
+    "main sends a vendor header name the server does not read");
+});
+
+test("...and the CUSTODY enum did NOT grow a vendor word", () => {
+  // The whole reason step 1 is a second dimension rather than three more enum members. Asserted
+  // on BOTH sides of the join: the server's recognized set, and the membership test in main.
+  const serverRuntimes = /const RECOGNIZED: readonly string\[\] = \[([\s\S]*?)\];/.exec(SHARED);
+  assert.ok(serverRuntimes, "the server's recognized-runtime list moved — re-pin this");
+  for (const vendor of ["claude", "codex", "cursor"]) {
+    assert.ok(!serverRuntimes[1].includes(vendor),
+      `'${vendor}' is a VENDOR and must never be a recognized RUNTIME value`);
+  }
+  const targeting = M("targeting.js");
+  const list = /const DESKTOP_RUNTIMES = \[([^\]]*)\];/.exec(targeting);
+  assert.ok(list, "DESKTOP_RUNTIMES moved — re-pin this");
+  assert.equal(list[1].replace(/\s/g, ""), "'desktop-session','desktop-ui'",
+    "DESKTOP_RUNTIMES is an array MEMBERSHIP test: a vendor word added here does not widen the "
+    + "set, it drops every non-Claude session out of it");
 });
 
 test("the CLI-entry lane sends NO runtime stamp, and that is the intended state", () => {

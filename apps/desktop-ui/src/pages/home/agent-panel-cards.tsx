@@ -30,7 +30,7 @@ import { channelPeople } from "./home-rows";
  * reaches these files too — see that suite's `HOME_FILES`.
  *
  * ⚠ NO LAUNCH CONTROL ON EITHER SECTION, and its absence is tested
- * (`agent-panels.test.tsx`). This is the AUTHORING face; the Chat face's
+ * (`agent-panels.test.tsx`). This is the AUTHORING face; the Channels face's
  * `TemplateLaunchPicker` is already wired to the same container list (plan
  * §0.2), and a second launch surface fights `resolve`'s singularity (§5A).
  */

@@ -13,7 +13,10 @@ import {
   listStarredBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
-import { getChannelGrantMap } from "@/features/knowledge/server/service-channel-grants";
+import {
+  getChannelGrantMap,
+  listSharedIntoChannelBaseIds,
+} from "@/features/knowledge/server/service-channel-grants";
 import { isChannelVisibleTo } from "@/features/workspaces/server/service-overview";
 import type { KbShelf, KnowledgeBaseStats } from "@/features/knowledge/types";
 import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
@@ -37,6 +40,16 @@ import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
  *     shelf" and a degraded read: an unreadable flag means an UNLABELLED card, never a mislabelled
  *     one — and never a card that vanishes.
  *     ⚠ Only ever a SUBSET of the ids in `bases`, so a consumer can index straight into the list.
+ *   - `sharedBaseIds` (2026-09-01): which of the listed bases are granted into AT LEAST ONE
+ *     channel — the set behind the card's `Shared` pill. 🔒 A SIBLING KEY for the same reason
+ *     `homeScopedBaseIds` is one: it is a fact about GRANTS, not a column on the base, so it must
+ *     not widen `KnowledgeBase` (which `check-knowledge-type-drift` mirrors into the SDK). A SET,
+ *     never a count and never a channel list — the pill asks one boolean per base, and anything
+ *     richer would put the identity of channels the caller may not see onto the wire.
+ *     ⚠ `[]` on a degraded read, which reproduces exactly what shipped before this key existed
+ *     (every private base labelled "Private"). It is stated rather than claimed SAFE: the
+ *     direction under-states a base's exposure to its own owner. Failing the whole list instead is
+ *     worse — `kb_list_bases` over MCP rides this route.
  *
  *   - `channelGrants` (ONLY when `?channelId=<uuid>` is sent): `{baseId → {level, guestWrite}}` for
  *     the grants of THAT channel among the visible bases — the scope-A grant map behind Home
@@ -64,8 +77,14 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const bases = await listBases(ctx, { shelf });
     // ⚠ Attribution and counters are cosmetic; the base list is not. A profiles/entries hiccup
     // degrades to no names / no stats, never a 500 (`kb_list_bases` over MCP rides this route).
-    const [ownerNames, baseStats, kbStorageLimit, starredBaseIds, homeScopedBaseIds] =
-      await Promise.all([
+    const [
+      ownerNames,
+      baseStats,
+      kbStorageLimit,
+      starredBaseIds,
+      homeScopedBaseIds,
+      sharedBaseIds,
+    ] = await Promise.all([
         listBaseOwnerNames(ctx, bases).catch(
           () => ({}) as Record<string, string>
         ),
@@ -81,6 +100,12 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
         // key existed. The unsafe direction would be labelling a workspace base
         // as personal, and no failure mode here can produce that.
         listHomeScopedBaseIds(ctx, bases).catch(() => [] as string[]),
+        // ⚠ SEE THE DOCBLOCK for why `[]` is the degraded value and why that
+        // direction is stated rather than called safe.
+        listSharedIntoChannelBaseIds(
+          ctx.workspaceId,
+          bases.map((b) => b.id)
+        ).catch(() => [] as string[]),
       ]);
     const base = {
       bases,
@@ -89,6 +114,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       kbStorageLimit,
       starredBaseIds,
       homeScopedBaseIds,
+      sharedBaseIds,
     };
 
     // ⚠ THE GRANT READ RUNS ONLY WHEN A CHANNEL WAS ASKED FOR. Absent param ⇒

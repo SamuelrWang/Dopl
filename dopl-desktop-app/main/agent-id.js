@@ -23,7 +23,8 @@
 // so this does not do `% alphabet.length` over random bytes. The id is not a secret — it is
 // printed in prompts and rendered in the UI — but it IS an addressing token: two live agents
 // colliding on one id would make `@id` ambiguous, and 26 * 36^7 (~2.0e12) makes that
-// unreachable for the six sessions a machine may hold (MAX_CONCURRENT_SESSIONS).
+// unreachable for the fifteen sessions a machine may hold (MAX_CONCURRENT_SESSIONS, raised from
+// six on 2026-09-01 — the headroom argument is unchanged at either number).
 //
 // ⚠ A RENDERER MAY NOW ASK FOR ONE BEFORE IT SPAWNS ANYTHING (2026-08-27, Samuel's launch-panel
 // ruling). The composer's launch panel shows the operator the agent's ID while they are still

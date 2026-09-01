@@ -255,6 +255,7 @@ export function ChannelsV2Composer({
         {newAgent?.canLaunch && (
           <ComposerLaunch
             panel={launch}
+            channelId={channelId}
             workspaceId={workspaceId}
             currentUserId={currentUserId}
             members={members}

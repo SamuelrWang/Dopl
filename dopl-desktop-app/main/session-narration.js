@@ -16,8 +16,10 @@
 // channel.
 //
 // ⚠ THE RING IS BOUNDED AT THE SOURCE, AND THE BOUND IS MULTIPLICATIVE. Every per-session
-// bound is multiplied by `MAX_CONCURRENT_SESSIONS` (`session-windowless.js`, measured 6 on
-// 2026-08-27 — this line said "4") — INVARIANTS §11 says so and this is one of them. The ring
+// bound is multiplied by `MAX_CONCURRENT_SESSIONS` (`session-windowless.js`, 15 since
+// 2026-09-01; 6 before that, and this line said "4" until 2026-08-27) — INVARIANTS §11 says so
+// and this is one of them. ⚠ The 2026-09-01 raise is safe for THIS ring only because
+// `RING_CHAR_BUDGET` bounds it by characters as well as entries. The ring
 // dies with the session object (no persistence, no TTL, no sweep).
 // ⚠ AND IT IS MULTIPLIED AGAIN BY THE WINDOW COUNT, which this header did not say until
 // 2026-08-30 and which is what made the 17 GB dev incident: `flush()` sends the WHOLE ring and
@@ -241,8 +243,9 @@ function entryFor(event, now) {
     // not a line about one: it is the local echo covering the window before the transcript has
     // loaded, and truncating a reply at 300 makes that echo useless. `POST_CAP` is 1000 rather
     // than the UI's own 2000 because the ring is `NARRATION_MAX` deep and multiplied by
-    // MAX_CONCURRENT_SESSIONS — 200 posts x 2000 chars x 6 sessions is a megabyte of IPC per
-    // flush. The TRANSCRIPT is the record and the UI dedupes this against it, so the echo only
+    // MAX_CONCURRENT_SESSIONS — 200 posts x 2000 chars x 15 sessions is several megabytes of
+    // IPC per flush (it was 6 sessions until 2026-09-01), which is what `RING_CHAR_BUDGET`
+    // exists to bound. The TRANSCRIPT is the record and the UI dedupes this against it, so the echo only
     // has to be good enough to read while it arrives.
     const entry = { at: now, kind: 'post', lane: 'channel', text: line(p.text, POST_CAP) };
     // ⚠ THE GATE RIDES THE FRAME (2026-08-25, Samuel's outbound-review ruling). `session-io.js ›

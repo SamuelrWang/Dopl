@@ -10,6 +10,19 @@ import type { ChannelMessageRow } from "./dto";
 
 interface MessageReadOpts {
   since?: number;
+  /**
+   * BACKWARD KEYSET CURSOR — `seq < before`, the page of history immediately
+   * OLDER than the caller's current window. It is what the transcript's
+   * scroll-up paging asks for, and it is a CURSOR, never an offset: the
+   * predicate rides `channel_messages_channel_seq_idx` on `(channel_id, seq)`,
+   * so page N costs the same as page 1 and a message inserted mid-scroll cannot
+   * shift a row across a page boundary the way `OFFSET` does.
+   *
+   * ⚠ IT DECIDES WHICH END THE `limit` BITES, not just which rows qualify — see
+   * {@link listMessages}. `before` without that flip would hand back the OLDEST
+   * `limit` rows in the channel on every page, which is the same page forever.
+   */
+  before?: number;
   limit: number;
   /**
    * Drop this author's rows. Only the await hold passes it, so a caller's own
@@ -50,15 +63,26 @@ function excludeAuthorFilter(userId: string): string {
 }
 
 /**
- * With a `since` cursor: `seq > since`, ascending, capped at `limit` — the
- * incremental read for MCP / desktop and the await poll. Without: the LATEST
- * `limit`, returned ascending, so a long channel still surfaces its newest posts
- * (an unconditional oldest-`limit` read hides everything past the first page).
+ * THREE MODES, ONE BUILDER, and the only thing that varies is which end the
+ * `limit` bites:
  *
- * ⚠ The two modes differ ONLY in the `seq > since` predicate and which end the
- * `limit` bites. Optional filters are applied ONCE to one builder rather than
- * duplicated per branch — a filter added to only one of two near-identical
- * queries is the exact bug shape this avoids.
+ *  - **FORWARD** (`since`, no `before`): `seq > since`, ascending, capped at
+ *    `limit` — the incremental read for MCP / desktop and the await poll.
+ *  - **BACKWARD** (`before`): `seq < before`, the `limit` rows NEAREST that
+ *    ceiling, returned ascending — the transcript's scroll-up page. It composes
+ *    with `since` as a bounded window rather than fighting it.
+ *  - **NEWEST** (neither): the LATEST `limit`, returned ascending, so a long
+ *    channel still surfaces its newest posts (an unconditional oldest-`limit`
+ *    read hides everything past the first page).
+ *
+ * ⚠ ONLY `forward` READS ASCENDING FROM THE DATABASE. The other two take the
+ * newest qualifying rows (descending + `limit`) and flip them for display; a
+ * `before` page read ascending would return the channel's oldest `limit` rows
+ * every time, i.e. the same page forever.
+ *
+ * ⚠ Optional filters are applied ONCE to one builder rather than duplicated per
+ * branch — a filter added to only one of three near-identical queries is the
+ * exact bug shape this avoids.
  */
 export async function listMessages(
   channelId: string,
@@ -70,6 +94,7 @@ export async function listMessages(
     .select("*")
     .eq("channel_id", channelId);
   if (opts.since !== undefined) query = query.gt("seq", opts.since);
+  if (opts.before !== undefined) query = query.lt("seq", opts.before);
   if (opts.excludeAuthor !== undefined) {
     query = query.or(excludeAuthorFilter(opts.excludeAuthor));
   }
@@ -78,15 +103,15 @@ export async function listMessages(
   if (opts.threadId !== undefined) {
     query = query.eq("metadata->>taskId", opts.threadId);
   }
-  // Cursored: oldest-first from the cursor. Cursorless: newest `limit`, flipped
-  // to ascending for display / cursor semantics.
-  const cursored = opts.since !== undefined;
+  // FORWARD: oldest-first from the cursor. BACKWARD / NEWEST: the newest
+  // qualifying `limit`, flipped to ascending for display / cursor semantics.
+  const forward = opts.since !== undefined && opts.before === undefined;
   const { data, error } = await query
-    .order("seq", { ascending: cursored })
+    .order("seq", { ascending: forward })
     .limit(opts.limit);
   if (error) throw error;
   const rows = (data ?? []) as ChannelMessageRow[];
-  return cursored ? rows : rows.reverse();
+  return forward ? rows : rows.reverse();
 }
 
 /**

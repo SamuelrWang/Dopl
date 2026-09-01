@@ -8,7 +8,7 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { kbScope, type KbScope } from "../../../scope";
 import type { KnowledgeBase, KnowledgeBaseStats } from "../../../types";
-import { KB_SCOPE_CARD_LABEL } from "../list-filters";
+import { kbCardLabel } from "../list-filters";
 import { StorageMeter } from "../storage-meter";
 import { shortWhen } from "../utils";
 import styles from "../knowledge-v2.module.css";
@@ -23,6 +23,17 @@ interface Props {
   ownerLabel: string;
   /** ⚠ CALLER'S OWN star — per-user, not a property of the base row. */
   starred: boolean;
+  /**
+   * Is this base granted into AT LEAST ONE channel? From the list response's
+   * `sharedBaseIds` sibling key — a fact about GRANTS, never a column on the
+   * base row, which is why it arrives as a prop and not off `base`.
+   *
+   * ⚠ Drives the pill's word through `kbCardLabel`, which overrides `private`
+   * and nothing else; that function carries the reasoning. Optional so an
+   * older caller (or a stale-cache read with no `sharedBaseIds`) renders the
+   * scope word exactly as it did before the key existed.
+   */
+  shared?: boolean;
   onOpen: (base: KnowledgeBase) => void;
   onToggleStar: (baseId: string, starred: boolean) => void;
 }
@@ -58,6 +69,7 @@ export function BaseCard({
   storageLimit,
   ownerLabel,
   starred,
+  shared = false,
   onOpen,
   onToggleStar,
 }: Props) {
@@ -71,7 +83,12 @@ export function BaseCard({
     >
       <div className={styles.cardHead}>
         <span className={styles.cardName}>{base.name}</span>
-        <span className={styles.cardScope}>{KB_SCOPE_CARD_LABEL[scope]}</span>
+        {/* ⚠ THE HUE STAYS THE SCOPE'S (`SCOPE_CLASS` on the container binds
+            `--kv-scope`, which this pill and the accent sliver both read). Only
+            the WORD changes when a private base is shared — a shared private
+            base is still a private base that has been lent out, and giving it a
+            fourth colour would read as a fourth visibility level. */}
+        <span className={styles.cardScope}>{kbCardLabel(scope, shared)}</span>
       </div>
 
       {/* Inset well: description, meta (+ meter) and footer are hairline-fenced

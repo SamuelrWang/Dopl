@@ -104,10 +104,25 @@ test("a missing or junk usage block reads as 0, never as NaN", () => {
 
 // ── 3. the observer, against a real SDK-shaped stream ────────────────────────
 
+// ⚠ 2026-08-31 (runtime-adapter port, step 4): `session-model.js › observe` was a SECOND
+// normalizer — it parsed the platform's own message schema directly and sat in the consume loop
+// beside the render mapping — so it split. The ADAPTER extracts the numbers per message
+// (`runtime/claude/normalize.js` -> a `context` CoreEvent) and CORE remembers the last one and
+// turns it into the reducer's event when the turn ends (`session-io.js › applyCoreEvents`).
+// This helper drives BOTH halves, exactly as the consume loop does, and filters to the events
+// this file is about — every assertion below is unchanged.
+const io = require("../main/session-io.js");
+const normalize = require("../main/runtime/claude/normalize.js").normalize;
+const NO_STORE = { setSdkSessionId() {}, saveRecord() {} };
+
 function stream(session, messages) {
   const dispatched = [];
-  for (const msg of messages) model.observe(session, msg, (_s, e) => dispatched.push(e));
-  return dispatched;
+  const s = session;
+  if (!s.state) s.state = { phase: "running", turns: 0, costUsd: 0 };
+  for (const msg of messages) {
+    io.applyCoreEvents(s, normalize(msg, {}), (_s, e) => dispatched.push(e), NO_STORE);
+  }
+  return dispatched.filter((e) => e && e.type === "context");
 }
 
 const init = (m) => ({ type: "system", subtype: "init", model: m, session_id: "sdk-1" });
@@ -161,6 +176,66 @@ test("a turn that measured NOTHING says nothing rather than painting a zero", ()
   assert.deepEqual(stream({}, [init("claude-opus-5"), result()]), []);
   assert.deepEqual(stream({}, [result()]), []);
   assert.deepEqual(stream({}, [init("claude-opus-5"), { type: "assistant", message: {} }, result()]), []);
+});
+
+// ── ⚠ D7.3: A THROWING CONTEXT DISPATCH IS SWALLOWED, AND A THROWING `result` IS NOT ──────────
+//
+// The pin for the `try/catch` that came over from `session-model.js › observe` with the dispatch
+// it wraps, was LOST in the 2026-08-31 port, and was restored 2026-09-01. Written as a PAIR
+// because only the pair states the rule: the meter is a cosmetic gauge and may not kill a
+// session, while every other dispatch in the loop is a state transition whose failure must still
+// reach `crash`. A single "it does not throw" test would pass just as well over a blanket
+// try/catch around the whole loop, which is the wrong fix and the one worth failing on.
+//
+// The escape route is what makes this MEDIUM rather than cosmetic: `applyCoreEvents` runs inside
+// `session-query.js › consume`'s `for await`, so a throw here is caught by that loop's `catch`,
+// read as a query error, and dispatched as `crash` — settle + destroy + `task_failed{interrupted}`.
+// A reducer bug on the context row would therefore tear the session down mid-turn and report it
+// to the waiting peer as an interruption.
+
+test("D7.3: a throwing CONTEXT dispatch is swallowed — the meter may not crash the session", () => {
+  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const seen = [];
+  const logged = [];
+  const hostile = (_s, e) => {
+    seen.push(e.type);
+    if (e.type === "context") throw new Error("reducer blew up on the gauge row");
+  };
+  for (const msg of [init("claude-opus-5"), assistant(120000), result()]) {
+    // ⚠ NOT wrapped in assert.doesNotThrow around the whole stream: the assertion is that THIS
+    // call returns normally, which is what the consume loop depends on.
+    // ⚠ THE LOG IS THE FIFTH ARGUMENT AND IS INJECTED. `session-io.js` may not require `diag`
+    // (electron); `session-query.js › consume` supplies the real one.
+    io.applyCoreEvents(s, normalize(msg, {}), hostile, NO_STORE, (...a) => logged.push(a.join(" ")));
+  }
+  assert.ok(seen.includes("context"), "the context dispatch was still attempted");
+  assert.ok(seen.includes("result"), "and the result still went out ahead of it");
+  // ⚠ SWALLOWED IS NOT SILENT. HEAD's line is kept VERBATIM, `session-model:` prefix included, so
+  // an existing `listener.log` grep still finds it.
+  assert.deepEqual(logged.length, 1, "exactly one line");
+  assert.match(logged[0], /^session-model: context dispatch failed reducer blew up on the gauge row$/);
+});
+
+test("D7.3: with NO log injected the swallow still holds — the line is optional, the catch is not", () => {
+  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const hostile = (_s, e) => { if (e.type === "context") throw new Error("boom"); };
+  for (const msg of [init("claude-opus-5"), assistant(120000), result()]) {
+    io.applyCoreEvents(s, normalize(msg, {}), hostile, NO_STORE); // four args, as every other caller
+  }
+});
+
+test("D7.3: a throwing RESULT dispatch still escapes — only the meter is swallowed", () => {
+  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const hostile = (_s, e) => { if (e.type === "result") throw new Error("boom"); };
+  assert.throws(
+    () => {
+      for (const msg of [init("claude-opus-5"), assistant(120000), result()]) {
+        io.applyCoreEvents(s, normalize(msg, {}), hostile, NO_STORE);
+      }
+    },
+    /boom/,
+    "a state-transition dispatch must still reach consume's catch and `crash`"
+  );
 });
 
 test("a MID-SESSION model switch moves the denominator without waiting for a fresh init", () => {

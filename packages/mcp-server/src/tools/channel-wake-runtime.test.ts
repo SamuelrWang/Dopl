@@ -291,6 +291,39 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).not.toContain("dopl-channel-wait.sh");
   });
 
+  /**
+   * ⚠ THE REGRESSION THE ADAPTER PORT'S STEP 1 WOULD OTHERWISE SHIP SILENTLY
+   * (2026-08-31). A Codex or Cursor session driven by the desktop is still a
+   * session the desktop SPAWNED and is still fed the counterparty's replies as
+   * new turns, so it must land in THIS branch. It does, and only because the
+   * vendor became a SECOND header dimension (`X-Dopl-Vendor`) instead of a
+   * fourth value of the custody enum: `isDesktopRuntime` is a strict equality,
+   * so a session stamped `codex` here would fall to the unstamped branch and be
+   * taught to arm and re-arm an await that will never wake it.
+   */
+  it("stays true for a NON-CLAUDE desktop session — custody, not vendor", async () => {
+    // What a Dopl-driven Codex session sends: the same custody stamp. The
+    // vendor rides `X-Dopl-Vendor` and never reaches this argument.
+    const text = (
+      await opAwait(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
+    ).content[0].text;
+
+    expect(text).toContain("Do NOT re-arm");
+    expect(text).not.toContain("re-arm the wait NOW");
+  });
+
+  it("...and a VENDOR word in the runtime slot falls to unstamped, as it must", async () => {
+    // The failure mode stated as a test: if a future change ever widens the
+    // custody enum with a vendor word, this is what those sessions would get.
+    for (const vendorWord of ["codex", "cursor", "claude"]) {
+      const text = (
+        await opAwait(quietClient(), "general", 7, undefined, "u-me", vendorWord)
+      ).content[0].text;
+      expect(text).toContain("re-arm the wait NOW");
+      expect(text).not.toContain("Do NOT re-arm");
+    }
+  });
+
   it("an unrecognized stamp is treated as unstamped, never as its own case", async () => {
     // ⚠ Only the EXACT recognized value counts — a near-miss falls to the
     // honest branch, never to the desktop one.

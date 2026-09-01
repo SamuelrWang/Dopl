@@ -90,6 +90,13 @@ interface FetchCall {
 
 let calls: FetchCall[];
 let fetchMock: ReturnType<typeof vi.fn>;
+/**
+ * What `GET /api/chats` answers. ⚠ THE DEFAULT DELIBERATELY OMITS `truncated` —
+ * it is the shape a cache entry written before that key existed has, and it is
+ * the first paint every user gets after the upgrade that added it (INVARIANTS
+ * §8). Every other test in this file therefore runs against the stale shape.
+ */
+let chatsPayload: Record<string, unknown>;
 
 function json(body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -102,6 +109,7 @@ beforeEach(() => {
   workspaceId = `ws-${++workspaceSeq}`;
   realtime.status = null;
   calls = [];
+  chatsPayload = { chats: [CHAT], hiddenCount: 0 };
   fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -120,7 +128,7 @@ beforeEach(() => {
       });
     }
     if (url === "/api/workspaces/me") return json({ role: "admin", userId: "u-1" });
-    if (url === "/api/chats") return json({ chats: [CHAT], hiddenCount: 0 });
+    if (url === "/api/chats") return json(chatsPayload);
     if (url === "/api/chats/folders") return json({ folders: [FOLDER] });
     if (url === "/api/chats/c-1") {
       return method === "PATCH"
@@ -196,5 +204,48 @@ describe("chats page", () => {
       expect(requestsTo("/api/chats").length).toBeGreaterThan(before)
     );
     expect(requestsTo("/api/chats/folders").length).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * THE READ CEILING (`chats/constants.ts › CHAT_LIST_LIMIT`), from the renderer's
+ * side. A clipped archive that renders identically to an exhausted one is the
+ * bug INVARIANTS §9 names, and the STALE half is the one that ships broken: the
+ * key is new, so the entry a returning user boots on does not have it.
+ */
+describe("chats page — a clipped archive", () => {
+  const CLIP = /Showing the most recent chats/;
+
+  it("says so when the read hit its ceiling", async () => {
+    chatsPayload = { chats: [CHAT], hiddenCount: 0, truncated: true };
+
+    renderPage();
+
+    expect(await screen.findByText(CLIP)).toBeInTheDocument();
+  });
+
+  it("says nothing when the read reached the end", async () => {
+    chatsPayload = { chats: [CHAT], hiddenCount: 0, truncated: false };
+
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Port the chats page" });
+    expect(screen.queryByText(CLIP)).not.toBeInTheDocument();
+  });
+
+  it("renders a payload with NO `truncated` key at all, as unclipped", async () => {
+    // ⚠ THE STALE-CACHE CASE. `data?.truncated` is `undefined` here, not
+    // `false` — a reader that treated the container's `?.` as the fallback
+    // would still be undefined, and one that rendered on truthiness of the
+    // wrong thing would claim a clip nobody measured. Absent must read as "not
+    // clipped": a missing notice is a smaller claim than a false one.
+    chatsPayload = { chats: [CHAT], hiddenCount: 0 };
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Port the chats page" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(CLIP)).not.toBeInTheDocument();
   });
 });

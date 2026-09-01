@@ -13,15 +13,13 @@ import {
   CHANNEL,
   CHANNEL_ID,
   HOME,
-  LINK_OUT,
   LINK_SEGMENT,
   LINK_WORKSPACE_ID,
-  SEVEN_DAYS_MS,
-  SOLO_CHANNEL,
   failing,
+  openChannelRecord,
+  openChannels,
   renderHome,
   routes,
-  withHome,
 } from "./home-test-harness";
 
 /**
@@ -36,6 +34,10 @@ import {
  * `channel-surface.test.tsx`; what this suite owns is that Home MOUNTS it with
  * the container's workspace, the resolved channel row, the caller's id and the
  * person slot.
+ *
+ * ⚠ THE INVITATION LIFECYCLE IS NEXT DOOR — `home-links.test.tsx` (2026-09-01),
+ * split off when this file crossed the 500-line cap for the second time. Mint,
+ * revoke and the one-open-link rule live there; the page's SHAPE lives here.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -125,6 +127,7 @@ describe("home page", () => {
    */
   it("gives the record pane NO drop shadow — the 2px line is its whole boundary", async () => {
     renderHome();
+    await openChannels();
     const pane = (await screen.findByTestId("channel-surface")).parentElement
       ?.parentElement;
     expect(pane?.className).toMatch(/border-home-panel-line/);
@@ -154,13 +157,13 @@ describe("home page", () => {
 
   it("renders claimed relationships and pending links in one list", async () => {
     renderHome();
-
-    // The header's selector replaced the page title — "Chat" is the surface.
-    expect(
-      await screen.findByRole("tab", { name: "Chat", selected: true })
-    ).toBeInTheDocument();
-    // ⚠ `getAllBy`: the email is the list row's subline AND the person card's.
-    expect(screen.getAllByText("priya@shahco.tax").length).toBeGreaterThan(0);
+    // The header's selector replaced the page title — "Channels" is the
+    // surface (renamed from "Chat" 2026-09-01), and it is no longer the face
+    // the page OPENS on (Samuel, 2026-09-01: Overview is the landing).
+    await openChannels();
+    // 🔒 THE ROW IS THE CHANNEL'S NAME AND NO MEMBER IDENTITY (2026-09-01) —
+    // this asserted the peer's EMAIL until the roster-derived row was removed.
+    expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Three renewals over $1k before October")
     ).toBeInTheDocument();
@@ -171,19 +174,22 @@ describe("home page", () => {
     // "All | Links" segmented filter above the rows is DELETED — links are no
     // longer a filterable state — and the rows themselves are untouched: the
     // link row above is still in this list, still chipped. The only tabs left
-    // on the page are the header's three faces.
+    // on the page are the header's four faces, and ORDER is the assertion:
+    // Overview sits LEFT of Channels (Samuel, 2026-09-01).
+    // ⚠ **THE FIRST FOUR, not every tab.** The face row is the page header's and
+    // is first in document order; the OUTGOING Overview pane is still mounted
+    // for one 150ms `Crossfade` fade after the click, and it carries the chart's
+    // metric switcher — which is also `role="tab"`.
     expect(screen.queryByRole("tab", { name: /^All/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /^Links/ })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "Chat",
-      "Knowledge",
-      "Agents",
-    ]);
+    expect(
+      screen.getAllByRole("tab").slice(0, 4).map((tab) => tab.textContent)
+    ).toEqual(["Overview", "Channels", "Knowledge", "Agents"]);
   });
 
   it("drops link containers from the account rail", async () => {
     renderHome();
-    await screen.findByRole("tab", { name: "Chat", selected: true });
+    await openChannels();
 
     expect(screen.getByRole("button", { name: "Acme" })).toBeInTheDocument();
     // The container workspace is named for the peer — it must not be a tile.
@@ -195,7 +201,7 @@ describe("home page", () => {
   it("selecting a relationship mounts the surface on its container", async () => {
     renderHome();
 
-    const surface = await screen.findByTestId("channel-surface");
+    const surface = await openChannelRecord();
     expect(surface).toHaveAttribute("data-workspace", LINK_WORKSPACE_ID);
     expect(surface).toHaveAttribute("data-slug", LINK_SEGMENT);
     expect(surface).toHaveAttribute("data-channel", CHANNEL_ID);
@@ -215,7 +221,7 @@ describe("home page", () => {
 
   it("searching filters the list by name and email", async () => {
     renderHome();
-    await screen.findByRole("tab", { name: "Chat", selected: true });
+    await openChannels();
 
     // The field is behind a collapsed pill — it is unreachable until the round
     // toggle grows it (kit `.search-expand`).
@@ -229,10 +235,13 @@ describe("home page", () => {
       "0"
     );
 
+    // ⚠ SEARCH STILL REACHES MEMBERS (2026-09-01, deliberately): finding a
+    // channel by who is in it is a QUERY, not a presentation of identity, and
+    // the row that comes back is still titled by the channel.
     fireEvent.change(screen.getByLabelText("Search people"), {
       target: { value: "shahco" },
     });
-    expect(screen.getAllByText("priya@shahco.tax").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
     expect(screen.queryByText("Link out")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Search people"), {
@@ -241,78 +250,19 @@ describe("home page", () => {
     // ⚠ BOTH PANES. The list says "No matches" and so does the record — the
     // pane resolves its selection from the same filtered set the list renders,
     // so it can no longer sit on a person the list has already dropped.
-    expect(screen.getAllByText("No matches")).toHaveLength(2);
-    expect(screen.queryByText("priya@shahco.tax")).not.toBeInTheDocument();
-  });
-
-  it("mints a link with the picked window as an absolute future instant", async () => {
-    // ⚠ FROM THE CHANNEL'S OWN Info tab (2026-08-25), not the page header: the
-    // act belongs to the container it binds to. (A SOLO channel is used here
-    // because it has no open link — the two-state rule, not a capacity one.)
-    apiRequest.mockImplementation(
-      withHome({ channels: [SOLO_CHANNEL], pendingLinks: [] })
-    );
-    renderHome();
-    await screen.findByTestId("channel-surface");
-
-    fireEvent.click(screen.getByRole("button", { name: "Add person" }));
-    // ⚠ `find`, not `get`: Add person opens a `StandardDialog` since
-    // 2026-08-27 (it was a Popover, which rendered synchronously), and
-    // `ModalShell` mounts a FRAME after `open` flips so it can animate in.
-    const create = await screen.findByRole("button", { name: "Create link" });
-    const before = Date.now();
-    fireEvent.click(create);
-
-    await waitFor(() => {
-      const mint = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/home/links" && c.opts.method === "POST"
-      );
-      expect(mint).toBeDefined();
-      const body = mint?.opts.body as {
-        expiresAt: string;
-        workspaceId: string;
-        maxUses?: number;
-      };
-      // ⚠ THE LINK IS BOUND to the selected channel's container — an unbound
-      // mint is not a thing any more, and `maxUses` is not a field the client
-      // may send: a bound link admits ONE named person by construction.
-      expect(body.workspaceId).toBe(LINK_WORKSPACE_ID);
-      expect(body.maxUses).toBeUndefined();
-      // The picker's default: 7 days. The WINDOW is relative; what leaves is an
-      // instant, because that is what the route validates.
-      const delta = Date.parse(body.expiresAt) - before;
-      expect(delta).toBeGreaterThan(SEVEN_DAYS_MS - 5_000);
-      expect(delta).toBeLessThan(SEVEN_DAYS_MS + 5_000);
-    });
-  });
-
-  it("revokes a pending link and re-reads the list", async () => {
-    renderHome();
-    await screen.findByRole("tab", { name: "Chat", selected: true });
-
-    fireEvent.click(screen.getByText("Link out"));
-    fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
-
-    await waitFor(() => {
-      const revoke = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/home/links/link-1"
-      );
-      expect(revoke?.opts.method).toBe("DELETE");
-    });
+    // ⚠ `waitFor`, not a synchronous read: the pane is a `Crossfade`, so the
+    // outgoing record stays mounted for one 150ms fade after the token moves to
+    // the empty one. Asserting immediately measures the fade, not the answer.
     await waitFor(() =>
-      expect(
-        bridgeCalls(apiRequest).filter(
-          (c) => c.path === "/api/home/channels"
-        ).length
-      ).toBeGreaterThan(1)
+      expect(screen.getAllByText("No matches")).toHaveLength(2)
     );
+    expect(screen.queryByText("Priya Shah")).not.toBeInTheDocument();
   });
 
-  it("renders a SOLO channel by its own name, subtitled 'Just you'", async () => {
-    // ⚠ A channel with nobody in it is the NORMAL first state after the
-    // 2026-08-24 inversion, not a half-built row: it is titled by the CHANNEL,
-    // because there is no person to title it after, and its subline is the
-    // static words — never an agent or thread count (Samuel's ruling).
+  it("renders a SOLO channel by its own name, like every other channel", async () => {
+    // 🔒 NO LONGER A SPECIAL CASE SINCE 2026-09-01, which is the point: the row
+    // was titled by the channel HERE and by the peer everywhere else, and the
+    // "Just you" subline was the roster said a second way. Both are gone.
     const solo: HomeChannelsPayload = {
       channels: [
         {
@@ -337,10 +287,10 @@ describe("home page", () => {
     );
 
     renderHome();
-    await screen.findByRole("tab", { name: "Chat", selected: true });
+    await openChannels();
 
     expect(screen.getAllByText("Q3 Fundraise").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Just you").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Just you")).not.toBeInTheDocument();
     expect(screen.queryByText("priya@shahco.tax")).not.toBeInTheDocument();
 
     // ⚠ AND THE INFO TAB IS THE CHANNEL'S CARD, not a person's with the fields
@@ -348,7 +298,7 @@ describe("home page", () => {
     // who is not there. What survives is what the channel itself knows.
     // ⚠ Awaited FIRST — the absence below means nothing until the slot is on
     // screen, and an unmounted panel would pass it for free.
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
     expect(screen.queryByText("Email")).not.toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Last activity")).toBeInTheDocument();
@@ -390,7 +340,7 @@ describe("home page", () => {
     );
 
     renderHome();
-    await screen.findByRole("tab", { name: "Chat", selected: true });
+    await openChannels();
     fireEvent.click(screen.getByRole("button", { name: "New channel" }));
 
     fireEvent.change(await screen.findByLabelText("Name"), {
@@ -416,43 +366,6 @@ describe("home page", () => {
     );
   });
 
-  it("wears the Link out chip and offers Revoke where Add person was", async () => {
-    // ⚠ ONE SECTION, TWO STATES, and this is the rule that SURVIVED the member
-    // cap's retirement. An invitation already out IS the answer to "add a
-    // person": a container may hold at most one OPEN link at a time, so
-    // offering the act again would mint over a URL already sent.
-    apiRequest.mockImplementation(
-      withHome({
-        channels: [{ ...SOLO_CHANNEL, linkOut: LINK_OUT }],
-        pendingLinks: [],
-      })
-    );
-    renderHome();
-    await screen.findByTestId("channel-surface");
-
-    // TWICE, and both are load-bearing: the chip names it on the ROW, where you
-    // scan for it, and the section heading names it INSIDE the channel, where
-    // you act on it.
-    expect(screen.getAllByText("Link out")).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: "Add person" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
-    await waitFor(() => {
-      const revoke = bridgeCalls(apiRequest).find(
-        (c) => c.path === `/api/home/links/${LINK_OUT.id}`
-      );
-      expect(revoke?.opts.method).toBe("DELETE");
-    });
-    // Revoking re-reads the channels; the chip clears with the payload, never
-    // by a cache edit here.
-    await waitFor(() =>
-      expect(
-        bridgeCalls(apiRequest).filter((c) => c.path === "/api/home/channels")
-          .length
-      ).toBeGreaterThan(1)
-    );
-  });
-
   it("keeps ONE primary action in the header, and Add person is not one of them", async () => {
     // ⚠ THE ASSERTION IS ABOUT PLACEMENT, NOT CAPACITY (rewritten 2026-08-26).
     // It used to read "no Add person on a FULL channel" over the default
@@ -462,7 +375,7 @@ describe("home page", () => {
     // exists EXACTLY ONCE — on the selected channel's Info tab, never lifted
     // into the header beside it.
     renderHome();
-    await screen.findByTestId("channel-surface");
+    await openChannelRecord();
 
     expect(screen.getAllByRole("button", { name: "New channel" })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();

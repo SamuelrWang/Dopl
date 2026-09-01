@@ -200,11 +200,13 @@ test("🔒 the credential is RELEASED at settle and NOT at park", () => {
   );
 });
 
-test("🔒 buildSdkOptions passes the session bearer into buildMcpServers", () => {
-  const query = readFileSync(M("session-query.js"), "utf8");
+test("🔒 the launch spec passes the session bearer into buildMcpServers", () => {
+  // ⚠ 2026-08-31 (runtime-adapter port): the assembly moved to the runtime adapter. The lock did
+  // not — it is WHICH CREDENTIAL the session was handed, and that is Dopl's on every runtime.
+  const query = readFileSync(M("runtime/claude/launch-spec.js"), "utf8");
   assert.match(
     query,
-    /buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\)/,
+    /loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\)/,
     "dropping the third argument silently reverts every locked session to the device token"
   );
 });

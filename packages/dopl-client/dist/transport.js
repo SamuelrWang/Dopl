@@ -24,6 +24,7 @@ class DoplTransport {
     toolHeaderName;
     clientIdentifier;
     runtime;
+    vendor;
     sessionId;
     signal;
     workspaceId;
@@ -33,6 +34,7 @@ class DoplTransport {
         this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
         this.clientIdentifier = opts.clientIdentifier ?? null;
         this.runtime = opts.runtime ?? null;
+        this.vendor = opts.vendor ?? null;
         this.sessionId = opts.sessionId ?? null;
         this.signal = opts.signal;
         this.workspaceId = opts.workspaceId ?? null;
@@ -179,6 +181,8 @@ class DoplTransport {
         // Server-read, never caller-writable (both on the reserved list below).
         if (this.runtime)
             headers["X-Dopl-Runtime"] = this.runtime;
+        if (this.vendor)
+            headers["X-Dopl-Vendor"] = this.vendor;
         if (this.sessionId)
             headers["X-Dopl-Session-Id"] = this.sessionId;
         // Order: per-call override > AsyncLocalStorage (set by the MCP
@@ -197,6 +201,7 @@ class DoplTransport {
                 this.toolHeaderName.toLowerCase(),
                 "x-dopl-client",
                 "x-dopl-runtime",
+                "x-dopl-vendor",
                 "x-dopl-session-id",
                 "x-workspace-id",
             ]);

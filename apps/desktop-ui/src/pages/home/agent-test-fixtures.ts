@@ -259,7 +259,10 @@ export function agentRoutes(
  *  ⚠ Each suite declares its OWN `channel-surface` stub: `vi.mock` is hoisted
  *  per file and its factory may not close over module imports. */
 export async function openAgents(): Promise<void> {
-  await screen.findByTestId("channel-surface");
+  // ⚠ GATES ON THE TAB ROW, NOT ON THE RECORD PANE (2026-09-01). It awaited
+  // `channel-surface` — free when the page opened on Channels, and a hang now
+  // that it opens on Overview, where no surface is mounted at all.
+  await screen.findByRole("tab", { name: "Overview" });
   fireEvent.click(screen.getByText("Agents"));
 }
 

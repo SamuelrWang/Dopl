@@ -31,7 +31,7 @@
 // METHOD: session-engine.js is electron-bound and has no extractable pure block, so the
 // functions this involves are brace-matched out and evaluated together with fakes for the
 // module bindings they close over. That runs the REAL control flow — including the FIX #7
-// re-check after the getSdk await — and the ceiling is the REAL `liveCount` + the REAL
+// re-check after the acquireRuntime await — and the ceiling is the REAL `liveCount` + the REAL
 // constant, sliced the same way, so the cap case cannot pass against a number this test made up.
 
 import { test } from "node:test";
@@ -39,6 +39,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,10 @@ const ENGINE = readFileSync(join(MAIN, "session-launch.js"), "utf8");
 const REGISTRY_SRC = readFileSync(join(MAIN, "session-registry.js"), "utf8");
 const STORE_SRC = readFileSync(join(MAIN, "session-store.js"), "utf8");
 const WINDOWLESS_SRC = readFileSync(join(MAIN, "session-windowless.js"), "utf8");
+// ⚠ THE REAL `session-profiles.js`, REQUIRED not sliced (2026-09-01, D1). It is the electron-free
+// module, so a plain require works, and the funnel's one launch-blocking question
+// (`windowlessFloorRefusal`) is therefore asked of the SHIPPED descriptors in every case below.
+const REAL_PROFILES = createRequire(import.meta.url)(join(MAIN, "session-profiles.js"));
 
 // The REAL key function, so the slot arithmetic under test is the shipped one.
 const { sessionKey, slotKey, threadKeyPrefix } = new Function(
@@ -92,7 +97,7 @@ const AGENT = "a1b2c3d4";
 const TASK = "11111111-2222-3333-4444-555555555555";
 
 function harness(cfg = {}) {
-  const calls = { started: [], diag: [] };
+  const calls = { started: [], diag: [], acquired: [] };
   const sessions = new Map();
   // ⚠ `liveOnThread` IS SLICED IN, NOT FAKED (2026-08-21): it is how `launch` finds the agents
   // already on a thread for the auth-hold read, and a fake would let this file be green over a
@@ -112,8 +117,16 @@ function harness(cfg = {}) {
   )({ sessions }, store);
   const deps = {
     sessions,
-    getSdk: async () => {
-      if (cfg.sdkThrows) throw new Error("no sdk on this machine");
+    // ⚠ 2026-08-31 (runtime-adapter port): `getSdk` became `acquireRuntime` — the same question
+    // ("can this machine load the agent runtime at all?"), the same throw-on-no, in the same
+    // place. The await this file races against did not move.
+    // ⚠ AND IT TAKES THE SESSION'S RUNTIME ID SINCE 2026-08-31 (port wave D). The funnel
+    // FORWARDS `a.runtime` and never invents one, so every lane that passes nothing lands on the
+    // DEFAULT adapter and its launch is byte-identical to what shipped. Recorded so a case can
+    // assert WHICH id the funnel asked for, which is the whole of the selection contract here.
+    acquireRuntime: async (runtimeId) => {
+      calls.acquired.push(runtimeId);
+      if (cfg.sdkThrows) throw new Error("no agent runtime on this machine");
       if (cfg.duringSdk) cfg.duringSdk(sessions);
       return {};
     },
@@ -128,7 +141,7 @@ function harness(cfg = {}) {
     sessionOn: registry.sessionOn,
   };
   const api = new Function(
-    "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId",
+    "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
     `${LAUNCH_SRC}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -137,7 +150,19 @@ function harness(cfg = {}) {
     sessionWindowless,
     (...a) => calls.diag.push(a.join(" ")),
     () => `mint${String(minted++).padStart(4, "0")}`,
-    (v) => typeof v === "string" && /^[a-z][a-z0-9]{7}$/.test(v)
+    (v) => typeof v === "string" && /^[a-z][a-z0-9]{7}$/.test(v),
+    // ⚠ 2026-09-01 (D1): the WINDOWLESS TOOL FLOOR refusal, injected REAL by default so the
+    // happy path is measured against the shipped predicate over the shipped descriptors — a
+    // fake `() => null` here would make every other case in this file green over a check that
+    // does not exist. `cfg.floorRefusal` overrides it for the refusal case, which is the only
+    // way to reach a null floor without editing a shipped adapter.
+    {
+      windowlessFloorRefusal: (id) => (cfg.floorRefusal !== undefined ? cfg.floorRefusal : REAL_PROFILES.windowlessFloorRefusal(id)),
+      // ⚠ 2026-09-01 (D3): Axis B's collapse WARNING, also injected REAL. Codex declares
+      // `opScoped: 'unverified'`, so this really does fire on the shipped tree — which is the
+      // point: the predicate had no consumer at all before this.
+      axisBOpScopedWarning: (id) => REAL_PROFILES.axisBOpScopedWarning(id),
+    }
   );
   return { ...api, sessions, calls };
 }
@@ -302,4 +327,158 @@ test("startSession's two rollbacks are reported, not swallowed", async () => {
     { skipped: "auth-hold" }
   );
   assert.equal(heldIdle.calls.started[0].parkedShell, true, "…on a real spawn-idle spec");
+});
+
+// ── ⚠ THE RUNTIME SELECTION, AT THE FUNNEL (2026-08-31, the runtime-adapter port, wave D) ─────
+//
+// The funnel's job here is exactly one thing and it is the thing that makes "existing sessions
+// behave identically" a PROPERTY rather than a hope: it FORWARDS what it was handed and INVENTS
+// nothing. Every lane except the operator's own Launch button (and the two that read the
+// channel's durable pick — `trigger.js`, `launch-directives.js`) passes no runtime at all, and
+// `main/runtime/index.js › resolve` reads absent as the DEFAULT adapter — the runtime every
+// pre-port session really ran on.
+//
+// ⚠ IT IS NOT A CONTAINMENT INPUT, which is why it may ride the caller's args where the TOOL
+// PROFILE may not. `main/channel-runtime.js`'s header carries the argument: every adapter
+// re-derives its own deny lists and Axis-A vocabulary, `contract.js › sealAdapter` refuses to
+// register one that cannot, and the four gate steps before Axis A are core's on all of them.
+
+test("RUNTIME: the funnel forwards the caller's pick to the registry, unchanged", async () => {
+  const h = harness();
+  await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
+  assert.deepEqual(h.calls.acquired, ["codex"], "the id the caller chose is the id acquired");
+});
+
+test("RUNTIME: a lane that passes nothing acquires the DEFAULT — the shipped behaviour", async () => {
+  const h = harness();
+  await h.launch(call({ channelId: CH, taskId: TASK }));
+  assert.deepEqual(h.calls.acquired, [undefined],
+    "absent, not a literal: `resolve` is the one place 'no pick' becomes a runtime");
+  assert.equal(h.calls.started.length, 1, "…and the launch still happens");
+});
+
+test("RUNTIME: an unusable runtime is still `no-sdk` — the wire vocabulary did not widen", async () => {
+  // ⚠ THE SKIP CODE IS THE WIRE AND MUST NOT CHANGE. `trigger.js` and the directive lane both
+  // branch on it, and it means "this machine has no agent runtime" on EVERY runtime — renaming
+  // it for a second adapter would be a vocabulary change dressed as a cleanup.
+  const h = harness({ sdkThrows: true });
+  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" })), { skipped: "no-sdk" });
+  assert.equal(h.calls.started.length, 0, "nothing is constructed when the runtime is unusable");
+});
+
+// ── ⚠ D1: THE WINDOWLESS TOOL FLOOR IS LAUNCH-BLOCKING (2026-09-01) ──────────────────────────
+//
+// `contract.js › LAUNCH_BLOCKING[3]`. `capability.js › floorWindowlessTool`'s header stated the
+// refusal from the day it was written — "`windowlessFloor: null` REFUSES THE WINDOWLESS LAUNCH
+// rather than picking a mode" — and NOTHING refused it. The predicate returned the session's own
+// stored mode instead, which starts at the NARROWEST member and resets to it on park, on a session
+// with no gate surface: every tool call silently denied, including the reads the prompt orders.
+//
+// ⚠ THE REFUSAL IS PINNED IN TWO HALVES BECAUSE ONE HALF ALONE IS PASSABLE BY THE BUG. "The
+// funnel refuses when handed a reason" would pass over a `windowlessFloorRefusal` that never
+// answers one; "the shipped adapters launch" would pass over a funnel that never asks. Together
+// they pin the wire.
+
+test("D1: a runtime with NO orderable windowless floor is REFUSED before anything is constructed", async () => {
+  const h = harness({ floorRefusal: "Test Runtime declares no windowless tool floor, and a session with no gate surface would silently deny every tool call it makes" });
+  const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
+  // ⚠ `'disabled'`, NOT AN EIGHTH WIRE WORD. `REFUSAL_REASONS` is backed by a deployed column
+  // CHECK, so a new word here would be a refusal the database refuses to record. `'disabled'` is
+  // the existing local-only code for "this build will not run this spawn shape"; the SPECIFIC
+  // reason rides the diag, which is the only surface allowed to name a runtime.
+  assert.deepEqual(res, { skipped: "disabled" });
+  // ⚠ NOTHING IS SPENT. The check sits after acquireRuntime and BEFORE startSession, so there is
+  // no session in the registry, no slot held and no rollback to get wrong.
+  assert.equal(h.calls.started.length, 0, "no session is constructed");
+  assert.equal(h.sessions.size, 0, "and none is registered");
+  assert.deepEqual(h.calls.acquired, ["codex"], "…but the runtime WAS acquired first: the question is about a known runtime");
+  assert.ok(h.calls.diag.some((l) => /windowless launch refused/.test(l)),
+    "the operator-readable sentence lands in the diag, the one surface that may name a runtime");
+});
+
+test("D1: every SHIPPED adapter declares an orderable floor, so none of them is refused", async () => {
+  // The other half. Driven through the REAL predicate over the REAL descriptors — a fake would
+  // make this file green over a check that does not exist.
+  for (const runtime of ["claude", "codex", "cursor", undefined]) {
+    const h = harness();
+    const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
+    assert.equal(res.skipped, undefined, `${runtime || "(default)"} must launch`);
+    assert.equal(h.calls.started.length, 1, `${runtime || "(default)"} constructs its session`);
+  }
+});
+
+test("D1: the predicate itself answers a SENTENCE for a null floor and for an unorderable one", () => {
+  // ⚠ THE MUTATION, RUN HERE RATHER THAN DESCRIBED. `floorWindowlessTool` must answer `null`
+  // (refuse) and NOT the session's own mode, for BOTH causes — an absent floor and a floor that
+  // is not one of the runtime's declared modes. Before the fix both returned a mode, and the
+  // narrowest one at that.
+  const capability = createRequire(import.meta.url)(join(MAIN, "runtime", "capability.js"));
+  const base = {
+    label: "Test Runtime",
+    toolMode: { options: [{ value: "narrow" }, { value: "wide" }], windowlessFloor: "wide" },
+  };
+  assert.equal(capability.windowlessFloorRefusal(base), null, "a declared, orderable floor is fine");
+  assert.equal(capability.floorWindowlessTool(base, "narrow"), "wide", "…and it raises");
+
+  const noFloor = { ...base, toolMode: { ...base.toolMode, windowlessFloor: null } };
+  assert.match(capability.windowlessFloorRefusal(noFloor), /declares no windowless tool floor/);
+  assert.equal(capability.floorWindowlessTool(noFloor, "narrow"), null,
+    "REFUSE, never the session's own mode — which here is the NARROWEST, i.e. deny-everything");
+  assert.equal(capability.floorWindowlessTool(noFloor, "wide"), null, "…and not the wide one either");
+
+  const badFloor = { ...base, toolMode: { ...base.toolMode, windowlessFloor: "nonesuch" } };
+  assert.match(capability.windowlessFloorRefusal(badFloor), /not one of the modes it declares/);
+  assert.equal(capability.floorWindowlessTool(badFloor, "narrow"), null);
+  // ⚠ NAMES THE RUNTIME'S OWN LABEL AND NO VENDOR.
+  assert.match(capability.windowlessFloorRefusal(noFloor), /^Test Runtime /);
+});
+
+// ── ⚠ D3: AXIS B'S COLLAPSE WARNING HAS A CONSUMER (2026-09-01) ──────────────────────────────
+//
+// `capability.js › axisBOpScoped` was declared with a documented severe consequence — "`false`
+// COLLAPSES AXIS B FROM OP-SCOPED TO WHOLE-TOOL — every channel call gates, READS INCLUDED — and a
+// held inbound on a windowless session is held forever" — and grepping `main/` and `src/` for it
+// returned exactly one hit, a COMMENT. So the operator got no warning and the launch was not
+// refused: a declaration that could not do its job.
+//
+// ⚠ WARNING, NOT REFUSAL, AND THIS FILE PINS THAT TOO. The direction of failure is CLOSED
+// (unreadable input -> `postFieldsOk` fails -> `gate` -> a windowless gate DENIES), so the agent
+// is broken and the boundary is not. A refusal here would take a registered adapter off the only
+// spawn shape this tree has, which is a release decision and not this function's.
+
+test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async () => {
+  // Codex declares `axisB.opScoped: 'unverified'` (§5 item C1, unmeasured), so this fires against
+  // the SHIPPED descriptor — no fake, no hypothetical fourth adapter.
+  const h = harness();
+  const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
+  assert.equal(res.skipped, undefined, "it is a WARNING — the launch proceeds");
+  assert.equal(h.calls.started.length, 1, "…and the session is really constructed");
+  const warned = h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l));
+  assert.equal(warned.length, 1, "exactly one line, at the launch");
+  assert.match(warned[0], /READS INCLUDED/, "it names the consequence, not just the field");
+  assert.match(warned[0], /not been measured/, "…and that this one is UNVERIFIED rather than false");
+});
+
+test("D3: an op-scoped runtime says NOTHING — a warning on every launch is a warning nobody reads", async () => {
+  for (const runtime of ["claude", "cursor"]) {
+    const h = harness();
+    await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
+    assert.deepEqual(h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l)), [], runtime);
+  }
+});
+
+test("D3: the predicate distinguishes false from unverified, and names no vendor", () => {
+  const capability = createRequire(import.meta.url)(join(MAIN, "runtime", "capability.js"));
+  const at = (opScoped) => ({ label: "Test Runtime", axisB: { opScoped } });
+  assert.equal(capability.axisBOpScopedWarning(at(true)), null, "op-scoped: no warning at all");
+  assert.match(capability.axisBOpScopedWarning(at(false)), /^Test Runtime cannot show the gate/);
+  assert.match(capability.axisBOpScopedWarning(at("unverified")), /^Test Runtime has not been measured/);
+  // ⚠ ABSENT IS NOT `true`. A descriptor that omits the field has not declared op-scoping, and
+  // reading absent as capable is exactly the fail-OPEN this predicate exists to refuse.
+  assert.match(capability.axisBOpScopedWarning(at(undefined)), /cannot show the gate/);
+  assert.match(capability.axisBOpScopedWarning({ label: "Test Runtime" }), /cannot show the gate/);
+  for (const v of [true, false, "unverified", undefined]) {
+    const w = capability.axisBOpScopedWarning(at(v));
+    if (w) assert.ok(!/claude|codex|cursor|anthropic|openai/i.test(w), `names a vendor: ${w}`);
+  }
 });

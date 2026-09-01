@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_PERMISSION_PRESET,
   hasModelKey,
   normalizePermissionPreset,
   type PermissionPreset,
 } from "../lib/permission-modes";
+import {
+  descriptorFor,
+  hasRuntimeKey,
+  normalizeRuntimeId,
+  normalizeRuntimes,
+  type RuntimeDescriptor,
+} from "../lib/runtime-capability";
 
 /**
  * Per-channel DURABLE LAUNCH POSTURE over the desktop bridge
@@ -65,24 +72,63 @@ import {
  * axis the first just changed. The deleted arm carried the same reader set for
  * exactly this reason — the idiom outlived it, the record it guarded did not.
  */
-const postureReaders = new Map<string, Set<(next: PermissionPreset) => void>>();
+const postureReaders = new Map<string, Set<(next: PostureSnapshot) => void>>();
 
-function broadcastPosture(channelId: string, next: PermissionPreset) {
+/**
+ * WHAT A SECOND MOUNT ADOPTS. ⚠ THE RUNTIME RIDES IT rather than living in a
+ * second broadcast, for the reason the record itself is one record: the two
+ * surfaces are the Settings tab in the main window and in a pop-out, and a
+ * runtime that fanned out on its own clock would let one mount show Codex over
+ * a pair the other just rewrote.
+ */
+interface PostureSnapshot {
+  preset: PermissionPreset;
+  /** `''` = the DEFAULT adapter. Never `null` — see `runtime-capability.ts ›
+   *  normalizeRuntimeId`, which states why `''` is the only spelling of no pick. */
+  runtime: string;
+}
+
+function broadcastPosture(channelId: string, next: PostureSnapshot) {
   const readers = postureReaders.get(channelId);
   if (readers) for (const adopt of readers) adopt(next);
 }
+
+/**
+ * THE READ'S REPLY, WHOLE. ⚠ IT IS WIDER THAN `PermissionPreset` AND THAT IS THE
+ * CAPABILITY SURFACE (2026-08-31, the runtime-adapter port). `runtime`,
+ * `runtimes` and `defaultRuntime` are ALWAYS present on the read from a build
+ * that has the concept — even with nothing stored — exactly as `model` is, and
+ * their ABSENCE is how this hook tells an older desktop from an unset channel
+ * (`runtime-capability.ts › hasRuntimeKey`; INVARIANTS §11).
+ * ⚠ `runtimes` IS TYPED `unknown` ON PURPOSE. It crossed a process boundary from
+ * a build that may be newer than this bundle, so it is narrowed by
+ * `normalizeRuntimes` rather than asserted into shape here.
+ */
+export interface LaunchPostureReply extends PermissionPreset {
+  runtime?: string;
+  runtimes?: unknown;
+  defaultRuntime?: string;
+}
+
+/** A posture write. ⚠ OMITTING `runtime` LEAVES THE CHANNEL'S PICK UNTOUCHED —
+ *  main's own rule (`channel-dir-ipc.js › channels:setLaunchPosture` branches on
+ *  `hasOwnProperty`), which is why this is an optional key and never `null`. */
+export type LaunchPostureWrite = PermissionPreset & { runtime?: string };
 
 /** The narrow launch-posture bridge exposed by the desktop preload. */
 export interface DoplLaunchPostureBridge {
   /** The channel's EFFECTIVE pair. ⚠ Never null from a current main — an unset
    *  channel really is manual/ask, unlike an arm that was never chosen. The
    *  nullable type is for an older build answering nothing. */
-  getLaunchPosture: (channelId: string) => Promise<PermissionPreset | null>;
-  /** Store a pair. `ok: false` when main rejected a value. */
+  getLaunchPosture: (channelId: string) => Promise<LaunchPostureReply | null>;
+  /** Store a pair. `ok: false` when main rejected a value. ⚠ The two AXES
+   *  validate HARD (an unknown value rejects the whole write); `model` and
+   *  `runtime` validate SOFT — an unregistered runtime id CLEARS the pick back
+   *  to the default rather than failing the pair beside it. */
   setLaunchPosture: (
     channelId: string,
-    preset: PermissionPreset
-  ) => Promise<{ ok: boolean }>;
+    preset: LaunchPostureWrite
+  ) => Promise<{ ok: boolean; runtime?: string }>;
 }
 
 /**
@@ -123,10 +169,36 @@ export interface ChannelLaunchPostureState {
    * correct direction while the answer is outstanding.
    */
   modelSupported: boolean;
+  /**
+   * THIS DESKTOP HAS A RUNTIME CONCEPT (2026-08-31, the runtime-adapter port).
+   *
+   * ⚠ FALSE RENDERS NO RUNTIME ROW AT ALL — `modelSupported`'s rule, for
+   * `modelSupported`'s reason: a desktop that predates the field DROPS it on
+   * write, so a live control would let the operator pick Codex and launch every
+   * agent on Claude with nothing anywhere saying so. It is an OWN-KEY probe over
+   * the raw reply (`runtime-capability.ts › hasRuntimeKey`), latched to true, and
+   * false until the first read answers — failing toward "no row" while the answer
+   * is outstanding is the correct direction.
+   */
+  runtimeSupported: boolean;
+  /** The channel's durable pick, `''` for the DEFAULT adapter. */
+  runtime: string;
+  /** Every adapter this desktop registered, in registry order. Empty off-desktop. */
+  runtimes: ReadonlyArray<RuntimeDescriptor>;
+  /** The adapter a channel with no pick launches on, `''` when the build says none. */
+  defaultRuntime: string;
+  /**
+   * THE DESCRIPTOR THE CHANNEL'S NEXT LAUNCH WOULD USE — the pick, else the
+   * default, else null. ⚠ EVERY §3 CONTROL READS THIS ONE OBJECT rather than the
+   * list plus an id, so a surface cannot render Codex's vocabulary against
+   * Cursor's refusals.
+   */
+  descriptor: RuntimeDescriptor | null;
   /** True while a write is in flight. */
   busy: boolean;
-  /** Persist a new value on one axis; the others are carried through unchanged. */
-  update: (patch: Partial<PermissionPreset>) => Promise<void>;
+  /** Persist a new value on one axis; the others are carried through unchanged.
+   *  ⚠ A patch with NO `runtime` key leaves the pick untouched (main's rule). */
+  update: (patch: Partial<LaunchPostureWrite>) => Promise<void>;
 }
 
 export function useChannelLaunchPosture(
@@ -138,10 +210,25 @@ export function useChannelLaunchPosture(
   );
   const [busy, setBusy] = useState(false);
   const [modelSupported, setModelSupported] = useState(false);
+  const [runtimeSupported, setRuntimeSupported] = useState(false);
+  const [runtime, setRuntime] = useState("");
+  const [runtimes, setRuntimes] = useState<RuntimeDescriptor[]>(EMPTY_RUNTIMES);
+  const [defaultRuntime, setDefaultRuntime] = useState("");
 
   // ⚠ Feature-detect after mount so SSR and first client render agree.
   useEffect(() => {
     setBridge(getDesktopLaunchPosture());
+  }, []);
+
+  /**
+   * ⚠ STABLE, AND IT HAS TO BE. The reader set is joined in an effect keyed on
+   * `[bridge, channelId]`; a callback re-created every render would leave and
+   * re-join on every keystroke elsewhere in the tab. `setPosture` / `setRuntime`
+   * are stable setState functions, so an empty dependency list is honest.
+   */
+  const adopt = useCallback((next: PostureSnapshot) => {
+    setPosture(next.preset);
+    setRuntime(next.runtime);
   }, []);
 
   // ⚠ NO EXPIRY BRANCH HERE, DELIBERATELY. The deleted arm's reader treated an
@@ -161,6 +248,22 @@ export function useChannelLaunchPosture(
         // version skew this hook cannot resolve, and yanking a control out from
         // under a mid-pick operator is worse than one stale row.
         if (hasModelKey(next)) setModelSupported(true);
+        // ⚠ THE RUNTIME FAMILY IS PROBED THE SAME WAY AND LATCHED THE SAME WAY,
+        // off the SAME raw reply — it rides the model's ops precisely so there
+        // is one read to probe (`main/channel-dir-ipc.js`'s own note).
+        if (hasRuntimeKey(next)) setRuntimeSupported(true);
+        // ⚠ NARROWED, NOT ASSERTED. A descriptor list from a newer build may
+        // carry branches this bundle has never heard of; `normalizeRuntimes`
+        // drops only entries with no id, so an unknown field renders as nothing
+        // rather than throwing a settings tab away.
+        const list = normalizeRuntimes((next as LaunchPostureReply)?.runtimes);
+        setRuntimes(list.length ? list : EMPTY_RUNTIMES);
+        setDefaultRuntime(
+          normalizeRuntimeId(list, (next as LaunchPostureReply)?.defaultRuntime)
+        );
+        setRuntime(
+          normalizeRuntimeId(list, (next as LaunchPostureReply)?.runtime)
+        );
       })
       .catch(() => {
         if (alive) setPosture(DEFAULT_PERMISSION_PRESET);
@@ -171,29 +274,39 @@ export function useChannelLaunchPosture(
   }, [bridge, channelId]);
 
   // Join the channel's reader set so a write from ANOTHER surface lands here.
-  // `setPosture` is a stable setState function, so this subscribes once per
+  // `adopt` is memoized on an empty dependency list, so this subscribes once per
   // channel rather than every render.
   useEffect(() => {
     if (!bridge) return;
     const readers =
-      postureReaders.get(channelId) ??
-      new Set<(n: PermissionPreset) => void>();
+      postureReaders.get(channelId) ?? new Set<(n: PostureSnapshot) => void>();
     postureReaders.set(channelId, readers);
-    readers.add(setPosture);
+    readers.add(adopt);
     return () => {
-      readers.delete(setPosture);
+      readers.delete(adopt);
       if (readers.size === 0) postureReaders.delete(channelId);
     };
-  }, [bridge, channelId]);
+  }, [adopt, bridge, channelId]);
 
   // ⚠ Optimistic, and REVERTS if the desktop refused: never leave a settings row
   // claiming a posture that was not stored. That failure is the exact one this
   // record was introduced to end.
   const update = useCallback(
-    async (patch: Partial<PermissionPreset>) => {
+    async (patch: Partial<LaunchPostureWrite>) => {
       if (!bridge || busy) return;
       const previous = posture;
-      const optimistic: PermissionPreset = { ...posture, ...patch };
+      const previousRuntime = runtime;
+      const { runtime: patchRuntime, ...presetPatch } = patch;
+      // ⚠ THE RUNTIME KEY'S PRESENCE IS THE SIGNAL, NOT ITS VALUE. `''` is a real
+      // pick (back to the default adapter) and main clears the store for it; an
+      // ABSENT key must leave the channel's pick alone. `hasOwnProperty` on the
+      // patch is the only way to tell those apart, and it is the same test main
+      // applies on its own side of the wire.
+      const movesRuntime = Object.prototype.hasOwnProperty.call(patch, "runtime");
+      const optimistic: PermissionPreset = { ...posture, ...presetPatch };
+      const optimisticRuntime = movesRuntime
+        ? normalizeRuntimeId(runtimes, patchRuntime)
+        : previousRuntime;
       if (
         optimistic.tools === previous.tools &&
         optimistic.messages === previous.messages &&
@@ -202,12 +315,17 @@ export function useChannelLaunchPosture(
         // above, but they are the same POSTURE — and without the coalesce the
         // first Default pick on a fresh channel would look like a change, write,
         // and put a `model` key on a record that had none.
-        (optimistic.model ?? null) === (previous.model ?? null)
+        (optimistic.model ?? null) === (previous.model ?? null) &&
+        optimisticRuntime === previousRuntime
       ) {
         return;
       }
       setPosture(optimistic);
-      broadcastPosture(channelId, optimistic);
+      setRuntime(optimisticRuntime);
+      broadcastPosture(channelId, {
+        preset: optimistic,
+        runtime: optimisticRuntime,
+      });
       setBusy(true);
       try {
         // ⚠ Merge onto what is STORED RIGHT NOW, never this component's mount
@@ -216,20 +334,61 @@ export function useChannelLaunchPosture(
           .getLaunchPosture(channelId)
           .then(normalizePermissionPreset)
           .catch(() => null);
-        const next: PermissionPreset = { ...(stored ?? previous), ...patch };
+        const next: LaunchPostureWrite = { ...(stored ?? previous), ...presetPatch };
+        // ⚠ THE KEY IS ADDED ONLY WHEN THE PATCH CARRIED ONE, so a Permissions or
+        // Sends pick puts the same object on the wire it always did and cannot
+        // re-stamp (or clear) a runtime nobody touched.
+        if (movesRuntime) next.runtime = optimisticRuntime;
         const res = await bridge.setLaunchPosture(channelId, next);
-        const settled = !res || res.ok !== true ? previous : next;
+        const ok = !!res && res.ok === true;
+        const settled = ok ? next : previous;
+        // ⚠ MAIN'S OWN ANSWER WINS OVER THE OPTIMISM. `setLaunchPosture` replies
+        // with the runtime the store ACTUALLY holds — an unregistered id clears
+        // the pick rather than parking a value nothing can resolve — so echoing
+        // the ask would leave the row claiming an adapter that was refused.
+        const settledRuntime = ok
+          ? normalizeRuntimeId(runtimes, res.runtime ?? optimisticRuntime)
+          : previousRuntime;
         setPosture(settled);
-        broadcastPosture(channelId, settled);
+        setRuntime(settledRuntime);
+        broadcastPosture(channelId, { preset: settled, runtime: settledRuntime });
       } catch {
         setPosture(previous);
-        broadcastPosture(channelId, previous);
+        setRuntime(previousRuntime);
+        broadcastPosture(channelId, {
+          preset: previous,
+          runtime: previousRuntime,
+        });
       } finally {
         setBusy(false);
       }
     },
-    [bridge, busy, channelId, posture]
+    [bridge, busy, channelId, posture, runtime, runtimes]
   );
 
-  return { bridge, posture, modelSupported, busy, update };
+  // ⚠ DERIVED, NEVER STORED. A second piece of state for "which descriptor" is a
+  // second thing to keep in step with the pick, and the pick already moves from
+  // three places (the read, this mount's write, another mount's broadcast).
+  const descriptor = useMemo(
+    () => descriptorFor(runtimes, runtime, defaultRuntime),
+    [runtimes, runtime, defaultRuntime]
+  );
+
+  return {
+    bridge,
+    posture,
+    modelSupported,
+    runtimeSupported,
+    runtime,
+    runtimes,
+    defaultRuntime,
+    descriptor,
+    busy,
+    update,
+  };
 }
+
+/** ⚠ Module-level, so a desktop with no adapters (and every plain browser) hands
+ *  every consumer the SAME empty array rather than a fresh identity per read —
+ *  `descriptor` is memoized on it. */
+const EMPTY_RUNTIMES: RuntimeDescriptor[] = [];

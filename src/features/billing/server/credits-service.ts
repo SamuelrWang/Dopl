@@ -14,6 +14,7 @@ import {
   type CreditPeriod,
 } from "../credits";
 import type { PlanId } from "../plans";
+import { recordCreditUsageEvent } from "./credit-ledger";
 import { entitledPlanFor, upgradeUrl } from "./entitlements";
 import {
   consumeWorkspaceCredits,
@@ -230,6 +231,25 @@ export async function consumeMcpCredits(
     CREDITS_PER_MCP_CALL,
     limit
   );
+  if (outcome.allowed) {
+    // ⚠ **ATTRIBUTION ONLY, AND ONLY ON A SPEND.** A refused consume moved no
+    // counter, so it has nothing to attribute; writing one would put credits in
+    // the by-channel rail that the workspace was never charged for.
+    // ⚠ **NOT AWAITED — the answer is already decided.** This is the hottest
+    // write path in the product and the ledger is best-effort by design
+    // (`credit-ledger.ts`): it swallows its own errors, so there is no rejection
+    // to handle, and `void` states that the ordering is deliberately unobserved.
+    // ⚠ `originWorkspaceId` IS THE ADDRESSED WORKSPACE, NOT `target` — for a
+    // home container those differ (the burn reroutes to the owner's billing
+    // workspace) and the difference IS the by-channel dimension.
+    void recordCreditUsageEvent({
+      workspaceId: target,
+      originWorkspaceId: workspaceId,
+      userId: caller?.userId ?? null,
+      amount: CREDITS_PER_MCP_CALL,
+      periodStart: period.periodStart,
+    });
+  }
   return {
     ...period,
     allowed: outcome.allowed,

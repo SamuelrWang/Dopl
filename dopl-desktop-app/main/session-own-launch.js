@@ -122,9 +122,11 @@
 // module was written to refuse. **What stands in its place is TWO REAL CEILINGS, both enforced
 // where a process is actually bought and neither described as a generation count:**
 //
-//   INSTANTANEOUS  `session-windowless.js › MAX_CONCURRENT_SESSIONS` (six live sessions per
-//                  machine), refused at `session-launch.js › launch` as `cap`. Already there,
-//                  already applies to every spawn shape, and unchanged by this ruling.
+//   INSTANTANEOUS  `session-windowless.js › MAX_CONCURRENT_SESSIONS` (FIFTEEN live sessions per
+//                  machine since 2026-09-01, six before), refused at `session-launch.js ›
+//                  launch` as `cap`. Already there, already applies to every spawn shape, and
+//                  unchanged by this ruling — the 2026-09-01 raise moved the number, not the
+//                  mechanism.
 //   OVER TIME      `launch-budget.js` — a ROLLING PER-CHANNEL LAUNCH BUDGET, spent only by a
 //                  chained spawn, refused as the same `cap` word. It exists because the
 //                  concurrency ceiling is not a bound over time: sessions settle and free their

@@ -45,6 +45,9 @@ interface Props {
   /** Retention-hidden chats (0 on full-history plans). Server-computed; the
    *  cache carries the live value. Drives the upgrade strip. */
   hiddenCount: number;
+  /** The list read hit its ceiling (`constants.ts › CHAT_LIST_LIMIT`). Seed
+   *  only, like `initialChats`; the cache carries the live value. */
+  truncated?: boolean;
 }
 
 /**
@@ -62,6 +65,7 @@ export function ChatsView({
   initialChats,
   initialFolders,
   hiddenCount,
+  truncated = false,
 }: Props) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<ChatFilter>("all");
@@ -75,6 +79,12 @@ export function ChatsView({
   const foldersQuery = useChatFolders(workspaceId);
   const chats = listQuery.data?.chats ?? initialChats;
   const hidden = listQuery.data?.hiddenCount ?? hiddenCount;
+  // ⚠ §8 STALE CACHE: `truncated` joined this payload on 2026-09-01, so an entry
+  // written by the previous bundle has the `chats` key and NOT this one — and
+  // `listQuery.data?.truncated` is `undefined` there, not `false`. Spelled at
+  // the read, inline, per INVARIANTS §8. Absent reads as "not clipped", which is
+  // the fail-safe direction: a missing notice is a smaller claim than a false one.
+  const clipped = listQuery.data?.truncated ?? truncated;
   const folders = foldersQuery.data ?? initialFolders;
 
   // ⚠ Invalidation stays EXPLICIT, naming three caches: list + folders
@@ -259,6 +269,7 @@ export function ChatsView({
         onCreateFolder={handleCreateFolder}
         onFolderShareChange={handleFolderShareChange}
         hiddenCount={hidden}
+        truncated={clipped}
       />
       <DetailPane
         chat={selected}

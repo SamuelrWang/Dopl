@@ -36,12 +36,16 @@ import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const LOADER = readFileSync(join(HERE, "..", "main", "sdk-loader.js"), "utf8");
+const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "loader.js"), "utf8");
 const SDK_DTS = readFileSync(
   join(HERE, "..", "node_modules", "@anthropic-ai", "claude-agent-sdk", "sdk.d.ts"), "utf8"
 );
 
-const { buildSessionToolConfig, shortDoplName } = require(join(HERE, "..", "main", "session-profiles.js"));
+// ⚠ 2026-08-31: the profile table and the short-name normalizer are the RUNTIME ADAPTER's now
+// (`main/runtime/claude/tools.js`) — they are a vocabulary of one runtime's built-in and MCP tool
+// names. `session-profiles.js` re-exports the first as a delegate; this suite asks the adapter
+// directly, because what it is pinning is that runtime's own surface.
+const { buildSessionToolConfig, shortDoplName } = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, DOPL_CHANNEL_TOOL,
 } = require(join(HERE, "..", "main", "tool-profiles.js"));
@@ -86,6 +90,7 @@ test("the fields the entry DOES carry are unchanged by the removal", () => {
   assert.deepEqual(dopl.headers, {
     Authorization: "Bearer device-token",
     "X-Dopl-Runtime": "desktop-session",
+    "X-Dopl-Vendor": "claude", // 2026-08-31: the vendor dimension (runtime-stamp-literals.test.mjs)
     "X-Workspace-Id": "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee",
   });
 });

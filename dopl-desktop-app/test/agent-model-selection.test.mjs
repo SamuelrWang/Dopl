@@ -298,8 +298,13 @@ test("LIVE: the SDK really supports this — it is a switch, not a deferral", ()
   const sdk = readFileSync(
     join(HERE, "..", "node_modules", "@anthropic-ai", "claude-agent-sdk", "sdk.d.ts"), "utf8");
   assert.match(sdk, /setModel\(model\?: string\): Promise<void>;/);
-  assert.match(read("session-query.js"), /sdk\.query\(\{ prompt: s\.pushIterator/,
+  // ⚠ 2026-08-31: the call moved to the runtime adapter (`runtime/claude/launch-spec.js › start`),
+  // which takes the prompt off the OPAQUE spec core hands it. The condition is unchanged: the
+  // prompt is the push iterator, never a string, so streaming input mode holds by construction.
+  assert.match(read("runtime/claude/launch-spec.js"), /sdk\.query\(\{ prompt: spec\.prompt/,
     "streaming input mode, which is the condition on the method");
+  assert.match(read("session-query.js"), /s\.pushIterator = io\.makePushIterator\(\);/,
+    "…and the prompt core puts on the spec is that iterator");
 });
 
 // ── 5. WHAT THE UI IS TOLD ───────────────────────────────────────────────────────────────────

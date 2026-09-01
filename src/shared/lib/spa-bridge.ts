@@ -379,6 +379,8 @@ export interface SpaBridgeSurface {
         model?: string | null;
         fields?: { key: string; value: string }[];
       };
+      /** THIS SPAWN's runtime. Argument + absence rule: `channels-v2/agents-controls.ts › launchAgentOnThread`. */
+      runtime?: string;
     }): Promise<{
       ok: boolean;
       agentId?: string;

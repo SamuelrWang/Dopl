@@ -35,6 +35,12 @@ const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const tag = require(join(HERE, "..", "main", "session-outbound-tag.js"));
 const { DOPL_CHANNEL_TOOL } = require(join(HERE, "..", "main", "tool-profiles.js"));
 const IO = M("session-io.js");
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// TAG MINTING and the card payloads are platform-free and live in `main/session-gate-bridge.js`;
+// the held-callback wiring and the platform's reply vocabulary are the adapter's. The tag rules
+// themselves never moved — they are `main/session-outbound-tag.js`, core, on every runtime.
+const BRIDGE = M("session-gate-bridge.js");
+const AXIS_B = M("runtime/claude/axis-b.js");
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const UUID = "cccccccc-3333-4ddd-8eee-ffffffffffff";
@@ -144,7 +150,7 @@ test("isOutboundPost is the gate: a cross-channel post or a non-post op is never
 // ── the wiring in session-io actually does all of the above ──────────────────────
 
 test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only reads it on ALLOW", () => {
-  const fn = fnOf(IO, "makeCanUseTool");
+  const fn = fnOf(BRIDGE, "gateCall");
   // ⚠ A THIRD ARGUMENT JOINED THE TAG ON 2026-08-21: the PER-INSTANCE post stamp
   // (`agent-<agentId>-<n>`), which is what lets `session-dispatch.js`'s fan-out recognise a
   // session's own words coming back off the wire. It rides the SAME seam as the thread tag, for
@@ -155,8 +161,15 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   // ⚠ THE STAMP IS MINTED ONLY FOR A REAL OWN-CHANNEL POST. Minting on every tool call would
   // spend ids the session never posts under and blunt the bounded lookback.
   assert.ok(!/nextOwnPostId\(s\)[^)]*\n[\s\S]*nextOwnPostId/.test(fn), "exactly one mint site");
-  assert.match(fn, /if \(decision === 'preapproved' \|\| decision === 'allow'\) return Promise\.resolve\(outboundTag\.allowResult\(tag\)\);/,
+  // ⚠ THE ANSWER SHAPE MOVED, THE RULE DID NOT (2026-08-31). The bridge hands the verdict and
+  // the tag back; the adapter writes them in the platform's own reply vocabulary
+  // (`runtime/claude/approval.js › answerApproval` -> `outboundTag.allowResult(tag)`), which is
+  // the half that is not portable. Both ends are pinned.
+  assert.match(fn, /if \(decision === 'preapproved' \|\| decision === 'allow'\) return \{ settled: true, verdict: 'allow', tag \};/,
     "the auto-allowed path");
+  assert.match(fnOf(M("runtime/claude/approval.js"), "answerApproval"),
+    /if \(verdict === 'allow'\) return outboundTag\(\)\.allowResult\(req\.tag \|\| null\);/,
+    "…and the tag is what an allow carries");
   assert.match(fn, /s\.pendingPermissions\.set\(requestId, outboundTag\.wrapAllow\(resolve, tag\)\);/,
     "and the gated one");
   // THE DENY BRANCH CARRIES NO TAG — that is what this pin is for, and it still holds.
@@ -164,8 +177,12 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   // session'` until then. A `deny` verdict has TWO causes now — the profile's hard-deny, and the
   // LAUNCH-DEPTH BOUND — so the sentence is chosen by `session-permissions.js › denyMessageFor`
   // from the gate REASON. The tag is still absent from the branch, which is the invariant here.
-  assert.match(fn, /if \(decision === 'deny'\) return Promise\.resolve\(\{ behavior: 'deny', message: denyMessageFor\(verdict\.reason\) \}\)/);
-  assert.ok(!/decision === 'deny'[^\n]*\btag\b/.test(fn), "no tag rides a refused call");
+  assert.match(fn, /if \(decision === 'deny'\) return \{ settled: true, verdict: 'deny', tag: null, message: denyMessageFor\(verdict\.reason\) \};/);
+  // ⚠ STATED AS `tag: null` SINCE 2026-08-31 RATHER THAN AS AN ABSENCE. The bridge now returns a
+  // shape rather than a promise, so "the branch mentions no tag" would be satisfied by a shape
+  // that simply forgot the field — and a forgotten field is exactly what a later refactor drops.
+  // Asserting the explicit null is the stronger pin: a refused call carries a tag of NOTHING.
+  assert.ok(!/decision === 'deny'[^\n]*tag(?!: null)/.test(fn), "no tag rides a refused call");
 });
 
 // ── THE COUNTER SURVIVES A CRASH RESUME (2026-08-22) ─────────────────────────────
@@ -225,21 +242,23 @@ test("…and a session with NO id still mints nothing, resume or not", () => {
 });
 
 test("the decision is made BEFORE the tag can influence anything", () => {
-  const fn = fnOf(IO, "makeCanUseTool");
+  const fn = fnOf(BRIDGE, "gateCall");
   // 2026-08-02: the verdict comes back as { decision, reason }; the ORDER pinned here is what
   // matters, and it is unchanged — the decision (and now its explanation) is settled first.
-  const decide = fn.indexOf("const verdict = grantDecisionDetail(grantArgs(");
+  const decide = fn.indexOf("const verdict = grantDecisionDetail(io().grantArgs(");
   const tagAt = fn.indexOf("const outbound = isOutboundPost");
   assert.ok(decide !== -1 && tagAt > decide, "the decision runs first and never sees the tag");
   assert.ok(!/grantArgs\([^)]*tag/.test(fn), "the tag is not an input to either axis");
 });
 
 test("a conflicting thread id is logged, and the log is injected (session-io stays electron-free)", () => {
-  const fn = fnOf(IO, "makeCanUseTool");
-  assert.match(fn, /function makeCanUseTool\(s, dispatch, log\)/);
+  const fn = fnOf(BRIDGE, "gateCall");
+  assert.match(fnOf(AXIS_B, "makeCanUseTool"), /function makeCanUseTool\(s, dispatch, log\)/);
   assert.match(fn, /tag\.action === 'conflict' && typeof log === 'function'/, "guarded, never assumed");
   assert.ok(!/require\('\.\/diag'\)/.test(IO), "diag requires electron; this file must not");
-  assert.match(M("session-query.js"), /io\.makeCanUseTool\(s, deps\.dispatch, diag\)/, "the option assembly supplies it");
+  assert.ok(!/require\('\.\/diag'\)/.test(BRIDGE),
+    "…and neither must the bridge, for the same reason");
+  assert.match(M("runtime/claude/launch-spec.js"), /axisB\.makeCanUseTool\(s, dispatch, diag\)/, "the option assembly supplies it");
 });
 
 test("the SDK really accepts updatedInput on an allow (pinned version, not assumed)", () => {

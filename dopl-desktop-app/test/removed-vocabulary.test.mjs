@@ -34,7 +34,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -119,10 +119,23 @@ const MENTION = new RegExp(
 const ANNOTATED =
   /\b(deleted|delete|gone|went with|used to|no longer|gone with|removed|gone\b|gone\.|rollback|gone,|not exist|gone;)\b/i;
 
-const mainFiles = () =>
-  readdirSync(MAIN)
-    .filter((f) => f.endsWith(".js"))
-    .sort();
+// ⚠ RECURSIVE SINCE 2026-08-31, AND THE FLAT VERSION WAS A LIVE HOLE THE DAY `main/` GREW ITS
+// FIRST SUBDIRECTORY. This scan was `readdirSync(MAIN)` filtered to `.js` — so every file the
+// runtime-adapter port moved into `main/runtime/**` silently left the coverage of all three tiers
+// below, INCLUDING tier 2, the guard that no module requires a deleted one. That is the tier
+// whose failure is a load-time `ReferenceError` rather than a dead branch, and the extraction
+// wave that moved the files is exactly the kind of change that reintroduces a stale require.
+// Paths are returned RELATIVE to `main/` so every message still reads `main/<path>:<line>`.
+function walk(dir, prefix, out) {
+  for (const entry of readdirSync(dir).sort()) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) { walk(full, prefix ? `${prefix}/${entry}` : entry, out); continue; }
+    if (entry.endsWith(".js")) out.push(prefix ? `${prefix}/${entry}` : entry);
+  }
+  return out;
+}
+
+const mainFiles = () => walk(MAIN, "", []);
 
 // The contiguous run of `//` comment lines containing `idx`. A blank line, a code line or the top
 // of the file ends the block. Comments in this tree are line comments throughout.

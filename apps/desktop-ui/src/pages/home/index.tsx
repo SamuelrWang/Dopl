@@ -27,6 +27,8 @@ import { HomeSearch } from "./home-search";
 import { HomePageSkeleton } from "./home-skeleton";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeAgentPanels } from "./agent-panels";
+import { HomeOverviewPanels } from "./overview-panels";
+import { useActivityJump } from "./use-activity-jump";
 
 import {
   HOME_CHANNELS_PATH,
@@ -34,6 +36,17 @@ import {
   homeRows,
   visibleRows,
 } from "./home-rows";
+// ⚠ THE FACE VOCABULARY LIVES IN ITS OWN MODULE (2026-09-01) — see
+// `home-tabs.ts`, which carries the disjointness rule the prefixes rely on.
+import {
+  AGENTS_PANE,
+  EMPTY_PANE,
+  HOME_DEFAULT_TAB,
+  HOME_TABS,
+  KNOWLEDGE_PANE,
+  OVERVIEW_PANE,
+  type HomeTab,
+} from "./home-tabs";
 
 /**
  * /home — the ACCOUNT surface (Samuel, 2026-08-21). Personal, cross-org
@@ -47,11 +60,17 @@ import {
  * `isStandardWorkspace`. A container is a relationship's plumbing; it is not a
  * place anybody navigates to.
  *
- * ⚠ THE PAGE HAS THREE FACES (Samuel's wireframe, 2026-08-24) AND ALL THREE ARE
- * BUILT — the header's selector replaces the old "Home" title. Chat, Knowledge
+ * ⚠ THE PAGE HAS FOUR FACES AND ALL FOUR ARE BUILT — the header's selector
+ * replaces the old "Home" title. Overview (2026-09-01), Channels, Knowledge
  * (2026-08-26, `docs/specs/home-knowledge-panels.plan.md` M3) and Agents
  * (2026-08-26, `docs/specs/home-agents-tab.plan.md` M2). It is LOCAL state, not
  * a route: nothing links to them.
+ *
+ * ⚠ "CHANNELS" WAS "CHAT" UNTIL 2026-09-01 (Samuel). LABEL AND LOCAL KEY ONLY —
+ * `/home` has no per-face route, so there was no URL, no deep link and no
+ * persisted value to migrate. Do not read the rename as licence to rename the
+ * `channels` PAGE segment (`routes.tsx › WORKSPACE_PAGES`), which is a real
+ * path with a hand copy in `dopl-desktop-app/main/deep-link-target.js`.
  *
  * ⚠ "AGENTS" HERE MEANS TEMPLATE IDENTITIES, not running sessions — the channel
  * info column has its own **Agents** tab and that one lists live sessions. Both
@@ -69,7 +88,13 @@ export default function HomePage() {
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<HomeTab>("chat");
+  const [tab, setTab] = useState<HomeTab>(HOME_DEFAULT_TAB);
+  // ⚠ OVERVIEW'S ACTIVITY ROWS LAND HERE. A home channel has no route, so the
+  // jump is a selection plus a raised face — the hook carries the ruling.
+  const jump = useActivityJump({
+    onSelect: setSelectedId,
+    onRaise: () => setTab("channels"),
+  });
 
   const workspacesQuery = useApiQuery<
     { workspaces?: WorkspaceLike[] },
@@ -122,7 +147,7 @@ export default function HomePage() {
 
 
   // 🔒 EVERY FACE THAT RENDERS A CHANNEL IS KEYED BY THE ROW, NOT BY THE TAB
-  // (2026-08-26). Chat always was; Knowledge and then Agents had to become so
+  // (2026-08-26). Channels always was; Knowledge and then Agents had to become so
   // the moment they started rendering a CHANNEL's contents. Keyed by the bare
   // tab name, switching channels leaves the token frozen at `"knowledge"` /
   // `"agents"` — the crossfade never fires and the pane swaps one channel's
@@ -133,7 +158,15 @@ export default function HomePage() {
       ? `${KNOWLEDGE_PANE}${selected?.id ?? EMPTY_PANE}`
       : tab === "agents"
         ? `${AGENTS_PANE}${selected?.id ?? EMPTY_PANE}`
-        : (selected?.id ?? EMPTY_PANE);
+        : tab === "overview"
+          // 🔒 THE OVERVIEW TOKEN CARRIES NO ROW (2026-09-01). Every other face
+          // renders a CHANNEL's contents and so must re-key on the selection;
+          // this one is cross-channel, so keying it by `selected` would remount
+          // and refetch the whole analytics face every time the operator
+          // clicked a different row in the list beside it — a crossfade with
+          // nothing to fade to.
+          ? OVERVIEW_PANE
+          : (selected?.id ?? EMPTY_PANE);
 
   /** The row a pane token names, or `null`. ⚠ READ OUT OF THE TOKEN, never out
    *  of `selected` — that is what makes the pane pure in `shown` and lets the
@@ -151,6 +184,22 @@ export default function HomePage() {
    *  one-line insertion above the bare-row fallback rather than a re-reading of
    *  which branch wins. */
   const renderPane = (shown: string) => {
+    if (shown === OVERVIEW_PANE) {
+      // ⚠ NO ROW IS READ OUT OF THIS TOKEN and there is none in it — the face is
+      // cross-channel (see `paneToken` above and
+      // `home/server/service-overview.ts`, which carries why the channel-scoped
+      // half was deleted).
+      // ⚠ `homeWorkspaceId` is the SAME boot query the other faces read — the
+      // credit bar is the PAYER's, and a home channel's MCP burn reroutes to
+      // that workspace (`billing/server/credits-service.ts ›
+      // resolveBillingTarget`). NULL until the caller is onboarded.
+      return (
+        <HomeOverviewPanels
+          homeWorkspaceId={identity.data.workspace?.id ?? null}
+          onOpenActivity={jump.open}
+        />
+      );
+    }
     if (shown.startsWith(AGENTS_PANE)) {
       const shownRow = rowFor(shown.slice(AGENTS_PANE.length));
       return (
@@ -233,6 +282,9 @@ export default function HomePage() {
         key={row.id}
         homeChannel={row.channel}
         currentUserId={identity.data.userId}
+        // ⚠ KEYED BY THE ROW, so a thread picked in channel A can never be
+        // raised inside channel B — see `use-activity-jump.ts`.
+        initialThreadId={jump.threadFor(row.id)}
         onDeleted={() => {
           setSelectedId(null);
           void channelsQuery.refetch();
@@ -347,10 +399,14 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
-            {/* ⚠ ONE LAYOUT FOR ALL THREE TABS (Samuel, 2026-08-24). The
+            {/* ⚠ ONE LAYOUT FOR ALL FOUR TABS (Samuel, 2026-08-24). The
                 conversation column and the pane's size and position do not move
-                between Chat, Knowledge and Agents — only what is INSIDE the
-                pane swaps. A tab that went full-width read as a different page.
+                between Overview, Channels, Knowledge and Agents — only what is
+                INSIDE the pane swaps. A tab that went full-width read as a
+                different page, and Overview joined on that same rule
+                (2026-09-01): its GLOBAL sections do not vary with the
+                selection, but the list stays put beside them because its
+                CHANNEL-SCOPED half is driven by exactly that selection.
                 `border-2` + `home.frame`: the pane's outer line reads a weight
                 up, and `home.frame` carries that colour and weight INTO the
                 shared channel surface — scoped to /home, so the workspace
@@ -359,7 +415,12 @@ export default function HomePage() {
               <RelationshipList
                 rows={visible}
                 selectedId={selected?.id ?? null}
-                onSelect={setSelectedId}
+                // ⚠ A MANUAL PICK DROPS ANY HELD THREAD — "take me to this
+                // channel", not "take me back to that thread".
+                onSelect={(id) => {
+                  setSelectedId(id);
+                  jump.clear();
+                }}
               />
               <div
                 className={cn(
@@ -428,32 +489,6 @@ export default function HomePage() {
   );
 }
 
-
-/** No conversation selected. A token, so the empty pane crossfades like any
- *  other pane content — and it can never collide with a row id. */
-const EMPTY_PANE = "empty";
-
-/** Knowledge tokens are `knowledge:<rowId>`. ⚠ The separator matters: row ids
- *  are `rel:`/`link:`-prefixed (`home-rows.ts`), so no chat token can ever be
- *  mistaken for a knowledge one and `slice` recovers the row id exactly. */
-const KNOWLEDGE_PANE = "knowledge:";
-
-/** Agents tokens are `agents:<rowId>`. ⚠ Same argument as `KNOWLEDGE_PANE` —
- *  row ids are `rel:`/`link:`-prefixed, so a chat token can never wear this
- *  prefix — plus one more: neither face's prefix is a prefix OF the other, so
- *  the `startsWith` branches in `renderPane` cannot claim each other's tokens. */
-const AGENTS_PANE = "agents:";
-
-/** The account surface's three faces, all built (2026-08-26).
- *  ⚠ `"agents"` here is the TEMPLATE face — the channel info column's Agents
- *  tab is a different surface listing live sessions (INVARIANTS §5A). */
-type HomeTab = "chat" | "knowledge" | "agents";
-
-const HOME_TABS = [
-  { key: "chat", label: "Chat" },
-  { key: "knowledge", label: "Knowledge" },
-  { key: "agents", label: "Agents" },
-] as const satisfies ReadonlyArray<{ key: HomeTab; label: string }>;
 
 /** ⚠ Link CONTAINERS never appear in the rail — see the file docblock. */
 const selectStandardWorkspaces = (body: { workspaces?: WorkspaceLike[] }) =>

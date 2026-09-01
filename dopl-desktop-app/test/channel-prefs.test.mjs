@@ -84,7 +84,25 @@ const OK = { tools: "accept_edits", messages: "auto_inbound" };
  *  ⚠ STORAGE omits the key and the WIRE cannot — the web's capability probe is an OWN-KEY test,
  *  so a reply without it reads as "this desktop has no model concept" and hides the model row.
  *  `main/channel-prefs.js › effectivePosture` carries the full argument. */
-const onWire = (pair) => ({ ...pair, model: null });
+// ⚠ A MINIMAL DESCRIPTOR TABLE, not the real registry's. Loading `main/runtime/index.js` here
+// would pull three adapters and the SDK loader into a suite whose subject is a UUID gate; what
+// this section has to prove is that the handler PASSES THE TABLE THROUGH unaltered. The real
+// descriptors are driven by `test/runtime-contract.test.mjs` and `test/adapter-parity.test.mjs`.
+const FAKE_RUNTIMES = Object.freeze([
+  Object.freeze({ id: "claude", label: "Claude Code" }),
+  Object.freeze({ id: "codex", label: "Codex" }),
+]);
+
+// ⚠ THE WIRE SHAPE IS WIDER THAN THE STORED PAIR, AND EACH EXTRA KEY IS A CAPABILITY PROBE.
+// `model` (2026-08-22) and `runtime` + `runtimes` + `defaultRuntime` (2026-08-31, the
+// runtime-adapter port) are always present on the READ even when nothing is stored, because the
+// SPA feature-detects an OWN KEY: a missing key is "this desktop has no such concept" and renders
+// no row, where a present one with an empty value is "nothing chosen, the default applies".
+// Collapsing those two is how a control comes to hide itself from every operator who never used
+// it (INVARIANTS §11 — UNKNOWN is not EMPTY).
+const onWire = (pair) => ({
+  ...pair, model: null, runtime: "", runtimes: FAKE_RUNTIMES, defaultRuntime: "claude",
+});
 
 // ── The frozen enums ─────────────────────────────────────────────────────────
 
@@ -201,6 +219,7 @@ test("a non-string mode (number / object) never passes as a member", () => {
 function bootIpc() {
   const handlers = {};
   const map = {};
+  const runtimePicks = {};
   const prefsStub = {
     // The two ops this section drives, backed by the REAL sliced map ops.
     // ⚠ `effectivePosture` IS THE REAL COMPOSITION, not a re-spelling of it. This stub used to
@@ -223,6 +242,23 @@ function bootIpc() {
       return { ipcMain: { handle: (name, fn) => { handlers[name] = fn; } } };
     }
     if (id === "./channel-prefs") return prefsStub;
+    // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the registry that names the
+    // adapters. ⚠ STUBBED AT THEIR SEAM: `channel-runtime.js` opens an electron-store and
+    // `runtime/index.js` loads three adapters that reach the SDK loader. What this section drives
+    // is the HANDLER's gates, and the pair rides the posture ops rather than growing its own.
+    if (id === "./channel-runtime") {
+      return {
+        getChannelRuntime: (channelId) => runtimePicks[channelId] || "",
+        setChannelRuntime: (channelId, raw) => {
+          const id2 = FAKE_RUNTIMES.some((r) => r.id === raw) ? raw : "";
+          if (id2) runtimePicks[channelId] = id2; else delete runtimePicks[channelId];
+          return id2;
+        },
+      };
+    }
+    if (id === "./runtime") {
+      return { all: () => FAKE_RUNTIMES.map((d) => ({ descriptor: d })), DEFAULT_ID: "claude" };
+    }
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => null,
@@ -294,7 +330,11 @@ test("round trip: set then get returns the stored pair", async () => {
   // that does not read the count is unaffected. Zero here is the assertion that matters — this
   // harness binds no session engine, and the fan-out is best-effort BY DESIGN, so a settings write
   // must still succeed cleanly with nothing to apply it to rather than throwing through.
-  assert.deepEqual(set, { ok: true, applied: 0 });
+  // ⚠ `runtime` JOINED THIS SHAPE ON 2026-08-31 (the runtime-adapter port) and is ADDITIVE the
+  // same way `applied` was. `''` is the DEFAULT adapter — this preset carries no `runtime` key at
+  // all, and a write that does not mention one must LEAVE the channel's pick alone rather than
+  // clearing it, which is what the own-key test in the handler is for.
+  assert.deepEqual(set, { ok: true, applied: 0, runtime: "" });
   assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(OK));
 });
 

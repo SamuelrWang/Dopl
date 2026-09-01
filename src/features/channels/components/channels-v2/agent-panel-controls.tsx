@@ -24,6 +24,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PanelTop, Pause, Square } from "lucide-react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
+import { interruptRefusal } from "../../lib/runtime-capability";
 import {
   canControlAgents,
   canOpenAgentWindow,
@@ -104,6 +106,30 @@ export function AgentControls({
   onRefreshSessions?: () => void;
 }) {
   const control = useAgentControls();
+  /**
+   * ⚠ WHY THE STOP VERBS ASK THE CHANNEL AND NOT THE AGENT. A runtime is stamped at spawn
+   * and `DesktopSessionSummary` does not carry it (measured 2026-08-31 —
+   * `shared/lib/spa-bridge-shapes.ts` has `channelId` and `agentId` and no runtime), so the
+   * channel's effective descriptor is the only answer this side can give. It is the right
+   * one for every agent launched from this channel with no per-spawn override, and F-393
+   * records the gap for the one that had one.
+   * ⚠ IT IS THE SAME SHARED RECORD the Settings tab writes, so a runtime changed there
+   * reaches this strip without a second read.
+   */
+  const posture = useChannelLaunchPosture(agent.channelId);
+  /**
+   * ⚠ A REFUSAL, WITH ITS SENTENCE — never a control that vanishes (§3.2). Without an
+   * interrupt Dopl cannot stop a session it started: `main/session-engine.js › runEffect`
+   * case `interruptQuery` is the tree's only `.interrupt()`, and the reducer's `interrupt`
+   * and `abandon_timeout` effects have no other actuator. So the buttons go inert AND say
+   * why, rather than shipping two that do nothing.
+   * ⚠ NULL WHENEVER THIS BUILD HAS NO RUNTIME CONCEPT — a descriptor nobody sent cannot
+   * refuse anything, and reading its absence as a refusal would disable Pause and End on
+   * every desktop older than the port.
+   */
+  const stopRefusal = posture.runtimeSupported
+    ? interruptRefusal(posture.descriptor)
+    : null;
   const [pending, setPending] = useState<AgentControl | null>(null);
   // ⚠ ONE notice slot for both refusal kinds, not two: they occupy the same
   // line under the same buttons, and two independent timers there race to blank
@@ -180,14 +206,14 @@ export function AgentControls({
               icon={Pause}
               label="Pause"
               title="Stop the turn it is running. It stays yours and keeps its context."
-              disabled={stopped || pending !== null}
+              disabled={stopped || pending !== null || stopRefusal !== null}
               onClick={() => run("pause")}
             />
             <ControlButton
               icon={Square}
               label="End"
               title="End this agent. The thread is untouched."
-              disabled={stopped || pending !== null}
+              disabled={stopped || pending !== null || stopRefusal !== null}
               onClick={() => run("end")}
             />
           </>
@@ -208,6 +234,14 @@ export function AgentControls({
         )}
       </div>
       {stats}
+      {/* ⚠ A STANDING NOTE, NOT THE SIX-SECOND NOTICE BELOW IT. The refusal is a FACT about
+          this runtime, not the outcome of a click, so it must not time out — and it renders
+          above `notice` so a genuine refusal from a press still lands last. */}
+      {stopRefusal && (
+        <p role="note" className="text-caption text-text-muted">
+          {stopRefusal}
+        </p>
+      )}
       {notice && (
         <p role="status" className="text-caption text-text-muted">
           {notice}

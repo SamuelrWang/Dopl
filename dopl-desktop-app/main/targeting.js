@@ -231,6 +231,15 @@ const {
 //   operator's SESSION credential — the server refuses that value to any agent credential.
 // Both are SERVER-written into the reserved `metadata.runtime` key; a caller-supplied copy in
 // the message body is always stripped.
+//
+// ⚠ THIS LIST IS CUSTODY AND MUST NOT GROW A VENDOR WORD (2026-08-31, adapter port step 1).
+// It is an ARRAY MEMBERSHIP test, so adding `codex` / `cursor` as siblings would not widen the
+// set — it would drop every non-Claude session OUT of it, because those sessions still stamp
+// `desktop-session` and the vendor word would never appear in `metadata.runtime` at all. A
+// Dopl-driven Codex session IS a session this app spawned, and this predicate is asking exactly
+// that. Which RUNTIME drives it is the separate `X-Dopl-Vendor` dimension
+// (`src/shared/auth/runtime-header.ts › VENDOR_HEADER`), which the MCP server's prose reads and
+// nothing here does.
 const DESKTOP_RUNTIMES = ['desktop-session', 'desktop-ui'];
 
 // TRUE iff this message carries one of the two stamps this app produces.

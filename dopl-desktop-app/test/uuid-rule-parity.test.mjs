@@ -44,7 +44,13 @@ const CANON = String.raw`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 // Every file that legitimately carries a copy, and WHY it cannot take the shared one.
 const EXPECTED = {
   "ipc-guards.js": "the shared source itself — sliced by two IPC suites",
-  "session-state-push.js": "inside SESSION-STATE-PUSH-PURE, sliced by _session-state-push-harness",
+  // ⚠ MOVED 2026-08-31, NOT ADDED. The copy used to sit in `session-state-push.js`; the three
+  // wire refusals it backs (the ad-hoc key, the nameless row, the ended row) split into their own
+  // module at the §1 cap, and the constraint travelled with them UNCHANGED — the push module's
+  // SESSION-STATE-PUSH block may hold no require, so it takes the filter as an INJECTED free var
+  // and the filter is a plain module the harness passes in. `ipc-guards.js › isUuid` is still
+  // unreachable from the block that consumes this rule, which is why the copy survives the move.
+  "session-state-push-wire.js": "backs the wire refusals, injected INTO the push module's sliced block",
   "queued-notice.js": "inside the queued-notice pure block, sliced by queued-notice.test",
   "targeting.js": "inline in the classify block, sliced by _classify-harness and by live/desktop.js",
   // ⚠ MEASURED, NOT ASSUMED. ui-bridge.js takes the shared `isAppWindowSender` from

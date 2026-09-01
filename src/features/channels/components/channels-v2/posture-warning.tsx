@@ -173,12 +173,25 @@ export const POSTURE_WARNING_CONFIRM = "Turn it on";
  * cannot collapse to one "apply" callback.
  */
 type PendingPostureChange =
-  | { kind: "posture"; patch: Partial<PermissionPreset> }
+  | { kind: "posture"; patch: PosturePatch }
   | { kind: "profile"; profile: AgentToolProfile };
+
+/**
+ * ONE POSTURE WRITE, as the launch-posture record accepts it.
+ *
+ * ⚠ `runtime` RIDES THE SAME PATCH AND IS NOT A THIRD AXIS (2026-08-31, the
+ * runtime-adapter port). It travels here because the Settings group writes it
+ * through the same callback the two axes use — but it is not part of the
+ * combination this dialog is about, and `changePosture` reads only `messages`,
+ * so a runtime pick can never open (or suppress) the warning.
+ * ⚠ ABSENT ≠ `''`: an omitted key leaves the channel's pick untouched, `''` sets
+ * it back to the default adapter (`use-channel-launch-posture.ts › update`).
+ */
+export type PosturePatch = Partial<PermissionPreset> & { runtime?: string };
 
 export interface PostureWarningGate {
   /** Call INSTEAD OF the posture write; commits, or opens the dialog first. */
-  changePosture: (patch: Partial<PermissionPreset>) => void;
+  changePosture: (patch: PosturePatch) => void;
   /** Call INSTEAD OF the tool-profile write; same contract. */
   setToolProfile: (profile: AgentToolProfile) => void;
   /** Mount once, anywhere in the subtree — it portals itself. */
@@ -197,7 +210,7 @@ export interface PostureWarningGate {
  */
 export function usePostureWarning(
   input: PostureWarningInputs & {
-    commitPosture: (patch: Partial<PermissionPreset>) => void;
+    commitPosture: (patch: PosturePatch) => void;
     commitToolProfile: (profile: AgentToolProfile) => void;
   }
 ): PostureWarningGate {
@@ -210,7 +223,7 @@ export function usePostureWarning(
     currentUserId: input.currentUserId,
   };
 
-  function changePosture(patch: Partial<PermissionPreset>) {
+  function changePosture(patch: PosturePatch) {
     // ⚠ `?? before.messageMode`: a patch that moves the OTHER axis (or the
     // model) carries no `messages` key, and must compare as no change at all.
     const after = { ...before, messageMode: patch.messages ?? before.messageMode };

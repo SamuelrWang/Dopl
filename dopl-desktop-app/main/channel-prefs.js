@@ -261,7 +261,7 @@ function setAutoSend(channelId, on) {
 // ⚠ AND WITH IT ON THERE IS NO GENERATION BOUND LEFT — SAID PLAINLY RATHER THAN IMPLIED. Depth
 // cannot cross the wire (`session-own-launch.js`'s header carries the argument), so "N
 // generations" is not a bound this build can express. What stands in its place is stated where it
-// is enforced: `MAX_CONCURRENT_SESSIONS` (six live sessions, instantaneous) and
+// is enforced: `MAX_CONCURRENT_SESSIONS` (fifteen live sessions, instantaneous — 6 until 2026-09-01) and
 // `launch-budget.js` (a rolling per-channel launch budget, over time). Neither is a generation
 // count and neither is described as one.
 const AGENT_CHAIN_KEY = 'channelAgentChain'; // { [channelId]: true }
@@ -303,75 +303,12 @@ function setAgentChain(channelId, on) {
 const orchestratorConsent = require('./orchestrator-consent');
 
 
-// ── ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3) ─────────────
-//
-// A `team` or `workspace` template's `instructions` are written by ANOTHER WORKSPACE MEMBER and
-// they execute ON THIS MACHINE, in this operator's session, under this operator's credential,
-// with this operator's tool profile and KB reach. That is a materially different exposure from
-// every other shared-content surface in the product: a shared SKILL is pulled per call and read
-// as a procedure, while a shared TEMPLATE is STANDING CONFIGURATION for an autonomous agent.
-//
-// The fence (`prompt-framing-template.js`) stops WIDENING. It does not stop MISDIRECTION, and
-// nothing text-shaped can. What addresses misdirection is INFORMING A HUMAN, once, before the
-// first run: the selector's authorship marker, and this — ONE approval, the first time a given
-// FOREIGN template launches on THIS MACHINE, with its instructions shown verbatim.
-//
-// ⚠ IT LIVES IN electron-store BESIDE `orchestratorLaunchEnabled`, AND FOR THAT TOGGLE'S EXACT
-// REASON. A spawned session has `Bash` and this operator's Dopl credential is on disk, so any
-// surface a Dopl credential can address is disqualified: a server-stored approval lets a
-// credential-holding agent PRE-APPROVE ITSELF ACROSS THE FLEET, which is the escalation this
-// whole family has to not have. No request, from any credential, to any Dopl endpoint, can write
-// this. `Bash` on this machine could rewrite the store file directly — true of every local
-// setting, and not what this defends against; the REMOTE path is.
-//
-// ⚠ KEYED BY TEMPLATE ID, AND APPROVAL IS PER TEMPLATE, NOT PER AUTHOR. Approving Ada's
-// "Code Auditor" says nothing about Ada's next template, because the thing the operator read and
-// consented to was a specific body of instructions.
-// ⚠ IT IS NOT A RECORD OF THE INSTRUCTIONS THEY READ. An edited template keeps its approval,
-// deliberately: re-prompting on every edit would train the operator to click through, and the
-// author could already have edited it between the approval and the launch. The approval is
-// "I have decided to trust this template", which is a decision about a THING, not a diff.
-// ⚠ DEFAULT DENY — an absent, corrupt or non-boolean record reads false, the same fail-closed
-// rule auto-send and the orchestrator toggle both follow.
-//
-// ⚠ NOTHING HERE APPLIES TO THE OPERATOR'S OWN TEMPLATES. `authoredByCaller === true` never
-// reaches this store: an approval prompt over your own configuration is the noise that teaches
-// people to stop reading approval prompts.
-// ⚠ NOR TO THE DIRECTIVE LANE. There is no human at the keyboard there, and the answer is
-// already written down one block above: `orchestratorLaunchEnabled` STANDS IN FOR THE CLICK. A
-// second machine-local gate for the same threat, guarding the same lane, is a fence nobody reads.
-const TEMPLATE_APPROVAL_KEY = 'approvedAgentTemplates'; // { [templateId]: true }
-
-// Bounded, because the map is written from a launch path and an unbounded local store is the
-// shape that has bitten this tree before. Oldest key out; a re-approval is one click.
-const MAX_APPROVED_TEMPLATES = 200;
-
-function isTemplateApproved(templateId) {
-  if (!templateId) return false;
-  try {
-    const map = store.get(TEMPLATE_APPROVAL_KEY);
-    return !!(map && typeof map === 'object' && map[templateId] === true);
-  } catch (_err) {
-    return false; // an unreadable store is not a grant
-  }
-}
-
-function approveTemplate(templateId) {
-  if (!templateId) return false;
-  try {
-    const map = store.get(TEMPLATE_APPROVAL_KEY);
-    const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
-    const keys = Object.keys(next);
-    if (keys.length >= MAX_APPROVED_TEMPLATES) delete next[keys[0]];
-    next[templateId] = true;
-    store.set(TEMPLATE_APPROVAL_KEY, next);
-  } catch (err) {
-    diag('channel-prefs: could not persist a template approval —', err && err.message);
-    return false;
-  }
-  diag('channel-prefs: template approved', String(templateId).slice(0, 8));
-  return true;
-}
+// ⚠ **THE FIRST-USE TEMPLATE APPROVAL MOVED TO `main/template-approval.js` ON 2026-08-31**, at
+// the §1 cap and on the same seam the two MCP consents moved on one wave earlier: it changes when
+// the rules for trusting ANOTHER MEMBER'S standing configuration change, where the rest of this
+// file changes when a CHANNEL preference does — and its record is keyed by a TEMPLATE ID, not by
+// a channel at all. Re-exported below, so no caller moved.
+const templateApproval = require('./template-approval');
 
 // ── Storage for the durable posture ─────────────────────────────────────────
 const POSTURE_KEY = 'channelLaunchPosture'; // { [channelId]: { tools, messages } }
@@ -494,9 +431,9 @@ module.exports = {
   // 2026-08-22 (OQ-3): FIRST-USE APPROVAL for another member's agent template. Same
   // machine-local, never-server-reachable property as the toggle above, and the block over these
   // two functions says why that property is the security content.
-  TEMPLATE_APPROVAL_KEY,
-  isTemplateApproved,
-  approveTemplate,
+  TEMPLATE_APPROVAL_KEY: templateApproval.TEMPLATE_APPROVAL_KEY,
+  isTemplateApproved: templateApproval.isTemplateApproved,
+  approveTemplate: templateApproval.approveTemplate,
   // The DURABLE launch posture — see the block above for why it is not the arm.
   readPostureFrom,
   effectivePosture, // 2026-08-22: the WIRE shape — the pair plus an always-present `model`

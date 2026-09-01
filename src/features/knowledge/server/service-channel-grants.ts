@@ -23,6 +23,7 @@ import {
   listChannelGrantsAtLevel,
   listChannelGrantsForBase,
   listChannelKnowledgeGrants,
+  listSharedBaseIds,
   upsertChannelKnowledgeGrant,
 } from "./repository-channel-grants";
 
@@ -106,6 +107,40 @@ export async function getChannelGrantMap(
     map[row.resource_id] = { level: row.level, guestWrite: row.guest_write };
   }
   return map;
+}
+
+/**
+ * WHICH OF `baseIds` IS SHARED INTO AT LEAST ONE CHANNEL — the set behind the
+ * card's `Shared` pill (2026-09-01, Samuel: a base shared into a channel was
+ * still wearing "Private").
+ *
+ * ⚠ **A SET, NOT A COUNT AND NOT A CHANNEL LIST.** The pill asks one boolean
+ * per base — "has this left my private shelf" — and answering it with anything
+ * richer would put channel identities on the wire for a surface that renders
+ * none of them (§9, and the leak `listChannelGrantsForBase`'s docblock warns
+ * about from the other direction).
+ *
+ * ⚠ **NO FENCE BEYOND THE CALLER'S OWN BASE LIST, AND THAT IS SUFFICIENT
+ * HERE.** `baseIds` comes from `listBases`, which is already visibility-fenced,
+ * so the answer only ever concerns bases the caller can see; the grants read is
+ * `workspace_id`-filtered on top. What is deliberately NOT done is intersecting
+ * the grants with the caller's visible CHANNELS — a base the operator shared
+ * into a room they were later removed from is still shared, and reporting it as
+ * private would understate the base's own exposure to its own owner.
+ */
+export async function listSharedIntoChannelBaseIds(
+  workspaceId: string,
+  baseIds: string[]
+): Promise<string[]> {
+  return listSharedBaseIds(
+    supabaseAdmin(),
+    workspaceId,
+    baseIds,
+    // ⚠ The ceiling is over GRANT ROWS, not bases: one base granted into four
+    // channels spends four. `CHANNEL_GRANT_LIMIT` per base is the same bound
+    // the per-channel lane carries, and the de-duplication happens after it.
+    CHANNEL_GRANT_LIMIT * Math.max(1, baseIds.length)
+  );
 }
 
 /**

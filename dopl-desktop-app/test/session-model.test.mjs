@@ -44,7 +44,7 @@ const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
 const model = require("../main/session-model.js");
-const QUERY = M("session-query.js");
+const SPEC = M("runtime/claude/launch-spec.js");
 const IO = M("session-io.js");
 const STORE = M("session-store.js");
 const PARK = M("session-park.js");
@@ -187,44 +187,52 @@ test("modelArg is the argv gate: null for 'default', the bare alias otherwise, j
 // same reason session-query exists: a fresh launch, a parked resume and the post-sign-in
 // relaunch all come through here, so proving it once proves it for all of them.
 
+// ⚠ 2026-08-31 (runtime-adapter port, steps 3–4): the option assembly is the RUNTIME ADAPTER's
+// (`main/runtime/claude/launch-spec.js › buildOptions`) — it is written in one platform's option
+// vocabulary, so it belongs to that platform. It is still the ONE assembly point for every spawn
+// shape, which is the property this section is about, and the model coercion it performs is
+// unchanged. The fakes moved with it: the platform-facing helpers now arrive as one `loader`
+// object and the gate as `axisB`.
 function assembled(s) {
-  const src = `${fnOf(QUERY, "buildSdkOptions")}\n return buildSdkOptions;`;
+  const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   const fake = new Function(
-    "buildSessionToolConfig", "channelDirs", "buildSecretPathDenyRules", "buildMcpServers",
-    "sessionAuth", "buildScrubbedEnv", "sessionOutbound", "io", "deps", "diag",
-    "withSessionStamp", "store", "resolveClaudeExecutable", "sessionModel",
-    "sessionCredential", src
+    "tools", "channelDirs", "loader", "sessionAuth", "sessionOutbound", "axisB", "diag",
+    "store", "sessionModel", "sessionCredential", "agentOps", src
   )(
-    () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }),
+    { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
     { sessionSpawnDir: () => "/tmp" },
-    () => [],
-    () => ({}),
+    {
+      buildSecretPathDenyRules: () => [],
+      buildMcpServers: () => ({}),
+      buildScrubbedEnv: () => ({}),
+      withSessionStamp: () => {},
+      resolveClaudeExecutable: () => null,
+    },
     { withStoredCredential: (e) => e },
-    () => ({}),
-    { wrapCanUseTool: () => () => {} },
-    { makeCanUseTool: () => () => {} },
-    { dispatch: () => {}, emitQuiet: () => {} },
-    () => {},
+    { wrapGate: () => () => {} },
+    // agent-self-ops (2026-08-31): no server in this harness — the real builder answers null
+    // outside Electron too (its own test pins that), so options carry no dopl_agents entry.
+    { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
     () => {},
     { slotKey: () => "c1:t1" },
-    () => null,
     require("../main/session-model.js"),
     // 🔒 THE CONTAINER LOCK (plan §4.4 B1) — an UNLOCKED session, which is what every assertion
-    // in this file is about. `buildSdkOptions` passes this bearer to `buildMcpServers` as a
-    // third argument; '' means "use the device token", i.e. the pre-ceiling behaviour.
-    { sessionBearer: () => "" }
+    // in this file is about. The assembly passes this bearer to `buildMcpServers` as a third
+    // argument; '' means "use the device token", i.e. the pre-ceiling behaviour.
+    { sessionBearer: () => "" },
+    { AGENT_OPS_TOOL_NAMES: [], SERVER_KEY: "dopl_agents" }
   );
   return fake(s);
 }
 
 const session = (over) => ({ profile: "full", channelId: "c1", workspaceId: "w1", taskId: "t1", ...over });
 
-test("buildSdkOptions carries the picked model on a FRESH launch", () => {
+test("the launch spec carries the picked model on a FRESH launch", () => {
   assert.equal(assembled(session({ model: "opus" })).model, "opus");
   assert.equal(assembled(session({ model: "fable" })).model, "fable");
 });
 
-test("buildSdkOptions carries it on a RESUME too — one assembly point, so park/resume is free", () => {
+test("the launch spec carries it on a RESUME too — one assembly point, so park/resume is free", () => {
   const opts = assembled(session({ model: "sonnet", resumeSdkId: "sdk-1" }));
   assert.equal(opts.model, "sonnet");
   assert.equal(opts.resume, "sdk-1", "and the resume is still the only field that differs");
@@ -238,7 +246,7 @@ test("'default' sets NO model field at all, so the CLI keeps its own pick", () =
   }
 });
 
-test("buildSdkOptions re-coerces: a hostile s.model can never reach argv", () => {
+test("the launch spec re-coerces: a hostile s.model can never reach argv", () => {
   for (const junk of JUNK) {
     assert.equal(assembled(session({ model: junk })).model, undefined, JSON.stringify(junk));
   }

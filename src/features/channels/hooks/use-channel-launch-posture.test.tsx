@@ -23,6 +23,7 @@ import {
   useChannelLaunchPosture,
   type ChannelLaunchPostureState,
 } from "./use-channel-launch-posture";
+import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 
 afterEach(() => {
   cleanup();
@@ -182,5 +183,110 @@ describe("useChannelLaunchPosture", () => {
       await a.value!.update({ tools: "bypass" });
     });
     expect(b.value!.posture.tools).toBe("bypass");
+  });
+});
+
+/**
+ * THE RUNTIME RIDES THE SAME RECORD AND THE SAME TWO OPS (2026-08-31, the
+ * runtime-adapter port). ⚠ EVERY CASE HERE IS ABOUT THE OWN-KEY RULE, on both ends: the
+ * READ's `runtime` key is the capability probe, and the WRITE's `runtime` key is what
+ * separates "set it back to the default adapter" (`''`) from "leave it alone" (absent).
+ * Main branches on `hasOwnProperty` too — the two ends implement one rule and must agree.
+ */
+describe("the runtime family", () => {
+  const WITH_RUNTIME = {
+    ...MANUAL,
+    runtime: "codex",
+    runtimes: REAL_DESCRIPTORS,
+    defaultRuntime: "claude",
+  };
+
+  it("reads NOT SUPPORTED from a reply with no runtime key", async () => {
+    installBridge();
+    const holder = await mount();
+    expect(holder.value!.runtimeSupported).toBe(false);
+    expect(holder.value!.runtimes).toEqual([]);
+    expect(holder.value!.descriptor).toBeNull();
+  });
+
+  it("reads SUPPORTED from `runtime: ''` — no pick is not no concept", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue({
+      ...MANUAL,
+      runtime: "",
+      runtimes: REAL_DESCRIPTORS,
+      defaultRuntime: "claude",
+    });
+    const holder = await mount();
+    expect(holder.value!.runtimeSupported).toBe(true);
+    // ⚠ Falls through to the DEFAULT adapter rather than to null.
+    expect(holder.value!.descriptor?.id).toBe("claude");
+  });
+
+  it("resolves the channel's pick to that adapter's descriptor", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
+    const holder = await mount();
+    expect(holder.value!.runtime).toBe("codex");
+    expect(holder.value!.descriptor?.id).toBe("codex");
+  });
+
+  it("drops an id this build never registered, without refusing the posture", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue({ ...WITH_RUNTIME, runtime: "gemini" });
+    const holder = await mount();
+    expect(holder.value!.runtime).toBe("");
+    expect(holder.value!.descriptor?.id).toBe("claude");
+    expect(holder.value!.posture).toEqual(MANUAL);
+  });
+
+  it("sends NO runtime key when only an axis moved — the pick is left alone", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
+    const holder = await mount();
+    await act(async () => {
+      await holder.value!.update({ tools: "bypass" });
+    });
+    const [, written] = bridge.setLaunchPosture.mock.calls[0];
+    expect(Object.prototype.hasOwnProperty.call(written, "runtime")).toBe(false);
+    expect(holder.value!.runtime).toBe("codex");
+  });
+
+  it("sends `runtime: ''` when the operator picks Default — a real write", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
+    const holder = await mount();
+    await act(async () => {
+      await holder.value!.update({ runtime: "" });
+    });
+    const [, written] = bridge.setLaunchPosture.mock.calls[0];
+    expect(Object.prototype.hasOwnProperty.call(written, "runtime")).toBe(true);
+    expect(written.runtime).toBe("");
+    expect(holder.value!.runtime).toBe("");
+  });
+
+  it("adopts MAIN'S answer over the ask when the store landed elsewhere", async () => {
+    // ⚠ `setChannelRuntime` answers the value the store ACTUALLY holds — an
+    // unregistered id CLEARS the pick — so echoing the ask would leave the row
+    // claiming an adapter that was refused.
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
+    bridge.setLaunchPosture.mockResolvedValue({ ok: true, runtime: "" });
+    const holder = await mount();
+    await act(async () => {
+      await holder.value!.update({ runtime: "cursor" });
+    });
+    expect(holder.value!.runtime).toBe("");
+  });
+
+  it("fans the runtime out to a SECOND mounted surface", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue(WITH_RUNTIME);
+    const a = await mount();
+    const b = await mount();
+    await act(async () => {
+      await a.value!.update({ runtime: "cursor" });
+    });
+    expect(b.value!.runtime).toBe("cursor");
   });
 });

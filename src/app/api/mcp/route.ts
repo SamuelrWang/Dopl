@@ -3,7 +3,10 @@ import { DoplClient } from "@dopl/client";
 import { bootServer, clientIdentifier } from "@dopl/mcp-server/factory";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateMcpRequest } from "@/shared/auth/with-mcp-transport-auth";
-import { readRuntimeHeader } from "@/shared/auth/runtime-header";
+import {
+  readRuntimeHeader,
+  readVendorHeader,
+} from "@/shared/auth/runtime-header";
 import { readSessionIdHeader } from "@/shared/auth/session-header";
 import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
@@ -57,6 +60,11 @@ async function handle(request: Request): Promise<Response> {
   // Runtime + session stamps forwarded onto the loopback. Only recognized values survive the
   // readers, so a caller-set header cannot be laundered through this hop.
   const callerRuntime = readRuntimeHeader(request);
+  // CUSTODY above, VENDOR here — two dimensions, never one widened enum
+  // (`shared/auth/runtime-header.ts`). Absent stays absent: an older desktop
+  // build sends no vendor, and reading `desktop-session` as "therefore Claude"
+  // is the conflation the second header exists to prevent.
+  const callerVendor = readVendorHeader(request);
   const callerSessionId = readSessionIdHeader(request);
   // `signal` hands the caller's disconnect to the loopback; without it nothing downstream learns
   // the client hung up and an orphaned `op="await"` keeps re-polling for its whole ~215s budget.
@@ -67,6 +75,7 @@ async function handle(request: Request): Promise<Response> {
     clientIdentifier,
     workspaceId,
     runtime: callerRuntime,
+    vendor: callerVendor,
     sessionId: callerSessionId,
     signal: request.signal,
   });
@@ -82,6 +91,7 @@ async function handle(request: Request): Promise<Response> {
     caller: {
       userId,
       runtime: callerRuntime ?? null,
+      vendor: callerVendor ?? null,
       credentialKind: credential_info.kind,
       credentialLabel: credential_info.label,
     },

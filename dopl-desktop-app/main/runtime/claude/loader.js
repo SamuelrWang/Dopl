@@ -1,4 +1,10 @@
-// Claude Agent SDK loader.
+// Claude Agent SDK loader — the CLAUDE ADAPTER's platform half.
+//
+// ⚠ MOVED HERE FROM `main/sdk-loader.js` ON 2026-08-31 (runtime-adapter port, step 3), BY MOVE
+// AND NOT BY REWRITE. Not one line of behaviour changed: the whole point of that step is that a
+// regression at this stage is a regression, never an improvement. What changed is WHO MAY REACH
+// IT — core no longer requires this module at all, and asks `main/runtime/index.js` instead. The
+// three relative requires below gained `../../` and nothing else did.
 //
 // ⚠ The SINGLE module that touches the ESM-only SDK, so CJS->ESM interop and packaged-binary
 // path math live in exactly one place (contract §D).
@@ -18,8 +24,8 @@
 
 const path = require('path');
 const { app } = require('electron');
-const { MCP_URL } = require('./config');
-const { diag } = require('./diag');
+const { MCP_URL } = require('../../config');
+const { diag } = require('../../diag');
 
 const SDK_PKG = '@anthropic-ai/claude-agent-sdk';
 
@@ -29,6 +35,14 @@ let _sdk = null; // cached ESM namespace
 // genuinely absent — the engine then reports {skipped:'no-sdk'}.
 async function getSdk() {
   if (!_sdk) _sdk = await import(SDK_PKG);
+  return _sdk;
+}
+
+// The SYNC read of that cache, for SYNCHRONOUS option assembly (agent-self-ops.js builds an
+// in-process server inside buildSdkOptions, which every query path reaches only AFTER awaiting
+// getSdk). ⚠ NULL BEFORE THE FIRST AWAIT IS THE CONTRACT, not an error: a caller answers "no
+// SDK extras this session" and the launch proceeds — never throw a launch over a display verb.
+function peekSdk() {
   return _sdk;
 }
 
@@ -69,7 +83,7 @@ function doplBearer() {
   // ⚠ Lazy require: mcp-config pulls in auth/session-spawner, and an unwired harness (or a
   // pre-sign-in launch) must read as "no token", never throw into a launch.
   try {
-    return require('./mcp-config').deviceTokenForSpawn() || '';
+    return require('../../mcp-config').deviceTokenForSpawn() || '';
   } catch (_) {
     return '';
   }
@@ -80,7 +94,7 @@ function doplBearer() {
 // Dopl MCP entry this process builds, and it drifted once already by restating it. Lazy like
 // doplBearer, and only reached after it proved mcp-config loads.
 function clientTimeoutMs() {
-  return require('./mcp-config').MCP_CLIENT_TIMEOUT_MS;
+  return require('../../mcp-config').MCP_CLIENT_TIMEOUT_MS;
 }
 
 // ⚠ Tool-BOUND half of the same fix. A pre-approved tool never reaches grantDecision, so this
@@ -171,6 +185,17 @@ function buildMcpServers(doplToolsPolicy, workspaceId, bearerOverride) {
       // this device token can set it, so it PROVES nothing about the caller. Nothing may be
       // GRANTED on it. Unconditional — it identifies the RUNTIME, not the workspace.
       'X-Dopl-Runtime': 'desktop-session',
+      // ⚠ THE SECOND DIMENSION, AND IT IS NOT A RUNTIME VALUE (2026-08-31, adapter port step 1).
+      // The stamp above is CUSTODY — "the desktop app spawned this" — and stays true for a
+      // Dopl-driven Codex or Cursor session. Three live sites compare the custody word by strict
+      // equality or array membership (`packages/mcp-server/src/tools/identity.ts › runtimeWord`,
+      // `packages/mcp-server/src/tools/channel-wake-guidance.ts`, `main/targeting.js ›
+      // DESKTOP_RUNTIMES`), so putting a vendor word THERE would silently flip all three for
+      // every non-Claude session. VENDOR is what the MCP server's PROSE branches on — which tool
+      // verb exists, which name prefix, whether an await wakes anything.
+      // ⚠ Absent is a legal answer server-side and must stay one: an older build sends only the
+      // custody stamp, and `desktop-session` never implies Claude.
+      'X-Dopl-Vendor': 'claude',
     },
   };
   const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
@@ -274,6 +299,7 @@ function buildScrubbedEnv() {
 
 module.exports = {
   getSdk,
+  peekSdk, // sync read of the cached namespace — null pre-await, by contract (agent-self-ops)
   resolveClaudeExecutable,
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above

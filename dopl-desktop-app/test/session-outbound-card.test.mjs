@@ -36,6 +36,22 @@ import { loadReducer } from "./_reducer-block.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const io = require(join(HERE, "..", "main", "session-io.js"));
+
+// ⚠ 2026-08-31 (runtime-adapter port, step 4): the SDK-message -> render-event mapping is the
+// ADAPTER's (`main/runtime/claude/normalize.js`), which is what makes it fixture-testable with
+// nothing installed. Its context arrives as one object rather than four positional arguments,
+// because a runtime that needs a fifth must not be a signature change in core. This shim keeps
+// every case below reading exactly as it did.
+const NORMALIZE = require(join(HERE, "..", "main", "runtime", "claude", "normalize.js"));
+const renderEvents = (msg, channelId, peerName, willGatePost, peerId) =>
+  NORMALIZE.renderEvents(msg, { channelId, peerName, willGatePost, peerId });
+
+// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
+// diag line, the card payloads and the resolver parking are platform-free and live in
+// `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
+// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
+// callback, so they take it from there.
+const axisB = require(join(HERE, "..", "main", "runtime", "claude", "axis-b.js"));
 const profiles = require(join(HERE, "..", "main", "session-profiles.js"));
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
@@ -84,7 +100,7 @@ const toolUse = (id, name, input) => ({ type: "tool_use", id, name, input });
 
 test("io: sdkRenderEvents marks a gating post PENDING — still ONE event, still no tool card", () => {
   const msg = assistantMsg([toolUse("t1", CHANNEL_TOOL, POST)]);
-  const evs = io.sdkRenderEvents(msg, "ch1", "Bob", () => true);
+  const evs = renderEvents(msg, "ch1", "Bob", () => true);
   assert.equal(evs.length, 1, "one artifact: the generic tool card stays suppressed");
   assert.deepEqual(evs[0].payload, {
     type: "outbound_post", toolUseId: "t1", to: "Bob", text: POST.body,
@@ -95,7 +111,7 @@ test("io: sdkRenderEvents marks a gating post PENDING — still ONE event, still
 test("io: an auto-approved post carries NO pending marker (the v2.6 payload, exactly)", () => {
   const msg = assistantMsg([toolUse("t1", CHANNEL_TOOL, POST)]);
   for (const predicate of [() => false, undefined, null, "nonsense", () => "yes"]) {
-    const evs = io.sdkRenderEvents(msg, "ch1", "Bob", predicate);
+    const evs = renderEvents(msg, "ch1", "Bob", predicate);
     assert.deepEqual(evs[0].payload, { type: "outbound_post", toolUseId: "t1", to: "Bob", text: POST.body },
       "only an explicit true marks a post pending");
   }
@@ -104,7 +120,7 @@ test("io: an auto-approved post carries NO pending marker (the v2.6 payload, exa
 test("io: the AXIS B auto-send bypass still dispatches NOTHING (no card, no dock)", async () => {
   const s = { profile: "full", channelId: "ch1", state: { allowForTask: [], messageMode: "auto_outbound" }, pendingPermissions: new Map(), pendingNames: new Map() };
   const events = [];
-  const res = await io.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "rA", toolUseID: "tA" });
+  const res = await axisB.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "rA", toolUseID: "tA" });
   assert.deepEqual(res, { behavior: "allow" });
   assert.deepEqual(events, [], "the operator opted out of being asked");
   assert.equal(s.pendingPermissions.size, 0, "and nothing is parked");

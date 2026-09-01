@@ -45,12 +45,27 @@ export function desktopSource(file: string) {
  * exactly ONE reader of the stored posture; WHICH file holds it is an
  * implementation detail the desktop is free to move. This survives the move and
  * still fails on the thing that matters — a second reader appearing.
+ *
+ * ⚠ RECURSIVE SINCE 2026-08-31, AND THE FLAT VERSION HAD JUST BECOME WRONG. `main/`
+ * grew its first subdirectory that day — `main/runtime/`, the adapter tree of the
+ * runtime port — so a flat scan would have answered a CONSUMER COUNT that silently
+ * excluded every module the port moved. A count that cannot see part of the tree is
+ * the F-237 failure this helper exists to prevent, one directory deeper. Paths come
+ * back relative to `main/`, so `desktopSource` takes them unchanged.
  */
 export function desktopMainFilesContaining(needle: string): string[] {
-  const dir = resolve(process.cwd(), "dopl-desktop-app/main");
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".js"))
-    .filter((f) => readFileSync(resolve(dir, f), "utf8").includes(needle));
+  const root = resolve(process.cwd(), "dopl-desktop-app/main");
+  const walk = (dir: string, prefix: string, out: string[]): string[] => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) { walk(resolve(dir, entry.name), rel, out); continue; }
+      if (entry.name.endsWith(".js")) out.push(rel);
+    }
+    return out;
+  };
+  return walk(root, "", []).filter((f) =>
+    readFileSync(resolve(root, f), "utf8").includes(needle)
+  );
 }
 
 const noop = () => {};

@@ -60,7 +60,7 @@ describe("the Launch agent split button", () => {
 
   it("launches a BLANK agent in ONE click, with no template and no overrides", async () => {
     const { onLaunchAgent } = mountLaunch();
-    fireEvent.click(screen.getByRole("button", { name: "Launch agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
     await waitFor(() => expect(onLaunchAgent).toHaveBeenCalledWith("t-1"));
     // ⚠ EXACTLY ONE ARGUMENT. A `null` template id spelled out here would be a
     // different object on the wire from the one this button has always sent.
@@ -69,7 +69,7 @@ describe("the Launch agent split button", () => {
 
   it("opens NO picker on the face's click", () => {
     mountLaunch();
-    fireEvent.click(screen.getByRole("button", { name: "Launch agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
@@ -86,7 +86,7 @@ describe("the Launch agent split button", () => {
 
   it("gives the chevron its OWN accessible name — two controls, not one", () => {
     mountLaunch();
-    expect(screen.getByRole("button", { name: "Launch agent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Launch from template" })).toBeTruthy();
   });
 
@@ -94,37 +94,40 @@ describe("the Launch agent split button", () => {
     // ⚠ The same feature-detected degradation every bridge affordance here
     // follows, applied to a READ: no affordance beats one that can only be empty.
     mountLaunch({ workspaceId: null });
-    expect(screen.getByRole("button", { name: "Launch agent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
   });
 
   // ⚠ CHANNEL VIEW IS WHERE MOST PEOPLE ARRIVE, and the button used to be
   // absent there entirely (gated on `openThreadId`) — Samuel opened the tab and
   // found no way to start an agent at all. It is present now, and because an
-  // agent runs INSIDE a thread it takes the first step of the same lane: the
-  // composer's new-thread panel. It must NOT reach the launch write with no
-  // target, and it must not grow a template chevron naming a thread that does
-  // not exist yet.
-  it("with no thread open, starts a thread instead of launching", () => {
+  // ⚠ FLIPPED 2026-08-31 (Samuel's ruling): it used to open the new-thread
+  // panel on the argument that an agent runs inside a thread — but the
+  // threadless lane (an agent ON THE ROOM, the composer's Bot icon since
+  // 2026-08-21) makes that redirect the one surface pretending otherwise. The
+  // channel view now launches CHANNEL-LEVEL in one click, `threadId: null`.
+  // The template chevron still needs a thread and still must not render.
+  it("with no thread open, launches CHANNEL-LEVEL — threadId null, one click", () => {
     const onNewThread = vi.fn();
     const { onLaunchAgent } = mountLaunch({ openThreadId: null, onNewThread });
 
-    fireEvent.click(screen.getByRole("button", { name: "Launch agent" }));
-    expect(onNewThread).toHaveBeenCalledTimes(1);
-    expect(onLaunchAgent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    expect(onLaunchAgent).toHaveBeenCalledTimes(1);
+    expect(onLaunchAgent).toHaveBeenCalledWith(null);
+    expect(onNewThread).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
   });
 
-  it("renders no button at all when no thread can be started either", () => {
-    // Nothing to launch into AND no way to make one: the honest answer is no
-    // control, the same feature-detected degradation `canLaunch` gets.
+  it("still renders WITHOUT a new-thread lane — the launch no longer needs one", () => {
+    // The old case pinned "no thread + no way to make one = no control"; the
+    // channel-level lane means the control stands on `canLaunch` alone now.
     mountLaunch({ openThreadId: null, onNewThread: undefined });
-    expect(screen.queryByRole("button", { name: "Launch agent" })).toBeNull();
+    expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
   });
 
   it("renders neither half when the bridge cannot launch", () => {
     mountLaunch({ canLaunch: false });
-    expect(screen.queryByRole("button", { name: "Launch agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
   });
 

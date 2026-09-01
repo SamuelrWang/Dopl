@@ -10,10 +10,10 @@
 // with the channel's chaining setting ON the DEPTH bound is gone, and something else has to hold.
 //
 // ⚠ `MAX_CONCURRENT_SESSIONS` IS ALREADY THERE AND IS NOT ENOUGH, WHICH IS THE WHOLE ARGUMENT FOR
-// THIS FILE. `session-launch.js › launch` refuses a seventh live session with `cap`, so the
-// INSTANTANEOUS fan-out is bounded at six no matter what. But sessions SETTLE and free their
+// THIS FILE. `session-launch.js › launch` refuses a SIXTEENTH live session with `cap`, so the
+// INSTANTANEOUS fan-out is bounded at fifteen no matter what. But sessions SETTLE and free their
 // slots — so an unbounded chain under a fixed concurrency ceiling is not stopped, it is merely
-// RATE-LIMITED to six at a time, forever, which is a fork bomb that has learned patience. The
+// RATE-LIMITED to fifteen at a time, forever, which is a fork bomb that has learned patience. The
 // missing bound is over TIME, and that is exactly what this is.
 //
 // ── WHAT IT COUNTS, AND WHAT IT DELIBERATELY DOES NOT ────────────────────────────────────────
@@ -42,16 +42,23 @@
 // injected clock.
 
 // ⚠ THE TWO NUMBERS, AND WHERE THEY COME FROM RATHER THAN BEING CHOSEN FOR ROOM.
-// `session-windowless.js › MAX_CONCURRENT_SESSIONS` is 6 (measured 2026-08-31), so TWELVE is two
-// complete turnovers of the machine's ENTIRE capacity inside the window — far above any real
-// staffing pattern (an orchestrator hiring six workers spends half of it) and far below a chain
-// that is running away, which reaches it in seconds. The window is long enough that a burst
+// `session-windowless.js › MAX_CONCURRENT_SESSIONS` is 15 (raised 6 → 15 on 2026-09-01), so THIRTY
+// is two complete turnovers of the machine's ENTIRE capacity inside the window — far above any
+// real staffing pattern (an orchestrator hiring fifteen workers spends half of it) and far below a
+// chain that is running away, which reaches it in seconds. The window is long enough that a burst
 // cannot be re-spent by simply waiting a moment, and short enough that a legitimate operator who
 // hits it is not locked out for the afternoon.
-// ⚠ THEY ARE NOT DERIVED FROM `MAX_CONCURRENT_SESSIONS` IN CODE. A `2 * 6` here would tie a
+// ⚠ IT WAS RAISED WITH THE CONCURRENCY CEILING, ON 2026-09-01, AND HAD TO BE. At 12, an
+// orchestrator staffing a single channel to the NEW cap was refused at its thirteenth worker
+// inside the window — i.e. the rate bound would have silently capped the machine at 12 and made
+// the concurrency raise unreachable on the one lane it was raised FOR. A rate ceiling below the
+// cost ceiling is not a backstop, it is the real cap wearing the wrong name.
+// ⚠ THEY ARE STILL NOT DERIVED FROM `MAX_CONCURRENT_SESSIONS` IN CODE. A `2 * 15` here would tie a
 // COST ceiling to a RATE ceiling and make one move when the other is tuned; the relationship is
-// the justification, not the implementation.
-const MAX_CHAINED_LAUNCHES = 12;
+// the justification, not the implementation — which is exactly why raising one meant REVISITING
+// the other by hand, and why `test/launch-budget.test.mjs` pins the ORDERING (rate > cost) rather
+// than either number.
+const MAX_CHAINED_LAUNCHES = 30;
 const WINDOW_MS = 15 * 60_000;
 
 // { [channelId]: number[] } — the timestamps still inside the window, oldest first.

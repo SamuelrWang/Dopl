@@ -45,6 +45,11 @@ vi.mock("@/features/knowledge/server/service", () => ({
 
 vi.mock("@/features/knowledge/server/service-channel-grants", () => ({
   getChannelGrantMap: vi.fn(),
+  // ⚠ THE `Shared` PILL'S READ (2026-09-01). It rides the same `Promise.all` as
+  // the four folded maps, so an UNMOCKED export here is not a missing assertion
+  // — it rejects and the whole list 500s, which is how twelve cases in this file
+  // went red at once.
+  listSharedIntoChannelBaseIds: vi.fn(),
 }));
 
 vi.mock("@/features/workspaces/server/service-overview", () => ({
@@ -61,7 +66,10 @@ import {
   listHomeScopedBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
-import { getChannelGrantMap } from "@/features/knowledge/server/service-channel-grants";
+import {
+  getChannelGrantMap,
+  listSharedIntoChannelBaseIds,
+} from "@/features/knowledge/server/service-channel-grants";
 import { isChannelVisibleTo } from "@/features/workspaces/server/service-overview";
 
 const mockListBases = vi.mocked(listBases);
@@ -72,6 +80,7 @@ const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
 const mockStarred = vi.mocked(listStarredBaseIds);
 const mockHomeScoped = vi.mocked(listHomeScopedBaseIds);
 const mockGrantMap = vi.mocked(getChannelGrantMap);
+const mockShared = vi.mocked(listSharedIntoChannelBaseIds);
 const mockChannelVisible = vi.mocked(isChannelVisibleTo);
 
 function base(id: string, createdBy: string | null): KnowledgeBase {
@@ -123,6 +132,9 @@ beforeEach(() => {
   mockStorageLimit.mockResolvedValue(5_000_000);
   mockStarred.mockResolvedValue(["kb-2"]);
   mockHomeScoped.mockResolvedValue(["kb-1"]);
+  // ⚠ NOT the shelf flag's base: two keys always naming the same row would pass
+  // whichever one the route dropped.
+  mockShared.mockResolvedValue(["kb-2"]);
 });
 
 describe("GET /api/knowledge/bases", () => {
@@ -136,6 +148,7 @@ describe("GET /api/knowledge/bases", () => {
       kbStorageLimit: 5_000_000,
       starredBaseIds: ["kb-2"],
       homeScopedBaseIds: ["kb-1"],
+      sharedBaseIds: ["kb-2"],
     });
   });
 
@@ -204,6 +217,9 @@ describe("GET /api/knowledge/bases", () => {
 
     mockStarred.mockResolvedValue([]);
     mockHomeScoped.mockResolvedValue([]);
+    // What the REAL read answers for an empty id list: it short-circuits with no
+    // query (`repository-channel-grants.ts › listSharedBaseIds`).
+    mockShared.mockResolvedValue([]);
 
     const res = await GET(getReq(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
@@ -214,6 +230,7 @@ describe("GET /api/knowledge/bases", () => {
       kbStorageLimit: 5_000_000,
       starredBaseIds: [],
       homeScopedBaseIds: [],
+      sharedBaseIds: [],
     });
   });
 
@@ -244,6 +261,42 @@ describe("GET /api/knowledge/bases", () => {
       expect("home_scoped" in b).toBe(false);
       expect("shelf" in b).toBe(false);
     }
+  });
+
+  /**
+   * 🔒 **`sharedBaseIds` IS A SIBLING KEY FOR THE SAME REASON `homeScopedBaseIds`
+   * IS (2026-09-01).** "Is this base granted into any channel" is a fact about
+   * GRANTS, not a column on the base, so folding it onto the row would widen
+   * `KnowledgeBase` — the type `check-knowledge-type-drift` mirrors into the SDK.
+   * ⚠ **A SET, NEVER A CHANNEL LIST**, fenced to the ids about to be returned:
+   * the pill asks one boolean per base, and anything richer would put the
+   * identity of channels the caller may not see on the wire.
+   */
+  it("folds sharedBaseIds in as a SIBLING KEY, over exactly the visible ids", async () => {
+    const body = (await (await GET(getReq(), { params: Promise.resolve({}) })).json()) as {
+      bases: Array<Record<string, unknown>>;
+      sharedBaseIds: string[];
+    };
+    expect(body.sharedBaseIds).toEqual(["kb-2"]);
+    expect(mockShared).toHaveBeenCalledWith("ws-1", ["kb-1", "kb-2"]);
+    for (const b of body.bases) {
+      expect("shared" in b).toBe(false);
+      expect("sharedBaseIds" in b).toBe(false);
+    }
+  });
+
+  it("degrades a shared-grant failure to [] — every card keeps its scope word", async () => {
+    // ⚠ THE DIRECTION IS STATED, NOT CALLED SAFE: `[]` reproduces what shipped
+    // before this key existed (every private base labelled "Private"), which
+    // UNDER-states a base's exposure to its own owner. Failing the whole list is
+    // worse — `kb_list_bases` over MCP rides this route.
+    mockShared.mockRejectedValue(new Error("grants table down"));
+
+    const res = await GET(getReq(), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.sharedBaseIds).toEqual([]);
+    expect(body.bases).toHaveLength(2);
   });
 
   it("degrades a shelf-flag failure to [] — UNLABELLED, never mislabelled", async () => {

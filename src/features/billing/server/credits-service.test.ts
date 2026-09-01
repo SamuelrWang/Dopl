@@ -13,6 +13,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
 
+// ⚠ THE LEDGER IS MOCKED, NOT LET THROUGH. It is a `supabaseAdmin()` insert on
+// the hottest path in the product, and what this suite pins about it is WHEN it
+// is called and WITH WHAT — never that Supabase was reachable.
+vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
+
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   countActiveMembers: vi.fn(),
@@ -22,6 +27,7 @@ vi.mock("./workspace-billing", () => ({
 }));
 
 import * as repo from "./workspace-billing";
+import { recordCreditUsageEvent } from "./credit-ledger";
 import {
   consumeMcpCredits,
   creditPeriodFor,
@@ -29,6 +35,7 @@ import {
 } from "./credits-service";
 
 const mockRepo = vi.mocked(repo);
+const mockLedger = vi.mocked(recordCreditUsageEvent);
 const WS = "ws-1";
 
 /** 2026-08-11, mid-month — anchor fixtures below straddle it. */
@@ -261,5 +268,74 @@ describe("consumeMcpCredits — refusal", () => {
     expect(res.used).toBe(500);
     expect(res.remaining).toBe(0);
     expect(res.upgradeUrl).toMatch(/\/billing\?billing=upgrade$/);
+  });
+});
+
+/**
+ * THE ATTRIBUTION LEDGER — one row per SPEND, beside the counter (2026-09-01,
+ * closing F-328's schema half).
+ *
+ * 🔒 **IT IS NOT THE COUNTER AND MUST NEVER GATE ONE.** `consume_workspace_credits`
+ * still decides `allowed`; this write only records WHO and WHERE, which is the
+ * dimension a one-row-per-period counter cannot carry.
+ */
+describe("credit usage ledger", () => {
+  beforeEach(() => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(billing({ plan: "free", status: "free" }));
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+  });
+
+  it("records one row per SPEND, stamped with the period the counter used", async () => {
+    mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: true, used: 7 });
+
+    await consumeMcpCredits(WS, { userId: "u-1", workspaceKind: "standard" });
+
+    expect(mockLedger).toHaveBeenCalledTimes(1);
+    const event = mockLedger.mock.calls[0]?.[0];
+    expect(event).toMatchObject({ workspaceId: WS, userId: "u-1", amount: 1 });
+    // The period the RPC was called with, not one re-derived from the clock.
+    expect(event?.periodStart).toBe(
+      mockRepo.consumeWorkspaceCredits.mock.calls[0]?.[1]
+    );
+  });
+
+  /** ⚠ A REFUSED CONSUME MOVED NO COUNTER, so it has nothing to attribute —
+   *  writing one would put credits in the by-channel rail that the workspace was
+   *  never charged for. */
+  it("writes NOTHING when the consume was refused", async () => {
+    mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: false, used: 500 });
+
+    await consumeMcpCredits(WS, { userId: "u-1", workspaceKind: "standard" });
+
+    expect(mockLedger).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 🔒 **`originWorkspaceId` IS THE ADDRESSED WORKSPACE, `workspaceId` IS THE
+   * PAYER — AND ON A LINK CONTAINER THEY DIFFER.** That difference IS the "by
+   * channel" dimension: the burn is charged to the container owner's billing
+   * workspace, and recorded against the container it happened in. Collapsing the
+   * two would file every home-channel credit under the operator's workspace and
+   * leave the rail empty.
+   */
+  it("separates the payer from the container the burn happened in", async () => {
+    mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: true, used: 1 });
+    const payer = "ws-owner-billing";
+    const container = "ws-link-1";
+    const workspaces = await import("@/features/workspaces/server/repository");
+    vi.spyOn(workspaces, "findActiveOwnerUserId").mockResolvedValue("owner-1");
+    vi.spyOn(workspaces, "findDefaultWorkspaceForUser").mockResolvedValue({
+      id: payer,
+    } as Awaited<ReturnType<typeof workspaces.findDefaultWorkspaceForUser>>);
+
+    await consumeMcpCredits(container, { userId: "guest-1", workspaceKind: "link" });
+
+    expect(mockLedger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: payer,
+        originWorkspaceId: container,
+        userId: "guest-1",
+      })
+    );
   });
 });

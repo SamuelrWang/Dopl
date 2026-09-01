@@ -23,7 +23,7 @@ import {
  *  query). `hiddenCount` = how many the window hid; 0 on full-history plans. */
 export async function listChats(ctx: ChatContext): Promise<ChatList> {
   const { since } = await resolveChatsWindow(ctx.workspaceId);
-  const [rows, hiddenCount] = await Promise.all([
+  const [{ rows, truncated }, hiddenCount] = await Promise.all([
     repo.listVisibleChats(ctx.workspaceId, ctx.userId, since),
     since ? repo.countHiddenChats(ctx.workspaceId, ctx.userId, since) : Promise.resolve(0),
   ]);
@@ -42,7 +42,12 @@ export async function listChats(ctx: ChatContext): Promise<ChatList> {
       )
     )
   );
-  return { chats, hiddenCount };
+  // ⚠ `truncated` is the READ's, not the filtered list's, and it is passed on
+  // rather than folded into `hiddenCount`: they answer different questions —
+  // one is "your plan hides older chats", the other is "this read did not reach
+  // the end". A clip that rendered as a retention notice would offer an upgrade
+  // as the remedy for a ceiling upgrading does not move (INVARIANTS §9).
+  return { chats, hiddenCount, truncated };
 }
 
 /** ⚠ Visibility gate only, NO retention window. Used by `service-writes` to

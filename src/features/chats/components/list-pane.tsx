@@ -65,7 +65,28 @@ interface Props {
   ) => Promise<void>;
   /** Chats hidden by the free-plan retention window (0 on Pro). */
   hiddenCount: number;
+  /** The list read hit its ceiling — see {@link CHATS_CLIPPED_NOTE}. */
+  truncated: boolean;
 }
+
+/**
+ * WHAT A CLIPPED CHAT LIST SAYS (INVARIANTS §9, the fifth wording).
+ *
+ * ⚠ IT REUSES NONE OF THE FOUR EXISTING ONES because the REMEDY differs, which
+ * is the whole reason that section keeps them apart. Ontology's says no read on
+ * the connection reaches past the ceiling; the MCP thread list's names asking a
+ * human; the Threads pane's and the Tags inbox's offer "most recently active"
+ * plus the assurance that nothing was closed or dismissed. This list is a
+ * SEARCHABLE ARCHIVE ordered by recency, so what it can honestly say is that the
+ * newest are here and the search box only reaches them.
+ *
+ * ⚠ IT PROMISES NO REMEDY AND MUST NOT: there is no page argument on this read
+ * and no deeper one behind it. ⚠ AND IT IS NOT THE RETENTION STRIP'S SENTENCE.
+ * That one has an upgrade behind it; upgrading does not move this ceiling, and a
+ * clip rendered as a plan limit would sell a fix for a different problem.
+ */
+export const CHATS_CLIPPED_NOTE =
+  "Showing the most recent chats. Older ones are not loaded, and search does not reach them.";
 
 /** Left list pane: count header, search well, All/Private/Team/Shared
  *  filter, chat list — folder-grouped on Private and All (All appends
@@ -90,6 +111,7 @@ export function ListPane({
   onCreateFolder,
   onFolderShareChange,
   hiddenCount,
+  truncated,
 }: Props) {
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
 
@@ -260,6 +282,19 @@ export function ListPane({
         )}
       </div>
 
+      {/* ⚠ THE CLIP SITS ABOVE THE RETENTION STRIP AND IS A SEPARATE ROW. Both
+          can be true at once — a free workspace with more than a page of chats
+          inside its window — and they are different facts with different
+          remedies. Stacking them says so; merging them would let a clip pass as
+          a plan limit. */}
+      {truncated && (
+        <p
+          role="status"
+          className="border-t border-border-default bg-card-surface-subtle px-3.5 py-2 text-caption text-text-muted"
+        >
+          {CHATS_CLIPPED_NOTE}
+        </p>
+      )}
       {hiddenCount > 0 && (
         <RetentionStrip
           hiddenCount={hiddenCount}

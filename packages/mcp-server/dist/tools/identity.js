@@ -15,7 +15,7 @@
  * one that knows it cannot tell.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.DESKTOP_SESSION_RUNTIME = void 0;
+exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CURSOR_VENDOR = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
 exports.callerStatusLine = callerStatusLine;
 exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
@@ -27,10 +27,27 @@ const narration_1 = require("./narration");
  * on this.
  */
 exports.DESKTOP_SESSION_RUNTIME = "desktop-session";
+/**
+ * Recognized `X-Dopl-Vendor` values — WHICH AGENT RUNTIME drives the session
+ * the stamp above says the desktop spawned. ⚠ HAND-COPIED from
+ * `src/shared/auth/runtime-header.ts` for the same reason as the constant
+ * above, and pinned against it by
+ * `dopl-desktop-app/test/runtime-stamp-literals.test.mjs`.
+ *
+ * ⚠ A SECOND DIMENSION, NOT A RUNTIME VALUE (2026-08-31). `runtimeWord` below
+ * compares `runtime` strictly against `DESKTOP_SESSION_RUNTIME`, and so does
+ * `channel-wake-guidance.ts`; a Codex or Cursor session spawned by the desktop
+ * is still `desktop-session` and must keep answering true there. What differs
+ * between vendors is what this server may TEACH, which reads `vendor` instead.
+ */
+exports.CLAUDE_VENDOR = "claude";
+exports.CODEX_VENDOR = "codex";
+exports.CURSOR_VENDOR = "cursor";
 /** No identity at all — the shape every test-constructed server gets by default. */
 exports.UNKNOWN_CALLER = {
     userId: null,
     runtime: null,
+    vendor: null,
     credentialKind: null,
     credentialLabel: null,
 };

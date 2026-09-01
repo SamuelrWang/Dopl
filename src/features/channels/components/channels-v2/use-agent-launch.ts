@@ -113,6 +113,17 @@ export interface AgentLaunchPanel {
   templateId: string | null;
   /** `AGENT_MODEL_DEFAULT` (`""`) is "whatever the chain decides". */
   model: string;
+  /**
+   * THIS SPAWN'S RUNTIME, or `''` for "the channel's own pick" (2026-08-31).
+   *
+   * ⚠ `''` IS NOT "THE DEFAULT ADAPTER" HERE, and that is the one place this
+   * field's empty string means something different from the Settings row's. On
+   * the DURABLE record `''` sets the channel back to the default; on a LAUNCH it
+   * means the operator expressed no per-spawn preference, so the channel's pick
+   * stands. `use-agents-panel.ts › launchAgent` therefore omits the key rather
+   * than sending `''`.
+   */
+  runtime: string;
   /** A name is the only required field; a blank agent with no description is legitimate. */
   ready: boolean;
   /** A rename/describe that main refused AFTER the agent started. Never a launch failure. */
@@ -122,6 +133,7 @@ export interface AgentLaunchPanel {
   setDescription: (next: string) => void;
   setTemplateId: (next: string | null) => void;
   setModel: (next: string) => void;
+  setRuntime: (next: string) => void;
   toggle: () => void;
   close: () => void;
   reset: () => void;
@@ -134,6 +146,9 @@ export function useAgentLaunch(): AgentLaunchPanel {
   const [description, setDescription] = useState("");
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(AGENT_MODEL_DEFAULT);
+  // ⚠ `""` = follow the channel's pick, NOT "the default adapter" — see the
+  // field's docblock on `AgentLaunchPanel`.
+  const [runtime, setRuntime] = useState<string>("");
   const [identityError, setIdentityError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
@@ -143,6 +158,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setDescription("");
     setTemplateId(null);
     setModel(AGENT_MODEL_DEFAULT);
+    setRuntime("");
     setIdentityError(null);
   }, []);
 
@@ -189,6 +205,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
     description,
     templateId,
     model,
+    runtime,
     // ⚠ THE NAME IS THE ONLY GATE. A blank agent is a real configuration (no template), so is a
     // model of "Default", and so is an agent with no description — none of those may block a
     // launch. An unnamed one is refused only because the field is prefilled: an empty one means
@@ -200,6 +217,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setDescription,
     setTemplateId,
     setModel,
+    setRuntime,
     toggle,
     close: () => setOpen(false),
     reset,
@@ -237,7 +255,11 @@ export async function launchWithIdentity(
     // ⚠ ABSENT WHEN THE MODEL IS THE DEFAULT, so an untouched panel puts the same payload on the
     // wire a one-click launch always did (`launch-overrides.ts › overridesFor`'s own rule).
     panel.model === AGENT_MODEL_DEFAULT ? undefined : { model: panel.model },
-    panel.agentId ?? undefined
+    panel.agentId ?? undefined,
+    // ⚠ `undefined` WHEN THE PANEL EXPRESSED NO PREFERENCE, so an untouched panel puts the
+    // same payload on the wire a one-click launch always did — `overridesFor`'s own rule,
+    // applied to the field main resolves FIRST in its precedence chain.
+    panel.runtime || undefined
   );
   if (!outcome.ok) {
     return {

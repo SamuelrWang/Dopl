@@ -108,6 +108,12 @@ export function bootIpc({ blocked = false } = {}) {
         setOrchestratorLaunch: (on) => { writes.push({ orchestratorLaunch: on }); return on === true; },
       };
     }
+    // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride
+    // the EXISTING posture pair rather than growing a fourth op (see `channel-dir-ipc.js`), so
+    // there is no new row in the OPS table; what they need here is only to exist, because the
+    // handler reads them on the SUCCESS path these cases must never reach.
+    if (id === "./channel-runtime") return { getChannelRuntime: () => "", setChannelRuntime: () => "" };
+    if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude" };
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => "~/Downloads/secret-repo",
@@ -152,6 +158,13 @@ export function bootIpc({ blocked = false } = {}) {
       };
     }
     if (id === "./session-ipc-ops") return opsModule;
+    // 2026-08-31 (port wave D) — WHICH RUNTIME this channel's agents launch on. ⚠ Stubbed at its
+    // seam like `./channel-prefs` above (the real module opens an electron-store), and answering
+    // `''` is the DEFAULT adapter, which is what every launch resolved to before the port — so
+    // the specs this file asserts stay byte-identical to the ones that shipped.
+    if (id === "./channel-runtime") {
+      return { normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""), getChannelRuntime: () => "" };
+    }
     throw new Error("unexpected require: " + id);
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();

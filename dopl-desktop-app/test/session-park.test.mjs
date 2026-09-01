@@ -5,7 +5,7 @@
 // deps (io / store / crypto / Notification / diag) as free vars (required at the module top,
 // like session-dispatch.js) plus a bind()-set `deps` for the engine handles. We slice the block,
 // prove it is electron/require-free, inject fakes, and pin the ONE property the lane exists for:
-// resumeParked rebuilds the query THROUGH buildSdkOptions (the v1.9 security path) with
+// resumeParked rebuilds the query THROUGH buildLaunchSpec (the v1.9 security path) with
 // options.resume = the retained sdkSessionId — no divergent option assembly, no new
 // auto-approval — and it does so SYNCHRONOUSLY, so the effect the reducer queues right behind it
 // lands on the FRESH iterator.
@@ -36,6 +36,14 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
 // charset drift away from what `channel_sessions.name`'s CHECK accepts, which is the exact
 // failure this wave fixed. Same discipline the summary harness follows for `session-pill.js`.
 const agentId = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-id.js"));
+// ⚠ THE REAL REGISTRY (2026-08-31, port wave D). `resumeParked` / `startResume` now REFUSE a
+// resume on a runtime whose `session.usageResetsOnResume` is `'unverified'` — a runtime that
+// CONTINUES the cumulative total makes every cost delta negative, clamps it to zero, and stops
+// the cost cap ever firing with no symptom until a bill arrives. The real registry loads cleanly
+// here (every adapter defers its platform binding), so what these cases drive is the predicate
+// the app applies rather than a stub that agrees with itself.
+const RUNTIME = createRequire(import.meta.url)(join(HERE, "..", "main", "runtime", "index.js"));
+
 // ⚠ AND THE FAKE `slotKey` IS THE REAL THREE-PART SHAPE. It mirrored the deleted D2 CHOICE
 // (`agentId` OR `taskId`), which stopped being what `main/session-store.js › slotKey` does when
 // multiplayer blended all three — so a case could pass here against a key production never builds.
@@ -70,7 +78,7 @@ assert.ok(REAL_MAX > 0, "MAX_CONCURRENT_SESSIONS not found in session-windowless
 
 function harness(over = {}) {
   const cfg = { gateSdk: null, ...over };
-  const calls = { buildSdkOptions: [], consume: [], dispatch: [], startSession: [], query: [] };
+  const calls = { buildLaunchSpec: [], consume: [], dispatch: [], startSession: [], query: [], acquired: [], diag: [] };
 
   const io = {
     makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }),
@@ -85,18 +93,35 @@ function harness(over = {}) {
   };
   const crypto = { randomBytes: () => ({ toString: () => "deadbeef" }) };
   const Notification = null; // offerResume is exercised elsewhere; not under test here
-  const diag = () => {};
+  // ⚠ CAPTURED, NOT DISCARDED (2026-08-31, port wave D). One line this module emits is
+  // load-bearing enough to assert: a resume refused on capability grounds has to say WHY in a
+  // sentence an operator can read, because a refusal they cannot read is one they work around.
+  const diag = (...parts) => calls.diag.push(parts.join(" "));
 
-  const fakeSdk = { query: (arg) => { calls.query.push(arg); return { __query: true }; } };
+// ⚠ 2026-08-31 (runtime-adapter port): `acquireRuntime` became `acquireRuntime` and the assembled
+// options became an OPAQUE launch spec the runtime itself starts. The await this harness
+// drives is the same one, in the same place; only the name and the shape moved.
+  const fakeRuntime = { resume: (spec) => { calls.query.push(spec); return { __query: true }; } };
   const deps = {
     sessions,
-    // `gateSdk` (a deferred) lets a test hold getSdk mid-await to drive the check-then-act race.
-    getSdk: async () => { if (cfg.gateSdk) await cfg.gateSdk; return fakeSdk; },
-    buildSdkOptions: (s) => { calls.buildSdkOptions.push(s); return { resume: s.resumeSdkId, canUseTool: "GATE", settingSources: [] }; },
+    // `gateSdk` (a deferred) lets a test hold acquireRuntime mid-await to drive the check-then-act race.
+    // ⚠ AND IT RECORDS WHICH RUNTIME IT WAS ASKED FOR (2026-08-31, port wave D). A park must not
+    // land a conversation on a different vendor: `s.runtimeId` / `rec.runtimeId` is stamped at
+    // spawn, persisted by `session-store.js › durableSessionRecord`, and handed back here.
+    acquireRuntime: async (runtimeId) => {
+      calls.acquired.push(runtimeId);
+      if (cfg.gateSdk) await cfg.gateSdk;
+      return fakeRuntime;
+    },
+    // ⚠ THE SPEC IS OPAQUE TO CORE and this fake mirrors that: it carries the prompt the
+    // lifecycle just built plus whatever the runtime needs, and core never looks inside. The two
+    // properties this file pins — the SAME fresh iterator drives the resumed run, and the
+    // conversation id is the only field that differs from a cold launch — are both on it.
+    buildLaunchSpec: (s) => { calls.buildLaunchSpec.push(s); return { prompt: s.pushIterator, options: { resume: s.resumeSdkId, settingSources: [] } }; },
     consume: (s, q) => calls.consume.push({ s, q }),
     dispatch: (s, ev) => calls.dispatch.push({ s, ev }),
     // Real startSession sets the Map entry SYNCHRONOUSLY (before its own first await); the fake
-    // mirrors that, so a re-check sees a session created during a getSdk await.
+    // mirrors that, so a re-check sees a session created during a acquireRuntime await.
     startSession: async (spec) => { calls.startSession.push(spec); const sess = { key: spec.key, settled: false, ...spec }; sessions.set(spec.key, sess); return sess; },
     hasLiveSession: (a) => { const s = sessions.get(store.slotKey(a)); return !!(s && !s.settled); },
     emit: () => {},
@@ -125,7 +150,7 @@ function harness(over = {}) {
     // attach the NEXT turn's text to a direction that never got one. The REAL module is
     // injected rather than a stub — it is pure, and the reset is the behaviour.
     "directedTurn",
-    "sessionWindowless", "diag", "sessionCredential",
+    "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
   )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
@@ -134,13 +159,14 @@ function harness(over = {}) {
     // 🔒 THE CONTAINER LOCK (plan §4.4 B1). Stubbed to a no-op mint: this harness is about the
     // RESUME path, and the credential's own behaviour is pinned in
     // `session-audience-ceiling.test.mjs`. What matters here is that the resume still assembles
-    // its options through the shared `buildSdkOptions` afterwards.
-    { ensureContainerCredential: async () => null, sessionBearer: () => "" });
+    // its spec through the shared `buildLaunchSpec` afterwards.
+    { ensureContainerCredential: async () => null, sessionBearer: () => "" },
+    RUNTIME, RUNTIME.capability);
   api.bind(deps);
   return { ...api, deps, sessions, calls, cfg, store };
 }
 
-// ── P1: resumeParked rebuilds the query on the SAME object, through buildSdkOptions ──
+// ── P1: resumeParked rebuilds the query on the SAME object, through buildLaunchSpec ──
 
 test("resumeParked sets up a fresh controller + iterator SYNCHRONOUSLY and resumes the sdk id", () => {
   const h = harness();
@@ -158,12 +184,12 @@ test("resumeParked sets up a fresh controller + iterator SYNCHRONOUSLY and resum
   assert.equal(s.query, null, "the torn-down query is cleared so consume's `s.query !== q` guard trips");
 });
 
-test("resumeParked (async) starts the query THROUGH buildSdkOptions (v1.9 security path)", async () => {
+test("resumeParked (async) starts the query THROUGH buildLaunchSpec (v1.9 security path)", async () => {
   const h = harness();
   const s = { settled: false, sdkSessionId: "sdk-xyz", resumeSdkId: null };
   h.resumeParked(s);
   await flush();
-  assert.equal(h.calls.buildSdkOptions.length, 1, "options assembled through the shared buildSdkOptions, not duplicated");
+  assert.equal(h.calls.buildLaunchSpec.length, 1, "the spec is assembled through the shared buildLaunchSpec, not duplicated");
   assert.equal(h.calls.query.length, 1);
   assert.equal(h.calls.query[0].prompt, s.pushIterator, "the SAME fresh iterator drives the resumed query");
   assert.equal(h.calls.query[0].options.resume, "sdk-xyz", "options.resume = the retained sdkSessionId");
@@ -239,22 +265,22 @@ test("resumeParked is a no-op for a settled session or a resume already in fligh
 // ── THE CHECK-THEN-ACT GUARD IN startResume — REWRITTEN, NOT REMOVED ──────────────
 //
 // ⚠ THIS TEST USED TO DRIVE THE RACE WITH `recreateParkedShell` (the operator clicking Reopen
-// while a crash resume sat on getSdk). The RACER is deleted; THE GUARD IT RACED IS NOT. The
+// while a crash resume sat on acquireRuntime). The RACER is deleted; THE GUARD IT RACED IS NOT. The
 // re-check after the await is live code in `startResume` and its comment states the failure
-// directly: "a reopen shell or racing launch may have created this slot during getSdk, and
+// directly: "a reopen shell or racing launch may have created this slot during acquireRuntime, and
 // startSession would overwrite the Map entry". Dropping the test with the racer would have taken
 // a live overwrite guard with it (INVARIANTS §14), so the racer is now a plain claimant landing
 // in the registry mid-await — which is what `launch()` does, and the shape the guard actually
 // defends against now that no reopen can create anything.
 
-test("a session created during a resume's getSdk await is NOT overwritten (post-await re-check)", async () => {
+test("a session created during a resume's acquireRuntime await is NOT overwritten (post-await re-check)", async () => {
   let release;
   const gate = new Promise((r) => { release = r; });
   const rec = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", profile: "full", side: "responder", mode: "autonomous" };
   const h = harness({ gateSdk: gate });
 
-  const resuming = h.startResume(rec, "sdk-1", "nudge"); // claims nothing; suspends at getSdk
-  // While startResume is parked on getSdk, another creator claims the slot — a racing
+  const resuming = h.startResume(rec, "sdk-1", "nudge"); // claims nothing; suspends at acquireRuntime
+  // While startResume is parked on acquireRuntime, another creator claims the slot — a racing
   // `launch()` is the one that can still do this. The registry entry is set synchronously,
   // exactly as the real startSession sets it.
   h.sessions.set("c1:t1:a1b2c3d4", { key: "c1:t1:a1b2c3d4", settled: false });
@@ -294,7 +320,7 @@ test("CAP: a resume at the ceiling is refused, and asks nothing of the SDK", asy
   fill(h, REAL_MAX);
   assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), false);
   assert.deepEqual(h.calls.startSession, [], "no seventh session");
-  assert.deepEqual(h.calls.buildSdkOptions, [], "and no options were assembled for one");
+  assert.deepEqual(h.calls.buildLaunchSpec, [], "and no spec was assembled for one");
 });
 
 test("CAP: one below the ceiling still resumes — the guard is a bound, not a block", async () => {
@@ -314,16 +340,16 @@ test("CAP: settled registry entries do not count against it", async () => {
   assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
 });
 
-// ⚠ THE SAME CHECK-THEN-ACT RACE THE SLOT GUARD ALREADY HANDLED. `getSdk` is wide enough for a
+// ⚠ THE SAME CHECK-THEN-ACT RACE THE SLOT GUARD ALREADY HANDLED. `acquireRuntime` is wide enough for a
 // peer wake or the operator's own button to take the last slot, and `launch()` re-checks its own
 // guard after the await for exactly this reason.
-test("CAP: a slot taken DURING getSdk is caught by the post-await re-check", async () => {
+test("CAP: a slot taken DURING acquireRuntime is caught by the post-await re-check", async () => {
   let release;
   const gate = new Promise((r) => { release = r; });
   const h = harness({ gateSdk: gate });
   fill(h, REAL_MAX - 1);
   const resuming = h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n");
-  fill(h, REAL_MAX); // a racing launch takes the last one while we are parked on getSdk
+  fill(h, REAL_MAX); // a racing launch takes the last one while we are parked on acquireRuntime
   release();
   assert.equal(await resuming, false);
   assert.deepEqual(h.calls.startSession, [], "the cap is re-read after the await, like the slot");
@@ -331,8 +357,19 @@ test("CAP: a slot taken DURING getSdk is caught by the post-await re-check", asy
 
 // ⚠ THE NUMBER IS NOT THIS FILE'S. The harness stubs `session-windowless.js`, so without this the
 // suite could agree with itself about a ceiling production does not enforce.
+//
+// ⚠ THIS CASE USED TO ASSERT `REAL_MAX === 6` under the note *"Samuel's multi-machine ruling: the
+// number does not go up"* (F-272, 2026-08-22). THAT RULING WAS SUPERSEDED ON 2026-09-01 — Samuel
+// raised the cap to 15 for the orchestrator-spawns-workers model, `end_agent` having since given
+// an agent a way to hand its slot back. The restated literal is deliberately NOT re-pinned at 15:
+// it pinned a decision, not a property, and it failed as a POLICY assertion the moment the policy
+// changed rather than telling anybody anything about the code. What is pinned instead is the
+// property the comment above actually claims — the number is READ FROM PRODUCTION SOURCE and this
+// file cannot invent one. `test/launch-budget.test.mjs` pins the one relationship that must hold
+// across any future retune: the rolling rate ceiling stays ABOVE this cost ceiling.
 test("CAP: the ceiling under test is the one `session-windowless.js` actually declares", () => {
-  assert.equal(REAL_MAX, 6, "Samuel's multi-machine ruling: the number does not go up");
+  assert.ok(Number.isInteger(REAL_MAX) && REAL_MAX > 0,
+    "the ceiling is parsed from session-windowless.js, never restated here");
   assert.match(SRC, /sessionWindowless\.MAX_CONCURRENT_SESSIONS/,
     "startResume reads the shared constant, never a local copy");
   assert.equal(/MAX_CONCURRENT_SESSIONS = \d/.test(SRC), false,

@@ -37,7 +37,7 @@ import {
  * that a channel with no grants still renders. A direct mount would hand the
  * panel static props and pass with every one of those broken.
  *
- * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Chat, so the real
+ * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Channels, so the real
  * channels-v2 surface would mount (and fetch) before a single Knowledge
  * assertion ran. `vi.mock` is hoisted per file and its factory may not close
  * over imports — hence a local stub rather than one in the harness.
@@ -64,7 +64,9 @@ beforeEach(() => {
 /** Open the Knowledge face. The selector is the page header's `SegmentedControl`
  *  — the same control the operator clicks, so nothing here bypasses the token. */
 async function openKnowledge(): Promise<void> {
-  await screen.findByTestId("channel-surface");
+  // ⚠ GATES ON THE TAB ROW, NOT ON THE RECORD PANE (2026-09-01) — the page
+  // opens on Overview now, which mounts no surface.
+  await screen.findByRole("tab", { name: "Overview" });
   fireEvent.click(screen.getByText("Knowledge"));
 }
 

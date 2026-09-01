@@ -24,6 +24,17 @@ interface Props {
   /** CALLER'S OWN starred base ids. Lifted to the front of the grid; ⚠ never
    *  counted by the scope pills. */
   starredBaseIds?: string[];
+  /**
+   * Base ids granted into at least one channel — the list response's
+   * `sharedBaseIds` sibling key. Drives the card's `Shared` pill.
+   *
+   * ⚠ OPTIONAL, and the §8 reason: this key is newer than the persisted query
+   * cache, so an entry written by an older bundle simply lacks it. Absent reads
+   * as "none known to be shared", which is what shipped before the key existed.
+   * ⚠ NOT used for ordering or for the scope PILL COUNTS — a share is not a
+   * scope, and folding it into either would double-count a base.
+   */
+  sharedBaseIds?: string[];
   currentUserId: string;
   query: string;
   onQueryChange: (q: string) => void;
@@ -59,6 +70,7 @@ export function KnowledgeHome({
   kbStorageLimit,
   ownerNames,
   starredBaseIds,
+  sharedBaseIds,
   currentUserId,
   query,
   onQueryChange,
@@ -72,6 +84,10 @@ export function KnowledgeHome({
   const starred = useMemo(
     () => new Set(starredBaseIds ?? []),
     [starredBaseIds]
+  );
+  const shared = useMemo(
+    () => new Set(sharedBaseIds ?? []),
+    [sharedBaseIds]
   );
   const ordered = useMemo(() => {
     if (starred.size === 0) return bases;
@@ -147,6 +163,7 @@ export function KnowledgeHome({
               storageLimit={kbStorageLimit}
               ownerLabel={ownerLabelFor(base, currentUserId, ownerNames)}
               starred={starred.has(base.id)}
+              shared={shared.has(base.id)}
               onOpen={onOpenBase}
               onToggleStar={onToggleStar}
             />

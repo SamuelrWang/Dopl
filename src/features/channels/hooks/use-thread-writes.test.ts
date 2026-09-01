@@ -15,7 +15,7 @@
  * ⚠ Both halves pinned, because the fix has a wrong version that looks right:
  * `invalidateQueries` defaults to `refetchType: "active"` and the transcript
  * query is active, so naming the messages key UNCONDITIONALLY re-downloads the
- * 200-message page on every send. `coldKeys` is what makes it cold-only.
+ * newest transcript page on every send. `coldKeys` is what makes it cold-only.
  *
  * ⚠ Assertions check the entry EXISTS before checking what it says — a bare
  * `entry?.state.isInvalidated).toBeFalsy()` passes when the write invalidated
@@ -254,7 +254,7 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
       h.client.getQueryData<MessagesCache>(MESSAGES_ENTRY)?.messages.map((m) => m.id)
     ).toEqual(["srv-0", "srv-1"]);
     // ⚠ Transcript NOT marked stale, so the active query does not refetch the
-    // 200-message page behind an already-correct screen.
+    // newest transcript page behind an already-correct screen.
     const entry = messagesEntry(h);
     expect(entry).toBeDefined();
     expect(entry?.state.isInvalidated).toBe(false);

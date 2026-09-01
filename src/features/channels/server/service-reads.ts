@@ -214,14 +214,22 @@ async function hydrateMessages(
 }
 
 /**
- * Cursor-based message read (`seq > since`, ascending, capped at `limit`),
- * optionally scoped to ONE thread (`query.thread` → `metadata.taskId`). A
- * member's read advances `last_read_at` best-effort. Non-members reading a
- * public channel have no watermark to move.
+ * Cursor-based message read — forward from `since`, BACKWARD from `before`, or
+ * the newest page when neither is given, capped at `limit` and optionally scoped
+ * to ONE thread (`query.thread` → `metadata.taskId`). A member's read advances
+ * `last_read_at` best-effort. Non-members reading a public channel have no
+ * watermark to move.
  *
  * ⚠ A THREAD-SCOPED read moves NO watermark. The watermark is content-derived
  * (newest message SHOWN) and monotonic, so a filtered read would jump it over
  * every unrelated older message and mark those read unseen.
+ *
+ * ⚠ A `before` PAGE MOVES NO WATERMARK EITHER, and this is belt on braces rather
+ * than a new rule: the watermark is monotonic, so a page of HISTORY can only
+ * ever fail the `>` test below and write nothing. Skipping it outright says the
+ * intent out loud and saves the read — scrolling back through a long channel
+ * fires one of these per page, and each would otherwise re-derive a maximum and
+ * compare it for the sole purpose of doing nothing.
  */
 export async function readMessages(
   ctx: ChannelContext,
@@ -231,11 +239,17 @@ export async function readMessages(
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   const rows = await repoMessages.listMessages(channel.id, {
     since: query.since,
+    before: query.before,
     limit: query.limit,
     threadId: query.thread,
   });
   const messages = await hydrateMessages(rows);
-  if (membership && query.thread === undefined && messages.length > 0) {
+  if (
+    membership &&
+    query.thread === undefined &&
+    query.before === undefined &&
+    messages.length > 0
+  ) {
     // ⚠ Watermark = newest message SHOWN, written only when it ADVANCES.
     // Writing now() on every read makes each realtime-triggered refetch emit a
     // `channel_members` UPDATE, itself a subscribed realtime event — every tab

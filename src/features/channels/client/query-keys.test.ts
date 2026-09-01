@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { QueryClient } from "@tanstack/react-query";
 import { apiQueryKey } from "@/shared/api/query-keys";
-import { MAX_MESSAGE_LIMIT } from "../constants";
+import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
 import {
   CHANNEL_CONSENT_PATH,
   channelKeys,
@@ -77,7 +77,13 @@ describe("channel paths", () => {
     expect(source("../hooks/use-channels.ts")).toContain(
       'includeArchived ? { include: "archived" } : undefined'
     );
-    expect(channelMessagesParams()).toEqual({ limit: MAX_MESSAGE_LIMIT });
+    // ⚠ THE TRANSCRIPT'S PAGE SIZE, NOT `MAX_MESSAGE_LIMIT` (2026-09-01). The
+    // read pages backward with a `before` cursor now, so the newest page is one
+    // page and the ceiling is only the schema's cap. The key CARRIES the limit,
+    // so this number is part of the cache entry the writes patch.
+    expect(channelMessagesParams()).toEqual({
+      limit: CHANNEL_TRANSCRIPT_PAGE_SIZE,
+    });
   });
 });
 
@@ -130,7 +136,7 @@ describe("channelKeys", () => {
     ).toEqual([
       `/api/channels/${CHANNEL}/messages`,
       "ws",
-      { limit: MAX_MESSAGE_LIMIT },
+      { limit: CHANNEL_TRANSCRIPT_PAGE_SIZE },
     ]);
   });
 });

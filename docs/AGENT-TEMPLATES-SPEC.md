@@ -550,7 +550,9 @@ answers `''` for anything it cannot honour, so an unrecognised value FALLS THROU
 link rather than ending the chain at `'default'`. That is what
 `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE`'s `model` describe string
 promises the orchestrator in so many words. The existing coercion points are unchanged and none is
-removed; `session-query.js › modelArg` is still the last gate before argv.
+removed; `session-model.js › modelArg` is still the last gate before argv, called from
+`runtime/claude/launch-spec.js › buildOptions` — the option assembly moved to the runtime
+adapter on 2026-08-31 and the coercion travelled with it, unchanged.
 
 ### 3d. Spawn-idle interplay
 

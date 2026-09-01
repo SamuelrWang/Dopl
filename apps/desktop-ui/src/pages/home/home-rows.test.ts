@@ -8,7 +8,6 @@ import type {
 } from "@/features/home/types";
 import {
   channelPeople,
-  channelSubline,
   channelTitle,
   hasLinkOut,
   homeRows,
@@ -187,65 +186,42 @@ describe("channelPeople — the ONE read of `peers`, and the cache merge", () =>
   });
 });
 
-describe("channelTitle — names, then a count", () => {
+/**
+ * 🔒 **THE CHANNEL'S NAME, AND NOTHING DERIVED FROM ITS ROSTER (Samuel,
+ * 2026-09-01).** These cases replace a suite that pinned the OPPOSITE — a title
+ * that was the lone peer's display name, then their email, then two names and a
+ * `+N` — which is what made adding a member RENAME a channel. The cases below
+ * are deliberately written as "the roster changes and the title does not",
+ * because a single `expect(title).toBe(name)` would also pass against a
+ * derivation that happened to agree on one fixture.
+ */
+describe("channelTitle — the CHANNEL's name, never the roster's", () => {
   it("titles a SOLO channel by the channel", () => {
     expect(channelTitle(channel({ peers: [], peer: null }))).toBe("Q3 Fundraise");
   });
 
-  it("titles ONE peer by the person, falling back email → channel name", () => {
-    // ⚠ UNCHANGED BY THE MULTI-PERSON WORK, deliberately — including the
-    // `|| channel.name` last resort, which is the only sensible thing left to
-    // call a channel whose one member has neither a name nor an address.
-    expect(channelTitle(channel({ peers: [GRACE], peer: GRACE }))).toBe("Grace");
+  it("does NOT rename the channel when people join", () => {
+    const solo = channel({ peers: [], peer: null });
+    const one = channel({ peers: [GRACE], peer: GRACE });
+    const many = channel({ peers: [GRACE, PRIYA, DANA, OMAR], peer: GRACE });
+    for (const row of [solo, one, many]) {
+      expect(channelTitle(row)).toBe("Q3 Fundraise");
+    }
+  });
+
+  // ⚠ THE EMAIL IS THE SHARP ONE: a nameless peer used to surface their ADDRESS
+  // as the channel's title, which put a stranger's email in the sidebar.
+  it("never surfaces a member's email as the title", () => {
     const nameless = { ...GRACE, displayName: null };
     expect(channelTitle(channel({ peers: [nameless], peer: nameless }))).toBe(
-      "grace@x.dev"
-    );
-    const anonymous = { ...GRACE, displayName: null, email: null };
-    expect(channelTitle(channel({ peers: [anonymous], peer: anonymous }))).toBe(
       "Q3 Fundraise"
     );
   });
 
-  it("joins TWO names, and counts the rest beyond two", () => {
-    expect(
-      channelTitle(channel({ peers: [GRACE, PRIYA], peer: GRACE }))
-    ).toBe("Grace, Priya");
-    expect(
-      channelTitle(channel({ peers: [GRACE, PRIYA, DANA, OMAR], peer: GRACE }))
-    ).toBe("Grace, Priya +2");
-  });
-
-  it("does NOT fall back to the channel name in the multi branch", () => {
-    // Naming a crowd after the channel while claiming to name people would
-    // attribute the channel to whoever the reader assumes. "Member" is honest.
-    const anonymous = { ...DANA, displayName: null, email: null };
-    expect(
-      channelTitle(channel({ peers: [GRACE, anonymous], peer: GRACE }))
-    ).toBe("Grace, Member");
-  });
-
-  it("titles a STALE-CACHE row by its single peer, exactly as before the upgrade", () => {
-    expect(channelTitle(staleCached({ peer: GRACE }))).toBe("Grace");
-  });
-});
-
-describe("channelSubline — who this channel is with", () => {
-  it("says Just you, then the address, then the size of the room", () => {
-    expect(channelSubline(channel({ peers: [], peer: null }))).toBe("Just you");
-    expect(channelSubline(channel({ peers: [GRACE], peer: GRACE }))).toBe(
-      "grace@x.dev"
-    );
-    // ⚠ NOT an email. One address under a title naming two OTHER people reads
-    // as theirs; the roster on the Info tab is where addresses can be attributed.
-    expect(
-      channelSubline(channel({ peers: [GRACE, PRIYA, DANA], peer: GRACE }))
-    ).toBe("3 people");
-  });
-
-  it("leaves the line blank for a lone peer with no address on file", () => {
-    const nameless = { ...GRACE, email: null };
-    expect(channelSubline(channel({ peers: [nameless], peer: nameless }))).toBe("");
+  // A cache entry written before `peers` existed still has `peer`; the title
+  // ignores both, so the upgrade cannot flash a peer-derived name either.
+  it("ignores the roster on a STALE-CACHE row too", () => {
+    expect(channelTitle(staleCached({ peer: GRACE }))).toBe("Q3 Fundraise");
   });
 });
 

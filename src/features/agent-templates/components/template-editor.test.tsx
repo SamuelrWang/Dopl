@@ -293,6 +293,12 @@ describe("no concave surfaces", () => {
     "FIELD_WELL",
     "SECTION_BOX_INSET",
     "SectionBox",
+    // ⚠ ADDED 2026-09-01. `shared/ui/usage-meter.tsx › UsageMeter` IS a concave
+    // surface — its whole recipe is a `.concave-track` well — so importing it
+    // was a way to ship one past a sweep that only reads class STRINGS. Naming
+    // the component closes that hole, and the sanctioned exception below is
+    // what keeps the one Samuel ordered.
+    "UsageMeter",
   ];
 
   function sources(dir: string): string[] {
@@ -359,6 +365,26 @@ describe("no concave surfaces", () => {
     "home-test-harness.tsx",
   ]);
 
+  /**
+   * 🔒 **THE ONE SANCTIONED CONCAVE SURFACE ON /home (Samuel, 2026-09-01), AND
+   * IT IS AN AMENDMENT TO THE RULING RATHER THAN A HOLE IN IT.**
+   *
+   * The Overview face's credit bar was built as an approximation of the billing
+   * surface's — a hand-rolled track with a raised fill — precisely BECAUSE of
+   * the no-concave rule. Samuel's correction is that the reference IS the spec:
+   * the bar must be `billing/components/billing-usage-pane.tsx`'s "MCP credits"
+   * meter, which is `shared/ui/usage-meter.tsx › UsageMeter`, which is a
+   * `.concave-track`. A design reference cloned exactly beats a local surface
+   * rule, and he said so after seeing the approximation.
+   *
+   * ⚠ **SCOPED TO ONE FILE AND ONE RECIPE.** Every other /home surface is still
+   * swept, and this file is still swept for every OTHER forbidden string — the
+   * exception is the pair, not the file. Widening it needs another ruling.
+   */
+  const HOME_CONCAVE_SANCTIONED: ReadonlyMap<string, string> = new Map([
+    ["overview-sections.tsx", "UsageMeter"],
+  ]);
+
   const HOME_FILES = readdirSync(HOME_DIR)
     .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
     .filter((name) => !HOME_NOT_SURFACES.has(name))
@@ -396,10 +422,29 @@ describe("no concave surfaces", () => {
       .split("\n")
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join("\n");
+    const sanctioned = HOME_CONCAVE_SANCTIONED.get(path.basename(file));
     for (const forbidden of FORBIDDEN) {
+      // ⚠ ONE recipe is excused in ONE file, by name — see
+      // `HOME_CONCAVE_SANCTIONED`. Everything else in that file is still swept.
+      if (forbidden === sanctioned) continue;
       expect(code, `${file} must not use ${forbidden}`).not.toContain(forbidden);
     }
   });
+
+  /**
+   * ⚠ **THE EXCEPTION HAS TO BE LOAD-BEARING OR IT IS JUST A HOLE.** If the
+   * credit bar ever stops using the billing meter, the carve-out must go with
+   * it — otherwise the next surface to reach for `UsageMeter` in that file
+   * inherits a permission nobody granted it.
+   */
+  it.each([...HOME_CONCAVE_SANCTIONED])(
+    "the sanctioned concave surface %s really does use %s",
+    (name, recipe) => {
+      const file = path.join(HOME_DIR, name);
+      expect(existsSync(file)).toBe(true);
+      expect(readFileSync(file, "utf8")).toContain(recipe);
+    }
+  );
 
   /**
    * ⚠ THE RECIPE MOVED, THE RULE DID NOT (2026-08-27). `RAISED_INPUT` was

@@ -6,7 +6,10 @@ import {
   bridgeCalls,
   installBridge,
 } from "#/test-utils/bridge";
-import { renderHome, routes } from "./home-test-harness";
+import {
+  openChannelRecord,
+  renderHome, routes,
+} from "./home-test-harness";
 
 /**
  * 🔒 /home → KNOWLEDGE, SCOPE C IS A **SHELF** — Samuel's ruling 2026-08-26,
@@ -45,7 +48,7 @@ beforeEach(() => {
 
 /** Open the Knowledge face through the header control the operator clicks. */
 async function openKnowledge(): Promise<void> {
-  await screen.findByTestId("channel-surface");
+  await openChannelRecord();
   fireEvent.click(screen.getByText("Knowledge"));
 }
 

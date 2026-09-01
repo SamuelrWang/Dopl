@@ -181,6 +181,47 @@ describe("StandaloneChannelSurface — mounted outside the channels page", () =>
   });
 });
 
+/**
+ * 🔒 **A CHANNEL'S HEADER IDENTITY (Samuel, 2026-09-01).**
+ *
+ * The header normally asks `channel-display.ts › channelDisplayName`, which
+ * names a DM after its peer — right on the workspace channels page, wrong on
+ * /home, where a container is a CHANNEL whose identity is its own name and does
+ * not move with its roster. The /home list row and Info tab were fixed at their
+ * OWN derivation (`home-rows.ts › channelTitle`); this header reads a different
+ * one, so a container minted before the channel-first inversion — carrying
+ * `is_direct = true` from `server/service-writes.ts › createDirectChannel` —
+ * showed the peer's name at the
+ * top of the pane while the row and the card beside it showed the channel's.
+ */
+describe("StandaloneChannelSurface — the header's identity", () => {
+  const DM = {
+    ...CHANNEL,
+    name: "Q3 Fundraise",
+    isDirect: true,
+    directPeer: {
+      userId: "user-2",
+      displayName: "Priya Shah",
+      avatarUrl: null,
+    },
+  };
+
+  it("names a direct channel after its peer by DEFAULT — the workspace page's behaviour", () => {
+    mount({ channel: DM });
+    expect(screen.getByText("Priya Shah")).toBeTruthy();
+    expect(screen.queryByText("Q3 Fundraise")).toBeNull();
+  });
+
+  it("pins the header to the channel's own name under `peerNamedHeader: false`", () => {
+    mount({ channel: DM, capabilities: { peerNamedHeader: false } });
+    expect(screen.getByText("Q3 Fundraise")).toBeTruthy();
+    // ⚠ THE ABSENCE IS THE ASSERTION: the roster is still loaded and the
+    // Members list still names her — what must not happen is the CHANNEL being
+    // named after her.
+    expect(screen.queryByText("Priya Shah")).toBeNull();
+  });
+});
+
 describe("StandaloneChannelSurface — the host's two knobs", () => {
   it("renders the channels page's own Info tab when no slot is given", () => {
     mount();

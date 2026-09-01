@@ -34,6 +34,11 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-park.js"), "utf8");
 // 2026-08-22: `startResume` mints its own instance id (it is the one spawn `launch` does not
 // funnel), so the block's two new free vars are injected REAL — see test/session-park.test.mjs.
 const ids = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-id.js"));
+// ⚠ THE REAL REGISTRY (2026-08-31, port wave D). It loads cleanly under `node --test` — every
+// adapter defers its platform binding — and using the real one is what makes the resume refusal
+// this file drives the one the app applies rather than a stub agreeing with itself.
+const RUNTIME = createRequire(import.meta.url)(join(HERE, "..", "main", "runtime", "index.js"));
+
 
 const from = SRC.indexOf("// ─── BEGIN SESSION-PARK-PURE");
 const to = SRC.indexOf("// ─── END SESSION-PARK-PURE");
@@ -61,13 +66,24 @@ function harness() {
   };
   const api = new Function(
     "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "sessionWindowless", "diag",
+    "runtimeRegistry", "runtimeCapability",
     `${BLOCK}\n return { bind, startResume, knownProfile };`
   )(io, store, { randomBytes: () => ({ toString: () => "dead" }) }, ids.newAgentId, ids.isAgentId, null,
-    sessionWindowless, () => {});
+    sessionWindowless, () => {},
+    // ⚠ THE RESUME CAPABILITY (2026-08-31, port wave D). `resumeParked` / `startResume` refuse a
+    // resume on a runtime whose `session.usageResetsOnResume` is `'unverified'`, because a runtime
+    // that CONTINUES the cumulative total makes every cost delta negative, clamps it to zero and
+    // stops the cost cap ever firing — silently. The REAL predicate is injected (`capability.js`
+    // is pure and names no vendor); the descriptor is the DEFAULT adapter's, which answers `true`,
+    // so every case in this file drives the path that shipped.
+    RUNTIME, RUNTIME.capability);
   api.bind({
     sessions,
-    getSdk: async () => ({ query: () => ({}) }),
-    buildSdkOptions: () => ({}),
+// ⚠ 2026-08-31 (runtime-adapter port): `getSdk` became `acquireRuntime` and the assembled
+// options became an OPAQUE launch spec the runtime itself starts. The await this harness
+// drives is the same one, in the same place; only the name and the shape moved.
+    acquireRuntime: async () => ({ resume: () => ({}) }),
+    buildLaunchSpec: () => ({}),
     consume: () => {},
     dispatch: () => {},
     startSession: async (spec) => { started.push(spec); return { key: spec.key }; },

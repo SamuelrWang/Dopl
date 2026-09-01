@@ -238,36 +238,21 @@ function contextEvent(tokens, model) {
 // correct after an auto-compaction — the exact opposite of what the operator needs it for.
 //
 // The LAST assistant message of a turn carries the usage of the LAST API request, and that IS
-// the prompt the model just saw. So this watches the raw stream in session-query's consume
-// loop, remembers that number, and hands it to the reducer when the turn ends.
+// the prompt the model just saw.
 //
-// A SUBAGENT's messages are skipped (`parent_tool_use_id` set): a Task runs in its own context
-// window, so counting its prompt as the session's would make the meter jump and then snap back.
-function observe(s, msg, dispatch) {
-  if (!s || !msg) return;
-  if (msg.type === 'system' && msg.subtype === 'init') {
-    // The FIRST honest statement of which model is really running (the picker asked; the CLI
-    // decides). It is also the denominator for the very first turn.
-    if (typeof msg.model === 'string' && msg.model) s.liveModel = msg.model;
-    return;
-  }
-  if (msg.type === 'assistant') {
-    if (msg.parent_tool_use_id != null) return; // a subagent's own window, not this session's
-    const m = msg.message || {};
-    const tokens = promptTokens(m.usage);
-    if (tokens > 0) s.promptTokens = tokens;
-    if (typeof m.model === 'string' && m.model) s.liveModel = m.model; // mid-session switch
-    return;
-  }
-  if (msg.type !== 'result' || typeof dispatch !== 'function') return;
-  const event = contextEvent(s.promptTokens, s.liveModel);
-  if (!event) return; // nothing measured this turn: say nothing rather than paint a zero
-  try {
-    dispatch(s, event);
-  } catch (err) {
-    diag('session-model: context dispatch failed', err && err.message);
-  }
-}
+// ⚠ THE WATCHER THAT READ THAT RAW STREAM — `› observe` — LEFT ON 2026-08-31 (runtime-adapter
+// port, step 4). It was a SECOND normalizer: it parsed the platform's own message schema
+// directly (`system`/`init`, the subagent-attribution field, the per-message `usage` block, the
+// mid-session model switch) and sat in the consume loop beside the render mapping. A boundary
+// that owned only the render mapping would have left it in core to fail the vocabulary scan, and
+// would have left the golden fixtures covering a third of the surface.
+//
+// SO THE SPLIT IS: the ADAPTER extracts the numbers per message and reports them
+// (`main/runtime/claude/normalize.js` -> a `context` CoreEvent), and CORE remembers the last one
+// and turns it into the reducer's event when the turn ends (`session-io.js › applyCoreEvents`).
+// Both halves of the rule that made this file's header worth writing survive intact: a
+// SUBAGENT's message never meters, because a delegated run has its own window; and a turn that
+// measured nothing says nothing rather than painting a zero (`› contextEvent` below).
 
 module.exports = {
   MODEL_CHOICES,
@@ -281,5 +266,4 @@ module.exports = {
   promptTokens,
   sessionTokens,
   contextEvent,
-  observe,
 };

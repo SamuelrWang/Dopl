@@ -32,6 +32,12 @@ interface Identity {
 interface ChatsResponse {
   chats: Chat[];
   hiddenCount: number;
+  /** ⚠ OPTIONAL ON THE TYPE because the CACHE is a different moment from the
+   *  wire (INVARIANTS §8): this key joined the payload on 2026-09-01, and the
+   *  24h IndexedDB-persisted entry written by the previous bundle does not
+   *  carry it. The route always sends it; that is not the same as it being
+   *  present on the first paint after an upgrade. */
+  truncated?: boolean;
 }
 
 const selectFolders = (body: { folders: ChatFolder[] }) => body.folders ?? [];
@@ -84,6 +90,9 @@ export default function ChatsPage() {
       initialChats={list.chats}
       initialFolders={folderList}
       hiddenCount={list.hiddenCount}
+      // ⚠ CACHE-SHAPE FALLBACK — see `ChatsResponse.truncated`. Absent reads as
+      // "not clipped": a missing notice is a smaller claim than a false one.
+      truncated={list.truncated ?? false}
     />
   );
 }

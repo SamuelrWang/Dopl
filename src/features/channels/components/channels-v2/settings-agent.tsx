@@ -72,7 +72,6 @@
  */
 
 import { Check } from "lucide-react";
-import { SelectMenu } from "@/shared/ui/select-menu";
 import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
 import { useChannelAgentChain } from "../../hooks/use-channel-agent-chain";
 import { useOrchestratorLaunch } from "../../hooks/use-orchestrator-launch";
@@ -84,25 +83,16 @@ import {
 } from "./settings-desktop-rows";
 import { cn } from "@/shared/lib/utils";
 import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
-import {
-  type MessageMode,
-  type PermissionPreset,
-  type ToolMode,
-} from "../../lib/permission-modes";
+import { type PermissionPreset } from "../../lib/permission-modes";
+import type { RuntimeDescriptor } from "../../lib/runtime-capability";
 import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
 import { useChannelFolder } from "../../hooks/use-channel-folder";
-import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
-import {
-  AGENT_MODEL_DEFAULT,
-  AGENT_MODEL_OPTIONS,
-} from "../../lib/agent-models";
 import { PanelHeading } from "./bits";
-import { usePostureWarning } from "./posture-warning";
+import { usePostureWarning, type PosturePatch } from "./posture-warning";
+import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
 import {
   GroupLabel,
-  LAUNCH_POSTURE_HEADING,
   SettingName,
-  SettingRow,
   TOOL_PROFILE_OPTIONS,
 } from "./settings-agent-rows";
 import type { AgentToolProfile, ChannelMember } from "../../types";
@@ -168,6 +158,10 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
       postureBusy={launchPosture.busy}
       onChangePosture={(patch) => void launchPosture.update(patch)}
       modelSupported={launchPosture.modelSupported}
+      runtimeSupported={launchPosture.runtimeSupported}
+      runtime={launchPosture.runtime}
+      runtimes={launchPosture.runtimes}
+      descriptor={launchPosture.descriptor}
       folder={
         folder.bridge
           ? {
@@ -238,7 +232,21 @@ export interface ChannelAgentSettingsViewProps {
   posture: PermissionPreset | null;
   /** True while a posture write is in flight — every posture select goes inert. */
   postureBusy: boolean;
-  onChangePosture: (patch: Partial<PermissionPreset>) => void;
+  onChangePosture: (patch: PosturePatch) => void;
+  /**
+   * THE RUNTIME FAMILY (2026-08-31, the runtime-adapter port) — the channel's
+   * pick, every adapter this desktop registered, and the descriptor a launch
+   * here would use. `settings-agent-launch-rows.tsx` is where all four are read
+   * and where the §3.1/§3.2 rules over them are stated.
+   *
+   * ⚠ `runtimeSupported` IS A SEPARATE GATE FROM `posture` BEING NON-NULL, for
+   * `modelSupported`'s reason: the two axes exist on desktops the runtime does
+   * not, and false renders NO runtime row rather than a greyed one.
+   */
+  runtimeSupported?: boolean;
+  runtime?: string;
+  runtimes?: ReadonlyArray<RuntimeDescriptor>;
+  descriptor?: RuntimeDescriptor | null;
   /**
    * This desktop understands the posture record's `model` field (2026-08-22).
    *
@@ -289,6 +297,10 @@ export function ChannelAgentSettingsView({
   postureBusy,
   onChangePosture,
   modelSupported = false,
+  runtimeSupported = false,
+  runtime = "",
+  runtimes = EMPTY_RUNTIMES,
+  descriptor = null,
   folder,
   autoSend = null,
   agentChain = null,
@@ -311,86 +323,31 @@ export function ChannelAgentSettingsView({
     <>
       <PanelHeading title="Agent" />
       <div className="flex flex-col gap-1 px-3.5">
-        {/* THE DURABLE LAUNCH POSTURE — 2026-08-20, AND IT REPLACED THE ARM ON
-            THIS TAB. Absent entirely in a plain browser — no bridge, no dead rows.
+        {/* THE DURABLE LAUNCH POSTURE — the runtime, both permission axes and
+            the model, as ONE group. Absent entirely in a plain browser: no
+            bridge, no dead rows.
 
-            ⚠ WHAT CHANGED AND WHY. These two selects used to write the SINGLE-USE
-            ARM, under the launch panel's own heading, on the reasoning that one
-            sentence must not drift into two. The heading was carrying the entire
-            distinction — and it could not. The rows sat among the durable group
-            below (tool profile, folder, auto-send), so the operator read them as
-            settings, picked Bypass, and got manual/ask on every session after
-            the first: the arm was spent by the launch that consumed it and
-            expired 30 minutes later, while this control went on displaying the
-            value they chose. A fuse drawn as a switch is worse than either one.
-
-            ⚠ AND THEN THE ARM WAS DELETED OUTRIGHT (2026-08-20, Samuel's ruling).
-            When it left this tab it was said to have "gone back to the request
-            card" — and that card's inbound branch had already stopped rendering
-            at the 2026-08-18 consent rewrite, so it went nowhere and nothing
-            could arm it (F-233). THIS PAIR IS NOW THE ONLY PERMISSION POSTURE IN
-            THE PRODUCT, it is durable, and it is read at exactly ONE call site:
-            `session-ipc-ops.js › sessions:launch`, the Launch button the
-            operator is pressing on their own thread. H2 still holds and still
-            holds BY CONSUMER COUNT — an inbound request a peer triggered carries
-            no tool posture at all and starts at manual/ask.
-            `main/channel-prefs.js` is the statement of record. */}
+            ⚠ THE GROUP AND ITS WHOLE ARGUMENT MOVED TO
+            `settings-agent-launch-rows.tsx` ON 2026-08-31, with the runtime-adapter
+            port. Not a redesign of what it stores: the seam is that Axis A is now
+            rendered from `descriptor.toolMode.options` — the RUNTIME row decides the
+            vocabulary of the row under it — so the two cannot live in different
+            files without drifting. This file was at the 500-line cap (INVARIANTS §1)
+            and could not have absorbed either the runtime row or the reasons for it.
+            ⚠ BOTH WRITES STILL GO THROUGH THE WARNING, unchanged: `changePosture`
+            is what the group is handed, so the `auto_both` + `full` + a-peer dialog
+            fires on exactly the transitions it always did. */}
         {posture && (
-          <>
-            <GroupLabel>{LAUNCH_POSTURE_HEADING}</GroupLabel>
-            <SettingRow name="Permissions">
-              <SelectMenu<ToolMode>
-                value={posture.tools}
-                options={TOOL_OPTIONS}
-                onChange={(tools) => warning.changePosture({ tools })}
-                ariaLabel="Permissions for agents you launch"
-                disabled={postureBusy}
-              />
-            </SettingRow>
-            <SettingRow name="Sends">
-              <SelectMenu<MessageMode>
-                value={posture.messages}
-                options={MESSAGE_OPTIONS}
-                onChange={(messages) => warning.changePosture({ messages })}
-                ariaLabel="Sends for agents you launch"
-                disabled={postureBusy}
-              />
-            </SettingRow>
-            {/* THE MODEL (Samuel, 2026-08-22) — durable, per channel, and read
-                at the same one call site the two axes are.
-
-                ⚠ IT SITS IN THIS GROUP AND NOT THE ONE BELOW, and the heading is
-                why: "When you launch an agent" governs the launches the OPERATOR
-                starts, which is exactly the scope of this pick. The group below
-                is "for every session on this channel" — an inbound-triggered
-                session carries no launch posture at all, and putting the model
-                there would promise it applies to runs it cannot reach.
-
-                ⚠ ABSENT ON A MAIN THAT HAS NO MODEL FIELD, never disabled. Such
-                a build DROPS the value on write, so a greyed row would be the
-                mild version of the failure and a live one would be the loud
-                version: a control that says Opus over agents that all launch on
-                the default. `modelSupported` is a probe over the get reply — the
-                bridge grew a FIELD here, not an op, so there is no member to
-                detect (`permission-modes.ts › hasModelKey`).
-
-                ⚠ "Default" IS A REAL PICK and writes NO id — the SDK's own
-                default applies. `lib/agent-models.ts` owns the roster and is the
-                ONE place an id becomes a label. */}
-            {modelSupported && (
-              <SettingRow name="Model">
-                <SelectMenu<string>
-                  value={posture.model ?? AGENT_MODEL_DEFAULT}
-                  options={AGENT_MODEL_OPTIONS}
-                  onChange={(model) =>
-                    warning.changePosture({ model: model || null })
-                  }
-                  ariaLabel="Model for agents you launch"
-                  disabled={postureBusy}
-                />
-              </SettingRow>
-            )}
-          </>
+          <AgentLaunchPostureRows
+            posture={posture}
+            busy={postureBusy}
+            onChange={warning.changePosture}
+            modelSupported={modelSupported}
+            runtimeSupported={runtimeSupported}
+            runtime={runtime}
+            runtimes={runtimes}
+            descriptor={descriptor}
+          />
         )}
 
         {/* THE DURABLE GROUP. Tools is the containment control, so its options
@@ -475,6 +432,11 @@ export function ChannelAgentSettingsView({
 /** ⚠ Module-level, so an unpassed roster is the SAME array every render rather
  *  than a fresh identity the warning would have to re-derive from. */
 const EMPTY_ROSTER: readonly ChannelMember[] = [];
+
+/** ⚠ Same rule, and it matters more here: the launch group memoizes nothing off
+ *  this list, but a fresh `[]` per render would make every runtime row a new
+ *  options identity. A desktop with no adapters and a plain browser share one. */
+const EMPTY_RUNTIMES: ReadonlyArray<RuntimeDescriptor> = [];
 
 // ⚠ `LAUNCH_POSTURE_HEADING`, `GroupLabel`, `SettingName`, `SettingRow` AND THE
 // `Note` TOMBSTONE MOVED TO `settings-agent-rows.tsx` ON 2026-08-26 — a PURE

@@ -134,7 +134,7 @@ test("ToolSearch is denied on the RESTRICTED profiles, and merely GATED under fu
 // so the dopl MCP entry carries `alwaysLoad: true`. If that field goes, the prompt below starts
 // naming a tool the model has only as a deferred stub.
 test("the dopl MCP server is pinned alwaysLoad, so nothing the prompt names is deferred", () => {
-  const loader = readFileSync(fileURLToPath(new URL("../main/sdk-loader.js", import.meta.url)), "utf8");
+  const loader = readFileSync(fileURLToPath(new URL("../main/runtime/claude/loader.js", import.meta.url)), "utf8");
   assert.match(loader, /^\s*alwaysLoad: true,$/m, "sdk-loader's dopl entry lost alwaysLoad");
 });
 

@@ -3,7 +3,7 @@
 //   1. session-io.baseRecord projects the header identity (counterpartyName /
 //      channelName / taskTitle) into the durable record, so a P2 recreate or an
 //      opt-in resume has something to rebuild the header from.
-//   2. handleSdkMessage's system/init payload carries the same three fields to the
+//   2. the system/init payload carries the same three fields to the
 //      renderer, and persists the record on the way.
 //   3. The RESPONDER spawn path (trigger.js) threads taskTitle into the session
 //      context — the value already existed for the consent payload.
@@ -21,6 +21,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const M = (p) => fileURLToPath(new URL("../main/" + p, import.meta.url));
 const io = require(M("session-io.js"));
+const { normalize } = require(M("runtime/claude/normalize.js"));
 
 // A live session object shaped like the engine's (only the fields baseRecord reads).
 function liveSession(over = {}) {
@@ -79,13 +80,21 @@ test("baseRecord still copies NO live handle (the durability leak guard holds)",
 
 // ── system/init: the renderer gets the same identity, and the record is saved ──
 
-test("handleSdkMessage's init payload carries taskTitle / channelName / from", () => {
+test("the init payload carries taskTitle / channelName / from", () => {
   const s = liveSession();
   const events = [];
   const saved = [];
   const store = { setSdkSessionId: () => {}, saveRecord: (r) => saved.push(r) };
-  io.handleSdkMessage(s, { type: "system", subtype: "init", session_id: "sdk-2", model: "claude" },
-    (_s, ev) => events.push(ev), store);
+  // ⚠ 2026-08-31 (runtime-adapter port, step 4): the PARSING of a platform message is the
+  // adapter's (`runtime/claude/normalize.js`) and the BOOKKEEPING — the conversation handle, the
+  // durable record, the init payload — is `session-io.js › applyCoreEvents`. Both halves are
+  // driven here, exactly as the consume loop drives them; the payload asserted below is unchanged.
+  io.applyCoreEvents(
+    s,
+    normalize({ type: "system", subtype: "init", session_id: "sdk-2", model: "claude" }, {}),
+    (_s, ev) => events.push(ev),
+    store
+  );
 
   const init = events.find((e) => e.type === "launched").payload;
   assert.equal(init.type, "init");

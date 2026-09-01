@@ -1,7 +1,19 @@
 -- `channel_sessions` — EIGHT NULLABLE TELEMETRY COLUMNS, and a column-privilege
 -- narrowing that is the BELT behind a DTO split.
 --
--- ⚠️ WRITTEN, NOT APPLIED (Samuel's standing gate on this directory).
+-- ✅ APPLIED. ⚠ This header said "WRITTEN, NOT APPLIED" long after it was live —
+-- corrected 2026-09-01, and the correction was forced by a consumer: the /home
+-- Overview face reads `tokens_spent`, so somebody had to establish whether the
+-- column exists rather than inherit the claim. It does, along with the other
+-- seven and the column-privilege narrowing.
+--
+-- ⚠ RE-DERIVE RATHER THAN TRUSTING THIS LINE, and JOIN ON THE NAME: like
+-- `20260822170000_overview_time_range_indexes.sql` before it, this file applied
+-- under a version that is NOT its filename prefix — `20260823091543`, name
+-- `channel_sessions_telemetry` (INVARIANTS §12, F-304). The command is
+-- `supabase migration list` / MCP `list_migrations`, or the two catalog queries
+-- in the AFTER-APPLYING block below; the ANSWER belongs to the deployment, not
+-- to this file.
 --
 -- ── WHY ────────────────────────────────────────────────────────────────────
 -- `read_sessions` answers "what is flint doing?" for an operator whose agents

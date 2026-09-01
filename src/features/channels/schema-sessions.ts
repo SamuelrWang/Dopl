@@ -216,8 +216,21 @@ export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
  * The desktop's own ceiling with a lot of room: **the wire set is LIVE ONLY**, so
  * a machine can offer at most
  * `dopl-desktop-app/main/session-windowless.js › MAX_CONCURRENT_SESSIONS` rows
- * (6, measured 2026-08-22) and this bound is over five times that. ⚠ Low enough
- * that a caller cannot use this endpoint to write a table.
+ * (**15 since 2026-09-01**; it was 6 when this was measured on 2026-08-22) and
+ * this bound is a little over TWICE that. ⚠ Low enough that a caller cannot use
+ * this endpoint to write a table.
+ *
+ * ⚠ **THE HEADROOM NARROWED AND THE NUMBER DELIBERATELY DID NOT MOVE
+ * (2026-09-01).** This docblock read "over five times that" against a cap of 6;
+ * the cap's raise to 15 spends most of that margin, and 32 is kept because the
+ * bound's JOB is unchanged — it is the "a caller cannot write a table here"
+ * fence, not a mirror of the desktop ceiling, and doubling it to preserve a
+ * ratio would weaken the only thing it enforces. ⚠ **What DOES have to hold is
+ * `SESSION_REPORT_MAX > MAX_CONCURRENT_SESSIONS`**, because the wire set is
+ * live-only and zod validates the ARRAY: a cap raised past this bound would
+ * 400 the WHOLE push for a busy machine, unretryably (see below). A future
+ * raise of the desktop ceiling past ~30 must raise this number in the same
+ * change.
  *
  * ⚠ THE OLD DERIVATION ADDED A RETAINED-ENDED TERM, AND THAT TERM IS GONE
  * (2026-08-22, F-255). It read "6 live plus `session-summary.js › MAX_ENDED`

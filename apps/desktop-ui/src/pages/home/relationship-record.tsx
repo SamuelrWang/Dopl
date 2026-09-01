@@ -24,10 +24,20 @@ import { PersonInfoTab } from "./person-info-tab";
 export function RelationshipRecord({
   homeChannel,
   currentUserId,
+  initialThreadId = null,
   onDeleted,
 }: {
   homeChannel: HomeChannel;
   currentUserId: string;
+  /**
+   * A thread to raise on MOUNT — how an Overview activity row lands
+   * (`use-activity-jump.ts`, 2026-09-01). ⚠ **INITIAL, NOT CONTROLLED**: the
+   * surface seeds its own selection from it once
+   * (`use-channels-v2-selection.ts`), so a later value only takes effect on a
+   * remount — which is exactly what happens here, because /home keys this pane
+   * by the row and swaps the whole element when the face changes.
+   */
+  initialThreadId?: string | null;
   /** The container's channel was deleted from Settings — drop the selection. */
   onDeleted: () => void;
 }) {
@@ -64,6 +74,7 @@ export function RelationshipRecord({
       workspaceSlug={homeChannel.workspaceSegment}
       channel={channel}
       currentUserId={currentUserId}
+      initialThreadId={initialThreadId}
       onDeleted={onDeleted}
       // ⚠ A RENDER FUNCTION SINCE 2026-08-25, and the argument is the point:
       // the person card became write-bearing when the Main-info rows became
@@ -95,7 +106,15 @@ export function RelationshipRecord({
       // and that asymmetry is deliberate, not an oversight: the tab is the guest's
       // ONLY way to read a base granted into this channel. Removing it there would
       // have taken the capability away rather than the duplicate view.
-      capabilities={{ memberManagement: false }}
+      // 🔒 `peerNamedHeader: false` — THE PANE'S HEADER IS THE CHANNEL'S NAME
+      // (Samuel, 2026-09-01). The list row and the Info tab were fixed at
+      // `home-rows.ts › channelTitle`; this header reads the OTHER counterpart
+      // derivation (`channel-display.ts › channelDisplayName`), so a container
+      // whose channel still carries `is_direct = true` — every one minted before
+      // the channel-first inversion — would have named the peer at the top of
+      // the pane while the row and the card beside it named the channel. Real
+      // DMs on the workspace page are untouched; see the capability's docblock.
+      capabilities={{ memberManagement: false, peerNamedHeader: false }}
     />
   );
 }

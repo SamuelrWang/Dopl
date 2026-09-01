@@ -48,9 +48,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { Bookmark, ChevronRight, Hash, PanelRight } from "lucide-react";
-import { IconButton } from "./bits";
+import { PaneHeader } from "./message-pane-header";
 import { useStickToBottom } from "./use-stick-to-bottom";
+import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
 import { ThreadSendBox } from "./thread-consent";
@@ -133,6 +133,9 @@ export function ChannelsV2MessagePane({
   onAnswerEscalation,
   answerBusy = false,
   onOpenThread = NOOP,
+  hasOlder = false,
+  loadingOlder = false,
+  onLoadOlder = NOOP,
 }: {
   channelId: string;
   workspaceId: string;
@@ -218,6 +221,19 @@ export function ChannelsV2MessagePane({
   answerBusy?: boolean;
   /** Set by an in-transcript thread card — the channel view's way IN. */
   onOpenThread?: (id: string) => void;
+  /**
+   * SCROLL-UP PAGING — the three values `use-channel-messages.ts` returns for
+   * it, handed down rather than read here for the same reason `newAgent` is: a
+   * second mount of that hook would be a second transcript read.
+   *
+   * ⚠ ALL THREE DEFAULT TO INERT, so a host that knows nothing about paging (the
+   * pop-out window's own reads, and every test that mounts this pane with a
+   * fixed row list) gets today's behaviour: no trigger, no indicator, no
+   * `before` request.
+   */
+  hasOlder?: boolean;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   // ⚠ DECLARED FIRST. Its effects must run BEFORE the scroll-target effect
@@ -228,6 +244,21 @@ export function ChannelsV2MessagePane({
     `${channelId}:${thread?.id ?? ""}`,
     rows.length
   );
+  // ⚠ DECLARED SECOND, BETWEEN THE PIN AND THE SCROLL-TARGET EFFECT BELOW.
+  // Effects run in declaration order: on a commit that both prepends a page and
+  // satisfies a mention jump, the pin is a no-op (a reader at the top is not
+  // pinned), the anchor restores the reading position, and the jump — declared
+  // last — still wins.
+  useLoadOlder(scrollerRef, {
+    canLoad: hasOlder && !loading,
+    loading: loadingOlder,
+    // The row the reader's position is measured against. `rows` is ascending, so
+    // the first one is the top of the loaded window and the row a prepended page
+    // pushes down.
+    topRowId: rows[0]?.id ?? null,
+    rowCount: rows.length,
+    onLoad: onLoadOlder,
+  });
 
   // The flash is DERIVED: a target flashes until its nonce is marked spent by
   // the timeout. No synchronous setState in the effect — the render pass
@@ -319,6 +350,25 @@ export function ChannelsV2MessagePane({
             {SCROLL_TARGET_MISSING_NOTE}
           </p>
         )}
+        {/* ⚠ ABOVE THE ROWS AND INSIDE THE SCROLLER — it belongs to the edge it
+            describes, and it is the one thing between the reader and the page
+            they are waiting for. **It reserves height while it stands**, which
+            is not decoration: `use-load-older.ts` restores the reading position
+            by MEASURING the anchor row, so a band that appears and disappears is
+            absorbed by that measurement rather than jolting the transcript.
+            ⚠ NO "you have reached the beginning" TWIN when the history runs out
+            — the minimal-copy ruling (INVARIANTS §5): the absence of more rows
+            is the message, and a permanent sentence at the top of every fully
+            read channel is an explainer nobody asked for. */}
+        {loadingOlder && (
+          <p
+            role="status"
+            aria-busy="true"
+            className="mb-3 text-center text-caption text-text-muted"
+          >
+            Loading earlier messages
+          </p>
+        )}
         {loading ? (
           <p role="status" aria-busy="true" className="sr-only">
             Loading transcript
@@ -373,113 +423,5 @@ export function ChannelsV2MessagePane({
         openThreadId={thread?.id ?? null}
       />
     </section>
-  );
-}
-
-function PaneHeader({
-  channelName,
-  threadTitle,
-  infoOpen,
-  favorited,
-  popOut,
-  chrome,
-  onToggleInfo,
-  onToggleFavorite,
-  onExitThread,
-}: {
-  channelName: string;
-  threadTitle: string | null;
-  infoOpen: boolean;
-  favorited: boolean;
-  popOut?: ReactNode;
-  chrome: "page" | "window";
-  onToggleInfo: () => void;
-  onToggleFavorite: () => void;
-  onExitThread: () => void;
-}) {
-  // THE POP-OUT WINDOW'S HEADER: the crumb reduced to the thread's own title,
-  // and nothing else. Every control the page header carries acts on something
-  // this window does not have.
-  if (chrome === "window") {
-    return (
-      <header className="flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4">
-        <Hash size={14} className="shrink-0 text-text-muted" />
-        <h1 className="truncate text-body font-semibold text-text-primary">
-          {threadTitle ?? channelName}
-        </h1>
-      </header>
-    );
-  }
-
-  return (
-    <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4">
-      <Hash size={14} className="shrink-0 text-text-muted" />
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
-        {threadTitle === null ? (
-          <span className="truncate text-body font-semibold text-text-primary">
-            {channelName}
-          </span>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={onExitThread}
-              className="truncate rounded-[7px] px-1 py-0.5 text-body text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-            >
-              {channelName}
-            </button>
-            <ChevronRight size={12} className="shrink-0 text-text-disabled" />
-            <span className="truncate text-body font-semibold text-text-primary">
-              {threadTitle}
-            </span>
-          </>
-        )}
-      </nav>
-      {/* THE FAVOURITE TOGGLE. Stays with the crumb because it acts on what the
-          crumb NAMES; the right-hand cluster acts on the pane.
-
-          ⚠ THE LABEL NAMES THE CHANNEL, matching the knowledge card's wording
-          family exactly (`knowledge-v2/home/base-card.tsx`: "Bookmark {name}" /
-          "Remove bookmark from {name}") — one save affordance across the app
-          means one sentence for it, and a screen-reader user in a thread needs
-          the label to say WHICH thing gets bookmarked, since the crumb reads
-          two. `aria-pressed` and the fill both come off the same boolean. */}
-      <IconButton
-        icon={Bookmark}
-        label={
-          favorited
-            ? `Remove bookmark from ${channelName}`
-            : `Bookmark ${channelName}`
-        }
-        size={14}
-        className="h-6 w-6"
-        active={favorited}
-        filled={favorited}
-        onClick={onToggleFavorite}
-      />
-      <span className="flex-1" />
-      {/* THREAD VIEW ONLY — it pops out the open thread, and the channel view
-          has none. Immediately LEFT of the info toggle, same `IconButton` face
-          (Samuel, 2026-08-19); it was beside the crumb until then. */}
-      {threadTitle !== null && popOut}
-      {/* ⚠ A PANEL GLYPH, NOT AN `Info` (Samuel, 2026-08-24). The control opens
-          and closes the column to its right, and `PanelRight` says that; the
-          circle-i said "read about this channel", which is one tab of four
-          inside it. **The LABEL stays "Channel info"** — three tests address
-          this button by that name, and it is still what the column is.
-          ⚠ AND IT WEARS NO BUTTON AT ALL (Samuel, 2026-08-25): `bare`, so no
-          circle, no fill, no border, resting OR pressed — the glyph's colour is
-          the whole affordance. **This replaced a /home-scoped 32px CIRCLE**
-          (`pages/home/home.module.css`, keyed on this exact label), which is
-          deleted: one control with one face on both surfaces, rather than a
-          shared component and a per-page override of it. */}
-      <IconButton
-        icon={PanelRight}
-        label="Channel info"
-        bare
-        active={infoOpen}
-        onClick={onToggleInfo}
-      />
-    </header>
   );
 }

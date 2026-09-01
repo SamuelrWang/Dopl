@@ -1,5 +1,5 @@
 import { apiResource, type ApiResourceKeys } from "@/shared/api/query-keys";
-import { MAX_MESSAGE_LIMIT } from "../constants";
+import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
 
 /**
  * The channels feature's URLs and the cache keys built from them, in one
@@ -92,7 +92,17 @@ export function channelListParams(includeArchived: boolean) {
   return includeArchived ? { include: "archived" } : undefined;
 }
 
-/** The exact query params `useChannelMessages` reads with. */
+/**
+ * The exact query params `useChannelMessages` reads its NEWEST page with — and
+ * therefore the params every optimistic messages patch must be able to reach.
+ *
+ * ⚠ THE OLDER PAGES ARE NOT HERE, AND THAT IS DELIBERATE. Scroll-up history is
+ * fetched with a `before` cursor and held in the hook, NOT registered as a
+ * sibling cache entry under this path — see `hooks/use-channel-messages.ts`.
+ * A `?before=` entry would sit under the SAME prefix key the writes patch
+ * (`channelKeys.messages(id).all`), so every send would append its pending row
+ * into every page of history it happened to have loaded.
+ */
 export function channelMessagesParams() {
-  return { limit: MAX_MESSAGE_LIMIT };
+  return { limit: CHANNEL_TRANSCRIPT_PAGE_SIZE };
 }

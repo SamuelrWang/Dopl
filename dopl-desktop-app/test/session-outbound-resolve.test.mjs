@@ -17,7 +17,7 @@
 // then `permission_resolved{allow-once}` (marks it sent).
 //
 // ⚠ 2026-08-20 (F-228) — main/session-outbound.js IS STILL LIVE. session-query.js wraps every
-// SDK spawn's canUseTool with it (`wrapCanUseTool(s, io.makeCanUseTool(...), deps.emitQuiet)`),
+// spawn's held gate with it (`wrapGate(s, axisB.makeCanUseTool(...), emitQuiet)`) — 2026-08-31,
 // and the last test here is the pin on that wiring. What died is the CONSUMER end: the v1
 // session window and renderer/session/session-viewmodel.js, so the three tests that folded these
 // events through the real view-model to watch a card go pending -> sent are gone, replaced by
@@ -45,7 +45,7 @@ function session() {
 function harness(verdict, s = session()) {
   const emitted = [];
   const inner = () => Promise.resolve(verdict);
-  const gated = outbound.wrapCanUseTool(s, inner, (_s, payload) => emitted.push(payload));
+  const gated = outbound.wrapGate(s, inner, (_s, payload) => emitted.push(payload));
   return { gated, emitted };
 }
 
@@ -74,7 +74,7 @@ test("C6: an auto-allowed own-channel post emits gate + resolved, keyed on the t
 //     markOutboundGated needs an open artifact and markOutboundDecided a `pending` one, so a
 //     late pair could neither duplicate a sent card nor flip a DENIED one to sent.
 // All three were assertions about a reducer that no longer exists. Idempotency was NEVER a
-// property of main here — wrapCanUseTool emits the same pair on every allow, by design, and the
+// property of main here — wrapGate emits the same pair on every allow, by design, and the
 // module docblock says so — so there is nothing on this side left to assert about it. The F5
 // path's MAIN half survives in the test above (`gate.text` carries the authorized bytes) and in
 // the bodiless-post test below.
@@ -111,15 +111,21 @@ test("C6: a bodiless post still resolves its card (text degrades to '')", async 
 test("C6: the engine wires the wrapper around the REAL gate and emits QUIETLY", async () => {
   const { readFileSync } = await import("node:fs");
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
-  // §3 SPLIT: the option assembly moved to main/session-query.js, which reaches the engine's
-  // dispatch + quiet emit through its injected `deps` — hence deps.dispatch / deps.emitQuiet.
-  const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
-  // The third argument is the injected `log` (session-io must stay electron-free, so the
+  // ⚠ 2026-08-31 (runtime-adapter port): the option assembly is the RUNTIME ADAPTER's, and the
+  // engine's two handles — the dispatch and the replay-aware quiet emit — reach it on the
+  // launch REQUEST rather than through a module-level `deps`. The WRAPPING is unchanged and is
+  // what this pins: `wrapGate` is core (it observes a verdict, it never makes one) and the
+  // gate it wraps is the adapter's held callback.
+  const SPEC = readFileSync(join(HERE, "..", "main", "runtime", "claude", "launch-spec.js"), "utf8");
+  // The third argument is the injected `log` (the gate bridge must stay electron-free, so the
   // forced-thread-tag conflict line is diag'd from here). The wrapper still only OBSERVES.
   assert.match(
-    QUERY,
-    /canUseTool: sessionOutbound\.wrapCanUseTool\(s, io\.makeCanUseTool\(s, deps\.dispatch, diag\), deps\.emitQuiet\)/,
+    SPEC,
+    /canUseTool: sessionOutbound\.wrapGate\(s, axisB\.makeCanUseTool\(s, dispatch, diag\), emitQuiet\)/,
     "the gate is unchanged; the wrapper only observes its verdict");
+  const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
+  assert.match(QUERY, /dispatch: deps\.dispatch,\n\s*emitQuiet: deps\.emitQuiet,/,
+    "…and core is what supplies both, from its own injected deps");
   // emitQuiet skips the RESHOW check: an auto-allowed post needs nothing from the operator,
   // so resolving its card must not pop a hidden window open.
   assert.match(ENGINE, /function emitQuiet\(s, payload\) \{\n\s*if \(!s\.win \|\| s\.win\.isDestroyed\(\)\) return;\n\s*s\.replay\.deliver\(payload\);/);

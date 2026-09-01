@@ -61,7 +61,8 @@ function baseList(
       "kb-1": { entryCount: 12, lastEntryUpdatedAt: null, storageBytes: 900 },
     },
     kbStorageLimit: 5_000_000,
-    starredBaseIds: ["kb-2"],
+    sharedBaseIds: [],
+  starredBaseIds: ["kb-2"],
     channelGrants,
   };
 }

@@ -48,6 +48,16 @@ export interface DoplTransportOptions {
    */
   runtime?: string;
   /**
+   * Vendor label, echoed as `X-Dopl-Vendor` (2026-08-31, runtime-adapter port
+   * step 1). WHICH AGENT RUNTIME drives the session the `runtime` label above
+   * says the desktop spawned — `claude` | `codex` | `cursor`. A SECOND
+   * DIMENSION, never a value of `runtime`: widening that enum would flip every
+   * `=== "desktop-session"` comparison false for a non-Claude session. Set by
+   * the in-app MCP route from the caller's own header; unset = unknown, and
+   * unknown is never guessed.
+   */
+  vendor?: string;
+  /**
    * Session label, echoed as `X-Dopl-Session-Id` (F2). ONLY consumer: the
    * server's reserved `metadata.session_id` stamp — what lets a reader tell two
    * concurrent sessions of one POSTER apart. A LABEL, NOT A LOCK: nothing gates
@@ -98,6 +108,7 @@ export class DoplTransport {
   private readonly toolHeaderName: string;
   private readonly clientIdentifier: string | null;
   private readonly runtime: string | null;
+  private readonly vendor: string | null;
   private readonly sessionId: string | null;
   private readonly signal: AbortSignal | undefined;
   private workspaceId: string | null;
@@ -108,6 +119,7 @@ export class DoplTransport {
     this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
     this.clientIdentifier = opts.clientIdentifier ?? null;
     this.runtime = opts.runtime ?? null;
+    this.vendor = opts.vendor ?? null;
     this.sessionId = opts.sessionId ?? null;
     this.signal = opts.signal;
     this.workspaceId = opts.workspaceId ?? null;
@@ -339,6 +351,7 @@ export class DoplTransport {
     if (this.clientIdentifier) headers["X-Dopl-Client"] = this.clientIdentifier;
     // Server-read, never caller-writable (both on the reserved list below).
     if (this.runtime) headers["X-Dopl-Runtime"] = this.runtime;
+    if (this.vendor) headers["X-Dopl-Vendor"] = this.vendor;
     if (this.sessionId) headers["X-Dopl-Session-Id"] = this.sessionId;
     // Order: per-call override > AsyncLocalStorage (set by the MCP
     // `registerTool` wrapper) > stored workspaceId (session default). Falling
@@ -356,6 +369,7 @@ export class DoplTransport {
         this.toolHeaderName.toLowerCase(),
         "x-dopl-client",
         "x-dopl-runtime",
+        "x-dopl-vendor",
         "x-dopl-session-id",
         "x-workspace-id",
       ]);

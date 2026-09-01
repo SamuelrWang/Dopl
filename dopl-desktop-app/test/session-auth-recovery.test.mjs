@@ -174,7 +174,7 @@ test("PREFLIGHT: the resume runs the ORIGINAL first turn through the engine's ow
   await h.resumeAfterSignIn(s);
   assert.equal(h.calls.startQuery.length, 1, "the deferred launch runs");
   assert.equal(h.calls.startQuery[0].s.firstTurn, "FRAMED FIRST TURN", "the same framed turn, byte for byte");
-  assert.equal(h.calls.startQuery[0].sdk.__sdk, true, "and through the engine's SDK handle, not a second loader");
+  assert.equal(h.calls.startQuery[0].rt.__runtime, true, "and through the engine's OWN runtime handle, not a second loader");
   // The parked stamp is lifted (the reducer stops swallowing SDK messages) and the reducer-visible
   // hold RELEASED before the relaunch — or wakeEffects refuses to resume this session forever.
   assert.deepEqual([s.state.phase, s.state.parked, s.state.activity, s.state.authHeld],
@@ -220,6 +220,27 @@ test("MID-SESSION: a NON-auth failure is refused, so today's crash path still ru
     assert.deepEqual(h.calls.emit, [], "nothing painted");
     assert.equal(s.authHold, undefined);
   }
+});
+
+test("D7.4: a SETTLED session answers FALSE to an auth-shaped failure — so the loop keeps draining", () => {
+  // ⚠ THE FALSE ANSWER IS THE POINT, AND IT IS NOT A REFUSAL OF THE TEXT. The text below is the
+  // same one the case above holds on; what changes is that the session has already settled, and
+  // `holdIfAuthFailure`'s first line declines on `s.settled` because the teardown it would run has
+  // already run. Nothing here aborts the child or closes the prompt stream — so the caller that
+  // treats "asked" as "stopped" abandons a live iterator with nothing left to consume its tail.
+  // This is the measurement behind the source pin in §3; without it that regex pins a shape whose
+  // reason nobody can check.
+  const h = harness({ usable: true });
+  const s = session({ state: { phase: "running", parked: false, activity: "working" } });
+  s.settled = true;
+  s.abortController = { aborted: false, abort() { this.aborted = true; } };
+  s.pushIterator = { closed: false, close() { this.closed = true; } };
+  assert.equal(h.holdIfAuthFailure(s, "API Error: 401 unauthorized"), false,
+    "a settled session is not held again — and the answer says so");
+  assert.deepEqual(h.calls.dispatch, [], "no hold event");
+  assert.deepEqual(h.calls.emit, [], "nothing painted");
+  assert.equal(s.abortController.aborted, false, "nothing was torn down…");
+  assert.equal(s.pushIterator.closed, false, "…so there is still a stream to drain");
 });
 
 test("MID-SESSION: the CLI's own login bubble is CONSUMED, never rendered", () => {
@@ -272,7 +293,7 @@ test("the engine preflights AFTER the parked-shell branch and BEFORE startQuery"
   // deleted symbol, and `hold > -1` is how a case goes green while measuring nothing.
   const guard = ENGINE.indexOf("if (spec.parkedShell) { state.phase = 'parked';");
   const hold = ENGINE.indexOf("if (sessionAuth.holdIfNoCredential(s)) return s;");
-  const start = ENGINE.indexOf("await startQuery(s, sdk);");
+  const start = ENGINE.indexOf("await startQuery(s, rt);");
   const windowless = ENGINE.indexOf("if (spec.windowless && sessionAuth.holdIfNoCredential(s))");
   assert.ok(Math.min(guard, hold, start, windowless) !== -1, "an anchor is gone — reslice rather than pass on -1");
   assert.ok(hold > guard, "the dormant-phase decision is made before the credential is probed");
@@ -285,11 +306,33 @@ test("the engine preflights AFTER the parked-shell branch and BEFORE startQuery"
 });
 
 test("the consume loop routes an auth failure to the hold before it can dispatch `crash`", () => {
-  assert.match(QUERY, /if \(sessionAuth\.holdIfAuthMessage\(s, msg\)\) return; io\.handleSdkMessage/,
+  // ⚠ 2026-08-31 (runtime-adapter port, step 4): the loop calls ONE thing per message where it
+  // called three. The auth sentinel is now recognised by the ADAPTER's `normalize` — the shape a
+  // credential failure arrives in is as platform-specific as any other message — and comes back
+  // as an `auth_hold` CoreEvent that `applyCoreEvents` hands straight back, BEFORE it dispatches
+  // anything else. The property this pins is unchanged: the bubble is consumed, never rendered.
+  // ⚠ THE FIFTH ARGUMENT IS `diag` (2026-09-01, D7.3): `session-io.js` may not require it —
+  // electron — so the swallowed context dispatch's log line is INJECTED from this loop, on the
+  // `session-gate-bridge.js › makeCanUseTool(s, dispatch, log)` precedent.
+  assert.match(QUERY, /const hold = io\.applyCoreEvents\(s, rt\.normalize\(msg, normalizeCtx\(s\)\), deps\.dispatch, store, diag\);/,
     "the message path consumes the bubble instead of rendering it");
-  const hold = QUERY.indexOf("if (sessionAuth.holdIfAuthFailure(s, (err && err.message) || err)) return;");
+  // ⚠ D7.4 (restored 2026-09-01): THE SENTINEL'S ANSWER IS THE STOP CONDITION, not the fact that
+  // it was asked. HEAD read `if (sessionAuth.holdIfAuthMessage(s, msg)) return;`; the port dropped
+  // the return value and returned unconditionally, so a SETTLED session emitting an auth-shaped
+  // message stopped draining a stream HEAD kept reading (the case below proves the false answer is
+  // real). ⚠ ASSERTED AS THE CONJUNCTION, not merely "holdIfAuthFailure appears": a call whose
+  // answer is discarded matches any looser regex, which is exactly how this was lost.
+  assert.match(QUERY, /if \(hold && sessionAuth\.holdIfAuthFailure\(s, hold\.text\)\) return;/,
+    "…and the loop stops only when the sentinel says it ACTED");
+  assert.ok(!/holdIfAuthFailure\(s, hold\.text\);\s*return;/.test(QUERY),
+    "no unconditional return past a sentinel that answered false");
+  assert.match(readFileSync(M("session-io.js"), "utf8"), /if \(ev\.type === 'auth_hold'\) return ev;/,
+    "applyCoreEvents returns the hold rather than dispatching past it");
+  const hold = QUERY.indexOf("const held = rt.normalize({ type: 'error', text:");
   const crash = QUERY.indexOf("deps.dispatch(s, { type: 'crash' })", hold);
   assert.ok(hold !== -1 && crash > hold, "the auth branch precedes the crash dispatch");
+  assert.match(QUERY, /if \(held\.length && sessionAuth\.holdIfAuthFailure\(s, held\[0\]\.text\)\) return;/,
+    "a REJECTION is asked of the same normalizer — the runtime decides what is auth-shaped");
   assert.match(QUERY, /if \(!isAbortError\(err\)\) \{/, "and an abort is still not an error at all");
 });
 
@@ -321,10 +364,13 @@ test("the engine injects its OWN startQuery + denyPending (no second query assem
   // the denial-copy ruling) and is destructured at the engine's module scope, so this bind reads
   // exactly as it did. What must stay true is that the auth hold is handed the REAL fail-closed
   // sweep and not a stub — a hold that leaves a resolver dangling blocks the SDK child forever.
-  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, getSdk, startQuery, dispatch, emit, denyPending: denyPendingPermissions \}\)/);
+  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions \}\)/);
   assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
     "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");
-  assert.match(QUERY, /env: sessionAuth\.withStoredCredential\(buildScrubbedEnv\(\)\)/,
-    "and the stored setup-token reaches the SDK env through the SAME scrubbed base");
+  // ⚠ 2026-08-31: the assembly is the runtime adapter's (`runtime/claude/launch-spec.js`). The
+  // property is unchanged — the stored token rides the SAME scrubbed base every spawn uses.
+  assert.match(readFileSync(M("runtime/claude/launch-spec.js"), "utf8"),
+    /env: sessionAuth\.withStoredCredential\(loader\.buildScrubbedEnv\(\)\)/,
+    "and the stored setup-token reaches the spawn env through the SAME scrubbed base");
 });

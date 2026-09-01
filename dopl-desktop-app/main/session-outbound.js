@@ -54,13 +54,19 @@ function outboundResolveEvents(requestId, toolUseId, input, counterpartyName, di
   ];
 }
 
-// Wrap the session's canUseTool bridge. Every non-post call passes through UNTOUCHED (same
+// Wrap the session's held permission gate. Every non-post call passes through UNTOUCHED (same
 // object, same promise) so the gate's policy path is byte-identical; an own-channel post has
 // its verdict observed and, when it is an allow, resolves its own card. `emit(s, payload)` is
 // the engine's QUIET emitter: an auto-allowed post needs nothing from the operator, so it
 // must never reshow a hidden window.
-function wrapCanUseTool(s, inner, emit) {
-  return function canUseTool(name, input, opts) {
+//
+// ⚠ RENAMED FROM `wrapCanUseTool` ON 2026-08-31 (runtime-adapter port, step 3), AND THE NAME WAS
+// THE WHOLE PROBLEM. This wrapper is CORE — it observes a verdict and never makes one, on every
+// runtime — but it was spelled in one platform's callback vocabulary, which is exactly what
+// `test/core-vocabulary.test.mjs` refuses on a code line in core. The `inner` it wraps is the
+// adapter's; what it does to that verdict is not.
+function wrapGate(s, inner, emit) {
+  return function gatedCall(name, input, opts) {
     const result = inner(name, input, opts);
     const toolUseId = opts && opts.toolUseID;
     if (!toolUseId || !io.isOutboundPost(name, input, s.channelId)) return result;
@@ -74,4 +80,4 @@ function wrapCanUseTool(s, inner, emit) {
   };
 }
 
-module.exports = { wrapCanUseTool, outboundResolveEvents };
+module.exports = { wrapGate, outboundResolveEvents };

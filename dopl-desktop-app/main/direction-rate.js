@@ -67,7 +67,7 @@ const seen = new Map();
 
 // ⚠ BOUNDED, oldest AGENT evicted first by insertion order — the idiom `launch-directives.js ›
 // MAX_REMEMBERED` and `session-outbound-tag.js` both follow. Comfortably above
-// `session-windowless.js › MAX_CONCURRENT_SESSIONS` (6, measured 2026-08-31), so a live session
+// `session-windowless.js › MAX_CONCURRENT_SESSIONS` (15 since 2026-09-01), so a live session
 // can never be evicted by its own siblings; the slack is for ids that have already settled.
 const MAX_TRACKED_AGENTS = 64;
 

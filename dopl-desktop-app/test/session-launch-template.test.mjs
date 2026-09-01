@@ -85,6 +85,13 @@ function boot(api = {}, opts = {}) {
         },
       };
     }
+    // 2026-08-31 (port wave D) — WHICH RUNTIME this channel's agents launch on. ⚠ Stubbed at its
+    // seam like `./channel-prefs` above (the real module opens an electron-store), and answering
+    // `''` is the DEFAULT adapter, which is what every launch resolved to before the port — so
+    // the specs this file asserts stay byte-identical to the ones that shipped.
+    if (id === "./channel-runtime") {
+      return { normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""), getChannelRuntime: () => "" };
+    }
     throw new Error("unexpected require: " + id);
   };
   const resolveMod = { exports: {} };

@@ -45,13 +45,28 @@ export default async function LinkClaimPage({ params }: PageProps) {
   const user = await getUser();
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-24">
-      <LinkClaimCard
-        creatorName={info.creatorDisplayName}
-        dead={info.expired || info.revoked || info.exhausted}
-        token={token}
-        needsAuth={!user}
-      />
+    // ⚠ FIXED FULL-VIEWPORT SURFACE, on `shared/layout/auth-split` ›
+    // AuthSplitLayout's pattern, and it is what makes the page white. `/link` is
+    // in `LayoutShell`'s NON_WORKSPACE_ROOTS, so the shell paints `mosaic-bg`
+    // (the dark frame) on <body> and wraps the route in a centred `container`
+    // — a `bg-white` block in flow would leave dark gutters beside it. Taking
+    // the page out of flow overrides both without touching the shell's set.
+    //
+    // ⚠ Face is the LANDING grotesk (`features/marketing/marketing.css` › `.lp`
+    // `--grotesk`), stated inline for the same reason AuthSplitLayout states it:
+    // that custom property is declared on `.lp`, which this page is not inside.
+    <main
+      className="fixed inset-0 z-50 overflow-y-auto bg-white"
+      style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+    >
+      <div className="flex min-h-full items-center justify-center px-5 py-16">
+        <LinkClaimCard
+          creatorName={info.creatorDisplayName}
+          dead={info.expired || info.revoked || info.exhausted}
+          token={token}
+          needsAuth={!user}
+        />
+      </div>
     </main>
   );
 }

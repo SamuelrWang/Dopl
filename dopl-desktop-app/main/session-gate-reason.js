@@ -16,7 +16,7 @@
 //
 // PURE + electron-free, like session-profiles: it is built by FACTORY with the predicates the
 // session-profile table already owns (isChannelTool / isOwnChannelPost / postFieldsOk /
-// grantKeyFor / BYPASS_TOOLS / normalizeToolMode / canonicalDoplName / the two own-channel op
+// grantKeyFor / isClassifiedTool / normalizeToolMode / canonicalDoplName / the two own-channel op
 // sets), so there is exactly ONE definition of each and this file cannot drift into its own
 // copy of the rules — F-139 is what that discipline is for: the matcher and its explanation
 // were wrong in lockstep, and normalizing in one place fixed both.
@@ -135,8 +135,14 @@ function makeGateReason(deps) {
     // report `unclassified-tool` for a dopl tool the gate had just covered under a different
     // server prefix — the diagnostic and the defect were one bug and must stay one fix.
     const name = d.canonicalDoplName(a.toolName);
-    if ((d.BYPASS_TOOLS || []).indexOf(name) === -1) return 'unclassified-tool';
-    const m = d.normalizeToolMode(a.toolMode);
+    // ⚠ "IN NO LIST THIS BUILD KNOWS" IS ASKED OF THE RUNTIME SINCE 2026-08-31, not of a copied
+    // list. `isClassifiedTool` is "allowed at the WIDEST mode this runtime offers", which is the
+    // same question the old `BYPASS_TOOLS` membership asked and stays correct on a runtime whose
+    // widest mode is not spelled the same way. Injected like every other predicate here, and
+    // handed the SESSION'S runtime, or a non-default session would be narrated against another
+    // runtime's lists.
+    if (!d.isClassifiedTool(name, a.runtime)) return 'unclassified-tool';
+    const m = d.normalizeToolMode(a.toolMode, a.runtime);
     return m === 'auto' || m === 'bypass' ? 'not-covered-by-bypass' : 'awaiting-approval';
   };
   return function gateReason(args, decision) {
@@ -155,7 +161,7 @@ function makeGateReason(deps) {
       // the audience story would go looking for a roster instead of a profile.
       // ⚠ THE HARD DENY IS ASKED WITH THE GATE'S OWN `buildSessionToolConfig`, injected like every
       // other predicate here — the explainer must not grow a second copy of the deny list.
-      const cfg = d.buildSessionToolConfig ? d.buildSessionToolConfig(a.profile) : null;
+      const cfg = d.buildSessionToolConfig ? d.buildSessionToolConfig(a.profile, a.runtime) : null;
       const hardDenied = !!cfg && cfg.disallowedTools.indexOf(d.canonicalDoplName(a.toolName)) !== -1;
       if (!hardDenied && d.containerOnlyDenies && d.containerOnlyDenies(a, d.isDoplTool)) {
         return 'container-audience';
@@ -171,7 +177,7 @@ function makeGateReason(deps) {
       // MISSED can be a `knowledge-read-op`.
       if (!channel) {
         const name = d.canonicalDoplName(a.toolName);
-        if (d.toolModeAllows(a.toolMode, name)) return 'tool-mode';
+        if (d.toolModeAllows(a.toolMode, name, a.runtime)) return 'tool-mode';
         return d.isKnowledgeReadCall(name, a.input) ? 'knowledge-read-op' : 'tool-mode';
       }
       // ⚠ THE LAUNCH LANE IS ASKED FIRST OF THE CHANNEL ALLOWS (2026-08-25, F-320), because it

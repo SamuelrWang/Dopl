@@ -41,13 +41,13 @@ import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => join(HERE, "..", "main", p);
-const LOADER = readFileSync(M("sdk-loader.js"), "utf8");
+const LOADER = readFileSync(M(join("runtime", "claude", "loader.js")), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 // §3 split: the SDK option assembly + the query lifecycle live in session-query.js;
 // session-engine.js still binds them (asserted below), which is what makes the park /
 // reopen paths share the one assembly.
-const QUERY = readFileSync(M("session-query.js"), "utf8");
+const SPEC = readFileSync(M(join("runtime", "claude", "launch-spec.js")), "utf8");
 
 const slice = (src, from, to, what) => {
   const a = src.indexOf(from);
@@ -130,12 +130,16 @@ test("C1: an unavailable userData path still leaves the home rules in force (fai
   assert.deepEqual(rules.filter((r) => r.startsWith("Read")), ["Read(~/.claude*)", "Read(~/.claude/**)"]);
 });
 
-test("C1: buildSdkOptions really concatenates them onto the profile's hard-deny", () => {
-  const opts = slice(QUERY, "function buildSdkOptions(s) {", "async function startQuery(", "buildSdkOptions");
-  assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(buildSecretPathDenyRules\(\)\),/);
-  // ...and that every profile therefore gets them: buildSdkOptions is the ONE assembly path
-  // (session-park resumes and recreated shells call deps.buildSdkOptions).
-  assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, getSdk, buildSdkOptions/);
+test("C1: the launch spec really concatenates them onto the profile's hard-deny", () => {
+  // ⚠ 2026-08-31 (runtime-adapter port): the option assembly is the RUNTIME ADAPTER's — it is
+  // written in one platform's option vocabulary. The rule it carries is unchanged, and so is the
+  // reason it is pinned: a pre-approved read is SHADOWED past the gate, so only this tool-bound
+  // layer can fence the credential directories.
+  const opts = slice(SPEC, "function buildOptions(s, dispatch, emitQuiet) {", "function buildLaunchSpec(", "buildOptions");
+  assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(loader\.buildSecretPathDenyRules\(\)\),/);
+  // ...and that every profile therefore gets them: it is the ONE assembly path
+  // (session-park resumes and recreated shells call deps.buildLaunchSpec).
+  assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, acquireRuntime, buildLaunchSpec/);
 });
 
 // ── S3: the spawn-config file is REMOVED, and never written ────────────────────────
@@ -259,16 +263,18 @@ test("S3: the path itself SURVIVES, because sign-out still tears the file down",
 
 // ── L8 (Q9): ONE definition of the per-server call timeout ───────────────────────
 
-test("L8: mcp-config OWNS the number and sdk-loader's entry is the only one that reads it", () => {
-  // sdk-loader used to restate the literal, which is exactly how the two entries drifted
+test("L8: mcp-config OWNS the number and the loader's entry is the only one that reads it", () => {
+  // The loader used to restate the literal, which is exactly how the two entries drifted
   // (280_000 vs a moved server cap). There is now only ONE entry — the spawn-config file that
   // was the second one is deleted — so the rule is simply: the constant lives here, is exported,
   // and no numeric literal reappears downstream.
-  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "it is exported for sdk-loader");
-  assert.match(LOADER, /timeout: clientTimeoutMs\(\),/, "sdk-loader reads it, never a literal");
+  // ⚠ 2026-08-31: the loader is `main/runtime/claude/loader.js` and reaches the owner through
+  // `../../`. The rule is unchanged; only the depth is.
+  assert.match(CONFIG, /MCP_CLIENT_TIMEOUT_MS, \/\/ Q9/, "it is exported for the loader");
+  assert.match(LOADER, /timeout: clientTimeoutMs\(\),/, "the loader reads it, never a literal");
   assert.match(
     fnOf(LOADER, "clientTimeoutMs"),
-    /require\('\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
+    /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
     "…from mcp-config, the one owner"
   );
   assert.ok(

@@ -47,8 +47,9 @@ const { diag } = require('./diag');
 //
 // ⚠ WHAT IT COSTS, MEASURED THE ONLY WAY THAT MATTERS — the ceiling. One request per interval
 // per WAITING post, and a post only waits while a human has not answered: at
-// `MAX_CONCURRENT_SESSIONS` posts all waiting at once that is ~2 req/s from one machine, against
-// ~0.6 before. Bounded by the session and by the human, and it stops dead on the first terminal
+// `MAX_CONCURRENT_SESSIONS` posts all waiting at once that is ~5 req/s from one machine, against
+// ~1.5 before (the numbers were ~2 and ~0.6 while the cap was 6; they are cap/interval and MOVE
+// WITH THE CAP — 2026-09-01). Bounded by the session and by the human, and it stops dead on the first terminal
 // status.
 //
 // ⚠ NOT A LADDER, DELIBERATELY. An adaptive cadence that decays would optimise the case where
@@ -80,9 +81,29 @@ const POLL_MAX_MS = 60_000;
 // retained-ended set and the gated-body ledger are each N times this number in the worst case.
 // Raising it is a memory decision as much as a concurrency one.
 //
-// VALUE UNCHANGED FROM WHAT THE ENGINE ALREADY ENFORCED, deliberately — this wave moves where
-// the number lives and nothing about what it is.
-const MAX_CONCURRENT_SESSIONS = 6;
+// ⚠ RAISED 6 → 15 ON 2026-09-01, SAMUEL'S RULING, AND THE OLD ARGUMENT FOR 6 IS RETIRED RATHER
+// THAN OVERRULED. The number moved because the PRODUCT SHAPE did: an ORCHESTRATOR SPAWNS WORKERS
+// and ends them when they stop being useful, so six is not a safety margin, it is a ceiling an
+// orchestrator hits with its own staff still running — *"if I have an orchestrator agent, that
+// agent should be able to spin other agents, and then end them when they're not useful anymore."*
+//
+// ⚠ THE RELEASE VALVE IS WHAT MADE THE RAISE SAFE, AND IT IS NAMED SO NOBODY RE-DERIVES 6 FROM
+// FIRST PRINCIPLES. `main/agent-self-ops.js` (2026-08-31) mounts `end_agent`, so an agent can
+// RETURN a slot — before it, the only way down from the ceiling was a settle or the operator's
+// hand, and a cap is the only backstop a population that cannot shrink itself has.
+//
+// ⚠ THE MEMORY ARGUMENT NO LONGER HOLDS AT 6, WHICH IS THE OTHER HALF. This block still says a
+// per-session bound is MULTIPLICATIVE against this number and that is still true — but the term
+// that made it bite was the narration ring, and the 17 GB dev-RSS incident it caused is CLOSED by
+// `session-narration.js › RING_CHAR_BUDGET` (60_000, 2026-08-30, INVARIANTS §11). The ring is now
+// bounded by CHARACTERS as well as entries, so its worst case is flat per session instead of
+// PROSE_CAP-shaped, and 15 × the bounded ring is smaller than the 6 × unbounded one that broke.
+//
+// ⚠ SO WHAT ACTUALLY LIMITS THIS BUILD IS NO LONGER THIS CONSTANT: it is N LIVE SDK CHILD
+// PROCESSES (each a real `claude` process with its own RSS) and API SPEND. Both are real and
+// neither is bounded here. If 15 turns out to be wrong, it will be wrong for one of those two
+// reasons — measure which before moving the number, and do not reach for the ring again.
+const MAX_CONCURRENT_SESSIONS = 15;
 
 // ── The spawn surface ────────────────────────────────────────────────────────
 // ⚠ THERE IS ONE SHAPE LEFT AND IT MINTS NOTHING (2026-08-20, F-228). This function used

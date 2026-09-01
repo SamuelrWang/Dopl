@@ -32,6 +32,14 @@ export const MAIN = join(HERE, "..", "main");
 export const require_ = createRequire(import.meta.url);
 
 export const SRC = readFileSync(join(MAIN, "launch-directives.js"), "utf8");
+// ⚠ 2026-08-31 (§1 split): the two authenticated calls left `launch-directives.js` for
+// `launch-directive-calls.js` — the file had reached EXACTLY 500 lines and could not take another
+// comment. The harness evaluates the REAL module with the SAME `./api` stub rather than faking
+// `claim` / `decide`, because those two carry behaviour this suite asserts: which HTTP statuses
+// are an ordinary lost race, the three accepted claim envelopes, and the re-narrow through
+// `wire.directiveFrom`. A stubbed pair would have moved all of that out of the suite's reach in a
+// change whose whole point was that nothing moved.
+export const CALLS_SRC = readFileSync(join(MAIN, "launch-directive-calls.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
 
 export const WS = "11111111-1111-4111-8111-111111111111";
@@ -124,6 +132,17 @@ export function boot(over = {}) {
       return { resolveToolProfile: (c) => (c && c.toolProfile) || "read_only" };
     }
     if (id === "./launch-directive-wire") return wire;
+    if (id === "./launch-directive-calls") {
+      const m = { exports: {} };
+      new Function("require", "module", "exports", CALLS_SRC)(stub, m, m.exports);
+      return m.exports;
+    }
+    // ⚠ 2026-08-31 (port wave D): WHICH RUNTIME this channel's agents run on. Stubbed at its seam
+    // like `./targeting` above — the real module opens an electron-store — and answering `''`
+    // (the DEFAULT adapter, and what every pre-port launch resolved to) is what keeps the specs
+    // this file asserts byte-identical to the ones that shipped. The INHERITANCE itself is
+    // asserted in `test/launch-chain.test.mjs`, against a channel that really has a pick.
+    if (id === "./channel-runtime") return { getChannelRuntime: () => cfg.channelRuntime || "" };
     if (id === "./session-model") return require_(join(MAIN, "session-model.js"));
     // ⚠ THE TEMPLATE RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
     // is `main/template-resolve.js` and it rides `api.js`, which reaches Electron — so what is
