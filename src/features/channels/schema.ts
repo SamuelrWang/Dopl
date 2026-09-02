@@ -131,6 +131,30 @@ export const ChannelUpdateSchema = z
      *  how much room somebody else's agent gets here. Widening is a permission
      *  change. */
     agentPosture: ChannelAgentPostureSchema.optional(),
+    /**
+     * **RR3's DEFAULT RESPONDER** (2026-09-02, B4 — Samuel's ruling B6). ⚠ The
+     * grammar is `channel_sessions.name`'s, VERBATIM, and the CHECK in
+     * `20260918120000` is its twin: a third spelling of "what an agent handle
+     * looks like" is how this setting comes to name something no session can
+     * ever be.
+     *
+     * ⚠ `.nullable()` IS THE CLEAR, on `agentPosture`'s terms — absent means "no
+     * opinion, leave it" and `null` means "this room nominates nobody". Without
+     * it a nomination would be permanent.
+     *
+     * ⚠ MANAGED, not member-gated: it decides whose machine the room's
+     * unaddressed work lands on. `MANAGED_CHANNEL_FIELDS` carries that, and
+     * `updateChannel` derives the loose set by SUBTRACTION, so this lands in the
+     * managed half by construction rather than by being remembered.
+     */
+    defaultResponderAgentName: z
+      .string()
+      .trim()
+      .regex(/^[a-z][a-z0-9-]{1,30}$/, {
+        error: "Agent handle must match ^[a-z][a-z0-9-]{1,30}$",
+      })
+      .nullable()
+      .optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
@@ -186,6 +210,24 @@ export const ChannelMessageCreateSchema = z.object({
     .optional(),
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
+  /**
+   * **THE ONE RECIPIENT, IN EITHER NAMESPACE** (2026-09-02, v2 wave B slice B4 —
+   * Samuel's ruling B1): a member (user id or email) **or an agent**
+   * (`@agent-<id>` / `@<handle>`, the `channel_sessions.name` grammar). Resolved
+   * server-side by `server/service-writes-metadata-recipient.ts ›
+   * resolveToRecipient`, which 400s `CHANNEL_RECIPIENT_UNRESOLVED` — listing the
+   * live handles and the roster — when it names nobody.
+   *
+   * ⚠ **IT DOES NOT REPLACE `toUserId` AND MUST NOT.** That field is the uuid
+   * every installed caller sends and the one `metadata.to_user_id` is stamped
+   * from; this is the loose form the MCP `send(to=)` hands through. A member
+   * resolved here becomes `toUserId` before any fence runs, so there is exactly
+   * one addressee path and one membership check, not two.
+   *
+   * ⚠ `.max(320)` is RFC 5321's address ceiling — the longest thing this field
+   * can legitimately carry. An agent handle is capped at 31 by its own CHECK.
+   */
+  to: z.string().trim().min(1).max(320).optional(),
   // ⚠ `.min(1)` HERE AND NO MINIMUM ON THE CONSENT ONE — DELIBERATE, not drift
   // (stated 2026-08-20 after an audit flagged the pair). Two concepts sharing a
   // name and a `max(200)`:
