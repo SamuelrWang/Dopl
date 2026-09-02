@@ -6,6 +6,11 @@
  *      params" below;
  *   2. `WRITE_OPS` drifting from a tool's op enum after an op rename, a latent
  *      read-only-token write hole → WRITE_OPS ⊆ enum + completeness below.
+ *   3. the SAME drift on the other list. `READ_OPS` had the ⊆ half missing until
+ *      2026-09-02 and carried `dopl_channel.get_thread` for a day after C15
+ *      deleted that op — an allowlist entry for an op nobody serves fails
+ *      nothing (completeness walks the ENUM), so it reads as a classification
+ *      somebody made. Both lists are checked both ways now.
  *
  * ⚠ Mechanism in `parity-harness.ts`: tools are captured through their real
  * registrars, and `WRITE_OPS` is PARSED out of source text so the tests check
@@ -60,7 +65,11 @@ const READ_OPS: Record<string, string[]> = {
     "await",
     "members",
     "list_threads",
-    "get_thread",
+    // ⚠ `get_thread` STOOD HERE AND IS GONE (2026-09-02, C15 — it folded into
+    // `read(thread=)`). A stale READ_OPS entry is DEAD LAW THAT READS AS
+    // COVERAGE: the completeness test only walks the ENUM, so an allowlist entry
+    // for an op nobody serves fails nothing, and the next reader takes it for a
+    // classified op. The ⊆ assertion below is what turns that into a failure.
     // `opReadSessions` calls only `listChannelSessions` — own-scoped, no write.
     // ⚠ The desktop WRITE that feeds it posts straight to the route from the
     // main process and must NOT become an MCP op: an external agent does not
@@ -154,6 +163,35 @@ describe("WRITE_OPS ⊆ op enum", () => {
         expect(
           enumOps,
           `WRITE_OPS.${name} lists op="${op}" which is NOT in the tool's op enum (stale op — the WRITE_OPS.dopl_skill drift bug)`,
+        ).toContain(op);
+      }
+    }
+  });
+});
+
+// ── 1a′. READ_OPS ⊆ op enum (the same class, the other list) ─────────
+
+describe("READ_OPS ⊆ op enum", () => {
+  it("every READ_OPS entry names a registered tool", () => {
+    for (const name of Object.keys(READ_OPS)) {
+      expect(TOOL_BY_NAME.has(name), `READ_OPS references unknown tool ${name}`).toBe(true);
+    }
+  });
+
+  it("every op listed in READ_OPS exists in that tool's op enum", () => {
+    // ⚠ THE MIRROR OF THE ASSERTION ABOVE, AND IT WAS MISSING. `READ_OPS` is a
+    // SECURITY REVIEW — "these ops were read and they only read" — so an entry
+    // that names nothing is a review of an op that does not exist, sitting in the
+    // list a human audits. It also silently pre-classifies the name: an op
+    // RE-ADDED under an old spelling would be waved through as already-read.
+    for (const [name, ops] of Object.entries(READ_OPS)) {
+      const tool = TOOL_BY_NAME.get(name);
+      const enumOps = tool ? opEnum(tool) : null;
+      expect(enumOps, `${name} has no op enum but READ_OPS classifies it`).not.toBeNull();
+      for (const op of ops) {
+        expect(
+          enumOps,
+          `READ_OPS.${name} lists op="${op}" which is NOT in the tool's op enum — delete the entry rather than leaving a review of an op nobody serves`,
         ).toContain(op);
       }
     }
