@@ -1,5 +1,5 @@
 import "server-only";
-import { resolveResource } from "@/shared/tenancy/resolve-resource";
+import { readResourceById } from "@/shared/tenancy/read-resource";
 import type {
   AgentTemplate,
   AgentTemplateContext,
@@ -118,33 +118,25 @@ export async function getTemplateById(
  *
  * ⚠ IT COSTS TWO EXTRA READS **ONLY ON A MISS IN THIS TENANCY**; a template that
  * resolves where it was asked for is byte-identical to before.
+ *
+ * ⚠ **THE FOLLOW ITSELF IS `shared/tenancy/read-resource.ts › readResourceById`
+ * SINCE B2**, where it was twelve hand-written lines here. Knowledge bases,
+ * skills and chats compose the same function, and the copy that would have gone
+ * wrong is the one this file used to be the only example of: the re-based
+ * context's `role`.
  */
 export async function readTemplateById(
   ctx: AgentTemplateContext,
   id: string
 ): Promise<AgentTemplate> {
-  const here = await loadVisibleTemplate(ctx, id);
-  if (here) return here;
-  const resolved = await resolveResource(ctx, "agent_template", id);
-  // ⚠ Resolving back into the tenancy that just missed means the matrix
-  // refused it — re-reading there would only spend a query to say so again.
-  if (!resolved || resolved.containerId === ctx.workspaceId) {
-    throw new AgentTemplateNotFoundError(id);
-  }
-  const there = await loadVisibleTemplate(
-    {
-      ...ctx,
-      workspaceId: resolved.containerId,
-      // ⚠ The caller's REAL role in the container the id named. Guessing `null`
-      // here would make the same template resolve differently depending on
-      // which door it came through — a team-scoped attachment an admin can see
-      // would vanish on the id lane only.
-      role: resolved.containerRole,
-    },
-    id
+  const hit = await readResourceById(
+    ctx,
+    "agent_template",
+    id,
+    loadVisibleTemplate
   );
-  if (!there) throw new AgentTemplateNotFoundError(id);
-  return there;
+  if (!hit) throw new AgentTemplateNotFoundError(id);
+  return hit.value;
 }
 
 /** The read every door shares: one row, in ONE named container, through the
