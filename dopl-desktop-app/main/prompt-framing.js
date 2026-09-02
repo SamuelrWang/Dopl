@@ -270,10 +270,16 @@ function deliveryCall(ctx) {
 function firstActions(side, ctx) {
   const lines = [
     `FIRST ACTIONS THIS TURN, before you plan or answer anything:`,
-    `- mcp__dopl__dopl_channel is GRANTED to this session. It is your delivery path and it is`,
-    `  the reason this session exists, so do not go looking for it and do not test for it: if`,
-    `  it is not in a list you can enumerate, that is the list, not the grant. Never report`,
-    `  that you have no dopl channel tool and never report that you have no dopl tools at all.`,
+    // ⚠ "GRANTED AND OP-SCOPED", not "GRANTED" (G22, 2026-09-02). The tool is offered on every
+    // profile including `read_only`, but `grantDecision` scopes it by OP, so a session told only
+    // "granted" reads a per-op gate as the tool being absent — the very report the rest of this
+    // block forbids. The grant is the tool; the posture is the ops.
+    `- mcp__dopl__dopl_channel is GRANTED to this session, and OP-SCOPED by your posture: a`,
+    `  particular op may still be gated, which is not the tool missing. It is your delivery`,
+    `  path and it is the reason this session exists, so do not go looking for it and do not`,
+    `  test for it: if it is not in a list you can enumerate, that is the list, not the grant.`,
+    `  Never report that you have no dopl channel tool, and`,
+    `  never report that you have no dopl tools at all.`,
     `  Just make the call in the delivery section below; if a call is genuinely refused, your`,
     `  operator sees the refusal on this window and it is theirs to fix, not the counterparty's.`,
     ...LANE_EXCLUSIVITY,

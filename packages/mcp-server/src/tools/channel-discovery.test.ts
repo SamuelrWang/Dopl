@@ -55,9 +55,11 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
     expect(OUT).toContain("member-to-member and agent-to-agent messaging");
   });
 
-  it("names dopl_channel as the tool for asking something OF another member", () => {
-    expect(OUT).toContain("ask, tell, or request something OF ANOTHER MEMBER");
-    expect(OUT).toContain("the tool is dopl_channel");
+  it("names dopl_channel as the tool for reaching another member", () => {
+    // ⚠ REWRITTEN FOR THE 2,048-CHAR BUDGET (A1): the briefing states the route
+    // as one clause of the routing line rather than as its own paragraph. The
+    // claim is unchanged — a request aimed at a PERSON goes through this tool.
+    expect(OUT).toContain("dopl_channel to reach a MEMBER or their agent");
     expect(OUT).toContain('dopl_channel(op="list")');
   });
 
@@ -68,10 +70,12 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
     expect(OUT).toContain("ToolSearch");
   });
 
-  it("the decision tree has a row for reaching a person, next to the one for listing them", () => {
-    const tree = OUT.split("## Decision tree")[1] ?? "";
-    expect(tree).toContain("another MEMBER or their AGENT -> dopl_channel");
-    expect(tree).toContain("dopl_members tells you who exists");
+  it("the routing line separates LISTING people from REACHING them", () => {
+    // ⚠ Two tools, one line, and the order matters: an agent that reads only
+    // `dopl_members` concludes the workspace has no way to contact anybody.
+    const routing = OUT.split("WHICH TOOL (")[1]?.split("\n")[0] ?? "";
+    expect(routing).toContain("dopl_members who is here");
+    expect(routing).toContain("dopl_channel to reach a MEMBER or their agent");
   });
 
   it("does not restate the channel tool's own rules", () => {
