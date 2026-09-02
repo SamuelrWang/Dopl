@@ -86,17 +86,19 @@ export declare function createServer(client: DoplClient, options?: {
      */
     scopes?: string[];
     /**
-     * The ROLE this connection says it is running as — the `X-Dopl-Tool-Profile`
-     * request header, forwarded verbatim by the transport. `gating.ts ›
-     * TOOL_PROFILE_TOOLS` decides what a role means; it is EMPTY today, so every
-     * value serves the whole surface and this changes nothing yet (wave B fills
-     * the table).
+     * The CONTAINMENT PROFILE this connection reports — the
+     * `X-Dopl-Tool-Profile` request header, forwarded verbatim by the transport.
+     * `gating.ts › TOOL_PROFILES` is the vocabulary and `PROFILE_TOOLS` decides
+     * what each one is offered.
      *
-     * ⚠ IT MAY ONLY NARROW, AND IT IS A HINT AND NOT A FENCE. Absent, unknown,
-     * or a role with no row all resolve to "serve everything", so a stale
-     * desktop can never be locked out; and because it is caller-supplied,
-     * nothing may be GRANTED on it. Containment stays the desktop's
-     * `disallowedTools` + `grantDecision` and the credential itself.
+     * ⚠ IT MAY ONLY NARROW, AND IT IS A HINT AND NOT A FENCE. Absent (`null` /
+     * `undefined`, the only "no claim" values) serves the whole surface; a
+     * profile this server cannot place is narrowed to the NARROWEST one, because
+     * the desktop stamps the containment a session is already under and an offer
+     * wider than that is a tool the machine refuses. Because it is
+     * caller-supplied, nothing may be GRANTED on it: containment stays the
+     * desktop's `disallowedTools` + `grantDecision`, the credential's scopes and
+     * `gating.ts › WRITE_OPS`.
      */
     toolProfile?: string | null;
     /**

@@ -131,7 +131,7 @@ function createServer(client, options = {}) {
     // ⚠ Four gates shared by BOTH registration paths, built here and passed in
     // rather than defined inside a wrapper: `registerMetaTool` registers straight
     // onto the SDK server and would otherwise pass through none of them.
-    // ⚠ The role narrowing is resolved HERE, to a set, so `gating.ts` owns the
+    // ⚠ The profile narrowing is resolved HERE, to a set, so `gating.ts` owns the
     // table and `createGates` owns no vocabulary. `null` ⇒ no narrowing.
     const gates = (0, gating_js_1.createGates)(canWrite, (0, gating_js_1.offeredToolsFor)(options.toolProfile));
     const { registerTool, registerMetaTool, chargeCredit } = (0, registrar_js_1.createToolRegistrars)({
@@ -169,7 +169,7 @@ function createServer(client, options = {}) {
     (0, status_js_1.registerStatusTool)(registerMetaTool, client, directory); // dopl_status — the whole check-in, one call
     // ⚠ THIS LIST IS THE SURFACE. Every published tool is registered here and
     // nowhere else, so `tools/list` == these calls minus `gating.ts ›
-    // HIDDEN_TOOLS` and minus anything outside this session's role-scoped offer.
+    // HIDDEN_TOOLS` and minus anything outside this session's profile offer.
     // Each registrar exposes ONE `dopl_<domain>` action-tool dispatching on an
     // `op` arg. ⚠ THE FIVE `_admin` COMPANIONS ARE GONE (2026-09-02): every op on
     // all five was refused unconditionally, and the rule they advertised is now
