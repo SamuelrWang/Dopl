@@ -131,6 +131,24 @@ export const ChannelUpdateSchema = z
      *  how much room somebody else's agent gets here. Widening is a permission
      *  change. */
     agentPosture: ChannelAgentPostureSchema.optional(),
+    /**
+     * **RR3's DEFAULT RESPONDER** (2026-09-02, B4 — ruling B6). ⚠ The grammar is
+     * `channel_sessions.name`'s VERBATIM and `20260918120000`'s CHECK is its
+     * twin: a third spelling of "what an agent handle looks like" is how this
+     * comes to name something no session can be. ⚠ `.nullable()` is the CLEAR,
+     * on `agentPosture`'s terms — absent leaves it, `null` withdraws it, and
+     * without the pair a nomination is permanent. ⚠ MANAGED, not member-gated
+     * (`MANAGED_CHANNEL_FIELDS`): it decides whose machine the room's
+     * unaddressed work lands on.
+     */
+    defaultResponderAgentName: z
+      .string()
+      .trim()
+      .regex(/^[a-z][a-z0-9-]{1,30}$/, {
+        error: "Agent handle must match ^[a-z][a-z0-9-]{1,30}$",
+      })
+      .nullable()
+      .optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
@@ -186,6 +204,17 @@ export const ChannelMessageCreateSchema = z.object({
     .optional(),
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
+  /**
+   * **THE ONE RECIPIENT, IN EITHER NAMESPACE** (2026-09-02, B4 — ruling B1): a
+   * member (user id or email) **or an agent** (`@agent-<id>` / `@<handle>`),
+   * resolved by `server/service-writes-metadata-recipient.ts ›
+   * resolveToRecipient`, which 400s `CHANNEL_RECIPIENT_UNRESOLVED` — listing the
+   * live handles and the roster — when it names nobody.
+   * ⚠ **IT DOES NOT REPLACE `toUserId`**: a member resolved here BECOMES that
+   * field before any fence runs, so there is one addressee path and one
+   * membership check, not two. `.max(320)` is RFC 5321's address ceiling.
+   */
+  to: z.string().trim().min(1).max(320).optional(),
   // ⚠ `.min(1)` HERE AND NO MINIMUM ON THE CONSENT ONE — DELIBERATE, not drift
   // (stated 2026-08-20 after an audit flagged the pair). Two concepts sharing a
   // name and a `max(200)`:
@@ -280,7 +309,7 @@ export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
  *
  * ⚠ `clientMsgId` is REQUIRED here where `TaskCreateSchema` leaves it optional.
  * It is the BASE the per-addressee keys are derived from
- * (`server/service-tasks-fanout.ts › addresseeClientMsgId`) AND the seed of the
+ * (`server/service-tasks-broadcast.ts › addresseeClientMsgId`) AND the seed of the
  * group id the N threads share, so a fan-out without one has no way to converge
  * on retry and no stable card. Bounded well under `clientMsgId`'s own 200 so
  * the derived `${base}:${uuid}` keys stay inside it.

@@ -29,7 +29,7 @@ import {
   addresseeClientMsgId,
   createTaskFanOut,
   fanoutGroupId,
-} from "./service-tasks-fanout";
+} from "./service-tasks-broadcast";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
 

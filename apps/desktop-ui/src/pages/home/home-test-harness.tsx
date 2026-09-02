@@ -155,6 +155,7 @@ export const CHANNEL: Channel = {
   // the × or the add row override it (`person-info-tab.test.tsx`).
   infoCard: EMPTY_INFO_CARD,
   agentPosture: EMPTY_AGENT_POSTURE,
+  defaultResponderAgentName: null,
 };
 
 /** The container's roster, as `GET /api/channels/{id}/members` answers it — the

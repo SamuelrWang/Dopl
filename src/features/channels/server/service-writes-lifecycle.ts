@@ -61,7 +61,7 @@ export interface PostMessageOptions {
   /**
    * REQUEST FAN-OUT GROUP. Stamp the reserved `metadata.fanoutGroup` on this
    * post, so the N opening messages of one fanned-out request can be rendered
-   * as ONE card. The one caller is `service-tasks-fanout.ts › createTaskFanOut`
+   * as ONE card. The one caller is `service-tasks-broadcast.ts › createTaskFanOut`
    * (through `service-tasks.ts › createTask`), which DERIVES the id server-side
    * — see `fanoutGroupId` there.
    *

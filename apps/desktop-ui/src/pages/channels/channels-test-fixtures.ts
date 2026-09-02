@@ -53,6 +53,7 @@ export const baseChannel: Channel = {
   myFavoritedAt: null,
   infoCard: EMPTY_INFO_CARD,
   agentPosture: EMPTY_AGENT_POSTURE,
+  defaultResponderAgentName: null,
   onlineMemberCount: 1,
 };
 

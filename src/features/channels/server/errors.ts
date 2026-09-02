@@ -1,9 +1,6 @@
-class ChannelError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = new.target.name;
-  }
-}
+// ⚠ `ChannelError` MOVED TO `errors-base.ts` (§1, 2026-09-02) — a LEAF, so the
+// second error module can extend it without a cycle back through this file.
+import { ChannelError } from "./errors-base";
 
 export class ChannelNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
@@ -45,6 +42,12 @@ export class ChannelAddresseeNotMemberError extends ChannelError {
     super(`Addressed user is not a member of this channel: ${userId}`);
   }
 }
+
+// ⚠ **`ChannelRecipientUnresolvedError` LIVES IN `errors-recipient.ts` (§1
+// SPLIT, 2026-09-02) AND IS RE-EXPORTED HERE**, because this file was AT the
+// 500-line cap. `errors.ts` stays the ONE import path for every channel error —
+// same arrangement `types.ts` has with `types-delivery.ts`.
+export { ChannelRecipientUnresolvedError } from "./errors-recipient";
 
 /** Would leave the channel with no owner — transfer ownership first. */
 export class ChannelLastOwnerError extends ChannelError {

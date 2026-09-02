@@ -4,6 +4,7 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
   ChannelChatAddressedError,
+  ChannelRecipientUnresolvedError,
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
   ChannelInviteeNotMemberError,
@@ -61,6 +62,13 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelAddresseeNotMemberError) {
     return new HttpError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER", err.message);
+  }
+  // ⚠ 400, and it is the LOUD half of ruling B1: with the fan-out narrowed, a
+  // `to` that resolves to nobody must never come back as a quiet
+  // `delivery=none`. The message carries the live handles and the roster, which
+  // is what the MCP side renders (`channel-errors.ts`).
+  if (err instanceof ChannelRecipientUnresolvedError) {
+    return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);

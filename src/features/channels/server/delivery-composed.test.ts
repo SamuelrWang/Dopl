@@ -5,9 +5,12 @@ import path from "node:path";
 import type { SessionStateRow } from "./collab-dto";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import type { ChannelContext } from "./service-shared";
+import type { ChannelRow } from "./dto";
 
 vi.mock("./repository-sessions");
+vi.mock("./repository-messages");
 
+import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 
 /**
@@ -137,12 +140,32 @@ const agent = (id: string, over: Partial<Session> = {}): Session => ({
  * ⚠ THE HAND-OFF IS THE SUBJECT, so it is spelled out rather than hidden in a helper: what
  * crosses is `recipientAgentIds`, and nothing else about addressing does.
  */
-async function post(body: string, live: Session[], threaded = true) {
+async function post(
+  body: string,
+  live: Session[],
+  threaded = true,
+  // ⚠ THE WRITE-PATH FACTS THE FOLD DOES NOT CARRY (2026-09-02, B4): the author
+  // kind (RR2 vs RR3), an agent `to=` already resolved at the door, and the
+  // thread pair RR1 reads. Defaulted to "a person, addressing nobody", which is
+  // what every case below except the resilience ones is about.
+  over: {
+    metadata?: Record<string, unknown>;
+    authorKind?: string;
+    toAgentId?: string | null;
+    clientMsgId?: string;
+    channel?: Partial<ChannelRow>;
+  } = {}
+) {
   const verdict = await resolveWakeVerdict(
     CTX,
-    CHAN,
-    { body, kind: "message" } as Parameters<typeof resolveWakeVerdict>[2],
-    threaded ? { taskId: THREAD } : {},
+    { id: CHAN, workspace_id: "ws-1", ...over.channel } as ChannelRow,
+    {
+      body,
+      kind: "message",
+      clientMsgId: over.clientMsgId,
+    } as Parameters<typeof resolveWakeVerdict>[2],
+    { ...(threaded ? { taskId: THREAD } : {}), ...over.metadata },
+    { authorKind: over.authorKind ?? "user", toAgentId: over.toAgentId ?? null },
     NOW
   );
   const desktop = machine(live);
@@ -162,6 +185,8 @@ async function post(body: string, live: Session[], threaded = true) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
+  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
+  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
 });
 
 describe("the server decides, the machine executes", () => {
@@ -198,6 +223,46 @@ describe("the server decides, the machine executes", () => {
     // agent the server said nothing about.
     vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow(A1)]);
     const { verdict, desktop } = await post("morning all", [agent(A1)]);
+    expect(verdict.recipientAgentIds).toEqual([]);
+    expect(desktop.fed).toEqual([{ agentId: A1, wake: false }]);
+  });
+
+  it("RR3 repairs a forgotten `@` and the machine wakes exactly the responder", async () => {
+    // 🔒 **THE ARM THE FAN-OUT NARROWING DEPENDS ON.** A person says something in
+    // the main room and names nobody; two agents are live; the channel nominates
+    // one. The server stores that repair, and the machine wakes THAT agent and
+    // not its sibling — which is the behaviour `b-fanout-narrow` will make the
+    // only one, and is already the only WAKE today.
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
+      sessionRow(A1),
+      sessionRow(A2),
+    ]);
+    const { verdict, desktop } = await post("can someone look at the build?", [
+      agent(A1),
+      agent(A2),
+    ], false, { channel: { default_responder_agent_name: `agent-${A2}` } });
+    expect(verdict.verdict).toBe("responder");
+    expect(verdict.recipientAgentIds).toEqual([A2]);
+    expect(verdict.delivery).toBe("woken");
+    // ⚠ BOTH ARE STILL FED — the desktop fans out until B9, exactly as the
+    // `@agent-<id>` case above records. What the repair changes is WHO IT WAKES,
+    // and the sibling is not woken.
+    expect(desktop.fed.filter((f) => f.wake).map((f) => f.agentId)).toEqual([A2]);
+  });
+
+  it("RR1 repairs a threaded reply to a MEMBER, and wakes no agent at all", async () => {
+    // ⚠ THE ARM WHOSE ANSWER THE AGENT LANE DOES NOT CONSUME, WHICH IS THE POINT
+    // OF DRIVING IT HERE. The repair is a person's id, so `recipientAgentIds` is
+    // `[]` — a complete answer, not a null — and today's machine correctly wakes
+    // nobody. `b-fanout-narrow` is what teaches it to route on
+    // `recipientUserIds`; until it does, this case pins that the server is not
+    // quietly promising an agent wake it cannot deliver.
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([sessionRow(A1)]);
+    const { verdict, desktop } = await post("what about the migration?", [agent(A1)], true, {
+      metadata: { taskCreatedBy: ME, taskTarget: "user-2" },
+    });
+    expect(verdict.verdict).toBe("thread_peer");
+    expect(verdict.recipientUserIds).toEqual(["user-2"]);
     expect(verdict.recipientAgentIds).toEqual([]);
     expect(desktop.fed).toEqual([{ agentId: A1, wake: false }]);
   });

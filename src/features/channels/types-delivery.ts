@@ -22,8 +22,41 @@ import type { LaunchMessageMode, LaunchToolMode } from "./types-launch";
  * ⚠ `"thread"` IS NOT A WEAK `"agent"`. It means the post named nobody and
  * carries a thread tag, so it reaches sessions ALREADY working that thread and
  * wakes nothing — the chat case, stated as a value rather than as an absence.
+ *
+ * ⚠ **THE LAST THREE ARE THE RESILIENCE ARMS (B1), AND THEY ARE VALUES RATHER
+ * THAN A FLAG BESIDE `"member"` / `"agent"` FOR ONE REASON: THE DESKTOP HAS TO
+ * BE ABLE TO TELL A NAMED RECIPIENT FROM A REPAIRED ONE.** Narrowing the fan-out
+ * to the addressed recipient (`b-fanout-narrow`) means a message that named
+ * nobody would reach nobody, and Samuel's ruling is that a forgotten `@` must
+ * never stall a conversation. So the server repairs the address — but a reader
+ * that cannot see the repair cannot explain the delivery, and "why did my agent
+ * answer that" is the question this vocabulary exists to answer.
+ *
+ * ⚠ **THE ARMS ARE DISJOINT BY (in a thread?) × (author kind), SO EXACTLY ONE
+ * FIRES.** RR1 is the threaded case; RR2 and RR3 are the main room, split by
+ * whether an agent or a person wrote it. There is no precedence question between
+ * them and no order to get wrong — see `server/service-wake-verdict.ts`.
  */
-export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread";
+export type ChannelWakeVerdict =
+  /** Nothing was addressed and no resilience arm fired. */
+  | "none"
+  /** `to=` named a channel member; their side decides what runs. */
+  | "member"
+  /** The body (or `to=`) named a live agent. */
+  | "agent"
+  /** No recipient, but a thread tag — it reaches sessions already working that
+   *  thread and wakes nothing. ⚠ NOT a weak `"agent"`. */
+  | "thread"
+  /** **RR1** — a reply in a thread with no `to`, resolved to the thread's OTHER
+   *  party. A thread has exactly two parties, so "other" is total. */
+  | "thread_peer"
+  /** **RR2** — an unaddressed AGENT-authored post in the main room, resolved to
+   *  the party that last addressed this agent in this room inside
+   *  `shared/channels/caps.ts › RESILIENCE_WINDOW_MS`. */
+  | "reciprocal"
+  /** **RR3** — an unaddressed HUMAN message, resolved to the channel's
+   *  configured default responder, or to the room's one live agent. */
+  | "responder";
 
 /**
  * **WHAT HAPPENED TO A MESSAGE** — the one vocabulary, written by two authors.

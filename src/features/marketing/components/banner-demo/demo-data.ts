@@ -120,6 +120,7 @@ function channel(
     onlineMemberCount: 3,
     infoCard: EMPTY_INFO_CARD,
     agentPosture: EMPTY_AGENT_POSTURE,
+    defaultResponderAgentName: null,
     ...extra,
   };
 }

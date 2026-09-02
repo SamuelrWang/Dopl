@@ -117,6 +117,60 @@ function failed(err: unknown, fallback: string) {
   toast({ title: err instanceof ChannelApiError ? err.message : fallback });
 }
 
+/**
+ * **THE TWO CHANNEL-AGENT SETTINGS** (2026-09-02, v2 wave B slice B4 — rulings
+ * B1/B6 and F-449): the default responder and the posture ceiling.
+ *
+ * ⚠ **ONE DRAFT AND ONE CONFIG FOR BOTH**, because they are one PATCH to one
+ * row behind one manage gate. Two configs would be two writes racing the same
+ * cache entry for a panel whose controls sit two rows apart.
+ *
+ * ⚠ **`null` IS A VALUE ON EVERY FIELD HERE AND `undefined` IS "UNCHANGED"** —
+ * the distinction `service-writes.ts › updateChannel` keeps, restated because
+ * this is where it would be lost: a draft that collapsed the two could never
+ * REMOVE a ceiling or withdraw a nomination.
+ *
+ * ⚠ **NO OPTIMISTIC PATCH.** The other configs in this file patch the list cache
+ * because a header pill reads the value; nothing renders these two outside the
+ * panel that just set them, and the PATCH answers with the caller-relative
+ * channel, so the reconcile below IS the update. An optimistic stamp here would
+ * be a claim about a manage gate this client cannot evaluate.
+ */
+export interface ChannelAgentSettingsDraft {
+  channelId: string;
+  defaultResponderAgentName?: string | null;
+  agentPosture?: {
+    tools?: string | null;
+    messages?: string | null;
+    chain?: boolean | null;
+  };
+}
+
+export function channelAgentSettingsConfig(
+  deps: LifecycleWriteDeps
+): UseApiMutationConfig<ChannelAgentSettingsDraft, { channel: Channel }> {
+  return {
+    request: (draft) => {
+      const { channelId, ...patch } = draft;
+      return {
+        path: channelPath(channelId),
+        method: "PATCH",
+        workspaceId: deps.workspaceId,
+        body: patch,
+      };
+    },
+    reconcile: (data) =>
+      patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
+        patchChannel(cache, data.channel.id, data.channel)
+      ),
+    invalidate: () => [channelKeys.list().all],
+    settleWith: deps.gate,
+    // ⚠ The server's own sentence, not a generic one: a refusal here is a
+    // MANAGE refusal or a handle-grammar 400, and both name what to do.
+    onError: (err) => failed(err, "Couldn't update the channel"),
+  };
+}
+
 export function archiveConfig(
   deps: LifecycleWriteDeps
 ): UseApiMutationConfig<ArchiveDraft, { channel: Channel }> {
@@ -326,6 +380,10 @@ export function useChannelLifecycleWrites({
     channelRequest,
     leaveConfig(deps)
   );
+  const agentSettings = useApiMutationWith<
+    ChannelAgentSettingsDraft,
+    { channel: Channel }
+  >(channelRequest, channelAgentSettingsConfig(deps));
 
   return {
     toggleArchive: () => {
@@ -363,12 +421,28 @@ export function useChannelLifecycleWrites({
         visibility: channel.visibility,
       });
     },
+    /** RR3's nomination. `null` withdraws it. */
+    setDefaultResponder: (handle: string | null) => {
+      if (!channel) return;
+      agentSettings.mutate({
+        channelId: channel.id,
+        defaultResponderAgentName: handle,
+      });
+    },
+    /** The channel's posture CEILING, per axis (F-449's missing surface). */
+    setAgentCeiling: (patch: NonNullable<ChannelAgentSettingsDraft["agentPosture"]>) => {
+      if (!channel) return;
+      agentSettings.mutate({ channelId: channel.id, agentPosture: patch });
+    },
+    /** True while a channel-agent setting is being written. */
+    agentSettingsPending: agentSettings.pending,
     /** True while any lifecycle write is in flight. */
     pending:
       archive.pending ||
       visibility.pending ||
       remove.pending ||
       joinChannel.pending ||
-      leaveChannel.pending,
+      leaveChannel.pending ||
+      agentSettings.pending,
   };
 }

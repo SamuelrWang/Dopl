@@ -3,9 +3,12 @@ import { SESSION_PROJECTION_FRESH_MS } from "../constants";
 import type { SessionStateRow } from "./collab-dto";
 import { ownLiveAgentIds, resolveWakeVerdict } from "./service-wake-verdict";
 import type { ChannelContext } from "./service-shared";
+import type { ChannelRow, ChannelMessageRow } from "./dto";
 
 vi.mock("./repository-sessions");
+vi.mock("./repository-messages");
 
+import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 
 /**
@@ -60,8 +63,36 @@ function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
   } as SessionStateRow;
 }
 
+/** The CALLER'S OWN live sessions — the own-scoped door the body parse reads. */
 function projection(...rows: SessionStateRow[]): void {
   vi.mocked(repoSessions.listSessionStates).mockResolvedValue(rows);
+}
+
+/** EVERY member's sessions in the room — RR3's candidate set. ⚠ A DIFFERENT
+ *  read from {@link projection}, and asserting on the wrong one is how the
+ *  same-account carve would appear to hold while being widened. */
+function roomProjection(...rows: SessionStateRow[]): void {
+  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
+}
+
+/** RR2's one read — the last main-room row addressed to this agent. */
+function lastAddress(row: Partial<ChannelMessageRow> | null): void {
+  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(
+    row === null ? null : ({ seq: 7, author_user_id: "user-2", ...row } as ChannelMessageRow)
+  );
+}
+
+function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
+  return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;
+}
+
+interface ResolveOpts {
+  kind?: "message" | "task_progress";
+  authorKind?: string;
+  toAgentId?: string | null;
+  threadTagStripped?: boolean;
+  clientMsgId?: string;
+  channel?: Partial<ChannelRow>;
 }
 
 /** One post, resolved. `metadata` is the fold's OUTPUT, which is what the
@@ -69,13 +100,22 @@ function projection(...rows: SessionStateRow[]): void {
 function resolve(
   body: string,
   metadata: Record<string, unknown> = {},
-  kind: "message" | "task_progress" = "message"
+  opts: ResolveOpts = {}
 ) {
   return resolveWakeVerdict(
     CTX,
-    "chan-1",
-    { body, kind } as Parameters<typeof resolveWakeVerdict>[2],
+    channelRow(opts.channel),
+    {
+      body,
+      kind: opts.kind ?? "message",
+      clientMsgId: opts.clientMsgId,
+    } as Parameters<typeof resolveWakeVerdict>[2],
     metadata,
+    {
+      authorKind: opts.authorKind ?? "user",
+      toAgentId: opts.toAgentId ?? null,
+      threadTagStripped: opts.threadTagStripped,
+    },
     NOW
   );
 }
@@ -83,6 +123,8 @@ function resolve(
 beforeEach(() => {
   vi.clearAllMocks();
   projection();
+  roomProjection();
+  lastAddress(null);
 });
 
 describe("resolveWakeVerdict — the recipient", () => {
@@ -218,7 +260,7 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
 
   it("does not resolve agents for a non-`message` kind", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
-    const out = await resolve("@agent-k3v7d2mq done", {}, "task_progress");
+    const out = await resolve("@agent-k3v7d2mq done", {}, { kind: "task_progress" });
     // Only `message` reaches a session at all (`main/session-dispatch.js`'s kind
     // filter), so resolving one here would promise a wake that cannot happen.
     expect(out.recipientAgentIds).toBeNull();
@@ -231,16 +273,16 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     // "the kind gate never asked". Reading the null alone stamped `unreachable`
     // on EVERY `task_progress` and `task_finished` row — so a thread's own
     // milestones read, to an orchestrator, as a room full of failed deliveries.
-    const threaded = await resolve("step two done", { taskId: "task-1" }, "task_progress");
+    const threaded = await resolve("step two done", { taskId: "task-1" }, { kind: "task_progress" });
     expect(threaded.verdict).toBe("thread");
     expect(threaded.delivery).toBe("idle");
 
-    const bare = await resolve("done", {}, "task_progress");
+    const bare = await resolve("done", {}, { kind: "task_progress" });
     expect(bare.verdict).toBe("none");
     expect(bare.delivery).toBe("none");
 
     // …even when the body is full of handles: the gate ran before the resolver.
-    const named = await resolve("@agent-k3v7d2mq done", {}, "task_progress");
+    const named = await resolve("@agent-k3v7d2mq done", {}, { kind: "task_progress" });
     expect(named.delivery).toBe("none");
   });
 
@@ -264,6 +306,15 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
 
   it("does not resolve the escalation-answer door — that agent is not the author's", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
+    // ⚠ TWO live agents and no default responder, so RR3 answers NOBODY and the
+    // case still measures what it was written to measure: the server does not
+    // reach for `escalationAnswer.agentId`. With one live agent RR3 arm 2 would
+    // resolve that same handle for an unrelated reason and the assertion would
+    // pass by coincidence.
+    roomProjection(
+      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
+      sessionRow({ id: "s-2", name: "m8q1zzzz" })
+    );
     const out = await resolve("option two", {
       escalationAnswer: { agentId: "k3v7d2mq" },
     });

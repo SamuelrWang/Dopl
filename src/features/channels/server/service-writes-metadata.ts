@@ -122,6 +122,23 @@ async function resolveInheritableTask(
  */
 export interface PostMetadataResult {
   metadata: Record<string, unknown>;
+  /**
+   * **A THREAD TAG THE POSTER WAS NOT ENTITLED TO, DROPPED** (2026-09-02, v2
+   * wave B slice B4 — ruling B1). Only the LEGACY (`task-<channelId>-<seq>`)
+   * arm can produce it; the first-class uuid arm 403s instead.
+   *
+   * ⚠ **IT IS REPORTED RATHER THAN MERELY DONE, AND THE READER IS THE VERDICT.**
+   * A stripped tag leaves a message that LOOKS like a plain main-room post, and
+   * the resilience arms would then repair its address as if the author had meant
+   * to talk to the room. The author meant to talk to a thread they are not in.
+   * So `service-wake-verdict.ts` answers `delivery=none` for it and repairs
+   * nothing — the distinction A6 introduced, surfaced, not invented here.
+   *
+   * ⚠ Still NEVER a throw: the installed desktop posts these ids for lifecycle
+   * events, some against openers with no `to_user_id` at all, and a 403 would
+   * reject real posts from the field.
+   */
+  threadTagStripped: boolean;
 }
 
 /**
@@ -144,7 +161,7 @@ export interface PostMetadataOptions {
   handoff?: boolean;
   /**
    * Stamp reserved `metadata.fanoutGroup` with this id. Only caller:
-   * `service-tasks-fanout.ts › createTaskFanOut` (through
+   * `service-tasks-broadcast.ts › createTaskFanOut` (through
    * `service-tasks.ts › createTask`), which derives it server-side from the
    * channel, the creator and the validated base idempotency key.
    *
@@ -251,6 +268,7 @@ export async function resolvePostMetadata(
   opts: PostMetadataOptions = {}
 ): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+  let threadTagStripped = false;
   // ⚠ ONE roster read per post, AT MOST, and only if something asks. Two folds
   // want `channel_members` — thread inheritance (3) and mention resolution (9)
   // — and neither runs on the common post. Memoized on the PROMISE so two
@@ -339,7 +357,12 @@ export async function resolvePostMetadata(
       // ⚠ A legacy id that is not the poster's own exchange is STRIPPED, never
       // refused — the post lands untagged, silently. The installed desktop that
       // sends these ids has no diag lane to show a refusal on.
+      // ⚠ SILENTLY TO THE CALLER, BUT NOT TO THE VERDICT (2026-09-02, B4): see
+      // {@link PostMetadataResult.threadTagStripped}. The post is not a main-room
+      // post that forgot to address anybody, and the resilience arms must not
+      // treat it as one.
       delete metadata.taskId;
+      threadTagStripped = true;
     }
   } else if (
     toUserId &&
@@ -419,5 +442,5 @@ export async function resolvePostMetadata(
     );
   }
 
-  return { metadata };
+  return { metadata, threadTagStripped };
 }

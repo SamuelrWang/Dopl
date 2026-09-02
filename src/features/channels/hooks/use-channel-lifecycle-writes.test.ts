@@ -85,6 +85,7 @@ function channel(over: Partial<Channel> = {}): Channel {
     onlineMemberCount: 0,
     infoCard: EMPTY_INFO_CARD,
     agentPosture: EMPTY_AGENT_POSTURE,
+    defaultResponderAgentName: null,
     ...over,
   };
 }

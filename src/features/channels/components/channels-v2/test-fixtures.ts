@@ -50,6 +50,7 @@ export function channel(over: Partial<Channel> = {}): Channel {
     onlineMemberCount: 1,
     infoCard: EMPTY_INFO_CARD,
     agentPosture: EMPTY_AGENT_POSTURE,
+    defaultResponderAgentName: null,
     ...over,
   };
 }

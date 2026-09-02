@@ -94,7 +94,7 @@ type ResolvedRecipient = {
  *
  * ⚠ **THE `member` ARM IS THE ONLY ONE THAT NAMES SOMEBODY ELSE**, and it reuses
  * the exact membership pair `service-writes.ts › postMessage`,
- * `service-tasks.ts › createTask` and `service-tasks-fanout.ts ›
+ * `service-tasks.ts › createTask` and `service-tasks-broadcast.ts ›
  * assertAddresseesAreReachable` apply to a post's `to`: a `channel_members` row
  * AND an ACTIVE `workspace_members` row. It is called here rather than shared
  * because each of those sites raises its OWN domain error, and the fan-out

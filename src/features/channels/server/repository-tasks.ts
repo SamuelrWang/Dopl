@@ -44,7 +44,7 @@ export async function insertTask(row: TaskInsert): Promise<ChannelTaskRow> {
  * contract: "I already sent this, give me back what you stored". Channel-scoped,
  * it was a contract with the whole ROOM — a member who reused a key another
  * member had used was handed back THEIR thread, and the served MCP schema said
- * so out loud. The keys are derived and guessable: `service-tasks-fanout.ts ›
+ * so out loud. The keys are derived and guessable: `service-tasks-broadcast.ts ›
  * addresseeClientMsgId` mints `${base}:${toUserId}` over ids every member can
  * read. Same vulnerability, same shape, same fix as
  * `repository-messages.ts › findOwnMessageByClientId`.
