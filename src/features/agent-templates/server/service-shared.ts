@@ -27,7 +27,9 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
-  apiKeyWorkspaceLockKind?: string | null;
+  /** WHOSE REACH the credential inherits; `null` = nobody in particular.
+   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+  credentialSubjectUserId: string | null;
 }
 
 export function buildAgentTemplateContext(
@@ -39,7 +41,7 @@ export function buildAgentTemplateContext(
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
-    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
+    credentialSubjectUserId: auth.credentialSubjectUserId,
   };
 }
 

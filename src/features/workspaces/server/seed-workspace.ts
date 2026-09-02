@@ -73,6 +73,7 @@ export async function seedNewWorkspace(
       source: "user",
       role: "owner",
       apiKeyWorkspaceId: null,
+      credentialSubjectUserId: userId,
     };
     const res = await seedKnowledge(ctx);
     result.knowledgeBases = res.basesCreated;
@@ -94,6 +95,7 @@ export async function seedNewWorkspace(
       source: "user",
       role: "owner",
       apiKeyWorkspaceId: null,
+      credentialSubjectUserId: userId,
     };
     const res = await seedSkills(ctx);
     result.skills = res.skillsCreated;

@@ -22,6 +22,7 @@ const USER = "user-1";
 const CTX: KnowledgeContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "user",
   role: "owner",
   apiKeyWorkspaceId: null,

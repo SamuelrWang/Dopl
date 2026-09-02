@@ -44,7 +44,7 @@ const CARD = {
 };
 
 function ctx(userId: string): ChannelContext {
-  return { workspaceId: WS, userId, source: "user", role: "member" };
+  return { workspaceId: WS, userId, source: "user", role: "member", credentialSubjectUserId: userId };
 }
 
 function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {

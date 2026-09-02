@@ -15,6 +15,7 @@ import type { KnowledgeBase } from "@/features/knowledge/types";
 
 const AUTH: WorkspaceAuthContext = {
   userId: "user-1",
+  credentialSubjectUserId: "user-1",
   workspaceId: "ws-1",
   workspaceSlug: "acme",
   workspacePublicId: "pub-1",

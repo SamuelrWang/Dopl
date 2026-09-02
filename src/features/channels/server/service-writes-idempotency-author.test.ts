@@ -47,6 +47,7 @@ const KEY = "agent-a1b2c3d4-5"; // the desktop's stamp, exactly as it ships
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

@@ -27,11 +27,12 @@ export interface ChatContext {
   /** Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* only — not
    *  the visibility answer (F-336). */
   apiKeyWorkspaceId: string | null;
-  /** `mcp_tokens.workspace_lock_kind`. ⚠ Read only via
-   *  `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
-   *  SHARED. Private chats are hidden entirely from a SHARED credential — one
-   *  with no single human behind it — never from a container SESSION. */
-  apiKeyWorkspaceLockKind: string | null;
+  /** WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`).
+   *  ⚠ Read only via `shared/auth/credential-audience.ts ›
+   *  isSharedCredential`. Private chats are hidden entirely from a SHARED
+   *  credential — one with no single human behind it — never from a container
+   *  SESSION, which carries its operator's id here. */
+  credentialSubjectUserId: string | null;
 }
 
 export interface AuthLike {
@@ -40,7 +41,9 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
-  apiKeyWorkspaceLockKind?: string | null;
+  /** WHOSE REACH the credential inherits; `null` = nobody in particular.
+   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+  credentialSubjectUserId: string | null;
 }
 
 export function buildChatContext(auth: AuthLike): ChatContext {
@@ -50,7 +53,7 @@ export function buildChatContext(auth: AuthLike): ChatContext {
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
-    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
+    credentialSubjectUserId: auth.credentialSubjectUserId,
   };
 }
 

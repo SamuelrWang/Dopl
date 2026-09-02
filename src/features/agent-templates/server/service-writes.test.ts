@@ -83,7 +83,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
   });
 
   it("a workspace-scoped API key gets 'workspace' and CANNOT ask for private", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     await createTemplate(keyCtx, { name: "Researcher" });
     expect(mockRepo.insertTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "workspace" })
@@ -100,7 +100,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
   // the exact state the create guard exists to prevent, invisible to the key itself and to every
   // workspace admin. This case is pinned BESIDE the create one deliberately: they are one rule.
   it("…and it cannot reach 'private' by PATCHing afterwards either (F-289)", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     const owned = template({ visibility: "workspace", createdBy: OWNER });
     mockRepo.findTemplateById.mockResolvedValue(owned);
     await expect(
@@ -115,7 +115,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
   // `service-shared.ts › canSeeBaseRow`'s template twin), so `getTemplateById` 404s BEFORE the
   // fence. Pinned as the 404 it really is, rather than as a fence firing where it cannot.
   it("a workspace key cannot even SEE an already-private template to PATCH it (F-289)", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     mockRepo.findTemplateById.mockResolvedValue(
       template({ visibility: "private", createdBy: OWNER })
     );
@@ -125,7 +125,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
 
   // …and the fence stops exactly there: widening is what a shared key is FOR.
   it("a workspace key may still PATCH a workspace template (F-289)", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     mockRepo.findTemplateById.mockResolvedValue(
       template({ visibility: "workspace", createdBy: OWNER })
     );

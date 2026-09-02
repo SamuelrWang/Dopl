@@ -41,6 +41,7 @@ const THEIRS = "99999999-9999-9999-9999-999999999999";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

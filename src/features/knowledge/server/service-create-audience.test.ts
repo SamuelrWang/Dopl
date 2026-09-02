@@ -74,7 +74,7 @@ function agentCtx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
     role: "owner",
     source: "agent",
     apiKeyWorkspaceId: CONTAINER,
-    apiKeyWorkspaceLockKind: "container_session",
+    credentialSubjectUserId: "u-operator",
     sessionId: null,
     ...over,
   };

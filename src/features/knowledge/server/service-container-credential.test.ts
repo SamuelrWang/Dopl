@@ -74,16 +74,18 @@ function containerSession(over: Partial<KnowledgeContext> = {}): KnowledgeContex
     role: "owner",
     source: "agent",
     apiKeyWorkspaceId: CONTAINER,
-    apiKeyWorkspaceLockKind: "container_session",
+    credentialSubjectUserId: "u-operator",
     sessionId: null,
     ...over,
   };
 }
 
-/** The credential M-10 was written for: locked, but with NO stated kind, so it
- *  may be shared between humans and inherits nobody's personal reach. */
+/** The credential M-10 was written for: fenced to the same container, but with
+ *  NO subject — it may be passed between humans and inherits nobody's personal
+ *  reach. ⚠ IDENTICAL TO `containerSession` ON THE CONTAINER AXIS, which is the
+ *  point: the two differ on the subject axis and nowhere else. */
 function sharedKey(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
-  return containerSession({ apiKeyWorkspaceLockKind: null, ...over });
+  return containerSession({ credentialSubjectUserId: null, ...over });
 }
 
 function privateBase(id: string, workspaceId = CONTAINER): KnowledgeBase {
@@ -109,7 +111,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("canSeeBase — the credential KIND, not the lock", () => {
+describe("canSeeBase — the SUBJECT axis, not the container axis", () => {
   it("a container session sees its OPERATOR's private base", () => {
     expect(canSeeBase(containerSession(), privateBase("kb"))).toBe(true);
   });
@@ -123,12 +125,27 @@ describe("canSeeBase — the credential KIND, not the lock", () => {
     expect(canSeeBase(sharedKey(), privateBase("kb"))).toBe(false);
   });
 
-  it("an unknown future lock kind reads as SHARED — fail-closed", () => {
-    const ctx = containerSession({ apiKeyWorkspaceLockKind: "ci_runner" });
+  it("the container axis alone decides NOTHING here — only the subject moves it", () => {
+    // 🔒 THE F-336 MUTATION, PINNED. These two contexts differ in exactly one
+    // field. If a predicate ever reads the container axis as an audience again,
+    // the first of these flips to false and this line fails.
+    expect(canSeeBase(containerSession(), privateBase("kb"))).toBe(true);
+    expect(
+      canSeeBase(
+        containerSession({ credentialSubjectUserId: null }),
+        privateBase("kb"),
+      ),
+    ).toBe(false);
+  });
+
+  it("an UNFENCED credential with no subject is still SHARED — fail-closed", () => {
+    // The other half of the same independence: dropping the container fence
+    // must not buy an anonymous credential a private row.
+    const ctx = sharedKey({ apiKeyWorkspaceId: null });
     expect(canSeeBase(ctx, privateBase("kb"))).toBe(false);
   });
 
-  it("public is public for every credential kind", () => {
+  it("public is public for every credential", () => {
     const pub = { ...privateBase("kb"), visibility: "public" as const };
     expect(canSeeBase(sharedKey(), pub)).toBe(true);
   });

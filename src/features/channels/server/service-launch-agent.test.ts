@@ -62,6 +62,7 @@ const AGENT = "a1b2c3d4";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

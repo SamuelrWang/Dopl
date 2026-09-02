@@ -78,6 +78,7 @@ const KEY = "orchestrator-run-7:launch-1";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

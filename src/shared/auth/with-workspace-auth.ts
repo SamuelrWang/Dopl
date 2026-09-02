@@ -20,23 +20,26 @@ export interface WorkspaceAuthContext {
   userId: string;
   agentTokenId?: string;
   /**
-   * Workspace a workspace-scoped API key (`api_keys.workspace_id IS NOT NULL`)
-   * is locked to. `null` for session callers and user-scoped keys. ⚠ Service
-   * layer reads this to enforce "private items are hidden from workspace-scoped
-   * keys" (M-10) — such keys may be shared across humans (CI runners, service
-   * accounts), so a teammate's private content must not leak through them.
+   * 🔒 AXIS 1 — WHICH CONTAINER the credential may act in
+   * (`mcp_tokens.container_id`). `null` for session callers and unfenced keys.
+   * The 403 below is the only thing that reads it here.
+   *
+   * ⚠ IT ANSWERS *WHICH*, NEVER *WHOSE*. Reading it as an audience is F-336;
+   * the audience is {@link WorkspaceAuthContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**
-   * 🔒 WHAT KIND of lock the credential carries (`mcp_tokens.workspace_lock_kind`),
-   * never WHICH workspace — the two axes the M-10 predicates used to conflate
-   * (F-336/F-333, 2026-08-27). ⚠ Read it ONLY through `credential-audience.ts ›
-   * isSharedCredential`; absent/unknown reads as a SHARED credential, which is
-   * the pre-fix refusal. The 403 below reads `apiKeyWorkspaceId` and is
-   * untouched by this field — a container session is fenced to one workspace
+   * 🔒 AXIS 2 — WHOSE REACH the credential inherits
+   * (`mcp_tokens.subject_user_id`): the ONE human it acts as, or `null` for a
+   * credential that may be passed between humans (a CI runner, a service
+   * account), which must inherit nobody's private rows (M-10).
+   *
+   * ⚠ REQUIRED, and read ONLY through `credential-audience.ts ›
+   * isSharedCredential`. It is independent of axis 1 in both directions: a
+   * container session is fenced AND personal, and it is fenced by the 403 above
    * exactly as before.
    */
-  apiKeyWorkspaceLockKind?: string | null;
+  credentialSubjectUserId: string | null;
   workspaceId: string;
   workspaceSlug: string;
   workspacePublicId: string;
@@ -194,7 +197,7 @@ export function withWorkspaceAuth(
         userId: ctx.userId,
         agentTokenId: ctx.agentTokenId,
         apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
-        apiKeyWorkspaceLockKind: ctx.apiKeyWorkspaceLockKind ?? null,
+        credentialSubjectUserId: ctx.credentialSubjectUserId,
         workspaceId: workspace.id,
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,

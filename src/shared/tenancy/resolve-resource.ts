@@ -2,7 +2,7 @@ import "server-only";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import {
   isSharedCredential,
-  type LockedCredentialLike,
+  type CredentialAxes,
 } from "@/shared/auth/credential-audience";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
@@ -93,11 +93,14 @@ const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
  */
 const CONTAINER_READ_FLOOR: Role = "viewer";
 
-/** The two credential facts the fence reads, plus who is behind it. Structural
- *  on purpose: every feature context already satisfies it without importing
- *  this module. */
-export interface ResourceCaller extends LockedCredentialLike {
+/** The two credential AXES the fence reads (clauses 1 and 3), plus who is
+ *  asking. Structural on purpose: every feature context already satisfies it
+ *  without importing this module. */
+export interface ResourceCaller extends CredentialAxes {
   userId: string;
+  /** WHICH CONTAINER the credential is fenced to (`mcp_tokens.container_id`);
+   *  `null`/absent = unfenced. Clause 3 narrows on it and never widens. */
+  apiKeyWorkspaceId?: string | null;
 }
 
 /**
@@ -184,9 +187,10 @@ async function listContainersForCaller(
     .select("workspace_id, role")
     .eq("user_id", caller.userId)
     .eq("status", "active");
-  // 🔒 Clause 3. The lock is a WORKSPACE fence and is applied as one — it
-  // narrows the candidate set and answers nothing about which rows inside it
-  // the caller may see (F-333/F-336: that conflation is the defect).
+  // 🔒 Clause 3, the CONTAINER axis. It is a tenancy fence and is applied as
+  // one — it narrows the candidate set and answers nothing about which rows
+  // inside it the caller may see. That second question is clause 1's SUBJECT
+  // axis (F-333/F-336: reading one off the other is the defect).
   if (caller.apiKeyWorkspaceId) {
     query = query.eq("workspace_id", caller.apiKeyWorkspaceId);
   }

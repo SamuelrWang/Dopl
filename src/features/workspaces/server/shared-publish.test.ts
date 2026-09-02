@@ -158,7 +158,7 @@ function knowledgeCtx(): KnowledgeContext {
     source: "user",
     role: "owner",
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: USER,
   } as KnowledgeContext;
 }
 
@@ -169,7 +169,7 @@ function skillCtx(): SkillContext {
     source: "user",
     role: "owner",
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: USER,
   } as SkillContext;
 }
 

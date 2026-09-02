@@ -94,7 +94,7 @@ function personCtx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
     role: "owner",
     source: "user",
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: USER,
     sessionId: null,
     ...over,
   };
@@ -248,7 +248,11 @@ describe("creating onto the home shelf", () => {
   it("REFUSES a SHARED credential — a workspace key has no personal shelf", async () => {
     await expect(
       createBase(
-        personCtx({ apiKeyWorkspaceId: HOME_WS, source: "agent" }),
+        personCtx({
+          apiKeyWorkspaceId: HOME_WS,
+          source: "agent",
+          credentialSubjectUserId: null,
+        }),
         { name: "From a key", homeScoped: true }
       )
     ).rejects.toBeInstanceOf(HomeScopeForbiddenError);

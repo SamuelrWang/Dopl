@@ -157,7 +157,7 @@ describe("createHomeChannel", () => {
     // ⚠ `direct: true` would ask createDirectChannel for a self-DM, and there
     // is no peer to be direct with — the whole point is a channel of one.
     expect(mockCreateChannel).toHaveBeenCalledWith(
-      { userId: CREATOR, workspaceId: WS, role: "owner" },
+      { userId: CREATOR, workspaceId: WS, role: "owner", credentialSubjectUserId: CREATOR },
       { name: "Q3 Fundraise", visibility: "private" }
     );
     const [, input] = mockCreateChannel.mock.calls[0];
@@ -450,7 +450,7 @@ describe("claimLink — the happy paths", () => {
     // ⚠ The dedup + membership-of-2 rules live in `createDirectChannel`, and
     // this must call it rather than re-implement them.
     expect(mockCreateChannel).toHaveBeenCalledWith(
-      { userId: CREATOR, workspaceId: WS, role: "owner" },
+      { userId: CREATOR, workspaceId: WS, role: "owner", credentialSubjectUserId: CREATOR },
       { direct: true, memberUserId: CLAIMER }
     );
     expect(mocked.insertClaim).toHaveBeenCalledWith({

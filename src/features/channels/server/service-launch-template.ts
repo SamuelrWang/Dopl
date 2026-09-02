@@ -76,17 +76,17 @@ export async function resolveTemplateForDirective(
       userId: ctx.userId,
       source: ctx.source,
       role: ctx.role,
-      // ⚠ CARRIED, NOT DROPPED, AND IT IS ARM 2 OF THE MATRIX (M-10). A
-      // workspace-scoped API key may be shared between humans, so it inherits no
-      // one person's reach and must see NOTHING beyond `visibility: 'workspace'`.
-      // `canSeeTemplate` reads this field; handing it `null` would let such a key
-      // resolve the key-owner's private templates by name.
+      // ⚠ BOTH AXES ARE CARRIED, NOT DROPPED, AND THEY DO DIFFERENT WORK.
+      // The CONTAINER axis is the tenancy fence. The SUBJECT axis is arm 2 of
+      // the matrix (M-10): a credential that may be passed between humans
+      // inherits no one person's reach and must see NOTHING beyond
+      // `visibility: 'workspace'`, while a container SESSION carries its
+      // operator's id and sees what the operator sees. Dropping the subject
+      // line puts `AGENT_TEMPLATE_NOT_FOUND` on every private template a
+      // session names — including every "Use in this channel" copy, which
+      // `containerCopyDraft` forces to `private` (F-333).
       apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
-      // ⚠ AND ITS KIND, OR ARM 2 REFUSES THE OPERATOR'S OWN SESSION (F-333).
-      // Dropping this line puts `AGENT_TEMPLATE_NOT_FOUND` on every private
-      // template a locked session names — including every "Use in this channel"
-      // copy, which `containerCopyDraft` forces to `private`.
-      apiKeyWorkspaceLockKind: ctx.apiKeyWorkspaceLockKind ?? null,
+      credentialSubjectUserId: ctx.credentialSubjectUserId,
     },
     ref
   );

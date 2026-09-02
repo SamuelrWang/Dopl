@@ -34,6 +34,7 @@ function ctx(overrides: Partial<KnowledgeContext> = {}): KnowledgeContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: OWNER,
     ...overrides,
   };
 }
@@ -125,7 +126,7 @@ describe("resolveEntryRefs visibility", () => {
     mockRepo.listBasesByIds.mockResolvedValue([ownPrivate, publicBase]);
 
     const refs = await resolveEntryRefs(
-      ctx({ apiKeyWorkspaceId: "ws-1" }),
+      ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null }),
       ["e-own", "e-public"],
     );
 

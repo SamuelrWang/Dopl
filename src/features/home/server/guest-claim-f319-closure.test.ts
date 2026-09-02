@@ -34,7 +34,13 @@ const OTHER_USER = "55555555-5555-4555-8555-555555555555";
 
 /** A guest's workspace context — exactly what the claim now produces. */
 function guestCtx(): ChannelContext {
-  return { workspaceId: WS, userId: GUEST_USER, source: "user", role: "guest" };
+  return {
+    workspaceId: WS,
+    userId: GUEST_USER,
+    source: "user",
+    role: "guest",
+    credentialSubjectUserId: GUEST_USER,
+  };
 }
 
 /** The guest's CHANNEL membership row — `addMember` joins them as `member`

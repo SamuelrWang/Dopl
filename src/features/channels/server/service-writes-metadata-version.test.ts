@@ -45,6 +45,7 @@ const PEER = "22222222-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -167,15 +168,15 @@ describe("readAppVersionHeader — a version, or nothing", () => {
   it("buildChannelContext re-narrows what the auth layer handed it", () => {
     // Same predicate, applied twice: no other construction path can widen it.
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS, appVersion: "1.7.15" })
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER, appVersion: "1.7.15" })
         .appVersion
     ).toBe("1.7.15");
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS, appVersion: "stale" })
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER, appVersion: "stale" })
         .appVersion
     ).toBeUndefined();
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS }).appVersion
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER }).appVersion
     ).toBeUndefined();
     expect(narrowAppVersion(null)).toBeUndefined();
   });

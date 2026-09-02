@@ -31,7 +31,7 @@ const ctx: ChatContext = {
   source: "user",
   role: "member",
   apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+  credentialSubjectUserId: USER,
 };
 
 const mockEnt = vi.mocked(getWorkspaceEntitlements);

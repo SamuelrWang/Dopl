@@ -66,6 +66,7 @@ async function main() {
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
     role: "owner",
+    credentialSubjectUserId: USER_ID,
     agentTokenId: null,
   });
   const base = await createBase(ctx, {

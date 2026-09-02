@@ -25,8 +25,10 @@ export interface McpAuthContext {
   /** Raw credential to forward to the loopback DoplClient (Authorization: Bearer). */
   credential: string;
   userId: string;
-  /** Workspace this session is locked to. Always null for OAuth callers — they
-   *  target any workspace via `x-workspace-id` or the per-call `workspace=`. */
+  /** AXIS 1 — WHICH CONTAINER this session is fenced to. Always null for OAuth
+   *  callers — they target any workspace via `x-workspace-id` or the per-call
+   *  `workspace=`. ⚠ The SUBJECT axis is deliberately absent from this context;
+   *  see the note at its assignment below. */
   apiKeyWorkspaceId: string | null;
   /** OAuth scopes; passed into bootServer to gate write/admin tool
    *  registration. */
@@ -87,15 +89,15 @@ export async function authenticateMcpRequest(
           // sibling: the two auth families reach the same services, and a lock
           // honoured on one path and dropped on the other is a fence with a
           // door in it that nothing in either file would mention.
-          apiKeyWorkspaceId: tok.workspaceId,
-          // ⚠ `workspaceLockKind` IS DELIBERATELY NOT CARRIED HERE, and this is
+          apiKeyWorkspaceId: tok.containerId,
+          // ⚠ THE SUBJECT AXIS IS DELIBERATELY NOT CARRIED HERE, and this is
           // the one place the two families legitimately differ (2026-08-27,
-          // F-336). The kind is a VISIBILITY input and this boundary builds no
-          // feature context: it forwards the raw credential to the loopback
-          // DoplClient, which re-authenticates through `with-auth.ts` and reads
-          // the kind there, once. What this file uses `apiKeyWorkspaceId` for is
-          // the WORKSPACE pin (`mcp-transport-pin.ts` / `bootServer`), which the
-          // kind never touches. Adding it here would be a second copy of an
+          // F-336). It is an AUDIENCE input and this boundary builds no feature
+          // context: it forwards the raw credential to the loopback DoplClient,
+          // which re-authenticates through `with-auth.ts` and reads the axis
+          // there, once. What this file uses the CONTAINER axis for is the
+          // workspace pin (`mcp-transport-pin.ts` / `bootServer`), which the
+          // audience never touches. Adding it here would be a second copy of an
           // authorization input with no reader.
           scopes: tok.scopes,
           credential_info: tok.credential,

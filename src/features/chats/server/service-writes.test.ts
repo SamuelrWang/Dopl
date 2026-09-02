@@ -27,7 +27,7 @@ const ctx: ChatContext = {
   source: "agent",
   role: "member",
   apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+  credentialSubjectUserId: USER,
 };
 
 function chatRow(overrides: Partial<ChatRowWithCount> = {}): ChatRowWithCount {
@@ -153,7 +153,11 @@ describe("deleteChat — permanent delete invariants", () => {
     // visibility gate: the refusal must come from the ownership branch's
     // `ctx.apiKeyWorkspaceId` clause. A private chat 404s a step earlier and
     // would test the wrong gate.
-    const apiKeyCtx: ChatContext = { ...ctx, apiKeyWorkspaceId: WS };
+    const apiKeyCtx: ChatContext = {
+      ...ctx,
+      apiKeyWorkspaceId: WS,
+      credentialSubjectUserId: null,
+    };
     vi.mocked(repo.findChatById).mockResolvedValue(
       chatRow({ visibility: "public" })
     );

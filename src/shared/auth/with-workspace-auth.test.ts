@@ -19,7 +19,7 @@ import type {
 
 const state = vi.hoisted(() => ({
   apiKeyWorkspaceId: null as string | null,
-  apiKeyWorkspaceLockKind: null as string | null,
+  credentialSubjectUserId: null as string | null,
   // Forwarding harness: `token` set → OAuth-bearer branch (re-enacting the
   // sessionOnly + write-scope gates from the forwarded `options`); else session.
   token: null as { userId: string; scopes: string[]; tokenId: string } | null,
@@ -65,14 +65,14 @@ vi.mock("./with-auth", () => ({
           userId: state.token.userId,
           agentTokenId: state.token.tokenId,
           apiKeyWorkspaceId: state.apiKeyWorkspaceId,
-          apiKeyWorkspaceLockKind: state.apiKeyWorkspaceLockKind,
+          credentialSubjectUserId: state.credentialSubjectUserId,
           params: rc?.params,
         });
       }
       return handler(req, {
         userId: state.sessionUser?.id ?? "user-1",
         apiKeyWorkspaceId: state.apiKeyWorkspaceId,
-        apiKeyWorkspaceLockKind: state.apiKeyWorkspaceLockKind,
+        credentialSubjectUserId: state.credentialSubjectUserId,
         params: rc?.params,
       });
     },
@@ -177,7 +177,9 @@ function writeReq(
 beforeEach(() => {
   vi.clearAllMocks();
   state.apiKeyWorkspaceId = null;
-  state.apiKeyWorkspaceLockKind = null;
+  // A session caller is a person and is their own subject — what `with-auth.ts`
+  // puts on the context for the cookie branch.
+  state.credentialSubjectUserId = "user-1";
   state.token = null;
   state.sessionUser = { id: "user-1" };
 });
@@ -250,33 +252,33 @@ describe("the credential workspace lock (LIVE since Home Knowledge Panels M5)", 
   // not have widened the WORKSPACE axis by a millimetre. A container-session
   // credential is the kind that now reads its operator's private rows — the
   // home workspace is still 403, which is B1's actual job.
-  it("STILL 403s a contradicting target when the lock is a CONTAINER SESSION", async () => {
+  it("STILL 403s a contradicting target when the credential is a CONTAINER SESSION", async () => {
     state.apiKeyWorkspaceId = UUID_A;
-    state.apiKeyWorkspaceLockKind = "container_session";
+    state.credentialSubjectUserId = "user-1";
     const res = await echo(req("/api/x", { "x-workspace-id": UUID_B }), { params: Promise.resolve({}) });
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe("API_KEY_WORKSPACE_MISMATCH");
   });
 
-  it("forwards the lock KIND onto the context, so the M-10 predicates can read it", async () => {
-    state.apiKeyWorkspaceId = UUID_A;
-    state.apiKeyWorkspaceLockKind = "container_session";
+  // 🔒 THE TWO AXES ARRIVE INDEPENDENTLY, WHICH IS THE WHOLE SLICE. The mutation
+  // this catches: deriving the subject from the container fence collapses row 3.
+  it.each([
+    ["a fenced session", UUID_A, "user-1"],
+    ["a fenced SHARED credential", UUID_A, null],
+    ["an UNFENCED person", null, "user-1"],
+  ] as const)("forwards both axes for %s", async (_label, container, subject) => {
+    state.apiKeyWorkspaceId = container;
+    state.credentialSubjectUserId = subject;
     grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    const echoKind = withWorkspaceAuth(async (_req, ctx) =>
-      NextResponse.json({ kind: ctx.apiKeyWorkspaceLockKind ?? null })
+    const echoAxes = withWorkspaceAuth(async (_req, ctx) =>
+      NextResponse.json({
+        container: ctx.apiKeyWorkspaceId,
+        subject: ctx.credentialSubjectUserId,
+      })
     );
-    const res = await echoKind(req("/api/x"), { params: Promise.resolve({}) });
-    expect(await res.json()).toEqual({ kind: "container_session" });
-  });
-
-  it("an UNSTATED kind arrives as null — which every predicate reads as SHARED", async () => {
-    state.apiKeyWorkspaceId = UUID_A;
-    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    const echoKind = withWorkspaceAuth(async (_req, ctx) =>
-      NextResponse.json({ kind: ctx.apiKeyWorkspaceLockKind ?? null })
-    );
-    const res = await echoKind(req("/api/x"), { params: Promise.resolve({}) });
-    expect(await res.json()).toEqual({ kind: null });
+    const target = req("/api/x", { "x-workspace-id": UUID_A });
+    const res = await echoAxes(target, { params: Promise.resolve({}) });
+    expect(await res.json()).toEqual({ container, subject });
   });
 });
 

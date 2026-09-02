@@ -70,7 +70,7 @@ const CTX: KnowledgeContext = {
   role: "owner",
   source: "user",
   apiKeyWorkspaceId: null,
-  apiKeyWorkspaceLockKind: null,
+  credentialSubjectUserId: "u-operator",
   sessionId: null,
 };
 

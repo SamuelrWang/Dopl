@@ -32,7 +32,9 @@ export interface AuthLike {
   role: Role;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
-  apiKeyWorkspaceLockKind?: string | null;
+  /** WHOSE REACH the credential inherits; `null` = nobody in particular.
+   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+  credentialSubjectUserId: string | null;
   sessionId?: string | null;
 }
 
@@ -55,7 +57,7 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
     role: auth.role,
     source: auth.agentTokenId ? "agent" : "user",
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
-    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
+    credentialSubjectUserId: auth.credentialSubjectUserId,
     sessionId: auth.sessionId ?? null,
   };
 }
