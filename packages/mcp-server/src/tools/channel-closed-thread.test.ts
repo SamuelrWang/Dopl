@@ -48,7 +48,7 @@ function posted() {
   };
 }
 
-describe("opPost — a post into a LEGACY closed thread says nothing about it", () => {
+describe("opPost — a send into a LEGACY closed thread says nothing about it", () => {
   it("reports an ordinary successful post, with no closed-thread warning", async () => {
     const postChannelMessage = vi.fn(async () => posted());
     const client = stubClient({ postChannelMessage });

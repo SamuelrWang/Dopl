@@ -10,17 +10,18 @@
  *   ⚠ "nobody was woken by it", said about a THREADED post — three routes run
  *     before `classify` (listener-messages.js) and none reads `to_user_id`: a
  *     first-class thread tag feeds the counterparty's live session directly.
- *   ⚠ "NONE of the messages above is addressed to you … do not answer them" —
- *     the canonical reply here is UNADDRESSED (`channel-post.js › postResult`,
- *     `prompt-framing.js › deliveryCall`), so this tells a requester its own
- *     answer is somebody else's traffic.
+ *
+ * ⚠ THE THIRD CLAIM — the `AWAIT_UNNAMED_NOTICE`, which must not tell a
+ * requester its own answer is somebody else's traffic — moved to
+ * `channel-addressing-await-notice.test.ts` on 2026-09-02, at the §1 cap. The
+ * seam is SUBJECT: what a WRITE reports about who it reached stays here; what a
+ * HOLD says about a page somebody else wrote is over there.
  */
 
 import { readFileSync } from "node:fs";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { ChannelMessage, DoplClient } from "@dopl/client";
 import {
-  AWAIT_UNNAMED_NOTICE,
   GROUP_CHANNEL_MIN_MEMBERS,
   rosterAddressingRule,
 } from "./channel-addressing";
@@ -32,7 +33,6 @@ import { isFirstClassThreadId } from "./channel-render-threads";
 import { threadFacts } from "./channel-post-linkage";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-import { opAwait } from "./channel-ops-await";
 import { opMembers } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
@@ -145,16 +145,22 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
    * named channel participant and its name ROUTED; the property that mattered was
    * never the spelling, it was that no name is an address.
    */
-  it("the revived rename_agent brought back NO addressing surface", () => {
+  it("the revived rename brought back NO addressing surface", () => {
+    // ⚠ B8: `op="rename_agent"` is `op="manage" action="rename"`; the retired
+    // spelling parses for one release so its redirect can run. ⚠ RE-POINTED:
+    // `agent_id` folded into the ONE recipient field, so the instance renamed is
+    // `to` and `name` pre-existed — still no param of its own, and `agent` is
+    // still banned by the case above.
     expect(CHANNEL_INPUT_SHAPE.op.safeParse("rename_agent").success).toBe(true);
-    // ⚠ It reuses `agent_id` — an INSTANCE id on the caller's own machine — and
-    // introduces no param of its own. A param literally named `agent` is still
-    // banned by the case above; `name` already existed for op="open".
-    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("agent_id");
+    expect(CHANNEL_INPUT_SHAPE.action.safeParse("rename").success).toBe(true);
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("to");
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("name");
     expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("agent");
     expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("as_agent");
   });
 
+  // ⚠ EVERY NAME BELOW IS A RETIRED SPELLING PARSING INTO ITS ONE-LINE REDIRECT
+  // (B8), not a published op — drop the parse and it is an opaque -32602.
   it("still accepts every op that SURVIVED, so the rollback took nothing extra", () => {
     for (const op of [
       "list",
@@ -287,8 +293,9 @@ describe("addressed= / landed= — what the note became", () => {
     expect(rosterAddressingRule("general", 2)).toContain(
       "routes the post into the session already working it",
     );
+    // ⚠ RE-POINTED: the trailing "whatever its addressing says" was compressed out.
     expect(CHANNEL_DOCTRINE).toContain(
-      "threaded into an exchange you are a party to is yours whatever its addressing says",
+      "anything threaded into an exchange you are a party to is yours",
     );
   });
 
@@ -389,109 +396,5 @@ describe("members — the rule reaches the result", () => {
 
     expect(text).toContain("With 3 members, an UNADDRESSED, UNTHREADED post reaches no one's agent");
     expect(text).not.toContain("Two members is the ONE size");
-  });
-});
-
-// ── the await notice ─────────────────────────────────────────────────
-
-describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
-  it("does not tell a waiting agent that its own answer belongs to someone else", () => {
-    // ⚠ `postResult` posts a responder's reply with no `toUserId` and
-    // `deliveryCall` teaches the delivery call with no `to`, so "nothing here
-    // is addressed to you" cannot narrow to "none of this is yours".
-    expect(AWAIT_UNNAMED_NOTICE).toContain("a reply here is normally posted UNADDRESSED");
-    expect(AWAIT_UNNAMED_NOTICE).toContain("that is your reply");
-    expect(AWAIT_UNNAMED_NOTICE).not.toContain("Do not answer them");
-    expect(AWAIT_UNNAMED_NOTICE).not.toContain("they are context.");
-  });
-
-  it("accounts for threading, which the addressing field cannot express", () => {
-    expect(AWAIT_UNNAMED_NOTICE).toContain(
-      "THREADED into an exchange you are a party to is for you",
-    );
-  });
-
-  it("still refuses another member's request", () => {
-    expect(AWAIT_UNNAMED_NOTICE).toContain("aimed at another member");
-    expect(AWAIT_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
-  });
-});
-
-// ── ...and WHEN it fires, a separate claim ───────────────────────────
-//
-// ⚠ Premise is "somebody ELSE wrote things and none names you". A predicate
-// running over the caller's OWN posts fires on a page holding only the caller's
-// own request and tells the agent it does not name them. `excludeAuthor` should
-// keep own posts out; this is the second line of defence, because the notice
-// must be false-free on whatever it is handed.
-
-describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
-  function awaitClient(messages: Array<Record<string, unknown>>): DoplClient {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
-    return {
-      listChannels: vi.fn(async () => [CHANNEL]),
-      awaitChannelMessages: vi.fn(async () => ({ messages, timedOut: false })),
-    } as unknown as DoplClient;
-  }
-
-  function message(
-    seq: number,
-    authorUserId: string,
-    toUserId?: string,
-  ): Record<string, unknown> {
-    return {
-      id: `m-${seq}`,
-      seq,
-      channelId: "chan-1",
-      authorUserId,
-      authorKind: "agent",
-      kind: "message",
-      body: "the body",
-      metadata: toUserId ? { to_user_id: toUserId } : {},
-      clientMsgId: null,
-      createdAt: "2026-07-31T00:00:00Z",
-    };
-  }
-
-  async function noticeFor(
-    messages: Array<Record<string, unknown>>,
-    selfUserId: string | null = ME,
-  ): Promise<string> {
-    const res = await opAwait(awaitClient(messages), "general", 7, undefined, selfUserId);
-    return res.content[0].text;
-  }
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("says NOTHING when every message on the page is the caller's own", async () => {
-    const text = await noticeFor([message(8, ME, PEER)]);
-    expect(text).not.toContain("NONE of the messages above NAMES you");
-  });
-
-  it("still fires when a peer wrote something that names nobody", async () => {
-    expect(await noticeFor([message(8, PEER)])).toContain(
-      "NONE of the messages above NAMES you",
-    );
-  });
-
-  it("stays silent when a peer's message DOES name the caller", async () => {
-    expect(await noticeFor([message(8, PEER, ME)])).not.toContain(
-      "NONE of the messages above NAMES you",
-    );
-  });
-
-  it("judges the peer's messages alone — the caller's own can't suppress it", async () => {
-    // Mixed page — the notice is about theirs; mine changes nothing.
-    expect(await noticeFor([message(8, ME, PEER), message(9, PEER)])).toContain(
-      "NONE of the messages above NAMES you",
-    );
-  });
-
-  it("says nothing at all when the caller's own id is unknown", async () => {
-    expect(await noticeFor([message(8, PEER)], null)).not.toContain(
-      "NONE of the messages above NAMES you",
-    );
   });
 });

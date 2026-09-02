@@ -1,6 +1,11 @@
 /**
- * `dopl_channel(op="escalate")` — structured escalation cards, and the four
- * rules that make one worth having.
+ * `dopl_channel(op="send", kind="decision")` — structured escalation cards, and
+ * the four rules that make one worth having.
+ *
+ * ⚠ THE OP COLLAPSED INTO A `kind` (B8, 2026-09-02) AND TWO PARAMS WENT WITH IT:
+ * the ISSUE is the send's `summary` and the CONTEXT is its `body`, because the
+ * surface already had both fields under other names. Nothing below is weaker for
+ * it — the payload the seam builds is the same validated `escalation` object.
  *
  * ⚠ THE HEADLINE ASSERTION IS THAT THE BODY CARRIES EVERYTHING. The card is
  * `kind='message'` plus reserved `metadata.escalation`, and four live surfaces
@@ -69,11 +74,16 @@ const OPTIONS = [
   { label: "Wait for review", consequence: "Blocked until tomorrow." },
 ];
 
+/** The ISSUE and the CONTEXT, under the names the send lane publishes. */
+const ISSUE = "Ship the migration now or wait?";
+const CONTEXT = "It is additive and reversible.";
+
 const ASK = {
-  op: "escalate",
+  op: "send",
+  kind: "decision",
   channel: "with-dana",
-  issue: "Ship the migration now or wait?",
-  context: "It is additive and reversible.",
+  summary: ISSUE,
+  body: CONTEXT,
   options: OPTIONS,
   recommendation: { index: 0, why: "Reversible, nothing depends on it." },
 };
@@ -83,8 +93,8 @@ describe("the card DEGRADES — the body carries the whole question", () => {
     const post = vi.fn(async () => POSTED);
     await run(channelStub({ postChannelMessage: post }), ASK);
     const body = post.mock.calls[0][1].body as string;
-    expect(body).toContain("Ship the migration now or wait?");
-    expect(body).toContain("It is additive and reversible.");
+    expect(body).toContain(ISSUE);
+    expect(body).toContain(CONTEXT);
     expect(body).toContain("Ship now");
     expect(body).toContain("Live in ten minutes.");
     expect(body).toContain("Wait for review");
@@ -101,8 +111,8 @@ describe("the card DEGRADES — the body carries the whole question", () => {
     await run(channelStub({ postChannelMessage: post }), ASK);
     const input = post.mock.calls[0][1] as Record<string, unknown>;
     expect(input.escalation).toEqual({
-      issue: ASK.issue,
-      context: ASK.context,
+      issue: ISSUE,
+      context: CONTEXT,
       options: OPTIONS,
       recommendation: ASK.recommendation,
     });
@@ -125,6 +135,12 @@ describe("the card DEGRADES — the body carries the whole question", () => {
       // Even if a caller supplies one, the routing seam does not forward it.
       to: "dana@example.com",
     });
+    // ⚠ RE-POINTED AT THE FIELD THAT REPLACED IT (B8): `to` is now a UNION
+    // resolved SERVER-side and goes out as the message input's own `to`, so
+    // `toUserId` no longer exists on the wire shape and asserting its absence
+    // would pass whatever the seam forwarded. The claim is unchanged — the
+    // decision lane routes no recipient at all.
+    expect(post.mock.calls[0][1].to).toBeUndefined();
     expect(post.mock.calls[0][1].toUserId).toBeUndefined();
   });
 });
@@ -139,7 +155,7 @@ describe("the option bounds refuse in the direction that says what to do", () =>
     expect(post).not.toHaveBeenCalled();
     expect(text).toContain("Nothing was posted");
     expect(text).toContain("one option is not a question");
-    expect(text).toContain('op="milestone"');
+    expect(text).toContain('kind="milestone"');
   });
 
   it("SEVEN options are refused, and the remedy is to collapse rather than to act", async () => {
@@ -209,7 +225,7 @@ describe("the result reports the card it filed, not what a card is", () => {
     // is the field on this result that matters most.
     const text = await run(channelStub(), {
       ...ASK,
-      context: "@samue the rollback window closes at 02:00.",
+      body: "@samue the rollback window closes at 02:00.",
     });
     expect(text).toContain("tags=0/1");
   });
@@ -226,7 +242,7 @@ describe("the result reports the card it filed, not what a card is", () => {
     expect(text).not.toContain("ESCALATION CARD");
     // ⚠ What the result DOES hand back is the cursor to watch on, which is the
     // operative half of "where the answer arrives" and costs eight characters.
-    // Without it an agent taught by `launch_agent`'s bullet polls a surface that
+    // Without it an agent taught by `manage(action="launch")`'s bullet polls a surface that
     // has nothing to give it, forever.
     expect(text).toContain("await=since:42");
   });

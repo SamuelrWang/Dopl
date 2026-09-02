@@ -1,5 +1,6 @@
 /**
- * **`client_msg_id` ON `launch_agent` AND `direct_agent`** — the wire half of
+ * **`client_msg_id` ON `manage action="launch"` AND `manage action="direct"`** —
+ * the wire half of
  * G10 (2026-09-02, MCP/architecture v2 slice A10).
  *
  * ⚠ **WHAT WAS PROMISED AND BY WHAT.** The doctrine tells a caller that a
@@ -10,8 +11,8 @@
  * the wire:
  *
  *  1. **THE KEY REACHES THE SERVER** on both ops, out of the SHARED
- *     `client_msg_id` param the tool already publishes for `post` and
- *     `create_thread` — not a per-op spelling, which would be a second
+ *     `client_msg_id` param the tool already publishes for `send` and
+ *     `send thread="new"` — not a per-op spelling, which would be a second
  *     idempotency vocabulary on one tool.
  *  2. **A CONVERGED RETRY SAYS SO**, as `retry=existing`, on every terminal
  *     shape. A converged retry and a fresh request are otherwise the same line,
@@ -101,23 +102,30 @@ const agentStub = (over: Record<string, unknown> = {}) =>
 const run = (client: DoplClient, args: Record<string, unknown>) =>
   callTool(registerChannelTool, client, "dopl_channel", args);
 
-const LAUNCH = { op: "launch_agent", channel: "general", goal: "ship it", wait_ms: 0 };
-const DIRECT = {
-  op: "direct_agent",
+const LAUNCH = {
+  op: "manage",
+  action: "launch",
   channel: "general",
-  agent_id: "k3wpf7c5",
+  body: "ship it",
+  wait_ms: 0,
+};
+const DIRECT = {
+  op: "manage",
+  action: "direct",
+  channel: "general",
+  to: "k3wpf7c5",
   body: "check the deploy",
   wait_ms: 0,
 };
 
 describe("the key reaches the server, out of the tool's SHARED client_msg_id param", () => {
-  it("op=launch_agent carries it into the create body", async () => {
+  it('op="manage" action="launch" carries it into the create body', async () => {
     const create = vi.fn(async () => ({ offline: false, directive: directive() }));
     await run(agentStub({ createLaunchDirective: create }), { ...LAUNCH, client_msg_id: KEY });
     expect(create.mock.calls[0][0]).toMatchObject({ clientMsgId: KEY });
   });
 
-  it("op=direct_agent carries it into the create body", async () => {
+  it('op="manage" action="direct" carries it into the create body', async () => {
     const create = vi.fn(async () => ({ offline: false, direction: DIRECTION }));
     await run(agentStub({ createAgentDirection: create }), { ...DIRECT, client_msg_id: KEY });
     expect(create.mock.calls[0][0]).toMatchObject({ clientMsgId: KEY });
@@ -176,7 +184,7 @@ describe("a converged retry says so — `retry=existing`, on every terminal shap
     expect(out).toContain("retry=existing");
   });
 
-  it("op=direct_agent — DELIVERED, and the reply the first call never saw comes with it", async () => {
+  it('op="manage" action="direct" — DELIVERED, and the reply the first call never saw comes with it', async () => {
     const out = await run(
       agentStub({
         createAgentDirection: vi.fn(async () => ({
@@ -192,7 +200,7 @@ describe("a converged retry says so — `retry=existing`, on every terminal shap
     expect(out).toContain("3 files changed");
   });
 
-  it("op=direct_agent — PENDING carries it too, over that line's own `retry=no`", async () => {
+  it('op="manage" action="direct" — PENDING carries it too, over that line\'s own `retry=no`', async () => {
     const out = await run(
       agentStub({
         createAgentDirection: vi.fn(async () => ({
@@ -209,7 +217,7 @@ describe("a converged retry says so — `retry=existing`, on every terminal shap
 });
 
 describe("a caller that sent no key sees a byte-identical result", () => {
-  it("op=launch_agent adds no field — not even a dash", async () => {
+  it('op="manage" action="launch" adds no field — not even a dash', async () => {
     const out = await run(
       agentStub({
         createLaunchDirective: vi.fn(async () => ({
@@ -222,7 +230,7 @@ describe("a caller that sent no key sees a byte-identical result", () => {
     expect(out).not.toContain("retry=");
   });
 
-  it("op=direct_agent keeps its own `retry=no` when nothing converged", async () => {
+  it('op="manage" action="direct" keeps its own `retry=no` when nothing converged', async () => {
     const out = await run(agentStub(), DIRECT);
     expect(out).toContain("retry=no");
     expect(out).not.toContain("retry=existing");

@@ -1,5 +1,5 @@
 /**
- * `op="set_agent_mode"` — THE ROUTING, THE REFUSAL VERDICTS, AND THE POSTURE
+ * `op="manage" action="posture"` — THE ROUTING, THE REFUSAL VERDICTS, AND THE POSTURE
  * ECHO (2026-09-01, T24's sibling verb; re-expressed against the terse result
  * convention 2026-09-02, T10/T24).
  *
@@ -16,7 +16,7 @@
  *     "unclamped", or echoing the request back, is (1) with a column behind it.
  *  3. **`no-bridge` NARRATED WITH THE WRONG TOGGLE STORY.** This is the one agent
  *     verb the launch toggle DOES gate, so the shipped copy must be allowed to
- *     say so — while `end_agent` / `rename_agent` must keep saying the opposite.
+ *     say so — while `action="end"` / `action="rename"` must keep saying the opposite.
  *  4. **A TIMEOUT READ AS A FAILURE**, producing a second request for the same
  *     change with no way to tell which one acted.
  *
@@ -35,7 +35,7 @@
  *
  * ⚠ **THE CROSS-VERB HALF LIVES NEXT DOOR** (`channel-ops-agent-gate.test.ts`,
  * split off at the 500-line cap, INVARIANTS §1): that `no-bridge` means the
- * launch toggle HERE and explicitly does not on `end_agent` / `rename_agent`, and
+ * launch toggle HERE and explicitly does not on `action="end"` / `action="rename"`, and
  * that the ungated module's copy never claims otherwise. It is one claim about
  * three verbs, so it could not live under any one of them. ⚠ A new case about
  * the ASYMMETRY goes there; a new case about THIS op's own result goes here.
@@ -51,6 +51,17 @@ import { opSetAgentMode } from "./channel-ops-agent-mode";
 import { postureFacts } from "./channel-facts";
 import { factsLine } from "./channel-facts";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+// ⚠ **THE ASK-IS-NOT-A-GRANT RULE IS `posture`'S OWN `.describe()` NOW.** The
+// five-op collapse folded the three axes into one object and moved the rule onto
+// it: a client reads it at the moment it decides what to send, which is closer to
+// the decision than the op paragraph was. The claim did not move surfaces by
+// accident — the doctrine keeps CONTRACTS, an argument keeps its own rule.
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+
+/** The argument `.describe()` text, which is prose a client reads too. */
+const ARG_PROSE = Object.values(CHANNEL_INPUT_SHAPE)
+  .map((arg) => arg.description ?? "")
+  .join("\n");
 
 const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
 const AGENT = "a1b2c3d4";
@@ -110,7 +121,7 @@ const modeText = async (
 /** The posture pair as a caller reads it — through the real renderer. */
 const postureText = (d: LaunchDirective) => factsLine("taken", postureFacts(d));
 
-describe("set_agent_mode — the ASK, never the SET", () => {
+describe('manage action="posture" — the ASK, never the SET', () => {
   it("names what was asked for and never claims it was granted", async () => {
     const text = await modeText(settled({ status: "done" }), {
       tools: "bypass",
@@ -129,23 +140,25 @@ describe("set_agent_mode — the ASK, never the SET", () => {
     // ⚠ THE RULE, in its one home. "ASKED FOR IS NOT GRANTED" and "never widens
     // past it" were paragraphs on every result of this verb; they are standing
     // doctrine — true of every call — and are read once at op="help".
-    expect(CHANNEL_DOCTRINE).toContain("YOU ASK, YOU DO NOT SET");
-    expect(CHANNEL_DOCTRINE).toContain("NARROWS whatever you name down to the ceiling");
-    expect(CHANNEL_DOCTRINE).toContain("never widens past it");
+    // ⚠ RE-POINTED ONTO `posture`'S OWN `.describe()`, where the rule lives now.
+    expect(ARG_PROSE).toContain("how much freedom to ASK FOR");
+    expect(ARG_PROSE).toContain(
+      "narrows whatever you ask for to their own ceiling and never widens past it",
+    );
   });
 
   it("says the agent keeps running — a posture is not an interruption", async () => {
     const text = await modeText(settled({ status: "done" }));
     // ⚠ THE VERDICT IS AN ABSENCE PLUS AN ADDRESS. "still running" was a
     // sentence; what carries it is that the line names the agent by its LIVE
-    // handle and borrows nothing from the stop verb — `end_agent` answers
+    // handle and borrows nothing from the stop verb — `action="end"` answers
     // `ended` with `handle=spent`, the reading this must never produce.
     expect(text).toContain(`agent=@agent-${AGENT}`);
     expect(text.startsWith("taken ")).toBe(true);
     expect(text).not.toContain("handle=spent");
     expect(text).not.toContain("ended");
     // ⚠ THE RULE: it moves permissions and nothing else.
-    expect(CHANNEL_DOCTRINE).toContain("changes permissions and nothing else");
+    expect(CHANNEL_DOCTRINE).toContain('"posture" re-permissions a running one');
   });
 
   it("renders `-` for an axis deliberately left alone", async () => {
@@ -193,10 +206,11 @@ describe("🔒 the posture ECHO — a NULL is 'not reported', never agreement", 
     );
     // ⚠ THE RULE. "DO NOT ASSUME YOU GOT IT" was the paragraph's headline; the
     // doctrine says the same thing and says WHICH reading is forbidden.
-    expect(CHANNEL_DOCTRINE).toContain(
-      "WHETHER YOU WERE NARROWED IS ONLY KNOWN IF THAT MACHINE SAYS SO",
-    );
-    expect(CHANNEL_DOCTRINE).toContain("NOT that you got what you asked for");
+    // ⚠ RE-POINTED: the ask-is-not-a-grant rule is `posture`'s `.describe()`, and
+    // the "a blank cell was NOT REPORTED and is not a value" principle is stated
+    // once, on the surface that renders those cells.
+    expect(ARG_PROSE).toContain("how much freedom to ASK FOR");
+    expect(CHANNEL_DOCTRINE).toContain("A `—` cell was NOT REPORTED");
   });
 
   it("⚠ NEVER echoes the REQUEST back when the echo is null", () => {
@@ -258,12 +272,12 @@ describe("🔒 the posture ECHO — a NULL is 'not reported', never agreement", 
     expect(line).toContain('chain="not reported"');
   });
 
-  it("the set_agent_mode success renders the echo line", async () => {
+  it('the action="posture" success renders the echo line', async () => {
     expect(await modeText(settled({ status: "done" }))).toContain("not reported");
   });
 });
 
-describe("set_agent_mode — the terminal shapes", () => {
+describe('manage action="posture" — the terminal shapes', () => {
   it("a refusal says nothing changed and is not an error", async () => {
     const text = await modeText(
       settled({ status: "refused", refusalReason: "no-session" }),
@@ -278,12 +292,13 @@ describe("set_agent_mode — the terminal shapes", () => {
     // ⚠ THE RULE, both halves of it: that a refusal is normal, and what
     // `no-session` means — the agent already finished, so there is no posture to
     // move and no re-issue will find one.
-    expect(CHANNEL_DOCTRINE).toContain(
-      "A refusal is a normal answer from a machine its owner controls",
-    );
-    expect(CHANNEL_DOCTRINE).toContain(
-      "the agent already finished and there was nothing left to stop",
-    );
+    // ⚠ RE-POINTED onto the refusal table's opening sentence and the word's own
+    // entry — the two CONTRACTS. ⚠ The "the agent already finished, so there was
+    // nothing left to stop" gloss was RETIRED BY RULING (contracts only, wave B
+    // spec §4) and is pinned ABSENT once, in
+    // `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
+    expect(CHANNEL_DOCTRINE).toContain("A REFUSAL IS A NORMAL ANSWER");
+    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
   });
 
   it("⚠ `no-bridge` HERE MAY BE THE LAUNCH TOGGLE — and the doctrine names it", async () => {
@@ -299,13 +314,13 @@ describe("set_agent_mode — the terminal shapes", () => {
     // one text now serves all three mailboxes, so it has to carry BOTH claims or
     // they collapse into one wrong answer. The sibling suite below pins the
     // other end.
-    expect(CHANNEL_DOCTRINE).toContain(
-      'It gates op="launch_agent" and op="set_agent_mode"',
-    );
-    expect(CHANNEL_DOCTRINE).toContain("MAY genuinely BE that setting");
-    // …and it still names the OTHER cause, which is that no listener of the
-    // operator's is up to take the row at all.
-    expect(CHANNEL_DOCTRINE).toContain("LAUNCHING (or DIRECTING) OVER MCP TURNED OFF");
+    // 🔒 THE RULE, AND IT IS THE ONE ASYMMETRY ON THIS LANE. The shipped copy
+    // used to say "DOES gate this op" in THIS module and the opposite next door;
+    // one text serves all three mailboxes now, so it has to carry BOTH claims or
+    // they collapse into one wrong answer — which is exactly what happened for a
+    // day in the five-op collapse. It names THIS action as gated, by name.
+    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture"');
   });
 
   it("`cap` does NOT borrow the launch advice to wait for a free slot", async () => {
@@ -331,8 +346,11 @@ describe("set_agent_mode — the terminal shapes", () => {
     expect(text).toContain("reason=bad-name");
     expect(text).toContain("retry=no");
     // …and the doctrine says whose word it is, which is what "belongs to
-    // RENAMING an agent" used to say in the result.
-    expect(CHANNEL_DOCTRINE).toContain("a rename's string was refused");
+    // RENAMING an agent" used to say in the result: a LABEL was refused, and this
+    // verb sends none.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "`bad-name` the label was not one line of 1-60 visible characters",
+    );
   });
 
   it("a TIMEOUT is pending, says the id, and forbids a re-issue", async () => {
@@ -345,24 +363,33 @@ describe("set_agent_mode — the terminal shapes", () => {
     expect(text).toContain("retry=no");
     // ⚠ THE RULE — and it is the expensive one: a second directive is a second
     // request for the same change, with nothing afterwards to say which acted.
-    expect(CHANNEL_DOCTRINE).toContain("IF A WAIT TIMES OUT THE REQUEST IS STILL PENDING");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "A TIMEOUT IS NOT A FAILURE: the request stays PENDING",
+    );
     // ⚠ **AND THE RULE NAMES ITS REMEDY SINCE A10 (2026-09-02).** "do NOT issue
     // it again" was the whole answer while the lane had no idempotency key;
     // `client_msg_id` makes the retry answerable, so the doctrine points at the
     // key and keeps the prohibition for a re-issue that carries none.
-    expect(CHANNEL_DOCTRINE).toContain("Re-issue it ONLY with the same `client_msg_id`");
-    expect(CHANNEL_DOCTRINE).toContain("WITHOUT one, do not re-issue at all");
+    // ⚠ RE-POINTED: one sentence now states the key AND the cost of omitting it,
+    // which is the same pair the two sentences carried.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
+    );
   });
 
-  it("🔒 the PENDING line answers `confirm=none`, not the END's read_sessions", async () => {
+  it("🔒 the PENDING line answers `confirm=none`, not the END's confirm surface", async () => {
     // The defect a `kind === "end" ? … : …` ternary produces the day a third
     // verb arrives: a re-posture told to go and confirm itself somewhere that
-    // cannot report it. ⚠ THE DANGEROUS MISREAD IS THE `read_sessions` ONE — an
+    // cannot report it. ⚠ THE DANGEROUS MISREAD IS THE `op="status"` ONE — an
     // agent whose re-posture never landed is still running at its OLD
     // permissions, and a listing that keeps printing it looks like success.
     const text = await modeText(settled({ status: "pending" }));
     expect(text).toContain("confirm=none");
-    expect(text).not.toContain("confirm=read_sessions");
+    // ⚠ THE END'S CONFIRM SURFACE, BY ITS CURRENT NAME: `PENDING_CONFIRM.end`
+    // shipped the retired `read_sessions` until it moved to `status`
+    // (2026-09-02), and the negative has to track the LIVE value or it stops
+    // guarding anything the day the ternary comes back.
+    expect(text).not.toContain("confirm=status");
     // ⚠ **A RENAME ANSWERS `none` TOO, AND THAT IS CORRECT RATHER THAN THE
     // COLLAPSE THIS CASE GUARDS** — neither is confirmable, for the same reason.
     // What keeps the two lines apart is `asked=`, which only this verb carries,
@@ -406,14 +433,14 @@ describe("set_agent_mode — the terminal shapes", () => {
     // `channel-ops-agent.ts › fileAndHold` renders the OFFLINE shape as
     // `factsLine(input.kind === "end" ? "not ended" : "not renamed", …)` — the
     // exact ternary `VERB_PAST` and `PENDING_CONFIRM` were both made into maps
-    // to avoid — so an offline `set_agent_mode` answers **`not renamed`** and
+    // to avoid — so an offline `action="posture"` answers **`not renamed`** and
     // tells the caller its posture request was a rename. The fix is one
     // expression (`not ${VERB_PAST[input.kind]}`); it is NOT applied here,
     // because a suite that goes green against the bug it names is the defect
     // rather than the evidence (INVARIANTS §14, mutation-verify culture).
     const why =
       "channel-ops-agent.ts › fileAndHold renders the offline head with a " +
-      "kind === 'end' ternary, so set_agent_mode reports as a RENAME. " +
+      "kind === 'end' ternary, so a posture reports as a RENAME. " +
       "Use VERB_PAST — the map that exists for exactly this.";
     expect(text.startsWith("not re-postured "), `${why}\ngot: ${text}`).toBe(true);
     expect(text, why).not.toContain("not renamed");

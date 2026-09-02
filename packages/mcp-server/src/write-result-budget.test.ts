@@ -65,9 +65,22 @@ function textOf(res: { content: Array<{ type: string; text?: string }> }): strin
 }
 
 describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} chars`, () => {
-  it("post — the fullest ordinary shape: threaded, addressed, a tag and a wake", async () => {
+  it("send — the fullest ordinary shape: threaded, addressed, a tag and a wake", async () => {
     const res = await opPost(
-      writeClient(),
+      // ⚠ THE STORED RECIPIENT SET, BECAUSE `addressed=` IS READ OFF THE ROW NOW
+      // (B8). `to` is a union resolved SERVER-side, so the argument alone no
+      // longer decides the fact — a stub that omits what the server wrote
+      // reports `addressed=no` over a call that addressed somebody.
+      writeClient({
+        postChannelMessage: vi.fn(async () => ({
+          id: MESSAGE_ID,
+          seq: 858,
+          kind: "message",
+          authorUserId: "u-me",
+          metadata: { taskId: THREAD_ID, mentionedUserIds: [] },
+          recipientUserIds: ["u-peer"],
+        })),
+      }),
       CHANNEL_ID,
       "@diana please review, @agent-x2sz1ztt carry on with the audit",
       {
@@ -93,7 +106,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(text).toContain("landed=thread");
   });
 
-  it("post — unaddressed and unthreaded says so in two tokens, not two paragraphs (T12)", async () => {
+  it("send — unaddressed and unthreaded says so in two tokens, not two paragraphs (T12)", async () => {
     const res = await opPost(
       writeClient({
         postChannelMessage: vi.fn(async () => ({
@@ -119,7 +132,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(text).not.toContain("POSTED TO THE ROOM ITSELF");
   });
 
-  it("post — a thread tag the server DROPPED is still reported (the silent failure)", async () => {
+  it("send — a thread tag the server DROPPED is still reported (the silent failure)", async () => {
     const res = await opPost(
       writeClient({
         postChannelMessage: vi.fn(async () => ({
@@ -139,7 +152,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(text).toContain("landed=dropped");
   });
 
-  it("milestone and escalate open on their OWN verb, not on `posted`", async () => {
+  it('kind="milestone" and kind="decision" open on their OWN verb, not on `posted`', async () => {
     const milestone = textOf(
       (await opPost(writeClient(), CHANNEL_ID, "step one landed", {
         kind: "task_progress",
@@ -174,7 +187,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(escalated.length).toBeLessThanOrEqual(WRITE_RESULT_MAX_CHARS);
   });
 
-  it("create_thread returns the id, the opening cursor and nothing else", async () => {
+  it('send thread="new" returns the id, the opening cursor and nothing else', async () => {
     const res = await opCreateThread(
       writeClient({
         createChannelThread: vi.fn(async () => ({
@@ -195,7 +208,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(text).not.toContain("Now WATCH FOR THE REPLY");
   });
 
-  it("launch_agent reports the handle, the identity and whether it is running", async () => {
+  it('manage(action="launch") reports the handle, the identity and whether it is running', async () => {
     const res = await opLaunchAgent(
       writeClient({
         createLaunchDirective: vi.fn(async () => ({
@@ -226,7 +239,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(text).not.toContain("THREE LIMITS");
   });
 
-  it("direct_agent's fact line fits — the agent's REPLY is payload and rides under it", async () => {
+  it('manage(action="direct")\'s fact line fits — the agent\'s REPLY is payload and rides under it', async () => {
     const res = await opDirectAgent(
       writeClient({
         createAgentDirection: vi.fn(async () => ({

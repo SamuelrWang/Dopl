@@ -2,7 +2,7 @@
  * `postureFacts` — **THE RENDER OF THE APPLIED POSTURE, AND THE NULL CASE IS THE WHOLE POINT.**
  *
  * ⚠ **WHY IT IS ITS OWN FILE.** `channel-ops-launch.test.ts` is about the four TERMINAL SHAPES of
- * `op="launch_agent"` — what each one teaches a model choosing its next action. This is about ONE
+ * `op="manage" action="launch"` — what each one teaches a model choosing its next action. This is about ONE
  * pure function's truth table, on a different clock: it moves when the echo columns move, not when
  * the op's copy does. Same seam `channel-ops-launch-template.test.ts` already took.
  *

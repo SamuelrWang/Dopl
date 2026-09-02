@@ -119,10 +119,10 @@ describe("the published input schema forbids extra properties", () => {
 });
 
 describe("a removed param is REFUSED, and the refusal names the field", () => {
-  it("dopl_channel op=post + to_agent → -32602 naming to_agent, and NOTHING is posted", async () => {
+  it("dopl_channel op=send + to_agent → -32602 naming to_agent, and NOTHING is posted", async () => {
     const res = await client.callTool({
       name: "dopl_channel",
-      arguments: { op: "post", channel: "general", body: "hi", to_agent: "quartz" },
+      arguments: { op: "send", channel: "general", body: "hi", to_agent: "quartz" },
     });
     expect(res.isError).toBe(true);
     const text = (res.content as Array<{ text: string }>)
@@ -140,7 +140,7 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
     // ⚠ The refusal must be about the UNKNOWN key and nothing else.
     const res = await client.callTool({
       name: "dopl_channel",
-      arguments: { op: "post", channel: "general", body: "hi" },
+      arguments: { op: "send", channel: "general", body: "hi" },
     });
     expect(res.isError).toBeFalsy();
     expect(posted).toHaveBeenCalledTimes(1);

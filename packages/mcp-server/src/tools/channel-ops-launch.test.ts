@@ -1,5 +1,6 @@
 /**
- * `op="launch_agent"` — the four terminal shapes and the FACTS each one ends on.
+ * `op="manage" action="launch"` — the four terminal shapes and the FACTS each
+ * one ends on.
  *
  * ⚠ **EVERY CASE HERE IS ABOUT WHAT THE RESULT TEACHES, not about plumbing.** A
  * tool RESULT is read by the same model at the moment it chooses its next action
@@ -98,8 +99,10 @@ describe("OFFLINE — nothing is filed, and the caveat is honest about presence"
   it("keeps the fallback that needs nobody's machine reachable in the doctrine", async () => {
     // ⚠ MOVED, NOT DELETED: a post reaches the PERSON whatever their desktop is
     // doing — the LAW's first rule, not this result's sentence.
-    expect(await text(offline)).not.toContain('op="post"');
-    expect(CHANNEL_DOCTRINE).toContain('op="post"');
+    // ⚠ RE-POINTED: `post` became `send` in the five-op collapse, and the LAW's
+    // first rules are still the home of "a message reaches the PERSON".
+    expect(await text(offline)).not.toContain('op="send"');
+    expect(CHANNEL_DOCTRINE).toContain('op="send"');
   });
 
   it("never polls — there is no directive to poll", async () => {
@@ -123,7 +126,11 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // ⚠ MOVED, NOT DELETED — the rule that makes the prefixed form the only one
     // that means anything off the operator's own machine.
     expect(out).not.toContain("ITS HANDLE IS");
-    expect(CHANNEL_DOCTRINE).toContain("THE HANDLE IS `@agent-<id>`");
+    // ⚠ RE-POINTED onto the LAW bullet that now carries the rule: the prefixed
+    // form is what `to=` and a body both take, and it is the only address.
+    expect(CHANNEL_DOCTRINE).toContain(
+      'to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
+    );
   });
 
   it("says a custom NAME is machine-local and never addressable from here", async () => {
@@ -131,7 +138,7 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // carries it — which is why the fact line publishes the ID, never a name.
     const out = await text(launched);
     expect(out).not.toContain("lives on their machine alone");
-    expect(CHANNEL_DOCTRINE).toContain("is stored on that ONE machine, reaches no server");
+    expect(CHANNEL_DOCTRINE).toContain("stored on that one machine, it reaches no server");
   });
 
   it("⚠ KEEPS THE WAKE **WITH ITS THREE LIMITS** — the sentence the repro bought", async () => {
@@ -143,25 +150,41 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // silence (ENGINEERING, 2026-08-31). Samuel's same-account carve made it
     // true; the BOUNDARY it never had is what is asserted here, on the doctrine.
     expect(await text(launched)).not.toContain("THREE LIMITS");
-    expect(CHANNEL_DOCTRINE).toContain("TO REDIRECT ONE LATER");
-    expect(CHANNEL_DOCTRINE).toContain("addresses an agent rather than a person");
-    expect(CHANNEL_DOCTRINE).toContain("THREE LIMITS, and they are the fence rather than a knack");
+    // ⚠ RE-POINTED ONTO THE TWO LAW BULLETS THAT NOW CARRY THE FENCE. The
+    // headline and the limits were one paragraph; they are the loop brake and
+    // the own-agents exception, and the redirect route is stated on the second.
+    expect(CHANNEL_DOCTRINE).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
+    expect(CHANNEL_DOCTRINE).toContain(
+      'thereafter to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
+    );
     // (1) ADDRESSED ONLY — tiers 2 and 3 stay shut to every agent-authored post.
-    expect(CHANNEL_DOCTRINE).toContain("an unaddressed post of yours starts nobody");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an AGENT-authored UNADDRESSED message starts nobody",
+    );
     // (2) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
-    expect(CHANNEL_DOCTRINE).toContain("only for YOUR OWN operator's agents");
-    // (3) NOT OBSERVABLE — the wake happens on a desktop no server can see.
-    expect(CHANNEL_DOCTRINE).toContain("delivery is not observable from here");
+    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Never another member's agent, and never without naming one",
+    );
+    // (3) ⚠ **SUPERSEDED BY THE PRODUCT, NOT DROPPED BY THE COLLAPSE.** "the wake
+    // is not observable from here" was true while nothing reported it; the send
+    // lane's `delivery=` now names `woken` as its own ack word, so the honest
+    // pin is the vocabulary that replaced the claim.
+    expect(CHANNEL_DOCTRINE).toContain("`woken` a dormant one was started");
   });
 
-  it("⚠ says a GOAL-LESS launch runs nothing, and a goal RUNS", async () => {
+  it("⚠ says a BODY-LESS launch runs nothing, and a body RUNS", async () => {
     // ⚠ `idle=` IS NOT COSMETIC AND MAY NEVER BE DROPPED FOR BREVITY: "it is on
     // it" vs "parked and running nothing" are different outcomes, and one field
     // covering both must be the weaker claim — which leaves a caller waiting
     // forever on an agent that was never going to move.
     expect(await text(launched)).toContain("idle=yes");
     expect(await text(launched, { goal: "Draft the notes" })).toContain("idle=no");
-    expect(CHANNEL_DOCTRINE).toContain("a launch WITH one runs that goal as its FIRST INSTRUCTION");
+    // ⚠ RE-POINTED: `goal` became `body` at the seam, so the doctrine states the
+    // same two outcomes about `body`.
+    expect(CHANNEL_DOCTRINE).toContain(
+      '"launch" starts one, and its `body` is the FIRST INSTRUCTION it runs',
+    );
   });
 
   it("carries the identity fields, quoted where a value could forge a field", async () => {
@@ -184,10 +207,12 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(out.length, out).toBeLessThanOrEqual(WRITE_RESULT_MAX_CHARS);
   });
 
-  it("points at await (channel AND workspace form) and read_sessions, in the doctrine", async () => {
+  it('points at the hold (channel AND workspace form) and op="status", in the doctrine', async () => {
     expect(await text(launched)).not.toContain('op="await"');
-    expect(CHANNEL_DOCTRINE).toContain('op="read_sessions"');
-    expect(CHANNEL_DOCTRINE).toContain("OMITTING `channel` holds across EVERY channel you are a MEMBER of at once");
+    // ⚠ RE-POINTED: `await` became `read(wait_ms=…)` and `read_sessions` became
+    // `status`; the widening rule is stated on `channel` for both read ops.
+    expect(CHANNEL_DOCTRINE).toContain('op="status"');
+    expect(CHANNEL_DOCTRINE).toContain("OMITTING `channel` IS A WIDER READ");
   });
 
   it("does NOT claim to have verified the launch", async () => {
@@ -198,7 +223,9 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     const out = await text(launched);
     expect(out.startsWith("launched ")).toBe(true);
     expect(out).not.toMatch(/confirm|verified|running now/i);
-    expect(CHANNEL_DOCTRINE).toContain('op="launch_agent" ASKS your operator\'s own machine to start one');
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Every action files a request on your own operator's machine and holds for its answer",
+    );
   });
 });
 
@@ -212,14 +239,30 @@ describe("LAUNCHED — the id, and how to direct it", () => {
  */
 const REFUSALS: Record<LaunchRefusalReason, { retry: "once" | "no"; says: string[] }> = {
   // ⚠ FULL, NOT BROKEN — the next action is to LOOK at what is running.
-  cap: { retry: "no", says: ["ALREADY RUNNING AS MANY AGENTS AS IT ALLOWS", "Nothing is broken", 'op="read_sessions"'] },
-  busy: { retry: "once", says: ["The one genuinely temporary refusal", "a minute or two"] },
-  "no-sdk": { retry: "no", says: ["NO AGENT RUNTIME available", "Tell your operator"] },
-  "auth-hold": { retry: "no", says: ["SIGNED OUT", "Tell your operator"] },
+  // ⚠ **ONE CLAUSE PER WORD SINCE THE FIVE-OP COLLAPSE, AND THAT IS THE SOURCE'S
+  // DOING, NOT A NARROWING HERE.** The doctrine's refusal PARAGRAPHS became one
+  // table row, so each `says` is the whole of what the document now states about
+  // that word — pinned in full, not clipped to a fragment that happens to pass.
+  cap: { retry: "no", says: ["`cap` full", 'read op="status"', "A REFUSAL IS A NORMAL ANSWER"] },
+  busy: { retry: "once", says: ["`busy` mid-turn"] },
+  "no-sdk": { retry: "no", says: ["`no-sdk` no runtime"] },
+  "auth-hold": { retry: "no", says: ["`auth-hold` the operator must sign in"] },
   // ⚠ THE OPERATOR SAYING NO — their own consent setting, never a fault and
   // never something to route around.
-  "no-bridge": { retry: "no", says: ["LAUNCHING (or DIRECTING) OVER MCP TURNED OFF", "deliberate setting", "ASK THEM", "do not look for another route"] },
-  "no-counterparty": { retry: "no", says: ['op="members"'] },
+  // ⚠ THE OPERATOR SAYING NO — their own consent setting, never a fault. The row
+  // names WHOSE toggle it is and WHICH actions it gates, which is the half a
+  // caller cannot derive. ⚠ "do not look for another route" was RETIRED BY RULING
+  // (contracts only, wave B spec §4) — `retry=no` already says asking again
+  // changes nothing — and is pinned ABSENT once, in
+  // `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
+  "no-bridge": {
+    retry: "no",
+    says: [
+      "`no-bridge` the operator's LAUNCH toggle is off",
+      'it gates "launch" and "posture", never "end" or "rename"',
+    ],
+  },
+  "no-counterparty": { retry: "no", says: ["`no-counterparty` nothing to receive it"] },
   // ⚠ TWO FENCES, TWO PEOPLE: you named it under YOUR visibility, their desktop
   // resolves it under THEIRS — and which of deleted/invisible stays unobservable,
   // because the resolve endpoint is 404-never-403.
@@ -228,12 +271,17 @@ const REFUSALS: Record<LaunchRefusalReason, { retry: "once" | "no"; says: string
   // container, so a template the caller owns elsewhere is ABSENT rather than
   // hidden — a standing rule, answerable without reading any row. Which of the
   // OTHER two it was stays unobservable.
-  "no-template": { retry: "no", says: ["OPERATOR whose machine this is", "Do not re-issue the same id", "or it no longer exists", "THIS CHANNEL'S container", "a home channel IS its own container", "CHECK THE TENANCY FIRST"] },
+  "no-template": { retry: "no", says: ["`no-template` THAT machine could not resolve it under the operator's visibility"] },
   // ⚠ Neither of the last two has a producer on a LAUNCH — they belong to the
   // `end`/`rename` kinds sharing this mailbox, so arriving here IS the anomaly
   // and the answer is `no`: re-issuing over it would re-issue forever.
-  "no-session": { retry: "no", says: ["no LIVE session of your operator's carries that agent id"] },
-  "bad-name": { retry: "no", says: ["1-60 visible characters"] },
+  "no-session": { retry: "no", says: ["`no-session` no such agent"] },
+  // ⚠ THE ONE WORD A CALLER CAN ACTUALLY FIX ON A RETRY, so its row is the one
+  // that has to state the SHAPE rather than just the fault.
+  "bad-name": {
+    retry: "no",
+    says: ["`bad-name` the label was not one line of 1-60 visible characters"],
+  },
 };
 
 describe("REFUSED — nine words, nine next actions", () => {
@@ -302,12 +350,21 @@ describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () =
     expect(out).not.toContain("DO NOT ISSUE THIS CALL AGAIN");
     // ⚠ MOVED, NOT DELETED — and the COST is what the doctrine states, because
     // "do not re-issue" without it is a rule an agent talks itself out of.
-    expect(CHANNEL_DOCTRINE).toContain("A second launch starts a SECOND agent on the same work");
+    // ⚠ RE-POINTED: one timeout rule now covers all five `manage` actions, and it
+    // still names the cost AND the key that removes it.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
+    );
   });
 
   it("says where the answer will show up instead", async () => {
-    expect(await text(pending, { waitMs: 0 })).not.toContain('op="read_sessions"');
-    expect(CHANNEL_DOCTRINE).toContain('Look for the outcome in "read_sessions" or "read_directions" instead');
+    expect(await text(pending, { waitMs: 0 })).not.toContain('op="status"');
+    // ⚠ RE-POINTED, AND ONTO ONE OP INSTEAD OF TWO: `read_sessions` and
+    // `read_directions` collapsed into `status`, which is why the doctrine can
+    // now name BOTH halves of the answer in one clause.
+    expect(CHANNEL_DOCTRINE).toContain(
+      'op="status" reads your own machine\'s live sessions and the directions waiting for them',
+    );
   });
 
   it("a CLAIMED-but-undecided hold says a machine has taken it", async () => {

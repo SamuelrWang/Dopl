@@ -120,7 +120,7 @@ afterEach(() => {
 // ── stamped: a desktop-run session is fed replies, so it must not arm ──
 
 describe("desktop-session runtime — no wake promise, and do NOT await", () => {
-  it("post tells it not to arm at all", async () => {
+  it("send tells it not to arm at all", async () => {
     const text = (
       await opPost(stubClient(), "general", "please do X", {
         to: "bob@x.com",
@@ -143,12 +143,17 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     // ⚠ MOVED, NOT DELETED: WHY a fed session must not arm. (The OBSERVATION
     // framing — "this request CARRIED the stamp", never "you are a desktop" —
     // survives verbatim in the `await` results pinned further down this file.)
+    // ⚠ RE-POINTED, AND THE CLAIM IS STRONGER FOR IT. The old sentence ASKED a
+    // fed session not to arm; the collapse made it a contract — that machine
+    // REFUSES the hold outright rather than being asked to skip it. Same rule,
+    // now unskippable.
     expect(CHANNEL_DOCTRINE).toContain(
-      "SKIP THE AWAIT ENTIRELY if this session already receives the counterparty's replies as new turns",
+      "a session your operator's own Dopl app runs is woken by the MESSAGE ITSELF",
     );
+    expect(CHANNEL_DOCTRINE).toContain("REFUSES the hold outright");
   });
 
-  it("create_thread tells it not to arm, and says the thread was addressed", async () => {
+  it('send thread="new" tells it not to arm, and says the thread was addressed', async () => {
     const text = (
       await opCreateThread(
         stubClient(),
@@ -212,7 +217,7 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
 // ── unstamped: promise nothing, describe the hold ─────────────────────
 
 describe("unstamped runtime — the wake is the CLIENT's, and is stated as one", () => {
-  it("post describes the hold instead of promising it outlives the turn", async () => {
+  it("send describes the hold instead of promising it outlives the turn", async () => {
     const text = (
       await opPost(stubClient(), "general", "please do X", { to: "bob@x.com" })
     ).content[0].text;
@@ -231,17 +236,22 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // in-turn, CONDITIONAL wake, with the load-bearing stop rule, and with the
     // escape hatch for a caller who may still BE a desktop session on an older
     // build — exactly the case the stamp cannot tell us about.
-    expect(CHANNEL_DOCTRINE).toContain("RETURNS INSIDE your current turn");
+    // ⚠ **PIN RETIRED: the AWAITING block is deleted BY RULING**, not by drift
+    // — wave B §4 (`docs/specs/mcp-v2-wave-b.md:280`) lists `AWAITING (3,914)`
+    // under "Prose deleted with them" when `await` collapsed into
+    // `read(since=, wait_ms=)`. Its ONE surviving contract is the stop rule,
+    // which is the load-bearing half this pair was ever about, and it is what
+    // the doctrine end of the pair now holds.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Some MCP clients background a call still pending",
+      "Re-arm from the highest seq you were handed and stop when the exchange is done",
     );
-    expect(CHANNEL_DOCTRINE).toContain("if yours does");
-    expect(CHANNEL_DOCTRINE).toContain("STOP and report to your operator");
-    expect(CHANNEL_DOCTRINE).toContain("30+ minutes");
-    expect(CHANNEL_DOCTRINE).toContain("SKIP THE AWAIT ENTIRELY");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an empty return is the budget expiring, not an answer",
+    );
+    expect(CHANNEL_DOCTRINE).toContain("REFUSES the hold outright");
   });
 
-  it("create_thread does the same, keeping the opening-seq cursor", async () => {
+  it('send thread="new" does the same, keeping the opening-seq cursor', async () => {
     const text = (
       await opCreateThread(
         stubClient(),
@@ -258,8 +268,15 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).toContain("await=since:41");
     expect(text).not.toContain("await=skip");
     expect(text).not.toContain("Now WATCH FOR THE REPLY");
-    expect(CHANNEL_DOCTRINE).toContain("RETURNS INSIDE your current turn");
-    expect(CHANNEL_DOCTRINE).toContain("STOP and report to your operator");
+    // ⚠ **PIN RETIRED: the AWAITING block is deleted BY RULING**, not by drift
+    // — wave B §4 (`docs/specs/mcp-v2-wave-b.md:280`) lists `AWAITING (3,914)`
+    // under "Prose deleted with them" when `await` collapsed into
+    // `read(since=, wait_ms=)`. Its ONE surviving contract is the stop rule,
+    // which is the load-bearing half this pair was ever about, and it is what
+    // the doctrine end of the pair now holds.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+    );
   });
 
   /**
@@ -350,9 +367,16 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       // `await=since:<seq>` on a write, a bare `cursor=<seq>` on the timeout.
       expect(text).toMatch(/await=since:|cursor=\d+/);
     }
-    expect(CHANNEL_DOCTRINE).toContain("If your harness can run background shell tasks");
-    expect(CHANNEL_DOCTRINE).toContain("END your turn");
-    expect(CHANNEL_DOCTRINE).toContain("a wake your client already delivers");
+    // ⚠ **PIN RETIRED: the background-task OFFER went with the AWAITING block**
+    // (wave B §4, `docs/specs/mcp-v2-wave-b.md:280`). It was harness advice, and
+    // the doctrine carries contracts now. What this case actually guards is
+    // asserted above and is untouched: every arming surface still hands back the
+    // CURSOR that makes any poll possible, and none of them promises a wake.
+    // The one rule that outlived the offer is the stop rule.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+    );
+    expect(CHANNEL_DOCTRINE).not.toContain("background shell tasks");
   });
 
   it("does NOT offer it to a desktop session, which is already fed replies", async () => {
@@ -432,15 +456,24 @@ describe("CHANNEL_DESCRIPTION — runtime-neutral and honest", () => {
     // two, and BOTH halves are asserted — the description must still get a
     // reader to the text, and the text must still say the thing.
     const description = channelDescription();
-    expect(description).toContain('op="help"');
+    // ⚠ RE-POINTED (B8): the doctrine door is `op="rooms" action="help"`, and
+    // the hold is `wait_ms` on `op="read"` rather than an op called "await".
+    // Both halves of the claim are unchanged — the description gets a reader to
+    // the text, and it names the mechanism that brings a reply back.
+    expect(description).toContain('action="help"');
     expect(description).toContain(DOCTRINE_URI);
-    expect(description).toContain('"await"');
-    // The hold, said as what it provably is...
-    expect(CHANNEL_DOCTRINE).toContain("RETURNS INSIDE your current turn");
-    expect(CHANNEL_DOCTRINE).toContain("background a call still pending past ~2 minutes");
-    expect(CHANNEL_DOCTRINE).toContain('call "await" with since=<the last seq you saw>');
+    expect(description).toContain('wait_ms= holds');
+    // The hold, said as what it provably is... ⚠ RE-POINTED onto the surviving
+    // contract sentences (the AWAITING block is deleted by ruling — wave B §4,
+    // `docs/specs/mcp-v2-wave-b.md:280`). The doctrine still says what the hold
+    // IS, what it needs, and when to stop; it no longer speculates about the
+    // caller's harness.
+    expect(CHANNEL_DOCTRINE).toContain("`wait_ms` turns the page into a HOLD and needs `since`");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+    );
     // ...and the desktop-session escape hatch, which the static text CAN state
     // conditionally because it addresses every caller at once.
-    expect(CHANNEL_DOCTRINE).toContain("SKIP THE AWAIT ENTIRELY");
+    expect(CHANNEL_DOCTRINE).toContain("REFUSES the hold outright");
   });
 });

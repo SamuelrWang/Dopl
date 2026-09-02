@@ -139,7 +139,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     expect(text).toContain(UNTRUSTED_BODY_HEADER);
   });
 
-  it("treats caller timeout_ms as the TOTAL hold and clamps it to the cap", async () => {
+  it("treats caller wait_ms as the TOTAL hold and clamps it to the cap", async () => {
     const clock = fakeClock();
     const start = clock.now;
     const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
@@ -401,7 +401,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
   });
 });
 
-describe("opCreateThread — the await cursor rides back (WAKE-V1)", () => {
+describe("opCreateThread — the hold cursor rides back (WAKE-V1)", () => {
   const MEMBER = {
     userId: "u-peer",
     email: "pat@example.com",
@@ -449,9 +449,18 @@ describe("opCreateThread — the await cursor rides back (WAKE-V1)", () => {
     // carries it. Deleting either half of this pair is the regression.
     expect(text).not.toContain('op="await"');
     expect(text).not.toContain("STOP and report");
-    expect(CHANNEL_DOCTRINE).toContain('call "await" with since=<the last seq you saw>');
-    expect(CHANNEL_DOCTRINE).toContain("STOP and report to your operator");
-    expect(CHANNEL_DOCTRINE).toContain("30+ minutes");
+    // ⚠ **PIN RETIRED: the AWAITING block is deleted BY RULING**, not by drift
+    // — wave B §4 (`docs/specs/mcp-v2-wave-b.md:280`) lists `AWAITING (3,914)`
+    // under "Prose deleted with them" when `await` collapsed into
+    // `read(since=, wait_ms=)`. Its ONE surviving contract is the stop rule,
+    // which is the load-bearing half this pair was ever about, and it is what
+    // the doctrine end of the pair now holds.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+    );
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an empty return is the budget expiring, not an answer",
+    );
   });
 
   it("reports NO cursor rather than a fabricated one when the route gives no seq", async () => {
@@ -476,7 +485,12 @@ describe("opCreateThread — the await cursor rides back (WAKE-V1)", () => {
     expect(text).not.toContain("since:");
     expect(text).not.toContain("since=null");
     expect(text).not.toContain("since=undefined");
-    // ⚠ MOVED, NOT DELETED: how to find the seq yourself is in the doctrine.
-    expect(CHANNEL_DOCTRINE).toContain('"read" (or "list") to learn the latest seq');
+    // ⚠ MOVED, NOT DELETED: how to find the seq yourself is in the doctrine —
+    // ⚠ RE-POINTED (B8), because the lookup no longer needs two ops named. A
+    // read with NO cursor IS the latest-seq lookup, and that is now stated on
+    // the read itself rather than as a pair of op names.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "with none you get the newest page",
+    );
   });
 });

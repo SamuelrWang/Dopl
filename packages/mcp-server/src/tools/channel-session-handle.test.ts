@@ -1,5 +1,5 @@
 /**
- * THE ADDRESSABLE HANDLE — what `read_sessions` publishes, and the sentence that
+ * THE ADDRESSABLE HANDLE — what `op="status"` publishes, and the sentence that
  * has to travel with it (2026-08-31).
  *
  * ── WHAT BOUGHT THIS FILE ────────────────────────────────────────────────────
@@ -10,7 +10,7 @@
  * message, and every post an agent makes is agent-authored. THREE things met
  * there, and this file pins the surface all three left behind:
  *
- *   1. THE HANDLE WAS NOT DISCOVERABLE. `read_sessions` printed the row's `name`
+ *   1. THE HANDLE WAS NOT DISCOVERABLE. `op="status"` printed the row's `name`
  *      — which IS the agent id on any current desktop — but never said it was an
  *      address, and never named the `@agent-` form the rest of the product
  *      writes and tints.
@@ -36,8 +36,16 @@ import { formatSessionLine } from "./channel-session-render";
 // `channel-session-table.ts`'s header for why the dependency runs one way.
 import { sessionBlockLines } from "./channel-session-table";
 // THE HANDLE RULE'S NEW HOME. It is shipped prose, pulled on demand, and these
-// pins are what keep it word-for-word what it was in the deleted constant.
-import { CHANNEL_DOCTRINE, CHANNEL_OWN_AGENTS } from "./channel-doctrine";
+// pins are what keep every clause of it in the product.
+// ⚠ `CHANNEL_OWN_AGENTS` IS GONE (B8, 2026-09-02): the own-agent narrative was
+// 4,873 of the 23,554 characters the five-op collapse cut out of the doctrine,
+// and what replaced it is the LAW's two own-agent bullets plus the `manage`
+// section. `DOCTRINE_SECTIONS.manage` is the section-scoped subject those pins
+// now take.
+import { CHANNEL_DOCTRINE, DOCTRINE_SECTIONS } from "./channel-doctrine";
+// ⚠ THE DENIAL MOVED TO THE SCHEMA, which is the other half of the fence pin
+// below — see that case for why the subject changed rather than the claim.
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import type { ChannelSessionStateOwn } from "@dopl/client";
 
 const NOW = Date.parse("2026-08-31T05:00:00.000Z");
@@ -134,20 +142,31 @@ describe("the session LINE carries the handle, and only for an own row", () => {
  * ⚠ THE SUBJECT MOVED; THE ASSERTIONS DID NOT (T10, 2026-09-02).
  *
  * These pins were written against `SESSION_HANDLE_NOTE`, a ~1.1k-char paragraph
- * rendered under EVERY `read_sessions` page — on an op an orchestrator polls in
- * a loop. The constant is DELETED and its text is in `channel-doctrine.ts`,
- * pulled through `dopl_channel(op="help")` or the `dopl://doctrine/channels`
- * resource. **Not one sentence was softened on the way**, which is what these
- * assertions are here to keep true: each still names a thing the live repro
- * proved was missing, and each is checked in BOTH directions — still in the
- * product, and no longer re-transmitted per call.
+ * rendered under EVERY session page — on an op an orchestrator polls in a loop.
+ * The constant is DELETED and its text is in `channel-doctrine.ts`, pulled
+ * through `dopl_channel(op="rooms", action="help")` or the
+ * `dopl://doctrine/channels` resource.
+ *
+ * ⚠ **AND IT WAS RE-SPELLED AGAIN BY B8 (2026-09-02), SO THESE PINS FOLLOWED THE
+ * RULES RATHER THAN THE WORDS.** The five-op collapse compressed the own-agent
+ * narrative from a section into two LAW bullets and the `manage` section, so the
+ * assertions below name the sentence that now CARRIES each clause. Every clause
+ * the repro proved was missing is still pinned, and each is still checked in
+ * BOTH directions — in the product, and not re-transmitted per call.
  */
-describe("the handle rule survived the move to the doctrine, word for word", () => {
+describe("the handle rule survived the move to the doctrine, clause for clause", () => {
   it("names the form, and says a CUSTOM NAME is machine-local", () => {
     // A rename lives in `main/agent-names.js`, on ONE machine, keyed by an id
     // minted there. No server holds it, so it is not addressable from here —
     // and a caller who saw a friendly name in the Dopl app must not assume it is.
-    expect(CHANNEL_DOCTRINE).toContain("`@agent-<id>` form is the only one");
+    // ⚠ RE-POINTED (B8): the form and its exclusivity are now one LAW bullet —
+    // the prefixed form is the only address it names, and "ONLY BY NAME" /
+    // "never without naming one" is the exclusivity clause.
+    expect(CHANNEL_DOCTRINE).toContain(
+      'to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
+    );
+    expect(CHANNEL_DOCTRINE).toContain("AND ONLY BY NAME");
+    expect(CHANNEL_DOCTRINE).toContain("never without naming one");
     expect(CHANNEL_DOCTRINE).toContain("reaches no server");
     // ⚠ PEER-INVISIBILITY WAS RESTORED ON 2026-09-02 after this tier found it had
     // stopped appearing in ANY shipped prose. It is the half a caller cannot
@@ -160,31 +179,58 @@ describe("the handle rule survived the move to the doctrine, word for word", () 
     // caller posts under its operator's account, which is what licenses the wake.
     // Before it, the id `launch_agent` handed out could not be spent by the only
     // caller that had it — five posts, nothing woken, nothing said.
-    expect(CHANNEL_DOCTRINE).toContain("WAKES THAT AGENT");
-    expect(CHANNEL_DOCTRINE).toContain("never by the server's mention resolver");
+    expect(CHANNEL_DOCTRINE).toContain("wakes THAT agent");
+    // ⚠ RE-POINTED (B8). "never by the server's mention resolver" survives only
+    // as a CODE comment in `channel-facts.ts` — it ships nowhere. What still
+    // ships is the claim it existed to make, that a wake is not a tag, and the
+    // LAW states it directly.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Tagging is not addressing and starts no agent",
+    );
   });
 
   it("puts the GOAL first — waking is for redirecting, not for starting", () => {
     // ⚠ An orchestrator that reaches for the wake when it should have sent a
     // goal has spent two calls and a turn on one instruction.
-    expect(CHANNEL_DOCTRINE).toContain("ALREADY WORKING on it");
-    expect(CHANNEL_DOCTRINE).toContain("waking is for agents you need to REDIRECT");
+    // ⚠ RE-POINTED (B8): the ordering is carried by the two sentences that
+    // survived — the launch takes the goal as its FIRST INSTRUCTION, and the
+    // wake is what happens THEREAFTER, to an agent that already exists.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "its `body` is the FIRST INSTRUCTION it runs",
+    );
+    expect(CHANNEL_DOCTRINE).toContain(
+      'op="manage" action="launch" starts one, and thereafter',
+    );
   });
 
   it("⚠ CARRIES ALL THREE LIMITS — an exception without its boundary is a hole", () => {
     // (1) ADDRESSED ONLY. Tiers 2 and 3 wake on traffic nobody addressed and stay
     // shut to every agent-authored message; dropping this clause invites exactly
     // the unaddressed post the loop brake exists to refuse.
-    expect(CHANNEL_DOCTRINE).toContain("an unaddressed post of yours starts nobody");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an AGENT-authored UNADDRESSED message starts nobody",
+    );
     // (2) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
-    expect(CHANNEL_DOCTRINE).toContain("only for YOUR OWN operator's agents");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "YOUR OWN OPERATOR'S AGENTS, AND ONLY THEIR MACHINE",
+    );
+    expect(CHANNEL_DOCTRINE).toContain("Never another member's agent");
     // (3) NOT OBSERVABLE. The wake is decided on a desktop no server can see, so
     // the copy may not promise delivery it cannot witness.
-    expect(CHANNEL_DOCTRINE).toContain("delivery is not observable from here");
-    expect(CHANNEL_DOCTRINE).toContain("rather than assuming it woke");
-    // ⚠ AND THE THREE ARE LABELLED AS LIMITS, not merely present as sentences. A
-    // reader who takes the capability without the boundary is the failure mode.
-    expect(CHANNEL_DOCTRINE).toContain("THREE LIMITS");
+    // ⚠ RE-POINTED (B8). The paragraph saying the wake cannot be watched from
+    // here was cut; what carries the same instruction now is that the RECEIPT is
+    // the only ack there is — read `delivery=`, never assume.
+    expect(CHANNEL_DOCTRINE).toContain("`delivery=` IS THE ACK AND THE ONLY ONE");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "`idle` resolved but nothing running, filed until that machine reconciles",
+    );
+    // ⚠ THE "THREE LIMITS" HEADING IS GONE with the section it headed, so the
+    // pin moved to the property it was protecting: the capability and its
+    // boundary are stated in ONE breath, so a reader cannot take the first
+    // without the second.
+    expect(DOCTRINE_SECTIONS.law).toContain(
+      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME.",
+    );
   });
 
   it("never suggests a way AROUND the fence", () => {
@@ -196,19 +242,18 @@ describe("the handle rule survived the move to the doctrine, word for word", () 
     // operator's launch toggle — the OPPOSITE claim, and a whole-text match
     // would read it as an offender and pressure someone into deleting a fence.
     //
-    // ⚠ `bypass` IS NOW A RESERVED WORD IN THIS SECTION AND IS NOT AN OFFENDER
-    // (2026-09-02, when `set_agent_mode`'s paragraph joined it). It is the NAME
-    // of a `LaunchToolMode` a caller may ASK for, and the only sentence that
-    // writes it is the one DENYING that asking for it grants it — the strongest
-    // possible statement of the fence, not a route around it. So the word is
-    // excused EXACTLY ONCE, by removing that clause and re-running the scan over
-    // what is left: any OTHER use of it, and every "work around", still fails.
-    const DENIAL = 'asking for "bypass" does not give you bypass';
-    // ⚠ Asserted, not assumed. Without this the strip could silently become a
-    // no-op the day the denial is deleted, and the case would pass over copy
-    // that no longer denies anything.
-    expect(CHANNEL_OWN_AGENTS).toContain(DENIAL);
-    expect(CHANNEL_OWN_AGENTS.replace(DENIAL, "")).not.toMatch(
+    // ⚠ **THE DENIAL MOVED TO THE SCHEMA AND THE SECTION MOVED WITH IT** (B8,
+    // 2026-09-02). `bypass` used to be excused EXACTLY ONCE in this section,
+    // because the one sentence writing it was the sentence denying that asking
+    // for it grants it. That sentence is no longer prose: `bypass` is a value of
+    // `posture.tools`, and the denial is `posture`'s own `.describe()` — so the
+    // section needs no exemption at all, and the scan runs over the whole of it.
+    // Both halves are still pinned, so deleting either still fails here.
+    const posture = CHANNEL_INPUT_SHAPE.posture.description ?? "";
+    expect(posture).toContain(
+      "narrows whatever you ask for to their own ceiling and never widens past it",
+    );
+    expect(DOCTRINE_SECTIONS.manage).not.toMatch(
       /work ?around|bypass|instead you can post/i,
     );
   });
@@ -217,9 +262,12 @@ describe("the handle rule survived the move to the doctrine, word for word", () 
     // A rule that moved out of a result and did NOT arrive in the doctrine has
     // left the product; a rule in BOTH is the repetition this tier removed. The
     // test above proves arrival, this one proves departure.
+    // ⚠ THE NEGATIVE PINS FOLLOWED THE WORDS TOO (B8) — pinned on the phrases
+    // the doctrine actually ships now, or the departure guard would be trivially
+    // true against copy nothing writes any more.
     const page = sessionBlockLines([ownRow({})], NOW).join("\n");
-    expect(page).not.toContain("THREE LIMITS");
-    expect(page).not.toContain("WAKES THAT AGENT");
+    expect(page).not.toContain("AND ONLY BY NAME");
+    expect(page).not.toContain("wakes THAT agent");
     expect(page).not.toContain("reaches no server");
   });
 });

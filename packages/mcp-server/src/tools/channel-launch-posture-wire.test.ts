@@ -3,11 +3,12 @@
  * A6b), and **C11's `chain` TRI-STATE** on the same call site.
  *
  * ⚠ **THE BUG THIS FILE EXISTS FOR SHIPPED IN EVERY LAYER BUT ONE.**
- * `channel-schema.ts` published `tools`, `messages` and `chain`;
+ * `channel-schema.ts` published `posture.tools`, `posture.messages` and
+ * `posture.chain`;
  * `channel-ops-launch.ts › opLaunchAgent` accepted them; `schema-launch.ts`
  * validated them; `service-launch.ts` stored them; and
  * `20260910120000_channel_launch_directives_posture.sql` gave them columns and
- * CHECKs. `channel-dispatch-agents.ts`'s `case "launch_agent"` read NONE of
+ * CHECKs. `channel-dispatch-agents.ts`'s `case "launch"` read NONE of
  * them, so a caller asking for a narrower agent got the operator's stored
  * ceiling and was told nothing.
  *
@@ -15,7 +16,7 @@
  * can only WIDEN back to the ceiling, never past it, so nothing was
  * over-granted; the row simply recorded "did not ask", which is also what an
  * honest omission looks like. What was lost is the ability to ask for LESS —
- * `tools: "manual"`, `chain: "off"` — which T24 shipped so an orchestrator could
+ * `posture.tools: "manual"`, `posture.chain: "off"` — which T24 shipped so an orchestrator could
  * hand a worker a narrower posture than its own.
  *
  * ⚠ **SO EVERY CASE HERE IS DRIVEN THROUGH `registerChannelTool`, NOT THROUGH
@@ -85,7 +86,13 @@ function launchStub() {
   };
 }
 
-const LAUNCH = { op: "launch_agent", channel: "general", goal: "ship it", wait_ms: 0 };
+const LAUNCH = {
+  op: "manage",
+  action: "launch",
+  channel: "general",
+  body: "ship it",
+  wait_ms: 0,
+};
 
 const run = (client: DoplClient, args: Record<string, unknown>) =>
   callTool(registerChannelTool, client, "dopl_channel", args);
@@ -93,7 +100,7 @@ const run = (client: DoplClient, args: Record<string, unknown>) =>
 describe("F-438 — the two posture axes reach the wire", () => {
   it("`tools` and `messages` are on the create body, narrowest values included", async () => {
     const { client, createLaunchDirective } = launchStub();
-    await run(client, { ...LAUNCH, tools: "manual", messages: "ask" });
+    await run(client, { ...LAUNCH, posture: { tools: "manual", messages: "ask" } });
     expect(createLaunchDirective.mock.calls[0][0]).toMatchObject({
       tools: "manual",
       messages: "ask",
@@ -110,7 +117,7 @@ describe("F-438 — the two posture axes reach the wire", () => {
     expect(body.messages).toBeUndefined();
   });
 
-  it("`set_agent_mode` — the sibling arm that always did — is unchanged", async () => {
+  it('action="posture" — the sibling arm that always did — is unchanged', async () => {
     // ⚠ THE CONTROL. This op read both axes all along, which is what proved the
     // launch arm was an OMISSION rather than a design.
     const createAgentDirective = vi.fn(async () => ({
@@ -124,11 +131,11 @@ describe("F-438 — the two posture axes reach the wire", () => {
       getLaunchDirective: vi.fn(async () => directive()),
     }) as DoplClient;
     await run(client, {
-      op: "set_agent_mode",
+      op: "manage",
+      action: "posture",
       channel: "general",
-      agent_id: "k3wpf7c5",
-      tools: "manual",
-      messages: "ask",
+      to: "k3wpf7c5",
+      posture: { tools: "manual", messages: "ask" },
       wait_ms: 0,
     });
     expect(createAgentDirective.mock.calls[0][0]).toMatchObject({
@@ -144,10 +151,16 @@ describe("C11 — `chain` is three words at the seam and a boolean on the wire",
     // which values a caller can send, and that a BOOLEAN is no longer one of
     // them — `true`/`false` were the whole of the old surface.
     for (const word of ["inherit", "on", "off"]) {
-      expect(CHANNEL_INPUT_SHAPE.chain.safeParse(word).success, word).toBe(true);
+      expect(
+        CHANNEL_INPUT_SHAPE.posture.safeParse({ chain: word }).success,
+        word,
+      ).toBe(true);
     }
     for (const legacy of [true, false, "allow", "deny"]) {
-      expect(CHANNEL_INPUT_SHAPE.chain.safeParse(legacy).success, String(legacy)).toBe(false);
+      expect(
+        CHANNEL_INPUT_SHAPE.posture.safeParse({ chain: legacy }).success,
+        String(legacy),
+      ).toBe(false);
     }
   });
 
@@ -156,7 +169,7 @@ describe("C11 — `chain` is three words at the seam and a boolean on the wire",
     ["off", false],
   ])('chain="%s" sends %s', async (word, wire) => {
     const { client, createLaunchDirective } = launchStub();
-    await run(client, { ...LAUNCH, chain: word });
+    await run(client, { ...LAUNCH, posture: { chain: word } });
     expect(createLaunchDirective.mock.calls[0][0]).toMatchObject({ chain: wire });
   });
 
@@ -170,7 +183,10 @@ describe("C11 — `chain` is three words at the seam and a boolean on the wire",
    */
   it.each(["inherit", undefined])("chain=%s sends NOTHING, not false", async (word) => {
     const { client, createLaunchDirective } = launchStub();
-    await run(client, { ...LAUNCH, ...(word === undefined ? {} : { chain: word }) });
+    await run(client, {
+      ...LAUNCH,
+      ...(word === undefined ? {} : { posture: { chain: word } }),
+    });
     const body = createLaunchDirective.mock.calls[0][0] as Record<string, unknown>;
     expect(body.chain).toBeUndefined();
     expect(body.chain).not.toBe(false);

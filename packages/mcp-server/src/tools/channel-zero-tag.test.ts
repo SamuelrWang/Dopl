@@ -48,11 +48,16 @@ import { postMentionFacts } from "./channel-post-guidance";
  */
 function causes(): string {
   const start = CHANNEL_DOCTRINE.indexOf("WHY A TAG RESOLVES TO NOBODY");
-  const end = CHANNEL_DOCTRINE.indexOf("WHEN IT IS WORTH IT");
+  // ⚠ THE CLOSING HEADING MOVED (B8). The list used to be followed by a
+  // `WHEN IT IS WORTH IT` section, which the collapse deleted as encouragement
+  // — the doctrine carries contracts now. The receiving-side paragraph is what
+  // follows the list, so it is the new fence, and the scope this function exists
+  // to give is unchanged: the cause list and nothing either side of it.
+  const end = CHANNEL_DOCTRINE.indexOf("WHAT HAPPENS ON THE RECEIVING SIDE");
   // ⚠ Guarded rather than assumed: a slice off two `indexOf(-1)` is the empty
   // string, and every `not.toContain` below would then pass over nothing.
   expect(start, "the cause list's heading moved or was renamed").toBeGreaterThan(-1);
-  expect(end, "the when-to-tag heading moved or was renamed").toBeGreaterThan(start);
+  expect(end, "the receiving-side paragraph moved or was renamed").toBeGreaterThan(start);
   return CHANNEL_DOCTRINE.slice(start, end);
 }
 
@@ -67,14 +72,24 @@ const verdict = (body: string, resolved: string[] = []) =>
 describe("the zero-tag line names the causes it actually has", () => {
   it("leads with CODE — the cause an agent hits without noticing", () => {
     expect(causes()).toContain("THE HANDLE WAS IN CODE");
-    expect(causes()).toContain("working as intended");
+    // ⚠ RE-POINTED: "working as intended" was the reassurance; the compressed
+    // list states the MECHANISM instead, which carries the same claim — a
+    // code-span handle is quoted text, so tagging nobody is the correct outcome
+    // and not a failure to repair.
+    expect(causes()).toContain("quoted text and tags nobody");
   });
 
   it("still names spelling, and now names the two the roster explains", () => {
-    expect(causes()).toContain("SPELLING");
-    expect(causes()).toContain("THEY ARE NOT IN THIS CHANNEL");
-    expect(causes()).toContain("TWO MEMBERS ANSWER TO IT");
-    expect(causes()).toContain('op="members"');
+    // ⚠ RE-POINTED AT THE COMPRESSED LIST'S OWN WORDING (B8). Each cause is one
+    // clause now rather than a capitalised heading, and the remedy names the
+    // ROSTER rather than the op that reads it — `op="members"` is
+    // `op="rooms" action="members"`, and the doctrine stopped spelling the call.
+    // All four claims are unchanged.
+    expect(causes()).toContain("the spelling missed");
+    expect(causes()).toContain("EXACT and never a prefix");
+    expect(causes()).toContain("they are not a member of THIS channel");
+    expect(causes()).toContain("two members answer to it");
+    expect(causes()).toContain("check the roster");
   });
 
   it("does NOT tell an agent it may have tagged itself", () => {
@@ -85,11 +100,18 @@ describe("the zero-tag line names the causes it actually has", () => {
     expect(causes().toLowerCase()).not.toContain("your own");
   });
 
-  it("keeps the old-server caveat, and keeps it LAST", () => {
-    // INVARIANTS §13: an old server that stamps nothing is indistinguishable
-    // from here, so the line may not assert a delivery failure it cannot prove.
-    expect(causes()).toContain("looks identical from here");
-    expect(causes().indexOf("looks identical from here")).toBeGreaterThan(
+  it("closes on the REMEDY, and asserts no failure it cannot prove", () => {
+    // ⚠ **PIN RETIRED: the old-server caveat is deleted BY RULING**, not by
+    // drift — wave B §4 (`docs/specs/mcp-v2-wave-b.md:280`) deletes the prose
+    // that hedged the list, and the doctrine carries contracts only now. What
+    // INVARIANTS §13 actually forbids is UNCHANGED and is asserted here in its
+    // load-bearing direction: no clause in this list claims a delivery failure,
+    // because none of the five can be told apart from a server that stamps
+    // nothing. The list ends on the roster remedy, which is what a cause
+    // appended after it would be read past.
+    expect(causes()).not.toContain("looks identical from here");
+    expect(causes()).not.toMatch(/was not delivered|delivery failed|never arrived/i);
+    expect(causes().indexOf("check the roster")).toBeGreaterThan(
       causes().indexOf("THE HANDLE WAS IN CODE"),
     );
   });
@@ -121,7 +143,11 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // spelled "tags resolve against the HUMAN roster" (it was "the human roster
     // only"); same claim, and the emphasis moved onto the word that carries it.
     expect(causes()).toContain("HUMAN roster");
-    expect(causes()).toContain("not a failure");
+    // ⚠ RE-POINTED: "not a failure" was the reassurance and the compressed list
+    // states the mechanism — an agent id is resolved against the HUMAN roster,
+    // so it stamps nobody. Same second half, and it is still what stops the
+    // reader hunting for a spelling that does not exist.
+    expect(causes()).toContain("stamps nobody");
   });
 
   it("keeps the wake CORRECT — it must not read as a thing to stop doing", () => {
@@ -133,13 +159,18 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // original sentence true again rather than requiring it to be softened, and
     // the prefixed form is now what the copy names. This case is what stops
     // either direction being "corrected" back.
-    expect(causes()).toContain("starts no inbox entry");
-    expect(causes()).toContain("`@agent-<id>` is a WAKE");
-    expect(causes()).toContain("working as intended");
+    expect(causes()).toContain("lands in no Tags inbox");
+    // ⚠ RE-POINTED ONE SECTION OVER: the compressed cause list states what an
+    // agent id does NOT do; that `@agent-<id>` IS a working wake is stated in
+    // the LAW, which is where the exception lives. Both halves are still pinned,
+    // which is the whole point of this case — neither direction may be
+    // "corrected" back.
+    expect(CHANNEL_DOCTRINE).toContain("`@agent-<id>` in a body wakes THAT agent");
+    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
     // ⚠ WHICH agent it wakes is stated in the doctrine's OWN AGENTS section
     // rather than inside the cause list — the half that used to ride here as
     // "a WAKE for that agent". Pinned so the claim cannot vanish from BOTH.
-    expect(CHANNEL_DOCTRINE).toContain("WAKES THAT AGENT");
+    expect(CHANNEL_DOCTRINE).toContain("wakes THAT agent");
   });
 
   it("sends this cause to NO roster remedy — that is the wrong turn it fixes", () => {
@@ -148,7 +179,7 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // list, so "check op=members and re-post" is the advice that wasted both
     // test agents' turns. (The call is spelled `op="members"` rather than
     // `dopl_channel(op="members"` now that the text is read as one document.)
-    expect(causes()).toContain('For (2), (3) and (4), check op="members"');
+    expect(causes()).toContain("For (2), (3) and (4), check the roster");
     expect(causes()).not.toContain("For (2), (3), (4) and (5)");
   });
 
@@ -157,15 +188,25 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // gets appended and read as noise. Derived from the copy, not asserted as a
     // literal, so the numbering and the count cannot drift apart.
     expect(causes()).toContain("FIVE CAUSES");
-    const numbered = [...causes().matchAll(/\((\d)\) [A-Z]/g)].map((m) => m[1]);
+    // ⚠ SCOPED TO THE LIST, AND CASE-INSENSITIVE (B8). The compressed causes
+    // (2)-(4) open lowercase where (1) and (5) keep their headings, and the
+    // REMEDY sentence re-cites "(2), (3) and (4)" — counted over the whole slice
+    // that sentence would double three of them. Cutting at the remedy is what
+    // keeps this an honest count of the BODY against the header.
+    const list = causes().split("For (2)")[0];
+    const numbered = [...list.matchAll(/\((\d)\) [A-Za-z]/g)].map((m) => m[1]);
     expect(numbered).toEqual(["1", "2", "3", "4", "5"]);
   });
 
-  it("stays before the old-server caveat, which is still LAST", () => {
-    // The caveat under-promises for the whole list; a cause added after it
-    // would be read past the sentence that hedges it.
+  it("stays before the roster remedy, which is still LAST", () => {
+    // ⚠ RE-POINTED WITH THE CAVEAT'S RETIREMENT (wave B §4): the sentence this
+    // cause had to precede is now the roster REMEDY rather than the deleted
+    // old-server hedge. The claim is the same one and is the reason the ordering
+    // is pinned at all — a cause added after the closing sentence is read past
+    // it, and this cause in particular must not fall inside a remedy that
+    // deliberately excludes it.
     expect(causes().indexOf("YOU TAGGED AN AGENT ID")).toBeLessThan(
-      causes().indexOf("looks identical from here"),
+      causes().indexOf("For (2), (3) and (4), check the roster"),
     );
   });
 

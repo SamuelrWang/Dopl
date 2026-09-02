@@ -128,17 +128,28 @@ describe("postMentionFacts — says what it knows and nothing past it", () => {
     // there, because a token cannot state them and they may not simply vanish.
     // (1) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
     expect(CHANNEL_DOCTRINE).toContain("Never another member's agent");
-    expect(CHANNEL_DOCTRINE).toContain("it works only for YOUR OWN operator's agents");
+    // ⚠ RE-POINTED AT THE LAW BULLET THAT CARRIES IT (B8): the own-operator
+    // fence is stated as the ONE EXCEPTION to the loop brake rather than as a
+    // sentence about the wake token. Same fence, and stated where the reader
+    // meets it first.
+    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
     // (2) NOT OBSERVABLE — the wake is decided on a desktop no server can see.
-    expect(CHANNEL_DOCTRINE).toContain("delivery is not observable from here");
-    expect(CHANNEL_DOCTRINE).toContain("rather than assuming it woke");
+    // ⚠ RE-POINTED, AND THE CLAIM IS STRONGER FOR IT: the doctrine stopped
+    // hedging ("not observable", "rather than assuming") and now NAMES the one
+    // field that answers the question, with the vocabulary it answers in. An
+    // agent told to read `delivery=` cannot assume a wake it was not handed.
+    expect(CHANNEL_DOCTRINE).toContain("`delivery=` IS THE ACK AND THE ONLY ONE");
+    expect(CHANNEL_DOCTRINE).toContain("`woken` a dormant one was started");
   });
 
   it("says an agent handle stamps nobody, so no inbox is involved", () => {
     expect(facts("@k3v7d2mq", []).tags).toBeUndefined();
     expect(facts("@k3v7d2mq", []).wake).toBe("@agent-k3v7d2mq");
     expect(CHANNEL_DOCTRINE).toContain("it stamps nobody and lands in no Tags inbox");
-    expect(CHANNEL_DOCTRINE).toContain("starts no inbox entry");
+    // ⚠ RE-POINTED: "starts no inbox entry" and "lands in no Tags inbox" were
+    // two spellings of one claim in the old text; the compressed list keeps the
+    // one that names WHICH inbox, which is the half a reader can act on.
+    expect(CHANNEL_DOCTRINE).toContain("Tagging is not addressing and starts no agent");
   });
 
   it("reports member handles against the server's own COUNT — all landed", () => {
@@ -217,7 +228,7 @@ describe("what a post result actually carries about its `@` tokens", () => {
   it("a MEMBER handle that reached nobody still reports the verdict", async () => {
     // ⚠ The VERDICT stayed and the CAUSES left, and neither is derivable from
     // the other — so both are pinned: `0/1` here, the five reasons in the
-    // doctrine one `op="help"` away.
+    // doctrine one `op="rooms" action="help"` away.
     const out = await resultOf("@dia can you look", []);
     expect(out).toContain("tags=0/1");
     expect(out).not.toContain("wake=@");
@@ -244,10 +255,17 @@ describe("what a post result actually carries about its `@` tokens", () => {
     // ⚠ …and neither rule may simply vanish from the product. The sparseness bar
     // is keyed on the agent's OWN run, which is checkable by the agent and not by
     // the server, so it reads identically in the doctrine — and there once.
+    // ⚠ **PIN RETIRED: the CONCRETE main-room bar is deleted BY RULING** — wave
+    // B §4 (`docs/specs/mcp-v2-wave-b.md:280`) cuts the encouragement prose, and
+    // `WHEN IT IS WORTH IT` went with it. The CAPABILITY and its LIMIT survive
+    // in the LAW and are what this half of the pair now holds: the rule did not
+    // vanish from the product, it stopped being spelled as a per-run test the
+    // server cannot check.
     expect(CHANNEL_DOCTRINE).toContain(
-      "IF YOU HAVE ALREADY POSTED TO THIS CHANNEL IN THIS RUN, THE NEXT ONE NEEDS A REASON A HUMAN WOULD NAME OUT LOUD",
+      "You MAY also post to the main room unprompted, SPARSELY",
     );
-    expect(CHANNEL_DOCTRINE).toContain("WHEN IT IS WORTH IT");
+    expect(CHANNEL_DOCTRINE).toContain("that is a capability, not a habit");
+    expect(CHANNEL_DOCTRINE).not.toContain("WHEN IT IS WORTH IT");
   });
 
   it("a body with no `@` at all reports both fields as absent", async () => {

@@ -1,5 +1,5 @@
 /**
- * `op="launch_agent"` — THE REQUEST THAT CROSSES THE WIRE, as distinct from the
+ * `op="manage" action="launch"` — THE REQUEST THAT CROSSES THE WIRE, as distinct from the
  * RESULT that comes back.
  *
  * ⚠ SPLIT OUT OF `channel-ops-launch.test.ts` ON 2026-09-01, when the T24
@@ -26,7 +26,15 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opLaunchAgent } from "./channel-ops-launch";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+// ⚠ **THE TENANCY RULE IS A NAMED EXPORT, NOT A LINE IN THE DOCUMENT, SINCE THE
+// FIVE-OP COLLAPSE.** It ships in `channel-ops-launch.ts`'s create-time
+// refusals rather than in the pulled doctrine, so the pin moved to the constant
+// itself — which is the one place a reword has to pass through either way.
+import { CHANNEL_DOCTRINE, TENANCY_RULE } from "./channel-doctrine";
+// ⚠ AND THE TWO-FENCES SENTENCE IS `template`'S OWN `.describe()` NOW: a client
+// reads it at the moment it decides what to pass, which is closer to the
+// decision than the op paragraph was.
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 
 const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
 
@@ -209,16 +217,25 @@ describe("the call itself", () => {
     expect(out).not.toContain("nothing was filed");
     // It must NOT claim to know which of deleted / invisible it was: the resolve
     // endpoint is 404-never-403 so the difference is not observable.
-    expect(CHANNEL_DOCTRINE).toContain("or it is not visible to the OPERATOR");
-    expect(CHANNEL_DOCTRINE).toContain("or it no longer exists");
+    // ⚠ RE-POINTED ONTO THE ONE CLAUSE THAT REPLACED BOTH, AND IT IS STILL THE
+    // UN-DISCRIMINATING ONE: "could not resolve it under the operator's
+    // visibility" names WHOSE fence failed and refuses to say which of
+    // deleted/invisible it was, which is the whole property under test.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "`no-template` THAT machine could not resolve it under the operator's visibility",
+    );
     // ⚠ AND THE DOCTRINE NAMES THE TENANCY (T35), which is NOT an oracle: the
     // resolve is keyed `(workspace_id, id)` against the CHANNEL's container, so
     // a template the caller owns elsewhere is ABSENT rather than hidden. That is
     // a standing rule of the system, answerable without reading any row — which
     // is why it may be said here, where "which row" may not.
-    expect(CHANNEL_DOCTRINE).toContain("THIS CHANNEL'S container");
-    expect(CHANNEL_DOCTRINE).toContain("a home channel IS its own container");
-    expect(CHANNEL_DOCTRINE).toContain("CHECK THE TENANCY FIRST");
+    expect(CHANNEL_INPUT_SHAPE.template.description).toContain(
+      "THIS CHANNEL'S container",
+    );
+    expect(TENANCY_RULE).toContain("a home channel IS its own container");
+    expect(TENANCY_RULE).toContain(
+      "A template resolves ONLY in the container the channel lives in",
+    );
     // ⚠ AND IT NAMES NO PLACE, because it CANNOT: this refusal came back from a
     // DESKTOP over a closed vocabulary with no detail field, so the honest
     // classification `template-resolve.js` made stays a local log. The RULE

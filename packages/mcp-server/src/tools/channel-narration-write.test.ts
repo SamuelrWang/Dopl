@@ -255,8 +255,8 @@ const THREAD = {
 // live instance of the same rule is `create_thread`'s below (peer display name)
 // and the read side's `list_threads` / `get_thread`.
 
-describe("Q1 write · set_thread_mode and create_thread", () => {
-  it("set_thread_mode's title is a span (no header — the route is creator-only)", async () => {
+describe('Q1 write · rooms(action="thread_mode") and send(thread="new")', () => {
+  it('rooms(action="thread_mode")\'s title is a span (no header — the route is creator-only)', async () => {
     const client = stubClient({
       listChannels: vi.fn(async () => [CLEAN_CHANNEL]),
       setChannelThreadMode: vi.fn(async () => ({
@@ -275,7 +275,7 @@ describe("Q1 write · set_thread_mode and create_thread", () => {
     expect(text).toContain("to autonomous mode");
   });
 
-  it("create_thread splices NONE of the three — name, title or addressee", async () => {
+  it('send(thread="new") splices NONE of the three — name, title or addressee', async () => {
     // ⚠ THREE PAYLOAD COPIES BECAME ZERO (T10). The result used to render the
     // channel name, the server's echo of the title and the addressee's display
     // name, each contained; it now returns the ids and the cursor. The TITLE in
@@ -304,7 +304,7 @@ describe("Q1 write · set_thread_mode and create_thread", () => {
     expect(text).toContain("await=since:4");
   });
 
-  it("create_thread's 400 mapping cannot be forged by the name or the addressee", async () => {
+  it('send(thread="new")\'s 400 mapping cannot be forged by the name or the addressee', async () => {
     const client = stubClient({
       createChannelThread: vi.fn(async () => {
         throw Object.assign(new Error("bad"), {

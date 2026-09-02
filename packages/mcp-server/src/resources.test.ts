@@ -5,7 +5,7 @@
  * ~14k characters of standing rules stopped being pushed into every description
  * and every write result, and became something an agent PULLS. That trade is
  * only sound while the pull actually works. A resource that fails to register,
- * or an `op="help"` that drifts from it, converts "stated once" into "stated
+ * or a `rooms(action="help")` that drifts from it, converts "stated once" into "stated
  * nowhere" — and nothing else in the suite would notice, because every other
  * test asserts what a result does NOT contain.
  *
@@ -103,13 +103,18 @@ describe("the channels doctrine is published as an MCP resource", () => {
     const probes: Array<[string, string]> = [
       ["the law", "THE LAW OF THIS ROOM"],
       ["the loop brake", "THE LOOP BRAKE, AND IT IS ABSOLUTE"],
-      ["main-room etiquette", "IF YOU HAVE ALREADY POSTED TO THIS CHANNEL IN THIS RUN"],
+      // ⚠ SEVEN PHRASES WERE RE-SPELLED BY THE FIVE-OP COLLAPSE (B8), not
+      // dropped: the doctrine went from 32,551 characters to under 9,000 by
+      // compressing each rule to its contract, so each probe now names the
+      // sentence that CARRIES the same rule. The rule each one guards is
+      // unchanged — only the words it is written in moved.
+      ["main-room etiquette", "REPLY WHERE YOU WERE ASKED"],
       ["the five zero-tag causes", "WHY A TAG RESOLVES TO NOBODY"],
-      ["the await stop rule", "STOP and report to your operator"],
-      ["the agent-handle limits", "THREE LIMITS"],
-      ["the refusal words", "WHY A LAUNCH, END, DIRECTION OR RENAME IS REFUSED"],
-      ["the session columns", 'READING "read_sessions"'],
-      ["the home-channel rule", "A HOME CHANNEL is a room that lives in its own CONTAINER"],
+      ["the await stop rule", "stop when the exchange is done"],
+      ["the agent-handle limits", "it reaches no server, is invisible to every other member and is never addressable from here"],
+      ["the refusal words", "A REFUSAL IS A NORMAL ANSWER"],
+      ["the session columns", 'op="status" reads your own machine\'s live sessions'],
+      ["the home-channel rule", "across every workspace and home container"],
     ];
     const missing = probes
       .filter(([, phrase]) => !CHANNEL_DOCTRINE.includes(phrase))
@@ -121,16 +126,17 @@ describe("the channels doctrine is published as an MCP resource", () => {
   });
 
   it("the pointer names BOTH doors — a client that cannot read resources still has one", () => {
-    // ⚠ THE REASON `op="help"` EXISTS. Several MCP clients list tools and never
-    // read resources; without the op, the rules would be unreachable for them.
+    // ⚠ THE REASON `rooms(action="help")` EXISTS. Several MCP clients list tools
+    // and never read resources; without the action, the rules would be
+    // unreachable for them.
     expect(DOCTRINE_POINTER).toContain(DOCTRINE_URI);
-    expect(DOCTRINE_POINTER).toContain('op="help"');
+    expect(DOCTRINE_POINTER).toContain('op="rooms", action="help"');
   });
 
-  it('`op="help"` returns the SAME text, byte for byte', async () => {
+  it('`rooms(action="help")` returns the SAME text, byte for byte', async () => {
     const res = await client.callTool({
       name: "dopl_channel",
-      arguments: { op: "help" },
+      arguments: { op: "rooms", action: "help" },
     });
     const content = res.content as Array<{ type: string; text?: string }>;
     const text = content.map((c) => c.text ?? "").join("\n");
@@ -141,8 +147,8 @@ describe("the channels doctrine is published as an MCP resource", () => {
     expect(text).toContain(CHANNEL_DOCTRINE);
   });
 
-  it('`op="help"` reads nothing — it makes no request at all', async () => {
-    // ⚠ THIS IS WHY IT IS A READ OP IN `parity.test.ts › READ_OPS` rather than
+  it('`rooms(action="help")` reads nothing — it makes no request at all', async () => {
+    // ⚠ THIS IS WHY IT IS A READ ACTION IN `parity.test.ts › READ_OPS` rather than
     // merely "not a write": there is no client call in the handler to audit. A
     // future edit that gave it a lookup would need a security review, and this
     // is the assertion that forces one.
@@ -157,7 +163,10 @@ describe("the channels doctrine is published as an MCP resource", () => {
     const [ct, st] = InMemoryTransport.createLinkedPair();
     const probe = new Client({ name: "help-probe", version: "0.0.0" });
     await Promise.all([server.connect(st), probe.connect(ct)]);
-    await probe.callTool({ name: "dopl_channel", arguments: { op: "help" } });
+    await probe.callTool({
+      name: "dopl_channel",
+      arguments: { op: "rooms", action: "help" },
+    });
     expect(backend.listChannels).not.toHaveBeenCalled();
     await probe.close();
   });

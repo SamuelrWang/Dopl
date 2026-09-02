@@ -167,8 +167,11 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(text).not.toContain("NO CURSOR FROM THIS READ");
     expect(text).toContain("permanently skip what the filter hid");
     expect(text).toContain("read unscoped to establish one");
-    // ⚠ Nothing may suggest passing a thread INTO an await.
-    expect(text).not.toMatch(/op="await"[^)]*thread/);
+    // ⚠ Nothing may suggest passing a thread INTO the HOLD. ⚠ RE-POINTED (B8):
+    // `op="await"` is `op="read"` with `wait_ms`, so the call the trailer names
+    // — and the one this must never see a `thread` inside — opens `op="read"`.
+    expect(text).not.toMatch(/op="await"/);
+    expect(text).not.toMatch(/op="read"[^)]*thread/);
   });
 
   it("the `since` PARAM PROSE teaches the same rule, so the two meet where an agent looks", async () => {
@@ -181,8 +184,10 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     const { CHANNEL_INPUT_SHAPE } = await import("./channel-schema");
     const since = CHANNEL_INPUT_SHAPE.since.description ?? "";
     expect(since).toContain("THREAD-SCOPED read");
-    expect(since).toContain("offers NO cursor at all");
-    expect(since).toContain("UNSCOPED read");
+    // ⚠ RE-POINTED AT THE WORDING THAT REPLACED IT (A6): one contract sentence
+    // per field, so "offers NO cursor at all" is now "hands back none". Same
+    // claim, on the same param, read at the same moment.
+    expect(since).toContain("hands back none");
 
     const text = (
       await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
@@ -193,7 +198,12 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     // RESULT now says it in three words and the PARAM, which is read before the
     // mistake rather than after it, keeps the spelled-out version.
     expect(text).toContain("read unscoped to establish one");
-    expect(since).toContain("drop `thread`");
+    // ⚠ RE-POINTED: the spelled-out REMEDY left the `.describe()` with the A6
+    // budget and is stated once in the PULLED doctrine, which is the only other
+    // place it exists. The join is unbroken — delete either end and the other is
+    // still a lonely claim — but it is now param-to-doctrine, not param-only.
+    const { CHANNEL_DOCTRINE } = await import("./channel-doctrine");
+    expect(CHANNEL_DOCTRINE).toContain("take yours from an unscoped read");
   });
 
   it("never re-reads the CHANNEL HEAD — there is still no number to offer", async () => {
@@ -268,7 +278,10 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     const text = (await opRead(client, "general")).content[0].text;
 
     expect(readChannelMessages).toHaveBeenCalledTimes(1);
-    expect(text).toContain('dopl_channel(op="await", channel="general", since=44)');
+    // ⚠ RE-POINTED: the hold is a KNOB on the read now, not an op of its own.
+    expect(text).toContain(
+      'dopl_channel(op="read" with wait_ms, channel="general", since=44)',
+    );
   });
 
   it("an empty filtered read says it FILTERED, not that the thread is missing", async () => {
@@ -281,7 +294,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
     expect(text).toContain("No messages tagged with thread `thread-9`");
     expect(text).toContain("comes back empty rather than as an error");
-    expect(text).toContain('op="list_threads"');
+    expect(text).toContain('op="rooms", action="threads"');
     expect(text).toContain("await is channel-wide and takes no thread");
   });
 
@@ -294,7 +307,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
     expect(text).toContain("## general — 2 messages\n");
     expect(text).toContain(
-      '\nHighest seq shown: 4. Watch for newer messages with dopl_channel(op="await", channel="general", since=4).',
+      '\nHighest seq shown: 4. Watch for newer messages with dopl_channel(op="read" with wait_ms, channel="general", since=4).',
     );
     expect(text).not.toContain("ONE exchange");
     expect(text).not.toContain("takes no thread");

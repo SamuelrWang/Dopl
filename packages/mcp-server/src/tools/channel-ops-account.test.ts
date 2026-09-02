@@ -12,8 +12,8 @@
  * The four rules:
  *   1. `op="read"` with no `channel` → the ACCOUNT page, and `since` is required.
  *   2. `op="read"` WITH a `channel` → the per-channel read, unchanged.
- *   3. `op="read_sessions"` with no `channel` → every session, everywhere.
- *   4. `op="read_sessions"` WITH a `channel` → the per-channel list, unchanged.
+ *   3. `op="status"` with no `channel` → every session, everywhere.
+ *   4. `op="status"` WITH a `channel` → the per-channel list, unchanged.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -94,6 +94,11 @@ function stubClient(): DoplClient {
     listChannelSessions: vi
       .fn()
       .mockResolvedValue({ sessions: [], operatorOnline: true }),
+    // ⚠ `op="status"` ANSWERS IN TWO BLOCKS (B8): the session table AND the
+    // direction mailbox, joined by a blank line. A stub that answers only the
+    // sessions half makes every status call throw, so the second half is stubbed
+    // empty — the mailbox's own content is `channel-directions.test.ts`'s.
+    listAgentDirections: vi.fn().mockResolvedValue([]),
     listChannels: vi
       .fn()
       .mockResolvedValue([
@@ -181,10 +186,10 @@ describe('op="read" WITH a channel', () => {
   });
 });
 
-describe('op="read_sessions"', () => {
+describe('op="status"', () => {
   it("with NO channel, reads every session everywhere", async () => {
     const t = tool();
-    const text = await t.call({ op: "read_sessions" });
+    const text = await t.call({ op: "status" });
     expect(t.client.getAccountStatus).toHaveBeenCalledWith({
       view: "sessions",
     });
@@ -198,7 +203,7 @@ describe('op="read_sessions"', () => {
 
   it("with a channel, still narrows through the per-channel read", async () => {
     const t = tool();
-    await t.call({ op: "read_sessions", channel: "dopl-main" });
+    await t.call({ op: "status", channel: "dopl-main" });
     expect(t.client.listChannelSessions).toHaveBeenCalled();
     expect(t.client.getAccountStatus).not.toHaveBeenCalled();
   });
@@ -211,7 +216,7 @@ describe('op="read_sessions"', () => {
       since: null,
       truncated: { channels: false, unread: false, waiting: false },
     });
-    const text = await t.call({ op: "read_sessions" });
+    const text = await t.call({ op: "status" });
     // ⚠ "No sessions are being REPORTED" — never "you have none". An asleep,
     // signed-out or older-build machine reports nothing.
     expect(text).toMatch(/being reported/i);
