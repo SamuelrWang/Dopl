@@ -12,6 +12,7 @@ import {
 import {
   buildChannelContext,
   listSessionStates,
+  recordDeliveryAcks,
   reportSessionStates,
 } from "@/features/channels/server/service";
 
@@ -63,8 +64,17 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, SessionStateReportSchema);
     const ctx = buildChannelContext(auth);
+    // ⚠ **THE WAKE ACK RIDES THIS LANE (2026-09-02, A9) AND IS SEQUENCED AFTER
+    // THE PROJECTION, DELIBERATELY.** The session set is what an entire tool
+    // reads (`op="read_sessions"`); a receipt is a convenience beside it. If the
+    // ack write throws, the projection has already landed and the caller sees a
+    // 500 it will retry — which re-sends both, and the ack is idempotent by
+    // rank (`service-writes-delivery.ts › weakerOrEqual`). The other order would
+    // lose the projection to a failure in the lesser half.
+    // ⚠ `acks` is OPTIONAL on the body: every installed desktop posts without it.
     const result = await reportSessionStates(ctx, input.sessions);
-    return NextResponse.json(result);
+    const acks = await recordDeliveryAcks(ctx, input.acks ?? []);
+    return NextResponse.json({ ...result, ...acks });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

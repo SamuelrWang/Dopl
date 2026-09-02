@@ -340,6 +340,21 @@ export type ChannelDelivery =
   /** The machine declined to feed it — a full queue, or a gate. */
   | "refused";
 
+/**
+ * **THE SUBSET A MACHINE MAY REPORT.**
+ *
+ * ⚠ `none` and `unreachable` are the SERVER'S answers about a message it
+ * resolved — "nobody was addressed" and "the agent named does not exist here" are
+ * not things a delivery attempt observes. A desktop reports only what it did,
+ * and the `Extract` is what makes that a compile-time fact rather than a
+ * convention: widening {@link ChannelDelivery} cannot silently widen what a
+ * machine is allowed to claim.
+ */
+export type MachineDelivery = Extract<
+  ChannelDelivery,
+  "delivered" | "woken" | "idle" | "refused"
+>;
+
 export type ChannelMessage = {
   id: string;
   /** Monotonic cursor — read / await paginate on `seq`. */

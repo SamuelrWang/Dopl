@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import type { SessionPillState } from "./types";
+import type { MachineDelivery, SessionPillState } from "./types";
 
 /**
  * ⚠ **THE `INT4` CEILING, AND IT EXISTS BECAUSE TWO OF THE HEALTH COLUMNS ARE
@@ -348,6 +348,44 @@ const SESSION_REPORT_MAX = 32;
  * `ON CONFLICT` twice in one statement (Postgres 21000 → opaque 500), and there
  * is no honest way to pick which contradictory state is true.
  */
+/**
+ * **ONE MACHINE'S RECEIPT FOR ONE MESSAGE** (2026-09-02, A9).
+ *
+ * ⚠ **FOUR VALUES, NOT SIX**, and `MachineDelivery` is what proves it: the two
+ * the subset omits (`none`, `unreachable`) are the SERVER'S write-time answers
+ * about a message it resolved, and a delivery attempt does not observe "nobody
+ * was addressed". A desktop reports only what it did: fed and woke (`woken`),
+ * fed a running session (`delivered`), reached sessions that took no wake
+ * (`idle`), or declined to feed at all (`refused`).
+ *
+ * ⚠ **`seq`, NOT the message id.** The seq is what the desktop's listener holds
+ * (`main/listener-io.js`'s cursor) and what it already stamps on the turn it
+ * feeds (`session-gate.js › lastInboundSeq`); making it name a UUID would mean
+ * carrying an id the dispatch path has no reason to keep.
+ */
+export const DeliveryAckSchema = z.object({
+  channelId: z.string().uuid(),
+  seq: z.number().int().positive(),
+  delivery: closedEnum<MachineDelivery>()([
+    "delivered",
+    "woken",
+    "idle",
+    "refused",
+  ]),
+});
+export type DeliveryAckInput = z.infer<typeof DeliveryAckSchema>;
+
+/**
+ * ⚠ **THE SAME ARRAY BOUND AS THE SESSION SET, AND FOR THE SAME REASON.** Zod
+ * validates the ARRAY, so one oversized payload 400s the WHOLE push — sessions
+ * included — and `retryable(400)` is false, which is the failure mode
+ * {@link SESSION_REPORT_MAX} is written around. A machine with more receipts than
+ * this drops the excess rather than losing its whole report; the ack is a
+ * convenience for an orchestrator, and the session set is the projection an
+ * entire tool reads.
+ */
+const DELIVERY_ACK_MAX = SESSION_REPORT_MAX;
+
 export const SessionStateReportSchema = z.object({
   sessions: z
     .array(SessionStateEntrySchema)
@@ -356,5 +394,17 @@ export const SessionStateReportSchema = z.object({
       (list) => new Set(list.map((s) => s.sessionKey)).size === list.length,
       { message: "Duplicate session keys in one report" }
     ),
+  /**
+   * **THE WAKE ACK, RIDING THE LANE THAT ALREADY EXISTS.**
+   *
+   * ⚠ **OPTIONAL, AND THAT IS THE WHOLE COMPATIBILITY STORY.** Every desktop in
+   * the field posts this body without the key, and must go on doing so — a
+   * required field here would 400 every push from every installed build, which
+   * is the unretryable failure this schema's other bounds exist to avoid.
+   * ⚠ NOT deduped and not ordered: two receipts for one seq are two real
+   * observations, and `service-writes-delivery.ts` resolves them by RANK rather
+   * than by arrival, so nothing depends on which came first.
+   */
+  acks: z.array(DeliveryAckSchema).max(DELIVERY_ACK_MAX).optional(),
 });
 export type SessionStateReportInput = z.infer<typeof SessionStateReportSchema>;
