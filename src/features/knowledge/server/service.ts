@@ -32,6 +32,7 @@ export {
   listHomeScopedBaseIds,
   getBaseById,
   getBaseBySlug,
+  readBaseById,
 } from "./service-bases";
 
 export {
