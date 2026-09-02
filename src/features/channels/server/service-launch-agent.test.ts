@@ -262,12 +262,33 @@ describe("createAgentDirective — presence", () => {
     // ⚠ What is being waited on is identical — a claim by a machine that is either
     // listening or not — and a second TTL on ONE table is how two rows written a
     // second apart come to disagree about when they died.
-    const before = Date.now();
-    await createAgentDirective(ctx, { kind: "end", channel: "general", agentId: AGENT });
-    const [, insert] = vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0];
-    const ttl = Date.parse(insert.expires_at) - before;
-    expect(ttl).toBeGreaterThan(LAUNCH_DIRECTIVE_TTL_MS - 5_000);
-    expect(ttl).toBeLessThanOrEqual(LAUNCH_DIRECTIVE_TTL_MS);
+    //
+    // ⚠ **THE CLOCK IS FROZEN, AND `Date.now()` MUST NOT COME BACK HERE (F-454).**
+    // This case used to take its own `Date.now()` and measure the delta. The
+    // service takes a SECOND `Date.now()` after that one, so the delta is really
+    // `TTL + (serviceNow − before)` — the lower bound had 5s of slack and the
+    // upper bound had NONE, so a single elapsed millisecond failed it. It flaked
+    // on machine SPEED, which is why CI saw it and a local run did not.
+    // ⚠ **WIDENING THE UPPER BOUND IS NOT THE FIX** — slack there makes the
+    // assertion blind to a second, LONGER TTL, which is the only thing this case
+    // exists to forbid. Neither `createAgentDirective` nor `createLaunchDirective`
+    // accepts an injectable `now` (F-454 assumed they did), so the clock is pinned
+    // from outside and the expiry is asserted EXACTLY, on one bound rather than
+    // two. Only `Date` is faked — the timer functions stay real so the awaits here
+    // behave as they always did.
+    const NOW = Date.UTC(2026, 8, 2, 12, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+    // ⚠ Presence is read through the SAME frozen clock, so it has to be re-stamped
+    // under it — `beforeEach` stamped `lastSeenAt` with the real one, which reads
+    // as decades stale from here and files nothing at all.
+    online();
+    try {
+      await createAgentDirective(ctx, { kind: "end", channel: "general", agentId: AGENT });
+      const [, insert] = vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0];
+      expect(Date.parse(insert.expires_at)).toBe(NOW + LAUNCH_DIRECTIVE_TTL_MS);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
