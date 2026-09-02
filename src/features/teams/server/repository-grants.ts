@@ -5,24 +5,74 @@ import type { TeamGrant } from "../types";
 import { mapTeamGrantRow, type TeamGrantDbRow } from "./dto";
 
 /**
- * Every read and write of `team_resource_access`. Nothing here touches the
- * resource's own table — what a grant POINTS AT lives in
+ * Every read and write of the TEAM slice of `resource_grants`. Nothing here
+ * touches the resource's own table — what a grant POINTS AT lives in
  * `repository-resources.ts`. A grant row is only ever
  * (team, resource_type, resource_id, level).
- * ⚠ Raw Supabase I/O: every query not pinned to a single `team_id` is
- * filtered by `workspace_id`.
+ *
+ * ⚠ THE TABLE IS `resource_grants`, NOT `team_resource_access` (Wave B, ruling
+ * B4, `20260914120000_resource_grants.sql` and `20260916120000`). **The team
+ * CAPABILITY is unchanged** — every function below still exists and still means
+ * what it meant. What changed is that a team is now ONE VALUE of `scope_type`
+ * beside `channel` and `container`, instead of a table, a five-migration trigger
+ * chain and four hand-written GC functions of its own.
+ *
+ * ⚠ `team_id` SURVIVES AS THE PROJECTED NAME. The column is `scope_id`;
+ * `team_id:scope_id` in the select keeps `dto.ts › TeamGrantDbRow` and every
+ * caller of {@link TeamGrant} exactly as they were.
+ *
+ * 🔒 EVERY STATEMENT PINS `scope_type = 'team'`. Without it these reads answer a
+ * team question with a channel's grants, and these writes land where the
+ * knowledge lane reads. It is stated once, in {@link TEAM_SCOPE}, and spread.
+ *
+ * ⚠ `created_by` IS LEFT NULL, AND THAT IS THE SAFE DIRECTION.
+ * `team_resource_access` had no such column, so there is no grantor to carry;
+ * `enforce_resource_grant()` answers an unattributed row with the OLD
+ * same-container equality, which is exactly the rule these rows lived under
+ * before. A team grant is same-container by construction (the team and the
+ * resource are both the workspace's), so nothing here can reach the
+ * cross-container lend the new trigger unlocks — that needs a named grantor.
+ *
+ * ⚠ Raw Supabase I/O: every query not pinned to a single team is filtered by
+ * `workspace_id`.
  */
 
-const GRANT_COLS = "team_id, resource_type, resource_id, level";
+const GRANTS_TABLE = "resource_grants";
+
+/** The slice this module owns, as an equality filter set for `.match()`. */
+const TEAM_SCOPE = { scope_type: "team" } as const;
+
+const GRANT_COLS = "team_id:scope_id, resource_type, resource_id, level";
+
+/** The row a write states, minus the key columns each caller supplies. */
+function grantRow(
+  workspaceId: string,
+  teamId: string,
+  resourceType: TeamResourceType,
+  resourceId: string,
+  level: AccessLevel
+) {
+  return {
+    ...TEAM_SCOPE,
+    scope_id: teamId,
+    resource_type: resourceType,
+    resource_id: resourceId,
+    workspace_id: workspaceId,
+    level,
+  };
+}
+
+/** "One grant per (scope, resource)" IS the primary key; this names it. */
+const ON_GRANT_PK = "scope_type,scope_id,resource_type,resource_id";
 
 export async function listGrantsForTeam(teamId: string): Promise<TeamGrant[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("team_resource_access")
+    .from(GRANTS_TABLE)
     .select(GRANT_COLS)
-    .eq("team_id", teamId);
+    .match({ scope_id: teamId, ...TEAM_SCOPE });
   if (error) throw error;
-  return ((data ?? []) as TeamGrantDbRow[]).map(mapTeamGrantRow);
+  return ((data ?? []) as unknown as TeamGrantDbRow[]).map(mapTeamGrantRow);
 }
 
 /** All grants in the workspace, optionally narrowed to a set of teams. */
@@ -33,13 +83,13 @@ export async function listGrantsForTeams(
   if (teamIds && teamIds.length === 0) return [];
   const db = supabaseAdmin();
   let query = db
-    .from("team_resource_access")
+    .from(GRANTS_TABLE)
     .select(GRANT_COLS)
-    .eq("workspace_id", workspaceId);
-  if (teamIds) query = query.in("team_id", teamIds);
+    .match({ workspace_id: workspaceId, ...TEAM_SCOPE });
+  if (teamIds) query = query.in("scope_id", teamIds);
   const { data, error } = await query;
   if (error) throw error;
-  return ((data ?? []) as TeamGrantDbRow[]).map(mapTeamGrantRow);
+  return ((data ?? []) as unknown as TeamGrantDbRow[]).map(mapTeamGrantRow);
 }
 
 export async function listGrantsForResource(
@@ -49,13 +99,16 @@ export async function listGrantsForResource(
 ): Promise<TeamGrant[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("team_resource_access")
+    .from(GRANTS_TABLE)
     .select(GRANT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("resource_type", resourceType)
-    .eq("resource_id", resourceId);
+    .match({
+      workspace_id: workspaceId,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      ...TEAM_SCOPE,
+    });
   if (error) throw error;
-  return ((data ?? []) as TeamGrantDbRow[]).map(mapTeamGrantRow);
+  return ((data ?? []) as unknown as TeamGrantDbRow[]).map(mapTeamGrantRow);
 }
 
 export async function upsertGrant(
@@ -66,16 +119,12 @@ export async function upsertGrant(
   level: AccessLevel
 ): Promise<void> {
   const db = supabaseAdmin();
-  const { error } = await db.from("team_resource_access").upsert(
+  const { error } = await db.from(GRANTS_TABLE).upsert(
     {
-      team_id: teamId,
-      resource_type: resourceType,
-      resource_id: resourceId,
-      workspace_id: workspaceId,
-      level,
+      ...grantRow(workspaceId, teamId, resourceType, resourceId, level),
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "team_id,resource_type,resource_id" }
+    { onConflict: ON_GRANT_PK }
   );
   if (error) throw error;
 }
@@ -89,15 +138,11 @@ export async function insertReadGrantsIfMissing(
 ): Promise<void> {
   if (teamIds.length === 0) return;
   const db = supabaseAdmin();
-  const { error } = await db.from("team_resource_access").upsert(
-    teamIds.map((teamId) => ({
-      team_id: teamId,
-      resource_type: resourceType,
-      resource_id: resourceId,
-      workspace_id: workspaceId,
-      level: "read" as AccessLevel,
-    })),
-    { onConflict: "team_id,resource_type,resource_id", ignoreDuplicates: true }
+  const { error } = await db.from(GRANTS_TABLE).upsert(
+    teamIds.map((teamId) =>
+      grantRow(workspaceId, teamId, resourceType, resourceId, "read")
+    ),
+    { onConflict: ON_GRANT_PK, ignoreDuplicates: true }
   );
   if (error) throw error;
 }
@@ -131,10 +176,13 @@ export async function deleteGrantsForResources(
   const db = supabaseAdmin();
   for (const ids of chunk(resourceIds, GRANT_ID_CHUNK)) {
     const { error } = await db
-      .from("team_resource_access")
+      .from(GRANTS_TABLE)
       .delete()
-      .eq("workspace_id", workspaceId)
-      .eq("resource_type", resourceType)
+      .match({
+        workspace_id: workspaceId,
+        resource_type: resourceType,
+        ...TEAM_SCOPE,
+      })
       .in("resource_id", ids);
     if (error) throw error;
   }
@@ -150,22 +198,15 @@ export async function insertReadGrantsForResources(
 ): Promise<void> {
   if (resourceIds.length === 0 || teamIds.length === 0) return;
   const rows = resourceIds.flatMap((resourceId) =>
-    teamIds.map((teamId) => ({
-      team_id: teamId,
-      resource_type: resourceType,
-      resource_id: resourceId,
-      workspace_id: workspaceId,
-      level: "read" as AccessLevel,
-    }))
+    teamIds.map((teamId) =>
+      grantRow(workspaceId, teamId, resourceType, resourceId, "read")
+    )
   );
   const db = supabaseAdmin();
   for (const batch of chunk(rows, GRANT_ROW_CHUNK)) {
     const { error } = await db
-      .from("team_resource_access")
-      .upsert(batch, {
-        onConflict: "team_id,resource_type,resource_id",
-        ignoreDuplicates: true,
-      });
+      .from(GRANTS_TABLE)
+      .upsert(batch, { onConflict: ON_GRANT_PK, ignoreDuplicates: true });
     if (error) throw error;
   }
 }
@@ -179,13 +220,16 @@ export async function listGrantsForResources(
   if (resourceIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("team_resource_access")
+    .from(GRANTS_TABLE)
     .select(GRANT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("resource_type", resourceType)
+    .match({
+      workspace_id: workspaceId,
+      resource_type: resourceType,
+      ...TEAM_SCOPE,
+    })
     .in("resource_id", resourceIds);
   if (error) throw error;
-  return ((data ?? []) as TeamGrantDbRow[]).map(mapTeamGrantRow);
+  return ((data ?? []) as unknown as TeamGrantDbRow[]).map(mapTeamGrantRow);
 }
 
 /** Drop every team grant on one resource (KB going private). */
@@ -196,11 +240,14 @@ export async function deleteGrantsForResource(
 ): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db
-    .from("team_resource_access")
+    .from(GRANTS_TABLE)
     .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("resource_type", resourceType)
-    .eq("resource_id", resourceId);
+    .match({
+      workspace_id: workspaceId,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      ...TEAM_SCOPE,
+    });
   if (error) throw error;
 }
 
@@ -211,10 +258,13 @@ export async function deleteGrantRow(
 ): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db
-    .from("team_resource_access")
+    .from(GRANTS_TABLE)
     .delete()
-    .eq("team_id", teamId)
-    .eq("resource_type", resourceType)
-    .eq("resource_id", resourceId);
+    .match({
+      scope_id: teamId,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      ...TEAM_SCOPE,
+    });
   if (error) throw error;
 }

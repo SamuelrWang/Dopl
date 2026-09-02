@@ -194,13 +194,17 @@ export async function listVisibleChannelGrants(
  * doing it first would answer "does this uuid name a live base in this
  * workspace" for every id a guest cares to try, and only then refuse.
  *
- * ⚠ THE SAME-WORKSPACE ASSERT IS REDUNDANT AND STAYS. The
- * `enforce_channel_resource_grant()` trigger already guarantees
+ * 🔒 ⚠ THE SAME-WORKSPACE ASSERT IS NOW LOAD-BEARING, NOT REDUNDANT, AND THAT
+ * CHANGED IN WAVE B. `enforce_channel_resource_grant()` used to guarantee
  * `knowledge_bases.workspace_id = channels.workspace_id = grant.workspace_id`,
- * and the grant read is workspace-filtered on top of that. It is asserted anyway
- * because the consequence of the trigger being dropped in some future migration
- * is a CROSS-TENANT read by a guest, which is the one outcome the whole design
- * exists to prevent (§1) — and because `findBaseById` takes no workspace id.
+ * so this line only defended against that trigger being dropped. Its successor
+ * `enforce_resource_grant()` (`20260914120000`) deliberately ADMITS a grant whose
+ * channel sits in another container — that is the cross-container lend ruling B4
+ * unlocks — and files the row under the RESOURCE's container. The grant read is
+ * workspace-filtered, so a foreign-container base cannot arrive here; this
+ * assert is what says so out loud rather than inheriting it. A guest reading
+ * across tenancy is the one outcome the whole design exists to prevent (§1), and
+ * `findBaseById` takes no workspace id.
  */
 export async function assertGrantVisible(
   ctx: ChannelKnowledgeContext,
@@ -247,8 +251,8 @@ export async function assertGrantVisible(
  *
  * ⚠ THIS SERVICE IS THE FENCE, NOT RLS. Every read and write below it runs on
  * the SERVICE-ROLE client, which bypasses row-level security entirely — the
- * `channel_resource_grants` policies are defense-in-depth and will never fire
- * for this caller. If this function returns, the write happens.
+ * `resource_grants` policies are defense-in-depth and will never fire for this
+ * caller. If this function returns, the write happens.
  */
 export async function assertGrantWritable(
   ctx: ChannelKnowledgeContext,
@@ -401,23 +405,28 @@ export async function setChannelKnowledgeGrant(
 }
 
 /**
- * Did the same-workspace VALIDITY TRIGGER refuse this write?
+ * Did the GRANT VALIDITY TRIGGER refuse this write?
+ *
+ * ⚠ The question it answers widened in Wave B and the code did not have to.
+ * `enforce_resource_grant()` (`20260914120000`) refuses on eight branches, not
+ * one — an unknown scope, an unknown resource, a row filed under the wrong
+ * container, and four ways the GRANTOR may not reach both sides — and every one
+ * of them is the same answer to a caller: refused, not broken. So this stays a
+ * predicate over the prefix rather than growing a branch per RAISE.
  *
  * `RAISE EXCEPTION` with no `ERRCODE` is `P0001` (`raise_exception`), which is
  * also what any other `plpgsql` RAISE in the write path would be — so the
  * MESSAGE PREFIX is checked too, and both must match. ⚠ A bare `P0001` match
- * would relabel an unrelated trigger's failure as a cross-workspace grant and
- * hand the user a wrong explanation with a confident 400.
+ * would relabel an unrelated trigger's failure as a refused grant and hand the
+ * user a wrong explanation with a confident 400.
  *
- * `23503` (foreign_key_violation) rides along: the channel or workspace row
- * disappearing between the route's fence and this write is the same class of
- * answer — refused, not broken.
+ * `23514` (check_violation) rides along for the per-scope `level` CHECK, and
+ * `23503` (foreign_key_violation) for the workspace row disappearing between the
+ * route's fence and this write. Same class of answer.
  */
 function isGrantValidityViolation(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const { code, message } = err as { code?: string; message?: string };
-  if (code === "23503") return true;
-  return (
-    code === "P0001" && (message ?? "").includes("channel_resource_grants:")
-  );
+  if (code === "23503" || code === "23514") return true;
+  return code === "P0001" && (message ?? "").includes("resource_grants:");
 }

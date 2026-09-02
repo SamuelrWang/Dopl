@@ -1,9 +1,17 @@
 /**
- * `repository-channel-grants.ts` — the raw I/O for `channel_resource_grants`.
+ * `repository-channel-grants.ts` — the raw I/O for the CHANNEL slice of
+ * `resource_grants`.
  *
  * The property every one of these pins shares: THE SERVICE-ROLE CLIENT BYPASSES
  * RLS, so `workspace_id` must appear as an explicit filter on every statement,
  * read or write. A missing one is not a slow query, it is a cross-tenant one.
+ *
+ * 🔒 AND SINCE WAVE B THERE IS A SECOND SUCH TERM. `20260914120000` folded
+ * `channel_resource_grants` and `team_resource_access` into ONE table keyed by
+ * `scope_type`, so `scope_type = 'channel'` is now as load-bearing as
+ * `workspace_id`: without it these reads answer a channel question with a team's
+ * grants, and this module's writes land where the teams repository reads. The
+ * `every statement` sweep at the bottom is what makes dropping either term red.
  *
  * `listChannelKnowledgeGrants` additionally pins the bounded fan behind
  * `channelGrants`: ONE query with `resource_id IN (baseIds)`, and an empty base
@@ -16,24 +24,27 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  CHANNEL_RESOURCE_GRANT_COLS,
   deleteChannelKnowledgeGrant,
   findChannelKnowledgeGrant,
   listChannelGrantsAtLevel,
   listChannelGrantsForBase,
   listChannelKnowledgeGrants,
+  listSharedBaseIds,
   upsertChannelKnowledgeGrant,
 } from "./repository-channel-grants";
 
 /**
- * A fake PostgREST builder recording the filter chain. `.in()`, `.limit()`,
- * `.single()` and `.delete()`-then-last-`.eq()` are the terminals, so the
- * builder is thenable: any await resolves the configured result.
+ * A fake PostgREST builder recording the filter chain. Every filter and
+ * modifier returns the builder — `.in()` and `.limit()` included, because
+ * `listSharedBaseIds` chains them in that order — and the builder is THENABLE,
+ * so whichever call the statement ends on resolves the configured result.
  */
 function fakeClient(result: { data: unknown; error: unknown }) {
   const calls = {
     from: [] as string[],
     select: [] as string[],
-    eq: [] as Array<[string, unknown]>,
+    match: [] as Array<Record<string, unknown>>,
     in: [] as Array<[string, unknown]>,
     limit: [] as number[],
     upsert: [] as Array<[unknown, unknown]>,
@@ -44,17 +55,17 @@ function fakeClient(result: { data: unknown; error: unknown }) {
       calls.select.push(cols);
       return builder;
     },
-    eq(col: string, val: unknown) {
-      calls.eq.push([col, val]);
+    match(filters: Record<string, unknown>) {
+      calls.match.push(filters);
       return builder;
     },
     in(col: string, vals: unknown) {
       calls.in.push([col, vals]);
-      return Promise.resolve(result);
+      return builder;
     },
     limit(n: number) {
       calls.limit.push(n);
-      return Promise.resolve(result);
+      return builder;
     },
     upsert(row: unknown, opts: unknown) {
       calls.upsert.push([row, opts]);
@@ -70,7 +81,7 @@ function fakeClient(result: { data: unknown; error: unknown }) {
     maybeSingle() {
       return Promise.resolve(result);
     },
-    // Thenable tail for the delete chain, which has no explicit terminal.
+    // Thenable tail for the chains with no explicit terminal.
     then(onOk: (v: unknown) => unknown, onErr?: (e: unknown) => unknown) {
       return Promise.resolve(result).then(onOk, onErr);
     },
@@ -82,6 +93,7 @@ function fakeClient(result: { data: unknown; error: unknown }) {
   return { client: { from } as unknown as SupabaseClient, calls };
 }
 
+/** The PROJECTED row: `channel_id` is an alias over the `scope_id` column. */
 const ROW = {
   channel_id: "chan-1",
   resource_type: "knowledge_base",
@@ -94,21 +106,26 @@ const ROW = {
   updated_at: "2026-08-27T00:00:00Z",
 };
 
+const CHANNEL_SLICE = {
+  scope_type: "channel",
+  resource_type: "knowledge_base",
+};
+
+describe("the table and the projection", () => {
+  it("reads `resource_grants`, and projects `scope_id` back as `channel_id`", () => {
+    // 🔒 The alias is the module's contract with its service: the storage word
+    // is `scope_id` (three scopes share the table), the domain word here is
+    // `channel_id`. Dropping the alias silently blanks every map key the
+    // service builds, which reads as "nothing is shared" rather than as an
+    // error.
+    expect(CHANNEL_RESOURCE_GRANT_COLS).toContain("channel_id:scope_id");
+    expect(CHANNEL_RESOURCE_GRANT_COLS).not.toMatch(/(^|\s)scope_type/);
+  });
+});
+
 describe("listChannelKnowledgeGrants", () => {
-  it("issues ONE workspace+channel+type+in(baseIds) query and returns the rows", async () => {
-    const rows = [
-      {
-        channel_id: "chan-1",
-        resource_type: "knowledge_base",
-        resource_id: "kb-1",
-        workspace_id: "ws-1",
-        level: "visible",
-        guest_write: false,
-        created_by: null,
-        created_at: "2026-08-27T00:00:00Z",
-        updated_at: "2026-08-27T00:00:00Z",
-      },
-    ];
+  it("issues ONE workspace+scope+type+in(baseIds) query and returns the rows", async () => {
+    const rows = [{ ...ROW, guest_write: false, created_by: null }];
     const { client, calls } = fakeClient({ data: rows, error: null });
 
     const out = await listChannelKnowledgeGrants(client, "ws-1", "chan-1", [
@@ -117,11 +134,9 @@ describe("listChannelKnowledgeGrants", () => {
     ]);
 
     expect(out).toEqual(rows);
-    expect(calls.from).toEqual(["channel_resource_grants"]);
-    expect(calls.eq).toEqual([
-      ["workspace_id", "ws-1"],
-      ["channel_id", "chan-1"],
-      ["resource_type", "knowledge_base"],
+    expect(calls.from).toEqual(["resource_grants"]);
+    expect(calls.match).toEqual([
+      { workspace_id: "ws-1", scope_id: "chan-1", ...CHANNEL_SLICE },
     ]);
     expect(calls.in).toEqual([["resource_id", ["kb-1", "kb-2"]]]);
   });
@@ -146,11 +161,11 @@ describe("listChannelGrantsAtLevel — the GUEST LANE's list read", () => {
   /**
    * ⚠ THE `level` FILTER IS THE ASSERTION, and it needs a REPOSITORY test to
    * exist at all. `grant-lane.test.ts` mocks this module, so a service-level pin
-   * cannot see the predicate — deleting `.eq("level", level)` left that whole
-   * suite GREEN (measured 2026-08-26), which would have put every `agent_only`
-   * grant in the container into a guest's base list.
+   * cannot see the predicate — deleting the `level` term left that whole suite
+   * GREEN (measured 2026-08-26), which would have put every `agent_only` grant
+   * in the container into a guest's base list.
    */
-  it("filters by workspace + channel + type + LEVEL, and carries the ceiling", async () => {
+  it("filters by workspace + scope + type + LEVEL, and carries the ceiling", async () => {
     const { client, calls } = fakeClient({ data: [ROW], error: null });
 
     const out = await listChannelGrantsAtLevel(
@@ -162,14 +177,16 @@ describe("listChannelGrantsAtLevel — the GUEST LANE's list read", () => {
     );
 
     expect(out).toEqual([ROW]);
-    expect(calls.from).toEqual(["channel_resource_grants"]);
-    expect(calls.eq).toEqual([
-      ["workspace_id", "ws-1"],
-      ["channel_id", "chan-1"],
-      ["resource_type", "knowledge_base"],
-      // 🔒 Without this term the lane lists `agent_only` grants — a DIFFERENT
-      // audience, whose existence must not leak to the people in the channel.
-      ["level", "visible"],
+    expect(calls.from).toEqual(["resource_grants"]);
+    expect(calls.match).toEqual([
+      {
+        workspace_id: "ws-1",
+        scope_id: "chan-1",
+        // 🔒 Without this term the lane lists `agent_only` grants — a DIFFERENT
+        // audience, whose existence must not leak to the people in the channel.
+        level: "visible",
+        ...CHANNEL_SLICE,
+      },
     ]);
     // PostgREST truncates an un-limited select silently.
     expect(calls.limit).toEqual([200]);
@@ -179,7 +196,7 @@ describe("listChannelGrantsAtLevel — the GUEST LANE's list read", () => {
     // The parameter is a parameter, not a decoration around a hardcoded value.
     const { client, calls } = fakeClient({ data: [], error: null });
     await listChannelGrantsAtLevel(client, "ws-1", "chan-1", "agent_only", 5);
-    expect(calls.eq).toContainEqual(["level", "agent_only"]);
+    expect(calls.match[0].level).toBe("agent_only");
     expect(calls.limit).toEqual([5]);
   });
 
@@ -192,17 +209,19 @@ describe("listChannelGrantsAtLevel — the GUEST LANE's list read", () => {
 });
 
 describe("findChannelKnowledgeGrant — the lane's per-base PK lookup", () => {
-  it("filters by workspace + channel + type + resource and answers the row", async () => {
+  it("filters by workspace + scope + type + resource and answers the row", async () => {
     const { client, calls } = fakeClient({ data: ROW, error: null });
 
     expect(
       await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1")
     ).toEqual(ROW);
-    expect(calls.eq).toEqual([
-      ["workspace_id", "ws-1"],
-      ["channel_id", "chan-1"],
-      ["resource_type", "knowledge_base"],
-      ["resource_id", "kb-1"],
+    expect(calls.match).toEqual([
+      {
+        workspace_id: "ws-1",
+        scope_id: "chan-1",
+        resource_id: "kb-1",
+        ...CHANNEL_SLICE,
+      },
     ]);
   });
 
@@ -215,17 +234,14 @@ describe("findChannelKnowledgeGrant — the lane's per-base PK lookup", () => {
     ).toBeNull();
   });
 
-  it("returns the row AT WHATEVER LEVEL IT CARRIES — the service decides", () => {
+  it("returns the row AT WHATEVER LEVEL IT CARRIES — the service decides", async () => {
     // ⚠ No `level` filter here on purpose, and it is not an oversight: the
     // service must be able to tell `agent_only` from absent in order to give
     // them the SAME answer deliberately. A filter here would make that decision
     // in SQL, where the reasoning cannot be written down.
-    const src = readFileSync(
-      resolve(__dirname, "repository-channel-grants.ts"),
-      "utf8"
-    );
-    const fn = src.slice(src.indexOf("export async function findChannelKnowledgeGrant"));
-    expect(fn.slice(0, fn.indexOf("}"))).not.toMatch(/\.eq\("level"/);
+    const { client, calls } = fakeClient({ data: null, error: null });
+    await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1");
+    expect(calls.match[0]).not.toHaveProperty("level");
   });
 
   it("throws when the query errors", async () => {
@@ -243,13 +259,36 @@ describe("listChannelGrantsForBase — the inverse read", () => {
     expect(await listChannelGrantsForBase(client, "ws-1", "kb-1", 200)).toEqual([
       ROW,
     ]);
-    expect(calls.eq).toEqual([
-      ["workspace_id", "ws-1"],
-      ["resource_type", "knowledge_base"],
-      ["resource_id", "kb-1"],
+    expect(calls.match).toEqual([
+      { workspace_id: "ws-1", resource_id: "kb-1", ...CHANNEL_SLICE },
     ]);
     // ⚠ An un-limited select is truncated SILENTLY by PostgREST.
     expect(calls.limit).toEqual([200]);
+  });
+});
+
+describe("listSharedBaseIds — the card's `Shared` pill", () => {
+  it("asks only about CHANNEL scopes, and de-duplicates the answer", async () => {
+    // 🔒 A team or container grant is a share too, but this pill belongs to the
+    // channel panel. Widening it to every scope is how one word starts meaning
+    // two things — and it would be invisible, because the answer stays a
+    // boolean either way.
+    const { client, calls } = fakeClient({
+      data: [{ resource_id: "kb-1" }, { resource_id: "kb-1" }],
+      error: null,
+    });
+
+    expect(await listSharedBaseIds(client, "ws-1", ["kb-1", "kb-2"], 400)).toEqual(
+      ["kb-1"]
+    );
+    expect(calls.select).toEqual(["resource_id"]);
+    expect(calls.match).toEqual([{ workspace_id: "ws-1", ...CHANNEL_SLICE }]);
+  });
+
+  it("short-circuits an empty base list with no query at all", async () => {
+    const { client, calls } = fakeClient({ data: [], error: null });
+    expect(await listSharedBaseIds(client, "ws-1", [], 400)).toEqual([]);
+    expect(calls.from).toEqual([]);
   });
 });
 
@@ -271,16 +310,21 @@ describe("upsertChannelKnowledgeGrant", () => {
     expect(calls.upsert).toEqual([
       [
         {
-          channel_id: "chan-1",
+          scope_type: "channel",
+          scope_id: "chan-1",
           resource_type: "knowledge_base",
           resource_id: "kb-1",
           workspace_id: "ws-1",
           level: "visible",
           guest_write: true,
+          // 🔒 THE GRANTOR the validity trigger judges — `enforce_resource_grant()`
+          // asks whether THIS user reaches both containers. Dropping the column
+          // does not skip the check; it re-points it at nobody, and an
+          // unattributed row is refused across containers by design.
           created_by: "user-1",
         },
-        // "One grant per (kb, channel)" IS the PK; this names it.
-        { onConflict: "channel_id,resource_type,resource_id" },
+        // "One grant per (scope, resource)" IS the PK; this names it.
+        { onConflict: "scope_type,scope_id,resource_type,resource_id" },
       ],
     ]);
   });
@@ -288,7 +332,7 @@ describe("upsertChannelKnowledgeGrant", () => {
   it("propagates the trigger's error untranslated — the SERVICE owns that", async () => {
     const raise = {
       code: "P0001",
-      message: "channel_resource_grants: channel workspace mismatch",
+      message: "resource_grants: grantor u-1 may not share into container ws-2",
     };
     const { client } = fakeClient({ data: null, error: raise });
     await expect(
@@ -311,11 +355,13 @@ describe("deleteChannelKnowledgeGrant", () => {
     await deleteChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1");
 
     expect(calls.delete).toBe(1);
-    expect(calls.eq).toEqual([
-      ["workspace_id", "ws-1"],
-      ["channel_id", "chan-1"],
-      ["resource_type", "knowledge_base"],
-      ["resource_id", "kb-1"],
+    expect(calls.match).toEqual([
+      {
+        workspace_id: "ws-1",
+        scope_id: "chan-1",
+        resource_id: "kb-1",
+        ...CHANNEL_SLICE,
+      },
     ]);
   });
 
@@ -331,5 +377,50 @@ describe("deleteChannelKnowledgeGrant", () => {
     await expect(
       deleteChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1")
     ).rejects.toThrow("db down");
+  });
+});
+
+/**
+ * 🔒 THE SWEEP. Every statement in the module, not the ones a test happened to
+ * drive: a seventh function added without the scope term would pass every case
+ * above by simply not being in one.
+ */
+describe("every statement pins its slice of the shared grant table", () => {
+  const SRC = readFileSync(
+    resolve(__dirname, "repository-channel-grants.ts"),
+    "utf8"
+  );
+
+  it("names `resource_grants`, and never the retired per-scope tables", () => {
+    expect(SRC).not.toMatch(/from\(\s*["'`]channel_resource_grants/);
+    expect(SRC).not.toMatch(/from\(\s*["'`]team_resource_access/);
+  });
+
+  it("routes every `.from(...)` through the one table constant", () => {
+    const literals = [...SRC.matchAll(/\.from\(([^)]*)\)/g)].map((m) =>
+      m[1].trim()
+    );
+    expect(literals.length).toBeGreaterThan(0);
+    expect([...new Set(literals)]).toEqual(["GRANTS_TABLE"]);
+  });
+
+  it("spreads CHANNEL_KNOWLEDGE_GRANT into every filter set and every write", () => {
+    // Each `.match(` and each `.upsert(` must carry the spread. Counting them
+    // is what makes a NEW statement without it fail, rather than only the ones
+    // enumerated above.
+    const filterSets = SRC.match(/\.match\(\{/g)?.length ?? 0;
+    const writes = SRC.match(/\.upsert\(\s*\{/g)?.length ?? 0;
+    const spreads = SRC.match(/\.\.\.CHANNEL_KNOWLEDGE_GRANT/g)?.length ?? 0;
+    expect(filterSets).toBeGreaterThan(0);
+    expect(writes).toBe(1);
+    expect(spreads).toBe(filterSets + writes);
+  });
+
+  it("carries `workspace_id` on every filter set — the RLS bypass is contained", () => {
+    const filterSets = [...SRC.matchAll(/\.match\(\{([\s\S]*?)\}\)/g)].map(
+      (m) => m[1]
+    );
+    expect(filterSets.length).toBeGreaterThan(0);
+    for (const set of filterSets) expect(set).toMatch(/workspace_id/);
   });
 });
