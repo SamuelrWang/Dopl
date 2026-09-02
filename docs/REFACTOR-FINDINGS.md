@@ -6651,3 +6651,51 @@ workspace-scoped, and there the narrower statement is the accurate one for what 
 
 - Status: ✅ resolved 2026-09-01 (§10 corrected; `repository-account.ts › listAccountMessagesAfter`
   states the stronger fact where it is relied on).
+
+---
+
+## The 2026-09-01 INTEGRATION — F-413 through F-414
+
+Both were produced BY the merge of the agent-efficiency tiers, not by any branch, and both were
+found only because a suite from one tier was made to run against code from another. Neither is
+visible on any branch in isolation.
+
+### F-413 — ✅ RESOLVED 2026-09-01 — an OFFLINE `set_agent_mode` told the caller its posture request was a RENAME
+
+`channel-ops-agent.ts › fileAndHold` rendered the offline result as
+`factsLine(input.kind === "end" ? "not ended" : "not renamed", …)`. That is a ternary over a CLOSED
+SET, and the set grew to three when the orchestrator-surface tier added the `set_agent_mode` kind.
+
+- What a caller saw: `not renamed agent=@agent-xxxxxxxx reason=offline filed=no` — a true statement
+  about a verb it did not use, in place of the one it did. Reachable from `opSetAgentMode`, which
+  returns `filed.response` verbatim.
+- ⚠ **THE SAME FILE ALREADY HELD THE FIX AND SAID WHY.** `VERB_PAST` and `PENDING_CONFIRM` are both
+  `Record<AgentDirectiveKind, …>` maps, and both docblocks state the rule outright: *a conditional
+  over a closed set is the shape that goes wrong the day the set grows, failing nothing on the way.*
+  This one line was the site that had not been converted. **A rule written in a docblock does not
+  apply itself.**
+- Why no branch could see it: the P1 tier wrote the ternary when the set had two members and was
+  correct; the P2 tier added the third member and never touched this line. Both suites green.
+- **Resolved** by rendering `not ${VERB_PAST[input.kind]}`. Pinned by
+  `channel-ops-agent-mode.test.ts › OFFLINE names THIS verb, not a rename`, which was left RED with
+  the diagnosis in its assertion message until the fix landed (§14: a suite that goes green against
+  the bug it names is the defect, not the evidence).
+
+### F-414 — ✅ RESOLVED 2026-09-01 — `dopl_status` had no security framing anywhere, because a banner was moved into a DIFFERENT tool's description
+
+The T11 verbosity cut removed per-result SECURITY banners on the grounds that the rule is stated
+once in `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph, read at connection. Applied
+to `status-render.ts` during the integration, that reasoning was **false**.
+
+- ⚠ **THAT PARAGRAPH SCOPES ITSELF TO "EVERY RESULT THIS TOOL RETURNS", AND `dopl_status` IS A
+  DIFFERENT TOOL.** It registers separately, carries its own description, and an agent that never
+  calls `dopl_channel` never reads that paragraph at all. So the page splicing member-typed channel
+  names, author names and message previews was framed by nothing.
+- ⚠ **THE GENERAL RULE, which is the part worth keeping: moving a banner into a description only
+  works WITHIN the tool that serves it.** A per-result string and a per-tool string have different
+  scopes, and "said once" is only true relative to a reader who reads the place it is said.
+- Neutralization was never affected — every value still goes through `neutralizeInline` — which is
+  why this was a framing regression and not an injection one.
+- **Resolved** by stating the rule in `status.ts › STATUS_DESCRIPTION`, this tool's own. ⚠ It was
+  TRIMMED back under the 1,200-char budget rather than ratcheted: the clauses that gave way were
+  ones restating the tool's own `since` argument description.

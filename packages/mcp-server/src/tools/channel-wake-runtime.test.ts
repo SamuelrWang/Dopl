@@ -26,7 +26,7 @@ import { registerChannelTool } from "./channel";
 // CHANNEL_DOCTRINE below; what SURVIVES in a write result is the one thing that
 // is a fact about the call, the `await=` branch off the observed runtime.
 import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
-import { UNTRUSTED_BODY_HEADER } from "./channel-render";
+import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 
 const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
 const BOB = { userId: "u-bob", email: "bob@x.com", displayName: "Bob", status: "active" };

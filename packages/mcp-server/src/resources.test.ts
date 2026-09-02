@@ -9,9 +9,12 @@
  * nowhere" — and nothing else in the suite would notice, because every other
  * test asserts what a result does NOT contain.
  *
- * ⚠ NOT MOCKED, DELIBERATELY. The five `McpServer` doubles in this package stub
- * `registerResource` as a no-op (they assert over TOOLS), so a mocked boot
- * cannot observe registration at all — the failure mode this file is for.
+ * ⚠ NOT MOCKED, DELIBERATELY. Every `McpServer` double in this package that
+ * boots a real server stubs `registerResource` as a no-op (they assert over
+ * TOOLS), so a mocked boot cannot observe registration at all — the failure
+ * mode this file is for. ⚠ This said "the five doubles" and was measured at
+ * EIGHT on 2026-09-02; re-derive rather than quote:
+ * `grep -rln 'registerResource() {}' packages/mcp-server/src`.
  * It boots the real `createServer` over a real `InMemoryTransport` and asks a
  * real `Client`, the same shape `strict-args.test.ts` uses for the same reason.
  */

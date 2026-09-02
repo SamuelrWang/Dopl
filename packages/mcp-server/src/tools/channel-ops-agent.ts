@@ -295,7 +295,13 @@ export async function fileAndHold(
       // shape. ⚠ PRESENCE IS A HINT, NOT A VERDICT: a per-(user, workspace)
       // heartbeat cannot say WHICH machine is up. The doctrine says so.
       response: ok(
-        factsLine(input.kind === "end" ? "not ended" : "not renamed", {
+        // ⚠ **THE VERB COMES FROM {@link VERB_PAST}, NOT FROM A TERNARY.** This
+        // line read `input.kind === "end" ? "not ended" : "not renamed"` — the
+        // exact shape `VERB_PAST` and `PENDING_CONFIRM` were both made into
+        // `Record<AgentDirectiveKind, …>` maps to avoid, and their docblocks say
+        // so in as many words. It was correct for two kinds and silently told a
+        // `set_agent_mode` caller its POSTURE request was a RENAME. F-413.
+        factsLine(`not ${VERB_PAST[input.kind]}`, {
           agent: `@agent-${input.agentId}`,
           reason: "offline",
           filed: false,

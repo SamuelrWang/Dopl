@@ -110,9 +110,17 @@ export function statusLines(
     // ⚠ NO SECURITY BANNER, AND NO HANDLE NOTE — T11/T13, the same cut every
     // other READ surface took on 2026-09-02. `dopl_status` is the call an
     // orchestrator makes MOST (it exists to replace ~10 of them per check-in),
-    // so a banner here is the most-repeated string on the whole surface. The
-    // rule is stated ONCE in `channel-description.ts`'s `SECURITY, SAID ONCE
-    // HERE` paragraph, read at connection and scoped to every result.
+    // so a banner here is the most-repeated string on the whole surface.
+    //
+    // ⚠ **THE RULE IS STATED IN `status.ts › STATUS_DESCRIPTION`, THIS TOOL'S
+    // OWN, AND THAT IS NOT A DETAIL (F-414).** This comment first pointed at
+    // `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph — which
+    // scopes itself to "every result THIS TOOL returns", and this is a DIFFERENT
+    // TOOL. `dopl_status` is registered separately, carries its own description,
+    // and an agent that never calls `dopl_channel` never reads that paragraph.
+    // So the cut had left this surface framed by nothing at all. **Moving a
+    // banner into a description only works within the tool that serves it.**
+    //
     // ⚠ WHAT DID NOT CHANGE IS NEUTRALIZATION: every member-typed name and
     // preview below still goes through `inlineOr`/`neutralizeInline`, which is
     // the half that actually defangs a hostile string. The two `await` lanes

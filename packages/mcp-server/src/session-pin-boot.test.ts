@@ -29,6 +29,17 @@ const registeredTools = new Map<
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
+    // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
+    // a double without this method throws before a single tool is registered —
+    // which is exactly what this file did when the T41 pin work met the tier
+    // that added the resource: eight cases failing on a missing METHOD, none of
+    // them on anything about a pin.
+    // ⚠ IT IS A NO-OP HERE ON PURPOSE — this suite asserts over TOOLS. The
+    // resource's own content is pinned in `channel-doctrine.test.ts`, and that
+    // it is registered at all in `resources.test.ts`, which boots unmocked for
+    // precisely that reason.
+    registerResource() {}
     // ⚠ `registerTool`, deliberately NOT `tool` — §10's strict-args rule.
     registerTool(
       name: string,

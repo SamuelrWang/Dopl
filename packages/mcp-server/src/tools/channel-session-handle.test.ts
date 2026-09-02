@@ -195,7 +195,22 @@ describe("the handle rule survived the move to the doctrine, word for word", () 
     // The REFUSALS section says "not something to work around" about the
     // operator's launch toggle — the OPPOSITE claim, and a whole-text match
     // would read it as an offender and pressure someone into deleting a fence.
-    expect(CHANNEL_OWN_AGENTS).not.toMatch(/work ?around|bypass|instead you can post/i);
+    //
+    // ⚠ `bypass` IS NOW A RESERVED WORD IN THIS SECTION AND IS NOT AN OFFENDER
+    // (2026-09-02, when `set_agent_mode`'s paragraph joined it). It is the NAME
+    // of a `LaunchToolMode` a caller may ASK for, and the only sentence that
+    // writes it is the one DENYING that asking for it grants it — the strongest
+    // possible statement of the fence, not a route around it. So the word is
+    // excused EXACTLY ONCE, by removing that clause and re-running the scan over
+    // what is left: any OTHER use of it, and every "work around", still fails.
+    const DENIAL = 'asking for "bypass" does not give you bypass';
+    // ⚠ Asserted, not assumed. Without this the strip could silently become a
+    // no-op the day the denial is deleted, and the case would pass over copy
+    // that no longer denies anything.
+    expect(CHANNEL_OWN_AGENTS).toContain(DENIAL);
+    expect(CHANNEL_OWN_AGENTS.replace(DENIAL, "")).not.toMatch(
+      /work ?around|bypass|instead you can post/i,
+    );
   });
 
   it("⚠ IS NO LONGER RE-TRANSMITTED PER CALL — the other half of the move", () => {

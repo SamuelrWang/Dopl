@@ -23,7 +23,7 @@ import {
 import { DESKTOP_SESSION_RUNTIME } from "./identity";
 import { opCreateThread } from "./channel-ops-threads";
 import { CHANNEL_DESCRIPTION } from "./channel-description";
-import { UNTRUSTED_BODY_HEADER } from "./channel-render";
+import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 // ⚠ WHERE THE AWAIT PROTOCOL LIVES SINCE T10/T12 (2026-09-02). `create_thread`
 // closed with four paragraphs of it; the result is one fact line now, so the
 // paragraphs are re-pinned HERE — moved, never dropped.

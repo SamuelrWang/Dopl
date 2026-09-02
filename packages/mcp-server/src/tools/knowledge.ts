@@ -54,7 +54,7 @@ Set \`op\` to one of:
 - "list_dir" — folders + entries at one path (omitted = root). Requires: base.
 - "create_base" — Requires: name. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own personal shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel or a second workspace you belong to. A PUBLIC base inside a home channel somebody else is in previews first, returning a one-time confirm_token.
 - "update_base" — name, description or slug. Requires: base. Shelf is fixed at creation; \`shelf\` is refused.
-- "copy_base" — re-create a base you can READ as a NEW, PRIVATE base in ANOTHER workspace or home channel, with its folders and entries. Requires: base, to_workspace. ⚠ The copy and the original are STRANGERS: writing to one never touches the other. Capped at 100 entries — a bigger base is refused WHOLE rather than copied halfway, because you cannot tell which half landed and nothing here can delete the remains. An unresolvable to_workspace refuses and creates nothing.
+- "copy_base" — re-create a base you can READ as a NEW base in ANOTHER workspace or home channel, with its folders and entries. Requires: base, to_workspace (see its own description for the target rules). Capped at 100 entries — a bigger base is refused WHOLE rather than copied halfway, because you cannot tell which half landed and nothing here can delete the remains.
 - "create_folder" — mkdir -p, idempotent. Requires: base, path. \`description\` sets/updates the folder summary.
 - "move_folder" — Requires: base, from_path, to_path.
 - "read_file" — an entry's body plus the Version token write_file wants. Requires: base, path.
@@ -62,8 +62,8 @@ Set \`op\` to one of:
 - "move_file" — Requires: base, from_path, to_path.
 - "search" — keyword + semantic over the entry BODIES of the bases you can read. A ranked sample, not an exhaustive scan: capped at \`limit\` (default 20) and stripped of unreadable bases after ranking, so zero hits is not proof of absence. Requires: query.
 - "set_visibility" — publish a base you created ("public", one-way). Requires: base, visibility.
-- "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. Requires: base. \`base\` alone pins the WHOLE base; add \`path\` to pin ONE entry. A workspace-wide curation flag — it changes no visibility and no audience. The payload is capped, so anything past a few pages arrives as a pointer to fetch with op="read_file" rather than as content.
-- "unpin" — the exact inverse, same arguments. \`base\` alone unpins the base; with \`path\` it unpins that one entry, which still arrives with the base if the BASE is pinned.
+- "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. Requires: base; \`path\` picks base-or-entry (see its own description). A workspace-wide curation flag — it changes no visibility and no audience. The payload is capped, so anything past a few pages arrives as a pointer to fetch with op="read_file" rather than as content.
+- "unpin" — the exact inverse, same arguments. An entry unpinned on its own still arrives with the base if the BASE is pinned.
 
 Deleting is app-only: \`dopl_kb_admin\` refuses every op it lists.`;
 

@@ -18,7 +18,7 @@ import {
   opCreateThread,
   opSetThreadMode,
 } from "./channel-ops-threads";
-import { UNTRUSTED_THREAD_HEADER } from "./channel-render";
+import { UNTRUSTED_THREAD_HEADER } from "./channel-framing";
 
 /** One payload, every structural trick, reused at every site. */
 const FORGERY = [
