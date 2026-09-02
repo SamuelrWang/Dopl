@@ -40,6 +40,7 @@ const SRC = readFileSync(DESKTOP_MODULE, "utf8");
 
 function desktop(): {
   narrowTo: (r: string, c: string, order: readonly string[]) => string;
+  narrowMessageMode: (r: string, c: string) => string;
   resolvePosture: (
     requested: { tools?: string; messages?: string },
     ceiling: { tools?: string; messages?: string },
@@ -56,7 +57,7 @@ function desktop(): {
   const end = SRC.indexOf("// ─── END LAUNCH-POSTURE");
   const block = SRC.slice(begin, end > begin ? end : undefined);
   return new Function(
-    `${block}\n return { narrowTo, resolvePosture, resolveChain };`
+    `${block}\n return { narrowTo, narrowMessageMode, resolvePosture, resolveChain };`
   )() as ReturnType<typeof desktop>;
 }
 
@@ -104,6 +105,11 @@ describe("the clamp answers identically on every pair", () => {
     );
   });
 
+  // ⚠ **THE MESSAGE AXIS IS NOT NARROWED BY INDEX AND MUST NOT BE** (2026-09-02).
+  // `auto_inbound` and `auto_outbound` are two INDEPENDENT capabilities, so the
+  // ladder `narrowTo` assumes WIDENED on two of these sixteen pairs — granting
+  // inbound automation against a ceiling that only ever allowed outbound. Both
+  // trees intersect capability BITS instead, and this drives both of them.
   it.each(
     LAUNCH_MESSAGE_MODES.flatMap((req) =>
       LAUNCH_MESSAGE_MODES.map((ceil) => [req, ceil] as const)
@@ -111,7 +117,34 @@ describe("the clamp answers identically on every pair", () => {
   )("messages: request %s against ceiling %s", (req, ceil) => {
     expect(
       clampPosture({ messages: req }, { ...EMPTY_AGENT_POSTURE, messages: ceil }).messages
-    ).toBe(main.narrowTo(req, ceil, LAUNCH_MESSAGE_MODES));
+    ).toBe(main.narrowMessageMode(req, ceil));
+  });
+
+  it("the two INDEPENDENT capabilities never substitute for each other", () => {
+    // 🔒 THE PAIRS AN INDEX COMPARISON GOT WRONG, stated as values rather than as
+    // a cross-check, so a matching bug in both trees still fails here.
+    const inboundCeiling = { ...EMPTY_AGENT_POSTURE, messages: "auto_inbound" as const };
+    const outboundCeiling = { ...EMPTY_AGENT_POSTURE, messages: "auto_outbound" as const };
+    // Asked to auto-send; the room only auto-receives. Neither is jointly
+    // permitted, so nothing is automated — NOT "have the inbound instead".
+    expect(clampPosture({ messages: "auto_outbound" }, inboundCeiling).messages).toBe("ask");
+    // Asked to auto-receive against an outbound-only ceiling: refused, not passed
+    // through because its index happened to be lower.
+    expect(clampPosture({ messages: "auto_inbound" }, outboundCeiling).messages).toBe("ask");
+    // …and both report the clamp, so the launch line can say so.
+    expect(clampPosture({ messages: "auto_outbound" }, inboundCeiling).clamped).toBe(true);
+    // The pairs that were already right are unchanged.
+    expect(clampPosture({ messages: "auto_both" }, inboundCeiling).messages).toBe("auto_inbound");
+    expect(clampPosture({ messages: "ask" }, outboundCeiling).messages).toBe("ask");
+  });
+
+  it("an UNRECOGNISED message value resolves to the ceiling on BOTH sides", () => {
+    // ⚠ Including a PROTOTYPE key: the bit tables are indexed with wire values.
+    const bogus = "constructor" as never;
+    expect(
+      clampPosture({ messages: bogus }, { ...EMPTY_AGENT_POSTURE, messages: "ask" }).messages
+    ).toBe("ask");
+    expect(main.narrowMessageMode("constructor", "ask")).toBe("ask");
   });
 
   it("an UNRECOGNISED request resolves to the ceiling on BOTH sides", () => {

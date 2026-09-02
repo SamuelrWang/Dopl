@@ -257,7 +257,10 @@ function setAgentMode(d) {
       (err && err.message) || String(err));
   }
   const tools = posture.narrowTo(d.targetToolMode, ceiling.tools, wire.TOOL_MODES);
-  const messages = posture.narrowTo(d.targetMessageMode, ceiling.messages, wire.MESSAGE_MODES);
+  // ⚠ NOT `narrowTo` — the message axis is two independent capability bits, not a ladder
+  // (`launch-posture.js › narrowMessageMode`). An index clamp granted `auto_inbound` against an
+  // `auto_outbound` ceiling and vice versa.
+  const messages = posture.narrowMessageMode(d.targetMessageMode, ceiling.messages);
   if (tools !== d.targetToolMode || messages !== d.targetMessageMode) {
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'CLAMPED to the channel posture —',
       'asked', String(d.targetToolMode || '-') + '/' + String(d.targetMessageMode || '-'),

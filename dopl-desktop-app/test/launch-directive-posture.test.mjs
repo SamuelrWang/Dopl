@@ -52,6 +52,28 @@ test("NARROW: an unknown value on EITHER side fails closed, because -1 is narrow
   assert.equal(posture.narrowTo("bypass", "god_mode", T), "god_mode", "an unknown CEILING clamps to itself");
 });
 
+test("NARROW MESSAGES: the axis is TWO capabilities, not a ladder", () => {
+  // 🔒 THE PAIRS AN INDEX COMPARISON GOT WRONG (fixed 2026-09-02). `MESSAGE_MODES` is ordered
+  // `ask, auto_inbound, auto_outbound, auto_both`, and `narrowTo` read that as a line — so a
+  // request to auto-SEND against an auto-RECEIVE ceiling came back as auto-receive, granting the
+  // capability nobody asked for; and auto-receive against an outbound-only ceiling passed
+  // straight through because its index was lower. Both moved in the one direction a clamp may not.
+  const n = posture.narrowMessageMode;
+  assert.equal(n("auto_outbound", "auto_inbound"), "ask", "no capability is jointly permitted");
+  assert.equal(n("auto_inbound", "auto_outbound"), "ask", "…and it is symmetric");
+  // Everything already right stays right.
+  assert.equal(n("auto_both", "auto_inbound"), "auto_inbound");
+  assert.equal(n("auto_inbound", "auto_both"), "auto_inbound");
+  assert.equal(n("auto_both", "auto_both"), "auto_both");
+  assert.equal(n("ask", "auto_both"), "ask");
+  assert.equal(n("", "auto_both"), "", "nothing asked for is not a request");
+  // ⚠ Unknown on EITHER side clamps to the ceiling — a PROTOTYPE key included, because the bit
+  // table is indexed with wire values.
+  assert.equal(n("god_mode", "auto_inbound"), "auto_inbound");
+  assert.equal(n("constructor", "auto_inbound"), "auto_inbound");
+  assert.equal(n("auto_both", "constructor"), "constructor");
+});
+
 test("RESOLVE: an axis nobody asked for takes the ceiling — the pre-T24 behaviour, exactly", () => {
   const p = posture.resolvePosture({ tools: "", messages: "" },
     { tools: "bypass", messages: "auto_both" }, wire.TOOL_MODES, wire.MESSAGE_MODES);

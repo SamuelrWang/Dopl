@@ -56,6 +56,48 @@ function narrowTo(requested, ceiling, order) {
 }
 
 /**
+ * NARROW THE MESSAGE AXIS — ⚠ **NOT WITH {@link narrowTo}, BECAUSE THIS AXIS IS NOT A LINE**
+ * (2026-09-02).
+ *
+ * `MESSAGE_MODES` is ordered `ask, auto_inbound, auto_outbound, auto_both`, and an index
+ * comparison reads that as a ladder — but `auto_inbound` and `auto_outbound` are two INDEPENDENT
+ * capabilities, neither wider than the other. Clamping by index therefore WIDENED: a request for
+ * `auto_outbound` against a ceiling of `auto_inbound` came back `auto_inbound`, granting the
+ * INBOUND automation nobody asked for while refusing the outbound one that was; and a request for
+ * `auto_inbound` against an `auto_outbound` ceiling passed straight through, granting inbound
+ * against a ceiling that never allowed it. Two of sixteen pairs, both in the one direction a
+ * clamp may never move.
+ *
+ * ⚠ **SO IT IS AN INTERSECTION OF CAPABILITY BITS, WHICH IS WHAT A CEILING MEANS**: bit 1 is
+ * inbound, bit 2 is outbound, and the answer is what BOTH sides permit. Every other pair is
+ * unchanged, `auto_both` still clamps to whatever the ceiling is, and the empty intersection is
+ * `ask`, which is the narrowest real mode rather than an absence.
+ *
+ * ⚠ THE TOOL AXIS IS STILL A LINE and still uses {@link narrowTo}: manual ⊂ accept_edits ⊂ auto ⊂
+ * bypass really is a ladder. Do not "unify" the two.
+ *
+ * ⚠ `hasOwnProperty` VIA `call`, BECAUSE THE KEYS ARE WIRE VALUES. A bare `BITS[x]` walks
+ * `Object.prototype`, so `"constructor"` would answer a function and every guard below it would
+ * read as satisfied.
+ */
+const MESSAGE_BITS = { ask: 0, auto_inbound: 1, auto_outbound: 2, auto_both: 3 };
+const MESSAGE_BY_BITS = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
+
+function messageBits(mode) {
+  return Object.prototype.hasOwnProperty.call(MESSAGE_BITS, mode) ? MESSAGE_BITS[mode] : -1;
+}
+
+function narrowMessageMode(requested, ceiling) {
+  if (!requested) return '';
+  // ⚠ An unrecognised value on EITHER side resolves to the CEILING, the same fail-closed
+  // direction `narrowTo` documents and for the same reason.
+  const r = messageBits(requested);
+  const c = messageBits(ceiling);
+  if (r === -1 || c === -1) return ceiling;
+  return MESSAGE_BY_BITS[r & c];
+}
+
+/**
  * THE PAIR A DIRECTIVE'S REQUEST RESOLVES TO, plus whether anything was clamped.
  *
  * `requested` / `ceiling` are `{ tools, messages }`; `''` on either axis of the REQUEST means
@@ -74,7 +116,12 @@ function resolvePosture(requested, ceiling, toolOrder, messageOrder) {
   const req = requested || {};
   const max = ceiling || {};
   const tools = narrowTo(req.tools, max.tools, toolOrder) || max.tools;
-  const messages = narrowTo(req.messages, max.messages, messageOrder) || max.messages;
+  // ⚠ `messageOrder` is still TAKEN and still unused here on purpose — the parameter is the
+  // caller's statement of which vocabulary this is, and dropping it would let a caller pass the
+  // TOOL order and be silently answered on the message axis. {@link narrowMessageMode} owns the
+  // rule; see its header for why an index comparison was the wrong shape for this axis.
+  void messageOrder;
+  const messages = narrowMessageMode(req.messages, max.messages) || max.messages;
   return {
     tools: tools,
     messages: messages,
@@ -168,4 +215,6 @@ const CHAIN_SETTING = 'channelAgentChain';
 
 // ─── END LAUNCH-POSTURE ──────────────────────────────────────────────────────────────────
 
-module.exports = { narrowTo, resolvePosture, resolveChain, resolveLaunch, CHAIN_SETTING };
+module.exports = {
+  narrowTo, narrowMessageMode, resolvePosture, resolveChain, resolveLaunch, CHAIN_SETTING,
+};

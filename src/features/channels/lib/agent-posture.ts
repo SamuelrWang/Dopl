@@ -92,6 +92,66 @@ function narrowTo<T extends string>(
  * channel), and there the machine's stored pair is still the only answer,
  * pre-T24 behaviour byte for byte.
  */
+/**
+ * NARROW THE MESSAGE AXIS — ⚠ **NOT WITH {@link narrowTo}, BECAUSE THIS AXIS IS
+ * NOT A LINE** (2026-09-02).
+ *
+ * `LAUNCH_MESSAGE_MODES` is ordered `ask, auto_inbound, auto_outbound,
+ * auto_both`, and an index comparison reads that as a ladder — but
+ * `auto_inbound` and `auto_outbound` are two INDEPENDENT capabilities, neither
+ * wider than the other. Clamping by index therefore WIDENED: `auto_outbound`
+ * against an `auto_inbound` ceiling came back `auto_inbound`, granting the
+ * inbound automation nobody asked for; and `auto_inbound` against an
+ * `auto_outbound` ceiling passed straight through, granting inbound against a
+ * ceiling that never allowed it. Two of sixteen pairs, both in the one direction
+ * a clamp may never move.
+ *
+ * ⚠ **IT IS AN INTERSECTION OF CAPABILITY BITS, WHICH IS WHAT A CEILING MEANS.**
+ * Bit 1 inbound, bit 2 outbound; the answer is what BOTH permit. The empty
+ * intersection is `ask` — the narrowest real mode, not an absence.
+ *
+ * ⚠ **THE TOOL AXIS IS STILL A LINE** (manual ⊂ accept_edits ⊂ auto ⊂ bypass)
+ * and still uses {@link narrowTo}. Do not unify the two.
+ *
+ * ⚠ `Object.hasOwn` FIRST — the keys are wire values, and a bare index walks
+ * `Object.prototype`.
+ */
+const MESSAGE_BITS: Readonly<Record<LaunchMessageMode, number>> = Object.freeze({
+  ask: 0,
+  auto_inbound: 1,
+  auto_outbound: 2,
+  auto_both: 3,
+});
+const MESSAGE_BY_BITS: readonly LaunchMessageMode[] = [
+  "ask",
+  "auto_inbound",
+  "auto_outbound",
+  "auto_both",
+];
+
+function messageBits(mode: string | null | undefined): number {
+  return mode !== null && mode !== undefined && Object.hasOwn(MESSAGE_BITS, mode)
+    ? MESSAGE_BITS[mode as LaunchMessageMode]
+    : -1;
+}
+
+export function narrowMessageMode(
+  requested: LaunchMessageMode | null | undefined,
+  ceiling: LaunchMessageMode | null | undefined
+): LaunchMessageMode | null {
+  // ⚠ The same two absences `narrowTo` answers, answered identically: no ceiling
+  // is no clamp, and no request takes the ceiling (review D4).
+  if (!ceiling) return requested ?? null;
+  if (!requested) return ceiling;
+  const r = messageBits(requested);
+  const c = messageBits(ceiling);
+  // ⚠ An unrecognised value on EITHER side resolves to the CEILING — the same
+  // fail-closed direction `narrowTo` documents, unreachable from a real request
+  // (zod holds the axis to its closed enum) and tested for that reason.
+  if (r === -1 || c === -1) return ceiling;
+  return MESSAGE_BY_BITS[r & c];
+}
+
 export function clampPosture(
   requested: { tools?: LaunchToolMode | null; messages?: LaunchMessageMode | null },
   ceiling: ChannelAgentPosture
@@ -101,11 +161,7 @@ export function clampPosture(
   clamped: boolean;
 } {
   const tools = narrowTo(requested.tools, ceiling.tools, LAUNCH_TOOL_MODES);
-  const messages = narrowTo(
-    requested.messages,
-    ceiling.messages,
-    LAUNCH_MESSAGE_MODES
-  );
+  const messages = narrowMessageMode(requested.messages, ceiling.messages);
   return {
     tools,
     messages,

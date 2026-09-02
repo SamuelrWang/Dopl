@@ -47,6 +47,16 @@ export const LAUNCH_TOOL_MODES = [
   "auto",
   "bypass",
 ] as const;
+/**
+ * ⚠ **THIS ONE IS NOT A LADDER, AND ITS ORDER IS NOT A CLAMP RULE** (2026-09-02).
+ * `LAUNCH_TOOL_MODES` above really is narrowest-first — manual ⊂ accept_edits ⊂
+ * auto ⊂ bypass — and an index comparison is the right clamp for it. Here
+ * `auto_inbound` and `auto_outbound` are two INDEPENDENT capabilities and
+ * neither is wider than the other; the array order is only a stable spelling for
+ * the zod enum and the column CHECK. Clamping this axis by index WIDENED on two
+ * of sixteen pairs. `lib/agent-posture.ts › narrowMessageMode` intersects
+ * capability bits instead, and `main/launch-posture.js` does the same.
+ */
 export const LAUNCH_MESSAGE_MODES = [
   "ask",
   "auto_inbound",
