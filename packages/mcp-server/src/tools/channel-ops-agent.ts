@@ -27,7 +27,7 @@
  *     not running any more, and an agent that finished is the ordinary cause. For
  *     an END that is the outcome the caller wanted, reached by another route, and
  *     the sentence says so rather than reading as a fault.
- *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `read_sessions`**, which is
+ *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `status`**, which is
  *     also where the caller got the id — so every terminal sentence points back
  *     at it.
  */
@@ -174,7 +174,7 @@ function foreignAgent(agentId: string, verb: string): ToolResponse {
  * RE-POSTURE the RENAME's answer for three — a conditional over a closed set is
  * the shape that goes wrong the day the set grows, failing nothing on the way.
  * ⚠ AND THE THREE ANSWERS GENUINELY DIFFER. An END is confirmable: the agent
- * disappearing from `read_sessions` is the answer. A RENAME is not — it is
+ * disappearing from `status` is the answer. A RENAME is not — it is
  * display-only and lives on the operator's machine, so that listing keeps
  * printing the id. A POSTURE is not either, for the same reason, and it is the
  * one where believing otherwise is dangerous: an agent whose re-posture never
@@ -197,7 +197,7 @@ const VERB_PAST: Record<AgentDirectiveKind, string> = {
 };
 
 const PENDING_CONFIRM: Record<AgentDirectiveKind, string> = {
-  end: "read_sessions",
+  end: "status",
   rename: "none",
   set_agent_mode: "none",
 };

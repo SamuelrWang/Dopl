@@ -95,12 +95,7 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     // and the very next bullet states it — so a flat denial two lines above the
     // exception was a remnant teaching the retired rule.
     // ⚠ **AND THE NARROWED CLAIM — "`to` cannot name an agent" — STOPPED BEING
-    // TRUE ON 2026-09-02 (wave B, B4's union resolver + B8's surface).** `to` is
-    // now a UNION over two namespaces, so the sentence had to move rather than be
-    // softened: what is absolute is WHOSE agent, not whether an agent. A peer's
-    // agent is unaddressable from here under every spelling; one of the caller's
-    // own is addressable BY NAME and only by name, which is what the next bullet
-    // has always said.
+    // TRUE ON 2026-09-02 (B4's union resolver).** What is absolute is WHOSE agent.
     expect(CHANNEL_LAW).toContain(
       "`to` never names another member's agent, and one of your own only by the next bullet",
     );
@@ -267,9 +262,8 @@ describe("the DESCRIPTION is a pointer, and has to stay one", () => {
   it("names BOTH doors to the doctrine", () => {
     // ⚠ TWO, on purpose: a client that cannot read resources still has the op,
     // and a pointer naming only the door it cannot open is no pointer at all.
-    // ⚠ `op="help"` BECAME `op="rooms" action="help"` (B8) — the doctrine sits on
-    // `rooms` because `rooms` already answers *what is this place*, and the law
-    // of the place is the same question.
+    // ⚠ `op="help"` BECAME `action="help"` (B8): `rooms` already answers *what
+    // is this place*, and the law of the place is the same question.
     expect(DESCRIPTION).toContain('action="help"');
     expect(DESCRIPTION).toContain(DOCTRINE_URI);
   });
@@ -469,11 +463,8 @@ describe("the removed ops are absent from the published op set", () => {
    * the doctrine's own-agents section.
    */
   it("the revived rename teaches a LABEL, never an ADDRESS", () => {
-    // ⚠ **THE OP IS NOW AN ACTION** (B8): `rename_agent` folded into
-    // `manage(action="rename")`, so the description names the DISPATCHER and the
-    // `action` argument's own describe carries the verb list. What did not move
-    // is the MEANING, which is what this case is actually about — and it is
-    // pinned on the two surfaces that still carry it.
+    // ⚠ **THE OP IS NOW AN ACTION** (B8): the description names the DISPATCHER
+    // and `action`'s describe carries the verbs. The MEANING did not move.
     expect(DESCRIPTION).toContain('"manage"');
     expect(ARG_PROSE).toContain("DISPLAY ONLY");
     // The handle is unchanged and is still the only thing that addresses an agent.
@@ -497,19 +488,9 @@ describe("the removed ops are absent from the published op set", () => {
     // slimmed description must still carry in full — a model PICKS an op from it,
     // and an op it cannot see is one it will not call. `parity.test.ts` greps the
     // same quoted form against the schema's enum.
-    // ⚠ **FIVE NAMES, NOT EIGHT, SINCE 2026-09-02 (B8).** The eight this case
-    // used to list were ops; six of them are now `kind=`, `thread="new"` or an
-    // `action=` on one of the two dispatchers. The claim is unchanged — a model
-    // PICKS an op from this line, and an op it cannot see is one it will not
-    // call — so the list is the PUBLISHED enum and `parity.test.ts` greps the
-    // same quoted form against it.
-    for (const op of [
-      "send",
-      "read",
-      "status",
-      "manage",
-      "rooms",
-    ]) {
+    // ⚠ **FIVE NAMES, NOT EIGHT, SINCE B8** — six are now `kind=`, `thread="new"`
+    // or an `action=`, and the list is the PUBLISHED enum.
+    for (const op of ["send", "read", "status", "manage", "rooms"]) {
       expect(DESCRIPTION, `op="${op}" lost its documentation`).toContain(
         `"${op}"`,
       );

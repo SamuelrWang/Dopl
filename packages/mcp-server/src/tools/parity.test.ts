@@ -29,37 +29,58 @@ import {
   TOOLS,
   TOOL_BY_NAME,
   WRITE_OPS,
+  ACTIONS_BY_OP,
   actionEnum,
+  classifies,
+  gateKeys,
   isAdmin,
   opEnum,
+  servesKey,
 } from "./parity-harness.js";
-import { CHANNEL_ACTIONS } from "./channel-schema.js";
 
-/**
- * ⚠ **THE OPS THAT DISPATCH AGAIN, ON A SECOND WORD** (2026-09-02, slice B8).
- * `dopl_channel(op="rooms")` READS on four actions and WRITES on four, so the
- * gate key is `<op>.<action>` and the classification below is per PAIR. Anything
- * else would be a hole: gating `rooms` wholesale as a write refuses a
- * `dopl.read` token the four calls it exists to make, and gating it as a read
- * hands one the four that change the room.
- *
- * ⚠ THE MAP IS IMPORTED FROM THE PRODUCTION CONSTANT, never restated — and the
- * case below asserts the published `action` enum is exactly the union of its
- * values, so a verb added to one and not the other fails here rather than
- * arriving unclassified.
- */
-const ACTIONS_BY_OP: Record<string, Readonly<Record<string, readonly string[]>>> = {
-  dopl_channel: CHANNEL_ACTIONS,
-};
+// ── Sanity: capture worked ───────────────────────────────────────────
 
-/** Every key a call on `tool` can be gated on — `op`, or `op.action` per pair. */
-function gateKeys(tool: { name: string }, enumOps: readonly string[]): string[] {
-  const actions = ACTIONS_BY_OP[tool.name];
-  if (!actions) return [...enumOps];
-  return enumOps.flatMap((op) =>
-    actions[op] ? actions[op].map((a) => `${op}.${a}`) : [op],
-  );
-}
+describe("tool capture", () => {
+  it("registers the expected domain tools", () => {
+    const names = TOOLS.map((t) => t.name).sort();
+    expect(names).toEqual(
+      [
+        // MCP surface v2 wave A (2026-08-28): the template family joins.
+        // ⚠ THE FIVE `_admin` COMPANIONS LEFT ON 2026-09-02 — deleted, not
+        // hidden: registrars, op handlers and descriptions are gone. The rule
+        // they advertised is `sessionOnly` on the REST routes now.
+        "dopl_agent",
+        // Wave B: `dopl_home` registers on the META path and is captured anyway —
+        // it has an op enum, a WRITE op and a charge (see `parity-harness.ts`).
+        "dopl_home",
+        "dopl_channel",
+        "dopl_chats",
+        "dopl_kb",
+        "dopl_map",
+        "dopl_members",
+        "dopl_ontology",
+        "dopl_search",
+        "dopl_skill",
+      ].sort(),
+    );
+  });
+
+  it("parsed a non-empty WRITE_OPS table", () => {
+    expect(Object.keys(WRITE_OPS).length).toBeGreaterThan(0);
+  });
+
+  it("parsed the HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
+    // ⚠ A parse silently returning {} makes every assertion below a vacuous
+    // pass. DELETE_BLOCKED_OPS is checked by SIZE; HIDDEN_TOOLS cannot be
+    // (legitimately empty), so the parse IS the assertion — `parseToolSet`
+    // THROWS when the constant is missing or renamed.
+    expect(HIDDEN_TOOLS).toBeInstanceOf(Set);
+    expect(Object.keys(DELETE_BLOCKED_OPS).length).toBeGreaterThan(0);
+  });
+});
+
+
+// ── 1a. WRITE_OPS ⊆ op enum (kills the stale-op class) ───────────────
 
 // ⚠ CURATED READ-OPS ALLOWLIST — THE SECURITY REVIEW. Per tool, the ops that
 // ONLY read (no client write call in the handler), derived by reading every op
@@ -136,77 +157,6 @@ const KNOWN_WRITE_OPS_DRIFT: Record<string, string[]> = {};
  * below, and an exclusion here would be a hole rather than a scoping.
  */
 const OP_TOOLS = TOOLS.filter((t) => opEnum(t) !== null);
-
-// ── Sanity: capture worked ───────────────────────────────────────────
-
-describe("tool capture", () => {
-  it("registers the expected domain tools", () => {
-    const names = TOOLS.map((t) => t.name).sort();
-    expect(names).toEqual(
-      [
-        // MCP surface v2 wave A (2026-08-28): the template family joins.
-        // ⚠ THE FIVE `_admin` COMPANIONS LEFT ON 2026-09-02 — deleted, not
-        // hidden: registrars, op handlers and descriptions are gone. The rule
-        // they advertised is `sessionOnly` on the REST routes now.
-        "dopl_agent",
-        // Wave B: `dopl_home` registers on the META path and is captured anyway —
-        // it has an op enum, a WRITE op and a charge (see `parity-harness.ts`).
-        "dopl_home",
-        "dopl_channel",
-        "dopl_chats",
-        "dopl_kb",
-        "dopl_map",
-        "dopl_members",
-        "dopl_ontology",
-        "dopl_search",
-        "dopl_skill",
-      ].sort(),
-    );
-  });
-
-  it("parsed a non-empty WRITE_OPS table", () => {
-    expect(Object.keys(WRITE_OPS).length).toBeGreaterThan(0);
-  });
-
-  it("parsed the HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
-    // ⚠ A parse silently returning {} makes every assertion below a vacuous
-    // pass. DELETE_BLOCKED_OPS is checked by SIZE; HIDDEN_TOOLS cannot be
-    // (legitimately empty), so the parse IS the assertion — `parseToolSet`
-    // THROWS when the constant is missing or renamed.
-    expect(HIDDEN_TOOLS).toBeInstanceOf(Set);
-    expect(Object.keys(DELETE_BLOCKED_OPS).length).toBeGreaterThan(0);
-  });
-});
-
-
-// ── 1a. WRITE_OPS ⊆ op enum (kills the stale-op class) ───────────────
-
-/**
- * Is `key` — plain `op` or dotted `op.action` — something `tool` really serves?
- * ⚠ ONE resolver for both gate lists, because "this entry names nothing" is the
- * same failure whichever list it sits in, and two copies is how one of them
- * quietly stops asking.
- */
-function servesKey(toolName: string, enumOps: readonly string[], key: string): boolean {
-  const [op, action, ...rest] = key.split(".");
-  if (rest.length > 0) return false;
-  if (!enumOps.includes(op)) return false;
-  // ⚠ A BARE OP IS A LEGAL ENTRY EVEN WHERE ACTIONS EXIST — it classifies the
-  // whole op, which `gating.ts › isWriteOp` honours the same way. What must NOT
-  // be legal is an action nobody serves.
-  if (action === undefined) return true;
-  return (ACTIONS_BY_OP[toolName]?.[op] ?? []).includes(action);
-}
-
-/**
- * Is `key` classified by `set`? ⚠ A bare entry for the op covers every action of
- * it, exactly as the gate reads it — a test that resolved this differently from
- * `gating.ts › isWriteOp` would be measuring a table nothing enforces.
- */
-function classifies(set: ReadonlySet<string>, key: string): boolean {
-  const dot = key.indexOf(".");
-  return set.has(key) || (dot > 0 && set.has(key.slice(0, dot)));
-}
 
 describe("the `action` sub-verb is declared once and published whole", () => {
   it("the published enum is exactly the union of the per-op vocabularies", () => {

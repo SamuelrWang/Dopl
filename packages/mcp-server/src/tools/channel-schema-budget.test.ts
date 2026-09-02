@@ -166,7 +166,8 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
     // GONE WITH THEM** (B8): `recipient`, `handoff` and the standalone `chain`
     // left the shape, so a doctrine line about any of them would teach a phantom
     // — which is exactly what the pair test below exists to catch.
-    // ⚠ **AND NEITHER `to` NOR `model` HAS A LINE HERE, DELIBERATELY.** This
+    // ⚠ **AND `to`, `model`, `info_card` AND `recommendation` HAVE NO LINE HERE,
+    // DELIBERATELY.** This
     // section is for a rule that had NOWHERE ELSE TO LIVE once the `.describe()`
     // could only carry a contract — and both of those rules fit in their own
     // describe (`to`: one party, two namespaces; `model`: an unrecognised id
@@ -178,8 +179,6 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "ONE CURSOR SPACE, ONE `since`",
       "`client_msg_id` IS WHAT MAKES A RETRY SAFE",
       "`posture.chain` NAMES ITS THREE STATES",
-      "`info_card` REPLACES THE WHOLE CARD",
-      "`recommendation.index` MUST BE INSIDE `options`",
     ])
       expect(CHANNEL_DOCTRINE, rule).toContain(rule);
   });
@@ -192,8 +191,6 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "since",
       "client_msg_id",
       "posture",
-      "info_card",
-      "recommendation",
     ])
       expect(CHANNEL_INPUT_SHAPE, field).toHaveProperty(field);
   });

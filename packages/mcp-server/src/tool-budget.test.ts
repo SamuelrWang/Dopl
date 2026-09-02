@@ -166,14 +166,8 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // doctrine, because the agent that has not read the doctrine is exactly the
   // one that needs it. Both descriptions FELL by hundreds in the same change.
   dopl_agent: 1948,
-  // ⚠ 1,591 → 1,586 (B8, 2026-09-02), and the number moved almost not at all
-  // while the string changed completely. The op paragraph went from 23 names to
-  // 5 plus two `action=` pointers — and the surface GAINED a rendered `Limits:`
-  // block and a third error row for the union resolver's own refusal, both of
-  // which are generated from declarations rather than typed. The prose fell
-  // ~470; the machine-readable tail took ~465 of it back. ⚠ That is the trade
-  // this ratchet is supposed to allow: an error code an agent can match on is
-  // worth more per character than a list of ops it can read off the enum.
+  // ⚠ 1,591 → 1,596 (B8): barely moved while the string changed completely — 23
+  // op names fell to 5, and a generated `Limits:` block took it back.
   dopl_channel: 1596,
   dopl_chats: 1699,
   dopl_kb: 1947,
@@ -220,20 +214,8 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // orchestrator loop's.
   current_workspace: 720,
   dopl_agent: 3930,
-  // ⚠ 11,609 → 8,571 (B8, 2026-09-02) — 3,038 characters, and every one came
-  // from a param or an op leaving rather than from a sentence being reworded.
-  // Thirteen params went (`topic`, `member`, `title`, `handoff`, `agent_id`,
-  // `ping_kind`, `recipient`, `metadata`, `goal`, `issue`, `context`,
-  // `timeout_ms`, and the three posture axes folded into one object), because
-  // the concept each named already had a field on this surface.
-  // ⚠ **IT DOES NOT REACH THE WAVE TARGET OF 3,000, AND THE GAP IS RECORDED
-  // RATHER THAN CLOSED BY TRIMMING.** What is left is 23 fields each carrying
-  // ONE sentence of contract; 3,000 is ~130 characters per field including the
-  // JSON Schema structure around it, which buys the number by deleting the
-  // answer to "does this op want this argument" — the floor
-  // `channel-schema-budget.test.ts` exists to hold. The next real cut is
-  // FEWER FIELDS, and B13 takes the next one.
-  dopl_channel: 8640,
+  // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
+  dopl_channel: 8678,
   dopl_chats: 3554,
   dopl_home: 440,
   dopl_kb: 5347,
@@ -242,16 +224,8 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   dopl_ontology: 2538,
   dopl_search: 1081,
   dopl_skill: 3059,
-  // ⚠ AND THREE ROSE BY EXACTLY 1 ON THE SAME DAY, FROM AN EDIT IN A FOURTH
-  // FILE: `shelf.ts › SHELF_ARG_DESCRIPTION` stopped saying "your DEFAULT
-  // workspace" and started saying "your personal container" (B11's cross-slice
-  // request, Samuel's ruling B10). One shared describe, three tools, one
-  // character each — which is what a shared constant costs, and it is cheaper
-  // than three copies that can disagree about where a shelf lives.
-  // ⚠ THESE THREE EACH FELL BY EXACTLY 7 AND THE EDIT WAS IN NEITHER OF THEM:
-  // `response-size.ts › RESPONSE_FORMAT_FIELD` is ONE constant shared by five
-  // tools, and its sentence now names `op="status"` where it named
-  // `op="read_sessions"`. A shared describe is a shared budget line.
+  // ⚠ THESE THREE EACH FELL BY 7 AND ROSE BY 1, BOTH EDITS IN OTHER FILES —
+  // `response-size.ts › RESPONSE_FORMAT_FIELD` and `shelf.ts › SHELF_ARG_DESCRIPTION`.
   dopl_status: 787,
   list_workspaces: 114,
 };
@@ -296,11 +270,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 //     run. See `instructions.ts › ConnectionIdentity`.
 // ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
 // about this surface has gone stale inside a day (F-422).
-// ⚠ 51,996 → 48,973 (B8, 2026-09-02). 3,007 of the 3,023-character fall is
-// `dopl_channel`'s schema; the remaining ~20 is the shared `response_format`
-// describe naming one op differently across five tools, and `dopl_channel`'s
-// own description shedding five.
-const SERVED_TOTAL_CEILING = 49_019;
+const SERVED_TOTAL_CEILING = 49_057; // ⚠ 51,996 → 49,057 (B8), almost all schema
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -316,11 +286,8 @@ const SERVED_TOTAL_CEILING = 49_019;
  * inside a consuming runtime is not observable from here and must not be
  * asserted here.
  */
-// ⚠ **1,851 → 1,857 (B8, 2026-09-02), AND IT IS A RISE ON A RATCHET, RECORDED.**
-// The briefing names the first two channel calls an agent makes, and both op
-// names moved: `dopl_channel(op="list")` → `op="rooms", action="list"`, and the
-// doctrine door → `action="help"`. Six characters, and the alternative was
-// leaving the FIRST string an agent reads naming a call the enum now rejects.
+// ⚠ **1,851 → 1,857 (B8): A RISE, RECORDED.** Both op names the briefing spells
+// moved — six characters, against the FIRST string an agent reads being wrong.
 const INSTRUCTIONS_CEILING = 1_857;
 
 /**
@@ -347,15 +314,10 @@ const INSTRUCTIONS_CEILING = 1_857;
 // paragraph collapsed to one sentence when `channel_tasks` took the author scope
 // (C14), and the protocol section stopped naming the deleted `kind` param. Banked
 // here rather than left as headroom, which is what this ratchet is for.
-// ⚠ **32,551 → 8,997 (B8, 2026-09-02), AND THAT IS THE LARGEST SINGLE FALL ON
-// THIS SURFACE.** The doctrine had become the place every paragraph evicted from
-// a pushed string landed — 5,765 characters of refusal prose, 4,873 of own-agent
-// narrative, 3,914 on a hold that is now a knob on `read`. It is re-sectioned to
-// the five ops and cut to CONTRACTS: what the nouns mean, what each op promises,
-// and the rule behind an argument a `.describe()` may only state the contract
-// of. Anything a result already reports and anything that is encouragement
-// rather than contract is gone.
-const DOCTRINE_CEILING = 8_909;
+// ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
+// where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
+// narrative, 3,914 on a hold that is now a knob on `read`.
+const DOCTRINE_CEILING = 8_960;
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",
