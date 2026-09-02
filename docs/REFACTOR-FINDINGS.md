@@ -4,6 +4,39 @@ A running log of bugs, conflicts, friction, and suspicious patterns discovered d
 
 See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
 
+**ALLOCATING AN ID — ⚠ FROM THE HIGHEST CLAIMED ON ANY LIVE BRANCH, NEVER FROM `master`'s.**
+⚠ *Deliberately BOLD TEXT and not an `##` heading:* `check-doc-refs.mjs` treats everything above
+the first `##` as this file's HEADER — the block that records which ids were deleted and may
+still be referenced — so a heading here truncates that record and turns hundreds of legitimate
+references into dangling ones. (Measured: it did, the first time this section was written.)
+
+**This file is an append-only shared counter, and parallel branches make "the next number" a
+question `master` cannot answer.** Established 2026-09-01, the hard way: master's highest id was
+`F-403`, and THREE branches of one wave then allocated `F-404` onward independently — the P0 bug
+tier (three ids), the desktop-lifecycle tier (three DIFFERENT findings under the SAME three ids),
+and the orchestrator-surface tier (two more). Six entries under three ids; only one set could
+survive the merge, and the integration had to renumber two whole tiers and every reference to them.
+
+Re-derive across every live branch before you file, never from `master` and never from memory:
+
+```
+for b in $(git branch --format='%(refname:short)'); do
+  git show "$b:docs/REFACTOR-FINDINGS.md" 2>/dev/null | grep -oE '^### F-[0-9]{3}'
+done | grep -oE 'F-[0-9]{3}' | sort -u | tail -1
+```
+
+- **Ids are never reused and never reassigned once merged.** Two entries under one id makes both
+  unreadable, which is the whole cost being avoided here. Gaps are fine — `F-160`, `F-161` and
+  `F-162` have been permanently unused since 2026-08-08.
+- **Renumber on the BRANCH, before the merge, in one commit that also moves every reference** —
+  `docs/`, code comments, and any test that pins an id. `scripts/check-doc-refs.mjs` resolves
+  `F-NNN` refs in the SOURCE trees too, so a half-done renumber fails the gate rather than rotting.
+- ⚠ **The gate cannot catch a COLLISION, only a DANGLING id.** Two headings under one number both
+  resolve, so `check-doc-refs` passes on exactly the state this rule exists to prevent. The rule is
+  the only thing standing between the wave and that outcome.
+- ⚠ **A note about a collision may not CITE the colliding id in `F-NNN` notation** if that id lives
+  only on another branch — the gate would resolve it here and fail. Describe it by number-block.
+
 **Pruned 2026-07-17:** a three-agent audit verified every entry against the live tree; resolved/obsolete findings were removed so this file holds only OPEN debt. Removed IDs (details in git history of this file): F-001–F-015, F-018, F-019, F-021, F-022, F-024, F-025, F-028–F-032, F-034, F-039. IDs are never reused. The second of two entries that both carried "F-038" was renumbered to F-040.
 
 **Pruned 2026-07-31:** every remaining entry was re-verified AGAINST THE CODE AT HEAD (not against commit messages — several entries had been written by agents that were mistaken). Deleted as genuinely resolved: F-020, F-043, F-045 (body; one follow-up kept), F-046, F-047, F-056, F-057, F-062, F-069, F-082, F-084, F-086, F-087, F-088, F-089, F-090, F-095. Deleted as STALE rather than resolved — the code they describe no longer exists: **F-065** and **F-066**. **F-041** was deleted as superseded by F-093. Entries that were only PARTLY resolved were rewritten down to the open half rather than deleted (F-042 item 3, F-092, F-093, F-094, F-096, F-098, F-099, F-100, F-101, F-102). IDs are never reused.
@@ -6419,7 +6452,7 @@ of a finished state to wait for — and the mechanism lecture is still taught wh
 2026-09-02 by the P1 verbosity tier; not resolved here, deliberately.
 
 - What: `op="await"` and the workspace await render peer-authored message bodies
-  under `channel-render.ts › UNTRUSTED_BODY_HEADER`, restored and position-pinned
+  under `channel-framing.ts › UNTRUSTED_BODY_HEADER`, restored and position-pinned
   by the P0 branch (`1481c6a4`). `op="read"` renders the SAME bodies, through the
   same `formatMessages`, with no header — T11 removed it and stated the rule once
   in `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph.
@@ -6442,7 +6475,7 @@ of a finished state to wait for — and the mechanism lecture is still taught wh
   fallback.
 - Measure it: `grep -n UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
   and compare `channel-ops-read.ts › opRead` with `channel-ops-await.ts › opAwait`.
-### F-404 — the `stale` flag is derived at projection time, so a session that stops dispatching ENTIRELY can never report it (2026-09-01, T51)
+### F-408 — the `stale` flag is derived at projection time, so a session that stops dispatching ENTIRELY can never report it (2026-09-01, T51)
 
 `dopl-desktop-app/main/session-health.js › isStale` answers "working, quiet past ten minutes, and
 still spending". It is computed inside `session-summary.js › reportList`, which runs on `touch()`
@@ -6463,7 +6496,7 @@ wants it should start from F-294's own two objections rather than from this para
 
 - Status: open
 
-### F-405 — the desktop reports seven health fields the server has no columns for, so `read_sessions` cannot render them yet (2026-09-01, T25 / T50 / T51 / T83)
+### F-409 — the desktop reports seven health fields the server has no columns for, so `read_sessions` cannot render them yet (2026-09-01, T25 / T50 / T51 / T83)
 
 ```
 grep -n "tokensDelta\|deniedCalls\|lastWakeSeq" dopl-desktop-app/main/session-telemetry.js
@@ -6490,7 +6523,7 @@ is getting on, and `collab-dto.ts`'s two parallel arrays plus
 
 - Status: open
 
-### F-406 — a CLAMPED posture directive has no way to tell the caller it was clamped (2026-09-01, T24)
+### F-410 — a CLAMPED posture directive has no way to tell the caller it was clamped (2026-09-01, T24)
 
 `launch-posture.js › resolvePosture` answers a `clamped` flag and both callers log it
 (`launch-directive-spawn.js › spawn`, `directive-agent-ops.js › setAgentMode`). The DIAG is the
@@ -6510,7 +6543,7 @@ DTO field and the result line, all of which are the orchestrator-surface tier's.
 - Status: open
 ---
 
-## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-407 through F-408
+## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-411 through F-412
 
 ⚠ **THESE WERE FILED IN THE 404-406 BLOCK AND RENUMBERED THE SAME DAY, BECAUSE THREE TIERS OF ONE
 WAVE CLAIMED IT AT ONCE.** Master's highest id was 403 — re-derive with
@@ -6529,13 +6562,17 @@ gate resolves every `F-NNN` reference to a heading in these docs, and an id that
 another branch is a DANGLING ref here — so the collision is described by number-block rather than
 cited. That is the gate working: a doc may not point at a finding this tree does not hold.
 
-These two moved to the next free block above every claim. **The other two tiers' ids are still to be
-resolved at merge**, and whichever set moves, this heading does not.
+These two moved to the next free block above every claim. ⚠ **RESOLVED AT MERGE 2026-09-01, and the
+allocation went in the order the tiers merged**, which is the only tie-break that is not a
+preference: the P0 tier kept `F-404`/`F-405`/`F-406` (it merged first and its ids were already cited
+from four source files), the P1 tier kept `F-407`, the DESKTOP tier's three became
+`F-408`/`F-409`/`F-410`, and this tier's two became `F-411`/`F-412`. The rule that would have
+avoided the whole exercise is now stated once at the top of this file.
 
 Opened while building T20/T21/T22/T40/T41/T81 of `docs/specs/` — the MCP agent-efficiency spec's P2
 tier. Both are things the wave MEASURED and deliberately did not fix inside it.
 
-### F-407 — `set_agent_mode` over MCP could not be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01) — ✅ DISCHARGED the same day by the desktop tier
+### F-411 — `set_agent_mode` over MCP could not be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01) — ✅ DISCHARGED the same day by the desktop tier
 
 **The ask** was a `dopl_channel(op="set_agent_mode", agent_id=…, tool_mode=…, message_mode=…)` — a
 fourth KIND on the launch mailbox, letting an orchestrator re-posture one of its operator's RUNNING
@@ -6595,7 +6632,7 @@ lives in another process must ship its FENCE first and its SURFACE second; shipp
 - Status: ✅ discharged 2026-09-01. Step 3 (the mode columns on `channel_sessions`, so an
   orchestrator can SEE the posture it is about to change) is the wave's session-health half.
 
-### F-408 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
+### F-412 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
 
 §10's workspace-await bullet and `repository-await-workspace.ts › listWorkspaceMessagesAfter` both say
 *"`seq` is WORKSPACE-GLOBAL and gappy"*. Measured against the DDL: `20260725120000_channels.sql`
