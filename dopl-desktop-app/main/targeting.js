@@ -22,35 +22,59 @@ function metaStr(m, key) {
 }
 
 // ── Targeting classification (Feature A) ─────────────────────────────────────
+//
 // classify() returns 'trigger' (consent prompt + maybe spawn), 'fyi' (THE MENTION ESCALATION —
 // a silent notify), 'task-reply' (passive news) or 'ignore'.
-// FAIL CLOSED: unknown identity or my own message → ignore.
-//   1. metadata.to_user_id present → trigger only if it equals me; else FYI (tagged me) /
-//      ignore. USER *and* AGENT authors — an agent explicitly addressed to me is the core
-//      Channels use case and MUST trigger.
-//   2. absent → FYI (tagged me) / ignore. NEVER a trigger, at any member count, any author kind.
-//   3. `metadata.intent === 'chat'` triggers NOBODY, on the same terms.
-// authorKind must be 'user' or 'agent'; anything else ('system') → ignore.
-// ⚠ 'fyi' IS NO LONGER "A MESSAGE I CAN SEE" — IT IS "A MESSAGE THAT @-TAGGED ME"
-// (2026-08-18, wiring plan Phase 7). Every 'fyi' return is conjoined with `mentionsMe`, so a
-// post I can read but was not tagged in classifies 'ignore' and raises NO desktop notification.
-// Most thread traffic is agents talking to each other; the operator does not need a popup per
-// message. THE TAG IS THE ESCALATION, THE TAGS INBOX IS THE RECORD — an untagged post is still
-// listed, read and rendered on the web; only the OS banner is gone.
-// ⚠ EXPLICIT ADDRESSING IS STILL AN ESCALATION AND STILL NOTIFIES, through 'trigger' and the
-// consent notification behind it. An addressed request is a decision somebody is waiting on and
-// the consent → launch flow DEPENDS on that notification arriving; gating it on a tag would
-// hide requests behind whether the sender happened to type a name.
-// ⚠ ADDRESSING IS EXPLICIT NOW, AND RULE 2 IS THE WHOLE OF FAIL-CLOSED. The IMPLICIT
-// 1:1 trigger — a known-exact memberCount of 2 plus explicit membership — was REMOVED
-// 2026-08-18, together with the server-side DM auto-address it paired with. An ask that
-// names nobody reaches nobody, in a DM exactly as in a group channel; the one surface
-// that raises an agent request is the web app's New agent thread panel, which always
-// names its addressees. Do NOT reinstate a count-keyed trigger: it made the ROSTER a
+//
+// ⚠ **IT ASKS TWO QUESTIONS (2026-09-02, ruling B1), AND IT USED TO SPELL THE SECOND ONE FOUR
+// TIMES.** Under the fan-out this function was one of five parallel rule sets over "who does a
+// message reach", and it had grown a branch per message shape: a first-class task reply, a legacy
+// task reply, chat, addressed-to-me, addressed-to-its-own-author, addressed-to-a-third-party and
+// unaddressed. FOUR of those seven ended in the SAME expression — `isMember && mentionsMe ? 'fyi'
+// : 'ignore'` — which is four places one rule could drift. The questions are:
+//
+//   1. IS THIS MESSAGE ADDRESSED TO ME? A fresh request is a 'trigger' (consent + maybe spawn);
+//      a reply inside an exchange I opened is 'task-reply' (passive news); a post that declared
+//      `intent:'chat'` or aimed at its own author is neither.
+//   2. DOES IT @-TAG ME? 'fyi' as a member, 'ignore' otherwise — written ONCE, at the foot.
+//
+// ⚠ THE VERDICTS AND THEIR INPUTS ARE UNCHANGED. This is a branch collapse, not a rewiring: the
+// four `to_user_id` / task-stamp reads are the same reads in the same order, and the routing this
+// function performs is the same routing. **`wake_verdict` is deliberately NOT consulted here** —
+// this is the HUMAN lane (a consent card, an OS banner), the delivery lane executes the verdict in
+// `session-dispatch.js`, and folding one into the other would put a consent decision behind a
+// column the field has not all got yet.
+//
+// FAIL CLOSED: unknown identity or my own message → ignore. authorKind must be 'user' or 'agent';
+// anything else ('system') → ignore.
+// ⚠ EXPLICIT ADDRESSING IS AN ESCALATION AND NOTIFIES, through 'trigger' and the consent
+// notification behind it. An addressed request is a decision somebody is waiting on and the
+// consent → launch flow DEPENDS on that notification arriving; gating it on a tag would hide
+// requests behind whether the sender happened to type a name.
+// ⚠ ADDRESSING IS EXPLICIT, AND THAT IS THE WHOLE OF FAIL-CLOSED. The IMPLICIT 1:1 trigger — a
+// known-exact memberCount of 2 plus explicit membership — was REMOVED 2026-08-18, together with
+// the server-side DM auto-address it paired with. An ask that names nobody reaches nobody, in a
+// DM exactly as in a group channel. Do NOT reinstate a count-keyed trigger: it made the ROSTER a
 // behaviour, so one ghost membership row silently changed what a message did.
+// ⚠ THE MEMBER COUNT IS NOT READ. `listener-messages.js` still LOGS it as diagnostics.
+// ⚠ `isDirect` IS NOT READ EITHER. It once meant "a DIRECT channel addresses every post
+// automatically", so `to_user_id` there was not evidence anybody addressed anybody; the SERVER
+// behaviour it described was removed 2026-08-18 with the DM auto-address.
 // ⚠ SHIP ORDER, INVARIANTS §13: the WEB half deploys FIRST. An old desktop against a new
 // server keeps triggering on 2-member channels until it updates, which is noisy and safe;
 // a new desktop against an old server is the direction that breaks.
+//
+// ── ⚠ THE RECORD OF A FALSE INVARIANT, KEPT BECAUSE THE PAIR WAS WHAT SURVIVED REVIEW ────────
+// This block sat on the unaddressed branch until that branch became question 2's single answer,
+// and it is carried here rather than deleted with it (pinned by `courtesy-no-op-brake.test.mjs`).
+// ⚠ THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM, and the reason it was false is GONE.
+// It used to claim a responder's unaddressed reply landed as FYI; in a DIRECT channel
+// `resolvePostMetadata` fell back to `peerUserId`, so `to_user_id` WAS stamped, the addressed rule
+// claimed the message and the unaddressed branch was never reached. What braked a DM was
+// `intent:"chat"` (stamped by channel-post.postCourtesy). ⚠ HISTORY, NOT BEHAVIOUR: that fallback
+// was REMOVED 2026-08-18 in the same change as the implicit 1:1 trigger, so an unaddressed DM post
+// really does reach question 2 now — which is why the LOOP BRAKE that used to be an agent-only
+// special case is simply the rule.
 
 // The `intent="chat"` marker.
 // ⚠ TWO READERS, ONE PREDICATE: listener-messages.js asks the same question BEFORE classify
@@ -115,88 +139,57 @@ function classify(m, entry, myId) {
     return 'ignore';
   }
 
-  // ⚠ THE MEMBER COUNT IS NO LONGER READ. It keyed the implicit 1:1 trigger, retired
-  // 2026-08-18 — see the header. `listener-messages.js` still LOGS it as diagnostics.
-  // Only an explicit `isMember: false` blocks (public channel the operator sees but is not
-  // in); a missing field degrades to member so DTO drift cannot silently stop answering.
-  const isMember = !(entry.channel && entry.channel.isMember === false);
-  // ⚠ `isDirect` USED TO BE READ HERE and its comment said a DIRECT channel addresses
-  // EVERY post automatically, so `to_user_id` there was not evidence anybody addressed
-  // anybody. It was already dead when the branch that needed it went; the SERVER
-  // behaviour it described was removed 2026-08-18 with the DM auto-address. A direct
-  // channel is now just a channel with two members, and `to_user_id` means the same
-  // thing in it as anywhere else.
-
+  // ── QUESTION 1: IS THIS MESSAGE ADDRESSED TO ME? ──────────────────────────
+  // Everything below the first branch is that one question's three answers: a fresh REQUEST
+  // (consent), a REPLY inside an exchange I opened (passive news), or nothing.
   const toUserId = metaStr(m, 'to_user_id');
-  // TASK-REPLY, requester side: an inbound reply on a task I created, addressed back to me,
-  // is passive news — no consent, no spawn, silent notification only. task* keys are stamped
-  // SERVER-SIDE so they cannot be spoofed. taskCreatedBy === me separates REQUESTER from
-  // RESPONDER; taskTarget === author binds the suppression to the responder, so a THIRD
-  // member posting into my task still triggers. Sits BEFORE the addressed rules.
-  // ⚠ EVERY MODE AND EVERY AUTHOR KIND (widened 2026-08-20, Samuel's ruling retiring the
-  // session window —
-  // retirement). This carried `taskMode === 'interactive'` and `authorKind === 'agent'`
-  // conjuncts when the requester ran a live session window that consumed replies first: an
-  // autonomous-mode or human-authored reply was left to the addressed rule so the window
-  // lane could claim it. With that lane retired, either conjunct failing turned the
-  // counterparty's reply IN MY OWN THREAD into a consent card against myself. A reply is
-  // read in the thread view; the exchange's decidable surface is the ASK, not its answers.
-  if (
-    metaStr(m, 'taskId') &&
-    toUserId === myId &&
-    metaStr(m, 'taskCreatedBy') === myId &&
-    metaStr(m, 'taskTarget') === m.authorUserId
-  ) return 'task-reply';
-  // LEGACY TASK-REPLY. The branch above only fires for FIRST-CLASS threads: taskMode /
-  // taskCreatedBy / taskTarget are stamped ONLY from a resolved channel_tasks row, and a
-  // legacy 'task-<channel>-<seq>' id is not a UUID (src/features/channels/server/
-  // service-writes-metadata.ts resolvePostMetadata). Without this branch, a session answering
-  // a legacy request posts a reply that looks like a fresh request on the requester's machine
-  // and spawns a counter-session against itself.
-  // ⚠ Provenance cannot come off the wire — a legacy id is caller-settable, so any member
-  // could claim one. It comes from the LOCAL registry of threads *I* opened. Every author
-  // kind, same as the first-class branch above (widened 2026-08-20). Fails safe toward
-  // 'trigger' (unknown id, restart, unclassified first-watch backlog all fall to the addressed
-  // path where consent is the net). ⚠ "cap eviction" was in that list until 2026-08-20 and is
-  // not a thing that happens: the concurrency ceiling REFUSES a launch, it never reclaims a
-  // live session, so no thread is ever silently un-tracked by it.
-  if (
-    toUserId === myId &&
-    knownLegacyReply(m, myId)
-  ) return 'task-reply';
-  // CHAT — a post that declared it addresses nobody triggers nobody.
-  // ⚠ POSITION IS LOAD-BEARING: after the two task-reply branches (passive notices, nothing to
-  // suppress) and BEFORE every branch that can return 'trigger'. It no longer STOPS anything
-  // an unaddressed post could otherwise do — the implicit 2-member rule it used to brake is
-  // retired — but it still says which of FYI and ignore an unaddressed post takes, and it
-  // still tells the receiving side the sender MEANT to reach nobody.
-  // ⚠ AND `mentionsMe` SINCE PHASE 7: chat that tags nobody here is exactly the traffic the
-  // mention gate exists to silence, and chat that tags ME is the human-to-human case the
-  // policy says DOES notify (a DM notifies when you are tagged, same as a group channel).
-  if (isChatIntent(m)) return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
-  if (toUserId) {
-    // Explicit address always prompts — USER *and* AGENT authors.
-    if (toUserId === myId) return 'trigger';
-    // Self-addressed noise. ⚠ A TAG DOES NOT RESCUE IT, deliberately: a post whose declared
-    // addressee is its own author is malformed rather than an escalation, and this branch is a
-    // loop brake. Reordering the tag above it would be a NEW rule, not this phase's.
-    if (toUserId === m.authorUserId) return 'ignore';
-    // Addressed to a THIRD party. Tagging me inside somebody else's request is still a tag.
-    return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
+  if (toUserId === myId) {
+    // A REPLY on a task I created, from the party I created it against, is passive news — no
+    // consent, no spawn, silent notification only. task* keys are stamped SERVER-SIDE so they
+    // cannot be spoofed; `taskCreatedBy === me` separates REQUESTER from RESPONDER and
+    // `taskTarget === author` binds the suppression to the responder, so a THIRD member posting
+    // into my task still triggers.
+    // ⚠ EVERY MODE AND EVERY AUTHOR KIND since 2026-08-20 (Samuel's ruling retiring the session
+    // window). It carried `taskMode === 'interactive'` and `authorKind === 'agent'` conjuncts
+    // while the requester ran a live window that consumed replies first; with that lane retired,
+    // either conjunct failing turned the counterparty's reply IN MY OWN THREAD into a consent
+    // card against myself.
+    if (metaStr(m, 'taskId') && metaStr(m, 'taskCreatedBy') === myId
+      && metaStr(m, 'taskTarget') === m.authorUserId) return 'task-reply';
+    // THE LEGACY HALF OF THE SAME ANSWER. The branch above fires only for FIRST-CLASS threads —
+    // taskMode / taskCreatedBy / taskTarget are stamped ONLY from a resolved channel_tasks row,
+    // and a legacy 'task-<channel>-<seq>' id is not a UUID. Without this, a session answering a
+    // legacy request posts a reply that looks like a fresh request on the requester's machine and
+    // spawns a counter-session against itself. ⚠ Provenance cannot come off the wire — a legacy
+    // id is caller-settable — so it comes from the LOCAL registry of threads *I* opened, and it
+    // fails safe toward 'trigger', where consent is the net.
+    if (knownLegacyReply(m, myId)) return 'task-reply';
   }
-  // UNADDRESSED — FYI (member) / ignore. ONE branch now, for every author kind.
-  // ⚠ THE SECOND CLAUSE OF THIS COMMENT WAS FALSE IN EVERY DM, and the reason it was
-  // false is GONE. It used to claim a responder's unaddressed reply landed here as FYI;
-  // in a DIRECT channel `resolvePostMetadata` fell back to
-  // `peerUserId`, so `to_user_id` WAS stamped, the addressed rule above claimed the
-  // message and this branch was never reached. What braked a DM was `intent:"chat"`
-  // above (stamped by channel-post.postCourtesy). ⚠ HISTORY, NOT BEHAVIOUR: that
-  // fallback was REMOVED 2026-08-18 in the same change as the implicit 1:1 trigger, so an
-  // unaddressed DM post really does arrive here now — which is why the LOOP BRAKE that
-  // used to be an agent-only special case is simply the rule.
-  // ⚠ AND SINCE PHASE 7 THE FYI HALF IS MENTION-GATED TOO, which is where the bulk of the
-  // retired per-message notifications lived: an agent posting into a thread it shares with
-  // another agent lands here every turn, and none of it is for the operator unless it says so.
+  // CHAT — a post that declared it addresses nobody triggers nobody, and it is asked HERE, after
+  // both passive answers (they have nothing to suppress) and before the only branch that can
+  // return 'trigger'. It no longer STOPS anything an unaddressed post could otherwise do — the
+  // implicit 2-member rule it used to brake was retired 2026-08-18 — but it still tells the
+  // receiving side the sender MEANT to reach nobody.
+  if (!isChatIntent(m) && toUserId) {
+    if (toUserId === myId) return 'trigger'; // explicit address, USER *and* AGENT authors
+    // Self-addressed noise. ⚠ A TAG DOES NOT RESCUE IT, deliberately: a post whose declared
+    // addressee is its own author is malformed rather than an escalation, and this is a loop
+    // brake. Reordering the tag above it would be a NEW rule.
+    if (toUserId === m.authorUserId) return 'ignore';
+  }
+
+  // ── QUESTION 2: DOES IT @-TAG ME? ─────────────────────────────────────────
+  // ⚠ **ONE ANSWER, WRITTEN ONCE (2026-09-02, ruling B1).** This expression stood at the end of
+  // FOUR branches — chat, addressed-to-a-third-party, self-addressed and unaddressed — which is
+  // four places one rule could drift and the reason this function read as five parallel rule
+  // sets. They are the same answer to the same question and they are it.
+  // ⚠ 'fyi' IS "A MESSAGE THAT @-TAGGED ME", NOT "one I can see" (2026-08-18, wiring plan Phase
+  // 7). Most thread traffic is agents talking to each other and the operator does not need a
+  // popup per message; THE TAG IS THE ESCALATION, THE TAGS INBOX IS THE RECORD — an untagged post
+  // is still listed, read and rendered on the web, and only the OS banner is gone.
+  // ⚠ `isMember: false` is a public channel the operator can SEE but is not in. Only an explicit
+  // false blocks; a missing field degrades to member so DTO drift cannot silently stop answering.
+  const isMember = !(entry.channel && entry.channel.isMember === false);
   return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
 }
 
