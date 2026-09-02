@@ -109,6 +109,7 @@ const RUNTIME = require(join(HERE, "..", "main", "runtime", "index.js"));
 const CLAUDE_TOOLS = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
 const buildSessionToolConfig = CLAUDE_TOOLS.buildSessionToolConfig;
 const shortDoplName = CLAUDE_TOOLS.shortDoplName;
+const toolModeAllows = CLAUDE_TOOLS.toolModeAllows; // A5: "is this offered name classified at all?"
 
 
 const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
@@ -227,7 +228,14 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
 
 test("F-177: full pre-approves only local reads and hard-denies ONLY the universal floor", () => {
   const cfg = buildSessionToolConfig("full");
-  assert.deepEqual(cfg.builtinTools, [], "no positive bound: work tools offered then gated per call");
+  // ⚠ A5 (2026-09-02) REPLACED `[]` — no bound, i.e. every built-in the CLI ships — WITH A
+  // POSITIVE ONE. The BY-NAME assertion is `session-builtin-bound.test.mjs`, deliberately not
+  // here: a constant compared against itself is not evidence. What belongs in the profile table's
+  // own suite is the PROPERTY, which is what makes the bound safe to derive.
+  assert.ok(cfg.builtinTools.length > 0, "`[]` means NO BOUND, never an empty one — A5");
+  for (const t of cfg.builtinTools) {
+    assert.equal(toolModeAllows("bypass", t), true, `${t} is offered but UNCLASSIFIED — it would gate in every mode`);
+  }
   assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(AGENT_OPS),
     "FIX H1: no dopl_channel pre-approved. D7.2: + the two self-ops verbs, DECLARED");
   assert.equal(cfg.doplToolsPolicy, null, "no per-server scoping under full");
