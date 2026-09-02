@@ -58,7 +58,7 @@ const TRIGGER = read("trigger.js");
 
 // ⚠ THE REAL ONES. `targeting-window.js` requires only `tool-profiles.js`, which is deliberately
 // electron/fs/path-free, so the resolver under test loads in a plain Node context unmodified.
-const { resolveToolProfile } = require(join(MAIN, "targeting-window.js"));
+const { resolveToolProfile, resolveLaunchToolProfile } = require(join(MAIN, "targeting-window.js"));
 const { buildSessionToolConfig } = require(join(MAIN, "session-profiles.js"));
 const { DOPL_SAFE_TOOLS } = require(join(MAIN, "tool-profiles.js"));
 const guards = require(join(MAIN, "ipc-guards.js"));
@@ -70,12 +70,19 @@ const CH_BARE = "33333333-3333-4333-8333-333333333333";
 const CH_GONE = "44444444-4444-4444-8444-444444444444";
 const THREAD = "55555555-5555-4555-8555-555555555555";
 
-/** A loop entry the way `channel-listener.js › reconcile` builds one: the server DTO, whole. */
-const entryFor = (id, profile) => ({
+/** A loop entry the way `channel-listener.js › reconcile` builds one: the server DTO, whole.
+ *
+ * ⚠ `memberCount` IS STATED, AND SOLO IS THE DEFAULT SO THIS FILE KEEPS ASKING ITS OWN QUESTION.
+ * Since ruling B7 a launch into a SHARED room narrows `full` -> `channel_agent`
+ * (`targeting-window.js › isSharedChannel`), and an ABSENT count reads as shared — so a fixture
+ * that said nothing would make every `full` case here assert the narrowing instead of the
+ * resolution this file is about. Section 5 drives the narrowing deliberately. */
+const entryFor = (id, profile, memberCount = 1) => ({
   channel: {
     id,
     name: `#${id.slice(0, 4)}`,
     isDirect: false,
+    memberCount,
     // The caller's OWN value off the channel DTO. Absent on `CH_BARE` — the non-member read, the
     // unrefreshed row, the column this desktop has not heard of.
     ...(profile === undefined ? {} : { myAgentToolProfile: profile }),
@@ -84,7 +91,15 @@ const entryFor = (id, profile) => ({
   workspaceSegment: "acme-a1b2",
 });
 
-const ENTRIES = [entryFor(CH_FULL, "full"), entryFor(CH_READ, "read_only"), entryFor(CH_BARE)];
+const CH_SHARED = "66666666-6666-4666-8666-666666666666";
+// ⚠ THE FOURTH ENTRY IS A SHARED ROOM, so the agreement case below spans the narrowing too — a
+// set of solo fixtures would let both lanes agree by never reaching the rule that split them.
+const ENTRIES = [
+  entryFor(CH_FULL, "full"),
+  entryFor(CH_READ, "read_only"),
+  entryFor(CH_BARE),
+  entryFor(CH_SHARED, "full", 4),
+];
 
 /**
  * The SHIPPED watched-channel accessors, over a `loops` map. Sliced rather than re-implemented:
@@ -111,7 +126,7 @@ function bootLaunch(entries) {
     if (id === "./diag") return { diag: () => {} };
     // ⚠ THE REAL REGISTRY AND THE REAL RESOLVER — the two halves of the defect.
     if (id === "./channel-listener") return reg;
-    if (id === "./targeting") return { resolveToolProfile };
+    if (id === "./targeting") return { resolveToolProfile, resolveLaunchToolProfile };
     if (id === "./session-engine") {
       return {
         launchRequesterSession: async (spec) => {
@@ -180,6 +195,12 @@ test("a WATCHED channel whose DTO says `full` launches at `full`", async () => {
   assert.equal(await requesterProfile(CH_FULL), "full");
 });
 
+test("the SAME channel with a second person in it launches at `channel_agent`", async () => {
+  // Ruling B7 on the button lane (F-510). The stored column still says `full` — nothing is
+  // written back — and the room is what moved the answer.
+  assert.equal(await requesterProfile(CH_SHARED), "channel_agent");
+});
+
 test("a WATCHED channel whose DTO says `read_only` launches at `read_only`", async () => {
   // The same read, answering restrictively because the CHANNEL says so — not because the input
   // was the wrong shape. A fail-closed default that is right for the wrong reason is not a pass.
@@ -204,7 +225,7 @@ test("the fail-closed answer is the TABLE's, not a second literal in the handler
   // own `: 'read_only'` fallback — that is the shape that once answered `'full'` one file over.
   const body = LAUNCH_OP.slice(LAUNCH_OP.indexOf("async function launchFromButton("));
   const launchBody = body.slice(0, body.indexOf("ipcMain.handle(", 1));
-  assert.match(launchBody, /const toolProfile = targeting\.resolveToolProfile\(/);
+  assert.match(launchBody, /const toolProfile = targeting\.resolveLaunchToolProfile\(/);
   assert.equal(/toolProfile\s*=.*\?.*:\s*'read_only'/.test(launchBody), false,
     "no ternary fallback beside the resolver — normalizeProfile owns the floor");
 });
@@ -216,7 +237,10 @@ test("the requester lane and the responder lane resolve the SAME profile for the
     for (const e of ENTRIES) {
       // The responder lane's own expression, verbatim (`trigger.js › handleTrigger`), over the
       // very record `channel-listener` stored — which is what `trigger.js` is handed.
-      const responder = resolveToolProfile(e.channel);
+      // ⚠ THE APPLIED PROFILE, NOT THE RESOLVED ONE (F-510). This case compared the two lanes'
+      // reads of the STORED column and stayed green while one lane narrowed for a shared room and
+      // the other did not — a two-lane agreement test agreeing about the wrong half.
+      const responder = resolveLaunchToolProfile(e.channel);
       const requester = await requesterProfile(e.channel.id);
       assert.equal(requester, responder,
         `lanes disagree on ${e.channel.id}: requester=${requester} responder=${responder}`);
@@ -226,7 +250,7 @@ test("the requester lane and the responder lane resolve the SAME profile for the
 test("the responder lane still reads the FULL DTO — the anchor the agreement rests on", () => {
   // If this moves to a projection, the two-lane case above stops being a comparison of two
   // independent readers and starts comparing one reader with itself.
-  assert.match(TRIGGER, /const toolProfile = targeting\.resolveToolProfile\(entry\.channel\);/);
+  assert.match(TRIGGER, /const toolProfile = targeting\.resolveLaunchToolProfile\(entry\.channel\);/);
 });
 
 // ── 4. THE PROJECTION IS NOT AN INPUT, AND MUST NEVER BECOME ONE AGAIN ────────────────────────
@@ -234,7 +258,7 @@ test("the responder lane still reads the FULL DTO — the anchor the agreement r
 test("the TRAY PROJECTION carries no profile at all — feeding it back floors every channel", () => {
   const { listWatchedChannels } = registry(ENTRIES);
   const rows = listWatchedChannels();
-  assert.equal(rows.length, 3);
+  assert.equal(rows.length, ENTRIES.length);
   for (const row of rows) {
     assert.deepEqual(Object.keys(row).sort(), ["id", "name"], "the tray gets id + name and nothing else");
     assert.equal(resolveToolProfile(row), "read_only");

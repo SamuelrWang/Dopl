@@ -110,33 +110,6 @@ function claimNotice(count) {
 let seenShared = null;
 
 /**
- * IS THIS CONTAINER SHARED, as of the last reconcile pass that answered?
- *
- * ⚠ A READ OF THE MEMO THIS MODULE ALREADY KEEPS, AND THAT IS WHY IT LIVES HERE (2026-09-02,
- * ruling B7). `newlySharedContainers` recomputes `kind === 'link' && memberCount !== 1` on every
- * pass and stores the answer; a caller that re-read `GET /api/workspaces` to ask the same question
- * would be a FOURTH copy of that predicate (`session-credential.js › shouldLockSession` and
- * `factory.ts › bootServer` are the other two) plus a network round trip inside a spawn.
- *
- * 🔒 ⚠ UNKNOWN COUNTS AS SHARED, in both of its spellings — no baseline yet, and no id named.
- * This is the same INVERTED stale-field direction the whole module already takes, and here the
- * cost of each answer is asymmetric: the caller is `tool-profiles.js › profileForContainer`, so
- * "shared" only ever removes the SHELL from a launch, while "solo" would hand a stranger's room a
- * session that has one. ⚠ It is not reachable in practice — a directive spawn needs a WATCHED
- * channel, which needs a reconcile that has already called `noteWorkspaces` — which is exactly
- * why it needed to be written down rather than left to the caller.
- *
- * ⚠ IT ANSWERS ABOUT CONTAINERS, NOT CHANNELS, and a `kind='standard'` workspace is therefore
- * never "shared" here however many members it has. That is this predicate's shipped meaning on
- * all three of its readers, not a judgement about standard workspaces — F-513 carries the gap.
- */
-function isSharedContainer(workspaceId) {
-  const id = typeof workspaceId === 'string' ? workspaceId.trim() : '';
-  if (!id || !seenShared) return true; // fail closed: unknown is not solo
-  return seenShared.has(id);
-}
-
-/**
  * Called once per reconcile pass with the workspace list that pass already fetched.
  *
  * ⚠ LAZY `require`s, both of them. `session-engine.js` is at the 500-line cap and cannot take a
@@ -198,7 +171,6 @@ function resetForTests() {
 
 module.exports = {
   newlySharedContainers,
-  isSharedContainer, // B7: the memo, read by the launch lane's profile narrowing
   sessionsToStop,
   claimNotice,
   noteWorkspaces,

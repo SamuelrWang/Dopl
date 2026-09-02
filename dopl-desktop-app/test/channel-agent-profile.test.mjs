@@ -44,6 +44,7 @@ const CURSOR = M("runtime", "cursor", "tools.js");
 const REGISTRY = M("runtime", "index.js");
 const capability = REGISTRY.capability;
 const parkOnClaim = M("session-park-on-claim.js");
+const WIN = M("targeting-window.js");
 
 const SHELL = ["Bash", "BashOutput", "KillShell"];
 /** Set difference as a sorted array — what one config offers/denies and the other does not. */
@@ -283,88 +284,90 @@ test("CURSOR's table has NO channel_agent branch — the freeze is in the source
     "an un-declared profile falls through to full HERE — which is why the launch is refused above");
 });
 
-// ── 7. THE SELECTION RULE — shared containers get it by default ──────────────────────────────
+// ── 7. THE SELECTION RULE — shared ROOMS get it by default ───────────────────────────────────
 
-test("SELECTION: a SHARED container narrows `full` to `channel_agent`", () => {
-  assert.equal(PROFILES.profileForContainer("full", true), "channel_agent");
+test("SELECTION: a SHARED room narrows `full` to `channel_agent`", () => {
+  assert.equal(PROFILES.profileForChannel("full", true), "channel_agent");
 });
 
 test("SELECTION: the operator's explicit `full` still means `full` on their OWN channel", () => {
-  // A solo container is the operator's own primary agent surface — no second audience to bound.
-  assert.equal(PROFILES.profileForContainer("full", false), "full");
+  // A solo room is the operator's own primary agent surface — no second audience to bound.
+  assert.equal(PROFILES.profileForChannel("full", false), "full");
 });
 
 test("SELECTION: it NARROWS and can never widen", () => {
   for (const shared of [true, false]) {
     for (const p of ["read_only", "dopl_only", "channel_agent"]) {
-      assert.equal(PROFILES.profileForContainer(p, shared), p,
+      assert.equal(PROFILES.profileForChannel(p, shared), p,
         `${p} must survive shared=${shared} untouched`);
     }
   }
   // …and an unresolvable value still fails closed, in both worlds.
   for (const shared of [true, false]) {
-    assert.equal(PROFILES.profileForContainer("nonsense", shared), "read_only");
+    assert.equal(PROFILES.profileForChannel("nonsense", shared), "read_only");
   }
 });
 
 test("SELECTION: only a literal `true` counts as shared — no truthy coercion", () => {
   for (const notShared of [undefined, null, 0, "", "yes", 1, {}]) {
-    assert.equal(PROFILES.profileForContainer("full", notShared), "full", String(notShared));
+    assert.equal(PROFILES.profileForChannel("full", notShared), "full", String(notShared));
   }
 });
 
-// ── 8. THE SHARED/SOLO FACT — one predicate, read from the memo ──────────────────────────────
+// ── 8. THE SHARED/SOLO FACT — the ROOM's member count (F-513 ruling) ─────────────────────────
+//
+// ⚠ THE FACT MOVED, THE RULE DID NOT (2026-09-02, Samuel's ruling on F-513). This slice first
+// read `session-park-on-claim.js › isSharedContainer` — `kind === 'link' && memberCount !== 1` —
+// which called a nine-member `standard` workspace SOLO, so the busiest rooms in the product were
+// the ones that kept a shell under a ruling whose stated reason is "a session launched into a
+// SHARED channel". A room is shared when more than one person is in it, whatever container it
+// sits in. The container predicate keeps its own meaning for its own two readers (the credential
+// lock and the park-on-claim stop, both about the CLAIM lane) and no longer has a third.
 
-test("SHARED: the memo answers off `kind='link'` + a member count that is not 1", () => {
-  parkOnClaim.resetForTests();
-  const solo = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  const shared = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const standard = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-  parkOnClaim.noteWorkspaces([
-    { id: solo, kind: "link", memberCount: 1 },
-    { id: shared, kind: "link", memberCount: 2 },
-    { id: standard, kind: "standard", memberCount: 9 },
-  ], () => {});
-  assert.equal(parkOnClaim.isSharedContainer(shared), true);
-  assert.equal(parkOnClaim.isSharedContainer(solo), false);
-  // ⚠ F-513: a `standard` workspace is not a "shared container" to any of the three readers of
-  // this predicate. Asserted as the SHIPPED meaning so the gap is visible, not so it is endorsed.
-  assert.equal(parkOnClaim.isSharedContainer(standard), false);
-  parkOnClaim.resetForTests();
+test("SHARED: a room with more than one member is shared, in ANY container kind", () => {
+  assert.equal(WIN.isSharedChannel({ memberCount: 2 }), true);
+  assert.equal(WIN.isSharedChannel({ memberCount: 9 }), true);
+  // ⚠ THE CASE THE RULING TURNED OVER: a `standard` workspace channel. There is no container
+  // field on this input at all, which is the point — the kind cannot be consulted by accident.
+  assert.equal(WIN.isSharedChannel({ memberCount: 9, kind: "standard" }), true);
 });
 
-test("SHARED: unknown fails CLOSED — no baseline, or no id, is not solo", () => {
-  parkOnClaim.resetForTests();
-  assert.equal(parkOnClaim.isSharedContainer("anything"), true, "cold: no pass has answered yet");
-  parkOnClaim.noteWorkspaces([{ id: "x", kind: "link", memberCount: 1 }], () => {});
-  for (const bad of [undefined, null, "", "   ", 7]) {
-    assert.equal(parkOnClaim.isSharedContainer(bad), true, String(bad));
+test("SHARED: exactly one member is solo — the operator's own room", () => {
+  assert.equal(WIN.isSharedChannel({ memberCount: 1 }), false);
+  assert.equal(WIN.isSharedChannel({ memberCount: 1, kind: "link" }), false);
+});
+
+test("SHARED: unknown fails CLOSED — an absent or unusable count is not solo", () => {
+  // Same inverted stale-field direction the rest of this machine takes: the only thing this
+  // answer can do is REMOVE the shell, so "solo" is the expensive guess.
+  for (const bad of [undefined, null, {}, { memberCount: null }, { memberCount: "2" },
+                     { memberCount: 0 }]) {
+    assert.equal(WIN.isSharedChannel(bad), true, JSON.stringify(bad));
   }
-  parkOnClaim.resetForTests();
 });
 
 // ── 9. THE LANE, DRIVEN ──────────────────────────────────────────────────────────────────────
 
-/** The profile the directive lane really hands the engine for this channel + container. */
-async function launchedProfile({ toolProfile, shared }) {
-  const h = boot({ watched: { id: CH, name: "General", toolProfile }, shared });
+/** The profile the directive lane really hands the engine for this channel. */
+async function launchedProfile({ toolProfile, memberCount = 1 }) {
+  const h = boot({ watched: { id: CH, name: "General", toolProfile, memberCount } });
   await h.api.handle(row(), WS);
   assert.ok(h.cfg.lastSpec, "the launch must actually happen — otherwise nothing was resolved");
   return h.cfg.lastSpec.toolProfile;
 }
 
-test("LANE: a directive into a SHARED container launches at `channel_agent`", async () => {
-  assert.equal(await launchedProfile({ toolProfile: "full", shared: true }), "channel_agent");
+test("LANE: a directive into a SHARED room launches at `channel_agent`", async () => {
+  assert.equal(await launchedProfile({ toolProfile: "full", memberCount: 3 }), "channel_agent");
 });
 
-test("LANE: the same directive into a SOLO container still launches at `full`", async () => {
-  assert.equal(await launchedProfile({ toolProfile: "full", shared: false }), "full");
+test("LANE: the same directive into a SOLO room still launches at `full`", async () => {
+  assert.equal(await launchedProfile({ toolProfile: "full", memberCount: 1 }), "full");
 });
 
-test("LANE: a channel already set NARROWER keeps its own profile in a shared container",
+test("LANE: a channel already set NARROWER keeps its own profile in a shared room",
   async () => {
-    assert.equal(await launchedProfile({ toolProfile: "dopl_only", shared: true }), "dopl_only");
-    assert.equal(await launchedProfile({ toolProfile: "read_only", shared: true }), "read_only");
+    assert.equal(await launchedProfile({ toolProfile: "dopl_only", memberCount: 3 }), "dopl_only");
+    assert.equal(await launchedProfile({ toolProfile: "read_only", memberCount: 3 }), "read_only");
   });
 
 test("LANE: the narrowing is the TABLE's rule, not a second literal in the spawn", () => {
@@ -372,16 +375,19 @@ test("LANE: the narrowing is the TABLE's rule, not a second literal in the spawn
   // is how the two lanes came to answer differently for one channel (F-267).
   const src = readMain("launch-directive-spawn.js");
   const body = src.slice(src.indexOf("async function spawn("));
-  assert.match(body, /toolProfiles\.profileForContainer\(\s*\n?\s*targeting\.resolveToolProfile\(channel\),/);
+  assert.match(body, /toolProfile: targeting\.resolveLaunchToolProfile\(channel\),/);
   assert.equal(/'channel_agent'/.test(body), false,
     "the spawn must not spell a profile name — the vocabulary is tool-profiles.js's");
-  assert.match(body, /parkOnClaim\.isSharedContainer\(d\.workspaceId\)/);
+  // ⚠ AND IT MUST NOT SPELL THE FACT EITHER (F-510). The rule and its input were two arguments
+  // written out at this call site, and the other two launch lanes wrote out neither.
+  assert.equal(/isShared|memberCount/.test(body), false,
+    "the spawn must not re-derive shared/solo — targeting-window.js owns both halves");
 });
 
 test("LANE: the DIRECTIVE still supplies no containment input, profile included", async () => {
   // The safety argument this lane's docblock makes, re-asserted over the new field: a row that
-  // asks for `full` in a shared container gets `channel_agent` like every other row.
-  const h = boot({ watched: { id: CH, name: "General", toolProfile: "full" }, shared: true });
+  // asks for `full` in a shared room gets `channel_agent` like every other row.
+  const h = boot({ watched: { id: CH, name: "General", toolProfile: "full", memberCount: 3 } });
   await h.api.handle(row({ tool_profile: "full", profile: "full" }), WS);
   assert.equal(h.cfg.lastSpec.toolProfile, "channel_agent");
 });

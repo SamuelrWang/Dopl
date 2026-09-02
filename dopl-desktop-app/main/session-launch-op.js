@@ -90,7 +90,12 @@ async function launchFromButton(payload) {
   // the working folder and the delivery lane stay the machine's, resolved from the machine's own
   // state. That sentence is INVARIANTS §5A's and it is enforced by this ordering: the profile is
   // computed before the template is even fetched, from a source the payload cannot reach.
-  const toolProfile = targeting.resolveToolProfile(listener.watchedChannel(p.channelId));
+  // ⚠ …AND NARROWED FOR A SHARED ROOM ON THE WAY OUT (2026-09-02, ruling B7). The button lane
+  // has a human at the keyboard, which is an argument for keeping an explicit `full` — but it is
+  // an argument nobody has made, and the ruling is about the ROOM, not about who pressed. This
+  // lane and the other two resolve through one function so they cannot answer differently for one
+  // channel again (F-510, and F-267 before it).
+  const toolProfile = targeting.resolveLaunchToolProfile(listener.watchedChannel(p.channelId));
   const workspaceId = typeof p.workspaceId === 'string' ? p.workspaceId : null;
 
   // ── ⚠ THE LAUNCH SHEET'S EPHEMERAL OVERRIDES, NARROWED FIRST ──────────────────────────────

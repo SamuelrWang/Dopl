@@ -45,7 +45,7 @@
 //              ⚠ IT IS NOT A STORED SETTING. `channel_agent` is never written to
 //              `channel_members.agent_tool_profile` (still the three-value enum,
 //              `src/features/channels/types.ts › AgentToolProfile`) — it is what a LAUNCH
-//              resolves to, via `profileForContainer` below.
+//              resolves to, via `profileForChannel` below.
 //   full       no restriction flags beyond the deny floor; the CLI's own gating applies.
 //              ⚠ A headless `full` spawn CANNOT use Bash/Write/MCP — DELIBERATE: pre-approving
 //              them for an untrusted teammate message lets side effects land DURING the run,
@@ -245,24 +245,27 @@ function isUnboundedProfile(p) {
 }
 
 /**
- * THE PROFILE A LAUNCH INTO THIS CONTAINER RESOLVES TO (2026-09-02, Samuel's ruling B7).
+ * THE PROFILE A LAUNCH INTO THIS ROOM RESOLVES TO (2026-09-02, Samuel's ruling B7).
  *
  * ⚠ IT NARROWS AND IT CAN NEVER WIDEN. The only pair it moves is `full` -> `channel_agent`, in a
- * SHARED container; `read_only` and `dopl_only` are already narrower than the fourth profile and
- * come back untouched, and an unresolvable value still fails closed through `normalizeProfile`.
+ * SHARED room; `read_only` and `dopl_only` are already narrower than the fourth profile and come
+ * back untouched, and an unresolvable value still fails closed through `normalizeProfile`.
  *
- * ⚠ THE OPERATOR'S EXPLICIT `full` STILL MEANS `full` ON THEIR OWN CHANNEL. `shared` is false for
- * a solo container — the operator's own primary agent surface, with no second audience to bound —
- * which is the same line `session-credential.js › shouldLockSession` and
- * `session-park-on-claim.js › newlySharedContainers` draw, and the reason this takes a BOOLEAN
- * rather than a workspace row: the shared/solo question already has one answer on this machine,
- * and a second reading of `kind` + `memberCount` here would be a fourth copy of it.
+ * ⚠ THE OPERATOR'S EXPLICIT `full` STILL MEANS `full` IN A ROOM WITH ONLY THEM IN IT. That is the
+ * whole of the `shared` argument, and since the F-513 ruling the FACT behind it is the CHANNEL's
+ * member count — `targeting-window.js › isSharedChannel` — not the container's kind. A room is
+ * shared when more than one person is in it, `standard` workspaces included; the container
+ * predicate this first read (`session-park-on-claim.js › isSharedContainer`) answers a different
+ * question and called a nine-member workspace solo.
+ * ⚠ IT STILL TAKES A BOOLEAN, and that is deliberate: this module owns the VOCABULARY and knows
+ * nothing about DTOs, so the fact is computed by the one caller that holds a channel record and
+ * the rule stays a rule.
  *
  * ⚠ AND IT IS A LAUNCH-TIME DERIVATION, NOT A SETTING. Nothing writes `channel_agent` back to the
  * channel — the stored enum is still three values — so an operator who moves the channel's
  * profile still moves the thing this reads, and the narrowing is re-derived per spawn.
  */
-function profileForContainer(profile, shared) {
+function profileForChannel(profile, shared) {
   const p = normalizeProfile(profile);
   return shared === true && p === 'full' ? 'channel_agent' : p;
 }
@@ -385,7 +388,7 @@ module.exports = {
   WEB_TOOLS,
   DENIED_BUILTINS,
   normalizeProfile,
-  profileForContainer, // B7: `full` -> `channel_agent` in a SHARED container, and never wider
+  profileForChannel, // B7: `full` -> `channel_agent` in a SHARED room, and never wider
   buildAllowedTools,
   buildDeniedTools,
   buildBuiltinTools,

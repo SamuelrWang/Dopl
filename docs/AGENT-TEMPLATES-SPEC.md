@@ -212,8 +212,9 @@ Four arguments, in decreasing weight:
 
 1. **It is the lane's existing architecture, not a new one.** Every security-relevant input on
    this lane is computed by main from main's own state, specifically so the renderer cannot
-   influence it: `toolProfile` ← `targeting.resolveToolProfile(listener.watchedChannel(...))`
-   (`session-launch-op.js › resolveToolProfile`), `startModes` ← `channelPrefs.launchStartModes`,
+   influence it: `toolProfile` ← `targeting.resolveLaunchToolProfile(listener.watchedChannel(...))`
+   (`session-launch-op.js › launchFromButton`; since 2026-09-02 that resolver applies ruling B7's
+   shared-room narrowing as well as the stored read), `startModes` ← `channelPrefs.launchStartModes`,
    `model` ← `channelPrefs.getLaunchModel`, `goal` ← three canned strings. **F-267 is the
    scar**: main read a *projection* instead of its own DTO and every button-launch silently
    floored to `read_only`. A renderer-supplied template snapshot repeats that mistake with

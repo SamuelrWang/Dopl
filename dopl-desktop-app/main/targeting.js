@@ -325,5 +325,6 @@ module.exports = {
   requesterTaskOpen,
   requesterTypedByOperator, // lifecycle strip only
   openChannelForEntry: win.openChannelForEntry,
-  resolveToolProfile: win.resolveToolProfile,
+  resolveToolProfile: win.resolveToolProfile, // the channel's STORED scope
+  resolveLaunchToolProfile: win.resolveLaunchToolProfile, // …and what a launch starts at (B7)
 };

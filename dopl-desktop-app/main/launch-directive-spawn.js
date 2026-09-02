@@ -29,12 +29,6 @@ const sessionModel = require('./session-model');
 // is clamped to the operator's own stored channel pair, and its header carries why the ticket's
 // own "unless the caller is the operator" carve-out is the whole set.
 const launchPosture = require('./launch-posture');
-// ⚠ THE CONTAINMENT NARROWING (2026-09-02, Samuel's ruling B7) and the memo it reads. Both are
-// electron-free at load — `tool-profiles.js` by contract (its own header), `session-park-on-claim
-// .js` because every one of its electron/engine requires is lazy — so neither costs this lane the
-// plain-Node evaluability its suite depends on.
-const toolProfiles = require('./tool-profiles');
-const parkOnClaim = require('./session-park-on-claim');
 const { diag } = require('./diag');
 
 /**
@@ -213,19 +207,18 @@ async function spawn(d, deps) {
       // into the prompt.
       startupContext,
     },
-    // ── ⚠ THE CHANNEL'S PROFILE, NARROWED FOR A SHARED CONTAINER (2026-09-02, ruling B7) ────
+    // ── ⚠ THE CHANNEL'S PROFILE, NARROWED FOR A SHARED ROOM (2026-09-02, ruling B7) ─────────
     // The READ is unchanged and is still MAIN's own full server DTO (the docblock's field-by-field
     // statement above); what is new is one NARROWING applied to it, which can only ever move
-    // `full` -> `channel_agent` and never the other way. `tool-profiles.js › profileForContainer`
-    // owns the rule and `session-park-on-claim.js › isSharedContainer` owns the fact, so neither
-    // the vocabulary nor the shared/solo predicate gains a copy on this lane.
+    // `full` -> `channel_agent` and never the other way.
+    // ⚠ ONE CALL, AND THE OTHER TWO LAUNCH LANES MAKE THE SAME ONE. The rule used to be spelled
+    // beside this resolver alone, so the New Agent button and the responder trigger kept their
+    // shell in a room this lane bounded (F-510). `targeting-window.js › resolveLaunchToolProfile`
+    // is now the only place either half is written.
     // ⚠ THE DIRECTIVE STILL SUPPLIES NOTHING HERE. A profile has never been a directive field and
     // does not become one: an orchestrator cannot ask for a wider profile, or for a narrower one,
     // any more than it could before — this is the DESTINATION's property, read on this machine.
-    toolProfile: toolProfiles.profileForContainer(
-      targeting.resolveToolProfile(channel),
-      parkOnClaim.isSharedContainer(d.workspaceId)
-    ),
+    toolProfile: targeting.resolveLaunchToolProfile(channel),
     mode: 'interactive',
     windowless: true,
     startModes: plan.modes, // T24: the operator's stored pair, or a narrower one the directive asked for

@@ -68,7 +68,12 @@ function boot(api = {}, opts = {}) {
     }
     if (id === "./template-resolve") return resolveMod.exports;
     if (id === "./channel-listener") return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
-    if (id === "./targeting") return { resolveToolProfile: () => "full" };
+    // ⚠ BOTH READS, because `session-launch-op.js` takes the LAUNCH one since ruling B7 and
+    // this file is about templates, not containment: a constant keeps the profile out of the
+    // way of what it does assert. `channel-agent-profile.test.mjs` drives the real rule.
+    if (id === "./targeting") {
+      return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" };
+    }
     if (id === "./channel-prefs") {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),

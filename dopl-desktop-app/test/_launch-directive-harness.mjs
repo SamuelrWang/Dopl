@@ -85,7 +85,11 @@ export function boot(over = {}) {
   const cfg = {
     enabled: true,
     user: ME,
-    watched: { id: CH, name: "General", toolProfile: "full" },
+    // ⚠ SOLO BY DEFAULT (`memberCount: 1`), so every existing case in these suites keeps asserting
+    // the profile it always did. Ruling B7 narrows `full` -> `channel_agent` in a SHARED room and
+    // an ABSENT count reads as shared, so this number is stated rather than left off; a case opts
+    // into the narrowing by raising it.
+    watched: { id: CH, name: "General", toolProfile: "full", memberCount: 1 },
     launch: async () => ({ agentId: "a1b2c3d4", sessionId: "s1" }),
     // ⚠ THE LIVE REGISTRY, as `session-engine.js › listLiveSessions` projects it. Empty by
     // default, so the ordinary `no-session` answer is what a case gets unless it says otherwise.
@@ -174,20 +178,23 @@ export function boot(over = {}) {
     if (id === "./targeting") {
       // The REAL question this stands in for is "what does main think this channel allows".
       // Answering off the DTO is the behaviour under test in §3.
-      return { resolveToolProfile: (c) => (c && c.toolProfile) || "read_only" };
+      // ⚠ ONLY THE FIELD NAME IS FAKED. These suites spell the channel's stored scope
+      // `toolProfile`; the server DTO spells it `myAgentToolProfile`. Everything after the
+      // rename — the fail-closed floor, the shared/solo fact and ruling B7's narrowing — is
+      // `targeting-window.js`'s own, unfaked, because a hand-written narrowing here would let
+      // the suite go green about a rule the lane no longer applies (F-510).
+      const win = require_(join(MAIN, "targeting-window.js"));
+      const asDto = (c) => ({ ...(c || {}), myAgentToolProfile: c && c.toolProfile });
+      return {
+        resolveToolProfile: (c) => win.resolveToolProfile(asDto(c)),
+        resolveLaunchToolProfile: (c) => win.resolveLaunchToolProfile(asDto(c)),
+      };
     }
     if (id === "./launch-directive-wire") return wire;
     // ⚠ THE CONTAINMENT NARROWING (2026-09-02, ruling B7) — the REAL table, not a stub. It is the
     // one statement of the profile vocabulary and it is electron-free by contract, so a fake here
     // would let this suite go green about a narrowing that never happened.
     if (id === "./tool-profiles") return require_(join(MAIN, "tool-profiles.js"));
-    // ⚠ THE SHARED/SOLO FACT, STUBBED AT ITS SEAM like `./targeting` above — the real one reads a
-    // memo `channel-listener.js` fills on every reconcile pass. The default is SOLO so every
-    // existing case in these suites keeps asserting the profile it always did; `cfg.shared` opts a
-    // case in, and `channel-agent-profile.test.mjs` drives the real predicate directly.
-    if (id === "./session-park-on-claim") {
-      return { isSharedContainer: () => cfg.shared === true };
-    }
     // ⚠ THE SHARED POSTURE BOUND (2026-09-01, T24) — the REAL module, not a stub. It is pure (no
     // require, no clock, no store) and it is the rule under test on both lanes; a fake here would
     // let the suite go green about a clamp that never happened.
