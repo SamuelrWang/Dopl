@@ -1,0 +1,22 @@
+{
+  "name": "@dopl/contracts",
+  "version": "0.1.0",
+  "description": "The canonical closed sets shared by the Dopl server (`src/`), @dopl/client and @dopl/mcp-server. TYPE-ONLY: it emits no runtime code and therefore needs no build. Internal workspace lib (not published to npm).",
+  "private": true,
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamuelrSun/usedopl.git",
+    "directory": "packages/contracts"
+  }
+}
