@@ -152,4 +152,26 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
       ])
     ).toEqual([]);
   });
+
+  it("ignores a later CONSTRAINT on a DIFFERENT column of the same table", () => {
+    // ⚠ THE REAL CASE, NOT A HYPOTHETICAL: `20260912120000` (A9) adds CHECKs on
+    // `wake_verdict` and `delivery`. Neither can redefine the two sets this gate
+    // reads, and reporting them would make the gate the reason a migration
+    // cannot land — the failure mode F-435 already records for this file.
+    const other = "20269999130000_channel_messages_other_column.sql";
+    const read: Read = (rel) =>
+      rel === `supabase/migrations/${other}`
+        ? "ALTER TABLE public.channel_messages\n  ADD CONSTRAINT channel_messages_delivery_check\n  CHECK (delivery IN ('none', 'woken'));"
+        : realRead(rel);
+    expect(laterConstraintRedefinitions(read, [other])).toEqual([]);
+  });
+
+  it("still catches a later constraint on author_kind", () => {
+    const later = "20269999140000_channel_messages_author_kind.sql";
+    const read: Read = (rel) =>
+      rel === `supabase/migrations/${later}`
+        ? "ALTER TABLE public.channel_messages\n  ADD CONSTRAINT ck CHECK (author_kind IN ('user'));"
+        : realRead(rel);
+    expect(laterConstraintRedefinitions(read, [later])).toEqual([later]);
+  });
 });

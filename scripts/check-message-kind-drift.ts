@@ -128,9 +128,23 @@ export function sqlCheckValues(sql: string, column: string): string[] {
 /**
  * ⚠ THE `CHECK` READ ABOVE IS ONLY THE TRUTH IF NOTHING RE-DEFINED IT LATER, and
  * a migration that did would make this whole gate compare against history —
- * green, and wrong, in the one direction nobody would think to check. Cheap to
- * rule out: no later migration may carry a CONSTRAINT clause against
- * `channel_messages` at all.
+ * green, and wrong, in the one direction nobody would think to check.
+ *
+ * ⚠ **THE PREDICATE NAMES `kind`, AND IT DID NOT UNTIL 2026-09-02.** It read
+ * *"no later migration may carry a CONSTRAINT clause against `channel_messages`
+ * at all"*, which was cheap and un-foolable right up to the first migration that
+ * legitimately constrained a DIFFERENT column of this table —
+ * `20260912120000_channel_delivery_verdict.sql`, whose CHECKs are on
+ * `wake_verdict` and `delivery` and cannot redefine anything this gate reads. A
+ * gate must not be the reason a change cannot land (the argument F-435 already
+ * makes about this same file), and the alternative — an exemption list — records
+ * a review that the regex can simply perform.
+ *
+ * ⚠ **IT IS STILL DELIBERATELY OVER-BROAD.** Any `CONSTRAINT` clause on this
+ * table whose statement so much as mentions `kind` is reported, including
+ * `author_kind`, including a DROP, and including a constraint merely NAMED for
+ * one — a false positive costs one reader a minute, and a false negative makes
+ * every set above compare against history.
  */
 export function laterConstraintRedefinitions(
   read: Read,
@@ -140,7 +154,7 @@ export function laterConstraintRedefinitions(
   return migrationFiles
     .filter((f) => f.endsWith(".sql") && f > base)
     .filter((f) =>
-      /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?channel_messages[\s\S]{0,400}?CONSTRAINT/i.test(
+      /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?channel_messages[\s\S]{0,400}?CONSTRAINT[^;]{0,400}kind/i.test(
         read(`${MIGRATIONS_DIR}/${f}`)
       )
     );
