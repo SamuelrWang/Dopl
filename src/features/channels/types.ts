@@ -434,3 +434,8 @@ export type {
 export type { LaunchRefusalReason, LaunchDirective } from "./types-launch";
 
 export type { DirectionRefusalReason, AgentDirection } from "./types-direction";
+
+// THE "NEEDS YOU" SIGNAL (2026-09-01) — the direct lane's sibling, and off
+// `channel_messages` for the same reasons plus a third: it needs its OWN cursor,
+// because the session holding it is not reading the channel.
+export type { PingKind, PingRecipientKind, ChannelPing } from "./types-ping";
