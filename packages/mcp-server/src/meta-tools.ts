@@ -44,7 +44,7 @@ export function registerWorkspaceMetaTools(
 
   registerMetaTool(
     "list_workspaces",
-    "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.",
+    "List the WORKSPACES the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.\n\n⚠ HOME-CHANNEL CONTAINERS ARE NOT LISTED HERE, deliberately — so this is not every room you can act in, and an empty-looking account may still hold several. List those with `dopl_home(op=\"list_channels\")` and address one by passing its container id as `workspace=`. They are also not counted toward the \"2+ workspaces\" rule that decides whether `workspace=` is required: one workspace plus three home channels still auto-targets the workspace.",
     {},
     async () => {
       const list = await directory.getWorkspaceList();
@@ -113,7 +113,7 @@ export function registerWorkspaceMetaTools(
 
   registerMetaTool(
     "current_workspace",
-    "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one membership (or a request pin); when the caller belongs to 2+ workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').",
+    "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one standard membership (or a request pin); when the caller belongs to 2+ standard workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').\n\n⚠ ONLY STANDARD WORKSPACES ARE COUNTED AND LISTED. Home-channel containers never auto-target and are not shown here or by `list_workspaces` — so \"you have one workspace, omit `workspace=`\" can be true while two home channels sit unreached beside it. Find them with `dopl_home(op=\"list_channels\")` and target one by passing its container id as `workspace=`.",
     {},
     async () => {
       // ⚠ Caller line per branch: with a session default the footer already
@@ -144,7 +144,7 @@ export function registerWorkspaceMetaTools(
       }
       const lines = [
         ...callerBlock(),
-        `You belong to ${list.length} workspaces and there is no auto-target — pass \`workspace=<slug_or_id>\` on every tool call. Choices:`,
+        `You belong to ${list.length} workspaces and there is no auto-target — pass \`workspace=<slug_or_id>\` on every tool call. ⚠ These are your STANDARD workspaces; home channels are not counted or listed here, so if you are looking for one, ask \`dopl_home(op="list_channels")\` and pass its container id as \`workspace=\`. Choices:`,
         "",
         UNTRUSTED_DIRECTORY_NOTE,
         "",

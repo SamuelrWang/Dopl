@@ -208,6 +208,12 @@ export function createWorkspaceDirectory(
     const lines = [
       `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`,
       "",
+      // ⚠ The count and the list are STANDARD memberships only (`getWorkspaceList`
+      // filters through `isStandardWorkspace`). An agent that meant to act in a
+      // home channel would otherwise read this as "your rooms are not here" with
+      // no next step; the container id is the only handle that reaches one.
+      `⚠ Home channels are not among these. They are addressed the same way — \`workspace=<container id>\` — but their ids come from \`dopl_home(op="list_channels")\`, not from this list.`,
+      "",
       UNTRUSTED_DIRECTORY_NOTE,
       "",
     ];
