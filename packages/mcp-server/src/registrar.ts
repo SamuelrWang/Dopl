@@ -32,18 +32,39 @@ import type {
 } from "./workspace-directory.js";
 
 /**
- * Optional per-call `workspace` arg injected into every tool schema by
+ * THE PER-CALL `workspace` ARG'S DESCRIPTION — ONE SHORT CONTRACT, PUSHED ONCE
+ * PER DOMAIN TOOL (C9, 2026-09-02).
+ *
+ * ⚠ EVERY CHARACTER HERE IS PAID FOR FOURTEEN TIMES, ON EVERY CONNECTION.
+ * `registerTool` injects this arg into all 14 domain schemas, so the 717-char
+ * paragraph this replaced spent ~10,000 served chars stating one rule fourteen
+ * times — thirteen of them pure repetition, and the same rule the instructions
+ * already owe the agent before its first tool call.
+ *
+ * ⚠ THE FULL RULE IS STATED ONCE, IN `instructions.ts` (slice A1, which this
+ * one lands after): which callers MUST pass it (0 / 2+ standard memberships),
+ * that the membership count IGNORES home-channel containers, and how to
+ * discover each kind of id — `list_workspaces` for workspace slugs,
+ * `dopl_home(op="list_channels")` for home-channel container ids, and the first
+ * does not list the second. ⚠ DO NOT RESTATE ANY OF IT HERE. A rule an agent
+ * needs before it calls anything belongs in the instructions, which are pushed
+ * once; the refusals in `registerTool` below name the discovery surfaces again
+ * at the only moment an agent is actually stuck.
+ *
+ * Pinned by `server.test.ts` — the length, and that every domain tool carries
+ * this exact string rather than a per-tool copy.
+ */
+export const WORKSPACE_ARG_DESCRIPTION =
+  "Workspace or home-channel container id/slug for this call; omit to use the session default.";
+
+/**
+ * Optional per-call `workspace` arg injected into every domain tool's schema by
  * `registerTool`. Slug or UUID; routes via the transport's AsyncLocalStorage
  * override, leaving the session default unchanged. Const so its description
- * renders verbatim in every tool's MCP introspection.
+ * renders verbatim — and identically — in every tool's MCP introspection.
  */
 const WORKSPACE_ARG_SHAPE = {
-  workspace: z
-    .string()
-    .optional()
-    .describe(
-      "Workspace slug or UUID to target for this single call, OR the container id of a home channel — a home channel is addressed here, by id, and that is the only way to reach one. Omit to use the session's workspace (see `current_workspace`). REQUIRED on every call when there is no session default, which is every caller with 2+ standard workspaces; a no-arg call is then refused with the list of choices. ⚠ THAT COUNT IGNORES HOME CHANNELS: one workspace plus two home channels still auto-targets the workspace, so omitting this arg silently misses the two rooms. Discover with `list_workspaces` for workspace slugs and `dopl_home(op=\"list_channels\")` for home-channel container ids — the first does not list the second.",
-    ),
+  workspace: z.string().optional().describe(WORKSPACE_ARG_DESCRIPTION),
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
 
@@ -239,7 +260,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
             content: [
               {
                 type: "text" as const,
-                text: `The \`workspace\` argument was blank. Pass a slug or UUID from \`list_workspaces\`, or omit \`workspace=\` entirely to use the session's active workspace.`,
+                text: `The \`workspace\` argument was blank. Pass a workspace slug or id from \`list_workspaces\`, or a home-channel container id from \`dopl_home(op="list_channels")\`, or omit \`workspace=\` entirely to use the session's active workspace.`,
               },
             ],
           };
@@ -275,7 +296,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
                 type: "text" as const,
                 // ⚠ Caller's own arg, but a raw backtick still escapes this
                 // span and puts the tail into narration.
-                text: `Workspace not found: ${inlineOr(ref, "`(unreadable ref)`")}. Call \`list_workspaces\` to see workspaces you have access to, or pass a slug or UUID from there.`,
+                text: `Workspace not found: ${inlineOr(ref, "`(unreadable ref)`")}. Call \`list_workspaces\` for the workspaces you can reach, or \`dopl_home(op="list_channels")\` for home-channel container ids — the first does not list the second.`,
               },
             ],
           };
