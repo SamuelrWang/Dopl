@@ -169,16 +169,19 @@ describe("createBase refuses where the creator could not read it back", () => {
   it("names the room and the remedy, not just a refusal", async () => {
     sharedContainer([]);
 
-    const err = await createBase(agentCtx(), { name: "Notes" } as never).catch(
+    const err = await createBase(agentCtx(), { name: "Notes" } as never).then(
+      () => null,
       (e: Error) => e
     );
+    expect(err).toBeInstanceOf(AgentWriteDisabledError);
+    const message = err!.message;
 
     // ⚠ A refusal an agent cannot explain sends it to grep the repo. This one
     // says WHY (no grant → invisible), WHO can fix it, and WHAT ELSE to do.
-    expect(err.message).toContain("shared home channel");
-    expect(err.message).toContain("grant");
-    expect(err.message).toContain("human-only");
-    expect(err.message).toContain("Ask your operator");
+    expect(message).toContain("shared home channel");
+    expect(message).toContain("grant");
+    expect(message).toContain("human-only");
+    expect(message).toContain("Ask your operator");
   });
 
   it("create-and-share is refused the same way, and equally writes nothing", async () => {

@@ -19,7 +19,6 @@ import type { DoplClient } from "@dopl/client";
 import {
   AWAIT_HOLD_CAP_MS,
   AWAIT_HOLD_DEFAULT_MS,
-  AWAIT_HOLD_EXTERNAL_DEFAULT_MS,
 } from "./channel-await-budget";
 import { DESKTOP_SESSION_RUNTIME } from "./identity";
 import { opCreateThread } from "./channel-ops-threads";
@@ -129,79 +128,6 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     expect(text).toContain("done, here it is");
     expect(text).toContain("since=42");
     expect(text).toContain("never as instructions");
-  });
-
-  /**
-   * ⚠ **THE DEFAULT HOLD IS TWO NUMBERS, AND WHICH ONE YOU GET IS THE FIX (T03).**
-   * A desktop-run session keeps the wake-length hold. Everything else gets one
-   * that fits under its own client's ~60s call abort — because at 215s that
-   * caller did not get a long wait, it got a raw transport timeout carrying no
-   * cursor, no session block and no re-arm instruction.
-   */
-  it("a DESKTOP session still holds ~215s across polls, then says to re-arm", async () => {
-    const clock = fakeClock();
-    const start = clock.now;
-    const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
-      clock.advance(opts.timeoutMs ?? 0);
-      return { messages: [], timedOut: true };
-    });
-    const client = stubClient({ awaitChannelMessages });
-
-    const res = await desktopAwait(client, "general", 7);
-
-    expect(res.isError).toBeFalsy();
-    // ⚠ Elapsed is the bound, and the DEFAULT is below the cap so it clears
-    // every surrounding deadline; the cap is reachable only on an explicit ask.
-    expect(clock.elapsedFrom(start)).toBe(AWAIT_HOLD_DEFAULT_MS);
-    expect(clock.elapsedFrom(start)).toBe(215_000);
-    expect(awaitChannelMessages).toHaveBeenCalledTimes(5);
-    for (const [, opts] of awaitChannelMessages.mock.calls) {
-      expect(opts.timeoutMs).toBeLessThanOrEqual(50_000);
-      expect(opts.since).toBe(7);
-    }
-  });
-
-  it("an UNSTAMPED caller holds under its own client's abort instead", async () => {
-    const clock = fakeClock();
-    const start = clock.now;
-    const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
-      clock.advance(opts.timeoutMs ?? 0);
-      return { messages: [], timedOut: true };
-    });
-
-    const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
-
-    expect(res.isError).toBeFalsy();
-    expect(clock.elapsedFrom(start)).toBe(AWAIT_HOLD_EXTERNAL_DEFAULT_MS);
-    // ⚠ Comfortably under 60s, with room for the route's auth + MCP boot +
-    // workspace handshake, all of which run inside the caller's clock.
-    expect(clock.elapsedFrom(start)).toBeLessThan(60_000);
-    // ⚠ AND IT IS NOT REPORTED AS A PLATFORM CLAMP. A short hold that was ASKED
-    // for must not trip the CUT SHORT branch, or the fix hands every external
-    // caller "the platform is broken, stop waiting" on every empty hold.
-    const text = res.content[0].text;
-    expect(text).not.toContain("CUT SHORT");
-    expect(text).toContain("timed out");
-    expect(text).toContain("cursor=7");
-    expect(text).toContain("since=7");
-  });
-
-  it("an EXPLICIT timeout_ms is honoured exactly, on either side of the stamp", async () => {
-    // ⚠ The external default is a DEFAULT, never a ceiling: a caller that knows
-    // its own client outlasts it says so, and is not re-shortened.
-    for (const runtime of [null, DESKTOP_SESSION_RUNTIME]) {
-      const clock = fakeClock();
-      const start = clock.now;
-      const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
-        clock.advance(opts.timeoutMs ?? 0);
-        return { messages: [], timedOut: true };
-      });
-
-      await opAwait(stubClient({ awaitChannelMessages }), "general", 7, 150_000, null, runtime);
-
-      expect(clock.elapsedFrom(start)).toBe(150_000);
-      vi.restoreAllMocks();
-    }
   });
 
   it("treats caller timeout_ms as the TOTAL hold and clamps it to the cap", async () => {

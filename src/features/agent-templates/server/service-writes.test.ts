@@ -13,8 +13,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTemplate, AgentTemplateContext } from "../types";
-
 vi.mock("./repository", () => ({
   listTemplatesForWorkspace: vi.fn(),
   findTemplateById: vi.fn(),
@@ -40,92 +38,25 @@ import {
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
 
+import {
+  BASES,
+  KB_OPEN,
+  KB_PRIVATE,
+  KB_TEAM,
+  OTHER,
+  OWNER,
+  TEAM_A,
+  TEAM_B,
+  ctx,
+  resetRepoMocks,
+  template,
+} from "./service-writes-fixtures";
+
 const mockRepo = vi.mocked(repo);
-
-const OWNER = "user-owner";
-const OTHER = "user-other";
-const TEAM_A = "11111111-1111-4111-8111-111111111111";
-const TEAM_B = "22222222-2222-4222-8222-222222222222";
-const KB_OPEN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const KB_PRIVATE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const KB_TEAM = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-
-function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
-  return {
-    workspaceId: "ws-1",
-    userId: OWNER,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    ...overrides,
-  };
-}
-
-function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Researcher",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: OWNER,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-/** Knowledge-base rows as the repository hands them over. */
-const BASES = {
-  [KB_OPEN]: {
-    id: KB_OPEN,
-    name: "Handbook",
-    visibility: "public" as const,
-    accessMode: "workspace" as const,
-    createdBy: OTHER,
-  },
-  [KB_PRIVATE]: {
-    id: KB_PRIVATE,
-    name: "Someone's notes",
-    visibility: "private" as const,
-    accessMode: "workspace" as const,
-    createdBy: OTHER,
-  },
-  [KB_TEAM]: {
-    id: KB_TEAM,
-    name: "Legal",
-    visibility: "public" as const,
-    accessMode: "teams" as const,
-    createdBy: OTHER,
-  },
-};
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
-  mockRepo.listTeamIdsForUser.mockResolvedValue([]);
-  mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  mockRepo.filterTeamIdsInWorkspace.mockImplementation(async (_ws, ids) => ids);
-  // ⚠ The insert mock ECHOES the visibility it was asked for, and
-  // `findTemplateById` returns the same row. Both writes re-read through
-  // `getTemplateById` so the response is the gated shape a GET returns — a
-  // fixture that answered a fixed `private` row would make every create by a
-  // non-owner 404 on its own result, which is a fixture bug that reads exactly
-  // like a gate bug.
-  mockRepo.insertTemplate.mockImplementation(async (args) => {
-    const row = template({ visibility: args.visibility, createdBy: args.createdBy });
-    mockRepo.findTemplateById.mockResolvedValue(row);
-    return row;
-  });
-  mockRepo.updateTemplateRow.mockResolvedValue(template());
-  mockRepo.findTemplateById.mockResolvedValue(template());
+  resetRepoMocks(mockRepo);
 });
 
 // ── Create defaults ──────────────────────────────────────────────────
@@ -396,75 +327,6 @@ describe("visibility transitions and replace-set semantics", () => {
       "tpl-1",
       [],
       OWNER
-    );
-  });
-});
-
-// ── The junction-only patch (F-404) ──────────────────────────────────
-//
-// ⚠ THIS IS THE KB-ATTACH 500. `dopl_agent(op="update", knowledge_bases=[…])`
-// names no scalar column, so the patch handed to `updateTemplateRow` was six
-// `undefined`s — an empty UPDATE body PostgREST rejects, thrown raw, unmapped
-// by `http-mapping.ts`, surfacing as INTERNAL_ERROR 500 on a valid request.
-// The junction write, which was the entire point of the call, never ran.
-describe("a junction-only patch never reaches the row write", () => {
-  it("a knowledgeBaseIds-only attach round-trips and issues NO row update", async () => {
-    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
-      { id: KB_OPEN, workspaceId: "ws-1", visibility: "workspace", createdBy: OTHER },
-    ] as never);
-    mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([] as never);
-
-    await expect(
-      updateTemplate(ctx(), "tpl-1", { knowledgeBaseIds: [KB_OPEN] })
-    ).resolves.toBeTruthy();
-
-    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
-    expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
-      "ws-1",
-      "tpl-1",
-      [KB_OPEN],
-      OWNER
-    );
-  });
-
-  it("a teamIds-only patch is the same shape and is skipped the same way", async () => {
-    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
-    mockRepo.filterTeamIdsInWorkspace.mockResolvedValue([TEAM_A]);
-    mockRepo.findTemplateById.mockResolvedValue(
-      template({ visibility: "team", teamIds: [TEAM_A] })
-    );
-
-    await updateTemplate(ctx(), "tpl-1", { teamIds: [TEAM_A] });
-
-    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
-    expect(mockRepo.replaceTeamLinks).toHaveBeenCalled();
-  });
-
-  it("but ANY scalar in the patch still writes the row", async () => {
-    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
-      { id: KB_OPEN, workspaceId: "ws-1", visibility: "workspace", createdBy: OTHER },
-    ] as never);
-    mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([] as never);
-
-    await updateTemplate(ctx(), "tpl-1", {
-      name: "Renamed",
-      knowledgeBaseIds: [KB_OPEN],
-    });
-
-    expect(mockRepo.updateTemplateRow).toHaveBeenCalledWith(
-      "ws-1",
-      "tpl-1",
-      expect.objectContaining({ name: "Renamed" })
-    );
-  });
-
-  it("clearing a nullable column is a SCALAR change, not an empty patch", async () => {
-    await updateTemplate(ctx(), "tpl-1", { description: null });
-
-    expect(mockRepo.updateTemplateRow).toHaveBeenCalledWith(
-      "ws-1",
-      "tpl-1",
-      expect.objectContaining({ description: null })
     );
   });
 });
