@@ -24,11 +24,7 @@ import { describe, it, expect } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond";
 import { registerChannelTool } from "./channel";
-import {
-  CHANNEL_DESCRIPTION,
-  DESCRIPTION_MAX_CHARS,
-  HOME_CHANNEL_ADDRESSING,
-} from "./channel-description";
+import { CHANNEL_DESCRIPTION, DESCRIPTION_MAX_CHARS, HOME_CHANNEL_ADDRESSING } from "./channel-description";
 // ⚠ THE LAW IS EXPORTED AS ITS OWN BLOCK FOR EXACTLY THE BUDGET GATES BELOW.
 // Slicing it out of `CHANNEL_DOCTRINE` between two headings would re-derive a
 // boundary the source already states, and a renamed neighbouring section would
@@ -471,17 +467,12 @@ describe("the removed ops are absent from the published op set", () => {
     // it. ⚠ Said in BOTH places, because a reader who took either door alone
     // would otherwise get the capability without its boundary.
     expect(ARG_PROSE).toContain("reaches no server");
-    // ⚠ THREE FACTS, ASSERTED SEPARATELY rather than as one sentence fragment.
-    // A single `toContain` over the whole clause breaks the moment any of the
-    // three is sharpened — which is exactly what happened when
-    // "is invisible to every other member" was added back on 2026-09-02, after
-    // this tier found that peer-invisibility had stopped being stated in ANY
-    // shipped prose. Pinning the facts, not the punctuation, keeps the guard.
-    expect(CHANNEL_DOCTRINE).toContain("reaches no server");
-    expect(CHANNEL_DOCTRINE).toContain("is invisible to every other member");
-    expect(CHANNEL_DOCTRINE).toContain(
-      "is never addressable from here",
-    );
+    // ⚠ THREE FACTS, PINNED SEPARATELY — not one sentence fragment. A single
+    // `toContain` over the clause breaks the moment any of the three is
+    // sharpened, as happened when "is invisible to every other member" was
+    // restored on 2026-09-02. Pin the facts, not the punctuation.
+    for (const fact of ["reaches no server", "is invisible to every other member", "is never addressable from here"])
+      expect(CHANNEL_DOCTRINE).toContain(fact);
   });
 
   it("still documents the ops that SURVIVED, so the rollback took nothing extra", () => {
