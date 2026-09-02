@@ -336,7 +336,7 @@ export const AGENT_DIRECTION_TTL_MS = 600_000;
  * would produce pings nobody reads, which is exactly the failure this surface
  * exists to fix.
  *
- * ⚠ Restated as the column CHECK in `20260907120000_channel_pings.sql` and as the
+ * ⚠ Restated as the column CHECK in `20260907130000_channel_pings.sql` and as the
  * MCP schema's `.max()`. Three statements of one rule; keep them in step.
  */
 export const MAX_PING_BODY = 600;

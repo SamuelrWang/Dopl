@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * (2026-09-01, `docs/specs/needs-you-ping.md`).
  *
  * ⚠ **EVERY FUNCTION USES THE RLS-BYPASSING ADMIN CLIENT**, and not for
- * convenience: `20260907120000_channel_pings.sql` REVOKEs INSERT/UPDATE/DELETE
+ * convenience: `20260907130000_channel_pings.sql` REVOKEs INSERT/UPDATE/DELETE
  * from `authenticated` and `anon` and carries no write policy at all, so there is
  * no other way to write it. That makes the `senderUserId` / `recipientUserId`
  * arguments below THE ENTIRE FENCE, and both come from the authenticated context

@@ -86,7 +86,7 @@ applying to a remote was out of scope. Per §12, replay is the only check that m
 these are claims.
 
 ```
-20260907120000_channel_pings                       (T70)
+20260907130000_channel_pings                       (T70)
 20260908120000_knowledge_pinned_startup_context    (T81)
 20260909120000_channel_sessions_health             (T50/T51/T83)
 20260910120000_channel_launch_directives_posture   (T24)
@@ -94,10 +94,12 @@ these are claims.
 
 They order correctly after master's latest (`20260907120000_channel_launch_directives_kind`).
 
-⚠ **`channel_pings` SHARES A VERSION PREFIX WITH THAT MIGRATION** — `20260907120000`. Filename
-order still resolves it (`…_kind` sorts before `…_pings`), and the repo already carries one such
-pair on master, but `supabase migration list` prints VERSIONS while every doc cites FILENAMES
-(§12, F-304). **Check before applying**, and join on the name:
+⚠ **`channel_pings` ONCE SHARED A VERSION PREFIX WITH THAT MIGRATION** — both were
+`20260907120000`. **Renamed to `20260907130000_channel_pings.sql` on 2026-09-02, while still
+unapplied.** Filename order had resolved it locally, but the `supabase_migrations.schema_migrations`
+history is upserted `ON CONFLICT (version) DO UPDATE`: one row would have survived and `…_kind`
+would have vanished from `migration list` entirely. `supabase migration list` prints VERSIONS while
+every doc cites FILENAMES (§12, F-304), so still join on the name:
 
 ```
 supabase migration list
@@ -106,7 +108,8 @@ supabase migration list
 ## What is left for Samuel
 
 1. **Apply the four migrations** — locally with Docker running (`supabase db reset` → exit 0),
-   then to the remote. Verify the `20260907120000` prefix pair landed as two rows.
+   then to the remote. Verify all four landed as four distinct rows (the `20260907120000` prefix collision was removed on
+   2026-09-02 — `channel_pings` is now `20260907130000`).
 2. **Push the branch so CI can run.** Every gate below was measured locally; CI is the gate.
 3. **Rule on T82** — which sentence comes out of the over-cap descriptions, or that the ratchet is
    the answer. Two were TRIMMED under the cap during integration (`current_workspace`,

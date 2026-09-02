@@ -41,7 +41,7 @@ import {
  * 🔒 **A PING IS NOT A MESSAGE** and never touches `channel_messages`. It must not
  * fan out to the room, it must not end a channel `await` (it has no message `seq`
  * and can never consume that cursor), and it needs its own cursor space — the
- * three reasons in `20260907120000_channel_pings.sql`'s header.
+ * three reasons in `20260907130000_channel_pings.sql`'s header.
  */
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
