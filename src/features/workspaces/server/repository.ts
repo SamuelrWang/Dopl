@@ -81,13 +81,22 @@ export async function findWorkspaceByPublicId(
  * ⚠ Returns null on zero OR 2+ matches: slug uniqueness is not enforced
  * post-publicId, so an ambiguous legacy URL must 404 rather than route to the
  * wrong workspace. Canonical `{slug}-{publicId}` URLs bypass this entirely.
+ *
+ * ⚠ **STANDARD KINDS ONLY (2026-09-02, F-561).** `link` and `personal`
+ * containers are memberships with slugs too, and neither has ever had a URL of
+ * this shape — counting them makes a real workspace's own legacy URL ambiguous
+ * (2 matches → `null` → 404) whenever a hidden container beside it shares the
+ * slug. `link` has carried that since `20260823150000`; `20260920120000` mints
+ * a second such kind for every user. ⚠ POSITIVE form (§4A, F-295).
  */
 export async function findMemberWorkspaceBySlug(
   userId: string,
   slug: string
 ): Promise<Workspace | null> {
   const memberships = await listWorkspacesForUser(userId);
-  const matches = memberships.filter((c) => c.slug === slug);
+  const matches = memberships
+    .filter(isStandardWorkspace)
+    .filter((c) => c.slug === slug);
   if (matches.length !== 1) return null;
   return matches[0];
 }

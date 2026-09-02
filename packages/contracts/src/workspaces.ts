@@ -50,8 +50,22 @@ export type MembershipStatus = "pending" | "active" | "revoked";
  * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
  * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
  * side's own plan until then).
+ *
+ * ⚠ **"personal" = THE ONE CONTAINER EVERY USER HAS** (v2 wave B, B11 —
+ * `supabase/migrations/20260920120000_workspace_kind_personal.sql`). It holds
+ * the personal shelf that `home_scoped` carries today, it is not in the rail,
+ * and it has its own surface at `/home`. ⚠ **NO ROW HAS THIS KIND YET** — the
+ * migration is unapplied and the dual-write sits behind
+ * `TENANCY_PERSONAL_CONTAINER` (default off). The type lands first on purpose:
+ * a value the column can hold and the union cannot is cast into it silently and
+ * takes every default branch, which is the mirror of the failure
+ * `check-message-kind-drift.ts` exists for.
+ *
+ * ⚠ **`!isStandardWorkspace(…)` IS NOT "THEREFORE A HOME CHANNEL"** and eight
+ * sites read it that way — F-564, which is an ORDERING constraint on applying
+ * `20260920120000`, not only a code fix. Ask `kind === "link"`.
  */
-export type WorkspaceKind = "standard" | "link";
+export type WorkspaceKind = "standard" | "link" | "personal";
 
 /**
  * Three-way sharing scope.
