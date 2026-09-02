@@ -343,6 +343,41 @@ CREATE POLICY chat_messages_select ON chat_messages
   FOR SELECT
   USING (public.dopl_chat_readable(chat_id));
 
+-- ---- knowledge_entry_chunks (F-575) ---------------------------------------
+-- ⚠ **RLS WAS ENABLED ON THIS TABLE WITH NO POLICY AT ALL** since
+-- `20260612090000_knowledge_embeddings.sql` ("No policies on purpose:
+-- service-role only"). That FAILS CLOSED — `authenticated` gets zero rows — so
+-- nothing is leaking and nothing is broken while the embeddings repository still
+-- reads as the service role. The trap is directional and it is the mirror of the
+-- failure `caller-jwt.ts` refuses to have: the day a chunk read moves to
+-- `readClient()`, search goes quietly EMPTY behind a fence that reports itself
+-- armed.
+--
+-- ⚠ ONE STATEMENT, AND IT MIRRORS ITS PARENT'S MATRIX BY CALLING IT — the same
+-- bargain `knowledge_entries_member_select` and `chat_messages_select` keep, and
+-- the reason F-571 exists: a child that RESTATES its parent's arms is where the
+-- fence goes stale. The chunk table carries both columns the entries policy
+-- filters on, so the child is its parent's policy verbatim.
+--
+-- ⚠ IT DOES NOT MOVE A SINGLE READ. This closes the phase-1 table list (the RLS
+-- plan names this table on the same line as `skills` / `skill_files`); moving the
+-- chunk reads onto `readClient()` is still owed, and the policy has to exist
+-- FIRST or that move is the outage described above.
+DROP POLICY IF EXISTS knowledge_entry_chunks_member_select ON knowledge_entry_chunks;
+CREATE POLICY knowledge_entry_chunks_member_select ON knowledge_entry_chunks
+  FOR SELECT
+  USING (
+    is_current_workspace_member(workspace_id, 'viewer'::text)
+    AND public.dopl_knowledge_base_readable(knowledge_base_id)
+  );
+
+-- ⚠ The parent column, indexed on its own — every child policy joins on it, and
+-- `knowledge_entry_chunks_workspace_idx` leads with `workspace_id`, so it cannot
+-- serve a `knowledge_base_id` probe. Same addition `20260919120000` STEP 6 made
+-- for the other two children.
+CREATE INDEX IF NOT EXISTS knowledge_entry_chunks_base_idx
+  ON knowledge_entry_chunks (knowledge_base_id);
+
 
 -- ===========================================================================
 -- STEP 6 — assert the outcome instead of trusting it (INVARIANTS §12)

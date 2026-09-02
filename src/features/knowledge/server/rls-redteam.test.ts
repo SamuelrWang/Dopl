@@ -45,6 +45,12 @@ const SELECT_POLICY = {
   knowledge_bases: "knowledge_bases.knowledge_bases_member_select",
   knowledge_folders: "knowledge_folders.knowledge_folders_member_select",
   knowledge_entries: "knowledge_entries.knowledge_entries_member_select",
+  // ⚠ F-575, closed at the batch-2 integration: this table had RLS ENABLED and
+  // NO policy since `20260612090000`. It failed CLOSED, so nothing leaked — the
+  // hazard was the other direction, a fence reporting itself armed while
+  // answering nothing the moment a chunk read moved onto `readClient()`.
+  knowledge_entry_chunks:
+    "knowledge_entry_chunks.knowledge_entry_chunks_member_select",
 } as const;
 
 /** "May the caller read this base?" — the rule, written once (STEP 4). */
@@ -61,6 +67,27 @@ describe("the read rule is stated ONCE", () => {
   // fact, and it is now asserted once — beside the second half of the same
   // question ("`shared` is the ONLY thing a policy reads out of the claim") — in
   // `shared/supabase/rls-redteam-resource-grants.test.ts`.
+});
+
+describe("REDTEAM knowledge_entry_chunks — the table that had no policy", () => {
+  const policy = () => POLICIES.get(SELECT_POLICY.knowledge_entry_chunks) ?? "";
+
+  it("EXISTS at all — the whole of F-575", () => {
+    expect(policy()).not.toBe("");
+  });
+
+  it("is its PARENT's policy, by calling it rather than restating the matrix", () => {
+    // ⚠ The same bargain `knowledge_entries_member_select` keeps (F-571): a
+    // child that restates its parent's arms is the copy nobody updates.
+    expect(policy()).toContain(`${READABLE}(knowledge_base_id)`);
+    expect(policy()).toContain("is_current_workspace_member(workspace_id");
+  });
+
+  it("states NO visibility arm of its own — a chunk is as visible as its base", () => {
+    for (const inlined of ["visibility", "access_mode", "created_by"]) {
+      expect(policy()).not.toContain(inlined);
+    }
+  });
 });
 
 describe("REDTEAM knowledge_bases — the policy alone", () => {

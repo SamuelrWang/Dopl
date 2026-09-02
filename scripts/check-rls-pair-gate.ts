@@ -85,6 +85,11 @@ const TWINS: Record<string, { table: string; policies: string[] }> = {
 const POLICY_ONLY: Record<string, string[]> = {
   knowledge_folders: ["knowledge_folders_member_select"],
   knowledge_entries: ["knowledge_entries_member_select"],
+  // ⚠ F-575: RLS was ENABLED on this table with no policy at all (fail-closed,
+  // and the day a chunk read moved to `readClient()` search would have gone
+  // silently empty). `20260921120000` gives it its parent's policy, by calling
+  // the parent's predicate rather than restating it.
+  knowledge_entry_chunks: ["knowledge_entry_chunks_member_select"],
   skill_files: ["skill_files_member_select"],
   chat_messages: ["chat_messages_select"],
   agent_template_knowledge_bases: ["agent_template_knowledge_bases_member_select"],
