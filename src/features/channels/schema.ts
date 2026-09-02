@@ -401,8 +401,18 @@ export type ChannelMemberRemoveInput = z.infer<
  * hold) — live in `schema-reads.ts` (split 2026-09-01 at the cap). Re-exported
  * here for the same reason the four blocks below are: this file is the barrel.
  */
-export { AwaitQuerySchema, MessageReadQuerySchema } from "./schema-reads";
-export type { AwaitQuery, MessageReadQuery } from "./schema-reads";
+export {
+  AccountMessagesQuerySchema,
+  AccountStatusQuerySchema,
+  AwaitQuerySchema,
+  MessageReadQuerySchema,
+} from "./schema-reads";
+export type {
+  AccountMessagesQuery,
+  AccountStatusQuery,
+  AwaitQuery,
+  MessageReadQuery,
+} from "./schema-reads";
 
 
 /**

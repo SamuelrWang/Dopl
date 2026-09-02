@@ -187,3 +187,25 @@ export {
   decideAgentDirection,
   DIRECTION_REFUSAL_REASONS,
 } from "./service-directions";
+
+// THE ACCOUNT-WIDE READS (2026-09-01, T20/T21/T22) — one answer across every
+// workspace AND every home-channel container the caller belongs to.
+//
+// ⚠ USER-SCOPED, NOT WORKSPACE-SCOPED, and that is why they are a separate
+// module rather than a flag on `listChannels` / `awaitWorkspaceMessages`: those
+// take a `ChannelContext`, which names ONE workspace, and threading an absent
+// workspace through them would put two authorization stories behind one
+// signature. The fence is `channel_members.user_id` alone — see
+// `service-account.ts`'s header, and note that the CONTAINER LOCK is applied by
+// the MCP layer rather than by these.
+export { getAccountStatus, readAccountMessages } from "./service-account";
+export type {
+  AccountChannelMessage,
+  AccountChannelStatus,
+  AccountMessagesPage,
+  AccountStatus,
+  AccountStatusClips,
+  AccountStatusOptions,
+  AccountStatusView,
+  AccountWaitingItem,
+} from "./service-account";

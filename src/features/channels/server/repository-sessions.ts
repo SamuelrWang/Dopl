@@ -134,7 +134,7 @@ export async function listSessionStates(
  * header says so) — so this names the builder rather than inferring a row type,
  * and the cast to `SessionStateRow[]` stays at the single point below.
  */
-type SessionQuery = ReturnType<
+export type SessionQuery = ReturnType<
   ReturnType<typeof supabaseAdmin>["from"]
 >["select"] extends (...args: never[]) => infer Q
   ? Q
@@ -155,12 +155,21 @@ type SessionQuery = ReturnType<
  * ⚠ It also keeps ONE `SESSION_ROWS_LIMIT` on both, which is what makes the bound
  * above a bound rather than a suggestion.
  *
- * ⚠ THE FENCE IS DELIBERATELY NOT SHARED. One read is USER-scoped and one is
- * CHANNEL-scoped; collapsing them into a single "filter" parameter would put the
- * two authorization stories behind one signature, and they are not the same story
+ * ⚠ THE FENCE IS DELIBERATELY NOT SHARED. One read is USER-scoped, one is
+ * CHANNEL-scoped and the third is USER-scoped ACROSS a proven channel set;
+ * collapsing them into a single "filter" parameter would put three
+ * authorization stories behind one signature, and they are not the same story
  * (see each caller's docblock). This shares the plumbing, never the fence.
+ *
+ * ⚠ **EXPORTED SINCE 2026-09-01 FOR A THIRD CALLER OUTSIDE THIS FILE** —
+ * `repository-account.ts › listAccountSessionStates`, the account-wide read. It
+ * lives there rather than here because its fence is the account-wide membership
+ * set, which is that module's whole subject; it calls THIS because the degrade
+ * and the bound are the halves that must never diverge, which is the same
+ * argument that extracted this function in the first place. **A fourth caller
+ * passes a fence and nothing else — never a widened one.**
  */
-async function sessionRowsWhere(
+export async function sessionRowsWhere(
   fence: (query: SessionQuery) => SessionQuery
 ): Promise<SessionStateRow[]> {
   const db = supabaseAdmin();
