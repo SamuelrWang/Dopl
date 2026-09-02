@@ -39,6 +39,7 @@ const CH = "33333333-4444-5555-6666-777777777777";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

@@ -21,7 +21,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { CONTAINER_SESSION_LOCK } from "@/shared/auth/credential-audience";
 import {
   resolveResource,
   resolveResourcesByName,
@@ -85,7 +84,7 @@ function templateRow(over: Record<string, unknown> = {}) {
   };
 }
 
-const caller: ResourceCaller = { userId: ME };
+const caller: ResourceCaller = { userId: ME, credentialSubjectUserId: ME };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -96,7 +95,13 @@ beforeEach(() => {
 describe("🔒 a SHARED credential resolves nothing, and does not even ask", () => {
   it("issues no query at all", async () => {
     const calls = makeAdmin({});
-    const shared: ResourceCaller = { userId: ME, apiKeyWorkspaceId: WS_A };
+    // ⚠ FENCED AND ANONYMOUS: identical to the container session below on the
+    // container axis, and different on the subject axis alone.
+    const shared: ResourceCaller = {
+      userId: ME,
+      credentialSubjectUserId: null,
+      apiKeyWorkspaceId: WS_A,
+    };
     expect(await resolveResource(shared, "agent_template", T1)).toBeNull();
     expect(await resolveResourcesByName(shared, "agent_template", "x")).toEqual(
       []
@@ -114,8 +119,8 @@ describe("🔒 a SHARED credential resolves nothing, and does not even ask", () 
     });
     const session: ResourceCaller = {
       userId: ME,
+      credentialSubjectUserId: ME,
       apiKeyWorkspaceId: WS_A,
-      apiKeyWorkspaceLockKind: CONTAINER_SESSION_LOCK,
     };
     expect(
       await resolveResource(session, "agent_template", T1)
@@ -176,8 +181,8 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     await resolveResource(
       {
         userId: ME,
+        credentialSubjectUserId: ME,
         apiKeyWorkspaceId: WS_A,
-        apiKeyWorkspaceLockKind: CONTAINER_SESSION_LOCK,
       },
       "agent_template",
       T1

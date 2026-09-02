@@ -24,6 +24,7 @@ let params: Record<string, string> = { baseId: "kb-1" };
 
 const AUTH: Omit<WorkspaceAuthContext, "params"> = {
   userId: "user-1",
+  credentialSubjectUserId: "user-1",
   workspaceId: "ws-1",
   workspaceSlug: "acme",
   workspacePublicId: "pub-1",

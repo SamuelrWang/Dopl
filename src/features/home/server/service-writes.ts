@@ -96,6 +96,7 @@ export async function createHomeChannel(
         userId,
         workspaceId: container.id,
         role: "owner",
+        credentialSubjectUserId: userId,
       }),
       { name: input.name, visibility: "private" }
     );
@@ -420,6 +421,7 @@ async function createContainer(
         userId: creatorId,
         workspaceId: container.id,
         role: "owner",
+        credentialSubjectUserId: creatorId,
       }),
       { direct: true, memberUserId: claimerId }
     );

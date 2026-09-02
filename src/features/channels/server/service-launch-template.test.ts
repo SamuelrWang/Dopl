@@ -69,6 +69,7 @@ const DIR = "55555555-5555-5555-5555-555555555555";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };
@@ -186,18 +187,32 @@ describe("the template ref — resolved under the CALLER's visibility, before an
   // as a shared credential and `POST /api/channels/launch-directives` answers
   // AGENT_TEMPLATE_NOT_FOUND for the operator's own private template, which is
   // every "Use in this channel" copy.
-  it("carries the lock KIND to the resolver as well, or a container session cannot name its own template", async () => {
+  it("carries BOTH axes to the resolver, or a container session cannot name its own template", async () => {
     online();
     vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
     await createLaunchDirective(
-      { ...ctx, apiKeyWorkspaceId: WS, apiKeyWorkspaceLockKind: "container_session" },
+      { ...ctx, apiKeyWorkspaceId: WS, credentialSubjectUserId: ctx.userId },
       { channel: "general", template: "X" }
     );
     const [templateCtx] = vi.mocked(resolveTemplateRef).mock.calls[0];
     expect(templateCtx).toMatchObject({
       apiKeyWorkspaceId: WS,
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: ctx.userId,
     });
+  });
+
+  it("carries a SHARED credential's absent subject through unchanged", async () => {
+    // 🔒 The mutation: forwarding `ctx.userId` instead of the subject axis would
+    // hand `canSeeTemplate` a person that is not there and let a shared
+    // credential name the key owner's private templates.
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
+    await createLaunchDirective(
+      { ...ctx, apiKeyWorkspaceId: WS, credentialSubjectUserId: null },
+      { channel: "general", template: "X" }
+    );
+    const [templateCtx] = vi.mocked(resolveTemplateRef).mock.calls[0];
+    expect(templateCtx).toMatchObject({ credentialSubjectUserId: null });
   });
 
   it("an UNRESOLVABLE ref refuses and files NOTHING", async () => {

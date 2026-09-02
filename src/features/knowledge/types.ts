@@ -178,22 +178,23 @@ export interface KnowledgeContext {
    * Workspace this credential is locked to; `null` for session callers and
    * unlocked tokens. ⚠ IT ANSWERS *WHICH WORKSPACE* AND NOTHING ELSE. It used
    * to double as the M-10 visibility gate, which is the F-336 defect: see
-   * {@link KnowledgeContext.apiKeyWorkspaceLockKind}.
+   * {@link KnowledgeContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**
-   * `mcp_tokens.workspace_lock_kind` — WHAT KIND of lock the credential
-   * carries. ⚠ NEVER read directly; the one reader is
-   * `shared/auth/credential-audience.ts › isSharedCredential`, and absent
-   * reads as a SHARED credential (fail-closed).
+   * WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`): the ONE
+   * human it acts as, or `null` for a credential that may be passed between
+   * humans. ⚠ NEVER read directly; the one reader is
+   * `shared/auth/credential-audience.ts › isSharedCredential`.
    *
    * M-10 means *"a credential with no single human behind it inherits nobody's
-   * personal reach"*. A container-session lock has a human behind it — the
-   * operator, whose own private bases are the whole point of the `agent_only`
-   * grant (§10 layer A) — so it reads private rows exactly as its operator
-   * does, while staying fenced to one workspace and to the GRANTED bases.
+   * personal reach"*. A container SESSION has a human behind it — the operator,
+   * whose own private bases are the whole point of the `agent_only` grant (§10
+   * layer A) — so it reads private rows exactly as its operator does, while
+   * staying fenced to one container by the OTHER axis and to the GRANTED bases
+   * by layer A.
    */
-  apiKeyWorkspaceLockKind?: string | null;
+  credentialSubjectUserId: string | null;
   /**
    * `X-Dopl-Session-Id` verbatim (the desktop's slot key, `<channelId>:<tail>`),
    * or `null`/absent for every caller that sends none.

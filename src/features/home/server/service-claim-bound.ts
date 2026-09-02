@@ -230,7 +230,12 @@ async function joinContainerChannel(
     // and NON-direct, which is precisely what makes this call legal — a legacy
     // unbound container holds a DIRECT channel and `addMember` refuses those.
     await addMember(
-      buildChannelContext({ userId: ownerId, workspaceId, role: "owner" }),
+      buildChannelContext({
+        userId: ownerId,
+        workspaceId,
+        role: "owner",
+        credentialSubjectUserId: ownerId,
+      }),
       channel.id,
       userId
     );

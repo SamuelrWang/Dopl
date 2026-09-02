@@ -38,6 +38,7 @@ const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "user",
   role: "member",
 };

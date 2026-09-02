@@ -50,6 +50,7 @@ const PAIR_SLOT = "dba90694-de4f-4950-83a9-f2d890c9ff3f:79ce5325-f53e-4d00-a1c0-
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -181,15 +182,15 @@ describe("readSessionIdHeader — an id-shaped token, or nothing", () => {
   it("buildChannelContext re-narrows what the auth layer handed it", () => {
     // Same predicate, applied twice: no other construction path can widen it.
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS, sessionId: ROOM_SLOT })
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER, sessionId: ROOM_SLOT })
         .sessionId
     ).toBe(ROOM_SLOT);
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS, sessionId: "two words" })
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER, sessionId: "two words" })
         .sessionId
     ).toBeUndefined();
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS }).sessionId
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER }).sessionId
     ).toBeUndefined();
     expect(narrowSessionId(null)).toBeUndefined();
   });

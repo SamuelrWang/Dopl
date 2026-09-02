@@ -175,12 +175,12 @@ export interface SkillContext {
    *  the visibility answer. Same semantics as
    *  `KnowledgeContext.apiKeyWorkspaceId`. */
   apiKeyWorkspaceId?: string | null;
-  /** `mcp_tokens.workspace_lock_kind`. ⚠ Read only via
-   *  `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
-   *  SHARED. The service layer gives a SHARED credential no private
-   *  visibility. Same semantics as
-   *  `KnowledgeContext.apiKeyWorkspaceLockKind` (F-336). */
-  apiKeyWorkspaceLockKind?: string | null;
+  /** WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`);
+   *  `null` = nobody in particular. ⚠ Read only via
+   *  `shared/auth/credential-audience.ts › isSharedCredential`. The service
+   *  layer gives a SHARED credential no private visibility. Same semantics as
+   *  `KnowledgeContext.credentialSubjectUserId` (F-336). */
+  credentialSubjectUserId: string | null;
 }
 
 export type { SourceProvider };

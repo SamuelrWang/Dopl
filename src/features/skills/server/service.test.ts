@@ -50,6 +50,7 @@ function ctx(overrides: Partial<SkillContext> = {}): SkillContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: OWNER,
     ...overrides,
   };
 }
@@ -129,7 +130,12 @@ describe("listSkills visibility (canSeeSkill)", () => {
       skill({ id: "s-ownpriv", slug: "own-private", visibility: "private", createdBy: OWNER }),
       skill({ id: "s-public", slug: "public-one", visibility: "public", accessMode: "workspace", createdBy: OWNER }),
     ];
-    expect(await visibleSlugs(ctx({ apiKeyWorkspaceId: "ws-1" }), rows)).toEqual(["public-one"]);
+    expect(
+      await visibleSlugs(
+        ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null }),
+        rows
+      )
+    ).toEqual(["public-one"]);
   });
 
   it("teams-mode skill is invisible without a grant, visible with one", async () => {

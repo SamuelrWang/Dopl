@@ -35,6 +35,7 @@ export function ctx(
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: OWNER,
     ...overrides,
   };
 }

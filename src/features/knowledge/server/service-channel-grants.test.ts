@@ -49,6 +49,7 @@ const mockDelete = vi.mocked(deleteChannelKnowledgeGrant);
 const OWNER: KnowledgeContext = {
   workspaceId: "ws-1",
   userId: "user-1",
+  credentialSubjectUserId: "user-1",
   role: "member",
   source: "user",
   apiKeyWorkspaceId: null,

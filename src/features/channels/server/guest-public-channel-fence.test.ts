@@ -97,7 +97,7 @@ const PUBLIC_CHANNEL = "44444444-4444-4444-8444-444444444444";
 const mocked = vi.mocked(repo);
 
 function ctx(role: Role | null): ChannelContext {
-  return { workspaceId: WS, userId: USER, source: "user", role };
+  return { workspaceId: WS, userId: USER, source: "user", role, credentialSubjectUserId: USER };
 }
 
 /** A PUBLIC channel in the workspace the caller has no `channel_members` row in. */

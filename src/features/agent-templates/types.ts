@@ -151,16 +151,16 @@ export interface AgentTemplateContext {
   /**
    * Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* ONLY — it is
    * NOT the visibility answer, which is the F-333/F-336 defect (fixed
-   * 2026-08-27). See {@link AgentTemplateContext.apiKeyWorkspaceLockKind}.
+   * 2026-08-27). See {@link AgentTemplateContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**
-   * `mcp_tokens.workspace_lock_kind`. ⚠ Read ONLY through
-   * `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
-   * a SHARED credential. A credential that may be shared between humans (CI
-   * runners, service accounts) gets NO private visibility — M-10, same rule as
-   * `canSeeSkill` / `canSeeBase`. A container-SESSION credential is one human's
-   * session and is not that.
+   * WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`); `null`
+   * = nobody in particular. ⚠ Read ONLY through
+   * `shared/auth/credential-audience.ts › isSharedCredential`. A credential that
+   * may be passed between humans (CI runners, service accounts) gets NO private
+   * visibility — M-10, same rule as `canSeeSkill` / `canSeeBase`. A container
+   * SESSION is one human's session and is not that.
    */
-  apiKeyWorkspaceLockKind?: string | null;
+  credentialSubjectUserId: string | null;
 }

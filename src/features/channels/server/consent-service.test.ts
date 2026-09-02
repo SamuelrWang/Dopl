@@ -47,7 +47,13 @@ const USER = "user-1";
 const REQUESTER = "user-2";
 const CHANNEL = "550e8400-e29b-41d4-a716-446655440000";
 
-const ctx: ChannelContext = { workspaceId: WS, userId: USER, source: "user", role: "member" };
+const ctx: ChannelContext = {
+  workspaceId: WS,
+  userId: USER,
+  source: "user",
+  role: "member",
+  credentialSubjectUserId: USER,
+};
 
 function channelRow(): ChannelRow {
   return {

@@ -61,7 +61,7 @@ function personCtx(over: Partial<AgentTemplateContext> = {}): AgentTemplateConte
     source: "user",
     role: "owner",
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: USER,
     ...over,
   };
 }
@@ -138,7 +138,11 @@ describe("listing one shelf", () => {
     // returned exactly as it would be. Narrowing can only ever SUBSET.
     const rows = [tpl({ id: "mine", visibility: "private" }), tpl({ id: "pub", visibility: "workspace" })];
     mockRepo.listTemplatesForWorkspace.mockResolvedValue(rows);
-    const shared = personCtx({ source: "agent", apiKeyWorkspaceId: HOME_WS });
+    const shared = personCtx({
+      source: "agent",
+      apiKeyWorkspaceId: HOME_WS,
+      credentialSubjectUserId: null,
+    });
 
     const narrowed = await listTemplates(shared, { shelf: "home" });
     const unfiltered = await listTemplates(shared);
@@ -198,7 +202,13 @@ describe("creating onto the home shelf", () => {
     // reason and would let a shared credential through the day that default
     // changed.
     await expect(
-      createTemplate(personCtx({ source: "agent", apiKeyWorkspaceId: HOME_WS }), {
+      createTemplate(
+        personCtx({
+          source: "agent",
+          apiKeyWorkspaceId: HOME_WS,
+          credentialSubjectUserId: null,
+        }),
+        {
         name: "From a key",
         homeScoped: true,
       })

@@ -15,6 +15,7 @@ import type { WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 
 const AUTH: WorkspaceAuthContext = {
   userId: "user-1",
+  credentialSubjectUserId: "user-1",
   workspaceId: "ws-1",
   workspaceSlug: "acme",
   workspacePublicId: "pub-1",

@@ -60,6 +60,7 @@ function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContex
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: CREATOR,
     ...overrides,
   };
 }
@@ -275,7 +276,7 @@ describe("the payload, and the door it comes through", () => {
     mockTenancy.resolveResource.mockResolvedValue(null);
     const locked = ctx({
       apiKeyWorkspaceId: "ws-1",
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: CREATOR,
     });
     await resolveTemplateForLaunch(locked, "tpl-1").catch(() => {});
     expect(mockTenancy.resolveResource).toHaveBeenCalledWith(

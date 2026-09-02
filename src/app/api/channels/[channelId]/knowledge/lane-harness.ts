@@ -60,6 +60,7 @@ export function makeAuth(role: Role, userId = GUEST): WorkspaceAuthContext {
     workspacePublicId: "pub-container",
     role,
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: userId,
   };
 }
 

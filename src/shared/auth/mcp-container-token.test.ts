@@ -4,12 +4,12 @@
  * process AND whatever it shells out to, because the lock rides the credential.
  *
  * The chain this suite walks, end to end, is FOUR hops that were never joined
- * before: `mcp_tokens.workspace_id` → `validateAccessToken` → `with-auth.ts`'s
- * `apiKeyWorkspaceId` → the gates that read it. ⚠ SINCE 2026-08-27 THE ROW
- * CARRIES A SECOND FIELD ON A SECOND AXIS — `workspace_lock_kind`, which says
- * WHAT KIND of lock this is and is what the VISIBILITY gates read
- * (`credential-audience.ts › isSharedCredential`, F-336/F-333). The lock still
- * answers WHICH WORKSPACE and nothing else. Until 2026-08-26 the third hop
+ * before: `mcp_tokens.container_id` → `validateAccessToken` → `with-auth.ts`'s
+ * `apiKeyWorkspaceId` → the gates that read it. ⚠ THE ROW CARRIES A SECOND,
+ * INDEPENDENT AXIS — `mcp_tokens.subject_user_id`, WHOSE reach the credential
+ * inherits, which is what the VISIBILITY gates read
+ * (`credential-audience.ts › isSharedCredential`, F-336/F-333). The container
+ * axis answers WHICH and nothing else. Until 2026-08-26 the third hop
  * did not exist at all (`with-auth.ts` never wrote the field, and the
  * `api_keys` table the whole chain was built for was dropped in
  * `20260609000000`), so INVARIANTS §4 called it "dead scaffolding; preserved".
@@ -30,8 +30,8 @@ const state = vi.hoisted(() => ({
     userId: string;
     scopes: string[];
     tokenId: string;
-    workspaceId: string | null;
-    workspaceLockKind?: string | null;
+    containerId: string | null;
+    subjectUserId: string | null;
   } | null,
   /** Every `.eq/.is/.not/.select/.insert/.update` the minter issued. */
   ops: [] as { fn: string; args: unknown[] }[],
@@ -232,8 +232,8 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
   const echo = withUserAuth(async (_req, ctx) =>
     NextResponse.json({ apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null }),
   );
-  const echoKind = withUserAuth(async (_req, ctx) =>
-    NextResponse.json({ kind: ctx.apiKeyWorkspaceLockKind ?? null }),
+  const echoSubject = withUserAuth(async (_req, ctx) =>
+    NextResponse.json({ subject: ctx.credentialSubjectUserId }),
   );
   const req = () =>
     new NextRequest("https://x.test/api/thing", {
@@ -247,7 +247,8 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
       userId: "u-1",
       scopes: ["dopl.read", "dopl.write"],
       tokenId: "t",
-      workspaceId: "ws-container",
+      containerId: "ws-container",
+      subjectUserId: "u-1",
     };
 
     const res = await echo(req(), { params: Promise.resolve({}) });
@@ -260,7 +261,8 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
       userId: "u-1",
       scopes: ["dopl.read", "dopl.write"],
       tokenId: "t",
-      workspaceId: null,
+      containerId: null,
+      subjectUserId: "u-1",
     };
 
     const res = await echo(req(), { params: Promise.resolve({}) });
@@ -268,21 +270,35 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
     expect(await res.json()).toEqual({ apiKeyWorkspaceId: null });
   });
 
-  // 🔒 THE FIFTH HOP (F-336, 2026-08-27). The lock alone cannot answer a
-  // VISIBILITY question; the kind is what the M-10 predicates read. Drop this
-  // forward and every container session reverts to being a shared key.
-  it("forwards the lock's KIND alongside it", async () => {
+  // 🔒 THE FIFTH HOP (F-336). The container axis cannot answer a VISIBILITY
+  // question; the SUBJECT axis is what the M-10 predicates read. Drop this
+  // forward and every session reverts to being a shared credential.
+  it("forwards the SUBJECT axis alongside the container axis", async () => {
     state.token = {
       userId: "u-1",
       scopes: ["dopl.read"],
       tokenId: "t",
-      workspaceId: "ws-container",
-      workspaceLockKind: "container_session",
+      containerId: "ws-container",
+      subjectUserId: "u-1",
     };
 
-    const res = await echoKind(req(), { params: Promise.resolve({}) });
+    const res = await echoSubject(req(), { params: Promise.resolve({}) });
 
-    expect(await res.json()).toEqual({ kind: "container_session" });
+    expect(await res.json()).toEqual({ subject: "u-1" });
+  });
+
+  it("forwards an ABSENT subject as null — the shared credential, unchanged", async () => {
+    state.token = {
+      userId: "u-1",
+      scopes: ["dopl.read"],
+      tokenId: "t",
+      containerId: "ws-container",
+      subjectUserId: null,
+    };
+
+    const res = await echoSubject(req(), { params: Promise.resolve({}) });
+
+    expect(await res.json()).toEqual({ subject: null });
   });
 });
 
@@ -298,7 +314,7 @@ describe("🔒 the PRODUCER — `with-auth.ts` forwards the token's lock", () =>
 describe("🔒 the M-10 gates a SHARED credential lights up", () => {
   function ctx(
     apiKeyWorkspaceId: string | null,
-    apiKeyWorkspaceLockKind: string | null = null,
+    credentialSubjectUserId: string | null = null,
   ): KnowledgeContext {
     return {
       workspaceId: "ws-container",
@@ -306,7 +322,7 @@ describe("🔒 the M-10 gates a SHARED credential lights up", () => {
       role: "owner",
       source: "agent",
       apiKeyWorkspaceId,
-      apiKeyWorkspaceLockKind,
+      credentialSubjectUserId,
     };
   }
   const privateOwn = {
@@ -316,28 +332,36 @@ describe("🔒 the M-10 gates a SHARED credential lights up", () => {
   } as KnowledgeBase;
   const shared = { id: "kb-public", visibility: "public" } as KnowledgeBase;
 
-  it("refuses a PRIVATE base under a lock with NO stated kind — the shared-key case", async () => {
-    // The rule the gate encodes: a credential that may be shared between humans
-    // must not read one person's private draft. "Locked, kind unknown" is read
-    // as exactly that, which is the fail-closed direction.
+  it("refuses a PRIVATE base to a credential with NO subject — the shared-key case", async () => {
+    // The rule the gate encodes: a credential that may be passed between humans
+    // must not read one person's private draft. An absent subject is exactly
+    // that, and it is the fail-closed direction.
     expect(canSeeBase(ctx("ws-container"), privateOwn)).toBe(false);
   });
 
-  it("🔒 ALLOWS it under a CONTAINER-SESSION lock — F-336, and the whole ruling", async () => {
-    // Same lock, same workspace, same user id. The kind is the only difference,
-    // and it is the difference between "a credential shared between humans" and
-    // "the operator's own session, narrowed".
-    expect(canSeeBase(ctx("ws-container", "container_session"), privateOwn)).toBe(
-      true,
-    );
+  it("🔒 ALLOWS it when the SUBJECT is the caller — F-336, and the whole ruling", async () => {
+    // Same container, same workspace, same user id. The subject axis is the
+    // only difference, and it is the difference between "a credential passed
+    // between humans" and "the operator's own session, narrowed".
+    expect(canSeeBase(ctx("ws-container", "u-1"), privateOwn)).toBe(true);
   });
 
-  it("still allows a SHARED base under either lock", async () => {
+  it("still allows a SHARED base either way", async () => {
     expect(canSeeBase(ctx("ws-container"), shared)).toBe(true);
-    expect(canSeeBase(ctx("ws-container", "container_session"), shared)).toBe(true);
+    expect(canSeeBase(ctx("ws-container", "u-1"), shared)).toBe(true);
   });
 
-  it("is unchanged for an UNLOCKED credential — the caller's own private base is visible", async () => {
-    expect(canSeeBase(ctx(null), privateOwn)).toBe(true);
+  it("is unchanged for an UNFENCED credential — the caller's own private base is visible", async () => {
+    expect(canSeeBase(ctx(null, "u-1"), privateOwn)).toBe(true);
+  });
+
+  // 🔒 THE MUTATION THAT MATTERS: the container axis must move NOTHING here.
+  it("the container axis alone changes no answer, in either position", async () => {
+    expect(canSeeBase(ctx("ws-container", "u-1"), privateOwn)).toBe(
+      canSeeBase(ctx(null, "u-1"), privateOwn),
+    );
+    expect(canSeeBase(ctx("ws-container", null), privateOwn)).toBe(
+      canSeeBase(ctx(null, null), privateOwn),
+    );
   });
 });

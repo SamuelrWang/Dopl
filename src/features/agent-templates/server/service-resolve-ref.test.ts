@@ -57,6 +57,7 @@ const TEAM = "66666666-6666-6666-6666-666666666666";
 const ctx: AgentTemplateContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
   apiKeyWorkspaceId: null,
@@ -232,7 +233,11 @@ describe("M-10 — a workspace-scoped API key inherits nobody's reach", () => {
    * key-owner's private templates by name. Building the template context with a
    * `null` here is the exact shape that would.
    */
-  const keyCtx: AgentTemplateContext = { ...ctx, apiKeyWorkspaceId: WS };
+  const keyCtx: AgentTemplateContext = {
+    ...ctx,
+    apiKeyWorkspaceId: WS,
+    credentialSubjectUserId: null,
+  };
 
   it("cannot resolve the key owner's own private template, by id or by name", async () => {
     vi.mocked(repo.findTemplateById).mockResolvedValue(template());
@@ -395,7 +400,7 @@ describe("the miss that is not a mystery", () => {
 
   it("asks with the CALLER'S OWN CONTEXT, and only about this ref", async () => {
     // 🔒 ⚠ THE ONE THING THIS FILE CAN GET WRONG NOW. The fence reads
-    // `apiKeyWorkspaceId` and `apiKeyWorkspaceLockKind` off the caller — a
+    // `apiKeyWorkspaceId` and `credentialSubjectUserId` off the caller — a
     // classifier that handed the resolver a bare `{ userId }` would strip the
     // container lock and the shared-credential refusal in one line, and every
     // assertion in `resolve-resource.test.ts` would still pass.

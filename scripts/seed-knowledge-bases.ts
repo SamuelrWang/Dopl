@@ -119,7 +119,8 @@ async function main() {
       workspaceId: workspace.id as string,
       userId: (workspace.owner_id as string) ?? null,
       role: "owner",
-    agentTokenId: null,
+      agentTokenId: null,
+      credentialSubjectUserId: (workspace.owner_id as string) ?? null,
     });
 
     try {

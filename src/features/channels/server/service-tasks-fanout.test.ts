@@ -43,6 +43,7 @@ const BASE = "base-key-1";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "user",
   role: "member",
 };

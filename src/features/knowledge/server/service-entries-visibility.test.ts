@@ -82,6 +82,7 @@ function ctx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
     source: "user",
     apiKeyWorkspaceId: null,
     sessionId: null,
+    credentialSubjectUserId: OTHER,
     ...over,
   };
 }
@@ -183,7 +184,10 @@ describe("getEntry — the base's visibility answers for its entries", () => {
     );
 
     await expect(
-      getEntry(ctx({ userId: OWNER, apiKeyWorkspaceId: WS }), "e-1")
+      getEntry(
+        ctx({ userId: OWNER, apiKeyWorkspaceId: WS, credentialSubjectUserId: null }),
+        "e-1"
+      )
     ).rejects.toBeInstanceOf(EntryNotFoundError);
   });
 

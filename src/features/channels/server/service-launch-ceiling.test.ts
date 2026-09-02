@@ -42,6 +42,7 @@ const CHAN = "11111111-1111-1111-1111-111111111111";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

@@ -45,6 +45,7 @@ function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContex
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: CREATOR,
     ...overrides,
   };
 }
@@ -95,7 +96,7 @@ const CALLERS = {
    * shared between humans and therefore inherits no individual's reach.
    */
   workspaceKey: {
-    c: ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1" }),
+    c: ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null }),
     teamsOf: [] as string[],
   },
   /**
@@ -111,7 +112,7 @@ const CALLERS = {
     c: ctx({
       userId: CREATOR,
       apiKeyWorkspaceId: "ws-1",
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: CREATOR,
     }),
     teamsOf: [] as string[],
   },
@@ -124,7 +125,7 @@ const CALLERS = {
     c: ctx({
       userId: OUTSIDER,
       apiKeyWorkspaceId: "ws-1",
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: OUTSIDER,
     }),
     teamsOf: [] as string[],
   },

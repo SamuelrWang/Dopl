@@ -74,6 +74,7 @@ function ctx(overrides: Partial<KnowledgeContext> = {}): KnowledgeContext {
     source: "user",
     role: "admin",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: OWNER,
     ...overrides,
   };
 }
