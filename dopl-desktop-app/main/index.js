@@ -36,7 +36,8 @@ const settings = require('./settings');
 const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle echo seam (2026-08-20)
 const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
 const launchDirectives = require('./launch-directives'); // 2026-08-22: the orchestrator launch lane
-const agentDirections = require('./agent-directions'); // 2026-08-31: the PRIVATE DIRECT lane
+const agentDirections = require('./agent-directions');
+const pings = require('./pings'); // 2026-08-31: the PRIVATE DIRECT lane
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -367,6 +368,22 @@ if (!gotLock) {
         workspaces: () => require('./realtime').desiredWorkspaceIds(),
       });
     } catch (err) { diag('agentDirections.start error', err && err.message); }
+
+    // THE "NEEDS YOU" SIGNAL (2026-09-01). ⚠ NO CONSENT TOGGLE, unlike the two mailboxes
+    // above, and the difference is what each one buys an external agent: a launch buys
+    // COMPUTE, a direction opens a running agent's PRIVATE turn, and a ping buys neither —
+    // one log line, and at most one line fed to a session this operator already started on a
+    // channel they are in. `pings.js`' header states the argument in full.
+    try {
+      pings.start({
+        getUserId: () => (authTokens.getAuthState() || {}).userId || null,
+        // ⚠ THE EXISTING BELT, not a second wake path: `feedInbound` is where the
+        // `@agent-<id>` fan-out door terminates, so a ping is subject to the same inbound
+        // gate every other addressed message is.
+        listLiveSessions: () => require('./session-engine').listLiveSessions(),
+        feedInbound: (a) => require('./session-engine').feedInbound(a),
+      });
+    } catch (err) { diag('pings.start error', err && err.message); }
 
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
     // no-ops when signed out or the CLI/endpoint isn't available).

@@ -236,7 +236,12 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     ),
   ];
 
-  // TEN since 2026-08-31: `channel_agent_directions.channel_id` (migration
+  // ELEVEN since 2026-09-01: `channel_pings.channel_id` (migration
+  // `20260907120000`, the "Needs you" signal) is the newest child — and it
+  // CASCADES for the direction mailbox's reason: a ping is a signal ABOUT work in
+  // that channel, addressed to somebody by virtue of that room, so it is
+  // meaningless without it and must not outlive it. TEN since 2026-08-31:
+  // `channel_agent_directions.channel_id` (migration
   // `20260903120000`, the PRIVATE DIRECT LANE's mailbox) is the newest child —
   // and it CASCADES for the launch mailbox's reason, which is the one that
   // matters here: a direction is addressed at an agent working THAT channel, so
@@ -250,8 +255,8 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // one statement (INVARIANTS §5). A new child that does not cascade fails the
   // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
   // goes: it is a share INTO that channel, meaningless without it.
-  it("finds all ten child FKs", () => {
-    expect(refs.length).toBe(10);
+  it("finds all eleven child FKs", () => {
+    expect(refs.length).toBe(11);
   });
 
   it("each one cascades — none is SET NULL or RESTRICT", () => {

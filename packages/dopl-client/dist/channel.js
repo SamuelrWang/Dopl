@@ -12,6 +12,7 @@
  * op, by re-issuing with the same cursor.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_AWAIT_TIMEOUT_MS = exports.AWAIT_TIMEOUT_MS = void 0;
 exports.listChannels = listChannels;
 exports.getChannel = getChannel;
 exports.listChannelMembers = listChannelMembers;
@@ -34,14 +35,19 @@ exports.createAgentDirection = createAgentDirection;
 exports.getAgentDirection = getAgentDirection;
 exports.listAgentDirections = listAgentDirections;
 const enc = encodeURIComponent;
-/** Network read-timeout for the long-poll — above the server cap. */
-const AWAIT_TIMEOUT_MS = 55_000;
+/** Network read-timeout for the long-poll — above the server cap.
+ *  ⚠ EXPORTED for `ping.ts`, which holds the SAME route ceiling (`maxDuration`
+ *  60) and must not restate the number: two copies drift, and the one that
+ *  drifts low turns a graceful hold into a transport abort. */
+exports.AWAIT_TIMEOUT_MS = 55_000;
 /**
  * Server-side long-poll window when the caller passes none. Sent explicitly
  * rather than relying on the route default, so poll length is pinned
  * client-side and stays under AWAIT_TIMEOUT_MS.
+ *
+ * ⚠ EXPORTED for `ping.ts`, for {@link AWAIT_TIMEOUT_MS}'s reason.
  */
-const DEFAULT_AWAIT_TIMEOUT_MS = 50_000;
+exports.DEFAULT_AWAIT_TIMEOUT_MS = 50_000;
 // ─── Read ───────────────────────────────────────────────────────────
 async function listChannels(t, opts = {}) {
     const params = new URLSearchParams();
@@ -76,13 +82,13 @@ async function readMessages(t, channelId, opts = {}) {
 async function awaitMessages(t, channelId, opts) {
     const params = new URLSearchParams();
     params.set("since", String(opts.since));
-    params.set("timeoutMs", String(opts.timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS));
+    params.set("timeoutMs", String(opts.timeoutMs ?? exports.DEFAULT_AWAIT_TIMEOUT_MS));
     if (opts.excludeAuthor !== undefined) {
         params.set("excludeAuthor", opts.excludeAuthor);
     }
     return t.request(`/api/channels/${enc(channelId)}/await?${params.toString()}`, {
         method: "GET",
-        timeoutMs: AWAIT_TIMEOUT_MS,
+        timeoutMs: exports.AWAIT_TIMEOUT_MS,
         // ⚠ A retry opens a second long-poll — never auto-retry this one.
         retries: 0,
         toolName: "channel_await",
@@ -104,13 +110,13 @@ async function awaitMessages(t, channelId, opts) {
 async function awaitWorkspaceMessages(t, opts) {
     const params = new URLSearchParams();
     params.set("since", String(opts.since));
-    params.set("timeoutMs", String(opts.timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS));
+    params.set("timeoutMs", String(opts.timeoutMs ?? exports.DEFAULT_AWAIT_TIMEOUT_MS));
     if (opts.excludeAuthor !== undefined) {
         params.set("excludeAuthor", opts.excludeAuthor);
     }
     return t.request(`/api/channels/await?${params.toString()}`, {
         method: "GET",
-        timeoutMs: AWAIT_TIMEOUT_MS,
+        timeoutMs: exports.AWAIT_TIMEOUT_MS,
         // ⚠ A retry opens a second long-poll — never auto-retry this one.
         retries: 0,
         toolName: "channel_await_workspace",

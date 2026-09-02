@@ -14,6 +14,19 @@ import type { DoplTransport } from "./transport.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
 import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
+/** Network read-timeout for the long-poll — above the server cap.
+ *  ⚠ EXPORTED for `ping.ts`, which holds the SAME route ceiling (`maxDuration`
+ *  60) and must not restate the number: two copies drift, and the one that
+ *  drifts low turns a graceful hold into a transport abort. */
+export declare const AWAIT_TIMEOUT_MS = 55000;
+/**
+ * Server-side long-poll window when the caller passes none. Sent explicitly
+ * rather than relying on the route default, so poll length is pinned
+ * client-side and stays under AWAIT_TIMEOUT_MS.
+ *
+ * ⚠ EXPORTED for `ping.ts`, for {@link AWAIT_TIMEOUT_MS}'s reason.
+ */
+export declare const DEFAULT_AWAIT_TIMEOUT_MS = 50000;
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;

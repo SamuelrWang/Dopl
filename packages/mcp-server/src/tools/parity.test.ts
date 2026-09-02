@@ -68,6 +68,11 @@ const READ_OPS: Record<string, string[]> = {
     // main process and must NOT become an MCP op: an external agent does not
     // get to say what a session on somebody's machine is doing.
     "read_sessions",
+    // `opReadPings` calls only `listPings` — own-scoped at the server
+    // (`recipient_user_id = ctx.userId` in the SQL predicate), no write. ⚠ Its
+    // sibling `ping` is a WRITE and is in WRITE_OPS; the two are one op apart in
+    // spelling and a whole scope apart in what they may do.
+    "pings",
     // `opReadDirections` calls only `listAgentDirections` — own-scoped at the
     // server (`operator_user_id = ctx.userId` in the SQL predicate), no write.
     // ⚠ THE TWO DESKTOP WRITES ON THAT LANE — claim and decide — ARE NOT MCP OPS

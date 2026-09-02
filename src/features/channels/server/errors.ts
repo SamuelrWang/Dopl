@@ -303,6 +303,43 @@ export class DirectionNotClaimableError extends ChannelError {
 }
 
 /**
+ * A ping's `to=` that names nobody on this channel's ACTIVE roster.
+ *
+ * ⚠ 400, NOT 404 — the same call the addressee check on a post answers
+ * (`ChannelAddresseeNotMemberError`), and for the same reason: the caller has
+ * already proved it can reach the CHANNEL, so the refusal discloses nothing about
+ * a room it could not see, and the fix is in the caller's own hand.
+ *
+ * ⚠ ONE ERROR FOR "not a channel member", "not an active workspace member" and
+ * "not a member reference at all". Splitting them would turn a ping into a probe
+ * for which ids exist in the deployment, and none of the three changes what the
+ * caller must do.
+ */
+export class PingRecipientNotMemberError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Ping recipient is not a member of this channel: ${ref}`);
+  }
+}
+
+/**
+ * A ping addressed with `to=` to the sender themselves.
+ *
+ * ⚠ REFUSED RATHER THAN DELIVERED, and the message names the instrument that
+ * does work: a ping to yourself is almost always an agent trying to reach ITS
+ * OWN operator's external session, and `toDesktop` is the spelling for that —
+ * it stamps the same `recipient_user_id` and reaches the session that holds
+ * `/api/pings/await` open, where a `to=` self-ping would land in a card the
+ * operator is already looking at.
+ */
+export class PingSelfTargetError extends ChannelError {
+  constructor() {
+    super(
+      "Cannot ping yourself with `to` — send it with `toDesktop: true` to reach your own operator's external Desktop Agent, or `agentId` to reach one of your own running agents."
+    );
+  }
+}
+
+/**
  * A launch directive id that resolves to nothing THIS operator owns.
  *
  * ⚠ ONE ERROR FOR THREE SITUATIONS, DELIBERATELY: it does not exist, it belongs

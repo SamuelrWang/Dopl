@@ -325,3 +325,27 @@ export const LAUNCH_DIRECTIVE_TTL_MS = 120_000;
  * `service-directions.ts › toDirection`; **there is no cron.**
  */
 export const AGENT_DIRECTION_TTL_MS = 600_000;
+
+/**
+ * HOW LONG A PING'S BODY MAY BE (2026-09-01).
+ *
+ * ⚠ **THE BOUND IS THE FEATURE, NOT A SAFETY MARGIN.** A message may run to
+ * 16000 characters (`schema.ts › ChannelMessageCreateSchema`); a ping gets 600 because it is a SIGNAL —
+ * "done", "blocked on the staging key", "which schema did you mean" — and the
+ * thread it points at is where the report lives. A cap that invited a report
+ * would produce pings nobody reads, which is exactly the failure this surface
+ * exists to fix.
+ *
+ * ⚠ Restated as the column CHECK in `20260907120000_channel_pings.sql` and as the
+ * MCP schema's `.max()`. Three statements of one rule; keep them in step.
+ */
+export const MAX_PING_BODY = 600;
+
+/** Inbox page size when a caller does not ask (`op="pings"`, the "Needs you"
+ *  card). One screen of rows, not one screen of scrolling. */
+export const DEFAULT_PING_LIMIT = 20;
+
+/** Inbox page ceiling. ⚠ Well under {@link MAX_MESSAGE_LIMIT}: a ping inbox that
+ *  needs 200 rows has stopped being an inbox, and the `since` cursor is how a
+ *  reader that fell behind catches up — one bounded page at a time. */
+export const MAX_PING_LIMIT = 100;

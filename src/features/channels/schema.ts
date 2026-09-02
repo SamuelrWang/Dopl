@@ -474,3 +474,11 @@ export {
 export type {
   DirectionClaimInput, DirectionCreateInput, DirectionDecideInput,
 } from "./schema-direction";
+// THE "NEEDS YOU" SIGNAL (2026-09-01) — same arrangement, same reason.
+export {
+  PingAwaitQuerySchema, PingCreateSchema,
+  PingKindSchema, PingListQuerySchema,
+} from "./schema-ping";
+export type {
+  PingAwaitQuery, PingCreateInput, PingListQuery,
+} from "./schema-ping";

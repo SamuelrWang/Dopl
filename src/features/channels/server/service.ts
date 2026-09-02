@@ -209,3 +209,23 @@ export type {
   AccountStatusView,
   AccountWaitingItem,
 } from "./service-account";
+/*
+ * THE "NEEDS YOU" SIGNAL (2026-09-01) — one agent telling exactly ONE recipient
+ * that it is done, has a question, or is blocked.
+ *
+ * ⚠ OFF `channel_messages`, so NONE OF THE POST-PATH MACHINERY APPLIES and none
+ * of it should be reachable from here: no reserved-metadata seam, no addressing
+ * fan-out, no mention resolution, no idempotency key, no transcript. The three
+ * reasons are the migration header's — a ping must not fan out to the room, it
+ * must not end a channel `await` (it has no `channel_messages.seq` and can never
+ * consume that cursor), and it needs its own cursor space, which `since=` on
+ * both reads below is.
+ *
+ * ⚠ THE HOLD IS ITS OWN MODULE and is NOT a mode on either message await: those
+ * two are fenced by a resolved channel id and by a re-proved membership set, and
+ * this one by `recipient_user_id = ctx.userId`. Three fences, three functions —
+ * see `service-pings-await.ts` for why that also makes its loop short.
+ */
+export { createPing, listPings } from "./service-pings";
+export { awaitPings } from "./service-pings-await";
+export type { PingAwaitCounters } from "./service-pings-await";
