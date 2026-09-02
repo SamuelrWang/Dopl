@@ -6496,7 +6496,30 @@ wants it should start from F-294's own two objections rather than from this para
 
 - Status: open
 
-### F-409 — the desktop reports seven health fields the server has no columns for, so `read_sessions` cannot render them yet (2026-09-01, T25 / T50 / T51 / T83)
+### F-409 — ✅ RESOLVED 2026-09-02 — the desktop reported seven health fields the server had no columns for (2026-09-01, T25 / T50 / T51 / T83)
+
+⚠ **THIS ENTRY SAID "Status: open" ON A BRANCH THAT SUPPLIES ALL SIX PIECES**, and INVARIANTS §11.1
+repeated the claim. Both are corrected. Re-derive rather than trusting this list:
+
+```
+grep -c denied_calls supabase/migrations/20260909120000_channel_sessions_health.sql   # 11
+grep -c deniedCalls  src/features/channels/schema-sessions.ts                          # the zod half
+grep -c denied_calls src/features/channels/server/collab-dto.ts                        # 5
+grep -c deniedCalls  src/features/channels/types-sessions.ts
+grep -c deniedCalls  packages/dopl-client/src/session-health-types.ts
+grep -c deniedCalls  packages/mcp-server/src/tools/channel-session-health.ts           # the render
+```
+
+Every piece the gap named exists on `integration/mcp-efficiency`, measured 2026-09-02: the
+migration (`20260909120000_channel_sessions_health.sql`, ⚠ **WRITTEN, NOT APPLIED** — §12), the
+seven fields on `SessionStateEntrySchema`, the `collab-dto.ts` upsert / operator-only column list /
+`mapOwnSessionStateRow` half, `ChannelSessionHealth` in both trees, and the render in
+`channel-session-health.ts`. ⚠ **The APPLY is still owed** — deploy state is a measurement, and
+until the migration replays the columns do not exist, so `zod` keeps stripping the seven at the
+route exactly as described below. That is the ONE thing left, and it is Samuel's, not this
+entry's.
+
+#### What the gap was, kept for the reasoning
 
 ```
 grep -n "tokensDelta\|deniedCalls\|lastWakeSeq" dopl-desktop-app/main/session-telemetry.js
@@ -6521,7 +6544,8 @@ is getting on, and `collab-dto.ts`'s two parallel arrays plus
 `src/features/channels/schema-sql.test.ts`'s grant census are where that is enforced. The render is
 `channel-session-render.ts`, owned by the terse-results tier.
 
-- Status: open
+- Status: **RESOLVED 2026-09-02.** The apply remains owed, as it does for all four of this wave's
+  migrations.
 
 ### F-410 — ✅ RESOLVED 2026-09-01 — a CLAMPED posture directive had no way to tell the caller it was clamped (T24)
 

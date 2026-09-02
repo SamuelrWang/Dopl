@@ -32,7 +32,8 @@ Integration commits on top: `f5c045b9` (chain honesty, committed onto tier 5 bef
 | T03 `await` unusable externally | **done** | `ea93c41e` — hold sized to the caller's runtime stamp |
 | T04 unreadable-create refusal | **done** | `21a34a2b` |
 | T10–T13 terse results | **done** | `072df4f0`, `02fe86a4`, `242d730d`, `32a0745f` — one `key=value` line; doctrine at `dopl://doctrine/channels` and `op="help"` |
-| T20–T23 `dopl_status`, cross-channel read, all-sessions, end_session | **done** | `60f873ed`, `8e0f52b5` |
+| T20–T22 `dopl_status`, cross-channel read, all-sessions | **done** | `60f873ed`, `8e0f52b5` |
+| **T23 end_session** | **PRE-EXISTING — nothing was built** | The capability is `dopl_channel(op="end_agent")` and it was **already on `master` at `80be1bc6`** (`grep -c end_agent` in `tools/channel-schema.ts` there → 4). ⚠ It was listed as "done" against this wave's two commits until 2026-09-02; `end_session` has **zero hits in the tree**, so the row was crediting a build that never happened and naming an op that does not exist. |
 | T24 launch posture | **done** — echo writer closed in integration (GAP A), closing **F-410** | `12b8ebd4`, `8688f333` + the integration commits |
 | T25 silent denial visible | **done** | `808281b0` |
 | T30–T37 tenancy naming | **done** | `9ecec274`, `75896738`, `8cb1b344`, `1966e5d4`, `2648cdf1`, `f9c82af2`, `fdf961b2` |
