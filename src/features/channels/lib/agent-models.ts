@@ -137,3 +137,47 @@ export function normalizeAgentModel(raw: unknown): string | null {
   const trimmed = typeof raw === "string" ? raw.trim() : "";
   return trimmed || null;
 }
+
+/**
+ * **THE ALIASES A DESKTOP ACCEPTS BESIDE THE FULL IDS** — `main/session-model.js
+ * › MODEL_CHOICES` / `› ID_TO_ALIAS`, restated because the two trees cannot
+ * import each other.
+ *
+ * ⚠ **`"default"` IS DELIBERATELY ABSENT.** It is not a model, it is the ABSENCE
+ * of one ({@link AGENT_MODEL_DEFAULT}), and mapping it to an id would be minting
+ * the sentinel that constant exists to refuse.
+ */
+const AGENT_MODEL_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  fable: "claude-fable-5",
+  opus: "claude-opus-5",
+  sonnet: "claude-sonnet-5",
+  haiku: "claude-haiku-4-5-20251001",
+});
+
+/**
+ * **THE CANONICAL ID A REQUESTED MODEL RESOLVES TO, OR `null`** (2026-09-02, A9
+ * — guardrail G8).
+ *
+ * ⚠ **G8 IS CLOSED BY TELLING THE CALLER, NOT BY REFUSING THEM**, and the choice
+ * has a reason this file already states twice. The guardrail records that *"an
+ * unrecognised `model` id is NOT refused — it silently FALLS BACK and nothing
+ * tells you"*: `main/session-model.js › normalizeModelId` fails closed to the
+ * CLI's own default. The gap is the SILENCE. A server-side 400 would close it by
+ * refusing values the machine runs happily — {@link normalizeAgentModel}'s own
+ * rule is that *"a main running a newer model must not have its answer erased by
+ * a web build that predates it"*, and the desktop additionally accepts the
+ * aliases above and `[1m]` long-context variants. That is a narrowing nobody
+ * ruled. So the server ECHOES what it recognised and says nothing about what it
+ * did not, and the result line reports the difference.
+ *
+ * ⚠ **`null` MEANS "NOT RECOGNISED HERE", NOT "REFUSED" AND NOT "NO MODEL".**
+ * The requested value is carried to the machine unchanged either way. A caller
+ * that asked for nothing also gets `null`, and the two are told apart by whether
+ * a model was requested at all.
+ */
+export function resolveAgentModelId(raw: string | null | undefined): string | null {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return null;
+  if (AGENT_MODELS.some((m) => m.id === trimmed)) return trimmed;
+  return AGENT_MODEL_ALIASES[trimmed.toLowerCase()] ?? null;
+}

@@ -23,6 +23,11 @@
 // DTO and the SPA all need the same answer; re-declaring the type here would be
 // the second copy that drifts.
 import type { ChannelInfoCard } from "./info-card";
+// ⚠ THE TWO POSTURE AXES, IMPORTED rather than restated: `Channel.agentPosture`
+// is a CEILING over the same ordered unions a launch directive asks against
+// (`types-launch.ts`), and a second spelling of either would let the ceiling and
+// the request disagree about what "wider" means.
+import type { LaunchMessageMode, LaunchToolMode } from "./types-launch";
 import type { Role } from "@/features/workspaces/types";
 
 /** Private = members only. Public = any workspace member can read/join. */
@@ -298,6 +303,33 @@ export type Channel = {
    * card loaded.
    */
   infoCard: ChannelInfoCard;
+  /**
+   * **THE POSTURE CEILING THE SERVER CAN SEE** (2026-09-02, A9 — G6/G7).
+   *
+   * ⚠ **`null` ON ANY AXIS MEANS "NO CEILING IS RECORDED HERE", NOT
+   * "UNRESTRICTED".** The operator's own machine has always held a ceiling
+   * (`main/channel-prefs.js › getLaunchPosture`, `channelAgentChain`) that no
+   * server could read, so a launch directive's requested posture "decided
+   * nothing" server-side and an offline or older desktop enforced nothing at
+   * all. This is what the server clamps against when it has one; the desktop's
+   * clamp stays the belt on every path either way.
+   */
+  agentPosture: ChannelAgentPosture;
+};
+
+/**
+ * ⚠ **THREE INDEPENDENT AXES, EACH NULLABLE ON ITS OWN.** A channel may record
+ * a chain rule and no mode ceiling, and the server must clamp what it knows
+ * without inventing the rest.
+ */
+export type ChannelAgentPosture = {
+  tools: LaunchToolMode | null;
+  messages: LaunchMessageMode | null;
+  /** May an agent launched here launch further agents? ⚠ `false` REFUSES a
+   *  `chain: true` request at creation (G7); a clamped chain would produce an
+   *  agent that hits a bound mid-run, after the caller handed it work assuming
+   *  workers. `null` = not recorded; the desktop's toggle answers. */
+  chain: boolean | null;
 };
 
 /**

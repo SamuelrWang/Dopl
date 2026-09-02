@@ -16,6 +16,10 @@ import type {
 // ⚠ THE RETIRED PARAMETERS LIVE IN THEIR OWN MODULE (§1 split, 2026-08-25) —
 // they are the one block here scheduled to STOP existing, and that file carries
 // the delete-me clock. Nothing about their behaviour moved.
+// ⚠ THE CEILING'S SHAPE COMES FROM THE LAUNCH SCHEMA, not from a second
+// declaration here: the ceiling and the request it clamps must be the same two
+// ordered enums, and `narrowTo`'s comparison is an INDEX into them.
+import { ChannelAgentPostureSchema } from "./schema-launch";
 import {
   REMOVED_PARTICIPANTS,
   REMOVED_THREAD_CLOSE,
@@ -123,6 +127,17 @@ export const ChannelUpdateSchema = z
     visibility: VisibilitySchema.optional(),
     archived: z.boolean().optional(),
     infoCard: ChannelInfoCardSchema.optional(),
+    /**
+     * **THE POSTURE CEILING A LAUNCH DIRECTIVE IS CLAMPED TO** (2026-09-02, A9 —
+     * G6/G7).
+     *
+     * ⚠ **MANAGE-GATED, NOT MEMBER-GATED**, and `service-writes.ts ›
+     * MANAGED_CHANNEL_FIELDS` is where that is decided. It is the opposite call
+     * from `infoCard`, deliberately: a card is a shared scratch surface about a
+     * relationship, and this is how much room somebody else's agent gets in this
+     * room. Widening it is a permission change.
+     */
+    agentPosture: ChannelAgentPostureSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
@@ -464,6 +479,7 @@ export {
   // ⚠ THE AGENT-MANAGEMENT HALF (2026-09-01) rides the SAME file and the same
   // barrel: `end` / `rename` are kinds of directive, not a second lane.
   AgentDirectiveCreateSchema,
+  ChannelAgentPostureSchema,
   LaunchClaimSchema,
   LaunchCreateSchema,
   LaunchDecideSchema,
@@ -471,6 +487,7 @@ export {
 } from "./schema-launch";
 export type {
   AgentDirectiveCreateInput,
+  ChannelAgentPostureInput,
   LaunchClaimInput,
   LaunchCreateInput,
   LaunchDecideInput,

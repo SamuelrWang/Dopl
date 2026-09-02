@@ -207,6 +207,17 @@ type ChannelPatch = Partial<{
   /** The curated Main-info card, already validated by
    *  `info-card.ts › ChannelInfoCardSchema` at the route boundary. */
   info_card: ChannelInfoCardInput;
+  /**
+   * **THE POSTURE CEILING** (2026-09-02, A9 — G6/G7), already held to the two
+   * ordered enums by `schema-launch.ts › ChannelAgentPostureSchema`.
+   *
+   * ⚠ `| null` ON EACH IS THE CLEAR, not an absence: `Partial<>` above already
+   * expresses "not in this patch", and these three have to be settable BACK to
+   * "no ceiling recorded" or a channel could never drop one.
+   */
+  agent_tool_ceiling: string | null;
+  agent_message_ceiling: string | null;
+  agent_chain_allowed: boolean | null;
 }>;
 
 export async function updateChannel(

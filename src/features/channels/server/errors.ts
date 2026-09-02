@@ -372,6 +372,34 @@ export class AgentDirectiveForeignError extends ChannelError {
   }
 }
 
+/**
+ * A LAUNCH ASKED FOR `chain: true` IN A CHANNEL WHOSE STORED CEILING FORBIDS IT
+ * (2026-09-02, A9 — guardrail G7).
+ *
+ * ⚠ **REFUSED, NOT CLAMPED, AND THE ASYMMETRY WITH THE POSTURE PAIR IS THE
+ * POINT.** A clamped posture still produces a working agent doing the asked-for
+ * work under more supervision; a clamped chain produces an agent that hits a
+ * bound it was told it did not have, MID-RUN, after the orchestrator has already
+ * handed it work that assumes workers. Refusing costs one round trip; clamping
+ * costs the whole run, and the orchestrator learns about it from silence.
+ *
+ * ⚠ **IT NAMES THE SETTING, because the caller cannot change it and the operator
+ * can.** `channelAgentChain` is a per-channel toggle on the operator's own
+ * Settings tab, and a refusal that did not name it leaves the caller with nothing
+ * to ask for. This is the SERVER half of a refusal the desktop already mints as
+ * `no-chain` — the difference is that this one happens whether or not a machine
+ * is listening.
+ */
+export class ChannelAgentChainForbiddenError extends ChannelError {
+  constructor() {
+    super(
+      "This channel does not allow launched agents to launch further agents " +
+        "(channelAgentChain). Re-issue without `chain`, or ask your operator to " +
+        "enable that one setting for this channel."
+    );
+  }
+}
+
 export class LaunchDirectiveNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Launch directive not found: ${ref}`);

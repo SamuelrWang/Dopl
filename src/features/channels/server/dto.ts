@@ -8,8 +8,11 @@ import type {
   ChannelMessageKind,
   ChannelRole,
   ChannelThread,
+  ChannelAgentPosture,
   ChannelVisibility,
   ChannelWakeVerdict,
+  LaunchMessageMode,
+  LaunchToolMode,
   MessageAuthorKind,
   NotifyScope,
   ThreadMode,
@@ -35,6 +38,14 @@ export type ChannelRow = {
   visibility: string;
   is_direct: boolean;
   direct_key: string | null;
+  // ── THE POSTURE CEILING (20260912120000, A9 — G6/G7) ────────────────────
+  // ⚠ OPTIONAL ON THE TYPE for `info_card`'s reason: these row shapes are CAST
+  // from PostgREST results, so a server reading a database whose migration has
+  // not landed sees no such key at all. `undefined` and `null` are one answer
+  // here — "no ceiling is recorded" — and neither is "unrestricted".
+  agent_tool_ceiling?: string | null;
+  agent_message_ceiling?: string | null;
+  agent_chain_allowed?: boolean | null;
   archived_at: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -199,6 +210,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * **THE CHANNEL'S POSTURE CEILING, READ OFF THE ROW** (2026-09-02, A9 — G6/G7).
+ *
+ * ⚠ ALWAYS AN OBJECT, NEVER `undefined` — `infoCard`'s discipline, for
+ * `infoCard`'s reason: a reader must not have to ask whether the field loaded.
+ * The three axes inside it are independently nullable, and `null` there is "no
+ * ceiling recorded", never "unrestricted".
+ *
+ * ⚠ **EXPORTED FOR `service-launch.ts`, WHICH HAS THE ROW AND NOT THE DTO.** The
+ * create already loaded the channel through `loadVisibleChannel`; building a
+ * whole `Channel` (which needs a membership STATE the clamp has no use for) to
+ * read three columns would be a second read of a fact already in hand. One
+ * reader of the columns, two callers.
+ */
+export function mapAgentPosture(row: ChannelRow): ChannelAgentPosture {
+  return {
+    tools: (row.agent_tool_ceiling ?? null) as LaunchToolMode | null,
+    messages: (row.agent_message_ceiling ?? null) as LaunchMessageMode | null,
+    chain: row.agent_chain_allowed ?? null,
+  };
+}
+
 export function mapChannelRow(
   row: ChannelRow,
   state: ChannelViewerState
@@ -240,6 +273,7 @@ export function mapChannelRow(
     // degrade to the card as shipped, because the facts under the card are
     // still there and a channel that cannot render is the worse answer.
     infoCard: parseInfoCard(row.info_card),
+    agentPosture: mapAgentPosture(row),
   };
 }
 

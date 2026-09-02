@@ -21,6 +21,7 @@
  */
 
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
+import { EMPTY_AGENT_POSTURE } from "@/features/channels/lib/agent-posture";
 import type {
   Channel,
   ChannelMember,
@@ -118,6 +119,7 @@ function channel(
     myFavoritedAt: null,
     onlineMemberCount: 3,
     infoCard: EMPTY_INFO_CARD,
+    agentPosture: EMPTY_AGENT_POSTURE,
     ...extra,
   };
 }

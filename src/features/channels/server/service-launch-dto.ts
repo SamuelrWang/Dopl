@@ -156,6 +156,19 @@ export function toDirective(
     appliedMessageMode: (row.applied_message_mode ??
       null) as LaunchDirective["appliedMessageMode"],
     appliedChain: row.applied_chain ?? null,
+    // ── THE SERVER'S RESOLVED POSTURE (2026-09-02, A9 — G6/G7/G8) ──────────
+    // ⚠ SAME `?? null` DISCIPLINE, SAME REASON, DIFFERENT MEANING FROM BOTH
+    // NEIGHBOURS: `null` here is "did not ask" (or, on `resolvedModel`, "not
+    // recognised"), never "unclamped". It is on the DTO because the CLAIM's
+    // answer IS this mapper's output — `main/launch-directive-wire.js ›
+    // directiveFrom` reads the camelCase spellings — and a resolved posture the
+    // desktop never saw would make the server's clamp cosmetic.
+    resolvedToolMode: (row.resolved_tool_mode ??
+      null) as LaunchDirective["resolvedToolMode"],
+    resolvedMessageMode: (row.resolved_message_mode ??
+      null) as LaunchDirective["resolvedMessageMode"],
+    resolvedChain: row.resolved_chain ?? null,
+    resolvedModel: row.resolved_model ?? null,
     status: expired ? "expired" : (row.status as LaunchDirective["status"]),
     refusalReason: row.refusal_reason as LaunchRefusalReason | null,
     agentId: row.agent_id,

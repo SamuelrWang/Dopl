@@ -248,6 +248,14 @@ const MANAGED_CHANNEL_FIELDS = [
   "topic",
   "visibility",
   "archived",
+  // ⚠ **THE POSTURE CEILING IS MANAGED, NOT MEMBER-GATED (2026-09-02, A9 —
+  // G6/G7)**, which is the OPPOSITE call from `infoCard` one field along. The
+  // card is a shared scratch surface about a relationship; this decides how much
+  // room somebody else's agent gets in this room, and widening it is a
+  // permission change. It is listed here rather than left to the subtraction
+  // below because the default this list produces — MANAGED — is the one it
+  // wants, and stating it is what keeps that from looking accidental.
+  "agentPosture",
 ] as const satisfies ReadonlyArray<keyof ChannelUpdateInput>;
 
 export async function updateChannel(
@@ -307,6 +315,16 @@ export async function updateChannel(
       throw new ChannelInfoCardTooLargeError(bytes, INFO_CARD_MAX_BYTES);
     }
     dbPatch.info_card = patch.infoCard;
+  }
+  // ⚠ **PER AXIS, AND `null` IS A VALUE.** Absent means "no opinion, leave it";
+  // `null` means "this channel records no ceiling on that axis any more", which
+  // is the only way a recorded ceiling can be removed. Collapsing the two —
+  // `patch.agentPosture.tools ?? undefined` — would make a ceiling permanent.
+  if (patch.agentPosture) {
+    const p = patch.agentPosture;
+    if (p.tools !== undefined) dbPatch.agent_tool_ceiling = p.tools;
+    if (p.messages !== undefined) dbPatch.agent_message_ceiling = p.messages;
+    if (p.chain !== undefined) dbPatch.agent_chain_allowed = p.chain;
   }
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);

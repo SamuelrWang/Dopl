@@ -305,6 +305,32 @@ export type LaunchDirective = {
   appliedToolMode: LaunchToolMode | null;
   appliedMessageMode: LaunchMessageMode | null;
   appliedChain: boolean | null;
+  /**
+   * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
+   * creation from the request and `Channel.agentPosture`.
+   *
+   * ⚠ **A THIRD GROUP, NOT A SPELLING OF EITHER OTHER ONE.** `startToolMode` is
+   * what was ASKED, `appliedToolMode` is what the MACHINE says it did, and this
+   * is what the SERVER allowed to be asked. G6's *"your operator's machine
+   * narrows what you ask; it never widens"* was enforced on the desktop only, so
+   * an offline or older one narrowed nothing at all — this is the half that
+   * happens whether or not a machine is listening.
+   * ⚠ **`null` STILL MEANS "DID NOT ASK" AND SURVIVES THE CLAMP.** A request that
+   * named no posture must stay unnamed all the way to the machine, which then
+   * applies the OPERATOR's own stored pair. Substituting the ceiling here would
+   * turn "whatever the operator chose" into "whatever this channel allows".
+   * ⚠ **`resolvedModel` IS AN ECHO, NOT A GATE.** It carries the canonical id a
+   * recognised request resolved to and `null` for one this build does not know —
+   * which is NOT a refusal: the raw value still reaches the machine, and a newer
+   * desktop may run a model this server predates. Read it BESIDE {@link model}:
+   * both null = nothing asked; `model` set and this null = asked and
+   * unrecognised, i.e. the machine will use its own default and now the caller is
+   * told (guardrail G8, whose whole complaint was the silence).
+   */
+  resolvedToolMode: LaunchToolMode | null;
+  resolvedMessageMode: LaunchMessageMode | null;
+  resolvedChain: boolean | null;
+  resolvedModel: string | null;
   /** The agent instance the desktop started. Set iff `status` is `launched` —
    *  it is what the requester types as `@<agentId>` to direct it. */
   agentId: string | null;

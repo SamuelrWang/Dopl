@@ -15,6 +15,7 @@ import {
   ChannelTaskNotInChannelError,
   ConsentAlreadyDecidedError,
   AgentDirectiveForeignError,
+  ChannelAgentChainForbiddenError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
   DirectionNotClaimableError,
@@ -97,6 +98,14 @@ function mapChannelError(err: unknown): HttpError | null {
   // orchestrator its own agent had vanished and send it to re-launch.
   if (err instanceof AgentDirectiveForeignError) {
     return new HttpError(403, "CHANNEL_AGENT_FOREIGN", err.message);
+  }
+  // ⚠ **400, NOT 403, AND THAT IS DELIBERATE (2026-09-02, A9 — G7).** Nothing is
+  // hidden and nobody is unauthorized: the caller is a member, the setting is
+  // this channel's, and the answer is "that combination is not available here".
+  // A 403 would read as "you may not launch", which is false and sends an
+  // orchestrator to ask for a permission rather than to drop one argument.
+  if (err instanceof ChannelAgentChainForbiddenError) {
+    return new HttpError(400, "CHANNEL_AGENT_CHAIN_FORBIDDEN", err.message);
   }
   // ⚠ 404 FOR "not yours", not 403 — see the error's own docblock. A 403 would
   // confirm the id exists, which is exactly the probe the single error prevents.
