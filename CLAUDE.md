@@ -74,10 +74,15 @@ Do this before reporting the work complete, not as a follow-up.
 **Five suites, TWO lints, TWO typechecks, and FIVE non-suite gates** — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
-⚠ This said **FIVE** non-suite gates until 2026-08-26, over a table of four. The five it counted
-included the desktop-ui typecheck, **which is one of the TWO typechecks** — a double count. The
-list below is "what gets forgotten", which is a different question from "how many non-suite gates
-there are", and the first item is on it precisely because it is a typecheck nobody remembers to run.
+⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
+trusting any number here.** (1) Until 2026-08-26 it said FIVE over a table of FOUR, because the five
+it counted included the desktop-ui typecheck, **which is one of the TWO typechecks** — a double
+count. (2) It then said FOUR until 2026-09-01, and that was an UNDERCOUNT: two real gates
+(`check-role-drift`, then `check-css-token-drift`) had shipped in CI with no doc row. It is FIVE
+today for a different reason than it was FIVE in August, and both times the fix was the same
+command. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
+many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
+nobody remembers to run, and it is NOT one of the five.
 
 The six things that are routinely forgotten (five non-suite gates, plus the second typecheck):
 
