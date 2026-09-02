@@ -45,8 +45,18 @@ const WS: WorkspaceListItem = {
   role: "owner",
 };
 
-/** The four tools A8 owns. ⚠ A NAME LEAVING THIS LIST IS A DECISION. */
-const OWNED_TOOLS = ["dopl_agent", "dopl_agent_admin", "dopl_kb", "dopl_kb_admin"];
+/**
+ * The tools A8 owns. ⚠ A NAME LEAVING THIS LIST IS A DECISION, and TWO LEFT ON
+ * 2026-09-02 AT WAVE A's INTEGRATION: A3 deleted `dopl_agent_admin` and
+ * `dopl_kb_admin` outright (every op on both was refused unconditionally), so
+ * there is no served prose left on them to scan. The rule they were here for
+ * did not relax — the surface that could break it got smaller.
+ *
+ * ⚠ THE `toBeDefined` FENCE IN {@link servedProse} IS WHAT MADE THAT VISIBLE
+ * rather than silently vacuous, and it is the reason this list may not simply be
+ * pruned when a scan goes quiet: a name here that nothing serves fails loudly.
+ */
+const OWNED_TOOLS = ["dopl_agent", "dopl_kb"];
 
 /** ⚠ Word-bounded: it must catch "team", "teams", "team-scoped" and "teammate"
  *  in served prose, and must NOT be a substring match that fires on unrelated

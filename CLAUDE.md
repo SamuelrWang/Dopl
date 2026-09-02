@@ -71,7 +71,7 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and SEVEN non-suite gates** (seven since 2026-09-02) — the full table is
+**Five suites, TWO lints, TWO typechecks, and EIGHT non-suite gates** (eight since 2026-09-02) — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
 ⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
@@ -80,13 +80,14 @@ it counted included the desktop-ui typecheck, **which is one of the TWO typechec
 count. (2) It then said FOUR until 2026-09-01, and that was an UNDERCOUNT: two real gates
 (`check-role-drift`, then `check-css-token-drift`) had shipped in CI with no doc row. It is FIVE
 today for a different reason than it was FIVE in August, and both times the fix was the same
-command. ⚠ **AND IT IS SEVEN SINCE 2026-09-02**, when `check-session-health-drift` and then
-`check-message-kind-drift` landed — both shipped WITH their doc rows, in the same change, which is
-the whole remedy this warning has been asking for. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
+command. ⚠ **AND IT IS EIGHT SINCE 2026-09-02**, when `check-session-health-drift`, then
+`check-message-kind-drift`, then the committed-`dist` check landed — all three shipped WITH their
+doc rows, in the same change, which is the whole remedy this warning has been asking for. Three in
+one day makes it the convention rather than the exception. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
 many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
 nobody remembers to run, and it is NOT one of the five.
 
-The eight things that are routinely forgotten (SEVEN non-suite gates since 2026-09-02, plus the
+The nine things that are routinely forgotten (EIGHT non-suite gates since 2026-09-02, plus the
 second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
@@ -128,6 +129,15 @@ second typecheck):
    three times (counting `check-role-drift`) is the process. **So re-derive this list rather than
    trusting it — it has been wrong twice and the command takes one second:
    `grep -n 'run:' .github/workflows/ci.yml`.**
+9. 🔒 **the committed-`dist` check** — `npm run build:packages`, then
+   `git status --porcelain -- 'packages/*/dist'`. **The committed `dist/` is what the app LOADS**
+   (`next.config.ts › serverExternalPackages` keeps both packages external), and until 2026-09-02
+   nothing asserted it was the build of `src/`. The A10 branch shipped a `dist/` that predated its
+   own source change and every gate stayed green: the suites import `src/`, both typechecks read
+   `src/`, and CI's `build-test` rebuilds into a **throwaway checkout**, so it proves the build
+   SUCCEEDS and never that the committed output MATCHES. ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**,
+   the third gate that day to do so (F-452). The build step is a precondition; the `git status`
+   is the gate.
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new

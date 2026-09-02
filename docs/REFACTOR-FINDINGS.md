@@ -7022,14 +7022,16 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Resolution: **taken.** Tombstones deleted; strip kept, with the distinction stated at both sites and in INVARIANTS §5 so the next reader of the spec row does not have to re-derive it.
 - Status: closed — recorded so the spec row is not re-read as unfinished work.
 
-### F-435 — the MCP tool's `kind` enum is the fifth statement of the message-kind set and is deliberately outside the drift gate (2026-09-02)
+### F-435 — ✅ RESOLVED 2026-09-02 (at Wave A integration) — the MCP tool's `kind` enum was the fifth statement of the message-kind set and stood outside the drift gate
 
-- Location: `packages/mcp-server/src/tools/channel-schema.ts` (the five postable kinds published to an agent) and `› channel-ops-write.ts › LIFECYCLE_KINDS` (the three refused from an agent credential), against `scripts/check-message-kind-drift.ts`, which reads neither.
+- Location: `packages/mcp-server/src/tools/channel-schema.ts` (the five postable kinds published to an agent, AS IT STOOD AT `80bcff51`) and the three lifecycle kinds refused from an agent credential, which live at `src/features/channels/server/service-writes-lifecycle.ts › LIFECYCLE_KINDS`, against `scripts/check-message-kind-drift.ts`, which reads neither.
 - Found during: building that gate (A7). Four statements are now held together; these two are not.
 - Severity: known gap, bounded — an MCP enum that drifts wider than the union publishes a kind the route refuses, which is a 400 with a message, not a silent wrong row. That is why it was acceptable to leave out and why it should not be left out forever.
 - ⚠ **THE REASON IS SCHEDULING, NOT PRINCIPLE.** The v2 architecture spec (§3 C21) deletes the `kind` parameter from that surface outright. A gate that read it would fail the change that removes it, and *a gate must not be the reason a deletion cannot land*. `LIFECYCLE_KINDS` is a partition of the same set (`full \ {message, task_progress, system}`) and has the same property.
 - Proposed resolution: when C21 lands, either the parameter is gone and this closes itself, or the surviving enum joins `FAMILIES` in the gate as a fifth site with its own subset relation. Whoever lands C21 decides; the gate's docblock names this finding.
-- Status: open, blocked on v2 C21.
+- Resolution: **it closed itself, exactly as the first branch predicted.** C21 landed in slice A6b (`b41e9971`): the `kind` parameter is DELETED from `channel-schema.ts` — a milestone is its own op and fixes the stored kind at the routing seam — so the fifth statement no longer exists and there is nothing for the gate to hold. The four sites `check-message-kind-drift.ts` covers are now the whole set.
+- ⚠ **AND THE FINDING IS WHY THE GATE DID NOT BLOCK THE DELETION**, which was its point: A7 deliberately left this enum out because *a gate must not be the reason a deletion cannot happen*. A fifth site added "for completeness" would have failed A6b and cost an argument.
+- Status: **resolved** — no gate change was needed, and none was made.
 ### F-440 — ✅ RESOLVED 2026-09-02 — INVARIANTS §5A stated the "Use in this channel" copy's visibility BOTH WAYS, six days apart, in one section
 
 - Location: `docs/INVARIANTS.md` §5A — the bullet *"USE IN THIS CHANNEL NOW COPIES AT `workspace`, NOT `private` (2026-08-27)"* and, nineteen bullets later in the same section, *"`visibility` IS FORCED TO `private`, NEVER CARRIED"*. The code is `src/features/agent-templates/lib/template-draft.ts › containerCopyDraft`.

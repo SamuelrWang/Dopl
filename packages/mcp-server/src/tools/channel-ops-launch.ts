@@ -28,7 +28,6 @@
 
 import type {
   DoplClient,
-  LaunchDirective,
   LaunchMessageMode,
   LaunchRefusalReason,
   LaunchToolMode,
@@ -36,7 +35,7 @@ import type {
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
 // ⚠ ONE write-result renderer, shared with `post` / `create_thread`.
-import { factsLine, postureFacts, type FactValue } from "./channel-facts";
+import { factsLine, postureFacts } from "./channel-facts";
 // ⚠ THE TENANCY SENTENCES LIVE WITH THE OTHER PROSE (T35), and the import
 // direction is ops → description because the description imports nothing from
 // here. FOUR surfaces state this one rule — this file's two create-time

@@ -266,9 +266,13 @@ jobs:
 
       - name: Fail if the committed dist/ is not the build of src/
         run: |
-          if [ -n "$(git status --porcelain packages)" ]; then
+          # ⚠ SCOPED TO dist/, not to `packages`: a clean checkout plus a build
+          # can only dirty generated output, and widening it would make an
+          # unrelated stray file read as a stale build.
+          DIRTY=$(git status --porcelain -- 'packages/*/dist')
+          if [ -n "$DIRTY" ]; then
             echo "::error::packages/*/dist is stale — run 'npm run build:packages' and commit the result."
-            git status --porcelain packages
-            git diff --stat -- packages
+            echo "$DIRTY"
+            git diff --stat -- 'packages/*/dist'
             exit 1
           fi
