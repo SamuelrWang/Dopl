@@ -6911,3 +6911,25 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution: (a) add an optional provenance field to `AgentTemplateCreateInput` / `KnowledgeBaseCreateInput` (zod + types, both trees), have the MCP copy ops SEND it, and refuse server-side unless `source.createdBy === ctx.userId` — failing closed when either side is null, mirroring `notOwnedRefusal`'s own rule; KEEP the MCP refusal; (b) accept the gap and say so in `copy-target.ts`, since the read was already fenced and the widening is bounded to content the caller could see.
 - Proposed resolution: defer — (a) is right but it is a contract change across two trees, not a hotfix.
 - Status: open.
+
+### F-426 — the MCP-v2 spec's A5 row contradicts its own rule in one sentence: `NotebookEdit` is CLASSIFIED (2026-09-02)
+
+- Location: the MCP/architecture v2 spec, WAVE A table, row A5 (held outside this tree, in the wave's own checkout) against `dopl-desktop-app/main/runtime/claude/tools.js › EDIT_TOOLS`.
+- Found during: building A5 (`v2/a5-builtin-bound`), while deriving `full`'s positive bound.
+- Severity: conflict — spec vs. spec, resolved in favour of the rule. No code is wrong; recorded so the wave's author can rule rather than discover it in review.
+- **The shape.** The row states the rule as *"remove ONLY tools `grantDecision` classifies as unclassified → gate in every mode including `bypass`"* and then names `NotebookEdit` in the removal list. `NotebookEdit` is a member of `EDIT_TOOLS`, which is contract A2's `accept_edits` set and a constituent of `AUTO_TOOLS`, so it is classified at `accept_edits`, `auto` and `bypass`. It cannot be removed under the rule the same sentence states. The other twelve names on that list are genuinely unclassified; this is the only one.
+- **What A5 shipped, and why.** The RULE, not the list: the bound is `BYPASS_TOOLS` minus the dopl names, so `admitted ⇔ classified` is structurally true rather than asserted, and `NotebookEdit` is offered. ⚠ Removing it would need a fourth hand-maintained list and would mint the drift class the derivation exists to prevent — a name the mode picker says runs while the model never sees it.
+- ⚠ **The cost of the other answer is small and is the reason this is a finding rather than a debate**: `NotebookEditInput` is one of the smaller built-in schemas, so the token argument does not favour removing it either.
+- Proposed resolution: (a) correct the A5 row to drop `NotebookEdit` from its removal list — the rule is right and the list is a slip; (b) if the intent really was "no notebook tooling on a channel agent", that is a CLASSIFICATION decision (drop `NotebookEdit` from `EDIT_TOOLS` and `NotebookRead` from `BYPASS_READS`), and it changes what `accept_edits` means, so it needs saying out loud.
+- Status: open — (a) recommended.
+
+### F-427 — two authorities disagree about what `options.tools = []` means, and the tree believes the older one (2026-09-02)
+
+- Location: `docs/INVARIANTS.md` §11 (the triage FENCE bullet) and `dopl-desktop-app/test/wake-triage-call.test.mjs` (*"`tools: []` would mean NO BOUND — it must not be set"*), against the bundled `@anthropic-ai/claude-agent-sdk` type declarations — the `tools` option's own docblock, SDK 0.3.220 / claude 2.1.220.
+- Found during: A5, reading the SDK's option contract before setting `options.tools` for the first time on the `full` profile.
+- Severity: conflict — a documented contract vs. a tree-wide belief. **Nothing depends on the difference today**, which is why this is a finding and not a fix.
+- **The shape.** The bundled SDK's own type declarations document the option as: *"`[]` (empty array) — Disable all built-in tools"*. This tree states the opposite in two places and reasons from it: the triage lane deliberately leaves `tools` ABSENT and fences with a denying `canUseTool` *because* the positive bound *"cannot express"* an empty offer. If the declaration is right, `tools: []` expresses it exactly, and the fence's own comment is teaching the next reader something false.
+- ⚠ **NEITHER SIDE IS SAFE TO ASSUME AND THAT IS THE POINT.** The tree's claim is unattributed and undated; the declaration file is generated documentation, not a measurement of the bundled binary — which is precisely the class where this repo has been burned before (the SDK-lane MCP cell said "do not load" while nine servers loaded, F-268). **Only the child's own `init` message settles it.**
+- ⚠ **A5 IS UNAFFECTED EITHER WAY.** `launch-spec.js` sets the field only when the list is non-empty and no profile's bound is empty, so no lane passes `[]`. `test/session-builtin-bound.test.mjs` pins that a bound may never empty itself, for exactly this reason.
+- Proposed resolution: measure it — run the recorded harness from `claudeai-connector-lane.test.mjs`'s header with `--tools ''` / an empty `tools` and read the init message's tool list; then correct whichever of the two is wrong, and re-argue the triage fence's comment on the answer. **Until then change neither** — the denying gate is the real fence there and holds under both readings.
+- Status: open.
