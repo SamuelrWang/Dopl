@@ -177,7 +177,7 @@ operatorOnline) {
  * `read_sessions` page (~800 chars, on a call an orchestrator makes in a loop).
  * It was STANDING doctrine about the columns — the same on every page — so it
  * moved to `channel-doctrine.ts`'s READING "read_sessions" section, behind
- * `op="help"` and the `dopl://doctrine/channels` resource. The LEGEND above
+ * `op="rooms" action="help"` and the `dopl://doctrine/channels` resource. The LEGEND above
  * stayed, because it decodes the cells THIS page actually contains and is
  * conditional on the page containing a hedged row.
  *

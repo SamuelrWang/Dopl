@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="post" — send a message or a structured activity event.
+ * `dopl_channel` op="send" — send a message or a structured activity event.
  * Resolve the addressing, make the call, map the 4xx, hand the outcome to the
  * modules that narrate it.
  *
@@ -60,7 +60,7 @@ interface PostOptions {
     /**
      * ⚠ **NOT A CALLER'S ARGUMENT ANY MORE** (C12, 2026-09-02). `kind` left the
      * published shape — three of its five values were refused, one had its own op
-     * and one was the default — and the only writer left is `op="milestone"`,
+     * and one was the default — and the only writer left is `op="send" with kind="milestone"`,
      * which fixes it to `task_progress` at the routing seam.
      */
     kind?: ChannelMessageInput["kind"];
@@ -81,7 +81,7 @@ interface PostOptions {
      */
     runtime?: string | null;
     /**
-     * THE STRUCTURED ESCALATION PAYLOAD, set only by `op="escalate"`.
+     * THE STRUCTURED ESCALATION PAYLOAD, set only by `op="send" with kind="decision"`.
      *
      * ⚠ IT RIDES THIS OP RATHER THAN GROWING A SECOND DELIVERY PATH — `milestone`'s
      * precedent exactly. What `escalate` adds over `post` is a validated payload

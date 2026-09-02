@@ -37,7 +37,7 @@ export declare function addressableHandle(name: string): string | null;
  * ⚠ `SESSION_HANDLE_NOTE` USED TO LIVE HERE — ~1.1k characters on how a handle is
  * spent, rendered under EVERY `read_sessions` page, to a reader that calls that
  * op in a loop. It moved to `channel-doctrine.ts`'s YOUR OWN AGENTS section
- * (T10, 2026-09-02), reached with `dopl_channel(op="help")` or the
+ * (T10, 2026-09-02), reached with `dopl_channel(op="rooms", action="help")` or the
  * `dopl://doctrine/channels` resource. **The text was not softened: THE THREE
  * LIMITS travelled with it verbatim**, and `channel-law.test.ts` pins them there.
  *

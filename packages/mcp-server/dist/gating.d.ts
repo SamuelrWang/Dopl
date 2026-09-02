@@ -99,6 +99,26 @@ export declare function offeredToolsFor(claimed: string | null | undefined): Rea
  * `dopl.read`-only token can write through a non-admin tool.
  */
 export declare const WRITE_OPS: Record<string, Set<string>>;
+/**
+ * Does `op` — the key {@link Gates.requestedOp} produced — write?
+ *
+ * ⚠ **TWO GRAINS, ON PURPOSE.** A bare entry (`manage`) gates the whole op; a
+ * dotted one (`rooms.open`) gates one action and leaves its siblings readable.
+ * `rooms` needs the fine grain — four of its actions read — and `manage` needs
+ * the coarse one, because listing five actions that all write is five chances to
+ * add a sixth and forget.
+ *
+ * ⚠ **THE BARE-CALL ARM FAILS CLOSED, AND THAT IS THE WHOLE REASON THIS IS A
+ * FUNCTION.** A sub-actioned call arrives as `rooms.open`; a call that named NO
+ * action arrives as bare `rooms`, and it must not read as "no matching write
+ * entry, therefore a read". The handler refuses a missing `action` before any
+ * write happens, so nothing is lost by refusing it here too — and refusing it
+ * here is what keeps the gate's answer independent of a handler's discipline.
+ *
+ * ⚠ The scan is over ONE tool's set, at most a dozen short strings, on a path
+ * that already does a `Set.has`. It is not worth an index.
+ */
+export declare function isWriteOp(name: string, op: string): boolean;
 /** The four gates, bound to one session's write capability. */
 export interface Gates {
     /**

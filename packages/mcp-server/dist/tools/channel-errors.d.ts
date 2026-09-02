@@ -2,7 +2,7 @@
  * `dopl_channel` API-ERROR CLASSIFICATION — ⚠ what a 4xx MEANS is read off the
  * error CODE, never guessed from the status. A bare `status === 400` branch
  * blames whichever param happened to be set, so an over-length title comes back
- * as "invite them first" and `op="invite"` then answers "already a member".
+ * as "invite them first" and `op="rooms" action="invite"` then answers "already a member".
  *
  * `DoplApiError` parses `{ error: { code, message } }` into `.code` /
  * `.apiMessage` (packages/dopl-client/src/errors.ts) and every channels-route

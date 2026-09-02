@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_channel` op="end_agent" / op="rename_agent" — **MANAGE THE OPERATOR'S OWN
+ * `dopl_channel` op="manage" action="end" / op="manage" action="rename" — **MANAGE THE OPERATOR'S OWN
  * RUNNING AGENTS** (2026-09-01, Samuel: *"I need you to build out dopl mcp being
  * able to end agents. Dopl MCP need to be able to do all that stuff"*).
  *
@@ -12,7 +12,7 @@
  *
  * **THESE OPS ASK. THEY DO NOT DO ANYTHING THEMSELVES.** Agents live in a desktop
  * main process no server can reach; what crosses the wire is a row in the SAME
- * mailbox `op="launch_agent"` writes, which the operator's machine polls, claims
+ * mailbox `op="manage" action="launch"` writes, which the operator's machine polls, claims
  * and answers. `channel-ops-launch.ts` states the three consequences at length
  * and all three hold here — a refusal is a normal outcome, a timeout is not a
  * failure, and "ended" means A MACHINE SAID SO.
@@ -28,7 +28,7 @@
  *     not running any more, and an agent that finished is the ordinary cause. For
  *     an END that is the outcome the caller wanted, reached by another route, and
  *     the sentence says so rather than reading as a fault.
- *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `read_sessions`**, which is
+ *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `status`**, which is
  *     also where the caller got the id — so every terminal sentence points back
  *     at it.
  */
@@ -111,7 +111,7 @@ const RETRY_ADVICE = {
  *
  * ⚠ IT NAMES THE FACT PLAINLY RATHER THAN 404-ING, and the server's error
  * docblock argues why that discloses nothing: the caller already proved
- * membership of the channel, inside which `op="members"` and `op="read_sessions"`
+ * membership of the channel, inside which `op="rooms" action="members"` and `op="status"`
  * are readable anyway. A 404 here would tell an orchestrator its OWN agent had
  * vanished and send it to re-launch — the expensive wrong answer.
  *
@@ -125,7 +125,7 @@ function foreignAgent(agentId, verb) {
     return (0, respond_1.err)([
         `Nothing was ${verb} — agent \`${agentId}\` is ANOTHER MEMBER'S, and **no request was filed**.`,
         `You can only manage agents running on YOUR OWN operator's machine. A peer's agent appears in a channel as a handle and is not reachable from here at all — there is no permission that would change that, so do not look for another route and do not ask anyone to grant one.`,
-        `dopl_channel(op="read_sessions") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
+        `dopl_channel(op="status") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
     ].join("\n"));
 }
 /**
@@ -139,7 +139,7 @@ function foreignAgent(agentId, verb) {
  * RE-POSTURE the RENAME's answer for three — a conditional over a closed set is
  * the shape that goes wrong the day the set grows, failing nothing on the way.
  * ⚠ AND THE THREE ANSWERS GENUINELY DIFFER. An END is confirmable: the agent
- * disappearing from `read_sessions` is the answer. A RENAME is not — it is
+ * disappearing from `status` is the answer. A RENAME is not — it is
  * display-only and lives on the operator's machine, so that listing keeps
  * printing the id. A POSTURE is not either, for the same reason, and it is the
  * one where believing otherwise is dangerous: an agent whose re-posture never
@@ -161,7 +161,7 @@ const VERB_PAST = {
     set_agent_mode: "re-postured",
 };
 const PENDING_CONFIRM = {
-    end: "read_sessions",
+    end: "status",
     rename: "none",
     set_agent_mode: "none",
 };

@@ -35,7 +35,7 @@ const channel_render_threads_1 = require("./channel-render-threads");
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 const channel_addressing_1 = require("./channel-addressing");
 // ⚠ THE ONE LINE A READ RESULT SPENDS ON THE RULES. Every standing paragraph
-// these ops used to close with is in `channel-doctrine.ts`, behind `op="help"`
+// these ops used to close with is in `channel-doctrine.ts`, behind `op="rooms" action="help"`
 // and the `dopl://doctrine/channels` resource.
 const channel_doctrine_1 = require("./channel-doctrine");
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
@@ -47,7 +47,7 @@ const NO_ID = "(unreadable id)";
 async function opList(client) {
     const channels = await client.listChannels();
     if (channels.length === 0) {
-        return (0, respond_1.ok)('No channels yet. Create one with dopl_channel(op="open", name="...").');
+        return (0, respond_1.ok)('No channels yet. Create one with dopl_channel(op="rooms", action="open", name="...").');
     }
     // ⚠ NO PER-RESULT SECURITY BANNER (T11, 2026-09-02). The framing did not go
     // away — it moved to CHANNEL_DESCRIPTION's own SECURITY paragraph, which is
@@ -57,7 +57,7 @@ async function opList(client) {
     const lines = [`## Channels — ${channels.length}\n`];
     for (const c of channels)
         lines.push((0, channel_render_1.formatChannelLine)(c));
-    lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="post"; watch for new messages with op="await".');
+    lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; watch for new messages with op="read" with wait_ms.');
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
@@ -146,13 +146,13 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread, form
     // question the caller is about to ask — "is this even a thread?" — and the
     // op it replaced would have answered it.
     const card = scope ? await threadHeader(client, ref, scope, selfUserId) : [];
-    const watch = `dopl_channel(op="await", channel="${ref}", since=`;
+    const watch = `dopl_channel(op="read" with wait_ms, channel="${ref}", since=`;
     if (messages.length === 0) {
         const sinceNote = since !== undefined ? ` after seq ${since}` : "";
         if (scope) {
             return (0, respond_1.ok)([
                 ...card,
-                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="list_threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); await is channel-wide and takes no thread.`,
+                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); await is channel-wide and takes no thread.`,
             ].join("\n"));
         }
         return (0, respond_1.ok)(`No messages in **${ref}**${sinceNote}. Watch for new ones with ${watch}${since ?? 0}).`);
@@ -261,7 +261,7 @@ async function opReadSessions(client, ref, format) {
     // that decodes THIS page's own cells and it is conditional on the page
     // actually containing a hedged row. The other two are standing DOCTRINE about
     // the surface rather than a report on these rows: they moved to
-    // dopl://doctrine/channels and dopl_channel(op="help"), which is where a
+    // dopl://doctrine/channels and dopl_channel(op="rooms", action="help"), which is where a
     // reader who needs them can spend one call, instead of every reader paying
     // for them on every call.
     const lines = [
@@ -316,7 +316,7 @@ async function opListThreads(client, ref, selfUserId = null) {
         throw e;
     }
     if (threads.length === 0) {
-        return (0, respond_1.ok)(`No threads in **${ref}**. Open one with dopl_channel(op="create_thread", channel="${ref}", title="...", body="...", to="...").`);
+        return (0, respond_1.ok)(`No threads in **${ref}**. Open one with dopl_channel(op="send", channel="${ref}", thread="new", summary="...", body="...", to="...").`);
     }
     const lines = [
         `## ${ref} — ${threads.length} thread${threads.length === 1 ? "" : "s"}, most recently active first\n`,

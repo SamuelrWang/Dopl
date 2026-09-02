@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_channel` op="escalate" — ASK A HUMAN A STRUCTURED QUESTION
+ * `dopl_channel` op="send" with kind="decision" — ASK A HUMAN A STRUCTURED QUESTION
  * (Samuel's ruling, 2026-08-31: agents escalate as STRUCTURE, not prose walls).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
@@ -56,10 +56,10 @@ async function opEscalate(client, channelRef, escalation, opts = {}) {
     // wrong and nothing about which direction to move, and the two directions have
     // opposite remedies: one option means DO IT, seven means COLLAPSE THEM.
     if (escalation.options.length < MIN_OPTIONS) {
-        return (0, respond_1.err)(`Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with dopl_channel(op="milestone", thread="<id>", body="<one line>"). If you are asking permission for that one path, the second option is what happens if they say no — write it out.`);
+        return (0, respond_1.err)(`Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with dopl_channel(op="send", kind="milestone", thread="<id>", body="<one line>"). If you are asking permission for that one path, the second option is what happens if they say no — write it out.`);
     }
     if (escalation.options.length > MAX_OPTIONS) {
-        return (0, respond_1.err)(`Nothing was posted. An escalation offers at most ${MAX_OPTIONS} options and you gave ${escalation.options.length} — past that it is the wall of prose this op exists to replace, with numbers on it. Collapse the near-duplicates into the decision they actually differ on, and put what you dropped into \`context\` in one line if it matters.`);
+        return (0, respond_1.err)(`Nothing was posted. An escalation offers at most ${MAX_OPTIONS} options and you gave ${escalation.options.length} — past that it is the wall of prose this op exists to replace, with numbers on it. Collapse the near-duplicates into the decision they actually differ on, and put what you dropped into the \`body\` in one line if it matters.`);
     }
     // ⚠ REFUSED, NEVER DROPPED. A dropped recommendation posts a card that
     // recommends nothing over an agent that believes it recommended something —
@@ -75,7 +75,7 @@ async function opEscalate(client, channelRef, escalation, opts = {}) {
     // not know `metadata.escalation` — op="read", a plain browser, the pop-out,
     // and any desktop older than the card. See `channel-escalate-render.ts`.
     const body = (0, channel_escalate_render_1.escalationBody)(escalation);
-    // ⚠ DELEGATES rather than growing a second delivery path — `op="milestone"`'s
+    // ⚠ DELEGATES rather than growing a second delivery path — `op="send" with kind="milestone"`'s
     // precedent. `kind` is left at the default `message` and MUST stay there:
     // `dopl-desktop-app/main/targeting.js › classify` returns `ignore` for every
     // other kind, so a card on one could never notify the human it is asking.

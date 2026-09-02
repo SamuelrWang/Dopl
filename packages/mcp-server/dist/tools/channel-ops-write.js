@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_channel` op="post" — send a message or a structured activity event.
+ * `dopl_channel` op="send" — send a message or a structured activity event.
  * Resolve the addressing, make the call, map the 4xx, hand the outcome to the
  * modules that narrate it.
  *
@@ -33,7 +33,7 @@ exports.opPost = opPost;
 const respond_1 = require("./respond");
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
 // FIELDS, not prose; the standing rules they used to restate live once in
-// `channel-doctrine.ts`, behind `op="help"`.
+// `channel-doctrine.ts`, behind `op="rooms" action="help"`.
 const channel_facts_1 = require("./channel-facts");
 // "Did it thread?" — the question a sender cannot otherwise settle.
 const channel_post_linkage_1 = require("./channel-post-linkage");
@@ -141,7 +141,7 @@ async function opPost(client, channelRef, body, opts = {}) {
         if ((0, channel_errors_1.isForbidden)(e)) {
             const kind = (0, channel_errors_1.classifyForbidden)(e);
             // ⚠ THE BELT FOR A BYPASSED BUILD. No caller can name a lifecycle kind
-            // any more — `kind` left the published shape (C12) and only op="milestone"
+            // any more — `kind` left the published shape (C12) and only op="send" with kind="milestone"
             // sets one, to the single value the lane allows — so this is unreachable
             // through the tool. It is answered with the RULE rather than dropped into
             // a membership arm, because the one thing it must never read as is "you

@@ -13,6 +13,16 @@ const channel_agent_id_1 = require("./channel-agent-id");
 const channel_errors_1 = require("./channel-errors");
 const channel_framing_1 = require("./channel-framing");
 /**
+ * ⚠ **UNREFERENCED SINCE 2026-09-02 (slice B8, Samuel's ruling B8).** Pings fold
+ * into a directed `send`: a directed send IS the delivery record, and its
+ * `delivery=` is the ack this mailbox row used to be. Both op names now answer a
+ * one-line redirect (`channel-retired-ops.ts`), so nothing routes here — and the
+ * table these handlers read (`20260907130000_channel_pings.sql`) was DELETED
+ * UNAPPLIED, so nothing ever could. ⚠ **THE MODULE AND ITS SUITE ARE SLICE
+ * B16'S TO DELETE**, with `channel-ops-await*.ts`, one release after the desktop
+ * version floor stops calling either name; deleting them here would take a
+ * retirement out of the slice that owns it.
+ *
  * THE "NEEDS YOU" SIGNAL — `op="ping"` and `op="pings"` (2026-09-01,
  * `docs/specs/needs-you-ping.md`).
  *
@@ -88,7 +98,7 @@ async function opPing(client, channelRef, kind, body,
 /** WHO has to act — `"desktop"`, `@agent-<id>`, or a member ref. */
 recipientRef, thread) {
     if (body.length > MAX_PING_BODY) {
-        return (0, respond_1.err)(`A ping body is capped at ${MAX_PING_BODY} characters and yours is ${body.length}. That bound is the point of the op: a ping is a SIGNAL, and the thread you point at is where the report goes. Post the detail with op="post" (thread=<id>), then ping one line pointing at it.`);
+        return (0, respond_1.err)(`A ping body is capped at ${MAX_PING_BODY} characters and yours is ${body.length}. That bound is the point of the op: a ping is a SIGNAL, and the thread you point at is where the report goes. Post the detail with op="send" (thread=<id>), then ping one line pointing at it.`);
     }
     const recipient = classifyRecipient(recipientRef);
     // ⚠ PRE-RESOLVED, like the direct and launch ops and unlike the hot read
@@ -116,7 +126,7 @@ recipientRef, thread) {
             // `channel-errors.ts` states. An unrecognized 400 falls through to the
             // server's own neutralized detail rather than to a confident wrong reason.
             if ((0, channel_errors_1.classifyBadRequest)(e) === "addressee_not_member") {
-                return (0, respond_1.err)(`Nobody by that reference is on ${label}. A ping's to= names a MEMBER of the channel — check dopl_channel(op="members", channel="${channelRef}") — or, if you meant your own operator's side, send recipient="desktop" instead.`);
+                return (0, respond_1.err)(`Nobody by that reference is on ${label}. A ping's to= names a MEMBER of the channel — check dopl_channel(op="rooms", action="members", channel="${channelRef}") — or, if you meant your own operator's side, send recipient="desktop" instead.`);
             }
             return (0, respond_1.err)(`That ping was refused${(0, channel_errors_1.serverDetail)(e)}`);
         }
@@ -134,7 +144,7 @@ recipientRef, thread) {
         // outvotes the description (INVARIANTS §10). The failure this prevents is
         // an agent pinging repeatedly because it expected a reply to arrive.
         "⚠ A ping is not a message: it is in NO transcript, it will never come back on an op=\"await\", and nothing replies to it. If you need an answer, the answer comes as a normal message on the channel — keep awaiting there.",
-        `⚠ ping seq ${ping.seq} is a PING cursor and is not a message seq. Never pass it to op="read" or op="await".`,
+        `⚠ ping seq ${ping.seq} is a PING cursor and is not a message seq. Never pass it to op="read" or op="read" with wait_ms.`,
     ].join("\n"));
 }
 /** One inbox row. ⚠ Bodies are counterparty-written, so every one is
@@ -169,6 +179,6 @@ async function opReadPings(client, opts = {}) {
         `${channel_framing_1.UNTRUSTED_BODY_HEADER}\n`,
         ...(pings.length === 0 ? [] : pings.map(formatPing)),
         "",
-        '⚠ A ping is in NO transcript: op="read" and op="await" will never show you one, and this op is the only place they exist. It hands back the newest page every time and takes no cursor, so a signal you have already acted on can appear again — the seq is how you tell.',
+        '⚠ A ping is in NO transcript: op="read" and op="read" with wait_ms will never show you one, and this op is the only place they exist. It hands back the newest page every time and takes no cursor, so a signal you have already acted on can appear again — the seq is how you tell.',
     ].join("\n"));
 }

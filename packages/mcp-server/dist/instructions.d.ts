@@ -15,7 +15,7 @@
  * ⚠ SO THIS FILE CARRIES THE CONTRACT AND NOTHING ELSE: who the caller is, how
  * targeting works, which tool owns which domain, and WHERE the doctrine lives.
  * A rule that needs a paragraph belongs to the surface that enforces it — a
- * tool description, a doctrine resource, an `op="help"` — where it is PULLED by
+ * tool description, a doctrine resource, a `rooms(action="help")` — where it is PULLED by
  * the one agent that needs it rather than PUSHED at every agent that does not.
  * `instructions-budget.test.ts` is the gate, and it only moves down.
  *

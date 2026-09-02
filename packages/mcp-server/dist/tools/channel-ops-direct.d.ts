@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="direct_agent" / op="read_directions" — THE PRIVATE DIRECT
+ * `dopl_channel` op="manage" action="direct" / op="status" — THE PRIVATE DIRECT
  * LANE (Samuel's ruling, 2026-08-31).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
@@ -23,7 +23,7 @@
  *      nothing can tell the two apart afterwards.
  *   4. **THE REPLY IS THE TURN'S FINAL TEXT AND NOTHING ELSE.** Not its narration,
  *      not its tool calls, not what it is doing now. An orchestrator that needs
- *      the latter wants `op="read_sessions"`.
+ *      the latter wants `op="status"`.
  *
  * ⚠ A DIRECTION IS NOT A MESSAGE (INVARIANTS §5) — no `seq`, so it can never end
  * an `await`. That is why this op holds on the ROW, exactly as `launch_agent` does.

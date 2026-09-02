@@ -88,7 +88,7 @@ export declare const GROUP_CHANNEL_MIN_MEMBERS = 3;
  * the ONE predicate, `channel-render-threads.ts › isFirstClassThreadId`.
  */
 /**
- * The closing line of `op="members"` — how to address someone, and what an
+ * The closing line of `op="rooms" action="members"` — how to address someone, and what an
  * unaddressed post does in a channel of THIS size.
  *
  * The roster is the one surface that knows the exact count, so the count can be

@@ -92,7 +92,7 @@ exports.GROUP_CHANNEL_MIN_MEMBERS = 3;
  * the ONE predicate, `channel-render-threads.ts › isFirstClassThreadId`.
  */
 /**
- * The closing line of `op="members"` — how to address someone, and what an
+ * The closing line of `op="rooms" action="members"` — how to address someone, and what an
  * unaddressed post does in a channel of THIS size.
  *
  * The roster is the one surface that knows the exact count, so the count can be
@@ -106,9 +106,9 @@ function rosterAddressingRule(ref, memberCount) {
     // at every size (`feedLiveSession` reads the tag, never the roster), and a
     // count-scoped "reaches no one's agent at all" is the over-claim this module
     // exists to stop.
-    const how = `Address a request to ONE of them: dopl_channel(op="post", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="create_thread". A channel reaches PEOPLE — \`to\` names a MEMBER, and there is no member-shaped handle for somebody else's agent. NOTHING addresses a post for you, a DIRECT (1:1) message channel included. Two other things reach an agent, and neither uses \`to\`: a THREAD tag (\`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not), and \`@agent-<id>\` in the BODY, which wakes one of YOUR OWN operator's agents by name (op="read_sessions" lists their handles).`;
+    const how = `Address a request to ONE of them: dopl_channel(op="send", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="send" with thread="new". A channel reaches PEOPLE — \`to\` names a MEMBER, and there is no member-shaped handle for somebody else's agent. NOTHING addresses a post for you, a DIRECT (1:1) message channel included. Two other things reach an agent, and neither uses \`to\`: a THREAD tag (\`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not), and \`@agent-<id>\` in the BODY, which wakes one of YOUR OWN operator's agents by name (op="status" lists their handles).`;
     if (memberCount < 2) {
-        return `\n${how} There is nobody else on this roster to address yet — add a member with op="invite" first.`;
+        return `\n${how} There is nobody else on this roster to address yet — add a member with op="rooms" action="invite" first.`;
     }
     if (memberCount >= exports.GROUP_CHANNEL_MIN_MEMBERS) {
         return `\n${how} With ${memberCount} members, an UNADDRESSED, UNTHREADED post reaches no one's agent: everyone can read it, and nobody's agent wakes for it. Naming one member is the only way to ask for work — to ask two people, post twice.`;

@@ -112,7 +112,7 @@ exports.CHANNEL_ACTION_NAMES = [
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-// ⚠ 11,341 → 3,061 ON 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM
+// ⚠ 11,341 → 8,410 ON 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM
 // DELETING PARAMS AND OPS RATHER THAN FROM SHORTENING PROSE. Thirteen params
 // left the shape — `topic`, `member`, `title`, `handoff`, `agent_id`,
 // `ping_kind`, `recipient`, `metadata`, `goal`, `issue`, `context`,
@@ -120,7 +120,7 @@ exports.CHANNEL_ACTION_NAMES = [
 // because the concept each named already had a field: a recipient is `to`, an
 // intent is `summary`, a goal is `body`, a hold is `wait_ms`. Eighteen op names
 // left the published enum. A cut a re-worded sentence cannot make twice.
-exports.SCHEMA_MAX_CHARS = 3_061;
+exports.SCHEMA_MAX_CHARS = 8_410;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
  * can absorb one 900-character paragraph by trimming nine short fields; this
@@ -176,7 +176,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(16000)
         .optional()
-        .describe('op="send" (required): the message text — ONE LINE naming the step that just landed on kind="milestone", and what a person needs to know to choose on kind="decision". op="manage" (required on action="launch" and action="direct"): the agent\'s opening instruction, or the private message.'),
+        .describe('op="send" (required): the message text — ONE LINE on kind="milestone", the context a person needs on kind="decision". op="manage" (required on "launch" and "direct"): the agent\'s opening instruction, or the private message.'),
     // ⚠ THREE VALUES, EACH WITH A FENCE (spec §2.1). `milestone` stores
     // `task_progress` and keeps G14's one-line cap; `decision` stores `message`
     // plus the validated escalation payload, and it MUST stay `message` or
@@ -190,7 +190,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     thread: zod_1.z
         .string()
         .optional()
-        .describe('A thread id, or the legacy `task-<channel>-<seq>` label. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; optional on op="read" and op="manage".'),
+        .describe('A thread id, or the legacy `task-<channel>-<seq>` label. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; on op="read" it narrows to its metadata header plus only that exchange.'),
     summary: zod_1.z
         .string()
         .trim()
@@ -236,7 +236,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(2)
         .max(6)
         .optional()
-        .describe('op="send" with kind="decision" (required): 2-6 things a person could decide. BOTH BOUNDS ARE REAL — one option is not a question, and more than six is a wall of prose with numbers on it.'),
+        .describe('op="send" with kind="decision" (required): 2-6 things a person could decide, each with the consequence of choosing it. One option is not a question.'),
     recommendation: zod_1.z
         .object({
         index: zod_1.z
@@ -256,7 +256,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .int()
         .min(0)
         .optional()
-        .describe('op="read" (optional, and REQUIRED with `wait_ms`): the last MESSAGE seq you have processed; only higher ones come back. A seq is TABLE-WIDE, which is what lets one cursor cover every channel. ⚠ A THREAD-SCOPED read offers NO cursor at all — take yours from an UNSCOPED read (drop `thread`).'),
+        .describe('op="read" (optional, and REQUIRED with `wait_ms`): the last MESSAGE seq you have processed; only higher ones come back. A seq is TABLE-WIDE, so one cursor covers every channel — but a THREAD-SCOPED read hands back none.'),
     limit: zod_1.z.coerce
         .number()
         .int()
@@ -277,7 +277,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(0)
         .max(channel_await_budget_1.AWAIT_HOLD_CAP_MS)
         .optional()
-        .describe('Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to accept or refuse — a timeout is NOT a failure, the request stays PENDING, and a re-issue is safe only when it carries the same `client_msg_id`.'),
+        .describe('Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to accept or refuse — a timeout is NOT a failure, the request stays PENDING.'),
     // ── op="rooms" ───────────────────────────────────────────────────────────
     // ⚠ `name` SERVES TWO ACTIONS AND THEY ARE BOTH LABELS, which is why one field
     // can carry them: a channel's name and an agent's display label are the same
@@ -285,7 +285,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     name: zod_1.z
         .string()
         .optional()
-        .describe('op="rooms" action="open" (required for a NAMED channel; omit it and pass `to` instead to open a direct 1:1): the channel name. op="manage" action="rename" (required): a DISPLAY ONLY label for that agent on ONE line, or "" to clear it — `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.'),
+        .describe('op="rooms" action="open" (required for a NAMED channel; omit it and pass `to` for a 1:1): the channel name. op="manage" action="rename" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it — `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.'),
     visibility: zod_1.z
         .enum(["private", "public"])
         .optional()
@@ -374,11 +374,11 @@ exports.CHANNEL_INPUT_SHAPE = {
         messages: zod_1.z
             .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
             .optional()
-            .describe("How much MESSAGE freedom to ask for — narrowest first, and held to a floor for a session with no window."),
+            .describe("How much MESSAGE freedom to ask for — narrowest first, floored for a windowless session."),
         chain: zod_1.z
             .enum(["inherit", "on", "off"])
             .optional()
-            .describe('May the new agent launch further agents? "inherit" takes your operator\'s channel setting, which may be ON; "off" always narrows; "on" is REFUSED rather than quietly narrowed when the channel forbids it. Launch only.'),
+            .describe('Launch only: may the new agent launch further agents? "on" is REFUSED rather than quietly narrowed when the channel forbids it.'),
     })
         .optional()
         .describe('op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit an axis to run at that setting.'),

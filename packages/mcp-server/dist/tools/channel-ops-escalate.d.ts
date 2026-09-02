@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="escalate" — ASK A HUMAN A STRUCTURED QUESTION
+ * `dopl_channel` op="send" with kind="decision" — ASK A HUMAN A STRUCTURED QUESTION
  * (Samuel's ruling, 2026-08-31: agents escalate as STRUCTURE, not prose walls).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan

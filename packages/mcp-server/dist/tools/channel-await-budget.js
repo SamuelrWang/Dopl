@@ -1,6 +1,6 @@
 "use strict";
 /**
- * THE DEADLINE CHAIN for `dopl_channel(op="await")` — every clock that can end
+ * THE DEADLINE CHAIN for `dopl_channel(op="read" with wait_ms)` — every clock that can end
  * one hold, and the numbers chosen to sit under them. The op lives in
  * `channel-ops-await.ts`.
  *

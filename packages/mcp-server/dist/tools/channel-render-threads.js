@@ -181,9 +181,9 @@ function moreNote(total, shown) {
 }
 function legendThreads(entries, ref) {
     const shown = entries.slice(0, THREAD_LEGEND_MAX).map(legendEntry);
-    return `Threads above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. Continue one with dopl_channel(op="post", channel="${ref}", thread="<the full id>") — a post with no thread reads as a NEW request on the other side.`;
+    return `Threads above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. Continue one with dopl_channel(op="send", channel="${ref}", thread="<the full id>") — a post with no thread reads as a NEW request on the other side.`;
 }
 function legendAdHoc(entries, ref) {
     const shown = entries.slice(0, THREAD_LEGEND_MAX).map(legendEntry);
-    return `Ad-hoc exchanges above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. These are NOT threads: a \`task-<channel>-<seq>\` id is the label a RECEIVING machine mints for an untagged request so the reply groups with it on that machine's card. There is no thread row behind one: no title and no recorded parties, so nothing to join. Passing one as thread="<the full id>" keeps a reply grouped with its request, which is worth doing on every post in that exchange; it does not open a shared exchange, and an id that is not yours is dropped and the post lands untagged. If this work needs a real thread, open one with dopl_channel(op="create_thread", channel="${ref}", title="...", body="...", to="...").`;
+    return `Ad-hoc exchanges above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. These are NOT threads: a \`task-<channel>-<seq>\` id is the label a RECEIVING machine mints for an untagged request so the reply groups with it on that machine's card. There is no thread row behind one: no title and no recorded parties, so nothing to join. Passing one as thread="<the full id>" keeps a reply grouped with its request, which is worth doing on every post in that exchange; it does not open a shared exchange, and an id that is not yours is dropped and the post lands untagged. If this work needs a real thread, open one with dopl_channel(op="send", channel="${ref}", thread="new", summary="...", body="...", to="...").`;
 }
