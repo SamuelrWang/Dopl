@@ -118,17 +118,19 @@ export function createServer(
      */
     scopes?: string[];
     /**
-     * The ROLE this connection says it is running as — the `X-Dopl-Tool-Profile`
-     * request header, forwarded verbatim by the transport. `gating.ts ›
-     * TOOL_PROFILE_TOOLS` decides what a role means; it is EMPTY today, so every
-     * value serves the whole surface and this changes nothing yet (wave B fills
-     * the table).
+     * The CONTAINMENT PROFILE this connection reports — the
+     * `X-Dopl-Tool-Profile` request header, forwarded verbatim by the transport.
+     * `gating.ts › TOOL_PROFILES` is the vocabulary and `PROFILE_TOOLS` decides
+     * what each one is offered.
      *
-     * ⚠ IT MAY ONLY NARROW, AND IT IS A HINT AND NOT A FENCE. Absent, unknown,
-     * or a role with no row all resolve to "serve everything", so a stale
-     * desktop can never be locked out; and because it is caller-supplied,
-     * nothing may be GRANTED on it. Containment stays the desktop's
-     * `disallowedTools` + `grantDecision` and the credential itself.
+     * ⚠ IT MAY ONLY NARROW, AND IT IS A HINT AND NOT A FENCE. Absent (`null` /
+     * `undefined`, the only "no claim" values) serves the whole surface; a
+     * profile this server cannot place is narrowed to the NARROWEST one, because
+     * the desktop stamps the containment a session is already under and an offer
+     * wider than that is a tool the machine refuses. Because it is
+     * caller-supplied, nothing may be GRANTED on it: containment stays the
+     * desktop's `disallowedTools` + `grantDecision`, the credential's scopes and
+     * `gating.ts › WRITE_OPS`.
      */
     toolProfile?: string | null;
     /**
@@ -240,7 +242,7 @@ export function createServer(
   // ⚠ Four gates shared by BOTH registration paths, built here and passed in
   // rather than defined inside a wrapper: `registerMetaTool` registers straight
   // onto the SDK server and would otherwise pass through none of them.
-  // ⚠ The role narrowing is resolved HERE, to a set, so `gating.ts` owns the
+  // ⚠ The profile narrowing is resolved HERE, to a set, so `gating.ts` owns the
   // table and `createGates` owns no vocabulary. `null` ⇒ no narrowing.
   const gates = createGates(canWrite, offeredToolsFor(options.toolProfile));
 
@@ -281,7 +283,7 @@ export function createServer(
 
   // ⚠ THIS LIST IS THE SURFACE. Every published tool is registered here and
   // nowhere else, so `tools/list` == these calls minus `gating.ts ›
-  // HIDDEN_TOOLS` and minus anything outside this session's role-scoped offer.
+  // HIDDEN_TOOLS` and minus anything outside this session's profile offer.
   // Each registrar exposes ONE `dopl_<domain>` action-tool dispatching on an
   // `op` arg. ⚠ THE FIVE `_admin` COMPANIONS ARE GONE (2026-09-02): every op on
   // all five was refused unconditionally, and the rule they advertised is now

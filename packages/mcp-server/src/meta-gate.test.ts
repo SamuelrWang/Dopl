@@ -12,15 +12,16 @@
  * Registered against the REAL gate tables and driven through a real MCP
  * `Client` over `InMemoryTransport`.
  *
- * ⚠ THE SUPPRESSION LEG DRIVES THE ROLE-SCOPED OFFER, NOT A NAME TABLE
- * (2026-09-02). Both name tables are legitimately empty — `HIDDEN_TOOLS` is the
- * hide-before-delete seam and `READ_ONLY_BLOCKED_TOOLS` was deleted with the
+ * ⚠ THE SUPPRESSION LEG DRIVES THE PROFILE OFFER, NOT A NAME TABLE
+ * (2026-09-02). `HIDDEN_TOOLS` is legitimately empty — it is the
+ * hide-before-delete seam, and `READ_ONLY_BLOCKED_TOOLS` was deleted with the
  * five `_admin` tools it held — and an empty table cannot suppress anything, so
  * pinning against one is the vacuous pass this file exists to prevent.
- * `createGates` takes the RESOLVED offer set rather than a role name precisely
- * so this file can hand it a synthetic one: the subject is the LINE, and a real
- * `TOOL_PROFILE_TOOLS` row (wave B) reaches it the same way. `HIDDEN_TOOLS`'s
- * emptiness is pinned as a value in `tools/delete-block.test.ts`.
+ * `createGates` takes the RESOLVED offer set rather than a profile name
+ * precisely so this file can hand it a synthetic one: the subject is the LINE,
+ * and a real `gating.ts › PROFILE_TOOLS` row reaches it the same way — that
+ * table's own rows are driven end to end by `tool-profile.test.ts`.
+ * `HIDDEN_TOOLS`'s emptiness is pinned as a value in `tools/delete-block.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -31,7 +32,7 @@ import { z } from "zod";
 
 import { createToolRegistrars } from "./registrar.js";
 import { createGates } from "./gating.js";
-import { HIDDEN_TOOLS, TOOL_PROFILE_TOOLS } from "./gating.js";
+import { HIDDEN_TOOLS } from "./gating.js";
 import { DELETE_REFUSAL } from "./delete-policy.js";
 import { UNKNOWN_CALLER } from "./tools/identity.js";
 import type { WorkspaceDirectory } from "./workspace-directory.js";
@@ -47,18 +48,18 @@ const unusedDirectory = {
 } as unknown as WorkspaceDirectory;
 
 /**
- * A name OUTSIDE the role-scoped offer below, registered through the narrowed
+ * A name OUTSIDE the profile offer below, registered through the narrowed
  * registrar. ⚠ Synthetic like the other two: the offer set is data, so the
  * fixture is the set, and there is no table to drift from.
  */
-const SUPPRESSED_NAME = "synthetic_out_of_role";
+const SUPPRESSED_NAME = "synthetic_out_of_profile";
 /**
- * The role's whole offer, applied to the SECOND registrar below. Everything not
+ * The profile's whole offer, applied to the SECOND registrar below. Everything not
  * in it is absent from `tools/list`. ⚠ `dopl_kb` is the one name that registrar
  * publishes, so the set is exactly "what survives", and the two legs below
  * assert both polarities of the same line.
  */
-const ROLE_OFFER = new Set(["dopl_kb"]);
+const PROFILE_OFFER = new Set(["dopl_kb"]);
 /**
  * An `_admin` name in NO table, so only `DELETE_OP_SHAPE` — the fail-closed
  * half — can refuse it. That is the half a future meta-tool relies on.
@@ -98,11 +99,11 @@ beforeAll(async () => {
 
   // Second registrar on the SAME server for the read-only scope gate: a
   // meta-tool carrying a WRITE op must be refused without `dopl.write`. ⚠ It
-  // also carries the ROLE-SCOPED offer, so one registrar drives both narrowing
+  // also carries the PROFILE offer, so one registrar drives both narrowing
   // axes and neither can hide the other's line going missing.
   const readOnly = createToolRegistrars({
     server,
-    gates: createGates(false, ROLE_OFFER),
+    gates: createGates(false, PROFILE_OFFER),
     directory: unusedDirectory,
     activeWorkspace: null,
     sessionEffective: () => null,
@@ -114,7 +115,7 @@ beforeAll(async () => {
     { op: z.string() },
     handlers.writeGated,
   );
-  // Suppression leg: a name outside the role's offer must not publish at all.
+  // Suppression leg: a name outside the profile's offer must not publish at all.
   readOnly.registerMetaTool(
     SUPPRESSED_NAME,
     "should never be published",
@@ -137,15 +138,14 @@ afterAll(async () => {
 describe("registerMetaTool runs isSuppressedTool (registrar.ts:299)", () => {
   it("the fixture really is outside the offer this registrar was built with", () => {
     // ⚠ An offer that had grown to include the name would pass vacuously.
-    expect(ROLE_OFFER.has(SUPPRESSED_NAME)).toBe(false);
+    expect(PROFILE_OFFER.has(SUPPRESSED_NAME)).toBe(false);
   });
 
-  it("both NAME tables are empty, which is WHY this drives the role offer", () => {
+  it("the NAME table is empty, which is WHY this drives the profile offer", () => {
     // ⚠ This file's fixture choice depends on it: the day a name goes back into
-    // `HIDDEN_TOOLS`, or `TOOL_PROFILE_TOOLS` gains a row (wave B), this fails,
-    // and that is the prompt to add a suppression leg driving the real table.
+    // `HIDDEN_TOOLS`, this fails, and that is the prompt to add a suppression
+    // leg driving the real table.
     expect([...HIDDEN_TOOLS]).toEqual([]);
-    expect([...TOOL_PROFILE_TOOLS.keys()]).toEqual([]);
   });
 
   it("a tool INSIDE the offer still registers — it narrows, it does not empty", async () => {
