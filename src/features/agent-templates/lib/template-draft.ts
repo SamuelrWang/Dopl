@@ -74,11 +74,21 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
  * Samuel's ruling Q2, 2026-08-26).
  *
  * ⚠ WHY A COPY AT ALL, since a "share across workspaces" flag sounds simpler: a
- * scope-C template CANNOT LAUNCH INTO A CONTAINER. `getTemplateById` is
- * workspace-filtered and `/resolve` passes the LAUNCH workspace, so the id 404s —
- * a same-workspace trigger, not a permission anyone lacks, and no grant table
- * could fix it (INVARIANTS §5A). This is CLIENT-COMPOSED over the EXISTING POST:
- * no new route, no new service, no server change.
+ * scope-C template COULD NOT LAUNCH INTO A CONTAINER. `getTemplateById` was
+ * workspace-filtered and `/resolve` passes the LAUNCH workspace, so the id 404'd
+ * — a same-workspace trigger, not a permission anyone lacked. This is
+ * CLIENT-COMPOSED over the EXISTING POST: no new route, no new service, no
+ * server change.
+ *
+ * ⚠ **AND THAT TRIGGER IS GONE SINCE 2026-09-02 (A12), SO THIS OP IS NO LONGER
+ * LOAD-BEARING — ONLY THE COPY'S OWN SEMANTICS ARE.** `/resolve` composes
+ * `server/service-reads.ts › readTemplateById` now, which follows an id into the
+ * container it actually lives in, so the operator's home-workspace template
+ * launches into a container without being duplicated first. What survives is the
+ * choice a copy MAKES: a divergent snapshot the operator owns in that container,
+ * with its own visibility and its own edits. ⚠ Do not delete this op on the
+ * strength of the paragraph above — B11 rules on copies-vs-grants, and until
+ * then the button keeps working.
  *
  * 🔒 **THE ATTACHED KNOWLEDGE BASES ARE DROPPED, NOT CARRIED.** A home-workspace
  * KB id is not in the container, and the attach gate ("a KB the CALLER can

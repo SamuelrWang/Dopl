@@ -6878,13 +6878,14 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 | **R4** | The pin/unpin routes are `sessionOnly`, on the channel-grants precedent. | `app/api/knowledge/bases/[baseId]/pin/route.ts`, `app/api/knowledge/entries/[entryId]/pin/route.ts` | Remove the flag from both, and from the census in `shared/auth/write-gate-coverage.test.ts`. ⚠ Then an agent token decides what every agent session launched in the workspace afterwards is handed at startup. **The MCP ops `dopl_kb(op="pin"|"unpin")` still work today for a human's session; what R4 refuses is the agent token.** |
 
 - ⚠ **THE REVIEW ALSO CONTESTED ONE FINDING, AND THE CODE WAS LEFT ALONE.** It read
-  `agent-templates/server/repository-tenancy.ts`'s `workspaces!inner` embed as violating the tree's
+  agent-templates' tenancy repository's `workspaces!inner` embed as violating the tree's
   "`!inner` 500s on this schema" rule. That note (`app/api/user/delete/route.ts`) is about joining
   OUT of `workspaces` after the May 2026 denormalizations; this is a child embedding its PARENT by
   FK, the shape `workspaces/server/repository.ts › listWorkspacesForUser` and
   `home/server/repository-containers.ts › listLinkContainers` run on every workspace list.
   `grep -rn '!inner' src --include='*.ts'` measures it. The half of that finding that WAS right —
-  no coverage over the real query — is `repository-tenancy.test.ts`.
+  no coverage over the real query — is now `src/shared/tenancy/resolve-resource.test.ts`; the query
+  moved there UNCHANGED on 2026-09-02 (A12) and the record is about the shape, not the path.
 - Status: **decisions recorded, code shipped.** Not debt; a standing question.
 
 ### F-418 — `dopl_channel(op="direct_agent")` PROMISES "refused outright and no request is filed" for a peer's agent id; the server files the row and lets the desktop answer `no-session` (2026-09-02)
@@ -7070,3 +7071,24 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE FILE LIST IS ALSO WRONG IN A WAY THAT COSTS A BUILDER TIME.** The A10 row names `repository-launch.ts`, `service-directions.ts`, `main/launch-posture.js` and `main/template-resolve.js`; the change actually needs `service-launch*.ts`, `schema-launch.ts`, `schema-direction.ts`, both repositories, the two create ROUTES, `packages/dopl-client` (both create types), and `channel-dispatch-agents.ts` — the last of which is assigned to no slice in §4's ownership table while being the only place a new `dopl_channel` param can be plumbed. See F-438 for what that gap already cost.
 - Proposed resolution: (a) mark G9's verdict ENFORCED with the two anchors above, and reduce the A10 cell to `client_msg_id` + `maxTurns`; (b) add `channel-dispatch-agents.ts` to the contested-file list beside `channel-schema.ts`. This log is the record; the spec is read-only from here.
 - Status: open (spec-side).
+### F-442 — the "it lives elsewhere" classifier answered OUTSIDE the credential's own container lock (2026-09-02, A12) — ✅ RESOLVED in this change
+
+- Location: `src/features/agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef`, as it stood at `79b28242` — it read the caller's WHOLE membership set and never looked at `ctx.apiKeyWorkspaceId`.
+- Found during: A12, generalising that lane's tenancy repository into `src/shared/tenancy/resolve-resource.ts`.
+- Severity: leak, narrow — a tenancy NAME, never a row, and only over rows the caller could already list for themselves.
+- **The shape, and it is F-336's shape read backwards.** The lock answers WHICH WORKSPACE a credential may act in, and every gate that reads it as a VISIBILITY answer is the defect F-333/F-336 fixed. This is the mirror error: a lane that correctly stopped asking about VISIBILITY forgot that the lock still had a WORKSPACE claim to make. `isSharedCredential` returns `false` for `container_session` — correctly, one human is behind it — so a desktop session locked into a `kind='link'` container was classified normally, and the refusal it produced named a workspace the credential was fenced OUT of. INVARIANTS §4 step 1 says the lock *"OVERRIDES rather than merely validating"*; here a read stepped over it while every WRITE around it was refused.
+- ⚠ **NOTHING WAS 403'd AND NOTHING SHOULD HAVE BEEN.** The 404 was correct in every case; what crossed the fence was the SENTENCE attached to it, so the residual is one tenancy label reaching an agent running under a locked credential.
+- Resolution: the lock is now a clause of the one fence — `resolve-resource.ts › listContainersForCaller` narrows the candidate containers to `apiKeyWorkspaceId` when the credential carries one, so a locked credential resolves inside its lock and nowhere else. Pinned by the `container lock is honoured, and narrows` block in `src/shared/tenancy/resolve-resource.test.ts`, mutation-stated.
+- ⚠ **RESIDUE THIS CHANGE DELIBERATELY LEAVES, FOR B2.** `AgentTemplateNotFoundError.elsewhere` and its `details.elsewhere` mapping now have ONE producer (the MCP name lane) where they had two, and `dopl-desktop-app/main/template-resolve.js` still duck-types a key the desktop's own door can no longer receive. Two SPA docblocks — `apps/desktop-ui/src/pages/home/agent-panels.tsx` and `› agent-copy.tsx` — still say a personal-shelf template *"CANNOT LAUNCH INTO A CONTAINER"* because `getTemplateById` is workspace-filtered; the READ door is `readTemplateById` now and it can, so those two sentences are stale prose over correct code. Left alone on purpose: they are outside this slice's ownership and they die with the classifier.
+- Status: **resolved**; residue named above is B2's.
+
+### F-443 — the same classifier answered for containers the caller is only a `guest` in, below the floor every template route runs at (2026-09-02, A12) — ✅ RESOLVED in this change
+
+- Location: the same function, and the `listWorkspaceIdsForUser` it called in agent-templates' tenancy repository, as both stood at `79b28242` — `status='active'` was checked and `role` was not.
+- Found during: A12, deciding what "a container the caller actively belongs to" has to mean once an id can be READ there and not merely named.
+- Severity: leak, narrow — same shape as F-442, different axis.
+- **The shape.** `guest` is a LINK-granted role that ranks below `viewer`, and INVARIANTS §4 records that *"guests never reach a template surface at all"* — every `agent-templates` route sits at `withWorkspaceAuth`'s `viewer` floor. An ACTIVE membership was therefore not the same fact as "may read templates here", and the classifier used the first to answer a question about the second. It could tell a guest that a `visibility='workspace'` template lives in a container whose template surface they cannot open.
+- ⚠ **IT ONLY BECAME LOAD-BEARING WHEN THE ANSWER STOPPED BEING A SENTENCE.** As a label it leaked a tenancy; as A12's ADDRESS it would have been a read under the route floor — the same membership set now decides both, which is why the floor had to move into it rather than be re-stated at each door.
+- Resolution: `resolve-resource.ts › CONTAINER_READ_FLOOR` (`viewer`), applied in `listContainersForCaller` alongside `status='active'`. Pinned by the `EXCLUDES a container the caller is only a GUEST in` case in `src/shared/tenancy/resolve-resource.test.ts`.
+- ⚠ **THE FLOOR IS THE RESOLVER'S, NOT THE FEATURE'S**, and it is a constant rather than a parameter on purpose: a caller that could pass its own floor is a caller that can pass `guest`.
+- Status: **resolved**.

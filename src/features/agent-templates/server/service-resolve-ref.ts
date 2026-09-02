@@ -1,9 +1,12 @@
 import "server-only";
-import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { isUuid } from "@/shared/lib/id/uuid";
+import {
+  resolveResource,
+  resolveResourcesByName,
+  type ResolvedResource,
+} from "@/shared/tenancy/resolve-resource";
 import type { AgentTemplateContext, TemplateVisibility } from "../types";
 import * as repo from "./repository";
-import * as tenancyRepo from "./repository-tenancy";
 import { canSeeTemplate, shareCtxForTemplates } from "./service-shared";
 
 /**
@@ -188,45 +191,44 @@ async function resolveInThisTenancy(
  *
  * ── ⚠ WHY THIS IS NOT THE EXISTENCE ORACLE THE REST OF THE SURFACE CLOSES ──
  *
- * It answers ONLY over rows the caller could already list for themselves:
- * `created_by = caller`, or `visibility = 'workspace'` in a workspace they are
- * an ACTIVE MEMBER of (`repository-tenancy.ts › findTemplateTenancyRows` — the `.or()`
- * IS the fence, and the membership set is supplied here). Another member's
- * `private` or `team` template matches neither arm in any workspace, so no
- * sentence built on this can name one, and probing an id you do not own gets
- * the same `null` a nonexistent id gets.
- *
- * ⚠ A SHARED CREDENTIAL GETS NOTHING, and that is arm 2 of `canSeeTemplate`
- * restated rather than a second rule: such a key may be shared between humans,
- * so it inherits no one person's reach and must not learn where "their"
- * templates live. A CONTAINER SESSION is not shared (F-336) and is answered
- * normally, exactly as arm 3 answers it.
+ * ⚠ **IT OWNS NO FENCE OF ITS OWN SINCE 2026-09-02 (A12).** Every clause —
+ * shared credential, active membership at the `viewer` floor, the credential's
+ * workspace lock, and the two-arm "rows you could already list for yourself"
+ * `.or()` — lives once, in `shared/tenancy/resolve-resource.ts`, and this
+ * function is the LABEL over its answer. What was a second place deciding what
+ * may be named across a tenancy boundary is now a `.filter()` and a sentence.
  *
  * ⚠ IT NAMES A TENANCY, NEVER A ROSTER. One name and one place — never how many
  * matched, never who else is in that workspace, never the other candidates.
+ *
+ * ⚠ **ONE DOOR SINCE A12, WHERE IT USED TO HAVE TWO.** `resolveTemplateForLaunch`
+ * no longer needs it: an id resolves its own container there, so the miss it
+ * used to explain does not happen. NAME refs, which cannot resolve a tenancy
+ * (`agent_templates` has no name uniqueness), are what is left — and B2 deletes
+ * this function when `workspace=` comes off the read ops.
  */
 export async function classifyMissingTemplateRef(
   ctx: AgentTemplateContext,
   needle: string
 ): Promise<TemplateElsewhere | null> {
-  if (isSharedCredential(ctx)) return null;
-  const memberships = await tenancyRepo.listWorkspaceIdsForUser(ctx.userId);
-  const others = memberships.filter((id) => id !== ctx.workspaceId);
-  if (others.length === 0) return null;
-  const rows = await tenancyRepo.findTemplateTenancyRows(
-    ctx.userId,
-    others,
-    isUuid(needle) ? { id: needle } : { name: needle }
-  );
-  if (rows.length === 0) return null;
-  // ⚠ ONE ANSWER, DETERMINISTICALLY CHOSEN. A name can legitimately match rows
-  // in several tenancies; listing them would be the roster this must not print,
-  // and an arbitrary pick would make the same refusal read differently on two
-  // consecutive calls. Sorted by the label the caller will read.
-  const labelled = rows
-    .map((r) => ({ name: r.name, label: tenancyLabel(r) }))
+  const matches = isUuid(needle)
+    ? [await resolveResource(ctx, "agent_template", needle)]
+    : await resolveResourcesByName(ctx, "agent_template", needle);
+  // ⚠ "ELSEWHERE" IS THE WHOLE POINT — a match in the tenancy this call already
+  // resolves in is not a miss to explain. The resolver is asked about the
+  // caller's WHOLE reach and this is the one line that makes it a difference.
+  const labelled = matches
+    .filter(
+      (row): row is ResolvedResource =>
+        row !== null && row.containerId !== ctx.workspaceId
+    )
+    .map((row) => ({ name: row.name, label: tenancyLabel(row) }))
+    // ⚠ ONE ANSWER, DETERMINISTICALLY CHOSEN. A name can legitimately match
+    // rows in several tenancies; listing them would be the roster this must not
+    // print, and an arbitrary pick would make the same refusal read differently
+    // on two consecutive calls. Sorted by the label the caller will read.
     .sort((a, b) => a.label.localeCompare(b.label));
-  return labelled[0];
+  return labelled[0] ?? null;
 }
 
 /**
@@ -244,12 +246,12 @@ export async function classifyMissingTemplateRef(
  * would arrive as blanks. The renderer decides the typography; this decides the
  * WORDS.
  */
-function tenancyLabel(row: tenancyRepo.TemplateTenancyRow): string {
+function tenancyLabel(row: ResolvedResource): string {
   if (row.homeScoped) return "your personal shelf";
-  if (row.workspaceKind !== "standard") {
-    return `a home channel of yours, container ${row.workspaceId}`;
+  if (row.containerKind !== "standard") {
+    return `a home channel of yours, container ${row.containerId}`;
   }
-  return row.workspaceName
-    ? `the workspace “${row.workspaceName}”`
+  return row.containerName
+    ? `the workspace “${row.containerName}”`
     : "another workspace you belong to";
 }

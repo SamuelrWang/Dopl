@@ -5930,3 +5930,40 @@ had been in CI since 2026-08-31 and in no doc — the same failure `check-role-d
 month earlier. §14 had told everyone to re-derive rather than quote; nobody ran the command until an
 integration needed the real list. **A doc that says "re-derive this" is not a substitute for
 re-deriving it, and the wave that adds a gate is the one that will not think to.**
+
+## 2026-09-02 — The subsystem that was an apology: what an id could not do, explained in four places
+
+`classifyMissingTemplateRef` was one of the tree's better-written functions. It had a real
+property — it named a tenancy without ever becoming an existence oracle — a test suite that drove
+it adversarially, a docblock that argued for every arm, and three careful label shapes. It also
+existed for exactly one reason: **a template read was keyed `(workspace_id, id)`, so a read could
+not follow its own id.** Everything above it was scaffolding around that: a 145-line "ONE CONSUMER"
+repository, an `elsewhere` arm on a domain error, an optional `details` key on a 404, a duck-type in
+the desktop main process, a `TENANCY_RULE` paragraph interpolated into the MCP doctrine, and a
+`workspace` argument on fourteen tool schemas explaining which of them to pass.
+
+**None of that was wrong. All of it was the cost of one missing capability**, and the shape is worth
+naming because it repeats: when a system cannot DO something, the explanation of why not grows into
+a subsystem, acquires its own tests, and starts looking like a feature. The tell is that the
+explanation is better engineered than the thing it explains — five surfaces agreed perfectly about a
+sentence, and no surface could act on it.
+
+A12 made ids resolve their own container (`shared/tenancy/resolve-resource.ts`), and the read
+follows the answer instead of describing it. The classifier survives on the NAME lane, where the
+ambiguity is real — `agent_templates` has no name uniqueness on purpose — and B2 deletes the rest.
+
+**Two fence gaps fell out of the move, and both were invisible while the answer was a sentence.**
+The generalised query had to decide what "a container the caller belongs to" means for a READ, and
+the old one had answered a weaker question: any ACTIVE membership. It did not consult the
+credential's workspace lock (F-442) — the mirror of F-336, where the lock was read as a visibility
+answer; here a lane that had correctly stopped asking it about visibility forgot it still had a
+WORKSPACE claim. And it did not consult the caller's ROLE (F-443), though `guest` ranks below the
+`viewer` floor every template route runs at. As labels these leaked a workspace name. As addresses
+they would have been reads under the route floor. **The generalisation is what surfaced them: the
+same membership set now answers "may you name this" and "may you read it", so the two questions
+could no longer disagree quietly.**
+
+⚠ **And the pilot is READS only, on purpose.** `getTemplateById` stays keyed to `ctx.workspaceId`
+because `service-writes.ts` funnels through it — a PATCH that followed an id into another container
+would be `workspace=` becoming ignorable on a WRITE, which is a ruling nobody has made. One
+function, two doors, and the split is the whole reason this was safe to build unattended.

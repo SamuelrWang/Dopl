@@ -28,17 +28,22 @@ vi.mock("./repository", () => ({
   listTeamLinksForTemplates: vi.fn(),
 }));
 
-// ⚠ THE CROSS-TENANCY PAIR (T35) LIVES IN ITS OWN MODULE, and is mocked EMPTY so
+// ⚠ THE CROSS-TENANCY READ LIVES IN `shared/tenancy/`, and is mocked EMPTY so
 // the default is "nothing to say" — every assertion in this file is about the
 // answer THIS workspace gives, and a classifier that answered would change the
 // error's DETAIL, never its visibility.
-vi.mock("./repository-tenancy", () => ({
-  listWorkspaceIdsForUser: vi.fn(async () => []),
-  findTemplateTenancyRows: vi.fn(async () => []),
+// 🔒 ⚠ THE FENCE ITSELF IS NOT RE-TESTED HERE. Shared credentials, the viewer
+// floor, the container lock and the two-arm `.or()` are asserted un-mocked in
+// `shared/tenancy/resolve-resource.test.ts`; what this file owns is that the
+// classifier COMPOSES that answer rather than re-deciding any of it.
+vi.mock("@/shared/tenancy/resolve-resource", () => ({
+  resolveResource: vi.fn(async () => null),
+  resolveResourcesByName: vi.fn(async () => []),
 }));
 
 import * as repo from "./repository";
-import * as tenancyRepo from "./repository-tenancy";
+import * as tenancy from "@/shared/tenancy/resolve-resource";
+import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { resolveTemplateRef } from "./service-resolve-ref";
 import type { AgentTemplate, AgentTemplateContext } from "../types";
 
@@ -268,34 +273,39 @@ describe("M-10 — a workspace-scoped API key inherits nobody's reach", () => {
   });
 });
 
+
 // ── THE CROSS-TENANCY CLASSIFIER (T35) ───────────────────────────────────
 //
 // ⚠ THE PROPERTY: it turns the ONE miss that has an honest cause into a sentence
 // an agent can act on, WITHOUT reopening the existence oracle the rest of this
-// file pins shut. A template read is keyed `(workspace_id, id)`, so a row in
-// another tenancy is filtered out BEFORE `canSeeTemplate` runs — "you own it"
-// and "it resolves here" are different questions, and an agent that does not
-// know that re-checks the spelling of a name that was never wrong.
+// file pins shut. A NAME cannot resolve a tenancy — `agent_templates` has no
+// name uniqueness, deliberately — so this is what is left of T35 after A12 gave
+// IDS a container of their own.
 //
-// ⚠ THE FENCE IS THE QUERY, and it is in `repository.ts ›
-// findTemplateTenancyRows`: the caller's OWN rows, or `workspace`-visible ones,
-// in workspaces they are an ACTIVE member of. Those tests live with the
-// classifier's CALLERS (it cannot name what the query never returns); what is
-// pinned HERE is that this function never asks WIDER than that, never asks at
-// all for a shared credential, and never asks about its own workspace.
+// ⚠ THE FENCE IS NOT HERE ANY MORE, and that is the change worth stating.
+// Shared credentials, the `viewer` floor, the container lock and the two-arm
+// "rows you could already list for yourself" `.or()` are ONE fence, asserted
+// un-mocked in `shared/tenancy/resolve-resource.test.ts`. What is pinned HERE is
+// that this function asks with the CALLER'S OWN CONTEXT (so those clauses see
+// the credential), never asks WIDER than one ref, drops a match in the tenancy
+// it was already asked in, and turns exactly one row into exactly one label.
 
 describe("the miss that is not a mystery", () => {
   const OTHER_WS = "77777777-7777-7777-7777-777777777777";
   const LINK_WS = "88888888-8888-8888-8888-888888888888";
 
-  function tenancy(over: Partial<tenancyRepo.TemplateTenancyRow> = {}): tenancyRepo.TemplateTenancyRow {
+  function elsewhere(
+    over: Partial<ResolvedResource> = {}
+  ): ResolvedResource {
     return {
+      type: "agent_template",
       id: T2,
       name: "Code Auditor",
-      workspaceId: OTHER_WS,
-      workspaceName: "Acme",
-      workspaceKind: "standard",
+      containerId: OTHER_WS,
+      containerName: "Acme",
+      containerKind: "standard",
       homeScoped: false,
+      containerRole: "member",
       ...over,
     };
   }
@@ -303,11 +313,10 @@ describe("the miss that is not a mystery", () => {
   beforeEach(() => {
     vi.mocked(repo.findTemplateById).mockResolvedValue(null);
     vi.mocked(repo.listTemplatesForWorkspace).mockResolvedValue([]);
-    vi.mocked(tenancyRepo.listWorkspaceIdsForUser).mockResolvedValue([WS, OTHER_WS]);
   });
 
   it("names the workspace a template of the caller's own lives in", async () => {
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([tenancy()]);
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([elsewhere()]);
     expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",
       template: { name: "Code Auditor", label: "the workspace “Acme”" },
@@ -318,8 +327,8 @@ describe("the miss that is not a mystery", () => {
     // ⚠ A `home_scoped` row is `private` by fence, so the only way it reached
     // the caller-owned arm of the query is that the caller created it — this
     // label is a statement about their own rows and nobody else's.
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([
-      tenancy({ homeScoped: true }),
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
+      elsewhere({ homeScoped: true }),
     ]);
     expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",
@@ -330,8 +339,12 @@ describe("the miss that is not a mystery", () => {
   it("names a home-channel container BY ITS ID, which is the actionable half", async () => {
     // ⚠ §4A: a container is never advertised as a workspace, and its NAME is
     // not the thing you can do anything with — `workspace=<container id>` is.
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([
-      tenancy({ workspaceId: LINK_WS, workspaceKind: "link", workspaceName: "Sam & Dana" }),
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
+      elsewhere({
+        containerId: LINK_WS,
+        containerKind: "link",
+        containerName: "Sam & Dana",
+      }),
     ]);
     const out = await resolveTemplateRef(ctx, "Code Auditor");
     expect(out).toEqual({
@@ -348,9 +361,9 @@ describe("the miss that is not a mystery", () => {
     // ⚠ A name can legitimately match in several tenancies. Listing them would
     // be the roster this must not print, and an arbitrary pick would make one
     // refusal read differently on two consecutive calls — so it is sorted.
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([
-      tenancy({ workspaceName: "Zephyr" }),
-      tenancy({ homeScoped: true }),
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
+      elsewhere({ containerName: "Zephyr" }),
+      elsewhere({ homeScoped: true }),
     ]);
     expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",
@@ -360,45 +373,44 @@ describe("the miss that is not a mystery", () => {
 
   it("stays NOT-FOUND when nothing of the caller's matches — the probe-proof arm", async () => {
     // Somebody else's private template in another workspace is exactly this:
-    // the query returns nothing, so there is nothing to name.
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([]);
+    // the resolver returns nothing, so there is nothing to name.
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([]);
     expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "not-found",
     });
   });
 
-  it("NEVER classifies for a SHARED credential, and does not even ask", async () => {
-    // 🔒 Arm 2 of `canSeeTemplate` restated, not a second rule: such a key may
-    // be shared between humans, so it inherits no one person's reach and must
-    // not learn where "their" templates live.
-    const keyCtx: AgentTemplateContext = { ...ctx, apiKeyWorkspaceId: WS };
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([tenancy()]);
-    expect(await resolveTemplateRef(keyCtx, "Code Auditor")).toEqual({
+  it("DROPS a match in the tenancy it was already asked in — 'elsewhere' means elsewhere", async () => {
+    // ⚠ The resolver answers the caller's WHOLE reach, so this filter is the
+    // only thing that makes the classification a DIFFERENCE. Without it, a row
+    // the matrix just refused in THIS workspace would come back labelled as
+    // living somewhere else — an invisible row named by a second door.
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
+      elsewhere({ containerId: WS }),
+    ]);
+    expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "not-found",
     });
-    expect(tenancyRepo.listWorkspaceIdsForUser).not.toHaveBeenCalled();
-    expect(tenancyRepo.findTemplateTenancyRows).not.toHaveBeenCalled();
   });
 
-  it("asks only about OTHER workspaces of the caller's, and only about this ref", async () => {
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockResolvedValue([]);
+  it("asks with the CALLER'S OWN CONTEXT, and only about this ref", async () => {
+    // 🔒 ⚠ THE ONE THING THIS FILE CAN GET WRONG NOW. The fence reads
+    // `apiKeyWorkspaceId` and `apiKeyWorkspaceLockKind` off the caller — a
+    // classifier that handed the resolver a bare `{ userId }` would strip the
+    // container lock and the shared-credential refusal in one line, and every
+    // assertion in `resolve-resource.test.ts` would still pass.
+    vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([]);
     await resolveTemplateRef(ctx, "Code Auditor");
-    expect(tenancyRepo.findTemplateTenancyRows).toHaveBeenCalledWith(ME, [OTHER_WS], {
-      name: "Code Auditor",
-    });
+    expect(tenancy.resolveResourcesByName).toHaveBeenCalledWith(
+      ctx,
+      "agent_template",
+      "Code Auditor"
+    );
     // ⚠ A UUID ref asks BY ID. Two lookups answering through each other is how
     // "no such id" starts reporting as "no such name".
-    vi.mocked(tenancyRepo.findTemplateTenancyRows).mockClear();
     await resolveTemplateRef(ctx, T1);
-    expect(tenancyRepo.findTemplateTenancyRows).toHaveBeenCalledWith(ME, [OTHER_WS], {
-      id: T1,
-    });
-  });
-
-  it("does not ask at all when the caller belongs to no OTHER workspace", async () => {
-    vi.mocked(tenancyRepo.listWorkspaceIdsForUser).mockResolvedValue([WS]);
-    await resolveTemplateRef(ctx, "Code Auditor");
-    expect(tenancyRepo.findTemplateTenancyRows).not.toHaveBeenCalled();
+    expect(tenancy.resolveResource).toHaveBeenCalledWith(ctx, "agent_template", T1);
+    expect(tenancy.resolveResourcesByName).toHaveBeenCalledTimes(1);
   });
 
   it("costs NOTHING on the hit path — a resolved ref never reaches the classifier", async () => {
@@ -408,8 +420,8 @@ describe("the miss that is not a mystery", () => {
       id: T1,
       name: "Code Auditor",
     });
-    expect(tenancyRepo.listWorkspaceIdsForUser).not.toHaveBeenCalled();
-    expect(tenancyRepo.findTemplateTenancyRows).not.toHaveBeenCalled();
+    expect(tenancy.resolveResource).not.toHaveBeenCalled();
+    expect(tenancy.resolveResourcesByName).not.toHaveBeenCalled();
   });
 
   it("an AMBIGUOUS name is answered here, not sent looking elsewhere", async () => {
@@ -420,6 +432,6 @@ describe("the miss that is not a mystery", () => {
     expect(
       (await resolveTemplateRef(ctx, "Code Auditor")).kind
     ).toBe("ambiguous");
-    expect(tenancyRepo.findTemplateTenancyRows).not.toHaveBeenCalled();
+    expect(tenancy.resolveResourcesByName).not.toHaveBeenCalled();
   });
 });

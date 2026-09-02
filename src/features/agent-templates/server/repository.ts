@@ -64,9 +64,9 @@ export async function listTemplatesForWorkspace(
  * `AGENT_TEMPLATE_COLS` on purpose (`../types.ts › TemplateShelf`); this returns
  * a set of ids the caller was ALREADY shown, labelled — not a new column on the
  * row. ⚠ THIS WAS "THE ONLY PLACE THE COLUMN IS SELECTED" UNTIL 2026-09-01;
- * `./repository-tenancy.ts › findTemplateTenancyRows` is the second and last,
- * and it keeps the same bargain — the boolean becomes a tenancy LABEL and never
- * reaches a DTO.
+ * `shared/tenancy/resolve-resource.ts › ResolvedResource` is the second and
+ * last, and it keeps the same bargain — the boolean becomes a tenancy LABEL and
+ * never reaches a DTO.
  *
  * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. This applies no `canSeeTemplate`
  * of its own; the id set IS the fence, the same contract

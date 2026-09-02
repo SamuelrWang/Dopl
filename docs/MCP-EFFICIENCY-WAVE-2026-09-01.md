@@ -153,7 +153,7 @@ UNPUSHED, so CI still has not run**; every figure below is a local measurement.
 | `channel-schema.ts` `channel`.describe(); `tool-budget.test.ts`'s downward ratchet | `c633622f` |
 | `opReadSessionsAccount` rendering the pre-terse line; `TENANCY_FIX`'s "once that op exists" | `c1765cab` |
 | **R2** copy = OWNED, and `createKbBase`'s unmapped 403 outside the try/catch | `95f355fa` |
-| `repository-tenancy.ts` untested (the `!inner` half **CONTESTED** — see below) | `e38bf300` |
+| agent-templates' tenancy repository untested (the `!inner` half **CONTESTED** — see below) | `e38bf300` |
 | the chain refusal's own word `no-chain`; the clamped `set_agent_mode` echo | `a6b0af31` |
 | T51's staleness clock stamped before the verdict | `ff7ea3d5` |
 | `service-base-writes.ts` at 498/500, and `launch-directive-wire.js` pushed to 512 (**F-415**) | `9ae8f49a` |
@@ -177,14 +177,16 @@ Recorded in full, with the exact edit that reverses each, as **F-417** in the fi
 
 ### CONTESTED — one finding, code unchanged
 
-**`agent-templates/server/repository-tenancy.ts` and the `workspaces!inner` embed.** The reviewer
+**agent-templates' tenancy repository and the `workspaces!inner` embed.** ⚠ That file was
+generalised into `src/shared/tenancy/resolve-resource.ts` on 2026-09-02 (A12) and the
+query shape moved with it, unchanged — this record is about the shape, not the path. The reviewer
 read it as violating the tree's "`!inner` embeds 500 on this schema" rule. That note lives in
 `app/api/user/delete/route.ts` and is about joining OUT of `workspaces` after the May 2026
 denormalizations; this is a child embedding its PARENT by FK — the identical shape
 `workspaces/server/repository.ts › listWorkspacesForUser` and
 `home/server/repository-containers.ts › listLinkContainers` run on every workspace list in the
 product. `grep -rn '!inner' src --include='*.ts'` answers eight production sites. The half that was
-right — no coverage over the real query — is `repository-tenancy.test.ts`.
+right — no coverage over the real query — is now `src/shared/tenancy/resolve-resource.test.ts`.
 
 ### What the review changed about the gates themselves
 

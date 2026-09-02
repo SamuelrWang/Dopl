@@ -52,8 +52,13 @@ import {
  * refuse the only caller it exists for on the OAuth half.
  *
  * ⚠ IT IS GATED BY THE SAME VISIBILITY MATRIX AS EVERY OTHER READ (it composes
- * `getTemplateById`), so it is not a second, weaker door onto the row. Two
- * consequences the integration builder should expect rather than debug:
+ * `service-reads.ts › readTemplateById`), so it is not a second, weaker door onto
+ * the row. ⚠ **THAT IS THE ID-RESOLVING READ SINCE 2026-09-02 (A12)**: the id
+ * names the container the matrix runs in, so a template of the operator's own
+ * living in another workspace of theirs RESOLVES rather than 404-ing with the
+ * `details.elsewhere` label the desktop could only log. The refusal is unchanged
+ * where it still bites. Two consequences the integration builder should expect
+ * rather than debug:
  *   1. a template the caller may not see is a 404 here, exactly as it is on the
  *      record endpoint — never a 403, which would confirm it exists;
  *   2. `knowledgeBases` is VIEWER-FILTERED, so two people resolving the SAME

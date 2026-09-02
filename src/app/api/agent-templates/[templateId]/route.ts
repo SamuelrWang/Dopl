@@ -11,7 +11,7 @@ import {
 import {
   buildAgentTemplateContext,
   deleteTemplate,
-  getTemplateById,
+  readTemplateById,
   updateTemplate,
 } from "@/features/agent-templates/server/service";
 import { AgentTemplateUpdateSchema } from "@/features/agent-templates/schema";
@@ -26,12 +26,22 @@ import { AgentTemplateUpdateSchema } from "@/features/agent-templates/schema";
  * spawning from, and an agent token has no confirm dialog to gate it — the same
  * argument that session-gates the team DELETE and the thread DELETE. Recorded
  * with that reasoning in `src/shared/auth/write-gate-coverage.test.ts`.
+ *
+ * ⚠ **AND THE READ AND THE WRITES NO LONGER RESOLVE THE ID THE SAME WAY (A12).**
+ * GET goes through `readTemplateById`, so the id names its own container and a
+ * `workspace=` that contradicts it is IGNORED. PATCH and DELETE stay on
+ * `getTemplateById`, keyed to the workspace the caller was authorised in — a
+ * write that followed an id across a tenancy boundary is a ruling nobody has
+ * made.
  */
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildAgentTemplateContext(auth);
-    const template = await getTemplateById(ctx, requireTemplateId(auth.params));
+    const template = await readTemplateById(
+      ctx,
+      requireTemplateId(auth.params)
+    );
     return NextResponse.json({ template });
   } catch (err) {
     return toAgentTemplateErrorResponse(err);
