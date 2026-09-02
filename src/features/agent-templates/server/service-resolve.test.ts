@@ -27,11 +27,23 @@ vi.mock("./repository", () => ({
   listKnowledgeBaseTeamGrants: vi.fn(),
 }));
 
+// ⚠ THE CROSS-TENANCY PAIR (T35) LIVES IN ITS OWN MODULE, and is mocked EMPTY so
+// the default is "nothing to say" — every assertion in this file is about the
+// answer THIS workspace gives, and a classifier that answered would change the
+// error's DETAIL, never its visibility.
+vi.mock("./repository-tenancy", () => ({
+  listWorkspaceIdsForUser: vi.fn(async () => []),
+  findTemplateTenancyRows: vi.fn(async () => []),
+}));
+
 import * as repo from "./repository";
+import * as tenancyRepo from "./repository-tenancy";
 import { resolveTemplateForLaunch } from "./service";
 import { AgentTemplateNotFoundError } from "./errors";
+import { mapAgentTemplateError } from "./http-mapping";
 
 const mockRepo = vi.mocked(repo);
+const mockTenancy = vi.mocked(tenancyRepo);
 
 const CREATOR = "user-creator";
 const OTHER = "user-other";
@@ -153,10 +165,84 @@ describe("the payload, and the door it comes through", () => {
     ).rejects.toBeInstanceOf(AgentTemplateNotFoundError);
   });
 
+  // ── T35 — THE DESKTOP'S DOOR MAKES THE SAME DISTINCTION, WITH THE SAME HELPER
+  //
+  // ⚠ THE STATUS DOES NOT MOVE: still 404, still never 403. What the desktop's
+  // resolve may now carry is the ONE non-leaky classification — a template THIS
+  // OPERATOR could already list for themselves, living in another tenancy — so
+  // the operator's own log can say "it is on your personal shelf" instead of
+  // "something went wrong". `classifyMissingTemplateRef` is the single producer,
+  // shared with the MCP create fence; a second copy of it here is the shape
+  // F-278 is filed against.
+
+  it("a miss the caller CAN account for carries the tenancy — same 404, extra fact", async () => {
+    mockRepo.findTemplateById.mockResolvedValue(null);
+    mockTenancy.listWorkspaceIdsForUser.mockResolvedValue(["ws-1", "ws-2"]);
+    mockTenancy.findTemplateTenancyRows.mockResolvedValue([
+      {
+        id: "tpl-1",
+        name: "Code Auditor",
+        workspaceId: "ws-2",
+        workspaceName: "Acme",
+        workspaceKind: "standard",
+        homeScoped: false,
+      },
+    ]);
+    const err = await resolveTemplateForLaunch(ctx(), "tpl-1").catch((e) => e);
+    expect(err).toBeInstanceOf(AgentTemplateNotFoundError);
+    expect((err as AgentTemplateNotFoundError).elsewhere).toEqual({
+      name: "Code Auditor",
+      label: "the workspace “Acme”",
+    });
+  });
+
+  it("a miss it cannot account for stays the BARE 404 — no key, not an empty one", async () => {
+    // 🔒 Somebody else's private template anywhere is exactly this: the query
+    // returns nothing, so there is nothing to name and nothing to infer from.
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    mockTenancy.listWorkspaceIdsForUser.mockResolvedValue(["ws-1", "ws-2"]);
+    mockTenancy.findTemplateTenancyRows.mockResolvedValue([]);
+    const err = await resolveTemplateForLaunch(ctx({ userId: OTHER }), "tpl-1").catch((e) => e);
+    expect((err as AgentTemplateNotFoundError).elsewhere).toBeNull();
+  });
+
+  it("costs NOTHING on the hit path — a resolved template never asks the classifier", async () => {
+    mockRepo.findTemplateById.mockResolvedValue(template());
+    await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(mockTenancy.listWorkspaceIdsForUser).not.toHaveBeenCalled();
+    expect(mockTenancy.findTemplateTenancyRows).not.toHaveBeenCalled();
+  });
+
   it("404s for a row that does not exist at all — the same error, deliberately", async () => {
     mockRepo.findTemplateById.mockResolvedValue(null);
     await expect(resolveTemplateForLaunch(ctx(), "tpl-1")).rejects.toBeInstanceOf(
       AgentTemplateNotFoundError
     );
+  });
+});
+
+// ── T35 — THE DESKTOP'S 404 BODY ────────────────────────────────────────
+//
+// ⚠ ABSENT, NOT NULL, for the same reason the channels mapper's arm gives: the
+// PRESENCE of a `details` key must not itself be a fact about a row the caller
+// may not see. `HttpError.toResponseBody` omits `undefined` details.
+describe("the 404 the desktop reads", () => {
+  it("carries `details.elsewhere` when the miss was accounted for", () => {
+    const http = mapAgentTemplateError(
+      new AgentTemplateNotFoundError("tpl-1", {
+        name: "Code Auditor",
+        label: "your personal shelf",
+      })
+    );
+    expect(http?.status).toBe(404);
+    expect(http?.details).toEqual({
+      elsewhere: { name: "Code Auditor", label: "your personal shelf" },
+    });
+  });
+
+  it("carries no details at all for an ordinary miss", () => {
+    const http = mapAgentTemplateError(new AgentTemplateNotFoundError("tpl-1"));
+    expect(http?.status).toBe(404);
+    expect(http?.details).toBeUndefined();
   });
 });

@@ -167,6 +167,14 @@ async function resolveTemplateForDirective(
   if (resolution.kind === "not-found") {
     throw new LaunchTemplateNotFoundError(ref);
   }
+  // ⚠ THE SAME 404, WITH THE ONE FACT THAT MAKES IT ACTIONABLE (T35). A ref that
+  // resolves in a tenancy the caller belongs to but NOT in this channel's is the
+  // commonest miss on this lane and the one whose honest cause the old sentence
+  // could not name. The classification is the template feature's — this file
+  // adds no rule of its own to it, it only carries the answer.
+  if (resolution.kind === "elsewhere") {
+    throw new LaunchTemplateNotFoundError(ref, resolution.template);
+  }
   return { id: resolution.id, name: resolution.name };
 }
 

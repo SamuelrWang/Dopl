@@ -1,7 +1,9 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { isUuid } from "@/shared/lib/id/uuid";
 import type { AgentTemplateContext, TemplateVisibility } from "../types";
 import * as repo from "./repository";
+import * as tenancyRepo from "./repository-tenancy";
 import { canSeeTemplate, shareCtxForTemplates } from "./service-shared";
 
 /**
@@ -74,7 +76,23 @@ export interface TemplateRefMatch {
 export type TemplateRefResolution =
   | { kind: "found"; id: string; name: string }
   | { kind: "not-found" }
+  /**
+   * ⚠ THE MISS THAT IS NOT A MYSTERY (T35). The ref names a template the caller
+   * COULD ALREADY LIST FOR THEMSELVES — their own row, or a `workspace`-visible
+   * one — living in a DIFFERENT tenancy than the one this call resolves in. See
+   * {@link classifyMissingTemplateRef} for why saying so is not an oracle.
+   */
+  | { kind: "elsewhere"; template: TemplateElsewhere }
   | { kind: "ambiguous"; matches: TemplateRefMatch[] };
+
+/** A template the caller holds somewhere else, and the phrase for WHERE. ⚠ The
+ *  label is a TENANCY, never a row list: one name, one place, nothing about who
+ *  else is in it. */
+export interface TemplateElsewhere {
+  name: string;
+  /** "your personal shelf" / "the workspace \u201cAcme\u201d" / a home channel's container id. */
+  label: string;
+}
 
 /**
  * Resolve `ref` — a template ID or an exact NAME — against what THIS caller may
@@ -103,7 +121,22 @@ export async function resolveTemplateRef(
 ): Promise<TemplateRefResolution> {
   const needle = ref.trim();
   if (needle === "") return { kind: "not-found" };
+  const here = await resolveInThisTenancy(ctx, needle);
+  if (here.kind !== "not-found") return here;
+  // ⚠ ONE EXTRA READ, AND ONLY ON A MISS. The hit path is untouched; a launch
+  // that resolves pays nothing for this, and a launch that does not is already
+  // about to hand a human a sentence they have to act on.
+  const template = await classifyMissingTemplateRef(ctx, needle);
+  return template ? { kind: "elsewhere", template } : { kind: "not-found" };
+}
 
+/** {@link resolveTemplateRef}'s steps 1-4, inside `ctx.workspaceId` and nowhere
+ *  else. ⚠ Split out so there is exactly ONE place that decides "not here", and
+ *  therefore exactly one place the cross-tenancy classifier hangs off. */
+async function resolveInThisTenancy(
+  ctx: AgentTemplateContext,
+  needle: string
+): Promise<TemplateRefResolution> {
   if (isUuid(needle)) {
     const template = await repo.findTemplateById(ctx.workspaceId, needle);
     if (!template) return { kind: "not-found" };
@@ -140,4 +173,83 @@ export async function resolveTemplateRef(
       visibility: t.visibility,
     })),
   };
+}
+
+/**
+ * 🔒 **WHY THE REF MISSED, WHEN THE HONEST ANSWER IS "IT LIVES SOMEWHERE ELSE"**
+ * (T35).
+ *
+ * A template read is keyed `(workspace_id, id)`, so `canSeeTemplate` is never
+ * even reached for a row in another tenancy — it is filtered out BEFORE
+ * visibility runs. That makes "you own it" and "it resolves here" different
+ * questions, and an agent that does not know the difference re-checks the
+ * spelling of a name that was never wrong. This function is what lets the
+ * refusal say which question failed.
+ *
+ * ── ⚠ WHY THIS IS NOT THE EXISTENCE ORACLE THE REST OF THE SURFACE CLOSES ──
+ *
+ * It answers ONLY over rows the caller could already list for themselves:
+ * `created_by = caller`, or `visibility = 'workspace'` in a workspace they are
+ * an ACTIVE MEMBER of (`repository-tenancy.ts › findTemplateTenancyRows` — the `.or()`
+ * IS the fence, and the membership set is supplied here). Another member's
+ * `private` or `team` template matches neither arm in any workspace, so no
+ * sentence built on this can name one, and probing an id you do not own gets
+ * the same `null` a nonexistent id gets.
+ *
+ * ⚠ A SHARED CREDENTIAL GETS NOTHING, and that is arm 2 of `canSeeTemplate`
+ * restated rather than a second rule: such a key may be shared between humans,
+ * so it inherits no one person's reach and must not learn where "their"
+ * templates live. A CONTAINER SESSION is not shared (F-336) and is answered
+ * normally, exactly as arm 3 answers it.
+ *
+ * ⚠ IT NAMES A TENANCY, NEVER A ROSTER. One name and one place — never how many
+ * matched, never who else is in that workspace, never the other candidates.
+ */
+export async function classifyMissingTemplateRef(
+  ctx: AgentTemplateContext,
+  needle: string
+): Promise<TemplateElsewhere | null> {
+  if (isSharedCredential(ctx)) return null;
+  const memberships = await tenancyRepo.listWorkspaceIdsForUser(ctx.userId);
+  const others = memberships.filter((id) => id !== ctx.workspaceId);
+  if (others.length === 0) return null;
+  const rows = await tenancyRepo.findTemplateTenancyRows(
+    ctx.userId,
+    others,
+    isUuid(needle) ? { id: needle } : { name: needle }
+  );
+  if (rows.length === 0) return null;
+  // ⚠ ONE ANSWER, DETERMINISTICALLY CHOSEN. A name can legitimately match rows
+  // in several tenancies; listing them would be the roster this must not print,
+  // and an arbitrary pick would make the same refusal read differently on two
+  // consecutive calls. Sorted by the label the caller will read.
+  const labelled = rows
+    .map((r) => ({ name: r.name, label: tenancyLabel(r) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  return labelled[0];
+}
+
+/**
+ * The phrase for a tenancy the caller belongs to.
+ *
+ * ⚠ THREE SHAPES, AND THE FIRST ONE CANNOT BE ANYONE ELSE'S. A `home_scoped`
+ * row is `private` by fence (`service-writes.ts › resolveHomeScope`), so the
+ * only way it reached the caller-owned arm of the query is that the caller
+ * created it — "your personal shelf" is a statement about their own rows.
+ * ⚠ A `kind='link'` container is named by ITS ID and not by its name: the id is
+ * the actionable half (`workspace=<container id>`), and §4A forbids advertising
+ * a container as a workspace.
+ * ⚠ NO MARKDOWN IN HERE. The label is peer-adjacent text (a workspace NAME) and
+ * every renderer of it neutralizes inline punctuation, so backticks added here
+ * would arrive as blanks. The renderer decides the typography; this decides the
+ * WORDS.
+ */
+function tenancyLabel(row: tenancyRepo.TemplateTenancyRow): string {
+  if (row.homeScoped) return "your personal shelf";
+  if (row.workspaceKind !== "standard") {
+    return `a home channel of yours, container ${row.workspaceId}`;
+  }
+  return row.workspaceName
+    ? `the workspace “${row.workspaceName}”`
+    : "another workspace you belong to";
 }

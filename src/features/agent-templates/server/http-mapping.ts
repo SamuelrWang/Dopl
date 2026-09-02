@@ -14,7 +14,15 @@ import {
  *  as `mapSkillError` / `mapKnowledgeError`. */
 export function mapAgentTemplateError(err: unknown): HttpError | null {
   if (err instanceof AgentTemplateNotFoundError) {
-    return new HttpError(404, "AGENT_TEMPLATE_NOT_FOUND", err.message);
+    // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35): the key
+    // is ABSENT for an ordinary miss, so its presence cannot itself be read as
+    // a fact about a row the caller may not see.
+    return new HttpError(
+      404,
+      "AGENT_TEMPLATE_NOT_FOUND",
+      err.message,
+      err.elsewhere ? { elsewhere: err.elsewhere } : undefined
+    );
   }
   if (err instanceof TemplateKnowledgeBaseNotFoundError) {
     // ⚠ 404, not 403 — see the error class: a distinguishable "forbidden" here

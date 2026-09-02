@@ -58,6 +58,7 @@ import {
   LaunchTemplateNotFoundError,
 } from "./errors";
 import { createLaunchDirective, getLaunchDirective } from "./service-launch";
+import { toChannelErrorResponse } from "./http-mapping";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 
 const WS = "22222222-2222-2222-2222-222222222222";
@@ -208,6 +209,41 @@ describe("the template ref — resolved under the CALLER's visibility, before an
     expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
   });
 
+  it("an `elsewhere` ref refuses with the TENANCY attached, and still files nothing (T35)", async () => {
+    // ⚠ THE FOURTH ANSWER, WIRED LIKE THE OTHER THREE. The classification is the
+    // template feature's — this service adds no rule of its own to it, it only
+    // carries it — and the OUTCOME does not move: still a refusal, still a 404,
+    // still nothing filed. What changes is that the sentence can name the place.
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({
+      kind: "elsewhere",
+      template: { name: "Code Auditor", label: "your personal shelf" },
+    });
+    const err = await createLaunchDirective(ctx, {
+      channel: "general",
+      template: "Code Auditor",
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(LaunchTemplateNotFoundError);
+    expect((err as LaunchTemplateNotFoundError).elsewhere).toEqual({
+      name: "Code Auditor",
+      label: "your personal shelf",
+    });
+    expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
+  });
+
+  it("a plain NOT-FOUND carries NO tenancy — the two must stay one answer", async () => {
+    // 🔒 `null`, not an empty object: "no such template" and "somebody else's,
+    // not yours to see" are the pair this surface refuses to distinguish, and a
+    // detail key present on one and absent on the other IS the distinction.
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "not-found" });
+    const err = await createLaunchDirective(ctx, {
+      channel: "general",
+      template: "Ghost",
+    }).catch((e) => e);
+    expect((err as LaunchTemplateNotFoundError).elsewhere).toBeNull();
+  });
+
   it("an AMBIGUOUS name refuses, files nothing, and carries every match", async () => {
     // ⚠ REFUSES AND LISTS, NEVER PICKS. Names are deliberately not unique, and
     // the list is what makes the refusal actionable — the caller re-issues with
@@ -275,5 +311,39 @@ describe("the template ref — resolved under the CALLER's visibility, before an
     const out = await getLaunchDirective(ctx, DIR);
     expect(out.templateId).toBeNull();
     expect(out.templateName).toBe("Code Auditor");
+  });
+});
+
+// ── T35 — AND THE FACT REACHES THE WIRE, OR IS ABSENT FROM IT ────────────
+//
+// ⚠ ABSENT, NOT NULL. `HttpError.toResponseBody` omits `details` when it is
+// `undefined`, and that is the shape this arm depends on: a `details` key
+// present on one 404 and absent on the other must correspond to "there was
+// something non-leaky to say" and nothing else. A `details: { elsewhere: null }`
+// on every miss would make the KEY the signal instead of its content.
+describe("the 404 body", () => {
+  it("carries `details.elsewhere` when the refusal named a tenancy", async () => {
+    const res = toChannelErrorResponse(
+      new LaunchTemplateNotFoundError("Code Auditor", {
+        name: "Code Auditor",
+        label: "your personal shelf",
+      })
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: {
+        code: "AGENT_TEMPLATE_NOT_FOUND",
+        message: "Agent template not found: Code Auditor",
+        details: { elsewhere: { name: "Code Auditor", label: "your personal shelf" } },
+      },
+    });
+  });
+
+  it("has NO `details` key at all for an ordinary miss", async () => {
+    const res = toChannelErrorResponse(new LaunchTemplateNotFoundError("Ghost"));
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
+    expect(body.error).not.toHaveProperty("details");
   });
 });
