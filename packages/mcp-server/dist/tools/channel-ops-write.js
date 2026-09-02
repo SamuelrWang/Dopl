@@ -15,10 +15,13 @@
  *   - `toLabel` (`profiles.display_name`) — already render-safe:
  *     `resolveMemberOr` neutralizes at the source. ⚠ Do NOT neutralize twice.
  *
- * ⚠ A post addresses a PERSON or nobody; `intent` decides whether even that
- * reaches their machine. There is no agent-addressing param.
+ * ⚠ A post addresses a PERSON or nobody, and `to` is the whole of it: with one
+ * the message reaches that member's machine, without one it is chat and reaches
+ * nobody. There is no agent-addressing param and no second way to say which.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.MILESTONE_MAX_CHARS = void 0;
+exports.milestoneRefusal = milestoneRefusal;
 exports.opPost = opPost;
 const respond_1 = require("./respond");
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
@@ -27,8 +30,6 @@ const respond_1 = require("./respond");
 const channel_facts_1 = require("./channel-facts");
 // "Did it thread?" — the question a sender cannot otherwise settle.
 const channel_post_linkage_1 = require("./channel-post-linkage");
-// The one refusal that is not a fact about a successful write.
-const channel_post_notes_1 = require("./channel-post-notes");
 // "What became of the `@…` tokens?" — the server's own resolution, read back.
 const channel_post_guidance_1 = require("./channel-post-guidance");
 const channel_shared_1 = require("./channel-shared");
@@ -40,36 +41,28 @@ const channel_errors_1 = require("./channel-errors");
 /** Fallback for peer text that neutralized to nothing — never an empty span. */
 const NO_NAME = "(unnamed)";
 /**
- * THE THREE KINDS AN AGENT MAY NOT POST — fast half of a refusal the server
- * also makes (`service-writes.assertLifecycleKindIsServerOwned`). Duplicated
- * here so the refusal can say WHAT TO DO INSTEAD before anything is sent, which
- * makes "nothing was sent" trivially true.
+ * G14 — **A MILESTONE IS ONE LINE, AND THAT IS NOW A BOUND RATHER THAN A WORD.**
  *
- * ⚠ `task_progress` is deliberately absent — the milestone lane stays writable.
+ * ⚠ The op shared `post`'s 16,000-character cap while three surfaces asked, in
+ * prose, for "ONE LINE naming the step that just landed" — and a rule stated
+ * only in prose is the rule a model spends a paragraph on. 240 characters is
+ * about two lines of terminal width; the NEWLINE check is the sharper half,
+ * because a multi-line milestone is a report wearing a marker's op, and the
+ * card that renders it shows one line whatever it was sent.
+ *
+ * ⚠ **THE REFUSAL NAMES THE OTHER LANE**, since the caller has real content in
+ * hand: refusing without saying where it goes is how a deliverable ends up
+ * squeezed into a marker.
  */
-const LIFECYCLE_KINDS = new Set([
-    "task_started",
-    "task_finished",
-    "task_failed",
-]);
-/**
- * ⚠ Leads with the CONSEQUENCE, not the rule: an agent reaching for
- * `task_finished` believes it is delivering, so "the body is not rendered" is
- * the sentence that changes behaviour, not "that kind is reserved".
- */
-function lifecycleKindRefusal(kind) {
-    return (0, respond_1.err)(`Nothing was sent: \`kind="${kind}"\` is a LIFECYCLE MARKER, not a way to say something, and it is not yours to post. Those three kinds ("task_started" / "task_finished" / "task_failed") are written by the runtime that starts and stops a session, and the other member's thread card renders a terminal marker as a STATUS CHIP — its body is not shown at all, so an answer sent this way is delivered nowhere. Re-send it as an ordinary message: drop \`kind\` entirely and post the same text. Everything substantive you send, your FINAL ANSWER included, is a plain message. To mark that a step LANDED, that is dopl_channel(op="milestone", thread="<id>", body="<one line>") — a marker, not a delivery.`);
+exports.MILESTONE_MAX_CHARS = 240;
+function milestoneRefusal(body) {
+    const over = body.length > exports.MILESTONE_MAX_CHARS;
+    const multiline = /[\r\n]/.test(body);
+    if (!over && !multiline)
+        return null;
+    return (0, respond_1.err)(`Nothing was posted: a milestone is ONE LINE marking a step that just landed, and yours ${over ? `is ${body.length} characters (the cap is ${exports.MILESTONE_MAX_CHARS})` : "spans more than one line"}. The bound is the point of the op — a milestone carries no content, so a requester watching several agents can read a page of them at a glance. Post the substance with dopl_channel(op="post", thread="<the same id>", body=…), then mark it with one short line here.`);
 }
 async function opPost(client, channelRef, body, opts = {}) {
-    // ⚠ Both refusals stay BEFORE any round-trip: a post this tool will not make
-    // needs nothing resolved, so "nothing was sent" is trivially true and cannot
-    // be confused with a delivery failure.
-    if (opts.intent === "chat" && opts.to) {
-        return (0, respond_1.err)(channel_post_notes_1.CHAT_ADDRESSED_REFUSAL);
-    }
-    if (opts.kind && LIFECYCLE_KINDS.has(opts.kind)) {
-        return lifecycleKindRefusal(opts.kind);
-    }
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
@@ -99,9 +92,6 @@ async function opPost(client, channelRef, body, opts = {}) {
             clientMsgId: opts.clientMsgId,
             toUserId,
             summary: opts.summary,
-            // ⚠ Omitted `intent` means `request` and stamps NO metadata key
-            // (service-writes-metadata.ts).
-            intent: opts.intent,
             // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
             escalation: opts.escalation,
         });
@@ -120,10 +110,6 @@ async function opPost(client, channelRef, body, opts = {}) {
                     return (0, respond_1.err)(`That post was rejected as INVALID before it reached **${chName}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and post again.`);
                 case "workspace":
                     return (0, respond_1.err)(`The post was rejected because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
-                // Local guard above already refuses this pair, so reaching here means
-                // the two disagree — answer with the RULE.
-                case "chat_addressed":
-                    return (0, respond_1.err)(channel_post_notes_1.CHAT_ADDRESSED_REFUSAL);
                 // `self_target` is create_thread-only (`post to=self` is deliberately
                 // NOT guarded server-side), so this arm is unreachable and exists only
                 // to keep the switch exhaustive.
@@ -135,11 +121,14 @@ async function opPost(client, channelRef, body, opts = {}) {
         // ⚠ 403s told apart by CODE, not by which params happened to be set.
         if ((0, channel_errors_1.isForbidden)(e)) {
             const kind = (0, channel_errors_1.classifyForbidden)(e);
-            // Server refused the kind. Unreachable behind the guard at the top of
-            // this op; answered with the same sentence rather than an arm that talks
-            // about channel membership.
+            // ⚠ THE BELT FOR A BYPASSED BUILD. No caller can name a lifecycle kind
+            // any more — `kind` left the published shape (C12) and only op="milestone"
+            // sets one, to the single value the lane allows — so this is unreachable
+            // through the tool. It is answered with the RULE rather than dropped into
+            // a membership arm, because the one thing it must never read as is "you
+            // left the channel".
             if (kind === "lifecycle_kind") {
-                return lifecycleKindRefusal(opts.kind ?? "task_finished");
+                return (0, respond_1.err)('Nothing was sent: that message carried a LIFECYCLE kind ("task_started" / "task_finished" / "task_failed"), which the runtime that starts and stops a session writes and an agent credential may not. Post the same text as an ordinary message — everything substantive you send, your FINAL ANSWER included, is one — and mark a step that LANDED with op="milestone".');
             }
             if (opts.thread && kind !== "not_a_member") {
                 // A thread belongs to its CREATOR and its addressee; that pair is the
@@ -148,7 +137,7 @@ async function opPost(client, channelRef, body, opts = {}) {
                 // ⚠ The thread id is NOT echoed here. It round-trips (an agent copies
                 // it from a `read` legend = `metadata.taskId`, peer-set verbatim for
                 // non-UUID values), and "the id you just passed" needs no escaping.
-                return (0, respond_1.err)(`You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with dopl_channel(op="get_thread", channel="${ch.id}", thread=<the id you just passed>). Post into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
+                return (0, respond_1.err)(`You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with dopl_channel(op="read", channel="${ch.id}", thread=<the id you just passed>). Post into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
             }
             if (kind === "not_a_member") {
                 return (0, respond_1.err)(`You can't post to **${chName}** — you are not a member of that channel. Nothing was posted.`);
@@ -173,8 +162,9 @@ async function opPost(client, channelRef, body, opts = {}) {
     //               the silent tag-drop the long note existed for.
     //   addressed — T12: the whole of the "NOT ADDRESSED" paragraph. `no` means no
     //               agent was put in front of this post; the doctrine says why.
-    //   intent    — `chat` addresses nobody ON PURPOSE, so it must be
-    //               distinguishable from a forgotten `to`.
+    //   ⚠ `intent` WAS A FIELD HERE and is not one now (C12): it could only
+    //               ever restate `addressed`, since chat is exactly "no `to`",
+    //               and two fields for one fact is what let them disagree.
     //   tags      — the server's own mention resolution. THE ONE THING IN THE
     //               PRODUCT THAT CATCHES A MISSPELLED HANDLE (INVARIANTS §10):
     //               `0/1` is the verdict, and it may never be dropped for brevity.
@@ -200,7 +190,6 @@ async function opPost(client, channelRef, body, opts = {}) {
         // ⚠ Read off `toUserId`, which is what the server was given — never off
         // `toLabel`, which is only ever the render of it.
         addressed: !!toUserId,
-        intent: opts.intent ?? "request",
         tags: mentions.tags,
         wake: mentions.wake,
         await: (0, channel_wake_guidance_1.awaitFact)(opts.runtime ?? null, message.seq),

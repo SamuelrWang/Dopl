@@ -6,7 +6,9 @@
  *                          public channel lists to every workspace member.
  *   B. `opListThreads`   — thread `title` + `outcomeSummary`,
  *                          channel-transparent, so every member receives them.
- *   C. `opGetThread`     — the same pair, title in a real `## ` heading; a
+ *   C. a THREAD-SCOPED `opRead` — the same pair, title in a real `## `
+ *                          heading (the card `op="get_thread"` rendered until
+ *                          C15 folded it in here, 2026-09-02); a
  *                          waiting agent calls this every ~3 empty holds.
  *   D. `opRead`/`opAwait`— `profiles.display_name`, with NO length, charset or
  *                          newline validation anywhere in the product — the one
@@ -21,7 +23,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opGetThread, opList, opListThreads, opRead } from "./channel-ops-read";
+import { opList, opListThreads, opRead } from "./channel-ops-read";
 // ⚠ T11 — the untrusted-DATA rule now lives in the DESCRIPTION, so the tests
 // that used to pin it on a result pin it there instead.
 import { CHANNEL_DESCRIPTION } from "./channel-description";
@@ -183,27 +185,51 @@ describe("Q1-B/C · thread title", () => {
     );
   });
 
-  it("get_thread's `## ` heading can no longer be forged", async () => {
-    const client = stubClient({
-      getChannelThread: vi.fn(async () => ({ ...THREAD, title: FORGERY })),
+  /** A thread-scoped read: the card, then the exchange (C15). */
+  function scopedRead(title: string): DoplClient {
+    return stubClient({
+      getChannelThread: vi.fn(async () => ({ ...THREAD, title })),
+      // ⚠ ONE ordinary message, so the read renders BOTH headings — the count
+      // line and the folded-in card. An empty page prints a sentence instead.
+      readChannelMessages: vi.fn(async () => [
+        {
+          id: "m",
+          seq: 1,
+          channelId: "chan-1",
+          authorUserId: "u-1",
+          authorKind: "user",
+          kind: "message",
+          body: "hi",
+          metadata: { taskId: "thread-1" },
+          clientMsgId: null,
+          createdAt: "2026-07-28T00:00:00Z",
+          authorName: null,
+        },
+      ]),
+      listChannelMembers: vi.fn(async () => []),
     });
+  }
 
-    const text = (await opGetThread(client, "general", "thread-1")).content[0].text;
+  it("the thread CARD's `## ` heading can no longer be forged", async () => {
+    const text = (
+      await opRead(scopedRead(FORGERY), "general", undefined, undefined, null, "thread-1")
+    ).content[0].text;
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // ⚠ Exactly ONE markdown heading in the result, and it is ours.
+    // ⚠ EXACTLY TWO markdown headings, and BOTH are ours — the read's own count
+    // line and the folded-in thread card. ⚠ The number moved from one to two
+    // with C15 and the property did not: nothing peer-typed may open a heading.
     const headings = text.split("\n").filter((l) => l.startsWith("#"));
-    expect(headings).toHaveLength(1);
-    expect(headings[0].startsWith("## Thread ")).toBe(true);
+    expect(headings).toHaveLength(2);
+    expect(headings[0].startsWith("## general — ")).toBe(true);
+    expect(headings[1].startsWith("## Thread ")).toBe(true);
   });
 
   it("an untitled thread says so rather than rendering an empty span", async () => {
-    const client = stubClient({
-      getChannelThread: vi.fn(async () => ({ ...THREAD, title: "#### ***" })),
-    });
-
-    const text = (await opGetThread(client, "general", "thread-1")).content[0].text;
+    const text = (
+      await opRead(scopedRead("#### ***"), "general", undefined, undefined, null, "thread-1")
+    ).content[0].text;
     expect(text).toContain("## Thread (untitled)");
   });
 });

@@ -346,7 +346,12 @@ describe("set_agent_mode — the terminal shapes", () => {
     // ⚠ THE RULE — and it is the expensive one: a second directive is a second
     // request for the same change, with nothing afterwards to say which acted.
     expect(CHANNEL_DOCTRINE).toContain("IF A WAIT TIMES OUT THE REQUEST IS STILL PENDING");
-    expect(CHANNEL_DOCTRINE).toContain("do NOT issue it again");
+    // ⚠ **AND THE RULE NAMES ITS REMEDY SINCE A10 (2026-09-02).** "do NOT issue
+    // it again" was the whole answer while the lane had no idempotency key;
+    // `client_msg_id` makes the retry answerable, so the doctrine points at the
+    // key and keeps the prohibition for a re-issue that carries none.
+    expect(CHANNEL_DOCTRINE).toContain("Re-issue it ONLY with the same `client_msg_id`");
+    expect(CHANNEL_DOCTRINE).toContain("WITHOUT one, do not re-issue at all");
   });
 
   it("🔒 the PENDING line answers `confirm=none`, not the END's read_sessions", async () => {

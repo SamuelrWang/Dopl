@@ -59,6 +59,21 @@ type AgentOp =
 type ChannelArgs = z.infer<ZodObject<typeof CHANNEL_INPUT_SHAPE>>;
 
 /**
+ * `chain`'s THREE published words → the wire's `boolean | undefined`.
+ *
+ * ⚠ **`inherit` IS `undefined`, NOT `false`, AND THAT DISTINCTION IS THE WHOLE
+ * REASON THE ENUM EXISTS** (C11): `false` FORBIDS chaining and always narrows,
+ * while absent takes the operator's channel setting, which may be ON. The
+ * surface used to say that in a paragraph on an optional boolean, and the two
+ * were flattened together in a live wire bug (GAP C, `directiveFrom`).
+ */
+const CHAIN_ON_WIRE: Record<"inherit" | "on" | "off", boolean | undefined> = {
+  inherit: undefined,
+  on: true,
+  off: false,
+};
+
+/**
  * ⚠ **`op` IS PASSED SEPARATELY FROM `args`, AND IT IS NOT REDUNDANT.**
  * `CHANNEL_INPUT_SHAPE` is ONE object type with an `op` enum, not a
  * discriminated union, so the caller's grouped `case` narrows `args.op` but NOT
@@ -98,8 +113,8 @@ export async function dispatchAgentOp(
         channel: args.channel,
         agent: args.agent_id,
       });
-    // ⚠ ASKS THE OPERATOR'S OWN MACHINE TO START AN AGENT. `goal`, `model`,
-    // `thread` and `wait_ms` are all optional; only `channel` is required.
+    // ⚠ ASKS THE OPERATOR'S OWN MACHINE TO START AN AGENT. Everything but
+    // `channel` is optional.
     // The op NEVER names an operator — the server stamps the authenticated
     // caller, because the only machine an agent may ask is its own
     // operator's, and there is no argument here that could say otherwise.
@@ -115,6 +130,23 @@ export async function dispatchAgentOp(
         // SERVER-SIDE, against the caller's own template visibility, which
         // this process cannot evaluate.
         template: args.template,
+        // ⚠ **THE POSTURE ASK, AND IT WAS DROPPED HERE FOR A WHOLE RELEASE**
+        // (F-438, fixed 2026-09-02). `channel-schema.ts` published these three,
+        // `opLaunchAgent` accepted them, the route validated them and the table
+        // has columns for them — and this arm built its object without reading
+        // any of them, so a caller asking for a NARROWER agent got the
+        // operator's stored ceiling and was told nothing. The direction was
+        // safe (it could only ever widen back to the ceiling, never past it),
+        // which is exactly why nothing caught it: the row recorded "did not
+        // ask", which is what an honest omission looks like too.
+        tools: args.tools,
+        messages: args.messages,
+        // ⚠ THE ENUM IS THE CALLER'S, THE BOOLEAN IS THE WIRE'S, AND THE MAP IS
+        // HERE (C11). `inherit` — and an omitted value — must reach the server
+        // as ABSENT rather than as `false`: flattening the two was GAP C, a live
+        // wire bug. Three words in, three states out, and no third meaning for
+        // `undefined`.
+        chain: CHAIN_ON_WIRE[args.chain ?? "inherit"],
         // ⚠ THE ONE THING THAT MAKES THE DOCTRINE'S "do NOT issue it again"
         // TRUE IN CODE (A10/G10). Without a key a re-issue after a timeout files
         // a SECOND directive and starts a SECOND agent on the same work; with

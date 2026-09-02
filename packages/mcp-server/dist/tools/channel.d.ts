@@ -10,18 +10,20 @@
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`     — ref resolution + the ONE neutralizer every
  *                               peer-authored string must pass through
- *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread /
+ *   - `channel-ops-read.ts`   — list / read (a thread-scoped read carries the
+ *                               thread's own metadata header) / list_threads /
  *                               members / read_sessions
  *   - `channel-ops-await.ts`  — await (the only looping op)
  *   - `channel-ops-open.ts`   — open / invite
- *   - `channel-ops-write.ts`  — post (+ `channel-post-notes.ts` /
- *                               `channel-post-linkage.ts` for its result lines)
+ *   - `channel-ops-write.ts`  — post (+ `channel-post-linkage.ts` and
+ *                               `channel-facts.ts` for its result line)
  *   - `channel-ops-threads.ts`— create_thread / set_thread_mode
  *   - `channel-render.ts`     — read renderers + untrusted-content headers,
  *                               shared with the write side
  *
- * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing; the only
- * distinction a post makes is `intent` chat vs. request.
+ * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing, and the only
+ * distinction a post makes is whether it carries `to`: with one it is a REQUEST
+ * that reaches that member's machine, without one it is chat and reaches nobody.
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
  * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the

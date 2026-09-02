@@ -5,17 +5,23 @@
  * 2026-08-18; before that a session card folded the marker into its `endEvent`)
  * — so an ANSWER posted as
  * `kind:"task_finished"` appears NOWHERE. Two guards pinned here:
- *   1. `op="post"` REFUSES the three lifecycle kinds before any round-trip,
- *      saying what to do instead. (Authoritative refusal is the server's,
- *      `service-writes.assertLifecycleKindIsServerOwned`; this is the fast,
- *      teaching half.)
+ *   1. ⚠ **`kind` IS NOT A PARAM ANY MORE (C12, 2026-09-02)**, so the three are
+ *      not REFUSABLE — they are UNSAYABLE. The field published five values of
+ *      which three were refused, one had its own op and one was the default,
+ *      and its own text opened "leave it unset". A pre-call guard over an
+ *      argument no caller can send is a guard with nothing to catch, so what is
+ *      pinned here is the DELETION and the belt behind it: the server's
+ *      `service-writes.assertLifecycleKindIsServerOwned` is now the only
+ *      refusal, and the 403 it raises is still answered with the RULE.
  *   2. `op="milestone"` exists, so the milestone lane is a different CALL, not
- *      a different `kind` on the same call — the two acts can no longer be
- *      confused by picking wrongly between adjacent enum values.
+ *      a different `kind` on the same call — and it is the ONLY writer of a
+ *      `task_*` kind left on this tool.
  */
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { opPost } from "./channel-ops-write";
 import { registerChannelTool } from "./channel";
 import type { RegisterTool, ToolResponse } from "./respond";
@@ -57,44 +63,56 @@ function callTool(client: DoplClient) {
   return handler;
 }
 
-// ── 1. the refusal ─────────────────────────────────────────────────────────────
+// ── 1. the deletion, and the belt behind it ────────────────────────────────────
 
-describe('op="post" refuses the lifecycle kinds (P0-2)', () => {
-  it.each(LIFECYCLE_KINDS)("refuses %s WITHOUT any round-trip", async (kind) => {
+describe("the three lifecycle kinds are UNSAYABLE, not merely refused (C12)", () => {
+  it.each(LIFECYCLE_KINDS)("%s is not a value a caller can send", (kind) => {
+    // ⚠ THE STRONGER GUARD. A pre-call refusal caught a caller that named one;
+    // an absent param means nothing can name one, so there is no arm to keep
+    // correct and no sentence to keep in sync with the server's.
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("kind");
+    expect(JSON.stringify(CHANNEL_INPUT_SHAPE.op.options)).not.toContain(kind);
+  });
+
+  it("an unknown arg is dropped by the strict shape, never forwarded", async () => {
+    // The call as an older agent would still write it: `kind` reaches nothing.
     const client = stubClient();
-    const res = await opPost(client, "general", "Here is the finished analysis…", { kind });
+    const res = await callTool(client)({
+      op: "post",
+      channel: "general",
+      body: "Here is the finished analysis…",
+      kind: "task_finished",
+    });
+
+    expect(res.isError).toBeFalsy();
+    const [, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
+    expect((input as unknown as Record<string, unknown>).kind).toBeUndefined();
+  });
+
+  it("the SERVER's 403 is still answered with the rule, not with membership", async () => {
+    // ⚠ THE BELT FOR A BYPASSED BUILD. Unreachable through the tool now, and
+    // answered anyway — the one thing it must never read as is "you left the
+    // channel", which is what a status-only branch would have said.
+    const client = stubClient({
+      postChannelMessage: vi.fn(async () => {
+        throw Object.assign(new Error("forbidden"), {
+          status: 403,
+          code: "CHANNEL_LIFECYCLE_KIND_FORBIDDEN",
+        });
+      }),
+    });
+    const res = await opPost(client, "general", "done", {});
 
     expect(res.isError).toBe(true);
-    // ⚠ "Nothing was sent" must be TRUE, not claimed — refused ahead of the
-    // channel lookup, so not even the resolve happens.
-    expect(client.postChannelMessage).not.toHaveBeenCalled();
-    expect(client.listChannels).not.toHaveBeenCalled();
-  });
-
-  it("leads with the CONSEQUENCE, because that is what changes behaviour", async () => {
-    // ⚠ The sentence that moves an agent is "the body is not shown", not "that
-    // kind is reserved" — pin the effect AND the remedy.
-    const text = (
-      await opPost(stubClient(), "general", "done", { kind: "task_finished" })
-    ).content[0].text;
-
-    expect(text).toContain("Nothing was sent");
-    expect(text).toContain("its body is not shown at all");
-    expect(text).toContain("delivered nowhere");
-    expect(text).toContain("drop `kind` entirely and post the same text");
+    const text = res.content[0].text;
+    expect(text).toContain("LIFECYCLE kind");
+    expect(text).toContain("FINAL ANSWER");
     expect(text).toContain('op="milestone"');
-    expect(text).toContain("FINAL ANSWER included");
-  });
-
-  it("names the kind the caller actually passed", async () => {
-    for (const kind of LIFECYCLE_KINDS) {
-      const text = (await opPost(stubClient(), "general", "x", { kind })).content[0].text;
-      expect(text).toContain(`kind="${kind}"`);
-    }
+    expect(text).not.toContain("member of that channel");
   });
 });
 
-describe("what the refusal must NOT catch", () => {
+describe("what the deletion must NOT catch", () => {
   it("task_progress still posts: it is the milestone lane", async () => {
     const client = stubClient();
     const res = await opPost(client, "general", "schema half landed", {
@@ -178,17 +196,25 @@ describe('op="milestone" — a different CALL, not a different kind (P0-3)', () 
 // ── 3. the surface still teaches the rule ──────────────────────────────────────
 
 describe("the published surface says whose each kind is", () => {
-  it("the `kind` describe stops reading as an interchangeable list", () => {
-    let schema!: Record<string, { description?: string }>;
-    const register: RegisterTool = (_n, _d, s) => {
-      schema = s as unknown as Record<string, { description?: string }>;
-    };
-    registerChannelTool(register, stubClient());
-
-    const described = (schema.kind as unknown as { description?: string }).description ?? "";
-    expect(described).toContain("LEAVE THIS UNSET");
-    expect(described).toContain("FINAL ANSWER");
-    expect(described).toContain("LIFECYCLE MARKERS");
-    expect(described).toContain('op="milestone"');
+  it("the rule outlived the param: the doctrine still states it, once", () => {
+    // ⚠ **THE PARAM'S `.describe()` WAS THE OTHER HALF OF THIS PAIR AND IS
+    // GONE** (C12). What it taught — that everything substantive you send is a
+    // plain message, and that the three markers belong to the runtime — is a
+    // STANDING rule rather than a field contract, so it belongs in the pulled
+    // doctrine and nowhere else. A rule stated in two places drifts in one.
+    //
+    // ⚠ **G2 (A6, 2026-09-02) — THE FENCE IS THE CREDENTIAL, NOT THE CALLER.**
+    // The retired describe read "this tool REFUSES them from you", and the
+    // hotfix investigation proved the sentence wrong rather than the code: the
+    // refusal keys on `ctx.source === "agent"`
+    // (`service-writes-lifecycle.ts`), by pinned invariant, because
+    // cookie-session posts are the desktop's own lane and must keep writing
+    // lifecycle rows.
+    expect(CHANNEL_DOCTRINE).toContain("REFUSED FROM AN AGENT CREDENTIAL");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "the fence is the credential a call arrives on, not the author it claims",
+    );
+    expect(CHANNEL_DOCTRINE).not.toContain("they are REFUSED from you");
+    expect(CHANNEL_DOCTRINE).toContain("EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY MESSAGE");
   });
 });

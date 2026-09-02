@@ -1,8 +1,14 @@
 "use strict";
 /**
- * `dopl_channel` READ op handlers: list, read, list_threads / get_thread,
- * members. All non-mutating, all ONE round-trip rendered. `await` lives in
- * `channel-ops-await.ts` (the only looping op).
+ * `dopl_channel` READ op handlers: list, read, list_threads, members. All
+ * non-mutating, all ONE round-trip rendered — except a THREAD-SCOPED `read`,
+ * which is two. `await` lives in `channel-ops-await.ts` (the only looping op).
+ *
+ * ⚠ **`op="get_thread"` WAS FOLDED INTO `read(thread=)` ON 2026-09-02 (C15).**
+ * Two ops answered one noun — "what is this exchange" — and the split cost 200
+ * characters of published prose explaining that the first returned no bodies.
+ * A thread-scoped read now carries the METADATA HEADER that op rendered, above
+ * the transcript it always rendered, so the fold deleted an op and no answer.
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread` — the `thread`
  * op param resolves against `channel_tasks` rows and `/tasks` routes under
@@ -17,7 +23,6 @@ exports.opList = opList;
 exports.opRead = opRead;
 exports.opReadSessions = opReadSessions;
 exports.opListThreads = opListThreads;
-exports.opGetThread = opGetThread;
 exports.opMembers = opMembers;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
@@ -85,6 +90,35 @@ async function opList(client) {
  * message's own `**#seq**`, so nothing is hidden — what is withheld is the
  * SUMMARY line that reads like a cursor.
  */
+/**
+ * THE THREAD'S OWN CARD, above the exchange (C15). ⚠ **BEST-EFFORT, AND THE
+ * SILENCE IS THE CONTRACT**: a legacy `task-<channel>-<seq>` id is a real,
+ * filterable `metadata.taskId` with NO row behind it, so a 404 here means "this
+ * tag names no thread row", which is a fact about ad-hoc exchanges rather than
+ * an error — the transcript below is the answer either way. A thrown non-404
+ * still propagates.
+ *
+ * ⚠ It is the ONE extra round-trip on this op and it is paid only when `thread`
+ * is set: an unscoped `read` is the poll-loop path and stays one call.
+ */
+async function threadHeader(client, ref, threadId, selfUserId) {
+    let thread;
+    try {
+        thread = await client.getChannelThread(ref, threadId);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e))
+            return [];
+        throw e;
+    }
+    // ⚠ The roster is read only once there IS a card to put names on — an ad-hoc
+    // tag pays for neither call.
+    const view = {
+        selfUserId,
+        names: await (0, channel_shared_1.memberNames)(client, ref),
+    };
+    return [(0, channel_render_1.formatThreadDetail)(thread, view), ``];
+}
 async function opRead(client, ref, since, limit, selfUserId = null, thread) {
     const scope = thread?.trim() ? thread.trim() : undefined;
     // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
@@ -106,11 +140,19 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
             return (0, channel_shared_1.channelNotFound)(ref);
         throw e;
     }
+    // ⚠ THE CARD IS FETCHED ONCE, BEFORE THE EMPTY BRANCH, AND IS RENDERED ON
+    // BOTH (C15). An EMPTY scoped page is exactly the call whose card answers the
+    // question the caller is about to ask — "is this even a thread?" — and the
+    // op it replaced would have answered it.
+    const card = scope ? await threadHeader(client, ref, scope, selfUserId) : [];
     const watch = `dopl_channel(op="await", channel="${ref}", since=`;
     if (messages.length === 0) {
         const sinceNote = since !== undefined ? ` after seq ${since}` : "";
         if (scope) {
-            return (0, respond_1.ok)(`No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="list_threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); await is channel-wide and takes no thread.`);
+            return (0, respond_1.ok)([
+                ...card,
+                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="list_threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); await is channel-wide and takes no thread.`,
+            ].join("\n"));
         }
         return (0, respond_1.ok)(`No messages in **${ref}**${sinceNote}. Watch for new ones with ${watch}${since ?? 0}).`);
     }
@@ -121,6 +163,10 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
             ? `## ${ref} — ${count} in thread ${safeScope} (ONE exchange, not the whole channel)\n`
             : `## ${ref} — ${count}\n`,
     ];
+    // ⚠ THE CARD GOES ABOVE THE BODIES, like every other framing on this surface:
+    // a header read after the peer-typed content it describes is a header that
+    // arrived too late. `memberNames` is fail-soft and is read only on this branch.
+    lines.push(...card);
     // ⚠ No roster read here — hot path, the whole reason `read` skips `resolveChannelOr`.
     lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
     const lastSeq = messages[messages.length - 1].seq;
@@ -277,32 +323,8 @@ async function opListThreads(client, ref, selfUserId = null) {
     // to close this listing is standing doctrine — true of every thread in every
     // channel — and is stated in `channel-doctrine.ts` under THE MODEL. What stays
     // is the two calls a reader of THIS page needs next.
-    lines.push(`\nRead one with op="read" (thread=<id>); inspect it with op="get_thread". ${channel_doctrine_1.DOCTRINE_POINTER}`);
+    lines.push(`\nRead one with op="read" (thread=<id>) — that returns the thread's card and its messages. ${channel_doctrine_1.DOCTRINE_POINTER}`);
     return (0, respond_1.ok)(lines.join("\n"));
-}
-async function opGetThread(client, ref, threadId, selfUserId = null) {
-    let thread;
-    try {
-        thread = await client.getChannelThread(ref, threadId);
-    }
-    catch (e) {
-        // Route 404s both an unknown channel ref and a thread not in this channel;
-        // surface a thread-oriented not-found either way.
-        //
-        // ⚠ `threadId` ROUND TRIPS (agent copies it from a `read` legend =
-        // `metadata.taskId`, peer-stored verbatim for non-UUID values), so it needs
-        // `inlineOr`. `ref` stays raw — caller's own argument, nothing
-        // peer-authored reaches it.
-        if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No thread ${(0, channel_shared_1.inlineOr)(threadId, NO_ID)} in **${ref}**. List a channel's threads with dopl_channel(op="list_threads", channel="${ref}").`);
-        }
-        throw e;
-    }
-    // ⚠ Framing FIRST, ABOVE the `## Thread <title>` heading — a waiting agent is
-    // told to call this op every ~3 empty holds, so it re-reads a peer-typed
-    // title on a timer.
-    const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
-    return (0, respond_1.ok)([channel_framing_1.UNTRUSTED_THREAD_HEADER, ``, (0, channel_render_1.formatThreadDetail)(thread, view)].join("\n"));
 }
 /**
  * The channel ROSTER. Read-only; the private per-member preference (agent tool

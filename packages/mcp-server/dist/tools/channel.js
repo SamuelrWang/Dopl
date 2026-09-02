@@ -11,18 +11,20 @@
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`     — ref resolution + the ONE neutralizer every
  *                               peer-authored string must pass through
- *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread /
+ *   - `channel-ops-read.ts`   — list / read (a thread-scoped read carries the
+ *                               thread's own metadata header) / list_threads /
  *                               members / read_sessions
  *   - `channel-ops-await.ts`  — await (the only looping op)
  *   - `channel-ops-open.ts`   — open / invite
- *   - `channel-ops-write.ts`  — post (+ `channel-post-notes.ts` /
- *                               `channel-post-linkage.ts` for its result lines)
+ *   - `channel-ops-write.ts`  — post (+ `channel-post-linkage.ts` and
+ *                               `channel-facts.ts` for its result line)
  *   - `channel-ops-threads.ts`— create_thread / set_thread_mode
  *   - `channel-render.ts`     — read renderers + untrusted-content headers,
  *                               shared with the write side
  *
- * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing; the only
- * distinction a post makes is `intent` chat vs. request.
+ * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing, and the only
+ * distinction a post makes is whether it carries `to`: with one it is a REQUEST
+ * that reaches that member's machine, without one it is chat and reaches nobody.
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
  * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
@@ -52,6 +54,8 @@ const channel_ops_await_1 = require("./channel-ops-await");
 // an absent ref through it would produce guidance with a hole in it.
 const channel_ops_await_workspace_1 = require("./channel-ops-await-workspace");
 const channel_ops_open_1 = require("./channel-ops-open");
+// ⚠ G14's cap travels WITH the op it bounds — the seam enforces it, the
+// post lane owns the number and the sentence.
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 // AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER three kinds, over
@@ -114,14 +118,26 @@ directory) {
             // for clients that never read resources, so the rules can never be
             // unreachable. It takes no arguments and makes no request.
             case "help":
-                return (0, respond_1.ok)(channel_doctrine_1.CHANNEL_DOCTRINE);
+                // ⚠ `section` NARROWS, it never changes what is true: an unknown name
+                // cannot reach here (the schema's enum is built from the same table),
+                // so there is no not-found arm to write and none to get wrong.
+                return (0, respond_1.ok)(args.section === undefined
+                    ? channel_doctrine_1.CHANNEL_DOCTRINE
+                    : (0, channel_doctrine_1.doctrineSection)(args.section));
             case "list":
                 return (0, channel_ops_read_1.opList)(client);
+            // ⚠ WHICH ROOM IS READ OFF THE SHAPE, NOT OFF A FLAG (C12,
+            // 2026-09-02). `direct: true` was a third thing to get right beside the
+            // two arguments that already said everything: a 1:1 has a `member` and
+            // no `name`, a named channel has a `name` and no `member`, and the flag
+            // could contradict either. Both together is the one ambiguous call, and
+            // it is REFUSED rather than resolved by precedence — a caller that meant
+            // one of them cannot tell which it got.
             case "open": {
-                if (args.direct) {
-                    const miss = (0, respond_1.missingParams)("open", args, ["member"]);
-                    if (miss)
-                        return miss;
+                if (args.member !== undefined && args.name !== undefined) {
+                    return (0, respond_1.err)('op="open" takes `name` (a named channel) or `member` (a direct 1:1), never both — nothing was opened. Drop `member` to open a channel, or drop `name` to open the DM.');
+                }
+                if (args.member !== undefined) {
                     return (0, channel_ops_open_1.opOpen)(client, { direct: true, member: args.member });
                 }
                 const miss = (0, respond_1.missingParams)("open", args, ["name"]);
@@ -144,13 +160,11 @@ directory) {
                 if (miss)
                     return miss;
                 return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, {
-                    kind: args.kind,
                     metadata: args.metadata,
                     clientMsgId: args.client_msg_id,
                     to: args.to,
                     summary: args.summary,
                     thread: args.thread,
-                    intent: args.intent,
                     runtime,
                 });
             }
@@ -169,6 +183,9 @@ directory) {
                 ]);
                 if (miss)
                     return miss;
+                const oversize = (0, channel_ops_write_1.milestoneRefusal)(args.body);
+                if (oversize)
+                    return oversize;
                 return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, {
                     kind: "task_progress",
                     thread: args.thread,
@@ -224,12 +241,6 @@ directory) {
                 if (miss)
                     return miss;
                 return (0, channel_ops_read_1.opListThreads)(client, args.channel, selfUserId);
-            }
-            case "get_thread": {
-                const miss = (0, respond_1.missingParams)("get_thread", args, ["channel", "thread"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_read_1.opGetThread)(client, args.channel, args.thread, selfUserId);
             }
             // ⚠ `channel` is an OPTIONAL filter here, hence no missingParams check.
             // Own-scoped in the service; the transport credential IS the caller, so
@@ -315,38 +326,32 @@ directory) {
             case "rename_agent":
             case "set_agent_mode":
                 return (0, channel_dispatch_agents_1.dispatchAgentOp)(args.op, args, client);
-            // ⚠ BOTH FILTERS ARE OPTIONAL, hence no missingParams check. Own-scoped in
-            // the service; the transport credential IS the caller, so no identity is
-            // passed and none could be.
-            // ⚠ THE OUT-OF-BAND SIGNAL. `missingParams` covers only the three that
-            // are unconditional; the RECIPIENT is a choose-exactly-one over three
-            // params, which a required-list cannot express — `opPing` counts them
-            // and names the count it saw, because a caller that sent two cannot
-            // otherwise tell which one would have won.
+            // ⚠ THE OUT-OF-BAND SIGNAL, AND ALL FOUR OF ITS REQUIREMENTS ARE NOW
+            // UNCONDITIONAL — which is the whole of what folding three recipient
+            // params into one bought (C5/F-429). The choose-exactly-one that
+            // `missingParams` could not express is now the shape.
             case "ping": {
                 const miss = (0, respond_1.missingParams)("ping", args, [
                     "channel",
                     "ping_kind",
                     "body",
+                    "recipient",
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_ping_1.opPing)(client, args.channel, args.ping_kind, args.body, {
-                    to: args.to,
-                    toDesktop: args.to_desktop,
-                    agentId: args.agent_id,
-                    thread: args.thread,
-                });
+                return (0, channel_ops_ping_1.opPing)(client, args.channel, args.ping_kind, args.body, args.recipient, args.thread);
             }
             // ⚠ NO REQUIRED PARAMS, hence no missingParams check, and NO recipient
             // argument either: the inbox is the caller's own, fenced at the server.
             // The transport credential IS the caller, so no identity is passed here
             // and none could be.
+            // ⚠ **AND NO `since` (C13, 2026-09-02).** A ping seq is a second cursor
+            // space, and one `since` over two of them reads a plausible WRONG page
+            // instead of erroring. The inbox is a bounded list of signals rather
+            // than a transcript, so the newest page answers it; that leaves exactly
+            // one cursor space on this tool and nothing to cross into.
             case "pings":
-                return (0, channel_ops_ping_1.opReadPings)(client, {
-                    since: args.since,
-                    limit: args.limit,
-                });
+                return (0, channel_ops_ping_1.opReadPings)(client, { limit: args.limit });
             // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
             // the same route and are deliberately NOT routed here (Samuel's ruling
             // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is
