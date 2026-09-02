@@ -31,6 +31,16 @@ import { AccountStatusQuerySchema } from "@/features/channels/schema";
  * › narrowToLock`). A future non-MCP caller that skips it has rebuilt the
  * enumeration oracle B3 denies.
  *
+ * 🔒 **BUT B1 — `ctx.apiKeyWorkspaceId` — IS APPLIED HERE, AND HAS TO BE (R3,
+ * 2026-09-02).** That one IS a property of the credential
+ * (`mcp_tokens.workspace_id`), and `withWorkspaceAuth` 403s on it on every other
+ * route. This route does not use that wrapper — the paragraph above says why —
+ * so nothing upstream enforces it, and until R3 a container-locked credential
+ * read channel names, session telemetry and message previews out of every
+ * workspace its operator belonged to. It is passed to the service, which narrows
+ * the membership PROOF; there is still no caller-supplied scoping parameter, so
+ * the lock is the only thing that can narrow this answer.
+ *
  * ⚠ **THE SESSION HALF CARRIES OPERATOR-ONLY TELEMETRY**, which is safe only
  * because the session read is fenced on `user_id` (`repository-account.ts ›
  * listAccountSessionStates`). A peer's session never reaches this payload and no
@@ -41,7 +51,10 @@ import { AccountStatusQuerySchema } from "@/features/channels/schema";
  */
 async function handleGet(
   request: NextRequest,
-  { userId }: { userId: string }
+  {
+    userId,
+    apiKeyWorkspaceId,
+  }: { userId: string; apiKeyWorkspaceId?: string | null }
 ): Promise<Response> {
   try {
     const { since, view } = parseQuery(
@@ -49,7 +62,14 @@ async function handleGet(
       AccountStatusQuerySchema,
       ["since", "view"]
     );
-    const status = await getAccountStatus(userId, { since, view });
+    const status = await getAccountStatus(userId, {
+      since,
+      view,
+      // 🔒 B1's CEILING (R3). `withUserAuth` is the only wrapper here — nothing
+      // upstream applies the lock — so a container-locked credential would
+      // otherwise read every workspace its operator belongs to.
+      lockedWorkspaceId: apiKeyWorkspaceId ?? null,
+    });
     return NextResponse.json(status, {
       // ⚠ Per-caller and volatile by construction — never cacheable.
       headers: { "Cache-Control": "private, no-store" },

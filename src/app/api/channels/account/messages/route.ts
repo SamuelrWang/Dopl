@@ -22,12 +22,16 @@ import { AccountMessagesQuerySchema } from "@/features/channels/schema";
  * per tick and a deadline struck before the first proof, and this route has
  * neither because it does not wait. Do not grow a `timeoutMs` here.
  *
- * ⚠ Same USER fence and same non-application of the container lock as its
+ * ⚠ Same USER fence, same non-application of the B3 CONTAINER lock, and the same
+ * application of the B1 CREDENTIAL lock (`ctx.apiKeyWorkspaceId`, R3) as its
  * sibling — see `./status/route.ts`'s header, which carries the whole argument.
  */
 async function handleGet(
   request: NextRequest,
-  { userId }: { userId: string }
+  {
+    userId,
+    apiKeyWorkspaceId,
+  }: { userId: string; apiKeyWorkspaceId?: string | null }
 ): Promise<Response> {
   try {
     const { since, limit } = parseQuery(
@@ -35,7 +39,14 @@ async function handleGet(
       AccountMessagesQuerySchema,
       ["since", "limit"]
     );
-    const page = await readAccountMessages(userId, { since, limit });
+    const page = await readAccountMessages(userId, {
+      since,
+      limit,
+      // 🔒 B1's CEILING (R3). `withUserAuth` is the only wrapper here — nothing
+      // upstream applies the lock — so a container-locked credential would
+      // otherwise read every workspace its operator belongs to.
+      lockedWorkspaceId: apiKeyWorkspaceId ?? null,
+    });
     return NextResponse.json(page, {
       headers: { "Cache-Control": "private, no-store" },
     });

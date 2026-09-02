@@ -108,17 +108,34 @@ export const ACCOUNT_OWN_REPLY_LIMIT = 500;
  * ⚠ `workspace_id` comes off the MEMBERSHIP row, which carries it denormalised,
  * so the tenancy of each channel is known without a second join.
  *
+ * ⚠ **`lockedWorkspaceId` IS `ctx.apiKeyWorkspaceId`, NEVER A REQUEST FIELD**
+ * (R3). Absent/null ⇒ every tenancy, which is what an ordinary session or device
+ * token gets. Set ⇒ that one, and the narrowing is total: no query below can
+ * name a channel outside it, because none of them is handed an id from it.
+ *
  * TWO QUERIES, for any number of workspaces.
  */
 export async function listAccountChannelRefs(
-  userId: string
+  userId: string,
+  lockedWorkspaceId?: string | null
 ): Promise<AccountScan<AccountChannelRef>> {
   const db = supabaseAdmin();
-  const { data: memberships, error: memberError } = await db
+  let memberQuery = db
     .from("channel_members")
     .select("channel_id, workspace_id")
-    .eq("user_id", userId)
-    .limit(ACCOUNT_CHANNEL_LIMIT);
+    .eq("user_id", userId);
+  // 🔒 B1's CEILING, APPLIED AT THE PROOF (R3, 2026-09-02). A container-locked
+  // credential may act in ONE workspace, and these reads are the only ones in
+  // the tree that span tenancies — so the lock has to narrow the very array that
+  // becomes every `WHERE channel_id IN (…)` below. Applied here rather than in
+  // the service because a filter downstream of the proof is a filter a future
+  // caller can forget.
+  if (lockedWorkspaceId) {
+    memberQuery = memberQuery.eq("workspace_id", lockedWorkspaceId);
+  }
+  const { data: memberships, error: memberError } = await memberQuery.limit(
+    ACCOUNT_CHANNEL_LIMIT
+  );
   if (memberError) throw memberError;
   const rows = (memberships ?? []) as Array<{
     channel_id: string;

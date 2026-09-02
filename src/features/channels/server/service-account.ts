@@ -33,13 +33,22 @@ import { fetchProfiles } from "./repository-workspace";
  * what is dropped relative to the latter is only the `workspace_id` narrowing,
  * which never granted anything.
  *
- * ⚠ **THE CONTAINER LOCK (B3) IS NOT APPLIED HERE, AND MUST NOT BE.** A locked
- * MCP session must see one room only, but a lock is a property of one MCP
- * CONNECTION and not of the credential — so, exactly as for `GET
- * /api/home/channels`, the narrowing lives in the MCP layer
- * (`packages/mcp-server/src/tools/home-scopes.ts › narrowToLock`). A reader that
- * calls this service and skips it has rebuilt the enumeration oracle B3 exists
- * to deny.
+ * ⚠ **TWO DIFFERENT LOCKS, AND ONLY ONE OF THEM IS A CONNECTION PROPERTY.**
+ *   - **B3, THE CONTAINER LOCK, IS NOT APPLIED HERE AND MUST NOT BE.** A locked
+ *     MCP session must see one room only, but that lock is a property of one MCP
+ *     CONNECTION and not of the credential — so, exactly as for `GET
+ *     /api/home/channels`, the narrowing lives in the MCP layer
+ *     (`packages/mcp-server/src/tools/home-scopes.ts › narrowToLock`). A reader
+ *     that calls this service and skips it has rebuilt the enumeration oracle B3
+ *     exists to deny.
+ *   - 🔒 **B1, `ctx.apiKeyWorkspaceId`, IS APPLIED HERE (R3, 2026-09-02).** That
+ *     one IS a property of the credential — `mcp_tokens.workspace_id`, minted by
+ *     `issueContainerToken` — and `withWorkspaceAuth` 403s on it everywhere
+ *     else. These two routes use `withUserAuth` precisely because they span
+ *     tenancies, so nothing upstream applies it and, until R3, a container-locked
+ *     credential read names, telemetry and bodies out of every workspace its
+ *     operator belonged to. `lockedWorkspaceId` narrows the membership PROOF, so
+ *     no query downstream is ever handed an id from another tenancy.
  *
  * ⚠ **THE OPERATOR-ONLY SESSION FIELDS RIDE THIS PAYLOAD, AND THAT IS SAFE ONLY
  * BECAUSE THE READ IS OWN-SCOPED.** `mapOwnSessionStateRow` is reached from here
@@ -138,6 +147,8 @@ export interface AccountStatusOptions {
   /** Global `seq` cursor. Absent ⇒ `unread` is `null` on every row. */
   since?: number;
   view?: AccountStatusView;
+  /** 🔒 `ctx.apiKeyWorkspaceId` — B1's ceiling, NEVER a request field (R3). */
+  lockedWorkspaceId?: string | null;
 }
 
 const EMPTY_CLIPS: AccountStatusClips = {
@@ -161,7 +172,10 @@ export async function getAccountStatus(
   opts: AccountStatusOptions = {}
 ): Promise<AccountStatus> {
   const view = opts.view ?? "full";
-  const refScan = await accountRepo.listAccountChannelRefs(userId);
+  const refScan = await accountRepo.listAccountChannelRefs(
+    userId,
+    opts.lockedWorkspaceId
+  );
   const refs = refScan.rows;
   const ids = refs.map((r) => r.id);
 
@@ -229,9 +243,17 @@ export async function getAccountStatus(
  */
 export async function readAccountMessages(
   userId: string,
-  opts: { since: number; limit?: number }
+  opts: {
+    since: number;
+    limit?: number;
+    /** 🔒 `ctx.apiKeyWorkspaceId` — B1's ceiling, NEVER a request field (R3). */
+    lockedWorkspaceId?: string | null;
+  }
 ): Promise<AccountMessagesPage> {
-  const refScan = await accountRepo.listAccountChannelRefs(userId);
+  const refScan = await accountRepo.listAccountChannelRefs(
+    userId,
+    opts.lockedWorkspaceId
+  );
   const refs = refScan.rows;
   if (refs.length === 0) {
     return { messages: [], channelCount: 0, truncated: false };
