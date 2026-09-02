@@ -160,3 +160,124 @@ describe("the skill-authoring guide is PULLED, not pushed", () => {
     expect(out).toContain(SKILL_AUTHORING_GUIDE);
   });
 });
+
+/**
+ * ⚠ **THE PER-CONNECTION IDENTITY BLOCK — WHAT IT REMOVES, AND WHAT IT REFUSES
+ * TO GUESS** (A14, 2026-09-02).
+ *
+ * ⚠ IT EXISTS TO DELETE ROUND TRIPS, so the cases below are written as the
+ * calls they replace: `current_workspace` for the target, `whoami` for the id,
+ * `dopl_home(op="list_channels")` for whether there are rooms at all,
+ * `dopl_status` for the caller's own agents. A field that does not remove a
+ * call has no case here because it should not be in the block.
+ *
+ * ⚠ AND THE HALF THAT MATTERS MOST IS WHAT IT WILL NOT SAY. An unknown agent
+ * list and an empty one are different facts, and rendering the first as the
+ * second would tell an orchestrator it has no workers when the truth is that
+ * this transport never said. Same rule as `identity.ts › LOCUS_NOTE` and as
+ * `status-render.ts`'s "null is unknown, never zero".
+ */
+describe("the briefing answers who this connection is before it asks", () => {
+  const ONE = [ws(1)];
+  const identity = {
+    userId: "user-77",
+    homeChannels: 3,
+    boundChannelId: "33333333-3333-3333-3333-333333333333",
+    liveAgents: ["abcdefgh", "@agent-bcdefghi"],
+    posture: "full/full chain=on",
+  };
+
+  it("carries the caller id, the default workspace and the home-channel COUNT", () => {
+    const text = buildInstructions(ONE, { pin: null, identity });
+    expect(text).toContain("id=`user-77`");
+    expect(text).toContain("default workspace `product-engineering-1`");
+    // ⚠ A COUNT, never the rooms: a container's id is what `list_workspaces`
+    // deliberately does not advertise (§4A), and the names are peer-typed.
+    expect(text).toContain("3 home channels");
+    expect(text).toContain('dopl_home(op="list_channels")');
+  });
+
+  it("normalizes both handle spellings and never prints an unparseable one", () => {
+    const text = buildInstructions(ONE, {
+      pin: null,
+      identity: { ...identity, liveAgents: ["abcdefgh", "@agent-bcdefghi", "NOT AN ID"] },
+    });
+    expect(text).toContain("@agent-abcdefgh");
+    expect(text).toContain("@agent-bcdefghi");
+    // ⚠ DROPPED, not escaped. This line is read as rules; the honest answer to
+    // a handle that does not match the anchored grammar is to print none.
+    expect(text).not.toContain("NOT AN ID");
+  });
+
+  it("points at dopl_status rather than claiming the caller has no agents", () => {
+    const text = buildInstructions(ONE, {
+      pin: null,
+      identity: { ...identity, liveAgents: [] },
+    });
+    expect(text).toContain("your live agents: dopl_status");
+  });
+
+  it("caps the handles and says how many it did not print", () => {
+    const many = ["aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee", "ffffffff", "gggggggg"];
+    const text = buildInstructions(ONE, { pin: null, identity: { ...identity, liveAgents: many } });
+    expect(text).toContain("and 2 more — dopl_status");
+    expect(text).not.toContain("@agent-ffffffff");
+  });
+
+  it("names no default when the caller has 2+ memberships and no pin", () => {
+    const text = buildInstructions([ws(1), ws(2)], { pin: null, identity });
+    expect(text).toContain("no default workspace — pass `workspace=`");
+  });
+
+  it("says UNRESOLVED rather than inventing an id", () => {
+    const text = buildInstructions(ONE, {
+      pin: null,
+      identity: { ...identity, userId: null },
+    });
+    expect(text).toContain("id=UNRESOLVED");
+  });
+
+  it("omits the bound channel and the posture when the transport reported neither", () => {
+    const text = buildInstructions(ONE, {
+      pin: null,
+      identity: { ...identity, boundChannelId: null, posture: null },
+    });
+    expect(text).not.toContain("bound to channel");
+    expect(text).not.toContain("posture");
+  });
+
+  it("states who you are exactly ONCE, in whichever form applies", () => {
+    // ⚠ The contract used to carry a paragraph explaining where to FIND the
+    // caller's id. With the id itself injected, that paragraph was 230 chars
+    // teaching a lookup the reader no longer has to make — and two "YOU:"
+    // blocks in one briefing is the repetition this wave exists to delete.
+    const injected = buildInstructions(ONE, { pin: null, identity });
+    const fallback = buildInstructions(ONE, { pin: null });
+    for (const text of [injected, fallback]) {
+      expect(text.split("YOU: ").length - 1).toBe(1);
+      expect(text).toContain("two members can share a display name");
+    }
+    expect(fallback).toContain("`_dopl_status` footer opens");
+    expect(injected).not.toContain("`_dopl_status` footer opens");
+  });
+
+  it("renders the identity ABOVE the peer-typed workspace names", () => {
+    // ⚠ ORDER IS THE SECURITY ARGUMENT: rules, then server-issued ids and
+    // charset-validated handles, then the workspace NAMES a stranger typed.
+    const text = buildInstructions(ONE, { pin: null, identity });
+    const names = text.indexOf("SECURITY: names below");
+    expect(names).toBeGreaterThan(-1);
+    expect(text.indexOf("YOU: id=")).toBeLessThan(names);
+  });
+
+  it("keeps the identity when 40 memberships spend the whole directory budget", () => {
+    // ⚠ THE DIRECTORY IS THE HALF THAT GIVES WAY, down to nothing if it must. A
+    // dropped row costs one `list_workspaces` call; a dropped identity costs
+    // the round trips this block exists to delete, and cannot be recovered from
+    // the briefing at all.
+    const many = Array.from({ length: 40 }, (_, i) => ws(i + 1));
+    const text = buildInstructions(many, { pin: null, identity });
+    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_CHARS);
+    expect(text).toContain("id=`user-77`");
+  });
+});

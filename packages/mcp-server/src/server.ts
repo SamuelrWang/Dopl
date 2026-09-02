@@ -35,7 +35,11 @@ import { registerChannelTool } from "./tools/channel.js";
 import { registerAgentTools } from "./tools/agent.js";
 import { registerHomeTool } from "./tools/home.js";
 import { registerStatusTool } from "./tools/status.js";
-import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
+import {
+  boundChannelId,
+  UNKNOWN_CALLER,
+  type CallerIdentity,
+} from "./tools/identity.js";
 import { buildInstructions } from "./instructions.js";
 import { createGates, offeredToolsFor } from "./gating.js";
 import { createToolRegistrars } from "./registrar.js";
@@ -127,6 +131,21 @@ export function createServer(
      * `disallowedTools` + `grantDecision` and the credential itself.
      */
     toolProfile?: string | null;
+    /**
+     * The caller's own LIVE AGENT HANDLES, when the transport already knows
+     * them — the desktop spawned them, so it does. ⚠ ADVISORY AND OPTIONAL: the
+     * server cannot learn them at boot without a loopback `bootServer` forbids,
+     * and an ABSENT list renders as a pointer to `dopl_status` rather than as a
+     * claim of none. See `instructions.ts › ConnectionIdentity.liveAgents`.
+     */
+    liveAgents?: readonly string[];
+    /**
+     * The posture this session was spawned under (`<tools>/<messages> chain=…`),
+     * when the transport stamped one. ⚠ Same terms as {@link liveAgents}: the
+     * desktop CLAMPS a requested posture and is the only layer that knows the
+     * resolved value, so absent means unreported and renders as nothing.
+     */
+    posture?: string | null;
   } = {},
 ): McpServer {
   // ⚠ FAIL CLOSED: write/admin capability ONLY on an explicit `dopl.write`
@@ -193,6 +212,22 @@ export function createServer(
             ? { name: options.workspace.name, slug: options.workspace.slug }
             : null,
         directoryLoadFailed: options.directoryLoadFailed ?? false,
+        // ⚠ PER-CONNECTION IDENTITY (A14). Every field is already in hand here
+        // — no loopback is added, which `factory.ts › bootServer` forbids.
+        identity: {
+          userId: caller.userId,
+          // 🔒 ZERO UNDER A LOCK, AND THAT IS THE POINT rather than a rounding.
+          // A locked session must not learn that its operator holds other
+          // rooms, which is the enumeration oracle B3 exists to deny; the count
+          // renders only when it is > 0, so the line simply omits it.
+          homeChannels: options.lockedTo
+            ? 0
+            : (options.directory ?? []).filter((w) => !isStandardWorkspace(w))
+                .length,
+          boundChannelId: boundChannelId(caller),
+          liveAgents: options.liveAgents,
+          posture: options.posture ?? null,
+        },
       }),
     },
   );
