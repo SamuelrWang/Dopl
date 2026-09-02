@@ -32,16 +32,17 @@
  *    the omitted case cannot publish into a shared room; said here because the
  *    reasoning is not local to this file.
  */
-import type { DoplClient, TemplateField, TemplateVisibility } from "@dopl/client";
+import type { DoplClient, TemplateField } from "@dopl/client";
 import { type ToolResponse } from "./respond.js";
 import { type ShelfArg } from "./shelf.js";
+import { type OfferedTemplateVisibility } from "./agent-shared.js";
 export interface TemplateWriteInput {
     name?: string;
     description?: string | null;
     instructions?: string | null;
     model?: string | null;
     fields?: TemplateField[];
-    visibility?: TemplateVisibility;
+    visibility?: OfferedTemplateVisibility;
     knowledge_bases?: string[];
     shelf?: ShelfArg;
     confirm_token?: string;

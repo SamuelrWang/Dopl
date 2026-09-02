@@ -154,7 +154,10 @@ function expectRatchet(
 const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ +383 ON 2026-09-02 for op="copy", after its bullet gave back the sentences
   // `copy-target.ts › TO_WORKSPACE_ARG_DESCRIPTION` already carries.
-  dopl_agent: 2476,
+  // ⚠ 2,476 → 2,467 ON 2026-09-02: A8 took the TEAM AXIS off the `list` bullet
+  // and out of the `visibility` arg (which is a THIRD enum arm gone from the
+  // schema too, and that is not counted here). The filter disclosure stayed.
+  dopl_agent: 2467,
   // ⚠ 1,197 OF THIS IS THE P1 SUMMARY AND THE REST IS **ONE PARAGRAPH THE P3
   // TENANCY TIER ASKED TO KEEP WORD FOR WORD** — `channel-description.ts ›
   // HOME_CHANNEL_ADDRESSING`, ~650 chars on how a home channel is addressed,
@@ -176,7 +179,10 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ 3,400 → 3,399 ON 2026-09-02: R2 reworded the `copy_base` bullet from "a
   // base you can READ" to "a base YOU CREATED", one character shorter. Caught by
   // the STALE half the same day it was repaired.
-  dopl_kb: 3399,
+  // ⚠ 3,399 → 3,387 ON 2026-09-02: A8 took the TEAM AXIS off the `list_bases`
+  // bullet. The FILTER is still disclosed ("no grant on", pinned by
+  // `tool-scope-claims.test.ts`) — what left is the dead axis naming it.
+  dopl_kb: 3387,
   dopl_members: 1535,
   dopl_ontology: 2321,
   dopl_skill: 1615,

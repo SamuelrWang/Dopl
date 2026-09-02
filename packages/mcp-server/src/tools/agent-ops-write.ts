@@ -38,7 +38,6 @@ import type {
   AgentTemplateUpdateInput,
   DoplClient,
   TemplateField,
-  TemplateVisibility,
 } from "@dopl/client";
 import { inlineOr } from "./narration.js";
 import { ok, err, type ToolResponse } from "./respond.js";
@@ -51,6 +50,7 @@ import {
   resolveTemplateOr,
   sharedCredentialPrivateDenied,
   templateWriteDenied,
+  type OfferedTemplateVisibility,
 } from "./agent-shared.js";
 
 export interface TemplateWriteInput {
@@ -59,7 +59,7 @@ export interface TemplateWriteInput {
   instructions?: string | null;
   model?: string | null;
   fields?: TemplateField[];
-  visibility?: TemplateVisibility;
+  visibility?: OfferedTemplateVisibility;
   knowledge_bases?: string[];
   shelf?: ShelfArg;
   confirm_token?: string;
@@ -105,7 +105,7 @@ export async function opCreate(
   const personal = input.shelf === "personal";
   // ⚠ `shelf:"personal"` must SEND `visibility: "private"` explicitly, or the
   // server's condition 2 refuses on a default the agent never chose.
-  const visibility: TemplateVisibility | undefined = personal
+  const visibility: OfferedTemplateVisibility | undefined = personal
     ? "private"
     : input.visibility;
 
@@ -156,12 +156,13 @@ export async function opCreate(
   const where = personal
     ? "on your personal shelf"
     : "on this workspace's shelf";
+  // ⚠ TWO ARMS, because `create` sends the two-arm enum and nothing else: the
+  // server's own default for an omitted `visibility` is `private`, so this
+  // response cannot describe a row at a visibility this surface never offered.
   const audience =
     template.visibility === "private"
       ? "Private to you — only you and your own agents can see it."
-      : template.visibility === "team"
-        ? "Shared with the teams you linked."
-        : "Shared with everyone in this workspace — every member can list it and launch it.";
+      : "Shared with everyone in this workspace — every member can list it and launch it.";
   return ok(
     [
       `Created agent template ${inlineOr(template.name, NO_NAME)} ${where} (id: \`${template.id}\`). ${audience}`,

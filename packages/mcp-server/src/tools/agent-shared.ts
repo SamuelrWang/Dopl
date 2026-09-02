@@ -38,6 +38,43 @@ import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
  */
 export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 
+/**
+ * 🔒 THE VISIBILITY AXIS THIS SURFACE OFFERS — **TWO values, not three.**
+ *
+ * `TemplateVisibility` in `src/features/agent-templates/types.ts` still carries
+ * `'team'`, the column still stores it and the route still accepts it from the
+ * app. A8 takes the axis off the MCP SURFACE ONLY, so no agent is ever TAUGHT a
+ * third option: measured in production 2026-09-02 there are **0 team-visibility
+ * templates and 0 `agent_template_teams` rows**, and an axis nothing uses is an
+ * enum arm a model still has to read, weigh and occasionally pick. Dropping the
+ * column, the two tables, the trigger and the app's second editor is B4.
+ *
+ * ⚠ ONE DECLARATION, read by the tool's enum ({@link agent.ts}), the list
+ * grouping ({@link agent-ops-read.ts}) and the write input type
+ * ({@link agent-ops-write.ts}) — a second list is how an enum and its headings
+ * drift apart in silence.
+ *
+ * ⚠ IT NARROWS WHAT IS OFFERED, NOT WHAT EXISTS. A row the server hands back at
+ * a visibility absent from this list is still RENDERED (see `opList`); filtering
+ * the read to match the write enum would drop rows instead of retiring an axis.
+ */
+export const TEMPLATE_VISIBILITY_VALUES = ["private", "workspace"] as const;
+
+/** The visibility values `dopl_agent` accepts on a write. */
+export type OfferedTemplateVisibility =
+  (typeof TEMPLATE_VISIBILITY_VALUES)[number];
+
+/**
+ * The one-line refusal for a retired `visibility`, raised by zod as `-32602`
+ * before any round trip — the same argument `shelf.ts` makes for its enum.
+ *
+ * ⚠ IT NAMES THE RETIRED VALUE. zod's own "Invalid option: expected one of …"
+ * reads as a typo and invites a retry with the same word; saying the option is
+ * gone is what stops the second call.
+ */
+export const VISIBILITY_ENUM_MESSAGE =
+  'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
+
 /** A template with nothing nameable left after neutralization. */
 export const NO_NAME = "`(unnamed)`";
 
@@ -222,9 +259,9 @@ export function templateRow(t: AgentTemplate, personal = false): string {
 /**
  * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.
  * `listTemplates` is filtered server-side by `canSeeTemplate`, so another
- * member's private templates and team templates the caller has no grant on are
- * simply absent — an untraced filter makes a four-row heading read as the
- * workspace's roster.
+ * member's private templates, and any the caller has no grant on, are simply
+ * absent — an untraced filter makes a four-row heading read as the workspace's
+ * roster.
  *
  * ⚠ AND THE SHELF IS NOT ON THE ROW. `home_scoped` is deliberately absent from
  * `server/dto.ts › AGENT_TEMPLATE_COLS` so no client can re-implement the fence;
@@ -234,4 +271,4 @@ export function templateRow(t: AgentTemplate, personal = false): string {
  * that does not send the key — rather than letting an absent label be read as an
  * assertion.
  */
-export const TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and team templates you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own personal shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;
+export const TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and any you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own personal shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;
