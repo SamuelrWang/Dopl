@@ -8,9 +8,9 @@
  * slack_search_channels first"* — and it works only because the literal that
  * comes back on the wire is the literal the description taught. So a code is
  * declared ONCE, here; {@link renderErrors} puts it in the description and
- * {@link refusal} puts it on the wire, and `tool-description-checklist.test.ts`
- * asserts the two are the same characters. A paraphrase on either side is a
- * silent break — the agent reads a remedy it can never match.
+ * {@link refusal} puts it on the wire, so the two are the same characters by
+ * construction. A paraphrase on either side is a silent break — the agent reads
+ * a remedy it can never match.
  *
  * ⚠ WHY OUR OWN LITERALS RATHER THAN THE API's, EXCEPT WHERE THEY ARE THE
  * API's. Most refusals on this surface are raised by THIS layer — a missing

@@ -33,9 +33,10 @@
  *   7. EXAMPLES — call shapes as JSON, never prose, inside
  *      {@link EXAMPLES_MAX_CHARS}.
  *
- * ⚠ EVERY RULE ABOVE IS ENFORCED IN `tool-style.test.ts` AND
- * `tool-description-checklist.test.ts`, against the descriptions AS SERVED
- * through a real `listTools()`. A style guide nothing measures is a style
+ * ⚠ EVERY RULE ABOVE IS ENFORCED IN `tool-style.test.ts`, against the
+ * descriptions AS SERVED through a real `listTools()` — it is the mechanically
+ * checkable half of `docs/MCP-TOOL-DESCRIPTION-CHECKLIST.md`, which holds the
+ * rows that stay a hand review. A style guide nothing measures is a style
  * nobody holds.
  *
  * ⚠ WHAT THIS FILE DELIBERATELY DOES NOT DO — the anti-patterns of the same
