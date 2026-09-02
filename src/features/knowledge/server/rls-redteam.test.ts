@@ -193,7 +193,17 @@ describe("REDTEAM knowledge_bases — the policy alone", () => {
     const teams = liveFunction("dopl_teams_mode_visible");
     expect(teams).toMatch(/is_current_workspace_member\(p_workspace_id, 'admin'\)/i);
     expect(teams).toMatch(/p_created_by\s*=\s*\(\s*SELECT auth\.uid\(\)\s*\)/i);
-    expect(teams).toMatch(/team_resource_access/i);
+    // ⚠ THE GRANT TABLE IS `resource_grants` SINCE B1 FOLDED THE TEAM AXIS INTO
+    // IT, and the `scope_type` term is asserted with it rather than beside it:
+    // this helper reading the table WITHOUT that term would answer "is this
+    // teams-mode resource visible to me" with a CHANNEL grant on the same
+    // resource — a room's audience silently becoming a workspace-wide read
+    // (F-468). The two belong in one assertion because either alone passes on
+    // the leak.
+    expect(teams).toMatch(
+      /FROM\s+public\.resource_grants\s+g\b[\s\S]*?g\.scope_type\s*=\s*'team'/i
+    );
+    expect(teams).not.toMatch(/team_resource_access/i);
     expect(teams).toMatch(/tm\.user_id\s*=\s*\(\s*SELECT auth\.uid\(\)\s*\)/i);
   });
 
