@@ -80,7 +80,7 @@ export function isErr<T>(x: T | ToolResponse): x is ToolResponse {
  */
 export function channelNotFound(ref: string): ToolResponse {
   return err(
-    `Channel not found: "${ref}". Use dopl_channel(op="list") to see channels you can access (pass a slug or id from there).`,
+    `Channel not found: "${ref}". Use dopl_channel(op="rooms", action="list") to see channels you can access (pass a slug or id from there).`,
   );
 }
 
@@ -161,7 +161,7 @@ export async function resolveMemberOr(
   const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
   if (!match) {
     return err(
-      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="list")).`,
+      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="rooms" action="list")).`,
     );
   }
   if (match.status !== "active") {

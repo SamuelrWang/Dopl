@@ -165,14 +165,18 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
     // ⚠ **THREE OF THESE NINE LINES ARE GONE AND THE FIELDS THEY WERE ABOUT ARE
     // GONE WITH THEM** (B8): `recipient`, `handoff` and the standalone `chain`
     // left the shape, so a doctrine line about any of them would teach a phantom
-    // — which is exactly what the pair test below exists to catch. `to`'s line
-    // is new, because the field grew a second namespace.
+    // — which is exactly what the pair test below exists to catch.
+    // ⚠ **AND NEITHER `to` NOR `model` HAS A LINE HERE, DELIBERATELY.** This
+    // section is for a rule that had NOWHERE ELSE TO LIVE once the `.describe()`
+    // could only carry a contract — and both of those rules fit in their own
+    // describe (`to`: one party, two namespaces; `model`: an unrecognised id
+    // FALLS BACK silently). `to`'s refusal is additionally stated in the doctrine's
+    // `send` section. A third copy in FIELDS is the repetition this budget exists
+    // to stop, not a relocation.
     for (const rule of [
       "OMITTING `channel` IS A WIDER READ",
       "ONE CURSOR SPACE, ONE `since`",
       "`client_msg_id` IS WHAT MAKES A RETRY SAFE",
-      "`to` IS ONE PARTY, RESOLVED AT THE DOOR",
-      "`model` IS VALIDATED NOWHERE",
       "`posture.chain` NAMES ITS THREE STATES",
       "`info_card` REPLACES THE WHOLE CARD",
       "`recommendation.index` MUST BE INSIDE `options`",
@@ -187,8 +191,6 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "channel",
       "since",
       "client_msg_id",
-      "to",
-      "model",
       "posture",
       "info_card",
       "recommendation",

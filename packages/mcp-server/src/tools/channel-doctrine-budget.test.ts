@@ -41,8 +41,8 @@ import {
  * fails too. ⚠ The largest section is now the LAW, which is the one section
  * whose size is capped for a second reason in `channel-law.test.ts`.
  */
-const DOCTRINE_MAX_CHARS = 8_985;
-const DOCTRINE_SECTION_MAX_CHARS = 2_639;
+const DOCTRINE_MAX_CHARS = 8_909;
+const DOCTRINE_SECTION_MAX_CHARS = 2_877;
 
 describe("the pulled doctrine is budgeted too, and by section", () => {
   it(`the whole document is at most ${DOCTRINE_MAX_CHARS} chars`, () => {

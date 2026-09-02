@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="await" — the assembled LONG-HOLD, and every string that
+ * `dopl_channel` op="read" with wait_ms — the assembled LONG-HOLD, and every string that
  * describes it. The only op here that LOOPS, the only one with a budget, and
  * the only one whose result text reasons about the caller's client.
  *
@@ -250,7 +250,7 @@ export async function opAwait(
       return ok(
         [
           `The wait on **${ref}** ended early, after about ${Math.round(elapsedMs / 1000)}s: an inner poll failed — ${describeFailure(pollError)}.`,
-          `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", channel="${ref}", since=${cursor}).`,
+          `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="read", channel="${ref}", since=${cursor}, wait_ms=<ms>).`,
           `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with dopl_channel(op="read", channel="${ref}", since=${cursor}) instead.`,
           rearmStopRule(ref),
         ].join("\n"),

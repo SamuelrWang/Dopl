@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="end_agent" / op="rename_agent" — **MANAGE THE OPERATOR'S OWN
+ * `dopl_channel` op="manage" action="end" / op="manage" action="rename" — **MANAGE THE OPERATOR'S OWN
  * RUNNING AGENTS** (2026-09-01, Samuel: *"I need you to build out dopl mcp being
  * able to end agents. Dopl MCP need to be able to do all that stuff"*).
  *
@@ -11,7 +11,7 @@
  *
  * **THESE OPS ASK. THEY DO NOT DO ANYTHING THEMSELVES.** Agents live in a desktop
  * main process no server can reach; what crosses the wire is a row in the SAME
- * mailbox `op="launch_agent"` writes, which the operator's machine polls, claims
+ * mailbox `op="manage" action="launch"` writes, which the operator's machine polls, claims
  * and answers. `channel-ops-launch.ts` states the three consequences at length
  * and all three hold here — a refusal is a normal outcome, a timeout is not a
  * failure, and "ended" means A MACHINE SAID SO.
@@ -143,7 +143,7 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
  *
  * ⚠ IT NAMES THE FACT PLAINLY RATHER THAN 404-ING, and the server's error
  * docblock argues why that discloses nothing: the caller already proved
- * membership of the channel, inside which `op="members"` and `op="read_sessions"`
+ * membership of the channel, inside which `op="rooms" action="members"` and `op="status"`
  * are readable anyway. A 404 here would tell an orchestrator its OWN agent had
  * vanished and send it to re-launch — the expensive wrong answer.
  *
@@ -158,7 +158,7 @@ function foreignAgent(agentId: string, verb: string): ToolResponse {
     [
       `Nothing was ${verb} — agent \`${agentId}\` is ANOTHER MEMBER'S, and **no request was filed**.`,
       `You can only manage agents running on YOUR OWN operator's machine. A peer's agent appears in a channel as a handle and is not reachable from here at all — there is no permission that would change that, so do not look for another route and do not ask anyone to grant one.`,
-      `dopl_channel(op="read_sessions") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
+      `dopl_channel(op="status") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
     ].join("\n"),
   );
 }

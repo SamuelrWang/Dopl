@@ -300,7 +300,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // `dopl_channel`'s schema; the remaining ~20 is the shared `response_format`
 // describe naming one op differently across five tools, and `dopl_channel`'s
 // own description shedding five.
-const SERVED_TOTAL_CEILING = 49_013;
+const SERVED_TOTAL_CEILING = 49_019;
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -316,7 +316,12 @@ const SERVED_TOTAL_CEILING = 49_013;
  * inside a consuming runtime is not observable from here and must not be
  * asserted here.
  */
-const INSTRUCTIONS_CEILING = 1_851;
+// ⚠ **1,851 → 1,857 (B8, 2026-09-02), AND IT IS A RISE ON A RATCHET, RECORDED.**
+// The briefing names the first two channel calls an agent makes, and both op
+// names moved: `dopl_channel(op="list")` → `op="rooms", action="list"`, and the
+// doctrine door → `action="help"`. Six characters, and the alternative was
+// leaving the FIRST string an agent reads naming a call the enum now rejects.
+const INSTRUCTIONS_CEILING = 1_857;
 
 /**
  * ⚠ THE PULLED SIDE, AND IT IS BUDGETED SEPARATELY ON PURPOSE (principle 7).
@@ -350,7 +355,7 @@ const INSTRUCTIONS_CEILING = 1_851;
 // and the rule behind an argument a `.describe()` may only state the contract
 // of. Anything a result already reports and anything that is encouragement
 // rather than contract is gone.
-const DOCTRINE_CEILING = 8_985;
+const DOCTRINE_CEILING = 8_909;
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",

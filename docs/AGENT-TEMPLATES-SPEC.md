@@ -668,7 +668,7 @@ CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx
 | `› CreateLaunchInput` | accept the resolved id |
 | `schema-launch.ts › LaunchCreateSchema` | accept `template` (string) |
 | `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE` | the param above |
-| `mcp-server/src/tools/channel-dispatch-agents.ts › dispatchAgentOp` | pass it into `opLaunchAgent` (the six agent-lifecycle ops left `channel.ts`'s switch on 2026-09-01, at the 500-line cap) |
+| `mcp-server/src/tools/channel-dispatch-agents.ts › dispatchManageAction` | pass it into `opLaunchAgent` (the six agent-lifecycle ops left `channel.ts`'s switch on 2026-09-01, at the 500-line cap) |
 | **`main/launch-directive-wire.js › directiveFrom`** | **narrows unknown keys away — a `template_id` not added here NEVER reaches the desktop** |
 
 #### Resolve at claim time on the desktop

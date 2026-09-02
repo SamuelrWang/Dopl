@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="post" — send a message or a structured activity event.
+ * `dopl_channel` op="send" — send a message or a structured activity event.
  * Resolve the addressing, make the call, map the 4xx, hand the outcome to the
  * modules that narrate it.
  *
@@ -29,7 +29,7 @@ import type { ChannelMessageInput, DoplClient } from "@dopl/client";
 import { ok, err, type ToolResponse } from "./respond";
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
 // FIELDS, not prose; the standing rules they used to restate live once in
-// `channel-doctrine.ts`, behind `op="help"`.
+// `channel-doctrine.ts`, behind `op="rooms" action="help"`.
 import { deliveryFact, factsLine, type FactValue } from "./channel-facts";
 // "Did it thread?" — the question a sender cannot otherwise settle.
 import { threadFacts } from "./channel-post-linkage";
@@ -101,7 +101,7 @@ interface PostOptions {
   /**
    * ⚠ **NOT A CALLER'S ARGUMENT ANY MORE** (C12, 2026-09-02). `kind` left the
    * published shape — three of its five values were refused, one had its own op
-   * and one was the default — and the only writer left is `op="milestone"`,
+   * and one was the default — and the only writer left is `op="send" with kind="milestone"`,
    * which fixes it to `task_progress` at the routing seam.
    */
   kind?: ChannelMessageInput["kind"];
@@ -122,7 +122,7 @@ interface PostOptions {
    */
   runtime?: string | null;
   /**
-   * THE STRUCTURED ESCALATION PAYLOAD, set only by `op="escalate"`.
+   * THE STRUCTURED ESCALATION PAYLOAD, set only by `op="send" with kind="decision"`.
    *
    * ⚠ IT RIDES THIS OP RATHER THAN GROWING A SECOND DELIVERY PATH — `milestone`'s
    * precedent exactly. What `escalate` adds over `post` is a validated payload
@@ -224,7 +224,7 @@ export async function opPost(
     if (isForbidden(e)) {
       const kind = classifyForbidden(e);
       // ⚠ THE BELT FOR A BYPASSED BUILD. No caller can name a lifecycle kind
-      // any more — `kind` left the published shape (C12) and only op="milestone"
+      // any more — `kind` left the published shape (C12) and only op="send" with kind="milestone"
       // sets one, to the single value the lane allows — so this is unreachable
       // through the tool. It is answered with the RULE rather than dropped into
       // a membership arm, because the one thing it must never read as is "you
