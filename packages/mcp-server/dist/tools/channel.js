@@ -48,6 +48,9 @@ const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
 const channel_ops_launch_1 = require("./channel-ops-launch");
+// AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER two kinds. A stop
+// verb and a display verb over the same lane, own-operator only.
+const channel_ops_agent_1 = require("./channel-ops-agent");
 const channel_ops_update_1 = require("./channel-ops-update");
 // ⚠ A structured POST, not a second delivery path — it delegates to `opPost`.
 const channel_ops_escalate_1 = require("./channel-ops-escalate");
@@ -265,6 +268,48 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     template: args.template,
                     waitMs: args.wait_ms,
                 });
+            }
+            // ⚠ END ONE OF THE OPERATOR'S OWN RUNNING AGENTS. The SAME mailbox
+            // `launch_agent` writes, with `kind: "end"` — so the machine decides, a
+            // refusal is normal and a timeout is PENDING rather than failed. The op
+            // NEVER names an operator: the server stamps the authenticated caller,
+            // and a target belonging to another member is refused before any row
+            // exists. ⚠ `channel` IS REQUIRED even though `agent_id` addresses the
+            // target on its own — the create proves a MEMBERSHIP ROW there, which is
+            // what stops this being a bare "end agent <id>" primitive.
+            case "end_agent": {
+                const miss = (0, respond_1.missingParams)("end_agent", args, [
+                    "channel",
+                    "agent_id",
+                ]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_agent_1.opEndAgent)(client, args.channel, args.agent_id, {
+                    waitMs: args.wait_ms,
+                });
+            }
+            // ⚠ RELABEL ONE OF THE OPERATOR'S OWN AGENTS — DISPLAY ONLY, on that one
+            // machine. `name` is REQUIRED and the EMPTY STRING is a legal value that
+            // CLEARS the name, which is why it is checked for presence rather than
+            // for truthiness: `missingParams` would reject "" as absent and delete
+            // the one gesture that undoes a rename.
+            case "rename_agent": {
+                const miss = (0, respond_1.missingParams)("rename_agent", args, [
+                    "channel",
+                    "agent_id",
+                ]);
+                if (miss)
+                    return miss;
+                // ⚠ NOT `missingParams`, AND THAT IS THE WHOLE REASON THIS BRANCH IS
+                // HAND-WRITTEN. That helper counts the EMPTY STRING as absent, which is
+                // right for every other param on this tool and wrong for exactly this
+                // one: `name: ""` is the legal, deliberate gesture that CLEARS a
+                // display name. Routing it through the helper would delete the only way
+                // to undo a rename and report it as a missing argument.
+                if (typeof args.name !== "string") {
+                    return (0, respond_1.err)('op="rename_agent" is missing required param: name. Pass the display name you want (1-60 visible characters on one line), or the EMPTY STRING to clear the name back to "Agent #<id>".');
+                }
+                return (0, channel_ops_agent_1.opRenameAgent)(client, args.channel, args.agent_id, args.name, { waitMs: args.wait_ms });
             }
             // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
             // the same route and are deliberately NOT routed here (Samuel's ruling

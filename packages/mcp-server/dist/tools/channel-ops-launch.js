@@ -152,6 +152,20 @@ const REFUSAL_SENTENCES = {
     // endpoint is 404-never-403 precisely so that difference is not observable, and a
     // sentence that guessed would rebuild the oracle the whole design closes.
     "no-template": "that machine could not resolve the TEMPLATE you named. Either it no longer exists, or it is not visible to the OPERATOR whose machine this is — you named it under YOUR visibility, and their desktop resolves it under THEIRS, so a private or team template of yours can be unusable there. Do not re-issue the same id: launch without a template, or share one that member can see.",
+    // ── ⚠ THE TWO WORDS THAT ARE NOT THIS LANE'S (2026-09-01) ──────────────────
+    // `no-session` and `bad-name` belong to the AGENT-MANAGEMENT kinds — `end` and
+    // `rename` — which ride the same mailbox and therefore share the enum. The
+    // column CHECK pairs `launched` with `kind='launch'` and neither of these words
+    // has a producer on a launch, so ARRIVING HERE IS ITSELF THE ANOMALY.
+    // ⚠ THEY ARE PRESENT BECAUSE THE MAP IS `Record<LaunchRefusalReason, string>`
+    // AND THE COMPILER SAYS SO — which is the whole value of `closedEnum`: a ninth
+    // word could not be added to the vocabulary without every render being made to
+    // account for it. ⚠ WHAT THEY MUST NOT DO IS GUESS. Borrowing the
+    // agent-management sentences here would tell a caller its LAUNCH failed because
+    // an agent was not running, which is not a sentence about anything that
+    // happened.
+    "no-session": "the machine answered with a word that belongs to ENDING or RENAMING an agent, not to starting one — so nothing here explains why your launch did not happen. Nothing was started. Check dopl_channel(op=\"read_sessions\") and report it to your operator rather than re-issuing.",
+    "bad-name": "the machine answered with a word that belongs to RENAMING an agent, not to starting one — so nothing here explains why your launch did not happen. Nothing was started. Check dopl_channel(op=\"read_sessions\") and report it to your operator rather than re-issuing.",
 };
 function refusalSentence(reason) {
     if (reason === null) {

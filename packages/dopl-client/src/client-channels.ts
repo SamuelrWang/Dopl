@@ -29,6 +29,8 @@ import type {
   WorkspaceAwaitResult,
 } from "./channel-types.js";
 import type {
+  AgentDirectiveCreateInput,
+  AgentDirectiveCreated,
   LaunchDirective,
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
@@ -109,6 +111,16 @@ export class ChannelMethods extends MemberMethods {
     input: LaunchDirectiveCreateInput
   ): Promise<LaunchDirectiveCreated> {
     return channel.createLaunchDirective(this.transport, input);
+  }
+
+  /** END or RENAME one of the operator's OWN running agents (2026-09-01).
+   *  ⚠ THE SAME MAILBOX as a launch, a different `kind` — so the answer is a
+   *  `LaunchDirective` and `getLaunchDirective` polls it. ⚠ No launch toggle
+   *  applies to these two; do not tell a caller to turn one on. */
+  createAgentDirective(
+    input: AgentDirectiveCreateInput
+  ): Promise<AgentDirectiveCreated> {
+    return channel.createAgentDirective(this.transport, input);
   }
 
   /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */

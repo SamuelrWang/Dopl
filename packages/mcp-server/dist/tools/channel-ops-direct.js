@@ -34,6 +34,10 @@ exports.opDirectAgent = opDirectAgent;
 exports.opReadDirections = opReadDirections;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+// ⚠ THE SHARED INSTANCE-ID PARSER (2026-09-01). It LIVED here until `end_agent`
+// and `rename_agent` became its second and third callers; the whole argument for
+// why four characters of logic still deserve one home is in that module.
+const channel_agent_id_1 = require("./channel-agent-id");
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
 /** Default and cap for the bounded hold. ⚠ Mirrors `channel-schema.ts › wait_ms`;
@@ -47,22 +51,6 @@ const WAIT_CAP_MS = 30_000;
  */
 const POLL_INTERVAL_MS = 1_500;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/**
- * THE BARE INSTANCE ID, from whichever form the caller pasted.
- *
- * ⚠ **BOTH FORMS ARE ACCEPTED BECAUSE `read_sessions` PRINTS THE HANDLE, NOT THE
- * ID.** Every surface that shows an agent over MCP shows `@agent-<id>`, so that is
- * what a model copies — and the column CHECK and the create schema both want the
- * bare eight characters. Refusing the pasted form would be a 400 for doing exactly
- * what the neighbouring op taught, which is the invisible-failure shape this
- * surface refuses everywhere else.
- * ⚠ IT STRIPS, IT DOES NOT VALIDATE. A value that is not an agent id after this
- * is refused by the create schema and, failing that, reaches a machine that
- * answers `no-session` — both honest, and neither is this function's job.
- */
-function bareAgentId(raw) {
-    return String(raw || "").trim().replace(/^@/, "").replace(/^agent-/, "");
-}
 /**
  * THE REFUSAL CONTRACT, AS SENTENCES AN AGENT CAN ACT ON.
  *
@@ -118,7 +106,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
     const label = (0, channel_shared_1.inlineOr)(channel.name, NO_NAME);
-    const agent = bareAgentId(agentId);
+    const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
     let created;
     try {
         created = await client.createAgentDirection({
@@ -244,7 +232,7 @@ async function opReadDirections(client, opts = {}) {
     }
     const directions = await client.listAgentDirections({
         channel: channelId,
-        agent: opts.agent ? bareAgentId(opts.agent) : undefined,
+        agent: opts.agent ? (0, channel_agent_id_1.bareAgentId)(opts.agent) : undefined,
     });
     const scope = [
         label ? `in **${label}**` : "across every channel you are in",

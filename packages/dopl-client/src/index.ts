@@ -159,9 +159,14 @@ export type {
 // LAUNCH-OVER-MCP types — their own module since 2026-08-22 (`channel-types.ts`
 // hit the 500-line cap). ⚠ Re-exported here unchanged, so no consumer moved.
 export type {
+  // ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) live in the SAME module because
+  // they are the same mailbox — `end` / `rename` directives, not a second lane.
+  AgentDirectiveCreateInput,
+  AgentDirectiveCreated,
   LaunchDirective,
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
+  LaunchDirectiveKind,
   LaunchRefusalReason,
 } from "./launch-types.js";
 

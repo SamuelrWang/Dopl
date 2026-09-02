@@ -39,6 +39,8 @@ export declare const CHANNEL_INPUT_SHAPE: {
         escalate: "escalate";
         direct_agent: "direct_agent";
         launch_agent: "launch_agent";
+        end_agent: "end_agent";
+        rename_agent: "rename_agent";
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";

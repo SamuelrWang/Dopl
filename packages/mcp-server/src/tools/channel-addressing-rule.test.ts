@@ -116,10 +116,19 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
     // to `propose_close` — and both left with thread closing (wiring plan
     // Phase 4, 2026-08-18), which is the rule stated the other way round: a
     // teaching refusal is only honest while there is something to teach.
+    // ⚠ SIX, NOT SEVEN, SINCE 2026-09-01. `rename_agent` IS ACCEPTED AGAIN and is
+    // a different verb: the retired one changed a named agent's channel-visible
+    // ADDRESS; this one sets a LOCAL DISPLAY LABEL stored on one machine
+    // (`main/agent-names.js`), reaching no server and addressing nobody — the
+    // same verb the in-process `mcp__dopl_agents__rename_agent` has carried since
+    // 2026-08-31. The argument in full is on
+    // `channel-law.test.ts › REMOVED_VOCABULARY`'s lifecycle entry.
+    // ⚠ WHAT THIS FILE GUARDS IS UNCHANGED AND IS ASSERTED HARDER, not relaxed:
+    // the case below still requires that NO param named `agent` exists, and the
+    // addressing contract still has exactly one address — `@agent-<id>`.
     for (const op of [
       "agents",
       "summon_agent",
-      "rename_agent",
       "set_agent_status",
       "disengage_agent",
       "join_thread",
@@ -130,6 +139,22 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
         `op="${op}" is still accepted`,
       ).toBe(false);
     }
+  });
+
+  /**
+   * ⚠ **THE REVIVED WORD DOES NOT REVIVE THE SURFACE**, and this is the case that
+   * says so. The retired `rename_agent` belonged to a model where an agent was a
+   * named channel participant and its name ROUTED; the property that mattered was
+   * never the spelling, it was that no name is an address.
+   */
+  it("the revived rename_agent brought back NO addressing surface", () => {
+    expect(CHANNEL_INPUT_SHAPE.op.safeParse("rename_agent").success).toBe(true);
+    // ⚠ It reuses `agent_id` — an INSTANCE id on the caller's own machine — and
+    // introduces no param of its own. A param literally named `agent` is still
+    // banned by the case above; `name` already existed for op="open".
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("agent_id");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("agent");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("as_agent");
   });
 
   it("still accepts every op that SURVIVED, so the rollback took nothing extra", () => {

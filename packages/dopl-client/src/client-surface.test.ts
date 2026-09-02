@@ -72,6 +72,12 @@ const PUBLIC_SURFACE = [
   "createChannel",
   "createHomeChannel",
   "createLaunchDirective",
+  // AGENT MANAGEMENT OVER MCP (2026-09-01, Samuel's end/rename ruling) — ONE more
+  // method and no more, because it is the SAME mailbox with a different `kind`.
+  // ⚠ THERE IS NO `getAgentDirective` AND THERE MUST NOT BE: the row it files IS a
+  // launch directive, so `getLaunchDirective` polls it. A second poll method would
+  // be a second name for one endpoint and would invite a second expiry rule.
+  "createAgentDirective",
   "createChannelThread",
   "createChatFolder",
   "createAgentTemplate",

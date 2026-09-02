@@ -28,6 +28,7 @@ exports.getChannelThread = getChannelThread;
 exports.createChannelThread = createChannelThread;
 exports.setChannelThreadMode = setChannelThreadMode;
 exports.createLaunchDirective = createLaunchDirective;
+exports.createAgentDirective = createAgentDirective;
 exports.getLaunchDirective = getLaunchDirective;
 exports.createAgentDirection = createAgentDirection;
 exports.getAgentDirection = getAgentDirection;
@@ -258,6 +259,27 @@ async function createLaunchDirective(t, input) {
         method: "POST",
         body: input,
         toolName: "channel_launch_agent",
+    });
+}
+/**
+ * ASK THE OPERATOR'S OWN DESKTOP TO **END** OR **RENAME** ONE OF ITS AGENTS
+ * (2026-09-01).
+ *
+ * ⚠ **THE SAME MAILBOX, A DIFFERENT KIND — so the result is a `LaunchDirective`
+ * and `getLaunchDirective` polls it.** There is no second lane and no second poll
+ * endpoint; only the CREATE body differs, because a launch's shape (goal, model,
+ * template) and an end's (which agent) have nothing in common.
+ * ⚠ A REQUEST, NOT A COMMAND, exactly as a launch is. `offline` means the machine
+ * is not listening and NOTHING WAS FILED.
+ * ⚠ **NO LAUNCH TOGGLE APPLIES TO THESE TWO.** The desktop's launch-over-MCP
+ * setting gates `launch_agent` and neither of these; do not tell a caller to turn
+ * it on because an end was refused.
+ */
+async function createAgentDirective(t, input) {
+    return t.request("/api/channels/launch-directives/agent", {
+        method: "POST",
+        body: input,
+        toolName: "channel_agent_directive",
     });
 }
 /**

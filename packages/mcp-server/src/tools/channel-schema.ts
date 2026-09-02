@@ -66,6 +66,16 @@ export const CHANNEL_INPUT_SHAPE = {
       // reasons. `channel` required; the hold is bounded and a timeout is a
       // PENDING directive, not a failure.
       "launch_agent",
+      // ⚠ MANAGE AN AGENT THE OPERATOR IS ALREADY RUNNING (2026-09-01, Samuel's
+      // ruling). The SAME mailbox `launch_agent` writes, with a different KIND —
+      // so the same "a machine decides, and may refuse" contract applies, and a
+      // timeout is a PENDING request rather than a failure.
+      // ⚠ NEITHER IS GATED BY THE LAUNCH TOGGLE, and no result may suggest
+      // otherwise: that setting governs STARTING agents. `end_agent` is a stop
+      // verb, `rename_agent` is display-only on one machine, and both are
+      // own-operator-only by construction.
+      "end_agent",
+      "rename_agent",
       // ⚠ THE INFO CARD, AND ONLY THE INFO CARD (Samuel's ruling Q12 (b),
       // 2026-08-28). The same route accepts name / topic / archived, and this op
       // deliberately does not — see `channel-ops-update.ts`. Omitting
@@ -95,7 +105,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="open" (required for a channel; omit for a direct message): the channel name (1-120 chars).',
+      'op="open" (required for a channel; omit for a direct message): the channel name (1-120 chars). op="rename_agent" (required): the DISPLAY NAME to give that agent on your operator\'s machine — 1-60 visible characters on ONE line, or the EMPTY STRING to clear it back to "Agent #<id>". ⚠ DISPLAY ONLY: `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the name is stored on that one desktop and reaches no server — so read_sessions will keep printing the id and that is correct, not a stale read.',
     ),
   topic: z
     .string()
@@ -240,7 +250,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="direct_agent" (required): WHICH of your operator\'s agents to speak to — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on this lane, deliberately: a direction reaches a PRIVATE turn, so guessing which agent you meant would steer one you did not address with nothing reporting the swap.',
+      'op="direct_agent" / op="end_agent" / op="rename_agent" (required): WHICH of your operator\'s agents to act on — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on ANY of these lanes, deliberately: guessing which agent you meant would direct, end or relabel one you did not address, with nothing reporting the swap — and on an end that is unrecoverable. ⚠ YOUR OWN OPERATOR\'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed; a peer\'s agent is a handle you can read about and nothing you can reach.',
     ),
   // ⚠ `outcome` ("completed" | "failed") was a param here, required by
   // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
@@ -293,7 +303,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(30_000)
     .optional()
     .describe(
-      'op="launch_agent" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to look for the agent in read_sessions. Do not re-issue on a timeout, or you queue a second agent.',
+      'op="launch_agent" / op="end_agent" / op="rename_agent" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to check read_sessions. Do not re-issue on a timeout: on a launch you would queue a SECOND agent, and on an end you would have no way to tell which request acted.',
     ),
   info_card: z
     .object({

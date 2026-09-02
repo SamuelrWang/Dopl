@@ -12,7 +12,7 @@
  */
 import type { DoplTransport } from "./transport.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
-import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
+import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
@@ -108,6 +108,21 @@ export declare function setChannelThreadMode(t: DoplTransport, channelId: string
  * {@link LaunchDirectiveCreateInput}.
  */
 export declare function createLaunchDirective(t: DoplTransport, input: LaunchDirectiveCreateInput): Promise<LaunchDirectiveCreated>;
+/**
+ * ASK THE OPERATOR'S OWN DESKTOP TO **END** OR **RENAME** ONE OF ITS AGENTS
+ * (2026-09-01).
+ *
+ * ⚠ **THE SAME MAILBOX, A DIFFERENT KIND — so the result is a `LaunchDirective`
+ * and `getLaunchDirective` polls it.** There is no second lane and no second poll
+ * endpoint; only the CREATE body differs, because a launch's shape (goal, model,
+ * template) and an end's (which agent) have nothing in common.
+ * ⚠ A REQUEST, NOT A COMMAND, exactly as a launch is. `offline` means the machine
+ * is not listening and NOTHING WAS FILED.
+ * ⚠ **NO LAUNCH TOGGLE APPLIES TO THESE TWO.** The desktop's launch-over-MCP
+ * setting gates `launch_agent` and neither of these; do not tell a caller to turn
+ * it on because an end was refused.
+ */
+export declare function createAgentDirective(t: DoplTransport, input: AgentDirectiveCreateInput): Promise<AgentDirectiveCreated>;
 /**
  * POLL ONE DIRECTIVE — what a bounded hold reads while the desktop decides.
  *

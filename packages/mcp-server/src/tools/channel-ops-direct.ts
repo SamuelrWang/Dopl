@@ -32,6 +32,10 @@
 import type { AgentDirection, DirectionRefusalReason, DoplClient } from "@dopl/client";
 import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
+// ⚠ THE SHARED INSTANCE-ID PARSER (2026-09-01). It LIVED here until `end_agent`
+// and `rename_agent` became its second and third callers; the whole argument for
+// why four characters of logic still deserve one home is in that module.
+import { bareAgentId } from "./channel-agent-id";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -50,22 +54,6 @@ const POLL_INTERVAL_MS = 1_500;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * THE BARE INSTANCE ID, from whichever form the caller pasted.
- *
- * ⚠ **BOTH FORMS ARE ACCEPTED BECAUSE `read_sessions` PRINTS THE HANDLE, NOT THE
- * ID.** Every surface that shows an agent over MCP shows `@agent-<id>`, so that is
- * what a model copies — and the column CHECK and the create schema both want the
- * bare eight characters. Refusing the pasted form would be a 400 for doing exactly
- * what the neighbouring op taught, which is the invisible-failure shape this
- * surface refuses everywhere else.
- * ⚠ IT STRIPS, IT DOES NOT VALIDATE. A value that is not an agent id after this
- * is refused by the create schema and, failing that, reaches a machine that
- * answers `no-session` — both honest, and neither is this function's job.
- */
-function bareAgentId(raw: string): string {
-  return String(raw || "").trim().replace(/^@/, "").replace(/^agent-/, "");
-}
 
 /**
  * THE REFUSAL CONTRACT, AS SENTENCES AN AGENT CAN ACT ON.

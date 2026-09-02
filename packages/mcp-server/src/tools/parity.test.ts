@@ -200,10 +200,15 @@ describe("write-op completeness", () => {
     const channelEnum = opEnum(
       TOOLS.find((t) => t.name === "dopl_channel")!,
     )!;
+    // ⚠ SIX, NOT SEVEN, SINCE 2026-09-01. `rename_agent` IS BACK IN THE ENUM and
+    // IS gated as a write — a DIFFERENT verb (a local display label, never an
+    // address; see `channel-law.test.ts › REMOVED_VOCABULARY`). It therefore
+    // cannot be asserted absent here, and the case below — every enum op is
+    // classified write-or-read — is what covers it, which is the check that
+    // actually closes the read-only-token hole this block is about.
     for (const op of [
       "agents",
       "summon_agent",
-      "rename_agent",
       "set_agent_status",
       "disengage_agent",
       "join_thread",

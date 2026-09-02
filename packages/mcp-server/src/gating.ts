@@ -136,6 +136,18 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     // set out of the SOURCE TEXT, so a quoted phrase in a comment is read as an
     // op name and fails the WRITE_OPS-subset-of-enum check.
     "launch_agent",
+    // ⚠ `end_agent` AND `rename_agent` WRITE (2026-09-01). Each files a
+    // `channel_launch_directives` row of a non-launch KIND and asks a machine to
+    // act on a running agent; a read-only token must be refused both, or a
+    // `dopl.read` session can STOP its operator agents through a non-admin tool.
+    // ⚠ CLASSIFIED AS WRITES EVEN THOUGH NEITHER CHANGES ANY ROW A READ COULD
+    // SEE — an end mutates a live process and a rename mutates a local store, and
+    // neither is a read that happens to wait. `direct_agent` above carries the
+    // same argument.
+    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
+    // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
+    "end_agent",
+    "rename_agent",
     // ⚠ WRITES THE CHANNEL INFO CARD (Q12, 2026-08-28). It also READS when
     // `info_card` is omitted, and it is classified as a WRITE anyway: an op that
     // can write must be refused wholesale for a read-only token, or the read arm

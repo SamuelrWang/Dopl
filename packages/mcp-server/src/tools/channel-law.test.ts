@@ -13,13 +13,17 @@
  * resurrection, and a stale law is the same bug as a false one.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
-import ts from "typescript";
 import { describe, it, expect } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond";
 import { registerChannelTool } from "./channel";
+// ⚠ THE BANNED SET AND THE SOURCE-WIDE SCAN THAT WALKS FOR IT LEFT THIS FILE ON
+// 2026-09-01 (the 500-line cap; `law-scan.test.ts` and `law-removed-vocabulary.ts`,
+// whose headers carry why the seam is real and why NEITHER may take a `channel-`
+// prefix). ONE statement of the table, imported rather than copied —
+// two lists of what may not be said is how one of them quietly stops banning
+// something.
+import { REMOVED_VOCABULARY } from "./law-removed-vocabulary";
 
 function description(): string {
   let text = "";
@@ -33,50 +37,6 @@ function description(): string {
 
 const DESCRIPTION = description();
 
-/**
- * Named-agent surfaces that no longer exist. ⚠ A description mentioning one
- * does not merely mislead — it names ops an MCP client rejects as invalid enum
- * values, so the pin is total: the words must not appear. Module-scoped because
- * the description is not the whole shipped surface (see the source-wide scan at
- * the bottom of this file).
- */
-const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]> = [
-  ["engagement", /\bengage/i],
-  ["summoning", /\bsummon/i],
-  ["to_agent / to_agents", /to_agents?\b/],
-  ["as_agent", /as_agent/],
-  ["breakout rooms", /breakout|participant set|\bparticipants\b/i],
-  ["the thread-open handshake", /thread-open-|handshake/i],
-  ["the agent lifecycle ops", /rename_agent|set_agent_status|disengage_agent|join_thread|leave_thread/],
-  ["the agents roster op", /op="agents"/],
-  // ── THREAD CLOSING, removed 2026-08-18 (wiring plan Phase 4) ──────────────
-  // No close, no propose-then-confirm, no reopen. The operator pauses or ends an
-  // AGENT. ⚠ These are the sharpest entries in this table: a thread's state is
-  // exactly what an agent polls and waits on, so a single surviving sentence
-  // sends it looking for a transition that can never arrive — and the two op
-  // names left the enum, so a description mentioning one names a call the SDK
-  // answers with -32602.
-  ["the propose_close op", /propose_close/],
-  ["the close_thread op", /close_thread/],
-  // Verb + THREAD in either order, so "close the thread", "closing a thread",
-  // "the thread is closed" and "thread closed" all land. ⚠ Deliberately NOT a
-  // bare /clos/: "fail-closed", "the enum is closed" and "closes the window" are
-  // live, correct English about other things.
-  [
-    "closing a thread",
-    /\bclos(e|es|ed|ing)\s+(the\s+|a\s+|this\s+|that\s+|its\s+)?thread|\bthread('s)?\s+(is\s+|was\s+|been\s+)?clos(e|ed|ing)/i,
-  ],
-  // Reopen has no other meaning on this surface — the tool never had an op for
-  // reopening anything else.
-  ["reopening a thread", /\breopen/i],
-  // The reserved marker keys the close machinery stamped. They left the
-  // re-stamp list entirely, so a string naming one is naming nothing.
-  ["the close-proposal / reopen markers", /closeProposed|closeOutcome|threadReopened/],
-  // The thread lifecycle FIELDS `list_threads` / `get_thread` used to render.
-  // The columns survive as legacy storage; the surface must not report them,
-  // because reporting a state is how an agent learns to wait on it.
-  ["thread status / outcome vocabulary", /\bthread('s)?\s+(status|outcome)\b|\boutcome summar(y|ies)\b/i],
-];
 
 describe("THE LAW is stated, in full, in the tool description", () => {
   it("is the FIRST thing after the opening line — an agent must not have to find it", () => {
@@ -342,10 +302,13 @@ describe("what the law and the ops around it may NOT say", () => {
 
 describe("the removed ops are absent from the published op set", () => {
   it("the description names none of them", () => {
+    // ⚠ SIX, NOT SEVEN, SINCE 2026-09-01 — `rename_agent` came back as a
+    // DIFFERENT VERB (a local display label, never an address). See the note on
+    // `REMOVED_VOCABULARY`'s lifecycle entry, and the positive case below, which
+    // is what actually guards the property this list was protecting.
     for (const op of [
       "agents",
       "summon_agent",
-      "rename_agent",
       "set_agent_status",
       "disengage_agent",
       "join_thread",
@@ -355,6 +318,26 @@ describe("the removed ops are absent from the published op set", () => {
         `"${op}"`,
       );
     }
+  });
+
+  /**
+   * ⚠ **THE REPLACEMENT GUARD, AND IT IS STRONGER THAN THE BANNED WORD IT
+   * REPLACES.** A banned string could only say "this word is absent". This drives
+   * the SHIPPED COPY and says what the revived word must MEAN: a label on one
+   * machine, never an address. If a future edit ever lets `rename_agent` read as
+   * "re-point an agent's handle", this fails — which the old list could not have
+   * caught even while it was passing, because the retired surface's danger was
+   * never the spelling.
+   */
+  it("the revived rename_agent teaches a LABEL, never an ADDRESS", () => {
+    expect(DESCRIPTION).toContain('"rename_agent"');
+    expect(DESCRIPTION).toContain("DISPLAY ONLY");
+    // The handle is unchanged and is still the only thing that addresses an agent.
+    expect(DESCRIPTION).toContain("stays the ONLY address");
+    expect(DESCRIPTION).toContain("nothing resolves an agent by its name");
+    // …and it never leaves the operator's own machine, so no peer can even see it.
+    expect(DESCRIPTION).toContain("reaches no server");
+    expect(DESCRIPTION).toContain("invisible to every other member");
   });
 
   it("still documents the ops that SURVIVED, so the rollback took nothing extra", () => {
@@ -374,99 +357,4 @@ describe("the removed ops are absent from the published op set", () => {
       );
     }
   });
-});
-
-/**
- * Scan of every SHIPPED STRING, not just the description: a tool RESULT is read
- * by the same model at the moment it decides what to do next, so it teaches
- * HARDER than the description does.
- *
- * Reads the AST, not raw text — `ts.createSourceFile` yields string/template
- * literals only, so a COMMENT may still discuss removed vocabulary while a
- * shipped sentence may not. Every non-test `channel-*.ts` in this directory is
- * in scope; descriptions, `.describe()` prose, error copy, render helpers and
- * result lines are all the same lane to a reader.
- *
- * ⚠ NO ALLOWLIST, on purpose — an exemption is how a removed-vocabulary string
- * survived four phases of the rollback. When a legitimate English sentence
- * collides, rephrase it: an agent cannot tell a descriptive use from an
- * instructive one.
- */
-describe("no SHIPPED STRING in the channel tool teaches removed vocabulary", () => {
-  // ⚠ Off `process.cwd()` (package root under vitest): `import.meta` is
-  // disallowed by this package's CommonJS tsc target and `__dirname` is not
-  // guaranteed under the ESM-transformed test. Same as `parity.test.ts`.
-  const HERE = path.resolve(process.cwd(), "src", "tools");
-
-  /** Every non-test `channel-*.ts` module — the tool's whole authored surface. */
-  const sources = readdirSync(HERE)
-    .filter(
-      (f) =>
-        (f.startsWith("channel-") || f === "channel.ts") &&
-        f.endsWith(".ts") &&
-        !f.endsWith(".test.ts"),
-    )
-    .sort();
-
-  /** Literal TEXT only — comments are not literals, so they are never scanned. */
-  function shippedStrings(file: string): Array<{ text: string; line: number }> {
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(path.join(HERE, file), "utf8"),
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const out: Array<{ text: string; line: number }> = [];
-    const walk = (node: ts.Node): void => {
-      if (
-        ts.isStringLiteral(node) ||
-        ts.isNoSubstitutionTemplateLiteral(node) ||
-        ts.isTemplateHead(node) ||
-        ts.isTemplateMiddle(node) ||
-        ts.isTemplateTail(node)
-      ) {
-        out.push({
-          text: node.text,
-          line:
-            source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-        });
-      }
-      ts.forEachChild(node, walk);
-    };
-    walk(source);
-    return out;
-  }
-
-  it("finds the modules at all (a scan over nothing is not a guard)", () => {
-    expect(sources.length).toBeGreaterThan(10);
-    expect(sources).toContain("channel-post-linkage.ts");
-    expect(sources).toContain("channel-ops-write.ts");
-    expect(sources).toContain("channel-render-threads.ts");
-    expect(shippedStrings("channel-post-linkage.ts").length).toBeGreaterThan(3);
-  });
-
-  it("the scan can SEE the defect it was written for", () => {
-    // Red proof: a scan that cannot fail is not a guard.
-    const shipped =
-      'to_agent="<handle>" starts that agent, to="<member>" triggers their machine.';
-    const hit = REMOVED_VOCABULARY.filter(([, re]) => re.test(shipped));
-    expect(hit.map(([label]) => label)).toEqual(["to_agent / to_agents"]);
-  });
-
-  for (const file of sources) {
-    it(`${file} ships no removed vocabulary`, () => {
-      const found: string[] = [];
-      for (const { text, line } of shippedStrings(file)) {
-        for (const [label, re] of REMOVED_VOCABULARY) {
-          if (re.test(text)) {
-            found.push(`${file}:${line} [${label}] ${JSON.stringify(text.slice(0, 120))}`);
-          }
-        }
-      }
-      expect(
-        found,
-        `a shipped string teaches a surface that no longer exists:\n${found.join("\n")}`,
-      ).toEqual([]);
-    });
-  }
 });

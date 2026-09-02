@@ -38,7 +38,19 @@
  * lane has no human and the launch-over-MCP toggle stands in for the click there,
  * so it can never cross this wire.
  */
-export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-bridge" | "no-counterparty" | "no-template";
+export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-bridge" | "no-counterparty" | "no-template" | "no-session" | "bad-name";
+/**
+ * WHICH VERB A DIRECTIVE ASKS FOR (2026-09-01).
+ *
+ * ⚠ `launch` is the DEFAULT and every row written before this existed is one, so
+ * a directive that names no kind is a launch — which is what it meant.
+ * ⚠ **THE KINDS DO NOT SHARE A CONSENT GATE.** `launch` is gated by a per-machine
+ * desktop toggle and answers `no-bridge` when it is off; `end` and `rename` are
+ * not gated at all — they are the stop verb and the display verb and widen
+ * nothing. Do not tell a caller that turning the launch toggle on is what makes
+ * an end work.
+ */
+export type LaunchDirectiveKind = "launch" | "end" | "rename";
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
  * desktop.
@@ -55,6 +67,8 @@ export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-
  */
 export interface LaunchDirective {
     id: string;
+    /** Which verb this asks for. ⚠ `launch` on every row that names no kind. */
+    kind: LaunchDirectiveKind;
     /**
      * The operator whose machine was asked — **always your own id** (2026-08-23).
      * The read is fenced on it server-side, so it echoes the caller back rather
@@ -79,9 +93,21 @@ export interface LaunchDirective {
     /** The template's name AT CREATE TIME — a snapshot, never a join, so it
      *  survives the id's `ON DELETE SET NULL`. */
     templateName: string | null;
-    status: "pending" | "claimed" | "launched" | "refused" | "expired";
+    /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS and `launched` IS THE LAUNCH'S.
+     *  They are two words because this row is rendered into an agent-facing
+     *  sentence, and "launched" on the record of an agent being STOPPED is the one
+     *  kind of wrong nothing downstream can detect. */
+    status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
     /** Set iff `status` is `refused`. */
     refusalReason: LaunchRefusalReason | null;
+    /** WHICH AGENT an `end` / `rename` acts on — an INPUT you named. `null` on a
+     *  launch. ⚠ Never confuse it with `agentId` below, which is the OUTPUT a
+     *  launch produced. */
+    targetAgentId: string | null;
+    /** The rename's new display name. Non-null iff `kind` is `rename`, where `""`
+     *  is legal and means CLEAR (back to `Agent #<id>`). ⚠ Display only, on one
+     *  machine — nothing resolves an agent by it. */
+    targetName: string | null;
     /** The agent instance started. Set iff `status` is `launched` — it is what a
      *  requester types as `@<agentId>` to direct it. */
     agentId: string | null;
@@ -114,6 +140,45 @@ export interface LaunchDirectiveCreateInput {
  * do not retry, and do not classify it as a failure.
  */
 export type LaunchDirectiveCreated = {
+    offline: true;
+    directive: null;
+} | {
+    offline: false;
+    directive: LaunchDirective;
+};
+/**
+ * WHAT `createAgentDirective` ASKS FOR — END or RENAME one of the operator's own
+ * running agents (2026-09-01).
+ *
+ * ⚠ A DISCRIMINATED UNION: a rename REQUIRES a name and an end must not carry
+ * one, which the column CHECK also says at rest.
+ * ⚠ **THERE IS NO OPERATOR FIELD AND THERE MUST NEVER BE ONE** — the server
+ * stamps the authenticated caller, because the only machine an agent may reach is
+ * its own operator's.
+ * ⚠ `channel` IS REQUIRED even though `agentId` addresses the target on its own:
+ * the create proves a MEMBERSHIP ROW in that channel, which is what stops this
+ * being a bare "end agent `abcdefgh`" primitive with no room the caller had to be
+ * in first.
+ */
+export type AgentDirectiveCreateInput = {
+    kind: "end";
+    channel: string;
+    agentId: string;
+}
+/** ⚠ `name: ""` IS LEGAL AND MEANS CLEAR. A separate "unname" verb would be a
+ *  second way to say one thing. Bounded at 60 — the desktop store's own cap. */
+ | {
+    kind: "rename";
+    channel: string;
+    agentId: string;
+    name: string;
+};
+/**
+ * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR — the launch create's rule
+ * verbatim. The operator's machine is not listening, **no row was created**, and
+ * nothing was asked.
+ */
+export type AgentDirectiveCreated = {
     offline: true;
     directive: null;
 } | {
