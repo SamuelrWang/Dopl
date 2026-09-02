@@ -6,6 +6,8 @@ import { getBearerJwtUser } from "./bearer-jwt";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
+import { runWithCallerScope } from "@/shared/supabase/caller-scope";
+import { sessionCallerScope, tokenCallerScope } from "./with-auth-scope";
 
 /** Per-route options for `withUserAuth` (forwarded through
  *  `withWorkspaceAuth`). ⚠ Both flags affect OAuth-bearer (agent) callers ONLY;
@@ -123,6 +125,15 @@ async function runAndLog5xx(
  * container-session credential is one human's session and reads what that human
  * reads; a lock with any other kind (or none) keeps the original refusal, so a
  * shared workspace key reintroduced later inherits the NARROW rule by default.
+ *
+ * 🔒 ⚠ AND IT ESTABLISHES THE CALLER SCOPE (`shared/supabase/caller-scope.ts`),
+ * which is what lets a repository read as the CALLER instead of as the service
+ * role once `RLS_CALLER_SCOPED_READS` is on. It is set HERE — the one wrapper
+ * every API route composes, `withWorkspaceAuth` and `withMcpAccess` included —
+ * from the credential this function has already validated. A route that
+ * authenticates some other way, or a read that runs outside a request, finds no
+ * scope and keeps the service-role client; the fence is then the TS predicate,
+ * exactly as today.
  */
 export function withUserAuth(
   handler: (
@@ -169,7 +180,10 @@ export function withUserAuth(
         const jwtUser = await getBearerJwtUser(token);
         if (jwtUser) {
           return runAndLog5xx(
-            () => handler(request, { userId: jwtUser.id, params: resolvedParams }),
+            () =>
+              runWithCallerScope(sessionCallerScope(jwtUser.id), () =>
+                handler(request, { userId: jwtUser.id, params: resolvedParams })
+              ),
             {
               endpoint: `${request.method} ${request.nextUrl.pathname}`,
               userId: jwtUser.id,
@@ -250,18 +264,22 @@ export function withUserAuth(
 
         return runAndLog5xx(
           () =>
-            handler(request, {
-              userId: tok.userId,
-              agentTokenId: tok.tokenId,
-              // 🔒 THE CONTAINER LOCK. `null` for every ordinary credential.
-              apiKeyWorkspaceId: tok.workspaceId,
-              // 🔒 …AND ITS KIND. Dropping this line is silent and fails CLOSED:
-              // every container session reverts to being read as a shared
-              // workspace key, and the operator's agent 404s on the operator's
-              // own private rows (F-336).
-              apiKeyWorkspaceLockKind: tok.workspaceLockKind,
-              params: resolvedParams,
-            }),
+            // 🔒 The one lane whose credential axes are not constant —
+            // `with-auth-scope.ts › tokenCallerScope` decides the M-10 axis.
+            runWithCallerScope(tokenCallerScope(tok), () =>
+                handler(request, {
+                  userId: tok.userId,
+                  agentTokenId: tok.tokenId,
+                  // 🔒 THE CONTAINER LOCK. `null` for every ordinary credential.
+                  apiKeyWorkspaceId: tok.workspaceId,
+                  // 🔒 …AND ITS KIND. Dropping this line is silent and fails
+                  // CLOSED: every container session reverts to being read as a
+                  // shared workspace key, and the operator's agent 404s on the
+                  // operator's own private rows (F-336).
+                  apiKeyWorkspaceLockKind: tok.workspaceLockKind,
+                  params: resolvedParams,
+                })
+            ),
           {
             endpoint: `${request.method} ${request.nextUrl.pathname}`,
             userId: tok.userId,
@@ -278,7 +296,10 @@ export function withUserAuth(
     const user = await getSessionUser(request);
     if (user) {
       return runAndLog5xx(
-        () => handler(request, { userId: user.id, params: resolvedParams }),
+        () =>
+          runWithCallerScope(sessionCallerScope(user.id), () =>
+            handler(request, { userId: user.id, params: resolvedParams })
+          ),
         {
           endpoint: `${request.method} ${request.nextUrl.pathname}`,
           userId: user.id,
