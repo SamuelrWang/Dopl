@@ -1,27 +1,32 @@
 /**
- * THE MESSAGE-KIND SET, ACROSS THE THREE STATEMENTS NO COMPILER CAN REACH
+ * THE MESSAGE-KIND SET, ACROSS THE ONE STATEMENT NO COMPILER CAN REACH
  * (2026-09-02).
  *
  * `channel_messages.kind` is a closed set of six and `channel_messages.author_kind`
- * a closed set of three, and each is written down five times:
+ * a closed set of three, and each is written down three times:
  *
- *   1. `src/features/channels/types.ts › ChannelMessageKind` / `MessageAuthorKind`
- *      — the REFERENCE. Where the set and every argument about it are stated.
+ *   1. `packages/contracts/src/channels.ts › ChannelMessageKind` /
+ *      `MessageAuthorKind` — the REFERENCE. Where the set and every argument
+ *      about it are stated, and since 2026-09-02 the ONLY TypeScript declaration
+ *      of either: `src/features/channels/types.ts` and the SDK's
+ *      `channel-types.ts` both RE-EXPORT it (v2 slice A13).
  *   2. `src/features/channels/schema.ts › PostableMessageKindSchema` /
  *      `PostableAuthorKindSchema` — the zod half. **NOT READ BY THIS SCRIPT, ON
- *      PURPOSE:** since 2026-09-02 both are `closedEnum` over a type this file
- *      DERIVES from (1) with `Exclude`, so drift between (1) and (2) is a
- *      COMPILE ERROR in both directions (`shared/lib/closed-enum.ts`). Re-reading
- *      them here would be a second, weaker statement of a proof that already
- *      holds — which is the duplication this family of gates exists to delete.
- *   3. `packages/dopl-client/src/channel-types.ts` — the SDK mirror. The SDK
- *      cannot import `src/`, so it is a hand copy.
- *   4. `packages/dopl-client/dist/channel-types.d.ts` — the COMMITTED build,
- *      which is what `packages/mcp-server` and `main` actually import.
- *      `check-role-drift.ts` learned this one the hard way: a `src/`-only
- *      comparison stays green while the thing consumers read is stale.
- *   5. the column `CHECK` in `20260725120000_channels.sql`. SQL can import
- *      nothing, and it is the only one of the five that can REJECT a write.
+ *      PURPOSE:** both are `closedEnum` over a type this file DERIVES from (1)
+ *      with `Exclude`, so drift between (1) and (2) is a COMPILE ERROR in both
+ *      directions (`shared/lib/closed-enum.ts`). Re-reading them here would be a
+ *      second, weaker statement of a proof that already holds — which is the
+ *      duplication this family of gates exists to delete.
+ *   3. the column `CHECK` in `20260725120000_channels.sql`. SQL can import
+ *      nothing, and it is the only one of the three that can REJECT a write.
+ *
+ * ⚠ **TWO SITES LEFT THIS SCRIPT ON 2026-09-02 AND THEY ARE NOT "NO LONGER
+ * CHECKED".** `packages/dopl-client/src/channel-types.ts` and its committed
+ * `dist/channel-types.d.ts` were sites (3) and (4) here because the SDK could not
+ * import `src/`. It now imports `@dopl/contracts`, so both emit a RE-EXPORT and
+ * there is no literal union left in either to disagree — the compiler holds that
+ * pair, strictly harder than this regex did. Do not re-add them: `extractUnion`
+ * would throw on a re-export, which is a gate that fails on the correct state.
  *
  * ⚠ **WHY A GATE AND NOT A COMMENT — THE TWO FAILURE DIRECTIONS ARE BOTH
  * SILENT, AND THEY ARE DIFFERENT BUGS.** A kind added to the TypeScript and not
@@ -78,31 +83,25 @@ export interface KindFamily {
   label: string;
   /** The `channel_messages` column whose `CHECK` states the set in SQL. */
   column: string;
-  /** `src/features/channels/types.ts`'s union — the reference. */
+  /** `@dopl/contracts`' union — the reference. */
   referenceType: string;
-  /** The SDK's name for the same union (it does not share the server's). */
-  sdkType: string;
   /** The type `Exclude`d from the reference, and what it excludes. */
   postable: { type: string; excluded: string[] };
 }
 
-const REFERENCE_FILE = "src/features/channels/types.ts";
-const SDK_FILE = "packages/dopl-client/src/channel-types.ts";
-const SDK_DIST_FILE = "packages/dopl-client/dist/channel-types.d.ts";
+const REFERENCE_FILE = "packages/contracts/src/channels.ts";
 
 export const FAMILIES: KindFamily[] = [
   {
     label: "message kind",
     column: "kind",
     referenceType: "ChannelMessageKind",
-    sdkType: "ChannelMessageKind",
     postable: { type: "PostableMessageKind", excluded: ["system"] },
   },
   {
     label: "author kind",
     column: "author_kind",
     referenceType: "MessageAuthorKind",
-    sdkType: "ChannelAuthorKind",
     postable: { type: "PostableAuthorKind", excluded: ["system"] },
   },
 ];
@@ -154,14 +153,6 @@ export function sitesFor(
   return {
     reference: extractUnion(read(REFERENCE_FILE), family.referenceType),
     mirrors: [
-      [
-        `${SDK_FILE} › ${family.sdkType}`,
-        extractUnion(read(SDK_FILE), family.sdkType),
-      ],
-      [
-        `${SDK_DIST_FILE} › ${family.sdkType}`,
-        extractUnion(read(SDK_DIST_FILE), family.sdkType),
-      ],
       [
         `${KIND_MIGRATION} › CHECK (${family.column} IN …)`,
         sqlCheckValues(read(KIND_MIGRATION), family.column),
@@ -239,7 +230,7 @@ function main(): void {
 
   if (drift) {
     console.error(
-      "\n❌ Message-kind drift detected. The set is stated in the server union, the SDK's type, the SDK's committed dist/ and the column CHECK, with no shared module between any two: change every side in ONE change, and rebuild with `npm run build -w @dopl/client`. A kind the database refuses throws 23514 on a real INSERT; a kind the database accepts and the union lacks takes the default branch of every kind-keyed decision downstream."
+      "\n❌ Message-kind drift detected. The set is stated in `@dopl/contracts` and in the column CHECK, and no TypeScript reaches a CHECK: change both sides in ONE change. A kind the database refuses throws 23514 on a real INSERT; a kind the database accepts and the union lacks takes the default branch of every kind-keyed decision downstream."
     );
     process.exit(1);
   }
@@ -247,7 +238,7 @@ function main(): void {
   for (const family of FAMILIES) {
     const { reference } = sitesFor(read, family);
     console.log(
-      `✅ ${family.label}: 4 declarations agree on the set (${reference.slice().sort().join(", ")}); ${family.postable.type} is derived.`
+      `✅ ${family.label}: the contracts union and the column CHECK agree on the set (${reference.slice().sort().join(", ")}); ${family.postable.type} is derived.`
     );
   }
 }

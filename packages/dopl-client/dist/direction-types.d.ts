@@ -10,18 +10,13 @@
  * two places drifts in one of them, and you cannot tell which from the outside.
  */
 /**
- * WHY A DESKTOP SAID NO TO A DIRECTION — exactly five words, the wire contract.
- *
- *  - `no-session` — no live agent with that id on that machine. The one that
- *                   actually happens, and the only authoritative answer: whether
- *                   an agent is alive is knowable only where it runs.
- *  - `auth-hold`  — the desktop is signed out; the session has no query to feed.
- *  - `busy`       — declined for now. Genuinely temporary.
- *  - `blocked`    — the desktop is below the version floor.
- *  - `no-bridge`  — the operator's direct-over-MCP toggle is OFF. A CHOICE, not a
- *                   fault; the render must not read as one.
+ * ⚠ **{@link DirectionRefusalReason} IS DECLARED IN `@dopl/contracts ›
+ * directives.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it was a
+ * hand mirror of `src/features/channels/types-direction.ts` and nothing compared
+ * the two. No consumer import changed.
  */
-export type DirectionRefusalReason = "no-session" | "auth-hold" | "busy" | "blocked" | "no-bridge";
+import type { DirectionRefusalReason } from "@dopl/contracts";
+export type { DirectionRefusalReason };
 /** One private direction, as the server reports it. `status` already has lazy
  *  expiry applied and may differ from the stored column. */
 export interface AgentDirection {
@@ -67,11 +62,32 @@ export interface AgentDirectionCreateInput {
     agentId: string;
     threadId?: string;
     body: string;
+    /**
+     * **AN IDEMPOTENCY KEY — "a retry may not say this twice"** (2026-09-02,
+     * A10/G10).
+     *
+     * ⚠ `LaunchDirectiveCreateInput.clientMsgId`'s contract exactly, and that type
+     * carries the argument. The hazard here is the mirror image: a second direction
+     * reaches a LIVE agent, which answers twice, and neither side can tell which
+     * answer belonged to which request.
+     * ⚠ A converged retry returns the stored row `reply` INCLUDED, so a caller
+     * whose hold timed out collects the answer instead of asking again.
+     */
+    clientMsgId?: string;
 }
+/**
+ * ⚠ **`existing: true` MEANS THIS CALL FILED NOTHING** (2026-09-02, A10/G10) —
+ * the `clientMsgId` had been used before and this is the FIRST request's
+ * direction, whatever became of it.
+ * ⚠ OPTIONAL, because a server older than this wave sends no such key
+ * (INVARIANTS §13); absent reads as `false`, which is right there — that server
+ * stored no key and every call really was fresh.
+ */
 export type AgentDirectionCreated = {
     offline: true;
     direction: null;
 } | {
     offline: false;
     direction: AgentDirection;
+    existing?: boolean;
 };

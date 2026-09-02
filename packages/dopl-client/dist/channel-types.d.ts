@@ -13,20 +13,31 @@
  * `task`) are storage names, deliberately unchanged; mapping happens here and
  * in `channel.ts`.
  */
-export type ChannelVisibility = "public" | "private";
-export type ChannelMemberRole = "owner" | "member";
 import type { ChannelEscalationFields } from "./escalation-types.js";
 import type { ChannelSessionHealth } from "./session-health-types.js";
-export type ThreadMode = "interactive" | "autonomous";
-export type ThreadStatus = "open" | "closed";
-export type ThreadOutcome = "completed" | "failed";
-export type ChannelAuthorKind = "user" | "agent" | "system";
 /**
- * `message` = chat; `task_*` = structured activity events (machine payload in
- * `metadata`, human render in `body`); `system` = server-emitted joins / topic
- * changes (agents don't post these).
+ * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
+ * `@dopl/contracts` AND RE-EXPORTED HERE UNDER THIS PACKAGE'S OWN NAMES**
+ * (2026-09-02, v2 slice A13). `ChannelMemberRole` is the package's
+ * `ChannelRole` and `ChannelAuthorKind` is its `MessageAuthorKind`, aliased on
+ * the way through, so **NO CONSUMER IMPORT CHANGES**: `@dopl/client` publishes
+ * exactly the names it always has.
+ *
+ * ⚠ **THIS IS WHAT THE "HAND MIRROR" HEADERS IN THIS PACKAGE WERE ASKING FOR.**
+ * Every one of these was re-typed here because this package cannot import
+ * `src/` — separate `tsc` programs, resolved through `node_modules`.
+ * `@dopl/contracts` is the shared module that removes the reason: it is TYPE-ONLY
+ * and has no build, so importing it costs this package nothing at runtime and
+ * adds nothing to its `dist/`.
+ *
+ * ⚠ **THE `dist/` COPIES OF THESE UNIONS ARE GONE, NOT STALE.** Three drift
+ * gates used to parse `packages/dopl-client/dist/*.d.ts` as a separate mirror
+ * because it is what `@dopl/mcp-server` actually imports. A re-export emits a
+ * re-export, so there is no literal union in `dist/` left to disagree — the
+ * gates dropped those sites rather than being pointed at them.
  */
-export type ChannelMessageKind = "message" | "task_started" | "task_progress" | "task_finished" | "task_failed" | "system";
+import type { ChannelVisibility, ChannelRole as ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, MessageAuthorKind as ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts";
+export type { ChannelVisibility, ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry, };
 import type { ChannelInfoCard } from "./info-card-types.js";
 export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, ChannelUpdateInput, } from "./info-card-types.js";
 export interface Channel {
@@ -156,11 +167,6 @@ export interface ChannelThreadPage {
     truncated: boolean;
 }
 /**
- * States a session's pill (and read-session-state) reports. NO `thinking` — it
- * needs streaming, which is off. Mirrors `SessionPillState` in the app.
- */
-export type SessionPillState = "working" | "idle" | "ended";
-/**
  * ONE of a member's live (or just-ended) sessions, from
  * `dopl_channel(op="read_sessions")`. Server-visible projection of the
  * desktop's `session-summary.list()`.
@@ -201,40 +207,6 @@ export interface ChannelSessionState {
     channelName: string | null;
     threadTitle: string | null;
     updatedAt: string;
-}
-/**
- * OPERATOR-ONLY session telemetry (server ruling, 2026-08-22). Rides only on
- * OWN-scoped reads — `listChannelSessions` (`GET /api/channels/sessions`) and
- * the `sessions` block on an await result. A PEER's session never carries these
- * fields: the server's channel-scoped mapper cannot emit them.
- *
- * ⚠ **EVERY MEASURED `null` MEANS UNKNOWN, NEVER ZERO.** Render "unknown" or
- * render nothing; never render `0` for an absent count, and never divide by an
- * absent `contextWindow`.
- *
- * ⚠ **THE NAME IS ABOUT THE AUDIENCE, NOT THE SUBJECT** (2026-08-23):
- * `templateName` is an identity snapshot rather than a measurement and rides
- * here because it reaches the same single reader.
- */
-export interface ChannelSessionTelemetry {
-    model: string | null;
-    /** The tool running right now ("Bash", "Edit"). */
-    toolLabel: string | null;
-    contextUsed: number | null;
-    contextWindow: number | null;
-    tokensSpent: number | null;
-    startedAt: string | null;
-    lastActivityAt: string | null;
-    /**
-     * The agent TEMPLATE this session was launched from, by name, AS OF SPAWN.
-     *
-     * ⚠ **A SNAPSHOT, NOT A POINTER** — a session reports what it RAN AS, so this
-     * may name a template that has since been renamed or deleted. That is correct,
-     * not stale. ⚠ OPERATOR-ONLY like the rest of this interface: a private
-     * template's name reaching a peer is an existence oracle. `null` = no
-     * template, or a desktop older than the field.
-     */
-    templateName: string | null;
 }
 /** The caller's OWN session — coarse projection plus the operator-only halves. */
 export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry & ChannelSessionHealth;
@@ -336,11 +308,6 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
      */
     intent?: MessageIntent;
 }
-/**
- * `request` (default) reaches an agent; `chat` reaches only the humans in the
- * room. See `ChannelMessageInput.intent`.
- */
-export type MessageIntent = "chat" | "request";
 export interface ReadMessagesOptions {
     /** Only messages with seq greater than this. */
     since?: number;

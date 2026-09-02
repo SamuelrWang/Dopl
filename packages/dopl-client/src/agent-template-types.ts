@@ -12,15 +12,15 @@
  */
 
 /**
- * Three-way sharing scope.
- *   private   → the creator (and workspace admins) only
- *   team      → members of any team linked through `agent_template_teams`
- *   workspace → every active workspace member
- *
- * ⚠ ONE field, not the `visibility` × `accessMode` PAIR that skills / chats /
- * knowledge bases carry — the server type's docblock carries the porting rule.
+ * ⚠ **{@link TemplateVisibility} IS DECLARED IN `@dopl/contracts ›
+ * workspaces.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it was a
+ * hand mirror of `src/features/agent-templates/types.ts`. No consumer import
+ * changed.
  */
-export type TemplateVisibility = "private" | "team" | "workspace";
+import type { TemplateVisibility } from "@dopl/contracts";
+
+export type { TemplateVisibility };
+
 
 /** One user-defined custom field. Both halves are short LABELS: they are
  *  spliced into the launch payload an agent reads back line by line. */

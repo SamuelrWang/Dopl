@@ -8,70 +8,16 @@
  * ⚠ THE ONE THING TO CARRY AWAY: **a directive is a REQUEST, not a command, and
  * it is NOT A MESSAGE.** It never touches `channel_messages` (the loop brake and
  * transcript purity), so it has no `seq` and can never end an `await`.
+ *
+ * ⚠ **THE FOUR CLOSED SETS ARE DECLARED IN `@dopl/contracts › directives.ts`
+ * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — they were hand mirrors of
+ * `src/features/channels/types-launch.ts` with no script between them. No
+ * consumer import changed. ⚠ {@link LaunchToolMode} and {@link LaunchMessageMode}
+ * are ORDERED NARROWEST FIRST and the desktop's clamp is an index comparison
+ * over that order, so read the declaration before re-spelling either.
  */
-/**
- * WHY A DESKTOP SAID NO TO A LAUNCH — **exactly six words**, the wire contract
- * both trees code against.
- *
- * ⚠ A KEY, NEVER A SENTENCE: the readable line is written by the READER, so a
- * reword does not need a desktop release and no desktop-authored prose is
- * rendered into an agent-facing result.
- *
- *  - `cap`             — at the machine's concurrent-agent ceiling.
- *  - `busy`            — under load, declined for now.
- *  - `no-sdk`          — no agent runtime on that machine.
- *  - `auth-hold`       — signed out, or the credential is held.
- *  - `no-bridge`       — ⚠ the operator's launch-over-MCP TOGGLE IS OFF. This is
- *                        the consent mechanism, so it is a CHOICE and must never
- *                        be rendered as a fault or a thing to retry.
- *  - `no-counterparty` — nothing to work with in that channel.
- *  - `no-template`     — ⚠ THE SEVENTH, 2026-08-22 (agent templates). The named
- *                        TEMPLATE did not resolve on the operator's machine:
- *                        deleted, or not visible to the OPERATOR even though the
- *                        orchestrator that named it could see it. One answer for
- *                        both, deliberately — the resolve endpoint is
- *                        404-never-403, so the difference is not observable and a
- *                        render that guessed would rebuild the oracle.
- *
- * ⚠ `template-approval` IS NOT A MEMBER. That word is the desktop's answer to its
- * OWN renderer when a foreign template needs its one first-use click; the directive
- * lane has no human and the launch-over-MCP toggle stands in for the click there,
- * so it can never cross this wire.
- */
-export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-bridge" | "no-counterparty" | "no-template" | "no-session" | "bad-name" | "no-chain";
-/**
- * WHICH VERB A DIRECTIVE ASKS FOR (2026-09-01).
- *
- * ⚠ `launch` is the DEFAULT and every row written before this existed is one, so
- * a directive that names no kind is a launch — which is what it meant.
- * ⚠ **THE KINDS DO NOT SHARE A CONSENT GATE.** `launch` is gated by a per-machine
- * desktop toggle and answers `no-bridge` when it is off; `end` and `rename` are
- * not gated at all — they are the stop verb and the display verb and widen
- * nothing. Do not tell a caller that turning the launch toggle on is what makes
- * an end work.
- * ⚠ **`set_agent_mode` IS THE FOURTH AND IT DOES **NOT** JOIN THE UNGATED PAIR**
- * (2026-09-01). It is the ONE non-launch kind still behind that toggle, because a
- * POSTURE is the only one of the three that can cause LOCAL COMPUTE TO BE SPENT
- * (`bypass` on the tool axis pre-approves work tools on the operator's own
- * hardware). Reading the three non-launch kinds as one class is the mistake this
- * sentence exists to stop.
- */
-export type LaunchDirectiveKind = "launch" | "end" | "rename" | "set_agent_mode";
-/**
- * THE TWO PERMISSION AXES A DIRECTIVE MAY **ASK** FOR — **ORDERED NARROWEST
- * FIRST** (2026-09-01, T24).
- *
- * ⚠ **THE ORDER IS PART OF THE CONTRACT AND NO COMPILER CHECKS IT.** The clamp on
- * the machine is an INDEX COMPARISON over these sequences, so re-ordering either
- * union silently inverts the bound with everything still type-checking.
- *
- * ⚠ **ASKS. NEVER WIDENS, AND THERE IS NO OPERATOR CARVE-OUT.** The operator's
- * machine narrows whatever is asked for to that operator's own stored channel
- * posture. A caller that reads these as "set" will report a posture it does not
- * have, and then size its work for room the agent was never given.
- */
-export type LaunchToolMode = "manual" | "accept_edits" | "auto" | "bypass";
-export type LaunchMessageMode = "ask" | "auto_inbound" | "auto_outbound" | "auto_both";
+import type { LaunchRefusalReason, LaunchDirectiveKind, LaunchToolMode, LaunchMessageMode } from "@dopl/contracts";
+export type { LaunchRefusalReason, LaunchDirectiveKind, LaunchToolMode, LaunchMessageMode, };
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
  * desktop.
@@ -211,11 +157,36 @@ export interface LaunchDirectiveCreateInput {
     tools?: LaunchToolMode;
     messages?: LaunchMessageMode;
     chain?: boolean;
+    /**
+     * **AN IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"** (2026-09-02,
+     * A10/G10).
+     *
+     * ⚠ **SEND ONE WHENEVER A RETRY IS POSSIBLE, WHICH ON THIS OP IS ALWAYS.** The
+     * create holds for the operator's machine and then returns PENDING; a timeout
+     * is indistinguishable from a lost response, so without a key the caller has to
+     * choose between an unknown outcome and a second agent on the same work.
+     * Re-sending the same key returns the FIRST request's directive
+     * ({@link LaunchDirectiveCreated}'s `existing`).
+     * ⚠ Any stable string of the caller's own, 1-200 chars. Uniqueness is scoped to
+     * `(channel, this operator)` server-side, so another member's key cannot
+     * collide with yours.
+     */
+    clientMsgId?: string;
 }
 /**
  * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR. The operator's machine is not
  * listening, **no row was created**, and nothing was asked. Render the caveat;
  * do not retry, and do not classify it as a failure.
+ *
+ * ⚠ **`existing: true` MEANS THIS CALL FILED NOTHING** (2026-09-02, A10/G10) —
+ * the `clientMsgId` had been used before and this is the FIRST request's
+ * directive. Render it as a converged retry, never as a fresh launch: the two are
+ * the same shape and only this flag separates "your retry was absorbed" from "a
+ * second agent was requested".
+ * ⚠ **OPTIONAL, BECAUSE A SERVER OLDER THAN THIS WAVE SENDS NO SUCH KEY** and
+ * this client is deployed against both (INVARIANTS §13). Absent reads as `false`
+ * — "a row was filed" — which is the safe direction against an old server,
+ * because an old server also stored no key and every call there really was fresh.
  */
 export type LaunchDirectiveCreated = {
     offline: true;
@@ -223,6 +194,7 @@ export type LaunchDirectiveCreated = {
 } | {
     offline: false;
     directive: LaunchDirective;
+    existing?: boolean;
 };
 /**
  * WHAT `createAgentDirective` ASKS FOR — END or RENAME one of the operator's own

@@ -25,8 +25,51 @@
 import type { ChannelInfoCard } from "./info-card";
 import type { Role } from "@/features/workspaces/types";
 
-/** Private = members only. Public = any workspace member can read/join. */
-export type ChannelVisibility = "private" | "public";
+/**
+ * ⚠ **THE TEN CLOSED SETS BELOW ARE DECLARED IN `@dopl/contracts › channels.ts`
+ * AND RE-EXPORTED HERE UNDER THE NAMES THEY HAVE ALWAYS HAD** (2026-09-02, v2
+ * slice A13). Every one of them used to be written a second time in
+ * `packages/dopl-client/src/channel-types.ts` — which cannot import `src/` —
+ * and `scripts/check-message-kind-drift.ts` held two of the pairs together with
+ * a regex. The compiler holds all ten now.
+ *
+ * ⚠ **NO IMPORT PATH CHANGED AND NONE MAY.** `@/features/channels/types` is
+ * still the one path to these names for the whole web tree and the SPA; the
+ * package is an implementation detail of this file. Do NOT start importing
+ * `@dopl/contracts` directly from a feature module — that would be a second path
+ * to one symbol, which is the arrangement `types-sessions.ts` and
+ * `schema-sessions.ts` both exist to avoid.
+ *
+ * ⚠ **WHAT DID NOT MOVE:** `NotifyScope`, `AgentToolProfile`, `ConsentKind`,
+ * `ConsentStatus`, `ConsentDecisionSurface` and `AgentPresenceStatus` have no
+ * SDK twin, so they were never mirrors and adding them would grow the shared
+ * package for nothing.
+ */
+import type {
+  ChannelVisibility,
+  ChannelRole,
+  ThreadMode,
+  ThreadStatus,
+  ThreadOutcome,
+  MessageAuthorKind,
+  PostableAuthorKind,
+  ChannelMessageKind,
+  PostableMessageKind,
+  MessageIntent,
+} from "@dopl/contracts";
+
+export type {
+  ChannelVisibility,
+  ChannelRole,
+  ThreadMode,
+  ThreadStatus,
+  ThreadOutcome,
+  MessageAuthorKind,
+  PostableAuthorKind,
+  ChannelMessageKind,
+  PostableMessageKind,
+  MessageIntent,
+};
 
 /**
  * Rendered peer of a direct channel. ⚠ Resolved live from the roster, never
@@ -37,25 +80,6 @@ export type ChannelDirectPeer = {
   displayName: string | null;
   avatarUrl: string | null;
 };
-
-/** How a thread is worked: interactive (multi-turn) or autonomous. */
-export type ThreadMode = "interactive" | "autonomous";
-
-/**
- * ⚠ LEGACY AND UNREAD SINCE 2026-08-18 (wiring plan Phase 4). THREADS DO NOT
- * CLOSE — no close, no propose-then-confirm, no reopen; the operator pauses or
- * ends an AGENT. `channel_tasks.status` and its CHECK constraint survive carrying
- * rows closed before the removal (dropping the column is a migration behind a
- * desktop-floor raise, INVARIANTS §13), and this type is the projection of that
- * column. **Nothing writes it and nothing may branch on it.** A new `=== "open"`
- * filter is a bug: it hides legacy rows from a list that is supposed to hold
- * everything.
- */
-export type ThreadStatus = "open" | "closed";
-
-/** Legacy, on {@link ThreadStatus}'s terms — the outcome of a close that can no
- *  longer happen. Null on every thread opened since. */
-export type ThreadOutcome = "completed" | "failed";
 
 /**
  * A titled, mode-tagged exchange. Transcript rides on `channel_messages` via
@@ -108,9 +132,6 @@ export type ChannelAgent = {
   name: string;
 };
 
-/** Channel-scoped role: the creator is `owner`, everyone added is `member`. */
-export type ChannelRole = "owner" | "member";
-
 /**
  * ⛔ REMOVED FROM THE PRODUCT (F-170). DO NOT BUILD ON THIS TYPE. No UI, not on
  * `ChannelMemberSelfUpdate`, not read in `classify` — unsettable by any route.
@@ -124,18 +145,6 @@ export type ChannelRole = "owner" | "member";
  * two-member trigger, so an addressed message still spawned a session.
  */
 export type NotifyScope = "all" | "addressed" | "none";
-
-/** Who wrote a message: a human, an agent (MCP/CLI), or the system. */
-export type MessageAuthorKind = "user" | "agent" | "system";
-
-/**
- * The author kinds a CALLER may claim. `system` is server-reserved — an
- * anonymized system-styled post is a forgery primitive — and this type is what
- * `schema.ts › PostableAuthorKindSchema` is closed over, so the carve-out is
- * DERIVED rather than re-typed. Widening {@link MessageAuthorKind} without a
- * decision about this one is a compile error, not a silent widening.
- */
-export type PostableAuthorKind = Exclude<MessageAuthorKind, "system">;
 
 /**
  * Tool scope a member's responding agent runs with (operator controls their own
@@ -194,54 +203,6 @@ export type ConsentDecisionSurface = "web" | "desktop";
  * need no migration.
  */
 export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
-
-/**
- * Message kind. `message` = chat; the `task_*` values are structured
- * activity events (payload in `metadata`, human-readable render in
- * `body`); `system` = joins / topic changes.
- */
-export type ChannelMessageKind =
-  | "message"
-  | "task_started"
-  | "task_progress"
-  | "task_finished"
-  | "task_failed"
-  | "system";
-
-/**
- * The message kinds a CALLER may post. `system` is server-emitted only, so the
- * postable set is the full set MINUS the server-owned one — DERIVED, never
- * re-typed, which is what makes `schema.ts › PostableMessageKindSchema`'s
- * `closedEnum` a proof rather than a second list to keep in step.
- *
- * ⚠ THIS IS THE TS↔ZOD HALF ONLY. The DATABASE states the full set a third time
- * as a column `CHECK` (`20260725120000_channels.sql`), the SDK a fourth and
- * fifth (`packages/dopl-client/src/channel-types.ts` and its committed
- * `dist/`), and no TypeScript can reach any of them — that is
- * `scripts/check-message-kind-drift.ts`, INVARIANTS §14.
- *
- * ⚠ POSTABLE IS NOT AGENT-WRITABLE. An agent token may write exactly `message`
- * and `task_progress`; the three lifecycle kinds are refused from it at two
- * layers on the CREDENTIAL (§5, `server/service-writes-lifecycle.ts`). That is
- * an authorization, not a shape, and it is deliberately not expressed here.
- */
-export type PostableMessageKind = Exclude<ChannelMessageKind, "system">;
-
-/**
- * Whether a post may REACH AN AGENT.
- *  - `request` — DEFAULT: an explicit `toUserId` addresses, and that is the only
- *    thing that does. ⚠ The DM auto-address that used to fill it in was retired
- *    2026-08-18 (wiring plan Phase 3).
- *  - `chat` — human talk; DECLARES that the post is work for nobody, and never
- *    inherits an open DM thread.
- *
- * Absence means `request` and stamps NO metadata key, so existing callers' wire
- * is unchanged. `chat` + explicit address → 400 `CHANNEL_CHAT_ADDRESSED`.
- *
- * ⚠ ONE DEFINITION: `MessageIntentSchema` (`schema.ts`) validates against this
- * union and `client/api.ts` imports it — never restate the two literals.
- */
-export type MessageIntent = "chat" | "request";
 
 /** List-level channel: header + caller-relative membership + activity. */
 export type Channel = {

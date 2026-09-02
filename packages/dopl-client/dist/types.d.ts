@@ -1,3 +1,19 @@
+/**
+ * ⚠ **{@link WorkspaceRole} AND {@link WorkspaceKind} ARE DECLARED IN
+ * `@dopl/contracts › workspaces.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice
+ * A13). Both were hand mirrors of `src/features/workspaces/types.ts`, and the
+ * role set is the one with the longest drift history in this repo — it is why
+ * `scripts/check-role-drift.ts` exists. No consumer import changed.
+ *
+ * ⚠ **`isStandardWorkspace` BELOW IS STILL A COPY, DELIBERATELY.**
+ * `@dopl/contracts` is TYPE-ONLY (that is what lets it have no build and no
+ * `dist/`), so a runtime predicate cannot live there. Both copies — and the
+ * POSITIVE-form assertion over them, INVARIANTS §4A / F-295 — are still held by
+ * `check-role-drift.ts › checkWorkspaceKind`, which is why that pass survives
+ * while the set comparison beside it went.
+ */
+import type { WorkspaceRole, WorkspaceKind } from "@dopl/contracts";
+export type { WorkspaceRole, WorkspaceKind };
 export interface DoplEntry {
     id: string;
     slug: string | null;
@@ -60,19 +76,6 @@ export interface ListResult {
     limit: number;
     offset: number;
 }
-/**
- * "standard" = a real user-facing workspace. "link" = a hidden home-channel
- * container holding ONE or TWO members and exactly one channel — never shown in
- * the rail/switcher, never a default-resolution candidate, and **bills to the
- * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
- * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
- * side's own plan until then).
- *
- * ⚠ HAND-MIRRORED from `src/features/workspaces/types.ts › WorkspaceKind`,
- * which is the source of this wording. Edit that one and copy it down; the two
- * drifting is how a reader learns two different rules for one column.
- */
-export type WorkspaceKind = "standard" | "link";
 export interface WorkspaceSummary {
     id: string;
     ownerId: string;
@@ -124,7 +127,6 @@ export interface WorkspaceListItem extends WorkspaceSummary {
      */
     memberCount?: number;
 }
-export type WorkspaceRole = "owner" | "admin" | "member" | "viewer" | "guest";
 export interface ResolvedWorkspace {
     workspace: WorkspaceSummary;
     role: WorkspaceRole;

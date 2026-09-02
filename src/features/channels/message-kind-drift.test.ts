@@ -13,6 +13,15 @@ import {
 /**
  * THE GATE, MUTATION-VERIFIED — and it is the gate's only test, deliberately.
  *
+ * ⚠ **THE TWO SDK SITES LEFT THIS FILE ON 2026-09-02 (v2 slice A13), AND THEIR
+ * TESTS WENT WITH THEM RATHER THAN BEING SOFTENED.** `packages/dopl-client/src/
+ * channel-types.ts` and its committed `dist/channel-types.d.ts` re-export
+ * `@dopl/contracts` now, so there is no literal union in either to mutate — a
+ * test that kept trying would be asserting against a state the tree can no
+ * longer be in. What replaced them is stronger and is not here: the compiler.
+ * `src/shared/contracts/canonical-sets.test.ts` is the census that proves no
+ * second literal declaration has crept back into either tree.
+ *
  * ⚠ **A DRIFT GATE THAT CANNOT FAIL IS WORSE THAN NO GATE**, because it is read
  * as evidence. Every sibling of `scripts/check-message-kind-drift.ts` ships
  * untested and each has already had a pass-by-accident: `check-role-drift.ts`
@@ -38,9 +47,7 @@ const readWith = (rel: string, mutate: (src: string) => string): Read => {
   return (r) => (r === rel ? patched : realRead(r));
 };
 
-const REFERENCE_FILE = "src/features/channels/types.ts";
-const SDK_FILE = "packages/dopl-client/src/channel-types.ts";
-const SDK_DIST_FILE = "packages/dopl-client/dist/channel-types.d.ts";
+const REFERENCE_FILE = "packages/contracts/src/channels.ts";
 
 const messageKind = FAMILIES.find((f) => f.label === "message kind")!;
 const authorKind = FAMILIES.find((f) => f.label === "author kind")!;
@@ -50,7 +57,7 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
     for (const family of FAMILIES) expect(checkFamily(realRead, family)).toEqual([]);
   });
 
-  it("catches a kind the SERVER union gained and nothing else did", () => {
+  it("catches a kind the CONTRACTS union gained and the column did not", () => {
     // The direction that throws 23514 on a real INSERT.
     const read = readWith(REFERENCE_FILE, (s) =>
       s.replace(
@@ -58,12 +65,9 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
         `export type ChannelMessageKind =\n  | "decision"\n  | "message"`
       )
     );
-    const problems = checkFamily(read, messageKind);
-    expect(problems).toHaveLength(3);
-    for (const site of [SDK_FILE, SDK_DIST_FILE, KIND_MIGRATION]) {
-      expect(problems.some((p) => p.startsWith(site))).toBe(true);
-    }
-    expect(problems.every((p) => p.includes("missing decision"))).toBe(true);
+    expect(checkFamily(read, messageKind)).toEqual([
+      `${KIND_MIGRATION} › CHECK (kind IN …): missing decision`,
+    ]);
   });
 
   it("catches a kind the COLUMN CHECK gained and the union did not", () => {
@@ -76,27 +80,14 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
     ]);
   });
 
-  it("catches a STALE committed dist/, not only a stale SDK source", () => {
-    // `check-role-drift.ts`'s original hole: the mirror consumers actually import.
-    const read = readWith(SDK_DIST_FILE, (s) =>
-      s.replace(' | "task_failed" | "system"', ' | "system"')
-    );
-    expect(checkFamily(read, messageKind)).toEqual([
-      `${SDK_DIST_FILE} › ChannelMessageKind: missing task_failed`,
-    ]);
-  });
-
   it("catches the AUTHOR-kind family separately from the message one", () => {
     // Two constraints four lines apart, one name a suffix of the other: a reader
     // anchored on the first `CHECK` in the file would compare the wrong column.
-    const read = readWith(SDK_FILE, (s) =>
-      s.replace(
-        'export type ChannelAuthorKind = "user" | "agent" | "system";',
-        'export type ChannelAuthorKind = "user" | "agent";'
-      )
+    const read = readWith(KIND_MIGRATION, (s) =>
+      s.replace("CHECK (author_kind IN ('user'", "CHECK (author_kind IN ('operator', 'user'")
     );
     expect(checkFamily(read, authorKind)).toEqual([
-      `${SDK_FILE} › ChannelAuthorKind: missing system`,
+      `${KIND_MIGRATION} › CHECK (author_kind IN …): extra operator`,
     ]);
     expect(checkFamily(read, messageKind)).toEqual([]);
   });
@@ -133,7 +124,7 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
     expect(problems).toContain(
       `${REFERENCE_FILE} › PostableMessageKind excludes system, which ChannelMessageKind no longer declares`
     );
-    expect(problems.filter((p) => p.endsWith("extra system"))).toHaveLength(3);
+    expect(problems.filter((p) => p.endsWith("extra system"))).toHaveLength(1);
   });
 
   it("refuses to read a CHECK that a later migration may have replaced", () => {

@@ -1,23 +1,30 @@
 /**
- * THE SESSION-HEALTH FIELD SET, ACROSS ITS FOUR HAND-MIRRORS (2026-09-02).
+ * THE SESSION-HEALTH FIELD SET, ACROSS THE TWO STATEMENTS NO COMPILER CAN REACH
+ * (2026-09-02).
  *
  * `ChannelSessionHealth` is the seven operator-only facts a session row carries
  * about whether an agent is GETTING ANYWHERE (T50 / T51 / T83, migration
- * `20260909120000_channel_sessions_health.sql`). It is declared FOUR times with
- * nothing between any two of them:
+ * `20260909120000`). It was declared FOUR times on the morning this script was
+ * written. It is declared TWICE now, plus the columns:
  *
- *   1. `src/features/channels/types-sessions.ts › ChannelSessionHealth`  — the
- *      REFERENCE. Where the shape and every argument about it are stated.
+ *   1. `packages/contracts/src/sessions.ts › ChannelSessionHealth` — the
+ *      REFERENCE. Where the shape and every argument about it are stated, and
+ *      the ONLY TypeScript declaration of it: both
+ *      `src/features/channels/types-sessions.ts` and the SDK's
+ *      `session-health-types.ts` RE-EXPORT it (2026-09-02, v2 slice A13).
  *   2. `src/features/channels/schema-sessions.ts › SessionStateEntrySchema` —
  *      the zod half. A field the server does not accept is a field the desktop
- *      reports into a strip.
- *   3. `packages/dopl-client/src/session-health-types.ts › ChannelSessionHealth`
- *      — the SDK mirror. Its own docblock says it is a hand mirror "WITH NO
- *      DRIFT GATE OVER IT". This is that gate.
- *   4. `packages/dopl-client/dist/session-health-types.d.ts` — the COMMITTED
- *      build, which is what `packages/mcp-server` actually imports.
- *      `check-role-drift.ts` learned this lesson first: a `src/`-only comparison
- *      is green while the thing consumers read is stale.
+ *      reports into a strip. **Zod is not TypeScript and nothing derives one
+ *      from the other here**, which is why this site is the reason the script
+ *      still exists.
+ *
+ * ⚠ **TWO SITES LEFT ON 2026-09-02 AND THEY ARE NOT "NO LONGER CHECKED".** The
+ * SDK's `session-health-types.ts` and its committed `dist/*.d.ts` were sites (3)
+ * and (4) — the SDK could not import `src/`, and the `dist/` copy was what
+ * `packages/mcp-server` actually imports. Both emit a RE-EXPORT of
+ * `@dopl/contracts` now, so there is no field list in either left to disagree,
+ * and `typeFields` would THROW on one. The compiler holds that pair, strictly
+ * harder than this regex did. Do not re-add them.
  *
  * ⚠ **WHY IT NEEDS A GATE AND WHY THE FAILURE IS SILENT.** Every field is
  * `optional` AND `nullable` — deliberately, because an older desktop must not
@@ -45,7 +52,7 @@ const REPO_ROOT = resolve(__dirname, "..");
 const read = (rel: string): string =>
   readFileSync(resolve(REPO_ROOT, rel), "utf8");
 
-const REFERENCE_FILE = "src/features/channels/types-sessions.ts";
+const REFERENCE_FILE = "packages/contracts/src/sessions.ts";
 
 /** camelCase field → its `snake_case` column. ⚠ Stated, never derived: the two
  *  vocabularies are the server's and the database's and a regex that guessed
@@ -65,10 +72,10 @@ const MIGRATION = "supabase/migrations/20260909120000_channel_sessions_health.sq
 /**
  * The field names in a declaration of `<name>`, whichever of the three forms it
  * takes — ⚠ and it must take all three, because the four sites do not agree on
- * one: `types-sessions.ts` writes `export type X = { … }`, the SDK writes
- * `export interface X { … }`, and the emitted `.d.ts` may write either with a
- * `declare` in front. A reader that insisted on one spelling would report a
- * missing declaration as a crash rather than as drift.
+ * one: the contracts file writes `export type X = { … }`, other sites
+ * have written `export interface X { … }`, and an emitted `.d.ts` may write
+ * either with a `declare` in front. A reader that insisted on one spelling would
+ * report a missing declaration as a crash rather than as drift.
  * ⚠ Comment and blank lines dropped, so a field named only in prose is not
  * counted — the same reader `check-knowledge-type-drift.ts` uses.
  */
@@ -79,7 +86,7 @@ function typeFields(source: string, name: string): string[] {
   const m = re.exec(source);
   if (!m) {
     throw new Error(
-      `could not find a declaration of \`${name}\` — if it was renamed, rename it in every one of the four sites this script names, which is the point of the script`
+      `could not find a declaration of \`${name}\` — if it was renamed, rename it in every one of the sites this script names, which is the point of the script`
     );
   }
   return fieldNamesIn(m[1]);
@@ -157,20 +164,6 @@ function main(): void {
       zodHealthFields(read("src/features/channels/schema-sessions.ts")),
     ],
     [
-      "packages/dopl-client/src/session-health-types.ts › ChannelSessionHealth",
-      typeFields(
-        read("packages/dopl-client/src/session-health-types.ts"),
-        "ChannelSessionHealth"
-      ),
-    ],
-    [
-      "packages/dopl-client/dist/session-health-types.d.ts › ChannelSessionHealth",
-      typeFields(
-        read("packages/dopl-client/dist/session-health-types.d.ts"),
-        "ChannelSessionHealth"
-      ),
-    ],
-    [
       `${MIGRATION} (ADD COLUMN)`,
       migrationColumns(read(MIGRATION))
         // The migration's columns are snake_case; compare in the reference's
@@ -209,7 +202,7 @@ function main(): void {
 
   if (drift) {
     console.error(
-      `\n❌ Session-health drift detected. Every field is optional AND nullable, so drift here does not fail a build or a test — it just means the field never arrives. Sync all four declarations and the migration in ONE change.`
+      `\n❌ Session-health drift detected. Every field is optional AND nullable, so drift here does not fail a build or a test — it just means the field never arrives. Sync the type, the zod block and the migration in ONE change.`
     );
     process.exit(1);
   }

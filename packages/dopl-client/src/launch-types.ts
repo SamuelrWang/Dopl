@@ -8,105 +8,27 @@
  * ⚠ THE ONE THING TO CARRY AWAY: **a directive is a REQUEST, not a command, and
  * it is NOT A MESSAGE.** It never touches `channel_messages` (the loop brake and
  * transcript purity), so it has no `seq` and can never end an `await`.
+ *
+ * ⚠ **THE FOUR CLOSED SETS ARE DECLARED IN `@dopl/contracts › directives.ts`
+ * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — they were hand mirrors of
+ * `src/features/channels/types-launch.ts` with no script between them. No
+ * consumer import changed. ⚠ {@link LaunchToolMode} and {@link LaunchMessageMode}
+ * are ORDERED NARROWEST FIRST and the desktop's clamp is an index comparison
+ * over that order, so read the declaration before re-spelling either.
  */
+import type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchToolMode,
+  LaunchMessageMode,
+} from "@dopl/contracts";
 
-/**
- * WHY A DESKTOP SAID NO TO A LAUNCH — **exactly six words**, the wire contract
- * both trees code against.
- *
- * ⚠ A KEY, NEVER A SENTENCE: the readable line is written by the READER, so a
- * reword does not need a desktop release and no desktop-authored prose is
- * rendered into an agent-facing result.
- *
- *  - `cap`             — at the machine's concurrent-agent ceiling.
- *  - `busy`            — under load, declined for now.
- *  - `no-sdk`          — no agent runtime on that machine.
- *  - `auth-hold`       — signed out, or the credential is held.
- *  - `no-bridge`       — ⚠ the operator's launch-over-MCP TOGGLE IS OFF. This is
- *                        the consent mechanism, so it is a CHOICE and must never
- *                        be rendered as a fault or a thing to retry.
- *  - `no-counterparty` — nothing to work with in that channel.
- *  - `no-template`     — ⚠ THE SEVENTH, 2026-08-22 (agent templates). The named
- *                        TEMPLATE did not resolve on the operator's machine:
- *                        deleted, or not visible to the OPERATOR even though the
- *                        orchestrator that named it could see it. One answer for
- *                        both, deliberately — the resolve endpoint is
- *                        404-never-403, so the difference is not observable and a
- *                        render that guessed would rebuild the oracle.
- *
- * ⚠ `template-approval` IS NOT A MEMBER. That word is the desktop's answer to its
- * OWN renderer when a foreign template needs its one first-use click; the directive
- * lane has no human and the launch-over-MCP toggle stands in for the click there,
- * so it can never cross this wire.
- */
-export type LaunchRefusalReason =
-  | "cap"
-  | "busy"
-  | "no-sdk"
-  | "auth-hold"
-  | "no-bridge"
-  | "no-counterparty"
-  | "no-template"
-  // ⚠ THE EIGHTH AND NINTH, 2026-09-01 (external `end` / `rename`). Both belong
-  // to the NON-LAUNCH kinds and a launch can produce neither.
-  //  - `no-session` — no LIVE session of this operator's carries that agent id on
-  //    the machine that claimed the row. ⚠ NOT AN ERROR: an agent that finished
-  //    is the ordinary cause. Same spelling the DIRECTION lane uses for the same
-  //    fact, deliberately.
-  //  - `bad-name`   — the rename's string was refused by that machine's own
-  //    sanitizer (1-60 visible characters on one line; control, zero-width and
-  //    bidi characters refused, not stripped).
-  | "no-session"
-  | "bad-name"
-  // ⚠ THE TENTH, 2026-09-02, and it is a LAUNCH word. It means the channel is
-  // right and the operator has not enabled agent chaining in it
-  // (`main/launch-posture.js › CHAIN_SETTING` = `channelAgentChain`) — a
-  // NAMEABLE setting, where `no-bridge` reads as "this machine could not take
-  // it" and sends a caller looking for another route.
-  | "no-chain";
-
-/**
- * WHICH VERB A DIRECTIVE ASKS FOR (2026-09-01).
- *
- * ⚠ `launch` is the DEFAULT and every row written before this existed is one, so
- * a directive that names no kind is a launch — which is what it meant.
- * ⚠ **THE KINDS DO NOT SHARE A CONSENT GATE.** `launch` is gated by a per-machine
- * desktop toggle and answers `no-bridge` when it is off; `end` and `rename` are
- * not gated at all — they are the stop verb and the display verb and widen
- * nothing. Do not tell a caller that turning the launch toggle on is what makes
- * an end work.
- * ⚠ **`set_agent_mode` IS THE FOURTH AND IT DOES **NOT** JOIN THE UNGATED PAIR**
- * (2026-09-01). It is the ONE non-launch kind still behind that toggle, because a
- * POSTURE is the only one of the three that can cause LOCAL COMPUTE TO BE SPENT
- * (`bypass` on the tool axis pre-approves work tools on the operator's own
- * hardware). Reading the three non-launch kinds as one class is the mistake this
- * sentence exists to stop.
- */
-export type LaunchDirectiveKind =
-  | "launch"
-  | "end"
-  | "rename"
-  | "set_agent_mode";
-
-/**
- * THE TWO PERMISSION AXES A DIRECTIVE MAY **ASK** FOR — **ORDERED NARROWEST
- * FIRST** (2026-09-01, T24).
- *
- * ⚠ **THE ORDER IS PART OF THE CONTRACT AND NO COMPILER CHECKS IT.** The clamp on
- * the machine is an INDEX COMPARISON over these sequences, so re-ordering either
- * union silently inverts the bound with everything still type-checking.
- *
- * ⚠ **ASKS. NEVER WIDENS, AND THERE IS NO OPERATOR CARVE-OUT.** The operator's
- * machine narrows whatever is asked for to that operator's own stored channel
- * posture. A caller that reads these as "set" will report a posture it does not
- * have, and then size its work for room the agent was never given.
- */
-export type LaunchToolMode = "manual" | "accept_edits" | "auto" | "bypass";
-export type LaunchMessageMode =
-  | "ask"
-  | "auto_inbound"
-  | "auto_outbound"
-  | "auto_both";
+export type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchToolMode,
+  LaunchMessageMode,
+};
 
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
