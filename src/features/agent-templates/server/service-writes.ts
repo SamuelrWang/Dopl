@@ -222,7 +222,17 @@ export async function updateTemplate(
       ? null
       : await assertAttachableKnowledgeBases(ctx, patch.knowledgeBaseIds);
 
-  await repo.updateTemplateRow(ctx.workspaceId, id, {
+  // ⚠ A JUNCTION-ONLY PATCH TOUCHES NO SCALAR COLUMN, so it must not reach the
+  // row write at all (F-340, 2026-09-02). `knowledgeBaseIds`-only and
+  // `teamIds`-only patches are both legal — `agent-ops-write.ts:200` and
+  // `schema.ts:198` let them through by design — and both used to arrive at
+  // `updateTemplateRow` as an all-`undefined` patch, i.e. an empty UPDATE body,
+  // which PostgREST rejects and `http-mapping.ts` had no arm for: the agent got
+  // a bare INTERNAL_ERROR 500 for a request that was entirely valid. The repo
+  // is now total on the empty patch too, so this is the round trip we skip
+  // rather than the guard we depend on. Mirrors `workspaces/server/
+  // service.ts:277`, which has guarded this exact class all along.
+  const rowPatch = {
     name: patch.name === undefined ? undefined : stripNullBytes(patch.name),
     description:
       patch.description === undefined ? undefined : normalizeProse(patch.description),
@@ -233,7 +243,10 @@ export async function updateTemplate(
     model: patch.model === undefined ? undefined : normalizeLabel(patch.model),
     fields: patch.fields === undefined ? undefined : normalizeFieldsInput(patch.fields),
     visibility: patch.visibility,
-  });
+  };
+  if (Object.values(rowPatch).some((value) => value !== undefined)) {
+    await repo.updateTemplateRow(ctx.workspaceId, id, rowPatch);
+  }
 
   // ⚠ REPLACE-SET, and it runs even for the empty set: leaving a template's
   // team links behind when it goes `private` would leave rows that come back to
