@@ -115,7 +115,7 @@ export async function opCreate(
       tool: "dopl_agent",
       op: "create",
       callerUserId,
-      what: `an agent template named ${inlineOr(input.name, NO_NAME)}, shared with the whole container`,
+      what: `an agent template named ${inlineOr(input.name, NO_NAME)}, shared with the whole home channel`,
       audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
       payload: {
         name: input.name,
@@ -212,7 +212,7 @@ export async function opUpdate(
       tool: "dopl_agent",
       op: "update",
       callerUserId,
-      what: `sharing the agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`) with the whole container`,
+      what: `sharing the agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`) with the whole home channel`,
       audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
       payload: {
         template: template.id,
