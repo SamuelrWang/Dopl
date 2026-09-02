@@ -6922,3 +6922,11 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Resolution: **taken.** Tombstones deleted; strip kept, with the distinction stated at both sites and in INVARIANTS §5 so the next reader of the spec row does not have to re-derive it.
 - Status: closed — recorded so the spec row is not re-read as unfinished work.
 
+### F-435 — the MCP tool's `kind` enum is the fifth statement of the message-kind set and is deliberately outside the drift gate (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-schema.ts` (the five postable kinds published to an agent) and `› channel-ops-write.ts › LIFECYCLE_KINDS` (the three refused from an agent credential), against `scripts/check-message-kind-drift.ts`, which reads neither.
+- Found during: building that gate (A7). Four statements are now held together; these two are not.
+- Severity: known gap, bounded — an MCP enum that drifts wider than the union publishes a kind the route refuses, which is a 400 with a message, not a silent wrong row. That is why it was acceptable to leave out and why it should not be left out forever.
+- ⚠ **THE REASON IS SCHEDULING, NOT PRINCIPLE.** The v2 architecture spec (§3 C21) deletes the `kind` parameter from that surface outright. A gate that read it would fail the change that removes it, and *a gate must not be the reason a deletion cannot land*. `LIFECYCLE_KINDS` is a partition of the same set (`full \ {message, task_progress, system}`) and has the same property.
+- Proposed resolution: when C21 lands, either the parameter is gone and this closes itself, or the surviving enum joins `FAMILIES` in the gate as a fifth site with its own subset relation. Whoever lands C21 decides; the gate's docblock names this finding.
+- Status: open, blocked on v2 C21.
