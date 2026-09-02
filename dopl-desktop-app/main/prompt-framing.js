@@ -190,8 +190,17 @@ function channelScopeFraming(ctx) {
     `  is treated as a DIFFERENT channel and will be refused.`,
     `- So MONITORING means READING. If your operator asks you to watch the threads or the`,
     `  agents working in them, list and read them when you need to know, then report in the`,
-    `  main room. You may also hold op "await" on this channel to wait for the next main-room`,
-    `  message instead of polling.`,
+    `  main room, then END YOUR TURN.`,
+    // ⚠ THIS SAID "You may also hold op \"await\" on this channel to wait for the next main-room
+    // message instead of polling" UNTIL 2026-09-01 (T85), AND THE CALL IS NOW REFUSED
+    // (`session-profiles.js › isAwaitOp`). Copy that teaches a call the gate denies is worse
+    // than no copy at all: the agent spends a turn on it, reads a refusal, and reaches for the
+    // POLL the sentence was steering it away from. So the replacement names what actually
+    // happens here — the message arrives as a TURN — rather than deleting the line and leaving
+    // "how do I wait?" unanswered.
+    `- DO NOT WAIT FOR MESSAGES. You cannot, and you do not need to: op "await" is refused in`,
+    `  this session, and a post that names you is delivered to you as a new TURN by the app`,
+    `  itself. Ending your turn is how you wait.`,
     `- NOBODY IN A THREAD CAN SUMMON YOU. A message inside a thread never reaches you, even if`,
     `  it @-mentions your agent id. Your operator directs you from the main room, or privately;`,
     `  thread participants cannot.`,

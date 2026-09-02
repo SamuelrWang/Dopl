@@ -73,13 +73,29 @@ test("MODE: it is NOT simply `ask` — READS must survive, or the agent goes bli
   // thread?" would get an agent that cannot look.
   const s = sess();
   priv.openPrivateTurn(s);
-  for (const op of ["read", "get_thread", "list_threads", "members", "await"]) {
+  // ⚠ `await` LEFT THIS LIST ON 2026-09-01 (T85) AND IT IS NOT AN EXCEPTION TO THE RULE ABOVE.
+  // The rule is "a read must survive, or the agent goes blind"; `await` returns no reading of
+  // anything — it HOLDS for a message that reaches a desktop-run session as a turn regardless —
+  // so denying it blinds nobody. It is asserted below rather than dropped, because "the private
+  // turn did not do this" is the fact this file exists to keep straight.
+  for (const op of ["read", "get_thread", "list_threads", "members"]) {
     assert.equal(
       profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op, channel: CH, thread: THREAD }) }),
       "allow",
       `${op} must still auto-allow inside a private turn`
     );
   }
+  assert.equal(
+    profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "await", channel: CH, thread: THREAD }) }),
+    "deny",
+    "await is refused by the T85 rule, not by the private turn — it denies OUTSIDE one too"
+  );
+  priv.resetPrivateTurn(s);
+  assert.equal(
+    profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "await", channel: CH, thread: THREAD }) }),
+    "deny",
+    "…and the same answer with the private turn closed, which is what makes it not this file's"
+  );
 });
 
 // ── 2. THE GATE, DRIVEN THROUGH THE REAL DECISION PATH ───────────────────────
