@@ -167,7 +167,7 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
     // connection, so a fact stated in both is paid for twice — the rule
     // `channel-description.ts` states as "the arguments that are NOT
     // self-describing from their own `.describe()`".
-    registerMetaTool("current_workspace", "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one standard membership (or a session pin); when the caller belongs to 2+ standard workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').\n\n⚠ ONLY STANDARD WORKSPACES ARE COUNTED AND LISTED by the no-arg report. Home-channel containers never auto-target and are not shown here or by `list_workspaces` — so \"you have one workspace, omit `workspace=`\" can be true while two home channels sit unreached beside it. Find them with `dopl_home(op=\"list_channels\")` and target one by passing its container id as `workspace=`.\n\nop=\"set\"/\"clear\" manage a sticky default for this connection. A per-call `workspace=` still OVERRIDES the pin, and the pin is BEST-EFFORT: if a later call is refused for want of a workspace, set it again.", {
+    registerMetaTool("current_workspace", "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one standard membership (or a session pin); when the caller belongs to 2+ standard workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').\n\n⚠ STANDARD workspaces only: a home-channel container is a legal `workspace=` target but is neither counted nor listed here. `dopl_home(op=\"list_channels\")` lists those; the server instructions state the rule once, for every tool.\n\nop=\"set\"/\"clear\" manage a sticky default for this connection. A per-call `workspace=` still OVERRIDES the pin, and the pin is BEST-EFFORT: if a later call is refused for want of a workspace, set it again.", {
         op: zod_1.z
             .enum(["get", "set", "clear"])
             .optional()
@@ -175,7 +175,11 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
         workspace: zod_1.z
             .string()
             .optional()
-            .describe('op="set" (required): the workspace slug or UUID to make this connection\'s default — or a HOME CHANNEL container id from dopl_home(op="list_channels"), which is a legal target here exactly as it is for a per-call `workspace=`. A ref that does not resolve to one of your active memberships is REFUSED and nothing is pinned.'),
+            .describe(
+        // ⚠ The home-channel rule is stated ONCE, in the tool description above
+        // and in the server instructions (F-425) — it used to run here too, in
+        // 330 chars pushed on every connection that never pins anything.
+        'op="set" (required): the workspace slug or UUID — or a home-channel container id — to make this connection\'s default. A ref that does not resolve to one of your active memberships is REFUSED and nothing is pinned.'),
     }, async (args) => {
         if (args.op === "set")
             return opSetPin(args.workspace);
