@@ -102,6 +102,34 @@ describe("the home-shelf fence, surfaced", () => {
     expect(textOf(res)).toContain("your OWN default workspace as the target");
   });
 
+  it("RE-SPELLS THE WIRE NOUN: the server's 'home shelf' surfaces as 'personal shelf' (T32)", async () => {
+    // "home" is the word for the CHANNEL on this surface. A refusal that said
+    // "the home shelf" and "personal shelf" in one breath is the conflation the
+    // tenancy-naming pass exists to remove — and the server's spelling is the
+    // one thing an agent cannot correct for itself.
+    const res = await opCreate(
+      stub({
+        ...standardWorkspace(),
+        createAgentTemplate: vi.fn(async () => {
+          throw apiError(
+            403,
+            "TEMPLATE_HOME_SCOPE_FORBIDDEN",
+            "This agent cannot be created on your home shelf — the home shelf holds private agents only.",
+          );
+        }),
+      }) as DoplClient,
+      ME,
+      { name: "Researcher", shelf: "personal" },
+    );
+    const text = textOf(res);
+
+    expect(text).not.toContain("home shelf");
+    expect(text).toContain("created on your personal shelf");
+    // ⚠ A NOUN, AND NOTHING ELSE: the server's reason is the only text that
+    // knows WHICH condition failed, so it must still arrive intact.
+    expect(text).toContain("the personal shelf holds private agents only");
+  });
+
   it("REFUSES THE CONTRADICTION LOCALLY — no round trip when personal meets a non-private visibility", async () => {
     const create = vi.fn();
     const res = await opCreate(
