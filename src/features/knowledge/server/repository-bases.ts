@@ -2,6 +2,10 @@ import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { readClient } from "@/shared/supabase/caller-client";
+import {
+  personalWriteWorkspaceId,
+  resolveShelfScope,
+} from "@/shared/tenancy/personal-container";
 import type { KbShelf, KnowledgeBase } from "../types";
 import {
   KNOWLEDGE_BASE_COLS,
@@ -108,6 +112,11 @@ export async function findBaseByPublicId(
  * `KNOWLEDGE_BASE_COLS` on purpose (`../types.ts › KbShelf` holds the argument);
  * Postgres does not require a column to be projected to filter on it, and
  * leaving it off the row is what keeps the fence server-side.
+ *
+ * ⚠ WHICH CONTAINER `shelf="home"` MEANS IS NO LONGER `workspaceId` — it is the
+ * caller's PERSONAL CONTAINER once one exists
+ * (`shared/tenancy/personal-container.ts`, wave B B11). The decision lives
+ * there, in one 2x2; what stays here is applying it.
  */
 export async function listBasesForWorkspace(
   workspaceId: string,
@@ -115,13 +124,16 @@ export async function listBasesForWorkspace(
   shelf?: KbShelf
 ): Promise<KnowledgeBase[]> {
   const db = readClient();
+  const scope = await resolveShelfScope(workspaceId, shelf);
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", scope.workspaceIds)
     .order("created_at", { ascending: true });
   if (!includeDeleted) query = query.is("deleted_at", null);
-  if (shelf !== undefined) query = query.eq("home_scoped", shelf === "home");
+  if (scope.homeScoped !== undefined) {
+    query = query.eq("home_scoped", scope.homeScoped);
+  }
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as KnowledgeBaseRow[]).map(mapBaseRow);
@@ -140,6 +152,11 @@ export async function listBasesForWorkspace(
  * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. The id set IS the fence, exactly
  * as `repository-stars.ts › listStarredBaseIds` requires — this function applies
  * no visibility of its own and must never be given a wider set.
+ *
+ * ⚠ IT ASKS THE SAME QUESTION `listBasesForWorkspace(_, _, "home")` ASKS, so it
+ * asks it through the same {@link resolveShelfScope} — a second, hand-rolled
+ * spelling of "is this row personal" is how a label comes to disagree with the
+ * list it labels.
  */
 export async function listHomeScopedBaseIds(
   workspaceId: string,
@@ -147,12 +164,16 @@ export async function listHomeScopedBaseIds(
 ): Promise<string[]> {
   if (baseIds.length === 0) return [];
   const db = readClient();
-  const { data, error } = await db
+  const scope = await resolveShelfScope(workspaceId, "home");
+  let query = db
     .from("knowledge_bases")
     .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("home_scoped", true)
+    .in("workspace_id", scope.workspaceIds)
     .in("id", baseIds);
+  if (scope.homeScoped !== undefined) {
+    query = query.eq("home_scoped", scope.homeScoped);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
@@ -198,7 +219,8 @@ export interface InsertBaseArgs {
   createdBy: string | null;
 }
 
-/** ⚠ Shared by single AND batch insert so column defaults can't drift. */
+/** ⚠ Shared by single AND batch insert so column defaults can't drift.
+ *  ⚠ `workspaceId` is the RESOLVED one — see {@link insertBase}. */
 function baseInsertRow(args: InsertBaseArgs) {
   return {
     workspace_id: args.workspaceId,
@@ -214,11 +236,20 @@ function baseInsertRow(args: InsertBaseArgs) {
   };
 }
 
+/**
+ * ⚠ THE DUAL-WRITE (wave B B11). A base created for the PERSONAL shelf keeps
+ * `home_scoped = true` AND is filed in the author's personal container once the
+ * flag is on — the two halves of "writes set both" — so the flag can be flipped
+ * back without stranding the row. Everything else inserts unchanged; only
+ * `insertBase` can be personal, which is why {@link insertBases} (the
+ * new-workspace seed, always workspace-shelf) is not on this path.
+ */
 export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   const db = supabaseAdmin();
+  const workspaceId = await personalWriteWorkspaceId(args);
   const { data, error } = await db
     .from("knowledge_bases")
-    .insert(baseInsertRow(args))
+    .insert(baseInsertRow({ ...args, workspaceId }))
     .select(KNOWLEDGE_BASE_COLS)
     .single();
   if (error || !data) throw error || new Error("Failed to insert knowledge base");

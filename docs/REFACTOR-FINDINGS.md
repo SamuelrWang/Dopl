@@ -7559,3 +7559,44 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE FIX IS NOT A RENAME HERE.** Both files are APPLIED. Renaming an applied migration is how a replay diverges from production — the tracker holds the old name and the directory offers a new one — so this pair stays as it is and is named rather than corrected.
 - Resolution taken: a RATCHET, in `src/features/knowledge/schema-sql.test.ts › "no TWO migrations share a version, except the one already applied"`. The live collision is allow-listed by version and every other one fails; the case says in its own body that the fix is to rename the UNAPPLIED file and never to bless a second entry. Mutation-verified red by copying a file to a colliding name. ⚠ It sits beside F-468's gate deliberately: both are assertions about the MERGED directory, which is the only place either defect exists.
 - Status: **NAMED and FENCED** — the pair stands, a second one cannot ship.
+
+### F-560 — the personal container's revert has an ORDER, and the cascade makes the wrong one destructive (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql` (header, "ROLLBACK"); the cascade is `supabase/migrations/20260501000000_knowledge_bases.sql` and `20260822200000_agent_templates.sql` (`workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE`).
+- Found during: writing B11's rollback story against the Wave B spec §3, which states step 1's revert as *"a `DELETE ... WHERE kind='personal'` plus a `DROP FUNCTION`"*.
+- **THE SPEC'S ONE-LINE REVERT IS DESTRUCTIVE AS WRITTEN, AND ONLY AFTER THE SAME MIGRATION'S DATA STEP.** Step 1 moves the `home_scoped` rows INTO the containers; both owning tables cascade on `workspace_id`; so the bare delete takes every personal knowledge base and agent template with it. The safe revert is two `UPDATE`s and then the delete, in that order, and it is written out in the migration header.
+- ⚠ **THE REVERT IS EXACT, AND ITS PRECONDITION IS NAMED.** `default_workspace_of()` — the same helper the mint uses, added by this migration for exactly this reason — is the one SQL spelling of "today's default", so the move back is the move forward inverted. If an owner's last standard workspace was deleted in between it answers NULL and the `UPDATE` violates `NOT NULL`, which FAILS the revert rather than filing a row somewhere. That direction is deliberate: **rollback fails closed, never open.**
+- Status: **NAMED, and the safe order is in the file.** Not fenced by a test — a test cannot run a revert nobody has applied. It converts to a probe the moment migration replay runs (F-563).
+
+### F-561 — the personal container's slug makes the legacy slug-only URL fallback ambiguous, the same way a link container already can (2026-09-02)
+
+- Location: `src/features/workspaces/server/repository.ts › findMemberWorkspaceBySlug`; the minted slug is `supabase/migrations/20260920120000_workspace_kind_personal.sql › ensure_personal_container`.
+- Found during: choosing which fields the mint copies from today's derived default.
+- **THE SHAPE.** `findMemberWorkspaceBySlug` scans the caller's ACTIVE MEMBERSHIPS for a slug and answers `null` on 2+ matches, deliberately, so an ambiguous legacy URL 404s instead of routing to the wrong workspace. It does not filter by `kind`. A personal container is a membership, so it joins that scan. This is why the mint does NOT copy the origin's slug — that would have made every legacy URL of the workspace it was minted from ambiguous, for all 15 users at once. It mints the constant `personal` instead, leaving a residue: a user whose OWN workspace is slugged `personal` loses that one legacy URL.
+- ⚠ **NOT NEW, AND NOT WORSE.** `kind='link'` containers have carried the identical hazard since `20260823150000` — they are memberships with slugs too. What is new is a second kind that does it.
+- Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP: `findMemberWorkspaceBySlug` should compose `isStandardWorkspace` on `matches`, which closes it for both kinds in one line. `workspaces/server/repository.ts` belongs to **B14** (`v2/b-default-workspace-off`) — recorded as a cross-slice request rather than taken here.
+- Status: **OPEN**, fail-closed (a 404, never a wrong workspace).
+
+### F-562 — `agent-templates/server/repository.ts` sits at 493 of the 500-line cap (2026-09-02)
+
+- Location: `src/features/agent-templates/server/repository.ts`. Re-derive, never quote: `wc -l`.
+- Found during: B11's dual-write, which pushed the file to 504 and had to be trimmed back rather than shipped.
+- The file already has its split seams marked — three `// ───` sections (Templates · Team links · Knowledge-base attachments) — and the house move at the cap is the one `service-base-gates.ts` made on 2026-09-02: lift a section into a sibling and re-export, exactly as `knowledge/server/repository.ts` is already a barrel over five. Not taken here because **B15** deletes part of this file's shelf lane in batch 3 and a split now would land under its feet.
+- Status: **OPEN.** The next edit to this file must split it, not shave a comment.
+
+### F-563 — the personal-container migration has never met a database, and its four claims are text-asserted (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql`, `src/shared/tenancy/personal-container-schema.test.ts`.
+- **WHAT IS PROVEN AND WHAT IS NOT.** The test reads SQL and proves the file still SAYS: one container per user (partial unique index), an owner membership on it, the shelf moved by `created_by`, and no destructive statement. **It cannot prove the advisory lock serializes, that the backfill loop terminates over `auth.users`, that the `UPDATE ... FROM` moves what it should, or that `RETURNS TABLE` matches what `ensureDefaultWorkspaceRow`'s caller destructures.** Only a database can say those.
+- Owed: the three-probe-per-branch pattern inside a rolled-back transaction (the `20260827120000` precedent, restated by F-461 for the grant trigger). ⚠ Docker has been down for all of Wave A and all of Wave B batch 1 — **replay is owed for TEN migrations, not one**, and this is the tenth.
+- Status: **OPEN**, and blocking nothing until replay runs.
+
+### F-564 — eight sites derive "home channel" as `!isStandardWorkspace`, and a THIRD kind makes each one a mislabel (2026-09-02)
+
+- Locations, re-derive rather than quote (`grep -rn '!isStandardWorkspace' packages apps src --exclude-dir=dist` plus the ternaries beside it): `packages/mcp-server/src/server.ts` (the home-channel half of the served directory) · `› meta-tools.ts › registerWorkspaceMetaTools`'s "home channel" line · `› factory.ts`'s shared-container predicate (`!isStandardWorkspace(active) && memberCount !== 1`) · `› tools/home-scopes.ts › listHomeChannels` (**two**: the `kind:` label and the slug it omits) · `› tools/copy-target.ts` (**two**: the address it prints and the `kind` word beside it) · `› tools/confirm-token.ts`'s `container` flag.
+- Found during: B11, checking what a `kind='personal'` row does to every consumer before minting one.
+- **THE RULE THIS BREAKS IS ALREADY WRITTEN IN THE TREE**, in `src/features/workspaces/server/shared-publish.ts`, in as many words: *"`=== "link"`, NOT `!isStandardWorkspace(…)`. That predicate is the LISTING one and its negative spelling admits every kind nobody has designed yet."* `service-audience.ts › findWorkspaceKind` makes the same choice. The eight sites above are the ones that did not.
+- ⚠ **THIS IS F-295's MIRROR IMAGE, NOT A REPEAT OF IT.** F-295 flipped the LISTING predicate positive so a new kind is kept OUT of the rail; these sites read that same predicate's NEGATION as a positive claim ("therefore a home channel"), so a new kind is silently pulled IN. Fixing one direction never fixed the other, and only a third kind could show it.
+- ⚠ **NOT REACHABLE TODAY** — `20260920120000` is unapplied, so no `personal` row exists anywhere. It becomes reachable the moment that migration runs, and it is a MISLABEL rather than a leak: a personal container advertised as a home channel is the caller's own container, listed to its only member.
+- Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP: each site asks `kind === "link"`. All eight belong to batch 3 — **B13** (`server.ts`, `meta-tools.ts`, `factory.ts`, `home-scopes.ts`) and **B15** (`copy-target.ts`), which DELETE most of them outright; `confirm-token.ts` is in neither `Owns` column and needs assigning. ⚠ Deleting a surface closes it too, but only if the deletion actually lands before the migration does.
+- Status: **OPEN**, and it is an ORDERING constraint on applying `20260920120000`, not only a code fix.
