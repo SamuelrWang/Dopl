@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readClient } from "@/shared/supabase/caller-client";
 import { personalWriteWorkspaceId, resolveShelfScope } from "@/shared/tenancy/personal-container";
 import type {
   AgentTemplate,
@@ -16,11 +17,26 @@ import {
 /**
  * Raw I/O for agent templates and their two junctions.
  *
- * ⚠ THE SERVICE-ROLE CLIENT BYPASSES RLS. Every query here takes a
- * `workspaceId` the service sets from the auth context, and every one of them
- * uses it — on this path the service IS the fence and the SELECT policies in
- * `20260822200000_agent_templates.sql` are not a backstop, they are the fence
- * for the OTHER path (PostgREST / a session token reading directly).
+ * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 2
+ * (Wave B B12); `knowledge/server/repository-bases.ts` states the same split for
+ * phase 1. `readClient()` is the CALLER's client when `RLS_CALLER_SCOPED_READS`
+ * is on and `supabaseAdmin()` otherwise, so with the flag off this file behaves
+ * exactly as it did — the service is still the fence and the SELECT policies are
+ * still only the fence for the OTHER path (PostgREST / a session token reading
+ * directly). With the flag on those become the SAME path, which is the point.
+ *
+ *   * **A read that answers "what may this caller see" takes `readClient()`,**
+ *     and the row filter becomes `agent_templates_member_select` →
+ *     `can_current_user_read_agent_template()`, repaired in
+ *     `20260921120000_rls_phase2_policies` to equal `service-shared.ts ›
+ *     canSeeTemplate` — including arm 2, the shared-credential arm the SQL did
+ *     not have.
+ *   * **A read of a table this slice does NOT cover keeps `supabaseAdmin()`**
+ *     and says so at the call site. `team_members` and `teams` are not among the
+ *     seven covered tables; scoping them to the caller would put a policy this
+ *     slice never audited between the service and its own membership lookup.
+ *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
+ *     until RLS plan phase 4, `workspaceId` filter and all.
  */
 
 // ─── Templates ──────────────────────────────────────────────────────────
@@ -43,7 +59,7 @@ export async function listTemplatesForWorkspace(
   workspaceId: string,
   shelf?: TemplateShelf
 ): Promise<AgentTemplate[]> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const scope = await resolveShelfScope(workspaceId, shelf);
   let query = db
     .from("agent_templates")
@@ -84,7 +100,7 @@ export async function listHomeScopedTemplateIds(
   templateIds: string[]
 ): Promise<string[]> {
   if (templateIds.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   // ⚠ THE SAME RESOLVER THE LIST USES: a second spelling of "is this row
   // personal" is how a label comes to disagree with the list it labels.
   const scope = await resolveShelfScope(workspaceId, "home");
@@ -105,7 +121,7 @@ export async function findTemplateById(
   workspaceId: string,
   id: string
 ): Promise<AgentTemplate | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("agent_templates")
     .select(AGENT_TEMPLATE_COLS)
@@ -277,7 +293,7 @@ export async function listTeamLinksForTemplates(
   templateIds: string[]
 ): Promise<Array<{ templateId: string; teamId: string }>> {
   if (templateIds.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("resource_grants")
     .select("resource_id, scope_id")
@@ -331,7 +347,10 @@ export async function replaceTeamLinks(
 /** Team ids the caller belongs to, workspace-scoped. ⚠ Read HERE rather than
  *  imported from `features/teams`, mirroring how `skills/server/repository.ts`
  *  reads `knowledge_bases` directly — a cross-feature import is what §1
- *  forbids, and this is one column of one table. */
+ *  forbids, and this is one column of one table.
+ *  ⚠ SERVICE ROLE: `team_members` is not one of the seven tables phases 1–2
+ *  cover, and this is the input to the TS predicate rather than a row the caller
+ *  is shown. A policy this slice never audited must not silently narrow it. */
 export async function listTeamIdsForUser(
   workspaceId: string,
   userId: string
@@ -348,7 +367,10 @@ export async function listTeamIdsForUser(
 
 /** Which of `teamIds` actually exist in this workspace. The service uses the
  *  difference to 403 rather than letting the junction's workspace-guard
- *  trigger surface as an opaque 500. */
+ *  trigger surface as an opaque 500.
+ *  ⚠ SERVICE ROLE: a WRITE-path validation over `teams`, which this slice does
+ *  not cover — and a team the caller cannot read is still a team that exists,
+ *  which is the question being asked. */
 export async function filterTeamIdsInWorkspace(
   workspaceId: string,
   teamIds: string[]
@@ -371,7 +393,7 @@ export async function listKnowledgeLinksForTemplates(
   templateIds: string[]
 ): Promise<Array<{ templateId: string; knowledgeBaseId: string }>> {
   if (templateIds.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("agent_template_knowledge_bases")
     .select("template_id, knowledge_base_id")
@@ -435,7 +457,7 @@ export async function listKnowledgeBaseAccessRows(
   ids: string[]
 ): Promise<KnowledgeBaseAccessRow[]> {
   if (ids.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
     .select("id, name, visibility, access_mode, created_by")
@@ -476,7 +498,7 @@ export async function listKnowledgeBaseTeamGrants(
   knowledgeBaseIds: string[]
 ): Promise<Array<{ knowledgeBaseId: string; teamId: string }>> {
   if (knowledgeBaseIds.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("resource_grants")
     .select("resource_id, scope_id")

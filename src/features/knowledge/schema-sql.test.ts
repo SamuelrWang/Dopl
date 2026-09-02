@@ -348,49 +348,55 @@ describe("🔒 the TEAM scope read path", () => {
   /**
    * The team axis retired as an AXIS, not as a capability (ruling B4), so the
    * read paths that used to join `team_resource_access` now join
-   * `resource_grants` — and a join to a table that carries THREE scopes is only
-   * correct while it says which one it means. Dropping `scope_type = 'team'`
-   * from any of these makes a channel grant confer team access, silently.
+   * `resource_grants` — and a join to a table carrying THREE scopes is only correct
+   * while it says which one it means. Dropping `scope_type = 'team'` makes a
+   * channel grant confer team access, silently.
+   * ⚠ **THE JOIN MOVED ONE INDIRECTION AWAY ON 2026-09-02 (B12) AND THE INVARIANT
+   * DID NOT** — phase 2 restated these onto `dopl_chat_readable()` /
+   * `dopl_teams_mode_visible()`, so the term is written ONCE and these cases follow
+   * the chain. Asserting on the CALLER would read a de-duplication as a lost fence.
    */
   const teamScoped = (sql: string) =>
     /scope_type\s*=\s*'team'/i.test(sql) && /resource_grants/i.test(sql);
 
-  it("the chats policies still exist, and read the team scope of the new table", () => {
-    for (const [table, policy] of [
-      ["chats", "chats_member_select"],
-      ["chat_messages", "chat_messages_select"],
+  const TEAMS_HELPER = "dopl_teams_mode_visible"; // where the axis is resolved
+  const TEMPLATE_MATRIX = "can_current_user_read_agent_template";
+
+  it("the team axis is resolved in ONE helper, and that helper names the scope", () => {
+    const helper = liveFunctionBody(TEAMS_HELPER);
+    expect(teamScoped(helper!)).toBe(true);
+    expect(helper).not.toMatch(/team_resource_access/i);
+  });
+
+  it("every surviving read policy reaches it, and none names the dropped table", () => {
+    // ⚠ BOTH permissive `chats` policies: they are OR-ed, so a fence stated on one
+    // of a pair is not a fence. Arm-by-arm equality is the redteam suites' job.
+    for (const [table, policy, chain] of [
+      ["chats", "chats_owner_select", "dopl_chat_readable"],
+      ["chats", "chats_member_select", "dopl_chat_readable"],
+      ["chat_messages", "chat_messages_select", "dopl_chat_readable"],
+      ["agent_templates", "agent_templates_member_select", TEMPLATE_MATRIX],
+      [
+        "agent_template_knowledge_bases",
+        "agent_template_knowledge_bases_member_select",
+        TEMPLATE_MATRIX,
+      ],
     ] as const) {
       const body = livePolicies(table).get(policy);
       expect(body, `${policy} must survive the drop`).toBeDefined();
       expect(body).not.toMatch(/team_resource_access/i);
-      expect(teamScoped(body!)).toBe(true);
-      // The `chat` resource type is the other half of the narrowing: without it
-      // a team's KB grant would open that team's members' chats.
-      expect(body).toMatch(/resource_type\s*=\s*'chat'/i);
-      // The arms this policy has always had, unchanged by the re-statement.
-      expect(body).toMatch(/access_mode\s*=\s*'teams'/i);
-      expect(body).toMatch(/is_current_workspace_member\(\s*\w*\.?workspace_id\s*,\s*'admin'/i);
+      expect(body).toContain(`${chain}(`);
     }
-  });
-
-  it("the agent-template matrix is stated ONCE, and it too names the scope", () => {
-    const fn = liveFunctionBody("can_current_user_read_agent_template");
-    expect(fn).not.toBeNull();
-    expect(teamScoped(fn!)).toBe(true);
-    expect(fn).toMatch(/resource_type\s*=\s*'agent_template'/i);
-    // The arm order `20260822200000` §4 fixed, including the admin arm sitting
-    // INSIDE the team branch so `private` still means private.
+    // `resource_type` is the other half of each narrowing — without it a team's KB
+    // grant opens that team's members' chats. ⚠ The template matrix spelled that
+    // `EXISTS` inline until `20260921120000` STEP 4 put it on the helper and added
+    // the missing shared-credential arm; arm ORDER is unchanged.
+    expect(liveFunctionBody("dopl_chat_readable")).toMatch(/'chat',\s*c\.id/i);
+    const fn = liveFunctionBody(TEMPLATE_MATRIX);
+    expect(fn).toMatch(/'agent_template',\s*t\.id/i);
+    expect(fn).toMatch(new RegExp(`${TEAMS_HELPER}\\(`));
     expect(fn).toMatch(/visibility\s*=\s*'workspace'/i);
     expect(fn).toMatch(/visibility\s*=\s*'team'/i);
-
-    // …and both surviving policies go through it rather than restating it.
-    for (const table of ["agent_templates", "agent_template_knowledge_bases"]) {
-      const selects = [...livePolicies(table)].filter(([, b]) =>
-        /\bFOR\s+SELECT\b/i.test(b)
-      );
-      expect(selects).toHaveLength(1);
-      expect(selects[0][1]).toMatch(/can_current_user_read_agent_template/);
-    }
   });
 });
 

@@ -7600,3 +7600,54 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **NOT REACHABLE TODAY** — `20260920120000` is unapplied, so no `personal` row exists anywhere. It becomes reachable the moment that migration runs, and it is a MISLABEL rather than a leak: a personal container advertised as a home channel is the caller's own container, listed to its only member.
 - Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP: each site asks `kind === "link"`. All eight belong to batch 3 — **B13** (`server.ts`, `meta-tools.ts`, `factory.ts`, `home-scopes.ts`) and **B15** (`copy-target.ts`), which DELETE most of them outright; `confirm-token.ts` is in neither `Owns` column and needs assigning. ⚠ Deleting a surface closes it too, but only if the deletion actually lands before the migration does.
 - Status: **OPEN**, and it is an ORDERING constraint on applying `20260920120000`, not only a code fix.
+
+### F-570 — the SELECT policies on skills, chats and agent_templates were WIDER than their TS predicates, in four named ways (2026-09-02)
+
+- Location: `supabase/migrations/20260720211005_rls_pin_workspace_member_and_initplan.sql`, `20260916120000_drop_team_resource_access.sql`, `20260915120000_drop_agent_template_teams.sql` (the pre-images); `src/features/skills/server/service-shared.ts › canSeeSkill`, `src/features/chats/server/service-shared.ts › canSeeChat`, `src/features/agent-templates/server/service-shared.ts › canSeeTemplate`.
+- Found during: Wave B B12, comparing each predicate against the replayed final policy body before moving its reads.
+- **THE FOUR GAPS.** (1) `skills_member_select` was `is_current_workspace_member(ws,'viewer') AND (visibility='public' OR created_by=auth.uid())` — no **SHARED CREDENTIAL** arm, so a credential standing for nobody in particular read the minter's private skills (M-10/F-336, `canSeeSkill` arm 2). (2) The same policy said nothing about **`access_mode='teams'`**, so a skill narrowed to one team was readable by every viewer; `20260708150001` recorded that in a comment — *"team scoping [is] enforced in the service"* — which was true while the service was the only reader. (3) `chats_member_select` led with a **blanket `is_current_workspace_member(ws,'admin')`**, so a workspace admin read every PRIVATE transcript; `canSeeChat` returns false for `visibility !== "public"` before its admin arm. (4) `chats_owner_select` was an **unfenced `owner_id = auth.uid()`** — no membership floor, no credential axis — and a fifth, adjacent: `can_current_user_read_agent_template()` carried five of `canSeeTemplate`'s six arms and omitted arm 2.
+- ⚠ **NONE WAS A LIVE LEAK, AND THAT IS THE POINT** — the same sentence F-520 ends on. Every read went through `supabaseAdmin()`, so no policy ran. These are the shapes that become leaks the instant a read moves off the service role, which is what this slice does.
+- ⚠ **GAP 3 WAS DELIBERATE AND IS OVERRULED BY B5, NOT BY OPINION.** `20260916120000`'s probe P2 records the blanket admin arm as intended ("the arm this policy has always had — unchanged"), and `20260915120000` calls `agent_templates` "tighter than `chats_member_select` on purpose". Ruling B5 asks the policy to EQUAL the predicate; the templates policy had already made exactly this correction, and its own comment explains why moving an admin arm out of the team branch is a widening.
+- Status: RESOLVED 2026-09-02 by `supabase/migrations/20260921120000_rls_phase2_policies.sql`. Each rule is stated once — `dopl_skill_readable()`, `dopl_chat_readable()`, the shared `dopl_public_teams_admits()` — and the policies call it; the template function is replaced in place, so no policy moves. Mutation-verified in six directions by the four redteam suites. ⚠ **NEVER APPLIED** — Docker is down on this machine, replay owed with the rest of Wave B's.
+
+### F-571 — a child policy that restates its parent's matrix is where the fence goes stale (2026-09-02)
+
+- Location: `skill_files_member_select` (`20260504030000_visibility_private_resources.sql`), `chat_messages_select` (`20260916120000_drop_team_resource_access.sql`).
+- Found during: Wave B B12, after repairing the two parents.
+- **THE SHAPE.** Each of these restated its parent's visibility matrix INLINE — `skill_files` as `(s.visibility='public' OR s.created_by=auth.uid())`, `chat_messages` as the whole four-arm chats body — so every parent repair had to be made twice and the second copy is the one nobody makes. That is the 2026-08-26 entry-body incident (INVARIANTS §4) with the table names changed, and it is why `20260919120000` made the knowledge children call `dopl_knowledge_base_readable()` rather than repeat it.
+- ⚠ **`chat_messages` IS NOT OPTIONAL IN A SECOND WAY.** `chats/server/repository.ts › listVisibleChats` selects `*, chat_messages(count)`, so under a caller-scoped client the child policy filters an EMBEDDED count: a wider child publishes the LENGTH of a transcript the caller may not read.
+- ⚠ **AND `skill_files_member_select` STILL ASKED THE 3-ARG `is_workspace_member(ws, auth.uid(), …)`** — the form where the CALLER supplies the user id, which M-9 closed for every table `20260720211005` was measuring. It was missed because that migration rewrote the tables it measured and this one was not among them.
+- Status: RESOLVED 2026-09-02 by `20260921120000`; both children now call the parent's predicate, and `scripts/check-rls-pair-gate.ts › POLICY_ONLY` watches them (they have no `canSee*` to hang a `TWINS` row on).
+
+### F-572 — `teams/` reads two covered tables on the service role, and it belongs to no slice in this wave (2026-09-02)
+
+- Location: `src/features/teams/server/repository-resources.ts` and `src/features/teams/server/service.ts` (both `.from("knowledge_bases")` + `.from("skills")`), `src/features/teams/server/repository-grants.ts` (`resource_grants`).
+- Found during: Wave B B12, sweeping for readers of the phase-2 tables outside the slice's ownership.
+- **WHAT IT MEANS.** Phases 1–2 moved the read paths in `knowledge/`, `skills/`, `agent-templates/` and `chats/`. The teams sharing surface reads the SAME rows through its own repository and still does so as the service role, so with the flag ON the tree has one table read two ways: caller-scoped from its owning feature, service-role from `teams/`. That is not a leak the flag introduces — it is today's behaviour, unchanged — but it is the exact residue F-521's unwritten lint rule exists to make visible.
+- ⚠ Not fixed here: `teams/server/**` is in no slice's `Owns` column in `docs/specs/mcp-v2-wave-b.md` §5, and a cross-slice edit to a fence is how two branches disagree about one policy.
+- Proposed resolution: fold into B16 with the TS-predicate deletions, or give `teams/` a row of its own in batch 3; either way it lands with the Phase 0 lint rule (F-521) that would have found it.
+- Status: open.
+
+### F-573 — two `skill_files` WRITE policies still take the user id from the caller (2026-09-02)
+
+- Location: `skill_files_editor_update` and `skill_files_editor_delete` (`20260504030000_visibility_private_resources.sql`), both `is_workspace_member(workspace_id, auth.uid(), 'editor')`.
+- Found during: Wave B B12, while repairing the SELECT policy on the same table.
+- **WHY NOT FIXED IN THE SAME FILE.** The 3-arg form lets the caller supply the user id — the oracle M-9 closed — and passing `auth.uid()` into it is harmless TODAY because that is what the 2-arg form does anyway. It is still the wrong form, and it is a WRITE policy: writes stay on the service role until RLS plan phase 4, they have no redteam suite, and a policy edit with no test behind it is the thing this wave has been avoiding.
+- Proposed resolution: sweep every remaining 3-arg call site in one migration when phase 4 opens (`grep -n "is_workspace_member(" supabase/migrations/*.sql`), with a probe per policy branch.
+- Status: open.
+
+### F-574 — the skills KB picker lists every base in the workspace, private ones included (2026-09-02)
+
+- Location: `src/features/skills/server/repository.ts › listWorkspaceKnowledgeBases`, `src/features/skills/server/service-reads.ts › listWorkspaceKnowledgeBases`.
+- Found during: Wave B B12, classifying each read as caller-scoped or system.
+- **NO SERVICE-SIDE FILTER EXISTS.** The service passes `ctx.workspaceId` and returns `{slug, name}` for every row; nothing asks `canSeeBase`, and the feature deliberately does not import `features/knowledge` (§1), so the only fence available to it is the policy. On the service role there is none, so the picker names other people's private bases. It leaks NAMES, not contents.
+- Status: MITIGATED 2026-09-02 — the read moved to `readClient()`, so with `RLS_CALLER_SCOPED_READS` on the phase-1 policy is the fence. ⚠ **With the flag off (the default) the over-share stands**, which is why this is filed rather than closed: the fix that holds in both states is a visibility filter in the service, and that belongs to whoever owns the picker.
+
+### F-575 — `knowledge_entry_chunks` has RLS enabled and NO policy at all (2026-09-02)
+
+- Location: `supabase/migrations/20260612090000_knowledge_embeddings.sql` (`ALTER TABLE knowledge_entry_chunks ENABLE ROW LEVEL SECURITY;`, and nothing else). Re-derive: `grep -rn "knowledge_entry_chunks" supabase/migrations/*.sql | grep -i policy` → no output.
+- Found during: Wave B B12, checking the RLS plan's phase-1 table list against what the two migrations actually cover.
+- **IT FAILS CLOSED, WHICH IS WHY IT IS A NOTE AND NOT A P0.** RLS enabled with no policy denies every row to `authenticated`. Nothing breaks today because the embeddings repository still reads as the service role. The trap is directional: the day a chunk read moves to `readClient()` it returns ZERO rows and search goes quietly empty — a fence that reports itself armed while answering nothing, which is the mirror of the failure `caller-jwt.ts` refuses to have.
+- ⚠ The RLS plan's phase 1 names this table on the same line as `skills` and `skill_files`; it is the one member of that line still uncovered after B7 and B12.
+- Proposed resolution: one policy, `dopl_knowledge_base_readable(knowledge_base_id)` if the column exists or via `knowledge_entries` if not, in the migration that moves the first chunk read.
+- Status: open.
