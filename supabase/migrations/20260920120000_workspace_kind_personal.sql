@@ -8,6 +8,28 @@
 -- (INVARIANTS §12, F-304). Nine batch-1 migrations are pending ahead of this
 -- one; apply them first, in filename order.
 --
+-- ⚠⚠ **APPLYING THIS FILE HAS A CODE PRECONDITION, AND IT IS NOT OPTIONAL
+-- (F-564).** Eight sites derive "this is a home channel" from
+-- `!isStandardWorkspace(w)` — the LISTING predicate's negation — rather than
+-- from `kind === "link"`. Re-derive them, never quote:
+--
+--   grep -rn '!isStandardWorkspace' packages apps src --exclude-dir=dist
+--
+-- Today they are correct by accident: `standard` and `link` are the only kinds,
+-- so "not standard" IS "link". THIS MIGRATION MAKES THAT FALSE for every user
+-- at once — each of those sites would advertise a `personal` container as a
+-- home channel. It is a MISLABEL rather than a leak (the container is the
+-- caller's own, listed to its only member), which is why it does not block the
+-- code landing; it blocks the migration RUNNING.
+--
+-- ⚠ THE FIX IS EITHER DIRECTION AND BOTH ARE BATCH 3: each site asks
+-- `kind === "link"` (`workspaces/server/shared-publish.ts` states the rule in
+-- as many words), or B13/B15 DELETE the surface — `dopl_home`, `home-scopes.ts`
+-- and `copy-target.ts` go with the `workspace=` and copy retirements.
+-- ⚠ Deleting a surface closes it too, **but only if the deletion actually lands
+-- before this file does.** `confirm-token.ts` is in no slice's Owns column and
+-- needs assigning before either half can be called finished.
+--
 -- ── WHAT THIS IS (Samuel's ruling B10 + #18) ───────────────────────────────
 --
 --   > Every user has exactly one `kind='personal'` container. When nothing is
