@@ -32,9 +32,27 @@ import type { WorkspaceDirectory } from "../workspace-directory.js";
  * "which room am I in".
  */
 export declare function listHomeChannels(client: DoplClient, directory: WorkspaceDirectory): Promise<HomeChannel[]>;
-/** 🔒 The lock, applied. Exported for the suite that pins it; every production
- *  caller goes through {@link listHomeChannels}. */
-export declare function narrowToLock(channels: HomeChannel[], directory: WorkspaceDirectory): HomeChannel[];
+/**
+ * 🔒 THE LOCK, APPLIED — and it is the ONLY reader of
+ * `WorkspaceDirectory.lockedWorkspaceId()` outside `workspace-directory.ts`
+ * itself.
+ *
+ * ⚠ **GENERIC OVER ANYTHING CARRYING A `workspaceId`, ON PURPOSE (2026-09-01).**
+ * It was `HomeChannel[]`, and the account-wide channel reads (T20/T21/T22) need
+ * exactly the same narrowing over a different row: `GET
+ * /api/channels/account/**` is `withUserAuth` and answers the WHOLE ACCOUNT, so
+ * — like `/api/home/channels` — the route cannot narrow and the workspace
+ * directory these rows never pass through cannot either. The alternative was a
+ * second reader of the lock, and the rule this module's header states is that a
+ * second reader IS the enumeration oracle B3 exists to deny. **Widening the
+ * parameter is how a second caller routes THROUGH this instead of around it.**
+ *
+ * ⚠ It narrows on the SAME id `getWorkspaceList` answers with — one lock, one
+ * identity, no second notion of "which room am I in". Unlocked ⇒ unchanged.
+ */
+export declare function narrowToLock<T extends {
+    workspaceId: string;
+}>(rows: T[], directory: WorkspaceDirectory): T[];
 /**
  * ONE SCOPE the `everywhere` fan-out searches.
  *

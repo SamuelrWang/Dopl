@@ -428,6 +428,7 @@ export type {
   SessionDetailKey,
   ChannelSessionState,
   ChannelSessionTelemetry,
+  ChannelSessionHealth,
   ChannelSessionStateOwn,
 } from "./types-sessions";
 
@@ -435,6 +436,12 @@ export type {
   LaunchRefusalReason,
   LaunchDirectiveKind,
   LaunchDirective,
+  // ⚠ THE TWO POSTURE AXES (2026-09-01, T24). Re-exported here like everything
+  // else on this lane so there is no second import path to a symbol — and both
+  // are ORDERED unions whose order the desktop's clamp depends on; see their
+  // docblock in `types-launch.ts` before touching either.
+  LaunchToolMode,
+  LaunchMessageMode,
 } from "./types-launch";
 
 export type { DirectionRefusalReason, AgentDirection } from "./types-direction";

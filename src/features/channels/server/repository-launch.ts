@@ -59,6 +59,38 @@ export type LaunchDirectiveRow = {
   /** The rename's new display name. ⚠ Non-null iff `kind = 'rename'`, and `''`
    *  is LEGAL there: it means CLEAR, back to `Agent #<id>`. */
   target_name: string | null;
+  /**
+   * THE POSTURE COLUMNS (2026-09-01, T24 and `set_agent_mode`).
+   *
+   * ⚠ **`start_*` / `chain` BELONG TO A LAUNCH, `target_*` TO A
+   * `set_agent_mode`, AND THE COLUMN CHECK KEEPS THEM APART.** One names the
+   * posture a NEW session starts on, the other the posture a RUNNING one moves
+   * to; a row carrying both would be answered by whichever lane read it first.
+   * ⚠ **EVERY ONE OF THEM IS A REQUEST AND NONE IS A GRANT.** The machine clamps
+   * to the operator's own stored ceiling; nothing in this repository enforces
+   * that and nothing can.
+   * ⚠ `?` ON THE READ SIDE TOO — a payload cached against an older PostgREST
+   * schema arrives without them, which is why the mapper defaults rather than
+   * reads (INVARIANTS: the stale-cache field rule).
+   */
+  start_tool_mode?: string | null;
+  start_message_mode?: string | null;
+  chain?: boolean | null;
+  target_tool_mode?: string | null;
+  target_message_mode?: string | null;
+  /**
+   * **THE ECHO TRIO — what the machine SAYS it applied, after its clamp.**
+   *
+   * ⚠ **NO WRITER EXISTS YET, SO ALL THREE ARE NULL ON EVERY LIVE ROW, AND NULL
+   * MEANS "NOT REPORTED".** Not "unclamped", and never the requested value echoed
+   * back. The decide body has no field for them
+   * (`main/launch-directive-wire.js › decideBody`); the columns are here so the
+   * reporting half can land without a second migration and so the render can
+   * already tell the truth about their absence.
+   */
+  applied_tool_mode?: string | null;
+  applied_message_mode?: string | null;
+  applied_chain?: boolean | null;
   status: string;
   refusal_reason: string | null;
   agent_id: string | null;
@@ -74,7 +106,7 @@ export type LaunchDirectiveRow = {
 export type LaunchDirectiveInsert = {
   /** ⚠ OMITTED MEANS `launch`, by the column's DEFAULT — so the launch path did
    *  not have to learn a new field when the agent-management kinds landed. */
-  kind?: "launch" | "end" | "rename";
+  kind?: "launch" | "end" | "rename" | "set_agent_mode";
   workspace_id: string;
   channel_id: string;
   task_id: string | null;
@@ -107,7 +139,44 @@ export type LaunchDirectiveInsert = {
   /** The rename's new display name. ⚠ `''` is legal and means CLEAR; absent on
    *  every kind but `rename`, which the column CHECK enforces both ways. */
   target_name?: string | null;
+  /**
+   * THE POSTURE A LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it may
+   * launch workers (2026-09-01, T24).
+   *
+   * ⚠ CALLER-SUPPLIED, like `template_id` and safe for the same reason: they name
+   * HOW MUCH ROOM the work gets, never WHOSE MACHINE runs it. The authorization
+   * story is `operator_user_id`, which is a separate ARGUMENT precisely so no
+   * caller can pass one inside an object built from a request body.
+   * ⚠ **AND NEITHER GRANTS ANYTHING.** The operator's machine clamps both axes to
+   * that operator's own stored ceiling and REFUSES a chain the channel forbids.
+   * ⚠ Absent on every kind but `launch`; the column CHECK enforces that at rest.
+   */
+  start_tool_mode?: string | null;
+  start_message_mode?: string | null;
+  /** ⚠ `true` asks; ABSENT/`null` did not ask and inherits the channel setting.
+   *  ⚠ `false` is storable and the DESKTOP CANNOT TELL IT FROM `null` (its
+   *  narrower reads only `true`), so it is recorded, never relied on. */
+  chain?: boolean | null;
+  /**
+   * THE POSTURE A `set_agent_mode` ASKS A **RUNNING** AGENT TO MOVE TO.
+   *
+   * ⚠ AT LEAST ONE OF THE TWO IS REQUIRED ON THAT KIND — the column CHECK, so a
+   * directive asking for nothing is refused AT REST rather than claimed and left
+   * unanswerable — and BOTH are absent on every other kind.
+   * ⚠ **NOT MERGED WITH `start_*`.** A `set_agent_mode` answered by a launch's
+   * fields is the confusion two column pairs exist to make impossible.
+   */
+  target_tool_mode?: string | null;
+  target_message_mode?: string | null;
   expires_at: string;
+  /**
+   * ⚠ **THE ECHO TRIO IS DELIBERATELY NOT WRITABLE FROM HERE.** It is the
+   * MACHINE's report of what it applied, so its writer is the DECIDE, not the
+   * CREATE — and the decide has no field for it yet
+   * (`main/launch-directive-wire.js › decideBody`). A create that could stamp
+   * `applied_*` would let the requester write its own confirmation, which is the
+   * one value on this row that must not come from the asking side.
+   */
 };
 
 const TABLE = "channel_launch_directives";

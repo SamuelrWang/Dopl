@@ -33,14 +33,16 @@ exports.workspaceRearmStopRule = workspaceRearmStopRule;
 exports.opAwaitWorkspace = opAwaitWorkspace;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+// ⚠ `groupByChannel` MOVED to `channel-render.ts` on 2026-09-01, when the
+// ACCOUNT-wide read needed the same grouping. It was private here; a second copy
+// would be a second opinion about which channel ref a per-message remedy points
+// at. See that function's docblock.
 const channel_render_1 = require("./channel-render");
 const channel_await_budget_1 = require("./channel-await-budget");
 // ⚠ The re-arm text branches on the caller's runtime here too, for the same
 // reason it does per-channel: an unstamped caller may not be promised a wake.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 const channel_session_table_1 = require("./channel-session-table");
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed channel)";
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
  * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: no framing
@@ -87,37 +89,6 @@ function scopeNote(channelCount) {
         return `⚠ THIS HOLD WATCHED NOTHING: you are not a member of any channel in this workspace, so no message can ever end it. Do not re-arm — join or open a channel first (dopl_channel(op="list") to see what exists, op="open" to create one).`;
     }
     return `Scope: every channel you are a MEMBER of (${channelCount}). ⚠ A PUBLIC channel you have not joined is NOT watched by this hold, so silence here is not evidence the workspace is quiet — it is evidence YOUR rooms are. Join a channel to watch it, or hold on it by name with dopl_channel(op="await", channel=<slug>, since=…).`;
-}
-/**
- * Group a mixed page by channel, preserving first-appearance (= seq) order.
- *
- * ⚠ GROUPED RATHER THAN INTERLEAVED, and it is not cosmetic:
- * `formatMessages` renders each line's REMEDY hints against a channel ref (the
- * one-message re-read that un-clips a long body, the thread legend). One ref for
- * a mixed page would point every remedy at the wrong channel — a call the agent
- * would make and get nothing from. One group, one ref, correct hints.
- * ⚠ Ordering INSIDE a group is untouched, and the groups themselves come out in
- * the order their first message arrived, so the page still reads chronologically
- * at the channel level.
- */
-function groupByChannel(messages) {
-    const groups = new Map();
-    for (const m of messages) {
-        let g = groups.get(m.channelId);
-        if (!g) {
-            // ⚠ The SLUG is the ref an agent can re-use in a follow-up call, and it is
-            // `^[a-z0-9-]+$` by construction so it cannot escape its own span. The id
-            // is the fallback — never the NAME, which is member-typed.
-            g = {
-                ref: m.channelSlug ?? m.channelId,
-                label: (0, channel_shared_1.inlineOr)(m.channelName ?? m.channelSlug ?? m.channelId, NO_NAME),
-                messages: [],
-            };
-            groups.set(m.channelId, g);
-        }
-        g.messages.push(m);
-    }
-    return [...groups.values()];
 }
 /**
  * LONG-HOLD workspace await. One call holds for `awaitHoldMs(timeoutMs,
@@ -236,7 +207,7 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, run
             ...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
-    const groups = groupByChannel(messages);
+    const groups = (0, channel_render_1.groupByChannel)(messages);
     // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11).
     const lines = [
         `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,

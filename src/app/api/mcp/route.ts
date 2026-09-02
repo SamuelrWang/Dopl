@@ -47,7 +47,7 @@ async function handle(request: Request): Promise<Response> {
   // Auth at transport boundary: headers only — body stays intact for the transport.
   const authed = await authenticateMcpRequest(request);
   if (!authed.ok) return authed.response;
-  const { credential, apiKeyWorkspaceId, scopes, userId, credential_info } =
+  const { credential, apiKeyWorkspaceId, scopes, userId, credential_info, tokenId } =
     authed.auth;
 
   // 🔒 KEY LOCK FIRST, HEADER SECOND — and blank is not a pin on either. The
@@ -103,6 +103,13 @@ async function handle(request: Request): Promise<Response> {
       // session's own posts; the two must come from the one read.
       sessionId: callerSessionId ?? null,
     },
+    // 🔒 THE SESSION PIN'S STORE KEY (T41). This route is the only layer that
+    // sees the credential, so it is the only one that can identify a connection
+    // across the stateless per-request boots. ⚠ It gates NOTHING — see
+    // `McpAuthContext.tokenId` and `@dopl/mcp-server › session-pin.ts`; absent
+    // would simply mean `current_workspace(op="set")` refuses, which is the
+    // pre-pin behaviour.
+    sessionKey: tokenId,
     onDiag: (message) => console.error(message),
   });
 

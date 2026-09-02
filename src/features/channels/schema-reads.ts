@@ -74,3 +74,46 @@ export const AwaitQuerySchema = z.object({
   excludeAuthor: z.string().uuid().optional(),
 });
 export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
+
+/**
+ * `?since=<seq>&view=full|sessions` for the ACCOUNT-WIDE status read
+ * (`GET /api/channels/account/status`).
+ *
+ * ⚠ `since` IS OPTIONAL HERE AND REQUIRED ON THE AWAIT, and the difference is
+ * the difference between a page and a wait: a status answer with no cursor is a
+ * complete, useful answer that simply reports `unread: null` — "not asked" —
+ * whereas a hold with no cursor is a firehose. See
+ * `server/service-account.ts › AccountChannelStatus.unread`.
+ *
+ * ⚠ `view` IS A PARAMETER AND THE EXPENSIVE VIEW IS THE DEFAULT (INVARIANTS §9):
+ * nothing may get a thinner answer than it asked for, and an unrecognised value
+ * is a 400 rather than a silent fall-through to `full`.
+ */
+export const AccountStatusQuerySchema = z.object({
+  since: z.coerce.number().int().nonnegative().optional(),
+  view: z.enum(["full", "sessions"]).optional().default("full"),
+});
+export type AccountStatusQuery = z.infer<typeof AccountStatusQuerySchema>;
+
+/**
+ * `?since=<seq>&limit=<n<=200>` for the ACCOUNT-WIDE message read
+ * (`GET /api/channels/account/messages`).
+ *
+ * ⚠ `since` IS REQUIRED. `channel_messages.seq` is a TABLE-WIDE identity, so one
+ * cursor really does cover every channel of every workspace at once — and that
+ * is exactly why a cursorless call here would return the newest N messages of
+ * the caller's entire working life across every tenancy they belong to. The
+ * companion read (`MessageReadQuerySchema`) may omit it because it is bounded to
+ * ONE channel; this one may not.
+ */
+export const AccountMessagesQuerySchema = z.object({
+  since: z.coerce.number().int().nonnegative(),
+  limit: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(MAX_MESSAGE_LIMIT)
+    .optional()
+    .default(DEFAULT_MESSAGE_LIMIT),
+});
+export type AccountMessagesQuery = z.infer<typeof AccountMessagesQuerySchema>;

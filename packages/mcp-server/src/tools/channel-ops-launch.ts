@@ -26,11 +26,17 @@
  * to arm a wait.
  */
 
-import type { DoplClient, LaunchRefusalReason } from "@dopl/client";
+import type {
+  DoplClient,
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
 // ⚠ ONE write-result renderer, shared with `post` / `create_thread`.
-import { factsLine } from "./channel-facts";
+import { factsLine, type FactValue } from "./channel-facts";
 // ⚠ THE TENANCY SENTENCES LIVE WITH THE OTHER PROSE (T35), and the import
 // direction is ops → description because the description imports nothing from
 // here. FOUR surfaces state this one rule — this file's two create-time
@@ -236,6 +242,43 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   "bad-name": "no",
 };
 
+/**
+ * **THE RESOLVED POSTURE, AS FACTS — AND THE NULL CASE IS THE WHOLE POINT.**
+ *
+ * ⚠ `null` MEANS "NOT REPORTED". It does not mean "unclamped" and it is never
+ * the requested value echoed back. The desktop CLAMPS a requested posture to the
+ * operator's own stored ceiling without being obliged to say so, so an
+ * orchestrator told "you got what you asked for" on the strength of an empty
+ * column would size its next instruction for room the agent does not have —
+ * exactly the reading this function exists to refuse. ⚠ SO THE FALLBACK IS THE
+ * WORD `not reported`, NOT A GUESS: echoing `startToolMode` back would produce a
+ * value that is right whenever nothing was clamped and confidently wrong
+ * precisely when it mattered.
+ *
+ * ⚠ THE SHAPE IS FIXED — `posture=<tools>/<messages> chain=on|off` — because it
+ * is read by a model choosing its next action, and a line that changes shape
+ * between calls gets parsed by guesswork. ⚠ `-` FOR AN AXIS THAT WAS NOT
+ * REPORTED EVEN WHEN THE OTHER ONE WAS: partial is a real shape, and filling the
+ * gap from the REQUEST would put an unconfirmed value beside a confirmed one,
+ * indistinguishable.
+ *
+ * ⚠ **RENDERED AS TWO FACTS RATHER THAN A PARAGRAPH** (T10 ∩ T24). The reason a
+ * caller must not read silence as success is standing doctrine and lives in
+ * `channel-doctrine.ts`; what only THIS call can say is the two values.
+ */
+export function postureFacts(d: LaunchDirective): Record<string, FactValue> {
+  const tools = d.appliedToolMode;
+  const messages = d.appliedMessageMode;
+  const chain = d.appliedChain;
+  if (tools === null && messages === null && chain === null) {
+    return { posture: "not reported", chain: "not reported" };
+  }
+  return {
+    posture: `${tools ?? "-"}/${messages ?? "-"}`,
+    chain: chain === null ? "not reported" : chain ? "on" : "off",
+  };
+}
+
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
@@ -255,6 +298,15 @@ export async function opLaunchAgent(
     /** Template id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
     template?: string;
+    /** ⚠ **ASKED FOR, NEVER SET.** The operator's machine clamps each axis to
+     *  that operator's own stored ceiling; omitting both is the pre-T24
+     *  behaviour. Passed through untouched — this process cannot see the
+     *  ceiling and must not pretend to. */
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
+    /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
+     *  it is a separate field and not a third axis. Omitted is NOT `false`. */
+    chain?: boolean;
     waitMs?: number;
   } = {},
 ): Promise<ToolResponse> {
@@ -273,6 +325,14 @@ export async function opLaunchAgent(
       goal: opts.goal,
       model: opts.model,
       template: opts.template,
+      // ⚠ PASSED THROUGH UNTOUCHED, exactly like `template` above and for a
+      // sharper reason: the ceiling these are clamped against lives on the
+      // OPERATOR'S MACHINE, so this process cannot evaluate the request, cannot
+      // predict the outcome, and must not narrate one. What it can do is print
+      // what came back — see `postureLine`.
+      tools: opts.tools,
+      messages: opts.messages,
+      chain: opts.chain,
     });
   } catch (e) {
     // ⚠ THE TEMPLATE ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
@@ -359,6 +419,11 @@ export async function opLaunchAgent(
         model: directive.model ?? undefined,
         // ⚠ `idle=yes` means STANDING BY AND RUNNING NOTHING.
         idle: !(typeof opts.goal === "string" && opts.goal.trim() !== ""),
+        // ⚠ ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR (T24). A caller
+        // that sent no posture still ran at SOME posture, and `not reported` is
+        // the only thing standing between an orchestrator and the assumption
+        // that silence means whatever it hoped.
+        ...postureFacts(directive),
       }),
     );
   }

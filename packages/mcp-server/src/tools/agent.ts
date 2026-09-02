@@ -14,6 +14,7 @@
  *   - `agent-shared.ts`    — the three-answer ref resolution + error mappers
  *   - `agent-ops-read.ts`  — list / get
  *   - `agent-ops-write.ts` — create / update (shelf fence + confirm gate)
+ *   - `agent-ops-copy.ts`  — copy into another tenancy (two fenced legs)
  *   - `agent-ops-admin.ts` — the (refused) delete
  * ⚠ The `agent-` prefix is what the parity split-scan groups on.
  */
@@ -27,6 +28,9 @@ import { SHELF_ARG_DESCRIPTION, SHELF_VALUES } from "./shelf.js";
 import { opGet, opList } from "./agent-ops-read.js";
 import { opCreate, opUpdate } from "./agent-ops-write.js";
 import { opDelete } from "./agent-ops-admin.js";
+import { opCopy } from "./agent-ops-copy.js";
+import { TO_WORKSPACE_ARG_DESCRIPTION } from "./copy-target.js";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 const AGENT_DESCRIPTION = `Read and author AGENT TEMPLATES — persistent agent identities (name, instructions, default model, custom fields, attached knowledge bases) that outlive any session spawned from them. Agents RUNNING in a channel are a different thing: dopl_channel(op="read_sessions"), and dopl_channel(op="launch_agent") starts one. Templates are addressed by id or exact name (case-insensitive); an ambiguous name is REFUSED with both ids, never guessed.
 
@@ -37,6 +41,7 @@ Set \`op\` to one of:
 - "get" — one template in full, INSTRUCTIONS block included. Requires: template.
 - "create" — Requires: name. Optional: description, instructions, model, fields, visibility, knowledge_bases, shelf, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on op="list": omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts it on your own personal shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel or a second workspace. You cannot attach a knowledge base you cannot read.
 - "update" — Requires: template. Optional: name, description, instructions, model, fields, visibility, knowledge_bases, confirm_token. \`fields\` and \`knowledge_bases\` REPLACE the whole set — [] empties it. No shelf move.
+- "copy" — re-create a template you can SEE as a NEW, PRIVATE template in ANOTHER workspace or home channel. Requires: template, to_workspace. Carries name, description, instructions, model and custom fields; NOT attached knowledge bases (a base id means nothing in another tenancy — the result says how many were dropped) and never visibility. ⚠ The copy and the original are STRANGERS: editing one never touches the other. An unresolvable to_workspace refuses and creates nothing — there is no fallback to the workspace you called from.
 
 Deleting is app-only — \`dopl_agent_admin\` refuses the op it lists. ⚠ Publishing a template into a home channel somebody ELSE is in previews first, returning what would be created, who would see it, and a one-time \`confirm_token\` to re-issue with.`;
 
@@ -94,21 +99,36 @@ export function registerAgentTools(
   // the caller who previewed. Nothing about visibility is decided from it — the
   // server already filtered.
   caller: CallerIdentity = UNKNOWN_CALLER,
+  // 🔒 THE TARGET RESOLVER FOR op="copy", AND NOTHING ELSE READS IT HERE.
+  // `workspace-directory.ts › resolveWorkspaceRef` is the ONE resolver that
+  // takes a home-channel CONTAINER id (§4A: it deliberately does not filter)
+  // and that answers `null` for every ref but the locked one under a CONTAINER
+  // LOCK.
+  // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
+  // defaulted parameter. A default would silently un-narrow the copy target for
+  // any caller that forgot it, which is the enumeration B3 exists to deny;
+  // `channel.ts` and `home.ts` take the same argument the same way, and
+  // `parity-harness.ts` passes a stub because capture never runs a handler.
+  directory: WorkspaceDirectory,
 ): void {
   register(
     "dopl_agent",
     AGENT_DESCRIPTION,
     {
       op: z
-        .enum(["list", "get", "create", "update"])
+        .enum(["list", "get", "create", "update", "copy"])
         .describe("Operation to perform."),
       template: z
         .string()
         .optional()
         .describe(
-          "Template id (uuid, stable across renames) OR its exact name, case-insensitive; required for get/update, and an ambiguous name is refused with every match listed rather than guessed.",
+          "Template id (uuid, stable across renames — prefer it for a held reference) OR its exact name, case-insensitive; required for get/update/copy, and an ambiguous name is refused with every match listed rather than guessed.",
         ),
       shelf: z.enum(SHELF_VALUES).optional().describe(SHELF_ARG_DESCRIPTION),
+      to_workspace: z
+        .string()
+        .optional()
+        .describe(`op=copy (required): ${TO_WORKSPACE_ARG_DESCRIPTION}`),
       name: z
         .string()
         .min(1)
@@ -187,6 +207,16 @@ export function registerAgentTools(
             shelf: args.shelf,
             confirm_token: args.confirm_token,
           });
+        }
+        case "copy": {
+          const miss = missingParams("copy", args, ["template", "to_workspace"]);
+          if (miss) return miss;
+          return opCopy(
+            client,
+            directory,
+            args.template as string,
+            args.to_workspace as string,
+          );
         }
         case "update": {
           const miss = missingParams("update", args, ["template"]);

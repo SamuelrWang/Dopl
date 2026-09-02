@@ -19,6 +19,10 @@ exports.sessionRow = sessionRow;
 exports.sessionBlockLines = sessionBlockLines;
 const channel_shared_1 = require("./channel-shared");
 const channel_session_handle_1 = require("./channel-session-handle");
+// ⚠ THE UNITS COME FROM THE LEAF, NOT THROUGH `channel-session-render.ts`. Both
+// files need them and the render module already imports them from here; routing
+// this one through it would make the leaf reachable two ways and invite a cycle.
+const channel_session_units_1 = require("./channel-session-units");
 const channel_session_render_1 = require("./channel-session-render");
 // ── THE TABLE (T13, 2026-09-02) ─────────────────────────────────────────────
 //
@@ -72,7 +76,7 @@ const NOT_REPORTED = "—";
 function sessionRow(s, opts = {}) {
     const now = opts.now ?? Date.now();
     const state = channel_session_render_1.SESSION_STATES.has(s.state) ? s.state : channel_session_render_1.UNKNOWN_STATE;
-    const age = (0, channel_session_render_1.ageMs)(s.updatedAt, now);
+    const age = (0, channel_session_units_1.ageMs)(s.updatedAt, now);
     const stale = (0, channel_session_render_1.sessionIsStale)(s, now);
     const quiet = (0, channel_session_render_1.rowIsQuietNotGone)(age, stale, opts.operatorOnline);
     // ⚠ Same three branches, same order and same reasoning as the prose head —
@@ -111,7 +115,7 @@ function sessionRow(s, opts = {}) {
         : NOT_REPORTED;
     // ⚠ AN UNREADABLE OR ABSENT STAMP DASHES rather than printing `0` — the same
     // fail-safe `ageMs` and `sessionIsStale` already take.
-    const idle = age === null ? NOT_REPORTED : (0, channel_session_render_1.coarseAge)(age);
+    const idle = age === null ? NOT_REPORTED : (0, channel_session_units_1.coarseAge)(age);
     return `| ${handle} | ${stateFull} | ${thread} | ${channel} | ${template} | ${model} | ${tool} | ${idle} |`;
 }
 /**

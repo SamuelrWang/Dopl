@@ -14,10 +14,12 @@
  *   - `agent-shared.ts`    — the three-answer ref resolution + error mappers
  *   - `agent-ops-read.ts`  — list / get
  *   - `agent-ops-write.ts` — create / update (shelf fence + confirm gate)
+ *   - `agent-ops-copy.ts`  — copy into another tenancy (two fenced legs)
  *   - `agent-ops-admin.ts` — the (refused) delete
  * ⚠ The `agent-` prefix is what the parity split-scan groups on.
  */
 import type { DoplClient } from "@dopl/client";
 import { type CallerIdentity } from "./identity.js";
 import { type RegisterTool } from "./respond.js";
-export declare function registerAgentTools(register: RegisterTool, client: DoplClient, caller?: CallerIdentity): void;
+import type { WorkspaceDirectory } from "../workspace-directory.js";
+export declare function registerAgentTools(register: RegisterTool, client: DoplClient, caller: CallerIdentity | undefined, directory: WorkspaceDirectory): void;

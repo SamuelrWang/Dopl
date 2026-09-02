@@ -44,15 +44,31 @@ export const REGISTRARS: Array<{
   file: string;
   register: (r: RegisterTool, c: DoplClient) => void;
 }> = [
-  { file: "knowledge.ts", register: registerKnowledgeTools },
+  // ⚠ Both take a `directory` their registrars REQUIRE (it resolves the copy
+  // ops' `to_workspace`); the harness passes the same stub `channel.ts` and
+  // `home.ts` get, because capture never runs a handler.
+  {
+    file: "knowledge.ts",
+    register: (r, c) => registerKnowledgeTools(r, c, undefined, STUB_DIRECTORY),
+  },
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
   { file: "members.ts", register: registerMembersTool },
   { file: "map.ts", register: registerMapTool },
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
-  { file: "channel.ts", register: registerChannelTool },
-  { file: "agent.ts", register: registerAgentTools },
+  // ⚠ It takes a `directory` its registrar REQUIRES (the container lock for the
+  // two account-wide reads); the harness passes the same stub `home.ts` gets,
+  // because capture never runs a handler.
+  {
+    file: "channel.ts",
+    register: (r, c) =>
+      registerChannelTool(r, c, undefined, false, STUB_DIRECTORY),
+  },
+  {
+    file: "agent.ts",
+    register: (r, c) => registerAgentTools(r, c, undefined, STUB_DIRECTORY),
+  },
   // ⚠ **THE ONE META TOOL IN THIS CAPTURE, AND IT EARNS ITS PLACE** (2026-08-28).
   // `current_workspace` / `list_workspaces` are deliberately absent: they carry
   // no `op`, no write and no charge, so every suite below would be vacuous over

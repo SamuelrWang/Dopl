@@ -217,3 +217,31 @@ export declare function formatThreadDetail(t: ChannelThread, view?: MemberView):
  * the email fallback is dropped and a name-less member renders by id alone.
  */
 export declare function formatMemberLine(m: ChannelMember, selfUserId: string | null, callerIsAdmin?: boolean): string;
+/**
+ * GROUP A MIXED PAGE BY CHANNEL, preserving first-appearance (= seq) order.
+ *
+ * ⚠ **GROUPED RATHER THAN INTERLEAVED, AND IT IS NOT COSMETIC:**
+ * {@link formatMessages} renders each line's REMEDY hints against a channel ref
+ * — the one-message re-read that un-clips a long body, the thread legend. One
+ * ref for a mixed page would point every remedy at the wrong channel, i.e. at a
+ * call the agent would make and get nothing from. One group, one ref, correct
+ * hints.
+ * ⚠ Ordering INSIDE a group is untouched, and the groups come out in the order
+ * their first message arrived, so the page still reads chronologically at the
+ * channel level.
+ *
+ * ⚠ **IT LIVES HERE BECAUSE TWO PAGES NEED IT** (2026-09-01). It was private to
+ * the workspace-wide `await`, and the ACCOUNT-wide `read` renders the same mixed
+ * page; a second copy would be a second opinion about which ref a remedy points
+ * at, which is the failure the paragraph above describes. Generic over the row,
+ * so the account page's extra `workspaceId` rides through untouched.
+ */
+export declare function groupByChannel<T extends {
+    channelId: string;
+    channelName?: string | null;
+    channelSlug?: string | null;
+}>(messages: T[]): Array<{
+    ref: string;
+    label: string;
+    messages: T[];
+}>;

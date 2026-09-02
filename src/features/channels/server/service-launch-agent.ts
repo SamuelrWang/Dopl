@@ -1,6 +1,10 @@
 import "server-only";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
-import type { LaunchDirective } from "../types";
+import type {
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchToolMode,
+} from "../types";
 import {
   AgentDirectiveForeignError,
   LaunchDirectiveNotFoundError,
@@ -67,7 +71,35 @@ export type CreateAgentDirectiveInput =
   /** ⚠ `name: ""` IS LEGAL AND MEANS CLEAR — back to `Agent #<id>`, the same
    *  gesture `sessions:rename` takes. A separate "unname" kind would be a second
    *  way to say one thing. */
-  | { kind: "rename"; channel: string; agentId: string; name: string };
+  | { kind: "rename"; channel: string; agentId: string; name: string }
+  /**
+   * **RE-POSTURE A RUNNING AGENT** (2026-09-01, the agent-efficiency wave).
+   *
+   * ⚠ **BOTH AXES OPTIONAL, AND AT LEAST ONE REQUIRED — enforced in the SCHEMA
+   * and again by the column CHECK**, because a directive that asks for nothing
+   * could only ever be answered with a refusal for a request that was never
+   * expressible. A caller may legitimately move one axis and leave the other.
+   * ⚠ **THIS KIND IS THE ONE NON-LAUNCH VERB STILL BEHIND THE MACHINE'S LAUNCH
+   * TOGGLE** (`main/launch-directive-wire.js › KINDS_NEEDING_LAUNCH_CONSENT`),
+   * unlike `end` and `rename` above. A posture is the only one of the three that
+   * can cause LOCAL COMPUTE TO BE SPENT — `bypass` on Axis A pre-approves work
+   * tools on hardware the operator pays for. ⚠ The server neither enforces nor
+   * observes that; the toggle is an `electron-store` boolean, and this note
+   * exists so nobody reads the three kinds as one class.
+   * ⚠ **A REQUEST, NEVER A GRANT.** `main/launch-posture.js › narrowTo` clamps
+   * each axis to the operator's own stored channel posture. There is no operator
+   * carve-out and none may be added — every caller here IS the operator's own
+   * account, so the carve-out would be the whole set.
+   * ⚠ **NO MODEL.** The desktop's narrower has no field for one, so a model here
+   * would be stored and silently dropped.
+   */
+  | {
+      kind: "set_agent_mode";
+      channel: string;
+      agentId: string;
+      tools?: LaunchToolMode;
+      messages?: LaunchMessageMode;
+    };
 
 /**
  * `offline` = no row was created and nothing was asked. Identical in shape and
@@ -182,6 +214,19 @@ export async function createAgentDirective(
     // dropped one are each refused AT REST rather than reaching a machine with
     // nothing coherent to do.
     target_name: input.kind === "rename" ? input.name : null,
+    // ⚠ THE POSTURE PAIR, ON `set_agent_mode` AND NOWHERE ELSE — the column CHECK
+    // enforces both directions here too, so an end that smuggled a posture is
+    // refused AT REST. ⚠ `?? null` per axis rather than one object: a directive
+    // moving ONE axis and leaving the other is the ordinary case, and `null` is
+    // the column's own spelling for "not requested", which the machine reads as
+    // "leave that axis alone" rather than as a value.
+    // ⚠ **NEITHER IS A GRANT.** The clamp happens on the operator's machine and
+    // this service cannot see the ceiling; every sentence downstream says "asked
+    // for", never "set".
+    target_tool_mode:
+      input.kind === "set_agent_mode" ? input.tools ?? null : null,
+    target_message_mode:
+      input.kind === "set_agent_mode" ? input.messages ?? null : null,
     // ⚠ THE LAUNCH TTL, REUSED RATHER THAN TUNED. What is being waited on is
     // identical — a claim by a machine that is either listening or not — and a
     // second liveness number on one table is how two rows written a second apart

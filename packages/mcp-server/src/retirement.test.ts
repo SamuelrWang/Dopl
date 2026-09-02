@@ -154,6 +154,11 @@ describe("retired tools never register (D1/D2)", () => {
       "dopl_agent",
       "dopl_agent_admin",
       "dopl_home",
+      // ⚠ THE SECOND CHARGED META TOOL (2026-09-01, T20). It is on this list for
+      // the same reason every other name is: a tool that stops registering is
+      // invisible to `tools/list` and to every agent, and nothing else in this
+      // suite would notice.
+      "dopl_status",
       "list_workspaces",
       "current_workspace",
     ]) {

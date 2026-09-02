@@ -24,6 +24,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DoplClient } from "@dopl/client";
 import type { WorkspaceListItem, WorkspaceRole, WorkspaceSummary } from "@dopl/client";
 import { type CallerIdentity } from "./tools/identity.js";
+import { type WorkspaceSource } from "./workspace-directory.js";
 export { buildInstructions } from "./instructions.js";
 export declare function createServer(client: DoplClient, options?: {
     isAdmin?: boolean;
@@ -67,11 +68,18 @@ export declare function createServer(client: DoplClient, options?: {
      */
     lockedTo?: WorkspaceListItem | null;
     /**
-     * How `workspace` was chosen at boot — `header pin` (X-Workspace-Id) or
-     * `sole membership`. Null when there is no session default. Drives the
-     * footer source label.
+     * How `workspace` was chosen at boot — `header pin` (X-Workspace-Id), the
+     * agent's own `session pin` (`session-pin.ts`), or `sole membership`. Null
+     * when there is no session default. Drives the footer source label.
      */
-    workspaceSource?: "header pin" | "sole membership" | null;
+    workspaceSource?: WorkspaceSource | null;
+    /**
+     * 🔒 OPAQUE SESSION KEY for the workspace pin — see
+     * `factory.ts › BootOptions.sessionKey`. Threaded to the meta-tools, which
+     * are its only writers. Absent ⇒ `current_workspace(op="set")` REFUSES
+     * rather than reporting a pin nothing stored.
+     */
+    sessionKey?: string;
     /**
      * OAuth scopes for this session. Present and lacking `dopl.write` ⇒
      * write/admin ops gated.

@@ -35,8 +35,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SESSION_STALE_WINDOW_MS = exports.UNKNOWN_STATE = exports.SESSION_STATES = exports.NO_TITLE = exports.NO_NAME = void 0;
 exports.detailPhrase = detailPhrase;
-exports.coarseAge = coarseAge;
-exports.ageMs = ageMs;
 exports.sessionIsStale = sessionIsStale;
 exports.shortModelLabel = shortModelLabel;
 exports.rowIsQuietNotGone = rowIsQuietNotGone;
@@ -46,6 +44,16 @@ const channel_shared_1 = require("./channel-shared");
 // ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
 // reason to change). See `channel-session-handle.ts`'s header.
 const channel_session_handle_1 = require("./channel-session-handle");
+// ⚠ THE HEALTH CLAUSES — their own file since 2026-09-01, same cap and a
+// different reason to change. 🔒 **READ ITS HEADER BEFORE TOUCHING `stale`
+// ANYWHERE IN THIS FILE**: the desktop reports a field of that name which is a
+// DIFFERENT FACT from {@link sessionIsStale}'s, and the two are kept apart by
+// vocabulary alone (that module says WEDGED; this one says stale).
+const channel_session_health_1 = require("./channel-session-health");
+// ⚠ THE COARSE UNITS moved DOWN into their own module in the same change — the
+// health clauses need the same three and importing them back out of this file
+// would be an import cycle. See `channel-session-units.ts`'s header.
+const channel_session_units_1 = require("./channel-session-units");
 // ⚠ THE HELPERS BELOW ARE EXPORTED FOR ONE CONSUMER: `channel-session-table.ts`,
 // which was split out of this file at the 500-line cap. They are NOT a general
 // API — the point of the split is that a session's vocabulary, its staleness
@@ -124,29 +132,6 @@ function detailPhrase(detail) {
         return null;
     return DETAIL_PHRASES[detail] ?? null;
 }
-/** "6m" / "2h" / "3d" — coarse on purpose; nobody acts on seconds here. */
-function coarseAge(ms) {
-    if (ms < 60_000)
-        return `${Math.max(1, Math.round(ms / 1000))}s`;
-    if (ms < 3_600_000)
-        return `${Math.round(ms / 60_000)}m`;
-    if (ms < 86_400_000)
-        return `${Math.round(ms / 3_600_000)}h`;
-    return `${Math.round(ms / 86_400_000)}d`;
-}
-/**
- * How long ago `iso` was, or `null` when it is absent or unparseable.
- * ⚠ UNPARSEABLE IS `null`, NOT `0`. A stamp we cannot read is a stamp we know
- * nothing about, and rendering "0s ago" for one invents a report.
- */
-function ageMs(iso, now) {
-    if (!iso)
-        return null;
-    const t = Date.parse(iso);
-    if (Number.isNaN(t))
-        return null;
-    return Math.max(0, now - t);
-}
 /**
  * IS THIS ROW STILL SPEAKING FOR ITSELF?
  *
@@ -155,7 +140,7 @@ function ageMs(iso, now) {
  * it was written may not assert a present tense.
  */
 function sessionIsStale(session, now = Date.now(), windowMs = exports.SESSION_STALE_WINDOW_MS) {
-    const age = ageMs(session.updatedAt, now);
+    const age = (0, channel_session_units_1.ageMs)(session.updatedAt, now);
     if (age === null)
         return true;
     return age >= windowMs;
@@ -227,14 +212,6 @@ function contextClause(s) {
     }
     return `context ${Math.round((used / window) * 100)}% of ${window}`;
 }
-/** `41k` / `912` — compact, and never for a null. */
-function compactCount(n) {
-    if (n < 1000)
-        return String(n);
-    if (n < 1_000_000)
-        return `${Math.round(n / 100) / 10}k`;
-    return `${Math.round(n / 100_000) / 10}M`;
-}
 /**
  * THE OPERATOR-ONLY HALF, as clauses — empty array when the row carries none.
  *
@@ -266,13 +243,25 @@ function telemetryClauses(s, now) {
     if (ctx)
         out.push(ctx);
     if (s.tokensSpent !== null && s.tokensSpent !== undefined) {
-        out.push(`${compactCount(s.tokensSpent)} tokens`);
+        out.push(`${(0, channel_session_units_1.compactCount)(s.tokensSpent)} tokens`);
     }
+    // ⚠ TURNS AND THE SPEND DELTA RIDE HERE, IMMEDIATELY AFTER THE LIFETIME
+    // TOTAL, because a reader comparing "41k tokens" with "+8.7k since it last
+    // posted" is doing ONE piece of arithmetic — see
+    // `channel-session-health.ts › sessionProgressClauses`.
+    out.push(...(0, channel_session_health_1.sessionProgressClauses)(s));
     if (s.toolLabel)
         out.push(`tool ${(0, channel_shared_1.inlineOr)(s.toolLabel, "(unnamed tool)")}`);
-    const started = ageMs(s.startedAt, now);
+    const started = (0, channel_session_units_1.ageMs)(s.startedAt, now);
     if (started !== null)
-        out.push(`started ${coarseAge(started)} ago`);
+        out.push(`started ${(0, channel_session_units_1.coarseAge)(started)} ago`);
+    // ⚠ LAST, AND THE POSITION IS LOAD-BEARING. Two of these three are things an
+    // orchestrator must ACT on (calls being denied, a session its own machine
+    // calls wedged), and the end of a `·`-joined line is the position a partial
+    // scan still reaches. ⚠ The `stale` rendered in here is the MACHINE's wedged
+    // flag and NOT {@link sessionIsStale}'s row-freshness fact — that module says
+    // WEDGED and this one says stale, deliberately, and neither word may migrate.
+    out.push(...(0, channel_session_health_1.sessionHealthClauses)(s, now));
     return out;
 }
 /**
@@ -317,13 +306,13 @@ function formatSessionLine(s, opts = {}) {
     // told about every idle-but-alive agent within ~2 minutes. It still stops short
     // of a fresh observation ("quiet", not "as of now"), because a push that FAILED
     // also leaves a live machine looking quiet.
-    const age = ageMs(s.updatedAt, now);
+    const age = (0, channel_session_units_1.ageMs)(s.updatedAt, now);
     const stale = sessionIsStale(s, now);
     const quiet = rowIsQuietNotGone(age, stale, opts.operatorOnline);
     const head = quiet
-        ? `${state} · quiet ${coarseAge(age)} — your desktop is online, so this is UNCHANGED, not unknown`
+        ? `${state} · quiet ${(0, channel_session_units_1.coarseAge)(age)} — your desktop is online, so this is UNCHANGED, not unknown`
         : stale
-            ? `last reported ${state} · stale${age === null ? "" : `, ${coarseAge(age)} ago`} — its desktop may be offline`
+            ? `last reported ${state} · stale${age === null ? "" : `, ${(0, channel_session_units_1.coarseAge)(age)} ago`} — its desktop may be offline`
             : state;
     // ⚠ NOT neutralized, and it does not need to be: this is OUR OWN copy, chosen
     // from a closed map by a key the server already narrowed. Nothing the desktop

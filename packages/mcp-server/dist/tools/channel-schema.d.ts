@@ -26,8 +26,8 @@
 import { z } from "zod";
 export declare const CHANNEL_INPUT_SHAPE: {
     op: z.ZodEnum<{
-        list: "list";
         read: "read";
+        list: "list";
         update: "update";
         members: "members";
         open: "open";
@@ -41,6 +41,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         launch_agent: "launch_agent";
         end_agent: "end_agent";
         rename_agent: "rename_agent";
+        set_agent_mode: "set_agent_mode";
         help: "help";
         await: "await";
         list_threads: "list_threads";
@@ -85,6 +86,19 @@ export declare const CHANNEL_INPUT_SHAPE: {
     goal: z.ZodOptional<z.ZodString>;
     model: z.ZodOptional<z.ZodString>;
     template: z.ZodOptional<z.ZodString>;
+    tools: z.ZodOptional<z.ZodEnum<{
+        manual: "manual";
+        accept_edits: "accept_edits";
+        auto: "auto";
+        bypass: "bypass";
+    }>>;
+    messages: z.ZodOptional<z.ZodEnum<{
+        ask: "ask";
+        auto_inbound: "auto_inbound";
+        auto_outbound: "auto_outbound";
+        auto_both: "auto_both";
+    }>>;
+    chain: z.ZodOptional<z.ZodBoolean>;
     wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     info_card: z.ZodOptional<z.ZodObject<{
         hidden: z.ZodOptional<z.ZodArray<z.ZodString>>;

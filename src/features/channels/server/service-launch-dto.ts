@@ -85,7 +85,12 @@ export function toDirective(
     // `switch` on this value is a directive nothing dispatches. §13's rule: an
     // older peer is supported, and the safe reading of "no kind stated" is the
     // one every pre-2026-09-01 row means.
-    kind: (row.kind === "end" || row.kind === "rename"
+    // ⚠ `set_agent_mode` JOINED THE LIST ON 2026-09-01 (T24's sibling). Omitting
+    // it here would coerce a live re-posture row to `launch` — the fallback is
+    // fail-SAFE for an UNKNOWN kind and is a silent mis-dispatch for a known one.
+    kind: (row.kind === "end" ||
+    row.kind === "rename" ||
+    row.kind === "set_agent_mode"
       ? row.kind
       : "launch") as LaunchDirective["kind"],
     // ⚠ ON THE DTO ON PURPOSE, AND IT DISCLOSES NOTHING (F-284, 2026-08-23).
@@ -117,6 +122,40 @@ export function toDirective(
     // as the string "undefined" in a sentence naming the agent to be ended.
     targetAgentId: row.target_agent_id ?? null,
     targetName: row.target_name ?? null,
+    // ── ⚠ THE EIGHT POSTURE COLUMNS (2026-09-01, T24 + `set_agent_mode`) ──────
+    //
+    // ⚠ **THEY MUST BE ON THE DTO OR THE DESKTOP NEVER SEES THEM.** The CLAIM's
+    // answer IS this mapper's output, and `main/launch-directive-wire.js ›
+    // directiveFrom` reads the camelCase spellings (`startToolMode`,
+    // `targetToolMode`, `chain`) precisely because a claimed row arrives as this
+    // DTO rather than as a raw realtime frame. Mapping only some of them would
+    // ship a lane whose request half silently does nothing.
+    //
+    // ⚠ `?? null` RATHER THAN A BARE READ, on every one, for the stale-cache
+    // reason the `kind` note above states: a payload cached against an older
+    // PostgREST schema arrives without the field, and `undefined` on a posture
+    // renders as the string "undefined" inside a sentence naming what an agent
+    // was allowed to do.
+    startToolMode: (row.start_tool_mode ??
+      null) as LaunchDirective["startToolMode"],
+    startMessageMode: (row.start_message_mode ??
+      null) as LaunchDirective["startMessageMode"],
+    chain: row.chain ?? null,
+    targetToolMode: (row.target_tool_mode ??
+      null) as LaunchDirective["targetToolMode"],
+    targetMessageMode: (row.target_message_mode ??
+      null) as LaunchDirective["targetMessageMode"],
+    // ⚠ **THE ECHO. `null` MEANS "NOT REPORTED", NOT "UNCLAMPED", AND NEVER THE
+    // REQUESTED VALUE.** No writer exists yet, so this is `null` on every live
+    // row. ⚠ IT WOULD BE EASY AND WRONG TO DEFAULT THESE TO THE `start_*` /
+    // `target_*` PAIR — the row would then assert that the machine applied
+    // exactly what was asked, which is the one claim this lane cannot make about
+    // a value it clamps. `channel-ops-launch.ts › postureLine` renders the null.
+    appliedToolMode: (row.applied_tool_mode ??
+      null) as LaunchDirective["appliedToolMode"],
+    appliedMessageMode: (row.applied_message_mode ??
+      null) as LaunchDirective["appliedMessageMode"],
+    appliedChain: row.applied_chain ?? null,
     status: expired ? "expired" : (row.status as LaunchDirective["status"]),
     refusalReason: row.refusal_reason as LaunchRefusalReason | null,
     agentId: row.agent_id,

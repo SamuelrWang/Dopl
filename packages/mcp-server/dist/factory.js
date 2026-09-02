@@ -11,6 +11,7 @@ exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = 
 exports.bootServer = bootServer;
 const client_1 = require("@dopl/client");
 const server_js_1 = require("./server.js");
+const session_pin_js_1 = require("./session-pin.js");
 const identity_js_1 = require("./tools/identity.js");
 var server_js_2 = require("./server.js");
 Object.defineProperty(exports, "createServer", { enumerable: true, get: function () { return server_js_2.createServer; } });
@@ -73,6 +74,23 @@ async function bootServer(client, opts = {}) {
             diag(`[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${directoryLoadFailed ? " (directory load had failed)" : ""}; ignoring it and resolving from memberships`);
         }
     }
+    // 🔒 THE AGENT'S OWN PIN, BELOW THE TRANSPORT'S AND ABOVE THE SOLE
+    // MEMBERSHIP. Below `header pin` because that one is explicit addressing on
+    // THIS request and a stored default must never override the argument in front
+    // of it; above `sole membership` because a session with exactly one standard
+    // workspace and a pin naming its home CONTAINER meant the container.
+    // ⚠ IT RESOLVES AGAINST THE UNFILTERED DIRECTORY, exactly as the header pin
+    // does — a `kind='link'` container is a legal EXPLICIT target (§4A) and a pin
+    // is explicit. What it can never do is widen: a pinned id that is not an
+    // active membership is dropped and the resolution continues below.
+    if (!active) {
+        const pinned = (0, session_pin_js_1.readSessionPin)(opts.sessionKey);
+        if (pinned) {
+            active = directory.find((w) => w.id === pinned) ?? null;
+            if (active)
+                source = "session pin";
+        }
+    }
     const listable = directory.filter(client_1.isStandardWorkspace);
     if (!active && listable.length === 1) {
         active = listable[0];
@@ -129,6 +147,7 @@ async function bootServer(client, opts = {}) {
         workspace: active,
         role: active?.role ?? null,
         workspaceSource: source,
+        sessionKey: opts.sessionKey,
         scopes: opts.scopes,
     });
     const activeWorkspace = active

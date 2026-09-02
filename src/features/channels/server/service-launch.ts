@@ -12,7 +12,12 @@ import {
   type TemplateRefMatch,
 } from "@/features/agent-templates/server/service";
 import { LAUNCH_DIRECTIVE_TTL_MS, PRESENCE_ONLINE_WINDOW_MS } from "../constants";
-import type { LaunchDirective, LaunchRefusalReason } from "../types";
+import type {
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "../types";
 import {
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
@@ -104,6 +109,24 @@ export type CreateLaunchInput = {
    * spelling on this path. See {@link resolveTemplateForDirective}.
    */
   template?: string;
+  /**
+   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
+   * may launch workers (2026-09-01, T24).
+   *
+   * ⚠ **ASKS. NEVER WIDENS — AND THIS SERVICE DOES NOT AND CANNOT CHECK THAT.**
+   * The ceiling is the operator's own stored channel posture, an
+   * `electron-store` record no server sees; `main/launch-posture.js ›
+   * resolveLaunch` CLAMPS the two axes to it and REFUSES a chain the channel
+   * forbids. All this path does is carry the request.
+   * ⚠ **THE TICKET'S "unless the caller is the operator" CARVE-OUT WAS REFUSED,
+   * and the reason is measurable here: every caller on this lane IS the
+   * operator's own account** (INVARIANTS §11), so the exception is not narrow,
+   * it is the whole set. Do not add one.
+   * ⚠ OMITTING ALL THREE IS THE PRE-T24 BEHAVIOUR BYTE FOR BYTE.
+   */
+  tools?: LaunchToolMode;
+  messages?: LaunchMessageMode;
+  chain?: boolean;
 };
 
 /**
@@ -264,6 +287,22 @@ export async function createLaunchDirective(
     // asked for and will not notice is missing (E-4).
     template_id: template?.id ?? null,
     template_name: template?.name ?? null,
+    // ⚠ **THE REQUESTED POSTURE, CARRIED VERBATIM AND VALIDATED NOWHERE ELSE
+    // HERE.** The route's zod holds each axis to its closed enum and the column
+    // CHECK says the same at rest; this path adds no opinion, because the only
+    // opinion that matters is the OPERATOR'S CEILING and it lives on their
+    // machine. ⚠ `?? null` maps "not asked" onto the column's own spelling for it,
+    // which the desktop then resolves to that ceiling — the pre-T24 behaviour.
+    // ⚠ `chain` USES `?? null` RATHER THAN `|| null` SO THE ROW RECORDS WHAT THE
+    // CALLER ACTUALLY SENT. `||` would rewrite a `false` into "did not ask" here,
+    // in the one place that is supposed to be a faithful record of the request.
+    // ⚠ **THAT IS NOT A CLAIM THAT `false` DOES ANYTHING**: the desktop's narrower
+    // reads only `true`, so a stored `false` resolves there exactly as `null` does
+    // (see `types-launch.ts › LaunchDirective.chain`). The distinction is kept at
+    // rest and promised to nobody.
+    start_tool_mode: input.tools ?? null,
+    start_message_mode: input.messages ?? null,
+    chain: input.chain ?? null,
     expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
   });
   return { offline: false, directive: toDirective(row, now) };

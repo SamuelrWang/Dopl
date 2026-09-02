@@ -34,6 +34,25 @@ export interface McpAuthContext {
   /** WHICH credential answered, for the agent's benefit. ⚠ NOT an authorization
    *  input — nothing here may gate anything. */
   credential_info: McpCredential;
+  /**
+   * 🔒 THE OPAQUE KEY ONE MCP CONNECTION IS IDENTIFIED BY, and its ONLY consumer
+   * is the session workspace PIN (`@dopl/mcp-server › session-pin.ts`, T41).
+   *
+   * ⚠ **IT IS A MAP KEY AND NOTHING ELSE — never rendered, never logged, never
+   * compared to anything but itself, and it GATES NOTHING.** A pin only ever
+   * picks among memberships the boot directory already proved, so the worst a
+   * wrong key can do is lose a default and fall back to the pre-existing
+   * `WORKSPACE_REQUIRED` refusal.
+   *
+   * ⚠ **THE TOKEN ROW ID IS THE RIGHT GRANULARITY BECAUSE THE TRANSPORT IS
+   * STATELESS.** `/api/mcp` runs `sessionIdGenerator: undefined` and `bootServer`
+   * boots per HTTP REQUEST, so there is no protocol session id to key on; one
+   * OAuth credential is one client install, which is what an operator means by
+   * "this connection". It is already the rate-limit subject
+   * (`mcp:<tokenId>`), so it is not a new identifier — it is the one this
+   * boundary already treats as the caller.
+   */
+  tokenId: string;
 }
 
 export type McpAuthResult =
@@ -80,6 +99,7 @@ export async function authenticateMcpRequest(
           // authorization input with no reader.
           scopes: tok.scopes,
           credential_info: tok.credential,
+          tokenId: tok.tokenId,
         },
       };
     }

@@ -367,11 +367,19 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
   }
 
   /**
-   * ⚠ THE EIGHT, AS A LIST, AND IT MUST STAY PARALLEL TO
+   * ⚠ THE FIFTEEN, AS A LIST, AND IT MUST STAY PARALLEL TO
    * `collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS`. A column classified PRIVATE
    * in one place and granted in the other is a fence with a hole and a green
    * suite — which is exactly the failure the DTO's two parallel arrays exist to
    * prevent on the application side.
+   *
+   * ⚠ **THE SEVEN HEALTH COLUMNS (2026-09-01, `20260909120000`) ARE HERE FOR A
+   * REASON THIS BLOCK HAS NOT NEEDED BEFORE: THEIR MIGRATION ISSUES NO GRANT AT
+   * ALL.** A column added by `ALTER TABLE` inherits nothing from an existing
+   * column-privilege list, so all seven are service_role-only from birth — which
+   * makes their narrowing an ABSENCE, and an absence is what silently stops being
+   * true. The scan below is the standing witness: it fails the day ANY migration,
+   * now or later, names one of them in a `GRANT SELECT (…)`.
    */
   const OPERATOR_ONLY = [
     "tool_label",
@@ -382,6 +390,13 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
     "started_at",
     "last_activity_at",
     "template_name",
+    "turns",
+    "tokens_delta",
+    "stale",
+    "denied_calls",
+    "last_denied_tool",
+    "last_wake_seq",
+    "last_wake_at",
   ];
 
   it("the table-wide SELECT grant is revoked from anon and authenticated", () => {
@@ -463,6 +478,22 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
     expect(file!.sql).toMatch(/template_name\s*=\s*btrim\(template_name\)/i);
     expect(file!.sql).toMatch(/template_name\s+!~\s+'\[\[:cntrl:\]\]'/i);
     // The assertion block, so a bad landing aborts rather than looking fine.
+    expect(file!.sql).toMatch(/RAISE\s+EXCEPTION/i);
+  });
+
+  it("the HEALTH seven are undefaulted, and their migration ASSERTS its own absence", () => {
+    const file = FILES.find((f) => f.name.startsWith("20260909120000"));
+    expect(file, "20260909120000_channel_sessions_health.sql is missing").toBeTruthy();
+    // ⚠ NULL IS UNKNOWN. A `DEFAULT 0` on `denied_calls` would make every row
+    // from a desktop that counts nothing claim nothing was refused to it.
+    for (const c of ["turns", "tokens_delta", "stale", "denied_calls", "last_wake_seq"]) {
+      expect(file!.sql, `${c} must be nullable`).not.toMatch(
+        new RegExp(`${c}\\s+(INTEGER|BIGINT|BOOLEAN|TEXT|TIMESTAMPTZ)\\s+(NOT NULL|DEFAULT)`, "i")
+      );
+    }
+    // ⚠ ITS NARROWING IS AN ABSENCE — it issues no GRANT — so the migration has
+    // to assert the absence rather than leave it to this scan alone.
+    expect(file!.sql).toMatch(/has_column_privilege\('authenticated'/);
     expect(file!.sql).toMatch(/RAISE\s+EXCEPTION/i);
   });
 });

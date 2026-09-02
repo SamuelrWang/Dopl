@@ -12,6 +12,8 @@ import "server-only";
  *   - `service-paths.ts`    — path-addressed reads + writes
  *   - `service-storage.ts`  — per-KB storage cap (growth gate + limit)
  *   - `service-stars.ts`    — PER-USER base stars, scoped to ctx.userId
+ *   - `service-pins.ts`     — WORKSPACE-WIDE pins (the launch reading list)
+ *   - `service-startup-context.ts` — the capped payload a session starts with
  *   - `service-seed.ts`     — workspace fixture seeding
  *
  * ⚠ DELETES ARE PERMANENT. No soft-delete, trash, restore or purge. The
@@ -80,5 +82,21 @@ export {
   starBase,
   unstarBase,
 } from "./service-stars";
+
+export {
+  listPinnedBaseIds,
+  pinBase,
+  pinEntry,
+} from "./service-pins";
+
+export {
+  getStartupContext,
+  STARTUP_CONTEXT_CHAR_CAP,
+} from "./service-startup-context";
+export type {
+  StartupContext,
+  StartupContextItem,
+  StartupContextPointer,
+} from "./service-startup-context";
 
 export { seedWorkspace } from "./service-seed";

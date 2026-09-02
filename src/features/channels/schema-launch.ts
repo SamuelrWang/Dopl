@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import type { LaunchRefusalReason } from "./types";
+import type {
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "./types";
 
 /**
  * LAUNCH-OVER-MCP's route schemas — the CREATE (an operator's agent asking) and
@@ -13,6 +17,45 @@ import type { LaunchRefusalReason } from "./types";
  * from the authenticated context in `server/service-launch.ts`; a field here
  * would be a way to name somebody else's computer.
  */
+
+/**
+ * THE TWO PERMISSION AXES, **DECLARED ONCE IN THIS FILE AND EXPORTED** —
+ * ORDERED NARROWEST FIRST (2026-09-01, T24).
+ *
+ * ⚠ **THE ORDER IS THE CONTRACT, AND NO COMPILER CHECKS IT.** `closedEnum` proves
+ * these arrays are the same SET as {@link LaunchToolMode} / {@link
+ * LaunchMessageMode}; it says nothing about the SEQUENCE. The clamp on the other
+ * side of the wire is an INDEX COMPARISON over the desktop's own copies
+ * (`dopl-desktop-app/main/launch-posture.js › narrowTo`, over
+ * `main/launch-directive-wire.js › TOOL_MODES` / `MESSAGE_MODES`), so re-ordering
+ * either array silently INVERTS the bound with every test still green.
+ *
+ * ⚠ **THREE STATEMENTS OF EACH SET, AND ONLY ONE PAIR IS COMPILER-CHECKED** —
+ * exactly the caveat {@link LaunchRefusalReasonSchema} carries. Here and
+ * `types-launch.ts` are held together by `closedEnum`; the third is
+ * `20260910120000_channel_launch_directives_posture.sql`'s value CHECKs, which no
+ * TypeScript can reach. A fifth mode is a schema change in all three, in one
+ * wave, or a request carrying it passes zod, passes the route and is refused AT
+ * REST.
+ *
+ * ⚠ EXPORTED because the MCP surface publishes the same two enums to its callers
+ * and a second literal there is the drift this declaration exists to prevent.
+ */
+export const LAUNCH_TOOL_MODES = [
+  "manual",
+  "accept_edits",
+  "auto",
+  "bypass",
+] as const;
+export const LAUNCH_MESSAGE_MODES = [
+  "ask",
+  "auto_inbound",
+  "auto_outbound",
+  "auto_both",
+] as const;
+
+const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
+const MessageModeSchema = closedEnum<LaunchMessageMode>()(LAUNCH_MESSAGE_MODES);
 
 export const LaunchCreateSchema = z.object({
   /** Channel slug or id. ⚠ Not `.uuid()` — a slug is a legal ref everywhere else
@@ -55,6 +98,45 @@ export const LaunchCreateSchema = z.object({
    * would make an orchestrator carry ids it has no way to look up over this tool.
    */
   template: safeLabel("Template", 120).optional(),
+  /**
+   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON (T24).
+   *
+   * ⚠ **ASKS. NEVER WIDENS, AND OMITTING BOTH IS THE PRE-T24 BEHAVIOUR EXACTLY.**
+   * The operator's machine CLAMPS each axis to that operator's own stored channel
+   * posture (`main/launch-posture.js › resolvePosture`) and an absent axis
+   * resolves to the ceiling itself. Nothing on this path enforces the clamp and
+   * nothing can — the ceiling is an `electron-store` record no server sees — so
+   * these two are a request, and the result copy has to say so.
+   * ⚠ A `z.enum` rather than a label: the set is CLOSED on the wire, the column
+   * CHECK says the same at rest, and a value outside it must be a 400 that NAMES
+   * the field rather than a constraint violation surfacing as an opaque 500.
+   */
+  tools: ToolModeSchema.optional(),
+  messages: MessageModeSchema.optional(),
+  /**
+   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS?
+   *
+   * ⚠ **OPTIONAL, AND OMITTING IT IS NOT THE SAME AS `false`.** Omitted means "I
+   * did not ask", which inherits the channel's own setting. Collapsing that into
+   * a request would turn every ordinary launch into one — and a request the
+   * channel denies is REFUSED, not clamped (`launch-posture.js › resolveChain`),
+   * so the collapse would start refusing launches that asked for nothing.
+   *
+   * ⚠ **MEASURED MISMATCH (2026-09-01): `false` IS STORABLE HERE AND IS NOT
+   * DISTINGUISHABLE ON THE DESKTOP.** `main/launch-directive-wire.js ›
+   * directiveFrom` narrows this field as `r.chain === true || r.chain === 'true'
+   * ? true : null`, so a stored `false` arrives as `null` — "did not ask" — and
+   * the session inherits the channel setting, which may be ON. **So `false` is
+   * NOT a way to turn chaining off**, and no copy on this lane may say it is;
+   * `channel-schema.ts › chain` states that to callers.
+   * ⚠ **THE COLUMN STAYS A NULLABLE BOOLEAN RATHER THAN A `z.literal(true)`, AND
+   * THAT IS THE CHEAP DIRECTION.** Narrowing here would make the day the desktop
+   * learns to honour `false` a schema change in three trees; admitting it costs
+   * one row value that currently resolves the same way `null` does. What is NOT
+   * acceptable is prose that promises the behaviour, which is why this note
+   * exists rather than a narrower type.
+   */
+  chain: z.boolean().optional(),
 });
 export type LaunchCreateInput = z.infer<typeof LaunchCreateSchema>;
 
@@ -122,8 +204,9 @@ const AgentInstanceIdSchema = z
   .regex(/^[a-z][a-z0-9]{7}$/, "Invalid agent id");
 
 /**
- * FILE AN `end` OR `rename` DIRECTIVE — the AGENT-MANAGEMENT half of the lane
- * (2026-09-01, Samuel: "dopl mcp being able to end agents").
+ * FILE AN `end`, `rename` OR `set_agent_mode` DIRECTIVE — the AGENT-MANAGEMENT
+ * half of the lane (2026-09-01, Samuel: "dopl mcp being able to end agents";
+ * the third arm is the agent-efficiency wave's re-posture verb).
  *
  * ⚠ **A DISCRIMINATED UNION ON `kind`, NOT ONE OBJECT WITH AN OPTIONAL `name`.**
  * A rename REQUIRES a name and an end must not carry one — the column CHECK says
@@ -173,6 +256,46 @@ export const AgentDirectiveCreateSchema = z.discriminatedUnion("kind", [
         "Control, zero-width and bidi characters are refused, not stripped",
       ),
   }),
+  /**
+   * **RE-POSTURE A RUNNING AGENT** (2026-09-01, the agent-efficiency wave).
+   *
+   * ⚠ **BOTH AXES ARE OPTIONAL AND BOTH ABSENT IS REFUSED HERE, AT THE SCHEMA.**
+   * A directive that asks for nothing is a request whose only honest answer is a
+   * refusal for something that was never expressible — this file's own docblock
+   * argues that against the rename arm, the column CHECK says it at rest, and
+   * `main/directive-agent-ops.js › setAgentMode` answers `no-bridge` for the case
+   * a machine can still reach (a mode IT does not recognise, narrowed away). ⚠ All
+   * three are wanted: this one is the only place that costs the caller nothing —
+   * a 400 now instead of a filed row, a claim and a two-minute round trip.
+   * ⚠ THE REFINE HANGS ON THE ARM, NOT THE UNION, so `end` and `rename` are not
+   * dragged through a predicate that says nothing about them and the message the
+   * caller gets names this verb's own rule.
+   *
+   * ⚠ **NO `model` FIELD, AND THERE MUST NEVER BE ONE.** The desktop's narrower
+   * has no `target_model` column to read (`main/launch-directive-wire.js ›
+   * directiveFrom`), so a model here would be accepted, stored, and silently
+   * dropped on the way in — the caller told its request landed while nothing
+   * carried it. A running session's model is not re-postureable from this lane.
+   */
+  z
+    .object({
+      kind: z.literal("set_agent_mode"),
+      channel: z.string().min(1).max(200),
+      agentId: AgentInstanceIdSchema,
+      /** ⚠ A REQUEST. The machine CLAMPS it to the operator's own stored channel
+       *  posture and never widens (`main/launch-posture.js › narrowTo`), so no
+       *  sentence built from this value may say "set". */
+      tools: ToolModeSchema.optional(),
+      messages: MessageModeSchema.optional(),
+    })
+    .refine(
+      (v) => v.tools !== undefined || v.messages !== undefined,
+      {
+        error:
+          'op="set_agent_mode" must ask for at least one axis: pass tools, messages, or both. A directive that names neither could only ever be refused.',
+        path: ["tools"],
+      },
+    ),
 ]);
 export type AgentDirectiveCreateInput = z.infer<
   typeof AgentDirectiveCreateSchema

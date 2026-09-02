@@ -7,7 +7,7 @@
 
 import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
-import { ok, err, isConflict, isAlreadyExists, type ToolResponse } from "./respond";
+import { ok, err, isConflict, isAlreadyExists, isNotFound, type ToolResponse } from "./respond";
 import {
   agentWriteDenied,
   isErr,
@@ -206,6 +206,62 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
   return ok(
     `Published knowledge base ${inlineOr(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`,
   );
+}
+
+/**
+ * PINNED STARTUP CONTEXT (T81) — put a base (or one entry of it) into what every
+ * agent session launched in this workspace is handed at startup, or take it out.
+ *
+ * ⚠ ONE HANDLER, TWO OPS, AND THE BOOLEAN IS THE ONLY DIFFERENCE. `pin` and
+ * `unpin` are separate ops rather than one op with a flag for the reason the
+ * REST routes are two verbs: a request that states the END STATE is safe to
+ * retry after an ambiguous failure, where a toggle silently un-does a write that
+ * landed. On workspace-wide state that un-do changes what every session started
+ * afterwards begins with.
+ *
+ * ⚠ `path` IS WHAT PICKS THE TARGET, and the two are different objects: with a
+ * path this pins ONE ENTRY, without it the WHOLE BASE. The result says which,
+ * because an agent that believes it pinned a base when it pinned one document
+ * will not pin the rest.
+ *
+ * ⚠ THE ENTRY LOOKUP IS A READ THROUGH THE ORDINARY PATH RESOLVER, so an
+ * unreadable base or a path that names a FOLDER refuses before anything is
+ * written — the server's own gates (`service-pins.ts › pinEntry` chases the
+ * entry up to its base) are what actually refuse; this only makes the refusal
+ * legible.
+ */
+export async function opPin(
+  client: DoplClient,
+  ref: string,
+  path: string | undefined,
+  pinned: boolean,
+): Promise<ToolResponse> {
+  const base = await resolveBaseOr(client, ref);
+  if (isErr(base)) return base;
+  const verb = pinned ? "Pinned" : "Unpinned";
+  try {
+    if (path === undefined || path === "") {
+      await client.setKbBasePinned(base.id, pinned);
+      return ok(
+        `${verb} knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${pinned ? "Every entry in it is now included in the startup context of agent sessions launched in this workspace." : "Its entries are no longer included in the startup context of new agent sessions."}`,
+      );
+    }
+    const entry = await client.readKbFileByPath(base.id, path);
+    await client.setKbEntryPinned(entry.id, pinned);
+    return ok(
+      `${verb} ${inlineOr(path, NO_PATH)} in ${inlineOr(base.name, NO_NAME)} (entry id: \`${entry.id}\`). ${pinned ? "This ONE entry is now included in the startup context of agent sessions launched in this workspace — the rest of the base is not." : "It is no longer included on its own; if its BASE is pinned it still arrives with the base."}`,
+    );
+  } catch (e) {
+    // Read-only-to-agents base — clean message, not a raw dump.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
+    if (isNotFound(e)) {
+      return err(
+        `No entry at ${inlineOr(path, NO_PATH)} in ${inlineOr(base.name, NO_NAME)}, so nothing was ${pinned ? "pinned" : "unpinned"}. Paths must resolve to an ENTRY, not a folder — check dopl_kb(op="get_tree", base) for the exact path, or omit \`path\` to ${pinned ? "pin" : "unpin"} the whole base.`,
+      );
+    }
+    throw e;
+  }
 }
 
 export async function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse> {

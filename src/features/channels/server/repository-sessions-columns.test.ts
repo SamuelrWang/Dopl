@@ -37,6 +37,16 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   last_activity_at: true,
   template_name: true,
   display_name: true,
+  // ⚠ THE HEALTH SEVEN (2026-09-01). This declaration is the reason adding them
+  // to `SessionStateUpsert` and not to `SESSION_DIFF_COLUMNS` was a RED TYPECHECK
+  // rather than a silent freeze — the guarantee working, exactly as documented.
+  turns: true,
+  tokens_delta: true,
+  stale: true,
+  denied_calls: true,
+  last_denied_tool: true,
+  last_wake_seq: true,
+  last_wake_at: true,
 };
 
 const upsertKeys = () => Object.keys(UPSERT_KEYS);
@@ -64,15 +74,19 @@ const upsertKeys = () => Object.keys(UPSERT_KEYS);
  * describing the guarantee it wanted rather than one anybody had built. Written
  * now, so the sentence is true.
  *
- * ⚠ **BOTH ARE READ OUT OF THE SOURCE TEXT**, not exported for the test. The
- * idiom is `schema-sql.test.ts`'s: exporting a private constant to test it makes
- * the constant part of a public surface, and neither of these is one. If a
- * refactor moves either declaration, this fails LOUDLY on the extraction rather
- * than passing over nothing.
+ * ⚠ **BOTH ARE READ OUT OF THE SOURCE TEXT**, not imported. The idiom is
+ * `schema-sql.test.ts`'s: a pin that reads TEXT fails LOUDLY when a declaration
+ * is moved or renamed, where an import would silently follow it. ⚠ **AND THAT IS
+ * EXACTLY WHAT HAPPENED ON 2026-09-01**: `repository-sessions.ts` hit the
+ * 500-line cap when the seven HEALTH columns joined both lists, and the two
+ * declarations moved into `repository-sessions-columns.ts` — the module this
+ * file was already named after. They are `export`ed there for the REPOSITORY,
+ * which now imports them; this suite still reads the text and never the symbol,
+ * so the "exporting a constant makes it public surface" rule is unbroken.
  */
 describe("the reconcile's three column lists cannot drift", () => {
   const SOURCE = readFileSync(
-    new URL("./repository-sessions.ts", import.meta.url),
+    new URL("./repository-sessions-columns.ts", import.meta.url),
     "utf8"
   );
 
@@ -135,9 +149,20 @@ describe("the reconcile's three column lists cannot drift", () => {
   it("the extraction is real — it finds the columns rather than an empty set", () => {
     // ⚠ Without this, a regex that stopped matching would make all three cases
     // above vacuously true.
-    expect(selectedColumns().length).toBeGreaterThanOrEqual(15);
-    expect(comparedColumns().length).toBeGreaterThanOrEqual(14);
+    // ⚠ THE FLOORS MOVED WITH THE SEVEN (17 → 24 written columns, 23 compared
+    // once `session_key` is excluded). They are a floor and not an equality on
+    // purpose: this case exists to catch a regex that matched NOTHING, and an
+    // exact count would turn every legitimate column addition into a second red
+    // test saying the same thing as the three above.
+    expect(selectedColumns().length).toBeGreaterThanOrEqual(22);
+    expect(comparedColumns().length).toBeGreaterThanOrEqual(21);
     expect(selectedColumns()).toContain("template_name");
     expect(comparedColumns()).toContain("template_name");
+    // ⚠ One HEALTH column named explicitly, and it is `last_wake_at` rather than
+    // any of the seven at random: it is the one an orchestrator POLLS for a
+    // change, so it is the one whose silent freeze would be read as "my redirect
+    // never reached the machine".
+    expect(selectedColumns()).toContain("last_wake_at");
+    expect(comparedColumns()).toContain("last_wake_at");
   });
 });

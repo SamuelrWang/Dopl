@@ -69,14 +69,6 @@ export declare const UNKNOWN_STATE = "(unrecognized state)";
  */
 export declare const SESSION_STALE_WINDOW_MS = 90000;
 export declare function detailPhrase(detail: SessionDetailKey | null | undefined): string | null;
-/** "6m" / "2h" / "3d" — coarse on purpose; nobody acts on seconds here. */
-export declare function coarseAge(ms: number): string;
-/**
- * How long ago `iso` was, or `null` when it is absent or unparseable.
- * ⚠ UNPARSEABLE IS `null`, NOT `0`. A stamp we cannot read is a stamp we know
- * nothing about, and rendering "0s ago" for one invents a report.
- */
-export declare function ageMs(iso: string | null | undefined, now: number): number | null;
 /**
  * IS THIS ROW STILL SPEAKING FOR ITSELF?
  *

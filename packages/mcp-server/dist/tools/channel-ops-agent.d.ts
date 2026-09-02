@@ -31,8 +31,71 @@
  *     also where the caller got the id — so every terminal sentence points back
  *     at it.
  */
-import type { DoplClient } from "@dopl/client";
+import type { DoplClient, LaunchDirective, LaunchMessageMode, LaunchToolMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type FactValue } from "./channel-facts";
+/**
+ * THE THREE AGENT-MANAGEMENT KINDS AND WHAT EACH CARRIES — **one declaration,
+ * shared with `channel-ops-agent-mode.ts`.**
+ *
+ * ⚠ IT MIRRORS `@dopl/client › AgentDirectiveCreateInput` rather than being it:
+ * this is the shape {@link fileAndHold} takes, and stating it once is what lets
+ * the third verb live in its own module without a second copy of the union
+ * drifting from this one.
+ * ⚠ **BOTH AXES ON THE `set_agent_mode` ARM ARE OPTIONAL HERE, DELIBERATELY.**
+ * "At least one of them" is a REGISTRAR check (`channel.ts`) and a route check; a
+ * type expressing it would be a union of three shapes for one verb, and the
+ * caller-facing message would become a parse error instead of a sentence.
+ */
+export type AgentDirectiveKind = "end" | "rename" | "set_agent_mode";
+export type AgentDirectiveInput = {
+    kind: "end";
+    channel: string;
+    agentId: string;
+} | {
+    kind: "rename";
+    channel: string;
+    agentId: string;
+    name: string;
+} | {
+    kind: "set_agent_mode";
+    channel: string;
+    agentId: string;
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
+};
+/** ⚠ TAKES THE **KIND**, NOT A DISPLAY WORD: the surface it names is a claim
+ *  about what a later read can prove, and keying that off prose is how a third
+ *  verb inherits the second one's answer. */
+export declare function pendingFacts(d: LaunchDirective, kind: AgentDirectiveKind): Record<string, FactValue>;
+/**
+ * FILE THE DIRECTIVE AND HOLD — the half `end_agent` and `rename_agent` share.
+ *
+ * ⚠ THE CREATE'S TWO NON-MACHINE FAILURES ARE SORTED ON THE **CODE**, NOT THE
+ * STATUS, the discipline `channel-ops-launch.ts` adopted when one call gained two
+ * ways to 404. Here a 403 is unambiguous, but the 404 is not: it may be the
+ * CHANNEL (unknown, or one the caller never joined) and nothing else, so it
+ * renders as a channel error rather than as anything about the agent.
+ */
+/**
+ * ⚠ EXPORTED FOR `channel-ops-agent-mode.ts` (2026-09-01), and for that ONE
+ * caller. It is the whole hold protocol — file the row, poll it, give up — and a
+ * second copy would be a second answer to "how long do we wait", which is the
+ * drift the shared `WAIT_*` constants above exist to prevent. ⚠ What is shared
+ * is the PLUMBING; every sentence a caller reads is written in its own module,
+ * because the three verbs' consent stories differ.
+ */
+export declare function fileAndHold(client: DoplClient, ref: string, input: AgentDirectiveInput, waitMs: number | undefined): Promise<{
+    done: true;
+    response: ToolResponse;
+} | {
+    done: false;
+    directive: LaunchDirective;
+} | {
+    done: true;
+    offline: true;
+    response: ToolResponse;
+}>;
 /**
  * END ONE OF THE OPERATOR'S OWN RUNNING AGENTS.
  *

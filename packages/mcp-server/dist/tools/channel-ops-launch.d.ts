@@ -25,8 +25,34 @@
  * an `await`. That is why this op holds on the ROW rather than telling the agent
  * to arm a wait.
  */
-import type { DoplClient } from "@dopl/client";
+import type { DoplClient, LaunchDirective, LaunchMessageMode, LaunchToolMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type FactValue } from "./channel-facts";
+/**
+ * **THE RESOLVED POSTURE, AS FACTS — AND THE NULL CASE IS THE WHOLE POINT.**
+ *
+ * ⚠ `null` MEANS "NOT REPORTED". It does not mean "unclamped" and it is never
+ * the requested value echoed back. The desktop CLAMPS a requested posture to the
+ * operator's own stored ceiling without being obliged to say so, so an
+ * orchestrator told "you got what you asked for" on the strength of an empty
+ * column would size its next instruction for room the agent does not have —
+ * exactly the reading this function exists to refuse. ⚠ SO THE FALLBACK IS THE
+ * WORD `not reported`, NOT A GUESS: echoing `startToolMode` back would produce a
+ * value that is right whenever nothing was clamped and confidently wrong
+ * precisely when it mattered.
+ *
+ * ⚠ THE SHAPE IS FIXED — `posture=<tools>/<messages> chain=on|off` — because it
+ * is read by a model choosing its next action, and a line that changes shape
+ * between calls gets parsed by guesswork. ⚠ `-` FOR AN AXIS THAT WAS NOT
+ * REPORTED EVEN WHEN THE OTHER ONE WAS: partial is a real shape, and filling the
+ * gap from the REQUEST would put an unconfirmed value beside a confirmed one,
+ * indistinguishable.
+ *
+ * ⚠ **RENDERED AS TWO FACTS RATHER THAN A PARAGRAPH** (T10 ∩ T24). The reason a
+ * caller must not read silence as success is standing doctrine and lives in
+ * `channel-doctrine.ts`; what only THIS call can say is the two values.
+ */
+export declare function postureFacts(d: LaunchDirective): Record<string, FactValue>;
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
@@ -43,5 +69,14 @@ export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
     /** Template id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
     template?: string;
+    /** ⚠ **ASKED FOR, NEVER SET.** The operator's machine clamps each axis to
+     *  that operator's own stored ceiling; omitting both is the pre-T24
+     *  behaviour. Passed through untouched — this process cannot see the
+     *  ceiling and must not pretend to. */
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
+    /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
+     *  it is a separate field and not a third axis. Omitted is NOT `false`. */
+    chain?: boolean;
     waitMs?: number;
 }): Promise<ToolResponse>;

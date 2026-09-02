@@ -16,13 +16,15 @@
 import type { ChannelSessionState, ChannelSessionStateOwn } from "@dopl/client";
 import { inlineOr } from "./channel-shared";
 import { addressableHandle } from "./channel-session-handle";
+// ⚠ THE UNITS COME FROM THE LEAF, NOT THROUGH `channel-session-render.ts`. Both
+// files need them and the render module already imports them from here; routing
+// this one through it would make the leaf reachable two ways and invite a cycle.
+import { ageMs, coarseAge } from "./channel-session-units";
 import {
   NO_NAME,
   NO_TITLE,
   SESSION_STATES,
   UNKNOWN_STATE,
-  ageMs,
-  coarseAge,
   detailPhrase,
   rowIsQuietNotGone,
   sessionIsStale,

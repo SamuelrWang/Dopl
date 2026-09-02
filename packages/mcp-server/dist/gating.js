@@ -82,6 +82,20 @@ exports.WRITE_OPS = {
         "write_file",
         "move_file",
         "set_visibility",
+        // ⚠ `pin` and `unpin` WRITE, and UNPIN is the one easiest to wave through:
+        // both set a WORKSPACE-WIDE boolean deciding what every agent session
+        // launched here is handed at startup, so a read-only token must be refused
+        // both or a dopl.read session can silently empty its operator's launch
+        // context through a non-admin tool.
+        // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out
+        // of the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
+        "pin",
+        "unpin",
+        // ⚠ copy_base CREATES A BASE (plus its folders and entries) IN ANOTHER
+        // TENANCY, so it is the widest write on this tool and a read-only token
+        // must be refused it. ⚠ The refusal is the ONE that costs nothing: the
+        // gate runs before the target resolves and before any tree is read.
+        "copy_base",
     ]),
     dopl_skill: new Set([
         "create",
@@ -95,7 +109,10 @@ exports.WRITE_OPS = {
     // ⚠ BOTH verbs write, and update is the one easiest to miss: it can raise a
     // template to workspace visibility, which is the SHARE act itself (a template
     // has no grant table). A read-only token must be refused it.
-    dopl_agent: new Set(["create", "update"]),
+    // ⚠ copy CREATES A TEMPLATE IN ANOTHER TENANCY. It lands private, which keeps
+    // it out of the confirm class, and that is a statement about AUDIENCE and not
+    // about whether it writes.
+    dopl_agent: new Set(["create", "update", "copy"]),
     // ⚠ `dopl_home` REGISTERS ON THE META PATH AND IS STILL GATED HERE, because
     // `opRefusal` is called explicitly on BOTH registration paths — which is the
     // whole reason the gates were hoisted out of the domain wrapper. A read-only
@@ -147,6 +164,17 @@ exports.WRITE_OPS = {
         // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
         "end_agent",
         "rename_agent",
+        // ⚠ `set_agent_mode` WRITES, AND IT IS THE WIDEST OF THE THREE (2026-09-01).
+        // It files a directive row and asks a machine to RE-PERMISSION a running
+        // agent; a read-only token must be refused it, or a dopl.read session can
+        // widen its own agents through a non-admin tool.
+        // ⚠ IT IS ALSO THE ONE NON-LAUNCH VERB THE MACHINE'S OWN LAUNCH-CONSENT
+        // TOGGLE GATES, for the same reason it is classified here: more room can mean
+        // more compute spent on the operator's hardware, which a stop verb and a
+        // display label cannot cause.
+        // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
+        // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
+        "set_agent_mode",
         // ⚠ WRITES THE CHANNEL INFO CARD (Q12, 2026-08-28). It also READS when
         // `info_card` is omitted, and it is classified as a WRITE anyway: an op that
         // can write must be refused wholesale for a read-only token, or the read arm

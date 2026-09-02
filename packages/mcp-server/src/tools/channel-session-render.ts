@@ -41,6 +41,19 @@ import { inlineOr } from "./channel-shared";
 // ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
 // reason to change). See `channel-session-handle.ts`'s header.
 import { addressableHandle } from "./channel-session-handle";
+// ⚠ THE HEALTH CLAUSES — their own file since 2026-09-01, same cap and a
+// different reason to change. 🔒 **READ ITS HEADER BEFORE TOUCHING `stale`
+// ANYWHERE IN THIS FILE**: the desktop reports a field of that name which is a
+// DIFFERENT FACT from {@link sessionIsStale}'s, and the two are kept apart by
+// vocabulary alone (that module says WEDGED; this one says stale).
+import {
+  sessionHealthClauses,
+  sessionProgressClauses,
+} from "./channel-session-health";
+// ⚠ THE COARSE UNITS moved DOWN into their own module in the same change — the
+// health clauses need the same three and importing them back out of this file
+// would be an import cycle. See `channel-session-units.ts`'s header.
+import { ageMs, coarseAge, compactCount } from "./channel-session-units";
 
 // ⚠ THE HELPERS BELOW ARE EXPORTED FOR ONE CONSUMER: `channel-session-table.ts`,
 // which was split out of this file at the 500-line cap. They are NOT a general
@@ -124,26 +137,6 @@ const DETAIL_PHRASES: Record<SessionDetailKey, string> = {
 export function detailPhrase(detail: SessionDetailKey | null | undefined): string | null {
   if (!detail) return null;
   return DETAIL_PHRASES[detail] ?? null;
-}
-
-/** "6m" / "2h" / "3d" — coarse on purpose; nobody acts on seconds here. */
-export function coarseAge(ms: number): string {
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
-  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
-  return `${Math.round(ms / 86_400_000)}d`;
-}
-
-/**
- * How long ago `iso` was, or `null` when it is absent or unparseable.
- * ⚠ UNPARSEABLE IS `null`, NOT `0`. A stamp we cannot read is a stamp we know
- * nothing about, and rendering "0s ago" for one invents a report.
- */
-export function ageMs(iso: string | null | undefined, now: number): number | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  return Math.max(0, now - t);
 }
 
 /**
@@ -232,13 +225,6 @@ function contextClause(s: ChannelSessionStateOwn): string | null {
   return `context ${Math.round((used / window) * 100)}% of ${window}`;
 }
 
-/** `41k` / `912` — compact, and never for a null. */
-function compactCount(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return `${Math.round(n / 100) / 10}k`;
-  return `${Math.round(n / 100_000) / 10}M`;
-}
-
 /**
  * THE OPERATOR-ONLY HALF, as clauses — empty array when the row carries none.
  *
@@ -273,9 +259,21 @@ function telemetryClauses(
   if (s.tokensSpent !== null && s.tokensSpent !== undefined) {
     out.push(`${compactCount(s.tokensSpent)} tokens`);
   }
+  // ⚠ TURNS AND THE SPEND DELTA RIDE HERE, IMMEDIATELY AFTER THE LIFETIME
+  // TOTAL, because a reader comparing "41k tokens" with "+8.7k since it last
+  // posted" is doing ONE piece of arithmetic — see
+  // `channel-session-health.ts › sessionProgressClauses`.
+  out.push(...sessionProgressClauses(s));
   if (s.toolLabel) out.push(`tool ${inlineOr(s.toolLabel, "(unnamed tool)")}`);
   const started = ageMs(s.startedAt, now);
   if (started !== null) out.push(`started ${coarseAge(started)} ago`);
+  // ⚠ LAST, AND THE POSITION IS LOAD-BEARING. Two of these three are things an
+  // orchestrator must ACT on (calls being denied, a session its own machine
+  // calls wedged), and the end of a `·`-joined line is the position a partial
+  // scan still reaches. ⚠ The `stale` rendered in here is the MACHINE's wedged
+  // flag and NOT {@link sessionIsStale}'s row-freshness fact — that module says
+  // WEDGED and this one says stale, deliberately, and neither word may migrate.
+  out.push(...sessionHealthClauses(s, now));
   return out;
 }
 

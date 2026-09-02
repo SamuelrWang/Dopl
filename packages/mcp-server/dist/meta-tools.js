@@ -10,15 +10,27 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWorkspaceMetaTools = registerWorkspaceMetaTools;
+const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
 const identity_js_1 = require("./tools/identity.js");
 const narration_js_1 = require("./tools/narration.js");
+const respond_js_1 = require("./tools/respond.js");
 const instructions_js_1 = require("./instructions.js");
-// Two read-only tools: discover your workspaces, and see what a no-arg call
-// resolves to. ⚠ Targeting is PER-CALL only (`workspace=`, injected by
-// `registerTool`). There is no sticky `set_workspace` — the connection is
-// stateless, so a "switch" could not persist.
-function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspace, caller }) {
+const session_pin_js_1 = require("./session-pin.js");
+// Two read-only tools: discover your workspaces, and see (or SET) what a no-arg
+// call resolves to.
+//
+// ⚠ **`current_workspace` GAINED A STICKY DEFAULT ON 2026-09-01 (T41), AND THIS
+// COMMENT USED TO SAY IT COULD NOT EXIST.** It read: *"Targeting is PER-CALL only
+// … There is no sticky `set_workspace` — the connection is stateless, so a
+// 'switch' could not persist."* Statelessness is real — `/api/mcp` runs
+// `sessionIdGenerator: undefined` and `bootServer` boots per HTTP REQUEST — but
+// the conclusion did not follow: the PROCESS outlives the request, which is the
+// same seam `tools/confirm-token.ts` already stores its tokens in. The pin is
+// therefore best-effort and FAIL-CLOSED (a pin the next process never sees is
+// simply no pin, i.e. the old refusal), never durable state. See
+// `session-pin.ts` for the whole argument.
+function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspace, caller, sessionKey }) {
     /**
      * Caller identity as a standalone block, for the meta-tools whose answers can
      * be read without a footer. ⚠ Same record and wording as the footer and
@@ -26,6 +38,65 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
      */
     function callerBlock() {
         return [...(0, identity_js_1.sessionLines)(caller), (0, identity_js_1.callerStatusLine)(caller).trim(), ""];
+    }
+    /**
+     * 🔒 PIN A DEFAULT — FAIL CLOSED AT EVERY STEP.
+     *
+     * Three refusals, and none of them pins anything: no ref, a ref that resolves
+     * to no active membership (`resolveWorkspaceRef` is also where the CONTAINER
+     * LOCK answers, so a locked session can pin only its own container), and no
+     * session key to store it against.
+     *
+     * ⚠ **IT DOES NOT MOVE *THIS* CALL'S TARGET, AND THE RESULT SAYS SO.** The
+     * session default is resolved once at boot and never mutated (`server.ts`), so
+     * the pin governs the NEXT call. An agent told only "pinned" would read the
+     * footer under this very response — which still names the old target — as the
+     * pin having failed.
+     */
+    async function opSetPin(ref) {
+        const target = ref?.trim();
+        if (!target) {
+            return (0, respond_js_1.err)('op="set" needs `workspace`. Pass a slug or UUID from `list_workspaces`, or a home-channel container id from dopl_home(op="list_channels"). Nothing was pinned.');
+        }
+        let resolved;
+        try {
+            resolved = await directory.resolveWorkspaceRef(target);
+        }
+        catch (e) {
+            return (0, respond_js_1.err)(`Couldn't validate that workspace (${(0, narration_js_1.inlineOr)(e instanceof Error ? e.message : String(e), "`no detail reported`")}). Nothing was pinned — retry, or keep passing \`workspace=\` per call.`);
+        }
+        if (!resolved) {
+            // ⚠ Caller's own argument, but a raw backtick still escapes this span.
+            return (0, respond_js_1.err)(`Workspace not found: ${(0, narration_js_1.inlineOr)(target, "`(unreadable ref)`")}. Nothing was pinned. Call \`list_workspaces\` for the workspaces you can target, or dopl_home(op="list_channels") for your home channels.`);
+        }
+        if (!(0, session_pin_js_1.writeSessionPin)(sessionKey, resolved.id)) {
+            return (0, respond_js_1.err)(`This connection cannot hold a default — it did not arrive with anything identifying the session, so there is nowhere to store a pin. Nothing was pinned. Keep passing \`workspace=<slug_or_id>\` on each call.`);
+        }
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: [
+                        `Pinned ${(0, narration_js_1.inlineOr)(resolved.name, instructions_js_1.UNNAMED_WORKSPACE)} (slug: \`${resolved.slug}\` · id: \`${resolved.id}\`) as this connection's default workspace.`,
+                        `⚠ FROM YOUR NEXT CALL ON, not this one — this response's own \`_dopl_status\` footer still names the target that was resolved before the pin existed. A no-\`workspace=\` call now lands in the pinned workspace, and a per-call \`workspace=\` still wins over it.`,
+                        `⚠ IT IS BEST-EFFORT AND IT EXPIRES. The pin lives in the server process that answered this call, so a later call may be refused for want of a workspace anyway — if that happens, set it again rather than concluding the pin was wrong. \`current_workspace(op="clear")\` removes it.`,
+                    ].join("\n"),
+                },
+            ],
+        };
+    }
+    async function opClearPin() {
+        const had = (0, session_pin_js_1.clearSessionPin)(sessionKey);
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: had
+                        ? `Cleared this connection's pinned default workspace. From your next call on, a no-\`workspace=\` call resolves the way it did before the pin — which, if you belong to 2+ workspaces, means it is refused and asks you to name one.`
+                        : `There was no pinned default to clear on this connection, so nothing changed.`,
+                },
+            ],
+        };
     }
     registerMetaTool("list_workspaces", "List the WORKSPACES the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.\n\n⚠ HOME-CHANNEL CONTAINERS ARE NOT LISTED HERE, deliberately — so this is not every room you can act in, and an empty-looking account may still hold several. List those with `dopl_home(op=\"list_channels\")` and address one by passing its container id as `workspace=`. They are also not counted toward the \"2+ workspaces\" rule that decides whether `workspace=` is required: one workspace plus three home channels still auto-targets the workspace.", {}, async () => {
         const list = await directory.getWorkspaceList();
@@ -85,7 +156,20 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
             content: [{ type: "text", text: lines.join("\n") }],
         };
     });
-    registerMetaTool("current_workspace", "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one standard membership (or a request pin); when the caller belongs to 2+ standard workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').\n\n⚠ ONLY STANDARD WORKSPACES ARE COUNTED AND LISTED. Home-channel containers never auto-target and are not shown here or by `list_workspaces` — so \"you have one workspace, omit `workspace=`\" can be true while two home channels sit unreached beside it. Find them with `dopl_home(op=\"list_channels\")` and target one by passing its container id as `workspace=`.", {}, async () => {
+    registerMetaTool("current_workspace", "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one standard membership (or a session pin); when the caller belongs to 2+ standard workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').\n\n⚠ ONLY STANDARD WORKSPACES ARE COUNTED AND LISTED by the no-arg report. Home-channel containers never auto-target and are not shown here or by `list_workspaces` — so \"you have one workspace, omit `workspace=`\" can be true while two home channels sit unreached beside it. Find them with `dopl_home(op=\"list_channels\")` and target one by passing its container id as `workspace=`.\n\nop=\"set\" PINS one workspace — OR a home-channel container, which is exactly why the pin is worth having here — as this connection's default so you stop passing `workspace=` on every call, and op=\"clear\" undoes it; a per-call `workspace=` still overrides the pin, and the pin is best-effort — if a later call is refused for want of a workspace, set it again.", {
+        op: zod_1.z
+            .enum(["get", "set", "clear"])
+            .optional()
+            .describe('Default "get" — report the current target. "set" pins a default for the rest of this connection (requires `workspace`); "clear" removes the pin.'),
+        workspace: zod_1.z
+            .string()
+            .optional()
+            .describe('op="set" (required): the workspace slug or UUID to make this connection\'s default — or a HOME CHANNEL container id from dopl_home(op="list_channels"), which is a legal target here exactly as it is for a per-call `workspace=`. A ref that does not resolve to one of your active memberships is REFUSED and nothing is pinned.'),
+    }, async (args) => {
+        if (args.op === "set")
+            return opSetPin(args.workspace);
+        if (args.op === "clear")
+            return opClearPin();
         // ⚠ Caller line per branch: with a session default the footer already
         // carries it (rendering here too prints the caller twice); without one
         // `appendDoplStatus` returns early and the response carries NO identity —

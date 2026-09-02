@@ -83,6 +83,30 @@ export type SessionStateRow = {
   tokens_spent: number | string | null;
   started_at: string | null;
   last_activity_at: string | null;
+  // ── OPERATOR-ONLY HEALTH (20260909120000) ───────────────────────────────
+  // "Is this agent GETTING ANYWHERE", as the seven facts
+  // `dopl-desktop-app/main/session-health.js` derives. ⚠ SAME NULL RULE, and it
+  // bites harder because six of the seven are counts: a `0` here would report
+  // that nothing was denied to an agent whose every call is being refused.
+  // ⚠ `stale` IS THE MACHINE'S OWN WEDGED FLAG (working + silent + still
+  // spending) and is NOT the row-freshness fact
+  // `packages/mcp-server/src/tools/channel-session-render.ts › sessionIsStale`
+  // derives from `updated_at`. Same word, two facts — see
+  // `channel-session-health.ts`, which renders them as different clauses.
+  //
+  // ⚠ `| string` ON THE TWO BIGINTS AND NOT ON THE TWO INTEGERS, DELIBERATELY.
+  // PostgREST hands an INT8 back as a STRING when it will not fit a JS number,
+  // which is why {@link bigintOrNull} exists; INT4 always arrives as a number.
+  // The column types are the migration's (`20260909120000`) and this restates
+  // them rather than widening everything "just in case" — a union that admits a
+  // value the column cannot hold is a type that has stopped describing the row.
+  turns: number | null;
+  tokens_delta: number | string | null;
+  stale: boolean | null;
+  denied_calls: number | null;
+  last_denied_tool: string | null;
+  last_wake_seq: number | string | null;
+  last_wake_at: string | null;
   /** ⚠ NOT TELEMETRY, AND OPERATOR-ONLY FOR ITS OWN REASONS (20260823130000,
    *  Samuel's OQ-5 ruling). The name of the agent template this session was
    *  launched from, SNAPSHOTTED AT SPAWN — deliberately not an FK, so a session
@@ -117,11 +141,17 @@ export type SessionStateRow = {
  * ⚠ The two arrays are parallel by construction and pinned as such — a column
  * added to one and not the other is a fence with a hole and a green suite.
  *
- * ⚠ **"OPERATOR-ONLY" IS AN AUDIENCE, NOT A SUBJECT.** Seven of the eight are
+ * ⚠ **"OPERATOR-ONLY" IS AN AUDIENCE, NOT A SUBJECT.** Eight of the fifteen are
  * telemetry (what an agent runs on and what it costs); `template_name` is an
- * IDENTITY snapshot and joined on 2026-08-23. Nothing here is about measurement —
- * the one question this array asks is "may a PEER read it", and the answer for
- * every entry is no.
+ * IDENTITY snapshot and joined on 2026-08-23; the seven HEALTH entries joined on
+ * 2026-09-01 and are about progress rather than cost. Nothing here is about
+ * measurement — the one question this array asks is "may a PEER read it", and
+ * the answer for every entry is no.
+ *
+ * ⚠ THE HEALTH SEVEN ARE NOT A CLOSE CALL. `denied_calls` / `last_denied_tool`
+ * are the sharpest of the whole set: they publish what an operator's tool policy
+ * REFUSES, which is a map of that operator's machine, and no peer has any claim
+ * on it.
  */
 export const OPERATOR_ONLY_SESSION_COLUMNS = [
   "tool_label",
@@ -132,6 +162,13 @@ export const OPERATOR_ONLY_SESSION_COLUMNS = [
   "started_at",
   "last_activity_at",
   "template_name",
+  "turns",
+  "tokens_delta",
+  "stale",
+  "denied_calls",
+  "last_denied_tool",
+  "last_wake_seq",
+  "last_wake_at",
 ] as const;
 
 export const OPERATOR_ONLY_SESSION_FIELDS = [
@@ -143,6 +180,13 @@ export const OPERATOR_ONLY_SESSION_FIELDS = [
   "startedAt",
   "lastActivityAt",
   "templateName",
+  "turns",
+  "tokensDelta",
+  "stale",
+  "deniedCalls",
+  "lastDeniedTool",
+  "lastWakeSeq",
+  "lastWakeAt",
 ] as const;
 
 /**
@@ -170,6 +214,19 @@ export type SessionStateUpsert = {
   tokens_spent: number | null;
   started_at: string | null;
   last_activity_at: string | null;
+  // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────────
+  // ⚠ NUMBERS ONLY ON THE WRITE SIDE — the reported value has already been
+  // through zod, so there is no `string` case here the way there is on
+  // {@link SessionStateRow}: that union describes what PostgREST HANDS BACK, and
+  // this one describes what the service WRITES. ⚠ Every one is nullable and
+  // never defaulted; see `session-state-service.ts › toUpsert`.
+  turns: number | null;
+  tokens_delta: number | null;
+  stale: boolean | null;
+  denied_calls: number | null;
+  last_denied_tool: string | null;
+  last_wake_seq: number | null;
+  last_wake_at: string | null;
   /** 2026-08-31 (20260905120000): the operator-given agent name; peer-visible. */
   display_name: string | null;
   /** ⚠ A SNAPSHOT THE DESKTOP REPORTS, NOT A LOOKUP THE SERVER PERFORMS. The
@@ -319,6 +376,28 @@ export function mapOwnSessionStateRow(
     // be probed that way. Adding it to {@link mapPeerSessionStateRow} would undo
     // both that decision and the 404-not-403 rule in one line.
     templateName: row.template_name,
+    // ── THE HEALTH HALF (2026-09-01, 20260909120000) ────────────────────────
+    // ⚠ `bigintOrNull` ON ALL FOUR COUNTS, INCLUDING THE TWO INT4s. The two
+    // BIGINTs genuinely need it (PostgREST may hand an INT8 back as a string);
+    // the two INTEGERs are run through the same helper because its OTHER
+    // guarantee is the one that matters everywhere — `null` survives as `null`
+    // and an unparseable value becomes `null` rather than `0`. A bare
+    // `Number(row.turns)` would turn "this machine counted nothing" into "this
+    // agent has taken no turns", which is the one lie this whole wave is about.
+    turns: bigintOrNull(row.turns),
+    tokensDelta: bigintOrNull(row.tokens_delta),
+    // ⚠ NOT COERCED, AND NOT DEFAULTED TO `false`. The desktop always sends a
+    // boolean (`session-telemetry.js` writes `x.stale === true`), so a NULL here
+    // means the column predates the writer — "nothing has evaluated whether this
+    // session is wedged", which is not the same claim as "it is not wedged".
+    // `?? false` here would state the second on behalf of a machine that said
+    // neither. ⚠ It is the MACHINE's wedged flag and never the row-freshness
+    // fact of the same name; see {@link SessionStateRow}.
+    stale: row.stale,
+    deniedCalls: bigintOrNull(row.denied_calls),
+    lastDeniedTool: row.last_denied_tool,
+    lastWakeSeq: bigintOrNull(row.last_wake_seq),
+    lastWakeAt: row.last_wake_at,
   };
 }
 

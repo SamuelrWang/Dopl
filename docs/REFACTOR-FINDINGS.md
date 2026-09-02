@@ -1775,7 +1775,7 @@ COMMIT;
   - **WHY NULLING IS HONEST RATHER THAN A SWALLOW:** the row's other half — *user U is running an agent, in channel C, state working* — is still true, and a null `task_id` is exactly what the column's own `ON DELETE SET NULL` would have left had the row been stored a moment earlier. Dropping the row instead would lose a LIVE agent from the projection; nulling the whole batch would discard the thread of rows whose threads are fine
   - ⚠ **IT NEVER GUESSES WHICH CONSTRAINT FAILED.** `channel_sessions` has four FKs and the match is on the CODE alone (the house rule — a constraint name in an error message is prose). If nothing in the batch names a dead thread the ORIGINAL error is rethrown: a `23503` on `channel_id` means the CHANNEL is gone, which nulling a thread id cannot fix and must not be made to look fixed
   - ⚠ **ONE RETRY, BY CONSTRUCTION** — the healer returns rows, the caller upserts once more and throws. No loop, so a violation this degrade does not cover cannot spin. The existence probe runs on the FAILURE PATH ONLY; a pre-flight check on every push would add a query per push to protect against a once-per-deleted-thread race, which is the cost this table's design refuses
-  - **Pinned by `repository-sessions.test.ts › "a thread deleted under a live peer agent (F-241)"`** — five cases: the replace SUCCEEDS with one dead `task_id` and only that row nulled; a `23503` naming no dead thread rethrows; a report with no thread ids never probes; every other write error still surfaces; a second failure throws rather than looping
+  - **Pinned by `repository-sessions-replace.test.ts › "replaceSessionStates — a thread deleted under a live peer agent (F-241)"`** (⚠ it lived in `repository-sessions.test.ts` until 2026-09-01, when the health columns split that file at the §1 cap; the anchor moved with the test) — five cases: the replace SUCCEEDS with one dead `task_id` and only that row nulled; a `23503` naming no dead thread rethrows; a report with no thread ids never probes; every other write error still surfaces; a second failure throws rather than looping
   - **Remedy (b) is still worth doing later and is not blocked by this** — a desktop that drops a session whose thread 404s stops reporting the dead id at all. This makes the server survive it; that would stop it happening
 - Status: **RESOLVED** (2026-08-21, remedy (a))
 
@@ -6508,3 +6508,109 @@ T24's own acceptance names the fix: the launch RESULT should echo the resolved p
 DTO field and the result line, all of which are the orchestrator-surface tier's.
 
 - Status: open
+---
+
+## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-407 through F-408
+
+⚠ **THESE WERE FILED IN THE 404-406 BLOCK AND RENUMBERED THE SAME DAY, BECAUSE THREE TIERS OF ONE
+WAVE CLAIMED IT AT ONCE.** Master's highest id was 403 — re-derive with
+`git show master:docs/REFACTOR-FINDINGS.md | grep -oE 'F-[0-9]{3}' | sort -u | tail -1` — and three
+branches then allocated 404 onward independently: the P0 tier (three ids), the DESKTOP tier (three
+different findings under the SAME three ids), and this tier (two). Only one set can survive a merge.
+
+⚠ **THE FIX IS A RULE, NOT THIS PARAGRAPH: ALLOCATE FROM THE HIGHEST ID CLAIMED ON ANY LIVE BRANCH,
+NEVER FROM MASTER'S.** A findings file is an append-only shared counter, and parallel branches make
+"the next number" a question master cannot answer. Re-derive across every live branch before filing:
+`for b in <branches>; do git show $b:docs/REFACTOR-FINDINGS.md | grep -oE 'F-[0-9]{3}'; done | sort -u
+| tail -1`.
+
+⚠ **`scripts/check-doc-refs.mjs` IS WHY THIS NOTE NAMES NO COLLIDING ID IN ITS OWN NOTATION.** The
+gate resolves every `F-NNN` reference to a heading in these docs, and an id that lives only on
+another branch is a DANGLING ref here — so the collision is described by number-block rather than
+cited. That is the gate working: a doc may not point at a finding this tree does not hold.
+
+These two moved to the next free block above every claim. **The other two tiers' ids are still to be
+resolved at merge**, and whichever set moves, this heading does not.
+
+Opened while building T20/T21/T22/T40/T41/T81 of `docs/specs/` — the MCP agent-efficiency spec's P2
+tier. Both are things the wave MEASURED and deliberately did not fix inside it.
+
+### F-407 — `set_agent_mode` over MCP could not be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01) — ✅ DISCHARGED the same day by the desktop tier
+
+**The ask** was a `dopl_channel(op="set_agent_mode", agent_id=…, tool_mode=…, message_mode=…)` — a
+fourth KIND on the launch mailbox, letting an orchestrator re-posture one of its operator's RUNNING
+agents, alongside `end_agent` / `rename_agent`.
+
+🔒 **IT IS BLOCKED BY AN EXPLICIT STANDING RULING, NOT BY EFFORT.** INVARIANTS §3 says
+`PATCH /api/channels/[channelId]/members` is `sessionOnly` *"because the agent tool profile is a
+CONTAINMENT control, not a preference — the setting relied on for containment must not be writable by
+the thing it contains, durably."* An MCP op that accepts `tool_mode` would hand exactly that write to
+exactly that thing: a windowless session floored at `auto` could ask its own machine for `bypass`,
+voiding the audience ceiling's B2 tripwire and, through Bash, B1's residual #3.
+
+**The safe shape is NARROWING-ONLY — never wider than the session already has — and it is not
+buildable on this side of the boundary.** Measured 2026-09-01: `channel_sessions` carries **no
+`tool_mode` / `message_mode` column** (`20260822150000_channel_sessions_telemetry.sql` adds eight
+columns and neither is one; re-derive with
+`grep -rn 'tool_mode\|message_mode' src/features/channels/server/collab-dto.ts supabase/migrations`).
+So **the server cannot know a session's current posture, and therefore cannot enforce "never wider"**
+— the only layer that can is `dopl-desktop-app/main/session-reducer.js`, whose `set_tool_mode` /
+`set_message_mode` already coerce fail-closed through `coerceMode(TOOL_MODES, …)` /
+`coerceMode(MESSAGE_MODES, …)` (`channel-prefs.js › TOOL_MODES` = manual/accept_edits/auto/bypass,
+`› MESSAGE_MODES` = ask/auto_inbound/auto_outbound/auto_both).
+
+⚠ **SO SHIPPING THE OP WITHOUT THE DESKTOP HALF IS NOT "PARTIAL", IT IS THE WIDENING.** An MCP op
+whose only bound is unimplemented is a posture-widening primitive with a docblock. This wave shipped
+NOTHING for it rather than a gated-looking op that gates nothing.
+
+**What the whole change needs, in order** (the `20260823140000` precedent — the CHECK widens BEFORE a
+producer ships, and the producer lands with the consumer it unblocks):
+1. the `kind` CHECK on `channel_launch_directives` widened to admit `set_mode`;
+2. the desktop dispatcher mapping it onto the existing `set_tool_mode` / `set_message_mode` reducer
+   events, **refusing any value wider than the session's current one** and answering one of the
+   existing refusal words otherwise — this is the fence, and it is the only place it can live;
+3. `channel_sessions` gaining the two mode columns so `read_sessions` / `dopl_status` can show the
+   posture the caller is about to change (T25's territory — without it an orchestrator sets a mode
+   blind);
+4. only then the server schema/service, the `@dopl/client` union arm, and the MCP op.
+
+✅ **STEP 2 LANDED THE SAME DAY** (desktop branch `p2/desktop-lifecycle`, commit `219304e5`
+*"dispatch set_agent_mode directives, clamped to the operator's posture"*), so the premise of this
+finding is discharged and the op is buildable. **What discharged it is worth keeping**: the desktop's
+two mode vocabularies are ORDERED arrays and the clamp is an INDEX COMPARISON against the operator's
+own stored channel posture — so "never wider" is enforced where the posture actually lives, and the
+MCP op ASKS rather than sets. ⚠ **`set_agent_mode` is also the only non-launch kind still behind the
+machine-wide launch-consent toggle**, because a posture at `bypass` pre-approves work tools on
+hardware the operator pays for, where `end` and `rename` widen nothing.
+
+⚠ **THE DESKTOP SYMBOLS ARE DELIBERATELY NOT CITED BY ANCHOR HERE.** They live on a branch this tree
+has not merged, and `scripts/check-doc-refs.mjs` correctly rejects a `path › symbol` anchor at a
+symbol this checkout does not hold — the same reason the block note above names no colliding id.
+Re-anchor them at merge, when the files exist.
+
+⚠ **THE ORDER IN THIS FINDING IS THE REUSABLE PART, NOT THE VERDICT.** A capability whose only bound
+lives in another process must ship its FENCE first and its SURFACE second; shipping the op while step
+2 was hypothetical would have been a posture-widening primitive with a docblock.
+
+- Status: ✅ discharged 2026-09-01. Step 3 (the mode columns on `channel_sessions`, so an
+  orchestrator can SEE the posture it is about to change) is the wave's session-health half.
+
+### F-408 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
+
+§10's workspace-await bullet and `repository-await-workspace.ts › listWorkspaceMessagesAfter` both say
+*"`seq` is WORKSPACE-GLOBAL and gappy"*. Measured against the DDL: `20260725120000_channels.sql`
+declares `seq BIGINT GENERATED ALWAYS AS IDENTITY` on `channel_messages` — **one identity sequence per
+TABLE**, so a `seq` is unique and monotonic across every workspace and every `kind='link'` container
+at once.
+
+The doc was never FALSE (table-global implies workspace-global) but it was **narrower than the truth in
+the direction that mattered**: read as an upper bound it says one cursor cannot span two workspaces,
+which is exactly the fact T21's account-wide read rests on. Per CLAUDE.md's precedence rule the CODE
+wins and INVARIANTS is corrected in the same change; §10's bullet now states the identity and its
+consequence.
+
+⚠ **The workspace-await's own wording is left alone on purpose** — it is describing a hold that IS
+workspace-scoped, and there the narrower statement is the accurate one for what that function does.
+
+- Status: ✅ resolved 2026-09-01 (§10 corrected; `repository-account.ts › listAccountMessagesAfter`
+  states the stronger fact where it is relied on).

@@ -58,16 +58,26 @@ import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread, opSetThreadMode } from "./channel-ops-threads";
 import { opLaunchAgent } from "./channel-ops-launch";
-// AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER two kinds. A stop
-// verb and a display verb over the same lane, own-operator only.
+// AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER three kinds, over
+// the same lane and own-operator only. ⚠ THE POSTURE VERB IS A SEPARATE MODULE
+// (500-line cap): shared plumbing, opposite consent story — its header has why.
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
+import { opSetAgentMode } from "./channel-ops-agent-mode";
 import { opUpdate } from "./channel-ops-update";
 // ⚠ A structured POST, not a second delivery path — it delegates to `opPost`.
 import { opEscalate } from "./channel-ops-escalate";
 // THE PRIVATE DIRECT LANE (2026-08-31) — a mailbox the operator's OWN machine
 // claims, never a message and never another member's machine.
 import { opDirectAgent, opReadDirections } from "./channel-ops-direct";
+// THE ACCOUNT-WIDE READS (2026-09-01) — `read` and `read_sessions` with no
+// `channel`. ⚠ A SIBLING MODULE, not a branch inside the per-channel handlers:
+// their whole result vocabulary splices one `ref`, and their scope is one room.
+import {
+  opReadAccount,
+  opReadSessionsAccount,
+} from "./channel-ops-account";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -93,6 +103,18 @@ export function registerChannelTool(
   client: DoplClient,
   caller: CallerIdentity = UNKNOWN_CALLER,
   isAdmin = false,
+  // 🔒 THE CONTAINER LOCK, for the two ACCOUNT-WIDE reads alone. Their routes are
+  // `withUserAuth` and answer for the whole account, so the narrowing cannot live
+  // there; `tools/account-scope.ts` applies it, through the one reader of the lock
+  // (`home-scopes.ts › narrowToLock`).
+  // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — and it is required even
+  // though it follows two defaulted parameters. A default would mean an
+  // UNNARROWED account read for any caller that forgot it, which is the
+  // enumeration oracle B3 exists to deny; `dopl_home` takes the same argument
+  // the same way, and `parity-harness.ts` passes a stub because capture never
+  // runs a handler. `container-lock.test.ts` drives the real one through
+  // `bootServer`.
+  directory: WorkspaceDirectory,
 ): void {
   const selfUserId = caller.userId;
   const runtime = caller.runtime;
@@ -173,9 +195,22 @@ export function registerChannelTool(
             resultHead: "milestone",
           });
         }
+        // ⚠ `channel` IS OPTIONAL, and omitting it here is a DIFFERENT scope
+        // from omitting it on `await` — account-wide vs workspace-wide (T21).
+        // The argument is stated ONCE, in `channel-ops-account.ts`'s header; a
+        // third copy beside the two that already carry it is what drifts.
         case "read": {
-          const miss = missingParams("read", args, ["channel"]);
-          if (miss) return miss;
+          if (args.channel === undefined || args.channel.trim() === "") {
+            const miss = missingParams("read", args, ["since"]);
+            if (miss) return miss;
+            return opReadAccount(
+              client,
+              directory,
+              args.since as number,
+              args.limit,
+              selfUserId,
+            );
+          }
           return opRead(
             client,
             args.channel as string,
@@ -241,7 +276,17 @@ export function registerChannelTool(
         // ⚠ `channel` is an OPTIONAL filter here, hence no missingParams check.
         // Own-scoped in the service; the transport credential IS the caller, so
         // no identity is passed.
+        // ⚠ **OMITTING IT NOW MEANS EVERYWHERE, NOT "THIS WORKSPACE" (T22,
+        // 2026-09-01).** That is a WIDENING of a read whose fence was already
+        // `user_id`, server-side, and it is what makes the op usable from a home
+        // channel at all — a container is never the active workspace unless it
+        // was explicitly addressed, so the old scope hid exactly the sessions an
+        // operator working in /home most wanted to see. Every row still names
+        // its room and its `workspace=` handle.
         case "read_sessions":
+          if (args.channel === undefined || args.channel.trim() === "") {
+            return opReadSessionsAccount(client, directory);
+          }
           return opReadSessions(client, args.channel);
         case "create_thread": {
           const miss = missingParams("create_thread", args, [
@@ -381,6 +426,41 @@ export function registerChannelTool(
             args.channel as string,
             args.agent_id as string,
             args.name,
+            { waitMs: args.wait_ms },
+          );
+        }
+        // ⚠ RE-POSTURE ONE OF THE OPERATOR'S OWN RUNNING AGENTS — the SAME mailbox
+        // again, `kind: "set_agent_mode"`. ⚠ IT ASKS AND NEVER WIDENS: that machine
+        // clamps each axis to the operator's own stored ceiling, so nothing here
+        // may narrate a posture as granted. ⚠ UNLIKE THE TWO ABOVE IT **IS** GATED
+        // BY THAT MACHINE'S LAUNCH TOGGLE — a posture can cause compute to be spent.
+        case "set_agent_mode": {
+          const miss = missingParams("set_agent_mode", args, ["channel", "agent_id"]);
+          if (miss) return miss;
+          // ⚠ **NOT `missingParams`, AND THAT IS THE WHOLE REASON THIS CHECK IS
+          // HAND-WRITTEN** — the same move `rename_agent`'s `name` check above
+          // makes, for the neighbouring reason. That helper answers ONE question
+          // per param ("is this one present?") and cannot express "at least one of
+          // these two": listing both would demand BOTH and delete the ordinary
+          // case (move one axis, leave the other alone), and listing neither would
+          // let an empty ask reach a row whose only possible answer is a refusal
+          // for a request that was never expressible. ⚠ The route's zod refuses it
+          // again and the column CHECK a third time at rest; this is the only one
+          // of the three that costs the caller nothing — no row, no claim, no
+          // two-minute round trip.
+          if (args.tools === undefined && args.messages === undefined) {
+            return err(
+              'op="set_agent_mode" is missing required params: pass at least one of tools (manual | accept_edits | auto | bypass) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.',
+            );
+          }
+          // ⚠ THE TWO AXES GO THROUGH UNTOUCHED. The schema's enum is the only
+          // shape check this process has; the CEILING lives on the operator's
+          // machine, so nothing here may predict the outcome.
+          return opSetAgentMode(
+            client,
+            args.channel as string,
+            args.agent_id as string,
+            { tools: args.tools, messages: args.messages },
             { waitMs: args.wait_ms },
           );
         }

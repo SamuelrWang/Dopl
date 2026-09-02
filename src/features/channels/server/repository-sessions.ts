@@ -1,6 +1,16 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
+// ⚠ WHAT COUNTS AS THE SAME ROW lives beside this file, not in it — split at the
+// §1 cap on 2026-09-01, by QUESTION rather than by size: this file answers "what
+// does a session read RETURN" (the fences, the bound, the missing-relation
+// degrade), that one answers "what counts as the SAME ROW". They change for
+// different reasons — a fence moves when the audience does, the column list moves
+// every time the desktop reports a new field. See that module's header.
+import {
+  SESSION_DIFF_COLUMNS,
+  sessionRowMatches,
+} from "./repository-sessions-columns";
 
 /**
  * DATA ACCESS FOR `channel_sessions` — read-session-state's storage, both
@@ -134,7 +144,7 @@ export async function listSessionStates(
  * header says so) — so this names the builder rather than inferring a row type,
  * and the cast to `SessionStateRow[]` stays at the single point below.
  */
-type SessionQuery = ReturnType<
+export type SessionQuery = ReturnType<
   ReturnType<typeof supabaseAdmin>["from"]
 >["select"] extends (...args: never[]) => infer Q
   ? Q
@@ -155,12 +165,21 @@ type SessionQuery = ReturnType<
  * ⚠ It also keeps ONE `SESSION_ROWS_LIMIT` on both, which is what makes the bound
  * above a bound rather than a suggestion.
  *
- * ⚠ THE FENCE IS DELIBERATELY NOT SHARED. One read is USER-scoped and one is
- * CHANNEL-scoped; collapsing them into a single "filter" parameter would put the
- * two authorization stories behind one signature, and they are not the same story
+ * ⚠ THE FENCE IS DELIBERATELY NOT SHARED. One read is USER-scoped, one is
+ * CHANNEL-scoped and the third is USER-scoped ACROSS a proven channel set;
+ * collapsing them into a single "filter" parameter would put three
+ * authorization stories behind one signature, and they are not the same story
  * (see each caller's docblock). This shares the plumbing, never the fence.
+ *
+ * ⚠ **EXPORTED SINCE 2026-09-01 FOR A THIRD CALLER OUTSIDE THIS FILE** —
+ * `repository-account.ts › listAccountSessionStates`, the account-wide read. It
+ * lives there rather than here because its fence is the account-wide membership
+ * set, which is that module's whole subject; it calls THIS because the degrade
+ * and the bound are the halves that must never diverge, which is the same
+ * argument that extracted this function in the first place. **A fourth caller
+ * passes a fence and nothing else — never a widened one.**
  */
-async function sessionRowsWhere(
+export async function sessionRowsWhere(
   fence: (query: SessionQuery) => SessionQuery
 ): Promise<SessionStateRow[]> {
   const db = supabaseAdmin();
@@ -172,83 +191,6 @@ async function sessionRowsWhere(
     throw error;
   }
   return (data ?? []) as SessionStateRow[];
-}
-
-/**
- * Columns the reconcile compares. ⚠ `id` / `created_at` / `updated_at` are
- * deliberately absent — identity and history, neither reported by the desktop
- * nor something the diff should look at.
- *
- * ⚠ **EVERY REPORTED COLUMN MUST BE IN THIS LIST, TELEMETRY INCLUDED**
- * (2026-08-22). The reconcile writes only rows that DIFFER, so a column the
- * SELECT does not fetch reads back as `undefined`, compares unequal against the
- * reported value, and makes every row look changed — or, if it were also left
- * out of {@link sessionRowMatches}, a push carrying nothing but new token counts
- * would be discarded as a no-op and the numbers would freeze at their first
- * value while the row kept claiming to be current. The two lists below and this
- * string are one statement of "what a session row is"; `repository-sessions-columns.test.ts`
- * pins them against {@link SessionStateUpsert}'s own keys so adding a column to
- * the type and not to these is a red test rather than a silent freeze.
- *
- * ⚠ **THAT SENTENCE WAS A CLAIM ABOUT A TEST THAT DID NOT EXIST UNTIL
- * 2026-08-23** — it named `repository-sessions.test.ts`, which never pinned
- * anything of the kind, and three columns were added under it. The pin is real
- * now and lives in its own file (the 500-line cap took it out of the behaviour
- * suite). Do not restate the guarantee here without opening that file.
- */
-const SESSION_DIFF_COLUMNS =
-  "session_key, channel_id, task_id, name, state, channel_name, thread_title, " +
-  "detail, tool_label, model, context_used, context_window, tokens_spent, " +
-  "started_at, last_activity_at, template_name, display_name";
-
-/** ⚠ Field by field, NEVER JSON.stringify: key ORDER differs between a
- *  PostgREST row and a service-built object, so a string compare reports every
- *  row as changed — touching every `updated_at` on every push and destroying
- *  the read's ordering.
- *
- *  ⚠ The BIGINT columns compare with `!==` against a value PostgREST may hand
- *  back as a STRING. `Number()` is applied to both sides for exactly those
- *  three, and `null` is compared as `null` — never coerced, because `Number
- *  (null)` is 0 and a stored NULL would then read as equal to a reported 0.
- */
-function sessionRowMatches(
-  stored: SessionStateUpsert,
-  reported: SessionStateUpsert
-): boolean {
-  const sameCount = (
-    a: number | string | null | undefined,
-    b: number | null
-  ): boolean => {
-    if (a === null || a === undefined) return b === null;
-    if (b === null) return false;
-    return Number(a) === b;
-  };
-  return (
-    stored.channel_id === reported.channel_id &&
-    stored.task_id === reported.task_id &&
-    stored.name === reported.name &&
-    stored.state === reported.state &&
-    stored.channel_name === reported.channel_name &&
-    stored.thread_title === reported.thread_title &&
-    stored.detail === reported.detail &&
-    stored.tool_label === reported.tool_label &&
-    stored.model === reported.model &&
-    sameCount(stored.context_used, reported.context_used) &&
-    sameCount(stored.context_window, reported.context_window) &&
-    sameCount(stored.tokens_spent, reported.tokens_spent) &&
-    stored.started_at === reported.started_at &&
-    stored.last_activity_at === reported.last_activity_at &&
-    // ⚠ In practice this never moves for a live session — a template is captured
-    // at spawn and a session cannot change identity mid-run. It is compared
-    // anyway because the rule above admits no exceptions: a column in the SELECT
-    // but not in this compare reads back as a difference nobody made on the
-    // FIRST push after the field ships, and a column in neither freezes at its
-    // first value while the row keeps claiming to be current.
-    stored.template_name === reported.template_name &&
-    // 2026-08-31: a RENAME is exactly the change this diff must see — it is how
-    // the peer-visible name propagates on the next push with nothing else moving.
-    stored.display_name === reported.display_name
-  );
 }
 
 /**

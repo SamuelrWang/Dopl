@@ -59,6 +59,21 @@ const BASE = "https://api.example.test";
  *        `*Payload` readers each DELEGATE to nothing new on the wire: they are
  *        the same request their array sibling makes, so the surface grew by two
  *        names and by zero round trips.
+ *   77 — PLUS TWO with the ACCOUNT-WIDE reads (2026-09-01, T20/T21/T22):
+ *        `getAccountStatus` and `readAccountMessages`. ⚠ TWO, NOT THREE — the
+ *        all-sessions read (T22) is `getAccountStatus({view:"sessions"})`, a
+ *        query PARAMETER over one resource rather than a second endpoint
+ *        (INVARIANTS §9), so it costs no third name and no third route to gate.
+ *   80 — PLUS THREE with PINNED STARTUP CONTEXT (2026-09-01, T81):
+ *        `setKbBasePinned`, `setKbEntryPinned` and `getKbStartupContext`.
+ *        ⚠ TWO WRITE NAMES FOR ONE FLAG, and that is the count being deliberate
+ *        rather than lazy: a base and an entry are different objects with
+ *        different gates (the entry write chases the row up to its base), so
+ *        folding them into one `setKbPinned(kind, id)` would put two
+ *        authorization stories behind one signature. ⚠ And THREE, not five —
+ *        each write is ONE method covering both directions, because `pinned` is
+ *        an argument choosing the VERB (`PUT`/`DELETE`) rather than a second
+ *        binding: two idempotent verbs, never a toggle, and never two names.
  */
 const PUBLIC_SURFACE = [
   "appendChatMessages",
@@ -95,6 +110,11 @@ const PUBLIC_SURFACE = [
   "deleteSkill",
   "exportChat",
   "getAccessMatrix",
+  // ACCOUNT-WIDE, USER-SCOPED (2026-09-01, T20/T22) — every channel the caller
+  // is in, across every workspace AND every home-channel container, in one read.
+  // A SIBLING of the per-workspace reads, never a flag on them: different
+  // wrapper, different fence, and no workspace argument anywhere on the path.
+  "getAccountStatus",
   "getActiveWorkspace",
   "getAgentTemplate",
   "getBaseUrl",
@@ -122,6 +142,10 @@ const PUBLIC_SURFACE = [
   "getChat",
   "getHomeChannels",
   "getKbBase",
+  // PINNED STARTUP CONTEXT (2026-09-01, T81) — the capped reading list a
+  // session starts with. ⚠ Read `truncated`/`omitted`: a clipped payload that
+  // renders as the whole of what is pinned is the bug (INVARIANTS §9).
+  "getKbStartupContext",
   "getKbTree",
   "getMemberAccess",
   "getMyAccess",
@@ -150,11 +174,18 @@ const PUBLIC_SURFACE = [
   "moveKbByPath",
   "pingMcpStatus",
   "postChannelMessage",
+  // ACCOUNT-WIDE cross-channel page (2026-09-01, T21) — one cursor, every
+  // channel, because seq is a TABLE-WIDE identity.
+  "readAccountMessages",
   "readChannelMessages",
   "readKbFileByPath",
   "readSkillBody",
   "searchKb",
   "setChannelThreadMode",
+  // T81 — ONE method per object, each covering BOTH directions: `pinned` picks
+  // the verb (PUT/DELETE), so there is no `unpinKbBase` to forget to gate.
+  "setKbBasePinned",
+  "setKbEntryPinned",
   "setWorkspaceId",
   "updateAgentTemplate",
   "updateChannel",

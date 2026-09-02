@@ -9,7 +9,9 @@
 import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
+import { readSessionPin } from "./session-pin.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
+import type { WorkspaceSource } from "./workspace-directory.js";
 
 export type { CallerIdentity } from "./tools/identity.js";
 
@@ -44,6 +46,17 @@ export interface BootOptions {
    * against a second code path that fails on its own.
    */
   caller?: Partial<CallerIdentity>;
+  /**
+   * 🔒 OPAQUE SESSION KEY for the workspace pin an agent can set
+   * (`session-pin.ts`). Supplied by the TRANSPORT, which is the only layer that
+   * can identify one MCP connection across the stateless per-request boots.
+   *
+   * ⚠ IT IS A MAP KEY AND NOTHING ELSE. Never rendered, never logged, never
+   * compared to anything but itself, and it grants nothing — a pin only ever
+   * picks among memberships the boot directory already proved. Absent ⇒ no pin
+   * can be read or written, which is the pre-pin behaviour verbatim.
+   */
+  sessionKey?: string;
 }
 
 function errText(err: unknown): string {
@@ -118,7 +131,7 @@ export async function bootServer(
   // explicit addressing and still matches the full directory.
   const pin = client.getWorkspaceId();
   let active: WorkspaceListItem | null = null;
-  let source: "header pin" | "sole membership" | null = null;
+  let source: WorkspaceSource | null = null;
   if (pin) {
     active = directory.find((w) => w.id === pin || w.slug === pin) ?? null;
     if (active) {
@@ -131,6 +144,22 @@ export async function bootServer(
           directoryLoadFailed ? " (directory load had failed)" : ""
         }; ignoring it and resolving from memberships`,
       );
+    }
+  }
+  // 🔒 THE AGENT'S OWN PIN, BELOW THE TRANSPORT'S AND ABOVE THE SOLE
+  // MEMBERSHIP. Below `header pin` because that one is explicit addressing on
+  // THIS request and a stored default must never override the argument in front
+  // of it; above `sole membership` because a session with exactly one standard
+  // workspace and a pin naming its home CONTAINER meant the container.
+  // ⚠ IT RESOLVES AGAINST THE UNFILTERED DIRECTORY, exactly as the header pin
+  // does — a `kind='link'` container is a legal EXPLICIT target (§4A) and a pin
+  // is explicit. What it can never do is widen: a pinned id that is not an
+  // active membership is dropped and the resolution continues below.
+  if (!active) {
+    const pinned = readSessionPin(opts.sessionKey);
+    if (pinned) {
+      active = directory.find((w) => w.id === pinned) ?? null;
+      if (active) source = "session pin";
     }
   }
   const listable = directory.filter(isStandardWorkspace);
@@ -197,6 +226,7 @@ export async function bootServer(
     workspace: active,
     role: active?.role ?? null,
     workspaceSource: source,
+    sessionKey: opts.sessionKey,
     scopes: opts.scopes,
   });
 

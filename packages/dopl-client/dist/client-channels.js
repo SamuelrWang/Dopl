@@ -44,9 +44,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChannelMethods = void 0;
 const client_members_js_1 = require("./client-members.js");
 const channel = __importStar(require("./channel.js"));
+const channelAccount = __importStar(require("./channel-account.js"));
 class ChannelMethods extends client_members_js_1.MemberMethods {
     listChannels(opts) {
         return channel.listChannels(this.transport, opts);
+    }
+    /**
+     * ⚠ ACCOUNT-WIDE AND USER-SCOPED — every channel the caller is in, across
+     * every workspace AND every home-channel container. It ENUMERATES and is not
+     * narrowed here; see `channel-account.ts`'s header for the container-lock
+     * caveat that applies to both of these.
+     */
+    getAccountStatus(opts) {
+        return channelAccount.getAccountStatus(this.transport, opts);
+    }
+    readAccountMessages(opts) {
+        return channelAccount.readAccountMessages(this.transport, opts);
     }
     getChannel(channelId) {
         return channel.getChannel(this.transport, channelId);

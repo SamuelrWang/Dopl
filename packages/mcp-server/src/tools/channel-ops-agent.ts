@@ -32,12 +32,43 @@
  *     at it.
  */
 
-import type { DoplClient, LaunchDirective, LaunchRefusalReason } from "@dopl/client";
+import type {
+  DoplClient,
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, isErr, resolveChannelOr } from "./channel-shared";
 import { bareAgentId } from "./channel-agent-id";
 // ⚠ ONE write-result renderer, shared with post / create_thread / launch / direct.
 import { factsLine, type FactValue } from "./channel-facts";
+
+/**
+ * THE THREE AGENT-MANAGEMENT KINDS AND WHAT EACH CARRIES — **one declaration,
+ * shared with `channel-ops-agent-mode.ts`.**
+ *
+ * ⚠ IT MIRRORS `@dopl/client › AgentDirectiveCreateInput` rather than being it:
+ * this is the shape {@link fileAndHold} takes, and stating it once is what lets
+ * the third verb live in its own module without a second copy of the union
+ * drifting from this one.
+ * ⚠ **BOTH AXES ON THE `set_agent_mode` ARM ARE OPTIONAL HERE, DELIBERATELY.**
+ * "At least one of them" is a REGISTRAR check (`channel.ts`) and a route check; a
+ * type expressing it would be a union of three shapes for one verb, and the
+ * caller-facing message would become a parse error instead of a sentence.
+ */
+export type AgentDirectiveKind = "end" | "rename" | "set_agent_mode";
+export type AgentDirectiveInput =
+  | { kind: "end"; channel: string; agentId: string }
+  | { kind: "rename"; channel: string; agentId: string; name: string }
+  | {
+      kind: "set_agent_mode";
+      channel: string;
+      agentId: string;
+      tools?: LaunchToolMode;
+      messages?: LaunchMessageMode;
+    };
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 
@@ -134,24 +165,53 @@ function foreignAgent(agentId: string, verb: string): ToolResponse {
  * A BARE FACT AND DID NOT**: a second directive is a second request for the same
  * change, and on an END nothing could tell you afterwards which one acted.
  *
- * ⚠ `confirm=` NAMES THE SURFACE THAT ANSWERS, and the two verbs have DIFFERENT
- * answers, which is why it is a field rather than one sentence. An END is
- * confirmable — the agent disappearing from `read_sessions` is the answer. A
- * RENAME is NOT: it is display-only and lives on the operator's machine, so
- * `read_sessions` keeps printing the id and nothing here can confirm it landed.
- * Collapsing those into one line would promise a confirmation for the rename
- * that does not exist.
+ * ⚠ `confirm=` NAMES THE SURFACE THAT ANSWERS, AND IT IS A MAP OVER THE KIND
+ * RATHER THAN A TERNARY. That stopped being cosmetic at the THIRD verb:
+ * `kind === "end" ? … : …` is correct for two kinds and silently gives a
+ * RE-POSTURE the RENAME's answer for three — a conditional over a closed set is
+ * the shape that goes wrong the day the set grows, failing nothing on the way.
+ * ⚠ AND THE THREE ANSWERS GENUINELY DIFFER. An END is confirmable: the agent
+ * disappearing from `read_sessions` is the answer. A RENAME is not — it is
+ * display-only and lives on the operator's machine, so that listing keeps
+ * printing the id. A POSTURE is not either, for the same reason, and it is the
+ * one where believing otherwise is dangerous: an agent whose re-posture never
+ * landed is still running at its old permissions.
  */
-function pendingFacts(
+/**
+ * THE PAST-TENSE WORD FOR EACH KIND, IN ONE PLACE — used by the one render that
+ * still needs prose (a FOREIGN agent id, which is an error, not a fact line).
+ *
+ * ⚠ A MAP RATHER THAN A TERNARY, and it stopped being cosmetic at the third
+ * verb: `kind === "end" ? "ended" : "renamed"` is CORRECT for two kinds and
+ * silently reports a RE-POSTURE as a RENAME for three. A conditional over a
+ * closed set is the shape that goes wrong the day the set grows, failing nothing
+ * on the way.
+ */
+const VERB_PAST: Record<AgentDirectiveKind, string> = {
+  end: "ended",
+  rename: "renamed",
+  set_agent_mode: "re-postured",
+};
+
+const PENDING_CONFIRM: Record<AgentDirectiveKind, string> = {
+  end: "read_sessions",
+  rename: "none",
+  set_agent_mode: "none",
+};
+
+/** ⚠ TAKES THE **KIND**, NOT A DISPLAY WORD: the surface it names is a claim
+ *  about what a later read can prove, and keying that off prose is how a third
+ *  verb inherits the second one's answer. */
+export function pendingFacts(
   d: LaunchDirective,
-  kind: "end" | "rename",
+  kind: AgentDirectiveKind,
 ): Record<string, FactValue> {
   return {
     directive: d.id,
     claimed: d.status === "claimed",
     expires: d.expiresAt,
     retry: false,
-    confirm: kind === "end" ? "read_sessions" : "none",
+    confirm: PENDING_CONFIRM[kind],
   };
 }
 
@@ -188,12 +248,25 @@ async function holdFor(
  * CHANNEL (unknown, or one the caller never joined) and nothing else, so it
  * renders as a channel error rather than as anything about the agent.
  */
-async function fileAndHold(
+/**
+ * ⚠ EXPORTED FOR `channel-ops-agent-mode.ts` (2026-09-01), and for that ONE
+ * caller. It is the whole hold protocol — file the row, poll it, give up — and a
+ * second copy would be a second answer to "how long do we wait", which is the
+ * drift the shared `WAIT_*` constants above exist to prevent. ⚠ What is shared
+ * is the PLUMBING; every sentence a caller reads is written in its own module,
+ * because the three verbs' consent stories differ.
+ */
+export async function fileAndHold(
   client: DoplClient,
   ref: string,
-  input:
-    | { kind: "end"; channel: string; agentId: string }
-    | { kind: "rename"; channel: string; agentId: string; name: string },
+  // ⚠ THE UNION IS {@link AgentDirectiveInput}, DECLARED ABOVE AND NOT INLINED.
+  // The THIRD kind rides this same hold and shares nothing else with the other
+  // two (2026-09-01): its sentences, its refusal map and its consent story live
+  // in `channel-ops-agent-mode.ts`, because it is the one agent verb still gated
+  // by the operator's launch toggle. "Both axes optional, at least one required"
+  // is enforced at the tool boundary and again by the column CHECK, never here —
+  // this function files a row, it does not judge one.
+  input: AgentDirectiveInput,
   waitMs: number | undefined,
 ): Promise<
   | { done: true; response: ToolResponse }
@@ -207,10 +280,7 @@ async function fileAndHold(
     if (apiErrorCode(e) === "CHANNEL_AGENT_FOREIGN") {
       return {
         done: true,
-        response: foreignAgent(
-          input.agentId,
-          input.kind === "end" ? "ended" : "renamed",
-        ),
+        response: foreignAgent(input.agentId, VERB_PAST[input.kind]),
       };
     }
     if (isNotFound(e)) return { done: true, response: channelNotFound(ref) };
