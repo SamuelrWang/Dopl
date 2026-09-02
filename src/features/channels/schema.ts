@@ -9,6 +9,8 @@ import type {
   AgentToolProfile,
   ChannelVisibility,
   MessageIntent,
+  PostableAuthorKind,
+  PostableMessageKind,
   ThreadMode,
 } from "./types";
 // ⚠ THE RETIRED PARAMETERS LIVE IN THEIR OWN MODULE (§1 split, 2026-08-25) —
@@ -62,10 +64,16 @@ const ChannelTopicSchema = safeOptionalLabel("Channel topic", 2000);
 // message. `agent` stays postable: desktop posts task results with authorKind
 // `agent` over a cookie session; service derives agent vs user from the token
 // when authorKind omitted.
-const PostableAuthorKindSchema = z.enum(["user", "agent"]);
-// `system` server-emitted only (matches MCP post enum). Full kind union incl.
-// `system` lives in types.ts; schema only validates caller input.
-const PostableMessageKindSchema = z.enum([
+// ⚠ `closedEnum` over the DERIVED `PostableAuthorKind` — see `MessageKind` below.
+const PostableAuthorKindSchema = closedEnum<PostableAuthorKind>()([
+  "user",
+  "agent",
+]);
+// `system` server-emitted only. ⚠ `closedEnum` over the DERIVED type, so drift
+// against the full union is a COMPILE ERROR both ways; the three statements no
+// compiler reaches (the column CHECK, the SDK's two mirrors) are held by
+// `scripts/check-message-kind-drift.ts`. Argument: `types.ts › PostableMessageKind`.
+const PostableMessageKindSchema = closedEnum<PostableMessageKind>()([
   "message",
   "task_started",
   "task_progress",
