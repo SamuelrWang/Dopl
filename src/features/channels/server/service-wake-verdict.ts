@@ -236,10 +236,16 @@ export async function resolveWakeVerdict(
   const recipientUserIds = toUserId ? [toUserId] : [];
   const threaded = typeof metadata.taskId === "string";
 
-  const recipientAgentIds =
-    (input.kind ?? "message") === "message"
-      ? await resolveAgentRecipients(ctx, channelId, input.body, now)
-      : null;
+  // ⚠ **THE KIND GATE IS HELD IN A NAMED FLAG BECAUSE THE `delivery` ARM BELOW
+  // NEEDS IT TOO.** `recipientAgentIds` is `null` for TWO different reasons —
+  // "handles were named and none resolved" and "the agent half was never asked,
+  // because only `kind: 'message'` can reach a session" — and the column cannot
+  // tell them apart. Reading the null alone is what stamped `unreachable` on
+  // every `task_progress` and `task_finished` row ever written.
+  const isMessage = (input.kind ?? "message") === "message";
+  const recipientAgentIds = isMessage
+    ? await resolveAgentRecipients(ctx, channelId, input.body, now)
+    : null;
 
   const verdict: ChannelWakeVerdict =
     recipientAgentIds !== null && recipientAgentIds.length > 0
@@ -260,11 +266,18 @@ export async function resolveWakeVerdict(
     // would say "you addressed nobody" (`none`) or "it went to the thread"
     // (`idle`) about a post whose whole point was a name — precisely the
     // silent-miss G15 describes.
-    // ⚠ **A STRONGER REACH WINS.** An unresolvable handle beside a real `to=`,
-    // or beside an agent that DID resolve, is not the story of that message: it
-    // reached somebody, and the machine settles the rest.
+    // ⚠ **A STRONGER REACH WINS.** An unresolvable handle beside a real `to=` is
+    // not the story of that message: it reached somebody, and the machine
+    // settles the rest. (No `verdict !== "agent"` term is needed — the resolver
+    // answers `null` only when NOTHING resolved, so `agent` is unreachable from
+    // this branch by construction.)
+    // ⚠ **AND IT IS GATED ON THE KIND** (2026-09-02). A lifecycle marker or a
+    // milestone never asked the agent half, so its `null` says nothing about
+    // reach; without this term every non-message row was stamped `unreachable`,
+    // and an orchestrator reading a thread's own progress notes saw a room full
+    // of failed deliveries that never happened.
     delivery:
-      recipientAgentIds === null && verdict !== "agent" && verdict !== "member"
+      isMessage && recipientAgentIds === null && verdict !== "member"
         ? "unreachable"
         : DELIVERY_FOR[verdict],
   };

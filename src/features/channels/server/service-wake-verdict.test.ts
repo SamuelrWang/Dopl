@@ -225,6 +225,35 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     expect(vi.mocked(repoSessions.listSessionStates)).not.toHaveBeenCalled();
   });
 
+  it("a non-`message` kind is NOT `unreachable` — it never asked the agent half", async () => {
+    // 🔒 `recipientAgentIds` IS `null` FOR TWO REASONS AND THE COLUMN CANNOT TELL
+    // THEM APART (fixed 2026-09-02): "handles were named and none resolved", and
+    // "the kind gate never asked". Reading the null alone stamped `unreachable`
+    // on EVERY `task_progress` and `task_finished` row — so a thread's own
+    // milestones read, to an orchestrator, as a room full of failed deliveries.
+    const threaded = await resolve("step two done", { taskId: "task-1" }, "task_progress");
+    expect(threaded.verdict).toBe("thread");
+    expect(threaded.delivery).toBe("idle");
+
+    const bare = await resolve("done", {}, "task_progress");
+    expect(bare.verdict).toBe("none");
+    expect(bare.delivery).toBe("none");
+
+    // …even when the body is full of handles: the gate ran before the resolver.
+    const named = await resolve("@agent-k3v7d2mq done", {}, "task_progress");
+    expect(named.delivery).toBe("none");
+  });
+
+  it("a MESSAGE whose handles resolve to nobody IS `unreachable` — the arm is kept", async () => {
+    // ⚠ THE OTHER SIDE OF THE SAME GATE. The kind term must not swallow the case
+    // `unreachable` exists for: a post whose whole point was a name, reaching
+    // nothing this server can see (G15).
+    projection(sessionRow({ name: "zzzzzzzz" }));
+    const out = await resolve("@agent-k3v7d2mq go", { taskId: "task-1" });
+    expect(out.recipientAgentIds).toBeNull();
+    expect(out.delivery).toBe("unreachable");
+  });
+
   it("scopes the projection read to the caller and this channel", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
     await resolve("@agent-k3v7d2mq go");
