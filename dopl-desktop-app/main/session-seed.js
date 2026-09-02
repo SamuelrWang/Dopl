@@ -42,13 +42,10 @@ const framing = require('./prompt-framing'); // FIX F2: the fresh-shell first-tu
 // tells a session to weigh, so a mislabel hands an agent's own output operator authority. The
 // FENCING below is unchanged — whoever wrote it, the body is DATA and never instructions.
 // ⚠ `addressing` JOINED THE SIGNATURE ON 2026-08-21 (Samuel's ruling 5) AND IT IS ONE LINE OF
-// PROSE, NOT A GATE. Under fan-out every live agent on a thread receives every message on it,
-// so a message that says `@abc12def` reaches the other agents too — and without being told,
-// each of them would answer it. The line below is what makes an unaddressed reader stand down
-// while still holding the message as context. It is placed ABOVE the fence, in the trusted
-// preamble, because it is OUR statement about the message rather than part of it; the ids it
-// names come from `main/agent-id.js`'s closed charset intersected with this machine's own live
-// sessions, so nothing counterparty-controlled is interpolated here.
+// PROSE, NOT A GATE. It says whether this message named THIS reader, and it is placed ABOVE the
+// fence, in the trusted preamble, because it is OUR statement about the message rather than part
+// of it; the ids it names come from `main/agent-id.js`'s closed charset intersected with this
+// machine's own live sessions, so nothing counterparty-controlled is interpolated here.
 function frameContinuation(nonce, message, authorName, addressing) {
   const begin = `BEGIN-REQUEST-${nonce}`;
   const end = `END-REQUEST-${nonce}`;
@@ -73,54 +70,55 @@ function frameContinuation(nonce, message, authorName, addressing) {
   ].join('\n');
 }
 
-// The @-addressing verdict for ONE fed message, as prose above the fence.
+// The addressing verdict for ONE fed message, as prose above the fence.
 // ⚠ `addressing.ids` are agent ids (`^[a-z][a-z0-9]{7}$`), filtered against this machine's live
 // sessions before they get here, so the join below can never open a line of its own.
 //
-// ⚠ THE UNADDRESSED CASE USED TO SAY NOTHING AT ALL, and silence is not neutral (2026-08-22,
-// Samuel's ruling). `session-dispatch.js › addressingFor` answers `null` for "nobody was named",
-// this returned `[]` for it, and the only standing rule the agent then had was
-// `prompt-framing.js › agentIdentityFraming`'s old default of "an unnamed message is yours".
-// Across 40 real messages in live testing every sibling therefore answered every unaddressed
-// message and the coordination protocol fired ZERO times. The verdict is now STATED on that
-// branch, and it states the flipped default.
+// ⚠ **THE UNADDRESSED BRANCH IS DELETED (2026-09-02, ruling B1), AND IT IS THE FAN-OUT THAT PAID
+// FOR IT.** It was 330 characters on EVERY turn of EVERY reader of EVERY message that named
+// nobody — "NOBODY IS NAMED IN THIS MESSAGE… if a sibling has already claimed it, stand down…" —
+// and it existed because a message that named nobody was handed to every live agent on the
+// thread, so each had to be talked out of answering it. Delivery is narrowed to the recipient the
+// server resolved now: a session that was not named is not fed, so there is nobody left to talk
+// down. ⚠ **AND THE STANDING RULE DID NOT GO WITH IT** — `prompt-framing.js ›
+// agentIdentityFraming` states "a message that names NO agent id is NOT automatically yours" ONCE
+// PER SESSION, which is where a standing rule belongs; this branch was the same sentence re-paid
+// per turn.
 //
-// ⚠ `undefined` IS NOT `null` HERE, AND THE DIFFERENCE IS DELIBERATE. `null` is a COMPUTED
-// verdict: the fan-out parsed the body and found no agent id, so "nobody named you" is a thing
-// this machine knows. `undefined` is the ARGUMENT NOT SUPPLIED by a caller that never ran the
-// verdict, and telling such a session that no sibling claimed the message would be a claim the
-// call site cannot back. Every production path supplies one: `session-reducer.js › pushInbound`
-// normalizes with `event.addressing || null` (pinned in addressing-framing.test.mjs), and
-// `session-gate.js` carries the same field through the hold.
+// ⚠ IT SAYS "ADDRESSED TO YOU", NEVER "@-MENTIONS YOU" (2026-09-02). A recipient may have been
+// written (`@agent-<id>`, `to=`) or REPAIRED by the server when a human forgot the `@` (RR3,
+// INVARIANTS §5), and the repaired case carries no `@` in the body at all. Naming the mechanism
+// would make the preamble describe a message the reader can see does not exist.
 //
-// ⚠ THE MULTI-ADDRESSEE TIE-BREAK IS A RULE, NOT A SUGGESTION. "COORDINATE IN THE OPEN" is what
-// was already there and it is what failed in production, so a message naming two live agents
-// gets a DETERMINISTIC winner instead of an invitation to negotiate. The order is real and it is
-// the same on every reader's machine: `session-dispatch.js › mentionedAgentIds` pushes ids in
-// the order they appear in the BODY, intersected with `liveOnThread` order (registry insertion,
-// i.e. spawn order), and the same array is handed to every session. So "the first id named in
-// this list" is a rule each agent can apply alone, from the list it is looking at, with no round
-// trip. The stand-down is not absolute: the others take it back if the first one plainly never
-// acted, because a deterministic winner that has already ended is otherwise a dead thread.
+// ⚠ `undefined` IS NOT `null` HERE, AND THE DIFFERENCE IS DELIBERATE — it is now the ONLY thing
+// the two spell differently, and both answer `[]`. `null` is a COMPUTED verdict ("this named
+// nobody"); `undefined` is the ARGUMENT NOT SUPPLIED by a caller that never ran one. Keeping them
+// apart costs nothing and is what stops a later branch being written for one and reached by both.
+// Every production path supplies one: `session-reducer.js › pushInbound` normalizes with
+// `event.addressing || null` (pinned in addressing-framing.test.mjs), and `session-gate.js`
+// carries the same field through the hold.
+//
+// ⚠ THE MULTI-ADDRESSEE TIE-BREAK IS A RULE, NOT A SUGGESTION, and it survives the narrowing
+// because a BODY may still name two live agents even though `to=` may name only one. "COORDINATE
+// IN THE OPEN" is what was already there and it is what failed in production, so a message naming
+// two agents gets a DETERMINISTIC winner instead of an invitation to negotiate. The order is real
+// and it is the same on every reader's machine: `session-dispatch.js › planFor` preserves the
+// order the server (or the body parse) resolved, and the same array is handed to every session.
+// So "the first id named in this list" is a rule each agent can apply alone, from the list it is
+// looking at, with no round trip. The stand-down is not absolute: the others take it back if the
+// first one plainly never acted, because a deterministic winner that has already ended is
+// otherwise a dead thread.
 function addressingLines(addressing) {
-  if (addressing === undefined) return [];
   const list = (addressing && Array.isArray(addressing.ids)) ? addressing.ids : [];
-  if (!list.length) {
-    return [
-      `NOBODY IS NAMED IN THIS MESSAGE, so it is NOT automatically yours. Every agent working`,
-      `this thread was handed it, not just you. Read the thread before you answer: if a sibling`,
-      `has already claimed it or already answered it, stand down and stay quiet. If you are`,
-      `going to take it, claim it in one short line first, then do the work.`,
-    ];
-  }
+  if (!list.length) return [];
   const ids = list.join(', ');
   if (addressing.me === true) {
     if (list.length === 1) {
-      return [`This message @-mentions YOUR agent id. It is addressed to you: act on it.`];
+      return [`This message is addressed to YOU. Act on it.`];
     }
     const first = list[0];
     return [
-      `This message @-mentions YOUR agent id, and it names more than one agent: ${ids}.`,
+      `This message is addressed to YOU, and it names more than one agent: ${ids}.`,
       `WHO ACTS IS DECIDED BY ORDER, not by judgement and not by whoever is quickest: the FIRST`,
       `id in that list acts, and the others stand down. That is the rule, not a suggestion.`,
       `- If ${first} is your agent id, you are the one who acts. Do the work.`,
@@ -479,7 +477,7 @@ function frameDirectedTurn(nonce, text) {
 
 module.exports = {
   frameContinuation,
-  addressingLines, // 2026-08-22: exported so the verdict's four branches are unit-testable alone
+  addressingLines, // 2026-08-22: exported so the verdict's branches are unit-testable alone
   frameOperatorTurn, // 2026-08-20: the direct 1:1 lane (F-212)
   frameDirectedTurn, // 2026-08-31: the MCP direction lane — DATA, never operator authority
   frameHistorySeed, // v2.5 D3
