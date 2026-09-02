@@ -1,15 +1,15 @@
 /**
- * `dopl_kb` + `dopl_kb_admin` — the user's editable knowledge bases, addressed
- * like a filesystem (bases by slug or id, folders/entries by `/`-separated
- * path). `dopl_kb` = read + non-destructive writes; ⚠ `dopl_kb_admin` is the
- * delete surface and REFUSES every op it publishes.
+ * `dopl_kb` — the user's editable knowledge bases, addressed like a filesystem
+ * (bases by slug or id, folders/entries by `/`-separated path): reads plus
+ * non-destructive writes. ⚠ THERE IS NO DELETE OP AND NO `dopl_kb_admin`
+ * (deleted 2026-09-02) — deletion is app-only, fenced by `sessionOnly` on the
+ * REST routes, and `delete-policy.ts` is where that rule now lives.
  *
- * Thin registrar: two tool schemas + op routing, delegating to
+ * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
  *   - `knowledge-ops-write.ts` — create/update/move/write ops
  *   - `knowledge-ops-copy.ts`  — copy_base into another tenancy (two fenced legs)
- *   - `knowledge-ops-admin.ts` — the (refused) delete ops
  */
 import type { DoplClient } from "@dopl/client";
 import { type CallerIdentity } from "./identity";

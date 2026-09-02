@@ -1,7 +1,7 @@
 /**
- * `dopl_skill` WRITE op handlers plus `dopl_skill_admin`'s delete. ⚠ Every one
- * can come back 403 `SKILL_AGENT_WRITE_DISABLED`, which is why
- * `agentWriteDenied` lives beside `failureDetail` in `skills-shared.ts`.
+ * `dopl_skill` WRITE op handlers. ⚠ Every one can come back 403
+ * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
+ * `failureDetail` in `skills-shared.ts`.
  */
 
 import type { DoplClient } from "@dopl/client";
@@ -151,17 +151,5 @@ export async function opSetVisibility(
     );
   } catch (e) {
     return err(`Couldn't change sharing on \`${slug}\`: ${failureDetail(e)}`);
-  }
-}
-
-export async function opDelete(client: DoplClient, slug: string): Promise<ToolResponse> {
-  try {
-    await client.deleteSkill(slug);
-    return ok(`Deleted skill \`${slug}\`.`);
-  } catch (e) {
-    // A skill flagged read-only to agents rejects agent deletes.
-    const denied = agentWriteDenied(e);
-    if (denied) return denied;
-    return err(`Couldn't delete skill \`${slug}\`: ${failureDetail(e)}`);
   }
 }

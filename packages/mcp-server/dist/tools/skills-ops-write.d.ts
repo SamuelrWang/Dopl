@@ -1,7 +1,7 @@
 /**
- * `dopl_skill` WRITE op handlers plus `dopl_skill_admin`'s delete. ⚠ Every one
- * can come back 403 `SKILL_AGENT_WRITE_DISABLED`, which is why
- * `agentWriteDenied` lives beside `failureDetail` in `skills-shared.ts`.
+ * `dopl_skill` WRITE op handlers. ⚠ Every one can come back 403
+ * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
+ * `failureDetail` in `skills-shared.ts`.
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
@@ -29,4 +29,3 @@ export declare function opUpdate(client: DoplClient, params: {
     folder?: string | null;
 }): Promise<ToolResponse>;
 export declare function opSetVisibility(client: DoplClient, slug: string, visibility: string): Promise<ToolResponse>;
-export declare function opDelete(client: DoplClient, slug: string): Promise<ToolResponse>;

@@ -27,8 +27,9 @@
 //              approve-out gate), NO Dopl MCP, no write/exec/delegation. Zero-outbound.
 //              Answers come back on stdout, so no tool is needed to reply.
 //   dopl_only  local reads + WEB reads + NON-ADMIN Dopl MCP, each named EXPLICITLY.
-//              ⚠ Never the bare `mcp__dopl` prefix in an allow list — it matches the
-//              destructive *_admin tools too (made v1.1's dopl_only MORE dangerous than full).
+//              ⚠ Never the bare `mcp__dopl` prefix in an allow list — it matches EVERY tool on
+//              the server, `dopl_channel` (the exfil surface) included, and back when the
+//              destructive *_admin tools existed it made v1.1's dopl_only MORE dangerous than full.
 //              `dopl_channel` excluded AND denied, so the reply
 //              routes through stdout + approve-out. Residual exfil (a GET query string) is
 //              bounded: no Bash/Write/admin, so injected web content cannot ACT.
@@ -84,17 +85,15 @@ const DOPL_SAFE_TOOLS = [
   'mcp__dopl__list_workspaces',
 ];
 
-// Destructive admin companions. NEVER grantable under any restricted profile: denied
-// explicitly (belt) AND excluded from the allow list (braces).
-// ⚠ Keep even though each now refuses every delete op server-side — containment must not
-// depend on server-side policy, and a deny the operator cannot click through is stronger.
-const DOPL_ADMIN_TOOLS = [
-  'mcp__dopl__dopl_kb_admin',
-  'mcp__dopl__dopl_skill_admin',
-  'mcp__dopl__dopl_ontology_admin',
-  'mcp__dopl__dopl_chats_admin',
-  'mcp__dopl__dopl_agent_admin',
-];
+// Destructive admin companions that the server registers TODAY. EMPTY since 2026-09-02:
+// the five that lived here were DELETED server-side (registrars, op handlers, descriptions)
+// once `sessionOnly` on the app-only DELETE routes made the sentence they published true in
+// code. Their names did not leave the deny path — they moved to RETIRED_DOPL_TOOLS below,
+// which is the same move the 2026-08-11 retirement made, so UNIVERSAL_HARD_DENY is still 9.
+// ⚠ THE SLOT STAYS, and `test/tool-profiles.test.mjs` holds it EQUAL to the server's live
+// `*_admin` registrations: a destructive companion that ever ships again must land here, not
+// in DOPL_SAFE_TOOLS, or a dopl_only spawn gets it pre-approved.
+const DOPL_ADMIN_TOOLS = [];
 
 // Dopl tools that NO LONGER EXIST — deleted server-side, registrars, routes and tables.
 // ⚠ THE DENY OUTLIVES THE TOOL, DELIBERATELY. Dropping a name from DOPL_ADMIN_TOOLS alone
@@ -102,18 +101,29 @@ const DOPL_ADMIN_TOOLS = [
 // instead of immovably denied. The caller is a CLI we do not control and the name is
 // attacker-suppliable, so containment must not depend on the server's current tool list.
 // UNIVERSAL_HARD_DENY = admins + these = 9 since 2026-08-28 (it was 8 from 2026-08-11, and moved
-// because `dopl_agent_admin` joined the admin half — NOT because anything was retired; this list
-// is unchanged). docs/INVARIANTS.md §11 pins the number.
+// because `dopl_agent_admin` joined the admin half — NOT because anything was retired).
+// ⚠ IT IS STILL 9 AFTER 2026-09-02, AND THE WHOLE FLOOR IS ON THIS LIST NOW: the five `*_admin`
+// tools were DELETED server-side (their unconditional refusal is a `sessionOnly` REST gate now)
+// and their names moved here from DOPL_ADMIN_TOOLS. The floor did not move, because a deny
+// outlives its tool — which is the entire point of this list.
+// docs/INVARIANTS.md §11 pins the number.
 // Do NOT shorten this list to tidy up.
 const RETIRED_DOPL_TOOLS = [
   'mcp__dopl__dopl_workflow',
   'mcp__dopl__dopl_workflow_admin',
   'mcp__dopl__dopl_cluster',
   'mcp__dopl__dopl_cluster_admin',
+  // MCP v2 wave A (2026-09-02). Every op on all five was refused unconditionally, so they
+  // cost 9,295 served chars to publish a refusal that the `sessionOnly` REST gate enforces.
+  'mcp__dopl__dopl_kb_admin',
+  'mcp__dopl__dopl_skill_admin',
+  'mcp__dopl__dopl_ontology_admin',
+  'mcp__dopl__dopl_chats_admin',
+  'mcp__dopl__dopl_agent_admin',
 ];
 
 // ⚠ Bare server prefix — valid ONLY in a DENY list (it matches every tool on the server,
-// admins included), NEVER in an allow list.
+// `dopl_channel` included), NEVER in an allow list.
 const DOPL_SERVER_PREFIX = 'mcp__dopl';
 
 // Local READ built-ins every restricted spawn may use; also the base of the --tools positive

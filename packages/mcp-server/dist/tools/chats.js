@@ -3,13 +3,13 @@
  * MCP tools for the chat archive. Chats are agent-exported conversation
  * records: per-message summaries under an agent-filled session header. Private
  * to their owner by default; the owner can share one with the workspace.
- *   - `dopl_chats`       — reads + non-destructive writes.
- *   - `dopl_chats_admin` — DESTRUCTIVE delete, split out on purpose.
+ * ⚠ ONE TOOL: reads + non-destructive writes. There is no delete op and no
+ * `dopl_chats_admin` (deleted 2026-09-02) — deletion is app-only and permanent,
+ * fenced by `sessionOnly` on the two chat DELETE routes.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerChatTools = registerChatTools;
 const zod_1 = require("zod");
-const delete_policy_js_1 = require("../delete-policy.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const chats_render_1 = require("./chats-render");
@@ -71,11 +71,7 @@ const CHATS_DESCRIPTION = `The user's chat archive — exported conversation rec
 - "update_folder" — rename and/or re-scope. Requires: folder_id plus name and/or visibility. ⚠ Changing sharing re-scopes EVERY chat in the folder — confirm with the user first.
 - "guide" — export etiquette: message style, header discipline, idempotency, privacy.
 
-Deleting is APP-ONLY and permanent — no trash, nothing to restore. \`dopl_chats_admin\` lists its delete ops only to refuse them.`;
-const CHATS_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
-    { op: "delete", effect: "would have deleted a chat and its transcript" },
-    { op: "delete_folder", effect: "would have deleted a chat folder (leaving its chats unfiled)" },
-], `Reach for instead: \`dopl_chats\` op=update to retitle or re-file a chat, op=update_folder to rename a folder. If an archived chat genuinely has to go, ask the user to delete it in the Dopl app.`);
+No delete op — deleting is APP-ONLY and permanent: no trash, nothing to restore.`;
 const MessageShape = zod_1.z.object({
     role: zod_1.z.enum(["user", "agent"]),
     summary: zod_1.z.string().min(1).max(4000),
@@ -165,38 +161,6 @@ function registerChatTools(register, client) {
                     name: args.name,
                     visibility: args.visibility,
                 });
-            }
-        }
-    });
-    register("dopl_chats_admin", CHATS_ADMIN_DESCRIPTION, {
-        op: zod_1.z.enum(["delete", "delete_folder"]).describe("DESTRUCTIVE operation to perform."),
-        chat_id: zod_1.z.string().optional().describe("op=delete (required): chat id."),
-        folder_id: zod_1.z.string().optional().describe("op=delete_folder (required): folder id."),
-    }, async (args) => {
-        switch (args.op) {
-            case "delete": {
-                const miss = (0, respond_1.missingParams)("delete", args, ["chat_id"]);
-                if (miss)
-                    return miss;
-                try {
-                    await client.deleteChat(args.chat_id);
-                    return (0, respond_1.ok)(`Deleted chat \`${args.chat_id}\` and its transcript. Permanent — there is nothing to restore it from.`);
-                }
-                catch (e) {
-                    return (0, respond_1.err)(`Delete failed: ${(0, chats_render_1.failureDetail)(e)}`);
-                }
-            }
-            case "delete_folder": {
-                const miss = (0, respond_1.missingParams)("delete_folder", args, ["folder_id"]);
-                if (miss)
-                    return miss;
-                try {
-                    await client.deleteChatFolder(args.folder_id);
-                    return (0, respond_1.ok)(`Deleted folder \`${args.folder_id}\`. Its chats are now unfiled.`);
-                }
-                catch (e) {
-                    return (0, respond_1.err)(`Delete failed: ${(0, chats_render_1.failureDetail)(e)}`);
-                }
             }
         }
     });

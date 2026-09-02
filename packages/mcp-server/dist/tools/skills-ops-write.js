@@ -1,15 +1,14 @@
 "use strict";
 /**
- * `dopl_skill` WRITE op handlers plus `dopl_skill_admin`'s delete. ⚠ Every one
- * can come back 403 `SKILL_AGENT_WRITE_DISABLED`, which is why
- * `agentWriteDenied` lives beside `failureDetail` in `skills-shared.ts`.
+ * `dopl_skill` WRITE op handlers. ⚠ Every one can come back 403
+ * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
+ * `failureDetail` in `skills-shared.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opWrite = opWrite;
 exports.opCreate = opCreate;
 exports.opUpdate = opUpdate;
 exports.opSetVisibility = opSetVisibility;
-exports.opDelete = opDelete;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const skills_shared_1 = require("./skills-shared");
@@ -104,18 +103,5 @@ async function opSetVisibility(client, slug, visibility) {
     }
     catch (e) {
         return (0, respond_1.err)(`Couldn't change sharing on \`${slug}\`: ${(0, skills_shared_1.failureDetail)(e)}`);
-    }
-}
-async function opDelete(client, slug) {
-    try {
-        await client.deleteSkill(slug);
-        return (0, respond_1.ok)(`Deleted skill \`${slug}\`.`);
-    }
-    catch (e) {
-        // A skill flagged read-only to agents rejects agent deletes.
-        const denied = (0, skills_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        return (0, respond_1.err)(`Couldn't delete skill \`${slug}\`: ${(0, skills_shared_1.failureDetail)(e)}`);
     }
 }

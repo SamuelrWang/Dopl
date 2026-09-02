@@ -157,7 +157,9 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ 2,476 → 2,467 ON 2026-09-02: A8 took the TEAM AXIS off the `list` bullet
   // and out of the `visibility` arg (which is a THIRD enum arm gone from the
   // schema too, and that is not counted here). The filter disclosure stayed.
-  dopl_agent: 2467,
+  // ⚠ 2,467 → 2,446 ON 2026-09-02 (A3): the closing line stopped routing to
+  // `dopl_agent_admin`, a tool that no longer exists, and states the rule.
+  dopl_agent: 2446,
   // ⚠ 1,197 OF THIS IS THE P1 SUMMARY AND THE REST IS **ONE PARAGRAPH THE P3
   // TENANCY TIER ASKED TO KEEP WORD FOR WORD** — `channel-description.ts ›
   // HOME_CHANNEL_ADDRESSING`, ~650 chars on how a home channel is addressed,
@@ -173,19 +175,23 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // correct word is six characters shorter. Caught by the STALE half, which is
   // what that half is for.
   dopl_channel: 1775,
-  dopl_chats: 1701,
   // ⚠ +931 ON 2026-09-02 for three new ops — "copy_base", "pin", "unpin" — after
   // the copy/pin bullets gave back what `to_workspace` and `path` already say.
   // ⚠ 3,400 → 3,399 ON 2026-09-02: R2 reworded the `copy_base` bullet from "a
-  // base you can READ" to "a base YOU CREATED", one character shorter. Caught by
-  // the STALE half the same day it was repaired.
+  // base you can READ" to "a base YOU CREATED", one character shorter.
   // ⚠ 3,399 → 3,387 ON 2026-09-02: A8 took the TEAM AXIS off the `list_bases`
   // bullet. The FILTER is still disclosed ("no grant on", pinned by
   // `tool-scope-claims.test.ts`) — what left is the dead axis naming it.
-  dopl_kb: 3387,
+  // ⚠ 3,387 → 3,371 ON 2026-09-02 (A3): the closing line stopped routing to
+  // `dopl_kb_admin` — a tool that no longer exists — and says the rule instead.
+  dopl_kb: 3371,
+  dopl_chats: 1654,
   dopl_members: 1535,
+  // ⚠ UNCHANGED BY A3 (2026-09-02): its closing sentence stopped naming
+  // `dopl_ontology_admin` and states the rule instead, at exactly the same
+  // length. The win of that slice is the five tools, not this line.
   dopl_ontology: 2321,
-  dopl_skill: 1615,
+  dopl_skill: 1586,
 };
 
 /**

@@ -2,13 +2,13 @@
  * MCP tools for the chat archive. Chats are agent-exported conversation
  * records: per-message summaries under an agent-filled session header. Private
  * to their owner by default; the owner can share one with the workspace.
- *   - `dopl_chats`       — reads + non-destructive writes.
- *   - `dopl_chats_admin` — DESTRUCTIVE delete, split out on purpose.
+ * ⚠ ONE TOOL: reads + non-destructive writes. There is no delete op and no
+ * `dopl_chats_admin` (deleted 2026-09-02) — deletion is app-only and permanent,
+ * fenced by `sessionOnly` on the two chat DELETE routes.
  */
 
 import { z } from "zod";
 import type { ChatDetail, DoplClient } from "@dopl/client";
-import { deleteAdminDescription } from "../delete-policy.js";
 import { inlineOr } from "./narration";
 import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import {
@@ -81,15 +81,8 @@ const CHATS_DESCRIPTION = `The user's chat archive — exported conversation rec
 - "update_folder" — rename and/or re-scope. Requires: folder_id plus name and/or visibility. ⚠ Changing sharing re-scopes EVERY chat in the folder — confirm with the user first.
 - "guide" — export etiquette: message style, header discipline, idempotency, privacy.
 
-Deleting is APP-ONLY and permanent — no trash, nothing to restore. \`dopl_chats_admin\` lists its delete ops only to refuse them.`;
+No delete op — deleting is APP-ONLY and permanent: no trash, nothing to restore.`;
 
-const CHATS_ADMIN_DESCRIPTION = deleteAdminDescription(
-  [
-    { op: "delete", effect: "would have deleted a chat and its transcript" },
-    { op: "delete_folder", effect: "would have deleted a chat folder (leaving its chats unfiled)" },
-  ],
-  `Reach for instead: \`dopl_chats\` op=update to retitle or re-file a chat, op=update_folder to rename a folder. If an archived chat genuinely has to go, ask the user to delete it in the Dopl app.`,
-);
 
 const MessageShape = z.object({
   role: z.enum(["user", "agent"]),
@@ -183,42 +176,6 @@ export function registerChatTools(
             name: args.name,
             visibility: args.visibility,
           });
-        }
-      }
-    },
-  );
-
-  register(
-    "dopl_chats_admin",
-    CHATS_ADMIN_DESCRIPTION,
-    {
-      op: z.enum(["delete", "delete_folder"]).describe("DESTRUCTIVE operation to perform."),
-      chat_id: z.string().optional().describe("op=delete (required): chat id."),
-      folder_id: z.string().optional().describe("op=delete_folder (required): folder id."),
-    },
-    async (args): Promise<ToolResponse> => {
-      switch (args.op) {
-        case "delete": {
-          const miss = missingParams("delete", args, ["chat_id"]);
-          if (miss) return miss;
-          try {
-            await client.deleteChat(args.chat_id as string);
-            return ok(
-              `Deleted chat \`${args.chat_id}\` and its transcript. Permanent — there is nothing to restore it from.`,
-            );
-          } catch (e) {
-            return err(`Delete failed: ${failureDetail(e)}`);
-          }
-        }
-        case "delete_folder": {
-          const miss = missingParams("delete_folder", args, ["folder_id"]);
-          if (miss) return miss;
-          try {
-            await client.deleteChatFolder(args.folder_id as string);
-            return ok(`Deleted folder \`${args.folder_id}\`. Its chats are now unfiled.`);
-          } catch (e) {
-            return err(`Delete failed: ${failureDetail(e)}`);
-          }
         }
       }
     },

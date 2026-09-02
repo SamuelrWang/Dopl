@@ -7,8 +7,7 @@
  *      arrive as an actionable sentence naming the three conditions, never as a
  *      raw throw and never as a silent downgrade onto the other shelf.
  *   2. The refusals that are POLICY rather than plumbing: no shelf move on
- *      update, no delete anywhere, and the tool description that resolves the
- *      "Agents" collision.
+ *      update, and the tool description that resolves the "Agents" collision.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -16,7 +15,6 @@ import type { DoplClient } from "@dopl/client";
 
 import { registerAgentTools } from "./agent";
 import { opCreate, opUpdate } from "./agent-ops-write";
-import { opDelete } from "./agent-ops-admin";
 import { callTool, stub } from "./narration-fixtures";
 
 const ME = "user-1";
@@ -198,17 +196,13 @@ describe("what this surface will not do", () => {
     expect(textOf(res)).toContain("STRANGERS");
   });
 
-  it("the admin delete refuses, names the app, and calls nothing", async () => {
-    const client = stub({
-      listAgentTemplates: vi.fn(async () => {
-        throw new Error("the handler ran: listAgentTemplates() was called");
-      }),
-    }) as DoplClient;
-    const res = await opDelete(client, "Researcher");
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("app-only");
-    expect(textOf(res)).toContain("Do not retry with different parameters");
-  });
+  // ⚠ THE DELETE REFUSAL USED TO BE PINNED HERE, through
+  // `agent-ops-admin.ts › opDelete`. Both are gone (2026-09-02): `dopl_agent`
+  // publishes no delete op, `DELETE /api/agent-templates/{id}` has been
+  // `sessionOnly` since 2026-08-22, and the surviving claim — "no live `op`
+  // enum contains one of these ops" — is asserted over EVERY tool at once in
+  // `delete-block.test.ts`. Re-adding a per-tool copy here would be a second
+  // declaration of the same rule.
 
   it("the registrar routes every op and demands the ref where one is needed", async () => {
     const text = await callTool(

@@ -1,7 +1,9 @@
 "use strict";
 /**
- * `dopl_agent` + `dopl_agent_admin` — AGENT TEMPLATES, the persistent agent
- * IDENTITIES a user authors once and launches many times.
+ * `dopl_agent` — AGENT TEMPLATES, the persistent agent IDENTITIES a user authors
+ * once and launches many times. ⚠ There is no delete op and no
+ * `dopl_agent_admin` (deleted 2026-09-02) — deletion is app-only, and
+ * `DELETE /api/agent-templates/{id}` has been `sessionOnly` since 2026-08-22.
  *
  * ⚠ THE NAME IS A DELIBERATE COLLISION, RESOLVED BY SAMUEL (ruling Q7,
  * 2026-08-28). "Agents" already names TWO surfaces — the identities on /home and
@@ -11,25 +13,22 @@
  * agent reaching for "the agents in this channel" is sent to
  * `dopl_channel(op="read_sessions")` instead of here.
  *
- * Thin registrar: two descriptions + schemas + op routing, delegating to
+ * Thin registrar: one description + schema + op routing, delegating to
  *   - `agent-shared.ts`    — the three-answer ref resolution + error mappers
  *   - `agent-ops-read.ts`  — list / get
  *   - `agent-ops-write.ts` — create / update (shelf fence + confirm gate)
  *   - `agent-ops-copy.ts`  — copy into another tenancy (two fenced legs)
- *   - `agent-ops-admin.ts` — the (refused) delete
  * ⚠ The `agent-` prefix is what the parity split-scan groups on.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAgentTools = registerAgentTools;
 const zod_1 = require("zod");
-const delete_policy_js_1 = require("../delete-policy.js");
 const identity_js_1 = require("./identity.js");
 const respond_js_1 = require("./respond.js");
 const shelf_js_1 = require("./shelf.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const agent_ops_read_js_1 = require("./agent-ops-read.js");
 const agent_ops_write_js_1 = require("./agent-ops-write.js");
-const agent_ops_admin_js_1 = require("./agent-ops-admin.js");
 const agent_ops_copy_js_1 = require("./agent-ops-copy.js");
 const copy_target_js_1 = require("./copy-target.js");
 const AGENT_DESCRIPTION = `Read and author AGENT TEMPLATES — persistent agent identities (name, instructions, default model, custom fields, attached knowledge bases) that outlive any session spawned from them. Agents RUNNING in a channel are a different thing: dopl_channel(op="read_sessions"), and dopl_channel(op="launch_agent") starts one. Templates are addressed by id or exact name (case-insensitive); an ambiguous name is REFUSED with both ids, never guessed.
@@ -43,13 +42,7 @@ Set \`op\` to one of:
 - "update" — Requires: template. Optional: name, description, instructions, model, fields, visibility, knowledge_bases, confirm_token. \`fields\` and \`knowledge_bases\` REPLACE the whole set — [] empties it. No shelf move.
 - "copy" — re-create a template YOU CREATED as a NEW template in ANOTHER workspace or home channel. Requires: template, to_workspace (see its own description for the target rules). Carries name, description, instructions, model and custom fields; NOT attached knowledge bases (a base id means nothing in another tenancy — the result says how many were dropped) and never visibility.
 
-Deleting is app-only — \`dopl_agent_admin\` refuses the op it lists. ⚠ Publishing a template into a home channel somebody ELSE is in previews first, returning what would be created, who would see it, and a one-time \`confirm_token\` to re-issue with.`;
-const AGENT_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
-    {
-        op: "delete",
-        effect: "would have destroyed an agent template and every attachment on it",
-    },
-], `Reach for instead: \`dopl_agent\` op=update with visibility="private" takes a template out of everyone else's reach without destroying it, and op=update can rewrite its instructions in place. If it genuinely has to go, ask the user to delete it in the Dopl app.`);
+No delete op — deletion is app-only. ⚠ Publishing a template into a home channel somebody ELSE is in previews first, returning what would be created, who would see it, and a one-time \`confirm_token\` to re-issue with.`;
 /**
  * ⚠ THE SERVER'S BOUNDS, RE-TYPED — and NAMED since 2026-08-30 (G3).
  *
@@ -204,22 +197,6 @@ directory) {
                     shelf: args.shelf,
                     confirm_token: args.confirm_token,
                 });
-            }
-        }
-    });
-    register("dopl_agent_admin", AGENT_ADMIN_DESCRIPTION, {
-        op: zod_1.z.enum(["delete"]).describe("DESTRUCTIVE operation to perform."),
-        template: zod_1.z
-            .string()
-            .optional()
-            .describe("Template id or exact name. Required for the refused delete op."),
-    }, async (args) => {
-        switch (args.op) {
-            case "delete": {
-                const miss = (0, respond_js_1.missingParams)("delete", args, ["template"]);
-                if (miss)
-                    return miss;
-                return (0, agent_ops_admin_js_1.opDelete)(client, args.template);
             }
         }
     });

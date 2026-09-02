@@ -1,8 +1,7 @@
 /**
  * THE APP-ONLY DELETION RULE, AS CODE RATHER THAN AS PROSE (2026-09-02).
  *
- * Every `_admin` tool in `packages/mcp-server` serves this sentence, built once
- * by `delete-policy.ts › deleteAdminDescription`:
+ * Every `_admin` tool in `packages/mcp-server` served this sentence:
  *
  *   "Deletion is app-only … there is no MCP path to it, for any role or token."
  *
@@ -14,12 +13,20 @@
  * been told "no role, scope or argument changes that" could `curl` the row away.
  * A tool description is a PROMPT; `sessionOnly` is a FENCE.
  *
- * Two properties, and the second is the one that survives the next wave:
+ * ⚠ AND THE NEXT WAVE CAME THE SAME DAY. Because this file exists, the five
+ * `_admin` tools were deleted outright — 9,295 served chars publishing a
+ * refusal — so `opRefusal` no longer guards anything that is registered, and
+ * THIS FILE IS THE FENCE. `DELETE_BLOCKED_OPS` survives as the ledger of delete
+ * capabilities the app owns and the MCP surface may never publish, re-keyed
+ * from `<tool>_admin` onto the DOMAIN tool a delete op could only arrive on.
+ *
+ * Two properties, and the second is the one that outlives any tool:
  *   1. per ROUTE — an agent token is refused `SESSION_REQUIRED` and a session
  *      caller still deletes (below);
- *   2. per REFUSED OP — every op in `DELETE_BLOCKED_OPS` maps to a REST route on
- *      this list, so a NEW `_admin` delete op cannot ship advertising a fence
- *      that only `opRefusal` provides.
+ *   2. per LISTED OP — every op in `DELETE_BLOCKED_OPS` maps to a REST route on
+ *      this list, so a delete op cannot ship without the fence behind it. Its
+ *      twin lives in `packages/mcp-server/src/tools/delete-block.test.ts`, which
+ *      asserts none of these ops is in a live `op` enum.
  *
  * ⚠ THE WRAPPER IS FAKED, AND THE FAKE MIRRORS `with-auth.ts`'s REAL BRANCH
  * (the `options.sessionOnly` → 403 `SESSION_REQUIRED` arm, verbatim in shape).
@@ -157,13 +164,13 @@ type Handler = (
 ) => Promise<Response>;
 
 /**
- * ⚠ THE MAP IS THE POINT OF THIS FILE. Left column: the `_admin` op the MCP
- * server publishes only to refuse. Right column: the REST door that op's
- * refusal was the only fence for. A refused op with no row here is a promise
- * with nothing behind it, and the census test below fails on one.
+ * ⚠ THE MAP IS THE POINT OF THIS FILE. Left column: the delete op the MCP
+ * surface must never publish. Right column: the REST door behind it. An op with
+ * no row here is a promise with nothing behind it, and the census below fails
+ * on one.
  */
 const GATED: Array<{
-  /** `<tool>.<op>` exactly as `DELETE_BLOCKED_OPS` spells it. */
+  /** `<tool>.<op>` exactly as `DELETE_BLOCKED_OPS` spells it — DOMAIN tool. */
   refusedOps: string[];
   /** Path relative to `src/app/api`, as `write-gate-coverage.test.ts` keys them. */
   file: string;
@@ -174,7 +181,7 @@ const GATED: Array<{
   service: () => ReturnType<typeof vi.fn>;
 }> = [
   {
-    refusedOps: ["dopl_kb_admin.delete_base"],
+    refusedOps: ["dopl_kb.delete_base"],
     file: "knowledge/bases/[baseId]/route.ts",
     url: "http://localhost/api/knowledge/bases/kb-1",
     params: { baseId: "kb-1" },
@@ -182,7 +189,7 @@ const GATED: Array<{
     service: () => vi.mocked(knowledgeService.deleteBase),
   },
   {
-    refusedOps: ["dopl_kb_admin.delete_folder"],
+    refusedOps: ["dopl_kb.delete_folder"],
     file: "knowledge/folders/[folderId]/route.ts",
     url: "http://localhost/api/knowledge/folders/f-1",
     params: { folderId: "f-1" },
@@ -193,7 +200,7 @@ const GATED: Array<{
     // ⚠ THE SECOND DOOR ONTO THE SAME TWO ACTS, and the one easiest to miss:
     // `?path=` resolves to a folder OR an entry, so leaving it ungated would
     // have kept both refused ops reachable by name instead of by id.
-    refusedOps: ["dopl_kb_admin.delete_folder", "dopl_kb_admin.delete_file"],
+    refusedOps: ["dopl_kb.delete_folder", "dopl_kb.delete_file"],
     file: "knowledge/bases/[baseId]/folders-by-path/route.ts",
     url: "http://localhost/api/knowledge/bases/kb-1/folders-by-path?path=notes",
     params: { baseId: "kb-1" },
@@ -201,7 +208,7 @@ const GATED: Array<{
     service: () => vi.mocked(knowledgeService.deleteByPath),
   },
   {
-    refusedOps: ["dopl_kb_admin.delete_file"],
+    refusedOps: ["dopl_kb.delete_file"],
     file: "knowledge/entries/[entryId]/route.ts",
     url: "http://localhost/api/knowledge/entries/e-1",
     params: { entryId: "e-1" },
@@ -209,7 +216,7 @@ const GATED: Array<{
     service: () => vi.mocked(knowledgeService.deleteEntry),
   },
   {
-    refusedOps: ["dopl_skill_admin.delete"],
+    refusedOps: ["dopl_skill.delete"],
     file: "skills/[skillSlug]/route.ts",
     url: "http://localhost/api/skills/my-skill",
     params: { skillSlug: "my-skill" },
@@ -217,7 +224,7 @@ const GATED: Array<{
     service: () => vi.mocked(skillService.deleteSkill),
   },
   {
-    refusedOps: ["dopl_chats_admin.delete"],
+    refusedOps: ["dopl_chats.delete"],
     file: "chats/[chatId]/route.ts",
     url: "http://localhost/api/chats/c-1",
     params: { chatId: "c-1" },
@@ -225,7 +232,7 @@ const GATED: Array<{
     service: () => vi.mocked(chatService.deleteChat),
   },
   {
-    refusedOps: ["dopl_chats_admin.delete_folder"],
+    refusedOps: ["dopl_chats.delete_folder"],
     file: "chats/folders/[folderId]/route.ts",
     url: "http://localhost/api/chats/folders/cf-1",
     params: { folderId: "cf-1" },
@@ -233,7 +240,7 @@ const GATED: Array<{
     service: () => vi.mocked(chatService.deleteFolderForUser),
   },
   {
-    refusedOps: ["dopl_ontology_admin.delete_object"],
+    refusedOps: ["dopl_ontology.delete_object"],
     file: "ontology/objects/[objectId]/route.ts",
     url: "http://localhost/api/ontology/objects/o-1",
     params: { objectId: "o-1" },
@@ -241,7 +248,7 @@ const GATED: Array<{
     service: () => vi.mocked(ontologyService.deleteObject),
   },
   {
-    refusedOps: ["dopl_ontology_admin.delete_cluster"],
+    refusedOps: ["dopl_ontology.delete_cluster"],
     file: "ontology/clusters/[clusterId]/route.ts",
     url: "http://localhost/api/ontology/clusters/cl-1",
     params: { clusterId: "cl-1" },
@@ -251,14 +258,14 @@ const GATED: Array<{
 ];
 
 /**
- * `dopl_agent_admin.delete` is the tenth refused op and is NOT in the table
- * above because `DELETE /api/agent-templates/[templateId]` has carried
- * `sessionOnly` since 2026-08-22 — it is pinned per-method by that route's own
- * `route.test.ts`. The census below reads it from here so a rename there fails
- * loudly rather than silently shrinking the map.
+ * `dopl_agent.delete` is the tenth op and is NOT in the table above because
+ * `DELETE /api/agent-templates/[templateId]` has carried `sessionOnly` since
+ * 2026-08-22 — it is pinned per-method by that route's own `route.test.ts`. The
+ * census below reads it from here so a rename there fails loudly rather than
+ * silently shrinking the map.
  */
 const ALREADY_GATED_ELSEWHERE: Record<string, string> = {
-  "dopl_agent_admin.delete": "agent-templates/[templateId]/route.ts",
+  "dopl_agent.delete": "agent-templates/[templateId]/route.ts",
 };
 
 function req(url: string): NextRequest {
@@ -310,7 +317,7 @@ describe("app-only deletion — the REST fence behind the MCP refusal", () => {
   }
 });
 
-describe("the census — every refused `_admin` delete op has a REST fence", () => {
+describe("the census — every app-only delete op has a REST fence", () => {
   /**
    * Parsed out of the MCP package's SOURCE TEXT rather than imported, for the
    * reason `tools/parity-harness.ts` gives: the `src` vitest project does not
@@ -345,9 +352,8 @@ describe("the census — every refused `_admin` delete op has a REST fence", () 
     const unfenced = refusedOpsFromSource().filter((op) => !covered.has(op));
     expect(
       unfenced,
-      "these `_admin` ops tell an agent deletion is app-only with NOTHING but " +
-        "`gating.ts › opRefusal` behind the claim — map each to its REST route " +
-        "and give that route `sessionOnly: true`:\n  " +
+      "these delete ops are declared app-only with NOTHING behind the claim — " +
+        "map each to its REST route and give that route `sessionOnly: true`:\n  " +
         unfenced.join("\n  ")
     ).toEqual([]);
   });

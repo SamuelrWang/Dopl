@@ -10,8 +10,8 @@
  *                          fail-closed no-default refusal.
  *   gating.ts              THE FOUR GATES + their tables. ⚠ Read that file's
  *                          header before touching either registration path.
- *   delete-policy.ts       the delete refusal AND the description `_admin`
- *                          tools advertise.
+ *   delete-policy.ts       the app-only-deletion rule: the refusal, and the
+ *                          table of delete ops no tool may publish.
  *   registrar.ts           `registerTool` / `registerMetaTool`, workspace arg,
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
@@ -82,7 +82,21 @@ export declare function createServer(client: DoplClient, options?: {
     sessionKey?: string;
     /**
      * OAuth scopes for this session. Present and lacking `dopl.write` ⇒
-     * write/admin ops gated.
+     * write ops gated.
      */
     scopes?: string[];
+    /**
+     * The ROLE this connection says it is running as — the `X-Dopl-Tool-Profile`
+     * request header, forwarded verbatim by the transport. `gating.ts ›
+     * TOOL_PROFILE_TOOLS` decides what a role means; it is EMPTY today, so every
+     * value serves the whole surface and this changes nothing yet (wave B fills
+     * the table).
+     *
+     * ⚠ IT MAY ONLY NARROW, AND IT IS A HINT AND NOT A FENCE. Absent, unknown,
+     * or a role with no row all resolve to "serve everything", so a stale
+     * desktop can never be locked out; and because it is caller-supplied,
+     * nothing may be GRANTED on it. Containment stays the desktop's
+     * `disallowedTools` + `grantDecision` and the credential itself.
+     */
+    toolProfile?: string | null;
 }): McpServer;

@@ -5,25 +5,23 @@
  * per-skill `agent_write_enabled` toggle — without it, 403
  * `SKILL_AGENT_WRITE_DISABLED`.
  *
- *   - `dopl_skill`       — reads + non-destructive writes.
- *   - `dopl_skill_admin` — ⚠ the delete surface, REFUSING; the ops stay listed
- *                          to teach the refusal.
+ * ⚠ ONE TOOL: reads + non-destructive writes. There is no delete op and no
+ * `dopl_skill_admin` (deleted 2026-09-02) — deletion is app-only, fenced by
+ * `sessionOnly` on `DELETE /api/skills/[skillSlug]`.
  *
- * Thin registrar: two descriptions + schemas + op routing, delegating to
+ * Thin registrar: one description + schema + op routing, delegating to
  * `skills-shared.ts`, `skills-ops-read.ts`, `skills-ops-write.ts`. ⚠ The
  * `skills-` prefix is what the parity split-scan groups on.
  */
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { deleteAdminDescription } from "../delete-policy.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
 import { opGet, opList, opRead } from "./skills-ops-read";
 import {
   opCreate,
-  opDelete,
   opSetVisibility,
   opUpdate,
   opWrite,
@@ -39,12 +37,8 @@ const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-
 - "set_visibility" — "public" (workspace-visible) or "private" (owner-only); owner or workspace-admin only. Requires: slug, visibility.
 - "authoring_guide" — the canonical skill-authoring framework. Call before every op="create".
 
-Deleting is app-only: \`dopl_skill_admin\` refuses the op it lists.`;
+No delete op — deletion is app-only.`;
 
-const SKILL_ADMIN_DESCRIPTION = deleteAdminDescription(
-  [{ op: "delete", effect: "would have deleted a skill" }],
-  `Reach for instead: \`dopl_skill\` op=write to replace the SKILL.md body, or op=update with status="draft" to take a skill out of the list an agent sees without destroying it. If it genuinely has to go, ask the user to delete it in the Dopl app.`,
-);
 
 export function registerSkillTools(
   register: RegisterTool,
@@ -129,24 +123,6 @@ export function registerSkillTools(
         }
         case "authoring_guide":
           return ok(SKILL_AUTHORING_GUIDE);
-      }
-    },
-  );
-
-  register(
-    "dopl_skill_admin",
-    SKILL_ADMIN_DESCRIPTION,
-    {
-      op: z.enum(["delete"]).describe("DESTRUCTIVE operation to perform."),
-      slug: z.string().optional().describe("Skill slug. Required for delete."),
-    },
-    async (args): Promise<ToolResponse> => {
-      switch (args.op) {
-        case "delete": {
-          const miss = missingParams("delete", args, ["slug"]);
-          if (miss) return miss;
-          return opDelete(client, args.slug as string);
-        }
       }
     },
   );

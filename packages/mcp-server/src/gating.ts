@@ -1,11 +1,11 @@
 /**
- * gating.ts — THE FOUR GATES, and the three tables they read.
+ * gating.ts — THE GATES, and the tables they read.
  *
- * ⚠ THE TOPOLOGY IS THE INVARIANT. TWO gates run at REGISTRATION (the tool
- * never exists) and TWO per CALL (the op is refused):
+ * ⚠ THE TOPOLOGY IS THE INVARIANT. Gates run at REGISTRATION (the tool never
+ * exists) or per CALL (the op is refused):
  *
- *   registration → {@link Gates.isSuppressedTool}: HIDDEN_TOOLS and, for a
- *                  read-only session, READ_ONLY_BLOCKED_TOOLS.
+ *   registration → {@link Gates.isSuppressedTool}: HIDDEN_TOOLS, plus the
+ *                  role-scoped offer a `X-Dopl-Tool-Profile` header asks for.
  *   per call     → {@link Gates.opRefusal}: the app-only-deletion block FIRST
  *                  and unconditionally, then the write-scope gate.
  *
@@ -19,9 +19,16 @@
  * so a refused delete costs zero round trips and can never half-happen. It must
  * never become reachable only after another gate lets the call through.
  *
- * ⚠ `parity.test.ts` / `delete-block.test.ts` PARSE `WRITE_OPS`,
- * `READ_ONLY_BLOCKED_TOOLS` and `HIDDEN_TOOLS` out of this file's SOURCE TEXT
- * (`tools/parity-harness.ts`). The parse follows the constant, not the filename.
+ * ⚠ `READ_ONLY_BLOCKED_TOOLS` WAS DELETED WITH THE FIVE `_admin` TOOLS
+ * (2026-09-02). It held exactly those five names — the purely destructive tools
+ * a read-only session was not even offered — and nothing can join it: deletion
+ * is app-only, so no destructive tool can be registered for it to name. A
+ * read-only session's write refusal is {@link WRITE_OPS}, per op, which is where
+ * it always was for every mixed tool.
+ *
+ * ⚠ `parity.test.ts` / `delete-block.test.ts` PARSE `WRITE_OPS` and
+ * `HIDDEN_TOOLS` out of this file's SOURCE TEXT (`tools/parity-harness.ts`).
+ * The parse follows the constant, not the filename.
  */
 
 import { DELETE_REFUSAL, isBlockedDeleteOp } from "./delete-policy.js";
@@ -43,14 +50,42 @@ import type { ToolResponse } from "./tools/respond.js";
  */
 export const HIDDEN_TOOLS = new Set<string>([]);
 
-/** Purely destructive tools aren't even registered for a read-only session. */
-export const READ_ONLY_BLOCKED_TOOLS = new Set([
-  "dopl_chats_admin",
-  "dopl_kb_admin",
-  "dopl_skill_admin",
-  "dopl_ontology_admin",
-  "dopl_agent_admin",
-]);
+/**
+ * ROLE-SCOPED TOOL OFFERS — which tools a session in a given role is offered.
+ * The `X-Dopl-Tool-Profile` request header names the role; this table decides
+ * what it means. EMPTY TODAY: the mechanism ships in wave A and the table is
+ * filled in wave B, so every role currently serves the whole surface.
+ *
+ * ⚠ NARROWING-ONLY BY CONSTRUCTION, in three ways that must all stay true:
+ *   1. a role's value is an ALLOW set INTERSECTED with what the registrars
+ *      register, so a role can never name a tool into existence;
+ *   2. an ABSENT header, and a role with no row here, both resolve to `null` =
+ *      no narrowing = the whole surface. An unknown role can therefore never
+ *      widen anything, and a desktop build newer than this server degrades to
+ *      today's behaviour rather than to an empty tool list;
+ *   3. it is a HINT AND NOT A FENCE. The header is caller-supplied, so anything
+ *      holding the credential can pick any role — including none. Containment
+ *      is the desktop's `disallowedTools` + `grantDecision`, and the credential
+ *      itself. Nothing may be GRANTED on this value. Same discipline as
+ *      `src/shared/auth/runtime-header.ts`.
+ */
+export const TOOL_PROFILE_TOOLS = new Map<string, ReadonlySet<string>>();
+
+/**
+ * The tools a role is offered, or `null` for "no narrowing". ⚠ The ONE place a
+ * profile name becomes a set, so the fail-open direction is written once.
+ *
+ * ⚠ A `Map`, NOT AN OBJECT LITERAL — unlike every other table in this file, the
+ * KEY here is caller-supplied. `TOOL_PROFILE_TOOLS["constructor"]` on a literal
+ * answers `Object.prototype.constructor`: truthy, and then `.has` is not a
+ * function. A Map has no inherited keys, so a role name off the wire can only
+ * hit a row somebody wrote.
+ */
+export function offeredToolsFor(
+  toolProfile: string | null | undefined,
+): ReadonlySet<string> | null {
+  return (toolProfile && TOOL_PROFILE_TOOLS.get(toolProfile)) || null;
+}
 
 /**
  * Per-op write gating for MIXED read+write tools — they stay registered for
@@ -195,7 +230,7 @@ export const WRITE_OPS: Record<string, Set<string>> = {
 export interface Gates {
   /**
    * Suppressed at registration: absent from `tools/list`, nothing to call —
-   * `HIDDEN_TOOLS` plus, for a read-only session, the destructive tools. The
+   * `HIDDEN_TOOLS` plus anything outside this session's role-scoped offer. The
    * honest way to remove a capability is for the tool not to exist.
    */
   isSuppressedTool(name: string): boolean;
@@ -212,12 +247,21 @@ export interface Gates {
 
 /**
  * Build the gates for one session. ⚠ `canWrite` is the OAuth scope verdict and
- * FAILS CLOSED upstream — write/admin only on an explicit `dopl.write`.
+ * FAILS CLOSED upstream — write only on an explicit `dopl.write`.
+ *
+ * ⚠ `offeredTools` is the RESOLVED set, not a role name, so a caller can hand in
+ * any set it likes — which is what lets `meta-gate.test.ts` drive the
+ * suppression leg with synthetic names instead of against a table that is empty
+ * by design. `server.ts` resolves it through {@link offeredToolsFor}; `null` is
+ * "serve everything" and is the only behaviour wave A ships.
  */
-export function createGates(canWrite: boolean): Gates {
+export function createGates(
+  canWrite: boolean,
+  offeredTools: ReadonlySet<string> | null = null,
+): Gates {
   function isSuppressedTool(name: string): boolean {
     if (HIDDEN_TOOLS.has(name)) return true;
-    return !canWrite && READ_ONLY_BLOCKED_TOOLS.has(name);
+    return offeredTools !== null && !offeredTools.has(name);
   }
 
   function requestedOp(args: unknown): string | undefined {

@@ -162,12 +162,13 @@ function parseToolSet(src: string, name: string, where: string): Set<string> {
 }
 
 /**
- * ⚠ THE PARSE FOLLOWS THE CONSTANT, NOT THE FILENAME. `HIDDEN_TOOLS`,
- * `READ_ONLY_BLOCKED_TOOLS` and `WRITE_OPS` live in `gating.ts`; the delete
- * table lives in `delete-policy.ts` (keeping it in `server.ts` would be an
- * import cycle through the four `_admin` registrars). A "not found" throw here
- * means a table was RENAMED or reshaped — the loud failure this parse exists
- * to produce.
+ * ⚠ THE PARSE FOLLOWS THE CONSTANT, NOT THE FILENAME. `HIDDEN_TOOLS` and
+ * `WRITE_OPS` live in `gating.ts`; the delete table lives in
+ * `delete-policy.ts`, its own module because the policy is read by BOTH the MCP
+ * gate and the app's REST census (`src/shared/auth/app-only-delete-gate.test.ts`
+ * parses the same constant out of the same source text). A "not found" throw
+ * here means a table was RENAMED or reshaped — the loud failure this parse
+ * exists to produce.
  */
 export const GATING_SOURCE = readFileSync(path.join(SRC_DIR, "gating.ts"), "utf8");
 export const DELETE_POLICY_SOURCE = readFileSync(
@@ -176,14 +177,13 @@ export const DELETE_POLICY_SOURCE = readFileSync(
 );
 
 export const WRITE_OPS = parseOpTable(GATING_SOURCE, "WRITE_OPS", "gating.ts");
-export const READ_ONLY_BLOCKED_TOOLS = parseToolSet(
-  GATING_SOURCE,
-  "READ_ONLY_BLOCKED_TOOLS",
-  "gating.ts",
-);
 /** Hide-before-delete guard — see `gating.ts › HIDDEN_TOOLS`. */
 export const HIDDEN_TOOLS = parseToolSet(GATING_SOURCE, "HIDDEN_TOOLS", "gating.ts");
-/** The §2b app-only-deletion table, same shape as WRITE_OPS. */
+/**
+ * The app-only-deletion table, same shape as WRITE_OPS. ⚠ Keyed on the DOMAIN
+ * tool since 2026-09-02: it names ops that must NEVER appear in a live `op`
+ * enum, which is the opposite of `WRITE_OPS`, whose entries must all appear.
+ */
 export const DELETE_BLOCKED_OPS = parseOpTable(
   DELETE_POLICY_SOURCE,
   "DELETE_BLOCKED_OPS",

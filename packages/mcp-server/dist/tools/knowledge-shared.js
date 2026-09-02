@@ -1,7 +1,7 @@
 "use strict";
 /**
- * Shared resolvers + error mappers for `dopl_kb` / `dopl_kb_admin`, leaned on by
- * the read, write and admin op modules. The registrar (knowledge.ts) routes.
+ * Shared resolvers + error mappers for `dopl_kb`, leaned on by the read, write
+ * and copy op modules. The registrar (knowledge.ts) routes.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UNTRUSTED_ENTRY_BODY_HEADER = void 0;

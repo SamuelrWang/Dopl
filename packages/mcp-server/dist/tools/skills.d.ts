@@ -5,11 +5,11 @@
  * per-skill `agent_write_enabled` toggle — without it, 403
  * `SKILL_AGENT_WRITE_DISABLED`.
  *
- *   - `dopl_skill`       — reads + non-destructive writes.
- *   - `dopl_skill_admin` — ⚠ the delete surface, REFUSING; the ops stay listed
- *                          to teach the refusal.
+ * ⚠ ONE TOOL: reads + non-destructive writes. There is no delete op and no
+ * `dopl_skill_admin` (deleted 2026-09-02) — deletion is app-only, fenced by
+ * `sessionOnly` on `DELETE /api/skills/[skillSlug]`.
  *
- * Thin registrar: two descriptions + schemas + op routing, delegating to
+ * Thin registrar: one description + schema + op routing, delegating to
  * `skills-shared.ts`, `skills-ops-read.ts`, `skills-ops-write.ts`. ⚠ The
  * `skills-` prefix is what the parity split-scan groups on.
  */

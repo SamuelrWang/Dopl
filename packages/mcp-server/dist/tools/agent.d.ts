@@ -1,6 +1,8 @@
 /**
- * `dopl_agent` + `dopl_agent_admin` — AGENT TEMPLATES, the persistent agent
- * IDENTITIES a user authors once and launches many times.
+ * `dopl_agent` — AGENT TEMPLATES, the persistent agent IDENTITIES a user authors
+ * once and launches many times. ⚠ There is no delete op and no
+ * `dopl_agent_admin` (deleted 2026-09-02) — deletion is app-only, and
+ * `DELETE /api/agent-templates/{id}` has been `sessionOnly` since 2026-08-22.
  *
  * ⚠ THE NAME IS A DELIBERATE COLLISION, RESOLVED BY SAMUEL (ruling Q7,
  * 2026-08-28). "Agents" already names TWO surfaces — the identities on /home and
@@ -10,12 +12,11 @@
  * agent reaching for "the agents in this channel" is sent to
  * `dopl_channel(op="read_sessions")` instead of here.
  *
- * Thin registrar: two descriptions + schemas + op routing, delegating to
+ * Thin registrar: one description + schema + op routing, delegating to
  *   - `agent-shared.ts`    — the three-answer ref resolution + error mappers
  *   - `agent-ops-read.ts`  — list / get
  *   - `agent-ops-write.ts` — create / update (shelf fence + confirm gate)
  *   - `agent-ops-copy.ts`  — copy into another tenancy (two fenced legs)
- *   - `agent-ops-admin.ts` — the (refused) delete
  * ⚠ The `agent-` prefix is what the parity split-scan groups on.
  */
 import type { DoplClient } from "@dopl/client";

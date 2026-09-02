@@ -1,6 +1,6 @@
 /**
- * Shared resolution + rendering for `dopl_agent` / `dopl_agent_admin`. The
- * registrar (`agent.ts`) routes; the op modules render.
+ * Shared resolution + rendering for `dopl_agent`. The registrar (`agent.ts`)
+ * routes; the op modules render.
  *
  * ⚠ THE `agent-` FILENAME PREFIX IS THE CONTRACT — `tool-group-files.ts` groups
  * a tool's files on the registrar's stem, and a handler in an unprefixed file is

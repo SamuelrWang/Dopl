@@ -1,27 +1,25 @@
 "use strict";
 /**
- * `dopl_kb` + `dopl_kb_admin` — the user's editable knowledge bases, addressed
- * like a filesystem (bases by slug or id, folders/entries by `/`-separated
- * path). `dopl_kb` = read + non-destructive writes; ⚠ `dopl_kb_admin` is the
- * delete surface and REFUSES every op it publishes.
+ * `dopl_kb` — the user's editable knowledge bases, addressed like a filesystem
+ * (bases by slug or id, folders/entries by `/`-separated path): reads plus
+ * non-destructive writes. ⚠ THERE IS NO DELETE OP AND NO `dopl_kb_admin`
+ * (deleted 2026-09-02) — deletion is app-only, fenced by `sessionOnly` on the
+ * REST routes, and `delete-policy.ts` is where that rule now lives.
  *
- * Thin registrar: two tool schemas + op routing, delegating to
+ * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
  *   - `knowledge-ops-write.ts` — create/update/move/write ops
  *   - `knowledge-ops-copy.ts`  — copy_base into another tenancy (two fenced legs)
- *   - `knowledge-ops-admin.ts` — the (refused) delete ops
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
 const zod_1 = require("zod");
-const delete_policy_js_1 = require("../delete-policy.js");
 const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const shelf_1 = require("./shelf");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
-const knowledge_ops_admin_1 = require("./knowledge-ops-admin");
 const knowledge_ops_copy_1 = require("./knowledge-ops-copy");
 const copy_target_1 = require("./copy-target");
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases like a filesystem: bases by slug or id, folders/entries by \`/\`-separated path.
@@ -45,12 +43,7 @@ Set \`op\` to one of:
 - "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. Requires: base; \`path\` picks base-or-entry (see its own description). A workspace-wide curation flag — it changes no visibility and no audience. The payload is capped, so anything past a few pages arrives as a pointer to fetch with op="read_file" rather than as content.
 - "unpin" — the exact inverse, same arguments. An entry unpinned on its own still arrives with the base if the BASE is pinned.
 
-Deleting is app-only: \`dopl_kb_admin\` refuses every op it lists.`;
-const KB_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
-    { op: "delete_base", effect: "would have deleted a base and its folders + entries" },
-    { op: "delete_folder", effect: "would have deleted the folder at a path" },
-    { op: "delete_file", effect: "would have deleted the entry at a path" },
-], `Reach for instead: \`dopl_kb\` op=write_file to replace an entry's contents, op=move_file / op=move_folder to reorganize. If something genuinely has to go, say so and ask the user to delete it in the Dopl app.`);
+No delete op — deletion is app-only.`;
 function registerKnowledgeTools(register, client, 
 // ⚠ Read for exactly THREE things: whether an entry BODY is somebody else's,
 // which decides `UNTRUSTED_ENTRY_BODY_HEADER`; binding a confirm token to the
@@ -215,38 +208,6 @@ directory) {
                 if (miss)
                     return miss;
                 return (0, knowledge_ops_write_1.opPin)(client, args.base, args.path, args.op === "pin");
-            }
-        }
-    });
-    // ── dopl_kb_admin — the delete surface, every op refused ─────────
-    register("dopl_kb_admin", KB_ADMIN_DESCRIPTION, {
-        op: zod_1.z
-            .enum(["delete_base", "delete_folder", "delete_file"])
-            .describe("Destructive operation to perform."),
-        base: zod_1.z.string().optional().describe("Base slug or id. Required for all ops."),
-        path: zod_1.z
-            .string()
-            .optional()
-            .describe("delete_folder/delete_file: required path of the resource the refused op names."),
-    }, async (args) => {
-        switch (args.op) {
-            case "delete_base": {
-                const miss = (0, respond_1.missingParams)("delete_base", args, ["base"]);
-                if (miss)
-                    return miss;
-                return (0, knowledge_ops_admin_1.opDeleteBase)(client, args.base);
-            }
-            case "delete_folder": {
-                const miss = (0, respond_1.missingParams)("delete_folder", args, ["base", "path"]);
-                if (miss)
-                    return miss;
-                return (0, knowledge_ops_admin_1.opDeleteFolder)(client, args.base, args.path);
-            }
-            case "delete_file": {
-                const miss = (0, respond_1.missingParams)("delete_file", args, ["base", "path"]);
-                if (miss)
-                    return miss;
-                return (0, knowledge_ops_admin_1.opDeleteFile)(client, args.base, args.path);
             }
         }
     });

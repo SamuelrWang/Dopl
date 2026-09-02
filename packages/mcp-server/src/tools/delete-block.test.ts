@@ -8,11 +8,14 @@
  *      must be a REAL registered tool (a name with no registrar is dead law
  *      that reads as coverage), no surviving description may route an agent to
  *      one, and the visible list must be exactly the surviving tools.
- *   2. DELETION IS APP-ONLY — every op on every live `_admin` tool is refused,
- *      and each tool SAYS SO in its description, so `tools/list` never
- *      advertises a delete the server will refuse.
+ *   2. DELETION IS APP-ONLY — and since 2026-09-02 the way that is true is that
+ *      NO DELETE OP EXISTS. The five `_admin` tools that published delete ops
+ *      only to refuse them are deleted; `DELETE_BLOCKED_OPS` survives as the
+ *      list of ops that must never come back, doubly held: asserted absent from
+ *      every live `op` enum here, and refused by `isBlockedDeleteOp` the instant
+ *      one is added.
  *
- * ⚠ The completeness check asks the REAL predicate (`isBlockedDeleteOp` from
+ * ⚠ The checks ask the REAL predicate (`isBlockedDeleteOp` from
  * `delete-policy.ts`), not a copy — a rule checked against a reimplementation
  * of itself only proves the copy agrees with itself. The TABLE is still parsed
  * from source, which is what catches a table drifting from an op enum.
@@ -58,21 +61,18 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
     expect(VISIBLE_TOOLS.map((t) => t.name).sort()).toEqual(
       [
         // MCP surface v2 wave A (2026-08-28): the template family joins.
+        // ⚠ TEN, NOT FIFTEEN, SINCE 2026-09-02: the five `_admin` companions
+        // were hidden and then deleted in the same wave.
         "dopl_agent",
-        "dopl_agent_admin",
         "dopl_channel",
         "dopl_home",
         "dopl_chats",
-        "dopl_chats_admin",
         "dopl_kb",
-        "dopl_kb_admin",
         "dopl_map",
         "dopl_members",
         "dopl_ontology",
-        "dopl_ontology_admin",
         "dopl_search",
         "dopl_skill",
-        "dopl_skill_admin",
       ].sort(),
     );
   });
@@ -94,13 +94,15 @@ describe("HIDDEN_TOOLS — the retired surface", () => {
   });
 });
 
-// ── §2b: deletion is app-only ────────────────────────────────────────
+// ── deletion is app-only: no delete op exists ────────────────────────
 
-describe("delete ops are refused, not performed", () => {
-  it("every DELETE_BLOCKED_OPS entry names a live admin tool", () => {
+describe("no delete op is published, and none may come back", () => {
+  it("every DELETE_BLOCKED_OPS entry names a live tool", () => {
+    // ⚠ A row against a tool nothing registers fences nothing, and it would
+    // silently drop that op out of the REST census in
+    // `src/shared/auth/app-only-delete-gate.test.ts`, which keys on this table.
     for (const name of Object.keys(DELETE_BLOCKED_OPS)) {
       expect(TOOL_BY_NAME.has(name), `DELETE_BLOCKED_OPS references unknown tool ${name}`).toBe(true);
-      expect(isAdmin(name), `DELETE_BLOCKED_OPS lists non-admin tool ${name}`).toBe(true);
       expect(
         HIDDEN_TOOLS.has(name),
         `DELETE_BLOCKED_OPS lists ${name}, which is hidden — a hidden tool needs no op-level rule`,
@@ -108,73 +110,71 @@ describe("delete ops are refused, not performed", () => {
     }
   });
 
-  it("every op it lists exists in that tool's op enum", () => {
-    // ⚠ A blocked op that no longer exists is a rule guarding nothing.
+  it("SECURITY: none of those ops is in a live op enum — the surface publishes no delete", () => {
+    // ⚠ THE INVARIANT THAT MATTERS, AND ITS POLARITY IS THE OPPOSITE OF
+    // `WRITE_OPS ⊆ enum` (2026-09-02). WRITE_OPS names ops that MUST exist;
+    // this table names ops that MUST NOT. An op arriving in an enum is a delete
+    // path over MCP, which `sessionOnly` on the REST route would then be the
+    // only thing standing behind.
     for (const [name, ops] of Object.entries(DELETE_BLOCKED_OPS)) {
-      const enumOps = opEnum(TOOL_BY_NAME.get(name)!);
-      expect(enumOps, `${name} has no op enum but DELETE_BLOCKED_OPS gates it`).not.toBeNull();
+      const enumOps = opEnum(TOOL_BY_NAME.get(name)!) ?? [];
       for (const op of ops) {
         expect(
-          enumOps,
-          `DELETE_BLOCKED_OPS.${name} lists op="${op}", which is not in the tool's op enum`,
-        ).toContain(op);
-      }
-    }
-  });
-
-  it("SECURITY: EVERY op on EVERY live admin tool is refused — no delete path survives", () => {
-    // ⚠ THE INVARIANT THAT MATTERS: every `*_admin` op is destructive by
-    // construction, so a new un-refused one is a delete an agent can perform.
-    // Asked of the REAL predicate so the fail-closed name-shape fallback counts
-    // and a future admin op inherits the rule with no table edit. A failure on
-    // a genuinely non-destructive op means it does not belong on `_admin`.
-    for (const tool of VISIBLE_TOOLS) {
-      if (!isAdmin(tool.name)) continue;
-      const enumOps = opEnum(tool);
-      expect(enumOps, `${tool.name} is an admin tool with no op enum`).not.toBeNull();
-      for (const op of enumOps!) {
-        expect(
-          isBlockedDeleteOp(tool.name, op),
-          `${tool.name} op="${op}" is NOT refused by isBlockedDeleteOp — that is a live delete path over MCP (§2b says there are none)`,
-        ).toBe(true);
-      }
-    }
-  });
-
-  it("the refusal is advertised: no admin description promises a delete it won't do", () => {
-    for (const tool of VISIBLE_TOOLS) {
-      if (!isAdmin(tool.name)) continue;
-      expect(
-        tool.description.startsWith("Deletion is app-only"),
-        `${tool.name}'s description must open by stating the refusal, or tools/list advertises deletes it will refuse. Got: ${tool.description.slice(0, 80)}`,
-      ).toBe(true);
-    }
-  });
-
-  it("leaves the non-admin tools alone — this is a delete block, not a write block", () => {
-    // ⚠ Opposite failure: an over-broad rule swallowing `remove_attribute` or
-    // `remove_template_field` (ontology FIELD edits) removes working capability
-    // with a message about deletion.
-    for (const tool of VISIBLE_TOOLS) {
-      if (isAdmin(tool.name)) continue;
-      for (const op of opEnum(tool) ?? []) {
-        expect(
-          isBlockedDeleteOp(tool.name, op),
-          `${tool.name} op="${op}" is refused as a delete, but it is not on an admin tool`,
+          enumOps.includes(op),
+          `${name} publishes op="${op}" — deletion is app-only, so no tool may offer it`,
         ).toBe(false);
       }
     }
   });
 
-  it("no admin description still claims a delete is recoverable", () => {
-    // ⚠ Deletion in the app is PERMANENT — a "soft-deleted"/"restorable"
-    // sentence has an agent tell a user an item can be brought back.
-    for (const tool of VISIBLE_TOOLS) {
-      if (!isAdmin(tool.name)) continue;
-      for (const stale of ["soft-delete", "soft-deleted", "restorable", "restore from trash"]) {
+  it("SECURITY: the gate refuses one anyway, asked of the REAL predicate", () => {
+    // ⚠ Belt to the enum check's braces: if an op DOES land in an enum, the
+    // refusal fires before workspace resolution and before any client call, so
+    // a delete cannot half-happen. Asked of `isBlockedDeleteOp` itself so the
+    // rule is the one the server runs.
+    for (const [name, ops] of Object.entries(DELETE_BLOCKED_OPS)) {
+      for (const op of ops) {
         expect(
-          tool.description.toLowerCase().includes(stale),
-          `${tool.name}'s description says "${stale}" — deletion is permanent`,
+          isBlockedDeleteOp(name, op),
+          `${name} op="${op}" is NOT refused by isBlockedDeleteOp — that is a live delete path over MCP`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("no `*_admin` tool is registered — the refusal surface is gone, not hidden", () => {
+    // ⚠ The five cost 9,295 served chars to publish a refusal, and the sentence
+    // they served — "there is no MCP path to it, for any role or token" — is now
+    // true in code at the credential layer. A new one would be a regression, not
+    // a gap.
+    expect(VISIBLE_TOOLS.map((t) => t.name).filter(isAdmin)).toEqual([]);
+  });
+
+  it("leaves the surviving ops alone — this is a delete block, not a write block", () => {
+    // ⚠ Opposite failure: an over-broad rule swallowing `remove_attribute` or
+    // `remove_template_field` (ontology FIELD edits) removes working capability
+    // with a message about deletion.
+    for (const tool of VISIBLE_TOOLS) {
+      for (const op of opEnum(tool) ?? []) {
+        expect(
+          isBlockedDeleteOp(tool.name, op),
+          `${tool.name} op="${op}" is refused as a delete, but it is a live op`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("no surviving description promises a delete, or claims one is recoverable", () => {
+    // ⚠ Deletion in the app is PERMANENT — a "soft-deleted"/"restorable"
+    // sentence has an agent tell a user an item can be brought back. And a
+    // description still routing to a deleted `_admin` tool teaches a call that
+    // cannot be made, which reads as a broken connection.
+    for (const tool of VISIBLE_TOOLS) {
+      const text = tool.description.toLowerCase();
+      for (const stale of ["soft-delete", "soft-deleted", "restorable", "restore from trash", "_admin"]) {
+        expect(
+          text.includes(stale),
+          `${tool.name}'s description says "${stale}"`,
         ).toBe(false);
       }
     }
