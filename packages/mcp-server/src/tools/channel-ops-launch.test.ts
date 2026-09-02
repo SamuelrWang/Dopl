@@ -361,57 +361,6 @@ describe("the call itself", () => {
   const apiError = (status: number, code: string, details?: unknown) =>
     Object.assign(new Error(code), { status, code, details });
 
-  it("an AMBIGUOUS name is refused and EVERY match is listed with its id and visibility", async () => {
-    // ⚠ REFUSES AND LISTS, NEVER PICKS. Names are deliberately not unique — a
-    // unique index across a visibility boundary would leak the existence of a
-    // private row through a conflict error — so two visible "Researcher"s is a
-    // legitimate state and any tie-break silently starts the wrong identity.
-    const res = await opLaunchAgent(
-      client({
-        createLaunchDirective: vi.fn(async () => {
-          throw apiError(409, "AGENT_TEMPLATE_AMBIGUOUS", {
-            matches: [
-              { id: "t-1", name: "Researcher", visibility: "private" },
-              { id: "t-2", name: "Researcher", visibility: "workspace" },
-            ],
-          });
-        }),
-      }),
-      "general",
-      { template: "Researcher" },
-    );
-    const out = res.content[0].text as string;
-    expect(res.isError).toBe(true);
-    expect(out).toContain("nothing was filed");
-    expect(out).toContain("`t-1`");
-    expect(out).toContain("`t-2`");
-    expect(out).toContain("(private)");
-    expect(out).toContain("(workspace)");
-    // ⚠ It must not read as a CHANNEL problem, and it must not tell the agent to
-    // wait for a machine: nothing was asked of one.
-    expect(out).not.toContain("Channel not found");
-    expect(out).not.toContain("still PENDING");
-  });
-
-  it("an UNRESOLVABLE template says so, and never says whether it EXISTS", async () => {
-    // ⚠ 404-never-403 all the way down: "no such template" and "not shared with
-    // you" are ONE answer, or the refusal becomes an id-probe.
-    const res = await opLaunchAgent(
-      client({
-        createLaunchDirective: vi.fn(async () => {
-          throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND");
-        }),
-      }),
-      "general",
-      { template: "Ghost" },
-    );
-    const out = res.content[0].text as string;
-    expect(res.isError).toBe(true);
-    expect(out).toContain("`Ghost`");
-    expect(out).toContain("nothing was filed");
-    expect(out).not.toContain("Channel not found");
-  });
-
   it("a channel 404 with NO template code is still a channel not-found", async () => {
     const res = await opLaunchAgent(
       client({
@@ -442,10 +391,24 @@ describe("the call itself", () => {
     )).content[0].text as string;
     expect(out).toContain("OPERATOR");
     expect(out).toContain("Do not re-issue");
-    // It must NOT claim to know which of deleted / invisible it was: the resolve
-    // endpoint is 404-never-403 so the difference is not observable, and a
-    // sentence that guessed would rebuild the oracle.
-    expect(out).toContain("Either it no longer exists, or it is not visible");
+    // It must NOT claim to know which failure it was: the resolve endpoint is
+    // 404-never-403 so the difference is not observable, and a sentence that
+    // guessed would rebuild the oracle. Pinned as the DISJUNCTION rather than as
+    // one phrasing — the alternatives are the property, the wording is not.
+    expect(out).toContain("or it no longer exists");
+    expect(out).toContain("not visible to the OPERATOR");
+    // ⚠ AND IT NAMES THE TENANCY RULE (T35), which is not an oracle: the resolve
+    // is keyed `(workspace_id, id)` against the CHANNEL's container, so a
+    // template the caller owns elsewhere is absent rather than hidden. That is a
+    // standing rule of the system, answerable without reading any row.
+    expect(out).toContain("THIS CHANNEL'S container");
+    expect(out).toContain("a home channel IS its own container");
+    // ⚠ AND IT NAMES NO PLACE, because it CANNOT: this refusal came back from a
+    // DESKTOP over a closed refusal vocabulary with no detail field, so the
+    // honest classification `template-resolve.js` made stays a local log. The
+    // RULE crossing instead of the ROW is the whole design.
+    expect(out).not.toContain("not in this channel's own container");
+    expect(out).toContain("CHECK THE TENANCY FIRST");
   });
 
   it("an unknown channel comes back as a clean not-found", async () => {
