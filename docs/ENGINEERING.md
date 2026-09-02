@@ -5470,7 +5470,7 @@ spawn-idle lane that goal is delivered AT A WAKE, and
 
 > **the only caller of the directive lane cannot produce a wake.**
 
-A dormant session woke on a HUMAN-authored message (`session-wake-tiers.js › wakeEligibility`, the
+A dormant session woke on a HUMAN-authored message (the loop fence, in the wake-tiers module deleted 2026-09-02 with the tiers; the
 2026-08-28 loop fence), and a directive is filed by an AGENT whose every post is agent-authored.
 The five @-posts were not misrouted, misspelled or refused — they were correctly, silently inert,
 and nothing in the product said so. The agent eventually ran because a human reached it through
@@ -5664,7 +5664,7 @@ exactly why raising one meant revisiting the others by hand.
   raise was FOR. **A rate ceiling below the cost ceiling is not a backstop — it is the real cap
   wearing the wrong name.** `test/launch-budget.test.mjs` pins the ORDERING (rate > cost) rather
   than either literal, which is why the relationship survives the next retune.
-- **`session-triage.js › MAX_TRIAGE_PER_MESSAGE` 6 → 15, and this one is the subtle one.** The cap
+- **The triage cap `MAX_TRIAGE_PER_MESSAGE` 6 → 15, and this one is the subtle one** (the module was deleted 2026-09-02 with the tier). The cap
   **TRUNCATES rather than refusing** — an over-budget room triages its oldest N candidates and the
   rest stay asleep. So leaving it at 6 under a cap of 15 would not have cost money, it would have
   cost **WAKES**: past the sixth dormant agent in a room, a candidate could never be triaged and
