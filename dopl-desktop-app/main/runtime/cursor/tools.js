@@ -41,6 +41,21 @@
 // ⚠ SO A CURSOR SESSION AT `read_only` OR `dopl_only` IS NOT PROVEN UNABLE TO DELEGATE, exactly
 // as on the other native-containment runtime. It is Samuel's §8 open question 2 in concrete form
 // and it is recorded, not papered over.
+//
+// ── ⚠ FROZEN AT THREE PROFILES (2026-09-02, ruling X0) ───────────────────────────────────────
+// The other two adapters gained a FOURTH, `channel_agent` (ruling B7: `full` minus the shell, for
+// a session launched into a SHARED container). THIS TABLE DID NOT, AND THAT IS THE FREEZE, NOT AN
+// OVERSIGHT. X0 holds this runtime: `descriptor.session.interrupt` is `'unverified'`, and *"Dopl
+// cannot own a session it cannot stop"* — a runtime that does not ship does not grow a profile,
+// because a containment table written against research nobody has smoke-tested is a claim, not a
+// fence.
+// ⚠ THE REFUSAL IS THE ONE ALREADY IN THE CONTRACT, not a new branch here.
+// `contract.js › LAUNCH_BLOCKING[1]` (`containment.profiles.<profile>.denyList`) refuses a LAUNCH
+// AT A PROFILE this adapter declares no deny list for, and `capability.js › profileRefusal` is
+// the sentence an operator reads. `cursor/index.js › containment.profiles` therefore names three,
+// and `test/channel-agent-profile.test.mjs` pins the refusal so the freeze cannot rot into a
+// silent fall-through. ⚠ WHEN X0 CLEARS, this file gains the branch and that descriptor gains the
+// entry, in one change with the smoke item that grounds it.
 
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY,

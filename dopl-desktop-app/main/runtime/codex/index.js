@@ -154,6 +154,10 @@ const descriptor = {
     profiles: {
       read_only: profileEntry('read_only'),
       dopl_only: profileEntry('dopl_only'),
+      // ⚠ THE FOURTH PROFILE (2026-09-02, ruling B7), DECLARED ON THIS LANE TOO — Codex SHIPS
+      // (X0 holds Cursor, not this one), so a shared-container launch here must reach the same
+      // containment as on Claude, expressed in this runtime's own approval vocabulary.
+      channel_agent: profileEntry('channel_agent'),
       full: profileEntry('full'),
     },
   },
