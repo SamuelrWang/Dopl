@@ -4,7 +4,7 @@
  * (below) and the read result's thread-legend title (bottom of this file).
  *
  * ⚠ `await`'s FAILED-MID-HOLD branch is the one place that splices upstream
- * text outside `UNTRUSTED_BODY_HEADER`, and "our own server's error" is a claim
+ * text no framing covers, and "our own server's error" is a claim
  * about the SOURCE, not the CONTENT — a 400 echoing a rejected field, a proxy
  * error page, or a not-found naming a counterparty ref all carry influenced text.
  *
@@ -115,7 +115,7 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
 /**
  * THE SAME HOLE ONE LINE LOWER: the thread legend's TITLE.
  *
- * ⚠ `UNTRUSTED_BODY_HEADER` disclaims message BODIES; the legend sits under it
+ * ⚠ The description's SECURITY paragraph disclaims message BODIES; the legend sits outside it
  * and reads as the server's own narration. The title is peer-typed —
  * "server-stamped" says where the bytes were copied from, not who wrote them —
  * and runs to 200 chars with interior newlines allowed: room to close the line

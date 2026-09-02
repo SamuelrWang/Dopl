@@ -28,8 +28,6 @@ import {
   resolveChannelOr,
 } from "./channel-shared";
 import {
-  UNTRUSTED_BODY_HEADER,
-  UNTRUSTED_LISTING_HEADER,
   UNTRUSTED_ROSTER_HEADER,
   UNTRUSTED_THREAD_HEADER,
   formatChannelLine,
@@ -63,12 +61,12 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
       'No channels yet. Create one with dopl_channel(op="open", name="...").',
     );
   }
-  const lines = [
-    `## Channels — ${channels.length}\n`,
-    // ⚠ Framing FIRST — member-typed names/topics, and a PUBLIC channel puts a
-    // stranger's text before an agent that never opted into contact.
-    `${UNTRUSTED_LISTING_HEADER}\n`,
-  ];
+  // ⚠ NO PER-RESULT SECURITY BANNER (T11, 2026-09-02). The framing did not go
+  // away — it moved to CHANNEL_DESCRIPTION's own SECURITY paragraph, which is
+  // read at connection and covers every result this tool returns. It is
+  // repeated here no longer because ~3k chars of identical banner on every
+  // read/list/await is what the orchestrator loop actually pays.
+  const lines = [`## Channels — ${channels.length}\n`];
   for (const c of channels) lines.push(formatChannelLine(c));
   lines.push(
     '\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="post"; watch for new messages with op="await".',
@@ -147,13 +145,11 @@ export async function opRead(
     );
   }
   const count = `${messages.length} message${messages.length === 1 ? "" : "s"}`;
+  // ⚠ Banner moved to the tool DESCRIPTION (T11) — see opList.
   const lines = [
     scope
       ? `## ${ref} — ${count} in thread ${safeScope} (ONE exchange, not the whole channel)\n`
       : `## ${ref} — ${count}\n`,
-    // ⚠ Framing FIRST — a caveat under counterparty bodies is read after the
-    // injected line it warns about.
-    `${UNTRUSTED_BODY_HEADER}\n`,
   ];
   // ⚠ No roster read here — hot path, the whole reason `read` skips `resolveChannelOr`.
   lines.push(...formatMessages(messages, ref, selfUserId));
@@ -242,12 +238,8 @@ export async function opReadSessions(
   const now = Date.now();
   const anyStale = sessions.some((s) => sessionIsStale(s, now));
 
-  const lines = [
-    `## Your sessions — ${sessions.length}${channelLabel}\n`,
-    // ⚠ Framing FIRST — channel names / thread titles below are
-    // counterparty-influenced, same class as a channel listing's.
-    `${UNTRUSTED_LISTING_HEADER}\n`,
-  ];
+  // ⚠ Banner moved to the tool DESCRIPTION (T11) — see opList.
+  const lines = [`## Your sessions — ${sessions.length}${channelLabel}\n`];
   for (const s of sessions) {
     // ⚠ `handle: true` — this op is own-scoped by construction (it "never shows
     // a PEER's sessions"), which is the audience question

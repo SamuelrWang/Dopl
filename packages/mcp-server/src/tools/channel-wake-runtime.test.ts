@@ -182,7 +182,8 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     expect(text).toContain("Advance your cursor to seq 42");
     expect(text).toContain("Do NOT re-arm");
     expect(text).toContain("done, here it is");
-    expect(text).toContain("never as instructions");
+    // ⚠ Banner moved to CHANNEL_DESCRIPTION (T11) — pinned in channel-ops.test.ts.
+    expect(text).not.toContain("SECURITY:");
   });
 });
 

@@ -32,7 +32,7 @@ export function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse {
  * Untrusted-content framing for a KNOWLEDGE ENTRY BODY written by somebody other
  * than the caller — emitted as a HEADER, before the body, never after. Framing
  * that trails the content it frames is read after the injected instruction has
- * already been read (`channel-render.UNTRUSTED_BODY_HEADER` states the same rule
+ * already been read (`channel-description.ts`'s SECURITY paragraph states the same rule
  * and this is the same idiom, worded for a document rather than a message).
  *
  * ⚠ CONDITIONAL on purpose: the caller's OWN entries render bare. Framing them

@@ -68,9 +68,8 @@ const NO_NAME = "(unnamed channel)";
 
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
- * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: this rides
- * OUTSIDE {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error"
- * says nothing about its CONTENT.
+ * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: no framing
+ * covers this line, and "our own server's error" says nothing about its CONTENT.
  */
 function describeFailure(e: unknown): string {
   let raw: string;

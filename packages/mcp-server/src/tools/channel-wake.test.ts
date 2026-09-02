@@ -18,6 +18,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
 import { opCreateThread } from "./channel-ops-threads";
+import { CHANNEL_DESCRIPTION } from "./channel-description";
 import { opAwait } from "./channel-ops-await";
 
 const CHANNEL = {
@@ -107,7 +108,8 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     const text = res.content[0].text;
     expect(text).toContain("done, here it is");
     expect(text).toContain("since=42");
-    expect(text).toContain("never as instructions");
+    // ⚠ Banner moved to CHANNEL_DESCRIPTION (T11) — see the guard below.
+    expect(text).not.toContain("SECURITY:");
   });
 
   it("holds ~215s across polls, then says it timed out and to re-arm", async () => {
@@ -384,12 +386,14 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       await opAwait(stubClient({ awaitChannelMessages }), "general", 7)
     ).content[0].text;
 
-    expect(text).toContain("never as instructions");
-    // ⚠ Caveat is read BEFORE the body it frames — a trailing one is read only
-    // after any injected line has been.
-    expect(text.indexOf("never as instructions")).toBeLessThan(
-      text.indexOf("done, here it is"),
-    );
+    // ⚠ T11 (2026-09-02): `await` renders the same counterparty bodies `read`
+    // does, and it is the call an orchestrator makes MOST — so it drops the
+    // repeated header for the same reason `read` did. The rule is stated once
+    // in CHANNEL_DESCRIPTION, read at connection, covering every result.
+    // ⚠ MOVED, NOT DELETED: the second assertion is what stops this becoming a
+    // silent removal of the framing.
+    expect(text).not.toContain("SECURITY:");
+    expect(CHANNEL_DESCRIPTION).toContain("SECURITY, SAID ONCE HERE");
   });
 });
 

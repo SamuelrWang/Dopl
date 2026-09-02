@@ -71,8 +71,8 @@ const AWAIT_SHORT_HOLD_MS = 60_000;
  * A thrown inner-poll failure reduced to one short line — this rides inside a
  * result a model reads, and a full API body buries the re-arm instruction.
  *
- * ⚠ NEUTRALIZED, not just shortened: this result splices upstream text OUTSIDE
- * {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error" says
+ * ⚠ NEUTRALIZED, not just shortened: this result splices upstream text that no
+ * framing covers, and "our own server's error" says
  * nothing about its CONTENT — a 400 echoing a rejected field, a proxy page, or
  * a not-found naming a counterparty ref all carry influenced text, read as
  * server narration in an unframed line.
