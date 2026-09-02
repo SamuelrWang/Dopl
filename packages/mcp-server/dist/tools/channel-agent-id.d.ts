@@ -22,3 +22,6 @@
  * answers `no-session` — both honest, and neither is this function's job.
  */
 export declare function bareAgentId(raw: string): string;
+/** Whether a value is an agent INSTANCE id. ⚠ Feed it {@link bareAgentId}'s
+ *  output — the handle `read_sessions` prints is not itself an id. */
+export declare function isAgentId(value: string): boolean;

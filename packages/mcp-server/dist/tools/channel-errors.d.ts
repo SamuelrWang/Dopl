@@ -27,15 +27,17 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `invalid_request`       — the route's zod schema (or JSON parse) rejected
  *     the body BEFORE any channel logic ran; almost always a field over its cap.
  *     ⚠ Emphatically NOT a membership problem.
- *   - `chat_addressed`        — `intent:"chat"` AND an addressee, which mean
- *     opposite things (`ChannelChatAddressedError`). The tool refuses it before
- *     the call, so this arm should be unreachable — ⚠ classified anyway,
- *     because "unreachable" is the assumption the status-only branch was built on.
+ *   ⚠ A SEVENTH KIND ENDED HERE (C12, 2026-09-02): `chat_addressed` classified
+ *     `CHANNEL_CHAT_ADDRESSED` — `intent:"chat"` beside a `to`, which mean
+ *     opposite things. Its own comment said the arm "should be unreachable"
+ *     because the tool refused the pair before the call; `intent` has now left
+ *     the published shape entirely, so the contradiction is not EXPRESSIBLE and
+ *     an arm for it would claim a live rule. Chat is "no `to`" and nothing else.
  *   - `workspace`             — no usable workspace on the call.
  *   - `unknown`               — a 400 with no recognized code (or none at all,
  *     e.g. an edge/proxy error page). ⚠ Say so; never invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "chat_addressed" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as

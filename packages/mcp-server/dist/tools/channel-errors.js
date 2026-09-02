@@ -48,8 +48,6 @@ function classifyBadRequest(e) {
         case "INVALID_JSON":
         case "BAD_REQUEST":
             return "invalid_request";
-        case "CHANNEL_CHAT_ADDRESSED":
-            return "chat_addressed";
         case "WORKSPACE_REQUIRED":
         case "WORKSPACE_INVALID":
             return "workspace";

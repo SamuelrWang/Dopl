@@ -7,12 +7,9 @@ import { type ToolResponse } from "./respond";
  * render — and the body cap is checked BEFORE any round-trip so "nothing was
  * sent" is trivially true rather than confusable with a delivery failure.
  */
-export declare function opPing(client: DoplClient, channelRef: string, kind: PingKind, body: string, opts: {
-    to?: string;
-    toDesktop?: boolean;
-    agentId?: string;
-    thread?: string;
-}): Promise<ToolResponse>;
+export declare function opPing(client: DoplClient, channelRef: string, kind: PingKind, body: string, 
+/** WHO has to act — `"desktop"`, `@agent-<id>`, or a member ref. */
+recipientRef: string, thread?: string): Promise<ToolResponse>;
 /**
  * READ THE INBOX — what was sent TO ME.
  *
@@ -21,6 +18,5 @@ export declare function opPing(client: DoplClient, channelRef: string, kind: Pin
  * somebody else would make the whole surface a worse transcript.
  */
 export declare function opReadPings(client: DoplClient, opts?: {
-    since?: number;
     limit?: number;
 }): Promise<ToolResponse>;

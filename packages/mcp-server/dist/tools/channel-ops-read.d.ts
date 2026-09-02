@@ -1,7 +1,13 @@
 /**
- * `dopl_channel` READ op handlers: list, read, list_threads / get_thread,
- * members. All non-mutating, all ONE round-trip rendered. `await` lives in
- * `channel-ops-await.ts` (the only looping op).
+ * `dopl_channel` READ op handlers: list, read, list_threads, members. All
+ * non-mutating, all ONE round-trip rendered — except a THREAD-SCOPED `read`,
+ * which is two. `await` lives in `channel-ops-await.ts` (the only looping op).
+ *
+ * ⚠ **`op="get_thread"` WAS FOLDED INTO `read(thread=)` ON 2026-09-02 (C15).**
+ * Two ops answered one noun — "what is this exchange" — and the split cost 200
+ * characters of published prose explaining that the first returned no bodies.
+ * A thread-scoped read now carries the METADATA HEADER that op rendered, above
+ * the transcript it always rendered, so the fold deleted an op and no answer.
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread` — the `thread`
  * op param resolves against `channel_tasks` rows and `/tasks` routes under
@@ -14,37 +20,6 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
-/**
- * Read a channel's transcript, optionally SCOPED TO ONE THREAD.
- *
- * ⚠ `thread` is a FILTER, not a lookup: route keeps rows whose
- * `metadata.taskId` equals it, an id nothing carries returns `[]` not 404, and
- * any non-empty string is legal (transcripts still carry legacy
- * `task-<channelId>-<seq>` ids). Blank/whitespace treated as unset rather than
- * sent, so `thread=""` reads the channel instead of 400ing on the route's `min(1)`.
- *
- * ⚠ `await` has no thread parameter — a filtered hold would miss messages an
- * agent must follow. Never suggest a thread-scoped wait here; the agent ends up
- * armed on a call that cannot exist.
- *
- * ⚠ NEITHER SEQ IS A CURSOR, so this hint offers NO number to await from. A safe
- * `since` is the highest seq below which the reader has seen EVERYTHING
- * channel-wide; a thread-scoped read deliberately filtered rows out and
- * establishes no such bound. `await` is `gt("seq", since)`, so a LARGER `since`
- * returns FEWER messages: awaiting from the channel-wide max drops every row in
- * `(threadMax, channelMax]` permanently, since the cursor only moves forward.
- *
- * ⚠ SO A SCOPED READ PRINTS NO SEQ AT ALL (2026-08-22, Samuel's ruling). It used
- * to print `Highest seq shown: <n>` and then spend four sentences telling the
- * reader not to use `<n>` — a footgun wrapped in prose is still a footgun, and
- * the number is what survives a skim. The two options were "omit it" and "return
- * an explicitly safe `nextSince`"; the second is not available here, because the
- * only safe value is the caller's OWN prior channel-wide cursor and this op
- * cannot see it. Omitting is therefore not a lesser fix: there is no number this
- * read is entitled to hand back. ⚠ The message lines above still carry each
- * message's own `**#seq**`, so nothing is hidden — what is withheld is the
- * SUMMARY line that reads like a cursor.
- */
 export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string): Promise<ToolResponse>;
 /**
  * READ-SESSION-STATE — the caller's OWN live sessions: handle, reduced state
@@ -78,7 +53,6 @@ export declare function opRead(client: DoplClient, ref: string, since?: number, 
  */
 export declare function opReadSessions(client: DoplClient, ref?: string): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
-export declare function opGetThread(client: DoplClient, ref: string, threadId: string, selfUserId?: string | null): Promise<ToolResponse>;
 /**
  * The channel ROSTER. Read-only; the private per-member preference (agent tool
  * profile) is scrubbed server-side for everyone but the caller and not rendered.

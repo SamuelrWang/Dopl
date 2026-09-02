@@ -284,6 +284,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
             tools: opts.tools,
             messages: opts.messages,
             chain: opts.chain,
+            clientMsgId: opts.clientMsgId,
         });
     }
     catch (e) {
@@ -314,6 +315,17 @@ async function opLaunchAgent(client, ref, opts = {}) {
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not launched", { reason: "offline", filed: false }));
     }
     let directive = created.directive;
+    // **THE CONVERGED-RETRY FACT** (2026-09-02, A10/G10).
+    //
+    // ⚠ **ADDED ONLY WHEN THE ROW WAS ALREADY THERE**, by spread, so a caller that
+    // sent no key sees a byte-identical result and no op grows a `retry=-` field it
+    // never had. ⚠ SPREAD **LAST** on every shape below: where a `retry` verdict is
+    // already printed, `existing` must win it, because "this call filed nothing" is
+    // the stronger and more actionable statement — it says the id below is the
+    // FIRST request's, not a second agent's.
+    // ⚠ `created.existing` IS OPTIONAL ON THE WIRE: a server older than this wave
+    // sends no such key, and absent correctly reads as "a row was filed".
+    const converged = created.existing ? { retry: "existing" } : {};
     const waitMs = Math.min(opts.waitMs ?? WAIT_DEFAULT_MS, WAIT_CAP_MS);
     const deadline = Date.now() + waitMs;
     // ⚠ POLLS THE ROW, never an `await`: a directive is not a message, has no
@@ -371,6 +383,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
             // the only thing standing between an orchestrator and the assumption
             // that silence means whatever it hoped.
             ...postureFacts(directive),
+            ...converged,
         }));
     }
     if (directive.status === "refused") {
@@ -388,13 +401,14 @@ async function opLaunchAgent(client, ref, opts = {}) {
                 ? RETRY_ADVICE[directive.refusalReason]
                 : undefined,
             filed: true,
+            ...converged,
         }));
     }
     if (directive.status === "expired") {
         // ⚠ LAPSED IS NOT REFUSED AND NOT PENDING: no machine ever answered, so
         // nothing is outstanding and asking once more is legitimate — which is the
         // opposite of the branch below.
-        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("expired", { directive: directive.id, filed: true }));
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("expired", { directive: directive.id, filed: true, ...converged }));
     }
     // PENDING and CLAIMED (taken but not yet answered) both end here: the next
     // action is identical.
@@ -408,5 +422,6 @@ async function opLaunchAgent(client, ref, opts = {}) {
         claimed: directive.status === "claimed",
         expires: directive.expiresAt,
         retry: false,
+        ...converged,
     }));
 }

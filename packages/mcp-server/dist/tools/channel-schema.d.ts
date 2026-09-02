@@ -43,7 +43,7 @@ import { z } from "zod";
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-export declare const SCHEMA_MAX_CHARS = 11475;
+export declare const SCHEMA_MAX_CHARS = 11103;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
  * can absorb one 900-character paragraph by trimming nine short fields; this
@@ -76,11 +76,25 @@ export declare const CHANNEL_INPUT_SHAPE: {
         help: "help";
         await: "await";
         list_threads: "list_threads";
-        get_thread: "get_thread";
         pings: "pings";
     }>;
+    section: z.ZodOptional<z.ZodEnum<{
+        law: "law";
+        model: "model";
+        protocol: "protocol";
+        adhoc: "adhoc";
+        main_room: "main_room";
+        tagging: "tagging";
+        milestones: "milestones";
+        escalation: "escalation";
+        awaiting: "awaiting";
+        agents: "agents";
+        refusals: "refusals";
+        sessions: "sessions";
+        fields: "fields";
+        conventions: "conventions";
+    }>>;
     channel: z.ZodOptional<z.ZodString>;
-    direct: z.ZodOptional<z.ZodBoolean>;
     name: z.ZodOptional<z.ZodString>;
     topic: z.ZodOptional<z.ZodString>;
     visibility: z.ZodOptional<z.ZodEnum<{
@@ -88,20 +102,9 @@ export declare const CHANNEL_INPUT_SHAPE: {
         public: "public";
     }>>;
     member: z.ZodOptional<z.ZodString>;
-    intent: z.ZodOptional<z.ZodEnum<{
-        chat: "chat";
-        request: "request";
-    }>>;
     body: z.ZodOptional<z.ZodString>;
     to: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodString>;
-    kind: z.ZodOptional<z.ZodEnum<{
-        message: "message";
-        task_started: "task_started";
-        task_progress: "task_progress";
-        task_finished: "task_finished";
-        task_failed: "task_failed";
-    }>>;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     client_msg_id: z.ZodOptional<z.ZodString>;
     title: z.ZodOptional<z.ZodString>;
@@ -117,7 +120,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         blocked: "blocked";
         question: "question";
     }>>;
-    to_desktop: z.ZodOptional<z.ZodBoolean>;
+    recipient: z.ZodOptional<z.ZodString>;
     since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     goal: z.ZodOptional<z.ZodString>;
     model: z.ZodOptional<z.ZodString>;
@@ -134,7 +137,11 @@ export declare const CHANNEL_INPUT_SHAPE: {
         auto_outbound: "auto_outbound";
         auto_both: "auto_both";
     }>>;
-    chain: z.ZodOptional<z.ZodBoolean>;
+    chain: z.ZodOptional<z.ZodEnum<{
+        on: "on";
+        off: "off";
+        inherit: "inherit";
+    }>>;
     wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     info_card: z.ZodOptional<z.ZodObject<{
         hidden: z.ZodOptional<z.ZodArray<z.ZodString>>;
