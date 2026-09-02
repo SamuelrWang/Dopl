@@ -10,8 +10,8 @@ import { buildKnowledgeContext, pinEntry } from "@/features/knowledge/server/ser
  * base coming with it.
  *
  * ⚠ SAME SHAPE AS THE BASE ROUTE ON PURPOSE — two idempotent verbs stating the END STATE, a
- * `member` floor on both, and no `sessionOnly`. See that file for each argument; restating them
- * here is how the two drift.
+ * `member` floor AND `sessionOnly` on both (R4, 2026-09-02). See that file for each argument;
+ * restating them here is how the two drift.
  *
  * 🔒 THE ROUTE'S FLOOR IS NOT THE CONTENT'S FLOOR — `features/knowledge/server/service-pins.ts ›
  * pinEntry` chases the entry UP to its base through `service-entries.ts › getEntry`, which
@@ -43,5 +43,11 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   return setPinned(auth, false);
 }
 
-export const PUT = withWorkspaceAuth(handlePut, { minRole: "member" });
-export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
+export const PUT = withWorkspaceAuth(handlePut, {
+  minRole: "member",
+  sessionOnly: true,
+});
+export const DELETE = withWorkspaceAuth(handleDelete, {
+  minRole: "member",
+  sessionOnly: true,
+});

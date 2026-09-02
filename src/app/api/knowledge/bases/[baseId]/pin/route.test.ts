@@ -7,8 +7,11 @@
  *   2. the `member` FLOOR, which is where this route parts company with its
  *      neighbour `star` (a personal bookmark at the viewer default): deciding
  *      what every agent here is handed is an edit to shared state;
- *   3. neither verb is `sessionOnly` — a pin reaches no person and changes no
- *      audience (INVARIANTS §3).
+ *   3. 🔒 BOTH verbs are `sessionOnly` (R4, 2026-09-02). They were not, on the
+ *      argument that a pin "reaches no person and changes no audience" — true of
+ *      the WRITE and beside the point of the DECISION, which settles what every
+ *      agent session launched here afterwards is HANDED at startup. That is the
+ *      shape `bases/{baseId}/channel-grants` is `sessionOnly` for.
  * Auth is mocked at the wrapper: what is under test is the composition.
  */
 
@@ -150,13 +153,17 @@ describe("the wrapper it is mounted behind", () => {
     expect(wrapperOptions.every((o) => o?.minRole === "member")).toBe(true);
   });
 
-  it("is neither sessionOnly nor writeScopeExempt — a pin reaches nobody", async () => {
-    // Pinned via the default posture (INVARIANTS §3, and
-    // `write-gate-coverage.test.ts` pins the sessionOnly set file-by-file).
+  it("🔒 is sessionOnly on BOTH verbs — an agent token cannot edit startup context (R4)", async () => {
+    // ⚠ MUTATION CHECK. Drop either flag and an agent token settles what every
+    // agent launched in this workspace afterwards is handed at startup — a
+    // machine editing its own standing context, with no operator at the keyboard.
+    // `write-gate-coverage.test.ts` pins the sessionOnly set file-by-file.
     await PUT(req("PUT"), { params: Promise.resolve({}) });
     await DELETE(req("DELETE"), { params: Promise.resolve({}) });
 
-    expect(wrapperOptions.every((o) => o?.sessionOnly === undefined)).toBe(true);
+    expect(wrapperOptions.every((o) => o?.sessionOnly === true)).toBe(true);
+    // ⚠ AND STILL NOT `writeScopeExempt`: a pin is an ordinary write and pays
+    // the ordinary write scope.
     expect(wrapperOptions.every((o) => o?.writeScopeExempt === undefined)).toBe(
       true
     );

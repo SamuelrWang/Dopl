@@ -35,15 +35,12 @@
  * cost in an orchestrator's check-in loop, and re-read verbatim dozens of times
  * per run by a model that had already been told at connection.
  *
- * ⚠ WHAT DID NOT CHANGE, and must not: NEUTRALIZATION. The banner was always
- * the weaker half — it ASKS the reader to discount text. {@link neutralizeInline}
- * is the half that actually defangs a hostile name, topic or title by making it
- * unable to render as structure, and every peer-authored string below still goes
- * through it. Deleting a banner is a verbosity change; deleting a neutralizer is
- * a security regression, and they are not the same edit.
+ * ⚠ WHAT DID NOT CHANGE, and must not: NEUTRALIZATION — the module docblock
+ * above states it once, and that is deliberately the only statement of it in
+ * this file (the paragraph was here verbatim a second time until 2026-09-02).
  *
- * ⚠ THE SURVIVING HEADERS ARE THE NARROW ONES, on purpose: the two `await`
- * lanes ({@link UNTRUSTED_BODY_HEADER}, kept for its POSITION — see its own
+ * ⚠ THE SURVIVING HEADERS ARE THE NARROW ONES, on purpose: the FOUR WAKE
+ * SURFACES ({@link UNTRUSTED_BODY_HEADER}, kept for its POSITION — see its own
  * docblock and F-407), a thread listing ({@link UNTRUSTED_THREAD_HEADER}) and a
  * roster ({@link UNTRUSTED_ROSTER_HEADER}) — surfaces where a peer's text is the
  * payload rather than a label.
@@ -67,14 +64,32 @@
  */
 
 /**
- * THE SECURITY BANNER ON THE TWO `await` LANES, AND ONLY THOSE TWO — ⚠ the
- * integration of P0's restore with P1's cut, and the shape both tiers argued for
- * (2026-09-01). `read`, `list` and `read_sessions` lost it (T11): the rule is
- * stated once in `channel-description.ts`'s `SECURITY, SAID ONCE HERE`
- * paragraph, read at connection, and re-emitting it per page was the largest
- * repeated cost in a check-in loop.
+ * THE SECURITY BANNER ON THE **WAKE SURFACES** — ⚠ the integration of P0's
+ * restore with P1's cut, and the shape both tiers argued for (2026-09-01).
+ * `read`, `list` and `read_sessions` lost it (T11): the rule is stated once in
+ * `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph, read at
+ * connection, and re-emitting it per page was the largest repeated cost in a
+ * check-in loop.
  *
- * ⚠ THE AWAIT LANES KEEP IT because of WHERE IT SITS RATHER THAN WHAT IT SAYS.
+ * ⚠ **THERE ARE FOUR IMPORTERS, NOT TWO, AND THE RULE IS "IS THIS A WAKE
+ * SURFACE" RATHER THAN "IS THIS AN await"** (docblock corrected 2026-09-02; it
+ * had said "the two await lanes only" while naming four). Re-derive:
+ * `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`.
+ *   - `channel-ops-await.ts` and `channel-ops-await-workspace.ts` — the two holds.
+ *   - `channel-ops-account.ts` — the CROSS-CHANNEL read (T21). ⚠ **IT KEEPS THE
+ *     BANNER, AND THAT IS A DECISION, NOT AN OVERSIGHT.** It is the surface an
+ *     orchestrator arms INSTEAD of N per-channel holds, so it carries bodies from
+ *     rooms the caller did not name, from members it did not address, and it is
+ *     read on the same wake cadence a hold is. Every argument for the hold's
+ *     header applies to it verbatim; the argument against — that a per-page
+ *     banner is the loop's largest repeated cost — bites on `read`, which is
+ *     called with a channel and a cursor by an agent that already knows what it
+ *     asked for.
+ *   - `channel-ops-ping.ts` — the ping inbox, for the same reason: it is the
+ *     out-of-band wake signal, and its body is one member's text delivered to
+ *     exactly one recipient who did not ask for it right then.
+ *
+ * ⚠ THESE LANES KEEP IT because of WHERE IT SITS RATHER THAN WHAT IT SAYS.
  * It is emitted FIRST, above the bodies — a description is read at connect time,
  * a body is read now, and a caveat read only AFTER an injected line has been
  * read is not a caveat. That position is pinned, not merely its presence.

@@ -6475,6 +6475,32 @@ of a finished state to wait for — and the mechanism lecture is still taught wh
   fallback.
 - Measure it: `grep -n UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
   and compare `channel-ops-read.ts › opRead` with `channel-ops-await.ts › opAwait`.
+
+#### ⚠ EXTENDED 2026-09-02 (review) — the boundary is WAKE, not `await`, and the LISTING half is filed too
+
+**(a) FOUR IMPORTERS, NOT TWO, AND THE ACCOUNT LANE IS A DECISION.** The header's docblock said "the
+two `await` lanes only" while `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
+answered four: the two holds, `channel-ops-account.ts` (the cross-channel read, T21) and
+`channel-ops-ping.ts` (the "needs you" inbox, T70). **The account lane KEEPS the banner** — ruled
+here rather than left ambiguous: it is what an orchestrator arms INSTEAD of N per-channel holds, so
+it carries bodies from rooms the caller did not name and members it did not address, on the same
+wake cadence a hold runs. Every argument for the hold's header applies to it verbatim, while the
+argument against (a per-page banner is the loop's largest repeated cost) bites on `read`, which is
+called with a channel and a cursor by an agent that already knows what it asked for. So the real
+line is **WAKE SURFACE vs. DIRECTED READ**, and the docblock says that now.
+
+**(b) THE LISTING HALF WAS NEVER FILED.** This entry only ever named the BODY header. T11 also
+deleted `UNTRUSTED_LISTING_HEADER` — the banner over `op="list"`'s CHANNEL NAMES AND TOPICS — and
+that is a materially different case from a body, in both directions:
+  - **Weaker than the body case**, because a name and a topic go through
+    `narration.ts › neutralizeInline` and cannot render as structure, and because they are LABELS a
+    caller asked for rather than payload delivered to it.
+  - **Stronger than the body case in exactly one respect**, and that is why it belongs on the same
+    ruling: on a PUBLIC channel the author of a name or topic need not be someone the reader has
+    any relationship with, where a message body at least comes from a room they are in.
+  ⚠ **The same instruction applies: do not close this by deleting the surviving headers.** Whoever
+  rules on (a) rules on (b) in the same breath, or the surface goes on disagreeing with itself about
+  one class of content in two places.
 ### F-408 — the `stale` flag is derived at projection time, so a session that stops dispatching ENTIRELY can never report it (2026-09-01, T51)
 
 `dopl-desktop-app/main/session-health.js › isStale` answers "working, quiet past ten minutes, and

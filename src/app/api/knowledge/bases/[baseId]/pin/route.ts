@@ -57,9 +57,23 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
  * starts its session with is an edit to shared state, and the UNPIN is gated for the same reason
  * as the pin — removing somebody else's launch context is as much a write as adding one.
  *
- * ⚠ NEITHER IS `sessionOnly`. A pin reaches no person, mints no credential and changes no
- * audience: it decides only whether an agent is HANDED content its caller could already read
- * (INVARIANTS §3 — the `infoCard` reasoning, one feature over).
+ * 🔒 **BOTH VERBS ARE `sessionOnly` (R4, 2026-09-02 — Desktop Agent default, Samuel may loosen).**
+ * They were not, and the docblock argued that a pin "reaches no person, mints no credential and
+ * changes no audience". That is true of the WRITE and beside the point of the DECISION: a pin
+ * decides what **every agent session launched in this workspace afterwards** is handed at startup,
+ * which is precisely the shape `channel-grants/route.ts` is `sessionOnly` for — an agent token
+ * settling what agents get handed is a machine editing its own standing context, and the operator
+ * is the one who should be at the keyboard for it. ⚠ The PRECEDENT is that route, named rather
+ * than re-argued: `PUT` there is `{ minRole: "member", sessionOnly: true }` and its `GET` is
+ * ungated, per-METHOD, exactly as here.
+ * ⚠ **IT NARROWS NOTHING A HUMAN CAN DO** — a member using the app is a session caller. What it
+ * refuses is an agent token, which had no UI to reach this from either.
  */
-export const PUT = withWorkspaceAuth(handlePut, { minRole: "member" });
-export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
+export const PUT = withWorkspaceAuth(handlePut, {
+  minRole: "member",
+  sessionOnly: true,
+});
+export const DELETE = withWorkspaceAuth(handleDelete, {
+  minRole: "member",
+  sessionOnly: true,
+});

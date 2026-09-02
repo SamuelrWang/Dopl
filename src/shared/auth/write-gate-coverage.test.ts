@@ -193,6 +193,16 @@ describe("H-3 write-gate coverage", () => {
         // that file stays ungated — reading which channels a base already
         // reaches decides nothing.
         "knowledge/bases/[baseId]/channel-grants/route.ts",
+        // 🔒 R4 (2026-09-02, Desktop Agent default — Samuel may loosen). A PIN
+        // decides what EVERY agent session launched in this workspace afterwards
+        // is handed at startup (T81). The write reaches no person and changes no
+        // audience, which is what the two routes argued before — and beside the
+        // point: an agent token settling its own successors' standing context is
+        // a machine editing what agents get told, with no operator at the
+        // keyboard. Same shape, same precedent, as the grants route above.
+        // ⚠ Per-METHOD is moot here — both verbs are writes and both are gated.
+        "knowledge/bases/[baseId]/pin/route.ts",
+        "knowledge/entries/[entryId]/pin/route.ts",
         "home/link/[token]/claim/route.ts",
         "home/links/[linkId]/route.ts",
         "home/links/route.ts",
