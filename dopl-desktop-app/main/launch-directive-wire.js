@@ -339,6 +339,26 @@ function directiveFrom(raw, workspaceId) {
       ? '' : String(r.target_tool_mode || r.targetToolMode),
     targetMessageMode: MESSAGE_MODES.indexOf(String(r.target_message_mode || r.targetMessageMode || '')) === -1
       ? '' : String(r.target_message_mode || r.targetMessageMode),
+    // ── ⚠ THE POSTURE A **LAUNCH** ASKS TO START ON (2026-09-01, T24) ────────────────────
+    // Narrowed to the same frozen enums, and `''` means "not asked for" exactly as above —
+    // which resolves to the operator's stored channel pair, i.e. the pre-T24 behaviour byte
+    // for byte. ⚠ THEY ARE SEPARATE FIELDS FROM THE `target*` PAIR ABOVE AND MUST STAY SO:
+    // one names the posture a NEW session starts on, the other the posture a RUNNING one moves
+    // to, and merging them would let a `set_agent_mode` be answered by a launch's fields on a
+    // row that carried both.
+    // ⚠ **NEITHER DECIDES ANYTHING.** `launch-posture.js › resolvePosture` clamps both to the
+    // operator's own durable channel pair before they reach a spawn — the lane's standing
+    // invariant, which T24 does not get to relax. That module's header carries the argument,
+    // including why the ticket's "unless the caller is the operator" carve-out is the whole set.
+    startToolMode: TOOL_MODES.indexOf(String(r.start_tool_mode || r.startToolMode || '')) === -1
+      ? '' : String(r.start_tool_mode || r.startToolMode),
+    startMessageMode: MESSAGE_MODES.indexOf(String(r.start_message_mode || r.startMessageMode || '')) === -1
+      ? '' : String(r.start_message_mode || r.startMessageMode),
+    // ⚠ A TRI-STATE, NOT A BOOLEAN, AND THE THIRD VALUE IS LOAD-BEARING. `true` is "I need this
+    // agent to be able to launch workers"; `null` is "I did not ask", which inherits the
+    // channel's setting silently as every launch did before T24. Collapsing them would turn
+    // every ordinary launch into a request, and a request the channel denies is a REFUSAL.
+    chain: r.chain === true || r.chain === 'true' ? true : null,
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };

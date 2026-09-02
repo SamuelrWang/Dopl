@@ -81,6 +81,10 @@
 const { diag } = require('./diag');
 const agentOps = require('./agent-self-ops');
 const wire = require('./launch-directive-wire');
+// ⚠ THE POSTURE BOUND IS SHARED WITH THE LAUNCH BRANCH (2026-09-01, T24) — one statement of
+// "an orchestrator may ask, and it may never widen", required rather than copied. Two lanes
+// reading one rule; `main/launch-posture.js`'s header carries the argument.
+const posture = require('./launch-posture');
 
 /**
  * END THE AGENT A DIRECTIVE NAMES. Returns `{ done: true }` or
@@ -199,39 +203,6 @@ function renameAgent(d) {
   return { done: true };
 }
 
-/**
- * NARROW A REQUESTED MODE TO A CEILING. Returns the requested value when it is no
- * wider, the CEILING when it is wider, and `''` when nothing was requested.
- *
- * ⚠ **THIS IS THE WHOLE SAFETY ARGUMENT OF THE `set_agent_mode` KIND, AND IT IS AN
- * INVARIANT THIS LANE HAS CARRIED SINCE IT EXISTED.** `launch-directives.js`'s
- * header states it in capitals: *"A directive-driven agent is exactly as contained
- * as a button-driven one, and nothing an orchestrator writes can widen it."* The
- * ceiling is the operator's OWN durable, human-set channel posture
- * (`channel-prefs.js › getLaunchPosture`) — the pair they chose on the Settings tab
- * of their own machine — so an external agent can move a running session anywhere
- * WITHIN what its operator already sanctioned for that room, and nowhere outside it.
- *
- * ⚠ **IT CLAMPS, IT DOES NOT REFUSE**, which is `session-reopen.js › setModeByTask`'s
- * own rule for the windowless floor one layer down, and is the right trade for the
- * same reason: a refusal would leave the orchestrator with nothing applied when part
- * of what it asked for was legal, and the DIAG records the clamp. ⚠ The cost is that
- * the caller cannot read back what landed — the row's `done` status carries no
- * posture field — so the clamp is a LOG here and a wire field the orchestrator-surface
- * tier owns. Recorded rather than hidden.
- *
- * ⚠ **THE COMPARISON IS AN INDEX INTO A NARROWEST-FIRST ARRAY**, which is this tree's
- * one way of ordering a posture enum (`descriptor.toolMode.options` states the rule).
- * An unrecognised value cannot reach here — `directiveFrom` collapses it to `''` — and
- * if one did, `indexOf` answers -1, which is narrower than everything and therefore
- * fails CLOSED.
- */
-function narrowTo(requested, ceiling, order) {
-  if (!requested) return '';
-  const want = order.indexOf(requested);
-  const max = order.indexOf(ceiling);
-  return want > max ? ceiling : requested;
-}
 
 /**
  * MOVE A RUNNING AGENT'S TWO PERMISSION AXES. Returns `{ done: true }` or
@@ -285,8 +256,8 @@ function setAgentMode(d) {
     diag('directive-agent-ops: set_agent_mode — posture ceiling unreadable, using the floor:',
       (err && err.message) || String(err));
   }
-  const tools = narrowTo(d.targetToolMode, ceiling.tools, wire.TOOL_MODES);
-  const messages = narrowTo(d.targetMessageMode, ceiling.messages, wire.MESSAGE_MODES);
+  const tools = posture.narrowTo(d.targetToolMode, ceiling.tools, wire.TOOL_MODES);
+  const messages = posture.narrowTo(d.targetMessageMode, ceiling.messages, wire.MESSAGE_MODES);
   if (tools !== d.targetToolMode || messages !== d.targetMessageMode) {
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'CLAMPED to the channel posture —',
       'asked', String(d.targetToolMode || '-') + '/' + String(d.targetMessageMode || '-'),
@@ -361,4 +332,4 @@ function apply(d) {
   return { refused: 'no-bridge' };
 }
 
-module.exports = { apply, endAgent, renameAgent, setAgentMode, narrowTo };
+module.exports = { apply, endAgent, renameAgent, setAgentMode };

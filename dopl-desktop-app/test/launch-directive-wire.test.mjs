@@ -288,8 +288,9 @@ test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing t
   // the narrowing, and also the one way to ship a feature over this lane and have it do nothing.
   assert.deepEqual(Object.keys(d).sort(),
     ["agentId", "channelId", "goal", "id", "kind", "model", "operatorUserId", "status",
+      "chain", "startMessageMode", "startToolMode",
       "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
-      "templateId", "templateName", "workspaceId"]);
+      "templateId", "templateName", "workspaceId"].sort());
   assert.equal(d.shell_command, undefined);
   assert.equal(d.startModes, undefined);
 });
@@ -371,7 +372,7 @@ test("TEMPLATE: `template-approval` is NOT a directive refusal word, on either s
 // ⚠ THE CHECK AND THE ENUM WERE ONE WORD APART FOR A DAY, DELIBERATELY AND DANGEROUSLY: the TS
 // vocabulary went to seven on 2026-08-22 while the column CHECK stayed at six, and four files
 // carried a standing instruction not to ship a producer into that window — a `decide` with the
-// word would have passed zod and been refused AT REST. `launch-directives.js › spawn` IS that
+// word would have passed zod and been refused AT REST. `launch-directive-spawn.js › spawn` IS that
 // producer now, so this case is what says the migration landed with it.
 test("TEMPLATE: the column CHECK admits `no-template`, and the producer exists", () => {
   const MIG = join(HERE, "..", "..", "supabase", "migrations",
@@ -384,8 +385,11 @@ test("TEMPLATE: the column CHECK admits `no-template`, and the producer exists",
   assert.match(sql, /ADD COLUMN IF NOT EXISTS template_name TEXT/);
   assert.match(sql, /CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx/,
     "the FK cover is not optional — a template DELETE would scan the whole table");
-  assert.match(SRC, /refused: 'no-template'/,
-    "the producer this migration was landed for must be in launch-directives.js");
+  // ⚠ THE PRODUCER MOVED FILE ON 2026-09-01 — `spawn` left `launch-directives.js` at the §1 cap
+  // (T24) — and the claim is unchanged: the word this migration widened the CHECK for must have
+  // a producer in this tree, or the CHECK admits a refusal nothing can write.
+  assert.match(readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8"), /refused: 'no-template'/,
+    "the producer this migration was landed for must be in launch-directive-spawn.js");
 });
 
 test("TEMPLATE: the migration NEVER touches the replica identity", () => {

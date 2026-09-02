@@ -87,7 +87,7 @@ test("H2: exactly THREE callers in main/ hand a posture in, and two may arm a do
   const handers = files.filter((f) => /startModes:/.test(read(f))).sort();
   assert.deepEqual(
     handers,
-    ["launch-directives.js", "session-launch-op.js", "trigger.js"],
+    ["launch-directive-spawn.js", "session-launch-op.js", "trigger.js"],
     "a new caller that hands in a posture is a new way for one to reach a launch no human is " +
       "attending — review it here rather than updating this list reflexively " +
       "(session-launch-op.js = the BODY of sessions:launch, the operator's own click on the " +
@@ -97,7 +97,8 @@ test("H2: exactly THREE callers in main/ hand a posture in, and two may arm a do
       "trigger.js = the PEER-TRIGGERED responder lane, which hands in a pinned most-restrictive " +
       "pair — it still names the key, so it still shows up here, and that is right: the seam is " +
       "what must stay reviewed, not the value on this pass; " +
-      "launch-directives.js = the ORCHESTRATOR lane, 2026-08-22 — the first hander that is not " +
+      "launch-directive-spawn.js = the ORCHESTRATOR lane, 2026-08-22 (it was `launch-directives.js` " +
+      "until the 2026-09-01 §1 split took `spawn` out of it) — the first hander that is not " +
       "a human pressing something, allowed because Samuel ruled a LOCAL DEFAULT-OFF TOGGLE the " +
       "approval for it. Read the block above this test before touching this array)"
   );
@@ -115,7 +116,7 @@ test("H2: exactly THREE callers in main/ hand a posture in, and two may arm a do
   // New Agent click may is written where it is exercised (`main/session-launch-op.js`). A SECOND producer means something other than a live click can arm
   // a shell, which IS the failure H2 names — do not add a name here without that argument.
   const armers = files.filter((f) => /operatorArmed/.test(read(f))).sort();
-  assert.deepEqual(armers, ["launch-directives.js", "session-launch-op.js"],
+  assert.deepEqual(armers, ["launch-directive-spawn.js", "session-launch-op.js"],
     "New Agent (the click) and the ORCHESTRATOR lane (the local default-OFF toggle, Samuel's " +
       "ruling — see the block above). A THIRD name means something else can arm a dormant " +
       "shell, which IS the failure H2 names.");
@@ -127,9 +128,14 @@ test("H2: exactly THREE callers in main/ hand a posture in, and two may arm a do
   // ⚠ AND THE ORCHESTRATOR LANE'S APPROVAL IS THE **LOCAL** ONE, asserted rather than trusted:
   // the lane must read the machine-local toggle, and it must not be reachable from a Dopl
   // credential. A server-side arming flag is the escalation this whole design refuses (§6).
-  const lane = read("launch-directives.js");
-  assert.match(lane, /channelPrefs\.getOrchestratorLaunch\(\)/,
+  // ⚠ THE LANE IS TWO FILES SINCE 2026-09-01 (the §1 split took `spawn` out of the watcher), so
+  // the two halves of this claim are asserted where each one lives: the WATCHER owns the consent
+  // read (it decides whether to act on a row at all), the SPAWN owns the posture hand-in. Both
+  // are still required, and a lane that read the toggle from neither would fail here.
+  const watcher = read("launch-directives.js");
+  assert.match(watcher, /channelPrefs\.getOrchestratorLaunch\(\)/,
     "the approval is the LOCAL toggle, read at decision time");
+  const lane = watcher + read("launch-directive-spawn.js");
   assert.ok(!/workspace_settings|orchestratorLaunch.*api|apiFetch\([^)]*[Tt]oggle/.test(lane),
     "…and it is never fetched from the server");
 });
