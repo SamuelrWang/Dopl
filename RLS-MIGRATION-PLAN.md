@@ -1,8 +1,8 @@
 # RLS Migration Plan — enforce authorization once, at the data boundary
 
 Written 2026-07-06. Owner: Samuel. Status: **Phase 1 + the first slice of Phases 2–3 LANDED
-2026-09-02** (Wave B B7, `v2/b-rls-real-1`), for THREE tables only and behind a flag that is OFF.
-Everything else is still proposed.
+2026-09-02** (Wave B B7 `v2/b-rls-real-1`, then B12 `v2/b-rls-real-2`), for TEN tables and behind a
+flag that is OFF. Everything else is still proposed.
 
 > ⚠ **The table inventory below is a 2026-07-06 capture and has drifted.** The
 > `workflows` group (4 tables) and `clusters` no longer exist — those features
@@ -11,6 +11,17 @@ Everything else is still proposed.
 > before planning against it; the argument the doc makes is unaffected.
 
 ## What has landed (2026-09-02, and only this)
+
+- **Phase 1, for TEN tables, in two migrations.** B7 took the three knowledge tables; B12 took
+  `skills`, `agent_templates`, `chats` and `resource_grants` — the Wave B spec's target of SEVEN —
+  plus the three CHILD tables that were restating a covered parent's matrix (`skill_files`,
+  `chat_messages`, `agent_template_knowledge_bases`). ⚠ **A CHILD IS COVERED WITH ITS PARENT OR NOT
+  AT ALL**: a wider child is the 2026-08-26 entry-body incident in a new table, and
+  `chats/server/repository.ts › listVisibleChats` selects `*, chat_messages(count)`, so the child
+  policy filters an EMBEDDED count. **Phase 2 closed four more wider-than-fence gaps** (F-570), the
+  loudest being a blanket admin arm on `chats_member_select` that handed a workspace admin every
+  private transcript while `canSeeChat` had never returned one.
+  `supabase/migrations/20260921120000_rls_phase2_policies.sql`, **also never applied**.
 
 - **Phase 1, for `knowledge_bases` / `knowledge_folders` / `knowledge_entries`.** Helper functions
   (`dopl_credential_is_shared`, `dopl_can_see_visibility`, `dopl_teams_mode_visible`, and
@@ -27,9 +38,17 @@ Everything else is still proposed.
 - **Phase 3, option 1 — taken, not prototyped-and-parked.** `caller-jwt.ts` mints a 60-second
   HS256 Supabase JWT for EVERY lane (session and `dopl_at_`), carrying `sub` and the credential axes,
   so both lanes meet one policy. New deploy input: `SUPABASE_JWT_SECRET` (F-522).
+- **The proof is one redteam suite per table, sharing one scanner.** `{knowledge,skills,chats,
+  agent-templates}/server/rls-redteam.test.ts` + `shared/supabase/rls-redteam-resource-grants.test.ts`,
+  over `shared/supabase/rls-policy-scan.ts` (replays every migration in filename order) and
+  `rls-redteam-fixture.ts` (the live half). ⚠ The live halves are **skipped-with-reason** and have
+  never run; a structural assertion is not a behavioural one (F-523).
+
 - **Not done, deliberately:** no TS predicate deleted (ruling B5 — they go one at a time, each behind
-  a green redteam test); no write policies; no lint rule (Phase 0's `no-restricted-imports`, F-521);
-  the agent audience ceiling is NOT expressible as a policy and stays in TS (F-524).
+  a green redteam test); no write policies (⚠ two `skill_files` write policies still use the 3-arg
+  caller-supplied-uid `is_workspace_member` form, F-573); no lint rule (Phase 0's
+  `no-restricted-imports`, F-521); the agent audience ceiling is NOT expressible as a policy and
+  stays in TS (F-524).
 
 ## Why
 
@@ -98,7 +117,8 @@ Stripe webhooks, cron, admin tooling.
   `workspace_resource_access`).
 - Write/repair SELECT policies for the employee/agent read path first:
   `knowledge_bases`, `knowledge_folders`, `knowledge_entries`,
-  `knowledge_entry_chunks`, `skills`, `skill_files`.
+  `knowledge_entry_chunks`, `skills`, `skill_files`. ⚠ `knowledge_entry_chunks`
+  is the ONE table on this line still uncovered after B7+B12 (F-575).
 - Index every column the policies filter on (workspace_id, team ids).
 - Test against local Supabase (`supabase start`), per ENGINEERING.md §13:
   happy path + a redteam case per table proving a non-member gets zero rows.

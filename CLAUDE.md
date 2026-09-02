@@ -143,7 +143,8 @@ second typecheck):
     twin, checked in both directions (a new predicate with no declared twin fails; a twin a later
     migration dropped fails). ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**, the fourth gate in two days
     to do so. It does NOT claim the predicate and the policy AGREE — that is what the per-table
-    redteam suites prove, one table at a time.
+    redteam suites prove, one table at a time. ⚠ Since B12 it also checks the covered tables
+    that have NO predicate to hang a twin on (the child tables, and `resource_grants`).
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new
