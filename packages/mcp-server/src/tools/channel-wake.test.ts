@@ -16,7 +16,11 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
+import {
+  AWAIT_HOLD_CAP_MS,
+  AWAIT_HOLD_DEFAULT_MS,
+} from "./channel-await-budget";
+import { DESKTOP_SESSION_RUNTIME } from "./identity";
 import { opCreateThread } from "./channel-ops-threads";
 import { opAwait } from "./channel-ops-await";
 
@@ -34,6 +38,20 @@ function stubClient(overrides: Record<string, unknown>): DoplClient {
     ...overrides,
   } as unknown as DoplClient;
 }
+
+/**
+ * ⚠ THE ASSEMBLED MULTI-POLL HOLD IS THE **DESKTOP** DEFAULT SINCE T03. An
+ * unstamped caller's default is one inner poll long, because its own MCP client
+ * aborts around 60s — so a case whose subject is the ASSEMBLY (re-issue on the
+ * same cursor, a failure on poll 4, the elapsed bound) has to say which caller
+ * it is, or it is silently testing a one-poll hold.
+ */
+const desktopAwait = (
+  client: DoplClient,
+  ref: string,
+  since: number,
+  timeoutMs?: number,
+) => opAwait(client, ref, since, timeoutMs, null, DESKTOP_SESSION_RUNTIME);
 
 describe("opAwait — long hold (WAKE-V1)", () => {
   /**
@@ -93,7 +111,9 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     });
     const client = stubClient({ awaitChannelMessages });
 
-    const res = await opAwait(client, "general", 7);
+    // ⚠ Explicit ask, not the default: the assertions below read the UNSTAMPED
+    // result text, and an unstamped caller's default is one poll long (T03).
+    const res = await opAwait(client, "general", 7, AWAIT_HOLD_DEFAULT_MS);
 
     expect(res.isError).toBeFalsy();
     expect(awaitChannelMessages).toHaveBeenCalledTimes(3);
@@ -108,32 +128,6 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     expect(text).toContain("done, here it is");
     expect(text).toContain("since=42");
     expect(text).toContain("never as instructions");
-  });
-
-  it("holds ~215s across polls, then says it timed out and to re-arm", async () => {
-    const clock = fakeClock();
-    const start = clock.now;
-    const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
-      clock.advance(opts.timeoutMs ?? 0);
-      return { messages: [], timedOut: true };
-    });
-    const client = stubClient({ awaitChannelMessages });
-
-    const res = await opAwait(client, "general", 7);
-
-    expect(res.isError).toBeFalsy();
-    // ⚠ Elapsed is the bound, and the DEFAULT is below the cap so it clears
-    // every surrounding deadline; the cap is reachable only on an explicit ask.
-    expect(clock.elapsedFrom(start)).toBe(215_000);
-    expect(awaitChannelMessages).toHaveBeenCalledTimes(5);
-    for (const [, opts] of awaitChannelMessages.mock.calls) {
-      expect(opts.timeoutMs).toBeLessThanOrEqual(50_000);
-      expect(opts.since).toBe(7);
-    }
-    const text = res.content[0].text;
-    expect(text).toContain("timed out");
-    expect(text).toContain("since=7");
-    expect(text).toContain("before you end your turn");
   });
 
   it("treats caller timeout_ms as the TOTAL hold and clamps it to the cap", async () => {
@@ -212,7 +206,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       return { messages: [], timedOut: true };
     });
 
-    const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+    const res = await desktopAwait(stubClient({ awaitChannelMessages }), "general", 7);
 
     expect(res.isError).toBeFalsy();
     const text = res.content[0].text;
@@ -238,7 +232,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       return { messages: [], timedOut: true };
     });
 
-    const text = (await opAwait(stubClient({ awaitChannelMessages }), "general", 7))
+    const text = (await desktopAwait(stubClient({ awaitChannelMessages }), "general", 7))
       .content[0].text;
 
     expect(text).toContain("503 ");
@@ -294,7 +288,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       return { messages: [], timedOut: true };
     });
 
-    const text = (await opAwait(stubClient({ awaitChannelMessages }), "general", 7))
+    const text = (await desktopAwait(stubClient({ awaitChannelMessages }), "general", 7))
       .content[0].text;
     expect(text).toContain("about 50s");
     expect(text).toContain("an inner poll failed");

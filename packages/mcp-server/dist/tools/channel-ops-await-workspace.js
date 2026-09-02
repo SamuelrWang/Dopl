@@ -35,17 +35,10 @@ const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
 const channel_await_budget_1 = require("./channel-await-budget");
+// ⚠ The re-arm text branches on the caller's runtime here too, for the same
+// reason it does per-channel: an unstamped caller may not be promised a wake.
+const channel_wake_guidance_1 = require("./channel-wake-guidance");
 const channel_session_render_1 = require("./channel-session-render");
-/** Read once at module load — one value per server process, no per-call env read. */
-const AWAIT_HOLD_MS = (0, channel_await_budget_1.resolveAwaitHoldMs)(process.env.DOPL_AWAIT_HOLD_MS);
-const AWAIT_HOLD_CEILING_MS = (0, channel_await_budget_1.resolveAwaitHoldCeilingMs)(process.env.DOPL_AWAIT_HOLD_MS);
-/** Don't re-issue an inner poll for a sliver of the remaining budget. */
-const AWAIT_MIN_POLL_MS = 1_000;
-/** ⚠ Spin brake, NOT the bound — elapsed wall-clock ends the hold. Same shape and
- *  same reason as the per-channel op's. */
-const AWAIT_MAX_POLLS = Math.ceil(AWAIT_HOLD_CEILING_MS / channel_await_budget_1.AWAIT_POLL_MS) + 2;
-/** A hold ending this far under the ASK did not hold — see the per-channel op. */
-const AWAIT_SHORT_HOLD_MS = 60_000;
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
 /**
@@ -128,9 +121,8 @@ function groupByChannel(messages) {
     return [...groups.values()];
 }
 /**
- * LONG-HOLD workspace await. One call holds up to `timeoutMs` (capped at
- * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll on the same
- * `since` cursor.
+ * LONG-HOLD workspace await. One call holds for `awaitHoldMs(timeoutMs,
+ * runtime)` by re-issuing the ~50s inner long-poll on the same `since` cursor.
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
  * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel op has,
@@ -138,8 +130,14 @@ function groupByChannel(messages) {
  * ⚠ NO not-found branch, because there is no ref to resolve: a caller with no
  * memberships gets a page with `channelCount: 0` and a result that says so.
  */
-async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
-    const holdMs = Math.min(timeoutMs ?? AWAIT_HOLD_MS, AWAIT_HOLD_CEILING_MS);
+async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, runtime = null, selfSessionId = null) {
+    // ⚠ Same two rules as the per-channel lane: explicit ask honoured exactly,
+    // default sized to the caller's runtime (`channel-await-budget.ts ›
+    // awaitHoldMs`). ⚠ `runtime` REACHES THIS OP AT ALL ONLY SINCE T03 — it was
+    // never threaded from `channel.ts`, so the workspace hold both ran the
+    // desktop-length default for external callers AND wrote external-flavoured
+    // re-arm guidance to desktop sessions.
+    const holdMs = (0, channel_await_budget_1.awaitHoldMs)(timeoutMs, runtime);
     const startedAt = Date.now();
     const deadline = startedAt + holdMs;
     let messages = [];
@@ -152,23 +150,26 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
     // carried over from an earlier poll is the one way to make it lie.
     let operatorOnline;
     let pollError = null;
-    for (let poll = 0; poll < AWAIT_MAX_POLLS; poll++) {
+    // ⚠ Advances ONLY past this session's own rows — see the per-channel op.
+    let cursor = since;
+    for (let poll = 0; poll < channel_await_budget_1.AWAIT_MAX_POLLS; poll++) {
         const remaining = deadline - Date.now();
-        if (poll > 0 && remaining < AWAIT_MIN_POLL_MS)
+        if (poll > 0 && remaining < channel_await_budget_1.AWAIT_MIN_POLL_MS)
             break;
         let result;
         try {
             result = await client.awaitWorkspaceMessages({
-                since,
+                since: cursor,
                 // ⚠ Floored at 1ms, not 0 — the route's query schema requires a POSITIVE
                 // timeout, so a `timeout_ms=0` caller would 400 instead of getting its check.
                 timeoutMs: Math.max(1, Math.min(channel_await_budget_1.AWAIT_POLL_MS, remaining)),
-                // ⚠ The caller's own account is always excluded, and across a WHOLE
-                // WORKSPACE this matters more than it does per channel: an orchestrator
-                // posts into many rooms, and every one of those echoes would otherwise
-                // pop its own hold. Null id (boot handshake could not name the caller)
-                // => no filter.
-                ...(selfUserId !== null ? { excludeAuthor: selfUserId } : {}),
+                // 🔒 NO `excludeAuthor`, EVER — session-scoped suppression only (F-405).
+                // The argument is in `channel-ops-await.ts` in full. An orchestrator
+                // posting into many rooms must not pop its own hold on its own echoes;
+                // that is real, and it is why the suppression stays. What it may NOT do
+                // is decide by ACCOUNT, which across a whole workspace hides most of
+                // what an orchestrator is waiting for — and hides ALL of it from an
+                // unstamped external client, the population that reported the outage.
             });
         }
         catch (e) {
@@ -185,44 +186,65 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
             operatorOnline = result.operatorOnline;
         }
         if (result.messages.length > 0) {
-            messages = result.messages;
-            break;
+            // ⚠ Our own lines dropped from the page in hand — see the per-channel op
+            // for why this is not a SQL predicate, and why an unstamped caller now
+            // drops nothing at all rather than falling back to the account.
+            const fresh = selfSessionId === null
+                ? result.messages
+                : result.messages.filter((m) => (0, channel_render_1.sessionIdOf)(m) !== selfSessionId);
+            if (fresh.length > 0) {
+                messages = fresh;
+                break;
+            }
+            // ⚠ Own echoes only: advance past them rather than re-fetching them every
+            // tick, which would spin the budget away and trip the CUT SHORT branch.
+            // Skips nothing anyone else wrote — every foreign row returns above first.
+            cursor = result.messages[result.messages.length - 1].seq;
+            continue;
         }
     }
     if (messages.length === 0) {
         const elapsedMs = Date.now() - startedAt;
-        const timedOut = `No new messages in ANY channel you belong to since seq ${since} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
+        const timedOut = `No new messages in ANY channel you belong to since seq ${cursor} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
         // ⚠ Say what BROKE before diagnosing a platform clamp, or a transient blip is
         // misread as "the wait is not holding" and a live exchange is abandoned.
         if (pollError !== null) {
             return (0, respond_1.ok)([
                 `The workspace wait ended early, after about ${Math.round(elapsedMs / 1000)}s: an inner poll failed — ${describeFailure(pollError)}.`,
-                `Nothing was missed: the cursor never advanced, so re-arm NOW, before you end your turn, with the SAME since — dopl_channel(op="await", since=${since}).`,
+                `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", since=${cursor}).`,
                 `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
                 workspaceRearmStopRule(),
                 ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
             ].join("\n"));
         }
-        if (elapsedMs < Math.min(AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
+        if (elapsedMs < Math.min(channel_await_budget_1.AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
             return (0, respond_1.ok)([
                 timedOut,
                 `That hold was CUT SHORT — it asked for about ${Math.round(holdMs / 1000)}s and returned in ${Math.round(elapsedMs / 1000)}s, which usually means the platform is clamping the call (or the server is erroring instantly). A hold this short can never stay pending long enough to wake you.`,
                 `Do NOT immediately re-arm — you would loop on short calls that never wake anything. Report this to your operator and check channels with dopl_channel(op="read") instead.`,
             ].join("\n"));
         }
+        // ⚠ The TIMEOUT is the compressed result (T03) — see
+        // `channel-wake-guidance.ts › workspaceAwaitTimedOutLines`. `scopeNote`
+        // STAYS: it is a fact about what was watched, not doctrine, and "no
+        // messages" versus "that room was never being watched" are different
+        // answers. The full `workspaceRearmStopRule` is still taught where it is
+        // new information — on the holds that RETURN and that FAIL.
         return (0, respond_1.ok)([
             timedOut,
             scopeNote(channelCount),
-            `Re-arm with the SAME since — dopl_channel(op="await", since=${since}) — before you end your turn if you are still waiting on something.`,
-            workspaceRearmStopRule(),
+            ...(0, channel_wake_guidance_1.workspaceAwaitTimedOutLines)(cursor, runtime),
             ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
     const groups = groupByChannel(messages);
     const lines = [
-        `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${since}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
+        `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
         // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
-        // BEFORE them, not as a footnote underneath.
+        // BEFORE them, not as a footnote underneath. ⚠ IT IS NOT DUPLICATED BY THE
+        // TOOL DESCRIPTION, and removing it on that belief is exactly how it was
+        // lost once (2026-09-02): a description is read at connect time, a body is
+        // read now, and only the second one can carry an injected line.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     for (const g of groups) {

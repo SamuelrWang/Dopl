@@ -29,11 +29,12 @@ import { type ToolResponse } from "./respond";
  */
 export declare function rearmStopRule(ref: string): string;
 /**
- * LONG-HOLD await. One call holds up to `timeoutMs` (capped at
- * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll on the same
- * `since` cursor. Returning the instant anything arrives keeps a reply fast;
- * holding past ~2 minutes when nothing does is what makes the pending call a
- * wake primitive.
+ * LONG-HOLD await. One call holds for `awaitHoldMs(timeoutMs, runtime)` by
+ * re-issuing the ~50s inner long-poll on the same `since` cursor. Returning the
+ * instant anything arrives keeps a reply fast; holding past ~2 minutes when
+ * nothing does is what makes the pending call a wake primitive — ⚠ and that is
+ * reachable only for a DESKTOP-stamped caller or an explicit `timeout_ms`, not
+ * at an unstamped caller's default, whose own client aborts first (T03).
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
  * timed-out (re-arm, with stop condition), FAILED-MID-HOLD (names what broke,
@@ -44,6 +45,8 @@ export declare function rearmStopRule(ref: string): string;
  * an agent needs to follow.
  *
  * `runtime` = caller's OBSERVED runtime stamp, threaded from the registrar.
- * Changes nothing this op DOES — only what it may claim about the hold.
+ * ⚠ IT NOW SIZES THE DEFAULT HOLD AS WELL AS WORDING THE RESULT (T03) — still
+ * an observation that grants nothing, but no longer cosmetic: read wrong it
+ * costs hold length one way and a transport error the other.
  */
-export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null): Promise<ToolResponse>;
+export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null, selfSessionId?: string | null): Promise<ToolResponse>;

@@ -64,6 +64,26 @@ export interface CallerIdentity {
   credentialKind: CallerCredentialKind | null;
   /** The credential's label, UNTRUSTED — neutralized on the way out, never before. */
   credentialLabel: string | null;
+  /**
+   * WHICH SESSION this connection is, from `X-Dopl-Session-Id` — the same value
+   * the loopback stamps onto every post this session makes
+   * (`service-writes-metadata.ts` fold 6b), so it is what lets an await tell its
+   * OWN lines apart from a SIBLING session's.
+   *
+   * ⚠ THIS IS THE ONLY FIELD THAT CAN DO THAT, and the reason is F-405: one
+   * account runs many concurrent agents and every post is authored by the
+   * ACCOUNT, so `userId` cannot distinguish "my own echo" from "the other
+   * worker answering me". Excluding on `userId` made a same-account
+   * counterparty permanently invisible to `op="await"`.
+   *
+   * ⚠ A LABEL, NOT A LOCK (`shared/auth/session-header.ts`) — nothing may GATE
+   * on it. Suppressing one's own echo is presentation, not authorization, which
+   * is the only reason it is allowed to read an attribution hint.
+   *
+   * Null when the caller sent no recognized header — every external client, and
+   * an older desktop build.
+   */
+  sessionId: string | null;
 }
 
 /** No identity at all — the shape every test-constructed server gets by default. */
@@ -73,7 +93,22 @@ export const UNKNOWN_CALLER: CallerIdentity = {
   vendor: null,
   credentialKind: null,
   credentialLabel: null,
+  sessionId: null,
 };
+
+/**
+ * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
+ * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
+ * `channel-await-budget.ts` (how long the hold may BE) both branch on it, and a
+ * second copy is how the two answers drift into disagreeing about one request.
+ *
+ * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`
+ * grants nothing). False means UNSTAMPED — usually an external client, but also
+ * how a desktop spawn on an older build looks. Never read it as "external".
+ */
+export function isDesktopRuntime(runtime: string | null | undefined): boolean {
+  return runtime === DESKTOP_SESSION_RUNTIME;
+}
 
 /**
  * ⚠ What the server SAW in the runtime header, never what it concluded.
@@ -81,9 +116,7 @@ export const UNKNOWN_CALLER: CallerIdentity = {
  * how a desktop spawn on an older build looks.
  */
 function runtimeWord(identity: CallerIdentity): string {
-  return identity.runtime === DESKTOP_SESSION_RUNTIME
-    ? DESKTOP_SESSION_RUNTIME
-    : "unstamped";
+  return isDesktopRuntime(identity.runtime) ? DESKTOP_SESSION_RUNTIME : "unstamped";
 }
 
 /**

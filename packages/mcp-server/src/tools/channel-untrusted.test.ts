@@ -18,6 +18,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
+import { AWAIT_HOLD_DEFAULT_MS } from "./channel-await-budget";
 import { opAwait } from "./channel-ops-await";
 import { opRead } from "./channel-ops-read";
 
@@ -54,7 +55,14 @@ async function failMidHold(message: string): Promise<string> {
     clock.advance(opts.timeoutMs ?? 0);
     return { messages: [], timedOut: true };
   });
-  const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+  // ⚠ Explicit hold: an unstamped caller's DEFAULT is one inner poll long
+  // (T03), and this branch needs a SECOND poll to fail on.
+  const res = await opAwait(
+    stubClient({ awaitChannelMessages }),
+    "general",
+    7,
+    AWAIT_HOLD_DEFAULT_MS,
+  );
   return res.content[0].text;
 }
 

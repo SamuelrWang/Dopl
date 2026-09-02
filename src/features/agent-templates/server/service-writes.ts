@@ -222,7 +222,23 @@ export async function updateTemplate(
       ? null
       : await assertAttachableKnowledgeBases(ctx, patch.knowledgeBaseIds);
 
-  await repo.updateTemplateRow(ctx.workspaceId, id, {
+  // ⚠ A JUNCTION-ONLY PATCH TOUCHES NO SCALAR COLUMN, so it must not reach the
+  // row write at all (F-404, 2026-09-02). `knowledgeBaseIds`-only and
+  // `teamIds`-only patches are both legal — `packages/mcp-server/src/tools/
+  // agent-ops-write.ts › opUpdate` refuses only the patch that names NOTHING,
+  // and `agent-templates/schema.ts › UpdateTemplateSchema` marks every field
+  // optional — and both used to arrive at `updateTemplateRow` as an
+  // all-`undefined` patch, i.e. an empty UPDATE body, which PostgREST rejects
+  // and `http-mapping.ts` had no arm for: the agent got a bare INTERNAL_ERROR
+  // 500 for a request that was entirely valid. The repo is now total on the
+  // empty patch too, so this is the round trip we skip rather than the guard we
+  // depend on. Mirrors `workspaces/server/service.ts › renameWorkspace`, which
+  // has guarded this exact class all along.
+  //
+  // ⚠ TYPED AS THE REPOSITORY'S OWN PATCH, so the emptiness test and the column
+  // set cannot drift: a seventh scalar column added to `UpdateTemplatePatch` and
+  // forgotten here is a compile-time absence to notice, not a silent skip.
+  const rowPatch: repo.UpdateTemplatePatch = {
     name: patch.name === undefined ? undefined : stripNullBytes(patch.name),
     description:
       patch.description === undefined ? undefined : normalizeProse(patch.description),
@@ -233,7 +249,10 @@ export async function updateTemplate(
     model: patch.model === undefined ? undefined : normalizeLabel(patch.model),
     fields: patch.fields === undefined ? undefined : normalizeFieldsInput(patch.fields),
     visibility: patch.visibility,
-  });
+  };
+  if (Object.values(rowPatch).some((value) => value !== undefined)) {
+    await repo.updateTemplateRow(ctx.workspaceId, id, rowPatch);
+  }
 
   // ⚠ REPLACE-SET, and it runs even for the empty set: leaving a template's
   // team links behind when it goes `private` would leave rows that come back to

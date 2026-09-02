@@ -16,6 +16,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CURSOR_VENDOR = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
+exports.isDesktopRuntime = isDesktopRuntime;
 exports.callerStatusLine = callerStatusLine;
 exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
@@ -50,16 +51,28 @@ exports.UNKNOWN_CALLER = {
     vendor: null,
     credentialKind: null,
     credentialLabel: null,
+    sessionId: null,
 };
+/**
+ * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
+ * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
+ * `channel-await-budget.ts` (how long the hold may BE) both branch on it, and a
+ * second copy is how the two answers drift into disagreeing about one request.
+ *
+ * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`
+ * grants nothing). False means UNSTAMPED — usually an external client, but also
+ * how a desktop spawn on an older build looks. Never read it as "external".
+ */
+function isDesktopRuntime(runtime) {
+    return runtime === exports.DESKTOP_SESSION_RUNTIME;
+}
 /**
  * ⚠ What the server SAW in the runtime header, never what it concluded.
  * `unstamped` means the stamp was absent — usually an external client, but also
  * how a desktop spawn on an older build looks.
  */
 function runtimeWord(identity) {
-    return identity.runtime === exports.DESKTOP_SESSION_RUNTIME
-        ? exports.DESKTOP_SESSION_RUNTIME
-        : "unstamped";
+    return isDesktopRuntime(identity.runtime) ? exports.DESKTOP_SESSION_RUNTIME : "unstamped";
 }
 /**
  * The `_dopl_status` caller line — ⚠ terse on purpose: this rides EVERY

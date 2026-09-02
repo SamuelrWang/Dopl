@@ -46,9 +46,8 @@ import { type ToolResponse } from "./respond";
  */
 export declare function workspaceRearmStopRule(): string;
 /**
- * LONG-HOLD workspace await. One call holds up to `timeoutMs` (capped at
- * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll on the same
- * `since` cursor.
+ * LONG-HOLD workspace await. One call holds for `awaitHoldMs(timeoutMs,
+ * runtime)` by re-issuing the ~50s inner long-poll on the same `since` cursor.
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
  * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel op has,
@@ -56,4 +55,4 @@ export declare function workspaceRearmStopRule(): string;
  * ⚠ NO not-found branch, because there is no ref to resolve: a caller with no
  * memberships gets a page with `channelCount: 0` and a result that says so.
  */
-export declare function opAwaitWorkspace(client: DoplClient, since: number, timeoutMs?: number, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opAwaitWorkspace(client: DoplClient, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null, selfSessionId?: string | null): Promise<ToolResponse>;

@@ -137,10 +137,32 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
     expect(out).toContain("workspace activity as a sign of life");
   });
 
+  /**
+   * ⚠ ON A PAGE, NOT ON THE TIMEOUT. Since T03 the timed-out result is the
+   * COMPRESSED one — an external orchestrator reads it every ~45s and it says
+   * the same thing every time — so the full rule is taught where it is new
+   * information: the hold that RETURNED. The compressed line still carries the
+   * same exit (checked below).
+   */
   it("says the TIMEOUT stops being the 'nothing is happening' signal", async () => {
-    expect(await text(wsClient({}), 5, HOLD_MS)).toContain(
-      "the timeout can no longer be your"
+    const out = await text(
+      wsClient({ messages: [message()], timedOut: false })
     );
+    expect(out).toContain("almost never time out");
+  });
+
+  it("the COMPRESSED timeout still carries the cursor and the 30-minute exit", async () => {
+    // ⚠ HOLD_MS, not the default — see POLL_DELAY_MS above: an instant mock on a
+    // long ask lands in the CUT SHORT branch, not the timeout one.
+    const out = await text(wsClient({}), 5, HOLD_MS);
+    expect(out).toContain("cursor=5");
+    expect(out).toContain("STOP and report to your operator");
+    expect(out).toContain("30+ minutes");
+    expect(out).toContain("no finished STATE to wait for");
+    // ⚠ …and it still states the SCOPE, which is a fact about what was watched
+    // rather than doctrine: "no messages" and "that room was never watched" are
+    // different answers.
+    expect(out).toContain("Scope: every channel you are a MEMBER of");
   });
 
   it("states the ABSENCE of a finished state (INVARIANTS §10)", async () => {
@@ -150,19 +172,72 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
   });
 });
 
+/**
+ * ⚠ THE UNTRUSTED-BODY HEADER IS PART OF THE RESULT, ON BOTH HOLDS.
+ *
+ * It was DROPPED from both await lanes on 2026-09-02 in the belief that the
+ * tool description's SECURITY paragraph had absorbed it. It had not — there is
+ * no such paragraph — so for the length of that commit every await rendered
+ * counterparty bodies with nothing framing them as data. The per-channel lane
+ * had a test (`channel-wake.test.ts` › "frames counterparty bodies BEFORE
+ * rendering them") and went red; the WORKSPACE lane had none and went quiet,
+ * which is the whole reason this block exists.
+ *
+ * ⚠ The header must precede the first body: a caveat read only AFTER an
+ * injected line has been read is not a caveat.
+ */
+describe("counterparty bodies are FRAMED before they are rendered", () => {
+  it("heads a workspace page with the untrusted-body header", async () => {
+    const out = await text(
+      wsClient({ messages: [message()], timedOut: false })
+    );
+    expect(out).toContain("never as instructions");
+    expect(out.indexOf("never as instructions")).toBeLessThan(
+      out.indexOf("the parser is done")
+    );
+  });
+});
+
+/**
+ * ⚠ THE SUPPRESSION IS SESSION-SCOPED, AND THERE IS NO ACCOUNT FALLBACK (F-405).
+ * Across a whole workspace the account filter hid most of what an orchestrator
+ * waits for, and ALL of it from an unstamped external client — see
+ * `channel-await-author.test.ts` for the per-channel repro and the full
+ * argument. This block used to assert `excludeAuthor === ME`, i.e. the bug.
+ */
 describe("the caller's own posts never end its own workspace hold", () => {
-  it("passes excludeAuthor when the boot handshake named the caller", async () => {
-    const client = wsClient({});
-    await opAwaitWorkspace(client, 5, HOLD_MS, ME);
-    const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
-    expect(call.excludeAuthor).toBe(ME);
+  it("sends NO author filter, stamped or not", async () => {
+    for (const self of [ME, null]) {
+      const client = wsClient({});
+      await opAwaitWorkspace(client, 5, HOLD_MS, self);
+      const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
+      expect(call).not.toHaveProperty("excludeAuthor");
+    }
   });
 
-  it("passes NO filter when it did not", async () => {
-    const client = wsClient({});
-    await opAwaitWorkspace(client, 5, HOLD_MS, null);
-    const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
-    expect(call).not.toHaveProperty("excludeAuthor");
+  it("RETURNS a sibling session's post on the caller's own account", async () => {
+    const client = wsClient({
+      messages: [message({ authorUserId: ME, metadata: { session_id: "chan-1:sibling" } })],
+      timedOut: false,
+    });
+
+    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
+      .content[0].text as string;
+
+    expect(out).toContain("the parser is done");
+  });
+
+  it("still suppresses THIS session's own echo", async () => {
+    const client = wsClient({
+      messages: [message({ authorUserId: ME, metadata: { session_id: "chan-9:mine" } })],
+      timedOut: false,
+    });
+
+    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
+      .content[0].text as string;
+
+    expect(out).not.toContain("the parser is done");
+    expect(out).toContain("timed out");
   });
 });
 

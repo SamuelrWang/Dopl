@@ -3512,8 +3512,22 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   AND, from the next tool call, to the agent that made it. **That is a sharper version of the same
   oddity, not a resolution of it** — an agent can now write a base it will not be able to read back,
   which is a worse ergonomic than the one filed here and a better security posture.
-  Status: **open, NARROWED** (read direction closed by the audience ceiling; authoring deferred per
-  Samuel's Q5)
+- ✅ **AND THE AUTHORING HALF IS NOW CLOSED TOO (2026-09-01), BECAUSE IT STOPPED BEING AN ODDITY AND
+  BECAME A REPORTED BUG.** The paragraph above predicted it verbatim — *"an agent can now write a base
+  it will not be able to read back"* — and that is what `dopl_kb(op="create_base")` did in a
+  two-member container: two SUCCESS strings ("Created knowledge base … Private to you"), a
+  `list_bases` that never showed it, a slug that would not resolve, two orphaned rows each holding a
+  slug the next attempt would collide with. `service-base-writes.ts › assertCreatorCanReadItBack`
+  now runs `resolveAgentAudience` BEFORE the insert and refuses the `granted` branch, so a create
+  either writes a base its creator can immediately list and resolve, or returns an error naming the
+  room, the cause and the remedy. **Refusal is the only available answer**, not the cautious one:
+  what would make the base reachable is a channel grant, and `setChannelKnowledgeGrant` refuses
+  `ctx.source === "agent"` outright because that grant decides what the PEER may read — so the
+  create-and-share path was already a refusal, just one that inserted the row and hard-deleted it
+  first. ⚠ Only the `granted` branch narrows; any human, any standard workspace and any SOLO
+  container are untouched.
+  Status: **RESOLVED** (read direction closed 2026-08-26 by the audience ceiling; authoring closed
+  2026-09-01)
 
 ### F-324 — ✅ RESOLVED 2026-08-26 — a REAL guest was RLS-denied on realtime channel reads, and the mitigation this entry claimed DID NOT EXIST
 
@@ -6294,3 +6308,108 @@ rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-
 `repository.ts` — that file is a re-export barrel with no queries in it.
 
 - Status: open
+
+### F-404 — ✅ RESOLVED 2026-09-01 — a junction-only template patch sent an empty UPDATE and 500'd deterministically
+
+`dopl_agent(op="update", knowledge_bases=[…])` failed in every workspace and every home
+container. A junction-only patch names none of the six scalar columns, so the body
+`agent-templates/server/repository.ts › updateTemplateRow` built stayed `{}`; PostgREST cannot emit
+`UPDATE … SET` with no assignments, and the raw driver object thrown had no arm in
+`http-mapping.ts`, so it surfaced as a bare `INTERNAL_ERROR` 500. **The junction write that was the
+entire point of the call never ran** — a valid request lost its write and got back an error naming
+nothing. `teamIds`-only patches hit the same wall.
+
+The docblock above the query asserted *"the service never calls with one"*. It was false:
+`service-writes.ts › updateTemplate` called it unconditionally, and both upstream guards
+(`packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate`, `agent-templates/schema.ts ›
+UpdateTemplateSchema`) pass a KB-only patch by design.
+
+**Resolved** in two places, deliberately: the SERVICE skips the row write when no scalar is present
+(mirroring `workspaces/server/service.ts › renameWorkspace`, which has guarded this class all
+along — and is why `skills` never had the bug, since it always stamps `lastEditedBy`), and the
+REPOSITORY is now TOTAL on the empty patch, reading the row back instead of writing it, so no future
+caller can rediscover this. ⚠ The read path deliberately does NOT fire
+`agent_templates_touch_updated_at`: a no-op UPDATE that bumps `updated_at` is the other thing the
+old comment wanted to avoid, and it was right about that one.
+
+⚠ **The one test that ran this repro mocked `updateTemplateRow`**, so the empty body never reached
+PostgREST and the suite stayed green through the outage. `repository.test.ts` runs the real function
+against a recording client, which is where the empty body is now actually observed. The service
+guard is typed as `repository.ts › UpdateTemplatePatch` so its emptiness test cannot drift from the
+column set it is deciding about.
+
+⚠ **Id note:** first filed as **F-340**, which is a LIVE and unrelated entry (the channel info
+column's five-tab width budget, cited from INVARIANTS §5 and `channels-v2/knowledge-tab.test.tsx`).
+Renumbered before merge. Ids are never reused; two entries under one id makes both unreadable.
+
+### F-405 — ✅ RESOLVED 2026-09-01 — `op="await"` filtered out its own account, so a same-account counterparty was invisible
+
+`dopl_channel(op="await", since=853)` returned "nothing" twice while seq 856 — an agent post in that
+channel, on the caller's own account — sat in the table. `op="read"` showed it plainly.
+
+`channel-ops-await.ts` passed `excludeAuthor = <the account>`, and every post is stamped
+`author_user_id = ctx.userId` (`channels/server/service-writes.ts › postMessage`) whether a human or
+an agent wrote it. One operator runs many concurrent sessions, so **an orchestrator and its worker
+are the same author id.** The filter removed the row from BOTH the page and the existence probe
+(`channels/server/repository-messages.ts › hasMessagesAfter`), so the hold did not even spin — it
+held silently to its deadline while the answer sat in the table. Re-issuing the same cursor could
+never help, which is why the report was two empty holds. ⚠ It also contradicted the op's own
+teaching: `rearmStopRule` tells the caller to watch for the counterparty's `task_progress`
+milestones, which for a same-account worker were exactly the posts the filter guaranteed to hide.
+
+**Resolved:** no author filter is ever sent, on either lane. Own lines are dropped from the page in
+hand keyed on `metadata.session_id` — the only wire field naming the PROCESS rather than the account
+(`shared/auth/session-header.ts`) — and the cursor advances past them so the hold does not re-fetch
+them every tick. With no session stamp, nothing is dropped.
+
+🔴 **THE ACCOUNT FILTER MAY NOT RETURN AS A "FALLBACK" FOR UNSTAMPED CALLERS, AND THAT IS NOT
+HYPOTHETICAL — IT IS THE SHAPE THE FIRST FIX SHIPPED WITH.** Scoping to the session while keeping
+`excludeAuthor` "when this session cannot name itself" reads like a safe default and is not: unstamped
+is EVERY EXTERNAL MCP CLIENT (Claude Code sends no `X-Dopl-Session-Id`), i.e. precisely the population
+that reported the outage, which therefore reproduced unchanged against its own fix. What an unstamped
+caller gives up instead is bounded and self-inflicted — it may wake on a post it made itself, and it is
+blocked inside the call so in practice only an older desktop build can trip that. A noisy wake is
+recoverable; a silent hold is not.
+
+⚠ `channel-await-author.test.ts` ASSERTED THIS BUG — it pinned `excludeAuthor === ME` on every poll,
+which is the behaviour that hid the counterparty. A test can hold a defect in place as firmly as it
+holds an invariant.
+
+⚠ **Id note:** first filed as **F-341**, a LIVE and unrelated entry (the live-agent posture strip,
+cited from INVARIANTS §5 and two specs). Renumbered before merge.
+
+### F-406 — ✅ RESOLVED 2026-09-01 — the `await` default hold was ~3.5× an external MCP client's call timeout, so the op was unusable from one
+
+The default hold is 215s. Claude Code wraps every non-GET fetch to an `http` MCP server in an
+AbortController firing after `max(server.timeout ?? MCP_TOOL_TIMEOUT, 60_000)` ms. So at the default,
+an external caller did not get a long wait — it got a **raw transport `TimeoutError` carrying no
+cursor, no session block and none of the re-arm teaching**, which is the exact outcome the deadline
+chain in `channel-await-budget.ts` exists to prevent. The chain documented the client cap as layer 6
+and then sized layer 4 as though only layer 5 existed.
+
+**Resolved:** `channel-await-budget.ts › awaitHoldMs` is the one resolver both lanes call. An
+explicit `timeout_ms` is honoured EXACTLY (clamped only by the cap and the `DOPL_AWAIT_HOLD_MS`
+incident lever); the DEFAULT branches on the caller's runtime stamp — desktop keeps the wake-length
+hold, everything else gets `EXTERNAL_CLIENT_ABORT_MS - AWAIT_HOLD_EXTERNAL_MARGIN_MS`.
+
+⚠ **This trades the wake primitive away for that population, deliberately.** Under a ~60s abort the
+wake was never available, so what the long default actually bought an external caller was nothing at
+all. A returned result it can poll on beats a wake it cannot have.
+
+Three things found in the same file while fixing it, all now closed: **`opAwaitWorkspace` was never
+passed `runtime`** (so the workspace hold ran the desktop-length default for external callers AND
+wrote external-flavoured wake guidance to desktop sessions); **four hold constants existed twice**,
+byte-identical, one copy per lane — a hold constant that exists twice is one that gets retuned once;
+and **`isDesktopRuntime` existed twice**, so the hold's LENGTH and the hold's CLAIMS could come to
+disagree about one request. It is one exported statement in `identity.ts` now.
+
+⚠ The TIMED-OUT result is also COMPRESSED, cursor-first: it is the hottest text on the surface and
+the one that never changes, so ~1.4k of re-arm doctrine was paid per empty hold to say nothing new.
+Every clause INVARIANTS §10 requires of a re-arm instruction still rides it — including the ABSENCE
+of a finished state to wait for — and the mechanism lecture is still taught where it is NEW: `post`,
+`create_thread`, and the hold that RETURNS.
+
+- Status: RESOLVED. ⚠ Open follow-up, NOT taken here: `EXTERNAL_CLIENT_ABORT_MS` is a HAND-MEASURED
+  property of somebody else's client. It is a floor to design under, never a promise — another client
+  may be tighter, and nothing in this repo can detect that. The result text tells a caller what to do
+  when it happens (pass a smaller `timeout_ms`), which is the only remedy available from this side.
