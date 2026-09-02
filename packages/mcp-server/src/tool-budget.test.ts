@@ -152,50 +152,21 @@ function expectRatchet(
  * the op glosses stop being pushed to clients that never call them.
  */
 const OVER_BUDGET_CEILINGS: Record<string, number> = {
-  // ⚠ +383 ON 2026-09-02 for op="copy", after its bullet gave back the sentences
-  // `copy-target.ts › TO_WORKSPACE_ARG_DESCRIPTION` already carries.
-  // ⚠ 2,476 → 2,467 ON 2026-09-02: A8 took the TEAM AXIS off the `list` bullet
-  // and out of the `visibility` arg (which is a THIRD enum arm gone from the
-  // schema too, and that is not counted here). The filter disclosure stayed.
-  // ⚠ 2,467 → 2,446 ON 2026-09-02 (A3): the closing line stopped routing to
-  // `dopl_agent_admin`, a tool that no longer exists, and states the rule.
-  dopl_agent: 2446,
-  // ⚠ 1,197 OF THIS IS THE P1 SUMMARY AND THE REST IS **ONE PARAGRAPH THE P3
-  // TENANCY TIER ASKED TO KEEP WORD FOR WORD** — `channel-description.ts ›
-  // HOME_CHANNEL_ADDRESSING`, ~650 chars on how a home channel is addressed,
-  // discovered and tenanted. Each of its three facts was a measured misread in
-  // the orchestration run this work came out of. It is interpolated by
-  // REFERENCE precisely so it stays a decision somebody takes rather than a
-  // sentence whoever is counting characters trims. Was 34,904.
-  // ⚠ +116 ON 2026-09-02: three op NAMES in the ops line — "set_agent_mode",
-  // "ping", "pings" — with two five-word glosses. Nothing here duplicated
-  // anything, so nothing was traded for them.
-  // ⚠ 1,781 → 1,775 ON 2026-09-02: the `seq` sentence said "workspace-global"
-  // where `design/status.ts` and INVARIANTS §5 (F-412) say TABLE-WIDE, and the
-  // correct word is six characters shorter. Caught by the STALE half, which is
-  // what that half is for.
-  // ⚠ **1,775 → 1,703 ON 2026-09-02 (A6b), AND IT IS THE FIRST DROP THAT CAME
-  // FROM DELETING OPS AND PARAMS RATHER THAN FROM REWORDING.** `"get_thread"`
-  // left the ops line (C15, folded into `read(thread=)`) and the whole `seq`
-  // sentence left under `channel-description.ts`'s own rule 4 — it restated
-  // what `since`'s `.describe()` already says. What it bought back is spent on
-  // `section=`, the one clause that makes the doctrine pullable in pieces.
+  // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT WAVE A's INTEGRATION.** Each figure
+  // is the merged tree's, not any one slice's: A8 took the team axis off
+  // `dopl_agent` and `dopl_kb`, A3 took the `_admin` routing line off four
+  // descriptions, and A6b deleted ops from `dopl_channel`. The falls compound
+  // and only the integrated boot measures the result.
+  //
+  // ⚠ A RISE IS A DECISION AND IT IS RECORDED HERE, NOT ABSORBED. The honest
+  // move for anything over `DESCRIPTION_MAX_CHARS` is the one `dopl_channel`
+  // already made for its LAW: a pulled doctrine resource, so the op glosses stop
+  // being pushed to clients that never call them.
+  dopl_agent: 2437,
   dopl_channel: 1703,
-  // ⚠ +931 ON 2026-09-02 for three new ops — "copy_base", "pin", "unpin" — after
-  // the copy/pin bullets gave back what `to_workspace` and `path` already say.
-  // ⚠ 3,400 → 3,399 ON 2026-09-02: R2 reworded the `copy_base` bullet from "a
-  // base you can READ" to "a base YOU CREATED", one character shorter.
-  // ⚠ 3,399 → 3,387 ON 2026-09-02: A8 took the TEAM AXIS off the `list_bases`
-  // bullet. The FILTER is still disclosed ("no grant on", pinned by
-  // `tool-scope-claims.test.ts`) — what left is the dead axis naming it.
-  // ⚠ 3,387 → 3,371 ON 2026-09-02 (A3): the closing line stopped routing to
-  // `dopl_kb_admin` — a tool that no longer exists — and says the rule instead.
-  dopl_kb: 3371,
   dopl_chats: 1654,
+  dopl_kb: 3359,
   dopl_members: 1535,
-  // ⚠ UNCHANGED BY A3 (2026-09-02): its closing sentence stopped naming
-  // `dopl_ontology_admin` and states the rule instead, at exactly the same
-  // length. The win of that slice is the five tools, not this line.
   dopl_ontology: 2321,
   dopl_skill: 1586,
 };
@@ -217,31 +188,48 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
  * moved rather than being redistributed.
  */
 const SCHEMA_CEILINGS: Record<string, number> = {
-  current_workspace: 704,
-  dopl_agent: 4598,
-  dopl_agent_admin: 1096,
-  dopl_channel: 21778,
-  dopl_chats: 4147,
-  dopl_chats_admin: 1165,
+  // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT WAVE A's INTEGRATION**, through the
+  // real `listTools()` over the merged tree — not by carrying each slice's
+  // number forward. Slices compound: `dopl_kb` fell on A8 (team axis), on A3
+  // (the `_admin` routing line) and again on A4 (the `workspace` arg), and no
+  // slice could see the other two. Only the integrated boot knows the total.
+  //
+  // ⚠ **THE FIVE `*_admin` CEILINGS ARE GONE, NOT ZEROED** — A3 deleted the
+  // tools, and a ceiling over a tool nobody serves is what the ratchet's DEAD
+  // half exists to refuse.
+  current_workspace: 594,
+  dopl_agent: 3912,
+  // ⚠ **21,778 → 11,371, THE SINGLE LARGEST FALL IN THE WAVE**, and it came from
+  // deleting ops and params rather than from rewording: `kind`, `intent` and
+  // `direct` are gone with their error codes, `get_thread` folded into
+  // `read(thread=)`, the three ping forms collapsed to one `recipient`, and
+  // `chain` became a three-value enum (A6 + A6b, C11–C15).
+  dopl_channel: 11371,
+  dopl_chats: 3519,
   dopl_home: 457,
-  dopl_kb: 5432,
-  dopl_kb_admin: 1223,
-  dopl_map: 879,
-  dopl_members: 1232,
-  dopl_ontology: 3166,
-  dopl_ontology_admin: 1162,
-  dopl_search: 1430,
-  dopl_skill: 3428,
-  dopl_skill_admin: 1062,
+  dopl_kb: 4819,
+  dopl_map: 251,
+  dopl_members: 604,
+  dopl_ontology: 2538,
+  dopl_search: 802,
+  dopl_skill: 2800,
   dopl_status: 508,
   list_workspaces: 114,
 };
 
 /**
  * ⚠ WHAT AN EXTERNAL CONNECTION COSTS BEFORE IT HAS DONE ANYTHING: every
- * description + every input schema + the `instructions` briefing, measured
- * 2026-09-02 at **95,174 chars / ~23.8k tokens**. Doctrine is NOT in it — that
- * is pulled, and {@link DOCTRINE_CEILING} is its separate ratchet.
+ * description + every input schema + the `instructions` briefing. Doctrine is
+ * NOT in it — that is pulled, and {@link DOCTRINE_CEILING} is its separate
+ * ratchet.
+ *
+ * ⚠ **95,174 → 54,702 ACROSS WAVE A (2026-09-02), A FALL OF 40,472 CHARS / 42%**,
+ * re-measured whole at integration through the real `listTools()`. Where it came
+ * from, largest first: `dopl_channel`'s schema −10,407 (A6 + A6b, ops and params
+ * DELETED), the briefing −15,216 (A1), the five `_admin` tools −9,295 (A3), the
+ * `workspace` argument −8,792 across fourteen tools (A4). ⚠ **NEVER QUOTE THIS
+ * NUMBER — re-derive it.** It is the sum of a boot, and every figure a doc has
+ * ever carried about this surface has gone stale inside a day (F-422).
  *
  * ⚠ IT IS NOT ARITHMETIC OVER THE ROWS ABOVE, AND THAT IS THE POINT. The
  * per-tool ceilings bound each tool; this bounds the SURFACE, so adding tools
@@ -249,29 +237,45 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-const SERVED_TOTAL_CEILING = 95_174;
+const SERVED_TOTAL_CEILING = 54_702;
 
 /**
- * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE, AND IT IS 17,067 CHARS — 18%
- * of the connection, larger than every description put together bar three.
- * A1's target is 2,048. ⚠ WHAT THIS CEILING DOES NOT SEE: whether the CLIENT
+ * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
+ * the connection, larger than every description put together bar three — and
+ * A1 cut it to a structural 2,048 cap, measuring **1,849** at integration.
+ * ⚠ THE CAP AND THIS CEILING ARE DIFFERENT INSTRUMENTS: `instructions.ts`
+ * ENFORCES 2,048 by dropping directory rows that do not fit, and this ratchets
+ * what the tree ACTUALLY writes, so prose growing back into the headroom is
+ * caught here rather than absorbed silently by the cap.
+ * ⚠ WHAT THIS CEILING DOES NOT SEE: whether the CLIENT
  * keeps all of it. Nothing in this tree truncates the briefing (F-423), so
  * "written" and "delivered" are the same number at every layer we own; a cut
  * inside a consuming runtime is not observable from here and must not be
  * asserted here.
  */
-const INSTRUCTIONS_CEILING = 17_067;
+const INSTRUCTIONS_CEILING = 1_849;
 
 /**
  * ⚠ THE PULLED SIDE, AND IT IS BUDGETED SEPARATELY ON PURPOSE (principle 7).
  * The sum of every resource this server publishes — one today,
- * `dopl://doctrine/channels` at 28,870 chars. ⚠ THIS CEILING IS EXPECTED TO
- * RISE during Wave A, and a rise here is only legitimate when the pushed side
- * falls further: A6 moves ~14,000 chars out of `.describe()` and ~3,000 of it
- * lands in the doctrine. A rise with no matching fall in
- * {@link SERVED_TOTAL_CEILING} is prose laundering and this is the gate for it.
+ * `dopl://doctrine/channels`.
+ *
+ * ⚠ **IT ROSE, 28,870 → 32,728, AND HERE IS THE TRADE THAT LICENSES IT.** A6 and
+ * A6b moved standing doctrine out of `.describe()` — which is PUSHED on every
+ * connection — into this document, which is PULLED only by an agent that asks.
+ * The pushed side fell 40,472 chars over the same wave (see
+ * {@link SERVED_TOTAL_CEILING}); this rose 3,858. **A rise of 1 against a fall of
+ * 10.5 is the design; a rise with no matching fall is prose laundering, and this
+ * is the gate for it.** Without a SEPARATE budget here every future description
+ * cut could be laundered into an unbounded pulled document and the headline
+ * number would keep improving while nothing got simpler.
+ *
+ * ⚠ **AND A PULLED BUDGET OVER NOTHING IS THE FAILURE MODE**, which is why the
+ * test above it asserts the resource is still published at all: if it stopped
+ * being served, every figure here would read 0 and go green while the doctrine
+ * reached no agent.
  */
-const DOCTRINE_CEILING = 28_870;
+const DOCTRINE_CEILING = 32_728;
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",

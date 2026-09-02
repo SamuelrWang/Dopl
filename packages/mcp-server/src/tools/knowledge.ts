@@ -59,7 +59,7 @@ Set \`op\` to one of:
 - "write_file" — upsert an entry. Requires: base, body, path (or \`title\`, which becomes the path). Overwriting REQUIRES \`expected_version\` from a read_file — 412 without it, only \`force=true\` skips it.
 - "move_file" — Requires: base, from_path, to_path.
 - "search" — keyword + semantic over the entry BODIES of the bases you can read. A ranked sample, not an exhaustive scan: capped at \`limit\` (default 20) and stripped of unreadable bases after ranking, so zero hits is not proof of absence. Requires: query.
-- "set_visibility" — publish a base you created ("public", one-way). Requires: base, visibility. Optional: confirm_token. Publishing into a home channel somebody else is in previews first, returning a one-time confirm_token.
+- "set_visibility" — publish a base you created ("public", one-way). Requires: base, visibility.
 - "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. Requires: base; \`path\` picks base-or-entry (see its own description). A workspace-wide curation flag — it changes no visibility and no audience. The payload is capped, so anything past a few pages arrives as a pointer to fetch with op="read_file" rather than as content.
 - "unpin" — the exact inverse, same arguments. An entry unpinned on its own still arrives with the base if the BASE is pinned.
 
