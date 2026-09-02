@@ -38,9 +38,12 @@ import {
  *   3. **THE NAME IS CARRIED UNCHANGED.** Templates have no name uniqueness,
  *      deliberately, so no "(copy)" suffix dodges a constraint that exists.
  *
- * ⚠ AND `visibility` IS FORCED TO `private`. The gesture's word is "use"; it
- * must never silently PUBLISH the operator's own agent into a room the peer is
- * standing in. Sharing it is a second, deliberate edit.
+ * ⚠ THE FIRST SENTENCE OF THE CONFIRM STEP IS NOW LOAD-BEARING TWICE. It is
+ * still the operator's consent step, and since G16/A11 it is also what entitles
+ * this write to send `acknowledgeShared: true` — without which the server 400s
+ * `CONTAINER_PUBLISH_UNACKNOWLEDGED` (`features/workspaces/server/
+ * shared-publish.ts`). **If that sentence is softened, the flag is a lie and the
+ * copy semantics are wrong again** (INVARIANTS §5A).
  */
 
 /** The card control. ⚠ A `<button>` inside the card's face, never over it —
@@ -96,7 +99,22 @@ export function CopyToChannelDialog({
     setError(null);
     try {
       await writes.create.mutateAsync({
-        body: draftToCreateBody(containerCopyDraft(source)),
+        body: {
+          ...draftToCreateBody(containerCopyDraft(source)),
+          // 🔒 G16 — THE SENTENCE ABOVE, AS A SERVER PRECONDITION (A11).
+          // `describe` states the audience change ("everyone here will see it")
+          // and `onConfirm` runs only when the operator pressed through it, so
+          // this is the one place in this flow entitled to say it. The server
+          // 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it
+          // (`features/workspaces/server/shared-publish.ts`), and a failed write
+          // keeps this dialog open with the server's own wording in it.
+          // ⚠ SET HERE, NOT IN `containerCopyDraft`. That function is PURE and
+          // describes what the copy IS; an acknowledgement is a fact about the
+          // GESTURE, and folding it into the draft would hand the flag to every
+          // future caller of the draft — including ones that show nobody
+          // anything, which is the client-side confirm this replaces.
+          acknowledgeShared: true,
+        },
       });
       onCopied();
     } catch (err) {

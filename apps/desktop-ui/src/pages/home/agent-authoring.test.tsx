@@ -127,6 +127,41 @@ describe("each section's create writes where its section reads", () => {
     expect(shared.textContent).not.toContain("Deck reviewer");
   });
 
+  it("🔒 the SHARED create ACKNOWLEDGES the audience the section names (A11)", async () => {
+    // 🔒 G16 — the server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without this,
+    // so "New shared agent" cannot save at all if the flag is dropped. ⚠ NO NEW
+    // DIALOG: `SECTIONS_CONTAINER`'s single option is labelled "Shared in this
+    // channel" and the section heading repeats it — that control IS the
+    // audience statement (INVARIANTS §5, minimal UI copy).
+    renderHome();
+    await openAgents();
+    await screen.findByText("Renewal chaser");
+
+    await startNewAgent("Intake triage", SHARED_BUTTON);
+    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+
+    await waitFor(() => expect(createCall()).toBeDefined());
+    expect(createCall()!.opts.body).toMatchObject({
+      visibility: "workspace",
+      acknowledgeShared: true,
+    });
+  });
+
+  it("🔒 the PERSONAL create sends NO acknowledgement — nothing is published", async () => {
+    // ⚠ `undefined`, never `false`. The server examines only an explicit
+    // `true`, and a `false` on every private save would suggest to a reader
+    // that the other value is examined too — the rule `homeScoped` states.
+    renderHome();
+    await openAgents();
+    await screen.findByText("Fundraise analyst");
+
+    await startNewAgent("Deck reviewer");
+    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+
+    await waitFor(() => expect(createCall()).toBeDefined());
+    expect(createCall()!.opts.body).not.toHaveProperty("acknowledgeShared");
+  });
+
   it("🔒 the SHARED create sends NO homeScoped — a container has no shelf", async () => {
     // `resolveTemplateHomeScope` would 403 it, and an explicit `false` would
     // widen the contract the fence has to allow for no reason.
@@ -349,6 +384,11 @@ describe("use in this channel", () => {
     // ⚠ `teamIds` and `knowledgeBaseIds` absent, which is what "cleared" means
     // on a create body. The name carries UNCHANGED — no "(copy)" suffix,
     // because templates have no name uniqueness to dodge.
+    // 🔒 G16/A11 — `acknowledgeShared` RIDES THE SAME BODY, and it is asserted
+    // in an EXACT-EQUALITY expectation on purpose: the server refuses this
+    // create without it (400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`), so a future
+    // edit that drops the flag has to delete a line here rather than silently
+    // pass a looser matcher.
     expect(call.opts.body).toEqual({
       name: "Fundraise analyst",
       visibility: "workspace",
@@ -356,7 +396,22 @@ describe("use in this channel", () => {
       instructions: "Cite the memo.",
       model: "claude-opus-5",
       fields: [{ key: "round", value: "seed" }],
+      acknowledgeShared: true,
     });
+  });
+
+  it("🔒 sends the flag ONLY after the confirm — the dialog alone writes nothing", async () => {
+    // 🔒 THE WHOLE SHAPE OF THE CONSENT STEP (A11). The acknowledgement is a
+    // fact about the GESTURE, so it may not exist before the operator pressed:
+    // opening the dialog must put no call on the wire at all, and `describe`'s
+    // "everyone here will see it" is what the flag on the next line stands for.
+    await openCopyConfirm();
+    expect(document.body.textContent).toContain("everyone here will see it");
+    expect(createCall()).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Make a copy" }));
+    await waitFor(() => expect(createCall()).toBeDefined());
+    expect(createCall()!.opts.body).toMatchObject({ acknowledgeShared: true });
   });
 
   it("says the knowledge bases stay behind BEFORE anything is written", async () => {
