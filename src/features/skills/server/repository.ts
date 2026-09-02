@@ -1,6 +1,7 @@
 import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readClient } from "@/shared/supabase/caller-client";
 import type {
   Skill,
   SkillFile,
@@ -19,8 +20,26 @@ import {
 } from "./dto";
 
 /**
- * Raw I/O for skills. ⚠ Service-role client bypasses RLS — every query
- * takes a `workspaceId` filter the service sets from the auth context.
+ * Raw I/O for skills.
+ *
+ * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 2
+ * (Wave B B12), exactly as `knowledge/server/repository-bases.ts` documents for
+ * phase 1. `readClient()` is the CALLER's client when `RLS_CALLER_SCOPED_READS`
+ * is on and `supabaseAdmin()` otherwise, so with the flag off this file behaves
+ * exactly as it did.
+ *
+ *   * **A read that answers "what may this caller see" takes `readClient()`.**
+ *     With the flag on the row filter is `skills_member_select`
+ *     (`20260921120000_rls_phase2_policies`), written to EQUAL
+ *     `service-shared.ts › canSeeSkill`; the predicate stays until the flag has
+ *     run a release.
+ *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`** and says
+ *     so at the call site. Scoped to the caller it would answer a different
+ *     question and answer it wrongly — a slug "free" because someone else's
+ *     private skill holds it.
+ *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
+ *     until RLS plan phase 4, and every one of them still carries the
+ *     `workspaceId` filter the service sets from the auth context.
  */
 
 // ─── Skills ─────────────────────────────────────────────────────────
@@ -32,7 +51,7 @@ export async function listSkillsForWorkspace(
   // Summary projection drops the connectors JSONB to keep skill_list lean;
   // mapSkillSummaryRow fills `connectors: []` for that shape.
   const includeConnectors = opts.includeConnectors ?? false;
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("skills")
     // ⚠ Cast to the full-col string so PostgREST's literal-type inference
@@ -52,7 +71,7 @@ export async function findSkillBySlug(
   workspaceId: string,
   slug: string
 ): Promise<Skill | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("skills")
     .select(SKILL_COLS)
@@ -68,7 +87,7 @@ export async function findSkillByPublicId(
   workspaceId: string,
   publicId: string
 ): Promise<Skill | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("skills")
     .select(SKILL_COLS)
@@ -85,7 +104,7 @@ export async function findSkillById(
   id: string,
   includeDeleted = false
 ): Promise<Skill | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("skills")
     .select(SKILL_COLS)
@@ -97,6 +116,9 @@ export async function findSkillById(
   return data ? mapSkillRow(data as SkillRow) : null;
 }
 
+/** ⚠ SERVICE ROLE ON PURPOSE — slug uniqueness is a SYSTEM question. Scoped to
+ *  the caller it would report a slug free because the row holding it is someone
+ *  else's private skill, and the next insert would hit the unique index. */
 export async function listSlugsForWorkspace(
   workspaceId: string
 ): Promise<string[]> {
@@ -281,7 +303,7 @@ export async function readSkillBody(
   workspaceId: string,
   skillId: string
 ): Promise<SkillFile | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("skills")
     .select(SKILL_BODY_COLS)
@@ -339,13 +361,22 @@ export async function updateSkillBody(
 
 // ─── Knowledge bases (cross-feature avoiding) ───────────────────────
 
-/** Existence check for the chip resolver. Queried here rather than imported
- *  from features/knowledge to avoid a cross-feature dependency. */
+/**
+ * Existence check for the chip resolver. Queried here rather than imported from
+ * features/knowledge to avoid a cross-feature dependency.
+ *
+ * ⚠ `readClient()` THOUGH THE TABLE BELONGS TO PHASE 1. "Is this chip
+ * available?" is a visibility question about a knowledge base, and
+ * `knowledge_bases_member_select` (`20260919120000`) is already written to equal
+ * `canSeeBase` — so with the flag on a chip pointing at a base the caller cannot
+ * read reports unavailable, which is what the badge means. ⚠ NOTHING IN THIS
+ * FEATURE RE-STATES `canSeeBase`; that would be the F-278 shape.
+ */
 export async function knowledgeBaseSlugExists(
   workspaceId: string,
   slug: string
 ): Promise<boolean> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
     .select("id")
@@ -357,10 +388,14 @@ export async function knowledgeBaseSlugExists(
   return data !== null;
 }
 
+/** The KB picker's rows. ⚠ Caller-scoped for the same reason, and it closes
+ *  more: this list has no service-side visibility filter at all, so on the
+ *  service role it names every base in the workspace including other people's
+ *  private ones (F-574). The policy is the only fence it has ever had. */
 export async function listWorkspaceKnowledgeBases(
   workspaceId: string
 ): Promise<Array<{ slug: string; name: string }>> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
     .select("slug, name")
