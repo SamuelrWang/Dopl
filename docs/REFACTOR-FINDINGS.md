@@ -6294,3 +6294,71 @@ rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-
 `repository.ts` — that file is a re-export barrel with no queries in it.
 
 - Status: open
+
+---
+
+## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-404 through F-405
+
+Opened while building T20/T21/T22/T40/T41/T81 of `docs/specs/` — the MCP agent-efficiency spec's P2
+tier. Both are things the wave MEASURED and deliberately did not fix inside it.
+
+### F-404 — `set_agent_mode` over MCP cannot be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01)
+
+**The ask** was a `dopl_channel(op="set_agent_mode", agent_id=…, tool_mode=…, message_mode=…)` — a
+fourth KIND on the launch mailbox, letting an orchestrator re-posture one of its operator's RUNNING
+agents, alongside `end_agent` / `rename_agent`.
+
+🔒 **IT IS BLOCKED BY AN EXPLICIT STANDING RULING, NOT BY EFFORT.** INVARIANTS §3 says
+`PATCH /api/channels/[channelId]/members` is `sessionOnly` *"because the agent tool profile is a
+CONTAINMENT control, not a preference — the setting relied on for containment must not be writable by
+the thing it contains, durably."* An MCP op that accepts `tool_mode` would hand exactly that write to
+exactly that thing: a windowless session floored at `auto` could ask its own machine for `bypass`,
+voiding the audience ceiling's B2 tripwire and, through Bash, B1's residual #3.
+
+**The safe shape is NARROWING-ONLY — never wider than the session already has — and it is not
+buildable on this side of the boundary.** Measured 2026-09-01: `channel_sessions` carries **no
+`tool_mode` / `message_mode` column** (`20260822150000_channel_sessions_telemetry.sql` adds eight
+columns and neither is one; re-derive with
+`grep -rn 'tool_mode\|message_mode' src/features/channels/server/collab-dto.ts supabase/migrations`).
+So **the server cannot know a session's current posture, and therefore cannot enforce "never wider"**
+— the only layer that can is `dopl-desktop-app/main/session-reducer.js`, whose `set_tool_mode` /
+`set_message_mode` already coerce fail-closed through `coerceMode(TOOL_MODES, …)` /
+`coerceMode(MESSAGE_MODES, …)` (`channel-prefs.js › TOOL_MODES` = manual/accept_edits/auto/bypass,
+`› MESSAGE_MODES` = ask/auto_inbound/auto_outbound/auto_both).
+
+⚠ **SO SHIPPING THE OP WITHOUT THE DESKTOP HALF IS NOT "PARTIAL", IT IS THE WIDENING.** An MCP op
+whose only bound is unimplemented is a posture-widening primitive with a docblock. This wave shipped
+NOTHING for it rather than a gated-looking op that gates nothing.
+
+**What the whole change needs, in order** (the `20260823140000` precedent — the CHECK widens BEFORE a
+producer ships, and the producer lands with the consumer it unblocks):
+1. the `kind` CHECK on `channel_launch_directives` widened to admit `set_mode`;
+2. the desktop dispatcher mapping it onto the existing `set_tool_mode` / `set_message_mode` reducer
+   events, **refusing any value wider than the session's current one** and answering one of the
+   existing refusal words otherwise — this is the fence, and it is the only place it can live;
+3. `channel_sessions` gaining the two mode columns so `read_sessions` / `dopl_status` can show the
+   posture the caller is about to change (T25's territory — without it an orchestrator sets a mode
+   blind);
+4. only then the server schema/service, the `@dopl/client` union arm, and the MCP op.
+
+- Status: open. ⚠ Do not implement step 4 before step 2 exists.
+
+### F-405 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
+
+§10's workspace-await bullet and `repository-await-workspace.ts › listWorkspaceMessagesAfter` both say
+*"`seq` is WORKSPACE-GLOBAL and gappy"*. Measured against the DDL: `20260725120000_channels.sql`
+declares `seq BIGINT GENERATED ALWAYS AS IDENTITY` on `channel_messages` — **one identity sequence per
+TABLE**, so a `seq` is unique and monotonic across every workspace and every `kind='link'` container
+at once.
+
+The doc was never FALSE (table-global implies workspace-global) but it was **narrower than the truth in
+the direction that mattered**: read as an upper bound it says one cursor cannot span two workspaces,
+which is exactly the fact T21's account-wide read rests on. Per CLAUDE.md's precedence rule the CODE
+wins and INVARIANTS is corrected in the same change; §10's bullet now states the identity and its
+consequence.
+
+⚠ **The workspace-await's own wording is left alone on purpose** — it is describing a hold that IS
+workspace-scoped, and there the narrower statement is the accurate one for what that function does.
+
+- Status: ✅ resolved 2026-09-01 (§10 corrected; `repository-account.ts › listAccountMessagesAfter`
+  states the stronger fact where it is relied on).
