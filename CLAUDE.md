@@ -71,7 +71,7 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and FOUR non-suite gates** — the full table is
+**Five suites, TWO lints, TWO typechecks, and FIVE non-suite gates** — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
 ⚠ This said **FIVE** non-suite gates until 2026-08-26, over a table of four. The five it counted
@@ -79,7 +79,7 @@ included the desktop-ui typecheck, **which is one of the TWO typechecks** — a 
 list below is "what gets forgotten", which is a different question from "how many non-suite gates
 there are", and the first item is on it precisely because it is a typecheck nobody remembers to run.
 
-The five things that are routinely forgotten (four non-suite gates, plus the second typecheck):
+The six things that are routinely forgotten (five non-suite gates, plus the second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
    vitest run does not typecheck. `npm run typecheck` alone does not cover it.
@@ -90,8 +90,15 @@ The five things that are routinely forgotten (four non-suite gates, plus the sec
 5. `npx tsx scripts/check-role-drift.ts` — the workspace ROLE SET across server, SDK and MCP.
    ⚠ **This list said "four" and omitted it until 2026-08-26**, though it has been the second step
    of CI's `type-drift` job since guest-role M0 (`080b7b48`) — i.e. the wave that introduced the
-   `guest` role shipped the gate that guards the role set and told no doc about it. **Re-derive
-   this list rather than trusting it: `grep -n 'run:' .github/workflows/ci.yml`.**
+   `guest` role shipped the gate that guards the role set and told no doc about it.
+6. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
+   SPA's `apps/desktop-ui/src/styles/tokens.css`, which is a second copy with no shared module.
+   ⚠ **And this list said "five" and omitted THIS one until 2026-09-01**, though it has been the
+   `type-drift` job's THIRD step since `522f53df` (2026-08-31). **The same failure, a second time,
+   one month apart: the wave that adds a gate does not add its doc row.** Twice is a coincidence;
+   three times (counting `check-role-drift`) is the process. **So re-derive this list rather than
+   trusting it — it has been wrong twice and the command takes one second:
+   `grep -n 'run:' .github/workflows/ci.yml`.**
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new

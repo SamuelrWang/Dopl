@@ -102,10 +102,15 @@ supabase migration list
 
 ## Gates, measured locally on the integrated branch
 
-Run `npm run lint -- --max-warnings 0`, `npm run typecheck`, `npm run typecheck -w @dopl/desktop-ui`,
-`node scripts/check-doc-refs.mjs`, `npx tsx scripts/check-knowledge-type-drift.ts`,
-`npx tsx scripts/check-role-drift.ts`, the five suites, and the `size-check` job's `find`/`awk`.
-Re-derive from `.github/workflows/ci.yml`; do not trust this list.
+Five suites, two lints, two typechecks and **FIVE** non-suite gates — re-derived from
+`.github/workflows/ci.yml`, not quoted.
+
+⚠ **THE DOCS SAID FOUR NON-SUITE GATES AND WERE WRONG, FOR THE THIRD TIME AND IN THE SAME
+DIRECTION.** `scripts/check-css-token-drift.ts` has been the `type-drift` job's third step since
+`522f53df` (2026-08-31) and appeared in no doc. That is the same failure `check-role-drift.ts`
+produced a month earlier: **the wave that adds a gate does not add its doc row.** INVARIANTS §14
+and CLAUDE.md are corrected in this branch, and both now carry the re-derive command rather than
+the number.
 
 Two known flakes rerun green in isolation and are **not** integration breakage:
 `src/app/api/mcp/credits/consume/route-guest-floor.test.ts` (worker teardown race) and
