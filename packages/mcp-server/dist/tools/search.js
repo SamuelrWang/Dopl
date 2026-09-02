@@ -36,13 +36,11 @@ function snippet(raw) {
  * word "THREE" spelled out in prose that nothing tied to it.
  */
 const SEARCH_GROUP_COUNT = 4;
-const SEARCH_DESCRIPTION = `Ranked search across FOUR domains at once: knowledge entries, skills, ontology objects, and agent templates. Returns grouped hits with the handle to read each: dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_ontology(op="get"), dopl_agent(op="get"). Prefer this over per-domain listing when you don't already know where something lives — including when the user names an agent by a nickname ("use my research agent").
+const SEARCH_DESCRIPTION = `Ranked search across FOUR domains at once: knowledge entries, skills, ontology objects, and agent templates. Returns grouped hits with the handle to read each: dopl_kb(op="read_file"), dopl_skill(op="get"), dopl_ontology(op="get"), dopl_agent(op="get"). Use it when you do not already know where something lives.
 
-WHAT IT DOES NOT COVER, because a miss here is not evidence of absence: the CHAT ARCHIVE, members, teams and channels are not searched at all (dopl_chats(op="list", query=...) is the archive's own filter). Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates are matched on names and short metadata only, so a term that appears solely inside a SKILL.md — or solely inside a template's INSTRUCTIONS — will not be found. Only ACTIVE skills are searched, and only what you can see. Every group is capped at \`limit\`; a group whose backing read FAILED still shows "No matches", but the failure is NAMED in a PARTIAL READ notice on the result, so a group with no such notice against it really was searched.
+A miss here is not evidence of absence. The CHAT ARCHIVE, members, teams and channels are not searched at all (dopl_chats(op="list", query=...) is the archive's own filter). Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates are matched on names and short metadata only, so a term living solely inside a SKILL.md — or a template's INSTRUCTIONS — will not be found. Only ACTIVE skills are searched, and only what you can see. Each group is capped at \`limit\`; a group whose read FAILED still shows "No matches", but is NAMED in a PARTIAL READ notice.
 
-SCOPE. \`scope="here"\` (the DEFAULT) searches the ONE workspace this call resolved to. \`scope="everywhere"\` fans out over every scope you can reach — your workspaces AND your home channels — and renders the hits under a PER-SCOPE heading carrying the id to target with \`workspace=\`. Nothing is merged across scopes, so a hit always says which room it came from. ⚠ THE FAN-OUT COSTS ONE MCP CREDIT PER SCOPE, is capped at ${search_everywhere_1.MAX_SCOPES} scopes, and NAMES the truncation when it hits the cap or runs out of credits — the count it reports is what it actually searched, never a promise of exhaustiveness. Use it when you do not know where something lives; use the default when you do.
-
-Params: query (required; all terms must appear, punctuation-folded), limit (max hits per group, default 8), scope ("here" | "everywhere", default "here").`;
+⚠ \`scope="everywhere"\` fans out over every workspace AND home channel you can reach, under per-scope headings carrying the id to target with \`workspace=\`. It COSTS ONE MCP CREDIT PER SCOPE, is capped at ${search_everywhere_1.MAX_SCOPES} scopes, and NAMES the truncation when it hits the cap or runs out of credits.`;
 /**
  * "Showing N of M" for one group, or nothing when untruncated. ⚠ Both numbers
  * come from a list already in memory (the cap is applied HERE), so it is free —
@@ -91,7 +89,7 @@ function registerSearchTool(register, client, directory, charge) {
         scope: zod_1.z
             .enum(["here", "everywhere"])
             .optional()
-            .describe(`Which scopes to search. "here" (DEFAULT) = the one workspace this call resolved to, byte-identical to what this tool has always done. "everywhere" = every workspace AND home channel you can reach, one ordinary fenced search per scope, results under per-scope headings — capped at ${search_everywhere_1.MAX_SCOPES} scopes, ONE MCP CREDIT PER SCOPE, and the truncation is named in the result. A session pinned to a shared home channel reaches exactly that one, so "everywhere" there is the same single scope as "here".`),
+            .describe(`Which scopes to search: "here" (DEFAULT) = the one workspace this call resolved to; "everywhere" = every workspace AND home channel you can reach, one fenced search each under per-scope headings, capped at ${search_everywhere_1.MAX_SCOPES} scopes at ONE MCP CREDIT PER SCOPE, with the truncation named in the result.`),
     }, async (args) => {
         const limit = args.limit ?? 8;
         // Tokenize + punctuation-fold query AND haystack so "duplicate name"

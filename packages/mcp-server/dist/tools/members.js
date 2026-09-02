@@ -15,23 +15,14 @@ const narration_1 = require("./narration");
 const identity_1 = require("./identity");
 const members_render_1 = require("./members-render");
 const respond_1 = require("./respond");
-const DESCRIPTION = `READ-ONLY view of workspace membership, teams, and access — for answering "who's in this workspace, who's on which team, what can they (or I) touch". You cannot change any of it: roles, teams, and grants are managed by humans in the Dopl web UI; if the user asks for a change, point them there.
-
-The access model, so you can explain it:
-- Roles rank guest < viewer < member < admin < owner. Role default level: guest → none, viewer → read, member/admin/owner → edit. A GUEST is link-granted and reaches ONE channel, nothing else in the workspace — no knowledge base, skill, chat or ontology object at any level.
-- A shareable resource (KNOWLEDGE BASE, SKILL) is either workspace-mode (open to all members at their role default) or teams-mode (visible only to granted teams — plus admins/owners and the resource's creator). Chats, chat folders and ontology objects carry their OWN sharing and are not part of the teams grid.
-- A member's effective level on a teams-mode resource = the highest grant across their teams, capped at their role default. No grant → the resource is invisible to them.
-- Admins and owners always have edit on everything.
-- SO TWO MEMBERS' LISTINGS LEGITIMATELY DISAGREE. dopl_map, dopl_skill(op="list") and dopl_kb(op="list_bases") each return one caller's view; a smaller count is normally private or team-scoped items, not a bug. op="access_matrix" below is what settles it.
-
-Set \`op\` to one of:
-- "whoami" — WHO AND WHERE YOU ARE, and the authoritative answer to both: your immutable user id, name, role, teams, default access level, the runtime and credential this session is acting through, and what that does and does not establish about another party. Start here whenever identity is in question — a display name alone never settles it.
-- "list" — the member roster: name, email, role, status, last active, team chips. EVERY membership row, INVITED AND DEACTIVATED INCLUDED — read the status on each before you count "members". Not role-shaped: a viewer gets the same roster an owner does.
-- "get" — one member in depth: profile, teams, and their server-resolved effective access per resource. \`member\` may be a user id, email, or display name. Effective access for OTHER members is admin-only (the server hides it otherwise — you'll still get their profile + teams from the roster).
-- "teams" — every team: members, and each resource grant with its level. Unshaped by role, so a grant can name a resource you cannot otherwise see (it renders as "a resource not visible to you").
-- "get_team" — one team in depth. \`team\` may be a team id or name.
-- "access_matrix" — THE INVENTORY, and the op to reach for when two members' listings disagree. Covers KNOWLEDGE BASES and SKILLS only (chats, chat folders and ontology objects are not in it). For an ADMIN OR OWNER it enumerates every one of those regardless of status or visibility — drafts and other members' private items included — which is exactly what the per-domain list ops do not do. A NON-ADMIN sees only the resources they can reach, so their matrix is a view like everything else. The teams half is unshaped for everyone.
-- "my_access" — the caller's effective level on the teams-mode resources they can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS AT ALL: they hold edit on everything, and the op says so instead of enumerating. Workspace-mode resources are never listed either — they collapse into your role's default level.`;
+const DESCRIPTION = `READ-ONLY view of workspace membership, teams, and access; roles, teams and grants are edited by humans in the Dopl web UI. Roles rank guest < viewer < member < admin < owner (defaults none / read / edit / edit / edit); a guest reaches ONE channel. Set \`op\` to one of:
+- "whoami" — your immutable user id, name, role, teams, default level, and the runtime and credential this session acts through. Start here whenever identity is in question — a display name never settles it.
+- "list" — the member roster: name, email, role, status, last active, team chips. INVITED AND DEACTIVATED rows included, so read the status before you count "members".
+- "get" — one member's profile, teams and effective access per resource. Requires: member (id, email, or display name). Effective access for OTHERS is admin-only.
+- "teams" — each team's members and its resource grants with levels. A grant can name a resource you cannot otherwise see.
+- "get_team" — one team in depth. Requires: team (id or name).
+- "access_matrix" — THE INVENTORY, for when two members' listings disagree. Covers KNOWLEDGE BASES and SKILLS only. For an ADMIN OR OWNER it enumerates those whatever their status or visibility, drafts and others' private items included; a NON-ADMIN sees only what they can reach, so their matrix is a view like everything else.
+- "my_access" — the caller's effective level on the teams-mode resources they can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS AT ALL: they hold edit on everything. Workspace-mode resources are never listed.`;
 function registerMembersTool(register, client, 
 /**
  * ⚠ The session's ONE identity record. Re-deriving the caller from

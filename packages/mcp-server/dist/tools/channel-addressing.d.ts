@@ -55,39 +55,38 @@
  */
 export declare const GROUP_CHANNEL_MIN_MEMBERS = 3;
 /**
- * TRUE for a thread id the receiving desktop will ROUTE on. Only a first-class
- * (uuid) id reaches `feedLiveSession` / `maybeSurfaceRequesterReply` — both call
- * `firstClassTaskId`, which returns '' for a legacy `task-<channel>-<seq>` id.
- * ⚠ A legacy tag groups on a thread card and wakes nobody; the two cases must
- * not be narrated with one sentence.
+ * ⚠ `UUID_RE` AND `routesToASession()` USED TO LIVE HERE, and their removal
+ * DELETED A DUPLICATE PREDICATE rather than a rule (T10, 2026-09-02). Fact 3
+ * above is unchanged and is still the reason the distinction matters: only a
+ * FIRST-CLASS (uuid) thread id reaches `feedLiveSession` /
+ * `maybeSurfaceRequesterReply`, so a legacy `task-<channel>-<seq>` tag groups on
+ * a card and wakes nobody, and the two cases may never be narrated with one
+ * sentence.
+ *
+ * The last caller of this copy was the "NOT ADDRESSED, BUT THREADED" paragraph,
+ * which T12 replaced with the post result's `landed=` field. That field is built
+ * by `channel-post-linkage.ts` from **`channel-render-threads.ts ›
+ * isFirstClassThreadId`** — the SAME predicate the read render decides
+ * `· thread` vs `· ad-hoc` with. One definition is the point: two regexes for
+ * "is this a real thread" is exactly how the write lane and the read lane learn
+ * to disagree about the same id.
  */
-export declare function routesToASession(threadId: string | undefined): boolean;
 /**
- * The line a `post` result carries when the caller named nobody. `null` ONLY
- * when the caller passed an explicit `to`.
+ * ⚠ `unaddressedPostNote()` USED TO LIVE HERE — the "NOT ADDRESSED" paragraph a
+ * post result carried whenever the caller named nobody, and its threaded
+ * variant. It went with T12 (2026-09-02): the rule it stated is true on every
+ * call, so it is stated once in `channel-doctrine.ts`, and the post result
+ * carries the FACT instead — `addressed=no`, plus `landed=thread` when a thread
+ * tag routed it anyway.
  *
- * ⚠ A DIRECT CHANNEL NO LONGER SUPPRESSES THIS NOTE. It used to: the server
- * stamped the other member for you (`resolveDirectPeer`), so an unaddressed DM
- * post really was addressed. That fallback is retired (2026-08-18), and a DM
- * post with no `to` now reaches nobody's agent like any other — telling a caller
- * otherwise is the invisible-delivery failure this module exists to prevent.
- *
- * ⚠ Two shapes:
- *   - THREADED into a first-class thread — may already be in front of the other
- *     party's agent, so the remedy is WAIT, never re-post;
- *   - anything else — nothing reached an agent, so name a member and re-post.
+ * Two things it knew are worth not relearning, and both survive above and below.
+ * **A THREAD TAG WAKES PEOPLE WITHOUT READING THE ADDRESSING AT ALL** (fact 3),
+ * which is why the result reports `landed=` beside `addressed=` rather than
+ * collapsing them into one verdict — "nobody was woken" is FALSE for a threaded
+ * post, and the old remedy ("re-post with `to=`") manufactured a duplicate
+ * request. And **only a FIRST-CLASS (uuid) tag reaches a session** — decided by
+ * the ONE predicate, `channel-render-threads.ts › isFirstClassThreadId`.
  */
-export declare function unaddressedPostNote({ ref, addressed, landedThread, }: {
-    ref: string;
-    /** ⚠ ACCEPTED AND DELIBERATELY NOT DESTRUCTURED — see the docblock. It stays
-     *  on the parameter TYPE so the call sites that pass it keep compiling (an
-     *  object literal with an unknown property is an excess-property error), and
-     *  so the removal of the DM exception is visible HERE rather than only in a
-     *  caller's diff. */
-    isDirect?: boolean | undefined;
-    addressed: boolean;
-    landedThread: string | undefined;
-}): string | null;
 /**
  * The closing line of `op="members"` — how to address someone, and what an
  * unaddressed post does in a channel of THIS size.

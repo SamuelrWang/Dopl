@@ -64,7 +64,7 @@ exports.SHELF_ABSENT_RULE = `\`shelf\` absent means BOTH shelves on a READ and t
  * split, because the single most likely mistake is reaching for
  * `shelf="personal"` when the caller meant `workspace=<home channel container>`.
  */
-exports.SHELF_ARG_DESCRIPTION = `Which SHELF to target: "personal" = your own /home shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${exports.SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a workspace, addressed with \`workspace=<container id>\`.`;
+exports.SHELF_ARG_DESCRIPTION = `Which SHELF to target: "personal" = your own PERSONAL shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${exports.SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a separate container, addressed with \`workspace=<container id>\`, and it has no personal shelf at all.`;
 /**
  * 🔒 THE HOME-SHELF FENCE, SURFACED. Both features answer 403 with their own
  * code — `HOME_SCOPE_FORBIDDEN` (knowledge) / `TEMPLATE_HOME_SCOPE_FORBIDDEN`

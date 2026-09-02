@@ -33,13 +33,11 @@ const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 const home_scopes_js_1 = require("./home-scopes.js");
 const NO_NAME = "`(unnamed)`";
-const HOME_DESCRIPTION = `Your HOME CHANNELS — the one-to-one and small-group rooms on your account, outside any workspace. Each one is backed by a hidden container whose id is what every other tool takes as \`workspace=\`, so this is how you reach a home channel's knowledge, agents and messages at all. Set \`op\` to one of:
-- "list_channels" — the home channels YOU are a member of. Each row carries the channel name, the CONTAINER ID to pass as \`workspace=\`, the channel id to pass to dopl_channel, who else is in it, and whether you are alone. Rows come from your own membership, so this is your account's view and never a directory of anybody else's rooms.
-- "create_channel" — make a new home channel. You land in it ALONE; that is a finished state, not a half-built one — it is where you talk to your own agents. Requires: name.
+const HOME_DESCRIPTION = `Your HOME CHANNELS — the one-to-one and small-group rooms on your account, outside any workspace. Each is backed by a hidden container whose id is what every other tool takes as \`workspace=\`, so this is how you reach a home channel's knowledge, agents and messages at all. Set \`op\` to one of:
+- "list_channels" — the home channels YOU are a member of: the name, the CONTAINER ID to pass as \`workspace=\`, the channel id for dopl_channel, who else is in it, and whether you are alone. Rows come from your own membership, so this is your account's view and never a directory of anybody else's rooms.
+- "create_channel" — make a new home channel. You land in it ALONE; that is a finished state, not a half-built one. Requires: name.
 
-WHAT THIS WILL NOT DO, and it is a fence rather than a gap: it cannot INVITE anyone. Adding a person to a home channel mints an invitation link that reaches a real human, which requires an interactive Dopl session and is refused over MCP for every role and token. So you can make the room and you cannot people it — ask the user to add someone from the Dopl app.
-
-⚠ These are NOT workspaces and must not be reported as such. A workspace is a tenancy with members and roles; a home channel is a relationship. \`list_workspaces\` deliberately does not show them.`;
+⚠ It cannot INVITE anyone: minting the invitation link needs an interactive Dopl session and is refused over MCP for every role and token — ask the user to add someone from the Dopl app. These are NOT workspaces and must not be reported as such — \`list_workspaces\` deliberately does not show them.`;
 /**
  * ⚠ WHOSE VIEW THIS IS, on the RESULT. The list is the caller's own membership
  * rows, and under a container lock it is narrowed to ONE — so a short list is

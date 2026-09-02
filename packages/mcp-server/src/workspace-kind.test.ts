@@ -19,6 +19,13 @@ import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
+    // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
+    // a double without this method throws before a single tool is registered.
+    // ⚠ IT IS A NO-OP HERE ON PURPOSE — these suites assert over TOOLS. The
+    // resource's own content is pinned in `channel-doctrine.test.ts`, and that
+    // it is registered at all in `server.test.ts`.
+    registerResource() {}
     registerTool() {}
   },
 }));

@@ -35,7 +35,7 @@ const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
 const channel_await_budget_1 = require("./channel-await-budget");
-const channel_session_render_1 = require("./channel-session-render");
+const channel_session_table_1 = require("./channel-session-table");
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = (0, channel_await_budget_1.resolveAwaitHoldMs)(process.env.DOPL_AWAIT_HOLD_MS);
 const AWAIT_HOLD_CEILING_MS = (0, channel_await_budget_1.resolveAwaitHoldCeilingMs)(process.env.DOPL_AWAIT_HOLD_MS);
@@ -50,9 +50,8 @@ const AWAIT_SHORT_HOLD_MS = 60_000;
 const NO_NAME = "(unnamed channel)";
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
- * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: this rides
- * OUTSIDE {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error"
- * says nothing about its CONTENT.
+ * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: no framing
+ * covers this line, and "our own server's error" says nothing about its CONTENT.
  */
 function describeFailure(e) {
     let raw;
@@ -219,7 +218,7 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, sel
                 `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", since=${cursor}).`,
                 `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
                 workspaceRearmStopRule(),
-                ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
+                ...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline),
             ].join("\n"));
         }
         if (elapsedMs < Math.min(AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
@@ -234,7 +233,7 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, sel
             scopeNote(channelCount),
             `Re-arm — dopl_channel(op="await", since=${cursor}) — before you end your turn if you are still waiting on something.`,
             workspaceRearmStopRule(),
-            ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
+            ...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
     const groups = groupByChannel(messages);
@@ -258,6 +257,6 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, sel
     lines.push(``, scopeNote(channelCount));
     lines.push(`Highest seq shown: ${lastSeq}. Re-arm with dopl_channel(op="await", since=${lastSeq}) — and read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`);
     lines.push(workspaceRearmStopRule());
-    lines.push(...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline));
+    lines.push(...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline));
     return (0, respond_1.ok)(lines.join("\n"));
 }

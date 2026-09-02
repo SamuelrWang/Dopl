@@ -19,6 +19,7 @@
  */
 import type { ChannelMessageInput, DoplClient, MessageIntent } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type FactValue } from "./channel-facts";
 /** Options accepted by opPost — the per-post flags routed from the registrar. */
 interface PostOptions {
     kind?: ChannelMessageInput["kind"];
@@ -60,6 +61,21 @@ interface PostOptions {
      * card it renders carries buttons that write back and wake an agent.
      */
     escalation?: ChannelMessageInput["escalation"];
+    /**
+     * The VERB the terse result opens with. Defaults to `posted`.
+     *
+     * ⚠ THE OPS THAT RIDE THIS ONE NEED THEIR OWN WORD. `milestone` and
+     * `escalate` both delegate here rather than growing a second delivery path,
+     * and a result that opened `posted` for all three would report the wrong act
+     * — the one kind of wrong nothing downstream can detect.
+     */
+    resultHead?: string;
+    /**
+     * Facts only the CALLING op knows, appended after the shared ones. ⚠ Kept to
+     * things the server observed about this write (an option count, a resolved
+     * posture) — never guidance, which belongs in `channel-doctrine.ts`.
+     */
+    resultFacts?: Record<string, FactValue>;
 }
 export declare function opPost(client: DoplClient, channelRef: string, body: string, opts?: PostOptions): Promise<ToolResponse>;
 export {};

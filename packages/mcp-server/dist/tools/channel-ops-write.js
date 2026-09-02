@@ -21,12 +21,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opPost = opPost;
 const respond_1 = require("./respond");
+// ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
+// FIELDS, not prose; the standing rules they used to restate live once in
+// `channel-doctrine.ts`, behind `op="help"`.
+const channel_facts_1 = require("./channel-facts");
 // "Did it thread?" — the question a sender cannot otherwise settle.
 const channel_post_linkage_1 = require("./channel-post-linkage");
-// "What did the ADDRESSING do?" — conflict note + addressed/chat/unaddressed line.
+// The one refusal that is not a fact about a successful write.
 const channel_post_notes_1 = require("./channel-post-notes");
-// "What may I do NEXT?" — the sparse main-room post and the @-tag, taught in the
-// RESULT because that is where the decision is made (INVARIANTS §10).
+// "What became of the `@…` tokens?" — the server's own resolution, read back.
 const channel_post_guidance_1 = require("./channel-post-guidance");
 const channel_shared_1 = require("./channel-shared");
 // ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
@@ -153,54 +156,54 @@ async function opPost(client, channelRef, body, opts = {}) {
         }
         throw e;
     }
-    const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
-    // ⚠ `toLabel` is already render-safe from its resolver — do not re-wrap.
-    const toNote = toLabel ? `, addressed to ${toLabel}` : "";
-    // ⚠ `landedThread` read back off the STORED message: what actually landed,
-    // not what was asked for.
-    const addressLines = (0, channel_post_notes_1.postAddressLines)({
-        channelId: ch.id,
-        safeChannelName: chName,
-        isDirect: ch.isDirect,
-        intent: opts.intent,
-        toLabel,
-        landedThread: (0, channel_shared_1.metaString)(message, "taskId"),
-    });
-    // Second line under the confirmation — a sender cannot otherwise tell
-    // continuation from new request, and the tag drop it catches is silent.
-    const linkage = await (0, channel_post_linkage_1.threadLinkageNote)(client, ch.id, chName, message, 
+    // ── THE RESULT: ONE LINE OF FACTS (T10/T12, 2026-09-02) ──────────────────
+    //
+    // ⚠ WHAT THIS REPLACED, AND THE RULE THAT DECIDED IT. A successful post used
+    // to return ~2.5–3.5k characters: the addressing paragraph, the thread-linkage
+    // paragraph, the per-mention breakdown, the five causes a tag resolves to
+    // nobody, the main-room sparseness bar, the await lecture and its stop rule.
+    // Every one of those was true BEFORE this call and is true AFTER it — standing
+    // doctrine, re-transmitted on every write, ~25 times in one measured
+    // orchestration run. It is stated once now, in `channel-doctrine.ts`.
+    //
+    // ⚠ EVERY FIELD BELOW IS SOMETHING ONLY THIS CALL KNOWS, and each replaces a
+    // paragraph rather than deleting one:
+    //   seq/msg   — the cursor and the id a follow-up call needs.
+    //   thread    — read off the STORED message, so `landed=dropped` still catches
+    //               the silent tag-drop the long note existed for.
+    //   addressed — T12: the whole of the "NOT ADDRESSED" paragraph. `no` means no
+    //               agent was put in front of this post; the doctrine says why.
+    //   intent    — `chat` addresses nobody ON PURPOSE, so it must be
+    //               distinguishable from a forgotten `to`.
+    //   tags      — the server's own mention resolution. THE ONE THING IN THE
+    //               PRODUCT THAT CATCHES A MISSPELLED HANDLE (INVARIANTS §10):
+    //               `0/1` is the verdict, and it may never be dropped for brevity.
+    //   wake      — the `@agent-…` handles the body named. NOT counted in `tags`:
+    //               they resolve on the operator's machine, never on the server.
+    //   await     — the one runtime-derived branch: arm from this seq, or skip.
+    const landing = (0, channel_post_linkage_1.threadFacts)(message, 
     // ⚠ The caller named a thread if EITHER argument carried one. `metadata` is
     // a caller-settable passthrough whose schema description tells agents to
     // put `taskId` in it, and it is forwarded untouched when `thread` is
     // absent — reading `opts.thread` alone makes such a post look unthreaded
-    // and produces a false "you named no thread" claim.
+    // and produces a false `landed=dropped`.
     opts.thread ??
         (typeof opts.metadata?.taskId === "string" && opts.metadata.taskId.trim()
             ? opts.metadata.taskId
             : undefined));
-    return (0, respond_1.ok)([
-        `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
-        ...addressLines,
-        ...(linkage ? [linkage] : []),
-        // ⚠ WHERE IT LANDED decides which capability is worth teaching here, and
-        // the answer comes off the STORED message like every other line above —
-        // a post that asked for a thread and did not get one is a MAIN-ROOM post,
-        // whatever the caller intended.
-        ...(0, channel_post_guidance_1.postGuidanceLines)({
-            channelId: ch.id,
-            landedThread: (0, channel_shared_1.metaString)(message, "taskId"),
-            body,
-            message,
-        }),
-        // ⚠ A `closedThreadNote(ch.id)` line rode here whenever the server
-        // answered `threadClosed`. Both went with thread closing (wiring plan
-        // Phase 4, 2026-08-18): nothing settles a thread, so nothing can raise it.
-        // ⚠ Whether the await outlives this turn is `channel-wake-guidance.ts`'s
-        // to assert, off the caller's observed runtime — never promise it here.
-        //
-        // Stop rule rides with it: "re-arm on timeout" with no exit loops forever
-        // over an abandoned exchange, but a plain timeout COUNTER abandons a peer
-        // legitimately heads-down for 20+ minutes. The exit is the THREAD's state.
-        ...(0, channel_wake_guidance_1.postReplyLines)(ch.id, message.seq, opts.runtime ?? null, `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first with op="read" for new activity — a working agent posts task_progress as it goes. Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`),
-    ].join("\n"));
+    const mentions = (0, channel_post_guidance_1.postMentionFacts)(body, message);
+    return (0, respond_1.ok)((0, channel_facts_1.factsLine)(opts.resultHead ?? "posted", {
+        seq: message.seq,
+        msg: message.id,
+        thread: landing.thread,
+        landed: landing.landed,
+        // ⚠ Read off `toUserId`, which is what the server was given — never off
+        // `toLabel`, which is only ever the render of it.
+        addressed: !!toUserId,
+        intent: opts.intent ?? "request",
+        tags: mentions.tags,
+        wake: mentions.wake,
+        await: (0, channel_wake_guidance_1.awaitFact)(opts.runtime ?? null, message.seq),
+        ...(opts.resultFacts ?? {}),
+    }));
 }

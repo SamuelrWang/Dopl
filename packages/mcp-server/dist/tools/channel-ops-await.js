@@ -27,7 +27,7 @@ const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // ⚠ The session block and every rule inside it (the staleness hedge, the
 // operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
 // `read_sessions` — see channel-session-render.ts.
-const channel_session_render_1 = require("./channel-session-render");
+const channel_session_table_1 = require("./channel-session-table");
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = (0, channel_await_budget_1.resolveAwaitHoldMs)(process.env.DOPL_AWAIT_HOLD_MS);
 const AWAIT_HOLD_CEILING_MS = (0, channel_await_budget_1.resolveAwaitHoldCeilingMs)(process.env.DOPL_AWAIT_HOLD_MS);
@@ -53,8 +53,8 @@ const AWAIT_SHORT_HOLD_MS = 60_000;
  * A thrown inner-poll failure reduced to one short line — this rides inside a
  * result a model reads, and a full API body buries the re-arm instruction.
  *
- * ⚠ NEUTRALIZED, not just shortened: this result splices upstream text OUTSIDE
- * {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error" says
+ * ⚠ NEUTRALIZED, not just shortened: this result splices upstream text that no
+ * framing covers, and "our own server's error" says
  * nothing about its CONTENT — a 400 echoing a rejected field, a proxy page, or
  * a not-found naming a counterparty ref all carry influenced text, read as
  * server narration in an unframed line.
@@ -258,14 +258,14 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
             // hold that came back empty is exactly when an orchestrator has to
             // decide whether the agent it is waiting on is still alive. Answering
             // that used to cost a second call.
-            ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
+            ...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
+    // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11) — `await`
+    // renders the same counterparty bodies `read` does and is the call an
+    // orchestrator makes most, so it drops the repeat for the same reason.
     const lines = [
         `## ${ref} — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}\n`,
-        // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
-        // BEFORE them, not as a footnote underneath.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
     const lastSeq = messages[messages.length - 1].seq;
@@ -290,6 +290,6 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     // ⚠ AFTER the messages and after the re-arm guidance — a block of server
     // narration spliced between counterparty bodies would let a body's last line
     // read as the start of this section.
-    lines.push(...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline));
+    lines.push(...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline));
     return (0, respond_1.ok)(lines.join("\n"));
 }

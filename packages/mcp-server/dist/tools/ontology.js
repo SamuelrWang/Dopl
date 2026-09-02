@@ -19,31 +19,31 @@ const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
 const ontology_ops_write_1 = require("./ontology-ops-write");
-const ONTOLOGY_DESCRIPTION = `The workspace ontology — objects organized in clusters of columns, with attributes, relationships, and actions. An object IS whatever its column is named (a "Sales Rep" column holds sales reps). LOOK UP identity, context, and how work gets done here instead of inferring; AUTHOR it the same way (no web UI needed). Objects are referenced by id (preferred) or exact name; clusters by slug/id/name.
+const ONTOLOGY_DESCRIPTION = `The workspace ontology — objects organized in clusters of columns, with attributes, relationships, and actions. An object IS whatever its column is named (a "Sales Rep" column holds sales reps). Objects are referenced by id (preferred) or exact name; clusters by slug/id/name.
 
 READ — set \`op\` to:
-- "map" — the clusters and their COLUMNS, with each column's direct members named. TWO LEVELS ONLY: objects nested below a column's own children, and objects that belong to no column at all, never appear here, and trashed clusters/objects are never listed by any read. So it routes, it does not inventory — op="resolve" and op="get" reach what it does not show. Call first to route.
-- "anchor" — the object representing the CALLER. Start here for any "my/me" request. At most one object is returned even if the data holds several anchored to you.
-- "resolve" — find objects whose NAME or SUBTITLE contains the query (substring, case-insensitive; attributes, relationships and actions are not matched). Returns ids, capped at 20 matches, and the result says when it truncated.
-- "get" — one object in full: attributes (linked knowledge/skills resolved to openable handles), OUTBOUND relationships plus an inbound "Referenced by" backlink list, nested objects, action recipes. Also returns a Version token — pass it back as \`expected_version\` on a later write so a concurrent edit can't silently clobber yours. Requires: object.
+- "map" — the clusters and their COLUMNS, each column's direct members named. TWO LEVELS ONLY: objects nested deeper, and objects in no column at all, never appear, and trashed rows appear in no read. It routes, it does not inventory. Call first.
+- "anchor" — the object representing the CALLER. Start here for any "my/me" request; at most one is returned.
+- "resolve" — objects whose NAME or SUBTITLE contains the query (substring, case-insensitive), capped at 20 matches, and the result says when it truncated. Requires: query.
+- "get" — one object: attributes, outbound relationships plus inbound backlinks, nested objects, actions, and a Version token. Requires: object.
 
 WRITE — set \`op\` to:
-- "create_cluster" — new ontology board. Requires: name. Optional: purpose (agents read it to route — write a good one).
-- "update_cluster" — rename / repurpose. Requires: cluster. Optional: name, purpose.
-- "create_column" — new column (container object) in a cluster; its name says what its objects ARE (e.g. "Sales Rep"). Requires: cluster, name.
-- "create_object" — new object inside a column (or nested in any object). Inherits from the parent: its template as empty fields, and a copy of its relationships and actions. Requires: parent, name.
-- "update_object" — rename / redescribe. Requires: object. Optional: name, subtitle.
-- "set_template_field" — upsert one DEFAULT field on a column (or any container): new objects created inside it are born with these fields, empty. Requires: object, label. Optional: kind (default text).
+- "create_cluster" — Requires: name. Optional: purpose (agents read it to route).
+- "update_cluster" — Requires: cluster. Optional: name, purpose.
+- "create_column" — a container whose name says what its objects ARE. Requires: cluster, name.
+- "create_object" — inherits the parent's template as empty fields, plus its relationships and actions. Requires: parent, name.
+- "update_object" — Requires: object. Optional: name, subtitle.
+- "set_template_field" — a DEFAULT field on a container; objects created inside are born with it, empty. Requires: object, label.
 - "remove_template_field" — Requires: object, label.
-- "set_attribute" — upsert one attribute by label. Requires: object, label. kind="text"|"pill" need \`value\`; kind="ref" needs \`values\` (object ids/names); kind="knowledge"|"skill" need \`values\` — KB/skill slugs or ids, and for kind="knowledge" also specific ENTRIES as \`<base>/<entry path>\` (e.g. "ai-ops-leads/Track 1 leads") or an entry uuid. Default kind: text.
+- "set_attribute" — Requires: object, label. kind "text"/"pill" need \`value\`; "ref"/"knowledge"/"skill" need \`values\`.
 - "remove_attribute" — Requires: object, label.
-- "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names — at least one, and never the object itself). To clear an edge use "remove_relationship".
+- "set_relationship" — replace one labeled edge. Requires: object, label, targets (never the object itself).
 - "remove_relationship" — Requires: object, label.
-- "set_action" — upsert an action by name: something the OBJECT can do day to day, performed by an agent on its behalf (e.g. "Send email", "Search LinkedIn"). Requires: object, name. Optional: description (how/when to do it), outcome (what the result should be, e.g. "Follow-up email sent and logged"), tools (what to use, e.g. "Gmail").
+- "set_action" — something the OBJECT does day to day, performed by an agent on its behalf. Requires: object, name. Optional: description, outcome, tools.
 - "remove_action" — Requires: object, name.
-- "claim_anchor" — link the CALLING user to an object as their identity anchor. Requires: object.
+- "claim_anchor" — link the CALLING user to an object as their anchor. Requires: object.
 
-Object-mutating ops (update_object, set/remove_attribute, set/remove_template_field, set/remove_action, set/remove_relationship) accept an optional \`expected_version\` (the Version from a prior op="get"). When supplied, the write is rejected if the object changed since — re-get, reconcile, and retry. Destructive deletes live in dopl_ontology_admin.`;
+Object-mutating ops take an optional \`expected_version\`; deletes live in dopl_ontology_admin.`;
 const ONTOLOGY_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
     { op: "delete_object", effect: "would have deleted one object" },
     { op: "delete_cluster", effect: "would have deleted a cluster and, in cascade, every object it owns" },
@@ -114,7 +114,7 @@ caller = identity_1.UNKNOWN_CALLER) {
         expected_version: zod_1.z
             .string()
             .optional()
-            .describe("Optional optimistic-concurrency token for object-mutating ops: the object's Version from a prior op=\"get\". If the object changed since, the write is rejected so you can re-get, reconcile, and retry. Omit to overwrite blindly (last-writer-wins)."),
+            .describe("Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."),
     }, (args) => (0, ontology_ops_write_1.dispatch)(client, args, caller));
     register("dopl_ontology_admin", ONTOLOGY_ADMIN_DESCRIPTION, {
         op: zod_1.z.enum(["delete_object", "delete_cluster"]).describe("Destructive operation."),

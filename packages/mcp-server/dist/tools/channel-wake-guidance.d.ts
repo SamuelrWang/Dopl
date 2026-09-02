@@ -23,14 +23,30 @@
  * loop over an abandoned exchange, and that rule is the caller's own text
  * (`rearmStopRule` and siblings), dropped only where nobody is told to re-arm.
  */
-/** After a successful `post`: how to be there when the answer lands. */
-export declare function postReplyLines(channelId: string, seq: number, runtime: string | null, stopRule: string): string[];
 /**
- * After `create_thread`: same decision with the addressee named. `cursor` is
- * the pre-built await call (the opening seq rides back on the create, so no
- * follow-up read); `who` is the ALREADY-neutralized member label.
+ * WHAT A WRITE RESULT SAYS ABOUT WAITING — ⚠ ONE TOKEN, and it is the only thing
+ * on this decision that is a FACT about the call rather than standing doctrine
+ * (T10/T12, 2026-09-02).
+ *
+ * `post` and `create_thread` used to close with three paragraphs each: the hold
+ * mechanics, the stop rule, and the skip clause. All three are true of every
+ * call and now live once in `channel-doctrine.ts`. What is NOT derivable by the
+ * caller is the branch below — whether THIS request carried the desktop's
+ * runtime stamp — so that survives:
+ *   - `await=skip`        — a desktop-run session, fed the counterparty's
+ *                           replies as new turns. Arming is simply wrong here.
+ *   - `await=since:<seq>` — everyone else: the cursor to arm from, pre-computed
+ *                           off the seq this write just produced, so the next
+ *                           call needs no read to find it.
+ *   - absent (`-`)        — the write produced no seq to arm from. ⚠ `0` is NOT
+ *                           a substitute: awaiting from 0 replays the channel.
+ *
+ * ⚠ IT STAYS AN OBSERVATION. An UNSTAMPED caller may still BE a desktop session
+ * on an older build, which is why the unstamped branch offers a cursor rather
+ * than an instruction, and why the doctrine states the wake as the client-side
+ * conditional it is.
  */
-export declare function createThreadReplyLines(cursor: string, who: string, runtime: string | null, stopRule: string): string[];
+export declare function awaitFact(runtime: string | null, seq: number | null): string | undefined;
 /** `await` came back empty: re-arm, or stop, depending on who is asking. */
 export declare function awaitTimedOutLines(ref: string, since: number, runtime: string | null, stopRule: string): string[];
 /** `await` returned messages: advance the cursor, then re-arm — or don't. */

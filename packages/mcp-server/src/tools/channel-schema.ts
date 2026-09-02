@@ -33,6 +33,12 @@ import {
 export const CHANNEL_INPUT_SHAPE = {
   op: z
     .enum([
+      // ⚠ THE DOCTRINE DOOR (T10, 2026-09-02). Returns the standing rules for
+      // this surface — the same text as the MCP resource
+      // `dopl://doctrine/channels`, for a client that lists tools and nothing
+      // else. Takes no arguments, reads nothing, and is NOT in
+      // `gating.ts › WRITE_OPS`.
+      "help",
       "list",
       "open",
       "invite",
