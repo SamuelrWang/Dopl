@@ -210,6 +210,19 @@ describe("G8 — the model is ECHOED, never refused", () => {
     });
   });
 
+  it("a PROTOTYPE key is not a model — `constructor` resolves to null like any other word", async () => {
+    // 🔒 THE ALIAS TABLE IS INDEXED WITH CALLER TEXT (2026-09-02). A bare
+    // `ALIASES[key]` walks `Object.prototype`, so `"constructor"` answered the
+    // `Object` FUNCTION and `?? null` never fired — `resolveAgentModelId`'s
+    // `string | null` return type was false for a value anybody could send, and
+    // the value went into `resolved_model` and onto the launch line.
+    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      vi.mocked(launchRepo.insertLaunchDirective).mockClear();
+      await createLaunchDirective(ctx, { channel: CHAN, model: key });
+      expect(inserted(), key).toMatchObject({ model: key, resolved_model: null });
+    }
+  });
+
   it("asking for no model resolves to null, which is the same shape as unrecognised", async () => {
     // ⚠ The two are told apart by `model` itself, which is why both live on the
     // row: null/null is "did not ask", set/null is "asked and unrecognised".

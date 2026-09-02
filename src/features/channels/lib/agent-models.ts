@@ -179,5 +179,14 @@ export function resolveAgentModelId(raw: string | null | undefined): string | nu
   const trimmed = typeof raw === "string" ? raw.trim() : "";
   if (!trimmed) return null;
   if (AGENT_MODELS.some((m) => m.id === trimmed)) return trimmed;
-  return AGENT_MODEL_ALIASES[trimmed.toLowerCase()] ?? null;
+  const alias = trimmed.toLowerCase();
+  // ⚠ **`Object.hasOwn` FIRST, BECAUSE THE KEY IS CALLER TEXT** (2026-09-02). A
+  // bare index into an object literal walks `Object.prototype`: `model:
+  // "constructor"` answered the `Object` FUNCTION, `"toString"` a method, and
+  // `?? null` never fires on either — so this function's `string | null` return
+  // type was a lie for a value any caller could send, and what it returned went
+  // on to be written into `channel_launch_directives.resolved_model` and rendered
+  // onto the launch line. `Object.freeze` bounds writes, not reads.
+  if (!Object.hasOwn(AGENT_MODEL_ALIASES, alias)) return null;
+  return AGENT_MODEL_ALIASES[alias];
 }
