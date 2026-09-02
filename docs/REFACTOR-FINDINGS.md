@@ -7559,3 +7559,34 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE FIX IS NOT A RENAME HERE.** Both files are APPLIED. Renaming an applied migration is how a replay diverges from production — the tracker holds the old name and the directory offers a new one — so this pair stays as it is and is named rather than corrected.
 - Resolution taken: a RATCHET, in `src/features/knowledge/schema-sql.test.ts › "no TWO migrations share a version, except the one already applied"`. The live collision is allow-listed by version and every other one fails; the case says in its own body that the fix is to rename the UNAPPLIED file and never to bless a second entry. Mutation-verified red by copying a file to a colliding name. ⚠ It sits beside F-468's gate deliberately: both are assertions about the MERGED directory, which is the only place either defect exists.
 - Status: **NAMED and FENCED** — the pair stands, a second one cannot ship.
+
+### F-560 — the personal container's revert has an ORDER, and the cascade makes the wrong one destructive (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql` (header, "ROLLBACK"); the cascade is `supabase/migrations/20260501000000_knowledge_bases.sql` and `20260822200000_agent_templates.sql` (`workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE`).
+- Found during: writing B11's rollback story against the Wave B spec §3, which states step 1's revert as *"a `DELETE ... WHERE kind='personal'` plus a `DROP FUNCTION`"*.
+- **THE SPEC'S ONE-LINE REVERT IS DESTRUCTIVE AS WRITTEN, AND ONLY AFTER THE SAME MIGRATION'S DATA STEP.** Step 1 moves the `home_scoped` rows INTO the containers; both owning tables cascade on `workspace_id`; so the bare delete takes every personal knowledge base and agent template with it. The safe revert is two `UPDATE`s and then the delete, in that order, and it is written out in the migration header.
+- ⚠ **THE REVERT IS EXACT, AND ITS PRECONDITION IS NAMED.** `default_workspace_of()` — the same helper the mint uses, added by this migration for exactly this reason — is the one SQL spelling of "today's default", so the move back is the move forward inverted. If an owner's last standard workspace was deleted in between it answers NULL and the `UPDATE` violates `NOT NULL`, which FAILS the revert rather than filing a row somewhere. That direction is deliberate: **rollback fails closed, never open.**
+- Status: **NAMED, and the safe order is in the file.** Not fenced by a test — a test cannot run a revert nobody has applied. It converts to a probe the moment migration replay runs (F-563).
+
+### F-561 — the personal container's slug makes the legacy slug-only URL fallback ambiguous, the same way a link container already can (2026-09-02)
+
+- Location: `src/features/workspaces/server/repository.ts › findMemberWorkspaceBySlug`; the minted slug is `supabase/migrations/20260920120000_workspace_kind_personal.sql › ensure_personal_container`.
+- Found during: choosing which fields the mint copies from today's derived default.
+- **THE SHAPE.** `findMemberWorkspaceBySlug` scans the caller's ACTIVE MEMBERSHIPS for a slug and answers `null` on 2+ matches, deliberately, so an ambiguous legacy URL 404s instead of routing to the wrong workspace. It does not filter by `kind`. A personal container is a membership, so it joins that scan. This is why the mint does NOT copy the origin's slug — that would have made every legacy URL of the workspace it was minted from ambiguous, for all 15 users at once. It mints the constant `personal` instead, leaving a residue: a user whose OWN workspace is slugged `personal` loses that one legacy URL.
+- ⚠ **NOT NEW, AND NOT WORSE.** `kind='link'` containers have carried the identical hazard since `20260823150000` — they are memberships with slugs too. What is new is a second kind that does it.
+- Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP: `findMemberWorkspaceBySlug` should compose `isStandardWorkspace` on `matches`, which closes it for both kinds in one line. `workspaces/server/repository.ts` belongs to **B14** (`v2/b-default-workspace-off`) — recorded as a cross-slice request rather than taken here.
+- Status: **OPEN**, fail-closed (a 404, never a wrong workspace).
+
+### F-562 — `agent-templates/server/repository.ts` sits at 493 of the 500-line cap (2026-09-02)
+
+- Location: `src/features/agent-templates/server/repository.ts`. Re-derive, never quote: `wc -l`.
+- Found during: B11's dual-write, which pushed the file to 504 and had to be trimmed back rather than shipped.
+- The file already has its split seams marked — three `// ───` sections (Templates · Team links · Knowledge-base attachments) — and the house move at the cap is the one `service-base-gates.ts` made on 2026-09-02: lift a section into a sibling and re-export, exactly as `knowledge/server/repository.ts` is already a barrel over five. Not taken here because **B15** deletes part of this file's shelf lane in batch 3 and a split now would land under its feet.
+- Status: **OPEN.** The next edit to this file must split it, not shave a comment.
+
+### F-563 — the personal-container migration has never met a database, and its four claims are text-asserted (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql`, `src/shared/tenancy/personal-container-schema.test.ts`.
+- **WHAT IS PROVEN AND WHAT IS NOT.** The test reads SQL and proves the file still SAYS: one container per user (partial unique index), an owner membership on it, the shelf moved by `created_by`, and no destructive statement. **It cannot prove the advisory lock serializes, that the backfill loop terminates over `auth.users`, that the `UPDATE ... FROM` moves what it should, or that `RETURNS TABLE` matches what `ensureDefaultWorkspaceRow`'s caller destructures.** Only a database can say those.
+- Owed: the three-probe-per-branch pattern inside a rolled-back transaction (the `20260827120000` precedent, restated by F-461 for the grant trigger). ⚠ Docker has been down for all of Wave A and all of Wave B batch 1 — **replay is owed for TEN migrations, not one**, and this is the tenth.
+- Status: **OPEN**, and blocking nothing until replay runs.

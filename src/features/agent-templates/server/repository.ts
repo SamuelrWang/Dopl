@@ -1,9 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import {
-  personalWriteWorkspaceId,
-  resolveShelfScope,
-} from "@/shared/tenancy/personal-container";
+import { personalWriteWorkspaceId, resolveShelfScope } from "@/shared/tenancy/personal-container";
 import type {
   AgentTemplate,
   TemplateField,
@@ -39,12 +36,8 @@ import {
  * `AGENT_TEMPLATE_COLS` on purpose (`../types.ts › TemplateShelf` holds the
  * argument). Postgres does not require a column to be projected to filter on it.
  *
- * ⚠ WHICH CONTAINER `shelf="home"` MEANS IS NO LONGER `workspaceId` — it is the
- * caller's PERSONAL CONTAINER once one exists
- * (`shared/tenancy/personal-container.ts`, wave B B11), decided there in one
- * 2x2 and merely applied here. The sibling of
- * `knowledge/server/repository-bases.ts › listBasesForWorkspace`, and the two
- * must not drift.
+ * ⚠ WHICH CONTAINER `shelf="home"` MEANS IS DECIDED BY
+ * `shared/tenancy/personal-container.ts › resolveShelfScope` (B11), not here.
  */
 export async function listTemplatesForWorkspace(
   workspaceId: string,
@@ -92,9 +85,8 @@ export async function listHomeScopedTemplateIds(
 ): Promise<string[]> {
   if (templateIds.length === 0) return [];
   const db = supabaseAdmin();
-  // ⚠ THE SAME QUESTION `listTemplatesForWorkspace(_, "home")` ASKS, THROUGH THE
-  // SAME RESOLVER — a second spelling of "is this row personal" is how a label
-  // comes to disagree with the list it labels.
+  // ⚠ THE SAME RESOLVER THE LIST USES: a second spelling of "is this row
+  // personal" is how a label comes to disagree with the list it labels.
   const scope = await resolveShelfScope(workspaceId, "home");
   let query = db
     .from("agent_templates")
@@ -105,6 +97,7 @@ export async function listHomeScopedTemplateIds(
     query = query.eq("home_scoped", scope.homeScoped);
   }
   const { data, error } = await query;
+  if (error) throw error;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
 
@@ -144,18 +137,14 @@ export interface InsertTemplateArgs {
 }
 
 /**
- * ⚠ THE DUAL-WRITE (wave B B11), the sibling of
- * `knowledge/server/repository-bases.ts › insertBase`. A personal template keeps
- * `home_scoped = true` AND is filed in the author's personal container once the
- * flag is on, so flipping the flag back cannot strand it.
+ * ⚠ THE DUAL-WRITE (B11), the sibling of `repository-bases.ts › insertBase`.
+ * ⚠ Resolved BEFORE the chain, never inline in the insert literal — an `await`
+ * between `.from()` and `.insert()` interleaves a second query into the builder.
  */
 export async function insertTemplate(
   args: InsertTemplateArgs
 ): Promise<AgentTemplate> {
   const db = supabaseAdmin();
-  // ⚠ RESOLVED BEFORE THE CHAIN, never inline in the insert literal: an `await`
-  // between `.from()` and `.insert()` interleaves a second query into the
-  // builder, which is a real hazard and not only a testing one.
   const workspaceId = await personalWriteWorkspaceId(args);
   const { data, error } = await db
     .from("agent_templates")
