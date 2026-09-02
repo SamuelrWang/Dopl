@@ -184,10 +184,18 @@ describe("the posture this tool registers with", () => {
       { getHomeChannels: vi.fn(async () => ({ channels: [] })) } as unknown as DoplClient,
       { op: "list_channels" },
     );
-    expect(description).toContain("cannot INVITE anyone");
-    expect(description).toContain("refused over MCP for every role and token");
+    // ⚠ **THE INVITE REFUSAL IS A NAMED CODE NOW, NOT A PARAGRAPH** (A14,
+    // 2026-09-02). It was ~230 chars of prose pushed on every connection to
+    // describe something a caller can otherwise only discover by trying; it is
+    // `tool-errors.ts › HOME_ERRORS`'s `invite_is_app_only`, rendered in the
+    // same shape as every other refusal on this surface, so an agent that hits
+    // it MATCHES the code instead of re-reading the paragraph. The claim this
+    // case makes is unchanged: the description must say the invite is refused.
+    expect(description).toContain("nothing here invites");
+    expect(description).toContain("reason=invite_is_app_only");
+    expect(description).toContain("needs an interactive session");
     // ⚠ INVARIANTS §4A: a container is never advertised as a workspace.
-    expect(description).toContain("These are NOT workspaces");
-    expect(description).toContain("`list_workspaces` deliberately does not show them");
+    expect(description).toContain("NOT workspaces");
+    expect(description).toContain("list_workspaces deliberately omits them");
   });
 });

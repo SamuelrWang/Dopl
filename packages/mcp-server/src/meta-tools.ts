@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
 import { isStandardWorkspace } from "@dopl/client";
 import { callerStatusLine, sessionLines, type CallerIdentity } from "./tools/identity.js";
 import { inlineOr } from "./tools/narration.js";
@@ -19,6 +20,53 @@ import type {
   ActiveWorkspaceState,
   WorkspaceDirectory,
 } from "./workspace-directory.js";
+
+/**
+ * ⚠ **RENDERED, NOT WRITTEN** (A14) — `tool-style.ts › composeDescription`
+ * holds the order for all thirteen tools, and refuses a headline over its
+ * window or a description over its cap at import time.
+ *
+ * ⚠ THESE TWO ARE BUDGETED AT {@link READ_DESCRIPTION_MAX_CHARS}, NOT THE
+ * DISPATCH CAP. `list_workspaces` takes no arguments at all and
+ * `current_workspace` takes two; neither has an `op` enum whose every member
+ * `parity.test.ts` requires glossed, which is the only thing that gives a tool
+ * a floor above 450.
+ *
+ * ⚠ **WHAT LEFT, AND IT IS NOT A FACT.** The old strings ran 804 and 1,011
+ * chars and both spent most of it restating their own schema: which of
+ * "set"/"clear" does what, that a container id is a legal target, the ~60s
+ * cache. A description and its arg descriptions are BOTH pushed on every
+ * connection, so that was one fact paid for twice — the same trade
+ * `tool-budget.test.ts` records these two making on 2026-09-02, applied again.
+ * The container rule itself survives because it is the one thing NEITHER schema
+ * says: a container is addressable and is counted by nothing.
+ */
+const LIST_WORKSPACES_DESCRIPTION = composeDescription({
+  headline:
+    "The workspaces you are an active member of, with your role on each — NOT your home channels, which are containers this never lists.",
+  policy: "Read-only.",
+  routing: [
+    'Use dopl_home(op="list_channels") for home channels and the container ids they take as `workspace=`.',
+    "Use current_workspace for the one a no-arg call targets.",
+  ],
+  body: [
+    '⚠ Containers count toward NOTHING — including the "2+ workspaces" rule that decides whether `workspace=` is required.',
+  ],
+  examples: [{}],
+  cap: READ_DESCRIPTION_MAX_CHARS,
+});
+
+const CURRENT_WORKSPACE_DESCRIPTION = composeDescription({
+  headline:
+    "Who this connection is, and which workspace a no-`workspace=` call resolves to — standard memberships only, never a home-channel container.",
+  policy: 'Read-only; op="set"/"clear" pin this connection\'s default and change no data.',
+  routing: ["Use dopl_members(op='whoami') for your role, teams and the locus caveats."],
+  body: [
+    "With 2+ standard memberships there is no auto-target and this lists them with ids to pick from.",
+  ],
+  examples: [{}, { op: "set", workspace: "alpha" }, { op: "clear" }],
+  cap: READ_DESCRIPTION_MAX_CHARS,
+});
 
 export interface MetaToolDeps {
   directory: WorkspaceDirectory;
@@ -133,7 +181,7 @@ export function registerWorkspaceMetaTools(
 
   registerMetaTool(
     "list_workspaces",
-    "List the WORKSPACES the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.\n\n⚠ HOME-CHANNEL CONTAINERS ARE NOT LISTED HERE, deliberately — so this is not every room you can act in, and an empty-looking account may still hold several. List those with `dopl_home(op=\"list_channels\")` and address one by passing its container id as `workspace=`. They are also not counted toward the \"2+ workspaces\" rule that decides whether `workspace=` is required: one workspace plus three home channels still auto-targets the workspace.",
+    LIST_WORKSPACES_DESCRIPTION,
     {},
     async () => {
       const list = await directory.getWorkspaceList();
@@ -213,13 +261,13 @@ export function registerWorkspaceMetaTools(
   // self-describing from their own `.describe()`".
   registerMetaTool(
     "current_workspace",
-    "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one standard membership (or a session pin); when the caller belongs to 2+ standard workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').\n\n⚠ STANDARD workspaces only: a home-channel container is a legal `workspace=` target but is neither counted nor listed here. `dopl_home(op=\"list_channels\")` lists those; the server instructions state the rule once, for every tool.\n\nop=\"set\"/\"clear\" manage a sticky default for this connection. A per-call `workspace=` still OVERRIDES the pin, and the pin is BEST-EFFORT: if a later call is refused for want of a workspace, set it again.",
+    CURRENT_WORKSPACE_DESCRIPTION,
     {
       op: z
         .enum(["get", "set", "clear"])
         .optional()
         .describe(
-          'Default "get" — report the current target. "set" pins a default for the rest of this connection (requires `workspace`); "clear" removes the pin.',
+          'Default "get" — report the current target. "set" pins a default for the rest of this connection (requires `workspace`); "clear" removes the pin. A pin is BEST-EFFORT and a per-call `workspace=` beats it — if a later call is refused for want of a workspace, set it again.',
         ),
       workspace: z
         .string()

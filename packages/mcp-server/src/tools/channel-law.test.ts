@@ -233,16 +233,20 @@ describe("the DESCRIPTION is a pointer, and has to stay one", () => {
   });
 
   it("stays inside its budget, once the paragraph P3 owns is set aside", () => {
-    // ⚠ **THE PART P1 WRITES IS WHAT THIS FILE GUARDS.** The whole description is
-    // over {@link DESCRIPTION_MAX_CHARS} today and that is a DECISION, not drift:
-    // `HOME_CHANNEL_ADDRESSING` is ~650 chars the P3 tenancy tier asked to keep
-    // word for word, interpolated by REFERENCE so it stays something somebody
-    // chooses to drop. `tool-budget.test.ts` owns the absolute per-tool ceiling
-    // and ratchets it DOWNWARD; restating that number here would give the repo
-    // two budgets. ⚠ So the gate is the one this file can state with no second
-    // magic number: everything OTHER than that paragraph still fits the cap —
-    // which is what stops 35,000 chars of law growing back a sentence at a time.
-    const p1Summary = DESCRIPTION.replace(HOME_CHANNEL_ADDRESSING, "");
+    // ⚠ **THIS FILE GUARDS THE PART A PERSON WROTE, AND ONLY THAT.** Two halves
+    // are set aside, each because it is a DECISION somebody took rather than
+    // drift: `HOME_CHANNEL_ADDRESSING`, the tenancy paragraph the P3 tier asked
+    // to keep and which is interpolated by REFERENCE so it stays something
+    // somebody chooses to drop; and (A14) the GENERATED `Limits:`/`Errors:`/
+    // `e.g.` tail, derived from the zod shape and `tool-errors.ts`, which
+    // cannot drift or be padded and is enforced elsewhere — counting it would
+    // buy this number by deleting an op gloss to pay for the error codes an
+    // agent matches on. `tool-budget.test.ts` owns the absolute per-tool
+    // ceiling; restating it here would give the repo two budgets. What is left
+    // is what stops 35,000 chars of law growing back a sentence at a time.
+    const tailAt = DESCRIPTION.search(/\n\n(?:Limits: |Errors: |e\.g\. )/);
+    expect(tailAt, "the generated tail is gone — no error codes taught").toBeGreaterThan(-1);
+    const p1Summary = DESCRIPTION.slice(0, tailAt).replace(HOME_CHANNEL_ADDRESSING, "");
     expect(
       DESCRIPTION,
       "HOME_CHANNEL_ADDRESSING is no longer interpolated — re-derive this gate",
