@@ -1,6 +1,8 @@
 # RLS Migration Plan — enforce authorization once, at the data boundary
 
-Written 2026-07-06. Owner: Samuel. Status: proposed, not started.
+Written 2026-07-06. Owner: Samuel. Status: **Phase 1 + the first slice of Phases 2–3 LANDED
+2026-09-02** (Wave B B7, `v2/b-rls-real-1`), for THREE tables only and behind a flag that is OFF.
+Everything else is still proposed.
 
 > ⚠ **The table inventory below is a 2026-07-06 capture and has drifted.** The
 > `workflows` group (4 tables) and `clusters` no longer exist — those features
@@ -8,7 +10,29 @@ Written 2026-07-06. Owner: Samuel. Status: proposed, not started.
 > (`supabase/migrations/20260811120000_drop_workflows_and_clusters.sql`). Re-count
 > before planning against it; the argument the doc makes is unaffected.
 
+## What has landed (2026-09-02, and only this)
+
+- **Phase 1, for `knowledge_bases` / `knowledge_folders` / `knowledge_entries`.** Helper functions
+  (`dopl_credential_is_shared`, `dopl_can_see_visibility`, `dopl_teams_mode_visible`, and
+  `dopl_knowledge_base_readable` — the rule, written once) plus the three SELECT policies repaired to
+  EQUAL the TS predicate, which they did not: they admitted a shared credential to a private row and
+  said nothing about `access_mode='teams'` (F-520). `supabase/migrations/20260919120000_rls_helpers_and_caller_scope.sql`.
+  ⚠ **NEVER APPLIED** — Docker is down here, so `supabase start` cannot run; replay is owed with the
+  rest of Wave B's migrations.
+- **Phase 2's client, without Phase 2's `AccessContext`.** `shared/supabase/caller-client.ts ›
+  readClient` is the one seam; the caller scope rides an `AsyncLocalStorage` store set in
+  `shared/auth/with-auth.ts`, so no repository signature moved. Threading an explicit context through
+  406 read sites is still the plan's end state — this is the step that makes ONE feature's reads
+  caller-scoped without a whole-tree edit first.
+- **Phase 3, option 1 — taken, not prototyped-and-parked.** `caller-jwt.ts` mints a 60-second
+  HS256 Supabase JWT for EVERY lane (session and `dopl_at_`), carrying `sub` and the credential axes,
+  so both lanes meet one policy. New deploy input: `SUPABASE_JWT_SECRET` (F-522).
+- **Not done, deliberately:** no TS predicate deleted (ruling B5 — they go one at a time, each behind
+  a green redteam test); no write policies; no lint rule (Phase 0's `no-restricted-imports`, F-521);
+  the agent audience ceiling is NOT expressible as a policy and stays in TS (F-524).
+
 ## Why
+
 
 Authorization today is app code someone must remember to write per service.
 Every repository reads through `supabaseAdmin()` (service role), which
