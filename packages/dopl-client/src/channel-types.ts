@@ -238,13 +238,14 @@ export interface ChannelThreadPage {
 // with it. The seam is the reason to change: those types move when the session
 // PROJECTION moves, and everything else here when a channel shape does.
 import type { ChannelSessionStateOwn } from "./session-types.js";
+// ⚠ `SessionPillState` and `ChannelSessionTelemetry` are NOT re-exported through
+// this line: they come from `@dopl/contracts` above (A13), and `session-types.ts`
+// re-exports them for its own readers. One name, one declaration, one door here.
 export type {
   ChannelSessionState,
   ChannelSessionStateOwn,
-  ChannelSessionTelemetry,
   ChannelSessionsPage,
   SessionDetailKey,
-  SessionPillState,
 } from "./session-types.js";
 
 export interface ChannelThreadCreateInput {
