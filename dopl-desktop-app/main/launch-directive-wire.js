@@ -118,7 +118,38 @@ const STATUSES = [STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE,
 const KIND_LAUNCH = 'launch';
 const KIND_END = 'end';
 const KIND_RENAME = 'rename';
-const KINDS = [KIND_LAUNCH, KIND_END, KIND_RENAME];
+// ── THE FOURTH KIND (2026-09-01, the agent-efficiency wave) ───────────────────
+//
+// ⚠ **IT IS THE ONLY NON-LAUNCH KIND THAT STAYS BEHIND THE CONSENT TOGGLE, AND
+// THAT IS THE WHOLE REASON IT IS SPELLED OUT SEPARATELY FROM THE OTHER TWO.**
+// `end` and `rename` ride free because a STOP verb and a DISPLAY verb widen
+// nothing (`directive-agent-ops.js`'s header carries that argument). A POSTURE
+// does the opposite: Axis A at `bypass` pre-approves work tools on hardware this
+// operator pays for, which is LOCAL COMPUTE BEING SPENT — the exact thing
+// `getOrchestratorLaunch` exists to gate. Reading the three non-launch kinds as
+// one class would hand an un-armed machine the widest half of the launch lane
+// without the launch.
+const KIND_SET_MODE = 'set_agent_mode';
+const KINDS = [KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE];
+
+// ⚠ WHICH KINDS THE MACHINE-WIDE CONSENT TOGGLE GATES, AS DATA RATHER THAN AS A
+// CONDITION IN `handle`. Two readers ask this question — the dispatch gate and the
+// suite that pins it — and a second `d.kind === … || d.kind === …` chain is how a
+// fifth kind comes to be admitted by whichever reader nobody updated.
+const KINDS_NEEDING_LAUNCH_CONSENT = [KIND_LAUNCH, KIND_SET_MODE];
+
+// ⚠ THE TWO AXES, RESTATED — and the restatement is forced, not lazy. This block is
+// PURE (no require below the sentinel) so its suite can evaluate it verbatim, and
+// `session-profiles.js` is the authority. `test/directive-set-mode.test.mjs` drives
+// the two lists against that module's own exports rather than trusting this
+// comment, which is the same pin `channel-prefs.js` takes for the same copies.
+//
+// ⚠ **NARROWEST FIRST, AND THE ORDER IS LOAD-BEARING HERE TOO.** The bound this
+// lane applies is "never wider than the operator's own stored channel posture", and
+// `directive-agent-ops.js › narrowTo` implements that as an INDEX COMPARISON over
+// these arrays. Re-ordering either one silently inverts the bound.
+const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
+const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
 // ⚠ THE WORDS, VERBATIM AND CLOSED. Not a guess — see the header.
 // ⚠ SEVEN SINCE 2026-08-22 (agent templates). `no-template` is what this machine answers when a
@@ -295,6 +326,19 @@ function directiveFrom(raw, workspaceId) {
       ? String(r.target_name !== undefined && r.target_name !== null
         ? r.target_name : r.targetName).slice(0, TARGET_NAME_MAX + 1)
       : null,
+    // ⚠ THE TWO AXES A `set_agent_mode` CARRIES, NARROWED TO THE FROZEN ENUMS HERE.
+    // `''` is "this axis was not requested", which is a REAL and common value: a
+    // directive may move one axis and leave the other alone, and the caller applies
+    // only what it was given. A value outside the enum collapses to `''` for
+    // `templateId`'s reason — this function is a NARROWING, and a mode this build has
+    // never heard of must not be carried toward a reducer that would coerce it to the
+    // most restrictive member without anybody saying so.
+    // ⚠ BOTH `''` MEANS THE DIRECTIVE ASKED FOR NOTHING THIS BUILD CAN DO, and the
+    // caller refuses rather than reporting a no-op as success — see `setAgentMode`.
+    targetToolMode: TOOL_MODES.indexOf(String(r.target_tool_mode || r.targetToolMode || '')) === -1
+      ? '' : String(r.target_tool_mode || r.targetToolMode),
+    targetMessageMode: MESSAGE_MODES.indexOf(String(r.target_message_mode || r.targetMessageMode || '')) === -1
+      ? '' : String(r.target_message_mode || r.targetMessageMode),
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };
@@ -365,6 +409,10 @@ module.exports = {
   KIND_LAUNCH,
   KIND_END,
   KIND_RENAME,
+  KIND_SET_MODE, // 2026-09-01: the posture verb — the one non-launch kind the toggle gates
+  KINDS_NEEDING_LAUNCH_CONSENT,
+  TOOL_MODES,
+  MESSAGE_MODES,
   AGENT_ID_RE,
   REFUSAL_REASONS,
   REQUEST_KEYS,

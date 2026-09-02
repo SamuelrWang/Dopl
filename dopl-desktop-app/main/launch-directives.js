@@ -19,15 +19,16 @@
 // ── ⚠ THE MAILBOX CARRIES THREE VERBS SINCE 2026-09-01, AND ONLY ONE IS BEHIND THAT TOGGLE ──
 // Samuel's external end/rename ruling. `end_agent` / `rename_agent` existed only INSIDE a spawned
 // session (`agent-self-ops.js`), so an EXTERNAL agent holding this operator's credential could
-// start agents and never stop or label them. They now ride this lane as `kind = 'end' | 'rename'`
-// and dispatch to `directive-agent-ops.js`, which routes to the SAME paths the in-process verbs
-// use. **NEITHER IS GATED BY THE LAUNCH TOGGLE** — that module's header carries the argument in
-// full (a STOP verb and a DISPLAY verb widen nothing; the toggle gates LOCAL COMPUTE BEING SPENT)
-// and names it as the assumption most worth overruling. TWO LINES HERE implement it: the
-// `d.kind === KIND_LAUNCH` test in `handle`, and `refresh` binding realtime on `armed`.
-// ⚠ THE §6 THREAT MODEL BELOW IS UNCHANGED AND STILL GOVERNS THE LAUNCH BRANCH — the other two
-// kinds cannot spawn, cannot widen a profile and cannot reach a credential, which is precisely
-// why they sit outside it.
+// start agents and never stop, label or re-posture them. They ride this lane as non-launch KINDS
+// (`end`, `rename`, and `set_agent_mode` since the 2026-09-01 agent-efficiency wave), dispatched
+// to `directive-agent-ops.js`, which routes to the SAME paths the in-process verbs use. **`end`
+// and `rename` ARE NOT GATED BY THE LAUNCH TOGGLE and `set_agent_mode` IS** — that module's
+// header carries the argument (a STOP verb and a DISPLAY verb widen nothing; a POSTURE grants,
+// and the toggle gates LOCAL COMPUTE BEING SPENT) and names it as the assumption most worth
+// overruling. TWO LINES HERE implement it: the `KINDS_NEEDING_LAUNCH_CONSENT` test in `handle`,
+// and `refresh` binding realtime on `armed`. ⚠ THE §6 THREAT MODEL BELOW IS UNCHANGED AND STILL
+// GOVERNS EVERY GATED KIND — the two free ones cannot spawn, widen a profile or reach a
+// credential, which is precisely why they sit outside it.
 //
 // ── ⚠ THE §6 THREAT THIS SHAPE IS BUILT AROUND ───────────────────────────────────────────
 //
@@ -135,12 +136,11 @@ function remember(id) {
  * operator may turn the lane off while a directive is in flight, and the next one must see that
  * immediately.
  *
- * ⚠ **IT GATES `kind = 'launch'` AND NOTHING ELSE SINCE 2026-09-01** (Samuel's external
- * end/rename ruling). It used to gate the whole watcher, which was correct while the mailbox
- * carried one verb. It now carries three, and the other two are a STOP verb and a DISPLAY verb
- * that widen nothing — `directive-agent-ops.js`'s header carries the argument in full, including
- * why gating them here would leave an operator able to have agents started for them and unable
- * to stop them from where their orchestrator lives.
+ * ⚠ **IT GATES `wire.KINDS_NEEDING_LAUNCH_CONSENT` AND NOTHING ELSE SINCE 2026-09-01** (Samuel's
+ * external end/rename ruling; `set_agent_mode` joined the gated side on the agent-efficiency
+ * wave). It used to gate the whole watcher, correct while the mailbox carried one verb; it now
+ * carries four, two of which widen nothing — `directive-agent-ops.js`'s header says why gating
+ * those here would leave an operator able to have agents started for them and unable to stop them.
  * ⚠ **THE TOGGLE-OFF PATH IS THEREFORE NO LONGER "THE WATCHER IS ASLEEP".** `refresh` binds
  * realtime whenever the watcher is armed, so an unarmed-for-launch machine still SEES directives
  * and still answers `no-bridge` to a launch. That is a widening of what this process READS (its
@@ -327,12 +327,13 @@ async function handle(raw, workspaceId) {
   if (!armed) return;
   const d = wire.directiveFrom(raw, workspaceId);
   if (!d || d.status !== wire.STATUS_PENDING) return;
-  // ⚠ **THE CONSENT GATE IS PER-KIND SINCE 2026-09-01, AND IT IS THIS LINE.** A LAUNCH spends
-  // this operator's compute on their hardware and stays behind the toggle, silently, exactly as
-  // before — the row expires and the orchestrator reads that. An `end` / `rename` does not:
-  // `directive-agent-ops.js`'s header carries the whole argument, and IT IS THE ASSUMPTION MOST
-  // WORTH OVERRULING IF SAMUEL DISAGREES — reverting is deleting the `d.kind` test here.
-  if (d.kind === wire.KIND_LAUNCH && !launchEnabled()) return;
+  // ⚠ **THE CONSENT GATE IS PER-KIND SINCE 2026-09-01, AND THE SET IS DATA**
+  // (`wire.KINDS_NEEDING_LAUNCH_CONSENT`) rather than a `||` chain a fifth kind could be admitted
+  // past by whichever reader nobody updated. A LAUNCH and a `set_agent_mode` both spend this
+  // operator's compute on their hardware — Axis A at `bypass` PRE-APPROVES work tools, the one
+  // thing the toggle exists for — and stay behind it silently, the row expiring where the
+  // orchestrator reads it. An `end` STOPS and a `rename` RELABELS: see this file's header.
+  if (wire.KINDS_NEEDING_LAUNCH_CONSENT.indexOf(d.kind) !== -1 && !launchEnabled()) return;
   const me = (deps.getUserId && deps.getUserId()) || null;
   // ⚠ THE LOCAL OWNER RE-CHECK. The realtime filter is workspace-wide — see the header.
   if (!me || d.operatorUserId !== me) return;

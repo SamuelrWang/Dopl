@@ -99,6 +99,7 @@ export function boot(over = {}) {
   const logged = [];
   const controls = []; // every `session-engine.controlByTask` call the lane made
   const names = [];    // every `agent-names` write the lane made
+  const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
   const resolves = [];
   const stub = (id) => {
     if (id === "./api") {
@@ -142,6 +143,11 @@ export function boot(over = {}) {
         // FALSE — the one-generation bound — so every existing case in this suite keeps asserting
         // the shipped behaviour; `cfg.chain` opts a case in, and `launch-chain.test.mjs` drives it.
         getAgentChain: () => cfg.chain === true,
+        // ⚠ THE CEILING THE `set_agent_mode` KIND CLAMPS TO (2026-09-01). It is the operator's
+        // OWN durable, human-set channel posture, and the whole safety argument of that kind is
+        // that nothing an orchestrator writes may exceed it. The default here is the WIDEST pair
+        // so an unrelated case never trips the clamp; `cfg.ceiling` is how a clamp case sets one.
+        getLaunchPosture: () => cfg.ceiling || { tools: "bypass", messages: "auto_both", model: null },
       };
     }
     if (id === "./targeting") {
@@ -191,6 +197,12 @@ export function boot(over = {}) {
       return {
         listLiveSessions: () => cfg.live,
         controlByTask: (a) => { controls.push(a); return cfg.control; },
+        // ⚠ THE LIVE MODE OP, STUBBED AT ITS SEAM (2026-09-01) — the real one is
+        // `session-reopen.js › setModeByTask`, where the windowless MESSAGE floor and the
+        // reducer's fail-closed coercion live, and it is driven for real in
+        // `session-mode-floor.test.mjs`. What THIS harness controls is which answer comes back,
+        // so a case can ask what the DIRECTIVE lane does with each.
+        setModeByTask: (a) => { modes.push(a); return cfg.setMode || { ok: true }; },
       };
     }
     if (id === "./agent-names") {
@@ -221,7 +233,7 @@ export function boot(over = {}) {
   // ⚠ THE FRAME IS RECORDED BEFORE IT IS HANDED IN, so the claim stub above can grant the row it
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
-  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names };
+  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names, modes };
 }
 
 /**

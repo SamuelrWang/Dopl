@@ -281,14 +281,15 @@ test("CONTRACT: `decideBody` has exactly three shapes and never a fourth", () =>
 
 test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing this machine", () => {
   const d = wire.directiveFrom(row({ shell_command: "rm -rf /", start_modes: { tools: "bypass" } }), WS);
-  // ⚠ THREE KEYS JOINED ON 2026-09-01 (the agent-management kinds) and the LIST IS THE TEST:
-  // `directiveFrom` is a literal whitelist, so this assertion is simultaneously "the new fields
-  // arrive" and "nothing else does". A column the server adds and the whitelist does not name is
-  // dropped without a word — which is the point of the narrowing, and also the one way to ship a
-  // feature over this lane and have it do exactly nothing.
+  // ⚠ THREE KEYS JOINED ON 2026-09-01 (the agent-management kinds) and TWO MORE LATER THAT DAY
+  // (`set_agent_mode`), and the LIST IS THE TEST: `directiveFrom` is a literal whitelist, so this
+  // assertion is simultaneously "the new fields arrive" and "nothing else does". A column the
+  // server adds and the whitelist does not name is dropped without a word — which is the point of
+  // the narrowing, and also the one way to ship a feature over this lane and have it do nothing.
   assert.deepEqual(Object.keys(d).sort(),
     ["agentId", "channelId", "goal", "id", "kind", "model", "operatorUserId", "status",
-      "targetAgentId", "targetName", "taskId", "templateId", "templateName", "workspaceId"]);
+      "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
+      "templateId", "templateName", "workspaceId"]);
   assert.equal(d.shell_command, undefined);
   assert.equal(d.startModes, undefined);
 });

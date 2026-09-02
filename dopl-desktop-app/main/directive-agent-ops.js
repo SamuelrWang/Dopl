@@ -200,6 +200,150 @@ function renameAgent(d) {
 }
 
 /**
+ * NARROW A REQUESTED MODE TO A CEILING. Returns the requested value when it is no
+ * wider, the CEILING when it is wider, and `''` when nothing was requested.
+ *
+ * ⚠ **THIS IS THE WHOLE SAFETY ARGUMENT OF THE `set_agent_mode` KIND, AND IT IS AN
+ * INVARIANT THIS LANE HAS CARRIED SINCE IT EXISTED.** `launch-directives.js`'s
+ * header states it in capitals: *"A directive-driven agent is exactly as contained
+ * as a button-driven one, and nothing an orchestrator writes can widen it."* The
+ * ceiling is the operator's OWN durable, human-set channel posture
+ * (`channel-prefs.js › getLaunchPosture`) — the pair they chose on the Settings tab
+ * of their own machine — so an external agent can move a running session anywhere
+ * WITHIN what its operator already sanctioned for that room, and nowhere outside it.
+ *
+ * ⚠ **IT CLAMPS, IT DOES NOT REFUSE**, which is `session-reopen.js › setModeByTask`'s
+ * own rule for the windowless floor one layer down, and is the right trade for the
+ * same reason: a refusal would leave the orchestrator with nothing applied when part
+ * of what it asked for was legal, and the DIAG records the clamp. ⚠ The cost is that
+ * the caller cannot read back what landed — the row's `done` status carries no
+ * posture field — so the clamp is a LOG here and a wire field the orchestrator-surface
+ * tier owns. Recorded rather than hidden.
+ *
+ * ⚠ **THE COMPARISON IS AN INDEX INTO A NARROWEST-FIRST ARRAY**, which is this tree's
+ * one way of ordering a posture enum (`descriptor.toolMode.options` states the rule).
+ * An unrecognised value cannot reach here — `directiveFrom` collapses it to `''` — and
+ * if one did, `indexOf` answers -1, which is narrower than everything and therefore
+ * fails CLOSED.
+ */
+function narrowTo(requested, ceiling, order) {
+  if (!requested) return '';
+  const want = order.indexOf(requested);
+  const max = order.indexOf(ceiling);
+  return want > max ? ceiling : requested;
+}
+
+/**
+ * MOVE A RUNNING AGENT'S TWO PERMISSION AXES. Returns `{ done: true }` or
+ * `{ refused: <wire word> }`.
+ *
+ * ⚠ **IT IMPLEMENTS NOTHING, EXACTLY LIKE THE TWO VERBS ABOVE.** The live-apply op is
+ * `session-engine.js › setModeByTask` — the reducer's own `set_tool_mode` /
+ * `set_message_mode`, where the windowless MESSAGE floor (F-236) and the fail-closed
+ * coercion already live — and it is the same op `sessions:setMode` and
+ * `channel-dir-ipc.js › applyPostureToLive` call. A second writer to those two fields
+ * is how two readers come to disagree about one posture.
+ *
+ * ⚠ **IT WIDENS SUPERVISION, NEVER CONTAINMENT**, and that is not a claim this file
+ * has to make good on: the tool PROFILE is resolved at spawn from this machine's own
+ * watched-channel DTO, `SESSION_HARD_DENY` is unconditional, and `bypass` is a
+ * POSITIVE allow-list — so no posture reaching `setModeByTask` can widen what an agent
+ * may touch. `applyPostureToLive`'s header makes the identical argument for the
+ * operator's own Settings tab, which is the surface this lane mirrors.
+ *
+ * ⚠ **PER AGENT, NEVER PER THREAD.** The directive names ONE `target_agent_id`; passing
+ * only (channel, thread) would take the oldest agent on the thread and silently skip
+ * its siblings, which under multiplayer is most of the room.
+ *
+ * ⚠ **BOTH AXES OPTIONAL, AND BOTH EMPTY IS A REFUSAL.** A directive may move one axis
+ * and leave the other; one that names neither (or names only values this build does not
+ * recognise — `directiveFrom` empties those) asked for nothing this machine can do, and
+ * `no-bridge` is the honest word for it in the closed vocabulary: "this machine could
+ * not take it". Reporting `done` for a no-op would tell an orchestrator its posture
+ * landed when nothing moved.
+ */
+function setAgentMode(d) {
+  if (!d.targetAgentId) {
+    diag('directive-agent-ops: set_agent_mode — directive carried no usable agent id');
+    return { refused: 'no-session' };
+  }
+  if (!d.targetToolMode && !d.targetMessageMode) {
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId,
+      '— no axis this build recognises; nothing applied');
+    return { refused: 'no-bridge' };
+  }
+
+  // ⚠ THE CEILING IS READ AT DECISION TIME AND NEVER CACHED, exactly as the consent
+  // toggle is: the operator may narrow their channel posture while a directive is in
+  // flight, and the next one must see it immediately. `getLaunchPosture` never answers
+  // null — an unset or unreadable record IS the restrictive default — so a store failure
+  // narrows rather than opens.
+  let ceiling = { tools: 'manual', messages: 'ask' };
+  try {
+    ceiling = require('./channel-prefs').getLaunchPosture(d.channelId) || ceiling;
+  } catch (err) {
+    diag('directive-agent-ops: set_agent_mode — posture ceiling unreadable, using the floor:',
+      (err && err.message) || String(err));
+  }
+  const tools = narrowTo(d.targetToolMode, ceiling.tools, wire.TOOL_MODES);
+  const messages = narrowTo(d.targetMessageMode, ceiling.messages, wire.MESSAGE_MODES);
+  if (tools !== d.targetToolMode || messages !== d.targetMessageMode) {
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'CLAMPED to the channel posture —',
+      'asked', String(d.targetToolMode || '-') + '/' + String(d.targetMessageMode || '-'),
+      'ceiling', ceiling.tools + '/' + ceiling.messages);
+  }
+
+  let rows = [];
+  try {
+    const engine = require('./session-engine');
+    rows = typeof engine.listLiveSessions === 'function' ? engine.listLiveSessions() : [];
+  } catch (_err) { rows = []; }
+  const row = rows.find((r) => r && String(r.agentId || '') === d.targetAgentId) || null;
+  if (!row) {
+    // ⚠ THE ORDINARY ANSWER, AND NOT AN ERROR — the same sentence `endAgent` writes. A
+    // posture is a property of a RUNNING session (it lives on `s.state`), so there is
+    // nothing to move on an agent that has finished and no durable record to move it in.
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— no live session');
+    return { refused: 'no-session' };
+  }
+
+  let applied = 0;
+  try {
+    const engine = require('./session-engine');
+    // ⚠ THE ADDRESS COMES FROM THE RESOLVED REGISTRY ROW, NOT FROM THE DIRECTIVE — the
+    // same rule `endAgent` follows: the row is what the engine matches on, and re-deriving
+    // a session key from wire fields is how the two come to disagree about which session a
+    // request names.
+    const target = {
+      channelId: String(row.channelId || ''),
+      taskId: String(row.taskId || ''),
+      agentId: String(row.agentId || ''),
+    };
+    if (tools) {
+      const r = engine.setModeByTask(Object.assign({ axis: 'tools', mode: tools }, target));
+      if (r && r.ok) applied += 1;
+    }
+    if (messages) {
+      const r = engine.setModeByTask(Object.assign({ axis: 'messages', mode: messages }, target));
+      if (r && r.ok) applied += 1;
+    }
+  } catch (err) {
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— engine threw:',
+      (err && err.message) || String(err));
+    return { refused: 'busy' };
+  }
+  if (!applied) {
+    // The one race this path has: the session settled between the lookup and the dispatch.
+    diag('directive-agent-ops: set_agent_mode', d.targetAgentId,
+      'REFUSED by the engine — it settled mid-flight');
+    return { refused: 'no-session' };
+  }
+  diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'ok —',
+    (tools || '-') + '/' + (messages || '-'));
+  return { done: true };
+}
+
+/**
  * THE ONE ENTRY POINT — dispatch a NON-LAUNCH directive.
  *
  * ⚠ **AN UNKNOWN KIND CANNOT ARRIVE AND IS STILL ANSWERED.**
@@ -212,8 +356,9 @@ function renameAgent(d) {
 function apply(d) {
   if (d.kind === wire.KIND_END) return endAgent(d);
   if (d.kind === wire.KIND_RENAME) return renameAgent(d);
+  if (d.kind === wire.KIND_SET_MODE) return setAgentMode(d);
   diag('directive-agent-ops: unknown kind', String(d.kind || '(none)'), '— refusing rather than leaving it undecided');
   return { refused: 'no-bridge' };
 }
 
-module.exports = { apply, endAgent, renameAgent };
+module.exports = { apply, endAgent, renameAgent, setAgentMode, narrowTo };
