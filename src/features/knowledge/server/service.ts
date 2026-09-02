@@ -53,6 +53,7 @@ export {
 export {
   listEntries,
   getEntry,
+  readEntry,
   resolveEntryRefs,
   createEntry,
   updateEntry,
