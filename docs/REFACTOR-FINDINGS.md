@@ -7242,3 +7242,104 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE FIX IS NOT "ADD SLACK TO THE UPPER BOUND"** — that would make the assertion unable to catch a second, longer TTL, which is the whole thing it exists to pin. Inject the clock (both services already take an optional `now`, which is how `service-launch-ceiling.test.ts` drives them) and assert the expiry EXACTLY.
 - Proposed resolution: pass a fixed `now` into `createAgentDirective` from this case and assert `Date.parse(insert.expires_at) === NOW + LAUNCH_DIRECTIVE_TTL_MS`. Left unfixed here because it is outside the 26 findings this pass was scoped to, and a flake fixed in passing is a flake nobody counts.
 - Status: RESOLVED 2026-09-02 (A14). The clock is pinned and the expiry asserted EXACTLY — `expect(Date.parse(insert.expires_at)).toBe(NOW + LAUNCH_DIRECTIVE_TTL_MS)` — so both bounds collapse to one and neither carries slack. ⚠ **THE PROPOSED RESOLUTION'S PREMISE WAS WRONG AND IS CORRECTED HERE**: neither `createAgentDirective` nor `service-launch.ts › createLaunchDirective` takes an optional `now`, and `service-launch-ceiling.test.ts` asserts on no timestamp at all — it drives nothing with a clock. With no injection point and the fix scoped to the one test file, `vi.useFakeTimers({ toFake: ["Date"] })` freezes `Date` alone (timers stay real) and the presence stub is re-stamped under it. One assertion of this shape in the file; no others.
+
+### F-460 — the grant fold left ONE reader on the old table, and a DB trigger is holding it up (2026-09-02)
+
+- Location: `src/features/knowledge/server/repository-audience.ts › listGrantedBaseIdsForChannels` (still `.from("channel_resource_grants")`), against `supabase/migrations/20260914120000_resource_grants.sql` §7 `mirror_channel_resource_grant()`.
+- Found during: B1, moving the channel grant path onto `resource_grants`.
+- Severity: **deliberate expand/contract debt, with a deadline.** Not a defect today — the mirror runs in the same transaction as the write, so no reader can observe the two tables disagreeing.
+- **Why the mirror and not the edit.** That file is in no Wave B slice's Owns column. It answers the AGENT's reachable-base set, so a table that quietly stopped receiving writes would fence the operator's own agents out of every newly-shared base — a silent, fail-*closed*-then-fail-*open* pair (a stale row un-shared elsewhere would keep reading). A trigger is atomic; a TypeScript dual-write is not.
+- ⚠ **IT IS NOT A SECOND SOURCE OF TRUTH.** Nothing reads `channel_resource_grants` back into `resource_grants`, and cross-container rows are SKIPPED rather than mirrored — the old table's own `enforce_channel_resource_grant()` cannot hold them and would RAISE inside a legal write. `schema-sql.test.ts` pins both properties.
+- Proposed resolution: in batch 3, move `listGrantedBaseIdsForChannels` onto `resource_grants` (`.match({workspace_id, scope_type:"channel", resource_type:"knowledge_base"})`, `.in("scope_id", channelIds)`), then `DROP TRIGGER resource_grants_channel_mirror ON resource_grants`, `DROP FUNCTION mirror_channel_resource_grant()`, `DROP TABLE channel_resource_grants` (taking `enforce_channel_resource_grant`, `drop_channel_resource_grants_for_kb` and its two policies), and delete this suite's "still live" case.
+- Status: open.
+
+### F-461 — three migrations written with their probe lists, and not one probe has run (2026-09-02)
+
+- Location: `supabase/migrations/2026091{4,5,6}120000_*.sql`, each header's `APPLY / VERIFY / REPLAY` block.
+- Found during: B1.
+- Severity: **a measurement gap, recorded rather than glossed** — the `20260827120000` precedent is three behavioural probes per trigger branch inside a rolled-back transaction, run through the Supabase MCP against a real database.
+- **What is actually asserted instead.** (a) each file's in-migration `DO $$` block, which RAISEs unless the objects it claims to create exist; (b) `src/features/knowledge/schema-sql.test.ts`, which REPLAYS `supabase/migrations` in filename order and pins the live policy set, the validity trigger's branches and the retirement of both old tables — mutation-verified red on seven separate reverts. Neither is a probe: both read SQL, and only a database can say what a trigger DOES.
+- ⚠ **AND MIGRATION REPLAY IS OWED FOR THE WHOLE WAVE, not just this slice.** `supabase db reset` has never run on any branch of either wave — Docker was unavailable for all of Wave A and is unavailable here — and Wave A's seven migrations are themselves unapplied. Nothing in this slice may reach production before that changes.
+- Proposed resolution: run the fifteen + eleven + eleven probes listed in the three headers, in order, on the first machine that can start the local stack; then `supabase db reset`. Record the command and the answer, per INVARIANTS §12.
+- Status: open.
+
+### F-462 — `scope_id` is projected as `team_id` and `channel_id`, and two DTO layers never learned (2026-09-02)
+
+- Location: `src/features/teams/server/repository-grants.ts › GRANT_COLS` (`team_id:scope_id`) and `src/features/knowledge/server/repository-channel-grants.ts › CHANNEL_RESOURCE_GRANT_COLS` (`channel_id:scope_id`), against `teams/server/dto.ts › TeamGrantDbRow` and `knowledge/server/repository-channel-grants.ts › ChannelResourceGrantRow`.
+- Found during: B1.
+- Severity: **a deliberate boundary, filed because it looks like an oversight.** The column is `scope_id` for all three scopes; each feature asks about ONE of them and the domain word at its boundary is `team` or `channel`, not `scope`.
+- **What it bought.** `dto.ts`, `types.ts › TeamGrant`, the teams service, the members access matrix and every knowledge caller are untouched by a schema change that renamed a primary-key column. One alias string per module, stated once, instead of a rename rippling through four features.
+- ⚠ **THE HAZARD IS A THIRD READER**, not these two: a new module that selects `scope_id` raw and a reviewer who reads `channel_id` in one file and `scope_id` in another will disagree about what the column is called. Both aliases sit in a named exported constant with a docblock for exactly that reason.
+- Proposed resolution: none while each feature owns one scope. If a surface ever needs to read ACROSS scopes (the `container` lend, F-467), give it its own repository that speaks `scope_id`/`scope_type` and leave these two alone — a shared mapper over three vocabularies would be worse than three names.
+- Status: closed as recorded.
+
+### F-463 — `TeamResourceType` names four types, `resource_grants` accepts five, and only one of them may widen (2026-09-02)
+
+- Location: `src/features/teams/access-levels.ts › TeamResourceType` (knowledge_base | chat | chat_folder | skill) against `supabase/migrations/20260914120000_resource_grants.sql`'s `resource_type` CHECK (those four plus `agent_template`).
+- Found during: B1, folding `agent_template_teams` into the shared table.
+- Severity: **a contract that must NOT be unified, stated so nobody unifies it.** `20260822200000` §2 split the template junction off the polymorphic table precisely to avoid widening this union (F-277), and that reasoning survives the fold.
+- **Why.** `TeamResourceType` has four consumers outside the teams lane — `teams/server/repository-resources.ts › RESOURCE_TABLES` (a `satisfies Record<TeamResourceType, …>` assuming every member has an `access_mode` column; `agent_templates` has `visibility` instead), `listTeamsModeResources`, `members/components/member-bits.tsx › RESOURCE_META`, and the hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`. A grant row of an unmodelled type reaching the members access matrix renders through an undefined lookup.
+- **Why it is safe as it stands.** The template rows never reach those consumers: `repository-grants.ts` filters `resource_type` on every statement, and the template links are read by `agent-templates/server/repository.ts › listTeamLinksForTemplates` alone. The DB accepts five; each lane asks about its own.
+- Proposed resolution: leave both. If `agent_template` must ever join the union, the same change has to teach all four consumers — that is the work item, not the type edit.
+- Status: closed as recorded.
+
+### F-464 — the generated `types.ts` still declares a table this wave dropped (2026-09-02)
+
+- Location: `src/shared/supabase/types.ts` (`team_resource_access`, ~line 1863 at time of writing — a real `supabase gen types` output), against `supabase/migrations/20260916120000_drop_team_resource_access.sql`.
+- Found during: B1.
+- Severity: **cosmetic today, and only because nothing type-checks against it.** `supabaseAdmin()` calls `createClient` with no `Database` generic, so `.from("resource_grants")` compiles with the new table absent from the file and `.from("team_resource_access")` would compile with it dropped. Four references, all in `features/chats` (findings-tenancy F7).
+- ⚠ **THE DIRECTION OF THE RISK IS THE TYPING, NOT THE FILE.** The day anyone parameterises the client with `Database` — which is the natural fix for F7's 47 hand mirrors — a stale generated file turns from decoration into a compile error on the wrong side: it would reject the live table and accept the dropped one.
+- Proposed resolution: re-run `supabase gen types typescript` after the three migrations are APPLIED (F-461), not before — the file is a snapshot of a database, and generating it from an unapplied branch would record a schema that exists nowhere.
+- Status: open.
+
+### F-465 — two MCP comments teach a schema the database no longer has (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/members-render.ts` (*"the backend builds this payload from `team_resource_access`"*) and `tools/agent-shared.ts` (*"0 `agent_template_teams` rows"*), against the two tables dropped by `20260915120000` / `20260916120000`.
+- Found during: B1.
+- Severity: **stale teaching, no live fence.** Both are comments; the payload is unchanged (the teams service still answers the same shape off `resource_grants`), and `agent-team-axis.test.ts` still passes because the `'team'` VISIBILITY it guards is untouched by ruling B4.
+- **Why it was not fixed here.** `packages/mcp-server/src/tools/**` belongs to B8 (`members`, `agent`) and to no slice for `agent-shared.ts`; widening a schema slice into the MCP package's prose is how a wave stops being reviewable.
+- Proposed resolution: B8 repoints both to `resource_grants` while it is in those files, naming the scope: *"…from `resource_grants` at `scope_type='team'`"*. One line each, no behaviour.
+- Status: open.
+
+### F-466 — `RETIRED_RESOURCE_TYPES` outlived the CHECK constraint that justified it (2026-09-02)
+
+- Location: `src/features/teams/access-levels.ts › RETIRED_RESOURCE_TYPES` / `isRetiredResourceType` / `withoutRetiredResources`, and its hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`.
+- Found during: B1, dropping `team_resource_access`.
+- Severity: **a fail-safe with nothing left to fail against.** The comment states its own premise in as many words: *"keep this set even though `TeamResourceType` no longer names one: `team_resource_access.resource_type` still ACCEPTS `'workflow'`"* (`20260811120000` deliberately kept the CHECK value after deleting the feature). `resource_grants` does not name the value, its `resource_type` CHECK refuses it, and `20260914120000`'s backfill drops such rows rather than carrying them — a `'workflow'` row can no longer exist to be filtered.
+- ⚠ **NOT DELETED IN THIS SLICE, AND THE REASON IS OWNERSHIP, NOT DOUBT.** `access-levels.ts` is in no Wave B slice's Owns column, the filter fails safe (it removes rows that cannot occur), and a render filter deleted from outside its lane is exactly the change nobody reviews.
+- Proposed resolution: after F-461's replay confirms the drop applied, delete the set, both helpers, their two call sites and the `members-render.ts` mirror — approximately 25 lines across two trees, and one fewer hand-copied mirror on F7's count.
+- Status: open.
+
+### F-467 — `scope_type='container'` is schema with no writer, and that is the whole point of B4's other half (2026-09-02)
+
+- Location: `supabase/migrations/20260914120000_resource_grants.sql` (the `scope_type` CHECK and `enforce_resource_grant()`'s `WHEN 'container'` arm), against the absence of any TypeScript that writes one.
+- Found during: B1.
+- Severity: **anticipated schema, filed so it is not read as dead code.** The ruling names three scopes; two have writers today. The arm is not speculative generality — it is the axis findings-tenancy F2 identifies as the reason the product shipped COPY ops instead of lending, and it is unreachable until a caller exists.
+- ⚠ **THE TRIGGER IS WHAT MAKES IT MEAN ANYTHING.** `enforce_resource_grant()` admits a grant whose scope sits in another container only when `created_by` is an active member of BOTH — so the capability arrives with its fence already written and mutation-pinned, rather than being added later beside a fence that assumed same-container.
+- ⚠ **AND AN UNATTRIBUTED CROSS-CONTAINER ROW IS REFUSED**, which is why the backfilled team grants (no `created_by` column existed) cannot become a cross-tenant read path by accident.
+- Proposed resolution: B15, which deletes the copy ops (`knowledge-ops-copy.ts`, `agent-ops-copy.ts`, `copy-target.ts`), is where the container writer belongs — the two changes are one sentence. Until then, do not "clean up" the arm; deleting it would have to be re-argued from the trigger up.
+- Status: open.
+
+### F-468 — a `LANGUAGE sql` helper on another branch reads a table this slice drops, and filename order decides who is wrong (2026-09-02)
+
+- Location: the `dopl_teams_mode_visible` helper in the migration named `rls_helpers_and_caller_scope`, version `20260919120000` — ⚠ **NOT IN THIS TREE**: it lives on branch `v2/b-rls-real-1`, which has its own entry for this under an id from its reserved range, so no symbol anchor is given and none would resolve. Against `supabase/migrations/20260916120000_drop_team_resource_access.sql`, which is in this tree.
+- Found during: B1, on a cross-slice request relayed after both slices were written.
+- Severity: **a replay-breaking collision that exists in NEITHER branch and appears at MERGE.** Each branch's own gates are green; the directory they will share is not.
+- **Why it FAILS OUTRIGHT rather than degrading.** The helper is `LANGUAGE sql`, so Postgres parses the body and records a dependency at creation time. `20260916120000` < `20260919120000`, so by the time the `CREATE OR REPLACE` runs the table is gone and the statement errors with `relation "team_resource_access" does not exist` — the migration stops, and every file after it stops with it. A `plpgsql` body would have deferred the failure to the first call, which is worse and is not what happened here.
+- **Whose change it is, and why it is not this slice's.** The reader runs LAST, so the reader is the file that must be right; a "fix" from B1 would have to take a version above `20260919120000`, which is B11's slot, and would still be overwritten by the `CREATE OR REPLACE` it was trying to correct. Ownership and ordering agree for once.
+- **The replacement, which is a join source and a scope term and nothing else** — no policy moves, no signature changes, no grant changes:
+  ```sql
+  FROM public.resource_grants g
+  JOIN public.team_members tm
+    ON tm.team_id = g.scope_id
+   AND tm.workspace_id = g.workspace_id
+  WHERE g.scope_type    = 'team'
+    AND g.workspace_id  = p_workspace_id
+    AND g.resource_type = p_resource_type
+    AND g.resource_id   = p_resource_id
+    AND tm.user_id      = (SELECT auth.uid())
+  ```
+  ⚠ **`scope_type = 'team'` IS NOT OPTIONAL AND IS THE WHOLE HAZARD OF THE FOLD.** Without it the helper answers "is this teams-mode resource visible to me" with a CHANNEL grant on the same resource — turning a room's audience into a workspace-wide read, silently, through a function whose name says nothing about scopes. ⚠ The `tm.workspace_id = g.workspace_id` term is carried over verbatim; `resource_grants.workspace_id` is the RESOURCE's container, which is the same container the team lives in for every team grant.
+- **The gate that will catch this, and any repeat of it.** `src/features/knowledge/schema-sql.test.ts` — *"no migration AFTER the drop mentions a dropped table"* — replays `supabase/migrations` in filename order and fails on any file sorting after `20260916120000` that names `team_resource_access` or `agent_template_teams`. ⚠ **IT IS GREEN ON BOTH BRANCHES IN ISOLATION AND THAT IS THE POINT**: verified red by copying B7's file into this worktree, which reproduced exactly the merge state. Every branch of this wave writes migrations against a directory it cannot see; this is the only assertion in the tree that reads the merged one.
+- Proposed resolution: B7 applies the body above. If B7 has already landed, the same edit is a one-line follow-up on whichever branch integrates second — never a re-creation of the dropped table.
+- Status: open, and owned by the integration.

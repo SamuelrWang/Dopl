@@ -420,6 +420,34 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
     expect(old.get("channel_resource_grants_member_select")).toMatch(/level\s*=\s*'visible'/i);
   });
 
+  /**
+   * 🔒 THE INTEGRATION GATE. F-468 (cross-slice, and slice B7 has its own entry on `v2/b-rls-real-1` under an id from its reserved range): `20260919120000` defines
+   * `dopl_teams_mode_visible()` as `LANGUAGE sql`, whose body IS parsed and
+   * dependency-tracked at creation time — so a `CREATE OR REPLACE` reading
+   * `team_resource_access` AFTER `20260916120000` dropped it does not fail
+   * subtly at runtime, it fails the migration outright with `relation … does not
+   * exist`. Every branch of this wave writes migrations against a directory it
+   * cannot see, and filename order is the only thing that decides which of them
+   * is right.
+   *
+   * ⚠ THIS CASE IS GREEN ON THIS BRANCH BY CONSTRUCTION and is not decoration:
+   * the file it exists to catch lands at MERGE, which is the first moment the
+   * two slices share a directory and the last moment before replay.
+   */
+  it("🔒 no migration AFTER the drop mentions a dropped table (F-468)", () => {
+    const DROPPED = ["team_resource_access", "agent_template_teams"];
+    const AFTER = "20260916120000_drop_team_resource_access.sql";
+    const offenders = FILES.filter((f) => f.name > AFTER).flatMap(({ name, sql }) =>
+      DROPPED.filter((t) => new RegExp(String.raw`\b${t}\b`).test(sql)).map(
+        (t) => `${name} → ${t}`
+      )
+    );
+    // The fix is never to re-create the table: repoint the reader at
+    // `resource_grants` with its `scope_type` term, which is what the fold is
+    // for. See F-468 in the findings log for the exact replacement body.
+    expect(offenders).toEqual([]);
+  });
+
   it("the mirror is one trigger and one function — not a second write path", () => {
     const mirror = liveFunctionBody("mirror_channel_resource_grant");
     expect(mirror).not.toBeNull();
