@@ -300,6 +300,46 @@ export type Channel = {
   infoCard: ChannelInfoCard;
 };
 
+/**
+ * **WHO THE SERVER RESOLVED A MESSAGE FOR**, computed once at write time by
+ * `server/service-wake-verdict.ts › resolveWakeVerdict` and stored on the row.
+ *
+ * ⚠ **IT IS A RESOLUTION, NOT AN OUTCOME.** {@link ChannelDelivery} is the
+ * outcome, and the two are separate because the answers move independently: the
+ * recipient of a message never changes, and what a machine did with it does.
+ *
+ * ⚠ `"thread"` IS NOT A WEAK `"agent"`. It means the post named nobody and
+ * carries a thread tag, so it reaches sessions ALREADY working that thread and
+ * wakes nothing — the chat case, stated as a value rather than as an absence.
+ */
+export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread";
+
+/**
+ * **WHAT HAPPENED TO A MESSAGE** — the one vocabulary, written by two authors.
+ *
+ * The SERVER stamps its write-time answer from the {@link ChannelWakeVerdict};
+ * the operator's machine later OVERWRITES it with what it actually did and
+ * stamps `deliveryAt` with it. ⚠ A `deliveryAt` of `null` means nothing has
+ * confirmed the server's answer — it is a prediction, not a receipt.
+ *
+ * ⚠ **THIS IS THE `delivery=` THE MCP RESULT LINE RENDERS**, and it is the ack:
+ * before it existed, four spellings of "reach an agent" had four different acks
+ * and one of them (`wake=`) was an echo of what the caller had typed.
+ */
+export type ChannelDelivery =
+  /** Nothing was addressed. */
+  | "none"
+  /** The body named an agent and it resolved to no live session. */
+  | "unreachable"
+  /** It reached sessions already on the thread; nobody was woken. */
+  | "idle"
+  /** It reached its recipient; what runs is that side's decision. */
+  | "delivered"
+  /** A dormant agent was started on it. */
+  | "woken"
+  /** The machine declined to feed it — a full queue, or a gate. */
+  | "refused";
+
 export type ChannelMessage = {
   id: string;
   /** Monotonic cursor — read / await paginate on `seq`. */
@@ -315,6 +355,43 @@ export type ChannelMessage = {
   /** Hydrated author display (UI convenience); null for system rows. */
   authorName: string | null;
   authorAvatarUrl: string | null;
+  // ── THE DELIVERY KEYSTONE (2026-09-02, A9) ──────────────────────────────
+  // ⚠ **OPTIONAL *AND* NULLABLE, AND THE TWO MEAN THE SAME THING: "NOT ANSWERED
+  // HERE".** `undefined` is the shape a message this tree BUILDS rather than
+  // READS carries — an optimistic row that has not reached the server
+  // (`lib/optimistic-cache.ts`), a fixture, the marketing demo — and `null` is
+  // what `server/dto.ts › mapMessageRow` writes for a stored row the resolver
+  // could not answer for. Neither is "nobody"; that is `"none"`, and a reader
+  // that collapses the three has broken the fallback below.
+  // ⚠ **THE OPTIONALITY IS ALSO WHAT KEEPS THIS TYPE AND THE SDK'S MIRROR
+  // (`packages/dopl-client/src/channel-types.ts`) IDENTICAL**, which is the only
+  // reason a hand-maintained mirror stays honest.
+  /**
+   * **THE SERVER'S RESOLUTION OF WHO THIS MESSAGE IS FOR.**
+   *
+   * ⚠ Absent MEANS THE ROW PREDATES THE RESOLVER — never "nobody", which is
+   * `"none"`. `dopl-desktop-app/main/session-dispatch.js` falls back to its own
+   * body parse when it is absent and executes the stored answer otherwise, which
+   * is what keeps an installed desktop working unchanged.
+   */
+  wakeVerdict?: ChannelWakeVerdict | null;
+  /**
+   * The member ids {@link wakeVerdict} resolved to. ⚠ `[]` and absent differ:
+   * `[]` is "resolved to nobody", absent is "not resolved here".
+   */
+  recipientUserIds?: string[] | null;
+  /**
+   * The live agent ids {@link wakeVerdict} resolved to, from
+   * `channel_sessions.name`. ⚠ `[]` vs absent as above — and the server resolves
+   * ONLY the author's own live sessions, so absent is the ordinary answer for a
+   * peer's agent and the machine remains the authority on it.
+   */
+  recipientAgentIds?: string[] | null;
+  /** What happened. ⚠ Read it beside {@link deliveryAt}: without a stamp this is
+   *  the server's write-time prediction, not a machine's receipt. */
+  delivery?: ChannelDelivery | null;
+  /** When the operator's machine acknowledged delivery; absent = never. */
+  deliveryAt?: string | null;
 };
 
 /**

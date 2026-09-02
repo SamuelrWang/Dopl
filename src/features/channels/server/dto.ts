@@ -1,6 +1,7 @@
 import type {
   AgentToolProfile,
   Channel,
+  ChannelDelivery,
   ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
@@ -8,6 +9,7 @@ import type {
   ChannelRole,
   ChannelThread,
   ChannelVisibility,
+  ChannelWakeVerdict,
   MessageAuthorKind,
   NotifyScope,
   ThreadMode,
@@ -125,6 +127,18 @@ export type ChannelMessageRow = {
   metadata: unknown;
   client_msg_id: string | null;
   created_at: string;
+  // ── THE DELIVERY KEYSTONE (20260912120000) ──────────────────────────────
+  // ⚠ NULL IS "NOT ANSWERED HERE", NEVER "NOBODY" AND NEVER "NO". A row written
+  // before the resolver carries NULL on all five, and `mapMessageRow` passes
+  // that through rather than inventing a verdict — the desktop's fallback and
+  // the MCP result line both key on it. Optional on the TYPE as well, because a
+  // deployment whose migration has not landed reads back a row without the
+  // columns at all.
+  wake_verdict?: string | null;
+  recipient_user_ids?: string[] | null;
+  recipient_agent_ids?: string[] | null;
+  delivery?: string | null;
+  delivery_at?: string | null;
 };
 
 export type ProfileRef = {
@@ -246,6 +260,16 @@ export function mapMessageRow(
     createdAt: row.created_at,
     authorName: profile?.display_name || profile?.email || null,
     authorAvatarUrl: profile?.avatar_url ?? null,
+    // ⚠ PASSED THROUGH, NEVER RE-DERIVED. The verdict was computed ONCE, on the
+    // write, by `service-wake-verdict.ts`; a mapper that recomputed it would be
+    // the second reader this whole slice exists to delete. `?? null` normalizes
+    // an ABSENT column (migration not applied) onto the same "not answered"
+    // value as a NULL one, which is the same answer to the caller.
+    wakeVerdict: (row.wake_verdict ?? null) as ChannelWakeVerdict | null,
+    recipientUserIds: row.recipient_user_ids ?? null,
+    recipientAgentIds: row.recipient_agent_ids ?? null,
+    delivery: (row.delivery ?? null) as ChannelDelivery | null,
+    deliveryAt: row.delivery_at ?? null,
   };
 }
 

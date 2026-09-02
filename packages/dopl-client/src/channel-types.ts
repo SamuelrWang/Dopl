@@ -90,6 +90,26 @@ export interface Channel {
   infoCard?: ChannelInfoCard;
 }
 
+/**
+ * WHO the server resolved a message for, decided once at write time.
+ * ⚠ Mirror of `src/features/channels/types.ts › ChannelWakeVerdict`.
+ */
+export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread";
+
+/**
+ * WHAT HAPPENED to a message — the `delivery=` verdict that IS the
+ * acknowledgement. The server stamps its write-time answer; the operator's
+ * machine overwrites it with what it did.
+ * ⚠ Mirror of `src/features/channels/types.ts › ChannelDelivery`.
+ */
+export type ChannelDelivery =
+  | "none"
+  | "unreachable"
+  | "idle"
+  | "delivered"
+  | "woken"
+  | "refused";
+
 export interface ChannelMessage {
   id: string;
   /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
@@ -109,6 +129,25 @@ export interface ChannelMessage {
    */
   authorName?: string | null;
   authorAvatarUrl?: string | null;
+  // ── THE DELIVERY KEYSTONE (2026-09-02, A9) ──────────────────────────────
+  // ⚠ **OPTIONAL AND NULLABLE, BOTH, AND THAT IS THE SDK RULE RATHER THAN
+  // TIMIDITY**: an older SERVER omits the key entirely and a newer one sends
+  // `null` for a row it could not resolve, and a reader must treat those the
+  // same — "not answered here". `undefined` is never "nobody".
+  // ⚠ THE MIRROR IS HAND-MAINTAINED. `src/features/channels/types.ts ›
+  // ChannelMessage` is the original and carries the argument for each field;
+  // this package cannot import it (INVARIANTS §13).
+  /** Who the server resolved this message for: none | member | agent | thread. */
+  wakeVerdict?: ChannelWakeVerdict | null;
+  /** The member ids it resolved to. ⚠ `[]` = nobody; absent/null = not resolved. */
+  recipientUserIds?: string[] | null;
+  /** The live agent ids it resolved to. ⚠ `[]` vs absent/null as above. */
+  recipientAgentIds?: string[] | null;
+  /** What happened — the `delivery=` verdict. ⚠ Without `deliveryAt` it is the
+   *  server's write-time prediction, not a machine's receipt. */
+  delivery?: ChannelDelivery | null;
+  /** When the operator's machine acknowledged delivery; absent/null = never. */
+  deliveryAt?: string | null;
 }
 
 /**

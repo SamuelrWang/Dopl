@@ -349,3 +349,29 @@ export const DEFAULT_PING_LIMIT = 20;
  *  needs 200 rows has stopped being an inbox, and the `since` cursor is how a
  *  reader that fell behind catches up — one bounded page at a time. */
 export const MAX_PING_LIMIT = 100;
+
+/**
+ * **HOW RECENT A `channel_sessions` ROW MUST BE FOR THE SERVER TO ACT ON IT**
+ * (2026-09-02, A9 — the delivery keystone).
+ *
+ * ⚠ **`channel_sessions` IS A PROJECTION, NOT A REGISTRY**, and the whole reason
+ * this constant exists is stated in `server/repository-sessions.ts` and again in
+ * **F-418**: the desktop pushes it ON STATE CHANGE and never on a timer
+ * (`main/session-state-push.js`, and the keepalive was refused there for
+ * reasons that still stand), so *a quiet row means nobody said anything, not
+ * that nothing is running*. A server that REFUSES on the strength of a stale
+ * projection converts a benign `no-session` answer into a hard 400 for every
+ * legitimate call sent while the push is behind.
+ *
+ * ⚠ **SO THE RULE IS ASYMMETRIC AND MUST STAY SO.** A row inside this window is
+ * evidence enough to RESOLVE a recipient and to REFUSE a direction naming an
+ * agent that is not in it; outside it, the server resolves nothing and refuses
+ * nothing, and the machine answers — which is exactly today's behaviour. Never
+ * invert it: "no fresh row" may not become "no such agent".
+ *
+ * ⚠ It is deliberately LONGER than `PRESENCE_ONLINE_WINDOW_MS`. Presence is a
+ * 30-second heartbeat, so 90 s is a real liveness read; this table is written
+ * only when a session's derived state MOVES, and an agent thinking for four
+ * minutes writes nothing at all.
+ */
+export const SESSION_PROJECTION_FRESH_MS = 5 * 60_000;

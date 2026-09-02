@@ -31,6 +31,7 @@ import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
 import { resolvePostMetadata } from "./service-writes-metadata";
+import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   canManageChannel,
   loadVisibleChannel,
@@ -435,6 +436,15 @@ export async function postMessage(
     fanoutGroupId: opts.fanoutGroupId,
   });
 
+  // ⚠ **WHO THIS IS FOR AND WHAT IT DID — DECIDED HERE, ONCE** (2026-09-02, A9).
+  // It runs AFTER the metadata fold and reads that fold's output rather than the
+  // caller's input, because `to_user_id` and `taskId` are only trustworthy once
+  // the anti-spoof strip has re-stamped them from validated values.
+  // ⚠ It comes AFTER the idempotency short-circuit too: a converged retry
+  // returns the FIRST request's stored verdict, which is the whole point of the
+  // key — a retry must not re-resolve against a world that has moved on.
+  const wake = await resolveWakeVerdict(ctx, channel.id, input, metadata);
+
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included).
   const authorKind =
@@ -451,6 +461,14 @@ export async function postMessage(
       body: input.body,
       metadata,
       client_msg_id: input.clientMsgId ?? null,
+      wake_verdict: wake.verdict,
+      recipient_user_ids: wake.recipientUserIds,
+      recipient_agent_ids: wake.recipientAgentIds,
+      // ⚠ THE SERVER'S PREDICTION, WHICH THE MACHINE'S ACK OVERWRITES
+      // (`service-writes-delivery.ts`). Stored rather than derived on read so a
+      // later reader sees what was true AT THE TIME, not what the projection
+      // says now.
+      delivery: wake.delivery,
     });
   } catch (err) {
     // ⚠ Lost an idempotency race — the short-circuit reached a second way, so

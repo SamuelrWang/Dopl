@@ -321,6 +321,14 @@ type MessageInsert = {
   body: string;
   metadata: Record<string, unknown>;
   client_msg_id: string | null;
+  // ── THE DELIVERY KEYSTONE (20260912120000) ──────────────────────────────
+  // ⚠ WRITTEN THROUGH THE RPC, not by a second statement afterwards. The RPC
+  // holds the per-channel advisory lock, so a follow-up UPDATE would open a
+  // window in which a realtime subscriber sees the row without its verdict.
+  wake_verdict: string | null;
+  recipient_user_ids: string[] | null;
+  recipient_agent_ids: string[] | null;
+  delivery: string | null;
 };
 
 /**
@@ -343,6 +351,10 @@ export async function insertMessage(
     p_body: row.body,
     p_metadata: row.metadata,
     p_client_msg_id: row.client_msg_id,
+    p_wake_verdict: row.wake_verdict,
+    p_recipient_user_ids: row.recipient_user_ids,
+    p_recipient_agent_ids: row.recipient_agent_ids,
+    p_delivery: row.delivery,
   });
   if (error) throw error;
   // ⚠ A single-composite RETURNS comes back as an object — normalize.

@@ -185,6 +185,13 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
         body: "done",
         metadata: {},
         client_msg_id: "k1",
+        // ⚠ The stored row's own verdict (A9). Not this case's subject — it is
+        // here because the insert states a verdict on every path, and a fixture
+        // that could omit it would let a real omission compile.
+        wake_verdict: "none",
+        recipient_user_ids: [],
+        recipient_agent_ids: null,
+        delivery: "none",
       })
     );
     await expect(
