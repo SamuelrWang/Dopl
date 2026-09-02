@@ -7445,3 +7445,53 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE CONSEQUENCE IS VISIBLE ON THE WIRE, and it is intended**: a session that is offered nothing registers nothing, so that connection declares no `tools` capability and `tools/list` answers `Method not found` (measured through a real `Client` over `InMemoryTransport`). Every client we ship reads capabilities first; a client that calls `tools/list` unconditionally sees an error where it used to see 13 tools it could not call.
 - Status: RESOLVED 2026-09-02 (B5) — recorded, not open work.
 
+### F-510 — the shared-container profile narrowing covers ONE of the three launch lanes (2026-09-02)
+
+- Location: `dopl-desktop-app/main/launch-directive-spawn.js` › `spawn` (narrowed), vs `dopl-desktop-app/main/session-launch-op.js` › `launchFromButton` and `dopl-desktop-app/main/trigger.js` › `launchResponderSession` (not narrowed).
+- Found during: Wave B slice `v2/b-channel-agent-profile`, landing Samuel's ruling B7 (`channel_agent` = `full` minus the shell, for a session launched into a shared container).
+- **THE SHAPE.** There are THREE lanes that resolve a tool profile and they all read the same DTO through `targeting-window.js › resolveToolProfile` — that agreement is the property `test/launch-tool-profile.test.mjs` exists to pin (F-267). This slice added `tool-profiles.js › profileForContainer` to exactly one of them, the DIRECTIVE lane, because the other two files are outside its ownership. **So the three lanes no longer agree**: an operator pressing New Agent in a shared channel still launches at `full`, with a shell, while an orchestrator's directive into the same channel launches at `channel_agent`.
+- ⚠ **IT IS NOT A HOLE THE RULING LEAVES OPEN — IT IS A HOLE THE OWNERSHIP BOUNDARY LEAVES OPEN.** B7 is about "a session launched into a SHARED channel", not about who pressed. The button lane has a human at the keyboard, which is an argument for keeping an explicit `full`, but it is an argument nobody has made and it is not what the ruling says.
+- ⚠ **AND F-267's TWO-LANE AGREEMENT TEST STILL PASSES**, because it compares the two lanes' *resolvers* over a channel record and knows nothing about the container. A test that agreed on the raw read is now green over two lanes that disagree on the applied profile.
+- Proposed resolution: one line in each of the other two lanes, `profileForContainer(resolveToolProfile(ch), isSharedContainer(wsId))`, plus an extension of `launch-tool-profile.test.mjs`'s agreement case to compare the APPLIED profile rather than the resolved one. Both files are unowned by any Wave B slice, so this is a cross-slice request rather than a re-scope.
+- Status: open.
+
+### F-511 — an adapter with no branch for a profile answers `full`'s config, silently (2026-09-02)
+
+- Location: `dopl-desktop-app/main/runtime/cursor/tools.js` › `buildSessionToolConfig` (the shape; `codex/tools.js` and `claude/tools.js` have it too).
+- Found during: the same slice, freezing the Cursor adapter at three profiles under ruling X0.
+- **THE SHAPE.** Every adapter's `buildSessionToolConfig` is a chain of `if (p === …)` with `full` as the FALL-THROUGH. `normalizeProfile` accepts `channel_agent` on every runtime, so an adapter that has not implemented it hands back `full`'s config — the WIDEST one — under a narrower label. Asserted out loud in `test/channel-agent-profile.test.mjs` rather than left to be discovered.
+- ⚠ **NOTHING SHIPS THROUGH IT TODAY, AND THAT IS THE ONLY REASON IT IS A FINDING RATHER THAN A BUG.** Cursor is held (X0) and its descriptor names three profiles, so `capability.js › canLaunchProfile` refuses `channel_agent` there with a sentence. ⚠ **But that refusal has NO PRODUCTION CONSUMER** — `canLaunchProfile` / `profileRefusal` are read by tests only (`grep -rn canLaunchProfile main/`), so the thing standing between this fall-through and a real launch is that Cursor does not ship at all.
+- ⚠ **THE DEFAULT DIRECTION IS THE DEFECT, NOT THE MISSING BRANCH.** A profile chain whose default is the widest member fails open by construction; `normalizeProfile`, one file over, fails closed for exactly this reason.
+- Proposed resolution: (a) give `canLaunchProfile` a real consumer at `session-launch.js`, beside `windowlessFloorRefusal`, which is the refusal that already reads a descriptor there; or (b) make the adapters' fall-through the NARROWEST profile and name `full` explicitly. (b) alone is not enough — a silently-narrowed session is a session that reports it cannot do its work.
+- Status: open.
+
+### F-512 — `session-park.js` still hand-copies the profile vocabulary (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-park.js` › `knownProfile`, against `dopl-desktop-app/main/tool-profiles.js` › `normalizeProfile`.
+- Found during: the same slice, adding the fourth profile — the copy did not have it, and a parked `channel_agent` session would have recreated at `read_only`.
+- **THE SHAPE.** Two answers to "which profiles are real", one over the live launch and one over the durable record. They agree today only because a test now holds them equal (`test/channel-agent-profile.test.mjs` › *"the DURABLE record's profile set is held EQUAL to the table's"*), which is the tree's standing remedy but not the fix.
+- ⚠ **THE DRIFT IS SILENT IN THE ONE DIRECTION THAT MATTERS.** A profile missing from the park copy does not refuse — it RECREATES the session at `read_only`, which reads as an agent that has quietly lost its tools, which is F-267's symptom exactly.
+- ⚠ **WHY IT WAS NOT DEDUPLICATED HERE.** `session-park.js`'s pure block may not reference `require(`, and every extraction harness that slices it would have to inject a new module-scope identifier — five test files, none of them this slice's. The test is the cheap half of the fix.
+- Proposed resolution: bind `normalizeProfile` at module scope beside `directedTurn` / `runtimeCapability` (both of which the pure block already reads that way) and delete the Set, injecting it in the five harnesses in one change.
+- Status: open.
+
+### F-513 — "shared container" is `kind='link'` only, so a multi-member `standard` workspace is "solo" (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-park-on-claim.js` › `newlySharedContainers` / `isSharedContainer`, `dopl-desktop-app/main/session-credential.js` › `shouldLockSession`, and `packages/mcp-server/src/factory.ts` › `bootServer` — three copies of one predicate.
+- Found during: the same slice, wiring ruling B7's default selection onto that predicate.
+- **THE SHAPE.** All three ask `kind === 'link' && memberCount !== 1`. A `kind='standard'` workspace with nine members therefore answers NOT SHARED, so a channel in it launches at `full` — with a shell — under a ruling whose stated reason is *"a session launched into a SHARED channel"*.
+- ⚠ **IT IS THE SHIPPED MEANING AND IT IS DELIBERATE FOR THE OTHER TWO READERS**: the container credential lock and the park-on-claim stop are both about the CLAIM lane, where a link container gaining a peer is the event. B7's reader inherited the definition because reusing it was the alternative to a fourth copy.
+- ⚠ **THE HONEST ALTERNATIVE IS THE CHANNEL, NOT THE CONTAINER.** `Channel.memberCount` is already on the DTO `launch-directive-spawn.js` holds, and "this room has more than one person in it" is closer to what the ruling says than "this container is a claimed link". Not taken here because the slice's instruction named the container definition explicitly, and silently substituting a wider one would be a re-scope wearing a bug fix.
+- Proposed resolution: put the question to Samuel as a one-line ruling — container or channel — then move all three readers or none.
+- Status: open.
+
+### F-514 — G18's web residual survives the fourth profile, by ruling (2026-09-02)
+
+- Location: `dopl-desktop-app/main/tool-profiles.js` › `WEB_TOOLS`, reachable under `channel_agent` and `full`.
+- Found during: the same slice; it is the guardrail ledger's own G18 row, recorded here so it has an id rather than only a table cell.
+- **THE SHAPE.** B7 is "full minus Bash". Web reads are a separate per-profile group, so a `channel_agent` session keeps `WebFetch` / `WebSearch` — one outbound path that does not cross the approve-out gate (a GET query string carries the data). The shell went; the exfil surface is NARROWED, not closed.
+- ⚠ **THE BOUND ON IT IS REAL AND IS WHY THIS IS A LEDGER ROW RATHER THAN A P0.** Under `channel_agent` both are `ESCALATION_TOOLS`, so they GATE at every Axis-A mode below `bypass` — and injected web content still cannot ACT, because the shell is gone.
+- ⚠ **DO NOT "FIX" IT BY DENYING WEB ON `channel_agent` WITHOUT A RULING.** That would make the profile something other than `full` minus the shell, and the derivation — one subtraction, asserted in both directions — is what keeps the two profiles from drifting apart.
+- Proposed resolution: none proposed. It is a posture question about `full` itself and belongs to whoever asks it.
+- Status: open.
+

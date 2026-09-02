@@ -177,6 +177,17 @@ export function boot(over = {}) {
       return { resolveToolProfile: (c) => (c && c.toolProfile) || "read_only" };
     }
     if (id === "./launch-directive-wire") return wire;
+    // ⚠ THE CONTAINMENT NARROWING (2026-09-02, ruling B7) — the REAL table, not a stub. It is the
+    // one statement of the profile vocabulary and it is electron-free by contract, so a fake here
+    // would let this suite go green about a narrowing that never happened.
+    if (id === "./tool-profiles") return require_(join(MAIN, "tool-profiles.js"));
+    // ⚠ THE SHARED/SOLO FACT, STUBBED AT ITS SEAM like `./targeting` above — the real one reads a
+    // memo `channel-listener.js` fills on every reconcile pass. The default is SOLO so every
+    // existing case in these suites keeps asserting the profile it always did; `cfg.shared` opts a
+    // case in, and `channel-agent-profile.test.mjs` drives the real predicate directly.
+    if (id === "./session-park-on-claim") {
+      return { isSharedContainer: () => cfg.shared === true };
+    }
     // ⚠ THE SHARED POSTURE BOUND (2026-09-01, T24) — the REAL module, not a stub. It is pure (no
     // require, no clock, no store) and it is the rule under test on both lanes; a fake here would
     // let the suite go green about a clamp that never happened.

@@ -127,6 +127,11 @@ const descriptor = {
     profiles: {
       read_only: profileEntry('read_only'),
       dopl_only: profileEntry('dopl_only'),
+      // ⚠ THE FOURTH PROFILE (2026-09-02, ruling B7). It is DECLARED here for the same reason
+      // every other one is: `contract.js › mirrorProblems` holds this entry equal to what
+      // `toolConfigFor('channel_agent')` ENFORCES, and a profile the descriptor does not name is
+      // one `capability.js › canLaunchProfile` refuses.
+      channel_agent: profileEntry('channel_agent'),
       full: profileEntry('full'),
     },
   },

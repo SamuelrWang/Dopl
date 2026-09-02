@@ -29,6 +29,12 @@ const sessionModel = require('./session-model');
 // is clamped to the operator's own stored channel pair, and its header carries why the ticket's
 // own "unless the caller is the operator" carve-out is the whole set.
 const launchPosture = require('./launch-posture');
+// ⚠ THE CONTAINMENT NARROWING (2026-09-02, Samuel's ruling B7) and the memo it reads. Both are
+// electron-free at load — `tool-profiles.js` by contract (its own header), `session-park-on-claim
+// .js` because every one of its electron/engine requires is lazy — so neither costs this lane the
+// plain-Node evaluability its suite depends on.
+const toolProfiles = require('./tool-profiles');
+const parkOnClaim = require('./session-park-on-claim');
 const { diag } = require('./diag');
 
 /**
@@ -42,6 +48,11 @@ const { diag } = require('./diag');
  *   toolProfile   `channel-listener.js › watchedChannel` — MAIN's own full server DTO off the
  *                 loop entry, the same read `sessions:launch` makes (F-267 fixed it to this) and
  *                 the same one `trigger.js` makes on the responder lane. Unwatched -> refuse.
+ *                 ⚠ SINCE 2026-09-02 (ruling B7) IT IS THEN NARROWED, NEVER WIDENED: a launch
+ *                 into a SHARED container resolves `full` to `channel_agent` — `full` minus the
+ *                 shell — because an agent with a shell and its own bearer reaches the REST API
+ *                 directly. On a SOLO container the operator's explicit `full` still means
+ *                 `full`. The fact comes from this machine's own roster memo, never the row.
  *   startModes    the operator's DURABLE per-channel posture (`channel-prefs.js ›
  *                 getLaunchPosture`) as the CEILING, message axis floored at `auto_inbound` for
  *                 the windowless reason. ⚠ SINCE 2026-09-01 (T24) A DIRECTIVE MAY ASK FOR A
@@ -202,7 +213,19 @@ async function spawn(d, deps) {
       // into the prompt.
       startupContext,
     },
-    toolProfile: targeting.resolveToolProfile(channel),
+    // ── ⚠ THE CHANNEL'S PROFILE, NARROWED FOR A SHARED CONTAINER (2026-09-02, ruling B7) ────
+    // The READ is unchanged and is still MAIN's own full server DTO (the docblock's field-by-field
+    // statement above); what is new is one NARROWING applied to it, which can only ever move
+    // `full` -> `channel_agent` and never the other way. `tool-profiles.js › profileForContainer`
+    // owns the rule and `session-park-on-claim.js › isSharedContainer` owns the fact, so neither
+    // the vocabulary nor the shared/solo predicate gains a copy on this lane.
+    // ⚠ THE DIRECTIVE STILL SUPPLIES NOTHING HERE. A profile has never been a directive field and
+    // does not become one: an orchestrator cannot ask for a wider profile, or for a narrower one,
+    // any more than it could before — this is the DESTINATION's property, read on this machine.
+    toolProfile: toolProfiles.profileForContainer(
+      targeting.resolveToolProfile(channel),
+      parkOnClaim.isSharedContainer(d.workspaceId)
+    ),
     mode: 'interactive',
     windowless: true,
     startModes: plan.modes, // T24: the operator's stored pair, or a narrower one the directive asked for
