@@ -2,7 +2,7 @@
  * `updateTemplateRow`'s QUERY SHAPE, pinned by recording what it asks the
  * database for.
  *
- * ⚠ THE EMPTY PATCH IS THE WHOLE POINT OF THIS FILE (F-340). A KB-only patch —
+ * ⚠ THE EMPTY PATCH IS THE WHOLE POINT OF THIS FILE (F-404). A KB-only patch —
  * `dopl_agent(op="update", knowledge_bases=[…])` — names none of the six scalar
  * columns, so the update body was `{}`, PostgREST cannot emit `UPDATE … SET`
  * with no assignments, and the raw driver error thrown here had no arm in

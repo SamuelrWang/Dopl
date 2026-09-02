@@ -175,7 +175,7 @@ export async function updateTemplateRow(
   // `agent_templates_touch_updated_at`, so a writer that sets it by hand is
   // fighting the trigger.
   //
-  // ⚠ THE EMPTY PATCH IS A READ, NOT A WRITE (F-340, 2026-09-02). This used to
+  // ⚠ THE EMPTY PATCH IS A READ, NOT A WRITE (F-404, 2026-09-02). This used to
   // assert "the service never calls with one" and hand `{}` straight to
   // PostgREST. It was false: a KB-ONLY patch — `dopl_agent(op="update",
   // knowledge_bases=[…])` — sets none of the six scalar columns, so `update`
@@ -184,7 +184,8 @@ export async function updateTemplateRow(
   // surfaced to the agent as an unexplained INTERNAL_ERROR 500. The junction
   // write that WAS the point of the call had already been fenced upstream and
   // still had to run, so the caller lost a legitimate write to a no-op.
-  // `workspaces/server/service.ts:277` guards this exact class the same way.
+  // `workspaces/server/service.ts › renameWorkspace` guards this exact class
+  // the same way.
   // Reading the row back keeps the return contract total for every caller
   // instead of making each one remember the special case, and it deliberately
   // does NOT fire the touch trigger: a no-op UPDATE that bumps `updated_at` is

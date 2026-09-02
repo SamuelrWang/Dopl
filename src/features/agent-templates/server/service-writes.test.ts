@@ -400,7 +400,7 @@ describe("visibility transitions and replace-set semantics", () => {
   });
 });
 
-// ── The junction-only patch (F-340) ──────────────────────────────────
+// ── The junction-only patch (F-404) ──────────────────────────────────
 //
 // ⚠ THIS IS THE KB-ATTACH 500. `dopl_agent(op="update", knowledge_bases=[…])`
 // names no scalar column, so the patch handed to `updateTemplateRow` was six
