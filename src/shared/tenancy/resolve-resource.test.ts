@@ -55,6 +55,7 @@ function makeAdmin(results: Record<string, unknown[]>) {
     eq: (c: string, v: unknown) => rec("eq", [c, v]),
     in: (c: string, v: unknown) => rec("in", [c, v]),
     or: (f: string) => rec("or", [f]),
+    is: (c: string, v: unknown) => rec("is", [c, v]),
     ilike: (c: string, v: unknown) => rec("ilike", [c, v]),
     then: (resolve: (r: { data: unknown[]; error: null }) => void) =>
       resolve({ data: results[table] ?? [], error: null }),
@@ -293,6 +294,85 @@ describe("an id resolves by id and a name by name — never through each other",
       "Code Auditor"
     );
     expect(rows.map((r) => r.containerId)).toEqual([WS_A, WS_B]);
+  });
+});
+
+// ── THE REGISTRY ──────────────────────────────────────────────────────────
+
+/**
+ * 🔒 **ONE RESOLVER, FOUR TABLES** (B2). Each type is driven through the SAME
+ * query and asserted on the filters that reach PostgREST, because a registry row
+ * is four constants and a wrong one is a silent widening rather than a failure.
+ */
+describe("every resource type resolves through the one query", () => {
+  const ROWS: Record<string, Record<string, unknown>> = {
+    knowledge_bases: { name: "Runbooks" },
+    skills: { name: "Triage" },
+    // ⚠ A chat has NO `name` column. The select aliases `title`, so the row a
+    // test feeds back carries the ALIAS, exactly as PostgREST would return it.
+    chats: { name: "Tuesday session" },
+  };
+
+  it.each([
+    ["knowledge_base", "knowledge_bases", "created_by", "name"],
+    ["skill", "skills", "created_by", "name"],
+    ["chat", "chats", "owner_id", "title"],
+  ] as const)(
+    "%s reads %s, owned by %s, named by %s",
+    async (type, table, ownerColumn, nameColumn) => {
+      const calls = makeAdmin({
+        workspace_members: [member(WS_B)],
+        [table]: [{ id: T1, workspace_id: WS_B, ...ROWS[table] }],
+      });
+      const resolved = await resolveResource(caller, type, T1);
+      expect(resolved).toMatchObject({ type, id: T1, containerId: WS_B });
+      // ⚠ MUTATION CHECK — the projection, per table. `skills` and `chats`
+      // have NO `home_scoped`, so one that crept into their select would 400
+      // the whole query; `chats` has no `name`, so a missing alias would too.
+      // ⚠ Scoped to `table`: the membership read selects first.
+      expect(
+        calls.find((c) => c.table === table && c.op === "select")?.args[0]
+      ).toBe(
+        [
+          "id",
+          `name:${nameColumn}`,
+          "workspace_id",
+          ...(table === "knowledge_bases" ? ["home_scoped"] : []),
+          "workspace:workspaces!inner(name, kind)",
+        ].join(", ")
+      );
+      // 🔒 MUTATION CHECK — clause 4 for the three tables that carry
+      // `access_mode`. Drop the `and(...)` group and a `public` row shared with
+      // GRANTED TEAMS ONLY becomes nameable by every member of the container,
+      // which is the oracle clause 4 closes.
+      expect(calls.find((c) => c.op === "or")?.args).toEqual([
+        `${ownerColumn}.eq."${ME}",and(visibility.eq.public,access_mode.eq.workspace)`,
+      ]);
+      // 🔒 MUTATION CHECK — a TRASHED row is not nameable. Drop this and an id
+      // resolves a container for a row every read path then skips: the read
+      // 404s and the ADDRESS is what leaked.
+      expect(filters(calls, table)).toContain(`is("deleted_at"=null)`);
+    }
+  );
+
+  it("does NOT filter a soft delete on the one table that has none", async () => {
+    // ⚠ `agent_templates` hard-deletes (`20260822200000_agent_templates.sql`).
+    // An `is(deleted_at, null)` there is a 400, not a tighter fence.
+    const calls = makeAdmin({
+      workspace_members: [member(WS_B)],
+      agent_templates: [templateRow()],
+    });
+    await resolveResource(caller, "agent_template", T1);
+    expect(calls.some((c) => c.op === "is")).toBe(false);
+  });
+
+  it("matches a chat by TITLE on the name path", async () => {
+    const calls = makeAdmin({ workspace_members: [member(WS_A)], chats: [] });
+    await resolveResourcesByName(caller, "chat", "Tuesday session");
+    expect(calls.find((c) => c.op === "ilike")?.args).toEqual([
+      "title",
+      "Tuesday session",
+    ]);
   });
 });
 

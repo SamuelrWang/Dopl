@@ -52,34 +52,88 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  */
 
 /**
- * The resources whose ids resolve. ⚠ **ONE ENTRY IS THE PILOT, ON PURPOSE**
- * (spec §Wave A / A12): agent templates only. Adding `knowledge_base` and
- * `skill` is a row in {@link RESOURCE_TABLES} and their read paths — not a
+ * The resources whose ids resolve. ⚠ **A12 SHIPPED ONE ENTRY AS A PILOT; B2
+ * COMPLETED THE SET** (2026-09-02). Everything an id can name on a read is a row
+ * in {@link RESOURCE_TABLES} — adding a fifth is a row and a read path, never a
  * second resolver.
  */
-export type ResourceType = "agent_template";
+export type ResourceType =
+  | "agent_template"
+  | "knowledge_base"
+  | "skill"
+  | "chat";
 
 /**
- * What each resource's table calls the two columns the fence reads.
+ * What each resource's table calls the columns the fence reads. ⚠ **EVERY FIELD
+ * IS A CONSTANT WRITTEN HERE**; none of it is ever caller-supplied, which is
+ * what makes {@link ResourceTable.sharedArm} safe to interpolate raw.
  *
- * ⚠ `sharedVisibility` DIFFERS PER RESOURCE and that is the reason this is a
- * table rather than a constant: templates say `workspace`, knowledge bases and
- * skills say `public`, for the same "every member of the container" meaning.
+ * ⚠ `nameColumn` — `chats` calls it `title`. The select ALIASES it back to
+ * `name` so one row shape serves every type.
+ * ⚠ `sharedArm` is a POSTGREST FILTER FRAGMENT, not a value, and that is the
+ * reason it is a fragment: "visible to every member of the container" is ONE
+ * column on `agent_templates` (`visibility = 'workspace'`) and TWO everywhere
+ * else — a `public` base/skill/chat in `access_mode = 'teams'` is visible to the
+ * GRANTED TEAMS and not to the container, so naming it here would widen clause 4
+ * into the existence oracle the clause exists to close.
  * ⚠ `shelfColumn` is `null` where the table has no personal-shelf flag.
+ * ⚠ `deletedColumn` is `null` where a delete is a `DELETE`. A soft-deleted row
+ * is not listable by anyone, so it must not be nameable either — otherwise an id
+ * resolves a container for a row every read path skips.
  */
 interface ResourceTable {
   table: string;
   ownerColumn: string;
-  sharedVisibility: string;
+  nameColumn: string;
+  sharedArm: string;
   shelfColumn: string | null;
+  deletedColumn: string | null;
 }
+
+/** The "every member of the container may read it" arm for the three tables
+ *  that carry `access_mode`. ⚠ BOTH halves are required — see
+ *  {@link ResourceTable.sharedArm}. */
+const SHARED_WITH_CONTAINER =
+  "and(visibility.eq.public,access_mode.eq.workspace)";
 
 const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
   agent_template: {
     table: "agent_templates",
     ownerColumn: "created_by",
-    sharedVisibility: "workspace",
+    nameColumn: "name",
+    // ⚠ `agent_templates` has no `access_mode`: its third value IS `team`, so
+    // the team scope is already outside this arm rather than hidden inside it.
+    sharedArm: "visibility.eq.workspace",
     shelfColumn: "home_scoped",
+    // ⚠ No soft delete — `20260822200000_agent_templates.sql`: "A delete is a
+    // `DELETE`, and both junctions go with it".
+    deletedColumn: null,
+  },
+  knowledge_base: {
+    table: "knowledge_bases",
+    ownerColumn: "created_by",
+    nameColumn: "name",
+    sharedArm: SHARED_WITH_CONTAINER,
+    shelfColumn: "home_scoped",
+    deletedColumn: "deleted_at",
+  },
+  skill: {
+    table: "skills",
+    ownerColumn: "created_by",
+    nameColumn: "name",
+    sharedArm: SHARED_WITH_CONTAINER,
+    shelfColumn: null,
+    deletedColumn: "deleted_at",
+  },
+  chat: {
+    table: "chats",
+    ownerColumn: "owner_id",
+    // ⚠ A chat's label is its `title`; there is no `name` column to fall back
+    // on, so the alias in {@link selectList} is load-bearing rather than tidy.
+    nameColumn: "title",
+    sharedArm: SHARED_WITH_CONTAINER,
+    shelfColumn: null,
+    deletedColumn: "deleted_at",
   },
 };
 
@@ -233,14 +287,16 @@ async function findResources(
     .from(spec.table)
     .select(selectList(spec))
     .in("workspace_id", [...containers.keys()])
-    .or(
-      `${spec.ownerColumn}.eq.${orLiteral(caller.userId)},` +
-        `visibility.eq.${spec.sharedVisibility}`
-    );
+    .or(`${spec.ownerColumn}.eq.${orLiteral(caller.userId)},${spec.sharedArm}`);
+  // 🔒 A TRASHED ROW IS NOT NAMEABLE. It is absent from every list the caller
+  // could run, so naming it would break clause 4 in the one direction nothing
+  // else notices — the read that follows this address finds nothing and 404s,
+  // and the ADDRESS is what leaked.
+  if (spec.deletedColumn) query = query.is(spec.deletedColumn, null);
   query =
     "id" in ref
       ? query.eq("id", ref.id)
-      : query.ilike("name", escapeLikeLiteral(ref.name));
+      : query.ilike(spec.nameColumn, escapeLikeLiteral(ref.name));
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as unknown as ResourceRow[];
@@ -263,7 +319,9 @@ interface ResourceRow {
 function selectList(spec: ResourceTable): string {
   return [
     "id",
-    "name",
+    // ⚠ ALIASED, ALWAYS. `name:name` is the identity case and is written the
+    // same way as `name:title` so no reader has to check which table is which.
+    `name:${spec.nameColumn}`,
     "workspace_id",
     spec.shelfColumn,
     "workspace:workspaces!inner(name, kind)",
