@@ -62,6 +62,11 @@ export const telemetry = createRequire(import.meta.url)(join(MAIN, "session-tele
 // The fresh set per `load()` is the factory's whole reason for existing; see that file's header.
 export const wire = createRequire(import.meta.url)(join(MAIN, "session-state-push-wire.js"));
 
+// ⚠ THE REAL RECEIPT BUFFER TOO (2026-09-02, A9), on the same argument: `delivery-ack.js` is
+// pure, and a stub would let the writer's drain/restore contract drift from the module that
+// ships. `load()` resets it per case because it is MODULE state.
+export const deliveryAck = createRequire(import.meta.url)(join(MAIN, "delivery-ack.js"));
+
 /**
  * A fresh copy of the module, with a fake transport, a fake log, a fake store and a CLOCK.
  *
@@ -90,8 +95,13 @@ export function load(opts = {}) {
   };
   // Immediate, so RETRY_DELAY_MS costs nothing here. It shadows the global inside the block.
   const fakeSetTimeout = (fn) => { Promise.resolve().then(fn); return { unref() {} }; };
+  // THE WAKE-ACK BUFFER (2026-09-02, A9) — the REAL module, not a stub. `delivery-ack.js` is
+  // pure (no electron, no store, no network), so injecting it keeps these suites testing ONE
+  // program; the only thing a case has to remember is that it holds MODULE state, which
+  // `load()` clears here so one case's receipts cannot leak into the next.
+  deliveryAck.reset();
   const api = new Function(
-    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody", "wire",
+    "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody", "wire", "deliveryAck",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate,
@@ -99,7 +109,8 @@ export function load(opts = {}) {
     // (api-repair.js › discardBody). Identity here — the rule is pinned in
     // test/unread-body-seams.test.mjs; this harness only has to let the code run.
     (res) => res,
-    wire
+    wire,
+    deliveryAck
   );
   return {
     ...api,

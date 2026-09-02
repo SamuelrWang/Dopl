@@ -217,9 +217,12 @@ function harness(over = {}) {
   // must be the shipped one and the model call must not happen. The stub never claims: an
   // external-requester thread has no dormant agent of mine to wake in the first place.
   const routes = new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
+    // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
+    // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
+    // the buffer.
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, io, wakeTiers, { claim: async () => "" }, agentHandles, () => {});
+  )(targeting, sessionEngine, io, wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true }, () => {});
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //

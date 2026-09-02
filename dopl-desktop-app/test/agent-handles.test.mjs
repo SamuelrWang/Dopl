@@ -122,9 +122,12 @@ function sliceDispatch() {
   );
   assert.ok(block.length > 400, "the dispatch block was not found — this test would pass vacuously");
   return new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
+    // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
+    // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
+    // the buffer.
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${block}\n return { mentionedAgentIds };`
-  )({}, {}, {}, {}, {}, handles, () => {});
+  )({}, {}, {}, {}, {}, handles, { note: () => true }, () => {});
 }
 
 /**
@@ -195,10 +198,22 @@ test("WIRING: feedLiveSession builds the index off the rename store and passes i
   // a missing index by design, so a call site that stopped passing one would take the whole
   // ruling out and every behavioural test in this file would still be green.
   const src = readFileSync(join(HERE, "..", "main", "session-dispatch.js"), "utf8");
+  // ⚠ THE CALL MOVED BEHIND `serverAddressed(...) ??` ON 2026-09-02 (A9) and the pin moved with
+  // it. The server now resolves the recipient at write time and this machine EXECUTES that
+  // answer; the local parse is the FALLBACK for a row the server did not resolve — a peer's
+  // agent, an older message, a session projection that had not been pushed. The index must
+  // still be built from THIS thread's live ids on that path, which is what this asserts.
   assert.match(
     src,
-    /const addressed = mentionedAgentIds\(m\.body, liveIds, agentHandles\.handleIndexFor\(liveIds\)\);/,
-    "the fan-out must build the slug index from THIS thread's live ids"
+    /serverAddressed\(m, liveIds\) \?\?\s*\n\s*mentionedAgentIds\(m\.body, liveIds, agentHandles\.handleIndexFor\(liveIds\)\);/,
+    "the fan-out's FALLBACK must build the slug index from THIS thread's live ids"
+  );
+  // ⚠ `??` AND NOT `||`, PINNED. An EMPTY array is the server saying "this body names no
+  // agent", and `||` would fall through to the local parse on it — re-deriving an answer that
+  // was already given, which is the whole defect A9 removes.
+  assert.ok(
+    !/serverAddressed\(m, liveIds\) \|\|/.test(src),
+    "the server's empty answer must not fall through to the local parse"
   );
 });
 

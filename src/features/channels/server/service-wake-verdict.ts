@@ -61,22 +61,6 @@ export interface WakeVerdictResult {
   delivery: ChannelDelivery;
 }
 
-/**
- * A message that names nobody and belongs to no thread.
- *
- * ⚠ `recipientUserIds: []` AND `recipientAgentIds: null` IS NOT AN OVERSIGHT.
- * The member half IS resolved (there was no `to=`, and that is a complete
- * answer); the agent half is not, because a body with no resolvable handle may
- * still name a PEER's agent this server cannot see — see
- * {@link resolveAgentRecipients}.
- */
-const NOBODY: WakeVerdictResult = {
-  verdict: "none",
-  recipientUserIds: [],
-  recipientAgentIds: null,
-  delivery: "none",
-};
-
 /** The stored `delivery` a verdict predicts, before any machine has spoken. */
 const DELIVERY_FOR: Record<ChannelWakeVerdict, ChannelDelivery> = {
   none: "none",
@@ -266,17 +250,22 @@ export async function resolveWakeVerdict(
           ? "thread"
           : "none";
 
-  if (verdict === "none" && recipientAgentIds === null) {
-    // ⚠ THE ONE CASE THE VERDICT ENUM CANNOT EXPRESS AND THE OUTCOME CAN. The
-    // body named an agent and nothing the server can see answers to it. `none`
-    // would read as "you addressed nobody", which is the opposite of what
-    // happened and is precisely the silent-miss G15 describes.
-    return { ...NOBODY, recipientAgentIds: null, delivery: "unreachable" };
-  }
   return {
     verdict,
     recipientUserIds,
     recipientAgentIds,
-    delivery: DELIVERY_FOR[verdict],
+    // ⚠ **`unreachable` IS AN OUTCOME THE VERDICT ENUM CANNOT EXPRESS, WHICH IS
+    // WHY THE TWO ARE SEPARATE FIELDS.** The body named an agent and nothing this
+    // server can see answers to it. Reporting the verdict's own outcome instead
+    // would say "you addressed nobody" (`none`) or "it went to the thread"
+    // (`idle`) about a post whose whole point was a name — precisely the
+    // silent-miss G15 describes.
+    // ⚠ **A STRONGER REACH WINS.** An unresolvable handle beside a real `to=`,
+    // or beside an agent that DID resolve, is not the story of that message: it
+    // reached somebody, and the machine settles the rest.
+    delivery:
+      recipientAgentIds === null && verdict !== "agent" && verdict !== "member"
+        ? "unreachable"
+        : DELIVERY_FOR[verdict],
   };
 }

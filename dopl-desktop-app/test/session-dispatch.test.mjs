@@ -229,7 +229,10 @@ test("the module exports ONE route, and nothing that was deleted comes back", ()
   // ⚠ `dormant` AND `wakeCandidates` JOINED THE LIST ON 2026-08-28 (Samuel's TIERED WAKE ruling),
   // beside `mayFeed`, and for the same reason it joined in 2026-08-22: they are ROUTING
   // predicates whose truth table has to be drivable directly, not new routes.
-  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, addressingFor, mayFeed, dormant, wakeCandidates \};/);
+  // ⚠ `serverAddressed` JOINED THE LIST ON 2026-09-02 (A9, the delivery keystone): the reader
+  // of the server's own recipient resolution, exported beside `mentionedAgentIds` because the
+  // two are one decision with a fallback and their truth table has to drive both halves.
+  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, serverAddressed, addressingFor, mayFeed, dormant, wakeCandidates \};/);
   for (const gone of [
     "maybeOpenRequesterSession", "maybeSurfaceRequesterReply", "noteRequestLifecycle",
     "maybeReopenAddressedThread", "diagRuntimeGateSkip", "REQUEST_MILESTONES",

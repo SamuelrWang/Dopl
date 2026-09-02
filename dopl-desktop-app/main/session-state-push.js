@@ -47,6 +47,11 @@ const wire = require('./session-state-push-wire');
 // THE QUANTIZER + CADENCE FLOOR (2026-08-22). ABOVE the sentinel like `apiFetch`, so the harness injects the REAL
 // module. Its header carries the derivations; this file only spends them.
 const telemetry = require('./session-telemetry');
+// THE WAKE-ACK BUFFER (2026-09-02, A9). ⚠ THIS MODULE IS THE ONLY THING THAT MAY POST IT: the
+// endpoint is a WHOLE-SET REPLACE, so a module posting receipts on its own with an empty session
+// list would delete this machine's projection every time it spoke. `delivery-ack.js` therefore
+// HOLDS receipts and this drains them into the payload it was going to send anyway.
+const deliveryAck = require('./delivery-ack');
 const Store = require('electron-store');
 
 const store = new Store();
@@ -237,15 +242,24 @@ function retryable(status) {
   return status === 429 || status >= 500;
 }
 
-/** POST one workspace's whole set. Returns whether the server stored it. */
-async function send(workspaceId, rows) {
+/**
+ * POST one workspace's whole set, plus any delivery receipts riding along. Returns whether the
+ * server stored it.
+ *
+ * ⚠ `acks` IS OMITTED WHEN EMPTY, not sent as `[]`. The key is optional on the endpoint
+ * (`schema-sessions.ts › SessionStateReportSchema`) and every build in the field posts without
+ * it; sending an empty array on every push would put a field on the wire that says nothing.
+ */
+async function send(workspaceId, rows, acks) {
+  const body = { sessions: rows };
+  if (acks && acks.length) body.acks = acks;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let res = null;
     try {
       res = await apiFetch(ENDPOINT, {
         method: 'POST',
         workspaceId: workspaceId,
-        body: { sessions: rows },
+        body: body,
         timeoutMs: HTTP_TIMEOUT_MS,
         noStore: true,
       });
@@ -282,6 +296,12 @@ async function cycle(entries) {
     pushedStateDigest.clear();
     pushedAt.clear();
     loggedFailures.clear();
+    // ⚠ THE RECEIPTS ARE NOT CLEARED HERE, AND THAT IS DELIBERATE (2026-09-02, A9). They carry
+    // the identity that earned them (`delivery-ack.js`), and `take` hands back only this
+    // operator's — so the cross-account rule holds whether or not anything noticed the
+    // handover, which a clear on this branch could not promise: the branch also runs on the
+    // FIRST cycle of a run, where there is no previous operator and a receipt the dispatch
+    // path already filed would be destroyed.
     lastUserId = userId;
   }
   // ⚠ Ad-hoc rows are dropped HERE, before grouping, so the digest, the empty-set delete and
@@ -291,9 +311,20 @@ async function cycle(entries) {
   for (const ws of reportedWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
+  // ⚠ A WORKSPACE HOLDING RECEIPTS IS PUSHED EVEN IF ITS SESSION SET NEVER MOVED (2026-09-02,
+  // A9). In practice almost every receipt coincides with a state change — a wake moves a
+  // session out of dormant, a fed turn moves `turns` — but "almost" is not a contract for a
+  // field an orchestrator polls, and a receipt stranded behind the digest gate is exactly the
+  // silent-miss the ack exists to remove.
+  for (const ws of deliveryAck.pendingWorkspaces(userId)) {
+    if (!groups.has(ws)) groups.set(ws, []);
+  }
   for (const [ws, rows] of groups) {
+    // ⚠ TAKEN BEFORE THE GATES BELOW MAY `continue`, and PUT BACK on every path that does not
+    // send: a receipt held past a skipped cycle is a receipt this machine forgot it owed.
+    const acks = deliveryAck.take(ws, userId);
     const digest = setDigest(rows);
-    if (pushedDigest.get(ws) === digest) continue;
+    if (pushedDigest.get(ws) === digest && acks.length === 0) continue;
     // ── THE CADENCE FLOOR (2026-08-22) — A DELAY, NOT A SCHEDULE ─────────────────────────
     // ⚠ NOTHING IS QUEUED AND NO TIMER IS ARMED. A churn-only set inside the window is not
     // written and its digest is NOT recorded, so the session's NEXT projection move carries it —
@@ -303,10 +334,13 @@ async function cycle(entries) {
     // working-as-designed; one line per skip is the quiet cousin of a log storm.
     const state = telemetry.stateDigest(rows);
     const stateMoved = pushedStateDigest.get(ws) !== state;
-    if (!stateMoved && !telemetry.floorAllows(pushedAt.get(ws), Date.now())) continue;
+    // ⚠ RECEIPTS BYPASS THE CADENCE FLOOR the way a STATE CHANGE does, and for the same reason:
+    // the floor exists to swallow CHURN — a telemetry counter ticking — and a receipt is news.
+    // ⚠ No `restore` on this branch: it is only reachable with an EMPTY `acks`.
+    if (!stateMoved && acks.length === 0 && !telemetry.floorAllows(pushedAt.get(ws), Date.now())) continue;
     // Serial on purpose: a burst of parallel writes is what this design exists to avoid.
-    const stored = await send(ws, rows);
-    if (!stored) continue; // NOT recorded, so the next real change retries
+    const stored = await send(ws, rows, acks);
+    if (!stored) { deliveryAck.restore(ws, acks, userId); continue; } // NOT recorded, so the next real change retries
     pushedDigest.set(ws, digest);
     pushedStateDigest.set(ws, state);
     // ⚠ STAMPED AFTER THE SEND. `send` can hold 15s plus a retry, and a stamp taken before it

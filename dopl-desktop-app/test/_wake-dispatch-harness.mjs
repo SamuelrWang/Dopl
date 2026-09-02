@@ -70,7 +70,7 @@ export const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, bo
 export const agent = (id, ownPostIds = []) => ({ agentId: id, ownPostIds: new Set(ownPostIds) });
 
 export function harness(over = {}) {
-  const calls = { feedInbound: [], triage: [] };
+  const calls = { feedInbound: [], triage: [], acks: [] };
   const cfg = {
     agents: [],
     feedInboundReturn: true,
@@ -102,10 +102,16 @@ export function harness(over = {}) {
   // resolver is `authorLabel`, INSIDE the sliced block, so it is the real one here rather
   // than a fake; only the account-name lookup under it is injected.
   const io = { displayNameFor: (id) => cfg.displayName(id) };
+  // ⚠ THE RECEIPT BUFFER IS FAKED, NOT REAL (2026-09-02, A9), and that is the one place these
+  // tables differ from `session-wake-tiers.js`'s treatment. `delivery-ack.js` holds MODULE
+  // state keyed by workspace, so a real one would leak one case's receipts into the next —
+  // and what these tables assert is the VERDICT this route computed, which a recorder states
+  // more directly than a buffer's contents. `delivery-ack.test.mjs` drives the real module.
+  const deliveryAck = { note: (...a) => { calls.acks.push(a); return true; } };
   const api = new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
-    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, escalationAnswerAgentIds, addressingFor, mayFeed, unwoken, dormant, wakeCandidates };`
-  )(targeting, sessionEngine, io, wakeTiers, sessionTriage, agentHandles, () => {});
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
+    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, escalationAnswerAgentIds, addressingFor, mayFeed, unwoken, dormant, wakeCandidates };`
+  )(targeting, sessionEngine, io, wakeTiers, sessionTriage, agentHandles, deliveryAck, () => {});
   wakeTiers.resetForTests(); // the recent-message ring is module state; every harness starts cold
   return { ...api, calls, cfg };
 }

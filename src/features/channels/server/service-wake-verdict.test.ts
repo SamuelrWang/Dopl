@@ -273,3 +273,27 @@ describe("ownLiveAgentIds — the shared projection read (G3 / F-418)", () => {
     );
   });
 });
+
+describe("the outcome and the verdict are separate answers", () => {
+  it("a THREADED post naming an agent nothing answers to reports `unreachable`, not `idle`", () => {
+    // ⚠ FOUND BY THE COMPOSED DRIVE (`delivery-composed.test.ts`), not by a unit case, which is
+    // the whole argument for that file: read alone, `verdict: "thread"` and `delivery: "idle"`
+    // are both defensible — together they hid the fact that the post's whole point was a name
+    // nobody here answers to.
+    return expect(
+      resolve("@agent-zzzzzzzz please", { taskId: "task-1" })
+    ).resolves.toMatchObject({ verdict: "thread", delivery: "unreachable" });
+  });
+
+  it("a STRONGER reach wins — an unresolvable handle beside a real `to=` still `delivered`", async () => {
+    const out = await resolve("@agent-zzzzzzzz fyi", { to_user_id: "user-2" });
+    expect(out).toMatchObject({ verdict: "member", delivery: "delivered" });
+  });
+
+  it("…and beside an agent that DID resolve, the wake is the story", async () => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    const out = await resolve("@agent-k3v7d2mq and @agent-zzzzzzzz");
+    expect(out).toMatchObject({ verdict: "agent", delivery: "woken" });
+    expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
+  });
+});

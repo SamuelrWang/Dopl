@@ -99,7 +99,10 @@ function dispatch(agents) {
   // wake rule driven here is the shipped one; only the MODEL CALL is faked, and it never claims —
   // an ended agent must be unreachable whatever a router would have said about it.
   const api = new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
+    // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
+    // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
+    // the buffer.
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${BLOCK}\n return { feedLiveSession, mentionedAgentIds };`
   )(
     { firstClassTaskId: (m) => m.taskId || "" },
@@ -108,6 +111,7 @@ function dispatch(agents) {
     wakeTiers,
     { claim: async () => "" },
     agentHandles,
+    { note: () => true },
     () => {}
   );
   return { ...api, fed };
