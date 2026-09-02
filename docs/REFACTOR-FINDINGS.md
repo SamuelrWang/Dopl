@@ -7232,3 +7232,13 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **AND `resolvedModel` IS NOT A POSTURE AT ALL** — it rides the group because it is written by the same create, but `null` there means "this server does not recognise the id", not "did not ask", and it is an ECHO rather than a bound (G8).
 - Proposed resolution: (a) when B9's `manage(op, …)` collapses the launch surface, collapse the three groups into one nested shape (`{requested, permitted, applied}`) so the distinction is structural rather than prefixal; (b) until then, keep every new reader's `?? null` and its comment, and treat a render that reads two of the three as the review question.
 - Status: open.
+
+### F-454 — a SIXTH flake, and it is an off-by-one-millisecond assertion nobody has counted (2026-09-02)
+
+- Location: `src/features/channels/server/service-launch-agent.test.ts` › *"reuses the LAUNCH TTL rather than minting a second liveness number"*.
+- Found during: the Wave A review fixes, running `src/features/channels` — it failed with `expected 120001 to be less than or equal to 120000` and passed on an immediate isolated re-run.
+- **THE SHAPE.** The case takes `const before = Date.now()`, calls the service, and asserts `Date.parse(insert.expires_at) - before <= LAUNCH_DIRECTIVE_TTL_MS`. But the service takes its OWN `Date.now()` after that one (`service-launch-agent.ts`, and `service-launch.ts › createLaunchDirective` does the same), so the stored expiry is `serviceNow + TTL` and the measured delta is `TTL + (serviceNow − before)`. **Any millisecond that elapses between the two clock reads fails it.** The lower bound is slack by 5,000 ms; the upper bound has none at all.
+- ⚠ **IT IS NOT ON THE KNOWN-FLAKE LIST.** The wave doc names five (`credits/consume`, `shared/version/latest-release`, `login-form-core`, `agent-authoring`, `billing/credits-link-reroute`) and reports "no flake was hit"; this is a sixth, and unlike the others it fails on machine SPEED rather than on ordering, so it will show up more often in CI than locally.
+- ⚠ **THE FIX IS NOT "ADD SLACK TO THE UPPER BOUND"** — that would make the assertion unable to catch a second, longer TTL, which is the whole thing it exists to pin. Inject the clock (both services already take an optional `now`, which is how `service-launch-ceiling.test.ts` drives them) and assert the expiry EXACTLY.
+- Proposed resolution: pass a fixed `now` into `createAgentDirective` from this case and assert `Date.parse(insert.expires_at) === NOW + LAUNCH_DIRECTIVE_TTL_MS`. Left unfixed here because it is outside the 26 findings this pass was scoped to, and a flake fixed in passing is a flake nobody counts.
+- Status: open.
