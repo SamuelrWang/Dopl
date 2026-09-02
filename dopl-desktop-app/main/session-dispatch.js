@@ -423,17 +423,12 @@ async function feedLiveSession(entry, m, myUserId) {
 
   let fed = 0;
   let held = 0; // dormant agents this message did not wake — see TIERED WAKE above
-  // ── THE RECEIPT'S THREE INPUTS (2026-09-02, A9). ⚠ COUNTED FROM WHAT HAPPENED, never
-  // re-derived from the body afterwards — that would be a third reader of the addressing rule.
+  // ── THE RECEIPT'S INPUTS (A9 + D3). ⚠ COUNTED FROM WHAT HAPPENED, never re-derived from the
+  // body; `earnedBy` names WHOSE session earned each, because the server SKIPS an unowned key.
   let woke = 0;        // a DORMANT agent was started on this message
   let toAddressee = 0; // a RUNNING session this message NAMED took the turn
   let refused = 0;     // `feedInbound` declined — a full queue, or the entry-point belt
-  // ⚠ **WHICH SESSION EARNED EACH OUTCOME** (2026-09-02, review D3). The receipt names one, and
-  // the server REQUIRES it: an ack must belong to a session in this machine's own live set or
-  // it is skipped, because channel membership alone let any member of a room stamp a permanent
-  // `woken` on any message in it. ⚠ `s.key` is CARRIED, never composed — `session-store.js ›
-  // sessionKey` owns the format and a second derivation here is a second authority on it.
-  const earnedBy = { woken: '', delivered: '', idle: '', refused: '' };
+  const earnedBy = { woken: '', delivered: '', idle: '', refused: '' }; // key per outcome
   for (const s of live) {
     if (wroteIt(s, m)) continue; // never feed a session its own post back
     // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. FRAMING ONLY since
@@ -460,17 +455,13 @@ async function feedLiveSession(entry, m, myUserId) {
       wake: wake === true,
     });
     if (!ok) { refused += 1; earnedBy.refused = String(s.key || ''); continue; }
-    fed += 1;
-    earnedBy.idle = String(s.key || '');
+    fed += 1; earnedBy.idle = String(s.key || '');
     // ⚠ `wake` ALONE DOES NOT MEAN "STARTED": an ADDRESSED session already running carries
     // `wake: true` too (it is what `session-gate.js` stamps `lastWakeSeq` on). Different news,
     // different next action, so the receipt tells them apart — and `wasDormant` is read BEFORE
     // the feed, because feeding is what stops it being true.
     if (wake === true && wasDormant) { woke += 1; earnedBy.woken = String(s.key || ''); }
-    else if (addressing && addressing.me === true) {
-      toAddressee += 1;
-      earnedBy.delivered = String(s.key || '');
-    }
+    else if (addressing && addressing.me === true) { toAddressee += 1; earnedBy.delivered = String(s.key || ''); }
   }
   // ⚠ THE RING IS FED AFTER THE DECISION, NEVER BEFORE IT. It is the "last few messages" a later
   // triage prompt reads, and a message that included ITSELF in its own context would be asking
@@ -496,16 +487,11 @@ async function feedLiveSession(entry, m, myUserId) {
       'elig', eligibility, 'tier', tier, claimed ? `woke:${claimed}` : '');
   }
   // ⚠ **THE RECEIPT — THE OTHER HALF OF `delivery=`** (A9). The server stamped a PREDICTION at
-  // write time; this is what the machine did. `delivery-ack.js` owns the WORD (`verdictFor`, so
-  // the rank is stated once) and why it cannot post on its own. ⚠ Stamped with `myUserId`, the
-  // only identity that may claim it: the ack fences its drain on that, so operator A's receipt
-  // can never go out under B's credential (`session-state-push.js › trackOrigin`'s rule).
+  // write time; this is what the machine did. `delivery-ack.js` owns the WORD and the RANK, and
+  // `myUserId` is the only identity that may claim it (`session-state-push.js › trackOrigin`).
   const verdict = deliveryAck.verdictFor({ woke, toAddressee, fed, held, refused });
-  if (verdict) {
-    deliveryAck.note(
-      entry.workspaceId, entry.channel.id, m.seq, verdict, myUserId, earnedBy[verdict],
-    );
-  }
+  if (verdict) deliveryAck.note(entry.workspaceId, entry.channel.id, m.seq, verdict, myUserId,
+    earnedBy[verdict]);
   return fed > 0;
 }
 

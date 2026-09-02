@@ -1,4 +1,4 @@
-import { LAUNCH_MESSAGE_MODES, LAUNCH_TOOL_MODES } from "../schema-launch";
+import { LAUNCH_TOOL_MODES } from "../schema-launch";
 import type { ChannelAgentPosture } from "../types";
 import type { LaunchMessageMode, LaunchToolMode } from "../types-launch";
 

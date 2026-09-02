@@ -25,12 +25,12 @@ import { opCreateBase, opSetVisibility } from "./knowledge-ops-write";
 import { stub } from "./narration-fixtures";
 import { __resetConfirmTokensForTest } from "./confirm-token";
 import { registerKnowledgeTools } from "./knowledge";
-import { registerSkillTools } from "./skills";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import type { RegisterTool, ToolResponse } from "./respond";
 import type { WorkspaceDirectory } from "../workspace-directory";
-
-const ME = "user-1";
+import {
+  ME, apiError, sharedContainer, textOf, tokenIn, workspaceStub,
+} from "./acknowledge-shared-fixtures";
 
 const TEMPLATE = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -63,37 +63,6 @@ const BASE: KnowledgeBase = {
   updatedAt: "2026-01-01T00:00:00Z",
   deletedAt: null,
 };
-
-const textOf = (res: { content: Array<{ text: string }> }) =>
-  res.content.map((c) => c.text).join("\n");
-
-function workspaceStub(kind: "standard" | "link", memberCount: number) {
-  return {
-    getWorkspaceId: vi.fn(() => "ws-1"),
-    listWorkspaces: vi.fn(async () => ({
-      workspaces: [
-        { id: "ws-1", slug: "acme", name: "Acme", kind, role: "owner", memberCount },
-      ],
-    })),
-  };
-}
-
-/** A `kind='link'` container with a PEER in it — the only room the class fires in. */
-const sharedContainer = () => workspaceStub("link", 2);
-
-function apiError(status: number, code: string): Error {
-  return Object.assign(new Error(`HTTP ${status}`), {
-    name: "DoplApiError",
-    status,
-    code,
-  });
-}
-
-function tokenIn(text: string): string {
-  const m = /confirm_token="([^"]+)"/.exec(text);
-  expect(m, `no confirm_token in:\n${text}`).not.toBeNull();
-  return m![1];
-}
 
 afterEach(() => {
   __resetConfirmTokensForTest();
@@ -446,141 +415,5 @@ describe("dopl_kb(op=\"set_visibility\") — the registrar arm carries both halv
 
     expect(stolen.isError).toBe(true);
     expect(update).not.toHaveBeenCalled();
-  });
-});
-
-
-// ── The third resource type (G16's missing caller) ───────────────────
-
-/**
- * 🔒 **SKILLS WERE THE ONE TYPE A11 DID NOT REACH**, and the ledger recorded G16
- * as closed anyway. `dopl_skill(op="set_visibility")` published into a peer's
- * container with no preview in front of it and no precondition behind it — so
- * this block drives the REAL `dopl_skill` handler, on `doplKb`'s reasoning: the
- * op function is not the fence, the `case` is.
- */
-function doplSkill(client: DoplClient, caller: CallerIdentity): (
-  args: Record<string, unknown>,
-) => Promise<ToolResponse> {
-  const handlers = new Map<string, unknown>();
-  const capture: RegisterTool = (name, _d, _s, handler) => {
-    handlers.set(name, handler);
-  };
-  registerSkillTools(capture, client, caller);
-  const tool = handlers.get("dopl_skill");
-  if (!tool) throw new Error("dopl_skill was not registered");
-  return tool as (a: Record<string, unknown>) => Promise<ToolResponse>;
-}
-
-const SKILL = {
-  id: "skill-1",
-  slug: "ship-it",
-  name: "Ship it",
-  visibility: "public" as const,
-};
-
-describe("dopl_skill(op=\"set_visibility\") — previews, then acknowledges", () => {
-  it("publishing previews first and writes NOTHING", async () => {
-    const update = vi.fn(async () => SKILL);
-    const client = stub({
-      ...sharedContainer(),
-      updateSkill: update,
-    }) as DoplClient;
-    const skill = doplSkill(client, { ...UNKNOWN_CALLER, userId: ME });
-
-    const preview = await skill({
-      op: "set_visibility",
-      slug: "ship-it",
-      visibility: "public",
-    });
-
-    expect(update).not.toHaveBeenCalled();
-    expect(textOf(preview)).toContain("confirm_token=");
-  });
-
-  it("the spent token becomes acknowledgeShared on the write", async () => {
-    const update = vi.fn(async () => SKILL);
-    const client = stub({
-      ...sharedContainer(),
-      updateSkill: update,
-    }) as DoplClient;
-    const skill = doplSkill(client, { ...UNKNOWN_CALLER, userId: ME });
-
-    const preview = await skill({
-      op: "set_visibility",
-      slug: "ship-it",
-      visibility: "public",
-    });
-    await skill({
-      op: "set_visibility",
-      slug: "ship-it",
-      visibility: "public",
-      confirm_token: tokenIn(textOf(preview)),
-    });
-
-    expect(update).toHaveBeenCalledWith(
-      "ship-it",
-      expect.objectContaining({ visibility: "public", acknowledgeShared: true }),
-    );
-  });
-
-  it("UN-publishing is not gated, and sends no flag", async () => {
-    // ⚠ THE NEGATIVE ARM. `visibility="private"` only ever narrows; a preview
-    // there would ask the operator to confirm the safe direction, which is how a
-    // confirm step stops being read.
-    const update = vi.fn(async () => ({ ...SKILL, visibility: "private" as const }));
-    const client = stub({
-      ...sharedContainer(),
-      updateSkill: update,
-    }) as DoplClient;
-    const skill = doplSkill(client, { ...UNKNOWN_CALLER, userId: ME });
-
-    await skill({ op: "set_visibility", slug: "ship-it", visibility: "private" });
-
-    expect(update).toHaveBeenCalledWith("ship-it", {
-      visibility: "private",
-      acknowledgeShared: undefined,
-    });
-  });
-
-  it("a SOLO container publishes with no preview and no flag", async () => {
-    const update = vi.fn(async () => SKILL);
-    const client = stub({
-      ...workspaceStub("link", 1),
-      updateSkill: update,
-    }) as DoplClient;
-    const skill = doplSkill(client, { ...UNKNOWN_CALLER, userId: ME });
-
-    await skill({ op: "set_visibility", slug: "ship-it", visibility: "public" });
-
-    expect(update).toHaveBeenCalledWith("ship-it", {
-      visibility: "public",
-      acknowledgeShared: undefined,
-    });
-  });
-
-  it("the server's 400 reaches the agent as a next action, not a stack trace", async () => {
-    const client = stub({
-      ...sharedContainer(),
-      updateSkill: vi.fn(async () => {
-        throw apiError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED");
-      }),
-    }) as DoplClient;
-    const skill = doplSkill(client, { ...UNKNOWN_CALLER, userId: ME });
-
-    const preview = await skill({
-      op: "set_visibility",
-      slug: "ship-it",
-      visibility: "public",
-    });
-    const res = await skill({
-      op: "set_visibility",
-      slug: "ship-it",
-      visibility: "public",
-      confirm_token: tokenIn(textOf(preview)),
-    });
-
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("Ask your operator");
   });
 });

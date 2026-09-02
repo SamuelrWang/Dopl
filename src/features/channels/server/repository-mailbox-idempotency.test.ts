@@ -122,9 +122,10 @@ describe("the partial unique index states the same predicate", () => {
     // NULL, and NULLs are only DISTINCT because the index never sees them.
     // ⚠ Counted on the CREATE statements, not on the file — a comment in the same
     // file discusses the clause, and a bare text count would pass on prose.
+    // ⚠ `[\s\S]` rather than the `s` flag — the root tsconfig targets below es2018.
     const partial = [
       ...sql.matchAll(
-        /CREATE UNIQUE INDEX[^;]*?WHERE client_msg_id IS NOT NULL;/gs
+        /CREATE UNIQUE INDEX[\s\S]*?WHERE client_msg_id IS NOT NULL;/g
       ),
     ];
     expect(partial).toHaveLength(2);
