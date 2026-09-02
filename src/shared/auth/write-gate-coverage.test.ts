@@ -133,6 +133,38 @@ describe("H-3 write-gate coverage", () => {
         // AGENT LISTING AND EDITING TEMPLATES IS THE FEATURE. Narrowing this
         // route to `sessionOnly` wholesale would gate the thing it exists for.
         "agent-templates/[templateId]/route.ts",
+        // ── APP-ONLY DELETION, GIVEN A FENCE (2026-09-02) ──────────────────
+        // Every `_admin` tool in `packages/mcp-server` serves the sentence
+        // "Deletion is app-only … there is no MCP path to it, for any role or
+        // token" (`delete-policy.ts › deleteAdminDescription`), and until this
+        // wave `gating.ts › opRefusal` was the ONLY thing making it true. That
+        // guards ONE door: the MCP server reaches the app over LOOPBACK HTTP,
+        // a `full`-profile session has Bash and its own `dopl_at_*` bearer, and
+        // each route below was `minRole: "member"` and nothing else — so the
+        // agent just told "no role, scope or argument changes that" could
+        // delete the row anyway. Samuel's ruling: a rule an agent is TOLD must
+        // have a fence in the code, not only in the prompt.
+        // ⚠ Per-METHOD throughout — the GETs and PATCHes stay ungated on
+        // purpose, because editing and rewriting are exactly what
+        // `DELETE_REFUSAL` redirects an agent to instead. Gating them would
+        // gate the capability the refusal advertises as the alternative.
+        // ⚠ `minRole` is UNCHANGED: this adds a caller-type gate, it does not
+        // raise the role floor. A member still deletes — in the app.
+        // ⚠ THE OP→ROUTE MAP IS `app-only-delete-gate.test.ts`, which fails
+        // when a NEW `_admin` delete op ships with no route on this list.
+        "chats/[chatId]/route.ts",
+        "chats/folders/[folderId]/route.ts",
+        // ⚠ `folders-by-path` IS THE SECOND DOOR ONTO THE SAME TWO ACTS and
+        // the one easiest to miss: its `?path=` resolves to a folder OR an
+        // entry, so gating only the id-keyed routes above would have left both
+        // refused ops reachable by name.
+        "knowledge/bases/[baseId]/folders-by-path/route.ts",
+        "knowledge/bases/[baseId]/route.ts",
+        "knowledge/entries/[entryId]/route.ts",
+        "knowledge/folders/[folderId]/route.ts",
+        "ontology/clusters/[clusterId]/route.ts",
+        "ontology/objects/[objectId]/route.ts",
+        "skills/[skillSlug]/route.ts",
         // POST mints a CONTAINER-LOCKED child credential, DELETE revokes one
         // (2026-08-26, plan §4.4 B1). Sharper than its sibling below, because
         // the credential in question IS the audience ceiling's fence: a bearer
