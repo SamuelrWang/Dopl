@@ -67,11 +67,11 @@ async function handle(request: Request): Promise<Response> {
   // is the conflation the second header exists to prevent.
   const callerVendor = readVendorHeader(request);
   const callerSessionId = readSessionIdHeader(request);
-  // WHICH ROLE this connection is running as, so `createServer` can offer it a
-  // narrower tool set. ⚠ It may only NARROW and it GATES NOTHING — the vocabulary
-  // and the fail-open rule live in `@dopl/mcp-server › gating.ts ›
-  // TOOL_PROFILE_TOOLS`, which is empty today, so every value serves the whole
-  // surface. Not forwarded onto the loopback: it is about what THIS MCP
+  // THE CONTAINMENT PROFILE this connection is running under, so `createServer`
+  // can offer it a narrower tool set. ⚠ It may only NARROW and it GATES NOTHING
+  // — the vocabulary lives in `@dopl/mcp-server › gating.ts › TOOL_PROFILES`,
+  // which is also where a value this server cannot place falls to the narrowest
+  // profile. Not forwarded onto the loopback: it is about what THIS MCP
   // connection is offered, not about what the app does with a request.
   const callerToolProfile = readToolProfileHeader(request);
   // `signal` hands the caller's disconnect to the loopback; without it nothing downstream learns
@@ -118,10 +118,10 @@ async function handle(request: Request): Promise<Response> {
     // would simply mean `current_workspace(op="set")` refuses, which is the
     // pre-pin behaviour.
     sessionKey: tokenId,
-    // ⚠ ROLE, NOT PRIVILEGE. See `readToolProfileHeader` above and
-    // `BootOptions.toolProfile`: absent, unknown, or a role with no row all mean
-    // "serve everything", so a desktop newer than this server degrades to
-    // today's surface rather than to an empty tool list.
+    // ⚠ CONTAINMENT, NOT PRIVILEGE. See `readToolProfileHeader` above and
+    // `BootOptions.toolProfile`: only an ABSENT header means "serve everything",
+    // while a header this server cannot read narrows to the floor rather than
+    // widening on a value nobody could parse.
     toolProfile: callerToolProfile,
     onDiag: (message) => console.error(message),
   });

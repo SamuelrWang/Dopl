@@ -6,7 +6,7 @@
  * exists) or per CALL (the op is refused):
  *
  *   registration → {@link Gates.isSuppressedTool}: HIDDEN_TOOLS, plus the
- *                  role-scoped offer a `X-Dopl-Tool-Profile` header asks for.
+ *                  profile-scoped offer `X-Dopl-Tool-Profile` reports.
  *   per call     → {@link Gates.opRefusal}: the app-only-deletion block FIRST
  *                  and unconditionally, then the write-scope gate.
  *
@@ -32,7 +32,7 @@
  * The parse follows the constant, not the filename.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WRITE_OPS = exports.TOOL_PROFILE_TOOLS = exports.HIDDEN_TOOLS = void 0;
+exports.WRITE_OPS = exports.NARROWEST_TOOL_PROFILE = exports.TOOL_PROFILES = exports.HIDDEN_TOOLS = void 0;
 exports.offeredToolsFor = offeredToolsFor;
 exports.createGates = createGates;
 const delete_policy_js_1 = require("./delete-policy.js");
@@ -53,37 +53,131 @@ const tool_errors_js_1 = require("./tools/tool-errors.js");
  */
 exports.HIDDEN_TOOLS = new Set([]);
 /**
- * ROLE-SCOPED TOOL OFFERS — which tools a session in a given role is offered.
- * The `X-Dopl-Tool-Profile` request header names the role; this table decides
- * what it means. EMPTY TODAY: the mechanism ships in wave A and the table is
- * filled in wave B, so every role currently serves the whole surface.
+ * THE SESSION PROFILES THE HEADER MAY NAME — the four CONTAINMENT profiles the
+ * desktop already spawns sessions under (`dopl-desktop-app/main/tool-profiles.js
+ * › KNOWN_PROFILES`), carried on the wire by `X-Dopl-Tool-Profile`.
+ *
+ * ⚠ A PROFILE SAYS HOW MUCH OF THE MACHINE A SESSION MAY TOUCH, AND NOTHING
+ * ABOUT WHAT IT IS FOR. There is no table here keyed on what one operator's
+ * sessions do for each other: one account runs many sessions that direct each
+ * other, another runs a single one, and neither arrangement is a product
+ * concept every connection should pay to be told about.
+ * `tool-profile.test.ts` pins this list as a VALUE and scans the served text,
+ * so a name of that kind cannot enter the surface through this file.
+ *
+ * ⚠ ORDERED NARROWEST FIRST. The head is {@link NARROWEST_TOOL_PROFILE}, the
+ * answer for every value this server cannot place.
+ */
+exports.TOOL_PROFILES = [
+    "read_only",
+    "dopl_only",
+    "channel_agent",
+    "full",
+];
+/**
+ * THE FLOOR, AND THE ANSWER TO EVERY UNRECOGNIZED CLAIM — an unknown name, a
+ * near-miss, or a header carrying two different values
+ * (`src/shared/auth/tool-profile-header.ts`).
+ *
+ * ⚠ FAIL CLOSED, matching the desktop's own `normalizeProfile`: the header
+ * carries the profile a session is ALREADY contained at, so a value this server
+ * cannot place describes a containment it does not know, and the only offer that
+ * cannot be wider than the truth is the narrowest one.
+ *
+ * ⚠ AN ABSENT HEADER IS NOT AN UNRECOGNIZED ONE. No claim is no narrowing —
+ * which is what keeps every client that sends nothing (the OAuth connector, the
+ * stdio binary, an older desktop) on the whole surface.
+ */
+exports.NARROWEST_TOOL_PROFILE = exports.TOOL_PROFILES[0];
+/**
+ * `dopl_only`'s offer: every tool this server registers EXCEPT `dopl_channel`.
+ *
+ * ⚠ IT IS THE DESKTOP'S OWN ALLOW LIST (`tool-profiles.js › DOPL_SAFE_TOOLS`,
+ * which `dopl-desktop-app/test/tool-profiles.test.mjs` holds equal to this
+ * server's live registrations). A `dopl_only` session pre-approves exactly these
+ * and DENIES `dopl_channel` by name, so serving it would be publishing a tool
+ * the machine refuses — the offer may never be wider than the deny list.
+ *
+ * ⚠ AN ALLOW LIST, NOT AN EXCLUSION, for the reason that file gives: a tool
+ * registered tomorrow must be CLASSIFIED before a contained session is offered
+ * it. `tool-profile.test.ts` asserts every name here is live and that the set is
+ * the whole surface minus the one exclusion, so neither half can rot silently.
+ */
+const DOPL_ONLY_TOOLS = new Set([
+    "dopl_kb",
+    "dopl_search",
+    "dopl_map",
+    "dopl_members",
+    "dopl_skill",
+    "dopl_ontology",
+    "dopl_chats",
+    "dopl_agent",
+    "dopl_home",
+    "dopl_status",
+    "current_workspace",
+    "list_workspaces",
+]);
+/**
+ * PROFILE → THE TOOLS IT IS OFFERED. `null` is the whole surface.
  *
  * ⚠ NARROWING-ONLY BY CONSTRUCTION, in three ways that must all stay true:
- *   1. a role's value is an ALLOW set INTERSECTED with what the registrars
- *      register, so a role can never name a tool into existence;
- *   2. an ABSENT header, and a role with no row here, both resolve to `null` =
- *      no narrowing = the whole surface. An unknown role can therefore never
- *      widen anything, and a desktop build newer than this server degrades to
- *      today's behaviour rather than to an empty tool list;
- *   3. it is a HINT AND NOT A FENCE. The header is caller-supplied, so anything
- *      holding the credential can pick any role — including none. Containment
- *      is the desktop's `disallowedTools` + `grantDecision`, and the credential
- *      itself. Nothing may be GRANTED on this value. Same discipline as
- *      `src/shared/auth/runtime-header.ts`.
- */
-exports.TOOL_PROFILE_TOOLS = new Map();
-/**
- * The tools a role is offered, or `null` for "no narrowing". ⚠ The ONE place a
- * profile name becomes a set, so the fail-open direction is written once.
+ *   1. a row is an ALLOW set INTERSECTED with what the registrars register, so
+ *      no row can name a tool into existence — a stale name loses a tool and
+ *      can never invent one;
+ *   2. no row is wider than the deny list the machine already applies to that
+ *      profile, because the header reports containment that has ALREADY been
+ *      decided (`loader.js › withToolProfileStamp` stamps `normalizeProfile`'s
+ *      answer, never a request);
+ *   3. it is a HINT AND NOT A FENCE. The value is caller-supplied, so anything
+ *      holding the credential can claim any profile. What REFUSES a call is the
+ *      credential, the desktop's `disallowedTools` + `grantDecision`, and
+ *      {@link WRITE_OPS}. Nothing may be GRANTED on this value. Same discipline
+ *      as `src/shared/auth/runtime-header.ts`.
  *
- * ⚠ A `Map`, NOT AN OBJECT LITERAL — unlike every other table in this file, the
- * KEY here is caller-supplied. `TOOL_PROFILE_TOOLS["constructor"]` on a literal
- * answers `Object.prototype.constructor`: truthy, and then `.has` is not a
- * function. A Map has no inherited keys, so a role name off the wire can only
- * hit a row somebody wrote.
+ * ⚠ A `Record` KEYED BY {@link ToolProfile}, so the compiler proves it TOTAL: a
+ * profile added to the vocabulary with no row is a build error rather than a
+ * silent widening. Indexing it with a wire value is safe only because
+ * {@link normalizeToolProfile} resolves that value against the vocabulary FIRST
+ * — `"constructor"` becomes {@link NARROWEST_TOOL_PROFILE} before any lookup, so
+ * no key off the wire ever reaches this object.
  */
-function offeredToolsFor(toolProfile) {
-    return (toolProfile && exports.TOOL_PROFILE_TOOLS.get(toolProfile)) || null;
+const PROFILE_TOOLS = {
+    // ZERO-OUTBOUND. The machine denies this session the whole `mcp__dopl` server
+    // prefix, so the honest offer is nothing at all — and it is the largest saving
+    // on the surface, because a session that is offered no tool pays for no
+    // description and no input schema either.
+    read_only: new Set([]),
+    dopl_only: DOPL_ONLY_TOOLS,
+    // `full` minus `Bash` — a distinction in BUILT-INs, which this server does not
+    // serve, so on this surface it is `full`.
+    channel_agent: null,
+    full: null,
+};
+/**
+ * The vocabulary check, and the ONE place an unrecognized claim falls to the
+ * floor. ⚠ Never exported: a second caller normalizing on its own is the
+ * hand-mirror this file exists to prevent.
+ */
+function normalizeToolProfile(claimed) {
+    return exports.TOOL_PROFILES.includes(claimed)
+        ? claimed
+        : exports.NARROWEST_TOOL_PROFILE;
+}
+/**
+ * The tools this session is offered, or `null` for "no narrowing". ⚠ THE ONE
+ * PLACE A PROFILE BECOMES A SET, so both directions are written once:
+ * `undefined`/`null` is NO CLAIM and serves everything, while ANY string is a
+ * claim — narrowed to its row, or to the narrowest profile's row when this
+ * server cannot place it. ⚠ The absence test is on the TYPE, not on
+ * truthiness: `""` is a claim this server could not read
+ * (`tool-profile-header.ts › UNREADABLE_TOOL_PROFILE`), and falling through a
+ * `!claimed` check would serve it the whole surface — the one direction this
+ * value may never fail.
+ */
+function offeredToolsFor(claimed) {
+    if (typeof claimed !== "string")
+        return null;
+    return PROFILE_TOOLS[normalizeToolProfile(claimed)];
 }
 /**
  * Per-op write gating for MIXED read+write tools — they stay registered for
@@ -227,11 +321,11 @@ exports.WRITE_OPS = {
  * Build the gates for one session. ⚠ `canWrite` is the OAuth scope verdict and
  * FAILS CLOSED upstream — write only on an explicit `dopl.write`.
  *
- * ⚠ `offeredTools` is the RESOLVED set, not a role name, so a caller can hand in
- * any set it likes — which is what lets `meta-gate.test.ts` drive the
- * suppression leg with synthetic names instead of against a table that is empty
- * by design. `server.ts` resolves it through {@link offeredToolsFor}; `null` is
- * "serve everything" and is the only behaviour wave A ships.
+ * ⚠ `offeredTools` is the RESOLVED set, not a profile name, so a caller can hand
+ * in any set it likes — which is what lets `meta-gate.test.ts` drive the
+ * suppression leg with synthetic names rather than through the real table.
+ * `server.ts` resolves it through {@link offeredToolsFor}; `null` is "serve
+ * everything", which is what a connection claiming no profile gets.
  */
 function createGates(canWrite, offeredTools = null) {
     function isSuppressedTool(name) {

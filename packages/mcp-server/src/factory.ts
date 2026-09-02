@@ -28,12 +28,13 @@ export interface BootOptions {
    */
   scopes?: string[];
   /**
-   * The ROLE this connection is running as, from the `X-Dopl-Tool-Profile`
-   * header the TRANSPORT read (`src/shared/auth/tool-profile-header.ts`) — the
-   * desktop stamps the containment profile it already spawned the session under.
-   * Threaded verbatim into `createServer`, whose option docblock carries the
-   * narrowing-only rule and the hint-not-fence caveat. Absent ⇒ the whole
-   * surface, which is also what every value does until wave B fills the table.
+   * The CONTAINMENT PROFILE this connection is running under, from the
+   * `X-Dopl-Tool-Profile` header the TRANSPORT read
+   * (`src/shared/auth/tool-profile-header.ts`) — the desktop stamps the profile
+   * it already spawned the session under. Threaded verbatim into
+   * `createServer`, whose option docblock carries the narrowing-only rule and
+   * the hint-not-fence caveat. Absent ⇒ the whole surface; a value this server
+   * cannot place ⇒ the narrowest profile, never the widest.
    */
   toolProfile?: string | null;
   /**

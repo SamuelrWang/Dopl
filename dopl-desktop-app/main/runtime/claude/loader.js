@@ -12,7 +12,7 @@
 //   resolveClaudeExecutable()  asar-unpacked path for options.pathToClaudeCodeExecutable
 //   buildMcpServers(cfg, wsId) in-memory mcpServers object (dopl bearer from safeStorage +
 //                              the session's X-Workspace-Id pin)
-//   withToolProfileStamp()     this session's ROLE onto that entry (X-Dopl-Tool-Profile)
+//   withToolProfileStamp()     this session's containment PROFILE onto that entry (X-Dopl-Tool-Profile)
 //   buildSecretPathDenyRules() credential-path deny rules every session runs with
 //
 // ⚠ Dynamic import, not require: the SDK ships `sdk.mjs` (ESM only) and Electron main is CJS,
@@ -260,18 +260,20 @@ function withSessionStamp(servers, sessionId) {
   return servers;
 }
 
-// WHICH ROLE IS CALLING, stamped onto an entry buildMcpServers just made. The desktop already
-// computes a containment profile per session and enforces it LOCALLY (`tool-profiles.js`,
-// `disallowedTools`, the permission gate); the server never heard the word, so a `dopl_only`
-// courier that will only ever call `dopl_channel` still paid for all 13 tools' descriptions and
-// input schemas on connection. This is that one word.
+// HOW CONTAINED THIS SESSION IS, stamped onto an entry buildMcpServers just made. The desktop
+// already computes a containment profile per session and enforces it LOCALLY (`tool-profiles.js`,
+// `disallowedTools`, the permission gate); the server never heard the word, so a session that
+// will never be allowed to call a single Dopl tool still paid for all 13 tools' descriptions
+// and input schemas on connection. This is that one word.
 //
 // ⚠ IT MAY ONLY NARROW, AND IT GRANTS NOTHING. The MCP server's table
-// (`packages/mcp-server/src/gating.ts › TOOL_PROFILE_TOOLS`) is EMPTY today, so every value
-// still serves the whole surface — which is also what an absent or unrecognized value gets,
-// deliberately: a desktop newer than the server must degrade to today's surface, never to an
-// empty tool list. Nothing may be GRANTED on this value; a LABEL, exactly like the runtime,
-// vendor and session-id stamps beside it.
+// (`packages/mcp-server/src/gating.ts › PROFILE_TOOLS`) maps each value to the tools that
+// profile is offered, and a value it cannot place resolves to the NARROWEST profile — never to
+// the whole surface. ⚠ SO A NEW PROFILE NAME IS A TWO-SIDED CHANGE: this side stamping a name
+// the server has not learned yet narrows that session to nothing, which is why
+// `test/tool-profile-stamp.test.mjs` holds `KNOWN_PROFILES` inside the server's own vocabulary,
+// read out of its source. Only an ABSENT header serves everything. Nothing may be GRANTED on
+// this value; a LABEL, exactly like the runtime, vendor and session-id stamps beside it.
 //
 // ⚠ SEPARATE FUNCTION for `withSessionStamp`'s reason: `buildMcpServers` answers "what MCP
 // server does this app offer" — the same answer for every spawn — and this answers something
@@ -345,7 +347,7 @@ module.exports = {
   resolveClaudeExecutable,
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above
-  withToolProfileStamp, // this run's ROLE, onto the same entry — narrowing-only, grants nothing
+  withToolProfileStamp, // this run's containment profile, onto the same entry — narrowing-only
   TOOL_PROFILE_HEADER,
   buildSecretPathDenyRules, // credential-path deny every session runs with
   buildScrubbedEnv,

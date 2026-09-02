@@ -1,88 +1,92 @@
 /**
  * `X-Dopl-Tool-Profile` — the reader, and the two properties it owes the MCP
- * server (2026-09-02, MCP v2 A3).
+ * server (2026-09-02, MCP v2 A3; the tri-state below is wave B slice B5).
  *
  * ⚠ IT IS A SHAPE CHECK, NOT A VOCABULARY CHECK, and that asymmetry with its two
  * siblings (`runtime-header.ts`, `session-header.ts` enumerate; this one does
- * not) is the thing worth pinning: the role names live in ONE place,
- * `packages/mcp-server/src/gating.ts › TOOL_PROFILE_TOOLS`, where an
- * unrecognized one already resolves to "serve everything". A second list here
- * would be a hand-mirror whose only effect is drift.
+ * not) is the thing worth pinning: the profile names live in ONE place,
+ * `packages/mcp-server/src/gating.ts › TOOL_PROFILES`, which is also where a
+ * name this server cannot place falls to the narrowest profile. A second list
+ * here would be a hand-mirror whose only effect is drift.
  *
- * ⚠ SO THE BOUND IS THE SHAPE. The value crosses into a table lookup keyed by a
- * string off the wire, and that is what this file is really guarding.
+ * ⚠ SO WHAT THIS MODULE OWES IS THE DIFFERENCE BETWEEN **NO HEADER** AND **A
+ * HEADER I CANNOT READ**. The first is the only answer that serves the whole
+ * surface; the second must reach the server as a claim, so it can take its
+ * floor. They were the same value until this slice, which is the whole of the
+ * duplicate-header defect below.
  */
 
 import { describe, it, expect } from "vitest";
 import {
   TOOL_PROFILE_HEADER,
+  UNREADABLE_TOOL_PROFILE,
   readToolProfileHeader,
 } from "./tool-profile-header";
 
-function req(value?: string): { headers: Headers } {
+function req(...values: string[]): { headers: Headers } {
   const headers = new Headers();
-  if (value !== undefined) headers.set(TOOL_PROFILE_HEADER, value);
+  // ⚠ `append`, not `set`: repeated fields are the subject of half this file and
+  // `Headers` folds them exactly as a proxy's would.
+  for (const value of values) headers.append(TOOL_PROFILE_HEADER, value);
   return { headers };
 }
 
 describe("readToolProfileHeader", () => {
-  it("reads the profile names the desktop actually stamps", () => {
-    // ⚠ The three `tool-profiles.js › KNOWN_PROFILES` values. They are asserted
-    // as SHAPES that survive, not as an allowed set — nothing here rejects a
-    // fourth, and wave B adding `courier` must not need an edit in this tree.
-    for (const p of ["read_only", "dopl_only", "full", "courier"]) {
-      expect(readToolProfileHeader(req(p))).toBe(p);
+  it("reads a profile name back verbatim, enumerating none of them", () => {
+    // ⚠ `courier` is in this list ON PURPOSE and it is not a profile: this
+    // module has no vocabulary, so a name it has never heard of is read and
+    // handed on unchanged. What refuses it is the server's table.
+    for (const value of ["read_only", "dopl_only", "channel_agent", "full", "courier"]) {
+      expect(readToolProfileHeader(req(value))).toBe(value);
     }
   });
 
-  it("is undefined when the header is absent or empty", () => {
+  it("is undefined ONLY when no header was sent", () => {
+    // ⚠ The one "no claim" answer, and the only one that serves everything: the
+    // OAuth connector, the stdio binary and any desktop older than this header.
     expect(readToolProfileHeader(req())).toBeUndefined();
-    expect(readToolProfileHeader(req(""))).toBeUndefined();
   });
 
-  it("drops anything that is not a role name, rather than rescuing it", () => {
-    // ⚠ No trimming and no case folding — the only sender is our own desktop
-    // build, so a near-miss is a bug to notice, not a value to repair. And a
-    // dropped value is the SAME answer as no header: serve everything.
-    // ⚠ SURROUNDING WHITESPACE IS NOT IN THIS LIST because it can never reach
-    // the reader: `Headers` strips leading/trailing OWS from a value per the
-    // Fetch spec, so `" dopl_only"` arrives as `dopl_only`. Asserting it as a
-    // rejection would be asserting the platform, and would fail.
-    for (const bad of [
-      "DOPL_ONLY",
-      "dopl-only",
-      "_private",
-      "9lives",
-      "a".repeat(33),
-    ]) {
-      expect(readToolProfileHeader(req(bad)), bad).toBeUndefined();
+  it("a header that is PRESENT but unreadable is a claim, not an absence", () => {
+    // 🔒 THE DIRECTION THAT MAY NOT FAIL. Each of these used to answer
+    // `undefined` — indistinguishable from "no header", which is the WIDEST
+    // answer this value can produce. ⚠ SURROUNDING WHITESPACE IS NOT ON THIS
+    // LIST because it can never reach the reader: `Headers` strips leading and
+    // trailing OWS per the Fetch spec, so `" dopl_only"` arrives as `dopl_only`.
+    for (const bad of ["", "DOPL_ONLY", "dopl-only", "_private", "9lives", "a".repeat(33)]) {
+      expect(readToolProfileHeader(req(bad)), bad).toBe(UNREADABLE_TOOL_PROFILE);
+      expect(readToolProfileHeader(req(bad)), bad).not.toBeUndefined();
     }
   });
 
-  it("SECURITY: a DUPLICATED header narrows on the first value, never un-narrows", () => {
+  it("SECURITY: a DUPLICATED header never un-narrows the request", () => {
     // 🔒 THE DEFECT (2026-09-02). `Headers.get` folds repeated fields into
-    // `"a, b"`, the joined string fails the shape test, and `undefined` here
-    // means NO NARROWING — the widest answer. So a second copy of this header
-    // silently removed the narrowing instead of being refused by it, which is the
-    // one direction a fence may never fail.
-    // ⚠ Header order is insertion order, so an APPENDED copy is second and has
-    // no effect; a proxy re-sending the same value keeps the narrowing it asked
-    // for. A comma-joined value and two real headers are indistinguishable here
-    // and are the same thing on the wire, so they get the same answer.
-    expect(readToolProfileHeader(req("courier, full"))).toBe("courier");
-    expect(readToolProfileHeader(req("dopl_only,full"))).toBe("dopl_only");
-    // …and a first segment that is not a role name still drops to "no header".
-    expect(readToolProfileHeader(req("DOPL_ONLY,full"))).toBeUndefined();
-    expect(readToolProfileHeader(req(",full"))).toBeUndefined();
+    // `"a, b"`, the joined string fails the shape test, and `undefined` meant NO
+    // NARROWING. So a second copy of this header — from a proxy that appends
+    // rather than replaces, or from anything that can add one — silently removed
+    // the narrowing instead of being refused by it.
+    //
+    // ⚠ IDENTICAL IS ONE CLAIM, DIFFERING IS NONE. A proxy re-sending the same
+    // value asked for exactly the narrowing the sender did and keeps it; two
+    // different values are two claims this layer cannot choose between, so it
+    // reports neither and the server takes its floor.
+    expect(readToolProfileHeader(req("dopl_only", "dopl_only"))).toBe("dopl_only");
+    expect(readToolProfileHeader(req("dopl_only", "full"))).toBe(UNREADABLE_TOOL_PROFILE);
+    expect(readToolProfileHeader(req("full", "dopl_only"))).toBe(UNREADABLE_TOOL_PROFILE);
+    // A comma-joined value and two real header lines are the same bytes on the
+    // wire and get the same answer.
+    expect(readToolProfileHeader(req("dopl_only, dopl_only"))).toBe("dopl_only");
+    expect(readToolProfileHeader(req("courier, full"))).toBe(UNREADABLE_TOOL_PROFILE);
+    expect(readToolProfileHeader(req(",full"))).toBe(UNREADABLE_TOOL_PROFILE);
   });
 
-  it("SECURITY: an inherited object key never survives the read", () => {
-    // ⚠ The value becomes a lookup key. `__proto__` and `prototype` are refused
-    // by shape here; `constructor` is a legal role NAME and is deliberately let
-    // through, because the fix for it belongs where the lookup happens — the
-    // server's table is a `Map`, which has no inherited keys. Pinned so the two
-    // halves of that argument cannot drift apart silently.
-    expect(readToolProfileHeader(req("__proto__"))).toBeUndefined();
+  it("SECURITY: an inherited object key never survives the read as one", () => {
+    // ⚠ The value becomes a lookup key. `__proto__` is refused by shape here;
+    // `constructor` is a legal profile NAME and is deliberately let through,
+    // because the fix for it belongs where the lookup happens — `gating.ts`
+    // resolves any unplaceable name to the narrowest profile before indexing
+    // anything. Pinned so the two halves of that argument cannot drift apart.
+    expect(readToolProfileHeader(req("__proto__"))).toBe(UNREADABLE_TOOL_PROFILE);
     expect(readToolProfileHeader(req("constructor"))).toBe("constructor");
   });
 });

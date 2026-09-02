@@ -7427,3 +7427,21 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **IF A LATER SLICE FINDS THIS TOO SUBTLE, RENAME THE MODULE — NOT THE INVARIANT.** a name built on "multi-addressee" says the same thing with no collision. It was not taken here because the spec names the target file explicitly and a slice inventing a third name is how the C16 confusion is reproduced under new spelling.
 - Status: RESOLVED 2026-09-02 (B4), recorded so the tension is on the record rather than rediscovered.
 
+### F-500 — INVARIANTS §11 counts `DOPL_SAFE_TOOLS` at 11; the list holds 12 (2026-09-02)
+
+- Location: `docs/INVARIANTS.md` §11 *"Profile tables (`main/tool-profiles.js`, re-measured 2026-09-02)"* vs `dopl-desktop-app/main/tool-profiles.js › DOPL_SAFE_TOOLS`.
+- Found during: MCP v2 wave B slice B5, mirroring that list into `gating.ts › PROFILE_TOOLS` (the `dopl_only` row) and counting both sides.
+- **THE MEASUREMENT.** `sed -n '/^const DOPL_SAFE_TOOLS/,/^\];/p' dopl-desktop-app/main/tool-profiles.js | grep -c 'mcp__dopl__'` answers **12**: `dopl_kb`, `dopl_search`, `dopl_map`, `dopl_members`, `dopl_skill`, `dopl_ontology`, `dopl_chats`, `dopl_agent`, `dopl_home`, `dopl_status`, `current_workspace`, `list_workspaces`. That is exactly the 13 registered tools minus `dopl_channel`, which is what `dopl-desktop-app/test/tool-profiles.test.mjs` enforces — so **the list is right and the doc's number is one behind**, most likely written before `dopl_status` landed (2026-09-01, T20).
+- ⚠ **THE COUNT IS PROSE AND THE TEST IS THE ENFORCEMENT**, which is why nothing went red: the same §11 bullet says so. It is still a doc that a future slice will quote.
+- Not fixed here: `main/tool-profiles.js` is slice B6's file and that slice is rewriting the surrounding table, so a count edit from this branch would collide with it in the same paragraph. **B6 owns the fix** — re-measure with the command above and correct the §11 line in the same change.
+- Status: OPEN.
+
+### F-501 — the wave B spec's `read_only` row offers `dopl_channel`, which that profile's own deny list refuses (2026-09-02)
+
+- Location: the wave B plan's §1.2 profile table — row `read_only`, *"local reads; `dopl_channel` op-scoped"*; it lives on branch `v2/wave-b-plan` and not in this tree, which is why no path is cited — vs `dopl-desktop-app/main/tool-profiles.js › buildDeniedTools`.
+- Found during: MCP v2 wave B slice B5, writing the `PROFILE_TOOLS` rows.
+- **THE CONTRADICTION.** A `read_only` spawn's deny list opens with the bare `mcp__dopl` server prefix (`denied.unshift(DOPL_SERVER_PREFIX)`), so **every Dopl tool is refused locally, `dopl_channel` included** — the profile is the zero-outbound one. Serving it `dopl_channel` would publish ~11,600 characters of schema for a tool the machine denies, which is exactly the "offer wider than the deny list" the header exists to avoid.
+- **SHIPPED AS ∅** (`PROFILE_TOOLS.read_only = new Set([])`), on the rule that the offer may never be wider than the containment already applied. The spec row reads as a description of the profile across BOTH layers (local reads on the desktop; `dopl_channel` op-scoped where a read-only *credential* is what narrows) rather than as this server's offer — recorded here so the row is not read back later as the contract.
+- ⚠ **THE CONSEQUENCE IS VISIBLE ON THE WIRE, and it is intended**: a session that is offered nothing registers nothing, so that connection declares no `tools` capability and `tools/list` answers `Method not found` (measured through a real `Client` over `InMemoryTransport`). Every client we ship reads capabilities first; a client that calls `tools/list` unconditionally sees an error where it used to see 13 tools it could not call.
+- Status: RESOLVED 2026-09-02 (B5) — recorded, not open work.
+

@@ -5,7 +5,7 @@
  * exists) or per CALL (the op is refused):
  *
  *   registration → {@link Gates.isSuppressedTool}: HIDDEN_TOOLS, plus the
- *                  role-scoped offer a `X-Dopl-Tool-Profile` header asks for.
+ *                  profile-scoped offer `X-Dopl-Tool-Profile` reports.
  *   per call     → {@link Gates.opRefusal}: the app-only-deletion block FIRST
  *                  and unconditionally, then the write-scope gate.
  *
@@ -47,36 +47,51 @@ import type { ToolResponse } from "./tools/respond.js";
  */
 export declare const HIDDEN_TOOLS: Set<string>;
 /**
- * ROLE-SCOPED TOOL OFFERS — which tools a session in a given role is offered.
- * The `X-Dopl-Tool-Profile` request header names the role; this table decides
- * what it means. EMPTY TODAY: the mechanism ships in wave A and the table is
- * filled in wave B, so every role currently serves the whole surface.
+ * THE SESSION PROFILES THE HEADER MAY NAME — the four CONTAINMENT profiles the
+ * desktop already spawns sessions under (`dopl-desktop-app/main/tool-profiles.js
+ * › KNOWN_PROFILES`), carried on the wire by `X-Dopl-Tool-Profile`.
  *
- * ⚠ NARROWING-ONLY BY CONSTRUCTION, in three ways that must all stay true:
- *   1. a role's value is an ALLOW set INTERSECTED with what the registrars
- *      register, so a role can never name a tool into existence;
- *   2. an ABSENT header, and a role with no row here, both resolve to `null` =
- *      no narrowing = the whole surface. An unknown role can therefore never
- *      widen anything, and a desktop build newer than this server degrades to
- *      today's behaviour rather than to an empty tool list;
- *   3. it is a HINT AND NOT A FENCE. The header is caller-supplied, so anything
- *      holding the credential can pick any role — including none. Containment
- *      is the desktop's `disallowedTools` + `grantDecision`, and the credential
- *      itself. Nothing may be GRANTED on this value. Same discipline as
- *      `src/shared/auth/runtime-header.ts`.
+ * ⚠ A PROFILE SAYS HOW MUCH OF THE MACHINE A SESSION MAY TOUCH, AND NOTHING
+ * ABOUT WHAT IT IS FOR. There is no table here keyed on what one operator's
+ * sessions do for each other: one account runs many sessions that direct each
+ * other, another runs a single one, and neither arrangement is a product
+ * concept every connection should pay to be told about.
+ * `tool-profile.test.ts` pins this list as a VALUE and scans the served text,
+ * so a name of that kind cannot enter the surface through this file.
+ *
+ * ⚠ ORDERED NARROWEST FIRST. The head is {@link NARROWEST_TOOL_PROFILE}, the
+ * answer for every value this server cannot place.
  */
-export declare const TOOL_PROFILE_TOOLS: Map<string, ReadonlySet<string>>;
+export declare const TOOL_PROFILES: readonly ["read_only", "dopl_only", "channel_agent", "full"];
+/** One of {@link TOOL_PROFILES} — the whole vocabulary, and nothing else. */
+export type ToolProfile = (typeof TOOL_PROFILES)[number];
 /**
- * The tools a role is offered, or `null` for "no narrowing". ⚠ The ONE place a
- * profile name becomes a set, so the fail-open direction is written once.
+ * THE FLOOR, AND THE ANSWER TO EVERY UNRECOGNIZED CLAIM — an unknown name, a
+ * near-miss, or a header carrying two different values
+ * (`src/shared/auth/tool-profile-header.ts`).
  *
- * ⚠ A `Map`, NOT AN OBJECT LITERAL — unlike every other table in this file, the
- * KEY here is caller-supplied. `TOOL_PROFILE_TOOLS["constructor"]` on a literal
- * answers `Object.prototype.constructor`: truthy, and then `.has` is not a
- * function. A Map has no inherited keys, so a role name off the wire can only
- * hit a row somebody wrote.
+ * ⚠ FAIL CLOSED, matching the desktop's own `normalizeProfile`: the header
+ * carries the profile a session is ALREADY contained at, so a value this server
+ * cannot place describes a containment it does not know, and the only offer that
+ * cannot be wider than the truth is the narrowest one.
+ *
+ * ⚠ AN ABSENT HEADER IS NOT AN UNRECOGNIZED ONE. No claim is no narrowing —
+ * which is what keeps every client that sends nothing (the OAuth connector, the
+ * stdio binary, an older desktop) on the whole surface.
  */
-export declare function offeredToolsFor(toolProfile: string | null | undefined): ReadonlySet<string> | null;
+export declare const NARROWEST_TOOL_PROFILE: ToolProfile;
+/**
+ * The tools this session is offered, or `null` for "no narrowing". ⚠ THE ONE
+ * PLACE A PROFILE BECOMES A SET, so both directions are written once:
+ * `undefined`/`null` is NO CLAIM and serves everything, while ANY string is a
+ * claim — narrowed to its row, or to the narrowest profile's row when this
+ * server cannot place it. ⚠ The absence test is on the TYPE, not on
+ * truthiness: `""` is a claim this server could not read
+ * (`tool-profile-header.ts › UNREADABLE_TOOL_PROFILE`), and falling through a
+ * `!claimed` check would serve it the whole surface — the one direction this
+ * value may never fail.
+ */
+export declare function offeredToolsFor(claimed: string | null | undefined): ReadonlySet<string> | null;
 /**
  * Per-op write gating for MIXED read+write tools — they stay registered for
  * read-only sessions so reads work, but write ops are refused. ⚠ Keep each set
@@ -88,7 +103,7 @@ export declare const WRITE_OPS: Record<string, Set<string>>;
 export interface Gates {
     /**
      * Suppressed at registration: absent from `tools/list`, nothing to call —
-     * `HIDDEN_TOOLS` plus anything outside this session's role-scoped offer. The
+     * `HIDDEN_TOOLS` plus anything outside this session's profile offer. The
      * honest way to remove a capability is for the tool not to exist.
      */
     isSuppressedTool(name: string): boolean;
@@ -106,10 +121,10 @@ export interface Gates {
  * Build the gates for one session. ⚠ `canWrite` is the OAuth scope verdict and
  * FAILS CLOSED upstream — write only on an explicit `dopl.write`.
  *
- * ⚠ `offeredTools` is the RESOLVED set, not a role name, so a caller can hand in
- * any set it likes — which is what lets `meta-gate.test.ts` drive the
- * suppression leg with synthetic names instead of against a table that is empty
- * by design. `server.ts` resolves it through {@link offeredToolsFor}; `null` is
- * "serve everything" and is the only behaviour wave A ships.
+ * ⚠ `offeredTools` is the RESOLVED set, not a profile name, so a caller can hand
+ * in any set it likes — which is what lets `meta-gate.test.ts` drive the
+ * suppression leg with synthetic names rather than through the real table.
+ * `server.ts` resolves it through {@link offeredToolsFor}; `null` is "serve
+ * everything", which is what a connection claiming no profile gets.
  */
 export declare function createGates(canWrite: boolean, offeredTools?: ReadonlySet<string> | null): Gates;
