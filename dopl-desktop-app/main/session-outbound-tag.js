@@ -145,6 +145,17 @@ function nextOwnPostId(s) {
     const oldest = s.ownPostIds.values().next();
     if (!oldest.done) s.ownPostIds.delete(oldest.value);
   }
+  // ── ⚠ THE "IT LAST SPOKE" STAMP (2026-09-01, T51/T83) ────────────────────────────────
+  // `session-health.js` measures both the QUIET WINDOW and the token DELTA from the last thing
+  // this session said, and this is the one place a post is stamped — so putting the clock
+  // anywhere else would let "it spoke" and "when it spoke" drift apart by exactly the paths that
+  // mint a stamp without minting an id.
+  // ⚠ IT IS STAMPED WHEN THE POST IS MINTED, WHICH IS AT THE GATE AND NOT AT DELIVERY. That is
+  // the honest bound for what it is used for: the session has DECIDED to speak, and treating a
+  // post that is waiting on an operator's Send as silence would flag the agent that is doing
+  // exactly what it should. It rides beside `ownPostSeq`, whose lifetime it shares.
+  s.lastOwnPostAt = Date.now();
+  s.tokensAtLastPost = Number(s.tokensSpent) || 0;
   return id;
 }
 
