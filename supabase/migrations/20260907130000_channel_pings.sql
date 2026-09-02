@@ -126,6 +126,11 @@ CREATE TABLE IF NOT EXISTS public.channel_pings (
 -- or carry an agent id under 'member', which would address a stranger's machine.
 -- Enforced at rest rather than trusted from the service, because it is the half of
 -- the loop brake that a later edit could relax without noticing.
+-- ⚠ DROPPED FIRST. `ADD CONSTRAINT` is not idempotent — on a re-run against a
+-- database that already has it, the file 42710s and every statement after this
+-- one is skipped. `CREATE TABLE IF NOT EXISTS` above makes that re-run reachable.
+ALTER TABLE public.channel_pings
+  DROP CONSTRAINT IF EXISTS channel_pings_recipient_shape;
 ALTER TABLE public.channel_pings
   ADD CONSTRAINT channel_pings_recipient_shape
   CHECK (
@@ -196,12 +201,29 @@ REVOKE INSERT, UPDATE, DELETE
 --   property this table exists NOT to have.
 --   The party clause alone would let a removed member keep reading pings about a
 --   channel they no longer belong to.
+-- ⚠ AND THE C-15 TOMBSTONE GUARD JOINS THEM (2026-09-02). A soft-deleted channel
+-- is NOT-FOUND to every other read and a `channel_members` row OUTLIVES the
+-- tombstone, so `is_channel_member` alone keeps answering true for a room that no
+-- longer exists — a ping outliving what it is about. It is an inline `EXISTS`
+-- rather than a new helper for `20260810100000`'s reason: a NEW function named by
+-- a SELECT policy on a PUBLISHED table also owes `anon` EXECUTE, or an
+-- expired-JWT subscriber raises 42501 inside `realtime.apply_rls` and kills CDC
+-- for the whole project. `schema-sql.test.ts`'s C-15 census enrolls this policy.
+-- ⚠ DROPPED FIRST, for `ADD CONSTRAINT`'s reason: `CREATE POLICY` is not
+-- idempotent either, and a 42710 here would skip the assertion block below —
+-- the one that exists to catch exactly a policy that is not what this file says.
+DROP POLICY IF EXISTS channel_pings_party_select ON public.channel_pings;
 CREATE POLICY channel_pings_party_select
   ON public.channel_pings
   FOR SELECT
   USING (
     is_current_workspace_member(workspace_id, 'viewer'::text)
     AND is_channel_member(channel_id)
+    AND EXISTS (
+      SELECT 1 FROM public.channels c
+      WHERE c.id = channel_pings.channel_id
+        AND c.deleted_at IS NULL
+    )
     AND (
       recipient_user_id = (SELECT auth.uid())
       OR sender_user_id = (SELECT auth.uid())
@@ -244,7 +266,20 @@ BEGIN
       'ABORT: the SELECT policy does not scope on recipient_user_id — a ping targets ONE recipient and must never be readable by the whole channel';
   END IF;
 
+  -- ⚠ C-15. The membership row outlives the tombstone, so this conjunct is the
+  -- only thing standing between a deleted channel and its pings.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+     WHERE schemaname = 'public'
+       AND tablename = 'channel_pings'
+       AND policyname = 'channel_pings_party_select'
+       AND qual LIKE '%deleted_at%'
+  ) THEN
+    RAISE EXCEPTION
+      'ABORT: the SELECT policy lost its channels.deleted_at guard — a channel_members row outlives a soft delete, so pings about a tombstoned channel would keep being served';
+  END IF;
+
   RAISE NOTICE
-    'channel_pings created: party-scoped SELECT inside channel membership, service-role writes, INSERT published, replica identity on (workspace_id, id). seq is a SEPARATE cursor space from channel_messages.seq. No ack, no expiry, no delete.';
+    'channel_pings created: party-scoped SELECT inside LIVE channel membership, service-role writes, INSERT published, replica identity on (workspace_id, id). seq is a SEPARATE cursor space from channel_messages.seq. No ack, no expiry, no delete.';
 END
 $$;

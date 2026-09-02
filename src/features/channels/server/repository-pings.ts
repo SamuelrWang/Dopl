@@ -12,11 +12,18 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * arguments below THE ENTIRE FENCE, and both come from the authenticated context
  * in `service-pings.ts`. ⚠ **Never read either out of a payload.**
  *
- * 🔒 **THE RECIPIENT PREDICATE IS THE WHOLE ACCESS STORY ON THE READS.** A ping
- * targets exactly one recipient — that is the property the table exists to have
- * and the reason it is not a `channel_messages` row — so a read without
+ * 🔒 **THE READS CARRY BOTH FENCES AT ONCE — PARTY *AND* CHANNEL MEMBERSHIP —
+ * BECAUSE THE RLS POLICY DOES** (`channel_pings_party_select`). A ping targets
+ * exactly one recipient — that is the property the table exists to have and the
+ * reason it is not a `channel_messages` row — so a read without
  * `recipient_user_id` would publish every ping to the room and make this a worse
- * message table. There is deliberately no read here that answers for a SENDER:
+ * message table. And `channel_ids` is the second half: the admin client bypasses
+ * RLS, so a recipient-only read here would deliver pings about rooms the caller
+ * has been REMOVED from, which the client lane refuses. ⚠ **`channelIds` MUST be
+ * a set the request PROVED** (`repository-await-workspace.ts ›
+ * listMemberChannelRefs` is the only legitimate source); never build it from
+ * anything a caller sent. There is deliberately no read here that answers for a
+ * SENDER:
  * no statement needs one, and the migration's own note ("NO INDEX ON
  * `sender_user_id`, DELIBERATELY") is the storage half of the same decision.
  *
@@ -48,11 +55,13 @@ export type ChannelPingRow = {
   body: string;
   created_at: string;
   /**
-   * ⚠ **NOT A COLUMN.** The channel's slug, attached by
-   * {@link hydrateChannelSlugs} after the row read so a reader can build a link
-   * without a second round trip. Absent on the insert path's return (the service
-   * already holds the channel there) and `undefined` rather than `null` when
-   * nothing hydrated it — `toPing`'s `?? null` is what collapses the two.
+   * ⚠ **NOT A COLUMN.** The channel's slug, attached by the SERVICE from the
+   * membership proof it already holds (`service-pings.ts › listPings`) so a
+   * reader can build a link without a second round trip. ⚠ There is deliberately
+   * NO hydration read here: the proof that fences the query carries the labels,
+   * and a second `channels` read would be one more way for the two to disagree.
+   * `undefined` rather than `null` when nothing attached it — `toPing`'s
+   * `?? null` is what collapses the two.
    */
   channel_slug?: string | null;
 };
@@ -99,57 +108,6 @@ export async function insertPing(
 }
 
 /**
- * ⚠ PostgREST truncates an un-limited select SILENTLY. One page of pings spans a
- * handful of channels at most, so this exists to make truncation loud rather
- * than to bound anything a reader will reach.
- */
-const SLUG_HYDRATION_LIMIT = 200;
-
-/**
- * Attach `channel_slug` to a page of rows — A SECOND BATCHED READ, NOT A JOIN.
- *
- * ⚠ **THE STYLE IS THE TREE'S, AND IT IS DELIBERATE.** No repository in
- * `features/channels` issues a PostgREST relational select; the workspace await
- * hydrates its channel labels the same way (`repository-await-workspace.ts ›
- * listMemberChannelRefs` — memberships, then channels), and
- * `app/api/user/delete/route.ts` records why: `!inner` embeds return opaque 500s
- * on this schema. A third style here would be a shape a future reader has to
- * learn to debug.
- *
- * ⚠ IT WIDENS NOTHING. The ids come from rows the recipient fence already
- * returned, so this read can only name channels the caller is a party to a ping
- * in. A channel deleted under a ping simply resolves to nothing, and the row
- * keeps a `null` slug rather than a fabricated label.
- */
-async function hydrateChannelSlugs(
-  workspaceId: string,
-  rows: ChannelPingRow[]
-): Promise<ChannelPingRow[]> {
-  if (rows.length === 0) return rows;
-  const ids = [...new Set(rows.map((r) => r.channel_id))];
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channels")
-    .select("id, slug")
-    .eq("workspace_id", workspaceId)
-    .in("id", ids)
-    .limit(SLUG_HYDRATION_LIMIT);
-  if (error) throw error;
-  const slugs = new Map(
-    ((data ?? []) as Array<{ id: string; slug: string }>).map((c) => [
-      c.id,
-      c.slug,
-    ])
-  );
-  return rows.map((row) => ({
-    ...row,
-    // ⚠ `null` WHEN IT DID NOT RESOLVE, never an empty string: a render must fall
-    // back to the id rather than print a blank label.
-    channel_slug: slugs.get(row.channel_id) ?? null,
-  }));
-}
-
-/**
  * ONE PAGE OF A RECIPIENT'S INBOX — `seq > since` for THIS person, ASCENDING.
  *
  * ⚠ ASCENDING BY `seq`, which is what makes the cursor work: a caller that
@@ -165,21 +123,26 @@ async function hydrateChannelSlugs(
 export async function listPingsForRecipient(
   recipientUserId: string,
   workspaceId: string,
+  channelIds: string[],
   opts: { since?: number; limit: number }
 ): Promise<ChannelPingRow[]> {
+  // ⚠ AN EMPTY PROOF IS AN EMPTY ANSWER, never an unfenced query. PostgREST's
+  // `in.()` on an empty list is a grammar the server need not be asked to parse.
+  if (channelIds.length === 0) return [];
   const db = supabaseAdmin();
   let query = db
     .from(TABLE)
     .select("*")
-    // 🔒 THE FENCE. This runs on the admin client, so the argument IS the security.
+    // 🔒 BOTH FENCES. This runs on the admin client, so the arguments ARE the security.
     .eq("recipient_user_id", recipientUserId)
-    .eq("workspace_id", workspaceId);
+    .eq("workspace_id", workspaceId)
+    .in("channel_id", channelIds);
   if (opts.since !== undefined) query = query.gt("seq", opts.since);
   const { data, error } = await query
     .order("seq", { ascending: true })
     .limit(opts.limit);
   if (error) throw error;
-  return hydrateChannelSlugs(workspaceId, (data ?? []) as ChannelPingRow[]);
+  return (data ?? []) as ChannelPingRow[];
 }
 
 /**
@@ -197,20 +160,23 @@ export async function listPingsForRecipient(
  * fetch-empty-continue, one extra pair of queries per tick; a probe that MISSES a
  * row the read would return is the invisibility bug — a signal that never wakes
  * anybody, which is the exact failure this table exists to fix. The two filter
- * sets are `recipient_user_id`, `workspace_id` and `seq > since`, and they change
- * together or not at all.
+ * sets are `recipient_user_id`, `workspace_id`, the PROVEN `channel_id` set and
+ * `seq > since`, and they change together or not at all.
  */
 export async function hasPingForRecipient(
   recipientUserId: string,
   workspaceId: string,
+  channelIds: string[],
   since: number | undefined
 ): Promise<boolean> {
+  if (channelIds.length === 0) return false;
   const db = supabaseAdmin();
   let query = db
     .from(TABLE)
     .select("id")
     .eq("recipient_user_id", recipientUserId)
-    .eq("workspace_id", workspaceId);
+    .eq("workspace_id", workspaceId)
+    .in("channel_id", channelIds);
   if (since !== undefined) query = query.gt("seq", since);
   const { data, error } = await query.limit(1);
   if (error) throw error;

@@ -18,9 +18,11 @@
  *  - **A SELF `to=` IS REFUSED NAMING THE INSTRUMENT THAT WORKS**, because the
  *    caller that reaches it is almost always an agent trying to reach its own
  *    operator's external session, which is what `toDesktop` spells.
- *  - **THE READ IS RECIPIENT-SCOPED IN THE SQL PREDICATE** and has no recipient
- *    parameter — it runs on the RLS-bypassing admin client, so the argument IS
- *    the access control.
+ *  - **THE READ CARRIES BOTH FENCES `channel_pings_party_select` CARRIES** —
+ *    party AND channel membership (R1, 2026-09-02) — and has no recipient
+ *    parameter. It runs on the RLS-bypassing admin client, so the arguments ARE
+ *    the access control, and party alone would make the REST answer wider than
+ *    the client answer for a member who was removed from the room.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,6 +30,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository-pings");
 vi.mock("./repository");
 vi.mock("./repository-tasks");
+vi.mock("./repository-await-workspace");
 vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
@@ -36,6 +39,7 @@ vi.mock("./service-shared", async (importOriginal) => {
 import * as pingRepo from "./repository-pings";
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
+import { listMemberChannelRefs } from "./repository-await-workspace";
 import { loadVisibleChannel } from "./service-shared";
 import { createPing, listPings } from "./service-pings";
 import { PingCreateSchema } from "../schema-ping";
@@ -95,6 +99,9 @@ beforeEach(() => {
     id: TASK,
   } as never);
   vi.mocked(pingRepo.listPingsForRecipient).mockResolvedValue([row()] as never);
+  vi.mocked(listMemberChannelRefs).mockResolvedValue([
+    { id: CH, name: "Build", slug: "build" },
+  ] as never);
 });
 
 describe("🔒 the sender is ctx.userId and can never be a parameter", () => {
@@ -260,12 +267,44 @@ describe("the body cap is the feature, not a safety margin", () => {
   });
 });
 
-describe("🔒 the inbox read is recipient-scoped in the SQL predicate", () => {
-  it("passes ctx.userId as the fence and takes no recipient parameter", async () => {
+describe("🔒 the inbox read carries BOTH fences the RLS policy carries (R1)", () => {
+  it("passes ctx.userId as the party fence and takes no recipient parameter", async () => {
     await listPings(ctx, { limit: 20, since: 4 });
     const call = vi.mocked(pingRepo.listPingsForRecipient).mock.calls[0];
     expect(call[0]).toBe(ME);
     expect(call[1]).toBe(WS);
-    expect(call[2]).toEqual({ since: 4, limit: 20 });
+    expect(call[3]).toEqual({ since: 4, limit: 20 });
+  });
+
+  it("narrows to the PROVEN channel set, so a removed member reads nothing", async () => {
+    // ⚠ MUTATION CHECK. Drop the `.in("channel_id", …)` argument — pass
+    // anything not derived from `listMemberChannelRefs` — and this fails: the
+    // admin client bypasses RLS, so the proof IS the membership half of
+    // `channel_pings_party_select`.
+    await listPings(ctx, { limit: 20 });
+    expect(vi.mocked(pingRepo.listPingsForRecipient).mock.calls[0][2]).toEqual([
+      CH,
+    ]);
+  });
+
+  it("hands the repository an EMPTY set when the caller is in no channel", async () => {
+    vi.mocked(listMemberChannelRefs).mockResolvedValue([] as never);
+    await listPings(ctx, { limit: 20 });
+    expect(vi.mocked(pingRepo.listPingsForRecipient).mock.calls[0][2]).toEqual(
+      []
+    );
+  });
+
+  it("labels the page from the PROOF, paying no second channels read", async () => {
+    const out = await listPings(ctx, { limit: 20 });
+    expect(out[0].channelSlug).toBe("build");
+  });
+
+  it("renders channelSlug null when the proof carries no label for the row", async () => {
+    vi.mocked(listMemberChannelRefs).mockResolvedValue([
+      { id: "other", name: "Other", slug: "other" },
+    ] as never);
+    const out = await listPings(ctx, { limit: 20 });
+    expect(out[0].channelSlug).toBeNull();
   });
 });

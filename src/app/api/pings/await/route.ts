@@ -54,13 +54,14 @@ function logHold(
   if (process.env.DOPL_AWAIT_DIAG === "0") return;
   console.log(
     `[await-hold] scope=pings polls=${counters.polls}` +
+      ` revalidations=${counters.revalidations}` +
       ` outcome=${outcome} ms=${Date.now() - started}`
   );
 }
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   const started = Date.now();
-  const counters: PingAwaitCounters = { polls: 0 };
+  const counters: PingAwaitCounters = { polls: 0, revalidations: 0 };
   let outcome: "hit" | "timeout" | "error" = "error";
   try {
     const { since, timeoutMs } = parseQuery(

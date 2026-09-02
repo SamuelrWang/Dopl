@@ -1,6 +1,14 @@
 import "server-only";
 import type { ChannelPing } from "../types-ping";
-import { AWAIT_POLL_INTERVAL_MS, MAX_PING_LIMIT } from "../constants";
+import {
+  AWAIT_POLL_INTERVAL_MS,
+  AWAIT_REVALIDATE_EVERY_TICKS,
+  MAX_PING_LIMIT,
+} from "../constants";
+import {
+  listMemberChannelRefs,
+  type MemberChannelRef,
+} from "./repository-await-workspace";
 import { hasPingForRecipient } from "./repository-pings";
 import { listPings } from "./service-pings";
 import type { ChannelContext } from "./service-shared";
@@ -19,23 +27,19 @@ import type { ChannelContext } from "./service-shared";
  * interval and the SHAPE of the options, deliberately restated rather than
  * unified, so a change to one is a visible decision about the others.
  *
- * ── WHY THIS LOOP IS SHORT, AND WHY THAT IS NOT A GAP ───────────────────────
- * The other two holds carry an access re-proof cadence
- * (`AWAIT_REVALIDATE_EVERY_TICKS`) because their fence is a FACT ABOUT THE
- * CALLER that can stop being true mid-hold: a channel membership can be revoked,
- * a channel soft-deleted, and the row read would still name it. **Here the fence
- * IS the SQL predicate.** Every row this hold can read is one the caller is the
- * RECIPIENT of, and that is a column on the row rather than a claim about a
- * relationship elsewhere — so there is nothing to re-prove, no proof that can go
- * stale, and no ordering rule between a proof and a fetch. Adding a recheck here
- * would be a query per tick that could not change a single answer.
+ * ── WHY THIS LOOP RE-PROVES, ON THE SAME CADENCE AS ITS TWO SIBLINGS ────────
+ * ⚠ **CORRECTED 2026-09-02 (R1).** This docblock used to argue that the fence
+ * "IS the SQL predicate" and that a ping about a channel the caller had SINCE
+ * LEFT still reaching them was the designed answer. It was not: the RLS policy
+ * `channel_pings_party_select` is `is_channel_member(channel_id) AND (party)`,
+ * and this lane runs on the admin client — so the two lanes disagreed for
+ * exactly the caller a removal is about. The fence is therefore a FACT ABOUT THE
+ * CALLER that can stop being true mid-hold, which is precisely why the other two
+ * holds carry `AWAIT_REVALIDATE_EVERY_TICKS`, and this one now does too.
  *
- * ⚠ THE ONE THING THAT DOES NOT FOLLOW FROM THAT, stated so nobody re-derives it
- * as a bug: a ping about a channel the caller has SINCE LEFT still reaches them
- * here. That is the designed answer — the signal was addressed to them
- * personally while they were in the room, and the RLS policy's channel-membership
- * arm is what stops it being re-read from the client afterwards. The hold's job
- * is delivery to one person, not continuing access to a room.
+ * ⚠ **NO ROW FETCH MAY PRECEDE A PROOF**, which is `service-await-workspace.ts`'s
+ * ordering rule restated: the proof narrows the very query that follows it, and a
+ * proof that did not narrow the next query is a proof of nothing.
  *
  * ⚠ **A PING HAS NO `channel_messages.seq`, SO THIS HOLD AND A CHANNEL `await`
  * CANNOT INTERFERE.** `since` here is a PING cursor; the two spaces are separate
@@ -50,15 +54,14 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * THROW still leaves its counts with the caller — the route logs them from a
  * `finally`, and counts living only in the return value lose exactly the holds
  * worth watching.
- *
- * ⚠ **THERE IS NO `revalidations`**, unlike `WorkspaceAwaitCounters`, and the
- * absence is the module docblock's point made in a field list: this fence is a
- * SQL predicate, so no access proof is ever issued and a counter for one would
- * report zero forever.
  */
 export interface PingAwaitCounters {
   /** Ping queries issued — existence probes plus row reads. */
   polls: number;
+  /** Membership re-proofs issued. ⚠ Added 2026-09-02 with the fence itself
+   *  (R1); `WorkspaceAwaitCounters` carries the identical field for the
+   *  identical reason. */
+  revalidations: number;
 }
 
 export interface PingAwaitOptions {
@@ -80,7 +83,8 @@ export interface PingAwaitResult {
 }
 
 /**
- * Hold until a ping addressed to `ctx.userId` exists past `since`, or `deadline`.
+ * Hold until a ping addressed to `ctx.userId`, in a channel they are still a
+ * member of, exists past `since` — or until `deadline`.
  *
  * ⚠ THE FIRST READ IS IMMEDIATE AND IS A ROW READ, not a probe — the desktop's
  * wake path arms this with a near-zero timeout, so probing first would add a
@@ -94,26 +98,59 @@ export async function awaitPings(
 ): Promise<PingAwaitResult> {
   const { since, deadline, signal } = opts;
   const intervalMs = opts.pollIntervalMs ?? AWAIT_POLL_INTERVAL_MS;
-  const counters: PingAwaitCounters = opts.counters ?? { polls: 0 };
+  const counters: PingAwaitCounters = opts.counters ?? {
+    polls: 0,
+    revalidations: 0,
+  };
+
+  let ticks = 0;
+  let verifiedAtTick = -1;
+  let refs: MemberChannelRef[] = [];
+
+  /** ⚠ It REPLACES `refs`; see the module docblock's ordering rule. */
+  const proveAccess = async () => {
+    refs = await listMemberChannelRefs(ctx.workspaceId, ctx.userId);
+    verifiedAtTick = ticks;
+    counters.revalidations += 1;
+  };
+  const proveAccessUnlessProvenThisTick = async () => {
+    if (verifiedAtTick === ticks) return;
+    await proveAccess();
+  };
+
+  // ⚠ TICK 0's PROOF, BEFORE ANY ROW IS FETCHED. Nothing upstream has proven
+  // channel membership for this caller — the route only resolved the workspace.
+  await proveAccess();
 
   // ⚠ THE PAGE CEILING IS THE INBOX'S OWN, not a bespoke number: the read is
   // ASCENDING by `seq`, so a burst clipped by the cap is RESUMED by the caller's
   // next `since` rather than skipped.
-  const read = () => listPings(ctx, { since, limit: MAX_PING_LIMIT });
+  const read = () => listPings(ctx, { since, limit: MAX_PING_LIMIT }, refs);
+  const ids = () => refs.map((r) => r.id);
 
   counters.polls += 1;
   let pings = await read();
 
   while (pings.length === 0 && Date.now() < deadline && !signal?.aborted) {
     await sleep(Math.min(intervalMs, Math.max(0, deadline - Date.now())));
+    ticks += 1;
+    // Background recheck: first held tick, then every Nth — the same cadence and
+    // the same ~15s bounded staleness both sibling holds run.
+    if ((ticks - 1) % AWAIT_REVALIDATE_EVERY_TICKS === 0) {
+      await proveAccessUnlessProvenThisTick();
+    }
     counters.polls += 1;
-    // ⚠ The probe carries the SAME predicates as the row read
-    // (`repository-pings.ts › hasPingForRecipient` states the rule): a probe that
-    // hits on a row the read then drops spins the hold fetch-empty-continue, one
-    // extra pair of queries every tick.
-    if (!(await hasPingForRecipient(ctx.userId, ctx.workspaceId, since))) {
+    // ⚠ The probe carries the SAME predicates as the row read — the proven
+    // channel set included (`repository-pings.ts › hasPingForRecipient` states
+    // the rule): a probe that hits on a row the read then drops spins the hold
+    // fetch-empty-continue, one extra pair of queries every tick, forever, since
+    // the caller's cursor never advances past a row it is never handed.
+    if (!(await hasPingForRecipient(ctx.userId, ctx.workspaceId, ids(), since))) {
       continue;
     }
+    // ⚠ PROVE BEFORE READING ROWS, and read with the FRESH set. Nothing is
+    // delivered from a channel the caller left since the last recheck.
+    await proveAccessUnlessProvenThisTick();
     counters.polls += 1;
     const found = await read();
     // ⚠ An existence hit that reads back EMPTY must keep HOLDING. Returning

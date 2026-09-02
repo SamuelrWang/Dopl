@@ -146,8 +146,21 @@ const CHANNEL_TRANSPARENT_SELECT_POLICIES = [
   "channel_agents_member_select",
 ];
 
+/**
+ * EVERY policy that reads a channel child, transparent or not. ⚠ The tombstone
+ * census is WIDER than transparency: `channel_pings_party_select` is
+ * member-and-party scoped and never public, so it is not on the list above — but
+ * a `channel_members` row OUTLIVES a soft-delete tombstone, so `is_channel_member`
+ * alone keeps answering true for a room that no longer exists. C-15 is about the
+ * TOMBSTONE, not about who else can see the row.
+ */
+const CHANNEL_SCOPED_SELECT_POLICIES = [
+  ...CHANNEL_TRANSPARENT_SELECT_POLICIES,
+  "channel_pings_party_select",
+];
+
 describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
-  it.each(CHANNEL_TRANSPARENT_SELECT_POLICIES)(
+  it.each(CHANNEL_SCOPED_SELECT_POLICIES)(
     "%s requires deleted_at IS NULL",
     (policy) => {
       expect(finalPolicy(policy)).toMatch(/deleted_at\s+IS\s+NULL/i);
@@ -155,7 +168,7 @@ describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
   );
 
   it("still fences on the workspace and on membership — the guard is ADDED, not swapped in", () => {
-    for (const policy of CHANNEL_TRANSPARENT_SELECT_POLICIES) {
+    for (const policy of CHANNEL_SCOPED_SELECT_POLICIES) {
       const sql = finalPolicy(policy);
       expect(sql, policy).toMatch(/is_current_workspace_member\(/);
       expect(sql, policy).toMatch(/is_channel_member\(/);
@@ -168,11 +181,20 @@ describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
     // raises 42501 inside realtime.apply_rls and kills CDC for the whole
     // project. Inline EXISTS has no such footgun.
     const KNOWN = new Set(["is_current_workspace_member", "is_channel_member"]);
-    for (const policy of CHANNEL_TRANSPARENT_SELECT_POLICIES) {
+    for (const policy of CHANNEL_SCOPED_SELECT_POLICIES) {
       const sql = finalPolicy(policy);
       const calls = [...sql.matchAll(/\b(is_[a-z_]+)\s*\(/g)].map((m) => m[1]);
       for (const fn of calls) expect(KNOWN.has(fn), `${policy} calls ${fn}`).toBe(true);
     }
+  });
+
+  it("channel_pings_party_select narrows to the two PARTIES, never the room", () => {
+    // ⚠ MUTATION CHECK. Membership alone would publish every ping to the whole
+    // channel — the one property `channel_pings` exists NOT to have — and would
+    // make the table a worse `channel_messages`.
+    const sql = finalPolicy("channel_pings_party_select");
+    expect(sql).toMatch(/recipient_user_id\s*=\s*\(\s*SELECT\s+auth\.uid\(\)/i);
+    expect(sql).toMatch(/sender_user_id\s*=\s*\(\s*SELECT\s+auth\.uid\(\)/i);
   });
 
   it("channel_task_participants inherits the guard through channel_tasks", () => {

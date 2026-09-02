@@ -10,6 +10,10 @@ import {
 import * as repo from "./repository";
 import * as pingRepo from "./repository-pings";
 import type { ChannelPingRow } from "./repository-pings";
+import {
+  listMemberChannelRefs,
+  type MemberChannelRef,
+} from "./repository-await-workspace";
 import * as repoTasks from "./repository-tasks";
 import { senderAgentIdFrom } from "./service-directions";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
@@ -214,14 +218,27 @@ export async function createPing(
 }
 
 /**
- * THE INBOX CATCH-UP READ — what has been sent TO ME since `since`.
+ * THE INBOX CATCH-UP READ — what has been sent TO ME since `since`, in a room I
+ * am STILL IN.
  *
- * 🔒 **RECIPIENT-SCOPED, AND `ctx.userId` IS THE FENCE.** It is a separate
- * positional argument to the repository, which runs on the admin client, so this
- * line is the whole of the access control on the read. ⚠ There is deliberately
- * no `recipient` parameter and there must never be one: a ping targets one
- * person, and a read that could answer for somebody else would make the table a
- * worse `channel_messages`.
+ * 🔒 **BOTH FENCES, BECAUSE THE RLS POLICY IS BOTH FENCES** (R1, 2026-09-02).
+ * `channel_pings_party_select` reads `is_channel_member(channel_id) AND (party)`,
+ * and this lane runs on the RLS-bypassing admin client — so party alone here
+ * would make the REST answer WIDER than the client answer for exactly one class
+ * of caller: a member who was removed from the room. The membership proof is
+ * `listMemberChannelRefs`, the same proof the workspace hold uses, and it is
+ * also what makes a SOFT-DELETED channel disappear from this inbox.
+ * ⚠ There is deliberately no `recipient` parameter and there must never be one:
+ * a ping targets one person, and a read that could answer for somebody else
+ * would make the table a worse `channel_messages`.
+ *
+ * ⚠ **THE PROOF DOUBLES AS THE SLUG SOURCE.** It already carries `name`/`slug`
+ * per channel, so the repository does NO hydration read — one query saved per
+ * page, and the label can never disagree with the fence that admitted the row.
+ *
+ * ⚠ `refs` IS AN OPTIONAL PRE-PROVEN SET, for the hold that re-proves on its own
+ * cadence (`service-pings-await.ts`). ⚠ **Never build it from anything a caller
+ * sent** — `listMemberChannelRefs` is the only legitimate source.
  *
  * ⚠ `since` IS A PING `seq`, NEVER A MESSAGE ONE — the two cursor spaces are
  * separate by construction, so a caller that crosses them reads a plausible,
@@ -229,12 +246,22 @@ export async function createPing(
  */
 export async function listPings(
   ctx: ChannelContext,
-  query: PingListQuery
+  query: PingListQuery,
+  refs?: MemberChannelRef[]
 ): Promise<ChannelPing[]> {
+  const proven =
+    refs ?? (await listMemberChannelRefs(ctx.workspaceId, ctx.userId));
   const rows = await pingRepo.listPingsForRecipient(
     ctx.userId,
     ctx.workspaceId,
+    proven.map((r) => r.id),
     { since: query.since, limit: query.limit }
   );
-  return rows.map(toPing);
+  const slugs = new Map(proven.map((r) => [r.id, r.slug]));
+  // ⚠ `channel_slug` stays `undefined` when the proof somehow lacks the row
+  // rather than becoming `""` — `toPing`'s `?? null` forces a render to fall
+  // back to the id instead of printing a blank label.
+  return rows.map((row) =>
+    toPing({ ...row, channel_slug: slugs.get(row.channel_id) })
+  );
 }

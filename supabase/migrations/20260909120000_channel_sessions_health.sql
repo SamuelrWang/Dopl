@@ -235,6 +235,12 @@ ALTER TABLE public.channel_sessions
 -- Counters are counts. ⚠ NOT NULL is deliberately absent from all four; each
 -- CHECK's own `IS NULL` branch is what keeps "unknown" legal, exactly as
 -- `channel_sessions_counts_nonnegative` does for the telemetry three.
+-- ⚠ DROPPED FIRST. `ADD CONSTRAINT` is not idempotent — on a re-run against a
+-- database that already carries it the file 42710s and every statement after
+-- this one is skipped, which the `ADD COLUMN IF NOT EXISTS` above makes a
+-- reachable path rather than a hypothetical.
+ALTER TABLE public.channel_sessions
+  DROP CONSTRAINT IF EXISTS channel_sessions_health_counts_nonnegative;
 ALTER TABLE public.channel_sessions
   ADD CONSTRAINT channel_sessions_health_counts_nonnegative
   CHECK (

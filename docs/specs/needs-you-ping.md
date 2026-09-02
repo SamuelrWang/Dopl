@@ -67,7 +67,9 @@ AND (recipient_user_id = auth.uid() OR sender_user_id = auth.uid())
 ```
 
 Membership alone would publish every ping to the room, which is the property the table exists to
-avoid; the party clause alone would leak past a channel the reader left.
+avoid; the party clause alone would leak past a channel the reader left. A `deleted_at IS NULL`
+guard on the channel joins them (2026-09-02): a membership row outlives a soft-delete tombstone,
+so without it a ping outlives the room it is about.
 
 ## 3. Delivery — three paths over one row, no second producer
 
@@ -78,8 +80,13 @@ device token, `agent-directions/claim`'s ruling), `parseQuery`, the four `AWAIT_
 `{ items, timedOut: items.length === 0 }` response contract. What it does **not** share is the ~12
 line hold body: `service-await.ts` and `service-await-workspace.ts` both state, in bold, that a
 "channel or workspace mode" behind one signature puts two authorization stories behind one fence,
-and a ping's fence is a third (`recipient_user_id = ctx.userId`) — which is also why its loop is
-short: the fence *is* the SQL predicate, so there is no access re-proof cadence to run. The
+and a ping's fence is a third (`recipient_user_id = ctx.userId` AND the proven channel-membership
+set). ⚠ **CORRECTED 2026-09-02 (R1).** This paragraph used to say the loop was short because "the
+fence *is* the SQL predicate, so there is no access re-proof cadence to run". That was only true of
+the party half. The RLS policy above is `is_channel_member(channel_id) AND (party)`, and the REST
+lane runs on the admin client — so party-only there made the two lanes disagree for exactly the
+caller a removal is about. The hold now proves membership at tick 0 and every
+`AWAIT_REVALIDATE_EVERY_TICKS` after, and both the probe and the row read carry the proven set. The
 assembled multi-poll budget on the MCP side is genuinely shared: `channel-await-budget.ts`, imported.
 
 **(b) The local watcher: one `listener.log` line, zero tokens.** The desktop already holds one
