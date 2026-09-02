@@ -47,12 +47,33 @@ function readServer(...p) {
   return readFileSync(file, "utf8");
 }
 
-/** The `dopl_kb` op enum, parsed out of the tool's zod schema. */
+/**
+ * The `dopl_kb` op enum, parsed out of the tool's zod schema.
+ *
+ * ⚠ ANCHORED ON THE SHAPE CONST, NOT ON THE REGISTRAR, SINCE 2026-09-02 (A14).
+ * This looked forward from `register("dopl_kb"` for the next `.enum([`, which
+ * worked only while the shape was an object literal written INSIDE the
+ * registrar call. A14 hoisted it to `const KB_INPUT_SHAPE` above the call — so
+ * `tool-style.ts › composeDescription` can render the tool's limits from the
+ * same object the registrar enforces — and the forward scan then found nothing
+ * and failed as "the op enum moved". It had not moved; the parse had.
+ *
+ * ⚠ THE REGISTRAR ASSERTION STAYS, AND IT IS NOW DOING REAL WORK: it pins that
+ * the shape this function parsed is the shape that is actually REGISTERED. An
+ * enum read out of some other const would be a parity check against a schema no
+ * client ever sees, which is a guard that passes while the grant drifts.
+ */
 function serverOpEnum() {
   const src = readServer("tools", "knowledge.ts");
+  const shape = src.indexOf("const KB_INPUT_SHAPE = {");
+  assert.notEqual(shape, -1, "KB_INPUT_SHAPE moved — re-anchor this parse");
   const at = src.indexOf('register(\n    "dopl_kb"');
   assert.notEqual(at, -1, "the dopl_kb registrar moved — re-anchor this parse");
-  const open = src.indexOf(".enum([", at);
+  assert.ok(
+    src.indexOf("KB_INPUT_SHAPE", at) !== -1,
+    "dopl_kb no longer registers KB_INPUT_SHAPE — this parse would be reading a schema nobody is served"
+  );
+  const open = src.indexOf(".enum([", shape);
   const close = src.indexOf("])", open);
   assert.ok(open !== -1 && close > open, "the dopl_kb op enum moved");
   return src
