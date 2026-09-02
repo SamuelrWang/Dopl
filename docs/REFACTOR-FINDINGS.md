@@ -7598,8 +7598,8 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - Location: `src/features/agent-templates/server/repository.ts`. Re-derive, never quote: `wc -l`.
 - Found during: B11's dual-write, which pushed the file to 504 and had to be trimmed back rather than shipped.
-- The file already has its split seams marked — three `// ───` sections (Templates · Team links · Knowledge-base attachments) — and the house move at the cap is the one `service-base-gates.ts` made on 2026-09-02: lift a section into a sibling and re-export, exactly as `knowledge/server/repository.ts` is already a barrel over five. Not taken here because **B15** deletes part of this file's shelf lane in batch 3 and a split now would land under its feet.
-- Status: **OPEN.** The next edit to this file must split it, not shave a comment.
+- The file already has its split seams marked — three `// ───` sections (Templates · Team links · Knowledge-base attachments) — and the house move at the cap is the one `service-base-gates.ts` made on 2026-09-02: lift a section into a sibling and re-export, exactly as `knowledge/server/repository.ts` is already a barrel over five. Not taken in B11 because **B15** deletes part of this file's shelf lane in batch 3 and a split then would have landed under its feet.
+- Status: RESOLVED 2026-09-02 at the batch-2 integration, and it was FORCED rather than chosen: B11's dual-write and B12's `readClient()` both landed in this file, taking it to 515 and turning the root lint's `max-lines` red. Knowledge-base attachments lifted to `repository-knowledge-links.ts` (142 lines) and re-exported; `repository.ts` is 402. ⚠ The section chosen is the one B15 does NOT touch — the shelf lane stays in `repository.ts`, so batch 3's deletion still lands where its slice expects it.
 
 ### F-563 — the personal-container migration has never met a database, and its four claims are text-asserted (2026-09-02)
 

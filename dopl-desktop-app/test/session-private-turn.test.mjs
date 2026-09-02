@@ -78,11 +78,18 @@ test("MODE: it is NOT simply `ask` — READS must survive, or the agent goes bli
   // anything — it HOLDS for a message that reaches a desktop-run session as a turn regardless —
   // so denying it blinds nobody. It is asserted below rather than dropped, because "the private
   // turn did not do this" is the fact this file exists to keep straight.
-  for (const op of ["read", "get_thread", "list_threads", "members"]) {
+  // ⚠ THE FOUR KEYS OF `OWN_CHANNEL_READ_OPS` (2026-09-02, F-578), spelled as calls: a thread
+  // read is `read(thread=)`, `read_sessions`/`read_directions` are one `status`, and
+  // `list_threads`/`members` are `rooms` ACTIONS — dotted, because four of that op's actions
+  // write and a bare `rooms` here would assert a widening.
+  for (const input of [
+    { op: "read" }, { op: "status" },
+    { op: "rooms", action: "threads" }, { op: "rooms", action: "members" },
+  ]) {
     assert.equal(
-      profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op, channel: CH, thread: THREAD }) }),
+      profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { ...input, channel: CH, thread: THREAD }) }),
       "allow",
-      `${op} must still auto-allow inside a private turn`
+      `${JSON.stringify(input)} must still auto-allow inside a private turn`
     );
   }
   assert.equal(

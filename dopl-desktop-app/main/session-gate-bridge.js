@@ -83,8 +83,14 @@ function gatePayload(s, name, input, opts, requestId, verdict) {
       requestId,
       toolUseId: opts && opts.toolUseID,
       ownChannel: true, ...(s.direct === true ? { directChannel: true } : {}), // H2: in a DM the server addresses this post, so the card names who gets it
-      // ⚠ `threadOpen` → `entryFor` mints the pending card a create_thread lacks an `outbound_post` to carry, else a gated windowless one hangs to its 24h TTL (F-321).
-      ...(isOutboundPost(name, input, s.channelId) ? {} : { threadOpen: true }),
+      // ⚠ **`threadOpen` IS DELETED, BECAUSE THE CASE IT DISCRIMINATED IS GONE (2026-09-02, B8).**
+      // It stamped the gate of a `create_thread` — an op that was NOT a post, rendered as a
+      // plain `tool_use` with no `pending`, so without a minted card the operator saw a
+      // `dopl_channel` row and then silence to the 24h TTL (F-321). The collapse made a thread
+      // open `send(thread="new")` and an escalation `send(kind="decision")`, so BOTH are
+      // `isOutboundPost` now and `runtime/claude/normalize.js › renderEvents` emits the same
+      // `outbound_post` frame (`pending: true` under `willGatePost`) it emits for any other
+      // send. F-321's card is minted by the ordinary path; the flag had no reachable arm left.
       text: input && input.body != null ? String(input.body) : '',
     }, input, s.counterpartyName, s.counterpartyId)
     : {

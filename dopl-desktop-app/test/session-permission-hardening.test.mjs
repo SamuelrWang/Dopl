@@ -322,7 +322,7 @@ test("F6: two DIFFERENT cross-channel targets never share a grant key", () => {
     assert.notEqual(keyOf(post({ channel: a })), keyOf(post({ channel: b })), why);
   }
   // The readable half is kept for the diag line, so the key still says where it points.
-  assert.ok(keyOf(post({ channel: "team.alpha" })).includes("#op:post:teamalpha#"));
+  assert.ok(keyOf(post({ channel: "team.alpha" })).includes("#op:send:teamalpha#"));
 });
 
 test("F6: a grant to post into one other channel does NOT post into its near-twin", () => {
