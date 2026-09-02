@@ -96,11 +96,28 @@ function resolvePosture(requested, ceiling, toolOrder, messageOrder) {
  * half of why a refusal is right here: flipping the channel setting afterwards does not unblock
  * a session already started, so a caller that got a silent `false` could never recover.
  *
- * Returns `{ chain, refused }` — `refused` is true only for the ASK-AND-DENIED case, never for a
- * directive that asked for nothing.
+ * ⚠ **THREE INPUTS, NOT TWO, AND `false` IS NOT A SPELLING OF "DID NOT ASK" (fixed 2026-09-01).**
+ *   `true`  — ASK IT ON. Granted only if the channel allows it; denied is a REFUSAL (above).
+ *   `false` — ASK IT OFF. Always granted: it is strictly narrower than anything the channel
+ *             would have given, so there is nothing for the operator's setting to protect. It
+ *             therefore wins over a channel set to ON, which is the whole point of sending it.
+ *   `null`  — DID NOT ASK. Inherits the channel setting silently, the pre-T24 behaviour.
+ *
+ * ⚠ **THE `false` ARM USED TO FALL THROUGH TO `allowed === true` AND THAT WAS A DEFECT**: an
+ * orchestrator asking for a deliberately un-chained worker got a chaining one whenever the
+ * channel allowed chaining, silently. It was survivable only because
+ * `launch-directive-wire.js › directiveFrom` flattened `false` to `null` before it ever reached
+ * here, so the two bugs hid each other — which is why both are fixed in one change and why
+ * `test/launch-chain.test.mjs` now drives the wire and this function TOGETHER.
+ *
+ * ⚠ NARROWING IS NEVER REFUSED. `refused` stays true for the ASK-AND-DENIED case ONLY — never
+ * for a directive that asked for nothing, and never for one that asked for LESS.
+ *
+ * Returns `{ chain, refused }`.
  */
 function resolveChain(requested, allowed) {
   if (requested === true && allowed !== true) return { chain: false, refused: true };
+  if (requested === false) return { chain: false, refused: false };
   return { chain: allowed === true, refused: false };
 }
 

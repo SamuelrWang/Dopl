@@ -354,11 +354,27 @@ function directiveFrom(raw, workspaceId) {
       ? '' : String(r.start_tool_mode || r.startToolMode),
     startMessageMode: MESSAGE_MODES.indexOf(String(r.start_message_mode || r.startMessageMode || '')) === -1
       ? '' : String(r.start_message_mode || r.startMessageMode),
-    // ⚠ A TRI-STATE, NOT A BOOLEAN, AND THE THIRD VALUE IS LOAD-BEARING. `true` is "I need this
-    // agent to be able to launch workers"; `null` is "I did not ask", which inherits the
-    // channel's setting silently as every launch did before T24. Collapsing them would turn
-    // every ordinary launch into a request, and a request the channel denies is a REFUSAL.
-    chain: r.chain === true || r.chain === 'true' ? true : null,
+    // ⚠ A TRI-STATE, NOT A BOOLEAN, AND **ALL THREE VALUES ARE LOAD-BEARING**. `true` is "I need
+    // this agent to be able to launch workers"; `false` is "run it with chaining OFF, whatever
+    // the channel allows"; `null` is "I did not ask", which inherits the channel's setting
+    // silently as every launch did before T24. Collapsing `null` into a request would turn every
+    // ordinary launch into one, and a request the channel denies is a REFUSAL.
+    //
+    // ⚠ **THIS LINE READ `r.chain === true || r.chain === 'true' ? true : null` AND THAT WAS THE
+    // BUG (2026-09-01).** A stored `false` fell down the `null` arm and arrived as "did not ask",
+    // so it INHERITED the channel setting — which may be ON. `chain: false` could not turn
+    // chaining off, and every doc, comment and agent-facing description on the lane said it
+    // could. The server has always stored the three states faithfully
+    // (`service-launch.ts › createLaunchDirective` uses `?? null`, not `|| null`, for exactly
+    // this); it was only this narrowing that flattened them.
+    // ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: this row may arrive
+    // over a transport that stringifies booleans, and a one-sided coercion is how the two halves
+    // of a tri-state stop being symmetric.
+    chain: r.chain === true || r.chain === 'true'
+      ? true
+      : r.chain === false || r.chain === 'false'
+        ? false
+        : null,
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };
